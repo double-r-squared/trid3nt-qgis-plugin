@@ -19,6 +19,7 @@ from stub_server import (  # noqa: E402
     RASTER_LAYER_ROW,
     S3_VECTOR_LAYER_ROW,
     STUB_CASE_ID,
+    STUB_TOKEN,
     STUB_USER_ID,
     StubAgentServer,
     VECTOR_LAYER_ROW,
@@ -213,7 +214,7 @@ class StubServerTestCase(unittest.TestCase):
         self.addCleanup(self.server.stop)
 
     def _connect(self, **kwargs) -> tc.AgentClient:
-        client = tc.AgentClient(self.server.url, **kwargs)
+        client = tc.AgentClient(self.server.url, **{"token": STUB_TOKEN, **kwargs})
         self.addCleanup(client.close)
         return client
 
@@ -231,28 +232,24 @@ class StubServerTestCase(unittest.TestCase):
 
 
 class TestHandshake(StubServerTestCase):
-    def test_anonymous_handshake(self):
+    def test_verified_handshake(self):
         client = self._connect()
         user_id = client.connect()
         self.assertEqual(user_id, STUB_USER_ID)
-        self.assertTrue(client.is_anonymous)
         self.assertEqual(client.last_session_state.get("loaded_layers"), [])
-        # First two frames the server saw: auth-token (empty token) then
-        # session-resume -- the exact reference-driver ordering.
+        # First two frames the server saw: auth-token then session-resume --
+        # the exact reference-driver ordering.
         types = [e["type"] for e in self.server.received]
         self.assertEqual(types[:2], ["auth-token", "session-resume"])
-        self.assertEqual(self.server.received[0]["payload"]["token"], "")
-        # Anonymous local mode: no ?st= on the upgrade path.
-        self.assertNotIn("st=", self.server.paths[0])
+        self.assertEqual(self.server.received[0]["payload"]["token"], STUB_TOKEN)
 
-    def test_remote_token_rides_query_and_envelope(self):
-        client = self._connect(token="jwt-abc/123==")
+    def test_token_rides_query_and_envelope(self):
+        client = self._connect()
         client.connect()
-        self.assertFalse(client.is_anonymous)
-        # ?st= carrier on the upgrade request path (URL-encoded)
-        self.assertIn("st=jwt-abc%2F123%3D%3D", self.server.paths[0])
+        # ?st= carrier on the upgrade request path
+        self.assertIn(f"st={STUB_TOKEN}", self.server.paths[0])
         # and the in-band auth-token envelope carries it verbatim
-        self.assertEqual(self.server.received[0]["payload"]["token"], "jwt-abc/123==")
+        self.assertEqual(self.server.received[0]["payload"]["token"], STUB_TOKEN)
 
     def test_handshake_failure_on_dead_port(self):
         dead = tc.AgentClient("ws://127.0.0.1:1/ws", connect_timeout=2)

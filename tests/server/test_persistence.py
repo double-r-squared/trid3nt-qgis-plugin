@@ -15,12 +15,10 @@ import pytest
 from trid3nt_server.persistence import (
     CASES_COLLECTION,
     CHAT_COLLECTION,
-    USERS_COLLECTION,
     Persistence,
 )
 from trid3nt_contracts.case import CaseChatMessage
 from trid3nt_contracts.common import new_ulid
-from trid3nt_contracts.user import User
 
 from tests._fakes import MockMCPClient, _fresh_case_summary
 
@@ -37,15 +35,6 @@ def _fresh_chat_message(case_id: str, *, role="user") -> CaseChatMessage:
     )
 
 
-def _fresh_user_record() -> User:
-    return User(
-        user_id=new_ulid(),
-        email="natealmanza3@gmail.com",
-        display_name="Nate Almanza",
-        created_at=datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc),
-        is_active=True,
-        prefs={"theme": "dark"},
-    )
 
 
 
@@ -166,61 +155,3 @@ def test_session_state_for_missing_case_returns_tombstone() -> None:
     state = asyncio.run(p.get_session_state(new_ulid()))
     assert state.case.status == "deleted"
     assert state.chat_history == []
-
-
-
-
-def test_user_round_trip() -> None:
-    """upsert_user then get_user_by_id returns equal model."""
-    mock = MockMCPClient()
-    p = Persistence(mock)
-    user = _fresh_user_record()
-
-    asyncio.run(p.upsert_user(user))
-    fetched = asyncio.run(p.get_user_by_id(user.user_id))
-    assert fetched is not None
-    assert fetched.user_id == user.user_id
-    assert fetched.email == "natealmanza3@gmail.com"
-    assert fetched.display_name == "Nate Almanza"
-    assert fetched.prefs == {"theme": "dark"}
-
-    # Routed to the users collection
-    upserts = [(n, a) for n, a in mock.calls if n == "update-one"
-               and a.get("collection") == USERS_COLLECTION]
-    assert upserts
-
-
-def test_user_lookup_returns_none_when_missing() -> None:
-    mock = MockMCPClient()
-    p = Persistence(mock)
-    assert asyncio.run(p.get_user_by_id("never-existed")) is None
-
-
-def test_get_user_by_id_tolerates_stale_firebase_uid_key() -> None:
-    """An OLD-SHAPE user row carrying a retired key loads without crashing.
-
-    ``get_user_by_id`` filters to the known ``User`` fields before validating, so a
-    dropped carrier never reaches the ``extra="forbid"`` contract."""
-    mock = MockMCPClient()
-    uid = new_ulid()
-    # Seed the store directly with a legacy document shape (pre-chop the field
-    # was persisted on every user row).
-    mock._store[USERS_COLLECTION] = {
-        uid: {
-            "_id": uid,
-            "schema_version": "v1",
-            "user_id": uid,
-            "firebase_uid": "legacy-idp-sub-value",
-            "email": None,
-            "display_name": None,
-            "created_at": "2026-06-08T12:00:00Z",
-            "is_active": True,
-            "prefs": {},
-            "is_anonymous": True,
-        }
-    }
-    p = Persistence(mock)
-    fetched = asyncio.run(p.get_user_by_id(uid))
-    assert fetched is not None
-    assert fetched.user_id == uid
-    assert not hasattr(fetched, "firebase_uid")

@@ -1,9 +1,9 @@
-"""Remote-daemon access: endpoint advertisement and the optional shared-token gate.
+"""Remote-daemon access: endpoint advertisement over the always-on token gate.
 
 The ``auth-ack`` carries an optional ``endpoints`` object, so a client holding
 only the WS URL learns ``data_base`` and ``http_base`` - from the advertised env
-values, else derived from the connection's own address. ``TRID3NT_ACCESS_TOKEN``,
-when set, must match constant-time or the socket closes AUTH_FAILED. Offline."""
+values, else derived from the connection's own address. Every handshake here
+presents the token first: a wrong or absent one closes AUTH_FAILED. Offline."""
 
 from __future__ import annotations
 
@@ -12,18 +12,21 @@ import json
 import pytest
 
 from trid3nt_contracts.auth import AdvertisedEndpoints, AuthAckEnvelope
-from trid3nt_contracts.common import new_ulid, now_utc
-from trid3nt_contracts.user import User
+from trid3nt_contracts.common import new_ulid
 
 from trid3nt_server.credentials.auth_handshake import (
     ADVERTISED_DATA_PORT,
     ADVERTISED_HTTP_PORT_DEFAULT,
-    AuthResult,
+    LOCAL_SINGLE_USER_ID,
     build_auth_ack,
     configured_access_token,
     derive_advertised_endpoints,
     verify_access_token,
 )
+
+#: The token every handshake case here presents, set on the env override so no
+#: case reads the dev box's own minted config file.
+GATE_TOKEN = "s3cr3t"
 
 # Env keys the tests toggle -- cleared before each test so a stray export on
 # the dev box can never leak into (or out of) a case.
@@ -32,26 +35,17 @@ _REMOTE_ENV_KEYS = (
     "TRID3NT_ADVERTISED_HTTP_BASE",
     "TRID3NT_ACCESS_TOKEN",
     "TRID3NT_AGENT_HTTP_PORT",
+    "TRID3NT_HOME",
 )
 
 
 @pytest.fixture(autouse=True)
-def _clean_remote_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Start every test from a KNOWN-clean remote-access env."""
+def _clean_remote_env(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    """Start every test from a KNOWN-clean remote-access env, with the config
+    home pointed at an empty tmp dir so nothing reads the box's own token."""
     for key in _REMOTE_ENV_KEYS:
         monkeypatch.delenv(key, raising=False)
-
-
-def _make_auth_result(*, anonymous: bool = True) -> AuthResult:
-    user = User(
-        user_id=new_ulid(),
-        created_at=now_utc(),
-        is_anonymous=anonymous,
-    )
-    return AuthResult(
-        user=user,
-        is_anonymous=anonymous,
-    )
+    monkeypatch.setenv("TRID3NT_HOME", str(tmp_path))
 
 
 
@@ -160,15 +154,15 @@ def test_build_auth_ack_carries_endpoints() -> None:
         data_base="http://100.64.0.1:9000",
         http_base="http://100.64.0.1:8766",
     )
-    ack = build_auth_ack(_make_auth_result(), endpoints=ep)
+    ack = build_auth_ack(endpoints=ep)
     assert ack.endpoints is not None
     assert ack.endpoints.data_base == "http://100.64.0.1:9000"
     assert ack.endpoints.http_base == "http://100.64.0.1:8766"
 
 
-def test_build_auth_ack_endpoints_default_none_backward_compatible() -> None:
-    """The pre-existing single-arg call still works; endpoints defaults None."""
-    ack = build_auth_ack(_make_auth_result())
+def test_build_auth_ack_endpoints_default_none() -> None:
+    """The no-arg call still works; endpoints defaults None."""
+    ack = build_auth_ack()
     assert ack.endpoints is None
     # Old-client / stub wire shape: the field is present-but-null, never a
     # credential, never breaks extra="forbid" round-trips.
@@ -180,7 +174,7 @@ def test_build_auth_ack_endpoints_default_none_backward_compatible() -> None:
 def test_auth_ack_round_trip_with_endpoints() -> None:
     """AuthAckEnvelope with endpoints survives a JSON round-trip (extra=forbid)."""
     ep = AdvertisedEndpoints(data_base="http://h:9000", http_base="http://h:8766")
-    ack = build_auth_ack(_make_auth_result(), endpoints=ep)
+    ack = build_auth_ack(endpoints=ep)
     raw = ack.model_dump_json()
     back = AuthAckEnvelope.model_validate_json(raw)
     assert back.endpoints == ep
@@ -188,38 +182,30 @@ def test_auth_ack_round_trip_with_endpoints() -> None:
 
 def test_auth_ack_old_wire_without_endpoints_parses() -> None:
     """An ack without the optional endpoints key still validates -> None."""
-    old_wire = {"user_id": new_ulid(), "is_anonymous": True}
+    old_wire = {"user_id": new_ulid()}
     back = AuthAckEnvelope.model_validate(old_wire)
     assert back.endpoints is None
 
 
 
 
-def test_verify_access_token_disabled_by_default() -> None:
-    """Unset TRID3NT_ACCESS_TOKEN -> gate open, every token accepted."""
+def test_verify_access_token_fails_closed_without_a_token() -> None:
+    """Nothing minted and no env override -> NOTHING matches, the gate refuses.
+    The daemon mints at start, so this is only ever a misconfigured box."""
     assert configured_access_token() is None
-    assert verify_access_token(None) is True
-    assert verify_access_token("") is True
-    assert verify_access_token("whatever") is True
-
-
-def test_verify_access_token_empty_env_counts_as_unset(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A blank env cannot accidentally lock everyone out."""
-    monkeypatch.setenv("TRID3NT_ACCESS_TOKEN", "")
-    assert configured_access_token() is None
-    assert verify_access_token(None) is True
+    assert verify_access_token(None) is False
+    assert verify_access_token("") is False
+    assert verify_access_token("whatever") is False
 
 
 def test_verify_access_token_match(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("TRID3NT_ACCESS_TOKEN", "s3cr3t")
-    assert configured_access_token() == "s3cr3t"
-    assert verify_access_token("s3cr3t") is True
+    monkeypatch.setenv("TRID3NT_ACCESS_TOKEN", GATE_TOKEN)
+    assert configured_access_token() == GATE_TOKEN
+    assert verify_access_token(GATE_TOKEN) is True
 
 
 def test_verify_access_token_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("TRID3NT_ACCESS_TOKEN", "s3cr3t")
+    monkeypatch.setenv("TRID3NT_ACCESS_TOKEN", GATE_TOKEN)
     assert verify_access_token("wrong") is False
     assert verify_access_token("") is False
     assert verify_access_token(None) is False
@@ -251,6 +237,12 @@ def _sent_types(ws: _FakeWebSocket) -> list[str]:
 
 
 @pytest.fixture()
+def _gate(monkeypatch: pytest.MonkeyPatch):
+    """Arm the gate with a known token for the handshake cases."""
+    monkeypatch.setenv("TRID3NT_ACCESS_TOKEN", GATE_TOKEN)
+
+
+@pytest.fixture()
 def _no_persistence():
     """Run the server handshake helpers with the M1 in-memory (None) path."""
     from trid3nt_server.server import set_persistence
@@ -262,14 +254,14 @@ def _no_persistence():
 
 @pytest.mark.asyncio
 async def test_handle_auth_token_advertises_derived_endpoints(
-    _no_persistence,
+    _no_persistence, _gate
 ) -> None:
     """auth-ack carries endpoints derived from the connection's local address."""
     from trid3nt_server.server import SessionState, _handle_auth_token
 
     state = SessionState(session_id=new_ulid())
     ws = _FakeWebSocket(local_address=("100.64.0.1", 8765))
-    await _handle_auth_token(ws, state, {"token": ""})
+    await _handle_auth_token(ws, state, {"token": GATE_TOKEN})
 
     assert _sent_types(ws) == ["auth-ack"]
     payload = ws.sent[0]["payload"]
@@ -282,7 +274,7 @@ async def test_handle_auth_token_advertises_derived_endpoints(
 
 @pytest.mark.asyncio
 async def test_handle_auth_token_absent_endpoints_for_socket_without_address(
-    _no_persistence,
+    _no_persistence, _gate
 ) -> None:
     """A fake socket with no local_address + no env -> endpoints absent (None).
 
@@ -293,75 +285,48 @@ async def test_handle_auth_token_absent_endpoints_for_socket_without_address(
 
     state = SessionState(session_id=new_ulid())
     ws = _FakeWebSocket(local_address=None)
-    await _handle_auth_token(ws, state, {"token": ""})
+    await _handle_auth_token(ws, state, {"token": GATE_TOKEN})
 
     assert _sent_types(ws) == ["auth-ack"]
     assert ws.sent[0]["payload"]["endpoints"] is None
 
 
 @pytest.mark.asyncio
-async def test_token_gate_off_is_anonymous_regression(_no_persistence) -> None:
-    """Gate unset (default): the anon handshake is byte-identical -- ack, no close."""
+async def test_correct_token_binds(_no_persistence, _gate) -> None:
+    """Matching token -> auth-ack, no close, the fixed identity bound."""
     from trid3nt_server.server import SessionState, _handle_auth_token
 
     state = SessionState(session_id=new_ulid())
     ws = _FakeWebSocket()
-    await _handle_auth_token(ws, state, {"token": "anything"})
+    await _handle_auth_token(ws, state, {"token": GATE_TOKEN})
 
     assert _sent_types(ws) == ["auth-ack"]
     assert ws.closed_with is None
     assert state.auth_handshake_complete is True
-    assert state.authenticated_user_id is not None
+    assert state.authenticated_user_id == LOCAL_SINGLE_USER_ID
 
 
 @pytest.mark.asyncio
-async def test_token_gate_on_correct_token_accepts(
-    _no_persistence, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Gate set + matching token -> normal auth-ack, no close."""
-    monkeypatch.setenv("TRID3NT_ACCESS_TOKEN", "s3cr3t")
+async def test_wrong_token_typed_close(_no_persistence, _gate) -> None:
+    """Wrong token -> AUTH_FAILED error + 1008 close, NO auth-ack, no bind."""
     from trid3nt_server.server import SessionState, _handle_auth_token
 
     state = SessionState(session_id=new_ulid())
     ws = _FakeWebSocket()
-    await _handle_auth_token(
-        ws, state, {"token": "s3cr3t"}
-    )
+    await _handle_auth_token(ws, state, {"token": "wrong"})
 
-    assert _sent_types(ws) == ["auth-ack"]
-    assert ws.closed_with is None
-    assert state.auth_handshake_complete is True
-
-
-@pytest.mark.asyncio
-async def test_token_gate_on_wrong_token_typed_close(
-    _no_persistence, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Gate set + wrong token -> AUTH_FAILED error + 1008 close, NO auth-ack, no bind."""
-    monkeypatch.setenv("TRID3NT_ACCESS_TOKEN", "s3cr3t")
-    from trid3nt_server.server import SessionState, _handle_auth_token
-
-    state = SessionState(session_id=new_ulid())
-    ws = _FakeWebSocket()
-    await _handle_auth_token(
-        ws, state, {"token": "wrong"}
-    )
-
-    # A typed error envelope, then a policy-violation (1008) close.
     assert _sent_types(ws) == ["error"]
     assert ws.sent[0]["payload"]["error_code"] == "AUTH_FAILED"
     assert ws.closed_with == (1008, "AUTH_FAILED")
-    # The session must NOT be bound on a rejected handshake.
     assert state.auth_handshake_complete is False
     assert state.authenticated_user_id is None
 
 
 @pytest.mark.asyncio
-async def test_token_gate_on_missing_token_typed_close(
-    _no_persistence, monkeypatch: pytest.MonkeyPatch
+async def test_token_less_auth_envelope_typed_close(
+    _no_persistence, _gate
 ) -> None:
-    """Gate set + empty token -> rejected (an empty token is not the secret)."""
-    monkeypatch.setenv("TRID3NT_ACCESS_TOKEN", "s3cr3t")
+    """An empty token is not the secret: same typed refusal, no bind."""
     from trid3nt_server.server import SessionState, _handle_auth_token
 
     state = SessionState(session_id=new_ulid())
@@ -375,44 +340,16 @@ async def test_token_gate_on_missing_token_typed_close(
 
 
 @pytest.mark.asyncio
-async def test_implicit_handshake_rejected_when_token_required(
-    _no_persistence, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A token-gated daemon rejects the implicit no-auth-token path too.
-
-    ``_ensure_auth_handshake`` returns False and closes with the same typed
-    AUTH_FAILED, so never sending auth-token is not a bypass."""
-    monkeypatch.setenv("TRID3NT_ACCESS_TOKEN", "s3cr3t")
-    from trid3nt_server.server import SessionState, _ensure_auth_handshake
+async def test_pre_handshake_envelope_is_refused(_no_persistence, _gate) -> None:
+    """Skipping auth-token is not a bypass: the first other envelope is refused
+    with the same typed close and never dispatched."""
+    from trid3nt_server.server import SessionState, reject_auth_handshake
 
     state = SessionState(session_id=new_ulid())
     ws = _FakeWebSocket()
-    proceed = await _ensure_auth_handshake(ws, state)
+    await reject_auth_handshake(ws, state.session_id)
 
-    assert proceed is False
     assert _sent_types(ws) == ["error"]
     assert ws.sent[0]["payload"]["error_code"] == "AUTH_FAILED"
     assert ws.closed_with == (1008, "AUTH_FAILED")
     assert state.auth_handshake_complete is False
-
-
-@pytest.mark.asyncio
-async def test_implicit_handshake_proceeds_when_token_off(
-    _no_persistence,
-) -> None:
-    """Gate unset: the implicit anonymous path still binds + acks (regression)."""
-    from trid3nt_server.server import SessionState, _ensure_auth_handshake
-
-    state = SessionState(session_id=new_ulid())
-    ws = _FakeWebSocket()
-    proceed = await _ensure_auth_handshake(ws, state)
-
-    assert proceed is True
-    assert _sent_types(ws) == ["auth-ack"]
-    assert ws.closed_with is None
-    assert state.auth_handshake_complete is True
-    # The implicit path also advertises endpoints.
-    assert ws.sent[0]["payload"]["endpoints"] == {
-        "data_base": "http://100.64.0.1:9000",
-        "http_base": "http://100.64.0.1:8766",
-    }

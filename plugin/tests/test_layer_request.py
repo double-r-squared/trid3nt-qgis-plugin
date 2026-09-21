@@ -23,6 +23,7 @@ from plugin.render import layer_request as lr  # noqa: E402
 from stub_server import (  # noqa: E402
     LAYER_REQUEST_ROW,
     STUB_LAYER_REQUEST_KEY,
+    STUB_TOKEN,
     StubAgentServer,
 )
 from test_keys_form import _FakeAuthManager, _FakeConfig  # noqa: E402
@@ -127,7 +128,7 @@ class TestLayerRequestRoundTrip(unittest.TestCase):
         self.server = StubAgentServer()
         self.server.start()
         self.addCleanup(self.server.stop)
-        self.client = tc.AgentClient(self.server.url)
+        self.client = tc.AgentClient(self.server.url, token=STUB_TOKEN)
         self.addCleanup(self.client.close)
         self.client.connect()
         self.client.create_case("layer request test")

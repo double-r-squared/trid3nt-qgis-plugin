@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from plugin.net import trid3nt_client as tc  # noqa: E402
 from stub_server import (  # noqa: E402
     CASE_LIST_ROWS,
+    STUB_TOKEN,
     StubAgentServer,
 )
 
@@ -88,7 +89,7 @@ class TestStartupCaseReuse(unittest.TestCase):
     reuse ladder ends in a full case-open rehydration."""
 
     def _client(self, server, **kwargs):
-        client = tc.AgentClient(server.url, **kwargs)
+        client = tc.AgentClient(server.url, **{"token": STUB_TOKEN, **kwargs})
         self.addCleanup(client.close)
         return client
 

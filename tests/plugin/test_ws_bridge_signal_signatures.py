@@ -136,9 +136,9 @@ def test_every_forwarded_pair_has_matching_signature(parsed):
     )
 
 
-def test_connected_is_four_arg(parsed):
-    # The exact 650e575 regression: connected MUST carry
-    # (user_id, is_anonymous, http_base, data_base) on BOTH sides.
-    expected = ("str", "bool", "str", "str")
+def test_connected_is_three_arg(parsed):
+    # connected MUST carry (user_id, http_base, data_base) on BOTH sides; a
+    # narrower signature silently drops the advertised endpoints.
+    expected = ("str", "str", "str")
     assert parsed["worker_sigs"].get("connected") == expected
     assert parsed["bridge_sigs"].get("connected") == expected

@@ -55,8 +55,12 @@ def _aoi_bbox_problem(value: Any) -> Optional[str]:
         return f"aoi_bbox min > max (order is [min_lon, min_lat, max_lon, max_lat]): {value!r}"
     return None
 
-#: An auth-token carrying this value is rejected AUTH_REQUIRED + close 1008.
-EXPIRED_TOKEN = "stub-expired-token"
+#: The one token the stub accepts, mirroring the daemon's minted gate.
+STUB_TOKEN = "stub-server-token"
+
+#: Any other auth-token -- this one included, and the empty one a token-less
+#: client sends -- is refused AUTH_FAILED + close 1008.
+REFUSED_TOKEN = "stub-wrong-token"
 
 # A raster row exactly as the local agent publishes it POST TiTiler->QGIS
 # swap: ``uri`` is the raw s3 COG and the explicit ``legend`` (LegendKey:
@@ -483,20 +487,20 @@ class StubAgentServer:
 
             if etype == "auth-token":
                 token = (env.get("payload") or {}).get("token") or ""
-                if token == EXPIRED_TOKEN:
-                    # The live agent's dead-token path: an in-band error
+                if token != STUB_TOKEN:
+                    # The live agent's refused-token path: an in-band error
                     # envelope, then a policy-violation close (1008). No
                     # auth-ack ever arrives.
                     await send(
                         "error",
                         {
-                            "error_code": "AUTH_REQUIRED",
-                            "message": "token expired or invalid",
+                            "error_code": "AUTH_FAILED",
+                            "message": "access token required: Add the token under Settings",
                         },
                     )
-                    await ws.close(code=1008, reason="auth required")
+                    await ws.close(code=1008, reason="AUTH_FAILED")
                     return
-                ack_payload = {"user_id": STUB_USER_ID, "is_anonymous": token == ""}
+                ack_payload = {"user_id": STUB_USER_ID}
                 if self.advertise_endpoints:
                     ack_payload.update(self.advertise_endpoints)
                 await send("auth-ack", ack_payload)

@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from plugin.case import aoi  # noqa: E402
 from plugin.net import trid3nt_client as tc  # noqa: E402
-from stub_server import StubAgentServer  # noqa: E402
+from stub_server import STUB_TOKEN, StubAgentServer  # noqa: E402
 
 
 
@@ -90,7 +90,7 @@ class TestAoi(unittest.TestCase):
         server = StubAgentServer()
         server.start()
         self.addCleanup(server.stop)
-        client = tc.AgentClient(server.url)
+        client = tc.AgentClient(server.url, token=STUB_TOKEN)
         self.addCleanup(client.close)
         client.connect()
         client.create_case("aoi case", bbox=[-82.6, 35.5, -82.5, 35.6])
@@ -100,7 +100,7 @@ class TestAoi(unittest.TestCase):
             create["payload"]["args"]["bbox"], [-82.6, 35.5, -82.5, 35.6]
         )
         # no bbox -> args carries no bbox key (byte-identical legacy path)
-        client2 = tc.AgentClient(server.url)
+        client2 = tc.AgentClient(server.url, token=STUB_TOKEN)
         self.addCleanup(client2.close)
         client2.connect()
         client2.create_case("no aoi case")

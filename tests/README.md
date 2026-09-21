@@ -12,7 +12,7 @@ join the run as the sixth slice.
 | `fixtures/` | data the tests read; no code | - | - |
 | `calibration/` | the observe slot's pairing and the skill metrics over those pairs | 2 | 23 |
 | `adapters/` | provider adapters, the message IR, the turn loop, the stream persistence | 22 | 289 |
-| `credentials/` | credential resolution, the auth handshake, identity | 6 | 64 |
+| `credentials/` | credential resolution, the access-token gate and the connect handshake | 4 | 49 |
 | `derive/` | the derive tools, the two session tools | 3 | 27 |
 | `render/` | the emitter, the uri registry, publication, the format set, charts | 36 | 470 |
 | `fetchers/` | the fetch router, its executors, hooks and fallbacks | 79 | 2261 |
@@ -45,9 +45,9 @@ Six slices by subsystem, each its own foreground invocation, from the repo root:
     make test-fetchers        # tests/fetchers                                                                              2261
     make test-spatial         # tests/derive tests/render tests/mesh                                                         742
     make test-engines         # tests/telemac tests/runtime tests/solver tests/search tests/calibration                     1560
-    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts           1296
+    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts           1288
     make test-model-surface   # tests/adapters tests/tools                                                                   656
-    make test-packages        # contracts/tests plugin/tests tests/plugin                                                    810
+    make test-packages        # contracts/tests plugin/tests tests/plugin                                                    807
 
 The prose guards - history markers, dead references, the package maps, the
 template pages, banner comments - are LINTS rather than tests: they read the

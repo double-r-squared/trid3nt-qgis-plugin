@@ -51,7 +51,7 @@ dock._auto_connect_done_this_show = True  # block showEvent auto-connect
 # ---- 1. advertised endpoints win outright ---------------------------------- #
 dock.settings.local_url = "ws://127.0.0.1:8765/ws"
 dock._on_connected(
-    "USER1", True, "http://100.64.0.5:8766/", "http://100.64.0.5:9000/"
+    "USER1", "http://100.64.0.5:8766/", "http://100.64.0.5:9000/"
 )
 if dock._effective_http_base() != "http://100.64.0.5:8766":
     _fail(f"advertised http_base not honored: {dock._effective_http_base()!r}")
@@ -71,7 +71,7 @@ if gdal.GetConfigOption("GDAL_PAM_ENABLED") != "NO":
 
 # ---- 2. no advertisement + tailnet-shaped local_url -> WS-host derivation -- #
 dock.settings.local_url = "ws://100.64.0.7:8765/ws"
-dock._on_connected("USER1", True, "", "")
+dock._on_connected("USER1", "", "")
 if dock._effective_http_base() != "http://100.64.0.7:8766":
     _fail(f"WS-host fallback wrong: {dock._effective_http_base()!r}")
 if dock._effective_data_base() != dock.settings.minio_endpoint:
@@ -87,21 +87,21 @@ if gdal.GetConfigOption("AWS_S3_ENDPOINT") != "127.0.0.1:9000":
 
 # ---- 3. no advertisement + DEFAULT local_url -> byte-identical old default - #
 dock.settings.local_url = "ws://127.0.0.1:8765/ws"  # DEFAULT_LOCAL_URL
-dock._on_connected("USER1", True, "", "")
+dock._on_connected("USER1", "", "")
 if dock._effective_http_base() != "http://127.0.0.1:8766":
     _fail(
         "localhost default regressed: "
         f"{dock._effective_http_base()!r} != http://127.0.0.1:8766"
     )
 
-# ---- 4. token passthrough: the optional shared tailnet token rides through - #
+# ---- 4. token passthrough: the server token rides through ---------------- #
 fresh_settings = PluginSettings()
 fresh_settings.token = "tailnet-shared-secret"
 if fresh_settings.mode != "local":
     _fail(f"expected mode local (migration seam), got {fresh_settings.mode!r}")
 if fresh_settings.effective_token() != "tailnet-shared-secret":
     _fail(
-        "the optional shared token must ride effective_token(), got "
+        "the server token must ride effective_token(), got "
         f"{fresh_settings.effective_token()!r}"
     )
 # Unset (default OFF) still rides through cleanly as "".

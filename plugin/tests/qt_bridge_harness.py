@@ -13,10 +13,12 @@ import time
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.insert(0, os.path.dirname(__file__))
 
 from qgis.PyQt.QtCore import QCoreApplication  # noqa: E402
 
 from plugin.net.ws_bridge import AgentBridge  # noqa: E402
+from stub_server import STUB_TOKEN  # noqa: E402
 
 
 def main() -> int:
@@ -25,7 +27,7 @@ def main() -> int:
     bridge = AgentBridge()
 
     seen = {"connected": False, "case": None, "turn": False, "kinds": []}
-    bridge.connected.connect(lambda _u, _a: seen.__setitem__("connected", True))
+    bridge.connected.connect(lambda _u, _h, _d: seen.__setitem__("connected", True))
     bridge.case_ready.connect(lambda cid: seen.__setitem__("case", cid))
     bridge.failed.connect(lambda m: print("FAILED:", m, flush=True))
 
@@ -38,7 +40,7 @@ def main() -> int:
 
     # The statement the shadowed-signal bug aborted on (QThread(self) ->
     # ChildAdded QEvent -> QObject.event lookup).
-    bridge.start(url)
+    bridge.start(url, token=STUB_TOKEN)
 
     def pump(seconds: float, until) -> None:
         deadline = time.time() + seconds

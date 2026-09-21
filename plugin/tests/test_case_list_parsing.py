@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from plugin.net import trid3nt_client as tc  # noqa: E402
 from stub_server import (  # noqa: E402
     CASE_LIST_ROWS,
+    STUB_TOKEN,
     StubAgentServer,
 )
 
@@ -45,7 +46,7 @@ class TestCaseList(unittest.TestCase):
         server = StubAgentServer()
         server.start()
         self.addCleanup(server.stop)
-        client = tc.AgentClient(server.url)
+        client = tc.AgentClient(server.url, token=STUB_TOKEN)
         self.addCleanup(client.close)
         client.connect()
         client.create_case("case-list test")

@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from qgis.core import QgsApplication, QgsProject, QgsRasterLayer  # noqa: E402
 
 from plugin.net import trid3nt_client as tc  # noqa: E402
+from trid3nt_server.credentials.auth_handshake import configured_access_token  # noqa: E402
 from plugin.render.layers import configure_store_access  # noqa: E402
 from plugin.render.processing import run_processing_request  # noqa: E402
 
@@ -81,7 +82,7 @@ def main(evidence_path: str) -> int:
     )
     assert note is None, note
 
-    client = tc.AgentClient(WS_URL)
+    client = tc.AgentClient(WS_URL, token=configured_access_token())
     client.connect()
     case_id = client.create_case("session-tools proof")
     _log("case", case_id=case_id)

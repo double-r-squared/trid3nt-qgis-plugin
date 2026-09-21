@@ -22,6 +22,7 @@ from stub_server import (  # noqa: E402
     SPATIAL_INPUT_POINT_ROW,
     SPATIAL_INPUT_VECTOR_ROW,
     STUB_SPATIAL_POINT_REQUEST_ID,
+    STUB_TOKEN,
     StubAgentServer,
 )
 
@@ -121,7 +122,7 @@ class _RoundTripBase(unittest.TestCase):
         self.server = StubAgentServer()
         self.server.start()
         self.addCleanup(self.server.stop)
-        self.client = tc.AgentClient(self.server.url)
+        self.client = tc.AgentClient(self.server.url, token=STUB_TOKEN)
         self.addCleanup(self.client.close)
         self.client.connect()
         self.client.create_case("envelope gap test")

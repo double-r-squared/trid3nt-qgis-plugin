@@ -14,6 +14,7 @@ import time
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 from plugin.net import trid3nt_client as tc  # noqa: E402
+from trid3nt_server.credentials.auth_handshake import configured_access_token  # noqa: E402
 from plugin.net.run_invocation import parse_run_invocation  # noqa: E402
 
 URL = os.environ.get("TRID3NT_AGENT_URL", "ws://127.0.0.1:8765")
@@ -83,10 +84,10 @@ def _run(client, line):
 
 
 def main() -> int:
-    client = tc.AgentClient(URL)
+    client = tc.AgentClient(URL, token=configured_access_token())
     try:
         uid = client.connect()
-        print(f"connected user={uid} anon={client.is_anonymous} url={URL}")
+        print(f"connected user={uid} url={URL}")
         case_id = client.create_case("!run live proof")
         print(f"case={case_id}")
 

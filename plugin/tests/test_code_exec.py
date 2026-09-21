@@ -22,6 +22,7 @@ from stub_server import (  # noqa: E402
     CODE_EXEC_REQUEST_ROW,
     STUB_CODE_EXEC_ID,
     STUB_PROCESSING_CODE_REQUEST_ID,
+    STUB_TOKEN,
     StubAgentServer,
 )
 
@@ -89,7 +90,7 @@ class TestCodeExecRoundTrip(unittest.TestCase):
         self.server = StubAgentServer()
         self.server.start()
         self.addCleanup(self.server.stop)
-        self.client = tc.AgentClient(self.server.url)
+        self.client = tc.AgentClient(self.server.url, token=STUB_TOKEN)
         self.addCleanup(self.client.close)
         self.client.connect()
         self.client.create_case("code exec test")

@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 
 from plugin.net import trid3nt_client as tc  # noqa: E402
-from stub_server import CASE_LIST_ROWS, StubAgentServer  # noqa: E402
+from stub_server import CASE_LIST_ROWS, STUB_TOKEN, StubAgentServer  # noqa: E402
 
 
 class TestSetBboxTransportArgs(unittest.TestCase):
@@ -30,7 +30,7 @@ class TestSetBboxTransportArgs(unittest.TestCase):
         self.server = StubAgentServer()
         self.server.start()
         self.addCleanup(self.server.stop)
-        self.client = tc.AgentClient(self.server.url)
+        self.client = tc.AgentClient(self.server.url, token=STUB_TOKEN)
         self.addCleanup(self.client.close)
         self.client.connect()
         self.client.create_case("set-bbox transport test")

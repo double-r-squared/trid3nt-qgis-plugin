@@ -20,6 +20,7 @@ from plugin.net import trid3nt_client as tc  # noqa: E402
 from stub_server import (  # noqa: E402
     PROCESSING_ALG_REQUEST_ROW,
     STUB_PROCESSING_ALG_REQUEST_ID,
+    STUB_TOKEN,
     StubAgentServer,
 )
 
@@ -32,7 +33,7 @@ class TestProcessingRoundTrip(unittest.TestCase):
         self.server = StubAgentServer()
         self.server.start()
         self.addCleanup(self.server.stop)
-        self.client = tc.AgentClient(self.server.url)
+        self.client = tc.AgentClient(self.server.url, token=STUB_TOKEN)
         self.addCleanup(self.client.close)
         self.client.connect()
         self.client.create_case("processing test")

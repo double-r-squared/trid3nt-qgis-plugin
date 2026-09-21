@@ -1,315 +1,166 @@
-"""``trid3nt_server.credentials.auth_handshake`` under the local build.
+"""``trid3nt_server.credentials.auth_handshake``: one token, one user, always on.
 
-There is no token verification and no identity provider: ``solver_backend()`` is
-hardwired to ``local-docker``, so every connection - any token, an empty token or
-no envelope - resolves to the one fixed local user, the ack mirrors the result
-without leaking a raw token, and any other mode fails LOUD."""
+The daemon mints its access token into the config file at first start, every
+connection must present that token, and a verified connection is scoped to the
+one fixed session identity. Offline."""
 
 from __future__ import annotations
 
 import json
+import stat
 
 import pytest
 
-from trid3nt_server.credentials import auth_handshake
+from trid3nt_contracts.auth import AuthAckEnvelope, AuthTokenEnvelope
+from trid3nt_contracts.common import new_ulid
+
 from trid3nt_server.credentials.auth_handshake import (
     LOCAL_SINGLE_USER_ID,
-    AuthResult,
-    authenticate_token,
+    access_token_path,
     build_auth_ack,
+    configured_access_token,
+    ensure_access_token,
+    verify_access_token,
 )
-from trid3nt_server.persistence import Persistence
-from trid3nt_contracts.auth import AuthAckEnvelope, AuthTokenEnvelope
-from trid3nt_contracts.common import new_ulid, now_utc
-from trid3nt_contracts.user import User
 
 
+@pytest.fixture(autouse=True)
+def _config_home(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    """Point the config home at an empty tmp dir so no case reads or writes the
+    dev box's own minted token, and clear the env override."""
+    monkeypatch.delenv("TRID3NT_ACCESS_TOKEN", raising=False)
+    monkeypatch.setenv("TRID3NT_HOME", str(tmp_path))
 
 
-class MockMCPClient:
-    """In-memory mock of the MongoDB MCP server's tool surface."""
+def test_mints_token_once_into_the_config_file() -> None:
+    """First start writes the token 0600; a later start reads the same one."""
+    path = access_token_path()
+    assert not path.exists()
 
-    def __init__(self) -> None:
-        self._store: dict[str, dict[str, dict]] = {}
-        self.calls: list[tuple[str, dict]] = []
+    minted = ensure_access_token()
+    assert minted
+    assert path.read_text(encoding="utf-8").strip() == minted
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
-    async def call_tool(self, name, arguments=None):  # noqa: D401
-        args = dict(arguments or {})
-        self.calls.append((name, args))
-        coll = args.get("collection") or "_default"
-        store = self._store.setdefault(coll, {})
-
-        if name == "insert-one":
-            doc = args["document"]
-            store[doc["_id"]] = doc
-            return {"insertedId": doc["_id"]}
-
-        if name == "update-one":
-            filt = args.get("filter", {})
-            update = args.get("update", {})
-            set_ = update.get("$set", {})
-            upsert = args.get("upsert", False)
-            target_id = filt.get("_id")
-            if target_id and target_id in store:
-                store[target_id].update(set_)
-            elif upsert and target_id:
-                store[target_id] = {**set_, "_id": target_id}
-            return {"matchedCount": 1, "modifiedCount": 1}
-
-        if name == "find-one":
-            filt = args.get("filter", {})
-            for doc in store.values():
-                if all(doc.get(k) == v for k, v in filt.items()):
-                    return {"document": doc}
-            return {"document": None}
-
-        if name == "find":
-            filt = args.get("filter", {})
-            out = []
-            for doc in store.values():
-                if all(doc.get(k) == v for k, v in filt.items()):
-                    out.append(doc)
-            return {"documents": out}
-
-        raise RuntimeError(f"MockMCPClient: unhandled tool {name}")
+    assert ensure_access_token() == minted
+    assert configured_access_token() == minted
 
 
-@pytest.fixture()
-def persistence() -> Persistence:
-    return Persistence(MockMCPClient())
+def test_env_override_mints_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """TRID3NT_ACCESS_TOKEN wins and no config file is written."""
+    monkeypatch.setenv("TRID3NT_ACCESS_TOKEN", "from-the-env")
+    assert ensure_access_token() == "from-the-env"
+    assert configured_access_token() == "from-the-env"
+    assert not access_token_path().exists()
 
 
+def test_minted_token_is_the_only_one_that_verifies() -> None:
+    minted = ensure_access_token()
+    assert verify_access_token(minted) is True
+    assert verify_access_token(minted + "x") is False
+    assert verify_access_token("") is False
+    assert verify_access_token(None) is False
 
 
-@pytest.mark.asyncio
-async def test_authenticate_token_nonempty_token_resolves_local_user(
-    persistence: Persistence,
-) -> None:
-    """A presented token is ignored -> the fixed local user."""
-    result = await authenticate_token(
-        AuthTokenEnvelope(token="any.jwt.like.string"), persistence
-    )
-
-    assert result.is_anonymous is True
-    assert result.user.user_id == LOCAL_SINGLE_USER_ID
-    assert result.user.is_active is True
-
-
-
-
-@pytest.mark.asyncio
-async def test_authenticate_token_empty_token_resolves_local_user(
-    persistence: Persistence,
-) -> None:
-    """Empty token string -> the fixed local user."""
-    result = await authenticate_token(AuthTokenEnvelope(token=""), persistence)
-    assert result.is_anonymous is True
-    assert result.user.user_id == LOCAL_SINGLE_USER_ID
-
-
-
-
-@pytest.mark.asyncio
-async def test_authenticate_token_no_envelope_resolves_local_user(
-    persistence: Persistence,
-) -> None:
-    """No envelope at all -> the fixed local user."""
-    result = await authenticate_token(None, persistence)
-    assert result.is_anonymous is True
-    assert result.user.user_id == LOCAL_SINGLE_USER_ID
-
-
-
-
-@pytest.mark.asyncio
-async def test_local_user_shape(
-    persistence: Persistence,
-) -> None:
-    """Resolved local User: anonymous, is_active=True, no email."""
-    result = await authenticate_token(None, persistence)
-    u = result.user
-    assert u.is_anonymous is True
-    assert u.email is None
-    assert u.is_active is True
-    assert u.user_id == LOCAL_SINGLE_USER_ID
-
-
-
-
-def test_build_auth_ack_shape() -> None:
-    """``build_auth_ack`` mirrors AuthResult and never carries the raw token."""
-    uid = new_ulid()
-    user = User(
-        user_id=uid,
-        created_at=now_utc(),
-        is_anonymous=True,
-    )
-    result = AuthResult(
-        user=user,
-        is_anonymous=True,
-    )
-    ack = build_auth_ack(result)
-    assert ack.user_id == uid
-    assert ack.is_anonymous is True
-
-    # Critical Decision-F backstop: the ack's wire form must NOT carry the
-    # token, the email, or any credential.
-    a = ack.model_dump(mode="json")
-    assert "token" not in a
-    assert "email" not in a
-    assert "password" not in a
-
-
-
-
-@pytest.mark.asyncio
-async def test_persistence_unbound_returns_in_memory_user() -> None:
-    """Persistence=None -> in-memory local User, no raise."""
-    result = await authenticate_token(AuthTokenEnvelope(token="x"), None)
-    assert result.is_anonymous is True
-    assert result.user.user_id == LOCAL_SINGLE_USER_ID
-
-    # No envelope with Persistence=None also lands on the local user.
-    result2 = await authenticate_token(None, None)
-    assert result2.is_anonymous is True
-    assert result2.user.user_id == LOCAL_SINGLE_USER_ID
-
-
+def test_build_auth_ack_carries_the_fixed_identity() -> None:
+    """The ack mirrors the one session identity and NEVER a credential."""
+    ack = build_auth_ack()
+    assert ack.user_id == LOCAL_SINGLE_USER_ID
+    dumped = ack.model_dump(mode="json")
+    assert "token" not in dumped
+    assert dumped["endpoints"] is None
 
 
 class _FakeWebSocket:
-    """Minimal stand-in for ``websockets.asyncio.server.ServerConnection``.
-
-    Only ``send`` is exercised; every envelope the handler sends lands in
-    ``self.sent`` as a JSON-decoded dict."""
+    """Minimal stand-in for ``websockets.asyncio.server.ServerConnection``:
+    every envelope the handler sends lands in ``sent``, and a close is recorded
+    rather than performed."""
 
     def __init__(self) -> None:
         self.sent: list[dict] = []
+        self.local_address = None
+        self.closed_with: tuple[int, str] | None = None
 
-    async def send(self, raw):
+    async def send(self, raw) -> None:
         self.sent.append(json.loads(raw))
 
+    async def close(self, code: int = 1000, reason: str = "") -> None:
+        self.closed_with = (code, reason)
 
-@pytest.mark.asyncio
-async def test_server_connect_handshake_flow_with_mocks() -> None:
-    """Full WS connect -> auth-token -> auth-ack against a mock Persistence.
 
-    ``SessionState`` binds the resolved user and reads anonymous, exactly one
-    ``auth-ack`` reaches the wire, and a completed session is never rebound."""
-    from trid3nt_server.server import (
-        SessionState,
-        _ensure_auth_handshake,
-        _handle_auth_token,
-        set_persistence,
-    )
+@pytest.fixture()
+def _no_persistence():
+    """Run the handshake with the in-memory (None) persistence path."""
+    from trid3nt_server.server import set_persistence
 
-    # Bind the mock Persistence into the server singleton.
-    p = Persistence(MockMCPClient())
-    set_persistence(p)
-
-    # Path A: explicit auth-token envelope (token ignored -> anonymous).
-    state_a = SessionState(session_id=new_ulid())
-    ws_a = _FakeWebSocket()
-    await _handle_auth_token(
-        ws_a,  # type: ignore[arg-type]
-        state_a,
-        {"token": "eyJ.fake.jwt", "anonymous": False},
-    )
-
-    # SessionState was bound.
-    assert state_a.authenticated_user_id is not None
-    assert state_a.is_anonymous is True
-    assert state_a.auth_handshake_complete is True
-
-    # The wire emitted an auth-ack with the right shape.
-    assert len(ws_a.sent) == 1
-    ack_env = ws_a.sent[0]
-    assert ack_env["type"] == "auth-ack"
-    assert ack_env["session_id"] == state_a.session_id
-    payload = ack_env["payload"]
-    assert payload["user_id"] == state_a.authenticated_user_id
-    assert "firebase_uid" not in payload
-    assert payload["is_anonymous"] is True
-    assert "tier" not in payload  # no tier claim
-    # Decision F: no raw token on the wire.
-    assert "token" not in payload
-
-    # Path B: implicit fallback on a fresh state -- no auth-token envelope
-    # ever arrives.
-    state_b = SessionState(session_id=new_ulid())
-    ws_b = _FakeWebSocket()
-    await _ensure_auth_handshake(ws_b, state_b)  # type: ignore[arg-type]
-
-    assert state_b.is_anonymous is True
-    assert state_b.auth_handshake_complete is True
-    # Auth-ack emitted for the anonymous fallback path too.
-    assert len(ws_b.sent) == 1
-    assert ws_b.sent[0]["type"] == "auth-ack"
-    assert ws_b.sent[0]["payload"]["is_anonymous"] is True
-
-    # Cleanup the persistence singleton so other tests get a clean slate.
+    set_persistence(None)
+    yield
     set_persistence(None)
 
 
+@pytest.mark.asyncio
+async def test_right_token_binds_the_session(_no_persistence) -> None:
+    from trid3nt_server.server import SessionState, _handle_auth_token
+
+    token = ensure_access_token()
+    state = SessionState(session_id=new_ulid())
+    ws = _FakeWebSocket()
+    await _handle_auth_token(ws, state, {"token": token})
+
+    assert [e["type"] for e in ws.sent] == ["auth-ack"]
+    assert ws.closed_with is None
+    payload = ws.sent[0]["payload"]
+    assert payload["user_id"] == LOCAL_SINGLE_USER_ID
+    assert "token" not in payload
+    assert state.authenticated_user_id == LOCAL_SINGLE_USER_ID
+    assert state.auth_handshake_complete is True
 
 
 @pytest.mark.asyncio
-async def test_connection_context_retains_authenticated_user_id() -> None:
-    """SessionState.authenticated_user_id survives across a second handshake call."""
-    from trid3nt_server.server import (
-        SessionState,
-        _bind_auth_result,
-        _ensure_auth_handshake,
-    )
+async def test_token_less_connect_is_refused(_no_persistence) -> None:
+    """No token presented at all -> the typed refusal, and nothing is bound."""
+    from trid3nt_server.server import SessionState, _handle_auth_token
 
+    ensure_access_token()
     state = SessionState(session_id=new_ulid())
-    fixed_user_id = new_ulid()
-    result = AuthResult(
-        user=User(
-            user_id=fixed_user_id,
-            created_at=now_utc(),
-            is_anonymous=True,
-        ),
-        is_anonymous=True,
-    )
-    _bind_auth_result(state, result)
-    assert state.authenticated_user_id == fixed_user_id
-    assert state.auth_handshake_complete is True
+    ws = _FakeWebSocket()
+    await _handle_auth_token(ws, state, {})
 
-    # A second ``_ensure_auth_handshake`` call is a no-op (handshake already
-    # complete) -- the bound user_id MUST NOT be overwritten.
-    class _NoopWS:
-        async def send(self, raw):
-            raise AssertionError(
-                "send must not be called when handshake already complete"
-            )
-
-    await _ensure_auth_handshake(_NoopWS(), state)  # type: ignore[arg-type]
-    assert state.authenticated_user_id == fixed_user_id
-    assert state.is_anonymous is True
+    assert [e["type"] for e in ws.sent] == ["error"]
+    assert ws.sent[0]["payload"]["error_code"] == "AUTH_FAILED"
+    assert ws.closed_with == (1008, "AUTH_FAILED")
+    assert state.auth_handshake_complete is False
+    assert state.authenticated_user_id is None
 
 
+@pytest.mark.asyncio
+async def test_malformed_envelope_is_refused(_no_persistence) -> None:
+    """A payload that is not an auth-token presents nothing, so it is refused
+    rather than falling through to any lesser path."""
+    from trid3nt_server.server import SessionState, _handle_auth_token
+
+    ensure_access_token()
+    state = SessionState(session_id=new_ulid())
+    ws = _FakeWebSocket()
+    await _handle_auth_token(ws, state, {"token": ["not", "a", "string"]})
+
+    assert ws.sent[0]["payload"]["error_code"] == "AUTH_FAILED"
+    assert ws.closed_with == (1008, "AUTH_FAILED")
+    assert state.auth_handshake_complete is False
 
 
 def test_auth_envelope_contracts_round_trip() -> None:
     """Auth envelope contracts JSON-round-trip cleanly (agent-side guard)."""
-    tok = AuthTokenEnvelope(token="eyJabc.payload.sig", anonymous=False)
+    tok = AuthTokenEnvelope(token="minted-token-value")
     a = tok.model_dump(mode="json")
     b = AuthTokenEnvelope.model_validate(json.loads(json.dumps(a))).model_dump(
         mode="json"
     )
     assert a == b
 
-    ack = AuthAckEnvelope(
-        user_id=new_ulid(),
-        is_anonymous=True,
-    )
+    ack = AuthAckEnvelope(user_id=new_ulid())
     c = ack.model_dump(mode="json")
     d = AuthAckEnvelope.model_validate(json.loads(json.dumps(c))).model_dump(
         mode="json"
     )
     assert c == d
-
-
-
-

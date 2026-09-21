@@ -22,9 +22,10 @@ sys.path.insert(0, os.path.dirname(__file__))
 from plugin.net import trid3nt_client as tc  # noqa: E402
 from plugin.ui import gate  # noqa: E402
 from stub_server import (  # noqa: E402
+    STUB_TOKEN,
     STUB_TOOL_CANDIDATES_REQUEST_ID,
-    TOOL_CANDIDATES_ROW,
     StubAgentServer,
+    TOOL_CANDIDATES_ROW,
 )
 
 
@@ -126,7 +127,7 @@ class TestToolChoiceRoundTrip(unittest.TestCase):
         self.server = StubAgentServer()
         self.server.start()
         self.addCleanup(self.server.stop)
-        self.client = tc.AgentClient(self.server.url)
+        self.client = tc.AgentClient(self.server.url, token=STUB_TOKEN)
         self.addCleanup(self.client.close)
         self.client.connect()
         self.client.create_case("tool picker test")

@@ -22,6 +22,7 @@ from stub_server import (  # noqa: E402
     CASE_LIST_ROWS,
     CASE_OPEN_CHAT_ROWS,
     RASTER_LAYER_ROW,
+    STUB_TOKEN,
     StubAgentServer,
 )
 
@@ -160,7 +161,7 @@ class TestCaseSelect(unittest.TestCase):
         self.server = StubAgentServer()
         self.server.start()
         self.addCleanup(self.server.stop)
-        self.client = tc.AgentClient(self.server.url)
+        self.client = tc.AgentClient(self.server.url, token=STUB_TOKEN)
         self.addCleanup(self.client.close)
         self.client.connect()
         self.client.create_case("select test")

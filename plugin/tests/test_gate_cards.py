@@ -18,6 +18,7 @@ from plugin.ui import gate  # noqa: E402
 from stub_server import (  # noqa: E402
     PAYLOAD_WARNING_HARDCAP_ROW,
     PAYLOAD_WARNING_ROW,
+    STUB_TOKEN,
     STUB_WARNING_ID,
     StubAgentServer,
 )
@@ -128,7 +129,7 @@ class TestGateRoundTrip(unittest.TestCase):
         self.server = StubAgentServer()
         self.server.start()
         self.addCleanup(self.server.stop)
-        self.client = tc.AgentClient(self.server.url)
+        self.client = tc.AgentClient(self.server.url, token=STUB_TOKEN)
         self.addCleanup(self.client.close)
         self.client.connect()
         self.client.create_case("gate test")
