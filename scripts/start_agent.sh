@@ -96,4 +96,7 @@ WARM_MODEL="${TRID3NT_OPENAI_MODEL:-qwen3:8b-24k}"
 disown
 echo "[start_agent] Ollama keep-alive warmup fired in background (model=$WARM_MODEL keep_alive=24h)"
 
+TOKEN_FILE="${TRID3NT_HOME:-$HOME/.trid3nt}/access_token"
+echo "[start_agent] server token -> $TOKEN_FILE (paste it into the plugin's Settings > Server token)"
+
 echo "[start_agent] agent is running -- tail $LOG_FILE to follow startup"

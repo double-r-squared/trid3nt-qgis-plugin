@@ -16,23 +16,20 @@ from trid3nt_contracts.case import (
     CaseSessionState,
     CaseSummary,
 )
-from trid3nt_contracts.user import User
 
 logger = logging.getLogger("trid3nt_server.persistence")
 
-# Logical database name for all Case/User/Secret persistence: the file backend
+# Logical database name for all Case/Secret persistence: the file backend
 # uses it as the namespace subdirectory under the dev-persistence root. Test
 # isolation goes through ``TRID3NT_DEV_PERSISTENCE_DIR``, which relocates the
 # whole root rather than renaming one namespace inside it.
 DEFAULT_DATABASE = "trid3nt_dev"
 
 # Collection names -- pinned nomenclature: "projects" for Cases, "sessions"
-# for chat history, "users" for the forward-looking Auth track stub,
-# "secrets" for per-Case keys.
+# for chat history, "secrets" for per-Case keys.
 CASES_COLLECTION = "projects"  # Case <-> projects 1:1
 CHAT_COLLECTION = "case_chat_messages"  # per-turn message log
 SESSIONS_COLLECTION = "sessions"  # agent's own session records
-USERS_COLLECTION = "users"  # Auth/Users track stub
 
 
 # Store client protocol -- duck-typed so tests can pass a mock
@@ -597,50 +594,6 @@ class Persistence:
             logger.warning("malformed session doc for session_id=%s", session_id)
             return None
 
-    # ----- Users (Auth/Users track stub) ----------------------------------- #
-
-    async def upsert_user(self, user: User) -> User:
-        """Insert or update a user record."""
-        body = user.model_dump(mode="json")
-        body["_id"] = user.user_id
-        await self._store.call_tool(
-            "update-one",
-            {
-                "database": self._db,
-                "collection": USERS_COLLECTION,
-                "filter": {"_id": user.user_id},
-                "update": {"$set": body},
-                "upsert": True,
-            },
-        )
-        return user
-
-    async def get_user_by_id(self, user_id: str) -> User | None:
-        """Find a user by ULID, or ``None`` when no record exists."""
-        raw = await self._store.call_tool(
-            "find-one",
-            {
-                "database": self._db,
-                "collection": USERS_COLLECTION,
-                "filter": {"_id": user_id},
-            },
-        )
-        doc = _unwrap_result(raw)
-        if not doc or not isinstance(doc, dict):
-            return None
-        normalized = {k: v for k, v in doc.items() if k != "_id"}
-        if "user_id" not in normalized:
-            normalized["user_id"] = user_id
-        # Drop fields the current User schema does not carry, so a schema bump
-        # never breaks an existing record.
-        allowed = set(User.model_fields.keys())
-        normalized = {k: v for k, v in normalized.items() if k in allowed}
-        try:
-            return User.model_validate(normalized)
-        except Exception:  # noqa: BLE001
-            logger.warning("malformed user doc for user_id=%s", user_id)
-            return None
-
 
 # Storage is ``~/.trid3nt/dev_persistence/<database>/<collection>.json``, one
 # JSON file per collection mapping ``_id`` to document. A per-collection
@@ -1033,5 +986,4 @@ __all__ = [
     "CASES_COLLECTION",
     "CHAT_COLLECTION",
     "SESSIONS_COLLECTION",
-    "USERS_COLLECTION",
 ]

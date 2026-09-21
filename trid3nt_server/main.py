@@ -176,6 +176,12 @@ def run(argv: list[str] | None = None) -> int:
     # preserves a pre-bound singleton, so this binding survives startup.
     _maybe_bind_dev_persistence()
 
+    # The access token is the connect gate, so it must exist before the socket
+    # does. Minted into the config file on a first start and printed once there.
+    from .credentials.auth_handshake import ensure_access_token
+
+    ensure_access_token()
+
     if startup_only:
         logger.info("--startup-only: tool registry verified; exiting without serving")
         return 0

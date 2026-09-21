@@ -1,7 +1,8 @@
-"""Local WS connect handshake: the ONE fixed local user.
+"""Local WS connect handshake: one token, one user, always on.
 
-There is no identity provider and no token verification: every connection
-resolves to ``LOCAL_SINGLE_USER_ID``, and no credential ever rides the ack.
+The daemon mints a shared access token at first start and every connection
+must present it; a connection that presents nothing is not the user. There is
+no identity to resolve - the token IS the one user, ``LOCAL_SINGLE_USER_ID``.
 """
 
 from __future__ import annotations
@@ -9,25 +10,15 @@ from __future__ import annotations
 import hmac
 import logging
 import os
-from dataclasses import dataclass
+import secrets
+from pathlib import Path
 
 from trid3nt_contracts.auth import (
     AdvertisedEndpoints,
     AuthAckEnvelope,
-    AuthTokenEnvelope,
 )
-from trid3nt_contracts.common import now_utc
-from trid3nt_contracts.user import User
-
-from trid3nt_server.persistence import Persistence
 
 logger = logging.getLogger("trid3nt_server.credentials.auth_handshake")
-
-#: Default time the agent waits for ``auth-token`` before falling through to
-#: the anonymous-fallback path.
-DEFAULT_AUTH_TOKEN_TIMEOUT_S: float = float(
-    os.environ.get("TRID3NT_AUTH_TOKEN_TIMEOUT_S", "5.0")
-)
 
 
 #: Object-store (MinIO) port the daemon co-hosts. Fixed on the local stack;
@@ -87,123 +78,97 @@ def derive_advertised_endpoints(
     return AdvertisedEndpoints(data_base=data_base, http_base=http_base)
 
 
+def access_token_path() -> Path:
+    """The daemon config file the minted access token lives in.
+    ``TRID3NT_HOME`` relocates the config home for a second daemon on one box."""
+    home = os.environ.get("TRID3NT_HOME")
+    return (Path(home) if home else Path.home() / ".trid3nt") / "access_token"
+
+
+def ensure_access_token() -> str:
+    """The daemon's access token, minted into the config file on first start.
+    Logged once here, at the mint, and never again: a later start reads the same
+    file silently. ``TRID3NT_ACCESS_TOKEN`` overrides and mints nothing."""
+    env = os.environ.get("TRID3NT_ACCESS_TOKEN")
+    if env:
+        logger.info("access token: TRID3NT_ACCESS_TOKEN env override in force")
+        return env
+    path = access_token_path()
+    existing = _read_token_file(path)
+    if existing:
+        logger.info("access token: read from %s", path)
+        return existing
+    token = secrets.token_urlsafe(32)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # Written 0600 BEFORE the bytes land: a world-readable window, however
+    # short, is the whole secret.
+    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(token + "\n")
+    logger.info(
+        "access token minted -> %s\n    paste this into the plugin's "
+        "Settings > Server token:\n    %s",
+        path,
+        token,
+    )
+    return token
+
+
+def _read_token_file(path: Path) -> str | None:
+    """The token stored in ``path``, or ``None`` when absent or unreadable.
+    An empty file counts as absent so a truncated write re-mints."""
+    try:
+        return path.read_text(encoding="utf-8").strip() or None
+    except OSError:
+        return None
+
+
 def configured_access_token() -> str | None:
-    """The shared access token gate, or ``None`` when auth is open (default).
-    Read at call time, and an EMPTY string counts as unset so a blank env cannot
-    lock everyone out."""
-    tok = os.environ.get("TRID3NT_ACCESS_TOKEN")
-    return tok if tok else None
+    """The token a presented one is compared against, read at call time:
+    ``TRID3NT_ACCESS_TOKEN`` first, then the minted config file. ``None`` only
+    when neither exists, and then NOTHING matches - the gate fails closed."""
+    env = os.environ.get("TRID3NT_ACCESS_TOKEN")
+    if env:
+        return env
+    return _read_token_file(access_token_path())
 
 
 def verify_access_token(presented: str | None) -> bool:
-    """Constant-time-compare a client-presented token against the gate.
-    ``True`` when NO token is configured or the presented token matches; ``False``
-    only when a token IS required and the value is missing or wrong."""
+    """Constant-time-compare a client-presented token against the daemon's.
+    ``compare_digest`` so a mismatch leaks neither length nor prefix through
+    timing; a missing token on either side is a refusal, never a pass."""
     required = configured_access_token()
-    if required is None:
-        return True
-    # ``compare_digest`` so a mismatch leaks neither length nor prefix through
-    # timing.
+    if not required:
+        return False
     return hmac.compare_digest(str(presented or ""), required)
 
 
-#: The single fixed user every connection resolves to. A constant, ULID-shaped
-#: id ("L0CA1 VSER" in Crockford base32 -- L/O/U are not in the alphabet, hence
-#: 1/0/V) so every client lands on the SAME case list.
+#: The single fixed session identity every connection is scoped to, the id the
+#: rest of the server joins Cases on. A constant, ULID-shaped id ("L0CA1 VSER"
+#: in Crockford base32 -- L/O/U are not in the alphabet, hence 1/0/V).
 LOCAL_SINGLE_USER_ID = "0110CA1VSERAAAAAAAAAAAAAAA"
 
 
-
-
-@dataclass
-class AuthResult:
-    """Outcome of the connect handshake; ``user`` is always populated."""
-
-    user: User
-    is_anonymous: bool
-
-
-async def authenticate_token(
-    token_envelope: AuthTokenEnvelope | None,
-    persistence: Persistence | None,
-) -> AuthResult:
-    """Resolve an ``AuthTokenEnvelope`` to the ONE fixed local ``User``.
-    The token field still rides the wire but is IGNORED: there is no verifier
-    and no per-client identity to resolve it against."""
-    return await _resolve_local_single_user(persistence)
-
-
-async def _resolve_local_single_user(
-    persistence: Persistence | None,
-) -> AuthResult:
-    """Resolve EVERY connection to ``LOCAL_SINGLE_USER_ID``.
-    The persisted record is reused when it exists, so ``created_at`` and prefs
-    stay stable across reconnects; unbound persistence means a session-only user."""
-    user: User | None = None
-    if persistence is not None:
-        try:
-            user = await persistence.get_user_by_id(LOCAL_SINGLE_USER_ID)
-        except Exception as exc:  # noqa: BLE001 -- best-effort: provision fresh
-            logger.warning(
-                "local user lookup failed (%s); provisioning fresh", exc
-            )
-            user = None
-    if user is None:
-        user = User(
-            user_id=LOCAL_SINGLE_USER_ID,
-            email=None,
-            display_name=None,
-            created_at=now_utc(),
-            is_active=True,
-            prefs={},
-            is_anonymous=True,
-        )
-        if persistence is not None:
-            try:
-                await persistence.upsert_user(user)
-            except Exception as exc:  # noqa: BLE001 -- best-effort
-                logger.warning(
-                    "local user upsert failed (continuing in-memory): %s", exc
-                )
-    return AuthResult(user=user, is_anonymous=True)
-
-
 def build_auth_ack(
-    result: AuthResult,
     endpoints: AdvertisedEndpoints | None = None,
 ) -> AuthAckEnvelope:
-    """Construct the ``auth-ack`` envelope payload for a resolved ``AuthResult``.
-    Mirrors only the acked fields and NEVER a credential; ``endpoints`` is the
-    optional advertised-sibling object and defaults to absent."""
+    """Construct the ``auth-ack`` payload for a verified connection.
+    Carries the fixed session identity and NEVER a credential; ``endpoints`` is
+    the optional advertised-sibling object and defaults to absent."""
     return AuthAckEnvelope(
-        user_id=result.user.user_id,
-        is_anonymous=result.is_anonymous,
+        user_id=LOCAL_SINGLE_USER_ID,
         endpoints=endpoints,
     )
 
 
-# Timeout helper -- public so the connect handler shares the default constant.
-
-
-def get_auth_token_timeout_s(default: float | None = None) -> float:
-    """The auth-token-arrival timeout, in seconds.
-    An explicit ``default`` short-circuits; otherwise
-    :data:`DEFAULT_AUTH_TOKEN_TIMEOUT_S` applies."""
-    if default is not None:
-        return default
-    return DEFAULT_AUTH_TOKEN_TIMEOUT_S
-
-
 __all__ = [
-    "AuthResult",
-    "DEFAULT_AUTH_TOKEN_TIMEOUT_S",
     "ADVERTISED_DATA_PORT",
     "ADVERTISED_HTTP_PORT_DEFAULT",
     "LOCAL_SINGLE_USER_ID",
-    "authenticate_token",
+    "access_token_path",
     "build_auth_ack",
     "configured_access_token",
     "derive_advertised_endpoints",
-    "get_auth_token_timeout_s",
+    "ensure_access_token",
     "verify_access_token",
 ]
