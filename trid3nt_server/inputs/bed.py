@@ -30,8 +30,8 @@ logger = logging.getLogger(__name__)
 __all__ = ["Bed", "DEPTH", "INTERPOLATED", "MERGE", "MERGE_DERIVE",
            "MergeRastersError", "MergedRasterLayerURI", "POINTS", "RASTER",
            "SURVEY_DERIVE", "SurveySurfaceError", "SurveySurfaceLayerURI",
-           "bed", "elevations", "merge_rows", "merged_surface",
-           "survey_surface"]
+           "bed", "elevations", "interpolates", "merge_rows",
+           "merged_surface", "survey_surface"]
 
 _CODE = "BED_INVALID"
 
@@ -43,6 +43,16 @@ _CODE = "BED_INVALID"
 #: interpolated bed is not a measured one.
 MERGE = "merge"
 INTERPOLATED = "interpolated"
+
+#: THE TWO GROUNDS a bed answers for, and what a hole over each IS. The water is
+#: inside the polygon the domain was cut with and a hole there is WET, covered by
+#: a row measuring the bed under water; the land is every other cell and a hole
+#: there is DRY, covered by terrain. The class of the hole decides the class of
+#: row that can cover it, so the feedback says which kind of hole it is and
+#: offers only rows of the class that measures that ground.
+_WATER = "water"
+_LAND = "land"
+_HOLE = {_WATER: "WET", _LAND: "DRY"}
 
 #: The three shapes an elevation source arrives in.
 RASTER = "raster"
@@ -104,7 +114,7 @@ def bed(value: Any, *, frame: Any = None, offset: Any = None, op: Any = None,
         return value
     if value is None:
         return None
-    _whole_water(value, _stated_ops(op, code), label, code)
+    _whole_water(value, _stated_ops(op, code), code)
     depth = _depth(value)
     if depth is not None:
         lo, hi = _DEPTH_RANGE_M
@@ -155,18 +165,30 @@ def _stated_ops(op: Any, code: str) -> list[str]:
 
 
 def merge_rows(op: Any) -> list[str]:
-    """The rows the MERGE op names, in the order it names them.
+    """The rows EVERY merge the call states names, in the order they are stated.
 
     Empty where the call states no merge. An op NAME means something only to the
     ingestion that reads it, so the runtime that produces those rows reads which
-    ones they are from here."""
+    ones they are from here. A call naming two merges lays both: a stated op
+    whose rows never reach the bed is the silence this slot exists to refuse."""
+    rows: list[str] = []
     for one in _listed(op) if op else []:
         if isinstance(one, Mapping) and str(one.get("name", "")) == MERGE:
-            return [str(row) for row in _listed(one.get("rows"))]
-    return []
+            rows.extend(str(row) for row in _listed(one.get("rows")))
+    return rows
 
 
-def _whole_water(value: Any, ops: list[str], label: str, code: str) -> None:
+def interpolates(op: Any) -> bool:
+    """Whether the call states the INTERPOLATED op for this slot.
+
+    The fill seeds the shoreline at the free surface the run opens on, so the
+    runtime reads from here whether it has to hand that elevation over."""
+    return any((str(one.get("name", "")) if isinstance(one, Mapping)
+                else str(one)) == INTERPOLATED
+               for one in (_listed(op) if op else []))
+
+
+def _whole_water(value: Any, ops: list[str], code: str) -> None:
     """Refuse a bed whose water no row measured, where the call states no fill.
 
     The surface states the share of the water measured by nothing and the rows
@@ -177,16 +199,9 @@ def _whole_water(value: Any, ops: list[str], label: str, code: str) -> None:
     share = getattr(value, "unmeasured_water_fraction", None)
     if not share or INTERPOLATED in ops:
         return
-    could = [row for row in getattr(value, "alternatives", None) or []]
-    named = (f" These rows also matched this bed and could cover it: "
-             f"{', '.join(could)}." if could else "")
     raise UserInputError(
-        f"{_percent(share)} of the water in this domain is measured by no "
-        f"row of the {label}, and a wider surface over it measures the water "
-        f"TOP rather than the bottom.{named} State "
-        f"ops={{{label!r}: [{{'name': {MERGE!r}, 'rows': [...]}}, "
-        f"{INTERPOLATED!r}]}} to lay them under this one and interpolate what "
-        "is left, or supply a bed of your own.", code=code)
+        _remedy(_WATER, list(getattr(value, "water_alternatives", None) or []),
+                share, ops), code=code)
 
 
 def _depth(value: Any) -> float | None:
@@ -719,11 +734,14 @@ class MergedRasterLayerURI(LayerURI):
     land_rows: list[tuple[str, float]] = []
     unmeasured_water_fraction: float | None = None
     unmeasured_land_fraction: float | None = None
-    #: The rows the match ALSO ranked for this bed and nothing laid, by name:
-    #: what a person names in a merge op to cover what this bed does not. The
-    #: provenance sidecar below writes a cell's row as its index into the lists
-    #: above.
-    alternatives: list[str] = []
+    #: The rows the match ALSO ranked and nothing laid, by name, PER GROUND:
+    #: what a person names in a merge op to cover what this bed does not. A wet
+    #: hole takes a row measuring the bed under water and a dry one takes
+    #: terrain, so the two grounds are offered different rows and never each
+    #: other's. The provenance sidecar below writes a cell's row as its index
+    #: into the lists above.
+    water_alternatives: list[str] = []
+    land_alternatives: list[str] = []
     #: The single-band raster carrying which row won at each cell, by the place
     #: it was laid in - 0 the first, then each row that painted what the ones
     #: before it left - and nodata where none of them measured. A sidecar rather than a second
@@ -1033,15 +1051,16 @@ def _water_cells(water: Any, crs: Any, transform: Any, width: int, height: int
     return inside if int(np.count_nonzero(inside)) else None
 
 
-def _interpolated(band: Any, wet: Any, hole: Any) -> Any:
+def _interpolated(band: Any, wet: Any, hole: Any, surface_m: float) -> Any:
     """The water no row measured, painted BETWEEN the measurements and the shore.
 
     The substrate's own inverse-distance fill, run on the water ALONE: the ground
     outside the cut is never read into it, and the polygon's own edge is seeded at
-    depth zero because the bed meets the water surface where the water ends. There
-    is no distance cap - a hole far from every measurement is painted and says so
-    through its provenance, which is the thing a reader weighs rather than a
-    radius this code would have chosen for them."""
+    depth zero, which on this surface's own axis is ``surface_m`` - the elevation
+    the run opens at - because the bed meets the water surface where the water
+    ends. There is no distance cap - a hole far from every measurement is painted
+    and says so through its provenance, which is the thing a reader weighs rather
+    than a radius this code would have chosen for them."""
     import numpy as np
     from rasterio.fill import fillnodata
 
@@ -1051,7 +1070,7 @@ def _interpolated(band: Any, wet: Any, hole: Any) -> Any:
     inner[:, 1:] &= wet[:, :-1]
     inner[:, :-1] &= wet[:, 1:]
     work = np.where(wet, band, _NODATA)
-    work[wet & ~inner & hole] = 0.0
+    work[wet & ~inner & hole] = float(surface_m)
     filled = fillnodata(work, mask=np.isfinite(work).astype("uint8"),
                         max_search_distance=float(sum(band.shape)))
     return np.where(hole, filled, band)
@@ -1186,26 +1205,30 @@ def _covers(name: str, painted: list[tuple[str, float]], blank: float) -> str:
             f"and {_percent(blank)} of it is measured by nothing.")
 
 
-def _remedy(alternatives: list[str], blank: float, laid: list[str]) -> str:
-    """What WOULD cover the water this bed does not, named so a person can state it.
+def _remedy(ground: str, alternatives: list[str], blank: float,
+            laid: list[str]) -> str:
+    """What WOULD cover the hole over ONE ground, named so a person can state it.
 
-    The feedback is the whole point of laying one row: the hole is stated with
-    the rows that could fill it and the ops that would, and stating them is
-    theirs. Nothing here acts on it."""
+    The hole says which KIND it is, because that decides the class of row that
+    covers it, and the rows offered are the ones the match ranked for that
+    class. The fill reaches the water alone, so a dry hole is never offered it.
+    Nothing here acts on any of it."""
     if not blank:
         return ""
-    could = (f" These rows also matched this bed and could cover it: "
+    could = (f" These rows measure the {ground} here and could cover it: "
              f"{', '.join(alternatives)}." if alternatives else "")
     moves = [move for move in (
         (f"{{'name': {MERGE!r}, 'rows': [...]}}" if MERGE not in laid
          and alternatives else ""),
-        (repr(INTERPOLATED) if INTERPOLATED not in laid else ""))
+        (repr(INTERPOLATED) if ground == _WATER and INTERPOLATED not in laid
+         else ""))
         if move]
     states = (f" State ops={{'bed': [{', '.join(moves)}]}} to lay them under "
-              "this one and interpolate what is left, or supply a bed of your "
-              "own." if moves else "")
-    return (f"{_percent(blank)} of the water in this domain is measured by "
-            f"no row of this bed.{could}{states}")
+              "this one"
+              + (" and interpolate what is left" if ground == _WATER else "")
+              + ", or supply a bed of your own." if moves else "")
+    return (f"{_percent(blank)} of the {ground} in this domain is measured by "
+            f"no row of this bed, a {_HOLE[ground]} hole.{could}{states}")
 
 
 def merged_surface(
@@ -1217,7 +1240,9 @@ def merged_surface(
     fallback_offset: Any = None,
     water: Any = None,
     ops: Any = None,
-    alternatives: Any = None,
+    water_alternatives: Any = None,
+    land_alternatives: Any = None,
+    free_surface_m: Any = None,
     *,
     _output_dir: str | None = None,
 ) -> MergedRasterLayerURI:
@@ -1243,13 +1268,18 @@ def merged_surface(
     measures the water top rather than the bottom, so it paints only OUTSIDE it
     and water no measured row reached is left unpainted. What each row covers
     over the water and over the land, and what nothing measured over either, is
-    STATED on the result and on the journal beside the rows ``alternatives``
-    names - the feedback a person weighs before a solve stands on this bed.
+    STATED on the result and on the journal beside the rows
+    ``water_alternatives`` and ``land_alternatives`` name - the rows the match
+    ranked for the class each ground needs, which is the feedback a person
+    weighs before a solve stands on this bed.
 
     ``ops`` is what they then state, in order: ``interpolated`` lays a surface
-    between the measurements and the shoreline as one more row, last, and the
-    share above still reads as what nothing measured. The merge op itself is
-    read by the runtime that produces the rows it names.
+    between the measurements and the shoreline as one more row, last, seeded at
+    ``free_surface_m`` - the elevation this run opens at, on the frame the merge
+    lands on - and refusing where no opening was stated, because a shore seeded
+    at a number nobody measured is a fabricated bed. The share above still reads
+    as what nothing measured. The merge op itself is read by the runtime that
+    produces the rows it names.
     """
     import tempfile
     from contextlib import ExitStack
@@ -1262,7 +1292,8 @@ def merged_surface(
     from trid3nt_server.workflows.runtime import journal_note
 
     laid = _stated_ops(ops, "MERGE_BED_OP_INVALID")
-    named = [str(row) for row in _listed(alternatives)]
+    wet_rows = [str(row) for row in _listed(water_alternatives)]
+    dry_rows = [str(row) for row in _listed(land_alternatives)]
     offered = _laid(primary, primary_offset)
     rows = offered + _laid(fallback, fallback_offset)
     if not rows:
@@ -1328,7 +1359,17 @@ def merged_surface(
             # itself is the gate, never its rounded share - a hole that reads as
             # zero percent is still a hole, and skipping the op the run stated
             # over one would be the silence this slot exists to refuse.
-            stack[0] = _interpolated(stack[0], wet, hole)
+            if free_surface_m is None:
+                raise MergeRastersError(
+                    "MERGE_BED_OPENING_UNSTATED",
+                    f"the {INTERPOLATED!r} op seeds the shoreline at the free "
+                    "surface this run opens on, and no opening reached this "
+                    "bed, so the shore has no elevation to be seeded at - a "
+                    "number put there instead is a bed nobody measured. State "
+                    "the level the water stands at, or name a row that "
+                    "measures the water this op would have painted.")
+            stack[0] = _interpolated(stack[0], wet, hole,
+                                     float(free_surface_m))
             won[hole] = len(rows)
             labels.append(INTERPOLATED)
         metres = float(cell * _metres_per_unit(crs))
@@ -1347,13 +1388,14 @@ def merged_surface(
     moved = [line for line in
              (_read_as(layer, labels[rank], aligned[rank], depths=counts_down[rank])
               for rank, (layer, _row) in enumerate(rows)) if line]
-    covered = [_covers("LAND", land_rows, ashore)]
+    covered = [_covers("LAND", land_rows, ashore),
+               _remedy(_LAND, dry_rows, ashore, laid)]
     if unmeasured is not None:
         # THE WATER FIRST: it is the ground the run is about, and the land a
         # terrain surface painted says nothing about the channel under it.
-        covered.insert(0, _covers("WATER - the polygon the domain was cut with",
-                                  water_rows, unmeasured))
-        covered.append(_remedy(named, unmeasured, laid))
+        covered[:0] = [_covers("WATER - the polygon the domain was cut with",
+                               water_rows, unmeasured),
+                       _remedy(_WATER, wet_rows, unmeasured, laid)]
     covered = [line for line in covered if line]
     notes = [
         *covered,
@@ -1389,7 +1431,8 @@ def merged_surface(
         land_rows=land_rows,
         unmeasured_water_fraction=unmeasured,
         unmeasured_land_fraction=ashore,
-        alternatives=named,
+        water_alternatives=wet_rows,
+        land_alternatives=dry_rows,
         provenance_uri=provenance,
         resolution_m=round(metres, 4),
         notes=notes)

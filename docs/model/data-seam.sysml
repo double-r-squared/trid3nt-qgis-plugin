@@ -872,17 +872,28 @@ package DataSeam {
         REFUSES over unmeasured water - naming the share, those rows and the ops
         that would lay them - rather than standing on a bed nobody measured.
 
+        A HOLE IS OFFERED THE CLASS THAT MEASURES ITS OWN GROUND. The feedback
+        says which KIND of hole it is - a WET one inside the cut polygon, a DRY
+        one outside it - and names rows of the class that covers that kind: the
+        bed's own class under water, terrain on land. Which rows those are is
+        the match's ranking for that class, never a list this code keeps, so a
+        dry hole is never offered bathymetry.
+
         COMPOSING PAST THAT ROW IS THE PERSON'S STATEMENT, carried as ops on the
         call beside the source it picks, in the order they are stated. MERGE
         names the rows laid under the first, each painting the cells the ones
-        before it left, provenance per cell. INTERPOLATED paints the water no
-        row measured, from the measurements to the polygon's own edge, seeded at
-        depth zero because the bed meets the water surface where the water ends;
-        it lays LAST, with no distance cap - a hole far from every sounding is
-        painted and says so through its provenance, and a cap would be this code
-        choosing a radius for the person who asked. The HOLE itself is what the
-        fill is gated on, never its rounded share. The share does not move when
-        the op runs: an interpolation is not a sounding.
+        before it left, provenance per cell; EVERY merge a call states is laid,
+        in the order stated, because a stated op whose rows never reach the bed
+        is the silence this slot exists to refuse. INTERPOLATED paints the water
+        no row measured, from the measurements to the polygon's own edge, seeded
+        at DEPTH zero - the free surface the run opens at, which on a frame
+        whose zero lies far below that surface is not elevation zero - and
+        REFUSING where no opening reached the bed rather than seeding a number
+        nobody measured; it lays LAST, with no distance cap - a hole far from
+        every sounding is painted and says so through its provenance, and a cap
+        would be this code choosing a radius for the person who asked. The HOLE
+        itself is what the fill is gated on, never its rounded share. The share
+        does not move when the op runs: an interpolation is not a sounding.
         */
     }
 
@@ -1424,6 +1435,16 @@ package DataSeam {
         "tests/inputs/test_slot_inputs.py::test_water_no_row_measured_refuses_and_names_the_share_the_rows_and_the_ops";
     verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
         "tests/inputs/test_slot_inputs.py::test_the_op_the_run_states_is_what_lets_the_unmeasured_water_through";
+    verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
+        "tests/inputs/test_bed_merge.py::test_a_dry_hole_is_offered_the_rows_that_measure_land";
+    verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
+        "tests/inputs/test_bed_merge.py::test_the_seeded_shore_stands_at_the_opening_the_run_states";
+    verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
+        "tests/inputs/test_bed_merge.py::test_a_fill_with_no_opening_stated_refuses_rather_than_seeding_a_number";
+    verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
+        "tests/inputs/test_slot_inputs.py::test_every_merge_the_call_states_names_rows_that_are_laid";
+    verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
+        "tests/runtime/test_matched_slots.py::test_the_fill_is_handed_the_level_the_run_opens_at";
     verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
         "tests/runtime/test_matched_slots.py::test_the_ops_the_run_states_reach_the_merge_in_the_order_stated";
     verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by

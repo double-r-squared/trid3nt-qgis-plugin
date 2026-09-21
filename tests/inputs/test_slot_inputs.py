@@ -274,7 +274,7 @@ def _merged(share: float | None, alternatives: list[str] | None = None):
     return MergedRasterLayerURI(layer_id="m", name="merged bed surface",
                                 layer_type="raster", uri="s3://b/k/merged.tif",
                                 unmeasured_water_fraction=share,
-                                alternatives=alternatives or [])
+                                water_alternatives=alternatives or [])
 
 
 def test_water_no_row_measured_refuses_and_names_the_share_the_rows_and_the_ops():
@@ -287,6 +287,18 @@ def test_water_no_row_measured_refuses_and_names_the_share_the_rows_and_the_ops(
     assert "74.0%" in said
     assert "fetch_chs_nonna" in said
     assert "'name': 'merge'" in said and "'interpolated'" in said
+
+
+def test_every_merge_the_call_states_names_rows_that_are_laid():
+    """A stated op that is not laid is impossible, not merely unlikely: a call
+    naming two merges lays both, in the order it states them."""
+    from trid3nt_server.inputs.bed import merge_rows
+
+    assert merge_rows([{"name": "merge", "rows": ["a", "b"]},
+                       "interpolated"]) == ["a", "b"]
+    assert merge_rows([{"name": "merge", "rows": ["a", "b"]},
+                       {"name": "merge", "rows": ["c"]},
+                       "interpolated"]) == ["a", "b", "c"]
 
 
 def test_a_bed_whose_water_is_measured_whole_needs_no_op():

@@ -156,7 +156,12 @@ def test_the_bed_lays_the_one_row_the_match_ranked_first(world):
     assert merge["primary"] == [
         "s3://b/trid3nt_server.inputs.bed.survey_surface.tif"]
     assert merge["fallback"] == []
-    assert merge["alternatives"] == ["fetch_bed_raster"]
+    # THE HOLE'S OWN CLASS: the water is offered the rows that measure a bed
+    # under water and the land the rows that measure terrain.
+    assert merge["water_alternatives"] == ["fetch_bed_raster"]
+    assert merge["land_alternatives"] == ["fetch_terrain"]
+    # No fill was stated, so no opening was asked for.
+    assert merge["free_surface_m"] is None
     # the soundings are gridded at the run's own edge, on the column the
     # coverage row names.
     _runner, grid = world[1]
@@ -181,8 +186,21 @@ def test_a_merge_op_lays_the_rows_it_names_in_the_order_it_names_them(world):
         "s3://b/trid3nt_server.inputs.bed.survey_surface.tif",
         "s3://b/fetch_bed_raster.tif"]
     assert merge["fallback"] == ["s3://b/fetch_terrain.tif"]
-    assert merge["alternatives"] == []
+    assert merge["water_alternatives"] == []
+    assert merge["land_alternatives"] == []
     assert merge["ops"] == env.ops["bed"]
+
+
+def test_the_fill_is_handed_the_level_the_run_opens_at(world):
+    """The shoreline the fill seeds is the free surface the run opens on, so the
+    number the run states for its level is the number the merge is handed."""
+    env = _env()
+    env.ops["bed"] = ["interpolated"]
+    env.data["level"] = _row(Data.need("water level series").optional(), "level")
+    env.supplied["level"] = 175.685
+    asyncio.run(interpreter._bed_surface(env, _row(Data.need("bathymetry"),
+                                                   "bed")))
+    assert world[-1][1]["free_surface_m"] == pytest.approx(175.685)
 
 
 def test_a_raster_measurement_reaches_the_merge_without_being_gridded(world,

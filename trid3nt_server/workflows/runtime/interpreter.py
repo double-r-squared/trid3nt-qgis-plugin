@@ -490,7 +490,7 @@ async def _bed_surface(env: _Env, decl: DataDecl) -> Any:
     world is produced, and which side of the cut each paints is its own
     declaration: a row serving this slot's class measured the bed, and one
     serving terrain measures the water TOP and stays outside the cut."""
-    from trid3nt_server.inputs.bed import MERGE_DERIVE, merge_rows
+    from trid3nt_server.inputs.bed import MERGE_DERIVE, interpolates, merge_rows
     from .levers import run_frame
 
     choice, top = await _probe(env, decl, decl.data_class,
@@ -517,11 +517,21 @@ async def _bed_surface(env: _Env, decl: DataDecl) -> Any:
          # water top rather than the bed, so it paints outside it only and the
          # feedback states the water and the land separately.
          "water": _cut_polygon(),
-         # WHAT ELSE MATCHED and nothing laid: the rows a person names in a
-         # merge op to cover what this bed does not, stated in the feedback
-         # rather than laid on their behalf.
-         "alternatives": [row.fetcher for row in choice.rows if not row.excluded
-                          and row.fetcher not in dict(laid + under)],
+         # WHAT ELSE MATCHED and nothing laid, PER GROUND: the rows a person
+         # names in a merge op to cover what this bed does not, stated in the
+         # feedback rather than laid on their behalf. A WET hole is covered by
+         # a row of this slot's own class and a DRY one by terrain, so each
+         # ground is offered the rows the match ranked for the class that
+         # measures it - never one another's.
+         "water_alternatives": _unlaid(choice, laid + under),
+         "land_alternatives": _unlaid(
+             await _ranked(env, decl, "terrain", f"{decl.name} terrain"),
+             laid + under),
+         # THE SHORELINE THE FILL SEEDS is the free surface the run opens on,
+         # so the elevation the run opens at and the elevation the shore is
+         # seeded at are one number, asked for only where the fill is stated.
+         "free_surface_m": (await _free_surface(env) if interpolates(stated)
+                            else None),
          "primary_offset": [await _offset_row(env, f"{decl.name}_{picked}",
                                               surface, frame)
                             for (picked, _held), surface
@@ -532,6 +542,37 @@ async def _bed_surface(env: _Env, decl: DataDecl) -> Any:
                              in zip(under, surfaces[len(laid):])]}))
 
 
+async def _ranked(env: _Env, decl: DataDecl, data_class: str,
+                  label: str) -> SourceChoice:
+    """What the match RANKS for this slot over one class, nothing produced.
+
+    Both readers ask the class its own way round: the feedback offers the rows
+    that measure a ground, and a named row is matched for the class it serves so
+    the ask it is called with is the one that class states."""
+    return match(await _need(env, decl, data_class, label),
+                 sources_with_coverage())
+
+
+def _unlaid(choice: SourceChoice, laid: Sequence[tuple[str, Any]]) -> list[str]:
+    """The rows a match ranked that nothing laid, by name."""
+    return [row.fetcher for row in choice.rows
+            if not row.excluded and row.fetcher not in dict(laid)]
+
+
+async def _free_surface(env: _Env) -> float | None:
+    """The elevation this run OPENS at, off the run's own level slot.
+
+    ``None`` where the run states no level: a bed op that needs the free surface
+    refuses on that rather than seeding a number nobody measured."""
+    row = next((r for r in env.data.values() if r.role == LEVEL), None)
+    if row is None:
+        return None
+    held = env.artifacts.get(row.name)
+    if held is None:
+        held = env.artifacts[row.name] = await _produce(env, row)
+    return None if held is None else float(getattr(held, "value", held))
+
+
 async def _named_row(env: _Env, decl: DataDecl, picked: str,
                      data_class: str) -> Any:
     """One row a merge op NAMED, produced under this slot.
@@ -539,8 +580,7 @@ async def _named_row(env: _Env, decl: DataDecl, picked: str,
     Matched for the class the row serves so the ask it is called with is the one
     that class states, then called by name: the run named it, so the rank the
     match would have put it at decides nothing here."""
-    choice = match(await _need(env, decl, data_class, f"{decl.name} {picked}"),
-                   sources_with_coverage())
+    choice = await _ranked(env, decl, data_class, f"{decl.name} {picked}")
     return await _produce(env, _runtime_row(
         env, f"{decl.name}_{picked}", picked,
         await _ask_for(env, choice.model_copy(update={"picked": picked}), decl)))

@@ -22,7 +22,10 @@ land separately on the result, the journal and the input row with the rows and
 ops that would cover the gap, a merge handed no cut claiming nothing about the
 water, a cut carrying no polygon refusing rather than painting it, and the ops a
 run states laid in the order stated, the fill running on a hole whose share
-rounds to zero, while an op the merge does not know refuses by name."""
+rounds to zero, a DRY hole offered the rows that measure land while the wet one
+is offered the rows that measure water, the seeded shore standing at the opening
+the run states on a frame whose zero is far below it and the fill refusing where
+no opening was stated, while an op the merge does not know refuses by name."""
 
 from __future__ import annotations
 
@@ -557,7 +560,8 @@ def test_the_feedback_states_the_water_and_the_land_separately(
     merged = merged_surface(
         primary=_survey(), fallback=_terrain(), frame="NAVD88",
         water=_cut(500_004.0, 3_999_992.0, 500_012.0, 4_000_000.0),
-        alternatives=["fetch_chs_nonna"], _output_dir=str(tmp_path))
+        water_alternatives=["fetch_chs_nonna"],
+        land_alternatives=["fetch_dem"], _output_dir=str(tmp_path))
     said = drain_notes(token)
     # Sixteen of the cut's sixty-four cells were sounded; the terrain stays out
     # of the cut, so the land it painted is every cell outside it.
@@ -569,7 +573,11 @@ def test_the_feedback_states_the_water_and_the_land_separately(
     assert len(water) == 1 and len(land) == 1
     assert "75.0% of it is measured by nothing" in water[0]
     remedy = [line for line in said if "could cover it" in line]
-    assert "fetch_chs_nonna" in remedy[0]
+    # The hole here is WET, so it is offered the rows that measure water and
+    # never the terrain row the dry ground would take.
+    assert len(remedy) == 1
+    assert "WET hole" in remedy[0] and "fetch_chs_nonna" in remedy[0]
+    assert "fetch_dem" not in remedy[0]
     assert "'name': 'merge'" in remedy[0] and "'interpolated'" in remedy[0]
     said_name = merged.input_row()["name"]
     assert "water:" in said_name and "75.0% measured by nothing" in said_name
@@ -606,7 +614,8 @@ def test_the_stated_op_paints_the_water_from_the_shore_to_the_measurements(
     merged = merged_surface(
         primary=_survey(), fallback=_terrain(), frame="NAVD88",
         water=_cut(500_004.0, 3_999_992.0, 500_012.0, 4_000_000.0),
-        ops=["interpolated"], _output_dir=str(tmp_path))
+        ops=["interpolated"], free_surface_m=0.0,
+        _output_dir=str(tmp_path))
     with rasterio.open(merged.uri) as surface:
         values = surface.read(1)
     # The cut is columns 4-11 over rows 0-7 of the 1 m grid, the survey its
@@ -632,7 +641,8 @@ def test_the_interpolated_row_is_laid_last_and_says_so_per_cell(
     merged = merged_surface(
         primary=_survey(), fallback=_terrain(), frame="NAVD88",
         water=_cut(500_004.0, 3_999_992.0, 500_012.0, 4_000_000.0),
-        ops=["interpolated"], _output_dir=str(tmp_path))
+        ops=["interpolated"], free_surface_m=0.0,
+        _output_dir=str(tmp_path))
     label, share = merged.water_rows[-1]
     assert label == "interpolated"
     # The 48 cells of the cut no measured row reached.
@@ -658,7 +668,8 @@ def test_a_hole_too_small_to_round_is_stated_and_still_filled(tmp_path) -> None:
                               cell=0.05), "NAVD88"),
         frame="NAVD88",
         water=_cut(500_004.0, 3_999_992.0, 500_012.0, 4_000_000.0),
-        ops=["interpolated"], _output_dir=str(tmp_path))
+        ops=["interpolated"], free_surface_m=0.0,
+        _output_dir=str(tmp_path))
     assert 0.0 < merged.unmeasured_water_fraction <= 0.0001
     assert any("less than 0.1% of it is measured by nothing" in note
                for note in merged.notes)
@@ -675,3 +686,66 @@ def test_an_op_the_merge_does_not_know_refuses_before_it_reads_a_surface(
         merged_surface(primary=_survey(), fallback=_terrain(), frame="NAVD88",
                        ops=["smoothed"], _output_dir=str(tmp_path))
     assert excinfo.value.error_code == "MERGE_BED_OP_INVALID"
+
+
+def test_a_dry_hole_is_offered_the_rows_that_measure_land(tmp_path) -> None:
+    """A hole says which KIND it is, and that decides the class of row offered
+    for it: the land nothing painted takes terrain, never the bathymetry rows
+    that only ever measure under water."""
+    from trid3nt_server.workflows.runtime.journal import bind_notes, drain_notes
+
+    ground = np.full((4, 4), 10.0)
+    ground[0, 0] = _NODATA
+    token = bind_notes()
+    merged = merged_surface(
+        primary=_survey(),
+        fallback=_layer(_write(ground, west=500_000.0, north=4_000_000.0,
+                               cell=4.0), "NAVD88"),
+        frame="NAVD88",
+        water=_cut(500_004.0, 3_999_996.0, 500_008.0, 4_000_000.0),
+        water_alternatives=["fetch_chs_nonna"],
+        land_alternatives=["fetch_dem"], _output_dir=str(tmp_path))
+    said = drain_notes(token)
+    assert merged.unmeasured_water_fraction == pytest.approx(0.0)
+    assert merged.unmeasured_land_fraction > 0.0
+    remedy = [line for line in said if "could cover it" in line]
+    assert len(remedy) == 1
+    assert "DRY hole" in remedy[0] and "fetch_dem" in remedy[0]
+    # The fill runs on the water alone, so a dry hole is never offered it, and
+    # the row that measures water is not what covers land.
+    assert "fetch_chs_nonna" not in remedy[0]
+    assert "'interpolated'" not in remedy[0]
+
+
+def test_the_seeded_shore_stands_at_the_opening_the_run_states(tmp_path) -> None:
+    """The polygon's edge is seeded at DEPTH zero, which is the free surface the
+    run opens on: on a frame whose zero is far below that surface, a shore
+    seeded at elevation zero is a bed fabricated the whole way down to it."""
+    opening = 175.685
+    merged = merged_surface(
+        primary=_layer(_write(np.full((4, 4), opening - 5.0), west=500_004.0,
+                              north=4_000_000.0, cell=1.0), "IGLD85"),
+        fallback=_layer(_write(np.full((4, 4), opening + 10.0), west=500_000.0,
+                               north=4_000_000.0, cell=4.0), "IGLD85"),
+        frame="IGLD85",
+        water=_cut(500_004.0, 3_999_992.0, 500_012.0, 4_000_000.0),
+        ops=["interpolated"], free_surface_m=opening,
+        _output_dir=str(tmp_path))
+    with rasterio.open(merged.uri) as surface:
+        values = surface.read(1)
+    assert float(values[7, 11]) == pytest.approx(opening)
+    painted = values[0:8, 4:12]
+    assert float(painted.min()) == pytest.approx(opening - 5.0)
+    assert float(painted.max()) == pytest.approx(opening)
+
+
+def test_a_fill_with_no_opening_stated_refuses_rather_than_seeding_a_number(
+        tmp_path) -> None:
+    """Where no opening reached this bed there is no elevation the shore stands
+    at, and seeding one anyway is the silence the op exists to refuse."""
+    with pytest.raises(MergeRastersError) as excinfo:
+        merged_surface(
+            primary=_survey(), fallback=_terrain(), frame="NAVD88",
+            water=_cut(500_004.0, 3_999_992.0, 500_012.0, 4_000_000.0),
+            ops=["interpolated"], _output_dir=str(tmp_path))
+    assert excinfo.value.error_code == "MERGE_BED_OPENING_UNSTATED"

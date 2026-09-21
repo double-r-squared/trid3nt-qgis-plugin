@@ -104,7 +104,7 @@ def test_a_node_no_row_reached_refuses_with_the_feedback_and_never_a_zero(
         primary=LayerURI(layer_id="x", name="survey", layer_type="raster",
                          uri=_raster(tmp_path / "half.tif", half, nodata=np.nan),
                          vertical_datum="NAVD88"),
-        alternatives=["fetch_chs_nonna"], _output_dir=str(tmp_path))
+        land_alternatives=["fetch_dem"], _output_dir=str(tmp_path))
     with pytest.raises(MeshToolError) as excinfo:
         P.set_bed(_lattice_mesh(), merged)
     said = str(excinfo.value)
