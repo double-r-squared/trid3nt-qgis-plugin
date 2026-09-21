@@ -25,6 +25,7 @@ from trid3nt_server.tools.fetchers._fetch_common import (
 __all__ = [
     "geocode_location",
     "GeocodeNoMatchError",
+    "GeocodeUnconfirmableError",
 ]
 
 logger = logging.getLogger(
@@ -40,6 +41,16 @@ class GeocodeNoMatchError(UpstreamAPIError):
     retry -- name a specific place, add a state/country, or draw an area."""
 
     error_code = "GEOCODE_NO_MATCH"
+    retryable = False
+
+
+class GeocodeUnconfirmableError(UpstreamAPIError):
+    """No session is bound, so the service's top match has nobody to confirm it
+    against the map. An HONEST, NOT-retryable failure: a top match accepted with
+    no one looking is a guess wearing the shape of an answer. State the extent on
+    the call, or draw the area in a session."""
+
+    error_code = "GEOCODE_UNCONFIRMABLE"
     retryable = False
 
 
@@ -142,11 +153,22 @@ def geocode_location(
     in auto mode (the top match, labeled as such in the journal) or
     ``"pending-confirm"`` in user-gated mode -- the case-AOI-commit step is
     what shows the confirm gate on that label; this call always returns its
-    match at once, never waiting on a turn.
+    match at once, never waiting on a turn. With no session bound it refuses
+    naming the query: a top match nobody can look at is not an answer.
     """
     if not isinstance(query, str) or not query.strip():
         raise BboxInvalidError("geocode_location requires a non-empty string query")
     text = query.strip()
+
+    from trid3nt_server.render.pipeline_emitter import current_emitter
+
+    if current_emitter() is None:
+        raise GeocodeUnconfirmableError(
+            f"{text!r} resolves to the service's top match, which a person "
+            "confirms on the map; no session is bound to this run, so there is "
+            "nobody to confirm it. State the extent on the call, or ask in a "
+            "session."
+        )
 
     mode = resolve_input_gate_mode(input_mode)
 
