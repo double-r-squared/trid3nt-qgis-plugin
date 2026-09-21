@@ -28,4 +28,4 @@ resolved and carries back what the user said.
 
 | subfolder | what lives there |
 | --- | --- |
-| `cards/` | One builder per card the client renders: credential, estimate, payload warning, region choice, solver confirm, spatial input. |
+| `cards/` | One builder per card the client renders: estimate, payload warning, solver confirm, spatial input. |

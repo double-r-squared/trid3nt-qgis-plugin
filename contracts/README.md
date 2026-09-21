@@ -16,8 +16,7 @@ produces. Pydantic v2 throughout; every model subclasses `GraceModel`
 | `auth` | The two connect-handshake envelopes and the server-advertised sibling endpoints |
 | `user` | The `User` account record |
 | `case` | The Case envelopes: summary, persisted chat message, tool-card record, rehydration state, lifecycle command |
-| `secrets` | Per-Case secret records and the just-in-time credential request/reply |
-| `region_choice` | The region-narrowing picker request and its reply |
+| `secrets` | Per-Case secret records, and `secret-add`, the one envelope that carries key material |
 | `payload_warning` | The payload gate: the warning envelope, its confirmation, and the granularity, time-scale and param-sheet rows |
 | `chart_contracts` | The `chart-emission` envelope, its Vega-Lite structural check, and the persisted chart record |
 | `processing_contracts` | The session processing request/response pair and the code approval card |

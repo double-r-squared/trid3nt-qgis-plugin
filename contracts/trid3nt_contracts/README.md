@@ -26,7 +26,6 @@ consumer branches on its discriminator rather than on a string it recognised.
 | `payload_warning.py` | The payload-warning envelope and its confirmation. |
 | `processing_contracts.py` | The session processing pair - a request the plugin runs in QGIS and its response - and the code approval card in front of a code request. |
 | `py.typed` | The marker that says these annotations are shipped. |
-| `region_choice.py` | The region-narrowing picker: the request that pauses a turn, and its reply. |
 | `secrets.py` | The per-Case secret envelopes; `secret-add` is the only one that carries key material. |
 | `source_spec.py` | `SourceSpec` - the generic data-router source specification, as data. |
 | `tool_metadata.py` | The tool docstring sections and the `tool_category` vocabulary. |

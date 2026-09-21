@@ -24,7 +24,7 @@ on one machine against one user; the only wire shapes it speaks are
 | subfolder | what lives there |
 | --- | --- |
 | `adapters/` | The LLM provider adapters, behind one shared IR. |
-| `credentials/` | The connect handshake and the per-provider credential registry. |
+| `credentials/` | The connect handshake, and the resolver over the credential each source row declares. |
 | `render/` | The format set a product reaches the map in - a COG raster, a GeoJSON vector, an MDAL mesh, a chart payload - and everything it passes through on the way. |
 | `fallbacks/` | Declared degradation: ladders as data, and the one walker. |
 | `gates/` | The agent-loop gates - confirm, review, draw, budget, runaway. |

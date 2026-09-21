@@ -200,7 +200,7 @@ async def test_gate_turn_memory_new_turn_gates_again() -> None:
     assert should_run_1 is True
     assert sum(1 for e in ws.sent if e.get("type") == "tool-payload-warning") == 1
 
-    # Simulate the new-turn reset (same site as credential_prompted_tools).
+    # Simulate the new-turn reset the dispatch does at each turn start.
     state.gate_decisions_this_turn = {}
 
     approver_2 = asyncio.create_task(_approve_next_pending(server, "proceed"))

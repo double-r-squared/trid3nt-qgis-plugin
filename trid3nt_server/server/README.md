@@ -12,9 +12,9 @@ where its results go.
 | `__init__.py` | The core's door; the subpackages below hold the working parts. |
 | `config.py` | Environment-knob readers, each a pure `env -> value` read taken live. |
 | `errors.py` | The typed dispatch error taxonomy - an `error_code` and a `retryable` flag per type. |
-| `interactions.py` | The tool-choice and credential request/response gates. |
+| `interactions.py` | The tool-choice request/response gate. |
 | `processing.py` | The session request seam: a `processing-request` emitted for the user's QGIS session, its pending registry, the bounded wait, and the typed refusals for no session, no answer and an error answer. |
-| `spatial.py` | Bbox and AOI helpers, and the region-choice and spatial pending-input registries. |
+| `spatial.py` | Bbox and AOI helpers, and the spatial pending-input registry. |
 
 ## Subfolders
 
