@@ -159,9 +159,10 @@ def _request_fmt(spec: SourceSpec, request: dict[str, Any], params: dict[str, An
 
 
 def declared_plans(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan]:
-    """The request plans stated by ``ingest.request``, one per endpoint in the resolved
-    chain. Every query value is a template over the validated params, and a template
-    referencing an unset param drops its key."""
+    """The request plans stated by ``ingest.request``, one per endpoint in the chain --
+    the endpoints ``request.endpoint`` names, else the resolved default. Every query
+    value is a template over the validated params, and a template referencing an unset
+    param drops its key."""
     from .executors.vector_fgb import resolve_endpoints
 
     request = (spec.ingest or {}).get("request") or {}
@@ -173,8 +174,10 @@ def declared_plans(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan
     method = str(request.get("method", "GET")).upper()
     named = request.get("endpoint")
     if named:
-        endpoint = spec.endpoints.get(str(named))
-        chain = [endpoint] if endpoint is not None else []
+        # One name is one endpoint; a list is the endpoints this request is MADE of,
+        # every one fetched and the bodies joined at parse.
+        names = [named] if isinstance(named, str) else list(named)
+        chain = [spec.endpoints[n] for n in names if n in spec.endpoints]
     else:
         chain = resolve_endpoints(spec, params)
     plans: list[RequestPlan] = []

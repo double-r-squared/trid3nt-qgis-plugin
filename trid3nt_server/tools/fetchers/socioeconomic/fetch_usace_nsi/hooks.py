@@ -1,51 +1,24 @@
-"""usace_nsi hooks: USACE National Structure Inventory points.
+"""usace_nsi hooks: the POST the National Structure Inventory is queried by.
 
-The one irreducible step is that the structures request is a POST whose query is a JSON
-body wrapping the bbox as a polygon -- the service has no query-string bbox -- plus the
-decode of the returned FeatureCollection."""
-
-# The decode projects each structure to the preserved property set, JSON-coerces the
-# nested props, and derives the two consumer columns from the occupancy type and the
-# structure value. The per-axis 1-degree span cap the server enforces is the one
-# bespoke pre-fetch gate the declarative bbox validation does not carry.
-#
-# The hook stays pure: it DESCRIBES the POST and the router owns the socket. An empty
-# result is a header-only FGB, since a bbox over open water is legitimate.
+The one irreducible step is the request: the service has no query-string bbox, so the
+query is a POST whose JSON body wraps the bbox as one polygon, and it rejects an
+envelope wider than a degree per axis with a 500 the ask refuses before the call."""
 
 from __future__ import annotations
 
-import json
-import math
 from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
 
 from ..._router import hooks as _hooks
-from ..._router.errors import router_input_error, router_upstream_error
+from ..._router.errors import router_input_error
 
-__all__ = ["build_request", "parse_response"]
+__all__ = ["build_request"]
 
 NSI_STRUCTURES_URL = "https://nsi.sec.usace.army.mil/nsiapi/structures"
 
 #: NSI rejects envelopes wider than ~1 degree per axis with a 500.
 NSI_BBOX_MAX_SPAN_DEG = 1.0
-
-#: Properties preserved from each NSI feature.
-_PRESERVED_PROPERTIES = (
-    "fd_id", "occtype", "st_damcat", "bldgtype", "found_type", "found_ht",
-    "num_story", "sqft", "med_yr_blt", "val_struct", "val_cont", "val_vehic",
-    "firmzone", "cbfips", "ground_elv", "ground_elv_m", "pop2amu65", "pop2amo65",
-    "pop2pmu65", "pop2pmo65", "students", "source",
-)
-
-#: Pelicun-consumer convenience columns (occtype IS the HAZUS occupancy class;
-#: val_struct is the canonical per-structure USD value).
-_COMPONENT_TYPE_COL = "component_type"
-_REPLACEMENT_VALUE_COL = "replacement_value"
-
-#: The output column order (preserved props + the two derived Pelicun columns),
-#: mirrored by the spec's ``ingest.properties`` for the honest-empty header.
-OUTPUT_COLUMNS = list(_PRESERVED_PROPERTIES) + [_COMPONENT_TYPE_COL, _REPLACEMENT_VALUE_COL]
 
 
 def _bbox_polygon_body(bbox: list[float]) -> dict[str, Any]:
@@ -95,48 +68,3 @@ def build_request(spec: SourceSpec, params: dict[str, Any]) -> list["_hooks.Requ
             json_body=_bbox_polygon_body(bbox),
         )
     ]
-
-
-@_hooks.register_hook("usace_nsi.parse_response")
-def parse_response(
-    spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
-) -> list[dict[str, Any]]:
-    """Decode the NSI FeatureCollection, project props, derive the Pelicun columns."""
-    sc = spec.error_code_prefix
-    raw = bodies[0] if bodies else b""
-    if not raw:
-        return []
-    try:
-        obj = json.loads(raw.decode("utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise router_upstream_error(sc, f"NSI response is not valid JSON: {exc}")
-    if not isinstance(obj, dict):
-        raise router_upstream_error(sc, f"NSI response is not a JSON object: type={type(obj).__name__}")
-    # NSI may surface errors as {"message": "..."} in a 200/4xx body.
-    if "message" in obj and obj.get("type") != "FeatureCollection":
-        raise router_upstream_error(sc, f"NSI returned error message: {obj.get('message')!r}")
-    if obj.get("type") != "FeatureCollection":
-        raise router_upstream_error(sc, f"NSI response is not a GeoJSON FeatureCollection: type={obj.get('type')!r}")
-
-    out: list[dict[str, Any]] = []
-    for feat in obj.get("features") or []:
-        if not isinstance(feat, dict):
-            continue
-        geom = feat.get("geometry")
-        if geom is None:
-            continue
-        props = feat.get("properties") or {}
-        row: dict[str, Any] = {}
-        for key in _PRESERVED_PROPERTIES:
-            v = props.get(key)
-            if isinstance(v, (dict, list)):
-                v = json.dumps(v)
-            row[key] = v
-        occtype = props.get("occtype")
-        row[_COMPONENT_TYPE_COL] = occtype if (isinstance(occtype, str) and occtype) else None
-        val_struct = props.get("val_struct")
-        row[_REPLACEMENT_VALUE_COL] = (
-            float(val_struct) if (isinstance(val_struct, (int, float)) and not isinstance(val_struct, bool) and math.isfinite(val_struct)) else None
-        )
-        out.append({"type": "Feature", "geometry": geom, "properties": row})
-    return out

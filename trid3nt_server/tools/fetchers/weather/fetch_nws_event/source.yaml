@@ -1,6 +1,6 @@
 # NWS active alerts as alert polygons, a single GET. The build hook canonicalizes the
-# area and builds the URL; the parse hook decodes the FeatureCollection, projects the
-# preserved props, and drops the null-geometry zone-only alerts.
+# area -- a state name, a state code or a county FIPS reaching one query value -- and
+# the field map states the FeatureCollection walk and the column projection.
 schema_version: v1
 name: fetch_nws_event
 source_class: nws_event
@@ -42,28 +42,39 @@ params:
     - cancel
 hooks:
   build_request: nws_event.build_request
-  parse_response: nws_event.parse_response
 ingest:
-  properties:
-  - event
-  - headline
-  - description
-  - severity
-  - urgency
-  - certainty
-  - effective
-  - onset
-  - ends
-  - expires
-  - senderName
-  - sender
-  - category
-  - messageType
-  - status
-  - areaDesc
-  - instruction
-  - response
-  - id
+  access: http_json
+  body:
+    format: geojson
+    rows_path: features
+    geometry:
+      kind: geojson
+      path: geometry
+  column_map:
+    event: {from: properties.event}
+    headline: {from: properties.headline}
+    description: {from: properties.description}
+    severity: {from: properties.severity}
+    urgency: {from: properties.urgency}
+    certainty: {from: properties.certainty}
+    effective: {from: properties.effective}
+    onset: {from: properties.onset}
+    ends: {from: properties.ends}
+    expires: {from: properties.expires}
+    senderName: {from: properties.senderName}
+    sender: {from: properties.sender}
+    category: {from: properties.category}
+    messageType: {from: properties.messageType}
+    status: {from: properties.status}
+    areaDesc: {from: properties.areaDesc}
+    instruction: {from: properties.instruction}
+    response: {from: properties.response}
+    id: {from: properties.id}
+  json_coerce_nested: true
+  geometry_filter:
+    # A zone-based statewide watch carries a NULL geometry: pyogrio rejects one and
+    # it has no map footprint.
+    geom_types: [Polygon, MultiPolygon, GeometryCollection]
 normalize:
   crs: EPSG:4326
 output:

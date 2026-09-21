@@ -1,6 +1,7 @@
-# USGS HANS volcano alerts. The build hook returns two static endpoints; the parse hook
-# inner-joins the alert and coordinate lists on vnum, filters to the bbox, and raises an
-# honest no-volcanoes error.
+# USGS HANS volcano alerts. The two static endpoints are the declared request; the parse
+# hook inner-joins the alert and coordinate lists on vnum -- two whole lists joined to
+# each other, which the keyed field map has no shape for -- filters to the bbox, ranks
+# by severity, and raises an honest no-volcanoes error.
 schema_version: v1
 name: fetch_usgs_volcano_alerts
 source_class: usgs_volcano_alerts
@@ -23,9 +24,11 @@ params:
     schema_optional: true
     quantize: round_6dp
 hooks:
-  build_request: usgs_volcano.build_request
   parse_response: usgs_volcano.parse_response
 ingest:
+  access: http_json
+  request:
+    endpoint: [monitored, us_volcanoes]
   properties:
   - vnum
   - volcano_name

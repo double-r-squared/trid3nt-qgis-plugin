@@ -1,6 +1,6 @@
 # USACE National Structure Inventory points, a single POST whose query is a JSON body.
-# The build hook carries the span cap and the polygon POST body; the parse hook decodes
-# the FeatureCollection, projects the preserved props, and derives the exposure columns.
+# The build hook carries the per-axis span cap and the polygon POST body; the field map
+# states the FeatureCollection walk, the column projection and the exposure columns.
 schema_version: v1
 name: fetch_usace_nsi
 source_class: usace_nsi
@@ -21,33 +21,45 @@ params:
     quantize: round_6dp
 hooks:
   build_request: usace_nsi.build_request
-  parse_response: usace_nsi.parse_response
 ingest:
-  properties:
-  - fd_id
-  - occtype
-  - st_damcat
-  - bldgtype
-  - found_type
-  - found_ht
-  - num_story
-  - sqft
-  - med_yr_blt
-  - val_struct
-  - val_cont
-  - val_vehic
-  - firmzone
-  - cbfips
-  - ground_elv
-  - ground_elv_m
-  - pop2amu65
-  - pop2amo65
-  - pop2pmu65
-  - pop2pmo65
-  - students
-  - source
-  - component_type
-  - replacement_value
+  access: http_json
+  body:
+    format: geojson
+    rows_path: features
+    geometry:
+      kind: geojson
+      path: geometry
+  column_map:
+    fd_id: {from: properties.fd_id}
+    occtype: {from: properties.occtype}
+    st_damcat: {from: properties.st_damcat}
+    bldgtype: {from: properties.bldgtype}
+    found_type: {from: properties.found_type}
+    found_ht: {from: properties.found_ht}
+    num_story: {from: properties.num_story}
+    sqft: {from: properties.sqft}
+    med_yr_blt: {from: properties.med_yr_blt}
+    val_struct: {from: properties.val_struct}
+    val_cont: {from: properties.val_cont}
+    val_vehic: {from: properties.val_vehic}
+    firmzone: {from: properties.firmzone}
+    cbfips: {from: properties.cbfips}
+    ground_elv: {from: properties.ground_elv}
+    ground_elv_m: {from: properties.ground_elv_m}
+    pop2amu65: {from: properties.pop2amu65}
+    pop2amo65: {from: properties.pop2amo65}
+    pop2pmu65: {from: properties.pop2pmu65}
+    pop2pmo65: {from: properties.pop2pmo65}
+    students: {from: properties.students}
+    source: {from: properties.source}
+    # occtype IS the HAZUS occupancy class and val_struct the canonical
+    # per-structure USD value, so the exposure consumer reads them under its own names.
+    component_type: {from: properties.occtype, kind: str}
+    replacement_value: {from: properties.val_struct, kind: float}
+  json_coerce_nested: true
+  geometry_filter:
+    geom_types: [Point]
+    require_finite: true
 normalize:
   crs: EPSG:4326
 output:

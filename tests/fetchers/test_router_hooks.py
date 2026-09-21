@@ -57,11 +57,17 @@ def _fgb_records(feats, spec) -> gpd.GeoDataFrame:
 def test_all_hooks_registered():
     for name in (
         "ncei_tsunami.build_request", "ncei_tsunami.parse_response",
-        "usgs_volcano.build_request", "usgs_volcano.parse_response",
-        "nws_event.build_request", "nws_event.parse_response",
-        "usace_nsi.build_request", "usace_nsi.parse_response",
+        "usgs_volcano.parse_response", "nws_event.build_request",
+        "usace_nsi.build_request",
     ):
         assert has_hook(name) and callable(resolve_hook(name))
+
+
+def test_the_declared_rows_name_no_parse_hook():
+    """A row whose walk the field map states declares no parse hook: the switch
+    would take the hook and the declaration would never be read."""
+    for name in ("fetch_nws_event", "fetch_usace_nsi"):
+        assert _spec(name).hooks.parse_response is None
 
 
 def test_resolve_unknown_raises():
@@ -252,9 +258,9 @@ def test_tsu_paging_loop_and_too_large(monkeypatch):
 
 
 
-def test_vol_build_request_two_endpoints():
+def test_vol_request_is_the_two_declared_endpoints():
     spec = _spec("fetch_usgs_volcano_alerts")
-    plans = resolve_hook(spec.hooks.build_request)(spec, {})
+    plans = http_json._plans(spec, {})
     assert len(plans) == 2 and "getMonitoredVolcanoes" in plans[0].url and "getUSVolcanoes" in plans[1].url
 
 
@@ -338,29 +344,27 @@ def test_nws_bad_status_enum_input_invalid():
     assert ei.value.error_code == "NWS_EVENT_INPUT_INVALID"
 
 
-def test_nws_parse_projects_props_and_drops_null_geometry():
+def test_nws_declared_walk_projects_props_and_drops_null_geometry():
     spec = _spec("fetch_nws_event")
-    pr = resolve_hook(spec.hooks.parse_response)
     body = json.dumps({"type": "FeatureCollection", "features": [
         {"geometry": {"type": "Polygon", "coordinates": [[[-81.0, 26.0], [-80.0, 26.0], [-80.0, 27.0], [-81.0, 26.0]]]},
          "properties": {"event": "Flood Warning", "severity": "Severe", "id": "urn:x:1",
                         "geocode": {"UGC": ["FLZ048"]}}},
         {"geometry": None, "properties": {"event": "Winter Storm Watch", "id": "urn:x:2"}},  # zone-only -> dropped
     ]}).encode()
-    feats = pr(spec, {}, [body])
-    assert len(feats) == 1 and feats[0]["properties"]["event"] == "Flood Warning"
-    # nested props JSON-coerced to a scalar string.
-    assert isinstance(feats[0]["properties"]["id"], str)
-    g = _fgb_records(feats, spec)
-    assert list(g.columns)[:-1] == spec.ingest["properties"]
+    g = _fgb_records(http_json._features(spec, {}, [body]), spec)
+    assert len(g) == 1 and g.iloc[0]["event"] == "Flood Warning"
+    # the column map IS the schema, and a nested prop lands as a scalar string.
+    assert list(g.columns)[:-1] == list(spec.ingest["column_map"])
+    assert isinstance(g.iloc[0]["id"], str)
 
 
-def test_nws_parse_empty_and_bad_body():
+def test_nws_declared_walk_empty_and_bad_body():
     spec = _spec("fetch_nws_event")
-    pr = resolve_hook(spec.hooks.parse_response)
-    assert pr(spec, {}, [json.dumps({"type": "FeatureCollection", "features": []}).encode()]) == []
+    assert http_json._features(
+        spec, {}, [json.dumps({"type": "FeatureCollection", "features": []}).encode()]) == []
     with pytest.raises(RouterUpstreamError) as ue:
-        pr(spec, {}, [json.dumps({"type": "NotAFC"}).encode()])
+        http_json._features(spec, {}, [json.dumps({"type": "NotAFC"}).encode()])
     assert ue.value.error_code == "NWS_EVENT_UPSTREAM_ERROR"
 
 
@@ -386,29 +390,27 @@ def test_nsi_build_request_oversized_bbox_input_invalid():
     assert ei.value.error_code == "USACE_NSI_INPUT_INVALID"
 
 
-def test_nsi_parse_projects_and_derives_pelicun_cols():
+def test_nsi_declared_walk_projects_and_states_the_exposure_cols():
     spec = _spec("fetch_usace_nsi")
-    pr = resolve_hook(spec.hooks.parse_response)
     body = json.dumps({"type": "FeatureCollection", "features": [
         {"geometry": {"type": "Point", "coordinates": [-81.87, 26.63]},
          "properties": {"fd_id": 7, "occtype": "RES1", "val_struct": 250000.0, "st_damcat": "RES"}},
         {"geometry": None, "properties": {"fd_id": 8, "occtype": "COM1"}},  # dropped
     ]}).encode()
-    feats = pr(spec, {}, [body])
-    assert len(feats) == 1
-    p = feats[0]["properties"]
-    assert p["component_type"] == "RES1" and p["replacement_value"] == 250000.0 and p["fd_id"] == 7
-    g = _fgb_records(feats, spec)
-    assert list(g.columns)[:-1] == spec.ingest["properties"]
+    g = _fgb_records(http_json._features(spec, {}, [body]), spec)
+    assert len(g) == 1
+    assert list(g.columns)[:-1] == list(spec.ingest["column_map"])
+    assert g.iloc[0]["component_type"] == "RES1"
+    assert g.iloc[0]["replacement_value"] == 250000.0 and g.iloc[0]["fd_id"] == 7
 
 
-def test_nsi_parse_message_error_and_empty():
+def test_nsi_message_body_and_empty():
     spec = _spec("fetch_usace_nsi")
-    pr = resolve_hook(spec.hooks.parse_response)
     with pytest.raises(RouterUpstreamError) as ue:
-        pr(spec, {}, [json.dumps({"message": "boom"}).encode()])
+        http_json._features(spec, {}, [json.dumps({"message": "boom"}).encode()])
     assert ue.value.error_code == "USACE_NSI_UPSTREAM_ERROR"
-    assert pr(spec, {}, [json.dumps({"type": "FeatureCollection", "features": []}).encode()]) == []
+    assert http_json._features(
+        spec, {}, [json.dumps({"type": "FeatureCollection", "features": []}).encode()]) == []
 
 
 def test_nsi_post_transport_executor_end_to_end(monkeypatch):

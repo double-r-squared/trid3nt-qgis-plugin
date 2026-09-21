@@ -1,8 +1,9 @@
-"""usgs_volcano hooks: USGS HANS volcano alerts as point features.
+"""usgs_volcano hooks: the join two HANS lists answer an alert point through.
 
-The irreducible step is a TWO-endpoint static request -- the alert list and the
-geographic list, both keyed by vnum -- inner-joined on vnum and then bbox-filtered in
-process, because HANS has no server-side spatial query."""
+The irreducible step is the parse: the alert list and the geographic list are two
+whole lists inner-joined on vnum, then bbox-filtered and severity-ranked in process,
+because HANS has no server-side spatial query and publishes the place in a second
+list rather than as a detail keyed off the first."""
 
 from __future__ import annotations
 
@@ -14,23 +15,10 @@ from trid3nt_contracts.source_spec import SourceSpec
 from ..._router import hooks as _hooks
 from ..._router.errors import router_empty_error, router_upstream_error
 
-__all__ = ["build_request", "parse_response"]
-
-MONITORED_URL = "https://volcanoes.usgs.gov/hans-public/api/volcano/getMonitoredVolcanoes"
-US_VOLCANOES_URL = "https://volcanoes.usgs.gov/hans-public/api/volcano/getUSVolcanoes"
+__all__ = ["parse_response"]
 
 ALERT_LEVELS = ("NORMAL", "ADVISORY", "WATCH", "WARNING")
 COLOR_CODES = ("GREEN", "YELLOW", "ORANGE", "RED")
-
-
-@_hooks.register_hook("usgs_volcano.build_request")
-def build_request(spec: SourceSpec, params: dict[str, Any]) -> list["_hooks.RequestPlan"]:
-    """The two HANS endpoints (alert list + geographic list); bbox filters at parse."""
-    ua = {"User-Agent": spec.auth.user_agent}
-    return [
-        _hooks.RequestPlan(url=MONITORED_URL, headers=ua),
-        _hooks.RequestPlan(url=US_VOLCANOES_URL, headers=ua),
-    ]
 
 
 def _alert_rank(alert_level: str | None) -> int:
