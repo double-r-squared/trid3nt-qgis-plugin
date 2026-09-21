@@ -5,7 +5,9 @@ Run as a SUBPROCESS by its wrapper test under the interpreter that carries
 GeoPackage written here, and the ingest route is a local stub, so the seam is
 proved without a network. Mode open puts the layer on the map; mode materialise
 windows it to the asked bbox, exports it and uploads it; an unopenable uri
-answers with the provider's own text.
+answers with the provider's own text. A raster row proves the two asks the
+request carries: the spacing it was asked for lands on the exported grid, and a
+request with no bbox exports the whole published layer.
 """
 
 from __future__ import annotations
@@ -24,6 +26,27 @@ from qgis.core import QgsApplication, QgsProject  # noqa: E402
 
 _KEY = "01harnesslayerrequestkey"
 _BBOX = [-114.0, 31.3, -112.0, 33.0]
+
+#: The synthetic raster: EPSG:4326, a 0.002 deg native grid over one degree
+#: square, so an asked 300 m is plainly coarser than native and the whole-layer
+#: export has an extent to compare against.
+_RASTER_ORIGIN = (-114.0, 34.0)
+_RASTER_PIXELS = 500
+_RASTER_STEP = 0.002
+_RASTER_BBOX = [-114.0, 33.0, -113.0, 34.0]
+
+
+def _metres_per_degree(lat: float) -> tuple:
+    """(east-west, north-south) metres in a degree at ``lat``."""
+    import math
+
+    phi = math.radians(lat)
+    return (
+        111412.84 * math.cos(phi) - 93.5 * math.cos(3 * phi)
+        + 0.118 * math.cos(5 * phi),
+        111132.92 - 559.82 * math.cos(2 * phi) + 1.175 * math.cos(4 * phi)
+        - 0.0023 * math.cos(6 * phi),
+    )
 
 
 class _IngestStub(http.server.BaseHTTPRequestHandler):
@@ -67,6 +90,72 @@ def _write_source(path: str) -> None:
         feature.SetGeometry(poly)
         layer.CreateFeature(feature)
     source = None
+
+
+def _write_raster(path: str) -> None:
+    from osgeo import gdal, osr
+
+    driver = gdal.GetDriverByName("GTiff")
+    dataset = driver.Create(path, _RASTER_PIXELS, _RASTER_PIXELS, 1, gdal.GDT_Float32)
+    dataset.SetGeoTransform(
+        (_RASTER_ORIGIN[0], _RASTER_STEP, 0.0, _RASTER_ORIGIN[1], 0.0, -_RASTER_STEP)
+    )
+    srs = osr.SpatialReference()
+    srs.ImportFromEPSG(4326)
+    dataset.SetProjection(srs.ExportToWkt())
+    band = dataset.GetRasterBand(1)
+    band.Fill(2.5)
+    band.FlushCache()
+    dataset = None
+
+
+def _raster_cases(tmp: str, base_url: str) -> None:
+    """The two asks a raster row carries, through the running plugin seam."""
+    from osgeo import gdal
+
+    from plugin.render.layer_request import run_layer_request
+
+    tif = os.path.join(tmp, "grid.tif")
+    _write_raster(tif)
+
+    asked_m = 300.0
+    answer = run_layer_request({
+        "key": _KEY, "provider": "gdal", "uri": tif, "name": "grid",
+        "bbox": _RASTER_BBOX, "mode": "materialise", "resolution_m": asked_m,
+    }, base_url=base_url)
+    assert answer["error"] is None, answer
+    path, body = _IngestStub.uploads[-1]
+    assert f"filename={_KEY}.tif" in path, path
+    out = os.path.join(tmp, "at_300m.tif")
+    with open(out, "wb") as handle:
+        handle.write(body)
+    exported = gdal.Open(out)
+    transform = exported.GetGeoTransform()
+    exported = None
+    x_step, y_step = abs(transform[1]), abs(transform[5])
+    centre_lat = (_RASTER_BBOX[1] + _RASTER_BBOX[3]) / 2.0
+    per_lon, per_lat = _metres_per_degree(centre_lat)
+    assert abs(x_step * per_lon - asked_m) < 0.5, (x_step * per_lon, asked_m)
+    assert abs(y_step * per_lat - asked_m) < 0.5, (y_step * per_lat, asked_m)
+    assert abs(x_step - _RASTER_STEP) > 1e-6, "the export kept the native grid"
+    print(f"[layer-request] a raster materialised at 300 m has a "
+          f"{x_step * per_lon:.1f} m by {y_step * per_lat:.1f} m cell, not the "
+          f"native {_RASTER_STEP * per_lon:.1f} m")
+
+    answer = run_layer_request({
+        "key": _KEY, "provider": "gdal", "uri": tif, "name": "grid",
+        "bbox": None, "mode": "materialise",
+    }, base_url=base_url)
+    assert answer["error"] is None, answer
+    _path, body = _IngestStub.uploads[-1]
+    out = os.path.join(tmp, "whole.tif")
+    with open(out, "wb") as handle:
+        handle.write(body)
+    exported = gdal.Open(out)
+    size = (exported.RasterXSize, exported.RasterYSize)
+    exported = None
+    assert size == (_RASTER_PIXELS, _RASTER_PIXELS), size
+    print(f"[layer-request] no bbox exported the whole layer: {size[0]}x{size[1]} px")
 
 
 def main() -> int:
@@ -131,6 +220,8 @@ def main() -> int:
     })
     assert unknown["error"] == "unknown layer mode 'download'", unknown
     print("[layer-request] an unknown mode is refused, never guessed")
+
+    _raster_cases(tmp, base_url)
 
     server.shutdown()
     server.server_close()

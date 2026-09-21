@@ -66,7 +66,10 @@ class TestKeyedProviderRow(unittest.TestCase):
         self._real_mat = lr.materialise
         lr.open_provider_layer = _open
         lr.add_to_map = lambda layer, bbox, iface: None
-        lr.materialise = lambda layer, bbox, key, base_url: "s3://cache/keyed.gpkg"
+        lr.materialise = (
+            lambda layer, bbox, key, base_url, resolution_m=None:
+            "s3://cache/keyed.gpkg"
+        )
         self.addCleanup(self._restore_seams)
 
     def _restore(self):
@@ -209,6 +212,8 @@ class TestLayerRequestInQgis(unittest.TestCase):
         self.assertIn("[layer-request] mode materialise uploaded", proc.stdout)
         self.assertIn("[layer-request] an unopenable uri answers", proc.stdout)
         self.assertIn("[layer-request] an unknown mode is refused", proc.stdout)
+        self.assertIn("[layer-request] a raster materialised at 300 m", proc.stdout)
+        self.assertIn("[layer-request] no bbox exported the whole layer", proc.stdout)
 
 
 if __name__ == "__main__":
