@@ -58,8 +58,8 @@ def _resolve_api_key(sc: str, params: dict[str, Any]) -> str:
         return env_key
     raise router_input_error(
         sc,
-        "no AirNow API key available: set the TRID3NT_AIRNOW_API_KEY env var (or add an "
-        "AirNow api key). Register a free key at https://docs.airnowapi.org/account/request/.",
+        "no AirNow API key available. Add the key under Settings > Keys. Register a "
+        "free key at https://docs.airnowapi.org/account/request/.",
         "MISSING_KEY",
     )
 

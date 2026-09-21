@@ -73,9 +73,8 @@ def _resolve_map_key(sc: str, params: dict[str, Any]) -> str:
         return env_key
     raise router_input_error(
         sc,
-        "no FIRMS MAP_KEY available: pass map_key=..., secret_ref=..., or set the "
-        "TRID3NT_FIRMS_MAP_KEY env var. Register a free key at "
-        "https://firms.modaps.eosdis.nasa.gov/api/map_key/.",
+        "no FIRMS MAP_KEY available. Add the key under Settings > Keys. Register a "
+        "free key at https://firms.modaps.eosdis.nasa.gov/api/map_key/.",
         "MISSING_KEY",
     )
 

@@ -51,8 +51,8 @@ def _resolve_api_key(sc: str, params: dict[str, Any]) -> str:
         return env_key
     raise router_input_error(
         sc,
-        "no OpenAQ API key available: set the TRID3NT_OPENAQ_API_KEY env var (or add an "
-        "OpenAQ api key). Register a free key at https://explore.openaq.org/ (account -> API keys).",
+        "no OpenAQ API key available. Add the key under Settings > Keys. Register a "
+        "free key at https://explore.openaq.org/ (account -> API keys).",
         "KEY_REQUIRED",
     )
 
