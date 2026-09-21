@@ -24,6 +24,7 @@ BUCKET = "trid3nt-cache-test"
 DEM = "cache/static-30d/dem/aaaaaaaa.tif"
 DEM_SIDECAR = "cache/static-30d/dem/aaaaaaaa.provenance.json"
 GAUGE = "cache/static-30d/gauge/bbbbbbbb.json"
+SUPPLIED = "cache/static-30d/supplied/cccccccc.tif"
 LAYER_URI = "s3://trid3nt-runs/01RUN/flood_depth.tif"
 
 NOW = datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
@@ -70,17 +71,21 @@ def store(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> _FakeStore:
     storage.set_client(None)
 
 
-def _case_holding_the_layer() -> CaseSummary:
+def _case_holding(layer_id: str, name: str, uri: str) -> CaseSummary:
     return CaseSummary(
         case_id=new_ulid(),
         title="St. Clair ice run",
         created_at=NOW,
         updated_at=NOW,
-        loaded_layer_summaries=[{"layer_id": "flood-depth", "name": "flood depth",
-                                 "layer_type": "raster", "uri": LAYER_URI,
+        loaded_layer_summaries=[{"layer_id": layer_id, "name": name,
+                                 "layer_type": "raster", "uri": uri,
                                  "visible": True, "role": "primary",
                                  "temporal": False}],
     )
+
+
+def _case_holding_the_layer() -> CaseSummary:
+    return _case_holding("flood-depth", "flood depth", LAYER_URI)
 
 
 def test_a_referenced_object_survives_its_ttl(store: _FakeStore,
@@ -126,3 +131,23 @@ def test_a_deleted_case_releases_its_objects(store: _FakeStore,
 
     assert set(asyncio.run(reap(now=NOW, client=db))) == {DEM, DEM_SIDECAR}
     assert store.objects == {}
+
+
+def test_a_case_held_object_no_run_names_survives_and_is_released(
+        store: _FakeStore, tmp_path: Path) -> None:
+    """A layer the person supplied is held by the Case alone - no run record
+    names it, so the Case is the only thing pinning it. It outlives its window
+    while the Case exists and goes once the Case is deleted."""
+    store.objects[SUPPLIED] = SPENT
+    db = FileMCPClient(base_dir=tmp_path / "db")
+    p = Persistence(db)
+    case = _case_holding("shoreline", "shoreline", f"s3://{BUCKET}/{SUPPLIED}")
+    asyncio.run(p.upsert_case(case))
+
+    assert SUPPLIED not in asyncio.run(reap(now=NOW, client=db))
+    assert SUPPLIED in store.objects
+
+    asyncio.run(p.delete_case(case.case_id))
+
+    assert SUPPLIED in asyncio.run(reap(now=NOW, client=db))
+    assert SUPPLIED not in store.objects

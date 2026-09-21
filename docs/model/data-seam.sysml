@@ -1595,6 +1595,8 @@ package DataSeam {
         "tests/server/test_store_retention.py::test_an_unreferenced_object_goes_and_a_current_one_stays";
     verify requirement AConsumedObjectIsPinnedWhileItsCaseLives by
         "tests/server/test_store_retention.py::test_a_deleted_case_releases_its_objects";
+    verify requirement AConsumedObjectIsPinnedWhileItsCaseLives by
+        "tests/server/test_store_retention.py::test_a_case_held_object_no_run_names_survives_and_is_released";
 
     satisfy requirement TheRunHasOneVerticalFrame by verticalFrame;
     satisfy requirement TheRunHasOneVerticalFrame by frameLever;
