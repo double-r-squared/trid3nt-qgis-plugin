@@ -1,119 +1,88 @@
-# NHD waterbodies over an ArcGIS FeatureServer, with a primary-to-fallback endpoint
-# chain (high resolution, then medium) and a case-insensitive column_map whose
-# lookup-derived ftype_label absorbs the two endpoints' differing field case.
+# NHD waterbodies (NHDPlus HR, MapServer layer 9), opened on the user's map
+# through QGIS's own ArcGIS FeatureServer provider. The twin's medium-resolution
+# fallback endpoint served the FETCHED store; mode open opens the primary
+# service only, since a provider-open failure has no in-band retry here.
 schema_version: v1
 
 name: fetch_nhd_waterbodies
-source_class: nhd_waterbodies              # cache prefix; error prefix == source_class.upper()
-input_error_suffix: INPUT_INVALID          # NHDWaterbodiesInputError -> NHD_WATERBODIES_INPUT_INVALID
-shape: vector-fgb
-supports_global_query: false               # national polygon corpus, bbox required
+source_class: nhd_waterbodies
+input_error_suffix: INPUT_INVALID
+shape: record
+supports_global_query: false
 
 endpoints:
-  data:                                      # PRIMARY: NHDPlus_HR (lowercase fields)
-    url: "https://hydro.nationalmap.gov/arcgis/rest/services/NHDPlus_HR/MapServer/9/query"
-  medium:                                    # FALLBACK: medium-resolution (UPPERCASE fields)
-    url: "https://hydro.nationalmap.gov/arcgis/rest/services/nhd/MapServer/12/query"
+  data:
+    url: "https://hydro.nationalmap.gov/arcgis/rest/services/NHDPlus_HR/MapServer/9"
+
 auth:
   mode: none
   user_agent: trid3nt_default
-endpoint_fallback: [medium]                           # tried in order on the primary's upstream failure
 
 params:
   bbox: {type: bbox, required: true, quantize: round_6dp}
-gates:
-  max_features: 100000                       # 100 pages of 1000
 
 ingest:
-  access: ogr
-  ogr: {driver: ESRIJSON}
-  query_template:
-    out_fields: "permanent_identifier,gnis_name,ftype,fcode,reachcode,elevation,areasqkm"
-    order_by: "OBJECTID ASC"
-  column_map_ci: true                        # HR lowercase vs medium-res UPPERCASE field names
-  column_map:
-    permanent_identifier: {from: permanent_identifier}
-    gnis_name:            {from: gnis_name}
-    ftype:                {from: ftype, kind: int}
-    ftype_label:          {from: ftype, kind: lookup, key_from: ftype,
-                           table: {390: LakePond, 436: Reservoir, 466: SwampMarsh,
-                                   361: Playa, 493: Estuary, 378: IceMass}}
-    fcode:                {from: fcode}
-    reachcode:            {from: reachcode}
-    elevation:            {from: elevation}
-    areasqkm:             {from: areasqkm}
+  access: qgis_provider
+  qgis_provider:
+    provider: arcgisfeatureserver
+    uri: "crs='EPSG:4326' url='{url}'"
+    mode: open
 
 normalize:
   crs: "EPSG:4326"
-  units: null
 
 output:
-  layer_type: vector
-  ext: fgb
-  role: context
-  style:
-    kind: reference
-    geometry: polygon
-  emit_bbox: false                           # the LayerURI omits bbox
+  layer_type: record
+  ext: json
 
 cache:
-  ttl_class: static-30d
-payload_estimate:                            # area*0.4 clamp[0.05,50]
+  ttl_class: live-no-cache
+payload_estimate:
   model: bbox_area
-  mb_per_sq_deg: 0.4
-  floor_mb: 0.05
+  mb_per_sq_deg: 0.0
+  floor_mb: 0.0
 
 caveats:
   - "model-callable, not matched: a many-feature network layer is not the one domain a hydrography row returns, so it carries no coverage row"
-  - "USGS NHD open-water polygons (lakes/ponds/reservoirs); vegetated wetlands -> fetch_nwi_wetlands"
-  - "PRIMARY NHDPlus_HR -> FALLBACK medium-resolution; empty bbox over dry upland -> header-only FGB (honest-empty)"
+  - "USGS NHD open-water polygons (lakes/ponds/reservoirs) via NHDPlus HR; vegetated wetlands -> fetch_nwi_wetlands"
+  - "the layer is drawn by QGIS from the service, so its features are on the map but not in the case store and no analysis reads them"
+  - "opens the PRIMARY NHDPlus HR service only; the medium-resolution mirror the fetch-and-store twin fell back to has no place in a single provider-open call"
 
 docstring: |-
-  USGS NHD waterbody polygons (lakes / ponds / reservoirs) as a vector layer.
+  USGS NHD waterbody polygons (lakes / ponds / reservoirs), added to the map.
 
-  ROUTING -- use this when the user wants OPEN-WATER BODY extent: "show the
-  lakes / ponds / reservoirs here", "map the water bodies", "NHD waterbodies",
-  "which lakes are in this area", or needs waterbody polygons to overlay on /
-  intersect with a hazard footprint. KEY-FREE, US + territories, authoritative
-  USGS National Hydrography Dataset (NHDPlus HR).
+  Opens NHDPlus HR open-water polygons as a live map overlay served by
+  QGIS's own ArcGIS FeatureServer provider. KEY-FREE, US + territories,
+  authoritative USGS National Hydrography Dataset.
 
-  Prefer THIS over:
-  - ``fetch_nhdplus_nldi_navigate`` -- that navigates the FLOWLINE (river/stream
-    LINE) network from a seed point; this returns waterbody POLYGONS.
-  - ``fetch_nwi_wetlands`` -- that returns VEGETATED / classified wetlands
-    (marshes, swamps); this returns OPEN water. Fetch both for "all water +
-    wetland habitat".
-  - ``fetch_jrc_global_surface_water`` -- that is a global surface-water RASTER
-    (occurrence %), not vector lake/pond polygons.
-  Do NOT use for: coastal shoreline (``fetch_topobathy``), stream gauges
-  (``fetch_usgs_nwis_gauges``), or a modeled flood extent (``telemac_rain_on_grid``).
+  **When to use:**
+  - "Show the lakes / ponds / reservoirs here", "map the water bodies",
+    "which lakes are in this area".
+  - Visual context beside a hazard footprint.
 
-  Parameters:
-      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. REQUIRED -- NHD does not support a global query (national-scale polygon corpus).
-          Recommended <= ~1 deg on a side. Example (Naples, FL):
-          ``(-81.5, 26.0, -81.3, 26.2)``.
+  **When NOT to use:**
+  - To COMPUTE with the polygons - intersect them with fields, an area
+    figure. The overlay is drawn from the service and its features never
+    reach the store; nothing downstream can read them.
+  - ``fetch_nhdplus_nldi_navigate`` -- that navigates the FLOWLINE (river/
+    stream LINE) network; this returns waterbody POLYGONS.
+  - ``fetch_nwi_wetlands`` -- that returns VEGETATED / classified wetlands;
+    this returns OPEN water.
+  - Coastal shoreline (``fetch_topobathy``), stream gauges
+    (``fetch_usgs_nwis_gauges``), or a modeled flood extent.
 
-  Returns:
-      ``LayerURI`` (``layer_type="vector"``, ``role="context"`` ``units=None``) pointing at a
-      FlatGeobuf in the cache bucket with per-polygon columns:
-          permanent_identifier (str) -- stable NHD id
-          gnis_name            (str) -- GNIS place name (null for many small ponds)
-          ftype                (int) -- NHD feature-type code
-          ftype_label          (str) -- human label (LakePond / Reservoir /
-                                         SwampMarsh / Playa / Estuary / IceMass)
-          fcode                (int) -- full NHD feature code
-          reachcode            (str) -- NHD reach code
-          elevation            (float) -- waterbody elevation (source units)
-          areasqkm             (float) -- polygon area in square km
-      An empty bbox over dry upland returns a valid 0-feature FlatGeobuf
-      (NOT an error).
+  **Parameters:**
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required.
 
-  Cross-tool dependencies:
-      - Composed in the session by ``run_pyqgis`` (open-water channel of a
-        habitat-impact assessment, alongside ``fetch_nwi_wetlands``).
+  **Returns:**
+      A record naming what was opened: the provider, the service uri behind
+      the layer, the layer name and the bbox the map was taken to.
+  **Error types:**
+      - ``NHD_WATERBODIESInputError``: bad bbox (retryable=False).
+      - ``NHD_WATERBODIESUpstreamError``: the provider's own text when it
+        cannot open the service (retryable=True).
 
-  Resilience: PRIMARY NHDPlus_HR ->
-  FALLBACK medium-resolution NHD Waterbody -> honest
-  ``NHDWaterbodiesUpstreamError(retryable=True)`` if both fail. Never fabricates
-  a non-empty layer. Cache: ``static-30d``, keyed on ``bbox-rounded-6dp`` +
-  month vintage.
+  Requires a live QGIS session: the layer is opened in the user's QGIS, so a
+  headless or direct call refuses by name rather than returning nothing.
+
+  ``supports_global_query=False``. No API key required.

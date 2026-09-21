@@ -134,12 +134,40 @@ def test_usace_levees_is_a_provider_row_per_layer() -> None:
     assert routes.endswith("FeatureServer/14'")
 
 
+def test_nhd_area_water_is_a_provider_row_in_mode_open() -> None:
+    _assert_open_row("fetch_nhd_area_water")
+    spec = _spec("fetch_nhd_area_water")
+    plain = qgis_provider.build_uri(spec, {"bbox": _BBOX})
+    assert plain.endswith("NHDPlus_HR/MapServer/8'")
+
+
+def test_nhd_waterbodies_is_a_provider_row_in_mode_open() -> None:
+    _assert_open_row("fetch_nhd_waterbodies")
+    spec = _spec("fetch_nhd_waterbodies")
+    plain = qgis_provider.build_uri(spec, {"bbox": _BBOX})
+    assert plain.endswith("NHDPlus_HR/MapServer/9'")
+
+
+def test_nhdplus_hr_flowlines_is_a_provider_row_in_mode_open() -> None:
+    _assert_open_row("fetch_nhdplus_hr_flowlines")
+    spec = _spec("fetch_nhdplus_hr_flowlines")
+    plain = qgis_provider.build_uri(spec, {"bbox": _BBOX})
+    assert plain.endswith("NHDPlus_HR/MapServer/3'")
+    filtered = qgis_provider.build_uri(
+        spec, {"bbox": _BBOX, "gnis_name": "Eel River"}
+    )
+    assert filtered.endswith("sql=UPPER(gnis_name)=UPPER('Eel River')")
+
+
 @pytest.mark.parametrize("name, extra", [
     ("fetch_hifld_critical_infrastructure", {"facility_type": "hospitals"}),
     ("fetch_hifld_transmission_lines", {}),
     ("fetch_mtbs_burn_severity", {}),
     ("fetch_nifc_fire_perimeters", {}),
     ("fetch_usace_levees", {}),
+    ("fetch_nhd_area_water", {}),
+    ("fetch_nhd_waterbodies", {}),
+    ("fetch_nhdplus_hr_flowlines", {}),
 ])
 def test_group1_row_refuses_by_name_with_no_session(name: str, extra: dict) -> None:
     _assert_refuses_with_no_session(name, **extra)

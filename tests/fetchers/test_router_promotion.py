@@ -69,6 +69,7 @@ PROMOTED = {
         "source_class": "nhd_waterbodies",
         "properties": ["bbox"],
         "required": ["bbox"],
+        "cacheable": False,
     },
     "fetch_us_drought_monitor": {
         "source_class": "us_drought_monitor",
