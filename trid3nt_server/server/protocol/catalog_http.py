@@ -306,10 +306,30 @@ def build_library_payload(*, use_cache: bool = True) -> dict[str, Any]:
 _LIBRARY_SEARCH_TOP_K = 25
 
 
+def _classes_named_by(query: str) -> list[str]:
+    """The data classes an ask names, best overlap first.
+
+    A covered source is reached by asking the world for a CLASS, so it carries
+    no corpus phrasing and the tool index cannot rank it. The ask is read
+    against the class vocabulary itself, through the index's own tokenizer, so
+    both halves of a search are split on the same words."""
+    from trid3nt_server.tools.search.search_tools.search_tools import (
+        _STOPWORDS, _tokenize,
+    )
+    from trid3nt_contracts.coverage import DATA_CLASSES
+
+    asked = {t for t in _tokenize(query) if t not in _STOPWORDS}
+    if not asked:
+        return []
+    scored = [(len(asked & set(_tokenize(name))), name) for name in DATA_CLASSES]
+    return [name for overlap, name in
+            sorted((s for s in scored if s[0]), key=lambda s: (-s[0], s[1]))]
+
+
 async def build_library_search(query: str, top_k: int = 10) -> dict[str, Any]:
-    """The ``/api/library/search`` hits: the BM25 corpus the model routes on,
-    answering both facets. Each ranked tool is followed by the coverage rows it
-    answers, so one query reaches a tool and the data behind it."""
+    """The ``/api/library/search`` hits: one ask over both facets. The tools are
+    ranked by the BM25 corpus the model routes on; the rows are those of the
+    classes the ask names, which is how a covered source is reached at all."""
     from trid3nt_server.tools import TOOL_REGISTRY
     from trid3nt_server.tools.search.search_tools.search_tools import search_tools
 
@@ -333,16 +353,22 @@ async def build_library_search(query: str, top_k: int = 10) -> dict[str, Any]:
         if isinstance(score, (int, float)):
             hit["score"] = score
         hits.append(hit)
-        # The rows this tool answers, under the class and kind heading they are
-        # listed at. They carry no score: rank is the tool's, and a repeated
-        # number would read as a measurement of the row.
-        for data_class in _library_classes(frozenset({name})):
-            for kind in data_class["kinds"]:
-                for row in kind["rows"]:
-                    hits.append(dict(row, kind="row",
-                                     group=f"{data_class['name']} / {kind['name']}"))
+
+    # The rows carry no score: rank here is the class overlap, and a number
+    # beside a row would read as a measurement of the row.
+    named = _classes_named_by(query)
+    by_class = {cls["name"]: cls for cls in _library_classes()}
+    for class_name in named:
+        listed = by_class.get(class_name)
+        if listed is None:
+            continue
+        for kind in listed["kinds"]:
+            for row in kind["rows"]:
+                hits.append(dict(row, kind="row",
+                                 group=f"{class_name} / {kind['name']}"))
 
     return {"query": query, "hits": hits}
+
 
 
 # Building click-to-enrich detail endpoint.

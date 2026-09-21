@@ -150,19 +150,33 @@ def test_listing_route_serves_the_payload():
     assert _body_json(out)["subsystems"]
 
 
-def test_search_route_answers_both_facets_off_the_model_corpus():
-    """One query, one index: the ranked tools and the rows they answer."""
+def test_search_route_answers_both_facets_from_one_ask():
+    """One query reaches the tools the model would rank and the rows of the
+    class it names -- the only way a covered source is reached at all."""
     out = _drive(_get("/api/library/search?q=tide+gauge+water+level"))
     assert _status(out) == 200
     payload = _body_json(out)
     assert payload["query"] == "tide gauge water level"
     kinds = {hit["kind"] for hit in payload["hits"]}
-    assert "tool" in kinds
+    assert kinds == {"tool", "row"}
+    rows = [h for h in payload["hits"] if h["kind"] == "row"]
+    assert {h["group"] for h in rows} >= {"water level series / measured"}
+    assert "fetch_noaa_coops_tides" in {h["fetcher"] for h in rows}
     for hit in payload["hits"]:
         assert hit["name"]
         if hit["kind"] == "row":
             assert hit["fetcher"]
             assert " / " in hit["group"]
+            assert "score" not in hit
+
+
+def test_a_class_the_ask_never_names_brings_no_rows():
+    """The row half is the class the ask names, not every row there is."""
+    payload = _body_json(_drive(_get("/api/library/search?q=water+level")))
+    named = {h["group"].split(" / ")[0] for h in payload["hits"]
+             if h["kind"] == "row"}
+    assert "fuels" not in named
+    assert "water level series" in named
 
 
 def test_search_with_no_query_answers_no_hits():
