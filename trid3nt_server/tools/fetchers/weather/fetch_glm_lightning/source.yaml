@@ -1,3 +1,5 @@
+# Whether goes2go owns this archive read is the substrate scout's question: the frames
+# share the ABI archive substrate, so the two rows answer it together.
 # GOES GLM group-energy-density frames: point-gridding of GLM group energy onto the
 # ABI-co-registered EPSG:4326 grid. The output is an ORDERED list of frames, a single
 # accumulation being a one-frame list. The plan hook splits the window into buckets and

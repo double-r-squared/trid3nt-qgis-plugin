@@ -1,5 +1,9 @@
 # NRCS SNOTEL/SCAN snow stations: the station catalog as the main fetch, then ONE batched
 # data GET as the enrich phase, null-tolerant, so a failed batch degrades to locations.
+# Not on the field map: the catalog has no service-side bbox, so the sweep is filtered
+# in process, and the enrich is ONE shared batched ref for every station with a windowed
+# max-per-element-code reduce, not the per-key detail join the enrich block states.
+# A metloom delegate is the substrate scout's question, not a field-map one.
 schema_version: v1
 name: fetch_snotel_snow
 source_class: snotel_snow

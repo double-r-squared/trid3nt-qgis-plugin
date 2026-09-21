@@ -1,3 +1,6 @@
+# Not on the field map: the parse REDUCES a whitespace table to ONE station row with
+# three series inline, over a header whose shape changed with the network, so a body
+# reader would decode rows the walk never emits one of.
 # NDBC stdmet: one named buoy, read out of the file the window names - realtime2
 # for the last 45 days, the yearly archive for a completed year. The station is
 # resolved through NDBC's own listing first, which is where a buoy's position,

@@ -1,5 +1,8 @@
 # NCEI 1991-2020 U.S. Climate Normals. An inventory resolve, then a per-station
 # access-CSV enrich, dropping stations without a usable annual normal. Keyless.
+# Not on the field map: the merge RECOMPUTES the geometry from the detail CSV, which
+# states the position the inventory gets wrong, and drops a station whose normal is
+# unusable - a reduce over the detail, not the keyed graft the enrich block states.
 schema_version: v1
 
 name: fetch_climate_normals

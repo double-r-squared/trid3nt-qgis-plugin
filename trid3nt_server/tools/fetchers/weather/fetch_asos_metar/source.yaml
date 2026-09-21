@@ -1,5 +1,11 @@
 # IEM ASOS/METAR station observations: a multi-state station discovery in the resolve
 # phase, then ONE bulk CSV as the main fetch, one point per observation row.
+# The row per OBSERVATION stands: the weather slot reads one instant's whole set of
+# columns off one row (the humidity trio is computed from the temperature and the dew
+# point AT THE SAME instant), so a per-station row would have to carry one wide table
+# rather than a series per variable, and the station executor serializes a single
+# variable. Converting is the executor's wide table, both packages, the slot's own
+# grouping and the stated-night fixture together.
 schema_version: v1
 name: fetch_asos_metar
 source_class: asos_metar

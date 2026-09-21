@@ -1,5 +1,8 @@
 # NOAA Storm Events: the directory-index resolve phase scrapes the newest bulk-CSV URL
 # per year, and the main fetch decodes each gzip CSV into points.
+# Not on the field map: the parse is a FILTER, not a row walk - the state, the event
+# types, the bbox and the date window are applied over the decoded table and the
+# geometry is synthesized from whichever coordinate pair a row carries.
 schema_version: v1
 name: fetch_storm_events_db
 source_class: storm_events

@@ -1,3 +1,5 @@
+# Not on the field map: the request POSTS one JSON-bearing form field, a shape the
+# request block has no key for, and the body is a ZIP the table is read out of.
 # USGS usSEABED sediment texture: the bbox packager is the only path to values (the
 # index query answers a picture-only WMS layer and the documented download is a
 # whole-EEZ bulk file); the build hook forms the packager's one JSON metadata field

@@ -1,3 +1,5 @@
+# Whether goes2go owns this archive read is the substrate scout's question, not a
+# field-map one: the bucket walk, the band selection and the step are all in-process.
 # The raw GOES ABI archive on the anonymous public noaa-goes S3 buckets: the caller
 # names the bands, the window and the step, and gets one multi-band COG per step in
 # physical units. Nothing is computed from the radiances here - a composite, an index

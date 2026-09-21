@@ -1,3 +1,6 @@
+# NOT a pygeohydro delegate: the EHydro class's backing ArcGIS FeatureServer answers
+# {"error": {"code": 500, "message": "Service not found."}} to a direct GET, so a
+# delegate over it cannot be authored or verified against anything live.
 # USACE eHydro: one ArcGIS layer indexes every published survey, and each survey's
 # own ZIP carries the measured soundings in its geodatabase. The index query, the
 # ZIP read and the per-survey join are one delegate's socket work, so no executor

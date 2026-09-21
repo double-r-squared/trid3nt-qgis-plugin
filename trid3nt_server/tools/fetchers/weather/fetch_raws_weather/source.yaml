@@ -1,5 +1,8 @@
 # Iowa Mesonet RAWS fire-weather stations: a multi-state discovery in the resolve phase,
 # then a per-station-per-day observation enrich, one point per observation row.
+# The row per OBSERVATION stands for the same reason the airport row's does: the weather
+# slot reads one instant's whole column set off one row, and the station executor
+# serializes one variable per station, not the wide table that shape needs.
 schema_version: v1
 name: fetch_raws_weather
 source_class: raws_weather

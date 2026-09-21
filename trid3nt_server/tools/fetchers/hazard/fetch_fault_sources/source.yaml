@@ -1,3 +1,7 @@
+# Not on the field map: the parse reads a "(best, min, max)" triple out of one string
+# field, drops a fault with no positive slip rate or fewer than two distinct vertices,
+# and chains the seismogenic depths through their own defaults - none of which the
+# column map has a kind for.
 # GEM active faults. The whole-world harmonized GeoJSON downloads once through the
 # constant_cache two-tier cache and is AOI-filtered in the parse hook; a zero-fault AOI
 # answers with the emptiness-switch record, and the envelope hook carries the kinematics.

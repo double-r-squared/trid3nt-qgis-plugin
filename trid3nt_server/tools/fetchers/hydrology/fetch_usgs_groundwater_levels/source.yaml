@@ -1,6 +1,9 @@
 # USGS Water Data OGC API groundwater wells: a measurements primary, then a best-effort
 # monitoring-locations enrich. A failed or absent locations body leaves the names blank
 # and never drops a reading. Keyless.
+# NOT a dataretrieval delegate: nwis.get_gwlevels is defunct in the installed version
+# and directs to waterdata.get_field_measurements / get_daily / get_continuous, a
+# different submodule answering a different shape than these rows are read in.
 schema_version: v1
 
 name: fetch_usgs_groundwater_levels

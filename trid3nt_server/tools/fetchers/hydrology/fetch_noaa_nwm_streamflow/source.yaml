@@ -1,3 +1,6 @@
+# The NLDI snap stays hand-rolled: pynhd's NLDI client fails in its own constructor
+# against the live service, which now answers its lookups endpoint with an RFC7807
+# document instead of the list the client expects.
 # NOAA National Water Model streamflow, a MULTI-SOURCE COMPOSITE folded onto a
 # library_delegate VECTOR source: the delegate resolves the channel_rt key, downloads the
 # whole-object netCDF, builds a {feature_id: streamflow} lookup, samples a 5x5 NLDI grid

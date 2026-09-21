@@ -1,6 +1,9 @@
 # OpenAQ v3 latest measurements: offset paging over the locations sweep, then a
 # per-location latest enrich that joins each sensor value to its parameter and expands
 # into one point per station and parameter.
+# Not on the field map: the walk matches a page NUMBER against the rows that came back
+# because no page count is published, and the detail join EXPANDS one detail record
+# into many output points through a nested sensor-to-parameter map.
 schema_version: v1
 name: fetch_openaq_measurements
 source_class: openaq

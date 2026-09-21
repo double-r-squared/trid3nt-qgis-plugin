@@ -1,3 +1,6 @@
+# NOT a tropycal delegate: its IBTrACS reader parses the first 25 columns only, which
+# drops the wind radii, the radius of maximum wind and the outermost-closed-isobar
+# pair this parse reads and a parametric wind field is forced from.
 # Hurricane and tropical-cyclone tracks, TWO modes under one name, on a library_delegate
 # VECTOR source. The delegate owns BOTH network rounds -- the historical archive CSV, and
 # the active index plus its BINARY forecast-track zip-shapefile round -- so the binary

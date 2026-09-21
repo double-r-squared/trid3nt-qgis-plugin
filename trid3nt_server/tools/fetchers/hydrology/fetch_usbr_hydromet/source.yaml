@@ -1,3 +1,6 @@
+# Not on the field map: the result endpoint reports totalItems and itemsPerPage and no
+# page count, which the declared page style needs, while the offset style sends a row
+# offset where RISE counts pages; and the parse REDUCES a series to one feature.
 # USBR RISE: a named station resolves through its own catalog (location ->
 # catalog-record -> catalog-item) to the Lake/Reservoir Elevation item id, one hop
 # a declarative station_catalog cannot express because the filter that finds it

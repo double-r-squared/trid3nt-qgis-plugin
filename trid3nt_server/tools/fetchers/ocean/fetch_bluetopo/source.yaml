@@ -1,5 +1,8 @@
 schema_version: v1
 name: fetch_bluetopo
+# NOT a bluetopo-package delegate: that package is a directory-oriented downloader -
+# it writes tiles into a local tree and shells out to gdalbuildvrt - with no in-process
+# bbox-to-geodata call the one-bytes-response contract can be satisfied from.
 # The heavy raster fetch gets the canonical fetch-resolution confirm card, the
 # same gate its sibling coastal composite declares.
 confirm_gate: fetch_resolution
