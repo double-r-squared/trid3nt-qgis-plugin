@@ -627,24 +627,15 @@ def summary_lines(warning: PayloadWarning) -> list:
         if suggested is not None:
             cells = g.get("estimated_active_cells")
             eta = g.get("estimated_solve_seconds")
-            compute = g.get("compute_class") or ""
             vcpus = g.get("vcpus")
             bits = [f"Suggested resolution {suggested:g} m"]
             if isinstance(cells, (int, float)):
                 bits.append(f"~{int(cells):,} cells")
             if isinstance(eta, (int, float)):
                 bits.append(f"est ~{eta:g}s")
-            if compute:
-                # The "local" compute lane renders plain CPU wording, never a
-                # cloud vCPU label; any other compute label keeps its own.
-                if compute == "local":
-                    if isinstance(vcpus, (int, float)) and vcpus > 1:
-                        label = f"local run ({int(vcpus)} CPU)"
-                    else:
-                        label = "local run"
-                else:
-                    label = compute if not vcpus else f"{compute} ({vcpus} vCPU)"
-                bits.append(label)
+            if isinstance(vcpus, (int, float)) and vcpus >= 1:
+                cores = int(vcpus)
+                bits.append(f"{cores} core" + ("s" if cores > 1 else ""))
             lines.append(", ".join(bits))
         reason = g.get("reason")
         if reason:

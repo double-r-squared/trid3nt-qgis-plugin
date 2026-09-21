@@ -146,7 +146,6 @@ PAYLOAD_WARNING_ROW: dict[str, Any] = {
         "estimated_active_cells": 46000,
         "estimated_solve_seconds": 70.0,
         "vcpus": 8,
-        "compute_class": "local",
         "cell_cap": 2000000,
         "coarsened": False,
         "reason": "30 m keeps the AOI under the cell cap.",

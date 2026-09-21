@@ -70,10 +70,8 @@ class GranularitySuggestion(GraceModel):
     #: Projected cells and wall-clock at the SUGGESTED resolution.
     estimated_active_cells: int = Field(ge=0)
     estimated_solve_seconds: float = Field(ge=0.0)
+    #: The cores the run is partitioned across. A count, never a size name.
     vcpus: int = Field(gt=0)
-    #: A FREE string, not a Literal, so a fetch gate can label its own tier
-    #: without a contract change.
-    compute_class: str = Field(min_length=1)
     #: The element cap honoured - the ceiling above which a suggestion coarsens.
     cell_cap: int = Field(gt=0)
     #: True when the suggestion is COARSER than what was asked for, because the
@@ -130,7 +128,7 @@ class GranularitySuggestion(GraceModel):
     @field_validator("vcpus")
     @classmethod
     def _validate_vcpus(cls, value: int) -> int:
-        """A compute tier must have at least one vCPU."""
+        """A solve runs on at least one core."""
         if value <= 0:
             raise ValueError(f"vcpus must be > 0; got {value!r}")
         return value

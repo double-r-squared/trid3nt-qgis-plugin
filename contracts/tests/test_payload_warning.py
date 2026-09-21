@@ -281,7 +281,6 @@ def test_combined_envelope_carries_both_suggestions() -> None:
         estimated_active_cells=46000,
         estimated_solve_seconds=70.0,
         vcpus=8,
-        compute_class="standard",
         cell_cap=250000,
         coarsened=False,
         reason="base 30m fits cap",

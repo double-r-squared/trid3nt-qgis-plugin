@@ -13,11 +13,6 @@
           "title": "Coarsened",
           "type": "boolean"
         },
-        "compute_class": {
-          "minLength": 1,
-          "title": "Compute Class",
-          "type": "string"
-        },
         "engine": {
           "enum": [
             "swmm",
@@ -92,7 +87,6 @@
         "estimated_active_cells",
         "estimated_solve_seconds",
         "vcpus",
-        "compute_class",
         "cell_cap",
         "coarsened",
         "reason"

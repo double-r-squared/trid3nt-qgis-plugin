@@ -163,9 +163,8 @@ async def _build_fetch_resolution_envelope(
         "fetch_landcover": "landcover",
     }
     engine = _ENGINE_BY_TOOL.get(tool_name, "topobathy")
-    # The fetch runs in-process on this machine, so the compute label the
-    # QGIS-plugin and web cards render is "local".
-    fetch_compute_class = "local"
+    # The fetch runs in-process on this machine, on the one core it is called
+    # from.
     granularity = GranularitySuggestion(
         engine=engine,
         resolution_param="resolution_m",
@@ -174,7 +173,6 @@ async def _build_fetch_resolution_envelope(
         estimated_active_cells=int(px_estimate),
         estimated_solve_seconds=0.0,
         vcpus=1,
-        compute_class=fetch_compute_class,
         cell_cap=int(max_fetch_px) ** 2,
         coarsened=False,
         reason=reason,

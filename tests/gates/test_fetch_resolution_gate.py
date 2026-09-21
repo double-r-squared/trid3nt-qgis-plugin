@@ -108,7 +108,6 @@ async def test_gate_emits_fetch_granularity_block(tool_name: str, engine: str) -
     assert g is not None
     assert g["engine"] == engine
     assert g["resolution_param"] == "resolution_m"
-    assert g["compute_class"] == "local"  # the fetch runs in this process
     assert g["suggested_resolution_m"] > 0
     assert len(g["resolution_choices"]) >= 1
     assert all(r > 0 for r in g["resolution_choices"])
@@ -345,7 +344,6 @@ async def test_landcover_gate_emits_granularity_block() -> None:
     assert g is not None
     assert g["engine"] == "landcover"
     assert g["resolution_param"] == "resolution_m"
-    assert g["compute_class"] in ("fetch", "local")
     assert g["suggested_resolution_m"] > 0
     assert len(g["resolution_choices"]) >= 1
     # narrow_scope must be offered so the user can override the rung.
