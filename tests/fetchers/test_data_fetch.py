@@ -249,11 +249,9 @@ def test_geocode_location_rejects_empty_query():
         geocode_location("   ")
 
 
-# geocode_location — state-snap fallback.
-#
-# A vague/regional query ("south Florida") that geocodes to an arbitrary /
-# wrong-state OSM feature must snap to the full state bbox with an honest note,
-# while a PRECISE in-state query ("Fort Myers, FL") must pass through unchanged.
+# geocode_location -- STRICT (R31): the query travels as written, the answer
+# is exactly what the service gives back. No state table, no snap, no
+# qualifier stripping, no result-class reorder, no AOI-floor expansion.
 
 
 def _bind_geocode_cache(monkeypatch):
@@ -268,811 +266,104 @@ def _bind_geocode_cache(monkeypatch):
     )
 
 
-# --- _extract_us_state edge cases ------------------------------------------
+class _FakeLocation:
+    def __init__(self, raw, latitude, longitude):
+        self.raw = raw
+        self.latitude = latitude
+        self.longitude = longitude
 
 
-@pytest.mark.parametrize(
-    "query,expected",
-    [
-        # Directional / qualifier stripping.
-        ("south Florida", "Florida"),
-        ("protected areas in south Florida", "Florida"),
-        ("central Texas", "Texas"),
-        ("upstate New York", "New York"),
-        ("greater metro Los Angeles California", "California"),
-        # F71: vernacular sub-state regions whose TAIL (after qualifier strip)
-        # is a full state name resolve via steps (2)/(2b) — the headline
-        # "South Florida" case. (Interior-position matches like "the Florida
-        # Panhandle" were intentionally NOT added — see the reverted (2c) note
-        # in _extract_us_state; the any-position scan regressed "Kansas City, MO"
-        # and "the Washington Monument".)
-        ("Southern California", "California"),
-        ("Central Texas", "Texas"),
-        ("South Florida", "Florida"),
-        # Full-name match BEFORE directional strip would eat the prefix.
-        ("west virginia", "West Virginia"),
-        ("north carolina", "North Carolina"),
-        ("new mexico", "New Mexico"),
-        ("rhode island", "Rhode Island"),
-        # Bare state names.
-        ("Kansas", "Kansas"),
-        ("california", "California"),
-        # USPS abbreviation in the "City, ST" idiom.
-        ("Fort Myers, FL", "Florida"),
-        ("wildfires near Los Angeles, CA", "California"),
-        # County form still detects the state.
-        ("Lee County Florida", "Florida"),
-        # DC variants.
-        ("Washington DC", "District of Columbia"),
-        ("district of columbia", "District of Columbia"),
-    ],
-)
-def test_extract_us_state_detects(query, expected):
-    assert geo_mod._extract_us_state(query) == expected
+def _geocode_stub(monkeypatch, location):
+    """Stub geo_mod._client().geocode to return ``location`` (or None) and
+    capture the exact query it was called with."""
+    calls: list[str] = []
+
+    class _Client:
+        def geocode(self, query, **kw):
+            calls.append(query)
+            return location
+
+    monkeypatch.setattr(geo_mod, "_client", lambda: _Client())
+    return calls
 
 
-@pytest.mark.parametrize(
-    "query",
-    [
-        "",
-        "   ",
-        "Houston",            # city, not a state
-        "Gulf of Mexico",     # marine zone by name
-        "in the woods",       # "in" must NOT match Indiana (word-boundary guard)
-        "or maybe later",     # "or" must NOT match Oregon
-        "Canada",             # not a US state
-        "Puerto Rico",        # territory — has no offline bbox row
-        # BARE dangerous 2-letter words (whole query) must NOT leak a state via
-        # resolve_state_code's unconditional 2-letter fast path (step-4 guard).
-        "in",
-        "or",
-        "ok",
-        "hi",
-        "me",
-        "co",
-        "la",
-        # ...and queries that REDUCE to a bare dangerous word after the
-        # leading-qualifier strip ("the or" -> "or").
-        "the or",
-        "near or",
-        # F71 sliding-window guard: a bare dangerous 2-letter word sitting in an
-        # INTERIOR position (not head/tail) must STILL NOT leak a state — the
-        # full-name scanner matches FULL state names only, never abbreviations.
-        "fly in a plane",     # interior "in" must NOT match Indiana
-        "this or that thing",  # interior "or" must NOT match Oregon
-        "park me here please",  # interior "me" must NOT match Maine
-    ],
-)
-def test_extract_us_state_rejects(query):
-    assert geo_mod._extract_us_state(query) is None
-
-
-def test_extract_us_state_abbreviation_word_boundary_guard():
-    """A dangerous bare English word ('in', 'or') is not a state abbreviation.
-
-    But the SAME letters in the comma idiom ('Bloomington, IN') ARE.
-    """
-    assert geo_mod._extract_us_state("flooding in the valley") is None
-    assert geo_mod._extract_us_state("Bloomington, IN") == "Indiana"
-    assert geo_mod._extract_us_state("Portland, OR") == "Oregon"
-    # Non-string input never raises.
-    assert geo_mod._extract_us_state(None) is None  # type: ignore[arg-type]
-    assert geo_mod._extract_us_state(42) is None  # type: ignore[arg-type]
-
-
-# --- offline backstop table plausibility -----------------------------------
-
-
-@pytest.mark.parametrize(
-    "state,lon_lo,lon_hi,lat_lo,lat_hi",
-    [
-        # (state, expected min_lon range, expected max_lat range) — generous
-        # plausibility bands around known cartographic extents.
-        ("Florida", -88.0, -79.0, 24.0, 31.5),
-        ("California", -125.0, -113.5, 32.0, 42.5),
-        ("Texas", -107.5, -93.0, 25.5, 37.0),
-        ("Kansas", -102.5, -94.0, 36.5, 40.5),
-        ("New York", -80.5, -71.0, 40.0, 45.5),
-    ],
-)
-def test_us_state_bbox_table_plausible(state, lon_lo, lon_hi, lat_lo, lat_hi):
-    bbox = geo_mod._US_STATE_BBOX[state]
-    min_lon, min_lat, max_lon, max_lat = bbox
-    # Canonical ordering.
-    assert min_lon < max_lon and min_lat < max_lat
-    # Within plausibility bands.
-    assert lon_lo <= min_lon <= lon_hi
-    assert lon_lo <= max_lon <= lon_hi
-    assert lat_lo <= min_lat <= lat_hi
-    assert lat_lo <= max_lat <= lat_hi
-
-
-def test_us_state_bbox_table_has_50_states_plus_dc():
-    assert len(geo_mod._US_STATE_BBOX) == 51
-    assert "District of Columbia" in geo_mod._US_STATE_BBOX
-    # Every row is a valid WGS84 ordered bbox.
-    for name, bbox in geo_mod._US_STATE_BBOX.items():
-        min_lon, min_lat, max_lon, max_lat = bbox
-        assert -180.0 <= min_lon < max_lon <= 180.0, name
-        assert -90.0 <= min_lat < max_lat <= 90.0, name
-
-
-# --- (a) precise in-state query returns precise bbox unchanged --------------
-
-
-def test_geocode_precise_in_state_query_not_snapped(monkeypatch):
-    """'Fort Myers, FL' resolves precisely; centroid is in FL -> no widening."""
-    import json as _json
-
-    precise = {
-        "name": "Fort Myers, Lee County, Florida, United States",
-        "latitude": 26.6406,
-        "longitude": -81.8723,
-        "bbox": [-81.93, 26.55, -81.78, 26.71],
-        "source": "nominatim",
-        "query": "Fort Myers, FL",
-        "osm_type": "relation",
-        "osm_id": 12345,
-        "place_id": 67890,
-    }
-    monkeypatch.setattr(
-        geo_mod,
-        "_fetch_nominatim_geocode_bytes",
-        lambda query: _json.dumps(precise).encode("utf-8"),
-    )
+def test_geocode_sends_the_query_verbatim_no_stripping_or_detection(monkeypatch):
+    """"south Florida" reaches geopy UNCHANGED -- no directional-qualifier
+    strip, no state table lookup, no rewrite of any kind."""
     _bind_geocode_cache(monkeypatch)
+    calls = _geocode_stub(monkeypatch, _FakeLocation(
+        {"display_name": "South Florida", "boundingbox": ["24.4", "27.0", "-82.0", "-80.0"],
+         "osm_type": "relation", "osm_id": 1, "place_id": 1},
+        25.7, -81.0,
+    ))
+    geocode_location("south Florida")
+    assert calls == ["south Florida"]
 
-    result = geocode_location("Fort Myers, FL")
-    assert result["source"] == "nominatim"
-    assert result["bbox"] == [-81.93, 26.55, -81.78, 26.71]
-    assert "fallback_reason" not in result
 
-
-def test_geocode_precise_county_query_not_snapped(monkeypatch):
-    """'Lee County Florida' (a county) stays precise — not widened to state."""
-    import json as _json
-
-    precise = {
-        "name": "Lee County, Florida, United States",
-        "latitude": 26.66,
-        "longitude": -81.84,
-        "bbox": [-82.27, 26.32, -81.56, 26.79],
-        "source": "nominatim",
-        "query": "Lee County Florida",
-        "osm_type": "relation",
-        "osm_id": 222,
-        "place_id": 333,
-    }
-    monkeypatch.setattr(
-        geo_mod,
-        "_fetch_nominatim_geocode_bytes",
-        lambda query: _json.dumps(precise).encode("utf-8"),
-    )
+def test_geocode_returns_the_services_own_answer_unmodified(monkeypatch):
     _bind_geocode_cache(monkeypatch)
-
-    result = geocode_location("Lee County Florida")
-    assert result["source"] == "nominatim"
-    assert result["bbox"] == [-82.27, 26.32, -81.56, 26.79]
-    assert "fallback_reason" not in result
-
-
-# --- (b) wrong-state result snaps to the state with honest note -------------
-
-
-def test_geocode_south_florida_wrong_state_snaps_to_florida(monkeypatch):
-    """'south Florida' resolving to KANSAS snaps to FL via the offline table."""
-    import json as _json
-
-    # The pathological observed behavior: Nominatim returns a Kansas feature.
-    wrong = {
-        "name": "Somewhere, Kansas, United States",
-        "latitude": 38.5,
-        "longitude": -98.0,
-        "bbox": [-98.1, 38.4, -97.9, 38.6],
-        "source": "nominatim",
-        "query": "south Florida",
-        "osm_type": "node",
-        "osm_id": 999,
-        "place_id": 111,
-    }
-    monkeypatch.setattr(
-        geo_mod,
-        "_fetch_nominatim_geocode_bytes",
-        lambda query: _json.dumps(wrong).encode("utf-8"),
-    )
-    _bind_geocode_cache(monkeypatch)
-    # Force the offline-table path (no live state lookup) for a deterministic
-    # bbox assertion.
-    monkeypatch.setattr(
-        requests,
-        "get",
-        lambda *a, **kw: (_ for _ in ()).throw(
-            requests.RequestException("offline")
-        ),
-    )
-
+    _geocode_stub(monkeypatch, _FakeLocation(
+        {"display_name": "Kansas, United States",
+         "boundingbox": ["37.0", "40.0", "-102.0", "-94.6"],
+         "osm_type": "relation", "osm_id": 99, "place_id": 99},
+        38.5, -98.0,
+    ))
+    # Whatever geopy answers is returned as-is -- even a surprising match --
+    # because this tool states no opinion of its own about the query.
     result = geocode_location("south Florida")
-    assert result["source"] == "state-bbox-fallback"
-    assert result["bbox"] == geo_mod._US_STATE_BBOX["Florida"]
-    assert result["state_bbox_source"] == "offline-state-table"
-    # Honest narration note present and truthful.
-    assert "fallback_reason" in result
-    assert "Florida" in result["fallback_reason"]
-    assert "south Florida" in result["fallback_reason"]
-    # Backward-compatible key shape preserved.
-    for key in (
-        "name", "bbox", "latitude", "longitude", "source", "query",
-        "osm_type", "osm_id", "place_id",
-    ):
-        assert key in result
-    assert result["osm_id"] is None
-    # Centroid is inside the Florida bbox.
-    fl = geo_mod._US_STATE_BBOX["Florida"]
-    assert fl[0] <= result["longitude"] <= fl[2]
-    assert fl[1] <= result["latitude"] <= fl[3]
+    assert result["name"] == "Kansas, United States"
+    assert result["bbox"] == [-102.0, 37.0, -94.6, 40.0]
+    assert result["source"] == "nominatim"
 
 
-def test_geocode_capitalized_south_florida_snaps_to_florida_centroid(monkeypatch):
-    """A comma-less regional phrase snaps to its state rather than a foreign hit.
-
-    The state NAME is extracted from the phrase, the out-of-state centroid fails the
-    sanity check, and the result snaps to the state bbox; the upstream is mocked."""
-    import json as _json
-
-    kansas_hit = {
-        "name": "Some Place, Kansas, United States",
-        "latitude": 38.5,
-        "longitude": -98.0,
-        "bbox": [-98.1, 38.4, -97.9, 38.6],
-        "source": "nominatim",
-        "query": "South Florida",
-        "osm_type": "node",
-        "osm_id": 4242,
-        "place_id": 5353,
-    }
-    monkeypatch.setattr(
-        geo_mod,
-        "_fetch_nominatim_geocode_bytes",
-        lambda query: _json.dumps(kansas_hit).encode("utf-8"),
-    )
+def test_geocode_refuses_when_the_service_finds_nothing(monkeypatch):
     _bind_geocode_cache(monkeypatch)
-    # Force the offline-table path so the bbox/centroid are deterministic.
-    monkeypatch.setattr(
-        requests,
-        "get",
-        lambda *a, **kw: (_ for _ in ()).throw(
-            requests.RequestException("offline")
-        ),
-    )
-
-    result = geocode_location("South Florida")
-
-    # The snap fired with the contracted source + an honest fallback note.
-    assert result["source"] == "state-bbox-fallback"
-    assert "fallback_reason" in result
-    assert "Florida" in result["fallback_reason"]
-
-    # The returned bbox's CENTROID is inside the Florida envelope (the whole
-    # point of F71 — it is NOT in Kansas).
-    min_lon, min_lat, max_lon, max_lat = result["bbox"]
-    cx = 0.5 * (min_lon + max_lon)
-    cy = 0.5 * (min_lat + max_lat)
-    fl = geo_mod._US_STATE_BBOX["Florida"]
-    assert fl[0] <= cx <= fl[2]
-    assert fl[1] <= cy <= fl[3]
-    # And the reported centroid lat/lon (used to snap the map) is also in FL.
-    assert fl[0] <= result["longitude"] <= fl[2]
-    assert fl[1] <= result["latitude"] <= fl[3]
-
-
-def test_geocode_bare_dangerous_word_does_not_snap_to_state(monkeypatch):
-    """A bare two-letter word never resolves to a state.
-
-    When the primary geocode of such a token finds no match, the typed no-match
-    error propagates: no state detected means no silent snap."""
-
-    def _boom(query):
-        raise GeocodeNoMatchError(f"Could not locate {query!r}.")
-
-    monkeypatch.setattr(geo_mod, "_fetch_nominatim_geocode_bytes", _boom)
-    _bind_geocode_cache(monkeypatch)
-
-    # No state is detected for these bare dangerous words, so the failure is
-    # NOT swallowed by a state-snap.
-    assert geo_mod._extract_us_state("in") is None
-    assert geo_mod._extract_us_state("or") is None
-    for q in ("in", "or"):
-        with pytest.raises(GeocodeNoMatchError):
-            geocode_location(q)
-
-
-def test_geocode_wrong_state_prefers_live_osm_state_boundary(monkeypatch):
-    """When the live state lookup succeeds, the snap uses the OSM admin bbox."""
-    import json as _json
-
-    wrong = {
-        "name": "Somewhere, Kansas, United States",
-        "latitude": 38.5,
-        "longitude": -98.0,
-        "bbox": [-98.1, 38.4, -97.9, 38.6],
-        "source": "nominatim",
-        "query": "south Florida",
-        "osm_type": "node",
-        "osm_id": 999,
-        "place_id": 111,
-    }
-    monkeypatch.setattr(
-        geo_mod,
-        "_fetch_nominatim_geocode_bytes",
-        lambda query: _json.dumps(wrong).encode("utf-8"),
-    )
-    _bind_geocode_cache(monkeypatch)
-
-    # Nominatim featuretype=state returns the real FL admin boundingbox
-    # ([south, north, west, east] strings, per Nominatim convention).
-    class _FakeStateResp:
-        status_code = 200
-
-        def raise_for_status(self):
-            return None
-
-        def json(self):
-            return [
-                {
-                    "boundingbox": ["24.396", "31.001", "-87.635", "-79.974"],
-                    "lat": "27.7",
-                    "lon": "-83.8",
-                }
-            ]
-
-    captured = {}
-
-    def _fake_get(url, params=None, headers=None, timeout=None, **_kw):
-        captured["params"] = params
-        return _FakeStateResp()
-
-    monkeypatch.setattr(requests, "get", _fake_get)
-
-    result = geocode_location("south Florida")
-    assert result["source"] == "state-bbox-fallback"
-    assert result["state_bbox_source"] == "nominatim-state"
-    # bbox normalized to [min_lon, min_lat, max_lon, max_lat].
-    assert result["bbox"] == [-87.635, 24.396, -79.974, 31.001]
-    # The live state lookup was scoped to the US with featuretype=state.
-    assert captured["params"]["countrycodes"] == "us"
-    assert captured["params"]["featuretype"] == "state"
-
-
-# --- (c) no-result + state detected snaps to state --------------------------
-
-
-def test_geocode_no_result_with_state_detected_snaps(monkeypatch):
-    """Nominatim returns nothing, but 'south Florida' has a detectable state.
-
-    GeocodeNoMatchError subclasses UpstreamAPIError, so the state-snap fallback
-    STILL fires when a US state is recognized in the query.
-    """
-
-    def _boom(query):
-        raise GeocodeNoMatchError(f"Could not locate {query!r}.")
-
-    monkeypatch.setattr(geo_mod, "_fetch_nominatim_geocode_bytes", _boom)
-    _bind_geocode_cache(monkeypatch)
-    # Offline path for deterministic bbox.
-    monkeypatch.setattr(
-        requests,
-        "get",
-        lambda *a, **kw: (_ for _ in ()).throw(
-            requests.RequestException("offline")
-        ),
-    )
-
-    result = geocode_location("protected areas in south Florida")
-    assert result["source"] == "state-bbox-fallback"
-    assert result["bbox"] == geo_mod._US_STATE_BBOX["Florida"]
-    assert "Florida" in result["fallback_reason"]
-
-
-# --- (d) no state + no result still raises (no silent swallow) --------------
-
-
-def test_geocode_no_result_no_state_still_raises(monkeypatch):
-    """A genuine no-match with NO detectable state propagates GeocodeNoMatchError."""
-
-    def _boom(query):
-        raise GeocodeNoMatchError(f"Could not locate {query!r}.")
-
-    monkeypatch.setattr(geo_mod, "_fetch_nominatim_geocode_bytes", _boom)
-    _bind_geocode_cache(monkeypatch)
-
+    _geocode_stub(monkeypatch, None)
     with pytest.raises(GeocodeNoMatchError):
         geocode_location("Atlantis")
 
 
-# --- typed GEOCODE_NO_MATCH from the real Nominatim fetch branches -----------
-
-
-class _FakeGeocodeResp:
-    """Minimal requests.Response stand-in returning a fixed JSON body."""
-
-    status_code = 200
-
-    def __init__(self, body):
-        self._body = body
-
-    def raise_for_status(self):
-        return None
-
-    def json(self):
-        return self._body
-
-
-def test_geocode_empty_body_raises_typed_no_match(monkeypatch):
-    """An empty geocoder body for an unknown place raises the typed no-match error.
-
-    The real fetch branch runs unmocked, so the non-retryable contract is locked end
-    to end through the tool."""
-    monkeypatch.setattr(
-        requests,
-        "get",
-        lambda *a, **kw: _FakeGeocodeResp([]),
-    )
+def test_geocode_refuses_a_match_with_no_bounding_box(monkeypatch):
     _bind_geocode_cache(monkeypatch)
-
-    # "Atlantis" has no detectable US state, so the no-match error propagates
-    # instead of being swallowed by a state-snap.
-    assert geo_mod._extract_us_state("Atlantis") is None
-    with pytest.raises(GeocodeNoMatchError) as excinfo:
+    _geocode_stub(monkeypatch, _FakeLocation(
+        {"display_name": "Nowhere", "boundingbox": []}, 0.0, 0.0,
+    ))
+    with pytest.raises(GeocodeNoMatchError):
         geocode_location("Atlantis")
-    assert excinfo.value.error_code == "GEOCODE_NO_MATCH"
-    assert excinfo.value.retryable is False
 
 
-def test_geocode_malformed_boundingbox_raises_typed_no_match(monkeypatch):
-    """A top hit whose boundingbox is the wrong length raises the typed
-    GeocodeNoMatchError (non-retryable GEOCODE_NO_MATCH) from the real fetch.
-    """
-    malformed = [
-        {
-            "display_name": "Somewhere",
-            "lat": "10.0",
-            "lon": "20.0",
-            # Only two values -> len(bb) != 4 -> malformed-boundingbox branch.
-            "boundingbox": ["10.0", "11.0"],
-        }
-    ]
-    monkeypatch.setattr(
-        requests,
-        "get",
-        lambda *a, **kw: _FakeGeocodeResp(malformed),
-    )
+def test_geocode_upstream_failure_raises_upstream_error(monkeypatch):
+    from geopy.exc import GeocoderServiceError
+
+    class _Client:
+        def geocode(self, query, **kw):
+            raise GeocoderServiceError("timed out")
+
+    monkeypatch.setattr(geo_mod, "_client", lambda: _Client())
+    with pytest.raises(UpstreamAPIError):
+        geocode_location("Fort Myers, FL")
+
+
+def test_geocode_auto_mode_labels_the_match_auto_accepted(monkeypatch):
     _bind_geocode_cache(monkeypatch)
-
-    assert geo_mod._extract_us_state("Atlantis") is None
-    with pytest.raises(GeocodeNoMatchError) as excinfo:
-        geocode_location("Atlantis")
-    assert excinfo.value.error_code == "GEOCODE_NO_MATCH"
-    assert excinfo.value.retryable is False
-
-
-# --- _resolve_state_bbox falls back to offline table on live failure --------
+    _geocode_stub(monkeypatch, _FakeLocation(
+        {"display_name": "Fort Myers, FL", "boundingbox": ["26.55", "26.71", "-81.93", "-81.78"]},
+        26.64, -81.87,
+    ))
+    result = geocode_location("Fort Myers, FL", input_mode="auto")
+    assert result["match_mode"] == "auto-accepted"
 
 
-def test_resolve_state_bbox_falls_back_to_table(monkeypatch):
-    monkeypatch.setattr(
-        requests,
-        "get",
-        lambda *a, **kw: (_ for _ in ()).throw(
-            requests.RequestException("down")
-        ),
-    )
-    bbox, lat, lon, source = geo_mod._resolve_state_bbox("Texas")
-    assert source == "offline-state-table"
-    assert bbox == geo_mod._US_STATE_BBOX["Texas"]
-    # Centroid inside the bbox.
-    assert bbox[0] <= lon <= bbox[2]
-    assert bbox[1] <= lat <= bbox[3]
-
-
-# "downtown Tampa" (and similar sub-locality phrasings) resolving
-# to a single building/POI footprint instead of a usable case AOI.
-#
-# Live-confirmed root cause: Nominatim's ONLY match for
-# "downtown Tampa" is a category=railway/type=tram_stop node literally named
-# "Downtown Tampa" (a streetcar stop), bbox ~11 m across. Two fixes in
-# ``_fetch_nominatim_geocode_bytes``: (a) prefer a place-class candidate over
-# a point-scale top hit for area-intent queries, (b) floor any surviving
-# sub-1km bbox to a 2 km square with an honest ``expansion_note``.
-
-
-def test_geocode_open10_downtown_tampa_live_captured_regression(monkeypatch):
-    """Golden regression: the EXACT live Nominatim payload for 'downtown Tampa'
-    must floor-expand rather than return an 11 m bbox.
-    """
-    tampa_tram_stop = [
-        {
-            "place_id": 305080868,
-            "osm_type": "node",
-            "osm_id": 5949810209,
-            "lat": "27.9452787",
-            "lon": "-82.4567888",
-            "category": "railway",
-            "type": "tram_stop",
-            "display_name": (
-                "Downtown Tampa, South Franklin Street, Riverside, Harbour "
-                "Island, Tampa, Hillsborough County, Florida, 33601, "
-                "United States"
-            ),
-            "boundingbox": [
-                "27.9452287", "27.9453287", "-82.4568388", "-82.4567388",
-            ],
-        }
-    ]
-    monkeypatch.setattr(
-        requests,
-        "get",
-        lambda *a, **kw: _FakeGeocodeResp(tampa_tram_stop),
-    )
+def test_geocode_user_gated_labels_pending_confirm(monkeypatch):
+    """The tool always returns at once; the case-AOI-commit step is what
+    shows the confirm gate on this label, not this call."""
     _bind_geocode_cache(monkeypatch)
-
-    assert geo_mod._extract_us_state("downtown Tampa") is None
-
-    result = geocode_location("downtown Tampa")
-
-    west, south, east, north = result["bbox"]
-    # The raw tram-stop bbox is ~11 m across -- old behavior. The floored
-    # bbox must be a real, visible AOI: at least ~1 km on both axes.
-    height_km = abs(north - south) * 111.32
-    width_km = (
-        abs(east - west) * 111.32 * math.cos(math.radians(result["latitude"]))
-    )
-    assert height_km >= 1.0, height_km
-    assert width_km >= 1.0, width_km
-    assert "expansion_note" in result
-    assert "downtown Tampa" in result["expansion_note"]
-    assert "Downtown Tampa" in result["name"]
-
-
-def test_geocode_open10_building_first_place_class_wins(monkeypatch):
-    """Building-class top hit + a place-class candidate for the same locality
-    -> the place-class candidate is promoted, unchanged bbox, no floor note.
-    """
-    candidates = [
-        {
-            "osm_type": "way",
-            "osm_id": 1,
-            "lat": "27.95",
-            "lon": "-82.46",
-            "category": "building",
-            "type": "yes",
-            "display_name": "123 Some Building, Tampa, Florida, United States",
-            "boundingbox": ["27.9495", "27.9505", "-82.4605", "-82.4595"],
-        },
-        {
-            "osm_type": "node",
-            "osm_id": 2,
-            "lat": "27.95",
-            "lon": "-82.46",
-            "category": "place",
-            "type": "neighbourhood",
-            "display_name": "Downtown, Tampa, Florida, United States",
-            "boundingbox": ["27.94", "27.96", "-82.47", "-82.45"],
-        },
-    ]
-    monkeypatch.setattr(
-        requests,
-        "get",
-        lambda *a, **kw: _FakeGeocodeResp(candidates),
-    )
-    _bind_geocode_cache(monkeypatch)
-
-    result = geocode_location("downtown Tampa")
-
-    assert "Downtown, Tampa" in result["name"]
-    assert result["bbox"] == [-82.47, 27.94, -82.45, 27.96]
-    assert "expansion_note" not in result
-
-
-def test_geocode_open10_building_only_floor_expansion(monkeypatch):
-    """No place-class alternate exists -> the point-scale building hit is
-    floor-expanded to a 2 km square with an honest ``expansion_note``.
-    """
-    candidates = [
-        {
-            "osm_type": "way",
-            "osm_id": 1,
-            "lat": "27.95",
-            "lon": "-82.46",
-            "category": "building",
-            "type": "yes",
-            "display_name": "123 Some Building, Tampa, Florida, United States",
-            "boundingbox": ["27.9495", "27.9505", "-82.4605", "-82.4595"],
-        },
-    ]
-    monkeypatch.setattr(
-        requests,
-        "get",
-        lambda *a, **kw: _FakeGeocodeResp(candidates),
-    )
-    _bind_geocode_cache(monkeypatch)
-
-    result = geocode_location("downtown Tampa")
-
-    assert "123 Some Building" in result["name"]
-    assert "expansion_note" in result
-    assert "expanded to a 2 km area" in result["expansion_note"]
-    west, south, east, north = result["bbox"]
-    height_km = abs(north - south) * 111.32
-    width_km = (
-        abs(east - west) * 111.32 * math.cos(math.radians(result["latitude"]))
-    )
-    assert 1.9 <= height_km <= 2.1, height_km
-    assert 1.9 <= width_km <= 2.1, width_km
-
-
-def test_geocode_open10_genuine_poi_query_unchanged(monkeypatch):
-    """A query that clearly names a POI (contains 'airport') is NOT redirected
-    to a place-class candidate, even when the top hit is building-class and a
-    place-class alternate exists for the same locality.
-    """
-    candidates = [
-        {
-            "osm_type": "way",
-            "osm_id": 3,
-            "lat": "27.9772",
-            "lon": "-82.5311",
-            "category": "aeroway",
-            "type": "aerodrome",
-            "display_name": (
-                "Tampa International Airport, Tampa, Florida, United States"
-            ),
-            "boundingbox": ["27.955", "28.000", "-82.555", "-82.505"],
-        },
-        {
-            "osm_type": "relation",
-            "osm_id": 4,
-            "lat": "27.95",
-            "lon": "-82.46",
-            "category": "boundary",
-            "type": "administrative",
-            "display_name": "Tampa, Hillsborough County, Florida, United States",
-            "boundingbox": ["27.87", "28.06", "-82.58", "-82.35"],
-        },
-    ]
-    monkeypatch.setattr(
-        requests,
-        "get",
-        lambda *a, **kw: _FakeGeocodeResp(candidates),
-    )
-    _bind_geocode_cache(monkeypatch)
-
-    result = geocode_location("Tampa International Airport")
-
-    assert "Airport" in result["name"]
-    assert result["bbox"] == [-82.555, 27.955, -82.505, 28.0]
-    assert "expansion_note" not in result
-
-
-def test_geocode_open10_street_address_query_unchanged(monkeypatch):
-    """A street address (leading house number) is a point lookup, not an
-    area-intent query -- the class-preference reorder must not fire even
-    though the top hit is building-class and a place candidate exists.
-    """
-    candidates = [
-        {
-            "osm_type": "way",
-            "osm_id": 5,
-            "lat": "27.9",
-            "lon": "-82.46",
-            "category": "building",
-            "type": "yes",
-            "display_name": "123 Main St, Tampa, Florida, United States",
-            "boundingbox": ["27.8995", "27.9005", "-82.4605", "-82.4595"],
-        },
-        {
-            "osm_type": "relation",
-            "osm_id": 6,
-            "lat": "27.95",
-            "lon": "-82.46",
-            "category": "boundary",
-            "type": "administrative",
-            "display_name": "Tampa, Hillsborough County, Florida, United States",
-            "boundingbox": ["27.87", "28.06", "-82.58", "-82.35"],
-        },
-    ]
-    monkeypatch.setattr(
-        requests,
-        "get",
-        lambda *a, **kw: _FakeGeocodeResp(candidates),
-    )
-    _bind_geocode_cache(monkeypatch)
-
-    result = geocode_location("123 Main St, Tampa, FL")
-
-    assert "123 Main St" in result["name"]
-    # Still building-scale -- the AOI floor (part b) still applies even
-    # though the class-preference reorder (part a) correctly stayed off.
-    assert "expansion_note" in result
-
-
-def test_geocode_open10_big_city_bbox_untouched(monkeypatch):
-    """An ordinary city-scale query is returned exactly as Nominatim reports
-    it -- no reorder (already place-class) and no floor (bbox well over 1 km).
-    """
-    candidates = [
-        {
-            "osm_type": "relation",
-            "osm_id": 7,
-            "lat": "27.9506",
-            "lon": "-82.4572",
-            "category": "boundary",
-            "type": "administrative",
-            "display_name": "Tampa, Hillsborough County, Florida, United States",
-            "boundingbox": ["27.87", "28.06", "-82.58", "-82.35"],
-        }
-    ]
-    monkeypatch.setattr(
-        requests,
-        "get",
-        lambda *a, **kw: _FakeGeocodeResp(candidates),
-    )
-    _bind_geocode_cache(monkeypatch)
-
-    result = geocode_location("Tampa, FL")
-
-    assert result["bbox"] == [-82.58, 27.87, -82.35, 28.06]
-    assert "expansion_note" not in result
-
-
-@pytest.mark.parametrize(
-    "candidate,expected",
-    [
-        ({"category": "place", "type": "neighbourhood"}, True),
-        ({"category": "place", "type": "city"}, True),
-        ({"category": "place", "type": "isolated_dwelling"}, False),
-        ({"category": "boundary", "type": "administrative"}, True),
-        ({"category": "boundary", "type": "postal_code"}, False),
-        ({"category": "building", "type": "yes"}, False),
-        ({"category": "railway", "type": "tram_stop"}, False),
-        ({"category": "amenity", "type": "restaurant"}, False),
-        ({}, False),
-    ],
-)
-def test_is_place_class(candidate, expected):
-    assert geo_mod._is_place_class(candidate) is expected
-
-
-@pytest.mark.parametrize(
-    "query,expected",
-    [
-        ("Tampa International Airport", True),
-        ("downtown Tampa", False),
-        ("123 Main St, Tampa, FL", True),
-        ("Fort Myers, FL", False),
-        ("Yankee Stadium", True),
-    ],
-)
-def test_looks_like_poi_query(query, expected):
-    assert geo_mod._looks_like_poi_query(query) is expected
-
-
-def test_bbox_long_axis_km_and_square_km_bbox_roundtrip():
-    # A ~0.0001 deg bbox (like the live Tampa tram-stop) is well under 1 km.
-    long_axis = geo_mod._bbox_long_axis_km(
-        -82.4568388, 27.9452287, -82.4567388, 27.9453287, 27.9452787
-    )
-    assert long_axis < 0.02  # ~11 m, in km
-
-    west, south, east, north = geo_mod._square_km_bbox(
-        27.9452787, -82.4567888, 2.0
-    )
-    height_km = abs(north - south) * 111.32
-    width_km = abs(east - west) * 111.32 * math.cos(math.radians(27.9452787))
-    assert 1.9 <= height_km <= 2.1
-    assert 1.9 <= width_km <= 2.1
-    # Centered on the input point.
-    assert south < 27.9452787 < north
-    assert west < -82.4567888 < east
+    _geocode_stub(monkeypatch, _FakeLocation(
+        {"display_name": "Fort Myers, FL", "boundingbox": ["26.55", "26.71", "-81.93", "-81.78"]},
+        26.64, -81.87,
+    ))
+    result = geocode_location("Fort Myers, FL", input_mode="user_gated")
+    assert result["match_mode"] == "pending-confirm"
 
 
 

@@ -95,6 +95,10 @@ dependencies = [
     # OGC-API surface and tabular schemas evolve, and a floating pin risks
     # silent column or endpoint drift.
     "dataretrieval==1.2.0",
+    # geopy.geocoders.Nominatim owns the forward-geocode call (socket, retry,
+    # response parse); geocode_location states only the strict pass-through
+    # and refusal policy over it.
+    "geopy>=2.4,<3",
     # The pins below are on libraries product code imports DIRECTLY and that
     # were previously supplied only transitively, so their versions were set by
     # whichever resolver run installed the geospatial stack. Each is pinned at
