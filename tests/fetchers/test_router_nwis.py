@@ -1,17 +1,18 @@
-"""The gauge fold: spec-driven, with the two blockers it resolved.
+"""The gauge network read through dataretrieval, offline over synthetic frames.
 
-The readings and the expanded site record are parsed together - the readings
-win and the site record decorates them with the zero a gage height is counted
-from - an all-empty result answers an honest no-stations, and the window mode
-switches the output schema between the instantaneous and hydrograph shapes.
-Plus the spatial-selector and temporal-window edge matrix, offline over
-synthetic payloads."""
+The readings and the expanded site record are joined by the delegate - the
+readings win and the site record decorates them with the zero a gage height is
+counted from - an all-empty result answers an honest no-stations, and the window
+mode switches the output schema between the instantaneous and hydrograph shapes.
+Plus the spatial-selector and temporal-window edge matrix."""
 
 from __future__ import annotations
 
-import json
+import datetime as dt
 
+import pandas as pd
 import pytest
+from dataretrieval.exceptions import HTTPError, ServiceUnavailable
 
 from trid3nt_server.tools.fetchers._router import hooks, registration
 from trid3nt_server.tools.fetchers._router.executors import http_json
@@ -27,44 +28,50 @@ def spec():
     return s
 
 
-def _iv_series(site, name, lon, lat, param, val, dt):
-    return {"sourceInfo": {"siteCode": [{"value": site}], "siteName": name,
-            "geoLocation": {"geogLocation": {"latitude": lat, "longitude": lon}}},
-            "variable": {"variableCode": [{"value": param}]},
-            "values": [{"value": [{"value": str(val), "dateTime": dt}]}]}
+def _stamp(hour):
+    return dt.datetime(2024, 1, 1, hour, tzinfo=dt.timezone.utc)
 
 
-def _iv_body():
-    return json.dumps({"value": {"timeSeries": [
-        _iv_series("01646500", "POTOMAC", -77.12, 38.95, "00060", "1200.0", "2024-01-01T12:00:00Z"),
-        _iv_series("01646500", "POTOMAC", -77.12, 38.95, "00065", "3.4", "2024-01-01T12:00:00Z"),
-        _iv_series("01638500", "SHENANDOAH", -77.80, 39.02, "00060", "800.0", "2024-01-01T12:00:00Z"),
-    ]}}).encode()
+def _iv_frame(rows):
+    """One long IV frame: a datetime index, ``site_no`` and one column per code."""
+    index = [_stamp(hour) for _site, hour, _vals in rows]
+    data = {"site_no": [site for site, _hour, _vals in rows]}
+    for code in ("00060", "00065", "00010"):
+        if any(code in vals for _s, _h, vals in rows):
+            data[code] = [vals.get(code) for _s, _h, vals in rows]
+    return pd.DataFrame(data, index=pd.DatetimeIndex(index))
 
 
-def _window_series(param, samples):
-    return {"sourceInfo": {"siteCode": [{"value": "01646500"}], "siteName": "POTOMAC",
-                           "geoLocation": {"geogLocation": {"latitude": 38.95, "longitude": -77.12}}},
-            "variable": {"variableCode": [{"value": param}]},
-            "values": [{"value": [{"value": str(v), "dateTime": d} for d, v in samples]}]}
+_SITE_FRAME = pd.DataFrame([
+    {"site_no": "01646500", "station_nm": "POTOMAC RIVER", "dec_lat_va": 38.95,
+     "dec_long_va": -77.12, "alt_va": 37.20, "alt_datum_cd": "NAVD88"},
+    {"site_no": "01638500", "station_nm": "SHENANDOAH", "dec_lat_va": 39.02,
+     "dec_long_va": -77.80, "alt_va": None, "alt_datum_cd": None},
+])
 
 
-def _iv_window_body():
-    flow = [("2024-01-01T00:00:00Z", 1000.0), ("2024-01-01T01:00:00Z", 1100.0), ("2024-01-01T02:00:00Z", 1200.0)]
-    stage = [("2024-01-01T00:00:00Z", 3.1), ("2024-01-01T01:00:00Z", 3.4), ("2024-01-01T02:00:00Z", 3.9)]
-    return json.dumps({"value": {"timeSeries": [
-        _window_series("00060", flow), _window_series("00065", stage)]}}).encode()
+@pytest.fixture
+def nwis_calls(monkeypatch):
+    """Stand in for both dataretrieval calls, recording the kwargs each got."""
+    import dataretrieval.nwis as nwis
+
+    calls = {"iv": None, "info": None, "iv_df": _iv_frame([]), "site_df": _SITE_FRAME}
+
+    def _get_iv(**kwargs):
+        calls["iv"] = kwargs
+        return calls["iv_df"], None
+
+    def _get_info(**kwargs):
+        calls["info"] = kwargs
+        return calls["site_df"], None
+
+    monkeypatch.setattr(nwis, "get_iv", _get_iv)
+    monkeypatch.setattr(nwis, "get_info", _get_info)
+    return calls
 
 
-_SITE_RDB = (
-    "# comment\n"
-    "agency_cd\tsite_no\tstation_nm\tdec_lat_va\tdec_long_va\talt_va\talt_datum_cd\n"
-    "5s\t15s\t50s\t16s\t16s\t16s\t10s\n"
-    "USGS\t01646500\tPOTOMAC RIVER\t38.95\t-77.12\t37.20\tNAVD88\n"
-    "USGS\t01638500\tSHENANDOAH\t39.02\t-77.80\t\t\n"
-).encode()
-
-
+def _read(spec, calls, **params):
+    return nwis_hooks.read(spec, {"_mode": "instantaneous", **params}, timeout_s=5.0)
 
 
 def test_nwis_registered_and_spec_served(spec):
@@ -77,16 +84,17 @@ def test_nwis_registered_and_spec_served(spec):
 
 
 def test_nwis_hooks_registered():
-    for h in ("usgs_nwis.resolve", "usgs_nwis.build_request", "usgs_nwis.parse"):
+    for h in ("usgs_nwis.resolve", "usgs_nwis.read"):
         assert h in hooks.HOOK_REGISTRY
 
 
-
-
-def test_parse_iv_instantaneous_carries_the_gauge_s_own_zero(spec):
-    feats = hooks.HOOK_REGISTRY["usgs_nwis.parse"](
-        spec, {"_mode": "instantaneous"}, [_iv_body(), _SITE_RDB])
-    assert len(feats) == 2  # two distinct sites merged over discharge + gage
+def test_the_read_carries_the_gauge_s_own_zero(spec, nwis_calls):
+    nwis_calls["iv_df"] = _iv_frame([
+        ("01646500", 12, {"00060": 1200.0, "00065": 3.4}),
+        ("01638500", 12, {"00060": 800.0, "00065": None}),
+    ])
+    feats = _read(spec, nwis_calls, bbox=[-77.9, 38.9, -77.0, 39.1])
+    assert len(feats) == 2
     assert set(feats[0]["properties"]) == {
         "site_no", "site_name", "discharge_cfs", "gage_height_ft", "water_temp_c",
         "reading_dt", "gauge_datum_ft", "vertical_datum"}
@@ -98,9 +106,13 @@ def test_parse_iv_instantaneous_carries_the_gauge_s_own_zero(spec):
     assert by["01638500"]["gauge_datum_ft"] is None
 
 
-def test_parse_iv_window_publishes_the_stage_series_beside_the_discharge(spec):
-    feats = hooks.HOOK_REGISTRY["usgs_nwis.parse"](
-        spec, {"_mode": "hydrograph"}, [_iv_window_body(), _SITE_RDB])
+def test_the_window_read_publishes_the_stage_series_beside_the_discharge(spec, nwis_calls):
+    nwis_calls["iv_df"] = _iv_frame([
+        ("01646500", 0, {"00060": 1000.0, "00065": 3.1}),
+        ("01646500", 1, {"00060": 1100.0, "00065": 3.4}),
+        ("01646500", 2, {"00060": 1200.0, "00065": 3.9}),
+    ])
+    feats = _read(spec, nwis_calls, bbox=[-77.9, 38.9, -77.0, 39.1], _mode="hydrograph")
     p = feats[0]["properties"]
     assert set(p) == {"site_no", "site_name", "discharge_cfs", "gage_height_ft", "water_temp_c",
                       "reading_dt", "time_series_csv", "stage_series_csv", "temp_series_csv",
@@ -108,32 +120,29 @@ def test_parse_iv_window_publishes_the_stage_series_beside_the_discharge(spec):
                       "discharge_max_cfs", "discharge_mean_cfs",
                       "gauge_datum_ft", "vertical_datum"}
     assert p["n_timesteps"] == 3 and p["discharge_min_cfs"] == 1000.0 and p["discharge_max_cfs"] == 1200.0
-    assert p["time_series_csv"].startswith("2024-01-01T00:00:00Z,1000.000000")
-    assert p["stage_series_csv"].startswith("2024-01-01T00:00:00Z,3.100000")
+    assert p["time_series_csv"].startswith("2024-01-01T00:00:00+0000,1000.000000")
+    assert p["stage_series_csv"].startswith("2024-01-01T00:00:00+0000,3.100000")
     assert p["gauge_datum_ft"] == 37.20 and p["vertical_datum"] == "NAVD88"
 
 
-def test_the_temperature_code_is_read_into_its_own_column(spec):
+def test_the_temperature_code_is_read_into_its_own_column(spec, nwis_calls):
     """The third coverage row is asked by the parameter code NWIS answers to,
     and the reading lands in the column that row names rather than in the
     discharge one it is not measured in."""
-    body = json.dumps({"value": {"timeSeries": [
-        _iv_series("14211720", "WILLAMETTE", -122.67, 45.51, "00010", "18.4",
-                   "2026-09-20T03:30:00Z")]}}).encode()
-    p = hooks.HOOK_REGISTRY["usgs_nwis.parse"](spec, {"_mode": "instantaneous"},
-                                               [body])[0]["properties"]
+    nwis_calls["iv_df"] = _iv_frame([("01646500", 3, {"00010": 18.4})])
+    p = _read(spec, nwis_calls, bbox=[-77.9, 38.9, -77.0, 39.1],
+              parameter="00010")[0]["properties"]
     assert p["water_temp_c"] == 18.4
     assert p["discharge_cfs"] is None and p["gage_height_ft"] is None
-    assert p["reading_dt"] == "2026-09-20T03:30:00Z"
+    assert p["reading_dt"] == "2024-01-01T03:00:00+0000"
 
 
-def test_the_temperature_window_is_its_own_series_column(spec):
-    samples = [("2026-09-17T00:00:00Z", 18.7), ("2026-09-17T01:00:00Z", 18.6)]
-    body = json.dumps({"value": {"timeSeries": [
-        _window_series("00010", samples)]}}).encode()
-    p = hooks.HOOK_REGISTRY["usgs_nwis.parse"](spec, {"_mode": "hydrograph"},
-                                               [body])[0]["properties"]
-    assert p["temp_series_csv"].startswith("2026-09-17T00:00:00Z,18.700000")
+def test_the_temperature_window_is_its_own_series_column(spec, nwis_calls):
+    nwis_calls["iv_df"] = _iv_frame([
+        ("01646500", 0, {"00010": 18.7}), ("01646500", 1, {"00010": 18.6})])
+    p = _read(spec, nwis_calls, bbox=[-77.9, 38.9, -77.0, 39.1],
+              parameter="00010", _mode="hydrograph")[0]["properties"]
+    assert p["temp_series_csv"].startswith("2024-01-01T00:00:00+0000,18.700000")
     assert p["water_temp_c"] == 18.6
     assert p["time_series_csv"] == "" and p["n_timesteps"] == 0
 
@@ -143,30 +152,88 @@ def test_a_parameter_this_source_reads_into_no_column_refuses(spec):
                                "parameter": "00095"}) == "NWIS_GAUGES_INPUT_ERROR"
 
 
-def test_the_asked_parameter_is_what_both_services_are_called_with(spec):
+def test_the_asked_parameter_is_what_both_services_are_called_with(spec, nwis_calls):
     params = hooks.HOOK_REGISTRY["usgs_nwis.resolve"](
         spec, {"bbox": [-122.7, 45.4, -122.6, 45.6], "parameter": "00010"})
     assert params["parameter"] == "00010"
-    plans = hooks.HOOK_REGISTRY["usgs_nwis.build_request"](spec, params)
-    assert [pl.params["parameterCd"] for pl in plans] == ["00010", "00010"]
-    pair = hooks.HOOK_REGISTRY["usgs_nwis.build_request"](
-        spec, hooks.HOOK_REGISTRY["usgs_nwis.resolve"](
-            spec, {"bbox": [-122.7, 45.4, -122.6, 45.6]}))
-    assert pair[0].params["parameterCd"] == "00060,00065"
+    _read(spec, nwis_calls, **params)
+    assert nwis_calls["iv"]["parameterCd"] == "00010"
+    assert nwis_calls["info"]["parameterCd"] == "00010"
+    assert nwis_calls["info"]["siteOutput"] == "expanded"
+    pair = hooks.HOOK_REGISTRY["usgs_nwis.resolve"](
+        spec, {"bbox": [-122.7, 45.4, -122.6, 45.6]})
+    _read(spec, nwis_calls, **pair)
+    assert nwis_calls["iv"]["parameterCd"] == "00060,00065"
 
 
-def test_parse_site_rdb(spec):
-    feats = hooks.HOOK_REGISTRY["usgs_nwis.parse"](spec, {"_mode": "instantaneous"}, [_SITE_RDB])
+def test_the_bbox_selector_is_the_one_the_library_is_called_with(spec, nwis_calls):
+    params = hooks.HOOK_REGISTRY["usgs_nwis.resolve"](spec, {"bbox": [-82.4, 26.3, -81.6, 26.9]})
+    _read(spec, nwis_calls, **params)
+    assert nwis_calls["iv"]["bBox"] == "-82.4,26.3,-81.6,26.9"
+    assert "stateCd" not in nwis_calls["iv"]
+
+
+def test_the_state_selector_replaces_the_box(spec, nwis_calls):
+    params = hooks.HOOK_REGISTRY["usgs_nwis.resolve"](spec, {"state_code": "WA"})
+    _read(spec, nwis_calls, **params)
+    assert nwis_calls["iv"]["stateCd"] == "WA" and "bBox" not in nwis_calls["iv"]
+
+
+def test_the_window_reaches_the_library_as_the_form_it_was_asked_in(spec, nwis_calls):
+    period = hooks.HOOK_REGISTRY["usgs_nwis.resolve"](
+        spec, {"bbox": [-82.4, 26.3, -81.6, 26.9], "period": "P7D"})
+    _read(spec, nwis_calls, **period)
+    assert nwis_calls["iv"]["period"] == "P7D"
+    dates = hooks.HOOK_REGISTRY["usgs_nwis.resolve"](
+        spec, {"bbox": [-82.4, 26.3, -81.6, 26.9],
+               "start_date": "2024-01-01", "end_date": "2024-01-05"})
+    _read(spec, nwis_calls, **dates)
+    assert nwis_calls["iv"]["start"] == "2024-01-01" and nwis_calls["iv"]["end"] == "2024-01-05"
+
+
+def test_empty_readings_degrade_to_the_station_locations(spec, nwis_calls):
+    feats = _read(spec, nwis_calls, bbox=[-77.9, 38.9, -77.0, 39.1])
     assert {f["properties"]["site_no"] for f in feats} == {"01646500", "01638500"}
-    assert all(f["properties"]["discharge_cfs"] is None for f in feats)  # locations only
+    assert all(f["properties"]["discharge_cfs"] is None for f in feats)
 
 
-def test_parse_with_no_body_at_all_refuses_rather_than_returning_nothing(spec):
-    with pytest.raises(Exception) as caught:
-        hooks.HOOK_REGISTRY["usgs_nwis.parse"](spec, {"_mode": "instantaneous"}, [b"", b""])
-    assert caught.value.error_code == "NWIS_GAUGES_NO_STATIONS"
+def test_both_services_empty_raises_no_stations(spec, nwis_calls):
+    nwis_calls["site_df"] = _SITE_FRAME.iloc[0:0]
+    with pytest.raises(Exception) as ei:
+        _read(spec, nwis_calls, bbox=[-77.9, 38.9, -77.0, 39.1])
+    assert ei.value.error_code == "NWIS_GAUGES_NO_STATIONS"
+    assert ei.value.retryable is False
 
 
+def test_a_reading_with_no_site_location_has_nowhere_to_be_a_point(spec, nwis_calls):
+    nwis_calls["iv_df"] = _iv_frame([("09999999", 12, {"00060": 5.0})])
+    with pytest.raises(Exception) as ei:
+        _read(spec, nwis_calls, bbox=[-77.9, 38.9, -77.0, 39.1])
+    assert ei.value.error_code == "NWIS_GAUGES_NO_STATIONS"
+
+
+def test_a_rejected_request_is_an_input_error_not_an_upstream_one(spec, monkeypatch):
+    import dataretrieval.nwis as nwis
+
+    def _reject(**_kwargs):
+        raise HTTPError("bad bBox", status_code=400)
+
+    monkeypatch.setattr(nwis, "get_iv", _reject)
+    with pytest.raises(Exception) as ei:
+        nwis_hooks.read(spec, {"bbox": [-77.9, 38.9, -77.0, 39.1]}, timeout_s=5.0)
+    assert ei.value.error_code == "NWIS_GAUGES_INPUT_ERROR"
+
+
+def test_a_service_failure_stays_an_upstream_error(spec, monkeypatch):
+    import dataretrieval.nwis as nwis
+
+    def _down(**_kwargs):
+        raise ServiceUnavailable("gateway down", status_code=503)
+
+    monkeypatch.setattr(nwis, "get_iv", _down)
+    with pytest.raises(Exception) as ei:
+        nwis_hooks.read(spec, {"bbox": [-77.9, 38.9, -77.0, 39.1]}, timeout_s=5.0)
+    assert ei.value.error_code == "NWIS_GAUGES_UPSTREAM_ERROR"
 
 
 def _resolve_err(spec, params):
@@ -218,76 +285,6 @@ def test_resolve_both_dates_window(spec):
 def test_resolve_over_120d_input_error(spec):
     assert _resolve_err(spec, {"bbox": [-82.4, 26.3, -81.6, 26.9], "start_date": "2024-01-01", "end_date": "2024-06-01"}) == "NWIS_GAUGES_INPUT_ERROR"
 
-
-
-
-def test_build_instantaneous_iv_then_site(spec):
-    p = hooks.HOOK_REGISTRY["usgs_nwis.resolve"](spec, {"bbox": [-82.4, 26.3, -81.6, 26.9]})
-    plans = hooks.HOOK_REGISTRY["usgs_nwis.build_request"](spec, {"bbox": [-82.4, 26.3, -81.6, 26.9], **p})
-    assert len(plans) == 2 and plans[0].url.endswith("/iv/") and plans[1].url.endswith("/site/")
-    assert plans[0].params["bBox"] == "-82.4,26.3,-81.6,26.9"
-
-
-def test_build_hydrograph_asks_the_site_service_for_the_expanded_record(spec):
-    p = hooks.HOOK_REGISTRY["usgs_nwis.resolve"](spec, {"bbox": [-82.4, 26.3, -81.6, 26.9], "period": "P7D"})
-    plans = hooks.HOOK_REGISTRY["usgs_nwis.build_request"](spec, {"bbox": [-82.4, 26.3, -81.6, 26.9], **p})
-    assert len(plans) == 2 and plans[0].params.get("period") == "P7D"
-    assert plans[1].params.get("siteOutput") == "expanded"
-
-
-def test_build_state_selector(spec):
-    p = hooks.HOOK_REGISTRY["usgs_nwis.resolve"](spec, {"state_code": "WA"})
-    plans = hooks.HOOK_REGISTRY["usgs_nwis.build_request"](spec, {"state_code": "WA", **p})
-    assert plans[0].params.get("stateCd") == "WA" and "bBox" not in plans[0].params
-
-
-
-
-def test_iv_empty_degrades_to_the_station_locations(spec, monkeypatch):
-    params = {"bbox": [-77.9, 38.9, -77.0, 39.1]}
-    params.update(hooks.HOOK_REGISTRY["usgs_nwis.resolve"](spec, dict(params)))
-    calls = {"n": 0}
-
-    def _fake_get(_spec, plan):
-        calls["n"] += 1
-        return b"" if plan.url.endswith("/iv/") else _SITE_RDB  # IV empty -> Site
-
-    monkeypatch.setattr(http_json, "_get", _fake_get)
-    fgb = http_json.execute(spec, params)
-    assert calls["n"] == 2  # tried IV then Site
-    import os
-    import tempfile
-
-    import geopandas as gpd
-    f = tempfile.NamedTemporaryFile(suffix=".fgb", delete=False)
-    f.write(fgb)
-    f.close()
-    gdf = gpd.read_file(f.name)
-    os.unlink(f.name)
-    assert set(gdf["site_no"]) == {"01646500", "01638500"}
-
-
-def test_both_services_empty_raises_no_stations(spec, monkeypatch):
-    params = {"bbox": [-77.9, 38.9, -77.0, 39.1]}
-    params.update(hooks.HOOK_REGISTRY["usgs_nwis.resolve"](spec, dict(params)))
-    monkeypatch.setattr(http_json, "_get", lambda _s, _p: b"")
-    with pytest.raises(Exception) as ei:
-        http_json.execute(spec, params)
-    assert ei.value.error_code == "NWIS_GAUGES_NO_STATIONS"
-    assert ei.value.retryable is False
-
-
-@pytest.mark.parametrize("body", ["", "  ", "No sites found matching the bBox"])
-def test_a_404_over_a_box_holding_no_gauge_is_an_empty_record(spec, body):
-    typed = nwis_hooks.classify_status(spec, 404, body)
-    assert typed.error_code == "NWIS_GAUGES_NO_STATIONS"
-    assert typed.retryable is False
-
-
-@pytest.mark.parametrize("status,body", [
-    (503, ""), (500, "gateway down"), (None, None), (404, "<html>bad query</html>")])
-def test_a_real_failure_stays_an_upstream_error(spec, status, body):
-    assert nwis_hooks.classify_status(spec, status, body) is None
 
 
 def test_a_transport_404_carries_its_own_non_retryable_verdict(spec, monkeypatch):

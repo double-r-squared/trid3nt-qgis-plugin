@@ -162,6 +162,23 @@ def _map_http_error(spec: SourceSpec, exc: Exception) -> None:
     raise router_upstream_error(prefix, f"{type(exc).__name__}: {exc}")
 
 
+def _number(raw: Any) -> float | None:
+    """A site field as a float, or None. A frame column with any missing cell holds
+    NaN where the record published nothing, and NaN is not a datum."""
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) else None
+
+
+def _text(raw: Any) -> str | None:
+    """A site field as text, or None. NaN reads as the string "nan" unless caught."""
+    if raw is None or (isinstance(raw, float) and not math.isfinite(raw)):
+        return None
+    return str(raw).strip() or None
+
+
 def _feature(lon: float, lat: float, props: dict[str, Any]) -> dict[str, Any]:
     return {"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]}, "properties": props}
 
@@ -274,16 +291,11 @@ def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[
                 continue
             if not (math.isfinite(lat) and math.isfinite(lon)):
                 continue
-            alt_va = rd.get("alt_va")
-            try:
-                alt_va = float(alt_va) if alt_va not in (None, "") else None
-            except (TypeError, ValueError):
-                alt_va = None
             sites[site_no] = {
-                "site_name": str(rd.get("station_nm") or "").strip(),
+                "site_name": _text(rd.get("station_nm")) or "",
                 "lon": lon, "lat": lat,
-                "gauge_datum_ft": alt_va,
-                "vertical_datum": (str(rd.get("alt_datum_cd")).strip() or None) if rd.get("alt_datum_cd") else None,
+                "gauge_datum_ft": _number(rd.get("alt_va")),
+                "vertical_datum": _text(rd.get("alt_datum_cd")),
             }
 
     if not readings:

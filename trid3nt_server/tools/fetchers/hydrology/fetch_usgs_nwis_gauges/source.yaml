@@ -1,6 +1,6 @@
-# USGS NWIS stream gauges through the http_json parse_fallback executor: an IV
-# WaterML-JSON primary degrading to the Site RDB service. The resolve hook derives the
-# mode -- 5-column instantaneous versus 12-column hydrograph -- pre-cache.
+# USGS NWIS stream gauges read through dataretrieval: the instantaneous values joined
+# to the expanded Site record. The resolve hook derives the mode -- the instantaneous
+# versus the hydrograph column schema -- pre-cache.
 schema_version: v1
 
 name: fetch_usgs_nwis_gauges
@@ -11,8 +11,8 @@ shape: vector-fgb
 supports_global_query: false
 
 endpoints:
-  # Endpoints are built by usgs_nwis.build_request (IV + Site); this satisfies the
-  # SourceSpec min_length=1 and documents the machine API base.
+  # dataretrieval owns both URLs; these satisfy the SourceSpec min_length=1 and
+  # document the machine API the library calls.
   iv:
     url: "https://waterservices.usgs.gov/nwis/iv/"
   site:
