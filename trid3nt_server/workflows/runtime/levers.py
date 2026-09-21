@@ -42,7 +42,7 @@ LEVERS: tuple[Param, ...] = (
               "published, and no series source is asked at all - a record is a "
               "reading at a time, and this run stated none"),
           desc="The moment the scenario is read at - an ISO date or datetime "
-               "('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like "
+               "(YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like "
                "'during last Tuesday's storm'. Each source keeps its own "
                "retention, and a request deeper than one refuses typed"),
     Param(name="compute_class", door=doors.CONSTANT, default="medium",

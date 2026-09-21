@@ -211,7 +211,7 @@ class AtomicToolMetadata(GraceModel):
         default=False,
         description=(
             "True if this tool accepts ``bbox=None`` to mean global/CONUS-wide "
-            "query. Default False (safer — tools opt in). When False, calling "
+            "query. Default False (safer - tools opt in). When False, calling "
             "with ``bbox=None`` must raise ``ToolInputError(code='BBOX_REQUIRED', "
             "retryable=False)`` BEFORE issuing any network call."
         ),
@@ -238,7 +238,7 @@ class AtomicToolMetadata(GraceModel):
         description=(
             "MCP annotation: readOnlyHint. True when the tool has no side "
             "effects and does not mutate any external state (object storage, "
-            "the QGIS project, the persisted store). Defaults to True — the "
+            "the QGIS project, the persisted store). Defaults to True - the "
             "safe assumption for fetchers and compute tools. Set to False for "
             "publish_layer, run_solver, and any other tool that writes."
         ),
@@ -248,8 +248,8 @@ class AtomicToolMetadata(GraceModel):
         default=False,
         description=(
             "MCP annotation: openWorldHint. True when the tool reaches beyond "
-            "the local deployment — external APIs or public data endpoints. "
-            "Defaults to False — compute, clip, and local-substrate-only tools "
+            "the local deployment - external APIs or public data endpoints. "
+            "Defaults to False - compute, clip, and local-substrate-only tools "
             "opt out. All fetch_* tools are True; "
             "catalog_search/catalog_fetch are True because they ultimately hit "
             "Tier-2/3 external endpoints."
@@ -274,7 +274,7 @@ class AtomicToolMetadata(GraceModel):
         description=(
             "MCP annotation: idempotentHint. True when calling the tool multiple "
             "times with the same arguments produces the same result without "
-            "additional side effects. Defaults to True — fetchers with the cache "
+            "additional side effects. Defaults to True - fetchers with the cache "
             "shim satisfy this property. Set to False for tools that emit pipeline "
             "state (wait_for_completion), dispatch a solver run (run_solver), "
             "write stored artifacts (publish_layer), or interact with stateful "
