@@ -1,4 +1,4 @@
-# NCEI historical tsunamis, a paged JSON point API. ingest.http_source.paging drives the
+# NCEI historical tsunamis, a paged JSON point API. ingest.pagination drives the
 # totalPages loop; the build hook builds one page's request and the parse hook decodes
 # the concatenated items per mode.
 schema_version: v1
@@ -37,12 +37,12 @@ hooks:
   build_request: ncei_tsunami.build_request
   parse_response: ncei_tsunami.parse_response
 ingest:
-  http_source:
-    paging:
-      page_param: page
-      total_pages_key: totalPages
-      total_items_key: totalItems
-      max_pages: 25
+  pagination:
+    style: page
+    page_param: page
+    total_pages_key: totalPages
+    total_items_key: totalItems
+    max_pages: 25
   properties:
   - id
   - year

@@ -1,5 +1,6 @@
-# FEMA disaster declarations: offset paging over the attribute feed, then a
-# boundary-service FIPS enrich.
+# FEMA disaster declarations: declared offset paging over the attribute feed, then a
+# declared county-polygon enrich keyed by state FIPS. Two hooks remain - the selector
+# that assembles the OData filter, and the per-county aggregate.
 schema_version: v1
 name: fetch_openfema_disasters
 source_class: openfema_disasters
@@ -10,6 +11,8 @@ input_error_suffix: INPUT_ERROR
 endpoints:
   data:
     url: https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries
+  counties:
+    url: https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/1/query
 auth:
   mode: none
   user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
@@ -34,12 +37,45 @@ params:
     schema_optional: true
 hooks:
   build_request: openfema_disasters.build_request
-  next_page: openfema_disasters.next_page
   parse_response: openfema_disasters.parse_response
-  enrich_plan: openfema_disasters.enrich_plan
-  enrich_merge: openfema_disasters.enrich_merge
 ingest:
-  chained: {}
+  pagination:
+    style: offset
+    page_size: 1000
+    stop_on_short_page: true
+    row_cap: 12000
+    max_pages: 25
+  body:
+    format: json
+    rows_path: DisasterDeclarationsSummaries
+  enrich:
+    key_column: state_fips
+    max_detail_fetches: 3000
+    request:
+      endpoint: counties
+      params:
+        where: STATE='{key}'
+        outFields: GEOID,NAME,STATE,COUNTY
+        returnGeometry: 'true'
+        outSR: '4326'
+        f: geojson
+    body:
+      format: json
+      rows_path: features
+    join:
+      detail_key: properties.GEOID
+      feature_key: county_fips
+      geometry: true
+      drop_unmatched: true
+      take:
+        county_name: properties.NAME
+    clip_to_bbox: true
+  empty:
+    code: NO_DECLARATIONS
+    message: No county-level FEMA disaster declarations could be joined to a county
+      polygon for the requested scope (no declarations join to a county, or none of
+      the affected counties fall inside the bbox). Try dropping the incident_type
+      filter, extending the year window, or widening the area.
   properties:
   - county_fips
   - county_name
