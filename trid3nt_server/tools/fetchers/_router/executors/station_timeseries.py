@@ -274,6 +274,17 @@ def fetch_station_records(spec: SourceSpec, params: dict[str, Any]) -> list[dict
 # per station -- the latest observed or the nearest-now prediction -- instead of the
 # full time series. The flood/ebb/slack direction lives in the named
 # ``coops_currents`` selector, dispatched by ``snapshot.transform``.
+#
+# This is NOT the series path over a one-sample window. A series row reads ONE value
+# column (``value_key``) into ``{t, v}``, and a current sample is a vector: a speed
+# and a bearing observed, and predicted, a signed major velocity whose sign chooses
+# between the station's mean flood and mean ebb bearings and names the flow state.
+# The rollups the series path writes are the water level's by name (``datum``,
+# ``wl_min_m``, ``wl_max_m``, ``wl_mean_m``), and there is no "latest" among them.
+# The prediction pick is not the latest sample either: over a MAX_SLACK lookahead
+# the last row is two days out and the one anybody asked for is the nearest to now.
+# The depth bin is no pick at all - CO-OPS answers on the station's own default bin
+# and the row REPORTS which one it was, so there is nothing to declare.
 
 
 def _snapshot_window(
