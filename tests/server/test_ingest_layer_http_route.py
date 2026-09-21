@@ -108,10 +108,7 @@ def _local_mode(monkeypatch):
     monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "local-docker")
 
 
-# Route availability: unconditional in the local build. ``solver_backend()``
-# is hardwired to local-docker, so the old outside-local-mode 404 branch
-# behind ``_ingest_layer_route_enabled`` is unreachable -- the env var no
-# longer gates these routes.
+# The routes are unconditional: no env arms them and no posture withholds them.
 
 
 def test_ingest_layer_route_served_without_env_arming(monkeypatch):

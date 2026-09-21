@@ -87,9 +87,7 @@ class _FakePersistence:
         return list(self._cases)
 
 
-# Route availability: unconditional in the local build. ``solver_backend()``
-# is hardwired to local-docker, so the old cloud-posture 404 branch behind
-# ``_case_list_route_enabled`` is unreachable -- the env var is dead here.
+# The route is unconditional: no env arms it and no posture withholds it.
 
 
 def test_route_served_when_backend_env_unset(monkeypatch):

@@ -317,11 +317,6 @@ class _CaseListPersistenceUnavailable(Exception):
     """Persistence is unbound; the case list cannot be sourced (-> 503)."""
 
 
-def _case_list_route_enabled() -> bool:
-    """The route is served: this build has ONE fixed local user to resolve to."""
-    return True
-
-
 #: The case-list row the client reads: the envelope serializes every Case field,
 #: and these four are what a left-rail row renders. A case with no bbox carries
 #: an honest None.
@@ -370,17 +365,10 @@ async def build_case_list_payload() -> dict[str, Any]:
 #     exists + is within the size cap, converts/validates the artifact,
 #     merges it into the case's durable loaded_layer_summaries, and
 #     best-effort-pins the AOI when make_aoi is true.
-#
-# Served whenever the agent runs the local single-user seam.
 
 
 class _IngestLayerBadRequest(Exception):
     """Malformed /api/ingest-layer(-file) request."""
-
-
-def _ingest_layer_route_enabled() -> bool:
-    """The routes are served (mirrors ``_case_list_route_enabled``)."""
-    return True
 
 
 def _ingest_layer_fn():
@@ -451,17 +439,11 @@ def _parse_ingest_layer_filename(query_string: str) -> str:
 
 
 # The deterministic map-click point probe: samples every raster layer, and any
-# detected frame sequence, on the case at one point. Served whenever the agent
-# runs the local single-user seam.
+# detected frame sequence, on the case at one point.
 
 
 class _ProbePointBadRequest(Exception):
     """Malformed /api/probe-point request."""
-
-
-def _probe_point_route_enabled() -> bool:
-    """The route is served (mirrors ``_case_list_route_enabled``)."""
-    return True
 
 
 def _probe_point_fn():
@@ -631,8 +613,6 @@ async def _route_telemetry_summary(_req: _Request) -> _Reply:
 async def _route_case_list(_req: _Request) -> _Reply:
     """``GET /api/case-list``: the cold case list, for a client with no
     WebSocket session yet."""
-    if not _case_list_route_enabled():
-        raise _HttpError(404, "not found")
     try:
         return _json_reply(await build_case_list_payload())
     except _CaseListPersistenceUnavailable as exc:
@@ -728,8 +708,6 @@ async def _route_ingest_layer_file(req: _Request) -> _Reply:
     PUT to the store itself and streams the exported file's bytes here."""
     from trid3nt_server.inputs.user_layer import ImportLayerError, ObjectTooLargeError
 
-    if not _ingest_layer_route_enabled():
-        raise _HttpError(404, "not found")
     try:
         filename = _parse_ingest_layer_filename(req.query)
         s3_uri = await asyncio.to_thread(
@@ -754,8 +732,6 @@ async def _route_ingest_layer(req: _Request) -> _Reply:
         ObjectNotFoundError,
     )
 
-    if not _ingest_layer_route_enabled():
-        raise _HttpError(404, "not found")
     try:
         return _Reply(await _handle_ingest_layer_post(req.body))
     except _IngestLayerBadRequest as exc:
@@ -776,8 +752,6 @@ async def _route_probe_point(req: _Request) -> _Reply:
         ProbePointInputError,
     )
 
-    if not _probe_point_route_enabled():
-        raise _HttpError(404, "not found")
     try:
         return _Reply(await _handle_probe_point_post(req.body))
     except _ProbePointBadRequest as exc:
