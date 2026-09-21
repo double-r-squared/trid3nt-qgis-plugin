@@ -174,6 +174,14 @@ package DataSeam {
         */
     }
 
+    part def CacheRetention {
+        doc /*
+        What the read-through cache keeps of the data a run stood on: the uris a
+        live case pins through the runs it published, and the sweep that deletes
+        every object neither pinned nor still inside its own TTL class's window.
+        */
+    }
+
     part def BedResultModel {
         doc /*
         The layer a bed fetch returns, with the provenance fields that are NOT
@@ -678,6 +686,12 @@ package DataSeam {
         port provenanceIn : ProvenanceIn;
     }
 
+    part cacheRetention : CacheRetention {
+        doc /*
+        code: trid3nt_server/retention.py
+        */
+    }
+
     // ----------------------------------------------------------------- //
     // Hops
     // ----------------------------------------------------------------- //
@@ -863,6 +877,22 @@ package DataSeam {
         every sounding is painted and says so through its provenance, and a cap
         would be this code choosing a radius for the person who asked. The share
         does not move when the op runs: an interpolation is not a sounding.
+        */
+    }
+
+    requirement def AConsumedObjectIsPinnedWhileItsCaseLives {
+        doc /*
+        An object a run consumed is pinned by that run's journal record for as
+        long as a case still holds one of the layers the run published, so a
+        case reopened long after answers from the same bytes it was answered
+        with. A case deleted releases what it held.
+
+        Everything else ages by the TTL class its own key was salted with: past
+        that window the key can no longer be computed, so the bytes are already
+        unreachable and the sweep is only what makes unreachable mean gone. An
+        object and the provenance sidecar beside it share one fate, because a
+        pinned object whose sidecar went is a miss. Only the cache is swept: a
+        run's own products carry no class to age by.
         */
     }
 
@@ -1557,6 +1587,14 @@ package DataSeam {
         "tests/fetchers/test_router_nwis.py::test_the_read_carries_the_gauge_s_own_zero";
     verify requirement ASeriesIsAlignedToTheRunsEventTime by
         "tests/runtime/test_matched_slots.py::test_a_run_series_is_asked_for_the_window_the_deck_will_solve";
+
+    satisfy requirement AConsumedObjectIsPinnedWhileItsCaseLives by cacheRetention;
+    verify requirement AConsumedObjectIsPinnedWhileItsCaseLives by
+        "tests/server/test_store_retention.py::test_a_referenced_object_survives_its_ttl";
+    verify requirement AConsumedObjectIsPinnedWhileItsCaseLives by
+        "tests/server/test_store_retention.py::test_an_unreferenced_object_goes_and_a_current_one_stays";
+    verify requirement AConsumedObjectIsPinnedWhileItsCaseLives by
+        "tests/server/test_store_retention.py::test_a_deleted_case_releases_its_objects";
 
     satisfy requirement TheRunHasOneVerticalFrame by verticalFrame;
     satisfy requirement TheRunHasOneVerticalFrame by frameLever;
