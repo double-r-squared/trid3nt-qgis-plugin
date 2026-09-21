@@ -43,11 +43,17 @@ _TWO_NUMBERS = re.compile(
 
 @dataclass(frozen=True, slots=True)
 class Point:
-    """One location in EPSG:4326, and the name the user gave it, if any."""
+    """One location in EPSG:4326, the name the user gave it, and what the place
+    that named it IS."""
 
     lon: float
     lat: float
     name: str | None = None
+    #: THE PLACE'S OWN WORD for what it is - "river", "reservoir", "city" -
+    #: where the service that resolved the name published one, "" where nothing
+    #: said. Read off the answer that came; nothing here asks for it, because a
+    #: call to learn it asks the same service the same question.
+    kind: str = ""
 
 
 class PointOutsideDomainError(UserInputError):
@@ -92,6 +98,17 @@ async def point(value: Any, *, label: str = "point",
         return await _from_text(value.strip(), label, code)
     lon, lat = lonlat_point(value, label=label, code=code)
     return Point(lon, lat)
+
+
+def _kind_of(value: Mapping[str, Any]) -> str:
+    """The word the answering service used for what this place is, or "".
+
+    A geocoder states it beside the coordinates it resolved; a pick, a pair and
+    a drawn feature state nothing, and nothing is an answer."""
+    kind = value.get("place_type")
+    if kind is None and isinstance(value.get("properties"), Mapping):
+        kind = value["properties"].get("place_type")
+    return str(kind).strip().lower() if kind else ""
 
 
 def _named(value: Mapping[str, Any]) -> str | None:
@@ -141,7 +158,7 @@ def _from_mapping(value: Mapping[str, Any], label: str, code: str) -> Point:
             "{\"coordinates\": [lon, lat], \"name\": ...} the way a pick returns "
             "it, as a (lon, lat) pair, or as a GeoJSON Point.", code=code)
     lon, lat = lonlat_point(list(coords)[:2], label=label, code=code)
-    return Point(lon, lat, _named(value))
+    return Point(lon, lat, _named(value), _kind_of(value))
 
 
 async def _from_text(text: str, label: str, code: str) -> Point:

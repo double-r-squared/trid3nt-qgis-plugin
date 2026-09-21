@@ -99,6 +99,12 @@ def _fetch_nominatim_geocode_bytes(query: str) -> bytes:
         "bbox": [west, south, east, north],
         "source": "nominatim",
         "query": query,
+        # WHAT THE SERVICE SAYS THIS PLACE IS, in its own two words: a second
+        # call to learn it would ask the same service the same question. Not
+        # under the bare keys Nominatim uses - a mapping carrying "type" reads
+        # as a GeoJSON document everywhere a slot ingests one.
+        "place_class": raw.get("class"),
+        "place_type": raw.get("type"),
         "osm_type": raw.get("osm_type"),
         "osm_id": raw.get("osm_id"),
         "place_id": raw.get("place_id"),
@@ -138,7 +144,9 @@ def geocode_location(
     lever every other input gate reads.
 
     Returns the canonical ``name``, a ``[min_lon, min_lat, max_lon, max_lat]``
-    ``bbox``, a centroid, the source, and ``match_mode``: ``"auto-accepted"``
+    ``bbox``, a centroid, the source, ``place_class`` and ``place_type`` - the
+    service's own two words for what the place IS, a river or a reservoir or a
+    city - and ``match_mode``: ``"auto-accepted"``
     in auto mode (the top match, labeled as such in the journal) or
     ``"pending-confirm"`` in user-gated mode -- the case-AOI-commit step is
     what shows the confirm gate on that label; this call always returns its

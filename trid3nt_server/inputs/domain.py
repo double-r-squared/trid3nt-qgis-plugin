@@ -10,13 +10,14 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Any, Mapping
 
 from .boundary import RUN_TYPES, WALL, BoundaryRun, boundary_runs
 from .geometry import flatten_geometries, read_geometry_doc, source_uri
 from .user_input import UserInputError, polygon_ring
 
-__all__ = ["Domain", "domain", "domain_ring", "measured_footprint"]
+__all__ = ["Domain", "domain", "domain_ring", "measured_footprint", "place_kind"]
 
 logger = logging.getLogger("trid3nt_server.inputs.domain")
 
@@ -26,6 +27,28 @@ _LAYER_SCHEMES = ("s3://", "gs://", "file://", "/", "./")
 #: The raster suffixes this slot reads a MEASURED FOOTPRINT off instead of a
 #: polygon. Anything else handed in is read as a vector document.
 _RASTER_SUFFIXES = (".tif", ".tiff", ".vrt", ".img", ".asc", ".jp2")
+
+#: WHAT A PLACE IS, in the word the hydrography sources publish that feature
+#: under, by the word the service that resolved the place used for it. Only
+#: water: a city, a county and a building are places this says nothing about,
+#: and nothing is the honest answer - the match then ranks every row it has.
+#: A word absent here is absent on purpose; guessing which water a stadium is
+#: would fill a domain with the wrong shape under the right name.
+_PLACE_KINDS: Mapping[str, str] = MappingProxyType({
+    "river": "flowline",
+    "stream": "flowline",
+    "creek": "flowline",
+    "brook": "flowline",
+    "canal": "flowline",
+    "waterway": "flowline",
+    "water": "waterbody",
+    "lake": "waterbody",
+    "pond": "waterbody",
+    "reservoir": "waterbody",
+    "lagoon": "waterbody",
+    "coastline": "coastline",
+    "beach": "coastline",
+})
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,6 +124,19 @@ class Domain:
             *({"type": "Feature", "properties": {"part": name},
                "geometry": dict(geometry)}
               for name, geometry in self.companions.items())]}
+
+
+def place_kind(seed: Any) -> str:
+    """WHICH FEATURE the seed is a place on, in the word a source publishes it
+    under - "flowline", "waterbody", "coastline" - or "" where nothing said.
+
+    The kind is a fact of the PLACE and not of the question asked there, so it
+    is read off what the seed arrived with rather than stated by a template. A
+    seed nothing said a type for is unclassified, never guessed."""
+    kind = getattr(seed, "kind", None)
+    if kind is None and isinstance(seed, Mapping):
+        kind = seed.get("place_type")
+    return _PLACE_KINDS.get(str(kind or "").strip().lower(), "")
 
 
 def domain(value: Any, *, label: str = "domain", code: str = _CODE,

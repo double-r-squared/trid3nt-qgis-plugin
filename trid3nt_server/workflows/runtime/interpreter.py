@@ -700,23 +700,32 @@ async def _need(env: _Env, decl: DataDecl, data_class: str,
     told to rank against, the window is the run's and the frame is the lever's."""
     from .levers import run_frame
 
-    lon, lat = await _place(env, decl)
+    seed = await _bind_value(decl.coercion.get("near"), env)
+    lon, lat = _place(seed)
     opens = env.params.value_of("event_time") if env.params else None
     return Need(slot=label, data_class=data_class, lon=lon, lat=lat,
                 geometry=decl.geometry or "",
                 opens=str(opens) if opens else None,
                 until=_closes(opens, env.window_s), frame=run_frame(env.params),
                 mesh_m=_mesh_m(env), pick=_pick(env, decl, data_class),
-                of=await _asked_of(env, decl), water=_water())
+                of=await _asked_of(env, decl, seed), water=_water())
 
 
-async def _asked_of(env: _Env, decl: DataDecl) -> str:
+async def _asked_of(env: _Env, decl: DataDecl, seed: Any) -> str:
     """WHAT OF ITS CLASS this row asks the world for, bound.
 
     A question asked of two kinds of water states the feature as a read of the
     param that settles it, and the read is bound here rather than at
-    declaration, the way the point the row is asked at is."""
-    return str(await _bind_value(decl.observes, env) or "")
+    declaration, the way the point the row is asked at is. A DOMAIN the
+    question states no feature for takes the one the SEED stands on: which
+    water a place is, is a fact of the place, so the run reads it off the seed
+    rather than hearing it from the question."""
+    from trid3nt_server.inputs.domain import place_kind
+
+    stated = str(await _bind_value(decl.observes, env) or "")
+    if stated or decl.role != DOMAIN:
+        return stated
+    return place_kind(seed)
 
 
 async def _somewhere_to_ask(env: _Env) -> None:
@@ -818,7 +827,7 @@ def _closes(opens: Any, window_s: float | None) -> str | None:
     return (started + timedelta(seconds=float(window_s))).isoformat()
 
 
-async def _place(env: _Env, decl: DataDecl) -> tuple[float | None, float | None]:
+def _place(seed: Any) -> tuple[float | None, float | None]:
     """The point a slot's coverage is tested at: what the row ranks against, else
     the domain's own centre."""
     from trid3nt_server.inputs.point import lonlat_of
@@ -826,7 +835,7 @@ async def _place(env: _Env, decl: DataDecl) -> tuple[float | None, float | None]
     # THE POINT a row is asked at, in whatever shape the question stated it: a
     # pick, a pair, a drawn feature. A value no place reads out of is no place
     # rather than a refusal - the domain's own centre answers next.
-    near = lonlat_of(await _bind_value(decl.coercion.get("near"), env))
+    near = lonlat_of(seed)
     if near is not None:
         return near
     dom = current_domain()
@@ -846,14 +855,15 @@ async def _ask_for(env: _Env, choice: SourceChoice,
     generic attributes travel with it, for the matched row to map onto the
     params this source states them in."""
     dom = current_domain()
-    lon, lat = await _place(env, decl)
+    seed = await _bind_value(decl.coercion.get("near"), env)
+    lon, lat = _place(seed)
     opens = env.params.value_of("event_time") if env.params else None
     return ask_for(choice, base_ask(
         choice, decl.name.replace("_", " "),
         _around(dom.bbox, _mesh_m(env)) if dom is not None and dom.bbox else None,
         lon, lat, str(opens) if opens else None,
         _closes(opens, env.window_s)), lon, lat,
-        {"span_km": decl.span_km, "of": await _asked_of(env, decl) or None,
+        {"span_km": decl.span_km, "of": await _asked_of(env, decl, seed) or None,
          "seed_point": None if lon is None or lat is None else [lon, lat]})
 
 
@@ -907,8 +917,8 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any,
     coercion = await _bind_value(dict(decl.coercion), env)
     stated = str(coercion.pop("measures", "") or "")
     coercion.pop("opens", None)
-    coercion.update(_what_the_run_calls_it(env, decl, stated,
-                                          await _asked_of(env, decl)))
+    coercion.update(_what_the_run_calls_it(
+        env, decl, stated, await _asked_of(env, decl, coercion.get("near"))))
     coercion.update(_the_window_it_is_cut_from(decl))
     coercion.update(await _on_the_run_s_frame(env, decl, value))
     coercion.update(_what_the_record_reports(env, decl, row))

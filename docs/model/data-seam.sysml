@@ -916,7 +916,7 @@ package DataSeam {
     requirement def TheRunHasOneVerticalFrame {
         doc /*
         A run counts every elevation it ingests from ONE zero, and that zero is
-        the RUNTIME's: a lever beside the compute class, NAVD88 by default,
+        the RUNTIME's: a lever beside the core count, NAVD88 by default,
         never a row a question writes. A template that named its own datum would
         make the frame a property of the question rather than of the run, and
         two questions over one water body would then answer on two axes.
@@ -1053,7 +1053,13 @@ package DataSeam {
         WHAT OF THE CLASS the row asks for is the word the answering
         source publishes it under, and where ONE question is asked of two
         kinds of thing it is a read of the param that settles which, bound
-        before the match runs the way the point the row is asked at is.
+        before the match runs the way the point the row is asked at is. A
+        DOMAIN that states no feature at all is answered for the water its SEED
+        stands on: which kind of water a place is is a fact of the PLACE, read
+        off the word the service that resolved it already published and turned
+        by the domain slot into the word the sources publish that feature
+        under, so a question never carries the narrowing itself. A seed nothing
+        said a type for is unclassified and every row of the class is ranked.
 
         NO ROW STATES A UNIT. What a measured slot's record is read in is the
         unit of the KEYWORD its role fills, which the engine's transform fixes,
@@ -1523,8 +1529,15 @@ package DataSeam {
         "tests/fetchers/test_router_spec_loader.py::test_a_spec_states_no_coverage_by_default";
 
     satisfy requirement ASlotStatesANeedAndTheMatchFillsIt by needDeclaration;
+    satisfy requirement ASlotStatesANeedAndTheMatchFillsIt by domainSlot;
     satisfy requirement ASlotStatesANeedAndTheMatchFillsIt by sourceMatch;
     satisfy requirement ASlotStatesANeedAndTheMatchFillsIt by matchedSlot;
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/inputs/test_place_kind.py::test_the_geocoder_s_word_becomes_the_word_a_source_publishes";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/inputs/test_place_kind.py::test_a_place_that_is_not_water_says_nothing";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/runtime/test_feature_ref.py::test_a_domain_states_no_feature_and_the_seed_says_which_water";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
         "tests/search/test_source_match.py::test_one_survivor_fills_the_slot_and_the_sentence_names_the_facts";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
