@@ -128,7 +128,7 @@ coverage:
 
 caveats:
   - "ERA5 lags: ~5 days (ERA5T preliminary) / ~3 months (finalised); NOT real-time -- use fetch_hrrr_forecast"
-  - "keyed: free Copernicus CDS key auto-requested via credential card on ERA5_MISSING_KEY; missing key is NOT a reason to route elsewhere"
+  - "keyed: a free Copernicus CDS key, entered in the plugin's keys form; with none the tool refuses by name on ERA5_MISSING_KEY, which is NOT a reason to route elsewhere"
   - "for CONUS precip prefer fetch_mrms_qpe (1 km gauge-corrected)"
 
 # corpus lifted from sibling corpus.yaml.
@@ -138,8 +138,8 @@ docstring: |-
 
   Use this (do not stop at geocode_location) when the user names ERA5 or wants
   historical/global atmospheric reanalysis. Call it even if no key is set: the
-  Copernicus CDS key is auto-requested via a credential card if missing, so a
-  possible key prompt is NOT a reason to route elsewhere.
+  tool refuses by name with no Copernicus CDS key and says where the key goes,
+  which is NOT a reason to route elsewhere.
 
   **What it does:** Retrieves an ERA5 hourly reanalysis variable for a bbox
   and date range via the Copernicus Climate Data Store (CDS) ``cdsapi``
@@ -174,11 +174,11 @@ docstring: |-
   - DO NOT use for CONUS precipitation when MRMS is available -- MRMS QPE is
     1 km gauge-corrected vs ERA5's 27 km; use ``fetch_mrms_qpe`` instead.
   - DO NOT use for sub-hourly timesteps; ERA5 is hourly minimum.
-  - Key auto-requested if missing: ERA5 uses a free Copernicus CDS API key
-    (register at https://cds.climate.copernicus.eu/user/register). If none is
-    configured the tool raises ``ERA5MissingKeyError``, which surfaces a
-    credential card and retries -- so a missing key is NOT a reason to avoid
-    this tool; call it normally.
+  - ERA5 uses a free Copernicus CDS API key (register at
+    https://cds.climate.copernicus.eu/user/register). If none is stored the
+    tool raises ``ERA5MissingKeyError``, which names the key and the plugin's
+    Settings -> Keys form -- so a missing key is NOT a reason to avoid this
+    tool; call it normally.
 
   **Parameters:**
   - ``bbox`` (tuple[float, float, float, float]): ``(west, south, east,

@@ -77,7 +77,7 @@ payload_estimate:
 caveats:
 - 'OpenAQ v3 global air-quality LATEST measurements (keyed: api_key -> secret_ref -> TRID3NT_OPENAQ_API_KEY
   env). Paginated /v3/locations sweep + per-location /latest fan-out + sensor->parameter join; one point
-  per (station, parameter). Worldwide. No key -> credential-shaped OPENAQ_KEY_REQUIRED (NAME-only card);
+  per (station, parameter). Worldwide. No key -> OPENAQ_KEY_REQUIRED, refused pre-network toward the plugin''s keys form;
   empty bbox -> honest header-only FGB.'
 - "model-callable, not matched: air quality is not one of the seventeen data classes, so it carries no coverage row"
 docstring: "OpenAQ global air-quality latest measurements as a FlatGeobuf point layer.\n\nWhat it does:\n\
@@ -115,9 +115,9 @@ docstring: "OpenAQ global air-quality latest measurements as a FlatGeobuf point 
   \    ``sensor_id``. ``layer_type=\"vector\"``, ``role=\"primary\"``,\n    ``units=None`` (the per-feature\
   \ ``unit`` column carries the pollutant\n    unit, which varies by parameter).\n\nRaises:\n    ``OpenAQMissingKeyError``\
   \ (``OPENAQ_KEY_REQUIRED``): no API key resolved\n        from any of the three paths -- raised BEFORE\
-  \ any network call. The\n        agent surfaces a credential-request card (OpenAQ has no public\n  \
+  \ any network call. The key is\n        entered in the plugin's Settings -> Keys (OpenAQ has no public\n  \
   \      mirror, so this honest typed error IS the degrade).\n    ``OpenAQAuthError`` (``OPENAQ_AUTH_ERROR``):\
-  \ the API rejected the key\n        (401/403; revoked / invalid) -- the agent surfaces a re-enter card.\n\
+  \ the API rejected the key\n        (401/403; revoked / invalid) -- replace it in Settings -> Keys.\n\
   \    ``OpenAQInputError``: bad bbox or unknown parameter name.\n    ``OpenAQUpstreamError``: OpenAQ\
   \ 5xx / 422 / non-JSON / network failure\n        (retryable).\n\nCross-tool dependencies:\n    Consumes\
   \ optional bbox from ``fetch_administrative_boundaries`` /\n    ``geocode_location`` (geocode \"Delhi\"\

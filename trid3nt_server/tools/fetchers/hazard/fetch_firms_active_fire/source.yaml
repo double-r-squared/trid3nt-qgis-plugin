@@ -101,7 +101,7 @@ coverage:
 caveats:
 - NASA FIRMS Tier-2 satellite active-fire / thermal-anomaly detections as points, keyed
   (map_key -> secret_ref -> TRID3NT_FIRMS_MAP_KEY env, key carried IN the URL path). No key
-  -> a credential-shaped FIRMS_MISSING_KEY pre-network; a rejected / rate-limited key -> a
+  -> a FIRMS_MISSING_KEY pre-network naming the plugin's keys form; a rejected / rate-limited key -> a
   FIRMS_AUTH_ERROR from the 200-with-error-body check; empty window -> an honest 0-feature FGB.
   VIIRS names its brightness bands bright_ti4/ti5 (not brightness/bright_t31), so those columns
   read null for a VIIRS source.

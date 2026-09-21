@@ -86,7 +86,7 @@ coverage:
 
 caveats:
   - "GTSM v3.0 is a reanalysis, a MODEL, not a gauge -- for CONUS use fetch_noaa_coops_tides"
-  - "keyed: free Copernicus CDS key auto-requested via credential card on GTSM_MISSING_KEY; empty bbox -> GTSM_EMPTY (no gauges)"
+  - "keyed: a free Copernicus CDS key, entered in the plugin's keys form; with none the tool refuses by name on GTSM_MISSING_KEY; empty bbox -> GTSM_EMPTY (no gauges)"
   - "sparse global gauge network; composers interpolate to the hydraulic model grid"
 
 # corpus lifted from sibling corpus.yaml.

@@ -80,28 +80,28 @@ payload_estimate:
   floor_mb: 0.001
 caveats:
 - 'EPA AirNow current-hour AQI monitor observations (keyed: api_key -> secret_ref -> TRID3NT_AIRNOW_API_KEY
-  env). One point per monitor-parameter (latest in a 3h window). US/Canada/Mexico. No key -> credential-shaped
-  AIRNOW_MISSING_KEY (NAME-only card); empty bbox -> honest header-only FGB.'
+  env). One point per monitor-parameter (latest in a 3h window). US/Canada/Mexico. No key -> AIRNOW_MISSING_KEY,
+  refused pre-network toward the plugin''s keys form; empty bbox -> honest header-only FGB.'
 - "model-callable, not matched: air quality is not one of the seventeen data classes, so it carries no coverage row"
 docstring: |-
   EPA AirNow current-hour air-quality / AQI / PM2.5 monitor observations as points.
 
   Use this (not fetch_openaq_measurements) when the user names EPA AirNow or
-  wants US/Canada/Mexico current-hour AQI. Call it even if no key is set: the
-  key is auto-requested via a credential card if missing (see below), so a
-  possible key prompt is NOT a reason to route elsewhere.
+  wants US/Canada/Mexico current-hour AQI. Call it even if no key is set: with
+  no key it refuses by name and says where the key goes (see below), which is
+  NOT a reason to route elsewhere.
 
   What it does:
       Fetches the U.S. EPA AirNow current-hour air-quality observations for
       every reporting monitor within ``bbox`` as point features. Each point
       carries the reporting parameter (PM2.5 / Ozone / PM10 / NO2 / SO2 /
       CO), the AQI value + AQI category band, the raw concentration + unit,
-      and the monitor / reporting-agency identity. Key auto-requested if
-      missing: AirNow uses an API key (resolved kwarg -> per-Case
-      ``secret_ref`` -> ``TRID3NT_AIRNOW_API_KEY`` env). With NO key it raises a
-      credential-shaped ``AirNowMissingKeyError`` so the agent surfaces a
-      credential card and retries -- it NEVER fabricates a layer (AirNow has
-      no public mirror).
+      and the monitor / reporting-agency identity. AirNow uses an API key
+      (resolved kwarg -> the session's own ``secret_ref`` ->
+      ``TRID3NT_AIRNOW_API_KEY`` env). With NO key it raises
+      ``AirNowMissingKeyError``, which names the key and the plugin's
+      Settings -> Keys form -- it NEVER fabricates a layer (AirNow has no
+      public mirror).
 
   When to use:
       - User asks about current air quality / AQI / smoke exposure in a
@@ -140,11 +140,10 @@ docstring: |-
           through to AirNow.
       api_key: Optional explicit AirNow API key (highest-priority resolution
           path; live-test / dev override).
-      secret_ref: Optional ``SecretRecord`` (from the per-Case secrets panel)
-          -> resolved to the key via ``Persistence.get_secret_value`` at
-          invocation time (the production path). A key that resolves but is
-          rejected by AirNow raises ``AirNowAuthError`` (credential-card
-          path); no key on any path raises ``AirNowMissingKeyError``.
+      secret_ref: The session's own key, threaded in before dispatch from
+          what the keys form stored (the production path). A key that
+          resolves but is rejected by AirNow raises ``AirNowAuthError``; no
+          key on any path raises ``AirNowMissingKeyError``.
 
   Returns:
       A ``LayerURI`` pointing at a FlatGeobuf in the cache bucket
