@@ -70,7 +70,7 @@ def plan(ops):
         When(P.delineate,
              Delineate.watershed(dem=DATA.terrain).overrides_domain()),
         ops.author(mesh=MESH, physics=PHYSICS, forcing=FORCING),
-        ops.solve(compute_class=P.compute_class, physics=PHYSICS),
+        ops.solve(cores=P.cores, physics=PHYSICS),
         ops.read(Ref("solve"), physics=PHYSICS, forcing=FORCING)
            .chart("concentration_timeseries", builder=dye_chart),
     ]

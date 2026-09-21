@@ -314,7 +314,7 @@ def test_a_hard_producer_row_still_refuses_when_its_source_is_empty(monkeypatch)
 def test_the_runtime_declares_the_levers_a_template_no_longer_restates():
     # The CLOCK is not among them: DURATION is a keyword telemac2d and telemac3d
     # both carry, so the deck states it and the user overrides it by that name.
-    assert LEVER_NAMES == ("mesh_resolution_m", "event_time", "compute_class",
+    assert LEVER_NAMES == ("mesh_resolution_m", "event_time", "cores",
                            "vertical_frame")
     seated = with_levers((), LEVER_NAMES)
     assert [p.name for p in seated] == list(LEVER_NAMES)
@@ -327,7 +327,7 @@ def test_a_templates_own_row_wins_over_the_lever_of_that_name():
                 bounds=(3.0, 500.0), desc="coarser: this answer is reach-scale")
     seated = with_levers((own,), LEVER_NAMES)
     assert [p.name for p in seated] == ["mesh_resolution_m", "event_time",
-                                        "compute_class", "vertical_frame"]
+                                        "cores", "vertical_frame"]
     assert seated[0].default == 25.0
 
 

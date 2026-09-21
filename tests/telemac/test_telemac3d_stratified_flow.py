@@ -89,7 +89,7 @@ def test_the_workflow_owns_the_stages_and_the_template_states_no_recipe():
     assert not hasattr(module, "MESH")
     assert [step.label for step in workflow.plan.steps][:2] == ["stated", "mesh"]
     assert workflow.levers() == ("mesh_resolution_m", "event_time",
-                                 "compute_class", "vertical_frame")
+                                 "cores", "vertical_frame")
 
 
 def test_the_owned_mesh_paints_its_bed_and_takes_its_roles_from_the_domain():

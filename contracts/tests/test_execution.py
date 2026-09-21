@@ -41,7 +41,7 @@ def test_execution_handle_pins_workflows_execution_id_invariant_8() -> None:
         handle_id=new_ulid(),
         run_id=new_ulid(),
         solver="sfincs",
-        compute_class="standard",
+        cores=2,
         workflows_execution_id="projects/trid3nt/locations/us-central1/workflows/sfincs-run/executions/01HX",
         workflow_name="sfincs-run",
         workflow_location="us-central1",

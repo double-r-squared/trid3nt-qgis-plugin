@@ -6,6 +6,7 @@ from __future__ import annotations
 from trid3nt_server.errors import DeclarativeError
 
 __all__ = [
+    "CoresUnavailable",
     "DeclarativeError",
     "GateRefusedError",
     "LeakScanTruncated",
@@ -22,6 +23,15 @@ __all__ = [
 
 class PlanValidationError(DeclarativeError):
     error_code = "PLAN_INVALID"
+
+
+class CoresUnavailable(DeclarativeError):
+    """A run asked to be partitioned across more cores than the box has.
+
+    Refused by name, never clamped: a count cut down to fit is a partition the
+    caller was never told about."""
+
+    error_code = "CORES_UNAVAILABLE"
 
 
 class ModifierIllegalError(DeclarativeError):

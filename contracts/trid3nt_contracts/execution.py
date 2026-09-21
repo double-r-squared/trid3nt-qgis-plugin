@@ -16,7 +16,6 @@ from .common import FallbackActivation, GraceModel, SyntheticInput, ULIDStr, UTC
 
 __all__ = [
     "AnswerLayerURI",
-    "ComputeClass",
     "ModelSetup",
     "ExecutionHandle",
     "RunResult",
@@ -35,13 +34,6 @@ __all__ = [
     "LivingAtlasLayerURI",
     "LAYER_RESULT_MODELS",
 ]
-
-
-# Open enum: the compute classes a solver may request. The handle shape does
-# NOT change per backend, so a new backend adds a class and nothing else.
-ComputeClass = Literal["small", "standard", "large", "xlarge", "gpu"]
-
-
 
 
 class LegendKey(GraceModel):
@@ -99,7 +91,9 @@ class ExecutionHandle(GraceModel):
     handle_id: ULIDStr
     run_id: ULIDStr  # the run this execution backs
     solver: str
-    compute_class: ComputeClass
+    #: The partition this execution runs on - the SAME number the engine's own
+    #: input file states, so the launcher and the deck describe one solve.
+    cores: int = Field(ge=1)
 
     # --- Cancellation seam: the identifier a terminate is issued against, and
     # --- the definition and region it names.

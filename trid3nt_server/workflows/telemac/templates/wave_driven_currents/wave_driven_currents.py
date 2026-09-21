@@ -23,7 +23,6 @@ from trid3nt_server.workflows.runtime import (
     register_workflow,
 )
 from trid3nt_server.workflows.mesh.tool import mesh_op, tool
-from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.modules import T2D, WAC, field, mesh, series
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries, Wind
 from trid3nt_server.workflows.telemac.modules.tomawac import RESULT_FILENAME
@@ -345,6 +344,5 @@ tomawac_wave_driven_currents = register_workflow(
                   prompt="Click on the water where the current should be read",
                   code="TELEMAC_PARAMS_INVALID"),
         event_time(),
-        compute_class(),
     ),
 )

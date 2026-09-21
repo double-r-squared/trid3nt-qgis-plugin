@@ -1369,7 +1369,7 @@ async def test_mint_dispatch_and_sim_cards_emits_two_cards(
         {"workflows_execution_id": "batch-job-777", "workflow_name": "aws-batch", "solver": "sfincs"},
     )()
     sim_id = await mint_dispatch_and_sim_cards(
-        emitter=emitter, solver="sfincs", handle=handle, compute_class="large"
+        emitter=emitter, solver="sfincs", handle=handle, cores=4
     )
     assert sim_id is not None
 

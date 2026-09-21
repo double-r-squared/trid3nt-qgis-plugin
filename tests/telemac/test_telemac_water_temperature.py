@@ -41,7 +41,7 @@ _STATION = {"lon": -122.72, "lat": 45.57, "name": "Temperature station"}
 #: event_time and closes on the deck's DURATION.
 _NOT_DECLARED = {"location", "bbox", "river_geometry_uri", "reach_length_km",
                  "friction_coefficient", "friction_law", "output_interval_min",
-                 "event_time", "compute_class", "initial_water_temp_c",
+                 "event_time", "cores", "initial_water_temp_c",
                  "sim_duration_s", "weather_start", "weather_end"}
 
 
@@ -129,7 +129,7 @@ def test_no_keyword_twin_and_no_domain_twin_is_declared_here():
     # The two levers the template does not declare are SEATED on it by the
     # runtime, so the card still carries them.
     seated = {p.name for p in _workflow().params}
-    assert {"event_time", "compute_class"} <= seated - own
+    assert {"event_time", "cores"} <= seated - own
 
 
 def test_the_granularity_row_is_restated_only_for_its_own_default():

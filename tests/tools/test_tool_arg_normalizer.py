@@ -103,7 +103,7 @@ def _fake_flood_tool(
     location_query: str | None = None,
     return_period_years: int = 100,
     duration_hours: int = 24,
-    compute_class: str = "medium",
+    cores: int = 1,
 ) -> dict[str, Any]:
     """Signature mirrors ``sfincs_flood`` for normalization tests."""
     return {"ok": True}

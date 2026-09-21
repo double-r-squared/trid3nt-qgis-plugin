@@ -159,7 +159,7 @@ def test_launch_writes_manifest_to_rundir(
         classify_exit=classify_exit,
     )
 
-    handle = launch_local_solver(spec, model_setup_uri, compute_class="standard")
+    handle = launch_local_solver(spec, model_setup_uri, cores=2)
     assert handle is not None
 
     # Wait for the supervisor to finish so the rundir is stable.
@@ -218,7 +218,7 @@ def test_subprocess_runner_exit0_produces_ok_completion(
     )
 
     handle = launch_local_solver(
-        spec, "s3://setup-bucket/test/landlab.json", compute_class="standard"
+        spec, "s3://setup-bucket/test/landlab.json", cores=2
     )
 
     completion = _wait_completion(s3, handle.run_id)
@@ -265,7 +265,7 @@ def test_subprocess_runner_nonzero_exit_produces_error_completion(
         classify_exit=classify_exit,
     )
 
-    handle = launch_local_solver(spec, "s3://b/m.json", compute_class="standard")
+    handle = launch_local_solver(spec, "s3://b/m.json", cores=2)
     completion = _wait_completion(s3, handle.run_id)
     assert completion["status"] == "error"
     assert completion["exit_code"] == 3
@@ -320,7 +320,7 @@ def test_env_overrides_set_in_subprocess_environment(
         env_overrides={"TRID3NT_TEST_PYPATH": "/injected/repo/root"},
     )
 
-    handle = launch_local_solver(spec, "s3://b/env_test.json", compute_class="standard")
+    handle = launch_local_solver(spec, "s3://b/env_test.json", cores=2)
     _wait_completion(s3, handle.run_id)
 
     assert output_file.exists(), "subprocess did not write output file"

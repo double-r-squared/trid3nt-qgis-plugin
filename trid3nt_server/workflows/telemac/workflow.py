@@ -453,7 +453,7 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
 
 async def run_sheet(*, sheet: Sheet, settled: Mapping[str, Any],
                     results: Sequence[str], steering: str, prefix: str,
-                    dispatch: str, compute_class: Any,
+                    dispatch: str, cores: Any,
                     display: str = "") -> dict[str, Any]:
     """A complete sheet: serialize, stage, hand it to the box -> the run handle.
 
@@ -470,7 +470,7 @@ async def run_sheet(*, sheet: Sheet, settled: Mapping[str, Any],
         sheet, dispatch=to_the_box, mesh_inputs=settled["mesh_inputs"],
         outputs=outputs, results=list(results), prefix=prefix,
         server_facts=settled["server_facts"], steering=steering,
-        compute_class=compute_class,
+        cores=cores,
         coupling=None if not coupled else str(coupled).split(";")[0].lower(),
         continue_from=settled.get("continue_from"))
     return {**settled, **handle, "module": sheet.module,
@@ -927,9 +927,8 @@ class TelemacWorkflow(Workflow):
                          # HOW MANY CORES the solve is partitioned across: the
                          # param the question declares, never a second statement
                          # of it beside the params it already carries.
-                         "compute_class": (ParamRef("compute_class")
-                                           if "compute_class" in declared
-                                           else None)}
+                         "cores": (ParamRef("cores")
+                                   if "cores" in declared else None)}
                  ).named("solve"),
             self._outputs_step(params),
         ]

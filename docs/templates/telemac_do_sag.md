@@ -28,9 +28,9 @@ The values the template declares. `desc` is what the model reads when it fills o
 |---|---|---|---|---|
 | `outfall_coords` | user | - | optional | Where the discharge enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. On a river with no domain supplied it is also the seed the reach is walked downstream from |
 | `do_standard_mgl` | scenario | mg/L | 5.0 | The DO water-quality standard the sag is judged against; 5 is a common warm-water aquatic-life criterion |
-| `mesh_resolution_m` | scenario | m | 14.0 | Target element edge or cell length the domain is resolved at. The granularity is the USER's lever: no sizing rung derives an edge from a channel nobody surveyed, so the number the run meshes at is either yours or this labeled default |
+| `mesh_resolution_m` | scenario | m | 14.0 | Target element edge or cell length the domain is resolved at. The granularity is the USER's lever: nothing derives an edge from a channel nobody surveyed, so the number the run meshes at is either yours or this labeled default |
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
-| `compute_class` | constant | - | medium | Solve sizing class - how many cores the solve is partitioned across. An engine that runs on one core says so on the card |
+| `cores` | constant | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
 | `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
 
 ## What it answers

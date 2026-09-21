@@ -173,8 +173,7 @@ def _run_start_iso(run_result: Any) -> str | None:
     return started.isoformat() if started is not None else None
 
 
-async def solve_case(*, run: dict[str, Any],
-                     compute_class: str = "medium") -> dict[str, Any]:
+async def solve_case(*, run: dict[str, Any], cores: int) -> dict[str, Any]:
     """Dispatch the staged case to the worker and wait -> the run handle.
 
     The returned ``uri`` is the result SELAFIN a ledger replay probes, and the
@@ -182,7 +181,7 @@ async def solve_case(*, run: dict[str, Any],
     facts = run["case"]["server_facts"]
     run_result, batch_run_id = await dispatch_and_wait(
         solver=TELEMAC_SOLVER_NAME, manifest_uri=run["manifest_uri"],
-        compute_class=compute_class, module=str(run["case"]["module"]),
+        cores=cores, module=str(run["case"]["module"]),
         label=str(facts["name"]), timeout_s=_wait_seconds(facts),
         grid_resolution_m=facts.get("mesh_size_m"),
         active_cell_count=facts.get("nelem"))

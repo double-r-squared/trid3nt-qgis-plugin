@@ -170,13 +170,13 @@ def test_a_constant_supplied_off_the_model_wire_still_reaches_the_sheet():
 
     wf = TOOL_REGISTRY["telemac_do_sag"].fn.workflow
     supplied, err = asyncio.run(wf._normalize(
-        {"location": "x", "compute_class": "large", "mesh_resolution_m": 30.0}))
+        {"location": "x", "cores": 2, "mesh_resolution_m": 30.0}))
     assert err is None
-    assert supplied["compute_class"] == "large"
+    assert supplied["cores"] == 2
     assert supplied["mesh_resolution_m"] == 30.0
     sheet = asyncio.run(resolve_params(wf.params, supplied))
-    assert sheet.value_of("compute_class") == "large"
-    assert sheet.row("compute_class").basis == "user"
+    assert sheet.value_of("cores") == 2
+    assert sheet.row("cores").basis == "user"
 
 
 # --- (4) a chart builder is the function, with no string fallback ----------- #

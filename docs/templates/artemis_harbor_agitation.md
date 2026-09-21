@@ -33,7 +33,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `barrier_width_m` | scenario | m | 20.0 | The width the mapped structure centreline is cut at; a survey maps a mound as a line and a line removes no water from the domain |
 | `transect_length_m` | scenario | m | 1500.0 | The whole length of the transect the agitation is read along: a straight line through the structure's centroid along the incident wave direction, half of it on the exposed side and half in the lee |
 | `open_depth_threshold_m` | scenario | m | -12.0 | How deep a boundary stretch must reach for it to be designated the OPEN edge the incident wave enters through; every stretch that reaches it opens |
-| `compute_class` | constant | - | medium | Solve sizing class - how many cores the solve is partitioned across. An engine that runs on one core says so on the card |
+| `cores` | constant | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
 
 ## What it answers
 

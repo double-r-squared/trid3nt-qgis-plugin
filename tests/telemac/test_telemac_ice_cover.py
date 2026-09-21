@@ -40,7 +40,7 @@ _STATION = {"lon": -122.67, "lat": 45.52, "name": "Ice station"}
 #: statement of a value somebody else already describes.
 _NOT_DECLARED = {"location", "bbox", "river_geometry_uri", "reach_length_km",
                  "friction_coefficient", "friction_law", "output_interval_min",
-                 "event_time", "compute_class", "initial_water_temp_c",
+                 "event_time", "cores", "initial_water_temp_c",
                  "sim_duration_s", "dynamic_ice_cover", "border_ice_cover"}
 
 
@@ -135,7 +135,7 @@ def test_no_keyword_twin_and_no_domain_twin_is_declared_here():
     own = {p.name for p in param_rows(template.PARAMS)}
     assert _NOT_DECLARED.isdisjoint(own)
     seated = {p.name for p in _workflow().params}
-    assert {"event_time", "compute_class"} <= seated - own
+    assert {"event_time", "cores"} <= seated - own
 
 
 def test_the_only_params_are_the_questions_own_inputs():

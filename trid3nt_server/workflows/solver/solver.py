@@ -28,7 +28,6 @@ from trid3nt_server import storage
 from trid3nt_server.storage import StorageError
 from trid3nt_server.tools import register_tool
 
-from .compute_class import COMPUTE_CLASS_ALIAS
 
 __all__ = [
     "run_solver",
@@ -486,7 +485,7 @@ def launch_local_solver(
     model_setup_uri: str,
     *,
     run_id: str | None = None,
-    compute_class: str = "medium",
+    cores: int = 1,
 ) -> ExecutionHandle:
     """Generic local-backend launcher: stage, launch detached, supervise, return.
     NON-BLOCKING - the handle comes back before the solve finishes; ``run_id`` is
@@ -499,12 +498,6 @@ def launch_local_solver(
         raise SolverDispatchError(
             f"model_setup_uri must be an s3:// / gs:// / file:// URI under "
             f"the local-docker backend; got {model_setup_uri!r}"
-        )
-    schema_compute_class = COMPUTE_CLASS_ALIAS.get(compute_class)
-    if schema_compute_class is None:
-        raise SolverDispatchError(
-            f"compute_class {compute_class!r} not recognized; allowed: "
-            f"{sorted(COMPUTE_CLASS_ALIAS)}"
         )
     runs_bucket = storage.local_runs_bucket()  # fail fast on missing env
 
@@ -644,7 +637,7 @@ def launch_local_solver(
         handle_id=new_ulid(),
         run_id=run_id,
         solver=spec.solver,
-        compute_class=schema_compute_class,  # type: ignore[arg-type]
+        cores=int(cores),
         workflows_execution_id=f"{spec.workflow_name}:{run_id}",
         workflow_name=spec.workflow_name,
         workflow_location=LOCAL_DOCKER_WORKFLOW_LOCATION,
@@ -662,7 +655,7 @@ def launch_local_solver(
 
 
 def _run_solver_local_docker(
-    solver: str, model_setup_uri: str, compute_class: str
+    solver: str, model_setup_uri: str, cores: int
 ) -> ExecutionHandle:
     """``run_solver`` body on the local backend. Every solver is looked up in
     ``LOCAL_SOLVER_SPEC_REGISTRY``, and one with no entry RAISES rather than
@@ -676,7 +669,7 @@ def _run_solver_local_docker(
                 f"local-docker spec factory for solver {solver!r} raised "
                 f"{type(exc).__name__}: {exc}"
             ) from exc
-        return launch_local_solver(spec, model_setup_uri, compute_class=compute_class)
+        return launch_local_solver(spec, model_setup_uri, cores=cores)
     raise SolverDispatchError(
         f"solver {solver!r} has no LOCAL_SOLVER_SPEC_REGISTRY entry -- its "
         "workflow module must call register_local_solver_spec() (never a "
@@ -954,7 +947,7 @@ _RUN_SOLVER_METADATA = AtomicToolMetadata(
 def run_solver(
     solver: str,
     model_setup_uri: str,
-    compute_class: str = "medium",
+    cores: int = 1,
     # Absorbs kwargs the model invents; the normalizer catches these upstream too.
     **_extra_ignored: Any,
 ) -> ExecutionHandle:
@@ -971,7 +964,7 @@ def run_solver(
 
     Params: ``solver`` a lowercase identifier registered in
     ``SOLVER_WORKFLOW_REGISTRY``; ``model_setup_uri`` the ``s3://`` manifest the
-    engine template composed; ``compute_class`` the sizing bucket.
+    engine template composed; ``cores`` the partition the staged deck states.
 
     Returns an ``ExecutionHandle`` whose ``workflow_name`` pins the backend and
     whose ``run_id`` is what a cancel terminates. An unregistered solver raises
@@ -1000,7 +993,7 @@ def run_solver(
     return _run_solver_local_docker(
         solver=solver,
         model_setup_uri=model_setup_uri,
-        compute_class=compute_class,
+        cores=cores,
     )
 
 
@@ -1096,7 +1089,7 @@ async def wait_for_completion(
 
 
 
-async def dispatch_and_wait(*, solver: str, manifest_uri: str, compute_class: str,
+async def dispatch_and_wait(*, solver: str, manifest_uri: str, cores: int,
                             module: str, label: str, timeout_s: float,
                             grid_resolution_m: float | None = None,
                             active_cell_count: int | None = None
@@ -1114,12 +1107,12 @@ async def dispatch_and_wait(*, solver: str, manifest_uri: str, compute_class: st
 
     emitter = current_emitter()
     handle = run_solver(solver=solver, model_setup_uri=manifest_uri,
-                        compute_class=compute_class)
+                        cores=cores)
     run_id = handle.run_id
     logger.info("%s dispatching %s -> %s", solver, label, manifest_uri)
     sim_step_id = await mint_dispatch_and_sim_cards(
         emitter=emitter, solver=solver, module=module, handle=handle,
-        compute_class=compute_class)
+        cores=cores)
     if emitter is not None and sim_step_id is not None:
         set_emitter_binding(EmitterBinding(emitter=emitter, step_id=sim_step_id))
     progress = asyncio.ensure_future(drive_live_solve_progress(

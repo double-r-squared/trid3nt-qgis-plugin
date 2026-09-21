@@ -88,7 +88,7 @@ class PARAMS:
         desc="How deep a boundary stretch must reach for it to be designated the "
              "OPEN edge the incident wave enters through; every stretch that "
              "reaches it opens")
-    compute_class = lever("compute_class")
+    cores = lever("cores")
 
 
 DOC = dict(

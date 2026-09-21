@@ -496,7 +496,7 @@ def test_run_serializes_then_stages_then_dispatches(monkeypatch, tmp_path):
         order.append("stage")
         return {"run_tag": run_tag, "manifest_uri": "s3://b/m.json"}
 
-    async def _dispatch(*, run, compute_class):
+    async def _dispatch(*, run, cores):
         order.append("dispatch")
         return {"run_id": "R", "uri": run["manifest_uri"]}
 

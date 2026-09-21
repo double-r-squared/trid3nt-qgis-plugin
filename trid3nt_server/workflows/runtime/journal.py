@@ -214,8 +214,8 @@ def build_record(*, run_id: str | None, engine: str | None,
         # the template it started in survives here and nowhere else on the line.
         "fill": dict(fill or {}),
         "mesh": {"mesh_size_m": getattr(result, "mesh_size_m", None)},
-        "compute_class": next((r.value for r in sheet
-                               if getattr(r, "name", "") == "compute_class"), None),
+        "cores": next((r.value for r in sheet
+                       if getattr(r, "name", "") == "cores"), None),
         "wall_seconds": wall_seconds,
         "executed": list(executed),
         "replayed": list(replayed),

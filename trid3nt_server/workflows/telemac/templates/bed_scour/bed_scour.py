@@ -35,7 +35,6 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
     TracerNames,
     Wind,
 )
-from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.templates.bed_scour.declarations import (
     ACCEPTS, DOC, GRADATION_PRESETS, PARAMS, PARAMS as P,
 )
@@ -303,6 +302,5 @@ telemac_bed_scour = register_workflow(
                   prompt="Click on the water where the sediment marker is injected",
                   code="TELEMAC_PARAMS_INVALID"),
         event_time(),
-        compute_class(),
     ),
 )

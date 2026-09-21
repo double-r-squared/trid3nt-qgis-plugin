@@ -18,7 +18,7 @@ speak it and the one file that specializes the executor to it.
 | --- | --- |
 | `runtime/` | The declarative library - the value types, the six doors, the validator, the interpreter, the skeleton and the run's records. See below. |
 | `mesh/` | The one mesh front: router, meshers, session, gate, artifact. Has its own map. |
-| `solver/` | The one executor, which knows no engine: `solver.py` (the box - launch, supervise, poll, dispatch-and-wait, download a result), `compute_class.py` (the ladder a caller may name and the coercion onto it), `solve_progress.py` (the live progress heartbeat a long solve emits while it runs), `code_provenance.py` (which code produced a run), `diagnostics/` (the one `read_run_diagnostics` dispatcher plus its per-engine parsers), `corpus.yaml` (routing phrasings). |
+| `solver/` | The one executor, which knows no engine: `solver.py` (the box - launch, supervise, poll, dispatch-and-wait, download a result), `solve_progress.py` (the live progress heartbeat a long solve emits while it runs), `code_provenance.py` (which code produced a run), `diagnostics/` (the one `read_run_diagnostics` dispatcher plus its per-engine parsers), `corpus.yaml` (routing phrasings). |
 | `telemac/` | The TELEMAC engine: the module wrappers, eight templates over them, the fill/run door, and the one engine file the executor is specialized by. Has its own map. |
 | `calibration/` | The subsystem the OBSERVE slot reveals: `pairing.py` (the record a run's observations are paired against its own reads) and `metrics.py` (the skill over those pairs). Dormant - nothing here is a tool and nothing here owns a loop's mathematics. |
 

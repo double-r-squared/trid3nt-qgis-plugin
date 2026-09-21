@@ -11,7 +11,7 @@ import asyncio
 
 import pytest
 
-#: Every REGISTERED TELEMAC template that declares ``compute_class``, and the bare
+#: Every REGISTERED TELEMAC template that declares ``cores``, and the bare
 #: natural prompt each one is asked. The parked declarations are absent: a tool
 #: off the model surface has no invocation for a provenance row to describe.
 TELEMAC_TEMPLATES: tuple[tuple[str, str], ...] = (
@@ -34,66 +34,38 @@ def _resolve_bare(tool_name: str, location: str):
 
 
 @pytest.mark.parametrize(("tool_name", "location"), TELEMAC_TEMPLATES)
-def test_unsupplied_compute_class_is_a_labeled_default(tool_name: str,
-                                                       location: str) -> None:
-    """Nobody sent a rung, so the row says CONSTANT door / labeled default."""
+def test_unsupplied_cores_states_no_count_of_its_own(tool_name: str,
+                                                     location: str) -> None:
+    """Nobody sent a count, so the row seats none: the module's own processors
+    keyword is the only default there is."""
     _, sheet = _resolve_bare(tool_name, location)
-    row = sheet.row("compute_class")
-    assert row is not None, f"{tool_name} declares no compute_class"
-    assert (row.door, row.basis) == ("constant", "default_demo"), (
-        f"{tool_name} stamps an unsupplied compute_class as "
-        f"door={row.door} basis={row.basis}")
+    row = sheet.row("cores")
+    assert row is not None, f"{tool_name} declares no cores"
+    assert row.value is None, f"{tool_name} invented a core count"
     assert "supplied on this invocation" not in row.note
 
 
 @pytest.mark.parametrize(("tool_name", "location"), TELEMAC_TEMPLATES)
-def test_unsupplied_compute_class_provenance_row_is_not_user(tool_name: str,
-                                                             location: str) -> None:
+def test_unsupplied_cores_provenance_row_is_not_user(tool_name: str,
+                                                     location: str) -> None:
     """The same abstention on the row the LAYER and the input-review gate read."""
     from trid3nt_server.workflows.runtime import provenance_entries
 
     workflow, sheet = _resolve_bare(tool_name, location)
     entry = next(e for e in provenance_entries(sheet, workflow.params)
-                 if e.param == "compute_class")
-    assert entry.basis == "default_demo"
-    assert entry.value == "medium"
+                 if e.param == "cores")
+    assert entry.basis == "derived"
+    assert "dictionary" in entry.note
 
 
-def test_a_supplied_compute_class_still_reads_as_the_users() -> None:
-    """The abstention is about ABSENCE only: a sent rung is still door=user."""
+def test_a_supplied_count_still_reads_as_the_users() -> None:
+    """The abstention is about ABSENCE only: a sent count is still door=user."""
     from trid3nt_server.tools import TOOL_REGISTRY
     from trid3nt_server.workflows.runtime.resolver import resolve_params
 
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
     supplied, err = asyncio.run(workflow._normalize(
-        {"location": "the Wabash River", "compute_class": "LARGE"}))
+        {"location": "the Wabash River", "cores": 2}))
     assert err is None, err
-    row = asyncio.run(resolve_params(workflow.params, supplied)).row("compute_class")
-    assert (row.value, row.door, row.basis) == ("large", "user", "user")
-
-
-def test_an_unknown_rung_refuses_rather_than_substituting() -> None:
-    """A rung the dispatcher cannot serve is a REFUSAL, not a quiet 'medium'.
-
-    Seating one gave a caller who asked for 'xlarge' a medium solve with no provenance
-    row saying so."""
-    from trid3nt_server.workflows.solver.compute_class import (
-        ComputeClassUnknown,
-        compute_class,
-    )
-
-    coerce = compute_class()
-    with pytest.raises(ComputeClassUnknown) as excinfo:
-        coerce({"compute_class": "enormous"})
-    assert excinfo.value.error_code == "COMPUTE_CLASS_UNKNOWN"
-    assert "enormous" in str(excinfo.value)
-    assert coerce({"compute_class": "  Small "}) == {"compute_class": "small"}
-
-
-@pytest.mark.parametrize("args", [{}, {"compute_class": None},
-                                  {"compute_class": ""}, {"compute_class": "   "}])
-def test_compute_class_abstains_when_absent(args: dict) -> None:
-    """Absent, null, and blank are the same non-answer: emit nothing."""
-    from trid3nt_server.workflows.solver.compute_class import compute_class
-
-    assert compute_class()(args) == {}
+    row = asyncio.run(resolve_params(workflow.params, supplied)).row("cores")
+    assert (row.value, row.door, row.basis) == (2, "user", "user")

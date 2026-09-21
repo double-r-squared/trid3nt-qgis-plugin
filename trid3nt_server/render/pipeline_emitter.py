@@ -1844,7 +1844,7 @@ async def mint_dispatch_and_sim_cards(
     emitter: "PipelineEmitter | None",
     solver: str,
     handle: Any,
-    compute_class: str | None = None,
+    cores: int | None = None,
     module: str | None = None,
 ) -> str | None:
     """Mint the Dispatch (tool) + Sim (compute) cards for a dispatched solve.
@@ -1863,8 +1863,9 @@ async def mint_dispatch_and_sim_cards(
     try:
         # Card 1 "Dispatch": a normal tool step recording the submit.
         dispatch_label = f"Dispatch {case} solve"
-        if compute_class:
-            dispatch_label = f"{dispatch_label} ({compute_class})"
+        if cores:
+            plural = "" if int(cores) == 1 else "s"
+            dispatch_label = f"{dispatch_label} ({int(cores)} core{plural})"
         dispatch_id = await emitter.add_step(
             name=dispatch_label, tool_name=f"{case}:dispatch"
         )

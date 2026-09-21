@@ -41,7 +41,7 @@ def _record(**overrides):
               "FRICTION_COEFFICIENT": "producer: friction"},
         sheet=[_row("reach_length_km", 15.0, door="user", basis="user", units="km",
                     consequence="physics", real_source="nhd"),
-               _row("compute_class", "standard", door="constant",
+               _row("cores", 2, door="constant",
                     consequence="numerical")],
         answer={"min_do_mgl": 6.1, "layer_uri": "s3://b/RUN9/do.tif"},
         provenance=[SimpleNamespace(param="discharge_cms", value=12.5,
@@ -105,12 +105,12 @@ def test_the_record_carries_the_answer_the_provenance_the_mesh_and_the_wall_time
     assert rec["wall_seconds"] == 91.4
 
 
-def test_the_compute_class_is_lifted_off_the_sheet_row_that_declares_it():
-    assert _record()["compute_class"] == "standard"
+def test_the_core_count_is_lifted_off_the_sheet_row_that_declares_it():
+    assert _record()["cores"] == 2
 
 
-def test_a_run_with_no_compute_class_row_records_none_rather_than_guessing():
-    assert _record(sheet=[_row("reach_length_km", 15.0)])["compute_class"] is None
+def test_a_run_with_no_cores_row_records_none_rather_than_guessing():
+    assert _record(sheet=[_row("reach_length_km", 15.0)])["cores"] is None
 
 
 # --- a long list is summarized, never copied --------------------------------- #

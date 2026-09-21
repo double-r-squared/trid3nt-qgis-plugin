@@ -32,7 +32,6 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
     TracerNames,
     Wind,
 )
-from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.templates.dye_release.declarations import (
     ACCEPTS, DECAY_PRESETS, DOC, PARAMS, PARAMS as P,
 )
@@ -271,6 +270,5 @@ telemac_dye_release = register_workflow(
                   prompt="Click on the water where the substance enters it",
                   code="TELEMAC_PARAMS_INVALID"),
         event_time(),
-        compute_class(),
     ),
 )

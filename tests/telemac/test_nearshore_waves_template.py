@@ -256,7 +256,7 @@ def _deck():
 
 
 @pytest.mark.parametrize("named", ["seed", "station", "mesh_resolution_m",
-                                   "event_time", "compute_class"])
+                                   "event_time", "cores"])
 def test_the_question_declares_the_levers_a_caller_reaches_it_through(named):
     assert named in {param.name for param in _workflow().params}
 

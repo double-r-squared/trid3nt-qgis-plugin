@@ -24,7 +24,7 @@ def _workflow():
 
 def _norm(**kw):
     base: dict[str, Any] = {
-        "release": None, "compute_class": None, "input_mode": "auto",
+        "release": None, "cores": None, "input_mode": "auto",
     }
     base.update(kw)
     return asyncio.run(_workflow()._normalize(base))
@@ -101,12 +101,16 @@ def test_a_malformed_release_point_refuses_it_never_falls_back():
     assert out["error_code"] == "TELEMAC_PARAMS_INVALID"
 
 
-def test_an_invented_compute_class_refuses_at_the_ladder():
-    """A rung the dispatcher cannot serve is REFUSED, not quietly re-seated."""
-    supplied, err = _norm(compute_class="dye_spill")
-    assert supplied == {}
-    assert err["error_code"] == "COMPUTE_CLASS_UNKNOWN"
-    assert "dye_spill" in err["error_message"]
+def test_a_core_count_past_the_box_refuses_by_name():
+    """Refused, never cut down to fit: the caller is told the box's own count."""
+    from trid3nt_server.workflows.runtime import GateRefusedError, resolve_params
+    from trid3nt_server.workflows.runtime.levers import BOX_CORES
+
+    supplied, err = _norm(cores=BOX_CORES + 1)
+    assert err is None, err
+    with pytest.raises(GateRefusedError) as raised:
+        asyncio.run(resolve_params(_workflow().params, supplied))
+    assert "cores" in str(raised.value) and str(BOX_CORES) in str(raised.value)
 
 
 def test_declared_bounds_keep_the_source_inside_the_domain():

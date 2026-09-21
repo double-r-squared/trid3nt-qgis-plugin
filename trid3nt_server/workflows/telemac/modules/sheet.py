@@ -358,17 +358,32 @@ SOLVER = "SOLVER"
 _DIRECT_SOLVER = 8
 
 
-def solve_cores(body: type, filled: Mapping[str, Filled],
-                compute_class: Any) -> int:
+def solve_cores(body: type, filled: Mapping[str, Filled], cores: Any) -> int:
     """How many cores THIS deck's solve runs on.
 
-    The sizing class asks for a partition and the deck's own numerics answer:
-    a deck resolving to the direct solver - stated, or the dictionary's own
-    default, which is the whole of what the engine will do - runs serial."""
-    from trid3nt_server.workflows.runtime.levers import cores_for
+    The run asks for a partition - or states none, and the module's own
+    processors keyword stands - and the deck's own numerics answer: a deck
+    resolving to the direct solver, stated or by the dictionary's own default,
+    runs serial whatever it was asked for."""
+    from trid3nt_server.workflows.runtime.levers import cores_asked
 
-    cores = cores_for(compute_class)
-    return 1 if cores > 1 and _solver(body, filled) == _DIRECT_SOLVER else cores
+    asked = cores_asked(cores)
+    if asked is None:
+        asked = _engine_cores(body)
+    return 1 if asked > 1 and _solver(body, filled) == _DIRECT_SOLVER else asked
+
+
+def _engine_cores(body: type) -> int:
+    """The partition the module's OWN dictionary states, as a core count.
+
+    The dictionary spells a scalar computation as zero processors, and a solve
+    still runs on the one core that scalar computation is."""
+    slot = body.MODULE_INPUT.get(PROCESSORS)
+    stated = None if slot is None or slot.is_open else slot.engine_default
+    try:
+        return max(1, int(stated))
+    except (TypeError, ValueError):
+        return 1
 
 
 def _solver(body: type, filled: Mapping[str, Filled]) -> Any:
@@ -384,30 +399,31 @@ def _partitioned(body: type, filled: dict[str, Filled],
                  params: Mapping[str, Any]) -> None:
     """State how many cores this run is solved on, where the body spells it.
 
-    The sizing class is the runtime's lever and the core count is its one
-    consequence; the worker's launcher is handed the SAME number, so the
-    partition the engine is told about is the partition it gets. A sheet filled
-    off a run states no class, so nothing is partitioned on its behalf."""
+    The core count is the runtime's one lever over the partition and the
+    worker's launcher is handed the SAME number, so the partition the engine is
+    told about is the partition it gets. A run stating no count leaves the
+    module's own keyword standing, and nothing is written on its behalf."""
     from trid3nt_server.workflows.runtime import journal_note
-    from trid3nt_server.workflows.runtime.levers import cores_for
+    from trid3nt_server.workflows.runtime.levers import cores_asked
 
-    stated = params.get("compute_class")
-    if not stated or PROCESSORS in filled or PROCESSORS not in body.MODULE_INPUT:
+    if PROCESSORS in filled or PROCESSORS not in body.MODULE_INPUT:
         return
-    asked = cores_for(stated)
-    cores = solve_cores(body, filled, stated)
+    asked = cores_asked(params.get("cores"))
+    if asked is None:
+        return
+    cores = solve_cores(body, filled, asked)
     if cores < asked:
         journal_note(
             f"{body.MODULE} solves this deck with the direct solver "
             f"({SOLVER} {_DIRECT_SOLVER}), which factorises the whole system "
-            f"rather than partitioning it, so the run is serial and the {asked} "
-            f"cores the {stated} sizing class asks for are not used.")
+            f"rather than partitioning it, so the run is serial and the "
+            f"{asked} cores it was asked for are not used.")
     if cores < 2:
         return
     slot = body.slot(PROCESSORS)
     filled[PROCESSORS] = Filled(slot=slot, value=slot.check(cores),
                                  provenance=Provenance(Origin.PRODUCER,
-                                                       "the run's sizing class"))
+                                                       "the run's cores lever"))
 
 
 def _arm(body: type, filled: dict[str, Filled],
@@ -637,7 +653,7 @@ async def run(sheet: Sheet, *, dispatch: Callable[..., Any],
               mesh_inputs: Sequence[Mapping[str, str]],
               outputs: Sequence[str], results: Sequence[str], prefix: str,
               server_facts: Mapping[str, Any], steering: str | None = None,
-              compute_class: str = "medium",
+              cores: int | None = None,
               coupling: str | None = None,
               continue_from: str | None = None) -> Any:
     """A complete sheet: serialize, stage, hand it to the box.
@@ -664,6 +680,7 @@ async def run(sheet: Sheet, *, dispatch: Callable[..., Any],
     # the worker's success convention checks each landed, and readable.
     kept = [name for name in sheet.kept() if name not in results]
     run_tag, rundir = new_rundir()
+    partition = solve_cores(sheet.body, sheet.filled, cores)
     # The serialization is a container round trip, so it runs off the loop.
     written = await asyncio.to_thread(serialize, sheet, rundir, steering=steering)
     staged = await stage_run(
@@ -679,8 +696,8 @@ async def run(sheet: Sheet, *, dispatch: Callable[..., Any],
         # THE SAME NUMBER the steering file states: the launcher partitions the
         # mesh across it, and a count the engine was not told about would run
         # the solve on a partition the deck does not describe.
-        cores=solve_cores(sheet.body, sheet.filled, compute_class))
+        cores=partition)
     # The staged run and the box's answer are ONE handle: the reader needs both
     # what was staged and what came back, and two results would make the caller
     # carry the join.
-    return {**staged, **await dispatch(run=staged, compute_class=compute_class)}
+    return {**staged, **await dispatch(run=staged, cores=partition)}

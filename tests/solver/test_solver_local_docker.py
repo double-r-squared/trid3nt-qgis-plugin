@@ -273,12 +273,12 @@ def test_local_run_solver_stages_manifest_and_launches_docker(
     storage.set_client(s3)
     uri = _seed_manifest(s3)
 
-    handle = run_solver(solver=_SOLVER, model_setup_uri=uri, compute_class="medium")
+    handle = run_solver(solver=_SOLVER, model_setup_uri=uri, cores=2)
 
     # Typed handle, local-backend pinned, container name == run_id (cancel seam).
     assert isinstance(handle, ExecutionHandle)
     assert handle.solver == _SOLVER
-    assert handle.compute_class == "standard"  # medium → standard alias
+    assert handle.cores == 2
     assert handle.workflow_name == LOCAL_DOCKER_WORKFLOW_NAME
     assert handle.workflow_location == "local"
     assert handle.workflows_execution_id == f"local-docker:{handle.run_id}"

@@ -35,7 +35,6 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
     TracerNames,
     Wind,
 )
-from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.templates.sediment_plume.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
     SEDIMENT_CONCENTRATION_MGL, SOURCE_Q_M3S,
@@ -295,6 +294,5 @@ telemac_sediment_plume = register_workflow(
                   prompt="Click on the water where the sediment enters it",
                   code="TELEMAC_PARAMS_INVALID"),
         event_time(),
-        compute_class(),
     ),
 )

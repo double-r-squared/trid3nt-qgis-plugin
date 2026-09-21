@@ -19,7 +19,6 @@ from trid3nt_server.workflows.runtime import (
     Ref,
     register_workflow,
 )
-from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, field, mesh, series
 from trid3nt_server.workflows.telemac.modules.telemac2d import Atmosphere, Boundaries
 from trid3nt_server.workflows.telemac.templates.water_temperature.declarations import (
@@ -291,6 +290,5 @@ telemac_water_temperature = register_workflow(
                   prompt="Click on the water where the temperature should be read",
                   code="TELEMAC_PARAMS_INVALID"),
         event_time(),
-        compute_class(),
     ),
 )

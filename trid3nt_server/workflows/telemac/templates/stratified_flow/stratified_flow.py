@@ -31,7 +31,6 @@ from trid3nt_server.workflows.telemac.modules.telemac3d import (
     VerticalGrid,
     Wind,
 )
-from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.templates.stratified_flow.declarations import (
     DOC,
     PARAMS,
@@ -282,6 +281,5 @@ telemac3d_stratified_flow = register_workflow(
                   prompt="Click on the body of water this run solves over",
                   code="TELEMAC3D_PARAMS_INVALID"),
         event_time(),
-        compute_class(),
     ),
 )

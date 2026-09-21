@@ -11,19 +11,24 @@ the keyword's name.
 
 from __future__ import annotations
 
+import os
 from dataclasses import replace
 from typing import Any, Sequence
 
-from .errors import PlanValidationError
+from .errors import CoresUnavailable, PlanValidationError
 from .params import Param, doors
 
-__all__ = ["COMPUTE_CORES", "LEVERS", "LEVER_NAMES", "VERTICAL_FRAME",
-           "cores_for", "lever", "run_frame", "with_levers"]
+__all__ = ["BOX_CORES", "LEVERS", "LEVER_NAMES", "VERTICAL_FRAME",
+           "cores_asked", "lever", "run_frame", "with_levers"]
 
 #: The vertical frame a run counts elevations from where nothing states another.
 #: NAVD88 is what the national terrain, the bathymetry and the gauges this
 #: substrate reaches are published on.
 VERTICAL_FRAME = "NAVD88"
+
+#: The cores this box can partition a solve across. A count past it is refused
+#: by name: a solve quietly cut to fit runs on a partition nobody was told about.
+BOX_CORES: int = os.cpu_count() or 1
 
 #: The declared levers, in the order a card reads them. Each one is a value the
 #: skeleton or the mesh front reads, never a value a question asks about.
@@ -32,7 +37,7 @@ LEVERS: tuple[Param, ...] = (
           bounds=(3.0, 5000.0), units="m", consequence="numerical",
           user_lever=True,
           desc="Target element edge or cell length the domain is resolved at. "
-               "The granularity is the USER's lever: no sizing rung derives an "
+               "The granularity is the USER's lever: nothing derives an "
                "edge from a channel nobody surveyed, so the number the run "
                "meshes at is either yours or this labeled default"),
     Param(name="event_time", door=doors.QUESTION, optional=True,
@@ -45,10 +50,15 @@ LEVERS: tuple[Param, ...] = (
                "(YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like "
                "'during last Tuesday's storm'. Each source keeps its own "
                "retention, and a request deeper than one refuses typed"),
-    Param(name="compute_class", door=doors.CONSTANT, default="medium",
-          consequence="numerical",
-          desc="Solve sizing class - how many cores the solve is partitioned "
-               "across. An engine that runs on one core says so on the card"),
+    Param(name="cores", door=doors.CONSTANT, optional=True, type=int,
+          bounds=(1.0, float(BOX_CORES)), consequence="numerical",
+          derived_when_absent=(
+              "the solve is partitioned across the number of processors the "
+              "engine's own dictionary states for this module"),
+          desc="How many cores the solve is partitioned across. Absent, the "
+               "module's own processors keyword stands; a count past this "
+               "box's cores is refused rather than cut down, and an engine "
+               "that solves on one core says so on the card"),
     # NUMERICAL, not physics: this is the AXIS every elevation is placed on, and
     # its default is a published national frame rather than a number nobody
     # measured - what law 9 refuses in auto mode is an invented world, and a
@@ -62,30 +72,26 @@ LEVERS: tuple[Param, ...] = (
 )
 
 
-#: What a sizing class MEANS, in the one thing a solve can be sized by: the
-#: number of cores the mesh is partitioned across. Stated once here because the
-#: engine writes its own switch for it and the worker's launcher passes the same
-#: number to mpirun, and two tables are how those two drift apart. The box this
-#: runs on has eight cores; ``gpu`` names hardware that is not here, so it is a
-#: class this fleet honours on one core.
-COMPUTE_CORES: dict[str, int] = {
-    "small": 1, "standard": 2, "large": 4, "xlarge": 8, "gpu": 1}
+def cores_asked(stated: Any) -> int | None:
+    """The core count this run STATES, checked against the box - ``None`` for none.
 
-
-def cores_for(compute_class: Any) -> int:
-    """How many cores THIS class is solved on, or a refusal naming the ladder."""
-    from ..solver.compute_class import COMPUTE_CLASS_ALIAS, ComputeClassUnknown
-
-    named = str(compute_class or "").strip().lower()
-    if not named:
-        named = str(next(row.default for row in LEVERS
-                         if row.name == "compute_class"))
-    rung = COMPUTE_CLASS_ALIAS.get(named)
-    if rung is None or rung not in COMPUTE_CORES:
-        raise ComputeClassUnknown(
-            f"compute_class {compute_class!r} is not a rung this fleet sizes a "
-            f"solve on; the ladder is {sorted(COMPUTE_CLASS_ALIAS)}.")
-    return COMPUTE_CORES[rung]
+    ``None`` is not one core: it leaves the module's own processors keyword
+    standing, which is the only place a default for it lives."""
+    if stated is None or (isinstance(stated, str) and not stated.strip()):
+        return None
+    try:
+        asked = int(str(stated).strip())
+    except (TypeError, ValueError):
+        raise CoresUnavailable(
+            f"cores {stated!r} is not a whole number of cores.") from None
+    if asked < 1:
+        raise CoresUnavailable(f"cores must be at least 1; {asked} was asked for.")
+    if asked > BOX_CORES:
+        raise CoresUnavailable(
+            f"cores {asked} is past the {BOX_CORES} this box has. Ask for "
+            f"{BOX_CORES} or fewer - a count this box cannot seat is refused "
+            "rather than cut down to fit.")
+    return asked
 
 
 #: Every lever by name - what a declaration that takes all of them states.

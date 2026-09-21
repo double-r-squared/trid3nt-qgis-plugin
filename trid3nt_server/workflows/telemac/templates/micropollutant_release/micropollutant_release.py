@@ -26,7 +26,6 @@ from trid3nt_server.workflows.telemac.modules import (
     series,
 )
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries, Sources
-from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.templates.micropollutant_release.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
 )
@@ -285,6 +284,5 @@ telemac_micropollutant_release = register_workflow(
                   prompt="Click where downstream to read the dissolved history",
                   code="TELEMAC_PARAMS_INVALID"),
         event_time(),
-        compute_class(),
     ),
 )

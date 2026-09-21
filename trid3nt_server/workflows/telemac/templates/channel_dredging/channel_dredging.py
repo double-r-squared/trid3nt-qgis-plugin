@@ -27,7 +27,6 @@ from trid3nt_server.workflows.telemac.modules import (
 )
 from trid3nt_server.workflows.telemac.modules.gaia import Dig, Dredging, RESULT_FILENAME
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries, TimeOrigin
-from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.templates.channel_dredging.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
 )
@@ -317,6 +316,5 @@ telemac_channel_dredging = register_workflow(
                   prompt="Click on the channel this dredge works in",
                   code="TELEMAC_PARAMS_INVALID"),
         event_time(),
-        compute_class(),
     ),
 )

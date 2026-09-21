@@ -19,7 +19,6 @@ from trid3nt_server.workflows.runtime import (
 )
 from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
-from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, mesh, series
 from trid3nt_server.workflows.telemac.modules.outputs import profile
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
@@ -294,6 +293,5 @@ telemac_eutrophication = register_workflow(
                   prompt="Click where you want the water watched",
                   code="TELEMAC_PARAMS_INVALID"),
         event_time(),
-        compute_class(),
     ),
 )

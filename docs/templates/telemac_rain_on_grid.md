@@ -34,7 +34,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `mesh_resolution_m` | scenario | m | 40.0 | Finest triangle edge, reached where the mesh refines toward the channel network. THE granularity lever: peak depth and flooded extent are resolution-bound classes and a coarse mesh reads both low |
 | `mesh_max_edge_m` | scenario | m | 300.0 | Coarsest triangle edge, reached far from the channels on the hillslopes |
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
-| `compute_class` | constant | - | medium | Solve sizing class - how many cores the solve is partitioned across. An engine that runs on one core says so on the card |
+| `cores` | constant | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
 | `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
 
 ## What it answers

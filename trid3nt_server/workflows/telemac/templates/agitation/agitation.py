@@ -25,7 +25,6 @@ from trid3nt_server.workflows.telemac.modules.artemis import (
     BOUNDARY_FILENAME,
     IncidentWave,
 )
-from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.templates.agitation.declarations import (
     ACCEPTS,
     DOC,
@@ -257,5 +256,4 @@ artemis_harbor_agitation = register_workflow(
     # A phase-RESOLVING solve is the most mesh-dependent of the family: Kd peaks
     # inside a diffraction fringe the coarse mesh averages away.
     sensitivity=(("kd_max", "peak"),),
-    coerce=(compute_class(),),
 )

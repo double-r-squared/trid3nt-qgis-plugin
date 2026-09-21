@@ -22,7 +22,6 @@ from trid3nt_server.workflows.runtime import (
     register_workflow,
 )
 from trid3nt_server.workflows.mesh.tool import mesh_op, tool
-from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.modules import (
     WAC,
     field,
@@ -300,6 +299,5 @@ tomawac_nearshore_waves = register_workflow(
                   prompt="Click on the water where the waves should be read",
                   code="TELEMAC_PARAMS_INVALID"),
         event_time(),
-        compute_class(),
     ),
 )

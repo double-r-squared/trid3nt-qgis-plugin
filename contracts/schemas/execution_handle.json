@@ -2,16 +2,10 @@
   "additionalProperties": false,
   "description": "A submitted execution, and the CANCELLATION contract.\nThe execution identifier is a first-class field, so a cancel terminates by\nit instead of parsing one out of a string. One handle, every backend.",
   "properties": {
-    "compute_class": {
-      "enum": [
-        "small",
-        "standard",
-        "large",
-        "xlarge",
-        "gpu"
-      ],
-      "title": "Compute Class",
-      "type": "string"
+    "cores": {
+      "minimum": 1,
+      "title": "Cores",
+      "type": "integer"
     },
     "handle_id": {
       "title": "Handle Id",
@@ -53,7 +47,7 @@
     "handle_id",
     "run_id",
     "solver",
-    "compute_class",
+    "cores",
     "workflows_execution_id",
     "workflow_name",
     "workflow_location",

@@ -472,7 +472,7 @@ def test_the_runtime_levers_are_seated_and_no_keyword_twin_is_declared():
     describes; mesh_resolution_m is restated only because this question's
     default differs from the runtime's."""
     declared = {prm.name for prm in _plan().params}
-    assert {"event_time", "compute_class", "mesh_resolution_m"} <= declared
+    assert {"event_time", "cores", "mesh_resolution_m"} <= declared
     assert not declared & {"location", "bbox", "river_geometry_uri",
                            "reach_length_km", "friction_coefficient",
                            "friction_law", "output_interval_min",

@@ -37,9 +37,9 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `dig_rate_m_per_s` | scenario | m/s | 0.002 | How fast the dredger lowers the bed, as metres of bed per second of SOLVER time at a working node - the plant's capacity, not a physical rate. A pass reports its volume only once it has reached grade, so this and the cut it has to make are what decide whether the run sees a completed pass at all |
 | `dump_rate_m_per_s` | scenario | m/s | 0.002 | How fast the spoil is laid into the dump area, as metres of bed per second of solver time at a receiving node; a pass is not finished until its spoil is placed |
 | `min_volume_m3` | scenario | m^3 | 0.0 | Least volume worth moving around a node before it is dredged at all; 0 works every node past the trigger |
-| `mesh_resolution_m` | scenario | m | 14.0 | Target element edge or cell length the domain is resolved at. The granularity is the USER's lever: no sizing rung derives an edge from a channel nobody surveyed, so the number the run meshes at is either yours or this labeled default |
+| `mesh_resolution_m` | scenario | m | 14.0 | Target element edge or cell length the domain is resolved at. The granularity is the USER's lever: nothing derives an edge from a channel nobody surveyed, so the number the run meshes at is either yours or this labeled default |
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
-| `compute_class` | constant | - | medium | Solve sizing class - how many cores the solve is partitioned across. An engine that runs on one core says so on the card |
+| `cores` | constant | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
 | `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
 
 ## What it answers

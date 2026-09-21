@@ -37,7 +37,6 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Rating,
     Storm,
 )
-from trid3nt_server.workflows.solver.compute_class import compute_class
 from trid3nt_server.workflows.telemac.templates.rain_on_grid.declarations import (
     DOC,
     LANDCOVER_CN_MANNING,
@@ -344,6 +343,5 @@ telemac_rain_on_grid = register_workflow(
                   prompt="Click the catchment outlet the runoff drains to",
                   code="TELEMAC_ROG_PARAMS_INVALID"),
         event_time(),
-        compute_class(),
     ),
 )
