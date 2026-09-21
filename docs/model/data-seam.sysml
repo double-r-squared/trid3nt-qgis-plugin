@@ -1514,9 +1514,9 @@ package DataSeam {
     verify requirement ASeriesIsAlignedToTheRunsEventTime by
         "tests/inputs/test_observation.py::test_a_gauge_that_publishes_no_zero_refuses_rather_than_reading_a_height";
     verify requirement ASeriesIsAlignedToTheRunsEventTime by
-        "tests/fetchers/test_router_nwis.py::test_parse_iv_window_publishes_the_stage_series_beside_the_discharge";
+        "tests/fetchers/test_router_nwis.py::test_the_window_read_publishes_the_stage_series_beside_the_discharge";
     verify requirement ASeriesIsAlignedToTheRunsEventTime by
-        "tests/fetchers/test_router_nwis.py::test_parse_iv_instantaneous_carries_the_gauge_s_own_zero";
+        "tests/fetchers/test_router_nwis.py::test_the_read_carries_the_gauge_s_own_zero";
     verify requirement ASeriesIsAlignedToTheRunsEventTime by
         "tests/runtime/test_matched_slots.py::test_a_run_series_is_asked_for_the_window_the_deck_will_solve";
 
