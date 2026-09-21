@@ -24,7 +24,6 @@ from . import (
     secrets,
     tool_metadata,
     tool_registry,
-    user,
     ws,
 )
 from .chart_contracts import (
@@ -90,7 +89,6 @@ __all__ = [
     "secrets",
     "tool_metadata",
     "tool_registry",
-    "user",
     # the adapters' message IR
     "Message",
     "Part",

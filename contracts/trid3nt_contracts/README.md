@@ -30,5 +30,4 @@ consumer branches on its discriminator rather than on a string it recognised.
 | `source_spec.py` | `SourceSpec` - the generic data-router source specification, as data. |
 | `tool_metadata.py` | The tool docstring sections and the `tool_category` vocabulary. |
 | `tool_registry.py` | `AtomicToolMetadata` - what every registered tool declares. |
-| `user.py` | The User account record. |
 | `ws.py` | The WebSocket protocol: the shared envelope and every message payload. |

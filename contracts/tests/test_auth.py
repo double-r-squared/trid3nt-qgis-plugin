@@ -3,7 +3,7 @@
 Both envelopes serialize -> deserialize -> re-serialize byte-identically, pin
 their kebab-case discriminators, refuse extra fields and a malformed ULID
 ``user_id``, cap a token at 8 KB, and carry no cost, spend or quota field. The
-anonymous ack carries no identity claim."""
+ack carries the session identity and never a credential."""
 
 from __future__ import annotations
 
@@ -21,7 +21,6 @@ from trid3nt_contracts.common import new_ulid
 def _ack(**overrides) -> AuthAckEnvelope:
     base = {
         "user_id": new_ulid(),
-        "is_anonymous": False,
     }
     base.update(overrides)
     return AuthAckEnvelope(**base)
@@ -33,24 +32,21 @@ def test_auth_token_envelope_roundtrip() -> None:
     """JSON serialize -> deserialize -> re-serialize is byte-identical."""
     tok = AuthTokenEnvelope(
         token="eyJhbGciOiJSUzI1NiIsImtpZCI6ImFiYzEyMyJ9.payload.signature",
-        anonymous=False,
     )
     a = tok.model_dump(mode="json")
     text_a = json.dumps(a, sort_keys=True)
     b = AuthTokenEnvelope.model_validate(json.loads(text_a)).model_dump(mode="json")
     text_b = json.dumps(b, sort_keys=True)
     assert text_a == text_b, "non-idempotent round-trip"
-    assert a["anonymous"] is False
     assert a["token"].startswith("eyJ")
 
 
 
 
 def test_auth_token_envelope_defaults() -> None:
-    """Default construction = empty token (triggers anonymous-fallback)."""
+    """Default construction = the empty token, which the gate refuses."""
     tok = AuthTokenEnvelope()
     assert tok.token == ""
-    assert tok.anonymous is False  # client may still NOT mark anonymous
 
 
 
@@ -67,7 +63,7 @@ def test_auth_token_rejects_extra_fields() -> None:
     base = AuthTokenEnvelope(token="abc").model_dump(mode="json")
     # ``anonymous_user_id`` is not a field on this envelope - it is rejected
     # like any other extra.
-    for forbidden in ("refresh_token", "tier", "user_id", "claims", "anonymous_user_id"):
+    for forbidden in ("refresh_token", "tier", "user_id", "claims", "anonymous"):
         bad = {**base, forbidden: "x"}
         with pytest.raises(ValidationError, match="(?i)extra"):
             AuthTokenEnvelope.model_validate(bad)
@@ -96,15 +92,12 @@ def test_auth_ack_envelope_roundtrip() -> None:
 
 
 
-def test_auth_ack_envelope_anonymous() -> None:
-    """Anonymous-fallback ack: no firebase_uid, anonymous=True."""
-    ack = AuthAckEnvelope(
-        user_id=new_ulid(),
-        is_anonymous=True,
-    )
+def test_auth_ack_carries_no_identity_claim() -> None:
+    """The ack is the session id and nothing else about who is connected."""
+    ack = AuthAckEnvelope(user_id=new_ulid())
     assert not hasattr(ack, "firebase_uid")
     assert not hasattr(ack, "tier")
-    assert ack.is_anonymous is True
+    assert not hasattr(ack, "is_anonymous")
 
 
 
@@ -146,7 +139,7 @@ def test_auth_ack_tier_field_removed() -> None:
 
 
 def test_auth_ack_invalid_user_id_rejected() -> None:
-    """``user_id`` must be a syntactically valid ULID (matches User contract)."""
+    """``user_id`` must be a syntactically valid ULID."""
     with pytest.raises(ValidationError):
         AuthAckEnvelope(user_id="not-a-ulid")
     with pytest.raises(ValidationError):

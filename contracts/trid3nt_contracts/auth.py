@@ -1,8 +1,8 @@
 """The two envelopes of the WebSocket connect handshake.
 
-``auth-token`` carries the credential up, ``auth-ack`` the resolved identity
-back. The raw credential NEVER appears on the ack and is never persisted: only
-the resolved ``user_id`` reaches the client.
+``auth-token`` carries the access token up, ``auth-ack`` the fixed session
+identity back. The raw token NEVER appears on the ack and is never persisted:
+only the ``user_id`` the session is scoped to reaches the client.
 """
 
 from __future__ import annotations
@@ -42,36 +42,30 @@ class AdvertisedEndpoints(GraceModel):
 
 
 class AuthTokenEnvelope(GraceModel):
-    """``auth-token`` (client -> agent): the credential, sent before any other
-    client envelope. An empty ``token`` selects the anonymous path, and
-    ``anonymous`` is an untrusted client hint rather than the decision."""
+    """``auth-token`` (client -> agent): the access token, sent before any
+    other client envelope. It is the whole gate - an absent or empty token is
+    refused, never a fallback into some lesser identity."""
 
     MESSAGE_TYPE: ClassVar[str] = "auth-token"
 
-    #: The identity token (JWT). Empty string selects the anonymous fallback.
-    #: Consumed at verification and discarded - never persisted, never
-    #: re-emitted. Bounded at 8KB: far above any real JWT, far below a DOS.
+    #: The daemon's shared access token. Consumed at verification and discarded
+    #: - never persisted, never re-emitted. Bounded at 8KB: far above the
+    #: minted token, far below a DOS.
     token: str = Field(default="", max_length=8192)
-
-    #: Client-side hint that this is an anonymous sign-in. Informational only:
-    #: the decision is taken from the token's own claims.
-    anonymous: bool = False
 
 
 
 
 class AuthAckEnvelope(GraceModel):
-    """``auth-ack`` (agent -> client): the resolved identity, sent exactly once
-    per connect. Every later envelope is implicitly scoped to this ``user_id``,
-    and no cost, quota or spend field ever lands here."""
+    """``auth-ack`` (agent -> client): the session identity, sent exactly once
+    per connect and only after the token verified. Every later envelope is
+    implicitly scoped to this ``user_id``, and no cost, quota or spend field
+    ever lands here."""
 
     MESSAGE_TYPE: ClassVar[str] = "auth-ack"
 
-    #: The resolved ``User`` id (ULID) this session is scoped to.
+    #: The fixed session id (ULID) this connection is scoped to.
     user_id: ULIDStr
-
-    #: True if this is an anonymous-fallback user (no identity provider).
-    is_anonymous: bool = False
 
     #: Optional server-advertised sibling endpoints (object store + agent
     #: HTTP). ``None`` when the server does not advertise; a client treats it
