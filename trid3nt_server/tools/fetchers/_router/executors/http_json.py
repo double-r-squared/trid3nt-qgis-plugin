@@ -1,8 +1,8 @@
-"""http_json executor: the hook-driven point-event fetch path.
+"""http_json executor: the point-event fetch path, declared or hooked.
 
-The engine owns the transport, the paging LOOP and the FGB serialize; two PURE hooks
-own the source-specific steps -- ``build_request`` constructs the requests, and
-``parse_response`` decodes the bodies and raises the honest-empty typed errors."""
+The engine owns the transport, the paging LOOP and the FGB serialize. Two switches
+pick the source-specific steps -- the ``build_request`` / ``parse_response`` hooks
+when the spec names them, else the ``ingest.request`` / ``ingest.body`` field map."""
 
 from __future__ import annotations
 
@@ -13,6 +13,8 @@ from typing import Any
 from trid3nt_contracts.source_spec import SourceSpec
 
 from ..errors import router_empty_error, router_input_error, router_upstream_error
+from ..field_map import (declared_features, declared_plans, declared_status_error,
+                         page_injection, rows_in_body)
 from ..hooks import RequestPlan, resolve_hook
 from ..transport import TransportError, get_bytes, get_client, post_bytes
 from .vector_fgb import features_to_fgb_bytes
@@ -22,6 +24,23 @@ logger = logging.getLogger(
 )
 
 __all__ = ["execute", "fetch_bodies"]
+
+
+def _plans(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan]:
+    """The request plans: the build hook when the spec names one, else the declared
+    ``ingest.request`` over the resolved endpoint chain."""
+    if spec.hooks is not None and spec.hooks.build_request:
+        return resolve_hook(spec.hooks.build_request)(spec, params)
+    return declared_plans(spec, params)
+
+
+def _features(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]) -> list[dict[str, Any]]:
+    """The decoded features: the parse hook when the spec names one, else the declared
+    ``ingest.body`` -- decode, walk to the row list, build the geometry, and hand the
+    raw row to the column map the serializer already applies."""
+    if spec.hooks is not None and spec.hooks.parse_response:
+        return resolve_hook(spec.hooks.parse_response)(spec, params, bodies)
+    return declared_features(spec, params, bodies)
 
 
 def _get_raw(plan: RequestPlan) -> bytes:
@@ -49,6 +68,10 @@ def _get(spec: SourceSpec, plan: RequestPlan) -> bytes:
         if spec.hooks is not None and spec.hooks.classify_status:
             classify = resolve_hook(spec.hooks.classify_status)
             typed = classify(spec, exc.status, exc.body)
+            if typed is not None:
+                raise typed
+        else:
+            typed = declared_status_error(spec, exc.status, exc.body)
             if typed is not None:
                 raise typed
         raise router_upstream_error(
@@ -82,53 +105,68 @@ def _fetch_endpoint_fallback(spec: SourceSpec, plans: list[RequestPlan]) -> list
     )
 
 
-def _fetch_paged(spec: SourceSpec, params: dict[str, Any], build: Any, paging: dict[str, Any]) -> list[bytes]:
-    """Walk pages until the declared ``totalPages``, bounded by ``max_pages``. The page
-    count is a light probe for loop control only -- the authoritative decode is the
-    parse hook over all bodies -- and overrunning raises RESULT_TOO_LARGE."""
+def _probe_total_pages(spec: SourceSpec, paging: dict[str, Any], body: bytes, max_pages: int) -> int:
+    """Read the declared page count off page 1. It is loop control only -- the decode
+    over every body stays authoritative -- and a count past the cap refuses up front
+    rather than after walking the pages."""
     sc = spec.error_code_prefix
-    page_param = paging.get("page_param", "page")
-    total_pages_key = paging.get("total_pages_key", "totalPages")
-    total_items_key = paging.get("total_items_key", "totalItems")
-    max_pages = int(paging.get("max_pages", 25))
+    try:
+        obj = json.loads(body.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise router_upstream_error(sc, f"paged response is not valid JSON: {exc}")
+    total_items = obj.get(paging.get("total_items_key", "totalItems"))
+    raw = obj.get(paging.get("total_pages_key", "totalPages"))
+    try:
+        total_pages = int(raw) if raw is not None and int(raw) >= 1 else 1
+    except (TypeError, ValueError):
+        total_pages = 1
+    if total_pages > max_pages:
+        raise router_input_error(
+            sc,
+            f"query reports {total_items} records over {total_pages} pages "
+            f"(>{max_pages}-page cap). Narrow the bbox, shorten the window, or use a "
+            f"sparser observation_type.",
+            "RESULT_TOO_LARGE",
+        )
+    return total_pages
 
+
+def _fetch_paginated(spec: SourceSpec, params: dict[str, Any], paging: dict[str, Any]) -> list[bytes]:
+    """Walk pages in the declared style. ``page`` counts to the page count the first
+    body reports; ``offset`` counts rows and stops on a short page or the row cap. The
+    page value enters ``params``, so a build hook and a declared request page alike."""
+    sc = spec.error_code_prefix
+    style = str(paging.get("style", "page"))
+    max_pages = int(paging.get("max_pages", 25))
+    page_size = int(paging.get("page_size", 1000))
+    row_cap = paging.get("row_cap")
     bodies: list[bytes] = []
-    total_pages = 1
-    total_items: Any = None
+    total_pages = max_pages
+    total_rows = 0
     page = 1
-    while page <= total_pages:
-        if page > max_pages:
-            raise router_input_error(
-                sc,
-                f"query spans {total_pages} pages (>{max_pages}-page cap, "
-                f"~{total_items if total_items is not None else 'many'} records). Narrow the "
-                f"bbox, shorten the window, or use a sparser observation_type.",
-                "RESULT_TOO_LARGE",
-            )
-        plan = build(spec, {**params, page_param: page})[0]
+    while page <= max_pages:
+        plan = _plans(spec, {**params, **page_injection(paging, page, None)})[0]
         body = _get(spec, plan)
         bodies.append(body)
-        if page == 1:
-            try:
-                obj = json.loads(body.decode("utf-8"))
-            except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-                raise router_upstream_error(sc, f"paged response is not valid JSON: {exc}")
-            total_items = obj.get(total_items_key)
-            tp = obj.get(total_pages_key)
-            try:
-                total_pages = int(tp) if tp is not None and int(tp) >= 1 else 1
-            except (TypeError, ValueError):
-                total_pages = 1
-            if total_pages > max_pages:
-                raise router_input_error(
-                    sc,
-                    f"query reports {total_items} records over {total_pages} pages "
-                    f"(>{max_pages}-page cap). Narrow the bbox, shorten the window, or use a "
-                    f"sparser observation_type.",
-                    "RESULT_TOO_LARGE",
-                )
+        if style == "page":
+            if page == 1:
+                total_pages = _probe_total_pages(spec, paging, body, max_pages)
+            if page >= total_pages:
+                return bodies
+        else:
+            n_rows = len(rows_in_body(spec, body))
+            total_rows += n_rows
+            if paging.get("stop_on_short_page", True) and n_rows < page_size:
+                return bodies
+            if row_cap is not None and total_rows >= int(row_cap):
+                return bodies
         page += 1
-    return bodies
+    raise router_input_error(
+        sc,
+        f"query spans more than the {max_pages}-page cap. Narrow the bbox, shorten the "
+        f"window, or filter harder.",
+        "RESULT_TOO_LARGE",
+    )
 
 
 def _fetch_constant_cache(spec: SourceSpec, plans: list[RequestPlan], cc: dict[str, Any]) -> list[bytes]:
@@ -157,15 +195,15 @@ def _fetch_constant_cache(spec: SourceSpec, plans: list[RequestPlan], cc: dict[s
 
 
 def fetch_bodies(spec: SourceSpec, params: dict[str, Any]) -> list[bytes]:
-    """Resolve the request plans via the build hook and GET the bodies. By declared
-    ``ingest.http_source``: ``paging`` walks pages, ``endpoint_fallback`` is a
-    first-success mirror chain, and the default joins every plan at parse."""
-    build = resolve_hook(spec.hooks.build_request)  # type: ignore[union-attr]
-    http_source = (spec.ingest or {}).get("http_source") or {}
-    paging = http_source.get("paging")
+    """Resolve the request plans and GET the bodies. ``ingest.pagination`` walks pages,
+    ``ingest.http_source.endpoint_fallback`` is a first-success mirror chain, and the
+    default joins every plan at parse."""
+    ingest = spec.ingest or {}
+    http_source = ingest.get("http_source") or {}
+    paging = ingest.get("pagination")
     if paging:
-        return _fetch_paged(spec, params, build, paging)
-    plans = build(spec, params)
+        return _fetch_paginated(spec, params, paging)
+    plans = _plans(spec, params)
     cc = (spec.ingest or {}).get("constant_cache")
     if cc:
         return _fetch_constant_cache(spec, plans, cc)
@@ -178,12 +216,10 @@ def _execute_parse_fallback(spec: SourceSpec, params: dict[str, Any]) -> bytes:
     """PARSE-driven fallback chain: parse EACH plan's body on its own and stop at the
     first yielding >= 1 feature, so an empty body degrades to the next plan. Every plan
     empty raises the source's typed EMPTY, never a fabricated header-only layer."""
-    build = resolve_hook(spec.hooks.build_request)  # type: ignore[union-attr]
-    parse = resolve_hook(spec.hooks.parse_response)  # type: ignore[union-attr]
-    plans = build(spec, params)
+    plans = _plans(spec, params)
     for plan in plans:
         body = _get(spec, plan)
-        features = parse(spec, params, [body])
+        features = _features(spec, params, [body])
         if features:
             return features_to_fgb_bytes(features, spec, params)
     raise router_empty_error(
@@ -194,10 +230,9 @@ def _execute_parse_fallback(spec: SourceSpec, params: dict[str, Any]) -> bytes:
 
 
 def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
-    """Fetch via the hooks and serialize the parsed features to FGB (the fetch_fn body)."""
+    """Fetch and serialize the parsed features to FGB (the fetch_fn body)."""
     if ((spec.ingest or {}).get("http_source") or {}).get("parse_fallback"):
         return _execute_parse_fallback(spec, params)
     bodies = fetch_bodies(spec, params)
-    parse = resolve_hook(spec.hooks.parse_response)  # type: ignore[union-attr]
-    features = parse(spec, params, bodies)
+    features = _features(spec, params, bodies)
     return features_to_fgb_bytes(features, spec, params)

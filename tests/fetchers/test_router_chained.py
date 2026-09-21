@@ -19,6 +19,7 @@ from trid3nt_server.tools.fetchers._router.errors import (RouterEmptyError,
                                                           RouterInputError,
                                                           RouterUpstreamError)
 from trid3nt_server.tools.fetchers._router.executors import chained_resolution as C
+from trid3nt_server.tools.fetchers._router.executors import http_json as _HJ
 from trid3nt_server.tools.fetchers._router.executors.chained_resolution import DetailResult
 from trid3nt_server.tools.fetchers._router.hooks import RequestPlan
 from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
@@ -43,14 +44,14 @@ def _run(name: str, raw: dict, url_map) -> gpd.GeoDataFrame:
         raise AssertionError(f"no canned body for {plan.url}")
 
     orig = C._get
-    C._get = fake_get
+    C._get = _HJ._get = fake_get
     try:
         params = R.validate_params(spec, dict(raw))
         if spec.hooks and spec.hooks.resolve_build:
             params = C.pre_resolve(spec, params)
         data = C.execute(spec, params)
     finally:
-        C._get = orig
+        C._get = _HJ._get = orig
     with tempfile.NamedTemporaryFile(suffix=".fgb", delete=False) as f:
         f.write(data)
         p = f.name
@@ -94,7 +95,7 @@ def test_fetch_detail_set_dedup_cap_besteffort():
         return b"{}"
 
     orig = C._get
-    C._get = fake_get
+    C._get = _HJ._get = fake_get
     try:
         plans = [
             ("a", RequestPlan(url="http://x/a")),
@@ -105,7 +106,7 @@ def test_fetch_detail_set_dedup_cap_besteffort():
         ]
         res = C.fetch_detail_set(spec, plans, cap=3)
     finally:
-        C._get = orig
+        C._get = _HJ._get = orig
     assert calls.count("http://x/a") == 1              # deduped
     assert res["a"].body == b"{}" and res["a"].error is None
     assert res["boom"].error is not None                # honest error, kept
@@ -207,7 +208,6 @@ def test_river_gauge_id_detail_mode():
 
 
 
-from trid3nt_server.tools.fetchers._router.executors import http_json as _HJ
 from trid3nt_server.tools.fetchers.hazard.fetch_openfema_disasters import hooks as _OF
 from trid3nt_server.tools.fetchers.weather.fetch_storm_events_db import hooks as _SE
 
@@ -277,22 +277,20 @@ def test_openfema_bbox_clip_drops_outside_county():
     assert set(gdf["county_fips"]) == {"44001"}
 
 
-def test_openfema_next_page_offset_stops_on_short_page():
-    """The reused offset-paging primitive: a full page continues, a short page stops."""
+def test_openfema_build_request_pages_at_the_declared_offset():
+    """The selector hook states the filter; the declared pagination states the window."""
     spec = _spec("fetch_openfema_disasters")
-    full = json.dumps(_fema_page([_decl("44", "001", i, "Flood") for i in range(_OF._PAGE_SIZE)])).encode()
-    short = json.dumps(_fema_page([_decl("44", "001", 1, "Flood")])).encode()
-    raw = R.validate_params(spec, {"state_code": "RI"})
-    nxt_full = _OF.next_page(spec, raw, [full])
-    assert nxt_full is not None and "$skip" in str(nxt_full.params) and nxt_full.params["$skip"] == "1000"
-    assert _OF.next_page(spec, raw, [full, short]) is None      # short page -> stop
-    assert _OF.next_page(spec, raw, [short]) is None            # first page short -> stop
+    params = R.validate_params(spec, {"state_code": "RI"})
+    plan = _OF.build_request(spec, {**params, "offset": 2000, "page_size": 1000})[0]
+    assert plan.params["$skip"] == "2000" and plan.params["$top"] == "1000"
+    assert plan.params["$filter"] == "state eq 'RI'"
 
 
 def test_openfema_input_errors():
     spec = _spec("fetch_openfema_disasters")
     for raw in ({}, {"state_code": "ZZ"}, {"state_code": "RI", "incident_type": "Frogs"},
-                {"state_code": "RI", "start_year": 1800}):
+                {"state_code": "RI", "start_year": 1800},
+                {"bbox": [10.0, 10.0, 11.0, 11.0]}):
         with pytest.raises(RouterInputError) as ei:
             _OF.build_request(spec, R.validate_params(spec, raw))
         assert ei.value.error_code == "OPENFEMA_INPUT_ERROR"
@@ -322,7 +320,7 @@ def _run_http(name: str, raw: dict, url_map) -> gpd.GeoDataFrame:
         params = C.pre_resolve(spec, params)
         data = _HJ.execute(spec, params)
     finally:
-        C._get = o1
+        C._get = _HJ._get = o1
         _HJ._get = o2
     with tempfile.NamedTemporaryFile(suffix=".fgb", delete=False) as f:
         f.write(data)
@@ -359,11 +357,11 @@ def test_storm_resolve_picks_newest_processed_date():
         return _INDEX_HTML
 
     o = C._get
-    C._get = fake_get
+    C._get = _HJ._get = fake_get
     try:
         merged = C.pre_resolve(spec, R.validate_params(spec, {"year": 2022}))
     finally:
-        C._get = o
+        C._get = _HJ._get = o
     urls = merged["_csv_urls"]
     assert len(urls) == 1 and urls[0].endswith("d2022_c20240517.csv.gz")  # newest c-date wins
 
@@ -375,13 +373,13 @@ def test_storm_resolve_missing_year_upstream():
         return _INDEX_HTML
 
     o = C._get
-    C._get = fake_get
+    C._get = _HJ._get = fake_get
     try:
         params = R.validate_params(spec, {"year": 1999})
         with pytest.raises(RouterUpstreamError) as ei:
             C.pre_resolve(spec, params)
     finally:
-        C._get = o
+        C._get = _HJ._get = o
     assert ei.value.error_code == "STORM_EVENTS_UPSTREAM_ERROR"
 
 

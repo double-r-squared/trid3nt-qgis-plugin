@@ -12,9 +12,10 @@ from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
 
+from .. import field_map
 from ..errors import RouterError, router_input_error
 from ..hooks import resolve_hook
-from .http_json import _get
+from .http_json import _features, _get, _plans, fetch_bodies
 from .vector_fgb import features_to_fgb_bytes
 
 logger = logging.getLogger(
@@ -77,11 +78,12 @@ def pre_resolve(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
 
 
 def _fetch_main(spec: SourceSpec, params: dict[str, Any]) -> list[bytes]:
-    """Fetch the round-1 body/bodies: build_request page 1, then next_page paging."""
-    build = resolve_hook(spec.hooks.build_request)  # type: ignore[union-attr]
-    bodies = [_get(spec, plan) for plan in build(spec, params)]
+    """Fetch the round-1 body/bodies. With no ``next_page`` hook this is the http_json
+    fetch verbatim -- the declared pagination block included -- so paging has one home
+    whichever executor the spec's enrichment routes it to."""
     if not (spec.hooks and spec.hooks.next_page):
-        return bodies
+        return fetch_bodies(spec, params)
+    bodies = [_get(spec, plan) for plan in _plans(spec, params)]
     nxt = resolve_hook(spec.hooks.next_page)
     page = 1
     while True:
@@ -140,12 +142,19 @@ def fetch_detail_set(
 
 
 def _enrich(spec: SourceSpec, params: dict[str, Any], features: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    plan_hook = resolve_hook(spec.hooks.enrich_plan)  # type: ignore[union-attr]
-    merge_hook = resolve_hook(spec.hooks.enrich_merge)  # type: ignore[union-attr]
-    ref_plans = list(plan_hook(spec, params, features))
-    cap = int(_chained_block(spec).get("max_detail_fetches", _DEFAULT_MAX_DETAIL_FETCHES))
+    """The detail pass: the enrich hook pair when the spec names one, else the declared
+    ``ingest.enrich`` keyed join. Either way the router owns the deduped, bounded,
+    best-effort fetch between them."""
+    if spec.hooks is not None and spec.hooks.enrich_plan:
+        plan_for = resolve_hook(spec.hooks.enrich_plan)
+        merge = resolve_hook(spec.hooks.enrich_merge)  # type: ignore[arg-type]
+    else:
+        plan_for, merge = field_map.enrich_plans, field_map.enrich_merge
+    ref_plans = list(plan_for(spec, params, features))
+    enrich_block = (spec.ingest or {}).get("enrich") or _chained_block(spec)
+    cap = int(enrich_block.get("max_detail_fetches", _DEFAULT_MAX_DETAIL_FETCHES))
     results = fetch_detail_set(spec, ref_plans, cap) if ref_plans else {}
-    return merge_hook(spec, params, features, results)
+    return merge(spec, params, features, results)
 
 
 
@@ -153,8 +162,7 @@ def _enrich(spec: SourceSpec, params: dict[str, Any], features: list[dict[str, A
 def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
     """Main fetch (+ paging) -> parse -> optional detail enrichment -> FGB bytes."""
     bodies = _fetch_main(spec, params)
-    parse = resolve_hook(spec.hooks.parse_response)  # type: ignore[union-attr]
-    features = parse(spec, params, bodies)
-    if spec.hooks and spec.hooks.enrich_plan:
+    features = _features(spec, params, bodies)
+    if (spec.hooks and spec.hooks.enrich_plan) or (spec.ingest or {}).get("enrich"):
         features = _enrich(spec, params, features)
     return features_to_fgb_bytes(features, spec, params)

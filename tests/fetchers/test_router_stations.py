@@ -71,7 +71,7 @@ def test_asos_resolve_discovers_and_parses_obs():
 
     raw = {"bbox": [-82.5, 25.8, -81.0, 27.5], "start_time": "2024-09-26", "end_time": "2024-09-27"}
     params = router.validate_params(spec, raw)
-    with patch.object(cr, "_get", fake_get):
+    with patch.object(cr, "_get", fake_get), patch.object(http_json, "_get", fake_get):
         params = cr.pre_resolve(spec, params)
         assert sorted(params["_station_ids"]) == ["APF", "RSW"]
     with patch.object(http_json, "_get", fake_get):
@@ -85,7 +85,7 @@ def test_asos_no_stations_raises_empty():
     empty = json.dumps({"features": []}).encode()
     raw = {"bbox": [-30.0, 10.0, -20.0, 20.0], "start_time": "2024-09-26", "end_time": "2024-09-27"}
     params = router.validate_params(spec, raw)
-    with patch.object(cr, "_get", lambda s, p: empty):
+    with patch.object(cr, "_get", lambda s, p: empty), patch.object(http_json, "_get", lambda s, p: empty):
         with pytest.raises(Exception) as exc:
             cr.pre_resolve(spec, params)
     assert exc.value.error_code == "ASOS_METAR_EMPTY"
@@ -95,7 +95,7 @@ def test_asos_future_start_rejected():
     spec = _spec("fetch_asos_metar")
     raw = {"bbox": [-82.5, 25.8, -81.0, 27.5], "start_time": "2099-01-01"}
     params = router.validate_params(spec, raw)
-    with patch.object(cr, "_get", lambda s, p: b"{}"):
+    with patch.object(cr, "_get", lambda s, p: b"{}"), patch.object(http_json, "_get", lambda s, p: b"{}"):
         with pytest.raises(Exception) as exc:
             cr.pre_resolve(spec, params)
     assert exc.value.error_code == "ASOS_METAR_INPUT_ERROR"
@@ -127,7 +127,7 @@ def test_raws_enrich_expands_and_best_effort_survives():
 
     raw = {"bbox": [-121.0, 38.5, -119.5, 39.5], "start_time": "2024-09-01", "end_time": "2024-09-02"}
     params = router.validate_params(spec, raw)
-    with patch.object(cr, "_get", fake_get):
+    with patch.object(cr, "_get", fake_get), patch.object(http_json, "_get", fake_get):
         params = cr.pre_resolve(spec, params)
         g = _gdf(cr.execute(spec, params))
     # 1 station x 1 good day x 2 obs = 2 rows (the failed 2nd day is skipped, station survives)
@@ -174,7 +174,7 @@ def test_snotel_merge_and_degrade_to_locations():
 
     raw = {"bbox": [-106.5, 39.0, -105.5, 40.0]}
     params = router.validate_params(spec, raw)
-    with patch.object(cr, "_get", fake_get):
+    with patch.object(cr, "_get", fake_get), patch.object(http_json, "_get", fake_get):
         g = _gdf(cr.execute(spec, params))
     assert len(g) == 1  # only the in-bbox station
     row = g.iloc[0]
@@ -189,7 +189,7 @@ def test_snotel_merge_and_degrade_to_locations():
         from trid3nt_server.tools.fetchers._router.errors import router_upstream_error
         raise router_upstream_error(spec.error_code_prefix, "data down")
 
-    with patch.object(cr, "_get", fail_data):
+    with patch.object(cr, "_get", fail_data), patch.object(http_json, "_get", fail_data):
         g2 = _gdf(cr.execute(spec, params))
     assert len(g2) == 1
     assert g2.iloc[0]["swe_in"] is None or str(g2.iloc[0]["swe_in"]) in ("nan", "None")
@@ -225,7 +225,7 @@ def test_openaq_paging_and_sensor_join():
 
     raw = {"bbox": [76.8, 28.4, 77.4, 28.9], "parameters": ["pm25"], "api_key": "DUMMY"}
     params = router.validate_params(spec, raw)
-    with patch.object(cr, "_get", fake_get):
+    with patch.object(cr, "_get", fake_get), patch.object(http_json, "_get", fake_get):
         g = _gdf(cr.execute(spec, params))
     assert len(g) == 1
     assert g.iloc[0]["parameter"] == "pm25"

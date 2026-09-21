@@ -554,13 +554,15 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
     # shared transport). The pure name->id resolve phase (resolve_build only) still
     # uses the http_json main-fetch body, so it is NOT a trigger here -- pre_resolve
     # runs it in route().
-    if spec.hooks is not None and (spec.hooks.next_page or spec.hooks.enrich_plan):
+    if (spec.hooks is not None and (spec.hooks.next_page or spec.hooks.enrich_plan)) \
+            or (spec.ingest or {}).get("enrich"):
         from .executors import chained_resolution
         return chained_resolution.execute
-    # Tier-3 hook-driven path: a spec that names a build_request hook
-    # routes to the http_json executor (source-specific request + parse via named
-    # pure hooks).
-    if spec.hooks is not None and spec.hooks.build_request:
+    # The HTTP fetch path: a spec that names a build_request hook, or one that
+    # declares ``ingest.access: http_json`` and states its request and body as a
+    # field map instead. The executor's two switches pick between them per call.
+    if (spec.hooks is not None and spec.hooks.build_request) \
+            or (spec.ingest or {}).get("access") == "http_json":
         from .executors import http_json
         return http_json.execute
     # No in-tree spec declares a join block, so a spec that does arrived with an
@@ -587,8 +589,9 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
         raise router_input_error(
             spec.error_code_prefix,
             "a vector-fgb row must declare HOW it is read - ingest.access: ogr for a "
-            "driver-published layer, hooks.delegate for a library-owned one, or a "
-            "hooks.build_request pair for a bespoke API",
+            "driver-published layer, hooks.delegate for a library-owned one, or "
+            "ingest.access: http_json with a field map (or a hooks.build_request "
+            "pair) for a bespoke API",
             spec.input_error_suffix,
         )
     if spec.shape == "station-timeseries-fgb":

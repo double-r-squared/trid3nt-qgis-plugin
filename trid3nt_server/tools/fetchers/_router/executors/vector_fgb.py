@@ -17,6 +17,7 @@ from typing import Any
 from trid3nt_contracts.source_spec import SourceSpec
 
 from ..errors import router_upstream_error
+from ..field_map import read_path
 
 logger = logging.getLogger(
     "trid3nt_server.tools.fetchers._router.executors.vector_fgb"
@@ -66,8 +67,12 @@ def build_where(spec: SourceSpec, params: dict[str, Any]) -> str:
 # `ingest.column_map` is an ORDERED map out_col -> rule, a raw-property to
 # output-column projection, rename and normalization with no source hardcode.
 # Rule fields:
-#   from            source property key (case-insensitive when column_map_ci)
+#   from            source property key, or a dotted path into the raw row when the
+#                   field map hands the whole row over (case-insensitive when
+#                   column_map_ci). A literal key wins over the path walk, so a
+#                   source property whose own name carries a dot still resolves.
 #   kind            passthrough(default) | int | float | str | lookup | date_iso
+#                   | epoch_ms_iso
 #   null_below      numeric: value <= this -> None (the -999 SVI sentinel)
 #   on_error        null(default) | skip_feature (drop the whole feature)
 #   key_from        lookup: an already-computed out_col to key the table on
@@ -80,6 +85,25 @@ def build_where(spec: SourceSpec, params: dict[str, Any]) -> str:
 
 class _SkipFeature(Exception):
     """Internal sentinel: a column_map rule with on_error=skip_feature failed."""
+
+
+#: Absent source field, distinct from a present null (which stays null).
+_MISSING = object()
+
+
+def _read_field(src_props: dict[str, Any], key: Any) -> Any:
+    """The raw value at a rule's ``from``, or ``_MISSING``. A literal key wins over the
+    dotted walk, so a property NAMED with dots resolves before a path of the same
+    spelling is tried."""
+    if key is None:
+        return _MISSING
+    if key in src_props:
+        return src_props[key]
+    if "." in str(key):
+        walked = read_path(src_props, key)
+        if walked is not None:
+            return walked
+    return _MISSING
 
 
 def _num(raw: Any) -> float:
@@ -124,13 +148,16 @@ def _resolve_column(
         field = (fp.get("map") or {}).get((params or {}).get(fp.get("param")))
         rule = {**rule, "from": field}
     if kind in ("percentile", "fraction", "raw"):
-        present = rule.get("from") in src_props
-        raw = src_props.get(rule.get("from")) if present else rule.get("default")
-        return _norm_env(raw, kind)
+        found = _read_field(src_props, rule.get("from"))
+        return _norm_env(rule.get("default") if found is _MISSING else found, kind)
 
     if kind == "lookup":
         table = rule.get("table") or {}
-        key = out_row.get(rule["key_from"]) if "key_from" in rule else src_props.get(rule.get("from"))
+        if "key_from" in rule:
+            key = out_row.get(rule["key_from"])
+        else:
+            found = _read_field(src_props, rule.get("from"))
+            key = None if found is _MISSING else found
         if key is None:
             return rule.get("default")
         # YAML int-keyed tables load as int keys; coerce the lookup key to int
@@ -146,13 +173,29 @@ def _resolve_column(
             return str(rule["default_template"]).format(key=key)
         return rule.get("default")
 
-    present = rule.get("from") in src_props
-    raw = src_props.get(rule.get("from")) if present else rule.get("default")
+    found = _read_field(src_props, rule.get("from"))
+    raw = rule.get("default") if found is _MISSING else found
 
     if kind == "passthrough":
         return raw
     if kind == "str":
-        return str(raw)
+        if raw is None:
+            return None
+        return str(raw).strip() or None
+    if kind == "epoch_ms_iso":
+        # Epoch milliseconds, the stamp an event API carries, as the ISO-8601 UTC
+        # instant the layer states. A date alone would drop the time of day.
+        try:
+            ms = float(raw)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(ms):
+            return None
+        try:
+            return _dt.datetime.fromtimestamp(
+                ms / 1000.0, tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        except (OverflowError, OSError, ValueError):
+            return None
     if kind == "date_iso":
         # A date arrives typed where the driver read the service's own field type
         # and as epoch milliseconds where it did not; both are the same day.
@@ -172,6 +215,10 @@ def _resolve_column(
         try:
             f = _num(raw)
         except (TypeError, ValueError):
+            if on_error == "skip_feature":
+                raise _SkipFeature
+            return None
+        if not math.isfinite(f):
             if on_error == "skip_feature":
                 raise _SkipFeature
             return None
