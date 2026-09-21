@@ -14,7 +14,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from trid3nt_server.server.protocol.catalog_http import (
+from trid3nt_server.telemetry import (
     _aggregate_records,
     _empty_summary,
     _normalize_record,
@@ -140,7 +140,7 @@ def test_normalize_record_local_file_and_mongo():
 def test_build_telemetry_summary_file_fallback(tmp_path, monkeypatch):
     # Ensure get_persistence returns None so the file path is used.
     monkeypatch.setattr(
-        "trid3nt_server.server.protocol.catalog_http._get_telemetry_path",
+        "trid3nt_server.telemetry._get_telemetry_path",
         lambda: tmp_path / "telemetry.jsonl",
     )
     fp = tmp_path / "telemetry.jsonl"
@@ -181,7 +181,7 @@ def test_build_telemetry_summary_carries_by_model_and_accuracy(
     carries the four headline accuracy metrics AND the per-model breakdown, so
     the dashboard's by-model A/B section + KPI cards have real data to render."""
     monkeypatch.setattr(
-        "trid3nt_server.server.protocol.catalog_http._get_telemetry_path",
+        "trid3nt_server.telemetry._get_telemetry_path",
         lambda: tmp_path / "telemetry.jsonl",
     )
     # No solve sink for this test — keep the solve section zero-state.

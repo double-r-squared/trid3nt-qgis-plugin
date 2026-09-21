@@ -17,8 +17,12 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server.adapters import model_selection as ms
-from trid3nt_server.telemetry import compute_args_hash, emit_tool_call_event
-from trid3nt_server.server.protocol.catalog_http import _aggregate_records, _normalize_record
+from trid3nt_server.telemetry import (
+    _aggregate_records,
+    _normalize_record,
+    compute_args_hash,
+    emit_tool_call_event,
+)
 
 
 

@@ -219,7 +219,7 @@ async def test_enforce_visible_set_is_monotonic_across_turns(fake_llm):
 
 
 def test_compute_recall_at_k_synthetic():
-    from trid3nt_server.server.protocol.catalog_http import compute_recall_at_k
+    from trid3nt_server.telemetry import compute_recall_at_k
 
     # Turn A (rainfall-runoff flow): dispatched 3 llm tools; retrieval would have
     # kept 2, dropped fetch_buildings -> recall 2/3 for this turn.
@@ -280,7 +280,7 @@ def test_compute_recall_at_k_synthetic():
 
 
 def test_compute_recall_at_k_empty_when_no_shadow():
-    from trid3nt_server.server.protocol.catalog_http import compute_recall_at_k
+    from trid3nt_server.telemetry import compute_recall_at_k
 
     out = compute_recall_at_k(
         [{"source": "llm", "turn_id": "T1", "tool_name": "fetch_dem"}],
@@ -294,7 +294,7 @@ def test_compute_recall_at_k_empty_when_no_shadow():
 def test_build_telemetry_summary_folds_recall_section(monkeypatch, tmp_path):
     """The summary carries a recall_at_k section read from the SAME JSONL sink."""
     import json as _json
-    from trid3nt_server.server.protocol import catalog_http as http
+    from trid3nt_server import telemetry as http
 
     path = tmp_path / "tel.jsonl"
     rows = [
