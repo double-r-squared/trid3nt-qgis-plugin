@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import math
 from dataclasses import dataclass
 from typing import Any, Mapping
 
@@ -506,11 +507,10 @@ def _text(props: Mapping[str, Any], *keys: str) -> str | None:
 
 
 def _distance_km(feature: Mapping[str, Any], near: Any) -> float:
-    """How far a feature is from the place asked about; ``inf`` orders nothing."""
-    from trid3nt_server.tools.fetchers._router.transforms.nearest import (
-        km_between,
-    )
+    """How far a feature is from the place asked about; ``inf`` orders nothing.
 
+    Ranking only has to ORDER candidates over a local box, so the flat-earth
+    distance on the latitude's own scale is the whole of what it needs."""
     from trid3nt_server.inputs.point import lonlat_of
 
     place = lonlat_of(near)
@@ -523,4 +523,6 @@ def _distance_km(feature: Mapping[str, Any], near: Any) -> float:
         coords = coords[0]
     if not (isinstance(coords, (list, tuple)) and len(coords) >= 2):
         return float("inf")
-    return km_between(lon, lat, float(coords[0]), float(coords[1]))
+    east = (float(coords[0]) - lon) * 111.32 * math.cos(math.radians(lat))
+    north = (float(coords[1]) - lat) * 110.57
+    return math.hypot(east, north)

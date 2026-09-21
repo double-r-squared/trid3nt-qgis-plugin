@@ -536,11 +536,6 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
     if (spec.ingest or {}).get("delegate"):
         from .executors import dataretrieval_delegate
         return dataretrieval_delegate.execute
-    # Declarative fan-out (multi-query-per-value + merge, slr_scenarios): it
-    # composes the driver read N times, so it wins over the access dispatch below.
-    if (spec.ingest or {}).get("fan_out"):
-        from .transforms import fan_out
-        return fan_out.execute
     # A vector row published through a GDAL driver (an ArcGIS query URL, an OGC
     # API - Features collection, a shapefile inside a remote ZIP) reads through
     # the vector_ogr executor: the library owns the socket, the paging and the
