@@ -1,15 +1,14 @@
-"""Connect handshake + auth-token verification + session resume/replay."""
+"""Connect handshake + access-token verification + session resume/replay."""
 
 from __future__ import annotations
 
 import logging
 from pydantic import ValidationError
 from trid3nt_contracts.auth import AuthTokenEnvelope
-from trid3nt_server.credentials.auth_handshake import authenticate_token, build_auth_ack, derive_advertised_endpoints, verify_access_token
+from trid3nt_server.credentials.auth_handshake import LOCAL_SINGLE_USER_ID, build_auth_ack, derive_advertised_endpoints, verify_access_token
 from trid3nt_server.server.dispatch.emitter import _ensure_emitter
 from trid3nt_server.server.protocol.connections import _reap_prior_session_connections, _register_session_connection
-from trid3nt_server.server.session.case_state import _bind_auth_result, _persist_session_active_case, _reload_session_active_case, _replay_active_case_layers, _touch_session_record
-from trid3nt_server.server.session.persistence_ref import get_persistence
+from trid3nt_server.server.session.case_state import _bind_session_identity, _persist_session_active_case, _reload_session_active_case, _replay_active_case_layers, _touch_session_record
 from trid3nt_server.server.session.state import SessionState, _CASE_SYNC_NEVER
 from trid3nt_server.server.turn.cases import _emit_case_list
 from trid3nt_server.server.turn.live_turn import _rebind_live_turns
@@ -30,12 +29,12 @@ def _connection_local_host(websocket: "ServerConnection | Any") -> str | None:
         return host if isinstance(host, str) and host else None
     return None
 
-async def _reject_auth_handshake(
+async def reject_auth_handshake(
     websocket: ServerConnection,
     session_id: str,
-    message: str,
+    message: str = "access token required: Add the token under Settings",
 ) -> None:
-    """Reject a connection at the handshake with a typed ``AUTH_FAILED`` error
+    """Refuse a connection at the handshake with a typed ``AUTH_FAILED`` error
     and a policy-violation close, the close the client classifies as an auth
     failure so it stops its reconnect ladder. Never raises."""
     await _send_error(websocket, session_id, "AUTH_FAILED", message)
@@ -49,98 +48,34 @@ async def _handle_auth_token(
     state: SessionState,
     payload_dict: dict,
 ) -> None:
-    """Process the client's ``auth-token`` envelope and emit ``auth-ack``: the
-    token resolves to a user, or provisions an anonymous fallback, and that
-    identity is bound into the session for every later envelope."""
-    tok: AuthTokenEnvelope | None
+    """Verify the client's ``auth-token`` envelope and emit ``auth-ack``. The
+    presented token is the whole gate: it matches the daemon's and the fixed
+    session identity is bound, or the connection is refused and closed."""
     try:
         tok = AuthTokenEnvelope.model_validate(payload_dict)
-    except ValidationError as ve:
-        await _send_error(
-            websocket,
-            state.session_id,
-            "AUTH_TOKEN_INVALID",
-            f"auth-token validation failed: {ve.errors()[0]['msg']}",
-        )
-        # Even on a validation failure the anonymous fallback runs, so the
-        # connection stays usable.
-        tok = None
-
-    # Optional shared-token gate: when ``TRID3NT_ACCESS_TOKEN`` is set the
-    # presented token must match in constant time or the connection is rejected
-    # with the typed close the client stops its reconnect ladder on. Unset, the
-    # verification passes and the anonymous path is unchanged.
-    presented = tok.token if tok is not None else None
+    except ValidationError:
+        presented = None
+    else:
+        presented = tok.token
     if not verify_access_token(presented):
-        logger.info(
-            "auth-token rejected session=%s (access token missing/invalid)",
-            state.session_id,
-        )
-        await _reject_auth_handshake(
-            websocket,
-            state.session_id,
-            "access token required: the presented token is missing or invalid",
-        )
+        logger.info("auth-token refused session=%s", state.session_id)
+        await reject_auth_handshake(websocket, state.session_id)
         return
 
-    result = await authenticate_token(tok, get_persistence())
-
-    _bind_auth_result(state, result)
+    _bind_session_identity(state)
     await _touch_session_record(state)  # session heartbeat
     # REMOTE-DAEMON ACCESS: advertise the sibling endpoints derived
     # from THIS connection's local address (so a tailnet client learns the
     # data + HTTP bases automatically) plus any env override.
     endpoints = derive_advertised_endpoints(_connection_local_host(websocket))
-    ack = build_auth_ack(result, endpoints=endpoints)
+    ack = build_auth_ack(endpoints=endpoints)
     await websocket.send(_new_envelope("auth-ack", state.session_id, ack))
     logger.info(
-        "auth-ack session=%s user_id=%s anonymous=%s endpoints=%s",
+        "auth-ack session=%s user_id=%s endpoints=%s",
         state.session_id,
-        result.user.user_id,
-        result.is_anonymous,
+        LOCAL_SINGLE_USER_ID,
         endpoints.model_dump(mode="json") if endpoints else None,
     )
-
-async def _ensure_auth_handshake(
-    websocket: ServerConnection,
-    state: SessionState,
-) -> bool:
-    """Bind an anonymous user inline when a non-auth envelope arrives before the
-    handshake ran. True when the connection may proceed, False when the
-    shared-token gate rejected and closed it, so the caller must not dispatch."""
-    if state.auth_handshake_complete:
-        return True
-    # A token-gated daemon must not accept a connection that skipped the
-    # auth-token envelope: that would be a trivial bypass. This implicit path
-    # presents NO token, so it is rejected with the same typed close.
-    if not verify_access_token(None):
-        logger.info(
-            "implicit handshake rejected session=%s (access token required)",
-            state.session_id,
-        )
-        await _reject_auth_handshake(
-            websocket,
-            state.session_id,
-            "access token required: connect with a valid token",
-        )
-        return False
-    # Implicit-anonymous path: the connection skipped the auth-token envelope,
-    # and every connection resolves to the one fixed local user.
-    result = await authenticate_token(None, get_persistence())
-    _bind_auth_result(state, result)
-    await _touch_session_record(state)  # session heartbeat
-    endpoints = derive_advertised_endpoints(_connection_local_host(websocket))
-    ack = build_auth_ack(result, endpoints=endpoints)
-    try:
-        await websocket.send(_new_envelope("auth-ack", state.session_id, ack))
-    except Exception:  # noqa: BLE001 -- socket may be down
-        pass
-    logger.info(
-        "auth-ack(implicit-anonymous) session=%s user_id=%s",
-        state.session_id,
-        result.user.user_id,
-    )
-    return True
 
 async def _handle_session_resume(
     websocket: ServerConnection,

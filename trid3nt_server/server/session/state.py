@@ -132,7 +132,6 @@ class SessionState:
     # it: Case lookups filter by it and a created Case is owned by it. ``None``
     # only between connect and handshake completion.
     authenticated_user_id: str | None = None
-    is_anonymous: bool = True
     auth_handshake_complete: bool = False
     # A client's keepalive sends an empty ``session-resume`` as a proof-of-life
     # ping, indistinguishable from a genuine fresh-socket resume by the envelope

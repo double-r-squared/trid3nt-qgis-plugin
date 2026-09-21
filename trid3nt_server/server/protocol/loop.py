@@ -18,7 +18,7 @@ from trid3nt_server.server.dispatch.emitter import _assert_sync_offload_safe, _d
 from trid3nt_server.server.interactions import _resolve_pending_tool_choice
 from trid3nt_server.server.processing import _resolve_pending_processing
 from trid3nt_server.tools.fetchers._router.executors.qgis_provider import resolve_pending_layer
-from trid3nt_server.server.protocol.auth import _ensure_auth_handshake, _handle_auth_token, _handle_session_resume
+from trid3nt_server.server.protocol.auth import _handle_auth_token, _handle_session_resume, reject_auth_handshake
 from trid3nt_server.server.protocol.connections import _deregister_session_connection, session_connection_count
 from trid3nt_server.server.protocol.handlers import _BG_TASKS, _drain_bg_tasks, _handle_dev_tool_invoke, _handle_layer_delete, _handle_secret_add
 from trid3nt_server.server.session.case_state import _clear_case_list_hash, _set_active_aoi_from_payload, _set_drawn_geometry_from_payload
@@ -121,22 +121,25 @@ def _make_handler(settings: ModelSettings):
                 # Dispatch on message type. Every payload is re-validated
                 # through its concrete trid3nt_contracts model.
                 try:
-                    # The auth-token envelope is the connect handshake; anything
-                    # else arriving first trips the anonymous fallback inline, so
-                    # the user is bound before any user-scoped action runs.
+                    # The auth-token envelope is the connect handshake and it
+                    # is the ONLY envelope that may arrive first: the token is
+                    # verified before any user-scoped action runs.
                     if msg_type == "auth-token":
                         await _handle_auth_token(
                             websocket, state, payload_dict
                         )
                         continue
-                    # Implicit anonymous fallback when any other envelope arrives
-                    # before the handshake, so a client that sends no auth-token
-                    # still works. When a token gate is set the implicit path
-                    # rejects and closes the socket, and the pending envelope
-                    # must NOT be dispatched.
+                    # Anything else before the handshake presents no token, so
+                    # it is refused and closed like a wrong one - accepting it
+                    # would be a trivial bypass of the gate.
                     if not state.auth_handshake_complete:
-                        if not await _ensure_auth_handshake(websocket, state):
-                            continue
+                        logger.info(
+                            "pre-handshake %s refused session=%s",
+                            msg_type,
+                            session_id,
+                        )
+                        await reject_auth_handshake(websocket, session_id)
+                        continue
 
                     if msg_type == "session-resume":
                         sr = SessionResumePayload.model_validate(payload_dict)

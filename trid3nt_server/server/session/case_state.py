@@ -6,7 +6,7 @@ import hashlib
 import math
 import logging
 from trid3nt_contracts import now_utc
-from trid3nt_server.credentials.auth_handshake import AuthResult
+from trid3nt_server.credentials.auth_handshake import LOCAL_SINGLE_USER_ID
 from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.render.uri_registry import get_uri_registry
 from trid3nt_server.server.session.persistence_ref import get_persistence
@@ -77,10 +77,10 @@ async def _replay_active_case_layers(state: SessionState) -> None:
             case_id,
         )
 
-def _bind_auth_result(state: SessionState, result: AuthResult) -> None:
-    """Copy the resolved auth identity into the SessionState."""
-    state.authenticated_user_id = result.user.user_id
-    state.is_anonymous = result.is_anonymous
+def _bind_session_identity(state: SessionState) -> None:
+    """Mark the handshake verified and scope the connection to the one fixed
+    session identity every later envelope joins Cases on."""
+    state.authenticated_user_id = LOCAL_SINGLE_USER_ID
     state.auth_handshake_complete = True
 
 async def _touch_session_record(
