@@ -29,7 +29,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `cold_temp_c` | scenario | C | 15.0 | Hypolimnion (cold bottom layer) temperature; the initial top-to-bottom difference is what the run either keeps or mixes away |
 | `thermocline_depth_m` | scenario | m | 8.0 | Depth of the thermocline below the free surface. The vertical grid is planned to HOLD it and REFUSES when no admissible sigma stretch over the domain's deepest column can |
 | `mesh_resolution_m` | scenario | m | 120.0 | Target triangle edge the water body's interior is meshed at. The horizontal spends its budget on COVERING the body rather than on detail; the 3D node count is this mesh's nodes times the planes the deck states |
-| `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime ('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
+| `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `compute_class` | constant | - | medium | Solve sizing class - how many cores the solve is partitioned across. An engine that runs on one core says so on the card |
 | `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
 

@@ -33,7 +33,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `steep_slope_correction` | scenario | - | False | Apply the Huang (2006) steep-slope correction to the curve numbers using the mesh's own bed gradients. The engine's native branch is compiled off in the installed 9.0.0 build, so the correction is applied to the CN field before it is written |
 | `mesh_resolution_m` | scenario | m | 40.0 | Finest triangle edge, reached where the mesh refines toward the channel network. THE granularity lever: peak depth and flooded extent are resolution-bound classes and a coarse mesh reads both low |
 | `mesh_max_edge_m` | scenario | m | 300.0 | Coarsest triangle edge, reached far from the channels on the hillslopes |
-| `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime ('2026-08-20' or '2026-08-20T06:00:00Z'), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
+| `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `compute_class` | constant | - | medium | Solve sizing class - how many cores the solve is partitioned across. An engine that runs on one core says so on the card |
 | `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
 
