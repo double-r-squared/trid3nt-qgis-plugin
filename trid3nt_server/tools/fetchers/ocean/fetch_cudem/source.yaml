@@ -1,0 +1,151 @@
+schema_version: v1
+name: fetch_cudem
+# The heavy nearshore raster fetch gets the canonical fetch-resolution confirm
+# card, the same gate its sibling bed rows declare.
+confirm_gate: fetch_resolution
+source_class: cudem
+shape: raster-cog
+supports_global_query: false
+error_prefix: CUDEM
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: COVERAGE_GAP
+endpoints:
+  data:
+    url: https://noaa-nos-coastal-lidar-pds.s3.amazonaws.com/
+auth:
+  mode: none
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  target_crs:
+    type: str
+    default: EPSG:32616
+  resolution_m:
+    type: float
+    schema_optional: true
+  timeout_s:
+    type: float
+    default: 120.0
+ingest:
+  access: library_delegate
+  delegate:
+    library: cudem_tile_index
+    timeout_s: 600.0
+hooks:
+  delegate: cudem.read
+  delegate_validate: cudem.validate
+normalize:
+  crs: EPSG:32616
+  units: meters
+  datum: NAVD88
+  quantity: elevation
+output:
+  layer_type: raster
+  ext: tif
+  role: input
+  style:
+    kind: continuous
+    ramp: gray
+    units: m
+  emit_bbox: true
+  display_name: NOAA NCEI CUDEM nearshore topo-bathymetry (NAVD88)
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 400.0
+  floor_mb: 0.5
+# The collection's own cell: 1/9 arc-second, about 3 m. resolution_m floors the
+# merge at the asked spacing and never invents a cell finer than the tile it read;
+# past the pixel budget the fetch refuses naming the spacing that fits.
+resolution_declarations:
+- param: resolution_m
+  unit: m
+  min_value: 3
+  native_hint: NCEI CUDEM 1/9 arc-second tiles, about 3 m
+  constraint_source: data
+  rationale: the published tile collection's own cell size; nothing here coarsens on its own behalf and nothing invents a cell finer than 1/9 arc-second
+coverage:
+-   data_class: bathymetry
+    kind: measured
+    extent:
+      kind: surface
+      rings:
+      - [[-126.0, 22.0], [-64.0, 22.0], [-64.0, 49.5], [-126.0, 49.5]]
+      note: the US coast where NCEI's hosted 1/9 arcsecond Topobathy collection ships,
+        which omits stretches of the Pacific coast and the Great Lakes entirely
+    window:
+      series: false
+      latest: '2023-01-01'
+    resolution_m: 3.0
+    datum: NAVD88
+    units:
+      elevation: m
+    value_column: elevation
+
+caveats:
+- The 1/9 arc-second tiles are the only CUDEM product integrating BOTH bathymetry and
+  topography, so a tile carries the land beside the sea floor - positive up, the sea
+  floor NEGATIVE, NAVD88 metres.
+- The hosted collection is not continuous US coast. A bbox no tile intersects raises
+  CUDEM_COVERAGE_GAP rather than returning a surface built from something else; the
+  bed ladder is what lays a coarser source under the part this one does not reach.
+- A tile stating a TIDAL vertical datum raises CUDEM_DATUM_MISMATCH rather than merging
+  two zeros as one surface. A tile stating no vertical CS carries the collection's own
+  NAVD88, which is what the coverage row states.
+docstring: |-
+  Fetch NOAA NCEI CUDEM 1/9 arc-second nearshore topo-bathymetry for a bbox.
+
+  **What it does:**
+      Resolves the AOI against the collection's published tile manifest, reads
+      every tile whose quarter-degree footprint intersects it, gates each one on
+      its vertical datum, and reprojects them onto one shared grid. Output is a
+      single-band float32 Cloud-Optimized GeoTIFF, NAVD88 metres, **positive-up**
+      (the sea floor is NEGATIVE) - byte-format identical to ``fetch_dem`` and
+      ``fetch_bluetopo`` so a terrain ingestion consumes it unchanged.
+
+      CUDEM 1/9 arc-second is NOAA's continuously updated DIGITAL ELEVATION MODEL
+      for the US coast, and its 1/9 arc-second tiles are the only ones that
+      integrate bathymetry WITH topography: one continuous surface from the dunes
+      to the nearshore.
+
+  **When to use:**
+      - The nearshore bed under a coastal surge, run-up or wave question, where
+        about 3 m cells across the surf zone are what the answer turns on.
+      - A seamless land-plus-sea surface over one stretch of coast.
+      - User asks for "CUDEM", "nearshore topobathy", "the sea floor and the land
+        together", or "a DEM that includes the water depth".
+
+  **When NOT to use:**
+      - Inland terrain with no coast - use ``fetch_dem``; this collection has no
+        inland coverage.
+      - Open ocean or a deep basin - the tiles stop at the shelf. The global
+        relief row (``fetch_etopo``) is the bed out there.
+      - A coast the hosted collection omits - it refuses, and the regional
+        coastal DEM row or BlueTopo may reach it.
+
+  **Parameters:**
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326, on the US coast.
+      target_crs: output CRS (default ``EPSG:32616``). The NAVD88 vertical is
+          preserved; only the horizontal grid is reprojected.
+      resolution_m: OPTIONAL output cell in metres. The merge is floored at this
+          value even where a 3 m tile is available, which keeps a wide AOI from
+          producing a needlessly heavy grid; it never invents a finer cell than
+          the tile it read, and it never coarsens past what was asked.
+      timeout_s: tile-manifest download budget in seconds (default 120).
+
+  **Returns:**
+      A ``LayerURI`` pointing at the merged COG in the cache bucket.
+      ``layer_type="raster"``, ``role="input"``, ``units="meters"``.
+
+  **Errors:**
+      - ``CUDEM_INPUT_INVALID``: bad bbox, outside the US coastal envelope, or
+        more tiles than one request merges (retryable=False).
+      - ``CUDEM_COVERAGE_GAP``: no tile intersects the AOI, or the tiles painted
+        none of it (retryable=False).
+      - ``CUDEM_DATUM_MISMATCH``: a tile states a tidal vertical datum
+        (retryable=False).
+      - ``CUDEM_UPSTREAM_ERROR``: manifest download, tile read or merge failure
+        (retryable=True).

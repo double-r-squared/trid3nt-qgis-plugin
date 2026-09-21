@@ -1,0 +1,144 @@
+schema_version: v1
+name: fetch_regional_coastal_dem
+# The finest bed this tree fetches, so the resolution confirm card rides on it.
+confirm_gate: fetch_resolution
+source_class: regional_coastal_dem
+shape: raster-cog
+supports_global_query: false
+error_prefix: REGIONAL_COASTAL_DEM
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: COVERAGE_GAP
+endpoints:
+  data:
+    url: https://noaa-nos-coastal-lidar-pds.s3.amazonaws.com/
+auth:
+  mode: none
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  target_crs:
+    type: str
+    default: EPSG:32616
+  resolution_m:
+    type: float
+    schema_optional: true
+  timeout_s:
+    type: float
+    default: 120.0
+ingest:
+  access: library_delegate
+  delegate:
+    library: regional_coastal_dem_items
+    timeout_s: 600.0
+hooks:
+  delegate: regional_coastal_dem.read
+  delegate_validate: regional_coastal_dem.validate
+normalize:
+  crs: EPSG:32616
+  units: meters
+  datum: NAVD88
+  quantity: elevation
+output:
+  layer_type: raster
+  ext: tif
+  role: input
+  style:
+    kind: continuous
+    ramp: gray
+    units: m
+  emit_bbox: true
+  display_name: NCEI regional coastal DEM (NAVD88)
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 3000.0
+  floor_mb: 0.5
+# The collections' own cell: the CoNED integrations publish at 1 m. resolution_m
+# floors the merge at the asked spacing, which is what keeps a wide AOI at this
+# cell from building a grid past the pixel budget.
+resolution_declarations:
+- param: resolution_m
+  unit: m
+  min_value: 1
+  native_hint: NCEI regional integrated topo-bathy DEMs, 1 m where a CoNED integration exists
+  constraint_source: data
+  rationale: the published collections' own cell size; a 1 m bed over a wide AOI runs past the pixel budget, and the request refuses naming the spacing that fits rather than coarsening
+coverage:
+-   data_class: bathymetry
+    kind: measured
+    extent:
+      kind: surface
+      rings:
+      - [[-124.5719, 37.7702], [-122.4453, 37.7702], [-122.4453, 42.0126], [-124.5719, 42.0126]]
+      note: the published NCEI regional integrated topo-bathy collections, one ring
+        each - built where one was funded, which is a short list rather than a coast
+    window:
+      series: false
+      latest: '2020-01-01'
+    resolution_m: 1.0
+    datum: NAVD88
+    units:
+      elevation: m
+    value_column: elevation
+
+caveats:
+- These are the FINEST beds published on the US coast - 1 m where a CoNED integration
+  exists - and they exist only where one was built. A coast with no collection raises
+  REGIONAL_COASTAL_DEM_COVERAGE_GAP; it is not a gap this row closes on its own.
+- The collections integrate topography WITH bathymetry across the shoreline, NAVD88
+  metres, positive up, the sea floor NEGATIVE.
+- A 1 m bed over a wide AOI runs past the pixel budget. The request refuses naming the
+  spacing that fits rather than coarsening on its own behalf.
+docstring: |-
+  Fetch an NCEI regional coastal DEM - the finest published US coastal bed - for a bbox.
+
+  **What it does:**
+      Finds the published regional integrated topo-bathy collections whose
+      footprint reaches the AOI, reads the items each one shipped over it, and
+      reprojects them onto one shared grid. Output is a single-band float32
+      Cloud-Optimized GeoTIFF, NAVD88 metres, **positive-up** (the sea floor is
+      NEGATIVE) - byte-format identical to ``fetch_dem``, ``fetch_cudem`` and
+      ``fetch_bluetopo`` so a terrain ingestion consumes it unchanged.
+
+      These are the USGS CoNED-style integrations: one continuous 1 m surface
+      across the shoreline, built for one stretch of coast at a time.
+
+  **When to use:**
+      - The nearshore bed where the question turns on metre-scale detail - a
+        harbour, a marina basin, an inlet, a structure - and a collection covers
+        the coast in question.
+      - A coast the CUDEM 1/9 arc-second collection omits but a regional
+        integration reaches.
+      - User asks for "CoNED", "the 1 m coastal DEM", or "the finest bathymetry
+        published here".
+
+  **When NOT to use:**
+      - A wide AOI - a 1 m grid runs past the pixel budget and the request
+        refuses. Ask ``fetch_cudem`` or ``fetch_bluetopo`` for that extent.
+      - A coast with no published collection - it refuses, and the coarser bed
+        rows are what reach it.
+
+  **Parameters:**
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326, inside a
+          published collection's footprint.
+      target_crs: output CRS (default ``EPSG:32616``). The NAVD88 vertical is
+          preserved; only the horizontal grid is reprojected.
+      resolution_m: OPTIONAL output cell in metres. The merge is floored at this
+          value even where a 1 m item is available; it never invents a finer cell
+          than the item it read, and it never coarsens past what was asked.
+      timeout_s: item-collection read budget in seconds (default 120).
+
+  **Returns:**
+      A ``LayerURI`` pointing at the merged COG in the cache bucket.
+      ``layer_type="raster"``, ``role="input"``, ``units="meters"``.
+
+  **Errors:**
+      - ``REGIONAL_COASTAL_DEM_INPUT_INVALID``: bad bbox, or more items than one
+        request merges (retryable=False).
+      - ``REGIONAL_COASTAL_DEM_COVERAGE_GAP``: no collection reaches the AOI, or
+        the items painted none of it (retryable=False).
+      - ``REGIONAL_COASTAL_DEM_UPSTREAM_ERROR``: item-collection read, item read
+        or merge failure (retryable=True).

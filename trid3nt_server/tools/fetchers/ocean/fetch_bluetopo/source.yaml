@@ -113,7 +113,7 @@ docstring: |-
       grid (coarsest tier first so the finest tier wins where tiers overlap).
       Output is a single-band float32 Cloud-Optimized GeoTIFF, NAVD88 metres,
       **positive-up** (the sea floor is NEGATIVE) - byte-format identical to
-      ``fetch_dem`` and ``fetch_topobathy`` so a terrain ingestion consumes it
+      ``fetch_dem`` and ``fetch_cudem`` so a terrain ingestion consumes it
       unchanged.
 
       BlueTopo is NOAA's National Bathymetric Source: a compiled best-available
@@ -132,9 +132,8 @@ docstring: |-
 
   **When NOT to use:**
       - Land elevation - there is none in this product. Use ``fetch_dem``.
-      - A seamless land-plus-sea surface in one raster - use
-        ``fetch_topobathy``, which merges a coastal topo-bathy composite with
-        the 3DEP land DEM.
+      - A seamless land-plus-sea surface in one raster - use ``fetch_cudem``,
+        whose 1/9 arc-second tiles carry the land beside the sea floor.
       - Outside navigationally significant US water: this tool refuses
         (see the coverage row).
 
@@ -144,8 +143,8 @@ docstring: |-
       target_crs: output CRS (default ``EPSG:32616``). The NAVD88 vertical is
           preserved; only the horizontal grid is reprojected.
       timeout_s: tile-scheme listing / download budget in seconds (default 120).
-      resolution_m: OPTIONAL output cell size in metres, the same lever name the
-          topobathy composite takes. The merge is floored at this value even
+      resolution_m: OPTIONAL output cell size in metres, the lever every bed row
+          takes under one name. The merge is floored at this value even
           where a 2 m tile is available, which keeps a small AOI from producing
           a needlessly heavy grid; it never invents a cell finer than the tile
           that was read, and it never coarsens past what was asked.

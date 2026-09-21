@@ -8,9 +8,10 @@ land DEM with no vertical transformation."""
 # GeoPackage of tile polygons carrying each delivered tile's raster link, its resolution
 # tier and its UTM zone. That file is the coverage truth -- a tile row with no link is a
 # tile the programme defined and has not delivered -- so the AOI is intersected against
-# it rather than against any assumption about the grid. The warp-merge onto one target
-# grid is NOT bespoke and is not reimplemented here: the coastal composite's per-source
-# reprojecting compositor is called directly.
+# it rather than against any assumption about the grid.
+#
+# The warp-merge onto one target grid is NOT bespoke and is not reimplemented here:
+# the shared tile mosaic owns it.
 #
 # ``read`` records the fetch-time provenance -- datum, tiles, tiers, measured coverage
 # -- on the provenance channel, so it survives a cache hit and ``envelope`` can replay
@@ -29,6 +30,7 @@ from trid3nt_server.tools.cache import record_provenance
 from trid3nt_server.tools.fetchers._public_s3 import public_s3_client
 
 from ..._fetch_common import FetchError
+from ..._tile_mosaic import VSICURL_ENV, MosaicEmpty, mosaic, painted_fraction
 from ..._router.hooks import register_hook
 
 logger = logging.getLogger(__name__)
@@ -240,11 +242,9 @@ def assert_navd88_tile(vsicurl_path: str) -> str:
     stating neither is refused, since a known datum is why this source is on a ladder."""
     import rasterio
 
-    from ..._router.hooks.topobathy import _VSICURL_ENV_KW
-
     text = ""
     try:
-        with rasterio.Env(**_VSICURL_ENV_KW):
+        with rasterio.Env(**VSICURL_ENV):
             with rasterio.open(vsicurl_path) as ds:
                 crs = ds.crs
                 if crs is not None:
@@ -304,13 +304,6 @@ def read_bluetopo(
     spec: Any, params: dict[str, Any], *, timeout_s: float
 ) -> tuple[Any, Any, Any]:
     """AOI -> tile-scheme select -> per-tile NAVD88 gate -> merged bed."""
-    from ..._router.hooks.topobathy import (
-        TopobathyEmptyError,
-        TopobathyUpstreamError,
-        _composite_sources_to_array,
-        painted_fraction,
-    )
-
     bbox = tuple(float(v) for v in params["bbox"])
     target_crs = (str(params.get("target_crs") or TARGET_CRS)).strip()
     fetch_timeout = float(params.get("timeout_s") or 120.0)
@@ -322,8 +315,8 @@ def read_bluetopo(
         raise BlueTopoCoverageGapError(
             f"no delivered NOAA BlueTopo tile intersects {bbox!r}. BlueTopo covers "
             "navigationally significant US waters; this AOI is outside what the "
-            "programme has delivered. Supply your own bed (dem_uri on the "
-            "topobathy row) or permit a declared alternative rung."
+            "programme has delivered. Supply your own bed, or let the bed "
+            "ladder lay a source that reaches this water."
         )
     if len(rows) > _MAX_TILES:
         raise BlueTopoInputError(
@@ -338,16 +331,13 @@ def read_bluetopo(
         sources.append(path)
 
     try:
-        array, transform, crs, painted, _footprints = _composite_sources_to_array(
-            sources, target_crs, bbox, resolution_m=resolution_m
+        array, transform, crs, painted = mosaic(
+            sources, target_crs, bbox, resolution_m=resolution_m,
+            source="fetch_bluetopo",
         )
-    except TopobathyEmptyError as exc:
+    except MosaicEmpty as exc:
         raise BlueTopoCoverageGapError(
             f"the BlueTopo tiles selected for {bbox!r} produced no bed: {exc}"
-        ) from exc
-    except TopobathyUpstreamError as exc:
-        raise BlueTopoUpstreamError(
-            f"BlueTopo tile read / merge failed for {bbox!r}: {exc}"
         ) from exc
 
     painted_rows = [row for row, ok in zip(rows, painted) if ok]

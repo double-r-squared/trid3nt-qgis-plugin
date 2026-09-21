@@ -1,0 +1,137 @@
+schema_version: v1
+name: fetch_etopo
+source_class: etopo
+shape: raster-cog
+supports_global_query: false
+error_prefix: ETOPO
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: COVERAGE_GAP
+endpoints:
+  data:
+    url: https://www.ngdc.noaa.gov/mgg/global/relief/ETOPO2022/
+auth:
+  mode: none
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  target_crs:
+    type: str
+    default: EPSG:32616
+  resolution_m:
+    type: float
+    schema_optional: true
+  timeout_s:
+    type: float
+    default: 120.0
+ingest:
+  access: library_delegate
+  delegate:
+    library: etopo_tile_grid
+    timeout_s: 600.0
+hooks:
+  delegate: etopo.read
+  delegate_validate: etopo.validate
+normalize:
+  crs: EPSG:32616
+  units: meters
+  datum: egm2008
+  quantity: elevation
+output:
+  layer_type: raster
+  ext: tif
+  role: input
+  style:
+    kind: continuous
+    ramp: gray
+    units: m
+  emit_bbox: true
+  display_name: NOAA ETOPO 2022 global relief (EGM2008)
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 4.0
+  floor_mb: 0.5
+# The model's own cell: 15 arc-second, about 450 m at the equator. resolution_m
+# floors the merge and never invents a finer cell than the tile it read.
+resolution_declarations:
+- param: resolution_m
+  unit: m
+  min_value: 450
+  native_hint: ETOPO 2022 15 arc-second, about 450 m
+  constraint_source: data
+  rationale: the published model's own cell size; this is a global relief model and no ask makes it finer than 15 arc-seconds
+coverage:
+-   data_class: bathymetry
+    kind: modelled
+    extent:
+      kind: surface
+      rings:
+      - [[-180.0, -90.0], [180.0, -90.0], [180.0, 90.0], [-180.0, 90.0]]
+      note: global and complete - land, shelf and deep ocean in one surface
+    window:
+      series: false
+      latest: '2022-01-01'
+    resolution_m: 450.0
+    datum: egm2008
+    units:
+      elevation: m
+    value_column: elevation
+
+caveats:
+- ETOPO 2022 is a global relief MODEL built by integrating regional and global datasets,
+  not a survey. It is the bed where nothing measured reaches - the deep column offshore -
+  and it is about 450 m, two orders coarser than a nearshore survey.
+- The surface-elevation product is referenced to the EGM2008 geoid, NOT to NAVD88, so a
+  run solved on NAVD88 reads it through a measured offset or it drops off the bed ladder.
+  It is never silently merged onto another zero.
+- The values are positive-up - land positive, the sea floor NEGATIVE - and the surface
+  variant carries the top of ice over Greenland and Antarctica rather than the bedrock.
+docstring: |-
+  Fetch NOAA NCEI ETOPO 2022 15 arc-second global relief for a bbox.
+
+  **What it does:**
+      Resolves the AOI onto the model's complete global grid of 15-degree COG
+      tiles, reads the ones it touches, and reprojects them onto one shared grid.
+      Output is a single-band float32 Cloud-Optimized GeoTIFF in metres,
+      **positive-up** (the sea floor is NEGATIVE), referenced to the EGM2008
+      geoid - byte-format identical to ``fetch_dem`` so a terrain ingestion
+      consumes it unchanged.
+
+      ETOPO 2022 is one continuous topo-bathymetric surface over the whole globe:
+      land, continental shelf and deep ocean, with no coastline seam in it.
+
+  **When to use:**
+      - The DEEP bed a basin-scale question needs - a far-field tsunami, an
+        offshore wave transformation, an ocean-scale domain - where no survey
+        reaches and a coarse real bed beats no bed.
+      - Anywhere outside the US, where the national surveys do not publish.
+      - User asks for "ETOPO", "global bathymetry", "ocean depth", or "the sea
+        floor offshore".
+
+  **When NOT to use:**
+      - The nearshore or a harbour - 450 m averages the surf zone and the channel
+        away. Use ``fetch_cudem``, ``fetch_regional_coastal_dem`` or
+        ``fetch_bluetopo``.
+      - Land terrain for a hydraulic model - use ``fetch_dem``.
+
+  **Parameters:**
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326, anywhere.
+      target_crs: output CRS (default ``EPSG:32616``). The EGM2008 vertical is
+          preserved; only the horizontal grid is reprojected.
+      resolution_m: OPTIONAL output cell in metres, floored at the model's own
+          15 arc-second cell. It never invents a finer cell than the tile read.
+      timeout_s: tile read budget in seconds (default 120).
+
+  **Returns:**
+      A ``LayerURI`` pointing at the merged COG in the cache bucket.
+      ``layer_type="raster"``, ``role="input"``, ``units="meters"``.
+
+  **Errors:**
+      - ``ETOPO_INPUT_INVALID``: bad bbox, out of lon/lat range, or spanning
+        more tiles than one request merges (retryable=False).
+      - ``ETOPO_COVERAGE_GAP``: the tiles painted no cell of the AOI
+        (retryable=False).
+      - ``ETOPO_UPSTREAM_ERROR``: tile read or merge failure (retryable=True).
