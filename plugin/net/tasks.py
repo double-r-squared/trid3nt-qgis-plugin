@@ -19,6 +19,7 @@ from .trid3nt_client import (
 )
 from ..case import push_layer
 from ..render import probe
+from ..render.export_layer import LayerExportError
 
 
 class _CaseListTask(QObject):
@@ -157,7 +158,7 @@ class _PushLayerTask(QObject):
             result = push_layer.push_active_layer(
                 self._base_url, self._case_id, self._layer, make_aoi=self._make_aoi
             )
-        except push_layer.PushLayerRequestError as exc:
+        except (push_layer.PushLayerRequestError, LayerExportError) as exc:
             self.errored.emit(self._layer_name, str(exc))
             return
         except Exception as exc:  # noqa: BLE001 -- surfaced, never silent

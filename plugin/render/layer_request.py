@@ -14,7 +14,8 @@ import os
 import traceback
 from typing import Any, Dict, Optional, Tuple
 
-from ..case.push_layer import export_active_layer_to_tempfile, upload_layer_bytes
+from ..case.push_layer import upload_layer_bytes
+from .export_layer import export_to_tempfile
 
 #: The tail of an error that rides the response.
 _TAIL_CHARS = 8000
@@ -117,7 +118,7 @@ def materialise(
 ) -> str:
     """Export the windowed layer and upload it through the ingest route; the
     staged object's uri is what the daemon reads the bytes back from."""
-    path, _kind = export_active_layer_to_tempfile(window_to_bbox(layer, bbox))
+    path, _kind = export_to_tempfile(window_to_bbox(layer, bbox))
     try:
         with open(path, "rb") as handle:
             data = handle.read()
