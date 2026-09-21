@@ -1,11 +1,9 @@
-"""``fetch_osm_features``: one Overpass interpreter, five feature classes.
+"""``fetch_osm_features``: one Overpass interpreter, four feature classes.
 
 Each class owns its own tag vocabulary, clip-or-whole rule and property shape,
 which is what these OFFLINE tests exercise against synthetic frames shaped
-exactly as the library returns them. The mirror chain and the silent-error
-hook run against a stand-in for its request seam (``tests/fetchers/
-test_router_arcgis_odd.py`` is a different family; the osm mirror/status tests
-live beside ``_router/hooks/osm.py`` itself)."""
+exactly as the library returns them. The mirror chain and the silent-error hook
+run against a stand-in for its request seam."""
 
 from __future__ import annotations
 
