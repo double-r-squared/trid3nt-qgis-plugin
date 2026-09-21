@@ -3,8 +3,8 @@
 The daemon borrows the session's data providers: it hands over a provider name
 and the datasource string that provider takes, and the session opens the layer.
 ``mode: open`` leaves it on the map as context and answers at once; ``mode:
-materialise`` windows it to the asked bbox, exports it and uploads it through the
-ingest route, so the daemon can land it in the store as any fetch does. The
+materialise`` exports it over the asked bbox and uploads it through the ingest
+route, so the daemon can land it in the store as any fetch does. The
 request carries the row's own ask: an absent bbox is the whole published layer,
 and a stated spacing is the grid the export is written at. An error is the
 provider's own text, never a fabricated success.
@@ -121,34 +121,6 @@ def add_to_map(
     zoom_to_bbox4326(iface.mapCanvas(), bbox)
 
 
-def window_to_bbox(
-    layer: Any, bbox: Optional[Tuple[float, float, float, float]]
-) -> Any:
-    """The layer restricted to the asked window: a materialised row carries the
-    AOI, never the provider's whole published coverage. A row whose ask IS the
-    whole published layer carries no bbox, and then there is no window to cut."""
-    from qgis.core import QgsProcessing, QgsRasterLayer, QgsVectorLayer
-
-    import processing
-
-    if bbox is None:
-        return layer
-    extent = f"{bbox[0]},{bbox[2]},{bbox[1]},{bbox[3]} [EPSG:4326]"
-    if isinstance(layer, QgsRasterLayer):
-        clipped = processing.run("gdal:cliprasterbyextent", {
-            "INPUT": layer, "PROJWIN": extent,
-            "OUTPUT": QgsProcessing.TEMPORARY_OUTPUT,
-        })["OUTPUT"]
-        return QgsRasterLayer(clipped, layer.name()) if isinstance(clipped, str) else clipped
-    extracted = processing.run("native:extractbyextent", {
-        "INPUT": layer, "EXTENT": extent, "CLIP": False,
-        "OUTPUT": QgsProcessing.TEMPORARY_OUTPUT,
-    })["OUTPUT"]
-    if isinstance(extracted, str):
-        return QgsVectorLayer(extracted, layer.name(), "ogr")
-    return extracted
-
-
 def materialise(
     layer: Any,
     bbox: Optional[Tuple[float, float, float, float]],
@@ -159,7 +131,7 @@ def materialise(
     """Export the windowed layer at the asked spacing and upload it through the
     ingest route; the staged object's uri is what the daemon reads the bytes back
     from."""
-    path, _kind = export_to_tempfile(window_to_bbox(layer, bbox), resolution_m)
+    path, _kind = export_to_tempfile(layer, bbox, resolution_m)
     try:
         with open(path, "rb") as handle:
             data = handle.read()
