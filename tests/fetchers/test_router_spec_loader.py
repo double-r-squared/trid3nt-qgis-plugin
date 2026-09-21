@@ -4,8 +4,8 @@ A well-formed spec loads for each pilot shape, and a malformed one - a missing
 required key, a shape and output mismatch, a join over a non-vector shape -
 raises the typed load error. A spec that omits its phrasings picks them up from
 the sibling corpus, and a tree compose keys by name and SKIPS a malformed member. The
-statements that shape a record are in its cache key, so a changed vocabulary
-misses the artifact cached under the old one."""
+statements that shape a record are in its cache key, so a changed vocabulary or a
+corrected provider row misses the artifact cached under the old one."""
 
 from __future__ import annotations
 
@@ -406,3 +406,38 @@ def test_a_changed_vocabulary_misses_the_artifact_cached_under_the_old_one(fake_
                          record_shape=record_shape(changed))
     assert after.hit is False
     assert after.data == b"shaped by the new statements"
+
+
+def test_a_changed_provider_row_misses_the_artifact_cached_under_the_old_one(fake_s3):
+    """A declarative row states its ingestion where a hook used to hold it, so a
+    corrected datasource has to invalidate the same way corrected hook bytes do."""
+    from trid3nt_server.tools.cache import read_through
+    from trid3nt_server.tools.fetchers._router.router import synthesize_metadata
+    from trid3nt_server.tools.fetchers._router.spec import record_shape
+
+    rowed = {**vector_spec(), "ingest": {
+        "access": "qgis_provider",
+        "qgis_provider": {"provider": "arcgisfeatureserver",
+                          "uri": "crs='EPSG:4326' url='{url}'", "mode": "materialise"},
+    }}
+    spec = load_spec(rowed)
+    metadata = synthesize_metadata(spec)
+    params = {"bbox": [-122.5, 37.7, -122.4, 37.8]}
+
+    landed = read_through(metadata=metadata, params=params, ext="fgb",
+                          fetch_fn=lambda: b"read through the old row",
+                          record_shape=record_shape(spec))
+    again = read_through(metadata=metadata, params=params, ext="fgb",
+                         fetch_fn=lambda: b"never fetched",
+                         record_shape=record_shape(spec))
+    assert landed.hit is False
+    assert again.hit is True and again.data == b"read through the old row"
+
+    moved = {**rowed, "ingest": {**rowed["ingest"], "qgis_provider": {
+        **rowed["ingest"]["qgis_provider"],
+        "uri": "crs='EPSG:4326' url='{url}' restrictToRequestBBOX='1'"}}}
+    after = read_through(metadata=metadata, params=params, ext="fgb",
+                         fetch_fn=lambda: b"read through the corrected row",
+                         record_shape=record_shape(load_spec(moved)))
+    assert after.hit is False
+    assert after.data == b"read through the corrected row"

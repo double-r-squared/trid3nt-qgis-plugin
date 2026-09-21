@@ -99,15 +99,19 @@ def _hook_sources(spec: SourceSpec) -> list[str]:
 def record_shape(spec: SourceSpec) -> str:
     """The digest of what shapes a record this source lands: its coverage rows -
     the columns, the vocabulary they are asked by, their units and the zero they
-    are counted from - its normalization, and the bytes of every hook that
-    decodes the body.
+    are counted from - its ingestion block, its normalization, and the bytes of
+    every hook that decodes the body.
 
     It salts the cache key, because the cached artifact was shaped by the
     statements standing at the fetch: a correction landed here would otherwise be
     invisible to every AOI already cached until the TTL bucket turned over, which
-    is a fixed source still answering with the wrong record."""
+    is a fixed source still answering with the wrong record. A declarative row
+    states in ``ingest`` what a hook used to carry in code - the provider, the
+    datasource it opens, the columns it keeps - so the block is read here for the
+    same reason the hook bytes are."""
     stated = {
         "coverage": [row.model_dump(mode="json") for row in spec.coverage],
+        "ingest": spec.ingest,
         "normalize": spec.normalize.model_dump(mode="json"),
         "vertical_datum": spec.vertical_datum,
     }
