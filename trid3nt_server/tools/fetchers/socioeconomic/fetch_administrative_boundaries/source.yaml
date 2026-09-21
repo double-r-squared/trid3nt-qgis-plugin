@@ -1,4 +1,9 @@
+# Census TIGERweb administrative polygons, materialised through QGIS's own ArcGIS
+# FeatureServer provider: one endpoint per admin level the row serves, the level
+# picking it, and the asked name applied as the provider's subset clause. Mode
+# materialise, so the polygon lands in the store and can stand as a run's extent.
 schema_version: v1
+
 name: fetch_administrative_boundaries
 source_class: admin_boundaries
 error_prefix: ADMIN_BOUNDARY
@@ -6,37 +11,57 @@ input_error_suffix: ERROR
 empty_error_suffix: EMPTY
 shape: vector-fgb
 supports_global_query: false
+
 endpoints:
-  data:
-    url: https://www2.census.gov/geo/tiger/TIGER2024
+  state:
+    url: "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/0"
+  county:
+    url: "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/1"
+  place:
+    url: "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Places_CouSub_ConCity_SubMCD/MapServer/4"
+  cdp:
+    url: "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Places_CouSub_ConCity_SubMCD/MapServer/5"
+  zcta:
+    url: "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/PUMA_TAD_TAZ_UGA_ZCTA/MapServer/1"
 auth:
   mode: none
-  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
-    agent@trid3nt.dev)
+  user_agent: trid3nt_default
+
 params:
   level:
     type: enum
     required: true
-    values:
-    - state
-    - county
-    - place
-    - zcta
+    values: [state, county, place, cdp, zcta]
     error_suffix: LEVEL_INVALID
   bbox:
     type: bbox
     required: true
     quantize: round_6dp
-hooks:
-  build_request: admin_boundaries.build_request
+  name:
+    type: str
+    required: false
+    default: null
+
 ingest:
-  access: ogr
-  ogr:
-    driver: vsizip
-    # A bbox the archive does not reach is out of coverage, not an empty answer.
-    empty_is_typed_error: true
+  access: qgis_provider
+  qgis_provider:
+    provider: arcgisfeatureserver
+    uri: "crs='EPSG:4326' url='{url}'"
+    mode: materialise
+  # The level IS the sub-layer: TIGERweb publishes one layer per admin class.
+  endpoint_by_param:
+    param: level
+    map: {state: state, county: county, place: place, cdp: cdp, zcta: zcta}
+  # A named region is the provider's subset; unnamed, the bbox window is the ask.
+  where_clauses:
+    - {template: "NAME='{name}'", require: [name]}
+  column_map:
+    GEOID: {from: GEOID}
+    NAME:  {from: NAME}
+
 normalize:
-  crs: EPSG:4326
+  crs: "EPSG:4326"
+
 output:
   layer_type: vector
   ext: fgb
@@ -45,6 +70,7 @@ output:
     kind: reference
     geometry: polygon
   emit_bbox: false
+
 cache:
   ttl_class: static-30d
 payload_estimate:
@@ -52,47 +78,56 @@ payload_estimate:
   mb_per_sq_deg: 2.0
   floor_mb: 0.05
   ceil_mb: 20.0
+
 caveats:
 - "model-callable, not matched: an administrative boundary is not one of the classes a slot asks for, so it carries no coverage row"
-- US Census TIGER/Line 2024 administrative polygons (state/county/place/zcta), clipped to bbox. The
-  shapefile is read inside the remote ZIP by range request; place fans out per intersecting state FIPS.
-  US + territories only. No feature in bbox -> ADMIN_BOUNDARY_EMPTY.
-docstring: |-
-  Fetch US Census TIGER/Line 2024 administrative-boundary polygons clipped to a bbox.
+- "US Census TIGERweb polygons by admin level (state, county, place, cdp, zcta), windowed to the bbox and stored as a vector layer that can stand as a run's extent"
+- "TIGERweb splits what the TIGER PLACE file merged: level=place is incorporated places, level=cdp is census designated places"
+- "a name carrying an apostrophe is not expressible as the provider's subset clause; ask that region by bbox"
+- "US + territories only; the QGIS session opens the provider, so a headless or direct call refuses by name"
 
-  **What it does:** Reads the TIGER/Line 2024 shapefile for the requested
-  administrative level inside its ZIP on ``census.gov``, by range request,
-  selecting the features that intersect the bbox, and returns a FlatGeobuf
-  vector layer. Cached ``static-30d``
-  (boundaries change at most once per census year). Four levels supported:
-  state, county, place (cities/CDPs), and ZIP Code Tabulation Areas (zcta).
+docstring: |-
+  US administrative-boundary polygons by level, for a map or a run's extent.
+
+  Materialises the Census TIGERweb polygons for one administrative level -
+  ``state``, ``county``, ``place`` (incorporated cities/towns), ``cdp``
+  (census designated places) or ``zcta`` (ZIP Code Tabulation Areas) - over
+  the requested bbox, optionally narrowed to one region by ``name``. The
+  polygons land in the case store as a FlatGeobuf layer, so they can be drawn,
+  clipped against, aggregated by, or taken as the extent a run is solved over.
+  Cached ``static-30d``.
 
   **When to use:**
-  - Agent needs administrative outlines for spatial context alongside a
-    hazard layer (e.g. county boundaries over a flood inundation surface).
-  - Workflow must aggregate or label results by jurisdiction -- state, county,
-    city, or ZIP code.
-  - User asks for a geographic boundary before clipping a layer to it in the
-    session (``run_qgis_algorithm``).
-  - ``geocode_location`` returned a bbox but the workflow needs the actual
-    polygon for precise clipping.
+  - User asks for a state, county, city or ZIP-code boundary, outline or
+    polygon.
+  - A run needs a jurisdiction as its extent rather than a rectangle
+    ("model the flood over Lee County").
+  - Results must be labelled or aggregated by jurisdiction.
+  - Administrative context alongside a hazard layer.
 
   **When NOT to use:**
-  - Parcel-level or cadastral boundaries (county assessor data; not in scope).
-  - Congressional or voting districts (different TIGER layers, not added).
-  - International administrative boundaries (TIGER is US + territories only).
-  - Simple place-name -> bbox resolution (use ``geocode_location`` instead).
+  - Parcel or cadastral boundaries (county assessor data; not in scope).
+  - Congressional or voting districts (different TIGERweb services).
+  - Non-US boundaries (TIGERweb is US + territories only).
+  - A place name to bbox with no polygon needed (``geocode_location``).
 
   **Parameters:**
-  - ``level`` (str): one of ``"state"`` (50 + DC + territories), ``"county"``
-    (3000+ counties), ``"place"`` (cities/CDPs; per-state ZIPs; only states
-    intersecting bbox are fetched), or ``"zcta"`` (ZIP Code Tabulation Areas;
-    ~504 MB download -- subsequent calls hit 30-day cache).
-  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
-    Example: ``(-82.2, 26.3, -81.5, 26.8)`` for Lee County FL.
+  - ``level`` (str): ``"state"``, ``"county"``, ``"place"``, ``"cdp"`` or
+    ``"zcta"``.
+  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326,
+    the window the layer is taken over. Example ``(-82.2, 26.3, -81.5, 26.8)``
+    for Lee County FL.
+  - ``name`` (str, optional): the region's TIGERweb ``NAME``, applied as the
+    layer's subset - ``"Florida"``, ``"Lee County"``, ``"Fort Myers"``.
 
   **Returns:**
-  ``LayerURI(layer_type="vector", role="context", units=None)`` pointing at a
-  FlatGeobuf with TIGER standard fields (GEOID, NAME, STATEFP, etc.) clipped
-  to the requested bbox.
+  ``LayerURI(layer_type="vector", role="context")`` over a FlatGeobuf carrying
+  ``GEOID`` and ``NAME`` per polygon.
 
+  **Error types:**
+  - ``ADMIN_BOUNDARYError``: bad level, bbox or name (retryable=False).
+  - ``ADMIN_BOUNDARYUpstreamError``: the provider's own text when it cannot
+    open the service (retryable=True).
+
+  Requires a live QGIS session: the layer is opened through the session's own
+  provider, so a headless or direct call refuses by name.

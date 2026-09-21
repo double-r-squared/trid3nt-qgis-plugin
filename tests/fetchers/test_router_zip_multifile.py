@@ -1,7 +1,7 @@
 """Offline coverage for the zip and multi-file fold.
 
 The fixed tile grid's math with its whole-object per-tile extract, window and
-merge, and the request planner with the zip-member read the vector executor does.
+merge, and the zip-member read, bbox filter and merge the vector executor does.
 The raster half stubs the shared archive step; the vector half points the driver
 at real local zips, so the machinery runs deterministically."""
 
@@ -14,9 +14,9 @@ import zipfile
 import numpy as np
 import pytest
 
+from trid3nt_contracts.source_spec import SourceSpec
 from trid3nt_server.tools.fetchers._router.errors import RouterError
 from trid3nt_server.tools.fetchers._router.executors import raster_cog, vector_ogr
-from trid3nt_server.tools.fetchers.socioeconomic.fetch_administrative_boundaries import hooks as adm
 from trid3nt_server.tools.fetchers._router import router
 from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 from trid3nt_server.tools.fetchers._router.transport import TransportNotFound
@@ -130,42 +130,6 @@ def test_ghsl_input_errors(specs):
 
 
 
-def test_admin_state_fips_for_bbox():
-    # Lee County FL -> state 12 (Florida) only.
-    assert adm._state_fips_for_bbox((-82.2, 26.3, -81.5, 26.8)) == ["12"]
-    # Western Aleutians (positive lon) route to AK via the antimeridian tail.
-    assert "02" in adm._state_fips_for_bbox((173.0, 52.0, 174.0, 52.5))
-
-
-def test_admin_build_request_nationwide(specs):
-    spec = specs["fetch_administrative_boundaries"]
-    for level, frag in [("state", "us_state"), ("county", "us_county"), ("zcta", "us_zcta520")]:
-        plans = adm.build_request(spec, {"level": level, "bbox": (-82.2, 26.3, -81.5, 26.8)})
-        assert len(plans) == 1 and frag in plans[0].url
-
-
-def test_admin_build_request_place_fanout(specs):
-    spec = specs["fetch_administrative_boundaries"]
-    plans = adm.build_request(spec, {"level": "place", "bbox": (-82.2, 26.3, -81.5, 26.8)})
-    assert len(plans) == 1 and "tl_2024_12_place.zip" in plans[0].url
-
-
-def test_admin_place_not_routable_raises_level_invalid(specs):
-    spec = specs["fetch_administrative_boundaries"]
-    with pytest.raises(RouterError) as ei:
-        adm.build_request(spec, {"level": "place", "bbox": (-140.0, 20.0, -139.9, 20.1)})
-    assert ei.value.error_code == "ADMIN_BOUNDARY_LEVEL_INVALID"
-
-
-def test_admin_bad_level_enum(specs):
-    spec = specs["fetch_administrative_boundaries"]
-    with pytest.raises(RouterError) as ei:
-        router.validate_params(spec, {"level": "galaxy", "bbox": [-82.2, 26.3, -81.5, 26.8]})
-    assert ei.value.error_code == "ADMIN_BOUNDARY_LEVEL_INVALID"
-
-
-
-
 def _shapefile_zip(dir_path, polys):
     """A real shapefile ZIP on disk (GEOID/NAME + polygons); returns its path."""
     import geopandas as gpd
@@ -185,16 +149,34 @@ def _shapefile_zip(dir_path, polys):
     return str(zip_path)
 
 
+def _zip_spec() -> SourceSpec:
+    """A vsizip row: the archive member read, bbox filter and FGB serialization the
+    zip half of the vector executor does, with no live source behind it."""
+    return SourceSpec.model_validate({
+        "name": "fetch_demo_zipped",
+        "source_class": "demo_zipped",
+        "error_prefix": "DEMO_ZIPPED",
+        "shape": "vector-fgb",
+        "endpoints": {"data": {"url": "https://example.test/archive"}},
+        "params": {"bbox": {"type": "bbox", "required": True}},
+        "ingest": {"access": "ogr", "ogr": {"driver": "vsizip", "empty_is_typed_error": True}},
+        "normalize": {"crs": "EPSG:4326"},
+        "output": {"layer_type": "vector", "ext": "fgb", "role": "context"},
+        "cache": {"ttl_class": "static-30d"},
+        "payload_estimate": {"model": "bbox_area", "mb_per_sq_deg": 2.0},
+    })
+
+
 def _point_at_local_zips(monkeypatch, paths):
     """Drive the vsizip read against local archives instead of remote ones."""
     monkeypatch.setattr(vector_ogr, "zip_urls", lambda spec, params, endpoint: list(paths))
     monkeypatch.setattr(vector_ogr, "open_path", lambda spec, url: f"/vsizip/{url}")
 
 
-def test_zip_member_reads_filters_and_serializes(specs, monkeypatch, tmp_path):
+def test_zip_member_reads_filters_and_serializes(monkeypatch, tmp_path):
     import geopandas as gpd
 
-    spec = specs["fetch_administrative_boundaries"]
+    spec = _zip_spec()
     d = tmp_path / "s"
     d.mkdir()
     zp = _shapefile_zip(
@@ -205,36 +187,36 @@ def test_zip_member_reads_filters_and_serializes(specs, monkeypatch, tmp_path):
     _point_at_local_zips(monkeypatch, [zp])
     out = tmp_path / "out.fgb"
     out.write_bytes(vector_ogr.execute(
-        spec, {"level": "county", "bbox": [-82.2, 26.3, -82.0, 26.5]}))
+        spec, {"bbox": [-82.2, 26.3, -82.0, 26.5]}))
     gdf = gpd.read_file(out)
     assert len(gdf) == 1                      # only Alpha intersects the bbox
     assert set(gdf["GEOID"]) == {"A"}
     assert {"GEOID", "NAME"}.issubset(set(gdf.columns))
 
 
-def test_zip_member_nationwide_empty_is_out_of_coverage(specs, monkeypatch, tmp_path):
-    spec = specs["fetch_administrative_boundaries"]
+def test_zip_member_empty_is_out_of_coverage(monkeypatch, tmp_path):
+    spec = _zip_spec()
     d = tmp_path / "s"
     d.mkdir()
     _point_at_local_zips(
         monkeypatch, [_shapefile_zip(d, [("B", "Bravo", (-70.0, 40.0, -69.9, 40.1))])])
     with pytest.raises(RouterError) as ei:
-        vector_ogr.execute(spec, {"level": "county", "bbox": [-82.2, 26.3, -82.0, 26.5]})
-    assert ei.value.error_code == "ADMIN_BOUNDARY_EMPTY"
+        vector_ogr.execute(spec, {"bbox": [-82.2, 26.3, -82.0, 26.5]})
+    assert ei.value.error_code == "DEMO_ZIPPED_EMPTY"
 
 
-def test_zip_member_place_merge_concatenates_the_states(specs, monkeypatch, tmp_path):
+def test_zip_member_merge_concatenates_the_archives(monkeypatch, tmp_path):
     import geopandas as gpd
 
-    spec = specs["fetch_administrative_boundaries"]
+    spec = _zip_spec()
     d1, d2 = tmp_path / "s1", tmp_path / "s2"
     d1.mkdir()
     d2.mkdir()
-    hit = _shapefile_zip(d1, [("P1", "Place1", (-82.2, 26.3, -82.0, 26.5))])
-    miss = _shapefile_zip(d2, [("P2", "Place2", (-70.0, 40.0, -69.9, 40.1))])
+    hit = _shapefile_zip(d1, [("P1", "One", (-82.2, 26.3, -82.0, 26.5))])
+    miss = _shapefile_zip(d2, [("P2", "Two", (-70.0, 40.0, -69.9, 40.1))])
     _point_at_local_zips(monkeypatch, [hit, miss])
     out = tmp_path / "m.fgb"
     out.write_bytes(vector_ogr.execute(
-        spec, {"level": "place", "bbox": [-82.2, 26.3, -82.0, 26.5]}))
+        spec, {"bbox": [-82.2, 26.3, -82.0, 26.5]}))
     gdf = gpd.read_file(out)
-    assert set(gdf["GEOID"]) == {"P1"}   # the state with nothing in the bbox adds nothing
+    assert set(gdf["GEOID"]) == {"P1"}   # the archive with nothing in the bbox adds nothing
