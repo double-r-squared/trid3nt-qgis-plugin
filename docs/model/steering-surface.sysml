@@ -911,9 +911,13 @@ package SteeringSurface {
         module - with each token checked against the keyword's own choices; a
         template restating it, or naming a style of its own, is refused.
 
-        Everything the table rows and the result carries is published as ONE
-        layer styled from the row: the TEMPORAL layer where the row varies in
-        time, the final frame where it does not. A still beside a time series
+        EVERY variable a result file WROTE is published as ONE layer: the
+        TEMPORAL layer where the row that names it varies in time, the final
+        frame where it does not. The RESULT FILE is the list and the table is
+        what draws it - a variable no row names is published under the spelling
+        the file itself carries, in the unit the record itself carries, with a
+        journal line saying so - because a real result omitted is as wrong as a
+        slot the engine never wrote published. A still beside a time series
         would be a copy of a frame that layer already carries, so a picture of
         one instant is a render of the temporal layer rather than a second
         product. That layer's legend is ranged over EVERY frame of the record,
@@ -922,9 +926,10 @@ package SteeringSurface {
         run's own data reached the top of its scale. There is no leading layer
         and no ranking among the rows, because every group rides the one mesh
         the run solved on and the camera takes its extent; the order is the
-        dictionary's. A row the result does not carry is skipped rather than
-        refused, and a row a module prints in its listing or derives over its
-        own variables is read or published but never asked of the engine.
+        dictionary's, then what the files carry past it. A row the result does
+        not carry is skipped rather than refused, and a row a module prints in
+        its listing or derives over its own variables is read or published but
+        never asked of the engine.
 
         A row may exist only UNDER a keyword: the engine allocates the variable
         with that keyword true and stops the solve on a request for one it did
@@ -1364,6 +1369,8 @@ package SteeringSurface {
         "tests/telemac/test_telemac_module_outputs.py::test_a_temporal_layer_is_ranged_over_the_record_not_its_last_frame";
     verify requirement OutputsAreTheModules by
         "tests/telemac/test_telemac_module_outputs.py::test_a_row_the_result_does_not_carry_is_skipped_and_a_placed_read_refuses";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_module_outputs.py::test_every_variable_the_result_wrote_is_published_even_where_no_row_names_it";
     verify requirement OutputsAreTheModules by
         "tests/telemac/test_telemac_module_outputs.py::test_a_coupled_module_states_the_tracers_it_appends_and_its_own_table";
     verify requirement OutputsAreTheModules by
