@@ -34,6 +34,29 @@ def test_layer_request_refuses_an_unknown_mode() -> None:
         )
 
 
+def test_a_global_ask_carries_no_bbox_and_still_round_trips() -> None:
+    p = ws.LayerRequestPayload(
+        key="k", provider="gdal", uri=_URI, name="chirps", mode="materialise",
+    )
+    assert p.bbox is None
+    assert ws.LayerRequestPayload.model_validate(
+        json.loads(p.model_dump_json())
+    ) == p
+
+
+def test_the_asked_grid_rides_the_request_and_is_a_positive_spacing() -> None:
+    p = ws.LayerRequestPayload(
+        key="k", provider="gdal", uri=_URI, name="landcover",
+        bbox=(-114.0, 31.3, -109.0, 37.0), mode="materialise", resolution_m=300.0,
+    )
+    assert p.resolution_m == 300.0
+    with pytest.raises(ValidationError):
+        ws.LayerRequestPayload(
+            key="k", provider="gdal", uri=_URI, name="landcover",
+            bbox=(0.0, 0.0, 1.0, 1.0), mode="materialise", resolution_m=0.0,
+        )
+
+
 def test_layer_response_carries_the_store_uri_or_the_provider_text() -> None:
     ok = ws.LayerResponsePayload(key="k", uri="s3://bucket/user-uploads/1/k.gpkg")
     assert ws.LayerResponsePayload.model_validate(

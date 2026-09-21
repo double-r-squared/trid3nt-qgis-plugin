@@ -742,8 +742,13 @@ class LayerRequestPayload(GraceModel):
     #: What the layer is called on the map.
     name: str = Field(min_length=1, max_length=200)
     #: What was asked about: the camera on an opened overlay, the export window
-    #: on a materialised row.
-    bbox: BBox
+    #: on a materialised row. ``None`` is the whole published layer, which is
+    #: what a row declaring a global query asks for.
+    bbox: BBox | None = None
+    #: The pixel spacing the row asked for, in metres; ``None`` is the layer's
+    #: own grid. A user lever, so the export honours it rather than serving the
+    #: native grid under the asked name.
+    resolution_m: float | None = Field(default=None, gt=0.0)
     mode: LayerMode
     #: The credential the row needs, by the NAME its source states. The session
     #: resolves it in its own auth store and attaches the stored config as
