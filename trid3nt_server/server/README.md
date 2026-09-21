@@ -21,6 +21,6 @@ where its results go.
 | subfolder | what lives there |
 | --- | --- |
 | `dispatch/` | One tool call end to end: the AOI it runs over, the emitter it publishes through, how its results are summarized, persisted and reused. |
-| `protocol/` | The wire: authentication, the connection registry, the message handlers, the HTTP catalog and the accept loop. |
+| `protocol/` | The wire: authentication, the connection registry, the message handlers, the HTTP door (the library, the data routes and the plugin repository) and the accept loop. |
 | `session/` | What one connection holds - the case it is on, its persistence handle, its mutable state. |
 | `turn/` | The turn engine: the model stream, the wire envelopes it produces, and the case bookkeeping around it. |
