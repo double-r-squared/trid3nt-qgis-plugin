@@ -1,29 +1,28 @@
-"""The bed slot's MERGE: a ranked LADDER of measurements, a wider surface under
-all of them.
+"""The bed slot's MERGE: the rows a run states, laid in order, and what they cover.
 
-Covered: every rung painting what the rungs above it left and the whole ladder
-refusing where none of them measured a cell, the top rung winning every cell it
-measured and the fallback filling the rest, the merged grid taking the finer cell over the union of both, the sidecar
-naming which input painted each cell, an absent row passing the other surface
-through, two different vertical datums refusing by name, an unstated datum
-refusing, a STATED OFFSET bringing two differing datums onto one axis while an
-offset between two other frames still refuses, EACH input read onto the run's
-own frame through the offset row declared for it, a region no service serves
-still refusing by name, a primary of DEPTHS read as elevations on the frame
-through the shift the survey publishes about itself, two disjoint surfaces, a measurement over half a domain landing survey and
-terrain in the right halves even though it is read onto a finer grid, a corner
-no sounding stood in coming back terrain, a rung the offset service cannot place
-dropping off while the rungs under it paint, the TOP rung being unplaceable
-refusing the whole merge, a ladder left with one rung passing it through, and a
-merged bed splitting into two populations farther apart than the domain's own
-relief refusing as a cliff while an ordinary channel cut into the terrain around
-it merges, the terrain rung painting only OUTSIDE the polygon the domain was cut
-with, the share of the water measured by nothing reaching the result, the
-journal and the input row, a merge handed no cut claiming nothing about the
-water, a cut carrying no polygon refusing rather than painting it, and the op a
-run states painting that water from the shoreline at depth zero to the
-measurements as one more rung, ranked last and per cell, while an op the merge
-does not know refuses by name."""
+Covered: each row painting what the ones before it left and the whole set
+refusing where none of them measured a cell, the first row winning every cell it
+measured and the wider surface filling the rest, one surface alone still laid and
+still stating its coverage, the merged grid taking the finer cell over the union
+of both, the sidecar naming which row painted each cell, two different vertical
+datums refusing by name, an unstated datum refusing, a STATED OFFSET bringing two
+differing datums onto one axis while an offset between two other frames still
+refuses, EACH input read onto the run's own frame through the offset row declared
+for it, a region no service serves still refusing by name, a primary of DEPTHS
+read as elevations on the frame through the shift the survey publishes about
+itself, two disjoint surfaces, a measurement over half a domain landing survey
+and terrain in the right halves even though it is read onto a finer grid, a
+corner no sounding stood in coming back terrain, a row the offset service cannot
+place dropping off while the ones after it paint, the FIRST being unplaceable
+refusing the whole merge, and a merged bed splitting into two populations farther
+apart than the domain's own relief refusing as a cliff while an ordinary channel
+cut into the terrain around it merges, the terrain painting only OUTSIDE the
+polygon the domain was cut with, the COVERAGE FEEDBACK stating the water and the
+land separately on the result, the journal and the input row with the rows and
+ops that would cover the gap, a merge handed no cut claiming nothing about the
+water, a cut carrying no polygon refusing rather than painting it, and the ops a
+run states laid in the order stated, the fill running on a hole whose share
+rounds to zero, while an op the merge does not know refuses by name."""
 
 from __future__ import annotations
 
@@ -99,8 +98,10 @@ def test_the_primary_wins_where_it_measured_and_the_fallback_fills_the_rest(
         assert (src.width, src.height) == (16, 16)
     assert float(np.nanmin(values)) == pytest.approx(-5.0)
     assert float(np.nanmax(values)) == pytest.approx(10.0)
-    assert merged.primary_fraction == pytest.approx(16 / 256.0, abs=1e-3)
-    assert merged.fallback_fraction + merged.primary_fraction == pytest.approx(1.0)
+    survey, terrain = merged.land_rows
+    assert survey[1] == pytest.approx(16 / 256.0, abs=1e-3)
+    assert survey[1] + terrain[1] == pytest.approx(1.0)
+    assert merged.unmeasured_land_fraction == pytest.approx(0.0)
     assert merged.resolution_m == pytest.approx(1.0)
 
 
@@ -133,7 +134,7 @@ def test_a_measurement_over_half_a_domain_lands_in_the_right_halves(tmp_path) ->
     assert won.shape == (32, 32)
     assert (won[:, :16] == 0).all(), "the surveyed half must read survey whole"
     assert (won[:, 16:] == 1).all(), "the unsurveyed half must read terrain whole"
-    assert merged.primary_fraction == pytest.approx(0.5)
+    assert merged.land_rows[0][1] == pytest.approx(0.5)
 
 
 def _quarter_left_unsounded(step_deg: float = 0.0001, n: int = 20) -> dict:
@@ -177,13 +178,16 @@ def test_a_corner_no_sounding_stood_in_comes_back_terrain(tmp_path) -> None:
     assert read[1] == 0, "the sounded corner is survey"
 
 
-def test_an_absent_primary_passes_the_other_surface_through(tmp_path) -> None:
-    terrain = _terrain()
-    merged = merged_surface(primary=None, fallback=terrain,
-                                  _output_dir=str(tmp_path))
-    assert merged.uri == terrain.uri
-    assert merged.primary_fraction == 0.0 and merged.fallback_fraction == 1.0
-    assert "absent" in merged.notes[0]
+def test_one_surface_alone_is_still_laid_and_still_states_what_it_covers(
+        tmp_path) -> None:
+    """A reach with no published survey has a terrain bed and nothing else, and
+    it says so: a bed nobody can read the coverage of is the bed a solve stands
+    on by accident."""
+    merged = merged_surface(primary=None, fallback=_terrain(),
+                            _output_dir=str(tmp_path))
+    assert [share for _label, share in merged.land_rows] == pytest.approx([1.0])
+    assert merged.unmeasured_land_fraction == pytest.approx(0.0)
+    assert "Over the LAND" in merged.notes[0]
 
 
 def test_two_datums_refuse_by_name(tmp_path) -> None:
@@ -335,13 +339,12 @@ def test_an_absent_survey_leaves_the_terrain_as_the_whole_bed(tmp_path) -> None:
     terrain = _terrain("NAVD88")
     merged = merged_surface(primary=None, fallback=terrain,
                                   _output_dir=str(tmp_path))
-    assert merged.uri == terrain.uri
     assert merged.vertical_datum == "NAVD88"
-    assert merged.fallback_fraction == 1.0
+    assert [share for _label, share in merged.land_rows] == pytest.approx([1.0])
 
 
 def _partial(columns: list[float | None], datum: str = "NAVD88") -> LayerURI:
-    """A 4 m x 4 m rung at 1 m, measuring only the columns it names a value for."""
+    """A 4 m x 4 m row at 1 m, measuring only the columns it names a value for."""
     grid = np.full((4, 4), _NODATA)
     for column, value in enumerate(columns):
         if value is not None:
@@ -349,10 +352,10 @@ def _partial(columns: list[float | None], datum: str = "NAVD88") -> LayerURI:
     return _layer(_write(grid, west=500_000.0, north=4_000_000.0, cell=1.0), datum)
 
 
-def test_every_rung_paints_the_cells_the_rungs_above_it_left(tmp_path) -> None:
-    """A domain reaching past the top pick is what the next rung is for: the
-    ladder is laid whole, in rank order, and the sidecar names the rung that
-    painted each cell by its rank."""
+def test_each_row_paints_the_cells_the_ones_before_it_left(tmp_path) -> None:
+    """A domain reaching past the first row is what the merge op names the next
+    one for: the rows are laid in the order stated and the sidecar names the row
+    that painted each cell by its place in it."""
     merged = merged_surface(primary=[_partial([-5.0, -5.0, None, None]),
                                      _partial([None, -7.0, -7.0, None])],
                             fallback=_partial([10.0, 10.0, 10.0, 10.0]),
@@ -363,17 +366,15 @@ def test_every_rung_paints_the_cells_the_rungs_above_it_left(tmp_path) -> None:
     assert won.shape == (4, 4)
     assert [int(v) for v in won[0]] == [0, 0, 1, 2]
     assert [float(v) for v in values[0]] == pytest.approx([-5.0, -5.0, -7.0, 10.0])
-    assert [share for _name, share in merged.rungs] == pytest.approx(
+    assert [share for _name, share in merged.land_rows] == pytest.approx(
         [0.5, 0.25, 0.25])
-    assert merged.primary_fraction == pytest.approx(0.75)
-    assert merged.fallback_fraction == pytest.approx(0.25)
 
 
-def test_each_rung_is_read_onto_the_frame_through_the_row_declared_for_it(
+def test_each_row_is_read_onto_the_frame_through_the_offset_declared_for_it(
         tmp_path) -> None:
     """A chart datum and the system it is expressed on are metres apart, so every
-    rung crosses onto the run's frame through the offset row of its own rank, and
-    the run says which point was asked and how close the service claims to be."""
+    row crosses onto the run's frame through the offset declared for it, and the
+    run says which point was asked and how close the service claims to be."""
     merged = merged_surface(
         primary=[_partial([-5.0, -5.0, None, None], "IGLD85"),
                  _partial([None, -7.0, -7.0, None], "LWD_IGLD85")],
@@ -393,24 +394,24 @@ def test_each_rung_is_read_onto_the_frame_through_the_row_declared_for_it(
     assert "(+/- 0.200 m) at (-82.42416, 42.98677)" in merged.notes[-1]
 
 
-def test_a_grid_the_whole_ladder_leaves_unpainted_refuses_naming_the_rungs(
+def test_a_grid_every_row_leaves_unpainted_refuses_naming_them(
         tmp_path) -> None:
-    """A rung measuring nothing is not a refusal - the next one is what it is for
-    - and only a grid every rung left refuses, naming how many were tried."""
+    """A row measuring nothing is not a refusal - the next one is what it is for
+    - and only a grid every row left refuses, naming how many were laid."""
     tried = [_partial([None, None, None, None]) for _ in range(3)]
     with pytest.raises(MergeRastersError) as excinfo:
         merged_surface(primary=tried[:2], fallback=tried[2],
                        _output_dir=str(tmp_path))
     assert excinfo.value.error_code == "MERGE_RASTERS_DISJOINT"
-    assert "none of the 3 surfaces tried" in str(excinfo.value)
-    assert all(os.path.basename(rung.uri) in str(excinfo.value) for rung in tried)
+    assert "none of the 3 surfaces laid" in str(excinfo.value)
+    assert all(os.path.basename(row.uri) in str(excinfo.value) for row in tried)
 
 
-def test_a_rung_the_service_cannot_place_drops_off_and_the_rest_paint(
+def test_a_row_the_service_cannot_place_drops_off_and_the_rest_paint(
         tmp_path) -> None:
-    """A rung whose zero nothing measures against the run's frame is not a rung
-    of this bed: it drops off as an empty one does, the journal says which and
-    why, and the rungs under it paint the cells it would have."""
+    """A row whose zero nothing measures against the run's frame is not part of
+    this bed: it drops off as an empty one does, the journal says which and why,
+    and the rows after it paint the cells it would have."""
     from trid3nt_server.workflows.runtime.journal import bind_notes, drain_notes
 
     token = bind_notes()
@@ -426,15 +427,14 @@ def test_a_rung_the_service_cannot_place_drops_off_and_the_rest_paint(
     with rasterio.open(merged.uri) as surface:
         values = surface.read(1)
     assert [float(v) for v in values[0]] == pytest.approx([-5.0, -5.0, 10.0, 10.0])
-    assert len(merged.rungs) == 2
-    assert merged.primary_fraction == pytest.approx(0.5)
-    assert merged.fallback_fraction == pytest.approx(0.5)
-    dropped = [line for line in said if "drops off the ladder" in line]
+    assert [share for _label, share in merged.land_rows] == pytest.approx(
+        [0.5, 0.5])
+    dropped = [line for line in said if "drops off this bed" in line]
     assert len(dropped) == 1
     assert "LWD_IGLD85" in dropped[0] and "NAVD88" in dropped[0]
 
 
-def test_the_top_rung_the_service_cannot_place_refuses_the_whole_merge(
+def test_the_first_row_the_service_cannot_place_refuses_the_whole_merge(
         tmp_path) -> None:
     """A bed whose best source cannot be placed is not that bed."""
     with pytest.raises(MergeRastersError) as excinfo:
@@ -446,16 +446,16 @@ def test_the_top_rung_the_service_cannot_place_refuses_the_whole_merge(
     assert excinfo.value.error_code == "MERGE_RASTERS_DATUMS_DIFFER"
 
 
-def test_a_ladder_left_with_one_rung_passes_that_surface_through(
+def test_every_row_after_the_first_dropping_leaves_that_one_and_its_holes(
         tmp_path) -> None:
-    """Every rung under the top one dropping leaves one surface, which is that
-    surface and not a merge of two."""
+    """One surface left is that surface, and the cells it never measured are
+    stated rather than filled by something that dropped off."""
     merged = merged_surface(
         primary=_partial([-5.0, -5.0, None, None], "NAVD88"),
         fallback=_partial([10.0, 10.0, 10.0, 10.0], "LWD_IGLD85"),
         frame="NAVD88", _output_dir=str(tmp_path))
-    assert merged.primary_fraction == 1.0 and merged.fallback_fraction == 0.0
-    assert "passed through unchanged" in merged.notes[0]
+    assert [share for _label, share in merged.land_rows] == pytest.approx([0.5])
+    assert merged.unmeasured_land_fraction == pytest.approx(0.5)
 
 
 def _relief(low: float, high: float, *, west: float, cell: float) -> LayerURI:
@@ -484,7 +484,7 @@ def test_a_bed_within_the_domain_relief_merges(tmp_path) -> None:
     merged = merged_surface(primary=_relief(168.0, 171.0, west=500_004.0, cell=1.0),
                             fallback=_relief(170.0, 175.0, west=500_000.0, cell=4.0),
                             _output_dir=str(tmp_path))
-    assert merged.primary_fraction > 0.0 and merged.fallback_fraction > 0.0
+    assert all(share > 0.0 for _label, share in merged.land_rows)
 
 
 def test_the_merge_publishes_the_bed_as_an_input_layer(tmp_path, monkeypatch) -> None:
@@ -505,8 +505,9 @@ def test_the_merge_publishes_the_bed_as_an_input_layer(tmp_path, monkeypatch) ->
 
     assert len(published) == 1
     row = published[0]
-    assert row["name"] == "Input: bed (merged: {} 6.2%, {} 93.8%, datum NAVD88)".format(
-        *(label for label, _share in merged.rungs))
+    assert row["name"] == ("Input: bed (land: {} 6.2%, {} 93.8%, 0.0% measured "
+                           "by nothing, datum NAVD88)").format(
+        *(label for label, _share in merged.land_rows))
     assert row["cog_uri"] == merged.uri
     assert row["layer_id"] == f"input-{merged.layer_id}"
     assert row["style"] == merged.style and row["style"]["units"] == "m"
@@ -515,7 +516,7 @@ def test_the_merge_publishes_the_bed_as_an_input_layer(tmp_path, monkeypatch) ->
 
 def _cut(west: float, south: float, east: float, north: float) -> dict:
     """The water polygon the domain was cut with, in the lon/lat a domain
-    publishes its geometry in, over a box stated in the rungs' own UTM zone."""
+    publishes its geometry in, over a box stated in the rows' own UTM zone."""
     from rasterio.warp import transform_geom
 
     return transform_geom("EPSG:32610", "EPSG:4326", {
@@ -527,7 +528,7 @@ def _cut(west: float, south: float, east: float, north: float) -> dict:
 def test_the_terrain_paints_only_outside_the_polygon_the_domain_was_cut_with(
         tmp_path) -> None:
     """A wider surface measures the water TOP, so inside the cut it is not a bed:
-    the measured rung paints the water it reached, the water it did not reach is
+    the measured row paints the water it reached, the water it did not reach is
     left unpainted, and the ground outside the cut is the terrain's as before."""
     merged = merged_surface(
         primary=_survey(), fallback=_terrain(), frame="NAVD88",
@@ -545,25 +546,33 @@ def test_the_terrain_paints_only_outside_the_polygon_the_domain_was_cut_with(
     assert float(values[8, 4]) == pytest.approx(10.0)
 
 
-def test_the_merge_states_the_share_of_the_water_measured_by_nothing(
+def test_the_feedback_states_the_water_and_the_land_separately(
         tmp_path) -> None:
-    """The heuristic a reader weighs before asking for a surface between the
-    measurements: one number over the WATER, on the result, on the journal line
-    and on the input row the packet shows."""
+    """What a reader weighs before a solve stands on this bed: what measured the
+    WATER, what measured the LAND, what neither reached, and what would - on the
+    result, on the journal and on the input row the packet shows."""
     from trid3nt_server.workflows.runtime.journal import bind_notes, drain_notes
 
     token = bind_notes()
     merged = merged_surface(
         primary=_survey(), fallback=_terrain(), frame="NAVD88",
         water=_cut(500_004.0, 3_999_992.0, 500_012.0, 4_000_000.0),
-        _output_dir=str(tmp_path))
+        alternatives=["fetch_chs_nonna"], _output_dir=str(tmp_path))
     said = drain_notes(token)
-    # Sixteen of the cut's sixty-four cells were sounded.
+    # Sixteen of the cut's sixty-four cells were sounded; the terrain stays out
+    # of the cut, so the land it painted is every cell outside it.
     assert merged.unmeasured_water_fraction == pytest.approx(0.75)
-    stated = [line for line in said if "measured by nothing" in line]
-    assert len(stated) == 1
-    assert "75.0%" in stated[0]
-    assert "75.0% of the water measured by nothing" in merged.input_row()["name"]
+    assert merged.unmeasured_land_fraction == pytest.approx(0.0)
+    assert dict(merged.water_rows)[merged.land_rows[0][0]] == pytest.approx(0.25)
+    water = [line for line in said if "Over the WATER" in line]
+    land = [line for line in said if "Over the LAND" in line]
+    assert len(water) == 1 and len(land) == 1
+    assert "75.0% of it is measured by nothing" in water[0]
+    remedy = [line for line in said if "could cover it" in line]
+    assert "fetch_chs_nonna" in remedy[0]
+    assert "'name': 'merge'" in remedy[0] and "'interpolated'" in remedy[0]
+    said_name = merged.input_row()["name"]
+    assert "water:" in said_name and "75.0% measured by nothing" in said_name
 
 
 def test_a_merge_handed_no_cut_claims_nothing_about_the_water(tmp_path) -> None:
@@ -572,7 +581,8 @@ def test_a_merge_handed_no_cut_claims_nothing_about_the_water(tmp_path) -> None:
     merged = merged_surface(primary=_survey(), fallback=_terrain(),
                             frame="NAVD88", _output_dir=str(tmp_path))
     assert merged.unmeasured_water_fraction is None
-    assert "measured by nothing" not in merged.input_row()["name"]
+    assert merged.water_rows == []
+    assert "water:" not in merged.input_row()["name"]
 
 
 def test_a_cut_carrying_no_polygon_refuses_rather_than_painting_the_water(
@@ -589,14 +599,14 @@ def test_a_cut_carrying_no_polygon_refuses_rather_than_painting_the_water(
 
 def test_the_stated_op_paints_the_water_from_the_shore_to_the_measurements(
         tmp_path) -> None:
-    """The op the run states lays one more rung, ranked under every measured
-    one: the water the ladder left is interpolated between the soundings and the
-    polygon's own edge, which is seeded at depth zero because the bed meets the
-    water surface where the water ends."""
+    """The op the run states lays one more row, under every measured one: the
+    water the rest left is interpolated between the soundings and the polygon's
+    own edge, which is seeded at depth zero because the bed meets the water
+    surface where the water ends."""
     merged = merged_surface(
         primary=_survey(), fallback=_terrain(), frame="NAVD88",
         water=_cut(500_004.0, 3_999_992.0, 500_012.0, 4_000_000.0),
-        fill="interpolated", _output_dir=str(tmp_path))
+        ops=["interpolated"], _output_dir=str(tmp_path))
     with rasterio.open(merged.uri) as surface:
         values = surface.read(1)
     # The cut is columns 4-11 over rows 0-7 of the 1 m grid, the survey its
@@ -614,35 +624,47 @@ def test_the_stated_op_paints_the_water_from_the_shore_to_the_measurements(
     assert float(values[0, 12]) == pytest.approx(10.0)
 
 
-def test_the_interpolated_rung_is_ranked_last_and_says_so_per_cell(
+def test_the_interpolated_row_is_laid_last_and_says_so_per_cell(
         tmp_path) -> None:
-    """A node painted by an interpolation is never read as one somebody
-    sounded: the fill is its own rung on the result, under every measured one,
-    and the provenance sidecar carries it cell by cell."""
-    from trid3nt_server.workflows.runtime.journal import bind_notes, drain_notes
-
-    token = bind_notes()
+    """A node painted by an interpolation is never read as one somebody sounded:
+    the fill is its own row on the result, after every measured one, and the
+    provenance sidecar carries it cell by cell."""
     merged = merged_surface(
         primary=_survey(), fallback=_terrain(), frame="NAVD88",
         water=_cut(500_004.0, 3_999_992.0, 500_012.0, 4_000_000.0),
-        fill="interpolated", _output_dir=str(tmp_path))
-    said = drain_notes(token)
-    label, share = merged.rungs[-1]
+        ops=["interpolated"], _output_dir=str(tmp_path))
+    label, share = merged.water_rows[-1]
     assert label == "interpolated"
-    # The 48 cells of the cut no rung measured, over the whole 16 x 16 grid.
-    assert share == pytest.approx(48.0 / 256.0)
+    # The 48 cells of the cut no measured row reached.
+    assert share == pytest.approx(48.0 / 64.0)
     assert "interpolated" in merged.input_row()["name"]
     with rasterio.open(merged.provenance_uri) as sidecar:
         won = sidecar.read(1)
-    assert int(won[7, 11]) == len(merged.rungs) - 1
+    assert int(won[7, 11]) == len(merged.water_rows) - 1
     assert int(won[0, 4]) == 0
     # The share is what MEASURED the water, so the fill never moves it: an
     # interpolation is not a sounding, and the reader weighs the same number.
     assert merged.unmeasured_water_fraction == pytest.approx(0.75)
-    assert merged.fallback_fraction == pytest.approx(
-        [share for label, share in merged.rungs if label != "interpolated"][-1])
-    stated = [line for line in said if "measured by nothing" in line]
-    assert "painted here by the interpolated rung" in stated[0]
+
+
+def test_a_hole_too_small_to_round_is_stated_and_still_filled(tmp_path) -> None:
+    """The HOLE is the gate, never its rounded share, and the share it is stated
+    at is never nothing: a hole a rounding reads as whole water is the silence
+    this slot exists to refuse, at the gate and in the sentence alike."""
+    sounded = np.full((160, 160), -5.0)
+    sounded[0, 0] = _NODATA
+    merged = merged_surface(
+        primary=_layer(_write(sounded, west=500_004.0, north=4_000_000.0,
+                              cell=0.05), "NAVD88"),
+        frame="NAVD88",
+        water=_cut(500_004.0, 3_999_992.0, 500_012.0, 4_000_000.0),
+        ops=["interpolated"], _output_dir=str(tmp_path))
+    assert 0.0 < merged.unmeasured_water_fraction <= 0.0001
+    assert any("less than 0.1% of it is measured by nothing" in note
+               for note in merged.notes)
+    assert merged.water_rows[-1][0] == "interpolated"
+    with rasterio.open(merged.uri) as surface:
+        assert not np.isnan(surface.read(1)[0, 0])
 
 
 def test_an_op_the_merge_does_not_know_refuses_before_it_reads_a_surface(
@@ -651,5 +673,5 @@ def test_an_op_the_merge_does_not_know_refuses_before_it_reads_a_surface(
 
     with pytest.raises(UserInputError) as excinfo:
         merged_surface(primary=_survey(), fallback=_terrain(), frame="NAVD88",
-                       fill="smoothed", _output_dir=str(tmp_path))
+                       ops=["smoothed"], _output_dir=str(tmp_path))
     assert excinfo.value.error_code == "MERGE_BED_OP_INVALID"

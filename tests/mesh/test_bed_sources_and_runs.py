@@ -73,7 +73,7 @@ def test_the_bed_is_one_source_and_two_are_merged_before_the_op(tmp_path):
     bedded = P.set_bed(_lattice_mesh(), merged)
     painted = sorted({round(float(v), 1) for v in bedded.bed})
     assert painted == [-9.0, 3.0]
-    assert merged.primary_fraction > 0.0 and merged.fallback_fraction > 0.0
+    assert all(share > 0.0 for _label, share in merged.land_rows)
     assert bedded.meta["bed_sources"][0].endswith("merged_bed.tif") or \
         "merged_bed" in bedded.meta["bed_sources"][0]
 
@@ -87,6 +87,58 @@ def test_a_domain_no_source_covers_refuses_by_name(tmp_path):
         P.set_bed(_lattice_mesh(), empty)
     assert excinfo.value.error_code == "MESH_BED_UNPAINTED"
     assert "9 of 9 nodes" in str(excinfo.value)
+
+
+def test_a_node_no_row_reached_refuses_with_the_feedback_and_never_a_zero(
+        tmp_path):
+    """A node standing on a cell nothing measured has no elevation, and a number
+    put there on its behalf is a bed nobody surveyed: the refusal says how many,
+    the box they stand in, and what the surface itself states about its own
+    coverage."""
+    from trid3nt_contracts.execution import LayerURI
+    from trid3nt_server.inputs.bed import merged_surface
+
+    half = np.full((5, 5), np.nan, dtype="float32")
+    half[:, :2] = -9.0
+    merged = merged_surface(
+        primary=LayerURI(layer_id="x", name="survey", layer_type="raster",
+                         uri=_raster(tmp_path / "half.tif", half, nodata=np.nan),
+                         vertical_datum="NAVD88"),
+        alternatives=["fetch_chs_nonna"], _output_dir=str(tmp_path))
+    with pytest.raises(MeshToolError) as excinfo:
+        P.set_bed(_lattice_mesh(), merged)
+    said = str(excinfo.value)
+    assert excinfo.value.error_code == "MESH_BED_UNPAINTED"
+    assert "of 9 nodes have no elevation" in said
+    assert "-75.7" in said and "36.1" in said
+    assert "Over the LAND" in said
+    assert "0.0" not in said.split("nodes have no elevation")[0]
+
+
+def test_the_journal_states_what_every_row_of_a_composed_bed_reached(tmp_path):
+    """A pair of numbers over a bed of three answers a question nobody asked, so
+    the share each row reached is stated for every one of them."""
+    from trid3nt_contracts.execution import LayerURI
+    from trid3nt_server.inputs.bed import merged_surface
+    from trid3nt_server.workflows.runtime.journal import bind_notes, drain_notes
+
+    def _layer(path: str) -> LayerURI:
+        return LayerURI(layer_id="x", name=path, layer_type="raster", uri=path,
+                        vertical_datum="NAVD88")
+
+    survey = np.full((5, 5), np.nan, dtype="float32")
+    survey[:, :2] = -9.0
+    merged = merged_surface(
+        primary=_layer(_raster(tmp_path / "survey.tif", survey, nodata=np.nan)),
+        fallback=_layer(_raster(tmp_path / "dem.tif", np.full((5, 5), 3.0),
+                                nodata=-9999.0)),
+        _output_dir=str(tmp_path))
+    token = bind_notes()
+    P.set_bed(_lattice_mesh(), merged)
+    said = [line for line in drain_notes(token) if line.startswith("bed:")]
+    assert len(said) == 1
+    for label, _share in merged.land_rows:
+        assert f"{label} reached " in said[0]
 
 
 def test_a_layer_of_soundings_goes_through_the_grid_at_the_meshs_own_scale(

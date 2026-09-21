@@ -636,21 +636,20 @@ def test_a_source_on_the_runs_own_frame_declares_no_offset_row(monkeypatch):
     assert told == {"frame": "NAVD88"} and not env.data
 
 
-def test_a_beds_ladder_sentence_states_its_rungs_in_rank_order():
-    """The bed lays a whole ladder rather than standing on the first answer, so
-    what a reader is told names every source it asked, in rank order, and what
-    each one held - never one drop and its successor."""
-    from trid3nt_contracts.coverage import SourceChoice, SourceOption
-    from trid3nt_server.workflows.runtime import interpreter
+def test_the_bed_reads_its_ops_by_name_and_names_the_rows_a_merge_lays():
+    """The op names mean something only to the ingestion that reads them, so the
+    runtime that produces a merge's rows reads which ones they are from there -
+    and a name that slot has no move for never reaches a producer."""
+    from trid3nt_server.inputs.bed import merge_rows
+    from trid3nt_server.inputs.user_input import UserInputError
+    from trid3nt_server.inputs.bed import bed as read_bed
 
-    asked = ["fetch_bluetopo", "fetch_cudem", "fetch_ehydro_surveys"]
-    choice = SourceChoice(slot="bed", need="bathymetry",
-                          rows=[SourceOption(fetcher=name) for name in asked])
-    said = interpreter._ladder_sentence(choice, asked,
-                                        [("fetch_cudem", object())])
-    assert said == ("bed: the ladder in rank order - fetch_bluetopo held "
-                    "nothing; fetch_cudem laid a rung; "
-                    "fetch_ehydro_surveys held nothing.")
+    stated = [{"name": "merge", "rows": ["fetch_chs_nonna", "fetch_etopo"]},
+              "interpolated"]
+    assert merge_rows(stated) == ["fetch_chs_nonna", "fetch_etopo"]
+    assert merge_rows("interpolated") == []
+    with pytest.raises(UserInputError, match="'merge'"):
+        read_bed(4.0, op=[{"name": "merge"}])
 
 
 class _Params:

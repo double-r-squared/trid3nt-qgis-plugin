@@ -136,7 +136,8 @@ async def stub_merged_bed(**kwargs):
         "merged-bed", seed="abc123", name="merged bed surface",
         layer_type="raster", uri="s3://b/bed.tif", role="primary",
         style={"kind": "continuous", "ramp": "terrain", "units": "m"},
-        vertical_datum="NAVD88", rungs=[("survey", 0.4), ("terrain", 0.6)])
+        vertical_datum="NAVD88", land_rows=[("survey", 0.4), ("terrain", 0.6)],
+        unmeasured_land_fraction=0.0)
 
 
 async def stub_mesh_step(**kwargs):
@@ -1013,8 +1014,8 @@ async def test_a_replayed_merge_publishes_its_bed_again(monkeypatch):
     ))
     parent = await _run(plan, _params(), {"base": 13.0})
     row = [r for r in parent.records if r.node == "bed"][0].layer
-    assert row["name"] == ("Input: bed (merged: survey 40.0%, terrain 60.0%, "
-                           "datum NAVD88)")
+    assert row["name"] == ("Input: bed (land: survey 40.0%, terrain 60.0%, "
+                           "0.0% measured by nothing, datum NAVD88)")
     assert row["cog_uri"] == "s3://b/bed.tif"
     assert published == []                  # the merge itself publishes, not the plan
 

@@ -267,23 +267,26 @@ def test_a_bed_the_runs_frame_cannot_reach_names_its_zero_once():
     assert "a charted survey" in said
 
 
-def _merged(share: float | None):
-    """A merged bed stating the share of the water no rung of it measured."""
+def _merged(share: float | None, alternatives: list[str] | None = None):
+    """A merged bed stating the share of the water no row of it measured."""
     from trid3nt_server.inputs.bed import MergedRasterLayerURI
 
     return MergedRasterLayerURI(layer_id="m", name="merged bed surface",
                                 layer_type="raster", uri="s3://b/k/merged.tif",
-                                unmeasured_water_fraction=share)
+                                unmeasured_water_fraction=share,
+                                alternatives=alternatives or [])
 
 
-def test_water_no_rung_measured_refuses_and_names_the_share_and_the_op():
-    """The remedy is the person's to state, so the refusal carries both halves
-    of it: how much of the water nothing measured, and the op that paints it."""
+def test_water_no_row_measured_refuses_and_names_the_share_the_rows_and_the_ops():
+    """The remedy is the person's to state, so the refusal carries every half of
+    it: how much of the water nothing measured, which rows could cover it, and
+    the ops that would lay them and paint what is left."""
     with pytest.raises(UserInputError) as excinfo:
-        bed(_merged(0.74), label="bed")
+        bed(_merged(0.74, ["fetch_chs_nonna"]), label="bed")
     said = str(excinfo.value)
     assert "74.0%" in said
-    assert "ops={'bed': 'interpolated'}" in said
+    assert "fetch_chs_nonna" in said
+    assert "'name': 'merge'" in said and "'interpolated'" in said
 
 
 def test_a_bed_whose_water_is_measured_whole_needs_no_op():
@@ -294,6 +297,8 @@ def test_a_bed_whose_water_is_measured_whole_needs_no_op():
 def test_the_op_the_run_states_is_what_lets_the_unmeasured_water_through():
     assert bed(_merged(0.74), op="interpolated").kind == RASTER
     assert bed(_merged(0.74), op={"name": "interpolated"}).kind == RASTER
+    assert bed(_merged(0.74), op=[{"name": "merge", "rows": ["a"]},
+                                  "interpolated"]).kind == RASTER
 
 
 def test_an_op_this_slot_does_not_know_refuses_by_name():
@@ -303,3 +308,5 @@ def test_an_op_this_slot_does_not_know_refuses_by_name():
         bed(_merged(0.74), op="smoothed")
     with pytest.raises(UserInputError, match="'interpolated'"):
         bed(_merged(0.74), op={"name": "interpolated", "max_distance_m": 500.0})
+    with pytest.raises(UserInputError, match="'merge'"):
+        bed(_merged(0.74), op={"name": "merge"})

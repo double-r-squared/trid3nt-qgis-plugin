@@ -1,8 +1,8 @@
-"""The slots the match fills: the bed's two classes and a run's series.
+"""The slots the match fills: the bed's one row and its ops, and a run's series.
 
 Offline. The coverage rows are values and the fetchers are stubs, so what is
-proved is the RULE - the measurement where it measured, the terrain under the
-rest, the next survivor when the top one held nothing."""
+proved is the RULE - the ONE row the match ranked first, the rows an op names
+laid under it, and the next survivor when the top one held nothing."""
 
 from __future__ import annotations
 
@@ -140,27 +140,49 @@ def _row(decl, name):
     return dataclasses.replace(decl, name=name)
 
 
-def test_every_surviving_rung_is_laid_in_rank_order_over_the_terrain(world):
-    """A domain reaching past the top pick is what the next rung is for, so the
-    bed calls EVERY survivor of its class and the merge lays them in rank order
-    over the terrain under all of them."""
+def test_the_bed_lays_the_one_row_the_match_ranked_first(world):
+    """Nothing paints on the run's behalf: the bed calls the top row of its own
+    class and no other, and names the rows it did not lay so the feedback can
+    offer them."""
     env = _env()
     bed = _row(Data.need("bathymetry"), "bed")
-    out = asyncio.run(interpreter._matched_bed(env, bed))
+    out = asyncio.run(interpreter._bed_surface(env, bed))
     ran = [runner for runner, _kw in world]
-    assert ran == ["fetch_terrain", "fetch_soundings", "fetch_bed_raster",
+    assert ran == ["fetch_soundings",
                    "trid3nt_server.inputs.bed.survey_surface",
                    "trid3nt_server.inputs.bed.merged_surface"]
     assert out.endswith("merged_surface.tif")
     merge = world[-1][1]
-    assert merge["primary"] == ["s3://b/trid3nt_server.inputs.bed.survey_surface.tif",
-                                "s3://b/fetch_bed_raster.tif"]
-    assert merge["fallback"] == "s3://b/fetch_terrain.tif"
+    assert merge["primary"] == [
+        "s3://b/trid3nt_server.inputs.bed.survey_surface.tif"]
+    assert merge["fallback"] == []
+    assert merge["alternatives"] == ["fetch_bed_raster"]
     # the soundings are gridded at the run's own edge, on the column the
     # coverage row names.
-    _runner, grid = world[3]
+    _runner, grid = world[1]
     assert grid["value_field"] == "depth_below_datum_m"
     assert grid["resolution_m"] == 14.0
+
+
+def test_a_merge_op_lays_the_rows_it_names_in_the_order_it_names_them(world):
+    """Composing more than one row is the run's statement, and which side of the
+    cut each paints is its own declaration: a row of the slot's class measured
+    the bed, a terrain row measures the water top and stays outside it."""
+    env = _env()
+    env.ops["bed"] = [{"name": "merge",
+                       "rows": ["fetch_bed_raster", "fetch_terrain"]},
+                      "interpolated"]
+    asyncio.run(interpreter._bed_surface(env, _row(Data.need("bathymetry"),
+                                                   "bed")))
+    ran = [runner for runner, _kw in world]
+    assert ran[:3] == ["fetch_soundings", "fetch_bed_raster", "fetch_terrain"]
+    merge = world[-1][1]
+    assert merge["primary"] == [
+        "s3://b/trid3nt_server.inputs.bed.survey_surface.tif",
+        "s3://b/fetch_bed_raster.tif"]
+    assert merge["fallback"] == ["s3://b/fetch_terrain.tif"]
+    assert merge["alternatives"] == []
+    assert merge["ops"] == env.ops["bed"]
 
 
 def test_a_raster_measurement_reaches_the_merge_without_being_gridded(world,
@@ -169,7 +191,7 @@ def test_a_raster_measurement_reaches_the_merge_without_being_gridded(world,
                         _Spec(coverage("bathymetry", res=1.0, latest="1990-01-01"),
                               "raster", {"bbox": None}))
     env = _env()
-    out = asyncio.run(interpreter._matched_bed(
+    out = asyncio.run(interpreter._bed_surface(
         env, _row(Data.need("bathymetry"), "bed")))
     ran = [runner for runner, _kw in world]
     assert "trid3nt_server.inputs.bed.survey_surface" not in ran
@@ -202,25 +224,29 @@ def test_the_runtime_declares_the_offset_row_a_merge_source_owes(world,
 
     monkeypatch.setattr(interpreter, "_call_runner", _runner)
     env = _env()
+    env.ops["bed"] = [{"name": "merge", "rows": ["fetch_terrain"]}]
     env.data["domain"] = _row(Data.need("hydrography", at=_SEED), "domain")
-    asyncio.run(interpreter._matched_bed(env, _row(Data.need("bathymetry"), "bed")))
+    asyncio.run(interpreter._bed_surface(env, _row(Data.need("bathymetry"), "bed")))
     asked = {runner: kwargs for runner, kwargs in world}
     assert asked["fetch_vertical_datum_offset"]["from_frame"] == "igld85"
     assert asked["fetch_vertical_datum_offset"]["to_frame"] == "navd88"
     assert asked["fetch_vertical_datum_offset"]["point"] == pytest.approx(_SEED)
     merge = asked["trid3nt_server.inputs.bed.merged_surface"]
     assert merge["frame"] == "NAVD88"
-    # One row per RUNG, by rank: the rung off the frame owes one, the rung that
-    # states no zero of its own owes none, and neither does the terrain.
-    assert merge["primary_offset"] == [record, None]
-    assert merge["fallback_offset"] is None
+    # One row per SURFACE, in the order they were laid: the one off the frame
+    # owes a row, the terrain already on it owes none.
+    assert merge["primary_offset"] == [record]
+    assert merge["fallback_offset"] == [None]
     assert "bed_fetch_soundings_datum_offset" in env.data
-    assert "bed_fetch_bed_raster_datum_offset" not in env.data
-    assert "bed_terrain_datum_offset" not in env.data
+    assert "bed_fetch_terrain_datum_offset" not in env.data
 
 
-def test_no_measurement_over_this_domain_leaves_the_terrain_as_the_whole_bed(
+def test_no_measurement_over_this_domain_refuses_rather_than_reaching_a_class(
         world, monkeypatch):
+    """A bed whose own class measured nothing here is not a bed the terrain
+    quietly becomes: the slot refuses, and naming the terrain is the person's."""
+    from trid3nt_server.workflows.runtime.errors import StepFailedError
+
     async def _runner(runner, kwargs, label):
         world.append((runner, dict(kwargs)))
         if runner in ("fetch_soundings", "fetch_bed_raster"):
@@ -229,11 +255,11 @@ def test_no_measurement_over_this_domain_leaves_the_terrain_as_the_whole_bed(
 
     monkeypatch.setattr(interpreter, "_call_runner", _runner)
     env = _env()
-    out = asyncio.run(interpreter._matched_bed(
-        env, _row(Data.need("bathymetry"), "bed")))
-    assert out == "s3://b/fetch_terrain.tif"
-    assert "trid3nt_server.inputs.bed.merged_surface" not in [
-        runner for runner, _kw in world]
+    with pytest.raises(StepFailedError) as excinfo:
+        asyncio.run(interpreter._bed_surface(
+            env, _row(Data.need("bathymetry"), "bed")))
+    assert excinfo.value.error_code == "DATA_NEED_UNMATCHED"
+    assert "fetch_terrain" not in [runner for runner, _kw in world]
     # BOTH measurements were tried, in rank order, and the sheet says so.
     sentence = run_choices()[-1].sentence
     assert "fetch_soundings" in sentence and "fetch_bed_raster" in sentence
@@ -309,10 +335,9 @@ def test_the_ranked_list_is_one_object_the_card_and_the_sheet_both_read(world):
     from trid3nt_server.workflows.telemac.workflow import _source_rows
 
     env = _env()
-    asyncio.run(interpreter._matched_bed(env, _row(Data.need("bathymetry"), "bed")))
+    asyncio.run(interpreter._bed_surface(env, _row(Data.need("bathymetry"), "bed")))
     rows = _source_rows()
-    assert [row.name for row in rows] == ["bed terrain source",
-                                          "bed bathymetry source"]
+    assert [row.name for row in rows] == ["bed bathymetry source"]
     card = rows[-1]
     assert isinstance(card, ParamSheetRow)
     assert card.value == "fetch_soundings"
@@ -512,23 +537,23 @@ def test_the_cut_domain_is_what_the_rest_of_the_run_is_bound_to(coastline):
     assert bound.bbox[0] == pytest.approx(-122.67)
 
 
-def test_the_op_the_run_states_reaches_the_merge_as_its_fill(world):
+def test_the_ops_the_run_states_reach_the_merge_in_the_order_stated(world):
     """The fifth control is the twin of the pick: stated for a slot on the call,
     carried no further than the ingestion that reads it - here the merge, which
-    lays the op as the rung under every measured one."""
+    lays them in the order the run named."""
     env = _env()
-    env.ops["bed"] = "interpolated"
-    asyncio.run(interpreter._matched_bed(env, _row(Data.need("bathymetry"), "bed")))
+    env.ops["bed"] = ["interpolated"]
+    asyncio.run(interpreter._bed_surface(env, _row(Data.need("bathymetry"), "bed")))
     merge = dict(world[-1][1])
-    assert merge["fill"] == "interpolated"
+    assert merge["ops"] == ["interpolated"]
 
 
 def test_a_run_that_states_no_op_hands_the_merge_none(world):
     """An op is stated or it is not: the merge is handed nothing to lay, and the
-    water the ladder left stays unpainted for the slot to refuse over."""
-    asyncio.run(interpreter._matched_bed(_env(), _row(Data.need("bathymetry"),
+    water the one row left stays unpainted for the slot to refuse over."""
+    asyncio.run(interpreter._bed_surface(_env(), _row(Data.need("bathymetry"),
                                                       "bed")))
-    assert dict(world[-1][1])["fill"] is None
+    assert dict(world[-1][1])["ops"] is None
 
 
 def test_an_op_stated_for_a_row_the_workflow_does_not_declare_refuses_by_name():
