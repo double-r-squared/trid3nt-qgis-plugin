@@ -20,9 +20,9 @@ package DataSeam {
     An elevation surface is not a bed. A DEM measures the water TOP where the
     channel is wet, and reading one as a channel bottom systematically
     under-represents conveyance - a BIAS, not noise, worst on exactly the small
-    streams where the substitution is most tempting. So the topobathy row asks
-    which water it is looking at, takes the ladder that class earned, and
-    refuses when no rung on it ships. What painted the bed and on what vertical
+    streams where the substitution is most tempting. So each bed row states what
+    it measured, over what footprint, at what cell and on which zero, and the
+    match ranks those statements: what painted the bed and on what vertical
     datum travels with the layer, because a bed whose datum nobody carried is a
     bed nobody can merge.
     */
@@ -124,14 +124,6 @@ package DataSeam {
         */
     }
 
-    part def WaterBodyClassifier {
-        doc /*
-        Which water this is, decided from the rows the reach chain already
-        holds, and the three ladders one per class - including the two rungs
-        that stopped and the class that therefore has none.
-        */
-    }
-
     part def BlueTopoSource {
         doc /*
         NOAA's National Bathymetric Source as a fetchable bed: the published
@@ -174,14 +166,6 @@ package DataSeam {
         */
     }
 
-    part def CoastalComposite {
-        doc /*
-        The CUDEM-first coastal topo-bathy composite: the row's original
-        producer, and the rung the coastal ladder falls to when the primary
-        cannot cover the AOI.
-        */
-    }
-
     part def WaterCut {
         doc /*
         The derive that turns a box and a mapped coastline into the WATER inside
@@ -206,18 +190,8 @@ package DataSeam {
     port def ProvenanceIn;
     port def DeclarationOut;
     port def DeclarationIn;
-    port def RungOut;
-    port def RungIn;
-    port def LadderOut;
-    port def LadderIn;
     port def ChoiceOut;
     port def ChoiceIn;
-    port def ClassOut;
-    port def ClassIn;
-    port def StoppedOut;
-    port def StoppedIn;
-    port def GapOut;
-    port def GapIn;
     port def CredentialOut;
     port def CredentialIn;
     port def KeyedCatalogOut;
@@ -250,10 +224,10 @@ package DataSeam {
     interface def BedSourceParams {
         doc /*
         The request a bed source takes. ``resolution_m`` is the one lever name
-        every raster fetcher and the topobathy composite share: it floors the
-        merge at the asked cell size, never invents a cell finer than the tile
-        that was read and never coarsens past the ask, which is why it is the
-        param the resolution declaration hangs off.
+        every raster fetcher shares: it floors the merge at the asked cell size,
+        never invents a cell finer than the tile that was read and never
+        coarsens past the ask, which is why it is the param the resolution
+        declaration hangs off.
         */
         item bbox : RealList;
         item target_crs : String;
@@ -300,37 +274,6 @@ package DataSeam {
         item credential : String [0..1];
     }
 
-    interface def BedLadderRung {
-        doc /*
-        One alternative on a bed ladder. ``consequence`` is what descending to
-        it COSTS, and it is the only thing the loudness gate keys on, so a rung
-        that crosses datasets must say so or the gate never asks.
-
-        constructor: Rung
-        */
-        item name : String;
-        item consequence : String;
-        item describes : String;
-        item call : String [0..1];
-        item source : String [0..1];
-        item params : Map [0..1];
-        item supplies_param : String [0..1];
-    }
-
-    interface def BedLadderDeclaration {
-        doc /*
-        A whole ladder: which capability it governs, its ordered rungs, and the
-        typed code its terminal refusal wears so a refusal keeps the
-        capability's own error vocabulary.
-
-        constructor: Ladder
-        */
-        item capability : String;
-        item rungs : RungList;
-        item refuse_error_code : String;
-        item coverage_exempt_params : StringList [0..1];
-    }
-
     interface def PerRequestLadderChoice {
         doc /*
         Which ladder governs ONE request. The chooser reads the request's own
@@ -342,38 +285,6 @@ package DataSeam {
         item selector : Callable [0..1];
     }
 
-    interface def WaterBodyClassDeclaration {
-        doc /*
-        The class vocabulary, declared on the row and read by the classifier.
-        Three names and no fourth: a class the row can state is a class a ladder
-        answers for, and the two must not drift apart.
-        */
-        item water_body_class : String;
-        item coastal_estuary : String;
-        item navigable_river : String;
-        item small_inland_stream : String;
-    }
-
-    interface def StoppedClassRefusal {
-        doc /*
-        A class whose every rung stopped, and what is missing before it can have
-        one. It is carried as DATA so the refusal names the gap rather than
-        saying only that there is one.
-        */
-        item STOPPED_CLASSES : Map;
-        item water_body_class : String;
-    }
-
-    interface def PartialCoverGap {
-        doc /*
-        A rung that served PART of the request, and how much. The walker reads
-        both off it: the share already painted, and the note the gate shows the
-        person being asked to accept the substitution that fills the rest.
-        */
-        item covered_fraction : Real;
-        item gap_note : String;
-    }
-
     // ----------------------------------------------------------------- //
     // Parts - bound to the modules they ARE
     // ----------------------------------------------------------------- //
@@ -382,8 +293,6 @@ package DataSeam {
         doc /*
         code: trid3nt_server/fallbacks/ladder.py
         */
-        port rungIn : RungIn;
-        port ladderIn : LadderIn;
         port choiceOut : ChoiceOut;
     }
 
@@ -391,7 +300,6 @@ package DataSeam {
         doc /*
         code: trid3nt_server/fallbacks/walker.py
         */
-        port gapIn : GapIn;
     }
 
     part fetcherRouter : FetcherRouter {
@@ -415,17 +323,6 @@ package DataSeam {
         port declarationOut : DeclarationOut;
     }
 
-    part waterBodyClassifier : WaterBodyClassifier {
-        doc /*
-        code: trid3nt_server/tools/fetchers/_router/hooks/topobathy_class.py
-        */
-        port classIn : ClassIn;
-        port rungOut : RungOut;
-        port ladderOut : LadderOut;
-        port stoppedOut : StoppedOut;
-        port gapOut : GapOut;
-    }
-
     part blueTopoSource : BlueTopoSource {
         doc /*
         code: trid3nt_server/tools/fetchers/ocean/fetch_bluetopo/hooks.py
@@ -441,21 +338,22 @@ package DataSeam {
         port declarationOut : DeclarationOut;
     }
 
-    part coastalDeclaration : BedSourceDeclaration {
+    part cudemDeclaration : BedSourceDeclaration {
         doc /*
-        code: trid3nt_server/tools/fetchers/ocean/fetch_topobathy/source.yaml
+        code: trid3nt_server/tools/fetchers/ocean/fetch_cudem/source.yaml
         */
-        port classOut : ClassOut;
     }
 
-    part coastalComposite : CoastalComposite {
+    part regionalCoastalDemDeclaration : BedSourceDeclaration {
         doc /*
-        code: trid3nt_server/tools/fetchers/_router/hooks/topobathy.py
+        code: trid3nt_server/tools/fetchers/ocean/fetch_regional_coastal_dem/source.yaml
         */
-        port stoppedIn : StoppedIn;
-        port rungOut : RungOut;
-        port ladderOut : LadderOut;
-        port gapOut : GapOut;
+    }
+
+    part etopoDeclaration : BedSourceDeclaration {
+        doc /*
+        code: trid3nt_server/tools/fetchers/ocean/fetch_etopo/source.yaml
+        */
     }
 
     part firmsDeclaration : KeyedSourceDeclaration {
@@ -793,32 +691,8 @@ package DataSeam {
     interface bedProvenanceCarried : BedProvenance
         connect blueTopoSource.provenanceOut to bedResultModel.provenanceIn;
 
-    interface classVocabularyDeclared : WaterBodyClassDeclaration
-        connect coastalDeclaration.classOut to waterBodyClassifier.classIn;
-
-    interface classRungDeclared : BedLadderRung
-        connect waterBodyClassifier.rungOut to bedLadderRegistry.rungIn;
-
-    interface compositeRungDeclared : BedLadderRung
-        connect coastalComposite.rungOut to bedLadderRegistry.rungIn;
-
-    interface classLadderRegistered : BedLadderDeclaration
-        connect waterBodyClassifier.ladderOut to bedLadderRegistry.ladderIn;
-
-    interface compositeLadderRegistered : BedLadderDeclaration
-        connect coastalComposite.ladderOut to bedLadderRegistry.ladderIn;
-
     interface perRequestLadderChosen : PerRequestLadderChoice
         connect bedLadderRegistry.choiceOut to fetcherRouter.choiceIn;
-
-    interface stoppedClassRefused : StoppedClassRefusal
-        connect waterBodyClassifier.stoppedOut to coastalComposite.stoppedIn;
-
-    interface classGapReported : PartialCoverGap
-        connect waterBodyClassifier.gapOut to ladderWalker.gapIn;
-
-    interface compositeGapReported : PartialCoverGap
-        connect coastalComposite.gapOut to ladderWalker.gapIn;
 
     interface sourceCredentialDeclared : SourceCredentialDeclaration
         connect firmsDeclaration.credentialOut to credentialResolver.credentialIn;
@@ -836,22 +710,6 @@ package DataSeam {
     // ----------------------------------------------------------------- //
     // The signed decisions this seam is governed by
     // ----------------------------------------------------------------- //
-
-    requirement def PerWaterBodyClassLadders {
-        doc /*
-        SIGNED DECISION - per-class ladders on the topobathy row (bathymetry
-        methodology, M1). A bed source fits one KIND of water and not another,
-        so the row has one ladder per class rather than one ladder: coastal or
-        estuary takes BlueTopo above the CUDEM composite, and the other two
-        classes take none - each stopped for a measured reason recorded under
-        AStoppedRungNeverShips. Which ladder governs a request is resolved from
-        the request itself, before the walk.
-
-        A row that declares no class keeps the unclassed ladder. A class nobody
-        declared is not a class anybody may assume, so the per-class ladders
-        govern the row that states which water it is and nothing else.
-        */
-    }
 
     requirement def AKeyedSourceStatesTheKeyItNeeds {
         doc /*
@@ -892,23 +750,6 @@ package DataSeam {
         vertical datum, the resolution and the style row - stay on the source
         row whatever library performs the fetch, so a bed published through a
         catalog is as mergeable after the fold as before it.
-        */
-    }
-
-    requirement def WaterBodyClassComesFromHeldData {
-        doc /*
-        SIGNED DECISION - the class comes from data the chain already holds (the
-        reach, water and waterbody rows), never from a guess. A tidal FType
-        among the mapped water makes the reach coastal; no mapped water surface
-        at all makes it a small inland stream, because a channel too narrow to
-        be mapped as an area is a flowline only and that absence is a real
-        answer about the channel.
-
-        Where the held rows CANNOT decide, the classifier REFUSES and names what
-        was missing rather than falling to a conservative default. A mapped
-        inland channel surface says the river is wide; the navigable class means
-        a federally maintained navigation channel, and no row this chain holds
-        says whether this one is - so it refuses and names that.
         */
     }
 
@@ -1457,8 +1298,7 @@ package DataSeam {
         survey.
 
         forbid: trid3nt_server.tools.fetchers.ocean.fetch_bluetopo.hooks -> trid3nt_server.tools.derive
-        forbid: trid3nt_server.tools.fetchers._router.hooks.topobathy_class -> trid3nt_server.tools.derive
-        forbid: trid3nt_server.tools.fetchers._router.hooks.topobathy -> trid3nt_server.tools.derive
+        forbid: trid3nt_server.tools.fetchers.ocean.fetch_cudem.hooks -> trid3nt_server.tools.derive
         */
     }
 
@@ -1466,17 +1306,6 @@ package DataSeam {
     // Allocations
     // ----------------------------------------------------------------- //
 
-    satisfy requirement PerWaterBodyClassLadders by waterBodyClassifier;
-    satisfy requirement PerWaterBodyClassLadders by bedLadderRegistry;
-    satisfy requirement PerWaterBodyClassLadders by fetcherRouter;
-    verify requirement PerWaterBodyClassLadders by
-        "tests/fetchers/test_bathymetry_data_seam.py::test_the_coastal_ladder_puts_bluetopo_above_the_cudem_composite";
-    verify requirement PerWaterBodyClassLadders by
-        "tests/fetchers/test_bathymetry_data_seam.py::test_every_declared_class_either_ladders_or_stops_by_name";
-    verify requirement PerWaterBodyClassLadders by
-        "tests/fetchers/test_bathymetry_data_seam.py::test_an_undeclared_class_keeps_the_rows_unclassed_ladder";
-    verify requirement PerWaterBodyClassLadders by
-        "tests/fetchers/test_bathymetry_data_seam.py::test_every_class_ladder_ends_at_refuse_with_the_rows_own_error_code";
 
     satisfy requirement AKeyedSourceStatesTheKeyItNeeds by firmsDeclaration;
     satisfy requirement AKeyedSourceStatesTheKeyItNeeds by credentialResolver;
@@ -1516,28 +1345,15 @@ package DataSeam {
     verify requirement ACatalogReaderCarriesNoProvenance by
         "tests/fetchers/test_bathymetry_data_seam.py::test_every_bed_capable_source_row_states_its_vertical_datum";
 
-    satisfy requirement WaterBodyClassComesFromHeldData by waterBodyClassifier;
-    satisfy requirement WaterBodyClassComesFromHeldData by coastalDeclaration;
-    verify requirement WaterBodyClassComesFromHeldData by
-        "tests/fetchers/test_bathymetry_data_seam.py::test_a_tidal_ftype_classifies_the_reach_as_coastal_estuary";
-    verify requirement WaterBodyClassComesFromHeldData by
-        "tests/fetchers/test_bathymetry_data_seam.py::test_no_mapped_water_surface_classifies_the_reach_as_a_small_inland_stream";
-    verify requirement WaterBodyClassComesFromHeldData by
-        "tests/fetchers/test_bathymetry_data_seam.py::test_a_wide_inland_river_refuses_naming_what_would_have_decided_it";
-    verify requirement WaterBodyClassComesFromHeldData by
-        "tests/fetchers/test_bathymetry_data_seam.py::test_the_classifier_never_guesses_a_class_from_an_unknown_ftype";
-    verify requirement WaterBodyClassComesFromHeldData by
-        "tests/fetchers/test_bathymetry_data_seam.py::test_the_topobathy_row_declares_the_water_body_class_it_ladders_on";
 
-    satisfy requirement SubstitutionIsDeclared by waterBodyClassifier;
+    satisfy requirement SubstitutionIsDeclared by bedLadderRegistry;
     satisfy requirement SubstitutionIsDeclared by ladderWalker;
-    satisfy requirement SubstitutionIsDeclared by coastalComposite;
-    verify requirement SubstitutionIsDeclared by
-        "tests/fetchers/test_bathymetry_data_seam.py::test_falling_from_bluetopo_to_the_cudem_composite_is_a_declared_cross_dataset_rung";
-    verify requirement SubstitutionIsDeclared by
-        "tests/fetchers/test_bathymetry_data_seam.py::test_a_partial_bluetopo_cover_is_reported_as_a_gap_not_a_whole_bed";
     verify requirement SubstitutionIsDeclared by
         "tests/fetchers/test_fallback_ladder.py::test_declared_rung_fills_the_gap_and_splits_coverage";
+    verify requirement SubstitutionIsDeclared by
+        "tests/fetchers/test_fallback_ladder.py::test_gap_no_rung_permitted_keeps_the_capabilitys_coverage_code";
+    verify requirement SubstitutionIsDeclared by
+        "tests/fetchers/test_fallback_sweep_guard.py::test_every_ladder_is_a_complete_account_of_its_own_rungs";
 
     satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by lakeLevelDeclaration;
     satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by lakeDeclaration;
@@ -1569,7 +1385,9 @@ package DataSeam {
 
     satisfy requirement OneSourceReadsOnOneStatedDatum by bedPainter;
     satisfy requirement OneSourceReadsOnOneStatedDatum by lakeDeclaration;
-    satisfy requirement OneSourceReadsOnOneStatedDatum by coastalDeclaration;
+    satisfy requirement OneSourceReadsOnOneStatedDatum by cudemDeclaration;
+    satisfy requirement OneSourceReadsOnOneStatedDatum by etopoDeclaration;
+    satisfy requirement OneSourceReadsOnOneStatedDatum by regionalCoastalDemDeclaration;
     satisfy requirement OneSourceReadsOnOneStatedDatum by blueTopoDeclaration;
     verify requirement OneSourceReadsOnOneStatedDatum by
         "tests/fetchers/test_bathymetry_data_seam.py::test_every_bed_capable_source_row_states_its_vertical_datum";
@@ -1759,22 +1577,19 @@ package DataSeam {
     verify requirement TheRunHasOneVerticalFrame by
         "tests/inputs/test_slot_inputs.py::test_a_bed_the_runs_frame_cannot_reach_names_its_zero_once";
 
-    satisfy requirement AStoppedRungNeverShips by waterBodyClassifier;
-    satisfy requirement AStoppedRungNeverShips by coastalComposite;
-    verify requirement AStoppedRungNeverShips by
-        "tests/fetchers/test_bathymetry_data_seam.py::test_a_small_inland_stream_has_no_ladder_and_refuses_naming_both_gaps";
-    verify requirement AStoppedRungNeverShips by
-        "tests/fetchers/test_bathymetry_data_seam.py::test_a_navigable_river_has_no_ladder_and_refuses_naming_its_stopped_primary";
-    verify requirement AStoppedRungNeverShips by
-        "tests/fetchers/test_bathymetry_data_seam.py::test_no_ladder_anywhere_ships_an_ehydro_rung";
-    verify requirement AStoppedRungNeverShips by
-        "tests/fetchers/test_bathymetry_data_seam.py::test_a_stopped_class_refuses_before_the_cache_and_before_the_network";
+    satisfy requirement AStoppedRungNeverShips by blueTopoSource;
+    satisfy requirement AStoppedRungNeverShips by cudemDeclaration;
+    satisfy requirement AStoppedRungNeverShips by regionalCoastalDemDeclaration;
     verify requirement AStoppedRungNeverShips by
         "tests/fetchers/test_bathymetry_data_seam.py::test_a_tile_row_with_no_delivered_link_is_not_data";
     verify requirement AStoppedRungNeverShips by
         "tests/fetchers/test_bathymetry_data_seam.py::test_an_aoi_no_delivered_tile_reaches_refuses_by_name";
     verify requirement AStoppedRungNeverShips by
-        "tests/fetchers/test_bathymetry_data_seam.py::test_the_synthetic_slot_is_stated_as_deferred_rather_than_forgotten";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_an_aoi_no_cudem_tile_reaches_refuses_rather_than_serving_something_else";
+    verify requirement AStoppedRungNeverShips by
+        "tests/fetchers/test_bathymetry_data_seam.py::test_a_coast_with_no_published_regional_collection_refuses_by_name";
+    verify requirement AStoppedRungNeverShips by
+        "tests/fetchers/test_bathymetry_data_seam.py::test_a_regional_collection_that_cannot_be_listed_refuses_rather_than_skipping";
 
     satisfy requirement TheShorelineIsTheDomainsOwnEdge by waterCut;
     satisfy requirement TheShorelineIsTheDomainsOwnEdge by coastlineDeclaration;
@@ -1897,8 +1712,8 @@ package DataSeam {
         "tests/runtime/test_domain_bed_and_context_slots.py::test_the_sheet_reads_a_wholly_absent_row_as_nothing";
 
     satisfy requirement ThalwegBurningIsNeverABedSource by blueTopoSource;
-    satisfy requirement ThalwegBurningIsNeverABedSource by waterBodyClassifier;
-    satisfy requirement ThalwegBurningIsNeverABedSource by coastalComposite;
+    satisfy requirement ThalwegBurningIsNeverABedSource by cudemDeclaration;
+    satisfy requirement ThalwegBurningIsNeverABedSource by etopoDeclaration;
     verify requirement ThalwegBurningIsNeverABedSource by
         "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
     verify requirement ThalwegBurningIsNeverABedSource by

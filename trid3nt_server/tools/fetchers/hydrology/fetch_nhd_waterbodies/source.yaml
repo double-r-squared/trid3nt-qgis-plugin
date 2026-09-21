@@ -68,7 +68,7 @@ docstring: |-
     stream LINE) network; this returns waterbody POLYGONS.
   - ``fetch_nwi_wetlands`` -- that returns VEGETATED / classified wetlands;
     this returns OPEN water.
-  - Coastal shoreline (``fetch_topobathy``), stream gauges
+  - Coastal shoreline (``fetch_osm_coastline``), stream gauges
     (``fetch_usgs_nwis_gauges``), or a modeled flood extent.
 
   **Parameters:**

@@ -128,7 +128,7 @@ docstring: |-
 
   When NOT to use:
       - DO NOT use for depth/bathymetry - use ``fetch_bluetopo`` or
-        ``fetch_topobathy``; this is texture, not elevation.
+        ``fetch_cudem``; this is texture, not elevation.
       - DO NOT use for river bed material inland - use
         ``fetch_nwis_bed_material``.
       - DO NOT expect uniform coverage: usSEABED is compiled from wherever a

@@ -174,10 +174,13 @@ async def test_a_bed_asked_for_off_the_oregon_coast_excludes_the_lakes_by_name()
     """
     found = await find_sources("bathymetry", OREGON_SHELF_BOX)
     dropped = {row["fetcher"]: row["excluded"] for row in found["choice"]["rows"]}
+    assert "does not reach this place" in dropped["fetch_chs_nonna"]
     assert "the Great Lakes and the connecting channels" in dropped["fetch_chs_nonna"]
-    assert "does not reach this place" in dropped["fetch_greatlakes_bathymetry"]
     named = [row["tool_name"] for row in found["results"]]
-    assert "fetch_bluetopo" in named and "fetch_topobathy" in named
+    assert "fetch_bluetopo" in named and "fetch_cudem" in named
+    # The global relief MODEL reaches everywhere and still ranks under every
+    # measured row, so the coarse bed is offered and never picked first.
+    assert named[-1] == "fetch_etopo"
 
 
 @pytest.mark.asyncio

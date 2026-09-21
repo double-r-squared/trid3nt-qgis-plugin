@@ -124,18 +124,18 @@ def test_an_unknown_op_refuses_with_the_nearest_names():
 
 
 def test_the_default_recipe_is_hard_baked_and_visible():
-    """An undeclared ask gets its rim sized, the clean passes, then the bed.
+    """An undeclared ask gets its rim sized and the clean passes, and NO bed.
 
     The rim is in the list because nothing else sizes it: every sizing function the
     library has measures the shoreline. No smoothing pass: it folds elements beside
-    a rim locked at one spacing."""
+    a rim locked at one spacing. No bed either: which measurement is the bed under
+    this water is the bed slot's answer, and a mesher naming a source here would be
+    a second place deciding it."""
     assert [op.fn for op in get_mesher("om2d").default_ops] == [
         "set_rim_size", "delete_boundary_faces",
         "delete_faces_connected_to_one_face",
-        "make_mesh_boundaries_traversable", "fix_mesh", "set_bed"]
-    bed = get_mesher("om2d").default_ops[-1]
-    assert bed.kwargs["source"] == "fetch_topobathy"
-    assert bed.kwargs["interp"] == "nearest"
+        "make_mesh_boundaries_traversable", "fix_mesh"]
+    assert not any(op.fn == "set_bed" for op in get_mesher("om2d").default_ops)
 
 
 def test_the_default_rim_carries_no_opinion_the_adapter_invented():
@@ -405,7 +405,7 @@ def test_a_library_op_after_the_bed_runs_in_its_own_call_over_the_current_mesh(
     _no_fetch_bed(monkeypatch)
     mesh = OM2D.build(_recipe(ops=[
         mesh_op("delete_boundary_faces"),
-        mesh_op("set_bed", source="fetch_topobathy"),
+        mesh_op("set_bed", source="fetch_cudem"),
         mesh_op("identify_ocean_boundary_sections", depth_threshold=-10.0)]))
 
     ops = [op for op, _cfg in sent["configs"]]
@@ -424,7 +424,7 @@ def test_a_recipe_that_never_asks_opens_no_boundary(monkeypatch, tmp_path):
     """An inland domain has no open boundary, which is an answer not an omission."""
     sent = _stub_om2d(monkeypatch, tmp_path)
     _no_fetch_bed(monkeypatch)
-    mesh = OM2D.build(_recipe(ops=[mesh_op("set_bed", source="fetch_topobathy")]))
+    mesh = OM2D.build(_recipe(ops=[mesh_op("set_bed", source="fetch_cudem")]))
     assert "open_boundary_sections" not in \
         mesh.meta["artifact"]["open_boundary_info"]
     assert sent["pair"]["roles"] == {}
@@ -448,7 +448,7 @@ def test_an_op_that_renumbers_after_a_primitive_refuses_by_name(
     monkeypatch.setattr(OM2D, "_run_op", shrinking)
     with pytest.raises(MeshToolError) as excinfo:
         OM2D.build(_recipe(ops=[
-            mesh_op("set_bed", source="fetch_topobathy"),
+            mesh_op("set_bed", source="fetch_cudem"),
             mesh_op("laplacian2")]))
     assert excinfo.value.error_code == "MESH_OP_RENUMBERED_AFTER_BED"
     assert "laplacian2" in str(excinfo.value)

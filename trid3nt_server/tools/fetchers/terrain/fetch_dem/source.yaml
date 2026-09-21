@@ -109,7 +109,7 @@ caveats:
 docstring: |-
   Fetch a digital elevation model (DEM) / terrain elevation for a bounding box (USGS 3DEP US lidar; on a 3DEP outage the default path STOPS and asks before any Copernicus GLO-30 swap; either source pinnable).
 
-  Use this (not ``fetch_topobathy``, which is coastal land+seafloor) for a plain
+  Use this (not ``fetch_cudem``, which is coastal land+seafloor) for a plain
   ground-elevation DEM. The default ``source="auto"`` tries USGS 3DEP (1-10 m
   lidar). If the 3DEP SERVICE is unavailable / times out it does NOT silently
   substitute a different dataset: it raises a typed error that names
@@ -144,7 +144,7 @@ docstring: |-
 
   **When NOT to use:**
   - Bathymetry (below-water elevation) -- 3DEP/GLO-30 are land/surface models;
-    use ``fetch_topobathy`` for coastal seafloor depth.
+    use ``fetch_cudem`` or ``fetch_bluetopo`` for coastal seafloor depth.
   - Single-point elevation lookups -- the tool fetches a raster window;
     for a point query use a future ``point_elevation`` tool.
   - Continent-scale bboxes (> 5,000,000 km2) -- rejected with

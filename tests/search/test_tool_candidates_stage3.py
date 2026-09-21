@@ -71,7 +71,7 @@ _NEAR_TIE = [
 #: A confident ranking (relative margin 40%).
 _CONFIDENT = [
     ("fetch_dem", 0.0500),
-    ("fetch_topobathy", 0.0300),
+    ("fetch_cudem", 0.0300),
     ("fetch_landcover", 0.0200),
 ]
 

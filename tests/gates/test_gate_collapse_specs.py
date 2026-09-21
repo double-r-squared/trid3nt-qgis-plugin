@@ -20,7 +20,8 @@ from trid3nt_server.gates import confirm as _core
 #: mesh it built and mounts the mesher's own edit actions, which is a superset of
 #: what an approve-mesh card could offer.
 _EXPECTED_SOLVER: set[str] = set()
-_EXPECTED_FETCH = {"fetch_dem", "fetch_topobathy", "fetch_bluetopo", "fetch_landcover"}
+_EXPECTED_FETCH = {"fetch_dem", "fetch_cudem", "fetch_regional_coastal_dem",
+                   "fetch_bluetopo", "fetch_landcover"}
 
 
 # --- membership is derived from metadata --- #

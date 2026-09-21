@@ -1,66 +1,12 @@
-"""Resolution doctrine: offline unit coverage of the two live rulings.
+"""Resolution doctrine: the sampled payload estimator.
 
-The sampled payload estimator (measured against analytic, the pixel cap,
-resolution scaling, the cache) and the honest GLOBAL-FALLBACK warning (skipped
-vs no-intersect vs unreachable vs datum-gated). All pure - no network, no fetch."""
+Measured against analytic, the pixel cap, resolution scaling and the cache. All
+pure - no network, no fetch."""
 from __future__ import annotations
 
 import pytest
 
 BBOX = (-95.05, 29.2, -94.6, 29.65)
-
-
-from trid3nt_server.tools.fetchers._router.hooks.topobathy import (  # noqa: E402
-    _compose_fallback_warnings,
-)
-
-
-def _warn(**kw):
-    base = dict(bbox=BBOX, cudem_status="no_intersect", cudem_count=0,
-                regional_count=0, has_etopo=True, bathy_present=True,
-                land_absent=False)
-    base.update(kw)
-    return _compose_fallback_warnings(**base)
-
-
-def test_rc_no_intersect_may_claim_omission():
-    w = _warn(cudem_status="no_intersect")
-    assert "collection omits this coast" in w
-    assert "GLOBAL-FALLBACK" in w
-
-
-def test_rc_skipped_never_claims_omission():
-    w = _warn(cudem_status="skipped")
-    assert "SKIPPED" in w
-    assert "collection omits this coast" not in w  # the 0221 lie is gone
-
-
-def test_rc_index_unreachable_names_its_cause():
-    w = _warn(cudem_status="index_unreachable")
-    assert "could not be reached" in w
-    assert "collection omits this coast" not in w
-
-
-def test_rc_datum_gated_present_names_its_cause():
-    w = _warn(cudem_status="present")
-    assert "vertical-datum" in w
-    assert "collection omits this coast" not in w
-
-
-def test_rc_no_fallback_when_cudem_present():
-    # CUDEM tiles painted the merge -> no global-fallback warning at all.
-    assert _warn(cudem_status="present", cudem_count=8) is None
-
-
-def test_rc_bathy_absent_beats_fallback_branch():
-    w = _warn(bathy_present=False, has_etopo=False)
-    assert "BATHYMETRY ABSENT" in w
-    assert "GLOBAL-FALLBACK" not in w
-
-
-def test_rc_land_absent_labeled_degrade_appended():
-    w = _warn(cudem_status="present", cudem_count=8, land_absent=True)
-    assert "land_absent" in w
 
 
 from trid3nt_server.tools import payload_sampling as ps  # noqa: E402

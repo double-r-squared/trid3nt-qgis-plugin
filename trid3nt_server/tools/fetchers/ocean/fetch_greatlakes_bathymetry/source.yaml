@@ -140,8 +140,8 @@ docstring: |-
         "the lake bed", "the depth grid for this harbour on the lake datum".
 
   **When NOT to use:**
-      - A US OCEAN coast: use ``fetch_topobathy`` (CUDEM 1/9 arc-second merged
-        with 3DEP land, NAVD88).
+      - A US OCEAN coast: use ``fetch_cudem`` (the NCEI 1/9 arc-second
+        nearshore tiles, NAVD88) or ``fetch_bluetopo``.
       - Land terrain: use ``fetch_dem`` (USGS 3DEP, NAVD88, 1-10 m). This grid
         holds no land at all.
       - A CONNECTING RIVER between two lakes - the St. Clair, the Detroit, the

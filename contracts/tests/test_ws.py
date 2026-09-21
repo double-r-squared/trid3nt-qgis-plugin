@@ -528,14 +528,14 @@ def test_pipeline_step_child_carries_parent_step_id(session_id: str) -> None:
                 name="Model coastal flood",
                 tool_name="model_flood_scenario",
                 state="running",
-                substep_label="fetch_topobathy",
+                substep_label="fetch_cudem",
                 substep_index=2,
                 substep_total=7,
             ),
             ws.PipelineStep(
                 step_id=new_ulid(),
-                name="fetch_topobathy",
-                tool_name="fetch_topobathy",
+                name="fetch_cudem",
+                tool_name="fetch_cudem",
                 state="running",
                 parent_step_id=parent_id,
             ),
@@ -545,7 +545,7 @@ def test_pipeline_step_child_carries_parent_step_id(session_id: str) -> None:
     steps = dumped["payload"]["steps"]
     # Parent: top-level, breadcrumb populated.
     assert steps[0]["parent_step_id"] is None
-    assert steps[0]["substep_label"] == "fetch_topobathy"
+    assert steps[0]["substep_label"] == "fetch_cudem"
     assert steps[0]["substep_index"] == 2
     assert steps[0]["substep_total"] == 7
     # Child: nested under the parent, no breadcrumb of its own.

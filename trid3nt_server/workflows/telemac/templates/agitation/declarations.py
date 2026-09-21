@@ -126,10 +126,10 @@ DOC = dict(
          "Its own edge is the SHORELINE the mesh is sized against, so a rough "
          "outline is enough; unfilled, the extent above is cut instead."),
         ("bed",
-         "That producer is NOAA CUDEM nearshore topobathy over the domain - the "
-         "surveyed sea floor the wave refracts over. Hand it your own survey "
-         "raster, a layer of soundings, or a depth in metres for a basin nobody "
-         "has sounded."),
+         "That producer is the measured bathymetry under the domain - the "
+         "surveyed sea floor the wave refracts over, matched to this water and "
+         "laid rung by rung. Hand it your own survey raster, a layer of "
+         "soundings, or a depth in metres for a basin nobody has sounded."),
         ("structure",
          "REQUIRED. The barrier the question is about, as a polyline LAYER (the "
          "uri or handle from fetch_osm_features feature='breakwaters', or any line layer the user "

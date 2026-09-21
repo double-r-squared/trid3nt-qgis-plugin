@@ -191,7 +191,7 @@ async def test_enforce_visible_set_is_monotonic_across_turns(fake_llm):
 
     state = SessionState(session_id=new_ulid())
 
-    real = [t for t in ("fetch_dem", "fetch_topobathy", "geocode_location") if t in TOOL_REGISTRY]
+    real = [t for t in ("fetch_dem", "fetch_cudem", "geocode_location") if t in TOOL_REGISTRY]
     assert real, "expected at least one real tool to test with"
 
     # Turn 1: retrieval surfaces real[0].
@@ -237,7 +237,7 @@ def test_compute_recall_at_k_synthetic():
             "session_id": "S1",
             "turn_id": "TB",
             "k": 25,
-            "visible_tools": ["fetch_topobathy", "telemac_dye_release"],
+            "visible_tools": ["fetch_cudem", "telemac_dye_release"],
         },
     ]
     tool_records = [
@@ -246,7 +246,7 @@ def test_compute_recall_at_k_synthetic():
         {"source": "llm", "session_id": "S1", "turn_id": "TA", "tool_name": "fetch_buildings"},
         {"source": "llm", "session_id": "S1", "turn_id": "TA", "tool_name": "telemac_rain_on_grid"},
         # Turn B -- river-plume.
-        {"source": "llm", "session_id": "S1", "turn_id": "TB", "tool_name": "fetch_topobathy"},
+        {"source": "llm", "session_id": "S1", "turn_id": "TB", "tool_name": "fetch_cudem"},
         {"source": "llm", "session_id": "S1", "turn_id": "TB", "tool_name": "telemac_dye_release"},
         # A workflow-sourced dispatch must be IGNORED by recall.
         {"source": "workflow", "session_id": "S1", "turn_id": "TA", "tool_name": "restyle_layer"},

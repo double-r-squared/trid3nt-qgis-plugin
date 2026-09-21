@@ -387,7 +387,7 @@ def test_an_unbound_op_kwarg_refuses_at_build(tmp_path):
 
 def test_editing_a_recipe_returns_a_new_frozen_one():
     first = _recipe()
-    second = first.appending(mesh_op("set_bed", source="fetch_topobathy"))
+    second = first.appending(mesh_op("set_bed", source="fetch_cudem"))
     third = second.appending(mesh_op("set_boundary_roles", outflow=[[0, 0], [1, 1]]))
     assert first.ops == ()
     assert [op.fn for op in third.ops] == ["set_bed", "set_boundary_roles"]
@@ -625,11 +625,11 @@ async def test_wire_ops_become_recipe_entries(monkeypatch):
     with pytest.raises(MeshToolError):
         await TOOL_REGISTRY["build_mesh"].fn(
             mesher="reg_grid", bbox=(-75.8, 36.1, -75.7, 36.2), resolution_m=200.0,
-            ops=[{"fn": "set_bed", "source": "fetch_topobathy",
+            ops=[{"fn": "set_bed", "source": "fetch_cudem",
                   "interp": "bilinear"}])
     ops = seen["recipe"].ops
     assert [op.fn for op in ops] == ["set_bed"]
-    assert dict(ops[0].kwargs) == {"source": "fetch_topobathy",
+    assert dict(ops[0].kwargs) == {"source": "fetch_cudem",
                                    "interp": "bilinear"}
 
 

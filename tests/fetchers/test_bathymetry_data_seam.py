@@ -1,9 +1,10 @@
-"""The topobathy row's bed seam: the BlueTopo source and the per-class ladders.
+"""The bed rows and the ranked list they are laid in.
 
-Offline. Every network edge is a fixture: the tile scheme is a GeoPackage built
-here, and a tile header is a stub whose only content is the datum string the
-gate reads. What is exercised is the DECISIONS - which ladder governs which
-water, which rung ships, what a partial cover reports, what a refusal names.
+Offline. Every network edge is a fixture: the BlueTopo tile scheme is a
+GeoPackage built here, the CUDEM manifest is a list of names, and a tile header
+is a stub whose only content is the datum string the gate reads. What is
+exercised is the DECISIONS - which source states what, what a partial cover
+reports, what a refusal names, and the order the sort lays them in.
 """
 
 from __future__ import annotations
@@ -12,135 +13,15 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.fallbacks import registered_ladders, resolve_ladder
+from trid3nt_server.tools.fetchers import _tile_mosaic
 from trid3nt_server.tools.fetchers.ocean.fetch_bluetopo import hooks as bt
-from trid3nt_server.tools.fetchers._router.hooks import topobathy as tb
-from trid3nt_server.tools.fetchers._router.hooks import topobathy_class as tc
-from trid3nt_server.tools.fetchers._router.hooks.topobathy import (
-    TopobathyCoverageGapError,
-    validate_topobathy,
+from trid3nt_server.tools.fetchers.ocean.fetch_cudem import hooks as cu
+from trid3nt_server.tools.fetchers.ocean.fetch_etopo import hooks as et
+from trid3nt_server.tools.fetchers.ocean.fetch_regional_coastal_dem import (
+    hooks as rc,
 )
 
 COASTAL_AOI = (-85.75, 29.55, -85.25, 30.20)
-
-
-
-
-def test_a_tidal_ftype_classifies_the_reach_as_coastal_estuary() -> None:
-    for ftype in sorted(tc.TIDAL_FTYPES):
-        assert tc.classify_water_body(
-            water_features=[{"properties": {"ftype": ftype}}]
-        ) == "coastal_estuary"
-
-
-def test_no_mapped_water_surface_classifies_the_reach_as_a_small_inland_stream() -> None:
-    # A channel too narrow to be mapped as an area is a flowline only, and the
-    # water fetcher says so in its own caveats: the absence is a real answer.
-    assert tc.classify_water_body(
-        water_features=[], mapped_water_fraction=0.0
-    ) == "small_inland_stream"
-
-
-def test_a_wide_inland_river_refuses_naming_what_would_have_decided_it() -> None:
-    with pytest.raises(tc.WaterBodyClassUnknown) as excinfo:
-        tc.classify_water_body(
-            water_features=[{"properties": {"ftype": 460}}],
-            mapped_water_fraction=0.9,
-        )
-    assert excinfo.value.missing, "a refusal that names nothing missing is useless"
-    assert "National Channel Framework" in " ".join(excinfo.value.missing)
-
-
-def test_the_classifier_never_guesses_a_class_from_an_unknown_ftype() -> None:
-    with pytest.raises(tc.WaterBodyClassUnknown):
-        tc.classify_water_body(water_features=[{"properties": {"ftype": 378}}])
-
-
-
-
-def test_the_coastal_ladder_puts_bluetopo_above_the_cudem_composite() -> None:
-    ladder = resolve_ladder("fetch_topobathy", {"water_body_class": "coastal_estuary"})
-    assert ladder is not None
-    names = [r.name for r in ladder.rungs]
-    assert names.index("bluetopo") < names.index("cudem_nearshore")
-    assert ladder.primary_rung.name == "bluetopo"
-
-
-def test_falling_from_bluetopo_to_the_cudem_composite_is_a_declared_cross_dataset_rung() -> None:
-    ladder = resolve_ladder("fetch_topobathy", {"water_body_class": "coastal_estuary"})
-    assert ladder is not None
-    rung = ladder.alternative("cudem_nearshore")
-    # It must be an ALTERNATIVE (gated, permitted by name), not something the
-    # capability may lay down on its own.
-    assert rung is not None and rung.consequence == "cross_dataset"
-
-
-def test_no_ladder_anywhere_ships_an_ehydro_rung() -> None:
-    # eHydro's queryable layer carries a horizontal projection and NO vertical
-    # datum, so its bed cannot state its datum; the rung STOPPED on that.
-    for ladder in registered_ladders().values():
-        assert not any("ehydro" in r.name for r in ladder.rungs)
-
-
-def test_a_navigable_river_has_no_ladder_and_refuses_naming_its_stopped_primary() -> None:
-    # With eHydro stopped only BlueTopo is left, and one source is not a
-    # degradation path: a ladder with nothing under its primary declares no
-    # alternative for anyone to permit.
-    assert "navigable_river" not in tc.CLASS_LADDERS
-    reason = tc.STOPPED_CLASSES["navigable_river"]
-    assert "eHydro" in reason and "vertical datum" in reason
-
-
-def test_a_small_inland_stream_has_no_ladder_and_refuses_naming_both_gaps() -> None:
-    assert "small_inland_stream" not in tc.CLASS_LADDERS
-    reason = tc.STOPPED_CLASSES["small_inland_stream"]
-    assert "NXSDB" in reason and "synthetic" in reason
-
-
-def test_the_synthetic_slot_is_stated_as_deferred_rather_than_forgotten() -> None:
-    """No synthetic bathymetry is produced, by ruling rather than by backlog.
-
-    Stating the empty slot is the point: a rung nobody has got to invites the next
-    hand to fill it, where one deliberately left empty says the decision is taken."""
-    reason = tc.STOPPED_CLASSES["small_inland_stream"]
-    assert "DEFERRED BY RULING" in reason
-    assert "does not exist yet" not in reason
-
-
-@pytest.mark.parametrize(
-    ("water_body_class", "named"),
-    [("small_inland_stream", "NXSDB"), ("navigable_river", "eHydro")],
-)
-def test_a_stopped_class_refuses_before_the_cache_and_before_the_network(
-    water_body_class: str, named: str
-) -> None:
-    with pytest.raises(TopobathyCoverageGapError) as excinfo:
-        validate_topobathy(None, {"bbox": COASTAL_AOI,
-                                  "water_body_class": water_body_class})
-    assert excinfo.value.error_code == "TOPOBATHY_COVERAGE_GAP"
-    assert named in str(excinfo.value)
-
-
-def test_every_declared_class_either_ladders_or_stops_by_name() -> None:
-    # A class the row can state must resolve to something: a ladder that serves
-    # it, or a stop that says what is missing. Silence is the third answer this
-    # forbids.
-    for name in tc.WATER_BODY_CLASSES:
-        assert (name in tc.CLASS_LADDERS) != (name in tc.STOPPED_CLASSES)
-
-
-def test_an_undeclared_class_keeps_the_rows_unclassed_ladder() -> None:
-    # A class nobody declared is not a class anybody may assume, so a request
-    # that states none is served exactly as before.
-    default = registered_ladders()["fetch_topobathy"]
-    assert resolve_ladder("fetch_topobathy", {}) is default
-    assert resolve_ladder("fetch_topobathy", {"water_body_class": None}) is default
-
-
-def test_every_class_ladder_ends_at_refuse_with_the_rows_own_error_code() -> None:
-    for ladder in tc.CLASS_LADDERS.values():
-        assert ladder.terminal.consequence == "refuse"
-        assert ladder.refuse_error_code == "TOPOBATHY_COVERAGE_GAP"
 
 
 
@@ -198,9 +79,10 @@ def test_coverage_is_the_painted_bed_not_the_delivered_footprint() -> None:
 
     grid = numpy.full((10, 10), 1.0, dtype="float32")
     grid[:, :4] = numpy.float32("nan")  # a delivered tile, 40% of it unpainted
-    assert tb.painted_fraction(grid) == pytest.approx(0.60)
-    assert tb.painted_fraction(numpy.full((4, 4), numpy.float32("nan"))) == 0.0
-    assert tb.painted_fraction(numpy.zeros((0, 0))) == 0.0
+    assert _tile_mosaic.painted_fraction(grid) == pytest.approx(0.60)
+    assert _tile_mosaic.painted_fraction(
+        numpy.full((4, 4), numpy.float32("nan"))) == 0.0
+    assert _tile_mosaic.painted_fraction(numpy.zeros((0, 0))) == 0.0
 
 
 def test_a_half_nan_tile_grades_the_gap_gate_on_what_it_painted(
@@ -214,10 +96,9 @@ def test_a_half_nan_tile_grades_the_gap_gate_on_what_it_painted(
     half[:4, :] = numpy.float32("nan")
     monkeypatch.setattr(bt, "assert_navd88_tile", lambda _p: "NAVD88")
     monkeypatch.setattr(
-        tb, "_composite_sources_to_array",
+        bt, "mosaic",
         lambda sources, *_a, **_kw: (half, None, "EPSG:4326",
-                                     [True] * len(sources),
-                                     [None] * len(sources)))
+                                     [True] * len(sources)))
     recorded: dict = {}
     monkeypatch.setattr(bt, "record_provenance", recorded.update)
 
@@ -278,29 +159,6 @@ def test_a_tile_that_states_no_navd88_refuses_rather_than_merging(
     assert excinfo.value.error_code == "BLUETOPO_DATUM_MISMATCH"
 
 
-def test_a_partial_bluetopo_cover_is_reported_as_a_gap_not_a_whole_bed(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from trid3nt_contracts.execution import BlueTopoResult
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    partial = BlueTopoResult(
-        layer_id="x", name="x", layer_type="raster", uri="s3://x.tif",
-        coverage_fraction=0.42,
-    )
-    monkeypatch.setitem(
-        TOOL_REGISTRY, "fetch_bluetopo",
-        TOOL_REGISTRY["fetch_bluetopo"].__class__(
-            **{**TOOL_REGISTRY["fetch_bluetopo"].__dict__,
-               "fn": lambda **_kw: partial}),
-    )
-    with pytest.raises(TopobathyCoverageGapError) as excinfo:
-        tc.serve_bluetopo_bed(bbox=COASTAL_AOI)
-    # The walker reads BOTH off it: how much was covered, and what the gap is.
-    assert excinfo.value.covered_fraction == pytest.approx(0.42)
-    assert "42.0%" in excinfo.value.gap_note
-
-
 def test_the_envelope_states_the_datum_in_provenance() -> None:
     fields = bt.envelope_bluetopo(
         None, {"bbox": COASTAL_AOI}, None, None,
@@ -336,43 +194,21 @@ def test_the_bed_resolution_lever_is_resolution_m_from_the_spec_to_the_merge(
     monkeypatch.setattr(bt, "assert_navd88_tile", lambda _p: "NAVD88")
     monkeypatch.setattr(bt, "record_provenance", lambda _fields: None)
     monkeypatch.setattr(
-        tb, "_composite_sources_to_array",
+        bt, "mosaic",
         lambda sources, *_a, **kw: (passed.update(kw)
                                     or (numpy.full((4, 4), 3.0, dtype="float32"),
                                         None, "EPSG:4326",
-                                        [True] * len(sources),
-                                        [None] * len(sources))))
+                                        [True] * len(sources))))
 
     bt.read_bluetopo(None, {"bbox": (-85.6, 30.0, -85.3, 30.1), "resolution_m": 8},
                      timeout_s=10.0)
-    assert passed == {"resolution_m": 8.0}
+    assert passed == {"resolution_m": 8.0, "source": "fetch_bluetopo"}
 
 
 def test_a_bed_resolution_that_is_not_a_cell_size_refuses_by_the_lever_name() -> None:
     with pytest.raises(bt.BlueTopoInputError) as excinfo:
         bt.validate_bluetopo(None, {"bbox": COASTAL_AOI, "resolution_m": 0})
     assert "resolution_m" in str(excinfo.value)
-
-
-def test_the_bluetopo_rung_hands_the_composites_own_lever_straight_through(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from trid3nt_contracts.execution import BlueTopoResult
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    whole = BlueTopoResult(
-        layer_id="x", name="x", layer_type="raster", uri="s3://x.tif",
-        coverage_fraction=1.0,
-    )
-    asked: dict = {}
-    monkeypatch.setitem(
-        TOOL_REGISTRY, "fetch_bluetopo",
-        TOOL_REGISTRY["fetch_bluetopo"].__class__(
-            **{**TOOL_REGISTRY["fetch_bluetopo"].__dict__,
-               "fn": lambda **kw: (asked.update(kw), whole)[1]}),
-    )
-    tc.serve_bluetopo_bed(bbox=COASTAL_AOI, resolution_m=8)
-    assert asked["resolution_m"] == 8
 
 
 def test_the_bluetopo_spec_declares_the_delegate_hooks_and_the_result_model() -> None:
@@ -389,13 +225,6 @@ def test_the_bluetopo_spec_declares_the_delegate_hooks_and_the_result_model() ->
     assert spec.normalize.datum == "NAVD88"
 
 
-def test_the_topobathy_row_declares_the_water_body_class_it_ladders_on() -> None:
-    from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
-
-    spec = load_spec_from_path(Path(
-        "trid3nt_server/tools/fetchers/ocean/fetch_topobathy/source.yaml"))
-    param = spec.params["water_body_class"]
-    assert sorted(param.values or []) == sorted(tc.WATER_BODY_CLASSES)
 
 
 #: Every source a recipe may hand ``set_bed``: the rows whose quantity IS bed
@@ -435,7 +264,8 @@ def test_the_bathymetry_sources_are_found_through_their_class(
         class_routes_to_the_match) -> None:
     """A covered fetcher carries no corpus: its class is the door."""
     for fetcher in ("fetch_bluetopo", "fetch_greatlakes_bathymetry",
-                    "fetch_topobathy"):
+                    "fetch_cudem", "fetch_etopo",
+                    "fetch_regional_coastal_dem"):
         class_routes_to_the_match("bathymetry", fetcher)
 
 
@@ -508,3 +338,145 @@ def test_the_lake_grid_publishes_its_own_fill_as_nodata(monkeypatch) -> None:
     with pytest.raises(RouterEmptyError) as raised:
         raster_cog.execute(spec, params)
     assert raised.value.error_code == "GREATLAKES_BATHYMETRY_EMPTY"
+
+
+#: A quarter-degree CUDEM tile name, which is where the footprint comes from.
+_CUDEM_TILE = "https://x/dem/ncei19_n30X00_w085X50_2019v1.tif"
+
+
+def test_a_cudem_tile_name_is_its_footprint() -> None:
+    """The quarter-degree square is read off the NW corner in the filename; a
+    name that carries no corner is a tile whose footprint nobody can state."""
+    assert cu.tile_box(_CUDEM_TILE) == pytest.approx(
+        (-85.5, 29.75, -85.25, 30.0))
+    assert cu.tile_box("https://x/dem/readme.tif") is None
+
+
+def test_only_the_tiles_that_touch_the_aoi_are_selected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    far = "https://x/dem/ncei19_n42X00_w070X00_2019v1.tif"
+    monkeypatch.setattr(cu, "_manifest_urls", lambda _t: [_CUDEM_TILE, far])
+    assert cu.select_tiles((-85.45, 29.80, -85.30, 29.95)) == [_CUDEM_TILE]
+
+
+def test_an_aoi_no_cudem_tile_reaches_refuses_rather_than_serving_something_else(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(cu, "_manifest_urls", lambda _t: [_CUDEM_TILE])
+    with pytest.raises(cu.CudemCoverageGapError) as excinfo:
+        cu.read_cudem(None, {"bbox": (-80.0, 25.0, -79.9, 25.1)}, timeout_s=10.0)
+    assert excinfo.value.error_code == "CUDEM_COVERAGE_GAP"
+
+
+def test_a_cudem_tile_on_a_tidal_datum_refuses_rather_than_merging(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stub_open(monkeypatch, 'COMPD_CS["NAD83 / UTM zone 16N + MLLW"]', "mllw")
+    with pytest.raises(cu.CudemDatumError) as excinfo:
+        cu.assert_navd88("/vsicurl/whatever.tif")
+    assert excinfo.value.error_code == "CUDEM_DATUM_MISMATCH"
+
+
+def test_a_cudem_tile_stating_no_vertical_cs_carries_the_collections_navd88(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The row states NAVD88 for the collection, so a tile that states nothing is
+    on it; only a tile stating a DIFFERENT zero is a mismatch."""
+    _stub_open(monkeypatch, 'PROJCS["NAD83 / UTM zone 16N"]', "")
+    assert cu.assert_navd88("/vsicurl/whatever.tif") is None
+
+
+def test_the_etopo_tile_grid_is_arithmetic_not_an_index() -> None:
+    assert et.tile_url(30.0, -90.0).endswith("ETOPO_2022_v1_15s_N30W090_surface.tif")
+    urls = et.select_tiles((-85.75, 29.55, -85.25, 30.20))
+    assert urls == [et.tile_url(30.0, -90.0), et.tile_url(45.0, -90.0)]
+
+
+def test_an_etopo_ask_spanning_the_globe_refuses_rather_than_merging_it() -> None:
+    with pytest.raises(et.EtopoInputError) as excinfo:
+        et.validate_etopo(None, {"bbox": (-180.0, -60.0, 180.0, 60.0)})
+    assert excinfo.value.error_code == "ETOPO_INPUT_INVALID"
+
+
+def test_a_coast_with_no_published_regional_collection_refuses_by_name() -> None:
+    with pytest.raises(rc.RegionalCoastalDemCoverageGapError) as excinfo:
+        rc.validate_regional_coastal_dem(None, {"bbox": COASTAL_AOI})
+    assert excinfo.value.error_code == "REGIONAL_COASTAL_DEM_COVERAGE_GAP"
+    assert "funded" in str(excinfo.value)
+
+
+def test_a_regional_collection_that_cannot_be_listed_refuses_rather_than_skipping(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A fine bed silently skipped is a coarser answer nobody was told about."""
+    import requests
+
+    def _boom(*_a: object, **_kw: object) -> None:
+        raise OSError("no route to host")
+
+    monkeypatch.setattr(requests, "get", _boom)
+    with pytest.raises(rc.RegionalCoastalDemUpstreamError):
+        rc.select_tiles((-124.0, 41.5, -123.9, 41.6))
+
+
+def test_every_bed_row_states_a_cell_and_a_frame_the_offset_service_names() -> None:
+    """R8 and R17 on one line: a row states the cell its ask fetches and the zero
+    it counts from, as a frame name an offset can be asked in."""
+    from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
+
+    frames = {"navd88", "egm2008", "lwd_igld85"}
+    for row in ("fetch_cudem", "fetch_etopo", "fetch_regional_coastal_dem"):
+        spec = load_spec_from_path(Path(
+            f"trid3nt_server/tools/fetchers/ocean/{row}/source.yaml"))
+        coverage = next(c for c in spec.coverage if c.data_class == "bathymetry")
+        assert coverage.resolution_m and coverage.resolution_m > 0
+        assert (coverage.datum or "").lower() in frames
+        assert coverage.units == {"elevation": "m"}
+        assert coverage.value_column == "elevation"
+
+
+def test_the_composite_row_is_gone_from_the_registry() -> None:
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    assert "fetch_topobathy" not in TOOL_REGISTRY
+
+
+def _bed_rank(lon: float, lat: float) -> list[str]:
+    from trid3nt_server.tools.search.match import Need, match, sources_with_coverage
+
+    choice = match(
+        Need(slot="bed", data_class="bathymetry", lon=lon, lat=lat,
+             frame="NAVD88", mesh_m=50.0),
+        sources_with_coverage())
+    return [row.fetcher for row in choice.rows if not row.excluded]
+
+
+def test_the_bed_ladder_over_a_coastal_box_is_the_rows_in_the_sorts_own_order(
+) -> None:
+    """The ladder the bed ingestion lays: every bathymetry row that survives the
+    place, in rank order, over the terrain the probe finds under all of them.
+
+    The sort reads facts, not names: the measured records come first and the
+    finest of them leads, and the global relief MODEL ranks below every one of
+    them because of how its numbers were come by."""
+    from trid3nt_server.tools.search.match import Need, match, sources_with_coverage
+
+    laid = _bed_rank(-85.50, 29.90)
+    assert laid == ["fetch_ehydro_surveys", "fetch_bluetopo", "fetch_cudem",
+                    "fetch_etopo"]
+
+    terrain = match(
+        Need(slot="bed terrain", data_class="terrain", lon=-85.50, lat=29.90,
+             frame="NAVD88", mesh_m=50.0),
+        sources_with_coverage())
+    assert terrain.picked == "fetch_dem"
+
+
+def test_a_coast_with_a_regional_integration_ranks_it_above_the_coarser_beds(
+) -> None:
+    """Crescent City: CUDEM's hosted collection omits this coast and the CoNED
+    integration covers it, and the sort says so without anyone naming a row."""
+    laid = _bed_rank(-124.20, 41.75)
+    assert laid.index("fetch_regional_coastal_dem") < laid.index("fetch_bluetopo")
+    assert laid[-1] == "fetch_etopo"

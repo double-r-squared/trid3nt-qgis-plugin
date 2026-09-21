@@ -643,13 +643,13 @@ def test_a_beds_ladder_sentence_states_its_rungs_in_rank_order():
     from trid3nt_contracts.coverage import SourceChoice, SourceOption
     from trid3nt_server.workflows.runtime import interpreter
 
-    asked = ["fetch_bluetopo", "fetch_topobathy", "fetch_ehydro_surveys"]
+    asked = ["fetch_bluetopo", "fetch_cudem", "fetch_ehydro_surveys"]
     choice = SourceChoice(slot="bed", need="bathymetry",
                           rows=[SourceOption(fetcher=name) for name in asked])
     said = interpreter._ladder_sentence(choice, asked,
-                                        [("fetch_topobathy", object())])
+                                        [("fetch_cudem", object())])
     assert said == ("bed: the ladder in rank order - fetch_bluetopo held "
-                    "nothing; fetch_topobathy laid a rung; "
+                    "nothing; fetch_cudem laid a rung; "
                     "fetch_ehydro_surveys held nothing.")
 
 

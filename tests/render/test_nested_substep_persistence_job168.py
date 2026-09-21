@@ -83,7 +83,7 @@ def composer_ok_tool():
     async def _fn(*, bbox=None) -> dict:
         em = current_emitter()
         begin_substeps(em, 2)
-        async with substep(em, "fetch_topobathy"):
+        async with substep(em, "fetch_cudem"):
             pass
         # A failed CHILD must NOT fail the parent (honesty floor): swallow here
         # so the parent returns success and the failed child still persists RED.
@@ -106,7 +106,7 @@ def composer_fails_tool():
     async def _fn() -> dict:
         em = current_emitter()
         begin_substeps(em, 2)
-        async with substep(em, "fetch_topobathy"):
+        async with substep(em, "fetch_cudem"):
             pass  # OK child
         # This child raises AND is allowed to propagate -> the PARENT fails too.
         async with substep(em, "run_solver"):
@@ -143,7 +143,7 @@ async def test_complete_parent_persists_ordered_children(
 
     # The ordered children survived persistence + reload.
     assert card.children is not None
-    assert [c.tool_name for c in card.children] == ["fetch_topobathy", "run_solver"]
+    assert [c.tool_name for c in card.children] == ["fetch_cudem", "run_solver"]
     fetch_child, solver_child = card.children
     # OK child: complete, no error, real duration.
     assert fetch_child.state == "complete"
@@ -165,7 +165,7 @@ async def test_complete_parent_persists_ordered_children(
 
     twin = json.loads(tool_rows[0].content)
     assert [c["tool_name"] for c in twin["children"]] == [
-        "fetch_topobathy",
+        "fetch_cudem",
         "run_solver",
     ]
 
@@ -194,7 +194,7 @@ async def test_failed_parent_still_persists_children(
     # The failed parent STILL nests its sub-step timeline: an OK fetch then a
     # failed solve.
     assert card.children is not None
-    assert [c.tool_name for c in card.children] == ["fetch_topobathy", "run_solver"]
+    assert [c.tool_name for c in card.children] == ["fetch_cudem", "run_solver"]
     assert card.children[0].state == "complete"
     assert card.children[1].state == "failed"
     assert card.children[1].error_code

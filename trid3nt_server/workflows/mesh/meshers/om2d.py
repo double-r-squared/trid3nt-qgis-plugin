@@ -113,12 +113,18 @@ _OCEANMESH_ON_A_MESH = (
 _OM2D_PRIMITIVES = ("set_obstacle", "set_region_size", "set_rim_size")
 
 #: The ops list an undeclared ask gets. Hard-baked and visible: the rim at the
-#: size word, the library's clean passes, then the bed. It sizes no INTERIOR -
-#: what a domain should be sized toward is the ask's own knowledge. The RIM is the
+#: size word, then the library's clean passes. It sizes no INTERIOR - what a
+#: domain should be sized toward is the ask's own knowledge. The RIM is the
 #: one exception: no sizing function the library has measures the extent's own
 #: outline, so an ask that names none comes back with the boundary a solver forces
 #: its open condition on running an order of magnitude past the size word. A
 #: declared recipe replaces this list wholesale.
+#:
+#: NO BED. Which measurement is the bed under this water is the BED SLOT's answer
+#: - the class a question states, ranked and laid rung by rung by the bed
+#: ingestion - so a mesher that named a source here would be a second place
+#: deciding it. A recipe hands the merged surface to ``set_bed``; an ask that
+#: declares none comes back unbedded, and the artifact says so.
 #:
 #: NO SMOOTHING PASS. ``laplacian2`` moves every interior node to the average of
 #: its neighbours with no test that the elements around it stay unfolded, and a
@@ -134,7 +140,6 @@ _DEFAULT_OPS = (
     mesh_op("delete_faces_connected_to_one_face"),
     mesh_op("make_mesh_boundaries_traversable"),
     mesh_op("fix_mesh", delete_unused=True),
-    mesh_op("set_bed", source="fetch_topobathy", interp="nearest"),
 )
 
 

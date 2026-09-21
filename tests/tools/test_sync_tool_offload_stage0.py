@@ -25,7 +25,7 @@ def test_should_offload_modes(monkeypatch: pytest.MonkeyPatch) -> None:
         assert server._should_offload_sync_tool("compute_cross_section") is False
         assert server._should_offload_sync_tool("geocode_location") is False
         # ...but the always-set off-loads even in off/unknown mode.
-        assert server._should_offload_sync_tool("fetch_topobathy") is True
+        assert server._should_offload_sync_tool("fetch_cudem") is True
 
     # Subset -> the compute_* family (plus the always-set).
     monkeypatch.setattr(server, "_SYNC_OFFLOAD_MODE", "subset")

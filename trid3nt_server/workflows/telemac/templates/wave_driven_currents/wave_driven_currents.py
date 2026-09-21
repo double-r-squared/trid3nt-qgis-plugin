@@ -288,8 +288,8 @@ _RES_SPEC = ResolutionSpec(
     param="mesh_resolution_m",
     unit="m",
     min_value=20.0,
-    native_hint="NOAA CUDEM 1/9 arc-second nearshore topobathy (~3 m) over "
-                "BlueTopo; edge sized from the water's own width",
+    native_hint="edge sized from the water's own width; the bed's own cell is "
+                "the matched source's, stated on its row",
     constraint_source="solver",
     rationale=(
         "explicit target edge length; 20 m is the finest edge the TIME STEP "

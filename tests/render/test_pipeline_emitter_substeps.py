@@ -60,7 +60,7 @@ async def test_parent_with_three_substeps_emits_one_parent_three_children(
     async def workflow() -> str:
         # Inside emit_tool_call -> current_emitter() is bound; declare the plan.
         begin_substeps(emitter, 3)
-        for raw in ("fetch_topobathy", "build_sfincs_deck", "publish_layer"):
+        for raw in ("fetch_cudem", "build_sfincs_deck", "publish_layer"):
             async with substep(emitter, raw) as child_id:
                 assert child_id is not None
         return "ok"
@@ -85,7 +85,7 @@ async def test_parent_with_three_substeps_emits_one_parent_three_children(
     # The parent is top-level (no parent_step_id); each child links to it.
     assert parent["parent_step_id"] is None
     assert [c["tool_name"] for c in children] == [
-        "fetch_topobathy",
+        "fetch_cudem",
         "build_sfincs_deck",
         "publish_layer",
     ]
@@ -157,7 +157,7 @@ async def test_begin_substeps_none_total_degrades_to_label_only(
 
     async def workflow() -> str:
         begin_substeps(emitter, None)  # plan unknown
-        async with substep(emitter, "fetch_topobathy"):
+        async with substep(emitter, "fetch_cudem"):
             parent = _last_steps(sink)[0]
             seen.append(
                 (
@@ -171,7 +171,7 @@ async def test_begin_substeps_none_total_degrades_to_label_only(
     await emitter.emit_tool_call(
         name="Coastal", tool_name="model_flood_scenario", invoke=workflow
     )
-    assert seen == [("fetch_topobathy", 1, None)]
+    assert seen == [("fetch_cudem", 1, None)]
 
 
 

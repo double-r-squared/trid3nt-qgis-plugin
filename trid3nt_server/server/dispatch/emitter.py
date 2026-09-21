@@ -151,7 +151,10 @@ _SYNC_OFFLOAD_SUBSET_PREFIXES = ("compute_",)
 _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
     {
         # tile mosaic / windowed warp-read plus COG materialize
-        "fetch_topobathy",
+        "fetch_cudem",
+        "fetch_regional_coastal_dem",
+        "fetch_etopo",
+        "fetch_bluetopo",
         "fetch_dem",
         "fetch_3dep_extra",
         "fetch_landcover",

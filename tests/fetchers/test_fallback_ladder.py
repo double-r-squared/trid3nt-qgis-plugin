@@ -1,23 +1,17 @@
 """Fallback-ladder contract: the rung schema, the ONE walker, the loudness gate.
 
-All offline. The SWAN bathymetry ladder is exercised through the real router with
-the topobathy delegate's source-discovery edges patched to synthetic rasters (the
-idiom test_router_topobathy uses).
+All offline, over ladders declared HERE. The contract is what the registry, the
+walker and the gate do with a rung, which is a statement about them and not about
+whichever capability happens to declare one.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-import numpy as np
 import pytest
-import rasterio
-from rasterio.transform import from_origin
 
 from trid3nt_contracts.common import render_fallback_line
-from trid3nt_contracts.execution import TopobathyResult
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers._router.hooks import topobathy as tb
 from trid3nt_server.fallbacks import (
     LADDER_ERROR_CODE,
     Ladder,
@@ -29,16 +23,6 @@ from trid3nt_server.fallbacks import (
 )
 from trid3nt_server.gates.fallback import confirm_fallback, gate_fires, labeled_default
 
-#: The AOI from the SWAN bathymetry-forensics exhibit (Port St Joe FL): CUDEM's
-#: 1/9" collection stops mid-AOI, and the uncovered corner is where the flat 0 m
-#: land fill painted the fake landmass.
-_EXHIBIT_BBOX = (-85.55, 29.70, -85.40, 29.85)
-_EXHIBIT_TILES = [
-    "https://x/ncei19_n29X75_w085X50_2019v1.tif",
-    "https://x/ncei19_n30X00_w085X50_2019v1.tif",
-    "https://x/ncei19_n30X00_w085X75_2019v1.tif",
-]
-_SMOKE_BBOX = (-85.45, 29.92, -85.38, 29.98)
 
 
 def _rung(name: str, consequence: str, **kw: Any) -> Rung:
@@ -557,7 +541,7 @@ def test_unanswered_gate_on_a_live_session_is_a_decline() -> None:
             self.sent.append((kind, env))
 
     envelope = PayloadWarningEnvelopePayload(
-        warning_id=new_ulid(), tool_name="fetch_topobathy",
+        warning_id=new_ulid(), tool_name="fetch_cudem",
         tool_args={}, estimated_mb=0.0, threshold_mb=0.0,
         recommendation="approve?", options=["proceed", "cancel"], ttl_seconds=1,
     )
@@ -566,247 +550,6 @@ def test_unanswered_gate_on_a_live_session_is_a_decline() -> None:
     assert emitter.sent and emitter.sent[0][0] == "tool-payload-warning"
 
 
-
-
-def test_bathymetry_ladder_shape() -> None:
-    ladder = get_ladder("fetch_topobathy")
-    assert ladder is not None
-    assert ladder.user_rung is not None and ladder.user_rung.supplies_param == "dem_uri"
-    assert ladder.primary_rung.name == "cudem_nearshore"
-    assert [r.name for r in ladder.alternatives] == ["etopo_bathy_base"]
-    assert ladder.alternative("etopo_bathy_base").consequence == "cross_dataset"
-    assert ladder.refuse_error_code == "TOPOBATHY_COVERAGE_GAP"
-
-
-def test_cudem_coverage_fraction_on_the_exhibit_aoi() -> None:
-    frac = tb.cudem_coverage_fraction(_EXHIBIT_BBOX, _EXHIBIT_TILES)
-    assert frac == pytest.approx(8.0 / 9.0, abs=1e-6)
-
-
-def test_cudem_coverage_is_unknown_when_a_footprint_cannot_be_parsed() -> None:
-    assert tb.cudem_coverage_fraction(_EXHIBIT_BBOX, ["/tmp/synthetic.tif"]) is None
-
-
-def test_cudem_coverage_full_when_tiles_blanket_the_aoi() -> None:
-    assert tb.cudem_coverage_fraction(
-        (-85.45, 29.92, -85.38, 29.98), ["x/ncei19_n30X00_w085X50_2019v1.tif"]
-    ) == pytest.approx(1.0)
-
-
-def test_partial_coverage_raises_the_ladder_gap(monkeypatch) -> None:
-    monkeypatch.setattr(tb, "_select_cudem_tiles", lambda *_a, **_k: list(_EXHIBIT_TILES))
-    with pytest.raises(tb.TopobathyCoverageGapError) as ei:
-        tb.validate_topobathy(None, {"bbox": list(_EXHIBIT_BBOX)})
-    exc = ei.value
-    assert exc.error_code == "TOPOBATHY_COVERAGE_GAP"
-    assert exc.covered_fraction == pytest.approx(8.0 / 9.0, abs=1e-6)
-    assert "89%" in str(exc) and "etopo_bathy_base" in str(exc)
-    assert isinstance(exc, LadderGap)
-
-
-@pytest.mark.parametrize(
-    "params",
-    [
-        {"force_bathy_base": True},
-        {"skip_cudem": True},
-        {"include_regional_fine": True},
-    ],
-)
-def test_coverage_gate_is_exempt_when_a_global_base_or_fine_leg_is_requested(
-    monkeypatch, params: dict
-) -> None:
-    monkeypatch.setattr(tb, "_select_cudem_tiles", lambda *_a, **_k: list(_EXHIBIT_TILES))
-    tb.validate_topobathy(None, {"bbox": list(_EXHIBIT_BBOX), **params})
-
-
-def test_skip_land_gap_does_not_cite_the_land_fill_the_caller_disabled(
-    monkeypatch,
-) -> None:
-    monkeypatch.setattr(tb, "_select_cudem_tiles", lambda *_a, **_k: list(_EXHIBIT_TILES))
-    with pytest.raises(tb.TopobathyCoverageGapError) as ei:
-        tb.validate_topobathy(
-            None, {"bbox": list(_EXHIBIT_BBOX), "skip_land": True}
-        )
-    text = str(ei.value)
-    assert "fake landmass" not in text
-    assert "skip_land" in text and "NODATA" in text
-
-
-def test_zero_cudem_tiles_is_the_same_gap_at_zero_percent(monkeypatch) -> None:
-    """A coast the nearshore composite does not reach is a 0% gap, not a pass.
-
-    The coarser global bed that could stand in is a cross-dataset substitution, so it
-    descends past the loudness gate rather than being laid under the primary."""
-    monkeypatch.setattr(tb, "_select_cudem_tiles", lambda *_a, **_k: [])
-    with pytest.raises(tb.TopobathyCoverageGapError) as ei:
-        tb.validate_topobathy(None, {"bbox": list(_EXHIBIT_BBOX)})
-    assert ei.value.covered_fraction == 0.0
-    assert "NO NOAA NCEI CUDEM" in str(ei.value)
-
-
-def test_unreachable_tile_index_never_claims_a_gap(monkeypatch) -> None:
-    def _boom(*_a: Any, **_k: Any) -> Any:
-        raise tb.TopobathyUpstreamError("index down")
-
-    monkeypatch.setattr(tb, "_select_cudem_tiles", _boom)
-    tb.validate_topobathy(None, {"bbox": list(_EXHIBIT_BBOX)})
-
-
-
-
-def _synth_raster(path: str, bbox, fill: float) -> None:
-    west, south, east, north = bbox
-    with rasterio.open(
-        path, "w", driver="GTiff", height=20, width=20, count=1, dtype="float32",
-        crs="EPSG:4326", nodata=-9999.0,
-        transform=from_origin(west, north, (east - west) / 20, (north - south) / 20),
-    ) as dst:
-        dst.write(np.full((20, 20), fill, dtype="float32"), 1)
-
-
-def _patch_partial_cudem(monkeypatch, tmp_path) -> None:
-    """Real (parseable) CUDEM tile NAMES for the coverage gate, synthetic rasters
-    for the merge -- the gap is a footprint fact, the merge is a pixel fact."""
-    cudem = str(tmp_path / "cudem.tif")
-    etopo = str(tmp_path / "etopo.tif")
-    land = str(tmp_path / "land.tif")
-    _synth_raster(cudem, _EXHIBIT_BBOX, -5.0)
-    _synth_raster(etopo, _EXHIBIT_BBOX, -30.0)
-    _synth_raster(land, _EXHIBIT_BBOX, 12.0)
-    monkeypatch.setattr(tb, "_select_cudem_tiles", lambda *_a, **_k: list(_EXHIBIT_TILES))
-    monkeypatch.setattr(tb, "_select_etopo_tiles", lambda *_a, **_k: [etopo])
-    monkeypatch.setattr(tb, "_assert_navd88", lambda *_a, **_k: 0.0)
-    monkeypatch.setattr(tb, "_fetch_3dep_land_to_file", lambda *_a, **_k: land)
-    real = tb._composite_sources_to_array
-
-    def _strip(sources, target_crs, bbox, **kw):
-        stripped = [
-            (s[len("/vsicurl/"):] if s.startswith("/vsicurl/") else s) for s in sources
-        ]
-        return real([cudem if s in _EXHIBIT_TILES else s for s in stripped],
-                    target_crs, bbox, **kw)
-
-    monkeypatch.setattr(tb, "_composite_sources_to_array", _strip)
-
-
-def test_undeclared_call_refuses_and_names_where_cudem_ends(
-    monkeypatch, tmp_path, fake_s3
-) -> None:
-    _patch_partial_cudem(monkeypatch, tmp_path)
-    with pytest.raises(tb.TopobathyCoverageGapError) as ei:
-        TOOL_REGISTRY["fetch_topobathy"].fn(bbox=list(_EXHIBIT_BBOX))
-    assert "has NO nearshore bathymetry source" in str(ei.value)
-    assert "fake landmass" in str(ei.value)
-
-
-def test_declared_rung_fills_the_gap_loudly_with_coverage(
-    monkeypatch, tmp_path, fake_s3
-) -> None:
-    _patch_partial_cudem(monkeypatch, tmp_path)
-    res = TOOL_REGISTRY["fetch_topobathy"].fn(
-        bbox=list(_EXHIBIT_BBOX), fallback=("etopo_bathy_base",)
-    )
-    assert isinstance(res, TopobathyResult)
-    rows = {r.rung: r for r in res.fallbacks}
-    assert set(rows) == {"cudem_nearshore", "etopo_bathy_base"}
-    assert rows["cudem_nearshore"].coverage == pytest.approx(8.0 / 9.0, abs=1e-6)
-    assert rows["etopo_bathy_base"].coverage == pytest.approx(1.0 / 9.0, abs=1e-6)
-    assert rows["etopo_bathy_base"].consequence == "cross_dataset"
-    assert res.fallback_note and "etopo_bathy_base [cross_dataset]" in res.fallback_note
-
-
-#: Four CUDEM tiles that BLANKET the exhibit AOI: the footprint gate passes, so
-#: any gap can only come from a tile that drops mid-merge.
-_FULL_COVER_TILES = [
-    "https://x/ncei19_n29X75_w085X50_2019v1.tif",
-    "https://x/ncei19_n30X00_w085X50_2019v1.tif",
-    "https://x/ncei19_n29X75_w085X75_2019v1.tif",
-    "https://x/ncei19_n30X00_w085X75_2019v1.tif",
-]
-#: Its share of the AOI is 0.010 / 0.0225 -- dropping it leaves ~56%.
-_DROPPED_TILE = "https://x/ncei19_n30X00_w085X50_2019v1.tif"
-
-
-def _patch_full_cudem_with_one_unreadable_tile(monkeypatch, tmp_path) -> None:
-    """Footprint PROMISES 100%; one tile is unreadable so the merge paints ~56%."""
-    cudem = str(tmp_path / "cudem.tif")
-    etopo = str(tmp_path / "etopo.tif")
-    land = str(tmp_path / "land.tif")
-    _synth_raster(cudem, _EXHIBIT_BBOX, -5.0)
-    _synth_raster(etopo, _EXHIBIT_BBOX, -30.0)
-    _synth_raster(land, _EXHIBIT_BBOX, 12.0)
-    monkeypatch.setattr(tb, "_select_cudem_tiles",
-                        lambda *_a, **_k: list(_FULL_COVER_TILES))
-    monkeypatch.setattr(tb, "_select_etopo_tiles", lambda *_a, **_k: [etopo])
-    monkeypatch.setattr(tb, "_assert_navd88", lambda *_a, **_k: 0.0)
-    monkeypatch.setattr(tb, "_fetch_3dep_land_to_file", lambda *_a, **_k: land)
-    real = tb._composite_sources_to_array
-
-    def _strip(sources, target_crs, bbox, **kw):
-        out = []
-        for s in sources:
-            bare = s[len("/vsicurl/"):] if s.startswith("/vsicurl/") else s
-            if bare == _DROPPED_TILE:
-                out.append(str(tmp_path / "gone.tif"))  # unreadable -> skipped
-            elif bare in _FULL_COVER_TILES:
-                out.append(cudem)
-            else:
-                out.append(bare)
-        return real(out, target_crs, bbox, **kw)
-
-    monkeypatch.setattr(tb, "_composite_sources_to_array", _strip)
-
-
-def test_a_tile_that_drops_mid_merge_raises_the_gap_not_a_silent_land_fill(
-    monkeypatch, tmp_path, fake_s3
-) -> None:
-    """The footprint gate promised full coverage; the merge must reconcile the
-    promise against what ACTUALLY painted rather than land-fill the hole."""
-    _patch_full_cudem_with_one_unreadable_tile(monkeypatch, tmp_path)
-    tb.validate_topobathy(None, {"bbox": list(_EXHIBIT_BBOX)})  # footprint says OK
-
-    with pytest.raises(tb.TopobathyCoverageGapError) as ei:
-        TOOL_REGISTRY["fetch_topobathy"].fn(bbox=list(_EXHIBIT_BBOX))
-    exc = ei.value
-    assert exc.covered_fraction == pytest.approx(0.5555556, abs=1e-5)
-    assert "PAINTED only" in str(exc) and "3 of the 4" in str(exc)
-
-
-def test_the_declared_rung_fills_a_mid_merge_drop_too(
-    monkeypatch, tmp_path, fake_s3
-) -> None:
-    _patch_full_cudem_with_one_unreadable_tile(monkeypatch, tmp_path)
-    res = TOOL_REGISTRY["fetch_topobathy"].fn(
-        bbox=list(_EXHIBIT_BBOX), fallback=("etopo_bathy_base",)
-    )
-    assert isinstance(res, TopobathyResult)
-    assert "PARTIAL-CUDEM BATHYMETRY" in (res.fallback_warning or "")
-
-
-def test_rows_report_measured_paint_not_the_footprint_promise(
-    monkeypatch, tmp_path, fake_s3
-) -> None:
-    """The stamped rows are the paint the rung MEASURED, not its footprint promise.
-
-    The biggest tile drops on the attempt, so a rung-injected param never exempts
-    that attempt from paint accounting."""
-    _patch_partial_cudem(monkeypatch, tmp_path)
-    real = tb._composite_sources_to_array
-    dropped = "ncei19_n30X00_w085X50_2019v1.tif"
-    gone = str(tmp_path / "gone.tif")
-
-    def _drop_one(sources, target_crs, bbox, **kw):
-        return real([gone if s.endswith(dropped) else s for s in sources],
-                    target_crs, bbox, **kw)
-
-    monkeypatch.setattr(tb, "_composite_sources_to_array", _drop_one)
-    res = TOOL_REGISTRY["fetch_topobathy"].fn(
-        bbox=list(_EXHIBIT_BBOX), fallback=("etopo_bathy_base",)
-    )
-    rows = {r.rung: r.coverage for r in res.fallbacks}
-    assert rows == pytest.approx(
-        {"cudem_nearshore": 4.0 / 9.0, "etopo_bathy_base": 5.0 / 9.0}, abs=1e-6
-    )
 
 
 def test_a_declined_rung_stays_on_the_contract_when_a_lower_rung_serves() -> None:
@@ -835,319 +578,10 @@ def test_a_declined_rung_stays_on_the_contract_when_a_lower_rung_serves() -> Non
     assert rows["mirror"].coverage == pytest.approx(0.5)
 
 
-def test_an_exempted_request_never_stamps_a_positive_false_coverage_row(
-    monkeypatch, tmp_path, fake_s3
-) -> None:
-    """force_bathy_base skips the coverage check; the raster is part ETOPO, so a
-    'cudem_nearshore / coverage=1.0' row would be an affirmatively false claim."""
-    _patch_partial_cudem(monkeypatch, tmp_path)
-    res = TOOL_REGISTRY["fetch_topobathy"].fn(
-        bbox=list(_EXHIBIT_BBOX), force_bathy_base=True
-    )
-    assert list(res.fallbacks or []) == []
-    assert "PARTIAL-CUDEM BATHYMETRY" in (res.fallback_warning or "")
-    # ... but it is not SILENT: the model-followable remedy carries its own
-    # unverified note, and the adapter hoists the warning out of the repr clip.
-    assert "UNMEASURED" in (res.fallback_note or "")
-    assert "force_bathy_base" in (res.fallback_note or "")
-    from trid3nt_server.adapters.adapter import summarize_tool_result
-
-    payload = summarize_tool_result("fetch_topobathy", res)
-    assert "PARTIAL-CUDEM BATHYMETRY" in payload["fallback_warning"]
-    assert "UNMEASURED" in payload["fallback_note"]
-
-
-def _patch_total_cudem_loss(monkeypatch, tmp_path) -> None:
-    """Every intersecting CUDEM tile drops at the datum gate. ETOPO auto-engages
-    because zero tiles survive -- the window where the merge used to return
-    SUCCESS with a raw 3DEP land fill painting the water."""
-    etopo = str(tmp_path / "etopo.tif")
-    _synth_raster(etopo, _EXHIBIT_BBOX, -30.0)
-    monkeypatch.setattr(tb, "_select_cudem_tiles",
-                        lambda *_a, **_k: list(_FULL_COVER_TILES))
-    monkeypatch.setattr(tb, "_select_etopo_tiles", lambda *_a, **_k: [etopo])
-
-    def _reject(*_a: Any, **_k: Any) -> float:
-        raise tb.TopobathyUpstreamError("header unreadable")
-
-    # The merge unlinks the staged land tif, so each attempt stages its own (as
-    # the real 3DEP leg does). The fill is 0.0 -- the 3DEP land DEM's flat
-    # sea-level OCEAN fill, the value _mask_land_leg_ocean_fill exists to drop.
-    # Staging emergent land here would make the mask a no-op and leave the
-    # clobber-the-ETOPO-column fix unproven by its own evidence.
-    def _stage_land(*_a: Any, **_k: Any) -> str:
-        path = str(tmp_path / f"land-{len(list(tmp_path.glob('land-*.tif')))}.tif")
-        _synth_raster(path, _EXHIBIT_BBOX, 0.0)
-        return path
-
-    monkeypatch.setattr(tb, "_assert_navd88", _reject)
-    monkeypatch.setattr(tb, "_fetch_3dep_land_to_file", _stage_land)
-    real = tb._composite_sources_to_array
-
-    def _strip(sources, target_crs, bbox, **kw):
-        return real(
-            [(s[len("/vsicurl/"):] if s.startswith("/vsicurl/") else s)
-             for s in sources],
-            target_crs, bbox, **kw,
-        )
-
-    monkeypatch.setattr(tb, "_composite_sources_to_array", _strip)
-
-
-def test_total_cudem_loss_refuses_instead_of_returning_a_land_fill_success(
-    monkeypatch, tmp_path, fake_s3
-) -> None:
-    _patch_total_cudem_loss(monkeypatch, tmp_path)
-    tb.validate_topobathy(None, {"bbox": list(_EXHIBIT_BBOX)})  # footprint says OK
-    with pytest.raises(tb.TopobathyCoverageGapError) as ei:
-        TOOL_REGISTRY["fetch_topobathy"].fn(bbox=list(_EXHIBIT_BBOX))
-    assert ei.value.covered_fraction == 0.0
-    assert "0 of the 4" in str(ei.value)
-
-
-def test_total_cudem_loss_serves_the_declared_rung_with_measured_paint(
-    monkeypatch, tmp_path, fake_s3
-) -> None:
-    """The declared rung fills the whole AOI, and the rows say so -- 0% CUDEM /
-    100% ETOPO is MEASURED paint, not the walker's promise arithmetic."""
-    _patch_total_cudem_loss(monkeypatch, tmp_path)
-    res = TOOL_REGISTRY["fetch_topobathy"].fn(
-        bbox=list(_EXHIBIT_BBOX), fallback=("etopo_bathy_base",)
-    )
-    # cudem_nearshore painted NOTHING, so it carries no row at all (a 0% row is
-    # not a claim); ETOPO's row is the measured 100%.
-    rows = {r.rung: r.coverage for r in res.fallbacks}
-    assert rows == pytest.approx({"etopo_bathy_base": 1.0})
-    assert res.cudem_tile_count == 0
-    assert res.bathymetry_present is True
-    assert res.rung_coverage == {"cudem_nearshore": 0.0, "etopo_bathy_base": 1.0}
-
-
-def test_the_land_legs_flat_ocean_fill_never_reaches_the_served_bed(
-    monkeypatch, tmp_path, fake_s3
-) -> None:
-    """N5's evidence: the 3DEP leg is staged at its real 0 m OCEAN fill, sits at
-    higher precedence than ETOPO, and must be masked out of the composite. Every
-    served cell is the ETOPO bed (-30 m), not sea-level land fill."""
-    _patch_total_cudem_loss(monkeypatch, tmp_path)
-    seen: dict[str, Any] = {}
-    real = tb._composite_sources_to_array
-
-    def _spy(sources, target_crs, bbox, **kw):
-        out = real(sources, target_crs, bbox, **kw)
-        seen["arr"] = out[0]
-        return out
-
-    monkeypatch.setattr(tb, "_composite_sources_to_array", _spy)
-    TOOL_REGISTRY["fetch_topobathy"].fn(
-        bbox=list(_EXHIBIT_BBOX), fallback=("etopo_bathy_base",)
-    )
-    arr = seen["arr"]
-    assert float(np.nanmax(arr)) < 0.0, "the land leg's 0 m ocean fill survived"
-    assert float(np.nanmin(arr)) == pytest.approx(-30.0, abs=1.0)
-
-
-
-
 class _Transient(Exception):
     """A transport hiccup (MinIO/S3), the shape that must stay retryable."""
 
     retryable = True
-
-
-def _fault_the_rungs_fetch(monkeypatch) -> None:
-    """CUDEM's footprint gap is measured PRE-fetch; the rung's own read then
-    faults on the cache/transport edge."""
-    from trid3nt_server.tools.fetchers._router import router as router_mod
-
-    def _boom(*_a: Any, **_k: Any) -> Any:
-        raise _Transient("EndpointConnectionError: could not connect to MinIO")
-
-    monkeypatch.setattr(router_mod, "read_through", _boom)
-
-
-def test_a_transport_fault_on_the_filling_rung_is_not_a_bathymetry_verdict(
-    monkeypatch, tmp_path, fake_s3
-) -> None:
-    _patch_partial_cudem(monkeypatch, tmp_path)
-    _fault_the_rungs_fetch(monkeypatch)
-    with pytest.raises(LadderRefused) as ei:
-        TOOL_REGISTRY["fetch_topobathy"].fn(
-            bbox=list(_EXHIBIT_BBOX), fallback=("etopo_bathy_base",)
-        )
-    assert ei.value.error_code == LADDER_ERROR_CODE != "TOPOBATHY_COVERAGE_GAP"
-    assert ei.value.retryable is True
-    assert "89% of AOI" in str(ei.value)             # the gap context
-    assert "MinIO" in str(ei.value)                  # AND the cause
-    assert isinstance(ei.value.__cause__, _Transient)
-
-
-def _patch_total_cudem_loss_with_half_an_etopo(monkeypatch, tmp_path) -> None:
-    """Every CUDEM tile drops AND the ETOPO base reaches only the west half (the
-    AOI straddles a 15-degree ETOPO tile boundary and one tile is unreadable)."""
-    _patch_total_cudem_loss(monkeypatch, tmp_path)
-    half = str(tmp_path / "etopo-half.tif")
-    _synth_raster(half, (-85.55, 29.70, -85.475, 29.85), -30.0)
-    monkeypatch.setattr(tb, "_select_etopo_tiles", lambda *_a, **_k: [half])
-
-
-def test_a_half_reaching_etopo_base_refuses_rather_than_claiming_a_bed_everywhere(
-    monkeypatch, tmp_path, fake_s3
-) -> None:
-    """A rung that paints half the AOI refuses rather than claiming a bed everywhere.
-
-    Stamping a provenance and an everywhere warning over a half-empty raster is the
-    lie the coverage gate exists to prevent, so the record carries the short paint."""
-    _patch_total_cudem_loss_with_half_an_etopo(monkeypatch, tmp_path)
-    with pytest.raises(tb.TopobathyCoverageGapError) as ei:
-        TOOL_REGISTRY["fetch_topobathy"].fn(
-            bbox=list(_EXHIBIT_BBOX), fallback=("etopo_bathy_base",)
-        )
-    exc = ei.value
-    assert "0 of the 4" in str(exc)
-    rows = {r.rung: r for r in exc.fallback_activation.records}
-    assert "leaving 50% painted by nothing" in (rows["etopo_bathy_base"].note or "")
-
-
-def test_a_half_reaching_etopo_base_refuses_under_force_bathy_base_too(
-    monkeypatch, tmp_path, fake_s3
-) -> None:
-    """An exemption buys a COARSER bed, never a bed with holes in it."""
-    _patch_total_cudem_loss_with_half_an_etopo(monkeypatch, tmp_path)
-    with pytest.raises(tb.TopobathyCoverageGapError):
-        TOOL_REGISTRY["fetch_topobathy"].fn(
-            bbox=list(_EXHIBIT_BBOX), force_bathy_base=True
-        )
-
-
-def test_a_partial_bed_with_no_cudem_gap_is_still_a_gap(
-    monkeypatch, tmp_path, fake_s3
-) -> None:
-    """CUDEM never intersected this AOI, and the PERMITTED ETOPO rung reaches half
-    of it. The old code returned SUCCESS with bathymetry_present=True over a
-    50%-NaN raster."""
-    etopo = str(tmp_path / "etopo-half.tif")
-    land = str(tmp_path / "land.tif")
-    _synth_raster(etopo, (-85.55, 29.70, -85.475, 29.85), -30.0)
-    _synth_raster(land, _EXHIBIT_BBOX, 12.0)
-    monkeypatch.setattr(tb, "_select_cudem_tiles", lambda *_a, **_k: [])
-    monkeypatch.setattr(tb, "_select_etopo_tiles", lambda *_a, **_k: [etopo])
-    monkeypatch.setattr(tb, "_fetch_3dep_land_to_file", lambda *_a, **_k: land)
-    real = tb._composite_sources_to_array
-    monkeypatch.setattr(
-        tb, "_composite_sources_to_array",
-        lambda s, c, b, **kw: real(
-            [(x[len("/vsicurl/"):] if x.startswith("/vsicurl/") else x) for x in s],
-            c, b, **kw,
-        ),
-    )
-    with pytest.raises(tb.TopobathyCoverageGapError) as ei:
-        TOOL_REGISTRY["fetch_topobathy"].fn(
-            bbox=list(_EXHIBIT_BBOX), fallback=("etopo_bathy_base",)
-        )
-    rows = {r.rung: r for r in ei.value.fallback_activation.records}
-    assert "PAINTS a real below-waterline bed over only" in (
-        rows["etopo_bathy_base"].note or "")
-    assert rows["etopo_bathy_base"].coverage < 0.6
-
-
-
-
-def _patch_partial_cudem_plus_regional_fine(monkeypatch, tmp_path) -> None:
-    """CUDEM covers 89%; the FINER NCEI regional coastal DEM covers the AOI. No
-    ETOPO leg engages at all (include_regional_fine never forces the base on)."""
-    cudem = str(tmp_path / "cudem.tif")
-    regional = str(tmp_path / "regional.tif")
-    land = str(tmp_path / "land.tif")
-    _synth_raster(cudem, _EXHIBIT_BBOX, -5.0)
-    _synth_raster(regional, _EXHIBIT_BBOX, -7.0)
-    _synth_raster(land, _EXHIBIT_BBOX, 12.0)
-    monkeypatch.setattr(tb, "_select_cudem_tiles", lambda *_a, **_k: list(_EXHIBIT_TILES))
-    monkeypatch.setattr(tb, "_select_etopo_tiles", lambda *_a, **_k: [])
-    monkeypatch.setattr(tb, "_assert_navd88", lambda *_a, **_k: 0.0)
-    monkeypatch.setattr(tb, "_fetch_3dep_land_to_file", lambda *_a, **_k: land)
-    monkeypatch.setattr(
-        tb, "_select_regional_coastal_dem_tiles",
-        lambda *_a, **_k: (["https://x/regional_ncei.tif"], ["CoNED_test"]),
-    )
-    real = tb._composite_sources_to_array
-    remap = {t: cudem for t in _EXHIBIT_TILES}
-    remap["https://x/regional_ncei.tif"] = regional
-
-    def _strip(sources, target_crs, bbox, **kw):
-        out = []
-        for s in sources:
-            bare = s[len("/vsicurl/"):] if s.startswith("/vsicurl/") else s
-            out.append(remap.get(bare, bare))
-        return real(out, target_crs, bbox, **kw)
-
-    monkeypatch.setattr(tb, "_composite_sources_to_array", _strip)
-
-
-def test_a_finer_regional_bed_that_fills_the_hole_serves_instead_of_refusing(
-    monkeypatch, tmp_path, fake_s3
-) -> None:
-    """The false refusal: the merge required an ETOPO base to accept an exempted
-    partial-CUDEM AOI, but include_regional_fine never engages ETOPO -- so a FINER
-    bed that fully painted the hole was refused as 'NO nearshore source'."""
-    _patch_partial_cudem_plus_regional_fine(monkeypatch, tmp_path)
-    res = TOOL_REGISTRY["fetch_topobathy"].fn(
-        bbox=list(_EXHIBIT_BBOX), include_regional_fine=True
-    )
-    assert isinstance(res, TopobathyResult)
-    assert res.regional_tile_count == 1
-    assert res.bathymetry_present is True
-    warning = res.fallback_warning or ""
-    assert "PARTIAL-CUDEM BATHYMETRY" in warning
-    assert "NCEI REGIONAL fine coastal DEM" in warning
-    assert "89%" in warning and "11%" in warning
-
-
-def test_the_regional_share_is_measured_not_credited_to_etopo(
-    monkeypatch, tmp_path
-) -> None:
-    """The share map is per-source paint: ETOPO gets 0 because ETOPO painted
-    nothing, even though 11% of the AOI is not CUDEM."""
-    _patch_partial_cudem_plus_regional_fine(monkeypatch, tmp_path)
-    _arr, _t, _c, prov = tb._select_and_merge(
-        _EXHIBIT_BBOX, 10, tb.TARGET_CRS, None, 30.0,
-        False, True, False, False,
-    )
-    coverage = prov["rung_coverage"]
-    assert coverage["cudem_nearshore"] == pytest.approx(8.0 / 9.0, abs=1e-6)
-    assert coverage["etopo_bathy_base"] == 0.0
-    assert coverage["regional_fine"] == pytest.approx(1.0 / 9.0, abs=1e-6)
-
-
-def test_the_finer_contributor_is_a_declared_row_not_a_warning(
-    monkeypatch, tmp_path, caplog
-) -> None:
-    """regional_fine is an ``enhancement`` rung: it lands on the contract as a
-    named row, with no unknown-key warning and no GATE-UNSEEN mark. A model
-    reading only the declared rungs can now account for the whole raster."""
-    _patch_partial_cudem_plus_regional_fine(monkeypatch, tmp_path)
-    ladder = get_ladder("fetch_topobathy")
-
-    class _Result:
-        rung_coverage = {
-            "cudem_nearshore": 8.0 / 9.0, "regional_fine": 1.0 / 9.0,
-            "etopo_bathy_base": 0.0,
-        }
-
-    with caplog.at_level("WARNING", logger="trid3nt_server.fallbacks.walker"):
-        _res, act = walk_ladder(ladder, params={}, attempt=lambda _r, _p: _Result(),
-                                gate=lambda **_k: True)
-    assert "declares no rung" not in caplog.text
-    assert "sum to" not in caplog.text
-    rows = {r.rung: r.coverage for r in act.to_contract()}
-    assert rows == pytest.approx(
-        {"cudem_nearshore": 8.0 / 9.0, "regional_fine": 1.0 / 9.0}
-    )
-    assert act.ungated == []
-    assert not act.degraded
-    fine = next(r for r in act.records if r.rung == "regional_fine")
-    assert fine.consequence == "enhancement"
-    assert "FINER" in (fine.note or "")
 
 
 def test_shares_that_do_not_sum_to_one_are_said_out_loud(caplog) -> None:
@@ -1234,69 +668,6 @@ def test_a_transport_fault_after_a_decline_still_beats_the_decline_verdict(
 
 
 
-def test_an_exempted_envelope_carries_no_numeric_shares(
-    monkeypatch, tmp_path, fake_s3
-) -> None:
-    """The note says the per-rung share is UNMEASURED; a rung_coverage map beside
-    it would make the envelope contradict itself."""
-    _patch_partial_cudem(monkeypatch, tmp_path)
-    res = TOOL_REGISTRY["fetch_topobathy"].fn(
-        bbox=list(_EXHIBIT_BBOX), force_bathy_base=True
-    )
-    assert list(res.fallbacks or []) == []
-    assert "UNMEASURED" in (res.fallback_note or "")
-    assert res.rung_coverage is None
-
-
-def _patch_zero_cudem_with_a_whole_etopo(monkeypatch, tmp_path) -> None:
-    """No CUDEM tile intersects; the ETOPO base covers the whole AOI."""
-    etopo = str(tmp_path / "etopo.tif")
-    land = str(tmp_path / "land.tif")
-    _synth_raster(etopo, _EXHIBIT_BBOX, -30.0)
-    _synth_raster(land, _EXHIBIT_BBOX, 12.0)
-    monkeypatch.setattr(tb, "_select_cudem_tiles", lambda *_a, **_k: [])
-    monkeypatch.setattr(tb, "_select_etopo_tiles", lambda *_a, **_k: [etopo])
-    monkeypatch.setattr(tb, "_fetch_3dep_land_to_file", lambda *_a, **_k: land)
-    real = tb._composite_sources_to_array
-    monkeypatch.setattr(
-        tb, "_composite_sources_to_array",
-        lambda s, c, b, **kw: real(
-            [(x[len("/vsicurl/"):] if x.startswith("/vsicurl/") else x) for x in s],
-            c, b, **kw,
-        ),
-    )
-
-
-def test_a_coast_cudem_omits_refuses_when_the_caller_permitted_nothing(
-    monkeypatch, tmp_path, fake_s3
-) -> None:
-    """The coarser global bed is never laid under the primary where the gate
-    cannot see it: an undeclared call gets the refusal and the remedy."""
-    _patch_zero_cudem_with_a_whole_etopo(monkeypatch, tmp_path)
-    with pytest.raises(tb.TopobathyCoverageGapError) as ei:
-        TOOL_REGISTRY["fetch_topobathy"].fn(bbox=list(_EXHIBIT_BBOX))
-    assert "0% of the AOI has a nearshore bathymetry source" in str(ei.value)
-    assert "etopo_bathy_base" in str(ei.value)
-
-
-def test_the_same_coast_serves_the_rung_the_gate_was_asked_about(
-    monkeypatch, tmp_path, fake_s3
-) -> None:
-    """Permitted, the substitution walks the ladder: the gate is asked, the row
-    is a walked one, and nothing on the envelope says GATE-UNSEEN."""
-    _patch_zero_cudem_with_a_whole_etopo(monkeypatch, tmp_path)
-    asked: list[str] = []
-    res = TOOL_REGISTRY["fetch_topobathy"].fn(
-        bbox=list(_EXHIBIT_BBOX), fallback=("etopo_bathy_base",),
-        fallback_gate="auto",
-    )
-    rows = {r.rung: r for r in (res.fallbacks or [])}
-    assert rows["etopo_bathy_base"].coverage == pytest.approx(1.0)
-    assert "never saw this rung" not in (rows["etopo_bathy_base"].note or "")
-    assert "GATE-UNSEEN" not in (res.fallback_note or "")
-    assert asked == []  # auto applies the labeled default without a card
-
-
 def test_the_walker_still_stamps_a_rung_a_capability_lays_down_itself() -> None:
     """The detector stays: a capability that paints a degradation rung the walk
     never descended to has that row appended and marked, because the loudness gate
@@ -1318,53 +689,21 @@ def test_emit_seam_carries_activation_rows_onto_a_reemitted_layer() -> None:
     from trid3nt_server.render.layer_uri_emit import emit_layer_uri
 
     layer = LayerURI(
-        layer_id="input-topobathy-abc", name="Coastal bed", layer_type="raster",
+        layer_id="input-bed-abc", name="Coastal bed", layer_type="raster",
         uri="s3://bucket/bed.tif", role="context",
     )
     rows = [
-        FallbackActivation(capability="fetch_topobathy", rung="cudem_nearshore",
+        FallbackActivation(capability="test_cap", rung="primary",
                            consequence="primary", coverage=0.889),
-        FallbackActivation(capability="fetch_topobathy", rung="etopo_bathy_base",
+        FallbackActivation(capability="test_cap", rung="coarse_base",
                            consequence="cross_dataset", coverage=0.111),
     ]
     out = emit_layer_uri(layer, fallbacks=rows)
     assert out is not None
-    assert [r.rung for r in out.fallbacks] == ["cudem_nearshore", "etopo_bathy_base"]
-    assert "11% etopo_bathy_base [cross_dataset]" in (out.fallback_note or "")
+    assert [r.rung for r in out.fallbacks] == ["primary", "coarse_base"]
+    assert "11% coarse_base [cross_dataset]" in (out.fallback_note or "")
     # Idempotent: a second pass neither duplicates rows nor the narration.
     again = emit_layer_uri(out, fallbacks=rows)
     assert len(again.fallbacks) == 2
     assert again.fallback_note == out.fallback_note
 
-
-def test_user_supplied_bed_wins_over_the_whole_ladder(monkeypatch, tmp_path) -> None:
-    _patch_partial_cudem(monkeypatch, tmp_path)
-    res = TOOL_REGISTRY["fetch_topobathy"].fn(
-        bbox=list(_EXHIBIT_BBOX), dem_uri="s3://mine/survey.tif"
-    )
-    assert res.uri == "s3://mine/survey.tif"
-    assert [r.rung for r in res.fallbacks] == ["user_supplied"]
-    assert res.fallbacks[0].consequence == "user_supplied"
-    assert [e.basis for e in res.synthetic_inputs] == ["user"]
-
-
-def test_a_user_supplied_rung_still_surfaces_its_input_layer(
-    monkeypatch, tmp_path
-) -> None:
-    """A rung with its own ``call`` never reaches _route_once, so nothing records
-    the emit-on-fetch arguments -- the user's own bed would be the one input that
-    never appears on the map."""
-    from trid3nt_server.tools.fetchers._router import emit_on_fetch
-
-    surfaced: list = []
-    monkeypatch.setattr(
-        emit_on_fetch, "maybe_emit_input_on_fetch",
-        lambda spec, params, layer, **kw: surfaced.append((layer.uri, kw)),
-    )
-    _patch_partial_cudem(monkeypatch, tmp_path)
-    TOOL_REGISTRY["fetch_topobathy"].fn(
-        bbox=list(_EXHIBIT_BBOX), dem_uri="s3://mine/survey.tif",
-        purpose="survey bed",
-    )
-    assert surfaced == [("s3://mine/survey.tif", {"visualize": None,
-                                                  "purpose": "survey bed"})]

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import inspect
 import pathlib
-import re
 
 import pytest
 
@@ -18,12 +17,10 @@ from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 from trid3nt_server.fallbacks import (
     BELOW_PRIMARY_CLASSES,
     DEGRADATION_CLASSES,
-    get_ladder,
     registered_ladders,
 )
 
 _REPO = pathlib.Path(__file__).resolve().parents[2]
-_SERVER = _REPO / "trid3nt_server"
 
 
 @pytest.fixture(scope="module")
@@ -104,60 +101,6 @@ def test_every_ladder_is_a_complete_account_of_its_own_rungs():
                 f"{name}/{rung.name}: {rung.consequence}"
             )
         assert ladder.terminal.consequence == "refuse"
-
-
-def test_the_bathymetry_ladder_declares_every_source_that_can_paint():
-    """The four sources ``_rung_coverage`` can report must each be a rung, or the
-    walker logs an unknown key and a model cannot account for the raster."""
-    from trid3nt_server.tools.fetchers._router.hooks import topobathy as tb
-
-    declared = {r.name for r in get_ladder("fetch_topobathy").rungs}
-    measured = set(tb._rung_coverage(0.5, 0.25, 0.25) or {})
-    assert measured <= declared, f"undeclared contributors: {measured - declared}"
-    assert get_ladder("fetch_topobathy").alternative("regional_fine") is None, (
-        "regional_fine is FINER than the primary; permitting it through "
-        "fallback= would price a free upgrade as a degradation"
-    )
-
-
-def test_the_user_supplied_rung_is_visible_in_the_tool_schema(specs):
-    """A rung the model cannot see is a rung nobody can take. ``dem_uri`` was
-    absorbed by ``**_extra_ignored`` for the whole of F1."""
-    ladder = get_ladder("fetch_topobathy")
-    param = ladder.user_rung.supplies_param
-    assert param in specs["fetch_topobathy"].params
-    assert param in specs["fetch_topobathy"].docstring
-
-
-# SHAPE 4 -- every EXPOSED fetch_topobathy call site declares its rung.
-#
-# A gate that fires only for opt-in callers is not a floor (F1b). The mesh joined
-# the four composers in F2.
-
-_TOPOBATHY_CALL = re.compile(r'fetch_topobathy(?:"\]\.fn)?\s*\(', re.M)
-
-#: file -> why this call site needs no ``fallback=``. Empty means: it declares one.
-_TOPOBATHY_CALLERS_WITHOUT_A_RUNG: dict[str, str] = {}
-
-
-def test_every_topobathy_call_site_declares_a_rung():
-    offenders: list[str] = []
-    for path in _SERVER.rglob("*.py"):
-        if "__pycache__" in path.parts or "hooks/topobathy.py" in path.as_posix():
-            continue
-        text = path.read_text(encoding="utf-8")
-        if not _TOPOBATHY_CALL.search(text):
-            continue
-        rel = path.relative_to(_REPO).as_posix()
-        if rel in _TOPOBATHY_CALLERS_WITHOUT_A_RUNG:
-            continue
-        if "fallback=" not in text:
-            offenders.append(rel)
-    assert not offenders, (
-        "these fetch_topobathy callers can take a coverage gap with no declared "
-        "rung, so a partial-CUDEM AOI either refuses or degrades unannounced:\n  "
-        + "\n  ".join(offenders)
-    )
 
 
 # THE REGISTER -- naked substitutions that are NOT fixed, with their verdicts.

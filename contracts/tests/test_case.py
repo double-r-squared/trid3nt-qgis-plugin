@@ -519,8 +519,8 @@ def test_persisted_substep_record_roundtrip() -> None:
     ok = PersistedSubStepRecord(
         step_id=new_ulid(),
         parent_step_id=new_ulid(),
-        name="fetch_topobathy",
-        tool_name="fetch_topobathy",
+        name="fetch_cudem",
+        tool_name="fetch_cudem",
         state="complete",
         duration_ms=1200,
     )
@@ -536,7 +536,7 @@ def test_persisted_substep_record_roundtrip() -> None:
     )
     ok_d = _roundtrip(ok)
     failed_d = _roundtrip(failed)
-    assert ok_d["tool_name"] == "fetch_topobathy"
+    assert ok_d["tool_name"] == "fetch_cudem"
     assert ok_d["state"] == "complete"
     assert ok_d["error_code"] is None
     assert failed_d["state"] == "failed"
@@ -580,8 +580,8 @@ def test_tool_card_record_children_roundtrip_with_failed_child_and_io() -> None:
             PersistedSubStepRecord(
                 step_id=new_ulid(),
                 parent_step_id=new_ulid(),
-                name="fetch_topobathy",
-                tool_name="fetch_topobathy",
+                name="fetch_cudem",
+                tool_name="fetch_cudem",
                 state="complete",
                 duration_ms=1200,
                 raw_args='{\n  "bbox": [-82.0, 26.0, -81.0, 27.0]\n}',
@@ -603,7 +603,7 @@ def test_tool_card_record_children_roundtrip_with_failed_child_and_io() -> None:
     )
     dumped = _roundtrip(parent)
     assert [c["tool_name"] for c in dumped["children"]] == [
-        "fetch_topobathy",
+        "fetch_cudem",
         "run_solver",
     ]
     assert dumped["children"][0]["state"] == "complete"
@@ -618,7 +618,7 @@ def test_tool_card_record_children_roundtrip_with_failed_child_and_io() -> None:
     assert rebuilt.children is not None
     assert all(isinstance(c, PersistedSubStepRecord) for c in rebuilt.children)
     assert [c.tool_name for c in rebuilt.children] == [
-        "fetch_topobathy",
+        "fetch_cudem",
         "run_solver",
     ]
 

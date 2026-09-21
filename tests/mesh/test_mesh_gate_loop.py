@@ -438,7 +438,7 @@ def test_every_mesher_gets_the_same_card(tmp_path):
         tool.build_mesh(mesher="om2d", kind="unstructured_tri", extent=_AOI,
                         resolution_m=60.0,
                         ops=[mesh_op("laplacian2"),
-                             mesh_op("set_bed", source="fetch_topobathy")]),
+                             mesh_op("set_bed", source="fetch_cudem")]),
         workdir=tmp_path / "tri")
     assert _card_rows(triangulated) == [
         "resolution_m", "op[0]", "op[1]", "reset"]

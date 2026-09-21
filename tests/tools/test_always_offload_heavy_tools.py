@@ -19,14 +19,14 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 _SRC = pathlib.Path(server.__file__).resolve().parent.parent
 _WORKFLOWS = _SRC / "workflows"
-#: The heavy sync fetch this file's sweep guards. It is named by the mesher's
-#: ``bed`` field rather than called from a coroutine anywhere in the tree, so the
-#: sweep asserts ABSENCE of an on-loop call rather than a particular offload.
-_HEAVY_FETCH = "fetch_topobathy("
+#: The heavy sync fetch this file's sweep guards. It is named by a recipe's bed
+#: row rather than called from a coroutine anywhere in the tree, so the sweep
+#: asserts ABSENCE of an on-loop call rather than a particular offload.
+_HEAVY_FETCH = "fetch_cudem("
 
 
-def test_fetch_topobathy_in_always_set() -> None:
-    assert "fetch_topobathy" in server._ALWAYS_OFFLOAD_SYNC_TOOLS
+def test_fetch_cudem_in_always_set() -> None:
+    assert "fetch_cudem" in server._ALWAYS_OFFLOAD_SYNC_TOOLS
 
 
 def test_goes_abi_in_always_set() -> None:
@@ -52,7 +52,7 @@ def test_always_set_offloads_even_in_off_mode(
     ``off`` mode -- that is the whole point of the in-code list."""
     monkeypatch.setattr(server, "_SYNC_OFFLOAD_MODE", "off")
     # The root-cause tool specifically.
-    assert server._should_offload_sync_tool("fetch_topobathy") is True
+    assert server._should_offload_sync_tool("fetch_cudem") is True
     # And EVERY member of the always-set.
     for name in server._ALWAYS_OFFLOAD_SYNC_TOOLS:
         assert server._should_offload_sync_tool(name) is True, name

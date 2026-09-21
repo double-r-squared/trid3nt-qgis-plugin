@@ -454,7 +454,7 @@ def test_the_journal_names_the_rung_that_ACTUALLY_painted_the_bed(tmp_path):
                      resolution_m=100.0, ops=()),
         workdir=tmp_path)
     assert "bed_source" not in session.recipe_lines()[-1]
-    painted = "fetch_topobathy: cudem_nearshore 89%, etopo_bathy_base 11%"
+    painted = "fetch_cudem: cudem_nearshore 89%, etopo_bathy_base 11%"
     session._mesh = Mesh(points=None, cells=None, crs_authid="EPSG:4326",
                          meta={"bed_source": painted})
     assert session.recipe_lines()[-1]["bed_source"] == painted
@@ -507,21 +507,21 @@ def test_a_dict_shaped_fetch_is_not_reported_as_unmeasured():
     calls a MEASURED provenance unmeasured."""
     as_dict = {"uri": "s3://b/x.tif", "fallbacks": _ROWS_DICT,
                "fallback_note": None}
-    assert P._provenance("fetch_topobathy", as_dict).startswith(
-        "fetch_topobathy: cudem_nearshore 89%, etopo_bathy_base 11% [")
-    assert "UNMEASURED" not in P._provenance("fetch_topobathy", as_dict)
+    assert P._provenance("fetch_cudem", as_dict).startswith(
+        "fetch_cudem: cudem_nearshore 89%, etopo_bathy_base 11% [")
+    assert "UNMEASURED" not in P._provenance("fetch_cudem", as_dict)
 
 
 def test_the_bed_card_states_the_datum_and_the_native_cell_of_its_source():
     """A bed the user is shown to refine is a bed they may stitch another source
     onto, and what the two are compared on is the metadata of the rows."""
-    card = P._provenance("fetch_topobathy",
+    card = P._provenance("fetch_cudem",
                          {"uri": "s3://b/x.tif", "fallbacks": _ROWS_DICT,
                           "fallback_note": None,
                           "reference_time": "2019-06-01T00:00:00Z"})
     assert "datum NAVD88" in card
     assert "acquired 2019-06-01T00:00:00Z" in card
-    assert "native CUDEM" in card
+    assert "native NCEI CUDEM 1/9 arc-second" in card
 
 
 def test_a_source_row_that_states_no_datum_is_not_a_bed():
@@ -531,12 +531,12 @@ def test_a_source_row_that_states_no_datum_is_not_a_bed():
     assert "fetch_nhd_waterbodies" in str(excinfo.value)
     # a row that states one passes, and nothing is invented for one that is not
     # a registered source at all.
-    P._refuse_undated_source("fetch_topobathy")
+    P._refuse_undated_source("fetch_cudem")
 
 
 def test_a_fetch_that_measured_nothing_still_says_so():
     empty = {"uri": "s3://b/x.tif", "fallbacks": [], "fallback_note": None}
-    assert "UNMEASURED" in P._provenance("fetch_topobathy", empty)
+    assert "UNMEASURED" in P._provenance("fetch_cudem", empty)
 
 
 def _flowline_collection(order):

@@ -23,8 +23,8 @@ MAX_FETCH_PX: int = 8192
 
 
 # Per-fetcher resolution ladders for the fetch-resolution gate. Finer = smaller
-# metres. fetch_dem reaches 1 m (3DEP); fetch_topobathy floors at 3 m (CUDEM
-# tiles); both default to 10 m. fetch_landcover's native NLCD grid is 30 m and
+# metres. fetch_dem reaches 1 m (3DEP); fetch_cudem floors at 3 m, its tiles'
+# own cell; both default to 10 m. fetch_landcover's native NLCD grid is 30 m and
 # its 60/120/300/600 m rungs are what a large bbox can be ASKED for so the MRLC
 # WCS GetCoverage stays under 4000 px per axis. fetch_dem's 90/300/900 m rungs
 # exist because a state-scale AOI needs roughly 150 m to stay under the tool's
@@ -33,7 +33,8 @@ MAX_FETCH_PX: int = 8192
 # are the ask the user picks: past the budget the fetcher refuses, never coarsens.
 _FETCH_RES_LADDERS: dict[str, list[float]] = {
     "fetch_dem": [1.0, 3.0, 10.0, 30.0, 90.0, 300.0, 900.0],
-    "fetch_topobathy": [3.0, 10.0, 30.0],
+    "fetch_cudem": [3.0, 10.0, 30.0],
+    "fetch_regional_coastal_dem": [1.0, 3.0, 10.0, 30.0],
     "fetch_landcover": [30.0, 60.0, 120.0, 300.0, 600.0],
 }
 _FETCH_DEFAULT_RES_M: float = 10.0
@@ -155,9 +156,10 @@ async def _build_fetch_resolution_envelope(
         + "Pick a finer or coarser resolution, or confirm."
     )[:512]
 
+    # The granularity ENGINE is the kind of grid the card renders, not a row:
+    # every bed row draws the same topo-bathymetry card.
     _ENGINE_BY_TOOL = {
         "fetch_dem": "dem",
-        "fetch_topobathy": "topobathy",
         "fetch_landcover": "landcover",
     }
     engine = _ENGINE_BY_TOOL.get(tool_name, "topobathy")

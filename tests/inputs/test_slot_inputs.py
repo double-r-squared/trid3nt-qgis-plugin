@@ -97,7 +97,7 @@ def test_the_bed_slot_says_which_shape_it_was_handed():
     assert bed({"type": "FeatureCollection", "features": []}).kind == POINTS
     assert bed("s3://b/k/dem.tif").kind == RASTER
     # a fetcher NAME is a surface the mesh op resolves, not a depth
-    assert bed("fetch_topobathy").kind == RASTER
+    assert bed("fetch_cudem").kind == RASTER
     assert bed(None) is None
 
 

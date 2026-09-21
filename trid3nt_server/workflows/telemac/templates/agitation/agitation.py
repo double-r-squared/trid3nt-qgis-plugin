@@ -209,7 +209,8 @@ _ARTEMIS_RES_SPEC = ResolutionSpec(
     param="mesh_resolution_m",
     unit="m",
     min_value=2.0,
-    native_hint="NOAA CUDEM 1/9 arc-second nearshore topobathy (~3 m)",
+    native_hint="finest triangle edge at the shoreline and the structure; the "
+                "bed's own cell is the matched source's, stated on its row",
     constraint_source="solver",
     rationale=(
         "finest triangle edge at the shoreline and around the structure; a "

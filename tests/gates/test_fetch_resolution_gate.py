@@ -75,7 +75,7 @@ def test_fetch_tools_in_fetch_confirm_set() -> None:
     from trid3nt_server import server
 
     assert "fetch_dem" in server.FETCH_CONFIRM_TOOLS
-    assert "fetch_topobathy" in server.FETCH_CONFIRM_TOOLS
+    assert "fetch_cudem" in server.FETCH_CONFIRM_TOOLS
     # SEPARATE from the solver set so the autostop solver-marker never fires for
     # a fetch.
     assert not (server.FETCH_CONFIRM_TOOLS & server.SOLVER_CONFIRM_TOOLS)
@@ -89,7 +89,7 @@ def test_fetch_tools_in_fetch_confirm_set() -> None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "tool_name,engine",
-    [("fetch_dem", "dem"), ("fetch_topobathy", "topobathy")],
+    [("fetch_dem", "dem"), ("fetch_cudem", "topobathy")],
 )
 async def test_gate_emits_fetch_granularity_block(tool_name: str, engine: str) -> None:
     from trid3nt_server import server
@@ -128,7 +128,7 @@ async def test_gate_emits_fetch_granularity_block(tool_name: str, engine: str) -
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("tool_name", ["fetch_dem", "fetch_topobathy"])
+@pytest.mark.parametrize("tool_name", ["fetch_dem", "fetch_cudem"])
 async def test_proceed_pins_default_resolution(tool_name: str) -> None:
     from trid3nt_server import server
 
@@ -149,7 +149,7 @@ async def test_proceed_pins_default_resolution(tool_name: str) -> None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "tool_name,finer",
-    [("fetch_dem", 1), ("fetch_dem", 3), ("fetch_topobathy", 3)],
+    [("fetch_dem", 1), ("fetch_dem", 3), ("fetch_cudem", 3)],
 )
 async def test_narrow_scope_finer_applied_small_aoi(
     tool_name: str, finer: int
@@ -228,7 +228,7 @@ async def test_timeout_fails_closed(monkeypatch) -> None:
     ws, state = _FakeWS(), _FakeState()
     with pytest.raises(GateConfirmationTimeoutError):
         await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-            ws, state, "fetch_topobathy", _fetch_params()
+            ws, state, "fetch_cudem", _fetch_params()
         )
     err = next(e for e in ws.sent if e.get("type") == "error")
     assert err["payload"]["error_code"] == "CONFIRMATION_TIMEOUT"
