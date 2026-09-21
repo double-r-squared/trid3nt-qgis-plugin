@@ -1,7 +1,7 @@
-# NLCD through the wcs_getcoverage access mode: a WCS 1.0.0 GetCoverage, a
-# background(0)-to-nodata remap, and a palette COG. The pre_resolve step carries the
-# dataset alias, the vintage parse, the effective resolution and the quantized bbox into
-# the cache key, and the envelope carries the validation sidecar.
+# NLCD, opened through QGIS's OWN wcs provider in the session and exported back:
+# the coverage is asked for in EPSG:4326 at the row's resolution lever, the
+# background class collapses to the dataset's nodata on the way in, and the class
+# palette is the style the service publishes, declared here.
 schema_version: v1
 name: fetch_landcover
 # Declared confirm gate: the heavy raster fetch gets the canonical
@@ -34,8 +34,17 @@ params:
 gates:
   max_bbox_km2: 5000000.0
 ingest:
-  access: wcs_getcoverage
-  wcs:
+  access: qgis_provider
+  qgis_provider:
+    provider: wcs
+    uri: "crs=EPSG:4326&format=GeoTIFF&identifier={coverage}&url={url}"
+    mode: materialise
+    # The MRLC GeoServer serves at most this many pixels per axis; past it the
+    # row refuses naming the spacing that fits.
+    max_px: 4000
+    # Class 0 is Background (open ocean, international waters) and is never a
+    # legitimate NLCD code -- the real codes are 11-95.
+    nodata_sentinel: 0
     coverage_by_year:
       2001: mrlc_display:NLCD_2001_Land_Cover_L48
       2004: mrlc_display:NLCD_2004_Land_Cover_L48
@@ -46,10 +55,9 @@ ingest:
       2016: mrlc_display:NLCD_2016_Land_Cover_L48
       2019: mrlc_display:NLCD_2019_Land_Cover_L48
       2021: mrlc_display:NLCD_2021_Land_Cover_L48
-    background_class: 0
-    image_format: GeoTIFF
-    max_px: 4000
-    timeout_s: 120.0
+  serialize:
+    nodata: 255
+    dtype: uint8
 hooks:
   pre_resolve: landcover.pre_resolve
   envelope: landcover.envelope
@@ -62,6 +70,30 @@ output:
   role: input
   style:
     kind: classed
+    # The class colours and labels the MRLC GeoServer publishes for this
+    # coverage's own style.
+    classes:
+    - [11, 11, "#476ba0", "Open Water"]
+    - [12, 12, "#d1ddf9", "Perennial Ice/Snow"]
+    - [21, 21, "#ddc9c9", "Developed, Open Space"]
+    - [22, 22, "#d89382", "Developed, Low Intensity"]
+    - [23, 23, "#ed0000", "Developed, Medium Intensity"]
+    - [24, 24, "#aa0000", "Developed, High Intensity"]
+    - [31, 31, "#b2ada3", "Barren Land (Rock/Sand/Clay)"]
+    - [32, 32, "#f9f9f9", "Unconsolidated Shore"]
+    - [41, 41, "#68aa63", "Deciduous Forest"]
+    - [42, 42, "#1c6330", "Evergreen Forest"]
+    - [43, 43, "#b5c98e", "Mixed Forest"]
+    - [51, 51, "#b0973d", "Dwarf Scrub (AK only)"]
+    - [52, 52, "#ccba7c", "Shrub/Scrub"]
+    - [71, 71, "#e2e2c1", "Grasslands/Herbaceous"]
+    - [72, 72, "#d1d182", "Sedge/Herbaceous (AK only)"]
+    - [73, 73, "#99c246", "Lichens (AK only)"]
+    - [74, 74, "#82ba9e", "Moss (AK only)"]
+    - [81, 81, "#dbd83d", "Pasture/Hay"]
+    - [82, 82, "#aa7028", "Cultivated Crops"]
+    - [90, 90, "#bad8ea", "Woody Wetlands"]
+    - [95, 95, "#70a3ba", "Emergent Herbaceous Wetlands"]
   result_model: LandcoverResult
 cache:
   ttl_class: static-30d

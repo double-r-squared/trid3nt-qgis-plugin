@@ -1,13 +1,12 @@
-"""landcover hooks: NLCD through the MRLC WCS.
+"""landcover hooks: NLCD through the session's own WCS provider.
 
 Two irreducible per-source steps, both PURE. ``pre_resolve`` normalizes the dataset
-alias, parses the vintage year, and refuses a request past the service's pixel budget;
+alias, parses the vintage year and names the coverage that vintage is published as;
 ``envelope`` builds the validation sidecar the downstream builder reads."""
 
-# The resolution asked is the resolution fetched and the resolution keyed: a bbox
-# needing more pixels per axis than the service serves REFUSES, naming the spacing that
-# fits, so the caller chooses its own grid. Only the 30 m native floor moves a request,
-# and the sidecar states it.
+# The resolution asked is the resolution served and the resolution keyed. Only the
+# 30 m native floor moves a request, and the sidecar states it; a bbox needing more
+# pixels per axis than the service serves refuses on the row's own max_px.
 #
 # The sidecar fields -- vintage year, dataset, source, effective and native resolution,
 # whether it was downsampled and the note saying so -- live on the result SUBCLASS,
@@ -19,7 +18,7 @@ from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
 
-from ..._fetch_common import enforce_pixel_budget, round_bbox_to_resolution
+from ..._fetch_common import round_bbox_to_resolution
 from ..._router import hooks as _hooks
 from ..._router.errors import router_input_error, router_upstream_error
 
@@ -27,14 +26,14 @@ __all__ = ["pre_resolve", "envelope"]
 
 _DEFAULT_NLCD_DATASET = "nlcd_2021"
 _NATIVE_RES_M = 30
-_PIXEL_BUDGET = 4000  # max px/side the MRLC WCS server serves
 
 
 @_hooks.register_hook("landcover.pre_resolve")
 def pre_resolve(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
-    """Normalize the dataset, parse the vintage and enforce the pixel budget, PURE.
-    Returns a params-merge carrying the resolved dataset, vintage year, effective
-    resolution, re-quantized bbox and downsample flag, all entering the cache key."""
+    """Normalize the dataset, parse the vintage and name its coverage, PURE.
+    Returns a params-merge carrying the resolved dataset, vintage year, coverage
+    identifier, effective resolution, re-quantized bbox and downsample flag, all
+    entering the cache key."""
     sc = spec.error_code_prefix
     isfx = spec.input_error_suffix
     dataset = params.get("dataset") or _DEFAULT_NLCD_DATASET
@@ -70,22 +69,28 @@ def pre_resolve(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
             isfx,
         )
 
+    block = (spec.ingest or {}).get("qgis_provider") or {}
+    published = {int(k): str(v) for k, v in (block.get("coverage_by_year") or {}).items()}
+    coverage = published.get(vintage_year)
+    if coverage is None:
+        raise router_upstream_error(
+            sc,
+            f"NLCD vintage year {vintage_year} is not published as a coverage "
+            f"(available: {sorted(published)}).",
+        )
+
     bbox = [float(v) for v in params["bbox"]]
     requested_res = int(params.get("resolution_m") or _NATIVE_RES_M)
     effective_res = max(_NATIVE_RES_M, requested_res)
-
-    enforce_pixel_budget(
-        tuple(bbox), effective_res, budget_px=_PIXEL_BUDGET, source="fetch_landcover",
-    )
-    downsampled = effective_res > _NATIVE_RES_M
     quantized = round_bbox_to_resolution(tuple(bbox), effective_res)
 
     return {
         "dataset": dataset,
         "vintage_year": vintage_year,
+        "coverage": coverage,
         "resolution_m": effective_res,
         "bbox": list(quantized),
-        "downsampled": downsampled,
+        "downsampled": effective_res > _NATIVE_RES_M,
     }
 
 
@@ -99,7 +104,7 @@ def envelope(spec: SourceSpec, params: dict[str, Any], layer: Any, data: bytes |
     if downsampled:
         note = (
             f"Landcover fetched at the {effective_res} m asked for (NLCD native is {_NATIVE_RES_M} m). "
-            "NLCD class codes are preserved (nearest-neighbor resampling via WCS pixel grid). "
+            "NLCD class codes are preserved (nearest-neighbor resampling on the export grid). "
             "Category boundaries are approximate at this scale."
         )
     name = f"NLCD Land Cover ({vintage_year})" + (f" at {effective_res} m" if downsampled else "")

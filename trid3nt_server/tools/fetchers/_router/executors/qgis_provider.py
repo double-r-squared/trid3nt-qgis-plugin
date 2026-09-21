@@ -2,7 +2,9 @@
 provider, borrowed over the wire the way Processing already is.
 
 The row states the provider, the datasource uri it takes and what to do with the
-layer. ``mode: open`` leaves an overlay on the user's map and returns a record, so
+layer, and the row's own ask rides with it: the window (absent when the row's ask
+IS the whole published layer) and the pixel spacing the row's resolution lever
+states. ``mode: open`` leaves an overlay on the user's map and returns a record, so
 nothing enters the store and no packet row is published; ``mode: materialise``
 has the session export and upload the layer, and the bytes come back through the
 read-through under the row-shaped cache key like any other fetch. A row may name
@@ -42,8 +44,9 @@ _PENDING_LAYER: dict[str, tuple[str, asyncio.Future]] = {}
 
 
 def _block(spec: SourceSpec) -> dict[str, Any]:
-    """The row's ``ingest.qgis_provider`` block: provider, uri, mode, and the
-    optional credential name the session resolves in its own auth store."""
+    """The row's ``ingest.qgis_provider`` block: provider, uri, mode, the optional
+    credential name the session resolves in its own auth store, and the optional
+    per-axis pixel budget the service serves."""
     block = (spec.ingest or {}).get("qgis_provider") or {}
     missing = [k for k in ("provider", "uri", "mode") if not block.get(k)]
     if missing:
@@ -197,19 +200,65 @@ def _store_bytes(uri: str) -> bytes:
     return storage.client().get_object(Bucket=bucket, Key=key)["Body"].read()
 
 
+def _within_pixel_budget(
+    spec: SourceSpec, block: dict[str, Any], bbox: Any, resolution_m: Any
+) -> None:
+    """A service that serves at most so many pixels per axis states ``max_px`` on
+    its block. Past it the row REFUSES, naming the spacing that fits, the way the
+    resolution lever refuses everywhere else; the session is never asked to
+    quietly hand back a coarser grid under the asked name."""
+    from ..._fetch_common import enforce_pixel_budget
+
+    budget = block.get("max_px")
+    if budget is None or bbox is None or resolution_m is None:
+        return
+    enforce_pixel_budget(
+        tuple(float(v) for v in bbox),
+        float(resolution_m),
+        budget_px=int(budget),
+        source=spec.name,
+    )
+
+
+def _exported_raster_to_cog(spec: SourceSpec, raw: bytes) -> bytes:
+    """The session's GeoTIFF as the COG the publish seam reads, carrying the two
+    value treatments a row states about its OWN dataset: everything at or below
+    ``nodata_sentinel`` is the dataset's own no-data, and the ``serialize`` block
+    is the nodata and dtype it is written with."""
+    import numpy as np
+    import rasterio
+
+    from .raster_cog import array_to_cog_bytes
+
+    ingest = spec.ingest or {}
+    sentinel = (ingest.get("qgis_provider") or {}).get("nodata_sentinel")
+    serialize = ingest.get("serialize") or {}
+    nodata = serialize.get("nodata")
+    with rasterio.MemoryFile(raw) as memfile:
+        with memfile.open() as src:
+            array = src.read(1)
+            transform, crs = src.transform, src.crs
+    if sentinel is not None:
+        fill = float("nan") if nodata is None else float(nodata)
+        array = np.where(array <= float(sentinel), fill, array)
+    if nodata is None:
+        return array_to_cog_bytes(array, transform, crs)
+    dtype = str(serialize.get("dtype", "float32"))
+    return array_to_cog_bytes(
+        np.where(np.isfinite(array), array, nodata).astype(dtype),
+        transform,
+        crs,
+        nodata=float(nodata),
+        dtype=dtype,
+    )
+
+
 def _exported_to_output(spec: SourceSpec, params: dict[str, Any], raw: bytes) -> bytes:
     """The session's export in the row's own output format: a GeoPackage read back
     through the row's declared ingest transforms into FlatGeobuf, a GeoTIFF
     reserialized as the COG the publish seam reads."""
     if spec.output.layer_type == "raster":
-        import rasterio
-
-        from .raster_cog import array_to_cog_bytes
-
-        with rasterio.MemoryFile(raw) as memfile:
-            with memfile.open() as src:
-                array = src.read(1)
-                return array_to_cog_bytes(array, src.transform, src.crs)
+        return _exported_raster_to_cog(spec, raw)
 
     import os
     import tempfile
@@ -247,12 +296,16 @@ def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
 
     block = _block(spec)
     uri = build_uri(spec, params)
+    bbox = params.get("bbox")
+    resolution_m = params.get("resolution_m")
+    _within_pixel_budget(spec, block, bbox, resolution_m)
     payload = LayerRequestPayload(
         key=row_key(spec, params),
         provider=str(block["provider"]),
         uri=uri,
         name=spec.name.removeprefix("fetch_"),
-        bbox=params["bbox"],
+        bbox=bbox,
+        resolution_m=None if resolution_m is None else float(resolution_m),
         mode=str(block["mode"]),
         credential=block.get("credential") or None,
     )
@@ -274,7 +327,7 @@ def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
                 "provider": payload.provider,
                 "uri": uri,
                 "name": payload.name,
-                "bbox": list(payload.bbox),
+                "bbox": None if payload.bbox is None else list(payload.bbox),
                 "opened_in_session": True,
             },
             separators=(",", ":"),
