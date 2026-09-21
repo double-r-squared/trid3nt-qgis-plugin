@@ -112,14 +112,14 @@ def test_co_occurrence_boost_when_jsonl_populated(tmp_path, monkeypatch) -> None
     )
 
     # Boosted: populate the sink so fetch_nws_event co-occurs with fetch_dem in
-    # 5 sessions and fetch_idf_curve in only 1.
+    # 5 sessions and fetch_climate_normals in only 1.
     pairs: list[tuple[str, str]] = []
     for i in range(5):
         sid = f"01SESS{i:020d}"
         pairs.append((sid, "fetch_sentinel1_sar"))
         pairs.append((sid, "fetch_nws_event"))
     pairs.append(("01SESS9999999999999999999", "fetch_sentinel1_sar"))
-    pairs.append(("01SESS9999999999999999999", "fetch_idf_curve"))
+    pairs.append(("01SESS9999999999999999999", "fetch_climate_normals"))
     populated = tmp_path / "populated.jsonl"
     _write_telemetry_jsonl(populated, pairs)
     monkeypatch.setenv("TRID3NT_TELEMETRY_PATH", str(populated))

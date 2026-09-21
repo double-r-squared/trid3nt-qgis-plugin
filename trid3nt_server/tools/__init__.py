@@ -176,7 +176,6 @@ def clear_registry_for_tests() -> None:
 # block.
 
 # -- fetchers/climate --
-from .fetchers.climate.fetch_idf_curve import fetch_idf_curve  # noqa: E402,F401
 from .fetchers.climate.lookup_precip_return_period import lookup_precip_return_period  # noqa: E402,F401
 
 # -- fetchers/hydrology --
