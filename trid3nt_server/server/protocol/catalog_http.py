@@ -23,7 +23,6 @@ logger = logging.getLogger("trid3nt_server.server.protocol.catalog_http")
 
 __all__ = [
     "build_catalog_payload",
-    "render_catalog_page",
     "load_query_corpus",
     "serve_catalog_http",
     "build_case_list_payload",
@@ -141,101 +140,6 @@ def build_catalog_payload(
     if use_cache:
         _PAYLOAD_CACHE = payload
     return payload
-
-
-# Self-contained catalog page. Inline CSS + JS + embedded data -- NO external
-# assets (a strict-CSP / offline viewer must render it unchanged). The data is
-# embedded as a JSON <script> block the inline JS reads once; facets and search
-# are derived from it entirely client-side.
-_CATALOG_PAGE_TEMPLATE = """<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TRID3NT tool catalog</title>
-<style>
-:root{color-scheme:light dark;--bg:#fff;--fg:#1a1a1a;--muted:#666;--card:#f6f7f9;--border:#dcdfe4;--badge:#e6ebf2;--accent:#2d6cdf}
-@media(prefers-color-scheme:dark){:root{--bg:#14161a;--fg:#e6e8eb;--muted:#9aa2ad;--card:#1d2027;--border:#2c313a;--badge:#252b36;--accent:#5b8cf0}}
-*{box-sizing:border-box}
-body{margin:0;font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--fg)}
-header{position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--border);padding:16px 20px;z-index:2}
-h1{margin:0 0 4px;font-size:20px}
-.sub{color:var(--muted);font-size:13px}
-.controls{margin-top:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-#q{flex:1 1 260px;min-width:200px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--fg);font:inherit}
-select{padding:7px 8px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--fg);font:inherit}
-main{padding:16px 20px;max-width:1100px;margin:0 auto}
-.tool{border:1px solid var(--border);background:var(--card);border-radius:10px;padding:14px 16px;margin:0 0 12px}
-.tool h2{margin:0;font:600 15px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace}
-.badges{margin:6px 0 8px;display:flex;flex-wrap:wrap;gap:6px}
-.badge{font-size:11px;padding:2px 8px;border-radius:999px;background:var(--badge);color:var(--muted);white-space:nowrap}
-.badge.eng{color:var(--accent)}
-pre.doc{margin:0;white-space:pre-wrap;word-break:break-word;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--fg)}
-.sq{margin-top:8px;font-size:12px;color:var(--muted)}
-.sq b{color:var(--fg);font-weight:600}
-.empty{color:var(--muted);padding:40px 0;text-align:center}
-</style></head>
-<body>
-<header>
-  <h1>TRID3NT tool catalog</h1>
-  <div class="sub">The agent's-eye view: every registered tool with the exact docstring the model routes on. <span id="count"></span></div>
-  <div class="controls">
-    <input id="q" type="search" placeholder="Search name + docstring..." autocomplete="off">
-    <select id="f-engine"><option value="">engine: all</option></select>
-    <select id="f-tier"><option value="">tier: all</option></select>
-    <select id="f-source"><option value="">source_class: all</option></select>
-  </div>
-</header>
-<main id="list"></main>
-<script id="catalog-data" type="application/json">__DATA__</script>
-<script>
-(function(){
-  var data=JSON.parse(document.getElementById("catalog-data").textContent);
-  var tools=data.tools||[];
-  var list=document.getElementById("list");
-  var q=document.getElementById("q");
-  var fEngine=document.getElementById("f-engine"),fTier=document.getElementById("f-tier"),fSource=document.getElementById("f-source");
-  function opts(sel,vals){vals.forEach(function(v){var o=document.createElement("option");o.value=v;o.textContent=v;sel.appendChild(o);});}
-  function uniq(key){var s={};tools.forEach(function(t){if(t[key])s[t[key]]=1;});return Object.keys(s).sort();}
-  opts(fEngine,uniq("engine"));opts(fTier,uniq("tier"));opts(fSource,uniq("source_class"));
-  function esc(x){return (x==null?"":String(x)).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
-  function badges(t){var b=[];if(t.engine)b.push('<span class="badge eng">'+esc(t.engine)+'</span>');
-    b.push('<span class="badge">tier: '+esc(t.tier)+'</span>');
-    if(t.source_class)b.push('<span class="badge">'+esc(t.source_class)+'</span>');
-    if(t.supports_global_query)b.push('<span class="badge">global</span>');
-    if(t.annotations&&t.annotations.read_only_hint)b.push('<span class="badge">read-only</span>');
-    return b.join("");}
-  function render(){
-    var term=q.value.trim().toLowerCase();
-    var e=fEngine.value,ti=fTier.value,so=fSource.value;
-    var html="",n=0;
-    tools.forEach(function(t){
-      if(e&&t.engine!==e)return;if(ti&&t.tier!==ti)return;if(so&&t.source_class!==so)return;
-      if(term&&(t.name+" "+t.docstring).toLowerCase().indexOf(term)<0)return;
-      n++;
-      var sq=(t.sample_queries&&t.sample_queries.length)?'<div class="sq"><b>e.g.</b> '+t.sample_queries.map(esc).join(" &middot; ")+'</div>':"";
-      html+='<div class="tool"><h2>'+esc(t.name)+'</h2><div class="badges">'+badges(t)+'</div><pre class="doc">'+esc(t.docstring)+'</pre>'+sq+'</div>';
-    });
-    list.innerHTML=n?html:'<div class="empty">No tools match.</div>';
-    document.getElementById("count").textContent=n+" of "+tools.length+" shown";
-  }
-  q.addEventListener("input",render);fEngine.addEventListener("change",render);
-  fTier.addEventListener("change",render);fSource.addEventListener("change",render);
-  render();
-})();
-</script>
-</body></html>"""
-
-
-def render_catalog_page(payload: dict[str, Any] | None = None) -> bytes:
-    """Render the self-contained HTML catalog page as UTF-8 bytes; the payload
-    is embedded as inline JSON with ``</`` escaped, so a docstring containing it
-    cannot break out of the script block."""
-    data = payload if payload is not None else build_catalog_payload()
-    raw = json.dumps(data, separators=(",", ":"), ensure_ascii=False)
-    safe = raw.replace("</", "<\\/")
-    return _CATALOG_PAGE_TEMPLATE.replace("__DATA__", safe).encode("utf-8")
-
-
-
 
 
 # Building click-to-enrich detail endpoint.
@@ -597,11 +501,6 @@ async def _route_tool_catalog(_req: _Request) -> _Reply:
     return _json_reply(build_catalog_payload())
 
 
-async def _route_catalog_page(_req: _Request) -> _Reply:
-    """``GET /catalog``: the same payload as a self-contained HTML page."""
-    return _Reply(render_catalog_page(), content_type="text/html; charset=utf-8")
-
-
 async def _route_telemetry_summary(_req: _Request) -> _Reply:
     """``GET /api/telemetry/summary``: the routing-quality summary the telemetry
     module aggregates over its own sink."""
@@ -789,8 +688,6 @@ def _max_ingest_bytes() -> int:
 _ROUTES: dict[tuple[str, str], _Route] = {
     ("GET", "/api/tool-catalog"): _Route(
         _route_tool_catalog, "catalog build failed"),
-    ("GET", "/catalog"): _Route(
-        _route_catalog_page, "catalog render failed"),
     ("GET", "/api/telemetry/summary"): _Route(
         _route_telemetry_summary, "telemetry summary failed"),
     ("GET", "/api/case-list"): _Route(
