@@ -16,6 +16,7 @@ on one machine against one user; the only wire shapes it speaks are
 | `errors.py` | `DeclarativeError` - the base every typed failure carries its `error_code` on, below both the input layer and the declarative library. |
 | `persistence.py` | The typed wrapper over the document store: cases, layers, chat, run snapshots. |
 | `plugin_repo.py` | The QGIS custom plugin repository the daemon serves: the versioned zip, `plugins.xml` and its manifest. |
+| `retention.py` | What the cache bucket keeps: the uris a live case's runs pin, and the sweep that deletes every unpinned object past its TTL class's window. |
 | `storage.py` | The object store every run reaches through: the bound S3 client and the two readings of the runs bucket - the one a read of a past run falls back on, and the one an upload refuses to default. |
 | `telemetry.py` | The JSONL sink: one line per tool call, turn, shadow selection and solve completion. |
 
