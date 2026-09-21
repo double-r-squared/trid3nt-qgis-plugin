@@ -117,14 +117,9 @@ def _validate_hooks(spec: SourceSpec) -> None:
     from .hooks import HookResolutionError, has_hook
 
     if spec.hooks is not None:
-        for point in (
-            "build_request", "parse_response",
-            "resolve_build", "resolve_parse", "next_page", "enrich_plan", "enrich_merge",
-            "classify_status", "envelope",
-            "delegate", "delegate_validate", "delegate_resolve",
-            "record", "pre_resolve", "colormap",
-            "frames_plan", "frame_bytes",
-        ):
+        # Every HookSpec field IS a hook point, so the contract's own field set is
+        # the list; a hand-kept copy of it drifts the turn a point is added.
+        for point in type(spec.hooks).model_fields:
             name = getattr(spec.hooks, point)
             if name and not has_hook(name):
                 raise HookResolutionError(

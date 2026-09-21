@@ -299,22 +299,17 @@ def _era5_netcdf_to_da(spec: SourceSpec, nc_path: str, cds_variable: str, bbox: 
 
 
 def _da_to_array_transform(da: Any) -> tuple[Any, Any, Any]:
-    """A lat-ascending DataArray -> north-up ``(array, affine, crs)`` for the COG writer."""
-    import numpy as np
-    import rasterio.transform as rtransform
+    """A DataArray -> north-up ``(array, affine, crs)`` for the COG writer.
 
-    arr = np.asarray(da.values, dtype="float32")
-    lat = np.asarray(da["latitude"].values, dtype="float64")
-    lon = np.asarray(da["longitude"].values, dtype="float64")
-    # North-up: row 0 must be the northernmost lat. _netcdf_to_da sorts lat
-    # ascending, so flip to make the array north-up for the negative-y transform.
-    if lat.size >= 2 and lat[0] < lat[-1]:
-        arr = arr[::-1, :]
-    transform = rtransform.from_bounds(
-        float(lon.min()), float(lat.min()), float(lon.max()), float(lat.max()),
-        arr.shape[1], arr.shape[0],
-    )
-    return arr, transform, "EPSG:4326"
+    The coordinates a NetCDF carries are CELL CENTRES, so the raster's extent is
+    half a cell beyond the outermost of them on every side; rioxarray computes
+    that from the spacing, which is why the affine is asked of it rather than
+    built from the coordinate range."""
+    import numpy as np
+
+    north_up = da.sortby("latitude", ascending=False)
+    return (np.asarray(north_up.values, dtype="float32"),
+            north_up.rio.transform(recalc=True), north_up.rio.crs)
 
 
 @register_hook("era5.read")

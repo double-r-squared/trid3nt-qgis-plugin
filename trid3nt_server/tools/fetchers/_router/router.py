@@ -17,10 +17,10 @@ from trid3nt_contracts.source_spec import SourceSpec
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_contracts.gate_spec import GateSpec, LeverSpec
 
-#: The canonical confirm gate for a heavy raster FETCHER. All three gated fetchers
-#: (fetch_dem/topobathy/landcover) share it -- one resolution_m lever, the shared
-#: estimate/pin providers; kind='fetch' (no ``confirmed`` injection -- fetchers
-#: ignore it). A source declares ``confirm_gate: fetch_resolution`` to opt in.
+#: The canonical confirm gate for a heavy raster FETCHER: one resolution_m lever
+#: and the shared estimate/pin providers, kind='fetch' (no ``confirmed``
+#: injection - fetchers ignore it). A source opts in by declaring
+#: ``confirm_gate: fetch_resolution``, which is the only thing that gates it.
 _PROVIDERS = "trid3nt_server.gates.cards.solver_confirm"
 FETCH_RESOLUTION_GATE_SPEC = GateSpec(
     kind="fetch",
