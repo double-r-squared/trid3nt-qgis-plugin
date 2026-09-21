@@ -604,15 +604,33 @@ class Solved:
             elif upper in table:
                 wanted, unit = table[upper].name, table[upper].unit
             else:
-                raise OutputEmpty(
-                    f"{token!r} is not a variable {self.body.MODULE} writes "
-                    f"({', '.join(table)}).")
+                # A variable no row NAMES is still a variable the run WROTE, and
+                # it is read under the spelling its own result file carries: the
+                # file is the list, and a table is what styles and captions what
+                # is on it rather than what decides it is there.
+                spelled = self.carried(upper)
+                if spelled is None:
+                    raise OutputEmpty(
+                        f"{token!r} is not a variable {self.body.MODULE} writes "
+                        f"({', '.join(table)}).")
+                wanted, unit = spelled
         for name in self.result["varnames"]:
             if name.strip().upper() == wanted.upper():
                 return name, _UNITS.get(unit.upper(), unit.lower())
         raise OutputEmpty(
             f"{token} ({wanted}) is not among the variables the result carries "
             f"({self.result['varnames']}).")
+
+    def carried(self, spelling: str) -> tuple[str, str] | None:
+        """``(variable, unit)`` for a spelling the RESULT FILE itself carries.
+
+        The unit is the record's own, because a variable the module's table does
+        not row has no declared unit to read it in."""
+        units = list(self.result.get("varunits") or ())
+        for index, name in enumerate(self.result["varnames"]):
+            if name.strip().upper() == str(spelling).strip().upper():
+                return name, (units[index] if index < len(units) else "")
+        return None
 
     def output_row(self, token: str) -> Mapping[str, Any]:
         """THIS run's own table row for a token - its style and its edge.

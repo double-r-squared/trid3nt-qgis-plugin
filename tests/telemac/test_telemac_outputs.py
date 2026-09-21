@@ -550,16 +550,21 @@ def test_publish_outputs_reads_once_publishes_each_and_answers(monkeypatch, solv
                 "reach_m": field("T1", t="every").measure("travel_m"),
                 "edge_m": mesh().measure("size_m")},
         params={"location": "the Wabash"}))
+    # WHAT THE RUN WROTE comes first, captioned by the result file's own names,
+    # and the template's listed reads behind it.
     assert [(type(d.product).__name__, d.caption) for d in seen["items"]] == [
+        ("Mesh", "water depth"),
+        ("Mesh", "dye"),
         ("Mesh", "dye concentration"),
         ("Mesh", "dye concentration"),
         ("Chart", "dye concentration")]
+    listed = [d for d in seen["items"] if d.caption == "dye concentration"]
     # The animation paints the group the result file carries; the envelope is
     # the group the module wrote beside it.
-    assert seen["items"][0].product.frames == 4
-    assert seen["items"][0].product.group == "DYE"
-    assert seen["items"][1].product.datasets == ("dye_concentration.dat",)
-    assert seen["items"][1].style == {"kind": "continuous"}
+    assert listed[0].product.frames == 4
+    assert listed[0].product.group == "DYE"
+    assert listed[1].product.datasets == ("dye_concentration.dat",)
+    assert listed[1].style == {"kind": "continuous"}
     assert (seen["run_id"], seen["engine"], seen["name"]) == (
         "RID", "telemac", "reach")
     assert result.answer == {"cmax": 80.0, "t_peak": 60.0,
@@ -923,7 +928,8 @@ def test_publish_outputs_rejoins_the_anchors_and_draws_the_reference_lines(
         anchors=[{"at": None, "along": None}, {"at": None, "along": _line(coupled)},
                  {"at": None, "along": _line(coupled)}],
         params={"location": "the Eel", "do_standard_mgl": 5.0}))
-    chart = seen["items"][1].product.payload
+    chart = next(d.product.payload for d in seen["items"]
+                 if type(d.product).__name__ == "Chart")
     assert any(row["series"] == "standard"
                for row in chart["vega_lite_spec"]["data"]["values"])
     assert result.answer == {"low": 6.0}
@@ -1216,7 +1222,9 @@ def test_a_chart_s_reference_may_be_another_primitive_drawn_as_a_line(
         answer={"dt": column("T1").measure("top_minus_bottom"),
                 "dt0": column("T1", t=0).measure("top_minus_bottom")},
         params={"location": "the lake"}))
-    rows = seen["items"][1].product.payload["vega_lite_spec"]["data"]["values"]
+    rows = next(d.product.payload for d in seen["items"]
+                if type(d.product).__name__ == "Chart"
+                )["vega_lite_spec"]["data"]["values"]
     beside = [r for r in rows if r["series"] == "water temperature at t = 0 s"]
     assert [r["value"] for r in beside] == [25.0, 20.0, 15.0]
     assert [r["x_m"] for r in beside] == [0.0, 10.0, 20.0]

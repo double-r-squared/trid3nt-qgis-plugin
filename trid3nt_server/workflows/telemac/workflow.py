@@ -13,7 +13,7 @@ import logging
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from importlib import import_module
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.execution import AnswerLayerURI
@@ -163,6 +163,51 @@ def _painted(row: Mapping[str, Any]) -> list[Primitive]:
     return [field(token, t=-1, module=module).layer(style=style)]
 
 
+def _written(run: Mapping[str, Any],
+             solved: Callable[[str], Solved]) -> list[Primitive]:
+    """EVERY variable this run wrote -> the one layer each is published under.
+
+    THE RESULT FILE IS THE LIST. The module's rows come first, in the table's
+    own order, styled and captioned from the row; then every variable a result
+    file carries that no row resolved to, under the spelling the file itself
+    carries and with a journal line saying so. A table decides how a variable
+    is drawn, never whether what the engine wrote reaches the map."""
+    from trid3nt_server.workflows.runtime.journal import journal_note
+    from trid3nt_server.workflows.telemac.modules.outputs import field
+
+    rows = list(run.get("module_output") or ())
+    painted = [p for row in rows for p in _painted(row)]
+    # The spellings already NAMED, across the whole run rather than per file: a
+    # quantity two of a run's files both carry is one layer, and the module row
+    # that names it is the one that styles it.
+    named: set[str] = set()
+    for row in rows:
+        try:
+            variable, _ = solved(str(row["module"])).variable(str(row["token"]))
+        except OutputEmpty:
+            # A row the result does not carry names nothing in it; the read of
+            # it is skipped downstream and it claims no spelling here.
+            continue
+        named.add(variable.strip().upper())
+    walked: set[str] = set()
+    for module in dict.fromkeys([str(run["module"]),
+                                 *(str(row["module"]) for row in rows)]):
+        read = solved(module)
+        if read.result_file in walked:
+            continue
+        walked.add(read.result_file)
+        for variable in read.result["varnames"]:
+            spelling = str(variable).strip()
+            if spelling.upper() in named:
+                continue
+            named.add(spelling.upper())
+            journal_note(f"{read.result_file} wrote {spelling!r} and no module "
+                         "row names it; it is published under the spelling the "
+                         "result file carries")
+            painted.append(field(spelling, t="every", module=module).animate())
+    return painted
+
+
 #: How long a stated value is printed before the doc names its shape instead: a
 #: whole tracer array spelled out crowds the keywords around it off the page.
 _VALUE_CHARS = 48
@@ -202,33 +247,37 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
                           ) -> AnswerLayerURI:
     """Read what the run wrote off it, publish every variable, answer.
 
-    The module's TABLE is the outputs list: every row of the host's and of each
-    coupled module's, styled from the row and published as ONE layer - the
-    temporal one where the row varies in time, the final frame where it does
-    not; a row the result does not carry is skipped. The template's own list is the reads it PLACED beside them. Each
-    module's result is read ONCE; a coupled module's own file goes through its
-    own wrapper. A chart's reference is a callable computing lines beside the
-    read, or another primitive read where the chart's own is anchored and drawn
-    as a line. A placed read the result lacks refuses; an answer over one is
-    ``None``."""
-    table = [p for row in (run.get("module_output") or ())
-             for p in _painted(row)]
+    WHAT THE RESULT FILES WROTE is the outputs list - the host's and each
+    coupled module's - published as ONE layer each: the temporal one where the
+    row varies in time, the final frame where it does not, styled from the
+    module row that names it and under the file's own spelling where no row
+    does. A row naming a variable the result does not carry is skipped. The
+    template's own list is the reads it PLACED beside them. Each module's result
+    is read ONCE; a coupled module's own file goes through its own wrapper. A
+    chart's reference is a callable computing lines beside the read, or another
+    primitive read where the chart's own is anchored and drawn as a line. A
+    placed read the result lacks refuses; an answer over one is ``None``."""
+    solved: dict[str, Solved] = {}
+
+    def _solved(module: str) -> Solved:
+        if module not in solved:
+            solved[module] = Solved(run, wrapper_for(module))
+        return solved[module]
+
+    table = await asyncio.to_thread(_written, run, _solved)
     listed = [*outputs, *(m.primitive for m in answer.values())]
     if anchors:
         listed = [_anchored(p, a) for p, a in zip(listed, anchors)]
     outputs = listed[:len(outputs)]
     answer = {name: replace(m, primitive=p, against=(against or {}).get(name))
               for (name, m), p in zip(answer.items(), listed[len(outputs):])}
-    solved: dict[str, Solved] = {}
     published_keys = {primitive.key for primitive in outputs}
     empty: dict[Primitive, str] = {}
 
     def _read(key: Primitive) -> Any:
-        module = key.module or str(run["module"])
-        if module not in solved:
-            solved[module] = Solved(run, wrapper_for(module))
+        read = _solved(key.module or str(run["module"]))
         try:
-            return solved[module].body.READS[key.kind](key, solved[module])
+            return read.body.READS[key.kind](key, read)
         except OutputEmpty as exc:
             # A run that carried nothing a measure could read answers with the
             # REASON it carried nothing, which the delivery refuses; a published
@@ -301,16 +350,13 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
     answered = {name: _answered(measure) for name, measure in answer.items()}
     if not published.layers:
         raise SlotRefused(
-            f"the {run['module']} run wrote none of the variables its module "
-            "rows, so it published nothing and there is nothing to paint.")
+            f"the {run['module']} run's result files carry no variable at all, "
+            "so it published nothing and there is nothing to paint.")
     logger.info("telemac outputs published run_id=%s layers=%d charts=%d answer=%s",
                 run["run_id"], len(published.layers), len(published.charts),
                 answered)
-    host = str(run["module"])
-    if host not in solved:
-        solved[host] = Solved(run, wrapper_for(host))
-    return await asyncio.to_thread(_record, solved[host], name=name,
-                                   answer=answered)
+    return await asyncio.to_thread(_record, _solved(str(run["module"])),
+                                   name=name, answer=answered)
 
 
 def _record(solved: Solved, *, name: str,

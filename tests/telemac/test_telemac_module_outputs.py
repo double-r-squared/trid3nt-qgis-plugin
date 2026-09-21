@@ -91,16 +91,22 @@ def test_a_token_the_keyword_does_not_spell_refuses_before_the_engine_reads_it()
         GAIA.MODULE_OUTPUT = original
 
 
-def _run(telemac_result, monkeypatch, dye=None) -> dict[str, Any]:
-    """A two-variable reach result, and the run handle a solve hands the publish."""
+def _run(telemac_result, monkeypatch, dye=None, unrowed=None) -> dict[str, Any]:
+    """A two-variable reach result, and the run handle a solve hands the publish.
+
+    ``unrowed`` states variables the file carries that no module row names, as
+    ``spelling -> (unit, frames)``."""
     x = [500000.0, 500120.0, 500000.0, 500120.0, 500060.0]
     y = [4400000.0, 4400000.0, 4400110.0, 4400110.0, 4400055.0]
     dye = dye if dye is not None else [[0.0] * 5, [10.0, 80.0, 5.0, 40.0, 60.0]]
     depth = [[2.0] * 5] * len(dye)
-    telemac_result(varnames=["WATER DEPTH", "DYE"], x=x, y=y,
+    unrowed = dict(unrowed or {})
+    telemac_result(varnames=["WATER DEPTH", "DYE", *unrowed], x=x, y=y,
+                   varunits=["M", "MG/L", *(unit for unit, _ in unrowed.values())],
                    ikle=[[0, 1, 4], [1, 3, 4], [2, 3, 4], [0, 2, 4]],
                    times=[float(60 * n) for n in range(len(dye))],
-                   data={"WATER DEPTH": depth, "DYE": dye})
+                   data={"WATER DEPTH": depth, "DYE": dye,
+                         **{name: frames for name, (_, frames) in unrowed.items()}})
     monkeypatch.setattr(
         "trid3nt_server.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
@@ -220,6 +226,50 @@ def test_a_row_the_result_does_not_carry_is_skipped_and_a_placed_read_refuses(
         asyncio.run(door.publish_outputs(
             run=run, outputs=[series("S").chart()],
             captions={"S": "free surface"}, answer={}, params={}))
+
+
+def test_every_variable_the_result_wrote_is_published_even_where_no_row_names_it(
+        monkeypatch, fake_s3, telemac_result):
+    """The RESULT FILE is the list. A variable the engine wrote and the module's
+    table rows no name for - a deprecated slot, a spelling carrying a dot or a
+    bracket - is published under the spelling the file itself carries, with a
+    journal line saying so; a row is what styles a layer, never what decides it
+    is on the map."""
+    from trid3nt_server.render.formats import Mesh
+    from trid3nt_server.workflows.runtime import journal
+    from trid3nt_server.workflows.telemac import workflow as door
+
+    seen: list[Any] = []
+
+    async def _publish(*, run_id, engine, name, items):
+        seen.extend(items)
+        return Published(layers=(LayerURI(
+            layer_id="L", name="Water depth", layer_type="mesh",
+            uri="s3://runs/RID/r2d.slf", quantity="water_depth"),))
+
+    monkeypatch.setattr(door, "publish", _publish)
+    run = _run(telemac_result, monkeypatch,
+               unrowed={"UNDER ICE THICK.": ("[SI]", [[0.0] * 5, [0.4] * 5]),
+                        "FRAZIL THICKNESS": ("[SI]", [[0.0] * 5, [0.2] * 5])})
+    token = journal.bind_notes()
+    try:
+        asyncio.run(door.publish_outputs(run=run, outputs=[], captions={},
+                                         answer={}, params={}))
+        notes = journal.drain_notes(token)
+    except BaseException:
+        journal.drain_notes(token)
+        raise
+    captions = [item.caption for item in seen]
+    # The rows the table names first, then what the file carried and nothing
+    # rowed - each under the spelling the file wrote it in.
+    assert captions == ["water depth", "dye", "under ice thick.",
+                        "frazil thickness"]
+    unrowed = [item.product for item in seen if item.caption.endswith("thick.")]
+    assert isinstance(unrowed[0], Mesh) and unrowed[0].group == "UNDER ICE THICK."
+    # The unit is the record's own, because no row declares one for it.
+    assert unrowed[0].units == "[si]"
+    assert [note for note in notes if "UNDER ICE THICK." in note]
+    assert [note for note in notes if "FRAZIL THICKNESS" in note]
 
 
 def test_a_coupled_module_states_the_tracers_it_appends_and_its_own_table():
