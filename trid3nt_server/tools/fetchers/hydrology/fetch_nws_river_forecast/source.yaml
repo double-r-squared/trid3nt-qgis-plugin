@@ -1,4 +1,10 @@
-# NWS/NWPS river-forecast gauges, through the chained-resolution hooks.
+# NWS/NWPS river-forecast gauges. The request template, the row walk, the geometry and
+# the column projection are declared below; the hooks that remain are the three steps
+# that are not a row walk - the bbox-or-lid selector, the detail endpoint answering with
+# ONE gauge where the list endpoint answers with many, and the two conditional detail
+# families (flood-category thresholds, stageflow series) whose merge reduces a crest and
+# packs two series. ingest.enrich is ONE keyed detail set with a field join, so this row
+# keeps its enrich hook pair rather than growing that vocabulary for a single source.
 schema_version: v1
 name: fetch_nws_river_forecast
 source_class: nws_nwps_river_forecast
@@ -9,6 +15,10 @@ input_error_suffix: INPUT_ERROR
 endpoints:
   data:
     url: https://api.water.noaa.gov/nwps/v1/gauges
+    query:
+      srid: EPSG_4326
+  detail:
+    url_template: https://api.water.noaa.gov/nwps/v1/gauges/{gauge_id}
 auth:
   mode: none
   user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
@@ -19,6 +29,7 @@ params:
     required: false
     schema_optional: true
     quantize: round_6dp
+    error_suffix: BBOX_TOO_LARGE
   include_thresholds:
     type: bool
     required: false
@@ -31,6 +42,8 @@ params:
     type: bool
     required: false
     default: false
+gates:
+  max_bbox_deg2: 2000.0
 hooks:
   build_request: nws_river_forecast.build_request
   parse_response: nws_river_forecast.parse_response
@@ -39,29 +52,62 @@ hooks:
 ingest:
   chained:
     max_detail_fetches: 100
-  properties:
-  - lid
-  - usgs_id
-  - name
-  - rfc
-  - wfo
-  - state
-  - flood_category
-  - fcst_flood_category
-  - obs_valid_time
-  - fcst_valid_time
-  - fcst_crest_time
-  - obs_series_json
-  - fcst_series_json
-  - obs_stage_ft
-  - obs_flow_kcfs
-  - fcst_stage_ft
-  - fcst_flow_kcfs
-  - action_stage_ft
-  - minor_stage_ft
-  - moderate_stage_ft
-  - major_stage_ft
-  - fcst_crest_stage_ft
+  endpoint_select:
+    param: gauge_id
+    present: detail
+    absent: data
+  request:
+    params:
+      bbox.xmin: '{bbox[0]}'
+      bbox.ymin: '{bbox[1]}'
+      bbox.xmax: '{bbox[2]}'
+      bbox.ymax: '{bbox[3]}'
+  body:
+    format: json
+    rows_path: gauges
+    geometry:
+      kind: point
+      lon: longitude
+      lat: latitude
+  geometry_filter:
+    geom_types: [Point]
+    require_finite: true
+  column_map:
+    lid: {from: lid, kind: str}
+    usgs_id: {from: usgsId, kind: str}
+    name: {from: name, kind: str}
+    rfc: {from: rfc.abbreviation, kind: str}
+    wfo: {from: wfo.abbreviation, kind: str}
+    state: {from: state.abbreviation, kind: str}
+    flood_category:
+      from: status.observed.floodCategory
+      kind: lookup
+      table: {no_flooding: no_flood}
+      default_template: '{key}'
+    fcst_flood_category:
+      from: status.forecast.floodCategory
+      kind: lookup
+      table: {no_flooding: no_flood}
+      default_template: '{key}'
+    obs_valid_time: {from: status.observed.validTime, kind: str}
+    fcst_valid_time: {from: status.forecast.validTime, kind: str}
+    fcst_crest_time: {from: fcst_crest_time, kind: str}
+    obs_series_json: {from: obs_series_json, kind: str}
+    fcst_series_json: {from: fcst_series_json, kind: str}
+    obs_stage_ft: {from: status.observed.primary, kind: float, null_below: -999.0}
+    obs_flow_kcfs: {from: status.observed.secondary, kind: float, null_below: -999.0}
+    fcst_stage_ft: {from: status.forecast.primary, kind: float, null_below: -999.0}
+    fcst_flow_kcfs: {from: status.forecast.secondary, kind: float, null_below: -999.0}
+    action_stage_ft: {from: flood.categories.action.stage, kind: float, null_below: -999.0}
+    minor_stage_ft: {from: flood.categories.minor.stage, kind: float, null_below: -999.0}
+    moderate_stage_ft: {from: flood.categories.moderate.stage, kind: float, null_below: -999.0}
+    major_stage_ft: {from: flood.categories.major.stage, kind: float, null_below: -999.0}
+    fcst_crest_stage_ft: {from: fcst_crest_stage_ft, kind: float, null_below: -999.0}
+  empty:
+    code: NO_GAUGES
+    message: >-
+      No NWS river/forecast gauges (AHPS/NWPS) found in scope. The NWPS gauges service
+      returned zero forecast points: this area is not on a forecast river reach.
 normalize:
   crs: EPSG:4326
   units: ft (river stage) + flood category
