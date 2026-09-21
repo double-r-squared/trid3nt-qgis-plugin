@@ -1,0 +1,18 @@
+fetch_osm_features:
+- show me the roads in this flood impact area
+- give me road network for evacuation routing context
+- I need carriageway centerlines for this county
+- overlay roads on the flood inundation map
+- fetch OSM roads for the wildfire evacuation corridor
+- map every OpenStreetMap feature tagged man_made=water_tower here
+- overlay schools and pharmacies on the map
+- find places of worship that could serve as shelters
+- fetch OSM points for amenity=fuel gas stations here
+- which supermarkets are inside the inundation footprint
+- map all the fire hydrants in these blocks
+- show me where the coastline runs here
+- cut the mesh domain from the real land-water edge
+- show me the breakwater protecting this harbor
+- what structure shelters the marina here
+- overlay the coastal wave barriers on the map
+- get the harbor breakwater so the agitation run can mesh it

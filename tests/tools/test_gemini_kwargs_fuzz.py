@@ -113,7 +113,7 @@ _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
     "fetch_nws_event": {"area": "FLZ055"},
     "fetch_population": {"bbox": _SAMPLE_BBOX},
     "fetch_river_geometry": {"bbox": _SAMPLE_BBOX},
-    "fetch_roads_osm": {"bbox": _SAMPLE_BBOX},
+    "fetch_osm_features": {"bbox": _SAMPLE_BBOX, "feature": "roads"},
     "fetch_storm_events_db": {"year": 2022},
     "geocode_location": {"query": "Fort Myers, FL"},
     "lookup_precip_return_period": {

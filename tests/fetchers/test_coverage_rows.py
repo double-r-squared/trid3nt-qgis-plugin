@@ -156,7 +156,7 @@ def test_the_nearest_station_is_what_a_listed_set_is_measured_from():
 #: water and nothing about WHICH water: the row's vocabulary is what a need
 #: selects on, and a source that stops publishing a feature has to say so.
 _HYDROGRAPHY_FEATURES = {
-    "fetch_osm_coastline": {"coastline"},
+    "fetch_osm_features": {"coastline"},
     "fetch_river_geometry": {"channel network", "drainage network"},
     "fetch_river_reach": {"reach"},
     "fetch_watershed": {"basin"},

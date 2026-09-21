@@ -103,7 +103,7 @@ DOC = dict(
         "an average. Wave: `WAVE PERIOD` 8 s, `DIRECTION OF WAVE PROPAGATION` 90 "
         "deg (trig from +x) - set either by name. THE STRUCTURE IS THE "
         "QUESTION and is REQUIRED: `structure=` a breakwater layer "
-        "(`fetch_osm_breakwaters`) or a drawn line. Give `domain=` the water as "
+        "(`fetch_osm_features`) or a drawn line. Give `domain=` the water as "
         "an outline or a polygon layer, or `extent=` a rectangle the "
         "coastline cuts into water."
     ),
@@ -132,7 +132,7 @@ DOC = dict(
          "has sounded."),
         ("structure",
          "REQUIRED. The barrier the question is about, as a polyline LAYER (the "
-         "uri or handle from fetch_osm_breakwaters, or any line layer the user "
+         "uri or handle from fetch_osm_features feature='breakwaters', or any line layer the user "
          "has) or a drawn/typed line as [[lon, lat], ...]. Producer-less BY "
          "DESIGN - this tool will never go and find a structure you did not name. "
          "It is cut out of the water domain at `barrier_width_m` and its faces "

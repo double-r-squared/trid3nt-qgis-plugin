@@ -1,0 +1,196 @@
+# One Overpass interpreter, four feature classes. The API is asked once per
+# call under a ``feature`` param; each class states its own tag vocabulary,
+# clip-or-whole rule and property set below. Waterways (fetch_river_geometry)
+# stays a SEPARATE source: its hydrography row already carries two vocabulary
+# words (channel/drainage network) distinguished by a SECOND param
+# (waterway_type), and a vocabulary word here resolves to exactly one param
+# value, so a coastline row here would either collide with it (one row per
+# data class and kind) or force the channel/drainage distinction to collapse.
+# roads/pois/breakwaters state no coverage row: none is one of the classes a
+# slot asks for, so nothing here would find them by class either.
+schema_version: v1
+name: fetch_osm_features
+source_class: osm_features
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: NO_FEATURES
+shape: vector-fgb
+supports_global_query: false
+endpoints:
+  data:
+    url: https://overpass-api.de/api/interpreter
+  kumi:
+    url: https://overpass.kumi.systems/api/interpreter
+  coffee:
+    url: https://overpass.private.coffee/api/interpreter
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  feature:
+    type: enum
+    required: true
+    values:
+    - roads
+    - pois
+    - coastline
+    - breakwaters
+  road_classes:
+    type: str_list
+    default:
+    - motorway
+    - motorway_link
+    - primary
+    - primary_link
+    - secondary
+    - tertiary
+    - trunk
+    - trunk_link
+  tag:
+    type: str
+    schema_optional: true
+  amenity:
+    type: str
+    schema_optional: true
+  category:
+    type: str
+    schema_optional: true
+  value:
+    type: str
+    schema_optional: true
+  structure_type:
+    type: str_list
+    default:
+    - breakwater
+    - groyne
+hooks:
+  delegate: osm_features.delegate
+  delegate_validate: osm_features.validate
+ingest:
+  delegate: {library: osmnx, timeout_s: 180}
+  properties_by_param:
+    param: feature
+    map:
+      roads: [osm_id, name, highway, lanes, maxspeed]
+      pois: [osm_id, osm_type, name, key, value, tags_json]
+      coastline: [osm_id, name, natural]
+      breakwaters: [osm_id, name, man_made]
+normalize:
+  crs: EPSG:4326
+output:
+  layer_type: vector
+  ext: fgb
+  role: context
+  style:
+    kind: reference
+    geometry: line
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 400.0
+  kb_per_feature: 2.0
+  floor_mb: 0.01
+coverage:
+- data_class: hydrography
+  kind: measured
+  extent:
+    kind: surface
+    rings:
+      - [[-180.0, -90.0], [180.0, -90.0], [180.0, 90.0], [-180.0, 90.0]]
+    note: OpenStreetMap natural=coastline ways, global and keyless; an inland
+      place has none, which is a fact about the place
+  window:
+    series: false
+  datum: null
+  units: {}
+  ask: {feature: coastline}
+  vocabulary:
+    coastline: coastline
+
+caveats:
+- "OpenStreetMap features via the Overpass API (3-mirror fallback), one class per
+  call under feature. Global, keyless. roads clips to the exact bbox (a network
+  is measured inside an area); coastline and breakwaters are returned WHOLE,
+  uncut (an edge or a solid barrier clipped at the AOI edge would misstate what
+  it is); pois reduces any element to its representative point and refuses a
+  zero-match ask by name rather than an empty-success layer."
+- "model-callable, not matched: roads/pois/breakwaters are not classes a slot
+  asks for, so they carry no coverage row (coastline does and is the row above)"
+docstring: |-
+  OpenStreetMap features via Overpass -- one interpreter, four feature classes.
+
+  **What it does:** Queries the OpenStreetMap Overpass API (3-mirror fallback)
+  for the class named by ``feature`` inside the requested bbox and returns it
+  as a FlatGeobuf, cached 30 days. Global, keyless. The vector renders inline
+  on the map automatically.
+
+  - ``feature="roads"``: ``highway``-tagged ways CLIPPED to the exact bbox, one
+    LineString per in-AOI road segment. Properties: ``osm_id``, ``name``,
+    ``highway``, ``lanes``, ``maxspeed``.
+  - ``feature="pois"``: any ``key=value``-tagged node/way/relation reduced to a
+    Point (way/relation at their bbox centre). Properties: ``osm_id``,
+    ``osm_type``, ``name``, ``key``, ``value``, ``tags_json`` (the full tag
+    dict). Zero matches raises a typed refusal, never an empty-success layer.
+  - ``feature="coastline"``: ``natural=coastline`` ways returned WHOLE
+    (unclipped) so the land-water edge's side is never cut away. Properties:
+    ``osm_id``, ``name``, ``natural``. An inland bbox is a valid 0-feature
+    answer -- a lake shore is ``natural=water``, not a coastline.
+  - ``feature="breakwaters"``: ``man_made=breakwater``/``groyne`` ways returned
+    WHOLE (a barrier clipped at the AOI edge would open a gap it does not have).
+    Properties: ``osm_id``, ``name``, ``man_made``. ``man_made=pier`` is
+    excluded by design -- a pier is the dock being sheltered, not a barrier.
+
+  **When to use:**
+  - "show the roads" / evacuation or accessibility context -> ``feature="roads"``.
+  - "show the hospitals / schools / fire hydrants / any OSM tag" ->
+    ``feature="pois"`` with ``amenity=``/``tag=``/``category=``/``value=``.
+  - the mesh seam cutting a domain from the real land-water edge, or "where
+    does the shore run" -> ``feature="coastline"``.
+  - feeding ``artemis_harbor_agitation``'s ``structure`` slot, or "what
+    protects this harbour" -> ``feature="breakwaters"``.
+
+  **When NOT to use:**
+  - DO NOT use ``roads`` for parcel/lot boundaries -- use
+    ``fetch_administrative_boundaries``.
+  - DO NOT use ``pois`` for US critical-infrastructure categories where
+    ``fetch_hifld_critical_infrastructure`` is the curated federal source, or
+    for building footprint polygons -- use ``fetch_buildings``.
+  - DO NOT use ``coastline`` for a lake/reservoir edge (``natural=water``
+    polygons carry no coastline way) or as bathymetry/a tidal datum.
+  - DO NOT use ``breakwaters`` for piers/docks (excluded by design) or for
+    engineering-grade cross-section geometry -- OSM ways are surveyed
+    centrelines with no crest elevation.
+  - DO NOT use for river/stream/canal geometry -- ``fetch_river_geometry`` is
+    the waterway family (its own Overpass source, a channel network needs its
+    own bbox-area cap this source does not carry).
+
+  **Parameters:**
+  - ``bbox`` (tuple[float, float, float, float]): ``(min_lon, min_lat,
+    max_lon, max_lat)`` in EPSG:4326. Required.
+  - ``feature`` (str): one of ``"roads"``, ``"pois"``, ``"coastline"``,
+    ``"breakwaters"``. Required.
+  - ``road_classes`` (list[str] | None, ``roads`` only): OSM ``highway`` tag
+    values. ``None`` returns the default major-plus-arterial set.
+  - ``amenity`` / ``tag`` / ``category`` / ``value`` (str, ``pois`` only): the
+    tag selector, checked in that priority order. Exactly one selector must
+    resolve to a ``key=value`` pair.
+  - ``structure_type`` (list[str] | None, ``breakwaters`` only): ``man_made``
+    barrier values. ``None`` returns both ``breakwater`` and ``groyne``.
+
+  **Returns:** A ``LayerURI`` pointing at a FlatGeobuf in the cache bucket
+  (``.../cache/static-30d/osm_features/<key>.fgb``). ``layer_type="vector"``,
+  ``role="context"``. Properties per feature vary by ``feature`` (listed
+  above); an honest-empty header-only FGB still carries the declared columns.
+
+  **Errors:**
+  - ``OSM_FEATURES_INPUT_INVALID``: bad bbox, unknown ``feature``, unresolved
+    POI tag, or an unknown class token (retryable=False).
+  - ``OSM_FEATURES_UPSTREAM_ERROR``: every Overpass mirror failed
+    (retryable=True).
+  - ``OSM_FEATURES_NO_FEATURES``: a ``pois`` ask matched zero elements
+    (retryable=False).

@@ -59,9 +59,9 @@ def test_the_coastline_is_the_only_hydrography_source_this_row_can_take():
     choice = match(Need(slot="domain", data_class=domain.data_class,
                         lon=-71.36, lat=41.36, of=domain.observes,
                         geometry=domain.geometry), sources_with_coverage())
-    assert choice.picked == "fetch_osm_coastline"
+    assert choice.picked == "fetch_osm_features"
     assert [row.fetcher for row in choice.rows if not row.excluded] == [
-        "fetch_osm_coastline"]
+        "fetch_osm_features"]
 
 
 def test_the_extent_is_a_slot_the_canvas_offers_a_rectangle_for():

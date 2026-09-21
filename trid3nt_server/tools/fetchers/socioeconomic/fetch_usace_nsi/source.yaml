@@ -189,7 +189,7 @@ docstring: |-
         ``fetch_buildings`` elsewhere.
       - Complementary to ``fetch_hrsl_population`` (population grid),
         ``fetch_administrative_boundaries`` (admin polygons for zonal
-        aggregation), and ``fetch_roads_osm`` (road network) for full
+        aggregation), and ``fetch_osm_features`` (feature="roads") for full
         exposure-context layers.
 
   Cache: ``static-30d`` (the NSI is rebuilt by USACE on a ~quarterly
