@@ -1,8 +1,9 @@
 """nws_alerts_conus hooks: active alerts with zone-polygon enrichment.
 
-The main fetch is a single active-alerts GET, decoded, event-type filtered and
-projected, stashing each alert's zone references. An alert carrying NULL inline geometry
-is then ENRICHED with the union of its resolved zone polygons, so it draws on the map."""
+The main fetch is a single active-alerts GET, decoded, event-type filtered, stashing
+each alert's zone references; the declared column_map projects the raw NWS properties
+down to the preserved set. An alert carrying NULL inline geometry is then ENRICHED with
+the union of its resolved zone polygons, so it draws on the map."""
 
 # The zone fetches are best-effort, deduped and capped. An alert whose zones cannot be
 # resolved KEEPS its row with null geometry: never fabricated, never silently dropped.
@@ -23,14 +24,6 @@ __all__ = ["build_request", "parse_response", "enrich_plan", "enrich_merge"]
 _NWS_BASE = "https://api.weather.gov"
 _ALERTS_URL = f"{_NWS_BASE}/alerts/active"
 _VALID_STATUSES = frozenset({"actual", "exercise", "system", "test", "draft"})
-
-#: Properties preserved from each NWS alert feature.
-_PRESERVED_PROPERTIES = (
-    "event", "headline", "description", "severity", "urgency", "certainty",
-    "effective", "onset", "ends", "expires", "senderName", "sender",
-    "category", "messageType", "status", "areaDesc", "instruction",
-    "response", "id",
-)
 
 
 def _headers(spec: SourceSpec) -> dict[str, str]:
@@ -143,16 +136,13 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
         props = feat.get("properties") or {}
         if allowed and not _matches_event_types(props, allowed):
             continue
-        row: dict[str, Any] = {}
-        for key in _PRESERVED_PROPERTIES:
-            v = props.get(key)
-            if isinstance(v, (dict, list)):
-                v = json.dumps(v)
-            row[key] = v
+        # The declared column_map projects the raw NWS properties down to the 18
+        # preserved fields; affectedZones / geocode ride along for the zone stash below
+        # and fall away at the projection.
         out.append({
             "type": "Feature",
             "geometry": feat.get("geometry"),
-            "properties": row,
+            "properties": dict(props),
             "_zone_urls": _zone_urls_for_feature(props),
         })
     return out

@@ -40,26 +40,26 @@ hooks:
 ingest:
   chained:
     max_detail_fetches: 2500
-  properties:
-  - event
-  - headline
-  - description
-  - severity
-  - urgency
-  - certainty
-  - effective
-  - onset
-  - ends
-  - expires
-  - senderName
-  - sender
-  - category
-  - messageType
-  - status
-  - areaDesc
-  - instruction
-  - response
-  - id
+  column_map:
+    event: {from: event}
+    headline: {from: headline}
+    description: {from: description}
+    severity: {from: severity}
+    urgency: {from: urgency}
+    certainty: {from: certainty}
+    effective: {from: effective}
+    onset: {from: onset}
+    ends: {from: ends}
+    expires: {from: expires}
+    senderName: {from: senderName}
+    sender: {from: sender}
+    category: {from: category}
+    messageType: {from: messageType}
+    status: {from: status}
+    areaDesc: {from: areaDesc}
+    instruction: {from: instruction}
+    response: {from: response}
+    id: {from: id}
 normalize:
   crs: EPSG:4326
 output:
