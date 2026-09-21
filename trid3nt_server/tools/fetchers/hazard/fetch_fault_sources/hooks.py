@@ -1,13 +1,8 @@
-"""fault_sources hooks: GEM active faults.
+"""fault_sources hooks: the kinematics GEM states in prose.
 
-``build_request`` is ONE GET of the whole-world harmonized GeoJSON -- the AOI never
-enters the URL -- and ``parse_response`` bbox-filters and kinematic-parses it. A zero-
-fault AOI returns no feature, so the emptiness switch answers with a record."""
-
-# The kinematic parse is the irreducible step: the '(best,min,max)' triple, the
-# two-distinct-vertex and positive-slip gate, and the published depth, dip and rake
-# defaults. ``envelope`` reads the kinematic record, legend and count back off the
-# produced FGB, and ``empty_record`` is the dict a zero-fault AOI answers with.
+``parse_response`` bbox-filters the whole-world harmonized GeoJSON the declared
+request downloads once, and reads each fault's kinematics out of it. A zero-fault AOI
+returns no feature, so the emptiness switch answers with a record."""
 
 # The kinematic parse is the irreducible step: the '(best,min,max)' triple, the
 # two-distinct-vertex and positive-slip gate, and the published depth, dip and rake
@@ -25,15 +20,7 @@ from trid3nt_contracts.source_spec import SourceSpec
 from ..._router import hooks as _hooks
 from ..._router.errors import router_upstream_error
 
-__all__ = ["build_request", "parse_response", "envelope", "empty_record"]
-
-#: GEM Global Active Faults, harmonized GeoJSON (worldwide; ~10.6 MB, 13696
-#: faults). Versioned research artifact -> 30-day constant-cache tier.
-GEM_GAF_URL = (
-    "https://raw.githubusercontent.com/GEMScienceTools/"
-    "gem-global-active-faults/master/geojson/"
-    "gem_active_faults_harmonized.geojson"
-)
+__all__ = ["parse_response", "envelope", "empty_record"]
 
 #: Provenance label, mirrored on both the dict and LayerURI return shapes.
 _SOURCE_LABEL = "GEM Global Active Faults (harmonized)"
@@ -134,14 +121,6 @@ def _parse_fault_feature(feature: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-
-
-@_hooks.register_hook("fault_sources.build_request")
-def build_request(spec: SourceSpec, params: dict[str, Any]) -> list["_hooks.RequestPlan"]:
-    """ONE GET of the whole-world GEM GAF file (fetched via constant_cache)."""
-    endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
-    url = endpoint.url or GEM_GAF_URL
-    return [_hooks.RequestPlan(url=url, headers={"User-Agent": spec.auth.user_agent})]
 
 
 @_hooks.register_hook("fault_sources.parse_response")

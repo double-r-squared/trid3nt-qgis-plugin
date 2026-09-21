@@ -162,8 +162,10 @@ def test_empty_record_shape(spec):
     assert rec["source"] == "GEM Global Active Faults (harmonized)"
 
 
-def test_build_request_constant_file(spec):
-    plans = fsh.build_request(spec, {"bbox": _SF_BBOX})
+def test_the_request_is_the_one_whole_world_file(spec):
+    from trid3nt_server.tools.fetchers._router.executors import http_json
+
+    plans = http_json._plans(spec, {"bbox": _SF_BBOX})
     assert len(plans) == 1
     assert plans[0].url.endswith("gem_active_faults_harmonized.geojson")
     assert "User-Agent" in plans[0].headers

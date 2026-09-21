@@ -31,10 +31,11 @@ params:
     - gem
     lowercase: true
 hooks:
-  build_request: fault_sources.build_request
   parse_response: fault_sources.parse_response
   envelope: fault_sources.envelope
 ingest:
+  access: http_json
+  request: {}
   http_source: {}
   constant_cache:
     file_id: gem_active_faults_harmonized
