@@ -75,6 +75,14 @@ package ToolPlane {
         */
     }
 
+    part def ConnectGate {
+        doc /*
+        The handshake in front of the wire: the token the daemon holds, the
+        presented one verified against it, and the refusal that closes a
+        connection carrying anything else.
+        */
+    }
+
     part def ConnectionLoop {
         doc /*
         The websocket loop, where the session's answer arrives and resolves
@@ -272,6 +280,18 @@ package ToolPlane {
         port responseIn : ResponseIn;
     }
 
+    part connectGate : ConnectGate {
+        doc /*
+        code: trid3nt_server/server/protocol/auth.py
+        */
+    }
+
+    part mintedToken : ConnectGate {
+        doc /*
+        code: trid3nt_server/credentials/auth_handshake.py
+        */
+    }
+
     part connectionLoop : ConnectionLoop {
         doc /*
         code: trid3nt_server/server/protocol/loop.py
@@ -397,6 +417,22 @@ package ToolPlane {
         */
     }
 
+    requirement def TheConnectGateIsAlwaysOn {
+        doc /*
+        One token is the one user, and presenting it is the whole of becoming
+        that user. The daemon mints the token at first start into its own
+        config, prints it once, and from then on verifies what a connection
+        presents against it; nothing about the socket's origin substitutes for
+        the string, because a process on this machine is not the person.
+
+        A connection presenting nothing, or the wrong token, is refused typed
+        and closed, and an envelope arriving before the handshake gets the same
+        refusal rather than the turn loop. The gate fails CLOSED: a daemon
+        holding no token matches nothing. Nothing here mints an identity - the
+        session it binds is the one user the token stands for.
+        */
+    }
+
     requirement def AnOverlayIsNeverAnInput {
         doc /*
         A borrowed provider layer opened in mode open is context on the user's
@@ -481,6 +517,24 @@ package ToolPlane {
         "tests/derive/test_session_tools.py::test_an_error_reply_is_the_sessions_own_message";
     verify requirement ASessionAnswersOrRefuses by
         "tests/derive/test_session_tools.py::test_a_cross_session_reply_is_refused";
+
+    satisfy requirement TheConnectGateIsAlwaysOn by connectGate;
+    satisfy requirement TheConnectGateIsAlwaysOn by mintedToken;
+    satisfy requirement TheConnectGateIsAlwaysOn by connectionLoop;
+    verify requirement TheConnectGateIsAlwaysOn by
+        "tests/credentials/test_auth_handshake.py::test_mints_token_once_into_the_config_file";
+    verify requirement TheConnectGateIsAlwaysOn by
+        "tests/credentials/test_auth_handshake.py::test_env_override_mints_nothing";
+    verify requirement TheConnectGateIsAlwaysOn by
+        "tests/credentials/test_remote_daemon_access.py::test_verify_access_token_fails_closed_without_a_token";
+    verify requirement TheConnectGateIsAlwaysOn by
+        "tests/credentials/test_remote_daemon_access.py::test_correct_token_binds";
+    verify requirement TheConnectGateIsAlwaysOn by
+        "tests/credentials/test_remote_daemon_access.py::test_wrong_token_typed_close";
+    verify requirement TheConnectGateIsAlwaysOn by
+        "tests/credentials/test_remote_daemon_access.py::test_token_less_auth_envelope_typed_close";
+    verify requirement TheConnectGateIsAlwaysOn by
+        "tests/credentials/test_remote_daemon_access.py::test_pre_handshake_envelope_is_refused";
 
     satisfy requirement AnOverlayIsNeverAnInput by borrowedProvider;
     satisfy requirement AnOverlayIsNeverAnInput by providerOpener;
