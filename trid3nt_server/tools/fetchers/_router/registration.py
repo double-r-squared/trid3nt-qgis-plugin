@@ -17,6 +17,7 @@ from typing import Any
 from trid3nt_contracts.source_spec import SourceSpec
 
 from . import router
+from .params import annotation_for
 from .executors.qgis_provider import ACCESS as QGIS_PROVIDER_ACCESS
 from .spec import compose_specs_from_tree
 
@@ -54,32 +55,6 @@ def catalog_arm() -> str | None:
     return val if val in ("1", "2", "3") else None
 
 
-def _annotation_for(ptype: str) -> Any:
-    """The schema-compatible Python annotation for a spec param type: bbox becomes
-    ``list[float]``, int and float pass through, and every string-ish type
-    (``iso_date`` / ``enum`` / ``str``) becomes ``str``."""
-    if ptype == "bbox":
-        return list[float]
-    if ptype == "point":
-        return list[float]
-    if ptype == "int_range":
-        return list[int]
-    if ptype == "datetime_range":
-        return list[str]
-    if ptype == "float_list":
-        return list[float]
-    if ptype == "str_list":
-        return list[str]
-    if ptype == "bool":
-        return bool
-    if ptype == "int":
-        return int
-    if ptype == "float":
-        return float
-    # iso_date / enum / str / date_compact -> str.
-    return str
-
-
 def promoted_signature(spec: SourceSpec) -> tuple[inspect.Signature, dict[str, Any]]:
     """Synthesize the promoted tool's signature and annotations from ``spec.params``:
     required params first, defaulted next, then a VAR_KEYWORD absorber. A param is
@@ -88,27 +63,16 @@ def promoted_signature(spec: SourceSpec) -> tuple[inspect.Signature, dict[str, A
     optional: list[inspect.Parameter] = []
     annotations: dict[str, Any] = {}
     for pname, pspec in spec.params.items():
-        ann = _annotation_for(pspec.type)
+        ann = annotation_for(pspec)
+        annotations[pname] = ann
         if pspec.required and pspec.default is None:
-            annotations[pname] = ann
             required.append(
                 inspect.Parameter(pname, inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=ann)
             )
         else:
-            # The adapter marks a None-default NON-Optional annotation as
-            # required-in-schema (min_voltage_kv / year_range / date rely on that).
-            # A param declared ``T | None = None`` is NOT required; ``schema_optional``
-            # reproduces that by annotating ``X | None``, so the adapter keeps it out
-            # of required (wqp bbox, nldi seed_point / comid).
-            opt_ann = (ann | None) if (pspec.default is None and getattr(pspec, "schema_optional", False)) else ann
-            annotations[pname] = opt_ann
             optional.append(
-                inspect.Parameter(
-                    pname,
-                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                    default=pspec.default,
-                    annotation=opt_ann,
-                )
+                inspect.Parameter(pname, inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                                  default=pspec.default, annotation=ann)
             )
     params = required + optional + [
         inspect.Parameter("_extra_ignored", inspect.Parameter.VAR_KEYWORD, annotation=Any)
