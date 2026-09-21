@@ -30,7 +30,12 @@ params:
   parameter:  {type: str, schema_optional: true}
 
 ingest:
-  # Both plans are fetched and the parse hook joins them: the readings carry the
+  access: library_delegate
+  delegate:
+    library: dataretrieval
+    # get_iv + the expanded get_info both run inside one call.
+    timeout_s: 60.0
+  # Both calls run and the delegate hook joins them: the readings carry the
   # gauge's own zero, which only the expanded Site record publishes.
   # Per-mode FGB column schema, pinned by the derived _mode.
   properties_by_param:
@@ -41,9 +46,7 @@ ingest:
 
 hooks:
   pre_resolve: usgs_nwis.resolve
-  build_request: usgs_nwis.build_request
-  parse_response: usgs_nwis.parse
-  classify_status: usgs_nwis.classify_status
+  delegate: usgs_nwis.read
 
 normalize:
   crs: "EPSG:4326"

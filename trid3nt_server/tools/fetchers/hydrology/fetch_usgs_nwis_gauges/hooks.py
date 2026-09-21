@@ -1,24 +1,24 @@
-"""USGS NWIS stream-gauge hooks: the mode switch and the parse fallback.
+"""USGS NWIS stream-gauge hooks: the mode switch, then the dataretrieval read.
 
-``resolve`` derives a ``_mode`` param pre-cache-key, so the declarative surface can pin
-a per-mode column schema and units; ``build_request`` emits an ORDERED plan pair and
-``parse`` self-detects each body, so an empty primary degrades to the second."""
+``pre_resolve`` derives a ``_mode`` param pre-cache-key, so the declarative surface can
+pin a per-mode column schema and units; ``read`` calls ``dataretrieval.nwis`` (IV then
+the expanded Site record) and joins them, so every reading carries the gauge's own
+zero. IV empty degrades to station locations from the Site call; both empty is the
+source's honest no-stations refusal."""
 
 from __future__ import annotations
 
-import json
 import math
 import re
 from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
 
-from ..._router.errors import (
-    RouterError, router_empty_error, router_input_error, router_upstream_error)
-from ..._router.hooks import RequestPlan, register_hook
+from ..._router.errors import router_empty_error, router_input_error, router_upstream_error
+from ..._router.hooks import register_hook
 
-_IV_URL = "https://waterservices.usgs.gov/nwis/iv/"
-_SITE_URL = "https://waterservices.usgs.gov/nwis/site/"
+__all__ = ["resolve", "read"]
+
 _PARAM_DISCHARGE = "00060"
 _PARAM_GAGE_HEIGHT = "00065"
 _PARAM_TEMPERATURE = "00010"
@@ -34,10 +34,6 @@ _COLUMNS: dict[str, tuple[str, str]] = {
 }
 _MAX_BBOX_SQ_DEG = 24.5
 _MAX_WINDOW_DAYS = 120
-_USER_AGENT = (
-    "trid3nt/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
-)
 
 _VALID_STATE_CODES: frozenset[str] = frozenset(
     {
@@ -49,8 +45,6 @@ _VALID_STATE_CODES: frozenset[str] = frozenset(
         "DC", "PR", "VI", "GU", "AS", "MP",
     }
 )
-
-
 
 
 def _resolve_window(sc: str, sfx: str, start_date: Any, end_date: Any, period: Any):
@@ -153,290 +147,189 @@ def resolve(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-
-
-def _selector_params(state_code: str | None, bbox: list[float] | None) -> dict[str, str]:
+def _selector_kwargs(state_code: str | None, bbox: list[float] | None) -> dict[str, str]:
     if state_code is not None:
         return {"stateCd": state_code}
     w, s, e, n = bbox  # type: ignore[misc]
     return {"bBox": f"{w},{s},{e},{n}"}
 
 
-@register_hook("usgs_nwis.build_request")
-def build_request(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan]:
-    """[IV, Site] in both modes. The Site service is asked with the EXPANDED
-    output because that is the only place the gauge's own datum is published,
-    and a stage read without the zero it is counted from is not an elevation."""
-    state_code = params.get("state_code")
-    bbox = params.get("bbox")
-    window = params.get("window")
-    sel = _selector_params(state_code, bbox)
-    headers = {"User-Agent": _USER_AGENT}
-    parameter_cd = str(params.get("parameter") or _PARAMETER_CD)
-
-    iv_params: dict[str, str] = {"format": "json", "siteStatus": "active", "parameterCd": parameter_cd, **sel}
-    if isinstance(window, str):
-        iv_params["period"] = window
-    elif isinstance(window, (list, tuple)):
-        iv_params["startDT"] = str(window[0])
-        iv_params["endDT"] = str(window[1])
-    iv_plan = RequestPlan(url=_IV_URL, params=iv_params, headers=headers)
-
-    site_params = {"format": "rdb", "siteStatus": "active", "hasDataTypeCd": "iv",
-                   "siteOutput": "expanded", "parameterCd": parameter_cd, **sel}
-    site_plan = RequestPlan(url=_SITE_URL, params=site_params, headers=headers)
-    return [iv_plan, site_plan]
-
-
+def _map_http_error(spec: SourceSpec, exc: Exception) -> None:
+    prefix = spec.error_code_prefix
+    status = getattr(exc, "status_code", None)
+    if status == 400:
+        raise router_input_error(prefix, f"upstream rejected the request (HTTP 400): {exc}", spec.input_error_suffix)
+    raise router_upstream_error(prefix, f"{type(exc).__name__}: {exc}")
 
 
 def _feature(lon: float, lat: float, props: dict[str, Any]) -> dict[str, Any]:
     return {"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]}, "properties": props}
 
 
-def _parse_iv_json(sc: str, raw: bytes) -> list[dict[str, Any]]:
-    """Latest-instantaneous IV WaterML-JSON to 5-field Point features."""
-    if not raw:
-        return []
-    try:
-        obj = json.loads(raw.decode("utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise router_upstream_error(sc, f"USGS IV response is not valid JSON: {exc}")
-    series = (obj.get("value") or {}).get("timeSeries") or []
+def _readings_by_site(iv_df: Any, parameter_cd: str, mode: str) -> dict[str, dict[str, Any]]:
+    """Group ``get_iv``'s long DataFrame (one row per timestep) by ``site_no`` into
+    one record per site, latest-value columns for ``instantaneous`` and full inline
+    series + rollups for ``hydrograph``."""
     by_site: dict[str, dict[str, Any]] = {}
-    for ts in series:
-        source = ts.get("sourceInfo") or {}
-        site_codes = source.get("siteCode") or []
-        if not site_codes:
-            continue
-        site_no = str(site_codes[0].get("value") or "").strip()
-        if not site_no:
-            continue
-        site_name = str(source.get("siteName") or "").strip()
-        geo = (source.get("geoLocation") or {}).get("geogLocation") or {}
-        try:
-            lat = float(geo.get("latitude"))
-            lon = float(geo.get("longitude"))
-        except (TypeError, ValueError):
-            continue
-        if not (math.isfinite(lat) and math.isfinite(lon)):
-            continue
-        var_codes = (ts.get("variable") or {}).get("variableCode") or []
-        param = str(var_codes[0].get("value") or "").strip() if var_codes else ""
-        latest_val: float | None = None
-        latest_dt: str | None = None
-        values_blocks = ts.get("values") or []
-        if values_blocks:
-            samples = values_blocks[0].get("value") or []
-            if samples:
-                last = samples[-1]
-                try:
-                    fv = float(last.get("value"))
-                    if fv > -999990.0:
-                        latest_val = fv
-                        latest_dt = str(last.get("dateTime") or "") or None
-                except (TypeError, ValueError):
-                    latest_val = None
-        rec = by_site.setdefault(site_no, {"site_no": site_no, "site_name": site_name, "lon": lon, "lat": lat,
-                                           "discharge_cfs": None, "gage_height_ft": None,
-                                           "water_temp_c": None, "reading_dt": None})
-        if site_name and not rec.get("site_name"):
-            rec["site_name"] = site_name
-        value_column = _COLUMNS.get(param, ("", ""))[0]
-        if value_column and latest_val is not None:
-            rec[value_column] = latest_val
-            if latest_dt and not rec["reading_dt"]:
-                rec["reading_dt"] = latest_dt
-    cols = ("site_no", "site_name", "discharge_cfs", "gage_height_ft", "water_temp_c", "reading_dt")
-    return [_feature(r["lon"], r["lat"], {k: r[k] for k in cols}) for r in by_site.values()]
+    if iv_df is None or len(iv_df) == 0 or "site_no" not in iv_df.columns:
+        return by_site
+    codes = [c for c in parameter_cd.split(",") if c in _COLUMNS]
+    for site_no, sub in iv_df.groupby("site_no"):
+        site_no = str(site_no)
+        rec = by_site.setdefault(site_no, {
+            "site_no": site_no, "discharge_cfs": None, "gage_height_ft": None,
+            "water_temp_c": None, "reading_dt": None,
+        })
+        if mode == "hydrograph":
+            rec.setdefault("time_series_csv", "")
+            rec.setdefault("stage_series_csv", "")
+            rec.setdefault("temp_series_csv", "")
+            rec.setdefault("time_start", None)
+            rec.setdefault("time_end", None)
+            rec.setdefault("n_timesteps", 0)
+            rec.setdefault("discharge_min_cfs", None)
+            rec.setdefault("discharge_max_cfs", None)
+            rec.setdefault("discharge_mean_cfs", None)
+        for code in codes:
+            if code not in sub.columns:
+                continue
+            value_column, series_column = _COLUMNS[code]
+            col = sub[code].dropna()
+            col = col[col > -999990.0]
+            if col.empty:
+                continue
+            if mode == "instantaneous":
+                idx = col.index.max()
+                rec[value_column] = float(col.loc[idx])
+                dt_str = idx.strftime("%Y-%m-%dT%H:%M:%S%z") if hasattr(idx, "strftime") else str(idx)
+                if not rec["reading_dt"]:
+                    rec["reading_dt"] = dt_str
+            else:
+                pairs = sorted((idx.strftime("%Y-%m-%dT%H:%M:%S%z") if hasattr(idx, "strftime") else str(idx), float(v))
+                                for idx, v in col.items())
+                rec[series_column] = "\n".join(f"{t},{v:.6f}" for t, v in pairs) + "\n"
+                rec[value_column] = pairs[-1][1]
+                if code == _PARAM_DISCHARGE:
+                    vals = [v for _t, v in pairs]
+                    rec["n_timesteps"] = len(vals)
+                    rec["time_start"] = pairs[0][0]
+                    rec["time_end"] = pairs[-1][0]
+                    rec["discharge_min_cfs"] = min(vals)
+                    rec["discharge_max_cfs"] = max(vals)
+                    rec["discharge_mean_cfs"] = sum(vals) / len(vals)
+                    rec["reading_dt"] = pairs[-1][0]
+                elif rec["reading_dt"] is None:
+                    rec["reading_dt"] = pairs[-1][0]
+    return by_site
 
 
-def _parse_iv_json_window(sc: str, raw: bytes) -> list[dict[str, Any]]:
-    """Windowed IV WaterML-JSON to 12-field hydrograph Point features."""
-    if not raw:
-        return []
-    try:
-        obj = json.loads(raw.decode("utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise router_upstream_error(sc, f"USGS IV (window) response is not valid JSON: {exc}")
-    series = (obj.get("value") or {}).get("timeSeries") or []
-    by_site: dict[str, dict[str, Any]] = {}
-    for ts in series:
-        source = ts.get("sourceInfo") or {}
-        site_codes = source.get("siteCode") or []
-        if not site_codes:
-            continue
-        site_no = str(site_codes[0].get("value") or "").strip()
-        if not site_no:
-            continue
-        site_name = str(source.get("siteName") or "").strip()
-        geo = (source.get("geoLocation") or {}).get("geogLocation") or {}
-        try:
-            lat = float(geo.get("latitude"))
-            lon = float(geo.get("longitude"))
-        except (TypeError, ValueError):
-            continue
-        if not (math.isfinite(lat) and math.isfinite(lon)):
-            continue
-        var_codes = (ts.get("variable") or {}).get("variableCode") or []
-        param = str(var_codes[0].get("value") or "").strip() if var_codes else ""
-        samples: list[tuple[str, float]] = []
-        values_blocks = ts.get("values") or []
-        if values_blocks:
-            for s in values_blocks[0].get("value") or []:
-                try:
-                    fv = float(s.get("value"))
-                except (TypeError, ValueError):
-                    continue
-                if fv <= -999990.0:
-                    continue
-                dt_s = str(s.get("dateTime") or "").strip()
-                if not dt_s:
-                    continue
-                samples.append((dt_s, fv))
-        rec = by_site.setdefault(site_no, {"site_no": site_no, "site_name": site_name, "lon": lon, "lat": lat,
-                                           "discharge_cfs": None, "gage_height_ft": None,
-                                           "water_temp_c": None, "reading_dt": None,
-                                           "time_series_csv": "", "stage_series_csv": "", "temp_series_csv": "",
-                                           "time_start": None, "time_end": None, "n_timesteps": 0,
-                                           "discharge_min_cfs": None, "discharge_max_cfs": None, "discharge_mean_cfs": None})
-        if site_name and not rec.get("site_name"):
-            rec["site_name"] = site_name
-        value_column, series_column = _COLUMNS.get(param, ("", ""))
-        if not samples or not value_column:
-            continue
-        # Each measurement's window is its own column beside the others: one
-        # gauge reports several quantities and a slot reads the one it opens on.
-        rec[series_column] = "\n".join(f"{dt_s},{v:.6f}" for dt_s, v in samples) + "\n"
-        rec[value_column] = samples[-1][1]
-        if param == _PARAM_DISCHARGE:
-            vals = [v for _dt_s, v in samples]
-            rec["n_timesteps"] = len(vals)
-            rec["time_start"] = samples[0][0]
-            rec["time_end"] = samples[-1][0]
-            rec["discharge_min_cfs"] = min(vals)
-            rec["discharge_max_cfs"] = max(vals)
-            rec["discharge_mean_cfs"] = sum(vals) / len(vals)
-            rec["reading_dt"] = samples[-1][0]
-        elif rec["reading_dt"] is None:
-            rec["reading_dt"] = samples[-1][0]
-    cols = ("site_no", "site_name", "discharge_cfs", "gage_height_ft", "water_temp_c", "reading_dt",
-            "time_series_csv", "stage_series_csv", "temp_series_csv",
-            "time_start", "time_end", "n_timesteps", "discharge_min_cfs", "discharge_max_cfs", "discharge_mean_cfs")
-    return [_feature(r["lon"], r["lat"], {k: r[k] for k in cols}) for r in by_site.values()]
+@register_hook("usgs_nwis.read")
+def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[dict[str, Any]]:
+    """Fetch through ``dataretrieval.nwis`` (IV, then the expanded Site record) and
+    join on ``site_no``: the readings carry each site's own zero. An empty IV
+    degrades to the station locations; both empty is the honest no-stations
+    refusal."""
+    import dataretrieval.nwis as nwis
+    from dataretrieval.exceptions import DataRetrievalError
 
-
-def _parse_site_rdb(sc: str, raw: bytes) -> list[dict[str, Any]]:
-    """Site-service RDB (tab-delimited) -> station-location Point features.
-
-    The EXPANDED output carries ``alt_va``, the elevation of the gauge's own
-    zero, and ``alt_datum_cd``, the frame that elevation is counted from. Both
-    ride every feature: a gage height is a height ABOVE that zero, and without
-    the two it cannot be placed on the frame a bed is painted on."""
-    if not raw:
-        return []
-    text = raw.decode("utf-8", errors="replace")
-    data_lines = [ln for ln in text.splitlines() if ln and not ln.startswith("#")]
-    if len(data_lines) < 3:
-        return []
-    header = data_lines[0].split("\t")
-    try:
-        i_site = header.index("site_no")
-        i_lat = header.index("dec_lat_va")
-        i_lon = header.index("dec_long_va")
-    except ValueError:
-        raise router_upstream_error(sc, f"USGS Site RDB missing required columns; got header {header[:12]}")
-    i_name = header.index("station_nm") if "station_nm" in header else None
-    i_alt = header.index("alt_va") if "alt_va" in header else None
-    i_datum = header.index("alt_datum_cd") if "alt_datum_cd" in header else None
-    features: list[dict[str, Any]] = []
-    for row in data_lines[2:]:
-        cols = row.split("\t")
-        if len(cols) <= max(i_site, i_lat, i_lon):
-            continue
-        site_no = cols[i_site].strip()
-        if not site_no:
-            continue
-        try:
-            lat = float(cols[i_lat])
-            lon = float(cols[i_lon])
-        except (TypeError, ValueError):
-            continue
-        if not (math.isfinite(lat) and math.isfinite(lon)):
-            continue
-        site_name = cols[i_name].strip() if (i_name is not None and len(cols) > i_name) else ""
-        features.append(_feature(lon, lat, {
-            "site_no": site_no, "site_name": site_name,
-            "discharge_cfs": None, "gage_height_ft": None, "water_temp_c": None,
-            "reading_dt": None,
-            "gauge_datum_ft": _number(cols, i_alt),
-            "vertical_datum": _word(cols, i_datum)}))
-    return features
-
-
-def _number(cols: list[str], index: int | None) -> float | None:
-    """One RDB column as a number, or ``None`` where the site states none."""
-    if index is None or len(cols) <= index:
-        return None
-    try:
-        return float(cols[index].strip())
-    except ValueError:
-        return None
-
-
-def _word(cols: list[str], index: int | None) -> str | None:
-    if index is None or len(cols) <= index:
-        return None
-    return cols[index].strip() or None
-
-
-@register_hook("usgs_nwis.parse")
-def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]) -> list[dict[str, Any]]:
-    """Both bodies at once: the readings, each carrying its own gauge datum.
-
-    A JSON body is the IV WaterML-JSON payload and anything else is the Site
-    RDB. The readings win and the site record DECORATES them with the zero the
-    stage is counted from; an empty IV degrades to the station locations, and
-    both empty is the source's honest no-stations refusal."""
     sc = spec.error_code_prefix
-    readings: list[dict[str, Any]] = []
-    sites: list[dict[str, Any]] = []
-    for body in bodies:
-        stripped = (body or b"").lstrip()
-        if not stripped:
-            continue
-        if stripped[:1] == b"{":
-            readings += (_parse_iv_json_window(sc, body)
-                         if params.get("_mode") == "hydrograph"
-                         else _parse_iv_json(sc, body))
-        else:
-            sites += _parse_site_rdb(sc, body)
+    sel = _selector_kwargs(params.get("state_code"), params.get("bbox"))
+    parameter_cd = str(params.get("parameter") or _PARAMETER_CD)
+    mode = params.get("_mode", "instantaneous")
+    window = params.get("window")
+    window_kwargs: dict[str, str] = {}
+    if isinstance(window, str):
+        window_kwargs["period"] = window
+    elif isinstance(window, (list, tuple)):
+        window_kwargs["start"] = str(window[0])
+        window_kwargs["end"] = str(window[1])
+
+    try:
+        iv_df, _md = nwis.get_iv(
+            parameterCd=parameter_cd, siteStatus="active", multi_index=False,
+            **sel, **window_kwargs,
+        )
+    except DataRetrievalError as exc:
+        _map_http_error(spec, exc)
+    try:
+        site_df, _md2 = nwis.get_info(
+            parameterCd=parameter_cd, siteStatus="active", hasDataTypeCd="iv",
+            siteOutput="expanded", **sel,
+        )
+    except DataRetrievalError as exc:
+        _map_http_error(spec, exc)
+
+    readings = _readings_by_site(iv_df, parameter_cd, mode)
+
+    sites: dict[str, dict[str, Any]] = {}
+    if site_df is not None and len(site_df):
+        for rd in site_df.to_dict(orient="records"):
+            site_no = str(rd.get("site_no") or "").strip()
+            if not site_no:
+                continue
+            try:
+                lat = float(rd.get("dec_lat_va"))
+                lon = float(rd.get("dec_long_va"))
+            except (TypeError, ValueError):
+                continue
+            if not (math.isfinite(lat) and math.isfinite(lon)):
+                continue
+            alt_va = rd.get("alt_va")
+            try:
+                alt_va = float(alt_va) if alt_va not in (None, "") else None
+            except (TypeError, ValueError):
+                alt_va = None
+            sites[site_no] = {
+                "site_name": str(rd.get("station_nm") or "").strip(),
+                "lon": lon, "lat": lat,
+                "gauge_datum_ft": alt_va,
+                "vertical_datum": (str(rd.get("alt_datum_cd")).strip() or None) if rd.get("alt_datum_cd") else None,
+            }
+
     if not readings:
-        if sites:
-            return sites
+        if not sites:
+            raise router_empty_error(
+                sc, "no active gauges in scope from the readings service or the "
+                    "site service", spec.empty_error_suffix)
+        # Fallback: station LOCATIONS only, every reading column null.
+        cols = _COLUMNS_BY_MODE[mode]
+        feats = []
+        for site_no, loc in sites.items():
+            props = {c: None for c in cols}
+            props["site_no"] = site_no
+            props["site_name"] = loc["site_name"]
+            props["gauge_datum_ft"] = loc["gauge_datum_ft"]
+            props["vertical_datum"] = loc["vertical_datum"]
+            feats.append(_feature(loc["lon"], loc["lat"], props))
+        return feats
+
+    cols = _COLUMNS_BY_MODE[mode]
+    feats = []
+    for site_no, rec in readings.items():
+        loc = sites.get(site_no)
+        if loc is None:
+            continue  # a reading with no site location has nowhere to be a Point
+        rec["site_name"] = loc["site_name"]
+        rec["gauge_datum_ft"] = loc["gauge_datum_ft"]
+        rec["vertical_datum"] = loc["vertical_datum"]
+        props = {c: rec.get(c) for c in cols}
+        feats.append(_feature(loc["lon"], loc["lat"], props))
+    if not feats:
         raise router_empty_error(
             sc, "no active gauges in scope from the readings service or the "
                 "site service", spec.empty_error_suffix)
-    zeros = {row["properties"]["site_no"]: row["properties"] for row in sites}
-    for row in readings:
-        site = zeros.get(row["properties"]["site_no"], {})
-        row["properties"]["gauge_datum_ft"] = site.get("gauge_datum_ft")
-        row["properties"]["vertical_datum"] = site.get("vertical_datum")
-    return readings
+    return feats
 
 
-@register_hook("usgs_nwis.classify_status")
-def classify_status(spec: SourceSpec, status: int | None,
-                    body: str | None) -> RouterError | None:
-    """The site and instantaneous services answer a scope holding no gauge with
-    a 404 over an empty or no-sites body - the network holding nothing here,
-    which is an empty record. A 5xx, a timeout or a body that says something
-    else is a real failure and keeps the upstream default."""
-    text = (body or "").strip()
-    if status != 404 or (text and "No sites found" not in text):
-        return None
-    return router_empty_error(
-        spec.error_code_prefix,
-        "the USGS gauge network publishes no active site in this scope",
-        spec.empty_error_suffix,
-    )
+_COLUMNS_BY_MODE: dict[str, tuple[str, ...]] = {
+    "instantaneous": (
+        "site_no", "site_name", "discharge_cfs", "gage_height_ft", "water_temp_c",
+        "reading_dt", "gauge_datum_ft", "vertical_datum",
+    ),
+    "hydrograph": (
+        "site_no", "site_name", "discharge_cfs", "gage_height_ft", "water_temp_c",
+        "reading_dt", "time_series_csv", "stage_series_csv", "temp_series_csv",
+        "time_start", "time_end", "n_timesteps", "discharge_min_cfs",
+        "discharge_max_cfs", "discharge_mean_cfs", "gauge_datum_ft", "vertical_datum",
+    ),
+}
