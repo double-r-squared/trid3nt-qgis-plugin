@@ -22,7 +22,7 @@ from typing import Any
 from trid3nt_contracts.ws import LayerRequestPayload, LayerResponsePayload
 from trid3nt_contracts.source_spec import SourceSpec
 
-from ..errors import router_input_error, router_upstream_error
+from ..errors import router_empty_error, router_input_error, router_upstream_error
 from .vector_fgb import build_where, resolve_endpoints
 
 logger = logging.getLogger(
@@ -224,7 +224,8 @@ def _exported_raster_to_cog(spec: SourceSpec, raw: bytes) -> bytes:
     """The session's GeoTIFF as the COG the publish seam reads, carrying the two
     value treatments a row states about its OWN dataset: everything at or below
     ``nodata_sentinel`` is the dataset's own no-data, and the ``serialize`` block
-    is the nodata and dtype it is written with."""
+    is the nodata and dtype it is written with. An export that is ENTIRELY the
+    dataset's no-data is honest no-coverage, not a layer."""
     import numpy as np
     import rasterio
 
@@ -241,6 +242,13 @@ def _exported_raster_to_cog(spec: SourceSpec, raw: bytes) -> bytes:
     if sentinel is not None:
         fill = float("nan") if nodata is None else float(nodata)
         array = np.where(array <= float(sentinel), fill, array)
+        if not bool((array != fill).any()):
+            raise router_empty_error(
+                spec.error_code_prefix,
+                "the exported window is entirely the dataset's own no-data "
+                f"(at or below {sentinel}); no valid pixels",
+                spec.empty_error_suffix,
+            )
     if nodata is None:
         return array_to_cog_bytes(array, transform, crs)
     dtype = str(serialize.get("dtype", "float32"))

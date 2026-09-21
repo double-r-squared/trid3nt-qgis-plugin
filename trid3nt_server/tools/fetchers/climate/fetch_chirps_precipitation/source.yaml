@@ -1,5 +1,7 @@
-# UCSB CHIRPS-2.0 quasi-global rainfall, a date-templated .tif.gz. A gzip stream is
-# not a windowed COG, so the whole object is fetched, gunzipped and windowed in memory.
+# UCSB CHIRPS-2.0 quasi-global rainfall, a date-templated .tif.gz opened through
+# QGIS's OWN gdal provider on the gzip stream. The row's ask is the whole grid
+# when no bbox is given; the ocean sentinel and the serialize dtype are the two
+# facts the export step applies.
 schema_version: v1
 
 name: fetch_chirps_precipitation
@@ -21,18 +23,24 @@ params:
   period: {type: enum, default: monthly, values: [monthly, daily]}
 
 ingest:
-  access: gzip_object
-  gzip_object:
+  access: qgis_provider
+  qgis_provider:
+    provider: gdal
+    uri: "/vsigzip//vsicurl/{object_url}"
+    mode: materialise
+    nodata_sentinel: -9000.0
     date_param: date
     period_param: period
     min_year: 1981
-    nodata_sentinel: -9000.0
     url_templates:
       monthly: "{base}/global_monthly/tifs/chirps-v2.0.{year:04d}.{month:02d}.tif.gz"
       daily: "{base}/global_daily/tifs/p05/{year:04d}/chirps-v2.0.{year:04d}.{month:02d}.{day:02d}.tif.gz"
   serialize:
     nodata: -9999.0
     dtype: float32
+
+hooks:
+  pre_resolve: chirps_precipitation.pre_resolve
 
 normalize:
   crs: "EPSG:4326"
