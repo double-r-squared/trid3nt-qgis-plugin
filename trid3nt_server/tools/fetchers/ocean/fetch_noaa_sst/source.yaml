@@ -48,7 +48,7 @@ payload_estimate:
   floor_mb: 0.0
 
 caveats:
-  - "NOAA Coral Reef Watch operational daily 5 km SST, opened as a live WMS map overlay through the ERDDAP dhw_5km dataset; the day the overlay draws is whatever the service's WMS TIME default carries, since a single provider-open call has no per-day subset - use fetch_goes_abi or a griddap tool for a specific day's raster"
+  - "NOAA Coral Reef Watch operational daily 5 km SST, opened as a live WMS map overlay through the ERDDAP dhw_5km dataset; the day the overlay draws is whatever the service's WMS TIME default carries, since a single provider-open call has no per-day subset - use fetch_goes_abi for a specific day's raster"
   - "the layer is drawn by QGIS from the service, so it is on the map but not in the case store and no analysis reads it"
   - "Ocean-only -- CRW masks land; a fully-land AOI draws a transparent overlay, never fabricated content"
   - "model-callable, not matched: a sea-surface temperature is not weather forcing, so it carries no coverage row"

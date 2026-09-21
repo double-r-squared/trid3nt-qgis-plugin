@@ -65,10 +65,7 @@ def _classified_nlcd(bounds) -> bytes:
 
 def _patch_ogc(monkeypatch, tile_bytes: bytes):
     def fake_fetch(url, layer_name, bbox, **kw):
-        return ogc_adapter.OGCResponse(
-            content=tile_bytes, content_type="image/tiff", service_type="WCS",
-            url=url, status_code=200,
-        )
+        return ogc_adapter.OGCResponse(content=tile_bytes, content_type="image/tiff")
 
     monkeypatch.setattr(ogc_adapter, "fetch_ogc_layer", fake_fetch)
 

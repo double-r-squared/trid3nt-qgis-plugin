@@ -190,7 +190,7 @@ def test_the_request_goes_out_on_the_mosaics_own_frame(spec, answered):
     assert asked["crs"] == "EPSG:3857"
     assert asked["extra_params"] == {"RESPONSE_CRS": "EPSG:4326"}
     assert asked["layer_name"] == "nonna:NONNA 10 Coverage"
-    assert asked["version"] == "1.0.0" and asked["service_type"] == "WCS"
+    assert asked["version"] == "1.0.0"
     west, south, east, north = asked["bbox"]
     assert (round(west), round(south)) == (-9176066, 5305885)
     assert (round(east), round(north)) == (-9174730, 5307407)

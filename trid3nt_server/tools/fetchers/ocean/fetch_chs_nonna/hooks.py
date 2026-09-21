@@ -79,7 +79,7 @@ def read(spec: SourceSpec, params: dict[str, Any], *,
     try:
         resp = fetch_ogc_layer(
             url=str(endpoint.url), layer_name=str(wcs["coverage"]),
-            bbox=(west, south, east, north), crs=native, service_type="WCS",
+            bbox=(west, south, east, north), crs=native,
             image_format=str(wcs.get("image_format", "GeoTIFF")),
             version=str(wcs.get("version", "1.0.0")),
             width_px=width_px, height_px=height_px, timeout_s=timeout_s,

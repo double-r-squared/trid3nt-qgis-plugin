@@ -135,8 +135,6 @@ def fetch_source_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, A
         return _gzip_object_to_array(spec, params)
     if access == "grib_object":
         return _grib_object_to_array(spec, params)
-    if access == "griddap":
-        return _griddap_to_array(spec, params)
     if access == "fixed_tile_grid":
         return _fixed_tile_grid_to_array(spec, params)
     if access == "categorical_tile_grid":
@@ -904,157 +902,6 @@ def _grib_object_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any
     return np.asarray(arr, dtype="float32"), out_transform, dst_crs
 
 
-# griddap: an ERDDAP griddap bracket-selector REST endpoint that returns a
-# PRE-SUBSET NetCDF (``.nc?<var>[(<time>)][(<lat_hi>):(<lat_lo>)][(<lon_lo>):
-# (<lon_hi>)]``) -- the server does the bbox and day subset, so the whole small
-# object is a windowed read by construction. A single GET through the shared
-# transport, an in-memory xarray open and squeeze, and a north-up (array, transform,
-# crs). A 404 whose body carries the ERDDAP no-matching or axis-range markers is
-# honest no-data (typed EMPTY); an all-NaN window over a fully-land AOI is also EMPTY.
-
-
-def _griddap_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
-    """ERDDAP griddap bracket-selector GET to a north-up float32 array. An absent
-    ``date`` defaults to the most-recent likely-published day, which does NOT enter
-    the cache key; a 404 carrying the no-data body markers is EMPTY, not UPSTREAM."""
-    import datetime as _dt
-
-    import numpy as np
-    import rasterio.transform as rtransform
-
-    from ..transport import TransportError, TransportNotFound, get_bytes, get_client
-
-    ingest = spec.ingest or {}
-    gd = ingest.get("griddap", {})
-    bbox = params["bbox"]
-    west, south, east, north = (float(v) for v in bbox)
-
-    # variable -> ERDDAP grid variable (already a validated enum).
-    vbp = gd.get("var_by_param", {})
-    var = (vbp.get("map") or {}).get(params.get(vbp.get("param")))
-    if var is None:
-        raise router_upstream_error(
-            spec.error_code_prefix,
-            f"no griddap variable for {vbp.get('param')}={params.get(vbp.get('param'))!r}",
-        )
-
-    # date: explicit request param else the default (today-1 UTC).
-    date = params.get("date")
-    if not date:
-        date = (_dt.datetime.now(_dt.timezone.utc).date() - _dt.timedelta(days=1)).isoformat()
-    ts = f"{date}T{gd.get('time_of_day', '12:00:00Z')}"
-
-    if gd.get("lat_descending", True):
-        sel = f"{var}[({ts})][({north}):({south})][({west}):({east})]"
-    else:
-        sel = f"{var}[({ts})][({south}):({north})][({west}):({east})]"
-    endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
-    base = (endpoint.url or endpoint.url_template or "").rstrip("/")
-    dataset = gd.get("dataset", "")
-    url = f"{base}/griddap/{dataset}.nc?{sel}"
-
-    ua = spec.auth.user_agent if spec.auth else "trid3nt_default"
-    markers = [str(m).lower() for m in gd.get("nodata_body_markers", [])]
-
-    def _is_nodata_body(body: str | None) -> bool:
-        low = (body or "").lower()
-        return any(m in low for m in markers)
-
-    try:
-        nc_bytes, _ct, _u = get_bytes(get_client(), url, headers={"User-Agent": ua})
-    except TransportNotFound as exc:
-        if _is_nodata_body(exc.body):
-            raise router_empty_error(
-                spec.error_code_prefix,
-                f"no {dataset} data for date={date} (ERDDAP: {(exc.body or '')[:200]})",
-                spec.empty_error_suffix,
-            )
-        raise router_upstream_error(spec.error_code_prefix, f"griddap 404 url={url}: {exc}")
-    except TransportError as exc:
-        if _is_nodata_body(getattr(exc, "body", None)):
-            raise router_empty_error(
-                spec.error_code_prefix,
-                f"no {dataset} data for date={date} (ERDDAP: {(exc.body or '')[:200]})",
-                spec.empty_error_suffix,
-            )
-        raise router_upstream_error(spec.error_code_prefix, f"griddap request failed url={url}: {exc}")
-    if not nc_bytes:
-        raise router_upstream_error(spec.error_code_prefix, f"empty response from {url}")
-
-    try:
-        import xarray as xr  # noqa: F401
-    except ImportError as exc:  # pragma: no cover
-        raise router_upstream_error(spec.error_code_prefix, f"xarray unavailable: {exc}")
-
-    tmp_nc: str | None = None
-    ds = None
-    try:
-        fd, tmp_nc = tempfile.mkstemp(suffix=".nc", prefix="trid3nt_router_griddap_")
-        with os.fdopen(fd, "wb") as f:
-            f.write(nc_bytes)
-        try:
-            ds = xr.open_dataset(tmp_nc, engine="netcdf4")
-        except Exception as exc:  # noqa: BLE001
-            raise router_upstream_error(spec.error_code_prefix, f"could not parse griddap NetCDF: {exc}")
-        if var not in ds.variables:
-            raise router_upstream_error(
-                spec.error_code_prefix,
-                f"griddap subset missing variable {var!r} (have {list(ds.data_vars)})",
-            )
-        da = ds[var]
-        for tdim in ("time",):
-            if tdim in da.dims:
-                da = da.squeeze(tdim, drop=True)
-        lat_dim = next((d for d in da.dims if d in ("latitude", "lat", "y")), None)
-        lon_dim = next((d for d in da.dims if d in ("longitude", "lon", "x")), None)
-        if lat_dim is None or lon_dim is None:
-            raise router_upstream_error(
-                spec.error_code_prefix, f"griddap DataArray missing lat/lon dims; dims={da.dims}")
-        if da.size == 0 or any(s == 0 for s in da.shape):
-            raise router_empty_error(
-                spec.error_code_prefix,
-                f"griddap returned an empty window for bbox={tuple(bbox)} on {date} "
-                "(no grid cells intersect the AOI)",
-                spec.empty_error_suffix,
-            )
-        arr = np.asarray(da.values, dtype="float32")
-        lat_vals = np.asarray(da[lat_dim].values, dtype="float64")
-        lon_vals = np.asarray(da[lon_dim].values, dtype="float64")
-        # North-up: row 0 must be the northernmost lat. Flip if the coord ascends
-        # (NOAA_DHW descends, so this is a no-op there; defensive for other grids).
-        if lat_vals.size >= 2 and lat_vals[0] < lat_vals[-1]:
-            arr = arr[::-1, :]
-        if not np.isfinite(arr).any():
-            raise router_empty_error(
-                spec.error_code_prefix,
-                f"griddap window is all-NaN over bbox={tuple(bbox)} on {date} "
-                "(the AOI is land / outside the ocean mask)",
-                spec.empty_error_suffix,
-            )
-        transform = rtransform.from_bounds(
-            float(lon_vals.min()), float(lat_vals.min()),
-            float(lon_vals.max()), float(lat_vals.max()),
-            arr.shape[1], arr.shape[0],
-        )
-        return arr, transform, spec.normalize.crs
-    except RouterError:
-        raise
-    except Exception as exc:  # noqa: BLE001
-        raise router_upstream_error(
-            spec.error_code_prefix, f"griddap NetCDF -> array failed for bbox={tuple(bbox)}: {exc}")
-    finally:
-        if ds is not None:
-            try:
-                ds.close()
-            except Exception:  # noqa: BLE001
-                pass
-        if tmp_nc is not None:
-            try:
-                os.unlink(tmp_nc)
-            except OSError:
-                pass
-
-
 # fixed_tile_grid: a global raster cut into a REGULAR degree grid of per-tile
 # ZIP objects, each wrapping ONE DEFLATE-compressed .tif member (GHS-POP tiles).
 # A DEFLATE member is not windowable by a byte range (decoding forces a near-whole
@@ -1259,7 +1106,7 @@ def _wcs_getcoverage_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple
     try:
         resp = fetch_ogc_layer(
             url=wcs_url, layer_name=coverage, bbox=bbox, crs="EPSG:4326",
-            service_type="WCS", image_format=str(w.get("image_format", "GeoTIFF")),
+            image_format=str(w.get("image_format", "GeoTIFF")),
             version="1.0.0", width_px=width_px, height_px=height_px,
             timeout_s=float(w.get("timeout_s", 120.0)), user_agent=ua,
         )
@@ -1579,108 +1426,12 @@ def _imageserver_export_bytes(spec: SourceSpec, params: dict[str, Any]) -> bytes
     return body
 
 
-# mapserver_export: an ArcGIS MapServer ``/export`` returning a SERVER-SYMBOLIZED
-# PNG32 (a baked color scheme, not raw values), georeferenced client-side into a
-# 4-band RGBA COG so publish_layer renders the baked symbology directly (no
-# colormap, no style-registry row). The transport owns the socket; PIL and GDAL only
-# decode the returned image. A fully-transparent export -- a bbox with no coverage at
-# that level -- is a VALID transparent overlay, never a fabricated layer and never a
-# typed EMPTY: the layer appears and renders nothing.
-
-
-def _mapserver_export_grid(
-    bbox: tuple[float, float, float, float], res_deg: float, img: dict[str, Any]
-) -> tuple[int, int]:
-    """MapServer/export ``size`` (width_px, height_px) from a ``res_deg`` cell: the
-    bbox span ceils over the cell and clamps per axis to ``[px_min, px_max]``,
-    because the service rejects a very large export request."""
-    import math
-
-    px_min = int(img.get("px_min", 16))
-    px_max = int(img.get("px_max", 2048))
-    min_lon, min_lat, max_lon, max_lat = bbox
-    w = max(px_min, min(px_max, int(math.ceil((max_lon - min_lon) / res_deg))))
-    h = max(px_min, min(px_max, int(math.ceil((max_lat - min_lat) / res_deg))))
-    return w, h
-
-
-def _mapserver_export_rgba_bytes(spec: SourceSpec, params: dict[str, Any]) -> bytes:
-    """MapServer ``/export`` PNG32 to a georeferenced 4-band RGBA COG: the service name
-    resolves from a request param, and an out-of-set value is a typed INPUT error.
-    No nodata gate -- a fully transparent export is a valid empty overlay."""
-    import io
-
-    import numpy as np
-    from PIL import Image
-    from rasterio.transform import from_bounds
-
-    from ..transport import TransportError, get_bytes, get_client
-
-    ingest = spec.ingest or {}
-    img = ingest.get("mapserver", {})
-    bbox = tuple(params["bbox"])
-
-    # service name resolved from a request param (the level -> service map).
-    svc_cfg = img.get("service_by_param", {})
-    svc_param = svc_cfg.get("param")
-    svc_map = svc_cfg.get("map", {})
-    service = svc_map.get(params.get(svc_param))
-    if service is None:
-        # An out-of-set level is an input defect, raised before any network call.
-        raise router_input_error(
-            spec.error_code_prefix,
-            f"{svc_param}={params.get(svc_param)!r} is not a valid level (no service in the map)",
-            spec.input_error_suffix)
-
-    endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
-    base = (endpoint.url or endpoint.url_template or "").rstrip("/")
-    url = f"{base}/{service}/MapServer/export"
-
-    # res_deg is a request param, falling back to the static default. A non-positive
-    # or non-finite value is a typed INPUT error, raised before any network call.
-    import math as _math
-
-    res_deg = params.get("res_deg")
-    res_deg = float(res_deg) if res_deg is not None else float(img.get("res_deg", 0.0005))
-    if not (_math.isfinite(res_deg) and res_deg > 0):
-        raise router_input_error(
-            spec.error_code_prefix, f"res_deg must be a positive number; got {res_deg!r}",
-            spec.input_error_suffix)
-    width_px, height_px = _mapserver_export_grid(bbox, res_deg, img)
-    query = dict(img.get("export_query", {}))
-    query["bbox"] = f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}"
-    query["size"] = f"{width_px},{height_px}"
-
-    ua = spec.auth.user_agent if spec.auth else "trid3nt_default"
-    try:
-        body, _ct, _u = get_bytes(get_client(), url, headers={"User-Agent": ua}, params=query)
-    except TransportError as exc:
-        raise router_upstream_error(
-            spec.error_code_prefix, f"MapServer export failed url={url}: {exc}")
-    try:
-        im = Image.open(io.BytesIO(body)).convert("RGBA")
-    except Exception as exc:  # noqa: BLE001 -- undecodable upstream payload (JSON error / HTML)
-        raise router_upstream_error(
-            spec.error_code_prefix, f"MapServer export returned an undecodable image url={url}: {exc}")
-
-    arr = np.asarray(im, dtype=np.uint8)  # (H, W, 4)
-    out_h, out_w = arr.shape[0], arr.shape[1]
-    chw = np.transpose(arr, (2, 0, 1))  # (4, H, W)
-    transform = from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], out_w, out_h)
-    return array_to_cog_bytes(
-        chw, transform, spec.normalize.crs, nodata=None, dtype="uint8", colorinterp="rgba")
-
-
 def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
     """Fetch the source array and serialize to COG bytes (the ``fetch_fn`` body)."""
     access = (spec.ingest or {}).get("access", "opendap")
     if access == "imageserver_export":
         # The ImageServer exportImage response IS the artifact: no reserialize.
         return _imageserver_export_bytes(spec, params)
-    if access == "mapserver_export":
-        # A MapServer/export server-symbolized PNG32, georeferenced client-side into
-        # a 4-band RGBA COG.
-        return _mapserver_export_rgba_bytes(spec, params)
     if access == "categorical_tile_grid":
         # A uint8 categorical first-valid mosaic, with the declarative palette baked
         # into a 256-entry band-1 color table and the nodata index transparent.
