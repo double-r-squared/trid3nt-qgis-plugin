@@ -1,6 +1,6 @@
-# USGS FDSN event GeoJSON, a single GET. The bespoke steps are named PURE hooks: the
-# build hook constructs the FDSN window and URL, and the parse hook decodes the GeoJSON,
-# applies the result cap, and raises an honest no-events error.
+# USGS FDSN event GeoJSON, a single GET, stated entirely as a field map: the request
+# template with its relative window, the GeoJSON row walk, the column projection and
+# the FDSN response cap.
 schema_version: v1
 name: fetch_usgs_earthquakes
 source_class: usgs_earthquakes
@@ -32,25 +32,60 @@ params:
     type: float
     required: false
     default: 2.5
-hooks:
-  build_request: usgs_earthquakes.build_request
-  parse_response: usgs_earthquakes.parse_response
+    min: -2.0
+    max: 12.0
 ingest:
-  properties:
-  - id
-  - mag
-  - depth_km
-  - mag_type
-  - place
-  - time
-  - updated
-  - url
-  - event_type
-  - status
-  - tsunami
-  - felt
-  - sig
-  - net
+  access: http_json
+  request:
+    params:
+      format: geojson
+      starttime: '{start_date}'
+      endtime: '{end_date}'
+      orderby: time
+      limit: '20000'
+      minlongitude: '{bbox[0]}'
+      minlatitude: '{bbox[1]}'
+      maxlongitude: '{bbox[2]}'
+      maxlatitude: '{bbox[3]}'
+      minmagnitude: '{min_magnitude}'
+    date_window:
+      start: start_date
+      end: end_date
+      default_days: 30
+      max_span_days: 366
+      format: '%Y-%m-%dT%H:%M:%S'
+  body:
+    format: geojson
+    rows_path: features
+    geometry:
+      kind: point
+      lon: geometry.coordinates.0
+      lat: geometry.coordinates.1
+    row_cap: 20000
+    row_cap_path: metadata.count
+    row_cap_hint: Narrow the bbox, shorten the window, or raise min_magnitude.
+  column_map:
+    id: {from: id, kind: str}
+    mag: {from: properties.mag, kind: float}
+    depth_km: {from: geometry.coordinates.2, kind: float}
+    mag_type: {from: properties.magType, kind: str}
+    place: {from: properties.place, kind: str}
+    time: {from: properties.time, kind: epoch_ms_iso}
+    updated: {from: properties.updated, kind: epoch_ms_iso}
+    url: {from: properties.url, kind: str}
+    event_type: {from: properties.type, kind: str}
+    status: {from: properties.status, kind: str}
+    tsunami: {from: properties.tsunami, kind: int, default: 0}
+    felt: {from: properties.felt, kind: int}
+    sig: {from: properties.sig, kind: int}
+    net: {from: properties.net, kind: str}
+  geometry_filter:
+    geom_types: [Point]
+    require_finite: true
+  empty:
+    message: No earthquakes matched the requested scope/window/magnitude. The USGS FDSN
+      service returned zero events. Widen the window, lower min_magnitude, or pick a
+      more seismically active area.
 normalize:
   crs: EPSG:4326
   units: magnitude / km

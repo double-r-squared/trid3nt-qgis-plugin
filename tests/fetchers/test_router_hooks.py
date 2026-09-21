@@ -56,7 +56,6 @@ def _fgb_records(feats, spec) -> gpd.GeoDataFrame:
 
 def test_all_hooks_registered():
     for name in (
-        "usgs_earthquakes.build_request", "usgs_earthquakes.parse_response",
         "ncei_tsunami.build_request", "ncei_tsunami.parse_response",
         "usgs_volcano.build_request", "usgs_volcano.parse_response",
         "nws_event.build_request", "nws_event.parse_response",
@@ -72,12 +71,12 @@ def test_resolve_unknown_raises():
 
 def test_duplicate_registration_raises():
     with pytest.raises(HookResolutionError):
-        register_hook("usgs_earthquakes.build_request")(lambda *a: None)
+        register_hook("ncei_tsunami.build_request")(lambda *a: None)
 
 
 def test_register_spec_rejects_unknown_hook():
-    bad = _spec("fetch_usgs_earthquakes").model_copy(
-        update={"hooks": _spec("fetch_usgs_earthquakes").hooks.model_copy(update={"build_request": "ghost.hook"})}
+    bad = _spec("fetch_tsunami_events").model_copy(
+        update={"hooks": _spec("fetch_tsunami_events").hooks.model_copy(update={"build_request": "ghost.hook"})}
     )
     with pytest.raises(HookResolutionError):
         reg._validate_hooks(bad)
@@ -85,76 +84,104 @@ def test_register_spec_rejects_unknown_hook():
 
 
 
-def test_eq_build_request_url():
+def test_eq_request_is_a_declared_template():
+    """The FDSN query is the ingest.request template over the validated params."""
     spec = _spec("fetch_usgs_earthquakes")
-    br = resolve_hook(spec.hooks.build_request)
-    plans = br(spec, {"bbox": [-122.5, 37.0, -120.0, 39.0], "start_date": "2019-07-04", "end_date": "2019-07-07", "min_magnitude": 4.5})
-    assert isinstance(plans, list) and len(plans) == 1
-    u = plans[0].url
-    assert "format=geojson" in u and "limit=20000" in u and "minmagnitude=4.5" in u
-    assert "minlongitude=-122.5" in u and "maxlatitude=39.0" in u
-    # A bare ISO date parses via datetime.fromisoformat to 00:00:00 (py3.11+) --
-    # the exact twin behavior (its except-branch end-of-day path is unreached).
-    assert "starttime=2019-07-04T00%3A00%3A00" in u and "endtime=2019-07-07T00%3A00%3A00" in u
+    assert spec.hooks is None                       # the row carries no source code
+    params = _router_mod.validate_params(spec, {
+        "bbox": [-122.5, 37.0, -120.0, 39.0], "start_date": "2019-07-04",
+        "end_date": "2019-07-07", "min_magnitude": 4.5})
+    plan = http_json._plans(spec, params)[0]
+    assert plan.url == "https://earthquake.usgs.gov/fdsnws/event/1/query"
+    assert plan.params["format"] == "geojson" and plan.params["limit"] == "20000"
+    assert plan.params["minmagnitude"] == "4.5"
+    assert plan.params["minlongitude"] == "-122.5" and plan.params["maxlatitude"] == "39.0"
+    # A bare ISO date parses via datetime.fromisoformat to 00:00:00 (py3.11+).
+    assert plan.params["starttime"] == "2019-07-04T00:00:00"
+    assert plan.params["endtime"] == "2019-07-07T00:00:00"
 
 
-def test_eq_build_request_default_window_and_global():
+def test_eq_unset_param_drops_its_key_and_window_defaults():
+    """An unset param drops its key rather than sending "None", and the declared
+    date_window fills the relative default window AFTER the cache key."""
     spec = _spec("fetch_usgs_earthquakes")
-    br = resolve_hook(spec.hooks.build_request)
-    plans = br(spec, {"min_magnitude": 2.5})  # no bbox, no dates
-    u = plans[0].url
-    assert "minlongitude" not in u and "starttime=" in u and "endtime=" in u
+    params = _router_mod.validate_params(spec, {"min_magnitude": 2.5})
+    q = http_json._plans(spec, params)[0].params
+    assert "minlongitude" not in q and "maxlatitude" not in q
+    assert q["starttime"] < q["endtime"]
 
 
-@pytest.mark.parametrize("kw,code", [
-    ({"start_date": "2020-05-01", "end_date": "2020-01-01"}, "USGS_EARTHQUAKES_INPUT_ERROR"),
-    ({"start_date": "2019-01-01", "end_date": "2021-01-01"}, "USGS_EARTHQUAKES_INPUT_ERROR"),  # >366d
-    ({"start_date": "not-a-date"}, "USGS_EARTHQUAKES_INPUT_ERROR"),
-    ({"min_magnitude": 99.0}, "USGS_EARTHQUAKES_INPUT_ERROR"),
+@pytest.mark.parametrize("kw", [
+    {"start_date": "2020-05-01", "end_date": "2020-01-01"},
+    {"start_date": "2019-01-01", "end_date": "2021-01-01"},   # > 366d
+    {"start_date": "not-a-date"},
 ])
-def test_eq_build_request_input_errors(kw, code):
+def test_eq_window_refusals(kw):
     spec = _spec("fetch_usgs_earthquakes")
-    br = resolve_hook(spec.hooks.build_request)
     with pytest.raises(RouterInputError) as ei:
-        br(spec, kw)
-    assert ei.value.error_code == code
+        http_json._plans(spec, _router_mod.validate_params(spec, kw))
+    assert ei.value.error_code == "USGS_EARTHQUAKES_INPUT_ERROR"
 
 
-def test_eq_parse_extracts_fields_and_serializes():
+def test_eq_magnitude_range_is_a_param_gate():
     spec = _spec("fetch_usgs_earthquakes")
-    pr = resolve_hook(spec.hooks.parse_response)
-    body = json.dumps({"type": "FeatureCollection", "metadata": {"count": 1}, "features": [
-        {"id": "nc1", "geometry": {"type": "Point", "coordinates": [-121.0, 38.0, 5.2]},
-         "properties": {"mag": 4.1, "magType": "mw", "place": "X", "time": 1600000000000,
-                        "tsunami": 0, "felt": 3, "sig": 100, "net": "nc", "status": "reviewed",
-                        "type": "earthquake", "url": "http://u"}},
-    ]}).encode()
-    feats = pr(spec, {}, [body])
-    p = feats[0]["properties"]
+    with pytest.raises(RouterInputError) as ei:
+        _router_mod.validate_params(spec, {"min_magnitude": 99.0})
+    assert ei.value.error_code == "USGS_EARTHQUAKES_INPUT_ERROR"
+
+
+_EQ_BODY = json.dumps({"type": "FeatureCollection", "metadata": {"count": 1}, "features": [
+    {"id": "nc1", "geometry": {"type": "Point", "coordinates": [-121.0, 38.0, 5.2]},
+     "properties": {"mag": 4.1, "magType": "mw", "place": "X", "time": 1600000000000,
+                    "tsunami": 0, "felt": 3, "sig": 100, "net": "nc", "status": "reviewed",
+                    "type": "earthquake", "url": "http://u"}},
+]}).encode()
+
+
+def test_eq_body_walk_and_column_map():
+    """The declared body walks features, builds the 2D point off the coordinate paths,
+    and the column map projects the raw feature - id at the top, depth off the Z."""
+    spec = _spec("fetch_usgs_earthquakes")
+    feats = http_json._features(spec, {}, [_EQ_BODY])
     assert feats[0]["geometry"]["coordinates"] == [-121.0, 38.0]
-    assert p["depth_km"] == 5.2 and p["id"] == "nc1" and p["time"] == "2020-09-13T12:26:40Z"
+    props = vector_fgb.apply_ingest_transforms(feats, spec, {})[0]["properties"]
+    assert props["id"] == "nc1" and props["depth_km"] == 5.2 and props["mag"] == 4.1
+    assert props["time"] == "2020-09-13T12:26:40Z" and props["updated"] is None
+    assert props["mag_type"] == "mw" and props["net"] == "nc"
     g = _fgb_records(feats, spec)
-    assert list(g.columns)[:-1] == spec.ingest["properties"]
+    assert list(g.columns)[:-1] == list(spec.ingest["column_map"])
 
 
-def test_eq_parse_empty_and_too_large():
+def test_eq_declared_empty_and_row_cap():
     spec = _spec("fetch_usgs_earthquakes")
-    pr = resolve_hook(spec.hooks.parse_response)
     with pytest.raises(RouterEmptyError) as ee:
-        pr(spec, {}, [json.dumps({"type": "FeatureCollection", "features": []}).encode()])
+        http_json._features(spec, {}, [json.dumps(
+            {"type": "FeatureCollection", "features": []}).encode()])
     assert ee.value.error_code == "USGS_EARTHQUAKES_NO_EVENTS"
     with pytest.raises(RouterInputError) as te:
-        pr(spec, {}, [json.dumps({"type": "FeatureCollection", "metadata": {"count": 20001}, "features": []}).encode()])
+        http_json._features(spec, {}, [json.dumps(
+            {"type": "FeatureCollection", "metadata": {"count": 20001}, "features": []}).encode()])
     assert te.value.error_code == "USGS_EARTHQUAKES_RESULT_TOO_LARGE"
 
 
-def test_eq_parse_rejects_non_featurecollection():
+def test_eq_body_rejects_non_featurecollection():
     spec = _spec("fetch_usgs_earthquakes")
-    pr = resolve_hook(spec.hooks.parse_response)
     with pytest.raises(RouterUpstreamError):
-        pr(spec, {}, [json.dumps({"type": "NotAFC"}).encode()])
+        http_json._features(spec, {}, [json.dumps({"type": "NotAFC"}).encode()])
 
 
+def test_eq_non_finite_coordinates_are_dropped():
+    """A feature the source cannot place is dropped by the declared geometry filter,
+    never emitted at a fabricated origin."""
+    spec = _spec("fetch_usgs_earthquakes")
+    body = json.dumps({"type": "FeatureCollection", "features": [
+        {"id": "bad", "geometry": {"type": "Point", "coordinates": ["x", None]},
+         "properties": {"mag": 1.0}},
+        {"id": "ok", "geometry": {"type": "Point", "coordinates": [-121.0, 38.0]},
+         "properties": {"mag": 1.0}},
+    ]}).encode()
+    kept = vector_fgb.apply_ingest_transforms(http_json._features(spec, {}, [body]), spec, {})
+    assert [f["properties"]["id"] for f in kept] == ["ok"]
 
 
 def test_tsu_build_request_mode_page_bbox():
