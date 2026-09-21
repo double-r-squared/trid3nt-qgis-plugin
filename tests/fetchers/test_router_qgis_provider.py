@@ -182,6 +182,27 @@ def test_mode_open_returns_the_record_and_never_the_store(monkeypatch, loop_thre
     assert session.asked[0].name == "demo_overlay"
 
 
+def test_a_public_row_names_no_credential(monkeypatch, loop_thread):
+    session = _Session(loop_thread, lambda p: LayerResponsePayload(key=p.key))
+    _bind(monkeypatch, session)
+    qgis_provider.execute(_open_spec(), {"bbox": _BBOX, "date": None})
+    assert session.asked[0].credential is None
+
+
+def test_a_keyed_row_carries_its_credential_NAME_and_no_key(
+    monkeypatch, loop_thread
+):
+    """The row states which key it needs; the session resolves it in its own
+    auth store, so nothing the daemon sends could carry a key."""
+    spec = _open_spec()
+    spec.ingest["qgis_provider"]["credential"] = "example_token"
+    session = _Session(loop_thread, lambda p: LayerResponsePayload(key=p.key))
+    _bind(monkeypatch, session)
+    qgis_provider.execute(spec, {"bbox": _BBOX, "date": None})
+    assert session.asked[0].credential == "example_token"
+    assert "authcfg" not in session.asked[0].uri
+
+
 def test_the_provider_error_is_carried_verbatim(monkeypatch, loop_thread):
     session = _Session(
         loop_thread,

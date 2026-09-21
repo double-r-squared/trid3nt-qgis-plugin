@@ -745,6 +745,12 @@ class LayerRequestPayload(GraceModel):
     #: on a materialised row.
     bbox: BBox
     mode: LayerMode
+    #: The credential the row needs, by the NAME its source states. The session
+    #: resolves it in its own auth store and attaches the stored config as
+    #: ``authcfg=`` on the uri, so the key never reaches the daemon. ``None`` is
+    #: a public row; a named credential nothing has stored is a refusal, never a
+    #: request the provider would reject.
+    credential: str | None = Field(default=None, min_length=1, max_length=120)
 
 
 class LayerResponsePayload(GraceModel):

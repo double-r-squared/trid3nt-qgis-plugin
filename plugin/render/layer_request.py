@@ -15,6 +15,7 @@ import traceback
 from typing import Any, Dict, Optional, Tuple
 
 from ..case.push_layer import upload_layer_bytes
+from ..net.auth_broker import AuthBroker
 from .export_layer import export_to_tempfile
 
 #: The tail of an error that rides the response.
@@ -28,7 +29,7 @@ _RASTER_PROVIDERS = frozenset(
 
 
 def run_layer_request(
-    payload: dict, base_url: str = "", iface: Any = None
+    payload: dict, base_url: str = "", iface: Any = None, broker: Any = None
 ) -> Dict[str, Any]:
     """The ``layer-response`` wire dict for one ``layer-request``."""
     key = payload.get("key")
@@ -38,6 +39,12 @@ def run_layer_request(
         name = str(payload.get("name") or "layer")
         mode = str(payload.get("mode") or "")
         bbox = _bbox(payload.get("bbox"))
+        credential = payload.get("credential") or None
+        if credential:
+            cfg_id = (broker or AuthBroker()).config_id(str(credential))
+            if not cfg_id:
+                return _response(key, error=_no_key(str(credential), name))
+            uri = f"{uri} authcfg={cfg_id}"
         layer = open_provider_layer(provider, uri, name)
         if mode == "open":
             add_to_map(layer, bbox, iface)
@@ -53,6 +60,17 @@ def _response(
     key: Any, uri: Optional[str] = None, error: Optional[str] = None
 ) -> Dict[str, Any]:
     return {"key": key, "uri": uri, "error": error}
+
+
+def _no_key(credential: str, name: str) -> str:
+    """The refusal for a keyed row with nothing stored under its credential.
+    Opening without the key would fail in the provider with the upstream's own
+    wording, which names neither the credential nor where a key is entered."""
+    return (
+        f"{name} is published through a keyed service and no key is stored "
+        f"under {credential!r}. Open the plugin's Settings -> Keys and enter "
+        f"the {credential} key there; the key stays in this QGIS session."
+    )
 
 
 def _bbox(value: Any) -> Tuple[float, float, float, float]:

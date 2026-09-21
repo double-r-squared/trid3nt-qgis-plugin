@@ -1,6 +1,7 @@
-"""A layer-request answered by the session: the pure client seam offline, and
-the QGIS-bound open/export in a subprocess under the interpreter that carries
-``qgis.core`` and the Processing plugin, skipped honestly when absent."""
+"""A layer-request answered by the session: the pure client seam offline, the
+keyed row's authcfg attach over a fake auth manager, and the QGIS-bound
+open/export in a subprocess under the interpreter that carries ``qgis.core`` and
+the Processing plugin, skipped honestly when absent."""
 
 from __future__ import annotations
 
@@ -17,11 +18,102 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 
 from plugin.net import trid3nt_client as tc  # noqa: E402
+from plugin.net.auth_broker import AuthBroker, QgsAuthManagerStore  # noqa: E402
+from plugin.render import layer_request as lr  # noqa: E402
 from stub_server import (  # noqa: E402
     LAYER_REQUEST_ROW,
     STUB_LAYER_REQUEST_KEY,
     StubAgentServer,
 )
+from test_keys_form import _FakeAuthManager, _FakeConfig  # noqa: E402
+
+
+#: A synthetic keyed provider row: an ArcGIS feature service that takes a token
+#: through a stored auth config. No shipped row names a credential yet.
+KEYED_REQUEST = {
+    "key": "01KEYEDROWAAAAAAAAAAAAAAAA",
+    "provider": "arcgisfeatureserver",
+    "uri": "crs='EPSG:4326' url='https://example.test/FeatureServer/0'",
+    "name": "keyed_cells",
+    "bbox": [-82.0, 27.0, -81.9, 27.1],
+    "mode": "open",
+    "credential": "example_token",
+}
+
+
+class TestKeyedProviderRow(unittest.TestCase):
+    """A row naming a credential takes its key from THIS session's auth store,
+    as the ``authcfg=`` token; nothing keyed ever reaches the daemon."""
+
+    def setUp(self):
+        import types
+
+        self.am = _FakeAuthManager()
+        qgis_core = types.ModuleType("qgis.core")
+        qgis_core.QgsAuthMethodConfig = _FakeConfig
+        self._saved = sys.modules.get("qgis.core")
+        sys.modules["qgis.core"] = qgis_core
+        self.addCleanup(self._restore)
+        self.broker = AuthBroker(QgsAuthManagerStore(self.am))
+        self.opened: list = []
+
+        def _open(provider, uri, name):
+            self.opened.append((provider, uri, name))
+            return object()
+
+        self._real_open = lr.open_provider_layer
+        self._real_add = lr.add_to_map
+        self._real_mat = lr.materialise
+        lr.open_provider_layer = _open
+        lr.add_to_map = lambda layer, bbox, iface: None
+        lr.materialise = lambda layer, bbox, key, base_url: "s3://cache/keyed.gpkg"
+        self.addCleanup(self._restore_seams)
+
+    def _restore(self):
+        if self._saved is None:
+            sys.modules.pop("qgis.core", None)
+        else:
+            sys.modules["qgis.core"] = self._saved
+
+    def _restore_seams(self):
+        lr.open_provider_layer = self._real_open
+        lr.add_to_map = self._real_add
+        lr.materialise = self._real_mat
+
+    def test_open_attaches_the_stored_config_id(self):
+        self.broker.remember("example_token", "TOKEN-VALUE")
+        cfg_id = self.broker.config_id("example_token")
+        answer = lr.run_layer_request(KEYED_REQUEST, broker=self.broker)
+        self.assertEqual(answer, {"key": KEYED_REQUEST["key"], "uri": None,
+                                  "error": None})
+        self.assertEqual(self.opened[-1][1],
+                         f"{KEYED_REQUEST['uri']} authcfg={cfg_id}")
+
+    def test_materialise_attaches_the_stored_config_id(self):
+        self.broker.remember("example_token", "TOKEN-VALUE")
+        cfg_id = self.broker.config_id("example_token")
+        answer = lr.run_layer_request(
+            dict(KEYED_REQUEST, mode="materialise"), broker=self.broker)
+        self.assertEqual(answer["uri"], "s3://cache/keyed.gpkg")
+        self.assertIsNone(answer["error"])
+        self.assertTrue(self.opened[-1][1].endswith(f"authcfg={cfg_id}"))
+
+    def test_the_key_value_never_rides_the_uri(self):
+        self.broker.remember("example_token", "TOKEN-VALUE")
+        lr.run_layer_request(KEYED_REQUEST, broker=self.broker)
+        self.assertNotIn("TOKEN-VALUE", self.opened[-1][1])
+
+    def test_no_stored_key_refuses_by_name_toward_the_form(self):
+        answer = lr.run_layer_request(KEYED_REQUEST, broker=self.broker)
+        self.assertIsNone(answer["uri"])
+        self.assertIn("example_token", answer["error"])
+        self.assertIn("Settings -> Keys", answer["error"])
+        self.assertEqual(self.opened, [], "a keyless row still asked the provider")
+
+    def test_a_public_row_is_untouched(self):
+        public = {k: v for k, v in KEYED_REQUEST.items() if k != "credential"}
+        lr.run_layer_request(public, broker=self.broker)
+        self.assertEqual(self.opened[-1][1], KEYED_REQUEST["uri"])
 
 
 class TestLayerRequestRoundTrip(unittest.TestCase):

@@ -47,6 +47,64 @@ package DataSeam {
         */
     }
 
+    part def KeyedSourceDeclaration {
+        doc /*
+        A source row that needs a key. It states WHICH key, by name, beside the
+        endpoints it needs the key for - so nothing downstream keeps a table of
+        which source needs what.
+        */
+    }
+
+    part def CredentialResolver {
+        doc /*
+        The one reader of a source row's credential. It resolves a key for a
+        keyed tool - the session's pushed key first, the row's own env var
+        behind it - and refuses by name when neither holds one, because a keyed
+        call with no key cannot succeed and a refusal that names the credential
+        is the only honest thing left to say.
+        */
+    }
+
+    part def KeyedSourceCatalog {
+        doc /*
+        What the daemon tells a key-entering surface: the credential each source
+        row declares, by name, with no key material. It restates nothing - the
+        rows are the closed set and this is a projection of them.
+        */
+    }
+
+    part def CredentialStore {
+        doc /*
+        The session's own credential home. A key entered here reaches the daemon
+        only as a pushed value for a bespoke fetcher; for a borrowed provider it
+        never leaves at all, and the stored config id rides the datasource uri.
+        */
+    }
+
+    part def KeysForm {
+        doc /*
+        One masked row per credential the source rows declare, not per source,
+        so two sources served by one account are one row and one entered key.
+        The chat is never a key path.
+        */
+    }
+
+    part def BorrowedProviderExecutor {
+        doc /*
+        The daemon end of a borrowed provider row: it names which credential the
+        row needs and never resolves it, so no keyed row can put a key on the
+        wire.
+        */
+    }
+
+    part def BorrowedProviderSession {
+        doc /*
+        The session end: it attaches its OWN stored config to the uri, and
+        refuses by name toward the keys form when nothing is stored under the
+        credential the row asked for.
+        */
+    }
+
     part def FetcherRouter {
         doc /*
         The door a data ask enters. It resolves which ladder governs THIS
@@ -160,6 +218,12 @@ package DataSeam {
     port def StoppedIn;
     port def GapOut;
     port def GapIn;
+    port def CredentialOut;
+    port def CredentialIn;
+    port def KeyedCatalogOut;
+    port def KeyedCatalogIn;
+    port def LayerCredentialOut;
+    port def LayerCredentialIn;
 
     // ----------------------------------------------------------------- //
     // Interfaces - the seam contracts, by their real key names
@@ -210,6 +274,30 @@ package DataSeam {
         item native_cell_m : Real;
         item render : String;
         item sign : String;
+    }
+
+    interface def SourceCredentialDeclaration {
+        doc /*
+        The key a source needs, stated where the source is. ``name`` is the
+        SCOPE a stored key lands under, which is why two rows served by one
+        upstream account state the same name; ``env_var`` is the same variable
+        the source's own hook reads, so the form and the code cannot disagree
+        about which key this is.
+        */
+        item name : String;
+        item label : String;
+        item signup_url : String [0..1];
+        item env_var : String;
+    }
+
+    interface def LayerCredentialRef {
+        doc /*
+        Which credential a borrowed provider row needs, by NAME only. The
+        session resolves it in its own store, so this is the whole of what the
+        daemon can say about a keyed provider row and the key itself never
+        crosses the wire in either direction.
+        */
+        item credential : String [0..1];
     }
 
     interface def BedLadderRung {
@@ -368,6 +456,56 @@ package DataSeam {
         port rungOut : RungOut;
         port ladderOut : LadderOut;
         port gapOut : GapOut;
+    }
+
+    part firmsDeclaration : KeyedSourceDeclaration {
+        doc /*
+        code: trid3nt_server/tools/fetchers/hazard/fetch_firms_active_fire/source.yaml
+        */
+        port credentialOut : CredentialOut;
+    }
+
+    part credentialResolver : CredentialResolver {
+        doc /*
+        code: trid3nt_server/credentials/resolver.py
+        */
+        port credentialIn : CredentialIn;
+        port keyedCatalogOut : KeyedCatalogOut;
+    }
+
+    part keyedSourceCatalog : KeyedSourceCatalog {
+        doc /*
+        code: trid3nt_server/server/protocol/catalog_http.py
+        */
+        port keyedCatalogIn : KeyedCatalogIn;
+        port credentialOut : CredentialOut;
+    }
+
+    part keysForm : KeysForm {
+        doc /*
+        code: plugin/ui/settings_dialog.py
+        */
+        port credentialIn : CredentialIn;
+    }
+
+    part credentialStore : CredentialStore {
+        doc /*
+        code: plugin/net/auth_broker.py
+        */
+    }
+
+    part borrowedProviderExecutor : BorrowedProviderExecutor {
+        doc /*
+        code: trid3nt_server/tools/fetchers/_router/executors/qgis_provider.py
+        */
+        port layerCredentialOut : LayerCredentialOut;
+    }
+
+    part borrowedProviderSession : BorrowedProviderSession {
+        doc /*
+        code: plugin/render/layer_request.py
+        */
+        port layerCredentialIn : LayerCredentialIn;
     }
 
     part waterCut : WaterCut {
@@ -682,6 +820,19 @@ package DataSeam {
     interface compositeGapReported : PartialCoverGap
         connect coastalComposite.gapOut to ladderWalker.gapIn;
 
+    interface sourceCredentialDeclared : SourceCredentialDeclaration
+        connect firmsDeclaration.credentialOut to credentialResolver.credentialIn;
+
+    interface keyedRowsProjected : SourceCredentialDeclaration
+        connect credentialResolver.keyedCatalogOut to keyedSourceCatalog.keyedCatalogIn;
+
+    interface keysFormOffersTheRows : SourceCredentialDeclaration
+        connect keyedSourceCatalog.credentialOut to keysForm.credentialIn;
+
+    interface layerCredentialNamed : LayerCredentialRef
+        connect borrowedProviderExecutor.layerCredentialOut
+            to borrowedProviderSession.layerCredentialIn;
+
     // ----------------------------------------------------------------- //
     // The signed decisions this seam is governed by
     // ----------------------------------------------------------------- //
@@ -699,6 +850,37 @@ package DataSeam {
         A row that declares no class keeps the unclassed ladder. A class nobody
         declared is not a class anybody may assume, so the per-class ladders
         govern the row that states which water it is and nothing else.
+        */
+    }
+
+    requirement def AKeyedSourceStatesTheKeyItNeeds {
+        doc /*
+        The key a source needs is a fact ABOUT THE SOURCE, so it is stated on
+        the source's own row and nowhere else - name, label, signup url and the
+        env var the source's own hook reads. Everything downstream is a reader
+        of those rows: the resolver takes the session's pushed key first and the
+        row's env var behind it, the catalog projects the rows for a
+        key-entering surface, and the keys form shows one field per credential
+        NAME rather than per source, so two sources served by one upstream
+        account take one entered key.
+
+        A keyed call with no key REFUSES before it dispatches, naming the
+        credential and the one place a key is entered. The chat is never that
+        place: a key pasted into a conversation is a key in the model's context
+        and in the history, so the refusal points at the form and the form is
+        the only surface that takes a value.
+        */
+    }
+
+    requirement def AKeyedProviderRowsKeyNeverLeavesTheSession {
+        doc /*
+        A borrowed provider row states which credential it needs and the daemon
+        stops there. The session resolves that name in its OWN credential store
+        and attaches the stored config as the uri's ``authcfg=`` token, so the
+        key is never on the wire, never in a log and never in the daemon's
+        memory. A row whose credential nothing has stored is refused by name
+        toward the keys form rather than opened - the provider's own rejection
+        would name neither the credential nor where a key is entered.
         */
     }
 
@@ -1295,6 +1477,35 @@ package DataSeam {
         "tests/fetchers/test_bathymetry_data_seam.py::test_an_undeclared_class_keeps_the_rows_unclassed_ladder";
     verify requirement PerWaterBodyClassLadders by
         "tests/fetchers/test_bathymetry_data_seam.py::test_every_class_ladder_ends_at_refuse_with_the_rows_own_error_code";
+
+    satisfy requirement AKeyedSourceStatesTheKeyItNeeds by firmsDeclaration;
+    satisfy requirement AKeyedSourceStatesTheKeyItNeeds by credentialResolver;
+    satisfy requirement AKeyedSourceStatesTheKeyItNeeds by keyedSourceCatalog;
+    satisfy requirement AKeyedSourceStatesTheKeyItNeeds by keysForm;
+    verify requirement AKeyedSourceStatesTheKeyItNeeds by
+        "tests/credentials/test_credential_resolver.py::test_keyed_credentials_are_the_rows_that_declare_one";
+    verify requirement AKeyedSourceStatesTheKeyItNeeds by
+        "tests/credentials/test_credential_resolver.py::test_one_pushed_key_serves_every_row_naming_it";
+    verify requirement AKeyedSourceStatesTheKeyItNeeds by
+        "tests/credentials/test_credential_resolver.py::test_refusal_names_the_credential_and_the_form";
+    verify requirement AKeyedSourceStatesTheKeyItNeeds by
+        "tests/fetchers/test_router_stations.py::test_keyed_missing_key_refuses_pre_network";
+    verify requirement AKeyedSourceStatesTheKeyItNeeds by
+        "plugin/tests/test_keys_form.py::test_one_row_per_credential_not_per_source";
+
+    satisfy requirement AKeyedProviderRowsKeyNeverLeavesTheSession by borrowedProviderExecutor;
+    satisfy requirement AKeyedProviderRowsKeyNeverLeavesTheSession by borrowedProviderSession;
+    satisfy requirement AKeyedProviderRowsKeyNeverLeavesTheSession by credentialStore;
+    verify requirement AKeyedProviderRowsKeyNeverLeavesTheSession by
+        "tests/fetchers/test_router_qgis_provider.py::test_a_keyed_row_carries_its_credential_NAME_and_no_key";
+    verify requirement AKeyedProviderRowsKeyNeverLeavesTheSession by
+        "plugin/tests/test_layer_request.py::test_open_attaches_the_stored_config_id";
+    verify requirement AKeyedProviderRowsKeyNeverLeavesTheSession by
+        "plugin/tests/test_layer_request.py::test_materialise_attaches_the_stored_config_id";
+    verify requirement AKeyedProviderRowsKeyNeverLeavesTheSession by
+        "plugin/tests/test_layer_request.py::test_the_key_value_never_rides_the_uri";
+    verify requirement AKeyedProviderRowsKeyNeverLeavesTheSession by
+        "plugin/tests/test_layer_request.py::test_no_stored_key_refuses_by_name_toward_the_form";
 
     satisfy requirement ACatalogReaderCarriesNoProvenance by stacRasterReader;
     satisfy requirement ACatalogReaderCarriesNoProvenance by copernicusDeclaration;

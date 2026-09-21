@@ -5,7 +5,9 @@ The row states the provider, the datasource uri it takes and what to do with the
 layer. ``mode: open`` leaves an overlay on the user's map and returns a record, so
 nothing enters the store and no packet row is published; ``mode: materialise``
 has the session export and upload the layer, and the bytes come back through the
-read-through under the row-shaped cache key like any other fetch.
+read-through under the row-shaped cache key like any other fetch. A row may name
+a ``credential``: the session attaches its own stored config to the uri, so a
+keyed provider's key never reaches the daemon at all.
 """
 
 from __future__ import annotations
@@ -40,7 +42,8 @@ _PENDING_LAYER: dict[str, tuple[str, asyncio.Future]] = {}
 
 
 def _block(spec: SourceSpec) -> dict[str, Any]:
-    """The row's ``ingest.qgis_provider`` block: provider, uri, mode."""
+    """The row's ``ingest.qgis_provider`` block: provider, uri, mode, and the
+    optional credential name the session resolves in its own auth store."""
     block = (spec.ingest or {}).get("qgis_provider") or {}
     missing = [k for k in ("provider", "uri", "mode") if not block.get(k)]
     if missing:
@@ -251,6 +254,7 @@ def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
         name=spec.name.removeprefix("fetch_"),
         bbox=params["bbox"],
         mode=str(block["mode"]),
+        credential=block.get("credential") or None,
     )
     answer = ask_session_for_layer(payload)
     if answer.error:
