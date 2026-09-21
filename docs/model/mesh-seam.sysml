@@ -640,13 +640,31 @@ package MeshSeam {
         not cover refuses in the fetcher's own words, and what ACTUALLY painted
         the bed rides back rather than what was asked for.
 
-        The bed is ONE source here. A survey over a wider surface is a spatial
-        MERGE of two available layers, which is a derive - useful on its own,
+        The bed is ONE source here. A bed composed of several rows is a spatial
+        MERGE of available layers, which is a derive - useful on its own,
         outside any slot - and it is composed in the DATA body before this op
-        runs: the primary paints every cell it measured, the fallback paints
-        what is left, and a sidecar records which won at each cell. A fetcher's
-        ladder is a different thing entirely, and one is never spelled as the
-        other. A node the one surface does not cover refuses by count.
+        runs, because the RUN stated the op that lays them: the first row paints
+        every cell it measured, each named row paints what the ones before it
+        left, and a sidecar records which won at each cell. A fetcher's own
+        fallback chain is a different thing entirely, and one is never spelled
+        as the other.
+        */
+    }
+
+    requirement def NothingPaintsSilently {
+        doc /*
+        FEEDBACK OVER BUILT-IN BEHAVIOUR. A node standing on a cell no row
+        measured has no elevation, and a number put there on its behalf - a
+        mean, a zero, a plane - is a bed nobody surveyed and nothing downstream
+        can tell from one somebody sounded. So the op REFUSES by name: how many
+        nodes, the box they stand in, and the coverage feedback the surface
+        states about itself, which is the thing the person acts on.
+
+        The feedback itself is stated over the two grounds a bed answers for
+        separately - the water the domain was cut with, and the land - because a
+        share over the whole grid mixes the land a terrain surface painted with
+        the channel the run is about. Every row that painted is named with the
+        share it reached, never the first two of five.
         */
     }
 
@@ -805,6 +823,18 @@ package MeshSeam {
         "tests/mesh/test_bed_sources_and_runs.py::test_a_domain_no_source_covers_refuses_by_name";
     verify requirement CorrectDataClassAtSetBed by
         "tests/mesh/test_bed_sources_and_runs.py::test_a_stated_depth_is_a_flat_bed_below_the_free_surface";
+
+    satisfy requirement NothingPaintsSilently by sharedPrimitives;
+    verify requirement NothingPaintsSilently by
+        "tests/mesh/test_bed_sources_and_runs.py::test_a_node_no_row_reached_refuses_with_the_feedback_and_never_a_zero";
+    verify requirement NothingPaintsSilently by
+        "tests/mesh/test_bed_sources_and_runs.py::test_the_journal_states_what_every_row_of_a_composed_bed_reached";
+    verify requirement NothingPaintsSilently by
+        "tests/inputs/test_bed_merge.py::test_the_feedback_states_the_water_and_the_land_separately";
+    verify requirement NothingPaintsSilently by
+        "tests/inputs/test_bed_merge.py::test_a_hole_too_small_to_round_is_stated_and_still_filled";
+    verify requirement NothingPaintsSilently by
+        "tests/runtime/test_matched_slots.py::test_the_bed_lays_the_one_row_the_match_ranked_first";
 
     satisfy requirement BoundaryRolesAreContiguousRuns by sharedPrimitives;
     satisfy requirement BoundaryRolesAreContiguousRuns by om2dAdapter;

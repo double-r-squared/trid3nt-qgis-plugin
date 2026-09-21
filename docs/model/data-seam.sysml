@@ -862,21 +862,27 @@ package DataSeam {
 
     requirement def WaterNothingMeasuredIsPaintedOnlyWhenAskedFor {
         doc /*
-        A wider surface over the water measures its TOP, so it is not a bed
-        there: the fallback rungs paint outside the polygon the domain was cut
-        with, and the merge states the share of the water no measured rung
-        reached. That share is the heuristic a reader weighs, and the slot
-        REFUSES over it - naming the share and the op that would paint it -
-        rather than standing on a bed nobody measured.
+        NOTHING PAINTS SILENTLY. The bed lays the ONE row the match ranked
+        first and STATES WHAT IT COVERS - over the water the domain was cut with
+        and over the land separately, what each row painted there and what
+        nothing measured, and the rows that also matched and could cover the
+        gap. A wider surface over the water measures its TOP, so it is not a bed
+        there: a row serving terrain paints outside the cut polygon only. The
+        feedback is the whole of what the slot hands a person, and the slot
+        REFUSES over unmeasured water - naming the share, those rows and the ops
+        that would lay them - rather than standing on a bed nobody measured.
 
-        The op is the person's: a run states it for the slot on the call, beside
-        the source it picks, and the bed's one op interpolates from the
-        measurements to the polygon's own edge, seeded at depth zero because the
-        bed meets the water surface where the water ends. It lays as the LAST
-        rung, under every measured one, with no distance cap - a hole far from
-        every sounding is painted and says so through its provenance, and a cap
-        would be this code choosing a radius for the person who asked. The share
-        does not move when the op runs: an interpolation is not a sounding.
+        COMPOSING PAST THAT ROW IS THE PERSON'S STATEMENT, carried as ops on the
+        call beside the source it picks, in the order they are stated. MERGE
+        names the rows laid under the first, each painting the cells the ones
+        before it left, provenance per cell. INTERPOLATED paints the water no
+        row measured, from the measurements to the polygon's own edge, seeded at
+        depth zero because the bed meets the water surface where the water ends;
+        it lays LAST, with no distance cap - a hole far from every sounding is
+        painted and says so through its provenance, and a cap would be this code
+        choosing a radius for the person who asked. The HOLE itself is what the
+        fill is gated on, never its rounded share. The share does not move when
+        the op runs: an interpolation is not a sounding.
         */
     }
 
@@ -939,11 +945,11 @@ package DataSeam {
         sheet states in its own sentence.
 
         The same order holds wherever surfaces meet before a slot does: the bed
-        merge reads EVERY RUNG of its ladder onto the run's frame, each through
-        the row the runtime declared for it - one per rung, the same declaration
+        merge reads EVERY ROW it lays onto the run's frame, each through the
+        row the runtime declared for it - one per surface, the same declaration
         a slot's source gets and never a second mechanism - before any of them
         paints a cell, and a pair nothing measures refuses naming both. A merge
-        called outside a run lands on the bottom rung's own zero, which nothing
+        called outside a run lands on the last surface's own zero, which nothing
         it already holds moves. A surface counting DEPTHS down from its zero is one
         axis with a surface counting elevations up only through that shift, so
         it is read the other way round on the way - on its own grid, before
@@ -954,12 +960,12 @@ package DataSeam {
         they are counted below and refuses without it, while an elevation
         surface somebody handed this run stands on the run's frame.
 
-        AN UNPLACEABLE RUNG DROPS OFF. A rung of the bed's ladder whose zero
-        nothing measures against the frame the merge lands on is not a rung of
-        this bed: it drops off the way an empty one does, the run says which
-        rung and why - its own zero and the frame nothing reached it from - and
-        the rungs under it paint the cells it would have. The merge refuses only
-        where what is left paints nothing, or where the TOP rung itself cannot
+        AN UNPLACEABLE ROW DROPS OFF. A row whose zero nothing measures
+        against the frame the merge lands on is not part of this bed: it drops
+        off the way an empty one does, the run says which row and why - its own
+        zero and the frame nothing reached it from - and the rows after it paint
+        the cells it would have. The merge refuses only
+        where what is left paints nothing, or where the FIRST row itself cannot
         be placed, because a bed whose best source is unplaceable is not that
         bed. The refusal is built ONCE, by the datum check that knows both
         zeros; a slot re-raises it under its own code rather than restating the
@@ -967,10 +973,10 @@ package DataSeam {
         one fact are two chances to disagree.
 
         A BED THAT SPLIT IN TWO IS REFUSED BY NAME. A shift nobody caught still
-        shows in what the rungs painted: values in two populations farther apart
+        shows in what the rows painted: values in two populations farther apart
         than the relief of the surface under them is a step no ground holds, and
         every node is painted, so nothing below catches it. The merge refuses,
-        naming both ranges and the rung each came from, rather than handing a
+        naming both ranges and the row each came from, rather than handing a
         mesh a cliff for a river to stand in. The domain's OWN relief is the
         yardstick, because the only number that says how far this landscape
         falls is this landscape.
@@ -1082,15 +1088,14 @@ package DataSeam {
         judgement, and a named source the filters excluded is a refusal rather
         than a way past them.
 
-        The bed is the one slot whose physics rule the runtime owns, stated
-        ONCE: EVERY surviving rung of the class laid in rank order over the
-        terrain under all of them, each rung painting the cells the rungs above
-        it left, the soundings gridded at the run's own edge before the merge
-        reads them, and the terrain alone where nothing measured this domain. A
-        domain reaching past the top pick is what the next rung is for, so the
-        bed calls the list to its end rather than standing on the first answer,
-        and the provenance the merge writes names the rung that painted each
-        cell by its rank.
+        The bed takes the ONE row its class matched, like every other slot,
+        and then whatever the run's own ops lay over it: a row reaches this bed
+        only because a merge op NAMED it, and the water no row measured is
+        painted only because the run stated the fill. Soundings are gridded at
+        the run's own edge before the merge reads them. What the run was not
+        given is the surface's own coverage feedback to state, and the
+        provenance the merge writes names the row that painted each cell by the
+        place it was laid in.
         */
     }
 
@@ -1410,17 +1415,17 @@ package DataSeam {
     verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
         "tests/inputs/test_bed_merge.py::test_the_terrain_paints_only_outside_the_polygon_the_domain_was_cut_with";
     verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
-        "tests/inputs/test_bed_merge.py::test_the_merge_states_the_share_of_the_water_measured_by_nothing";
+        "tests/inputs/test_bed_merge.py::test_the_feedback_states_the_water_and_the_land_separately";
     verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
         "tests/inputs/test_bed_merge.py::test_the_stated_op_paints_the_water_from_the_shore_to_the_measurements";
     verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
-        "tests/inputs/test_bed_merge.py::test_the_interpolated_rung_is_ranked_last_and_says_so_per_cell";
+        "tests/inputs/test_bed_merge.py::test_the_interpolated_row_is_laid_last_and_says_so_per_cell";
     verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
-        "tests/inputs/test_slot_inputs.py::test_water_no_rung_measured_refuses_and_names_the_share_and_the_op";
+        "tests/inputs/test_slot_inputs.py::test_water_no_row_measured_refuses_and_names_the_share_the_rows_and_the_ops";
     verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
         "tests/inputs/test_slot_inputs.py::test_the_op_the_run_states_is_what_lets_the_unmeasured_water_through";
     verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
-        "tests/runtime/test_matched_slots.py::test_the_op_the_run_states_reaches_the_merge_as_its_fill";
+        "tests/runtime/test_matched_slots.py::test_the_ops_the_run_states_reach_the_merge_in_the_order_stated";
     verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
         "tests/runtime/test_matched_slots.py::test_an_op_stated_for_a_row_the_workflow_does_not_declare_refuses_by_name";
     satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by lakeLevelDeclaration;
@@ -1530,9 +1535,9 @@ package DataSeam {
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
         "tests/search/test_source_match.py::test_a_run_that_picks_a_source_the_filters_excluded_is_refused";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
-        "tests/runtime/test_matched_slots.py::test_every_surviving_rung_is_laid_in_rank_order_over_the_terrain";
+        "tests/runtime/test_matched_slots.py::test_a_merge_op_lays_the_rows_it_names_in_the_order_it_names_them";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
-        "tests/runtime/test_matched_slots.py::test_no_measurement_over_this_domain_leaves_the_terrain_as_the_whole_bed";
+        "tests/runtime/test_matched_slots.py::test_no_measurement_over_this_domain_refuses_rather_than_reaching_a_class";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
         "tests/runtime/test_matched_slots.py::test_the_next_survivor_takes_its_turn_when_the_top_one_held_nothing";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
@@ -1631,7 +1636,7 @@ package DataSeam {
     verify requirement TheRunHasOneVerticalFrame by
         "tests/runtime/test_matched_slots.py::test_the_runtime_declares_the_offset_row_a_merge_source_owes";
     verify requirement TheRunHasOneVerticalFrame by
-        "tests/inputs/test_bed_merge.py::test_each_rung_is_read_onto_the_frame_through_the_row_declared_for_it";
+        "tests/inputs/test_bed_merge.py::test_each_row_is_read_onto_the_frame_through_the_offset_declared_for_it";
     verify requirement TheRunHasOneVerticalFrame by
         "tests/fetchers/test_router_ehydro_surveys.py::test_a_depth_on_igld85_is_counted_from_the_low_water_datum";
     verify requirement TheRunHasOneVerticalFrame by
@@ -1649,9 +1654,9 @@ package DataSeam {
     verify requirement TheRunHasOneVerticalFrame by
         "tests/runtime/test_domain_bed_and_context_slots.py::test_an_offset_row_is_asked_where_the_source_measured_not_at_the_seed";
     verify requirement TheRunHasOneVerticalFrame by
-        "tests/inputs/test_bed_merge.py::test_a_rung_the_service_cannot_place_drops_off_and_the_rest_paint";
+        "tests/inputs/test_bed_merge.py::test_a_row_the_service_cannot_place_drops_off_and_the_rest_paint";
     verify requirement TheRunHasOneVerticalFrame by
-        "tests/inputs/test_bed_merge.py::test_the_top_rung_the_service_cannot_place_refuses_the_whole_merge";
+        "tests/inputs/test_bed_merge.py::test_the_first_row_the_service_cannot_place_refuses_the_whole_merge";
     verify requirement TheRunHasOneVerticalFrame by
         "tests/inputs/test_slot_inputs.py::test_a_bed_the_runs_frame_cannot_reach_names_its_zero_once";
 
@@ -1724,11 +1729,11 @@ package DataSeam {
     verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/inputs/test_bed_merge.py::test_the_sidecar_says_which_input_painted_each_cell";
     verify requirement OneBedOverEverySourceAUserCanHave by
-        "tests/inputs/test_bed_merge.py::test_every_rung_paints_the_cells_the_rungs_above_it_left";
+        "tests/inputs/test_bed_merge.py::test_each_row_paints_the_cells_the_ones_before_it_left";
     verify requirement OneBedOverEverySourceAUserCanHave by
-        "tests/inputs/test_bed_merge.py::test_a_grid_the_whole_ladder_leaves_unpainted_refuses_naming_the_rungs";
+        "tests/inputs/test_bed_merge.py::test_a_grid_every_row_leaves_unpainted_refuses_naming_them";
     verify requirement OneBedOverEverySourceAUserCanHave by
-        "tests/inputs/test_bed_merge.py::test_an_absent_primary_passes_the_other_surface_through";
+        "tests/inputs/test_bed_merge.py::test_one_surface_alone_is_still_laid_and_still_states_what_it_covers";
     verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/mesh/test_bed_sources_and_runs.py::test_a_domain_no_source_covers_refuses_by_name";
     verify requirement OneBedOverEverySourceAUserCanHave by
