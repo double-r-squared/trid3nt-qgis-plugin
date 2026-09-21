@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Any, Sequence
+from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
 from trid3nt_contracts.common import render_fallback_line
 from trid3nt_contracts.execution import LayerURI
@@ -24,6 +24,7 @@ __all__ = [
     "publish_for_emission",
     "publish_input_layer",
     "publish_raster_input_cog",
+    "republish_input_row",
     "stamp_fallbacks",
 ]
 
@@ -236,6 +237,19 @@ def _cog_object_exists(cog_uri: str) -> bool:
         return False
 
 
+async def republish_input_row(row: Mapping[str, Any] | None) -> bool:
+    """Put a row a completed step already published back on the map.
+
+    The row is what ``publish_raster_input_cog`` takes, carried on that step's
+    ledger record: a REPLAYED step never reaches its own publish, and the run
+    resuming on its work has to show the same surface a fresh one showed."""
+    if not row:
+        return False
+    from trid3nt_server.render.pipeline_emitter import current_emitter
+
+    return await publish_raster_input_cog(current_emitter(), **row)
+
+
 async def publish_raster_input_cog(
     emitter: "PipelineEmitter | None",
     *,
@@ -244,16 +258,12 @@ async def publish_raster_input_cog(
     name: str,
     style: dict[str, Any] | None = None,
     role: str = "context",
-    units: str | None = None,
-    vertical_datum: str | None = None,
     fallback_note: str | None = None,
     fallbacks: Sequence[Any] | None = None,
 ) -> bool:
     """BEST-EFFORT: surface an EXISTING ``s3://`` raster COG as an input/context row.
     Rides the object already in the store - no re-upload - and never raises,
     returning ``False`` for every failure rather than failing the solve.
-    ``units`` and ``vertical_datum`` are what the row is READ IN: an elevation
-    surface says both or a reader cannot place it.
     """
     if emitter is None or not cog_uri:
         return False
@@ -314,8 +324,6 @@ async def publish_raster_input_cog(
         uri=renderable,
         style=style,
         role=role,
-        units=units,
-        vertical_datum=vertical_datum,
         bbox=None,
         fallback_note=fallback_note,
     )

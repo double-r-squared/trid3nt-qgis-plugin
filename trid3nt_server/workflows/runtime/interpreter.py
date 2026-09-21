@@ -21,6 +21,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from trid3nt_contracts.common import SyntheticInput
 
+from trid3nt_server.render.layer_uri_emit import republish_input_row
 from trid3nt_server.render.pipeline_emitter import (
     begin_substeps,
     current_emitter,
@@ -202,6 +203,9 @@ async def interpret(
                 value = _rehydrate(cached)
                 if value is not _UNREPLAYABLE:
                     _adopt(env, node, value, out, replayed=True, record=cached)
+                    # The publish rides inside the node, so a replayed one
+                    # never reaches it: the record puts its surface back.
+                    await republish_input_row(cached.layer)
                     out.records.append(cached)
                     logger.info("plan %s node %d %s REPLAYED from ledger",
                                 plan.name, node.index, node.label)
@@ -1533,7 +1537,14 @@ def _record_for(label: str, runner: str, value: Any, *, index: int = 0,
         result_kind=kind, result=payload, result_type=type_path,
         artifact_uris=_artifact_uris(value),
         domain=dom.as_doc() if dom else None,
+        layer=_input_row(value),
     )
+
+
+def _input_row(value: Any) -> dict[str, Any] | None:
+    """The input row a result publishes for itself, as the raster seam takes it."""
+    row = getattr(value, "input_row", None)
+    return dict(row()) if callable(row) else None
 
 
 #: Answers ``_artifact_state`` can give. Both non-live answers re-execute the

@@ -96,6 +96,10 @@ class LedgerRecord:
     result_type: str | None = None
     artifact_uris: tuple[str, ...] = ()
     domain: dict[str, Any] | None = None
+    #: The input row this node PUBLISHED, as the raster publishing seam takes it.
+    #: A replayed node never reaches its own publish, so the record carries the
+    #: row and the replay publishes it: a resumed run shows what a fresh one did.
+    layer: dict[str, Any] | None = None
 
     def to_doc(self) -> dict[str, Any]:
         # A step's result may hold a composite's own read-only mapping, which

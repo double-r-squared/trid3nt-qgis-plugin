@@ -499,9 +499,9 @@ def test_the_merge_publishes_the_bed_as_an_input_layer(tmp_path, monkeypatch) ->
 
     assert len(published) == 1
     row = published[0]
-    assert row["name"] == "Input: bed (merged: {} 6.2%, {} 93.8%)".format(
+    assert row["name"] == "Input: bed (merged: {} 6.2%, {} 93.8%, datum NAVD88)".format(
         *(label for label, _share in merged.rungs))
     assert row["cog_uri"] == merged.uri
     assert row["layer_id"] == f"input-{merged.layer_id}"
-    assert row["units"] == "m" and row["vertical_datum"] == "NAVD88"
-    assert row["style"] == merged.style
+    assert row["style"] == merged.style and row["style"]["units"] == "m"
+    assert set(row) == {"cog_uri", "layer_id", "name", "style"}

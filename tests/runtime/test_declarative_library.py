@@ -126,6 +126,19 @@ async def stub_noting(**kwargs):
     return {"uri": "s3://b/noted.tif"}
 
 
+async def stub_merged_bed(**kwargs):
+    """A step whose RESULT states the input row it publishes for itself - the
+    merged bed, which a replayed run has to put back on the map."""
+    from trid3nt_server.inputs.bed import MergedRasterLayerURI
+
+    _CALLS.append("stub_merged_bed")
+    return MergedRasterLayerURI.published(
+        "merged-bed", seed="abc123", name="merged bed surface",
+        layer_type="raster", uri="s3://b/bed.tif", role="primary",
+        style={"kind": "continuous", "ramp": "terrain", "units": "m"},
+        vertical_datum="NAVD88", rungs=[("survey", 0.4), ("terrain", 0.6)])
+
+
 async def stub_mesh_step(**kwargs):
     """A mesh step's own result shape: the ARTIFACT beside the fields read off it.
 
@@ -979,6 +992,39 @@ async def test_a_replayed_artifact_comes_back_as_the_artifact_not_as_a_mapping()
     assert isinstance(replayed, MeshArtifact)
     assert measured_min_edge_m(replayed) == 40.5
     assert _domain_polygon(replayed)["type"] == "Polygon"
+
+
+@pytest.mark.asyncio
+async def test_a_replayed_merge_publishes_its_bed_again(monkeypatch):
+    """The published surface is part of what the record replays. A cached merge
+    never reaches its own publish, and a resumed run must still show the bed."""
+    from trid3nt_server.render import layer_uri_emit
+
+    published: list[dict] = []
+
+    async def _publish(emitter, **fields) -> bool:
+        published.append(fields)
+        return True
+
+    monkeypatch.setattr(layer_uri_emit, "publish_raster_input_cog", _publish)
+    plan = Plan("bed_replay_w", None, (
+        Step(runner=f"{_HERE}.stub_merged_bed").named("bed"),
+        Step(runner=f"{_HERE}.stub_second").named("run"),
+    ))
+    parent = await _run(plan, _params(), {"base": 13.0})
+    row = [r for r in parent.records if r.node == "bed"][0].layer
+    assert row["name"] == ("Input: bed (merged: survey 40.0%, terrain 60.0%, "
+                           "datum NAVD88)")
+    assert row["cog_uri"] == "s3://b/bed.tif"
+    assert published == []                  # the merge itself publishes, not the plan
+
+    await _seed_ledger("bed_replay_w", {"base": 13.0},
+                       [r for r in parent.records if r.node == "bed"])
+    _CALLS.clear()
+    out = await _run(plan, _params(), {"base": 13.0})
+    assert out.replayed == ["bed"] and _CALLS == ["stub_second"]
+    assert [r.layer for r in out.records if r.node == "bed"] == [row]
+    assert published == [row]
 
 
 @pytest.mark.asyncio

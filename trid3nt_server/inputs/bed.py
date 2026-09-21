@@ -656,13 +656,26 @@ class MergedRasterLayerURI(LayerURI):
     fallback_shift_m: float = 0.0
     notes: list[str] = []
 
+    def input_row(self) -> dict[str, Any]:
+        """What the raster publishing seam takes to put this surface on the map.
 
-#: The merged surface is an elevation, so it draws as one.
-_BED_STYLE = {"kind": "continuous", "ramp": "terrain"}
+        Stated by the surface itself, because the ledger carries the row onto
+        the merge's record: a REPLAYED merge publishes the bed a fresh one
+        published, rather than leaving a resumed run with nothing to see."""
+        painted = ", ".join(f"{label} {share * 100.0:.1f}%"
+                            for label, share in self.rungs)
+        said = [f"merged: {painted}"] if painted else []
+        if self.vertical_datum:
+            said.append(f"datum {self.vertical_datum}")
+        return {"cog_uri": self.uri, "layer_id": f"input-{self.layer_id}",
+                "name": f"Input: bed ({', '.join(said)})" if said
+                        else "Input: bed",
+                "style": self.style}
 
-#: What every published bed row is read in: the merge lands each rung on the
-#: run's own frame in metres, whatever unit the rung arrived carrying.
-_BED_UNITS = "m"
+
+#: The merged surface is an elevation in metres, so it draws as one: the merge
+#: lands each rung on the run's own frame, whatever unit the rung arrived in.
+_BED_STYLE = {"kind": "continuous", "ramp": "terrain", "units": "m"}
 
 #: The surfacing tasks in flight, held because a bare ``create_task`` reference
 #: is the loop's only claim on the coroutine and a dropped one is collectable.
@@ -947,12 +960,7 @@ def _surfaced(merged: MergedRasterLayerURI) -> None:
         emitter = current_emitter()
         if emitter is None:
             return
-        painted = ", ".join(f"{label} {share * 100.0:.1f}%"
-                            for label, share in merged.rungs)
-        coro = publish_raster_input_cog(
-            emitter, cog_uri=merged.uri, layer_id=f"input-{merged.layer_id}",
-            name=f"Input: bed (merged: {painted})", style=merged.style,
-            units=_BED_UNITS, vertical_datum=merged.vertical_datum)
+        coro = publish_raster_input_cog(emitter, **merged.input_row())
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
