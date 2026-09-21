@@ -1,7 +1,7 @@
 # NASA FIRMS active-fire / thermal-anomaly detections, keyed. build_request resolves the
-# MAP_KEY into the URL path, raising FIRMS_MISSING_KEY pre-network when absent;
-# parse_response decodes the CSV and checks the 200-with-error-body for an auth failure,
-# and classify_status re-applies the same body markers on a non-2xx transport error.
+# MAP_KEY into the URL PATH, raising FIRMS_MISSING_KEY pre-network when absent; the
+# field map states the CSV walk, the column projection and the two body markers FIRMS
+# spells a bad or exhausted key with, which it sends under a 200 as often as a 4xx.
 schema_version: v1
 name: fetch_firms_active_fire
 source_class: firms_active_fire
@@ -49,22 +49,41 @@ params:
     schema_optional: true
 hooks:
   build_request: firms_active_fire.build_request
-  parse_response: firms_active_fire.parse_response
-  classify_status: firms_active_fire.classify_status
 ingest:
-  properties:
-  - brightness
-  - scan
-  - track
-  - acq_date
-  - acq_time
-  - satellite
-  - instrument
-  - confidence
-  - version
-  - bright_t31
-  - frp
-  - daynight
+  access: http_json
+  body:
+    format: csv
+    geometry:
+      kind: point
+      lon: longitude
+      lat: latitude
+    refuse:
+    - contains: invalid map_key
+      code: AUTH_ERROR
+      message: FIRMS rejected the MAP_KEY. Set TRID3NT_FIRMS_MAP_KEY to a valid key
+        from https://firms.modaps.eosdis.nasa.gov/api/map_key/.
+    - contains: exceeded your transaction
+      code: AUTH_ERROR
+      message: FIRMS reports rate-limit exhaustion for the MAP_KEY. Wait for the
+        10-minute transaction window to clear, or use a second key.
+  # A VIIRS source names its brightness bands bright_ti4/ti5, so a MODIS-only column
+  # reads null there rather than being absent from the layer.
+  column_map:
+    brightness: {from: brightness}
+    scan: {from: scan}
+    track: {from: track}
+    acq_date: {from: acq_date}
+    acq_time: {from: acq_time}
+    satellite: {from: satellite}
+    instrument: {from: instrument}
+    confidence: {from: confidence}
+    version: {from: version}
+    bright_t31: {from: bright_t31}
+    frp: {from: frp}
+    daynight: {from: daynight}
+  geometry_filter:
+    geom_types: [Point]
+    require_finite: true
 normalize:
   crs: EPSG:4326
 output:

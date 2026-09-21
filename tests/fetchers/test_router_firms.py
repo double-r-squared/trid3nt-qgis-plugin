@@ -13,6 +13,8 @@ import tempfile
 import geopandas as gpd
 import pytest
 
+from trid3nt_server.tools.fetchers._router import field_map
+from trid3nt_server.tools.fetchers._router.executors import http_json
 from trid3nt_server.tools.fetchers._router.executors.vector_fgb import (
     features_to_fgb_bytes,
 )
@@ -107,8 +109,8 @@ def test_historical_date_forces_day_one(spec):
     )
 
 
-def test_parse_csv_to_points_retained_schema(spec):
-    feats = fh.parse_response(spec, {"bbox": [-124, 32, -114, 42]}, [_synth_csv(5)])
+def test_the_declared_csv_walk_makes_points_of_the_retained_schema(spec):
+    feats = http_json._features(spec, {"bbox": [-124, 32, -114, 42]}, [_synth_csv(5)])
     assert len(feats) == 5
     assert feats[0]["geometry"] == {"type": "Point", "coordinates": [-120.5, 37.5]}
     gdf = _read(features_to_fgb_bytes(feats, spec, {}))
@@ -119,16 +121,16 @@ def test_parse_csv_to_points_retained_schema(spec):
 
 
 def test_empty_header_only_is_zero_feature_fgb(spec):
-    feats = fh.parse_response(spec, {}, [(_HEADER + "\n").encode()])
+    feats = http_json._features(spec, {}, [(_HEADER + "\n").encode()])
     assert feats == []
-    # declared ingest.properties -> the honest-empty FGB carries the retained schema.
+    # the column map is the schema -> the honest-empty FGB carries every column.
     gdf = _read(features_to_fgb_bytes(feats, spec, {}))
     assert len(gdf) == 0
     assert sorted(c for c in gdf.columns if c != "geometry") == sorted(_RETAINED)
 
 
 def test_geography_correctness_california(spec):
-    feats = fh.parse_response(spec, {}, [_synth_csv(5)])
+    feats = http_json._features(spec, {}, [_synth_csv(5)])
     gdf = _read(features_to_fgb_bytes(feats, spec, {}))
     for geom in gdf.geometry:
         assert -124.5 <= geom.x <= -114.1
@@ -138,19 +140,19 @@ def test_geography_correctness_california(spec):
 @pytest.mark.parametrize("body", [b"Invalid MAP_KEY.", b"You have exceeded your transaction limit."])
 def test_auth_body_200_raises_auth_error(spec, body):
     with pytest.raises(Exception) as ei:
-        fh.parse_response(spec, {}, [body])
+        http_json._features(spec, {}, [body])
     assert getattr(ei.value, "error_code", "") == "FIRMS_AUTH_ERROR"
 
 
 def test_blank_body_raises_upstream(spec):
     with pytest.raises(Exception) as ei:
-        fh.parse_response(spec, {}, [b"   \n  "])
+        http_json._features(spec, {}, [b"   \n  "])
     assert getattr(ei.value, "error_code", "") == "FIRMS_UPSTREAM_ERROR"
 
 
 def test_missing_columns_raises_upstream(spec):
     with pytest.raises(Exception) as ei:
-        fh.parse_response(spec, {}, [b"foo,bar\n1,2\n"])
+        http_json._features(spec, {}, [b"foo,bar\n1,2\n"])
     assert getattr(ei.value, "error_code", "") == "FIRMS_UPSTREAM_ERROR"
 
 
@@ -159,6 +161,8 @@ def test_missing_columns_raises_upstream(spec):
     (500, "server error", None),
     (404, "not found", None),
 ])
-def test_classify_status_body_split(spec, status, body, code):
-    err = fh.classify_status(spec, status, body)
+def test_the_same_body_markers_refuse_a_non_2xx(spec, status, body, code):
+    """The markers FIRMS spells a key failure with reach a 4xx body as often as a
+    200 one, and one declaration is read off both."""
+    err = field_map.declared_status_error(spec, status, body)
     assert getattr(err, "error_code", None) == code

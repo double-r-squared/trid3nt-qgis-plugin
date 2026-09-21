@@ -6,7 +6,9 @@ vocabulary is the station_timeseries one generalized from a station loop to a ro
 
 from __future__ import annotations
 
+import csv
 import datetime as _dt
+import io
 import json
 import math
 import string
@@ -196,12 +198,49 @@ def declared_plans(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan
     return plans
 
 
+def _refuse_declared(spec: SourceSpec, body: dict[str, Any], text: str) -> None:
+    """The source's own refusal wearing a body: ``ingest.body.refuse`` names the
+    markers a failure is spelled with. A service that reports a bad key under HTTP 200
+    as often as under a 4xx is refused off the body either way."""
+    for rule in body.get("refuse") or []:
+        if str(rule.get("contains", "")).lower() not in text.lower():
+            continue
+        raise router_input_error(
+            spec.error_code_prefix,
+            str(rule.get("message") or f"the source refused the request: {text[:200]}"),
+            str(rule.get("code") or spec.input_error_suffix),
+        )
+
+
+def _csv_rows(spec: SourceSpec, body: dict[str, Any], text: str) -> list[dict[str, str]]:
+    """A comma-separated body as its own header's rows. The values stay text: the
+    column map states which are numbers and coerces them. A header that does not name
+    the geometry's own columns is a body this declaration cannot read."""
+    reader = csv.DictReader(io.StringIO(text))
+    names = list(reader.fieldnames or [])
+    geometry = body.get("geometry") or {}
+    needed = [str(geometry[axis]) for axis in ("lon", "lat") if axis in geometry]
+    missing = [name for name in needed if name not in names]
+    if not names or missing:
+        raise router_upstream_error(
+            spec.error_code_prefix,
+            f"CSV body names no {missing or ['header']} column; got columns={names}")
+    return [dict(row) for row in reader]
+
+
 def _decode(spec: SourceSpec, body: dict[str, Any], raw: bytes) -> Any:
     fmt = str(body.get("format", "json"))
     sc = spec.error_code_prefix
     try:
-        obj = json.loads(raw.decode("utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise router_upstream_error(sc, f"response is not UTF-8: {exc}")
+    _refuse_declared(spec, body, text)
+    if fmt == "csv":
+        return _csv_rows(spec, body, text)
+    try:
+        obj = json.loads(text)
+    except json.JSONDecodeError as exc:
         raise router_upstream_error(sc, f"response is not valid JSON: {exc}")
     if fmt == "geojson":
         if not isinstance(obj, dict):
@@ -310,9 +349,14 @@ def declared_empty_error(spec: SourceSpec, fallback: str) -> RouterError | None:
 def declared_status_error(
     spec: SourceSpec, status: int | None, body: str | None
 ) -> RouterError | None:
-    """An honest zero wearing an HTTP error: ``ingest.empty.on_status`` with an optional
-    ``body_contains`` says which status over which body IS the source's empty. Anything
-    else stays an upstream failure."""
+    """The typed error an HTTP failure body states: ``ingest.body.refuse`` first -- the
+    same markers a 200 body is refused on -- then ``ingest.empty.on_status`` with an
+    optional ``body_contains``, which says which status over which body IS the source's
+    empty. Anything else stays an upstream failure."""
+    try:
+        _refuse_declared(spec, (spec.ingest or {}).get("body") or {}, body or "")
+    except RouterError as refusal:
+        return refusal
     empty = (spec.ingest or {}).get("empty") or {}
     statuses = empty.get("on_status")
     if not statuses or status is None or int(status) not in [int(s) for s in statuses]:
