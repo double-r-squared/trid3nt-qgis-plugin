@@ -267,16 +267,6 @@ class AgentWorker(QObject):
         if self.client is not None:
             self.client.confirm_payload(warning_id, decision, revised_args)
 
-    def submit_credential(
-        self, request_id: str, provider_id: str, key_value: str
-    ) -> None:
-        if self.client is not None:
-            self.client.submit_credential(request_id, provider_id, key_value)
-
-    def decline_credential(self, request_id: str) -> None:
-        if self.client is not None:
-            self.client.decline_credential(request_id)
-
     def send_tool_choice(
         self,
         request_id: str,
@@ -476,16 +466,6 @@ class AgentBridge(QObject):
     ) -> None:
         if self._worker is not None:
             self._worker.confirm_payload(warning_id, decision, revised_args)
-
-    def submit_credential(
-        self, request_id: str, provider_id: str, key_value: str
-    ) -> None:
-        if self._worker is not None:
-            self._worker.submit_credential(request_id, provider_id, key_value)
-
-    def decline_credential(self, request_id: str) -> None:
-        if self._worker is not None:
-            self._worker.decline_credential(request_id)
 
     def send_tool_choice(
         self,

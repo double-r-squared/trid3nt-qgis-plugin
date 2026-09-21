@@ -385,7 +385,6 @@ async def _invoke_tool_via_emitter(
         _gate_with_turn_memory,
         _inject_secret_ref,
         _maybe_gate_on_payload_warning,
-        _maybe_handle_credential_error,
     )
 
     _ensure_emitter(websocket, state)
@@ -595,10 +594,9 @@ async def _invoke_tool_via_emitter(
     uri_registry = get_uri_registry(state.session_id)
     params = uri_registry.resolve_params(tool_name, params)
 
-    # Thread the user's per-Case ``secret_ref`` into a keyed tool so its key
-    # resolution reads the vault first and env second. No-op for a non-keyed
-    # tool and when no active secret exists, in which case the tool falls back to
-    # env or a typed auth error the credential flow below acts on.
+    # Thread the session's key into a keyed tool's ``secret_ref``. A no-op for a
+    # public tool; a keyed tool with no key anywhere refuses here by name rather
+    # than dispatching a call that cannot succeed.
     params = await _inject_secret_ref(state, tool_name, params, turn_case_id)
 
     state.current_pipeline_id = state.emitter.start_pipeline()
@@ -706,32 +704,11 @@ async def _invoke_tool_via_emitter(
         return _restamp(out)
 
     try:
-        # Dispatch with a credential-request retry: a missing or invalid
-        # credential for a keyed provider PAUSES the dispatch, emits a
-        # credential request, and retries ONCE with the freshly pushed key. One
-        # prompt per tool per turn, so a still-bad key fails through the normal
-        # typed-error surface instead of re-prompting forever.
-        try:
-            result = await state.emitter.emit_tool_call(
-                name=entry.metadata.name,
-                tool_name=tool_name,
-                invoke=_invoke_with_unique_layer_id,
-            )
-        except (asyncio.CancelledError, GeneratorExit):
-            raise
-        except BaseException as exc:  # noqa: BLE001 -- classify below
-            retry_params = await _maybe_handle_credential_error(
-                websocket, state, tool_name, params, exc, turn_case_id
-            )
-            if retry_params is None:
-                raise
-            # Key provided + session-cache re-resolved: retry the tool ONCE.
-            params = retry_params
-            result = await state.emitter.emit_tool_call(
-                name=entry.metadata.name,
-                tool_name=tool_name,
-                invoke=_invoke_with_unique_layer_id,
-            )
+        result = await state.emitter.emit_tool_call(
+            name=entry.metadata.name,
+            tool_name=tool_name,
+            invoke=_invoke_with_unique_layer_id,
+        )
         _card_state = "complete"
         # Stamp the IO for the persisted tool-card row: ``params`` is the
         # post-resolution arg dict the tool ran with and ``result`` the raw

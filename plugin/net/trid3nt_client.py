@@ -1089,9 +1089,9 @@ class AgentClient:
         self.advertised_data_base: Optional[str] = None
         #: True between a completed handshake and the next transport loss.
         self.connected = False
-        #: Optional credential broker. When set, connect pushes every stored
-        #: credential over ``secret-add`` and a prompt-answered key is stored
-        #: back for the next connect. None where there is no auth home.
+        #: Optional credential broker. When set, connect pushes every key the
+        #: keys form stored over ``secret-add``. None where there is no auth
+        #: home, and the daemon then falls back to its own env.
         self.credential_broker = None
         self._ws: Optional[WebSocketConnection] = None
         # Outbound intent queue: pre-serialized frames buffered while
@@ -1321,9 +1321,9 @@ class AgentClient:
         )
 
     def push_secret(self, provider_id: str, key_value: str) -> None:
-        """Push one credential VALUE over ``secret-add``, with no reply signal
-        and no ``credential-provided``: there is no paused tool to resume. KEY
-        HYGIENE: the value rides this envelope only and is never logged."""
+        """Push one credential VALUE over ``secret-add``, the ONLY envelope a
+        raw key rides. KEY HYGIENE: the value never reaches a log line, and the
+        keys form is the only place it is entered."""
         self._send(
             "secret-add",
             {
@@ -1331,49 +1331,6 @@ class AgentClient:
                 "case_id": self.case_id,
                 "key_value": key_value,
             },
-            queue_if_closed=True,
-        )
-
-    def submit_credential(
-        self, request_id: str, provider_id: str, key_value: str
-    ) -> None:
-        """Answer a ``credential-request`` with the user's key. KEY HYGIENE:
-        the raw key rides the ``secret-add`` envelope ALONE and is never
-        logged or stored on ``self``."""
-        # ORDER matters and is safe on one socket, because the server consumes
-        # envelopes sequentially per connection: the cache write completes
-        # before the paused tool's future resolves and re-resolves the key.
-        # The retry signal that follows carries NO key material, and
-        # ``secret_id`` goes out None because the server re-resolves the
-        # credential itself rather than handing back a id to wait for.
-        broker = self.credential_broker
-        if broker is not None:
-            try:
-                broker.remember(provider_id, key_value)
-            except Exception:  # noqa: BLE001 -- store is best-effort; push still runs
-                pass
-        self._send(
-            "secret-add",
-            {
-                "provider": provider_id,
-                "case_id": self.case_id,
-                "key_value": key_value,
-            },
-            queue_if_closed=True,
-        )
-        self._send(
-            "credential-provided",
-            {"request_id": request_id, "secret_id": None, "provided": True},
-            queue_if_closed=True,
-        )
-
-    def decline_credential(self, request_id: str) -> None:
-        """Decline a ``credential-request``: ``provided=False`` and NO
-        preceding ``secret-add``. The gate still CLOSES -- the paused tool
-        resumes into its original typed auth error, never a dead end."""
-        self._send(
-            "credential-provided",
-            {"request_id": request_id, "secret_id": None, "provided": False},
             queue_if_closed=True,
         )
 
@@ -1572,11 +1529,6 @@ class AgentClient:
             # A gate WAIT: the agent borrows THIS session's data providers to
             # open one layer and PAUSES until the layer-response lands.
             return AgentEvent("layer-request", payload)
-        if etype == "credential-request":
-            # A keyed tool hit a missing or invalid key and the agent PAUSED
-            # it to ask for the credential by name. The pause has a
-            # server-side TTL: unanswered, the tool fails.
-            return AgentEvent("credential-request", payload)
         if etype == "tool-candidates":
             # The agent ranked several plausible tools and asks which runs.
             # Unanswered, the server's own ``timeout_s`` fail-open proceeds

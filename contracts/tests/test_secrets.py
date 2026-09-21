@@ -188,41 +188,25 @@ def test_envelope_type_literal_validation() -> None:
 
 
 
-def test_provider_id_literal_validation() -> None:
-    """Unknown ``provider`` strings are rejected by the closed Literal."""
-    # SecretRecord rejects unknown provider
+def test_provider_is_the_row_stated_credential_name() -> None:
+    """``provider`` is the credential NAME a source row declares, not a closed
+    vocabulary here: a name the rows state validates, an empty one does not."""
+    for name in ("firms", "ecmwf_cds", "openaq", "airnow"):
+        assert _record(provider=name).provider == name
+        assert SecretAddEnvelopePayload(
+            provider=name, case_id=new_ulid(), key_value="x"
+        ).provider == name
+
     base = _record().model_dump(mode="json")
-    bad = {**base, "provider": "frobnicate"}
     with pytest.raises(ValidationError):
-        SecretRecord.model_validate(bad)
-
-    # SecretAddEnvelopePayload rejects unknown provider
-    bad_add = {
-        "envelope_type": "secret-add",
-        "provider": "stripe",  # not in the Tier-2/LLM/basemap vocabulary
-        "case_id": new_ulid(),
-        "key_value": "x",
-    }
+        SecretRecord.model_validate({**base, "provider": ""})
     with pytest.raises(ValidationError):
-        SecretAddEnvelopePayload.model_validate(bad_add)
-
-    # All declared providers are constructible
-    for provider in (
-        "firms",
-        "ecmwf_cds",
-        "gtsm",
-        "nws",
-        "openweathermap",
-        "openai",
-        "anthropic",
-        "google_genai",
-        "mapbox",
-        "maptiler",
-    ):
-        rec = _record(provider=provider)
-        assert rec.provider == provider
-
-
+        SecretAddEnvelopePayload.model_validate({
+            "envelope_type": "secret-add",
+            "provider": "",
+            "case_id": new_ulid(),
+            "key_value": "x",
+        })
 
 
 def test_secrets_payloads_exposed_via_module_registries() -> None:

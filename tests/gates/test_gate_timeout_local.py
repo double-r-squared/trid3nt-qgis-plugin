@@ -48,7 +48,7 @@ def test_every_gate_wait_site_uses_the_seam():
         "timeout=payload.default_timeout_seconds",
     ):
         assert bare not in src, f"gate wait bypasses _gate_wait_timeout: {bare}"
-    assert src.count("_gate_wait_timeout(") >= 6  # def + 5 call sites
+    assert src.count("_gate_wait_timeout(") >= 5  # def + 4 call sites
     # The code-exec carve-out: its wait is the bounded approval window, live-read.
     assert "timeout=approval_timeout_s" in src
     assert "_code_exec_approval_timeout_s()" in src

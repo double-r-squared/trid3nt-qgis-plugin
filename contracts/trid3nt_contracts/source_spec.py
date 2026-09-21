@@ -23,6 +23,7 @@ __all__ = [
     "PayloadModel",
     "EndpointSpec",
     "AuthSpec",
+    "CredentialSpec",
     "ParamSpec",
     "GateSpec",
     "NormalizeSpec",
@@ -76,8 +77,8 @@ SourceShape = Literal[
     "animation_frames",
 ]
 
-#: Auth mode. ``none`` = keyless public; ``api_key_env`` = a key from an env var,
-#: required or optional; ``cds`` / ``vault`` / ``token`` are reserved.
+#: Auth mode. ``none`` = keyless public; ``api_key_env`` = a key from an env var;
+#: ``cds`` = the Copernicus client's own config; ``vault`` / ``token`` are reserved.
 AuthMode = Literal["none", "api_key_env", "cds", "vault", "token"]
 
 #: Request-param declared types. The compound ones, whose Python shape the name
@@ -122,13 +123,30 @@ class EndpointSpec(GraceModel):
         return self
 
 
+class CredentialSpec(GraceModel):
+    """The key a source needs, named where the source is declared.
+
+    ``name`` is the scope a stored key lands under, so two rows served by ONE
+    upstream account state the same name and one entered key serves both."""
+
+    name: str = Field(min_length=1, max_length=120)
+    #: What the keys form calls it - the account the user signs into, not the row.
+    label: str = Field(min_length=1, max_length=120)
+    #: Where a key is obtained. ``None`` when no public self-serve signup exists;
+    #: a fabricated URL would be indistinguishable from a real one to the reader.
+    signup_url: str | None = Field(default=None, max_length=512)
+    #: The env var the key is read from when no session key was pushed. It is the
+    #: SAME name the source's own hook reads, so the form and the code agree.
+    env_var: str = Field(min_length=1, max_length=200)
+
+
 class AuthSpec(GraceModel):
-    """Auth mode and the shared User-Agent."""
+    """Auth mode, the shared User-Agent, and the key this source needs."""
 
     mode: AuthMode = "none"
-    #: For ``mode="api_key_env"``: which env var, and whether it is required.
-    #: ``required: false`` is how a keyless fallback is expressed.
-    api_key_env: dict[str, Any] = Field(default_factory=dict)
+    #: Set on a KEYED source: the credential the keys form offers and the
+    #: resolver reads. Absent = a public source, which never refuses for a key.
+    credential: CredentialSpec | None = None
     user_agent: str = "trid3nt_default"
 
 

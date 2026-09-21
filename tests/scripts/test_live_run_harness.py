@@ -312,11 +312,11 @@ def test_the_pump_collects_status_layers_and_charts():
 
 
 def test_the_pump_reports_a_blocking_event_it_cannot_answer():
-    ws = _FakeWS([_msg("credential-request", {"provider": "noaa"})])
+    ws = _FakeWS([_msg("region-choice-request", {"request_id": "r"})])
     ev = _env()
     asyncio.run(_pump(ws, "S", LiveRun(tool="t", args={}, case_title="c",
                                        timeout_s=5), ev))
-    assert "BLOCKED by credential-request" in ev.detail
+    assert "BLOCKED by region-choice-request" in ev.detail
     assert ev.turn_complete is False
 
 

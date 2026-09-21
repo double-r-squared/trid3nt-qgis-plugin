@@ -105,19 +105,6 @@ class TestDockUiBatch(unittest.TestCase):
         a lock with a one-line chip - never a silently dropped envelope."""
         self.assertIn("[code-exec] approval card", self._stdout())
 
-    def test_credential_key_entry_card(self):
-        """The credential-request renders an inline key-entry card.
-
-        A masked field, Submit sending the two envelopes and Skip declining, the field
-        cleared and a provider-named chip; the raw key appears in NO harness output."""
-        out = self._stdout()
-        self.assertIn("[credential] key-entry card", out)
-        # The harness's test key -- must never leak into any log output this
-        # test captures from the subprocess.
-        self.assertNotIn("harness-firms-key-f00ba4c0ffee", out)
-        self.assertNotIn(
-            "harness-firms-key-f00ba4c0ffee", self._proc.stderr or ""
-        )
 
     def test_no_tool_turn_mints_no_card(self):
         """F3: a turn with zero tool events must

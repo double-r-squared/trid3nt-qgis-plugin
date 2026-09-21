@@ -1,1 +1,1 @@
-"""Credential handshake, registry, and secrets handling."""
+"""Credential handshake and key resolution."""

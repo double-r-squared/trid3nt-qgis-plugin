@@ -68,8 +68,8 @@ class TransportTruncatedError(TransportError):
 
 def classify_status(status: int, body: str | None, url: str) -> TransportError:
     """Map an HTTP error status and verbatim body to a typed transport error: 404 or
-    a ``NoSuchKey`` body to not-found, 403 or ``AccessDenied`` to auth, 429/5xx to
-    retryable upstream, anything else >= 400 to upstream."""
+    a ``NoSuchKey`` body to not-found, 401/403 or ``AccessDenied`` to auth, 429/5xx
+    to retryable upstream, anything else >= 400 to upstream."""
     snippet = (body or "")[:2000]
     verdict = classify_response(body) if body else None
     s3_code = (
@@ -83,7 +83,7 @@ def classify_status(status: int, body: str | None, url: str) -> TransportError:
             f"object not found (HTTP {status}) url={url}: {snippet[:400]!r}",
             status=status, body=body,
         )
-    if status == 403 or s3_code == "AccessDenied" or "AccessDenied" in code_hint:
+    if status in (401, 403) or s3_code == "AccessDenied" or "AccessDenied" in code_hint:
         return TransportAuthError(
             f"access denied (HTTP {status}) url={url}: {snippet[:400]!r}",
             status=status, body=body,

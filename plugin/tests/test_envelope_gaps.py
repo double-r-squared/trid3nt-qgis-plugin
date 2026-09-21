@@ -285,12 +285,9 @@ class TestSpatialInputRoundTrip(_RoundTripBase):
 
 class TestSecretsListRoundTrip(_RoundTripBase):
     def test_secrets_list_after_secret_add(self):
-        # The credential flow's secret-add emits a refreshed secrets-list --
-        # previously that fell through to "raw".
-        self.client.send_chat("need-key the fire detections")
-        ev = self._await_kind("credential-request")
-        req = gate.parse_credential_request(ev.data)
-        self.client.submit_credential(req.request_id, req.provider_id, "SECRET123")
+        # A key the keys form stored is pushed over secret-add; the daemon
+        # answers with a refreshed secrets-list, which must not fall to "raw".
+        self.client.push_secret("firms", "SECRET123")
         roster_ev = self._await_kind("secrets-list")
         rows = gate.parse_secrets_list(roster_ev.data)
         self.assertEqual(len(rows), 1)
@@ -299,7 +296,6 @@ class TestSecretsListRoundTrip(_RoundTripBase):
         self.assertNotIn("SECRET123", roster_ev.data.get("secrets", [{}])[0].get(
             "vault_ref", ""
         ))
-        self._await_kind("turn-complete")
 
 
 if __name__ == "__main__":

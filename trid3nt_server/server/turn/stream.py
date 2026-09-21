@@ -93,9 +93,6 @@ async def _stream_model_reply(
     # Reset the per-turn context-window abort note: a new turn is a fresh
     # request, and a prior turn's note must never leak forward.
     state.current_turn_context_abort_note = None
-    # Reset the per-turn credential-prompt guard: a tool that prompted for a key
-    # last turn may legitimately prompt again, since the key may still be gone.
-    state.credential_prompted_tools = set()
     # Reset the per-turn gate-decision memory: a tool and bbox pair confirmed
     # last turn must gate again this turn.
     state.gate_decisions_this_turn = {}

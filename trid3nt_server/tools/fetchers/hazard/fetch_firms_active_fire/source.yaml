@@ -14,6 +14,11 @@ endpoints:
     url: https://firms.modaps.eosdis.nasa.gov/api/area/csv
 auth:
   mode: none
+  credential:
+    name: firms
+    label: NASA FIRMS
+    signup_url: https://firms.modaps.eosdis.nasa.gov/api/map_key/
+    env_var: TRID3NT_FIRMS_MAP_KEY
   user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
     agent@trid3nt.dev)
 params:

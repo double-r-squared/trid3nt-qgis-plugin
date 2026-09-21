@@ -146,16 +146,8 @@ _CODE_PREVIEW_STYLE = (
     "border-radius: 2px;"
 )
 
-# Green: a "provide something and the run continues" affordance, distinct from
-# the amber caution gate and the blue code gate.
-_CRED_CARD_STYLE = (
-    "QFrame#credentialcard { border: 1px solid #3fb950; border-radius: 8px; "
-    "background-color: rgba(63, 185, 80, 7%); }"
-)
-_CRED_TITLE_STYLE = "color: #3fb950; font-weight: bold; border: none;"
-
-# Teal: a "steer the routing" affordance, distinct from the caution, code and
-# credential cards.
+# Teal: a "steer the routing" affordance, distinct from the caution and code
+# cards.
 _PICKER_CARD_STYLE = (
     "QFrame#toolpickercard { border: 1px solid #39c5cf; border-radius: 8px; "
     "background-color: rgba(57, 197, 207, 7%); }"
@@ -1377,161 +1369,6 @@ class CodeExecCard(QFrame):
             self._body.layout().addWidget(lbl)
 
 
-class CredentialCard(QFrame):
-    """Inline key-entry card for one ``credential-request``. KEY HYGIENE: the
-    raw key is never logged, stored on ``self`` or named in the chip. A signup
-    URL is shown only when the server sent one, never invented."""
-
-    def __init__(self, request: gate.CredentialRequest, on_decide, parent=None):
-        super().__init__(parent)
-        self._request = request
-        self._on_decide = on_decide
-        self._decided: Optional[str] = None
-        self.setObjectName("credentialcard")  # scope the fill to the frame
-        self.setStyleSheet(_CRED_CARD_STYLE)
-        self.setFrameShape(QFrame.Shape.StyledPanel)
-
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(8, 6, 8, 6)
-        outer.setSpacing(3)
-
-        # Collapsed one-line summary (hidden until answered) + "show details"
-        # re-expand -- the GateCard affordance verbatim.
-        summary_row = QHBoxLayout()
-        self.summary_lbl = _label("", _CRED_TITLE_STYLE, wrap=True)
-        summary_row.addWidget(self.summary_lbl, 1)
-        self.details_toggle = QPushButton("show details")
-        self.details_toggle.setFlat(True)
-        self.details_toggle.setCheckable(True)
-        self.details_toggle.setStyleSheet(_THINKING_TOGGLE_STYLE)
-        self.details_toggle.clicked.connect(self._toggle_details)
-        summary_row.addWidget(self.details_toggle)
-        self._summary_container = QWidget()
-        self._summary_container.setLayout(summary_row)
-        self._summary_container.setVisible(False)
-        outer.addWidget(self._summary_container)
-
-        # Full card content -- visible until answered, then folded behind the
-        # summary line (re-expandable read-only; controls stay disabled).
-        self._body = QWidget()
-        lay = QVBoxLayout(self._body)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(3)
-        outer.addWidget(self._body)
-
-        title_lbl = _label(f"API key needed: {request.display_label}",
-                           _CRED_TITLE_STYLE, wrap=True)
-        lay.addWidget(title_lbl)
-
-        if request.message:
-            # The agent's user-facing explanation, VERBATIM: never
-            # paraphrased client-side.
-            message_lbl = _label(request.message, _GATE_BODY_STYLE, wrap=True)
-            lay.addWidget(message_lbl)
-
-        for line in gate.credential_note_lines(request):
-            note_lbl = _label(line, _GATE_NOTE_STYLE, wrap=True)
-            lay.addWidget(note_lbl)
-
-        if request.signup_url:
-            # The server's REAL signup URL (registry-sourced; a name-only
-            # generic card sends None and this label is simply absent --
-            # the client never fabricates a URL).
-            href = html.escape(request.signup_url)
-            link_lbl = _label(f'<a href="{href}">Get a key: {href}</a>',
-                              _GATE_NOTE_STYLE, wrap=True, rich=True)
-            lay.addWidget(link_lbl)
-
-        # The masked key field: password echo -- the value is never rendered
-        # on screen, and nothing in this class ever reads it except the one
-        # Submit commit (which clears it immediately).
-        self.key_edit = QLineEdit()
-        self.key_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        placeholder = request.secret_key_name or "API key"
-        self.key_edit.setPlaceholderText(f"Paste your {placeholder}")
-        self.key_edit.returnPressed.connect(self._submit)
-        lay.addWidget(self.key_edit)
-
-        btn_row = QHBoxLayout()
-        btn_row.addStretch(1)
-        self.submit_btn = QPushButton("Submit")
-        self.submit_btn.clicked.connect(self._submit)
-        btn_row.addWidget(self.submit_btn)
-        self.skip_btn = QPushButton("Skip")
-        self.skip_btn.clicked.connect(self._skip)
-        btn_row.addWidget(self.skip_btn)
-        lay.addLayout(btn_row)
-
-        self.result_lbl = _label("", _GATE_NOTE_STYLE, wrap=True)
-        self.result_lbl.setVisible(False)
-        lay.addWidget(self.result_lbl)
-
-    # -- toggles ---------------------------------------------------------- #
-
-    def _toggle_details(self, checked: bool) -> None:
-        self._body.setVisible(checked)
-        self.details_toggle.setText("hide details" if checked else "show details")
-
-    # -- actions ---------------------------------------------------------- #
-
-    def _submit(self) -> None:
-        if self._decided is not None:
-            return  # locked -- a gate is answered exactly once
-        key = self.key_edit.text().strip()
-        if not key:
-            # No decision consumed: an accidental empty Submit/Return must
-            # not decline the agent's pause on the user's behalf.
-            self.result_lbl.setText("Enter a key, or press Skip.")
-            self.result_lbl.setVisible(True)
-            return
-        self._decided = "provided"
-        # Clear + disable the field BEFORE anything else runs: after this
-        # commit the key exists only in the local ``key`` handed to the send
-        # hook (never on ``self``, never in a log, never in the chip text).
-        self.key_edit.clear()
-        self._lock()
-        self.result_lbl.setText(
-            "Key sent to the local vault -- retrying the paused tool."
-        )
-        self.result_lbl.setVisible(True)
-        self._collapse()
-        self._on_decide(self._request.request_id, self._request.provider_id, key)
-
-    def _skip(self) -> None:
-        if self._decided is not None:
-            return  # locked -- a gate is answered exactly once
-        self._decided = "skipped"
-        self.key_edit.clear()
-        self._lock()
-        self.result_lbl.setText(
-            "Skipped -- the tool will report its original error."
-        )
-        self.result_lbl.setVisible(True)
-        self._collapse()
-        self._on_decide(self._request.request_id, self._request.provider_id, None)
-
-    def _lock(self) -> None:
-        for widget in (self.submit_btn, self.skip_btn, self.key_edit):
-            widget.setEnabled(False)
-
-    # -- collapse (the GateCard affordance) -------------------------------- #
-
-    def _collapse(self) -> None:
-        """Fold to a single one-line state chip once answered; the body stays
-        intact underneath (controls already disabled + field cleared) so
-        "show details" can re-expand a read-only view."""
-        label = self._request.display_label
-        self.summary_lbl.setText(
-            f"Key provided for {label}"
-            if self._decided == "provided"
-            else f"Key skipped for {label}"
-        )
-        self._summary_container.setVisible(True)
-        self._body.setVisible(False)
-        self.details_toggle.setChecked(False)
-        self.details_toggle.setText("show details")
-
-
 class ToolCandidatesCard(QFrame):
     """Inline tool-selection picker for one ``tool-candidates`` request.
     Typing in the free-text field selects ITS radio, so a typed answer is never
@@ -1686,7 +1523,7 @@ class ToolCandidatesCard(QFrame):
         if picked is None and not (free_text or "").strip():
             # No decision consumed: an accidental Confirm/Return with nothing
             # selected must not send "let the agent decide" on the user's
-            # behalf (the empty-Submit honesty the credential card uses).
+            # behalf.
             self.result_lbl.setText(
                 "Pick a tool, type what to do instead, or press "
                 "Let agent decide."

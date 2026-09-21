@@ -43,26 +43,20 @@ def classify_actionability(tool_name: str, error: BaseException) -> Actionabilit
         if explicit in ("agent", "user", "operator"):
             return explicit  # type: ignore[return-value]
 
-        # 2. Credential-shaped signal (any tool, typed or not) -> user, read
-        #    through the same detector that raises a credential-request card.
-        from trid3nt_server.credentials.credential_registry import (
-            is_credential_shaped_error,
-        )
-
-        if is_credential_shaped_error(tool_name, error):
-            return "user"
-
-        # 3. Any OTHER typed tool exception (declares its own
-        #    error_code) -- the agent-visible retry surface.
+        # 2. Any OTHER typed tool exception (declares its own
+        #    error_code) -- the agent-visible retry surface. A credential
+        #    failure reaches the user bucket through step 1: the refusal and
+        #    the transport's auth error both DECLARE themselves user-actionable,
+        #    so nothing here has to guess a missing key from message text.
         code_attr = getattr(error, "error_code", None)
         if isinstance(code_attr, str) and code_attr:
             return "agent"
 
-        # 4. Untyped network / arg-shape primitives -- also agent-visible.
+        # 3. Untyped network / arg-shape primitives -- also agent-visible.
         if isinstance(error, _AGENT_CLASS_UNTYPED):
             return "agent"
 
-        # 5. A narrow, explicit internal-bug family -- a true contract
+        # 4. A narrow, explicit internal-bug family -- a true contract
         #    violation, never a normal tool/upstream failure shape.
         if isinstance(error, _OPERATOR_CLASS_TYPES):
             return "operator"
@@ -74,7 +68,7 @@ def classify_actionability(tool_name: str, error: BaseException) -> Actionabilit
         except Exception:  # noqa: BLE001 -- pydantic always present here, but defensive
             pass
 
-        # 6. Everything else -- an untyped, unrecognized exception (e.g. a
+        # 5. Everything else -- an untyped, unrecognized exception (e.g. a
         #    bare RuntimeError) -- is agent-visible/retryable: the operator
         #    bucket must never silently swallow a message a caller expects
         #    to read verbatim.

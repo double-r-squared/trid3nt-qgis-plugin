@@ -13,9 +13,11 @@ endpoints:
     url: https://api.openaq.org/v3/locations
 auth:
   mode: api_key_env
-  api_key_env:
-    var: TRID3NT_OPENAQ_API_KEY
-    required: true
+  credential:
+    name: openaq
+    label: OpenAQ
+    signup_url: https://explore.openaq.org/register
+    env_var: TRID3NT_OPENAQ_API_KEY
   user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
     agent@trid3nt.dev)
 params:

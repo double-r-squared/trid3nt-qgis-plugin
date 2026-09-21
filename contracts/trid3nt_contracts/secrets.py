@@ -1,9 +1,10 @@
 """Per-Case API-key secret envelopes.
 
 WIRE ISOLATION is the whole point: ``secret-add`` is the ONLY envelope that
-ever carries a raw key value, and it is transient - written to the vault and
+ever carries a raw key value, and it is transient - cached for the session and
 cleared before any log or persistence path. Everything else carries an opaque
-vault reference. Keys are scoped per Case so one cannot leak across Cases.
+vault reference. A key is scoped by the credential NAME its source row declares,
+so the rows are the closed set and this module restates none of them.
 """
 
 from __future__ import annotations
@@ -19,50 +20,14 @@ from .common import (
 )
 
 __all__ = [
-    "ProviderID",
     "SecretRecord",
     "SecretsListEnvelopePayload",
     "SecretAddEnvelopePayload",
     "SecretRevokeEnvelopePayload",
-    "CredentialRequestEnvelopePayload",
-    "CredentialProvidedEnvelopePayload",
     "SECRET_PAYLOADS",
     "SECRET_CLIENT_TO_AGENT_PAYLOADS",
     "SECRET_AGENT_TO_CLIENT_PAYLOADS",
 ]
-
-
-
-# Closed Literal of providers a Case secret can be bound to. CLOSED because
-# each provider has its own injection plumbing - a query param here, a header
-# there, a vendor SDK elsewhere - so admitting an unknown provider here would
-# let the server accept a record it cannot actually use.
-ProviderID = Literal[
-    # Keyed data sources with a self-serve signup page: the key is requested
-    # just in time, when the upstream rejects or lacks one.
-    "firms",  # NASA FIRMS active-fire (FIRMS_MAP_KEY)
-    "ecmwf_cds",  # reanalysis AND tide/surge share ONE key: one provider, two
-    # tools.
-    "gtsm",  # an alias scope, for a caller that scopes the same key to the
-    # tide/surge tool specifically; it resolves alongside ecmwf_cds.
-    # Weather (Tier-2 keyed endpoints)
-    "nws",
-    "openweathermap",
-    # LLM providers (per-Case bring-your-own-key)
-    "openai",
-    "anthropic",
-    "google_genai",
-    # Basemap providers (paid tier; per-Case scoped)
-    "mapbox",
-    "maptiler",
-    # The name-only fallback: a credential card for ANY keyed endpoint with no
-    # dedicated provider above. The name is derived from the failing tool and
-    # ``signup_url`` stays None - never a fabricated URL. The key is saved under
-    # this scope so the user is never left at a silent dead-end; auto-injection
-    # on retry is provider-specific, so such a tool resolves its own key.
-    "generic",
-]
-
 
 
 
@@ -75,7 +40,9 @@ class SecretRecord(GraceModel):
     schema_version: Literal["v1"] = "v1"
 
     secret_id: ULIDStr
-    provider: ProviderID
+    #: The credential name a source row declares in its ``auth.credential``
+    #: block. The rows are the closed set, so nothing is restated here.
+    provider: str = Field(min_length=1, max_length=120)
     #: ``None`` makes the record user-level, a cross-Case default; set, it
     #: scopes the key to a single Case.
     case_id: ULIDStr | None = None
@@ -113,7 +80,9 @@ class SecretAddEnvelopePayload(GraceModel):
     MESSAGE_TYPE: ClassVar[str] = "secret-add"
 
     envelope_type: Literal["secret-add"] = "secret-add"
-    provider: ProviderID
+    #: The credential name the key is stored under: the name the source rows
+    #: that need this key state, so one push serves every row naming it.
+    provider: str = Field(min_length=1, max_length=120)
     #: ``None`` for a user-level secret rather than a Case-scoped one.
     case_id: ULIDStr | None = None
     label: str | None = Field(default=None, max_length=200)
@@ -148,65 +117,15 @@ class SecretRevokeEnvelopePayload(GraceModel):
 
 
 
-class CredentialRequestEnvelopePayload(GraceModel):
-    """``credential-request``: server -> client, a key is needed NOW.
-    The tool pauses and the answer takes the existing ``secret-add`` path, so
-    this envelope carries NO key material in either direction."""
-
-    MESSAGE_TYPE: ClassVar[str] = "credential-request"
-
-    envelope_type: Literal["credential-request"] = "credential-request"
-    #: Correlates request, reply and the paused tool. Echoed VERBATIM.
-    request_id: ULIDStr
-    provider_id: ProviderID
-    #: The human name to show. A client renders whatever arrives rather than
-    #: keeping its own provider -> label table.
-    provider_label: str = Field(min_length=1, max_length=120)
-    #: Where a key can be obtained. ``None`` when no public self-serve signup
-    #: exists - never a fabricated URL; the message then explains the path.
-    signup_url: str | None = Field(default=None, max_length=512)
-    #: The canonical name of the secret being asked for, so the user knows
-    #: exactly which credential to paste.
-    secret_key_name: str = Field(min_length=1, max_length=200)
-    #: The user-facing explanation of why the credential is needed right now.
-    message: str = Field(min_length=1, max_length=1024)
-    #: The tool that paused, so the prompt can be tied to its card and the
-    #: right dispatch resumed.
-    tool_name: str = Field(min_length=1, max_length=120)
-
-
-class CredentialProvidedEnvelopePayload(GraceModel):
-    """``credential-provided``: client -> server, the paused tool may retry.
-    Carries NO key material. ``provided=False`` is the decline path: the tool is
-    abandoned and narrated, never a silent dead-end or an invented success."""
-
-    MESSAGE_TYPE: ClassVar[str] = "credential-provided"
-
-    envelope_type: Literal["credential-provided"] = "credential-provided"
-    #: Resolves the exact paused tool to resume.
-    request_id: ULIDStr
-    #: The record the preceding ``secret-add`` minted, so its existence can be
-    #: confirmed before the retry. ``None`` when ``provided=False``.
-    secret_id: ULIDStr | None = None
-    provided: bool = True
-
-
-
 # Client -> server envelopes this module contributes.
 SECRET_CLIENT_TO_AGENT_PAYLOADS: dict[str, type[GraceModel]] = {
     SecretAddEnvelopePayload.MESSAGE_TYPE: SecretAddEnvelopePayload,
     SecretRevokeEnvelopePayload.MESSAGE_TYPE: SecretRevokeEnvelopePayload,
-    CredentialProvidedEnvelopePayload.MESSAGE_TYPE: (
-        CredentialProvidedEnvelopePayload
-    ),
 }
 
 # Server -> client envelopes this module contributes.
 SECRET_AGENT_TO_CLIENT_PAYLOADS: dict[str, type[GraceModel]] = {
     SecretsListEnvelopePayload.MESSAGE_TYPE: SecretsListEnvelopePayload,
-    CredentialRequestEnvelopePayload.MESSAGE_TYPE: (
-        CredentialRequestEnvelopePayload
-    ),
 }
 
 # Aggregate for downstream consumers that don't care about direction.

@@ -296,31 +296,6 @@ WAVE_TOOL_CANDIDATES_STEP2: dict[str, Any] = {
     "timeout_s": 60.0,
 }
 
-STUB_CREDENTIAL_REQUEST_ID = "01STUBCREDREQAAAAAAAAAAAAA"
-
-# A credential-request payload field-for-field the
-# CredentialRequestEnvelopePayload contract (contracts .../secrets.py). The
-# reply is TWO envelopes in Decision-F order: secret-add (the ONLY transport
-# for the raw key; the live server vault-writes it 0600 and answers with a
-# refreshed secrets-list) THEN credential-provided (request_id echo +
-# provided=True) -- or credential-provided provided=False alone on Skip (the
-# live server then re-raises the tool's original typed error). LANE K
-# This envelope previously had ZERO plugin handling (the exact
-# code-exec gap), so the agent's paused keyed tool waited out its TTL.
-CREDENTIAL_REQUEST_ROW: dict[str, Any] = {
-    "envelope_type": "credential-request",
-    "request_id": STUB_CREDENTIAL_REQUEST_ID,
-    "provider_id": "firms",
-    "provider_label": "NASA FIRMS",
-    "signup_url": "https://firms.modaps.eosdis.nasa.gov/api/map_key/",
-    "secret_key_name": "FIRMS_MAP_KEY",
-    "message": (
-        "I need a NASA FIRMS map key to fetch the active-fire detections "
-        "for this Case."
-    ),
-    "tool_name": "fetch_active_fires",
-}
-
 STUB_REGION_CHOICE_REQUEST_ID = "01STUBREGIONCHOICEAAAAAAAA"
 STUB_REGION_ID = "county-12071"
 
@@ -444,8 +419,7 @@ class StubAgentServer:
         self.connection_count = 0
         self.resume_case_ids: list[Optional[str]] = []  # session-resume payloads
         self.confirmations: list[dict] = []  # tool-payload-confirmation payloads
-        self.secret_adds: list[dict] = []  # secret-add payloads (LANE K)
-        self.credential_replies: list[dict] = []  # credential-provided payloads
+        self.secret_adds: list[dict] = []  # secret-add payloads
         self.tool_choices: list[dict] = []  # tool-choice payloads
         #: region-choice-provided payloads (LANE A region-choice gate-WAIT).
         self.region_choices: list[dict] = []
@@ -684,20 +658,6 @@ class StubAgentServer:
                     # layer-response arrives -- handled in that branch below.
                     self._pending_gate_case = case_id
                     await send("layer-request", LAYER_REQUEST_ROW, case_id=case_id)
-                    continue
-                if "need-key" in text:
-                    # Credential-request pause (LANE K): a keyed tool hit a
-                    # missing key; the agent pauses the tool and BLOCKS until
-                    # the credential-provided reply arrives -- handled in the
-                    # credential-provided branch below. (The live server's
-                    # 300s gate TTL is not simulated; the pause is indefinite
-                    # within a test run.)
-                    self._pending_gate_case = case_id
-                    await send(
-                        "credential-request",
-                        CREDENTIAL_REQUEST_ROW,
-                        case_id=case_id,
-                    )
                     continue
                 if "narrow-region" in text:
                     # Region-choice gate-WAIT (LANE A): the server snapped a
@@ -989,8 +949,8 @@ class StubAgentServer:
                     await send("turn-complete", {}, case_id=gate_case)
 
             elif etype == "secret-add":
-                # LANE K (contract SecretAddEnvelopePayload): the ONLY
-                # envelope that ever carries the raw key. The
+                # (contract SecretAddEnvelopePayload): the ONLY envelope that
+                # ever carries the raw key. The
                 # live server vault-writes key_value and answers with a
                 # refreshed secrets-list whose SecretRecord rows carry
                 # vault_ref, NEVER the raw value -- mirrored here so a
@@ -1016,41 +976,6 @@ class StubAgentServer:
                     },
                     case_id=env.get("case_id"),
                 )
-            elif etype == "credential-provided":
-                # LANE K (contract CredentialProvidedEnvelopePayload): the
-                # retry signal that resolves the agent's paused-tool future.
-                # provided=True -> the live server re-resolves the freshly
-                # vault-written key and retries the tool ONCE; provided=False
-                # -> it re-raises the original typed error and the agent
-                # narrates honestly. NO key material rides here.
-                payload = env.get("payload") or {}
-                self.credential_replies.append(payload)
-                gate_case = getattr(self, "_pending_gate_case", None)
-                if payload.get("provided"):
-                    await send(
-                        "agent-message-chunk",
-                        {
-                            "message_id": "m-cred",
-                            "delta": "Key accepted -- fire detections fetched.",
-                            "done": True,
-                        },
-                        case_id=gate_case,
-                    )
-                    await send("turn-complete", {}, case_id=gate_case)
-                else:
-                    await send(
-                        "agent-message-chunk",
-                        {
-                            "message_id": "m-cred",
-                            "delta": (
-                                "No key provided -- the FIRMS fetch failed "
-                                "with its original auth error."
-                            ),
-                            "done": True,
-                        },
-                        case_id=gate_case,
-                    )
-                    await send("turn-complete", {}, case_id=gate_case)
             elif etype == "tool-choice":
                 # (contract ToolChoicePayload): the picker reply
                 # request_id echo + exactly one of three shapes. The live

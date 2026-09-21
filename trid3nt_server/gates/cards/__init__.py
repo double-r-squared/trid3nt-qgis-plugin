@@ -2,7 +2,6 @@
 
 Pure payload and envelope builders: no websocket, no session state.
 """
-from .credential import _build_credential_request_payload
 from .payload_warning import (
     _get_hard_cap_mb,
     _get_warning_threshold_mb,
@@ -30,7 +29,6 @@ __all__ = [
     "MAX_FETCH_PX",
     "_FETCH_MAX_PX_BY_TOOL",
     "_LANDCOVER_DEFAULT_RES_M",
-    "_build_credential_request_payload",
     "_build_fetch_resolution_envelope",
     "_build_region_candidates",
     "_build_region_choice_request_payload",

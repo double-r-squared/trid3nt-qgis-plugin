@@ -10,13 +10,13 @@ from trid3nt_contracts.case import CaseCommandEnvelopePayload
 from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
 from trid3nt_contracts.processing_contracts import ProcessingResponsePayload
 from trid3nt_contracts.region_choice import RegionChoiceProvidedEnvelopePayload
-from trid3nt_contracts.secrets import CredentialProvidedEnvelopePayload, SecretAddEnvelopePayload
+from trid3nt_contracts.secrets import SecretAddEnvelopePayload
 from trid3nt_contracts.ws import CancelPayload, ErrorPayload, LayerResponsePayload, SessionResumePayload, SpatialInputResponsePayload, UserMessagePayload
 from trid3nt_server.adapters.model_selection import ModelSettings, load_settings
 from trid3nt_server.gates.pending import _resolve_pending_confirmation
 from trid3nt_server.main import MAX_TURNS_PER_SESSION
 from trid3nt_server.server.dispatch.emitter import _assert_sync_offload_safe, _dispatch_tool_and_persist, _ensure_emitter
-from trid3nt_server.server.interactions import _resolve_pending_credential, _resolve_pending_tool_choice
+from trid3nt_server.server.interactions import _resolve_pending_tool_choice
 from trid3nt_server.server.processing import _resolve_pending_processing
 from trid3nt_server.tools.fetchers._router.executors.qgis_provider import resolve_pending_layer
 from trid3nt_server.server.protocol.auth import _ensure_auth_handshake, _handle_auth_token, _handle_session_resume
@@ -389,42 +389,6 @@ def _make_handler(settings: ModelSettings):
                             state.session_id,
                             conf.warning_id,
                             conf.decision,
-                        )
-
-                    elif msg_type == "credential-provided":
-                        # Resolves the paused dispatch's future once the user
-                        # saves or declines a requested credential: the tool
-                        # retries, or re-raises the original typed error. This
-                        # envelope carries NO key material - the key itself
-                        # arrived on the secret-add path.
-                        try:
-                            cp = (
-                                CredentialProvidedEnvelopePayload.model_validate(
-                                    payload_dict
-                                )
-                            )
-                        except ValidationError as ve:
-                            await _send_error(
-                                websocket,
-                                state.session_id,
-                                "TOOL_PARAMS_INVALID",
-                                f"credential-provided invalid: {ve.errors()[0]['msg']}",
-                            )
-                            continue
-                        if not _resolve_pending_credential(state.session_id, cp):
-                            logger.warning(
-                                "credential-provided for unknown/closed "
-                                "request_id=%s session=%s",
-                                cp.request_id,
-                                state.session_id,
-                            )
-                            continue
-                        logger.info(
-                            "credential-provided accepted session=%s "
-                            "request_id=%s provided=%s",
-                            state.session_id,
-                            cp.request_id,
-                            cp.provided,
                         )
 
                     elif msg_type == "region-choice-provided":

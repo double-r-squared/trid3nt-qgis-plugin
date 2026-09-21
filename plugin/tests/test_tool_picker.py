@@ -141,7 +141,7 @@ class TestToolChoiceRoundTrip(unittest.TestCase):
 
     def test_request_classified_not_raw(self):
         # The envelope must surface as its own kind, never the
-        # dropped-on-the-floor "raw" fallthrough (the code-exec/credential
+        # dropped-on-the-floor "raw" fallthrough (the code-exec
         # lesson: a raw fallthrough silently wastes the pick window).
         self.client.send_chat("not sure which-tool fits here")
         ev = self._await_kind("tool-candidates")

@@ -12,7 +12,6 @@ from typing import Any, Optional
 __all__ = [
     "CodeExecRequest",
     "CodeExecResult",
-    "CredentialRequest",
     "GateDecision",
     "PayloadWarning",
     "RegionCandidate",
@@ -23,8 +22,6 @@ __all__ = [
     "ToolCandidatesRequest",
     "code_exec_result_chip",
     "code_exec_result_lines",
-    "credential_note_lines",
-    "parse_credential_request",
     "estimate_cells",
     "estimate_eta_seconds",
     "estimate_frames",
@@ -495,78 +492,6 @@ def resolve_code_exec_decision(approve: bool) -> GateDecision:
     ``revised_args`` is ALWAYS None: proceed and cancel forbid it, and
     ``narrow_scope`` is never offered here."""
     return GateDecision("proceed" if approve else "cancel", None)
-
-
-#
-# The reply is TWO envelopes in order, and the split is the point: the raw key
-# rides ``secret-add`` ALONE, and the ``credential-provided`` retry signal that
-# follows carries no key material. A ``signup_url`` is None when there is no
-# self-serve signup, and is never a fabricated URL. Skip is
-# ``provided=False`` with NO preceding secret-add, so the server re-raises the
-# original typed error and the agent narrates it honestly.
-
-
-@dataclass
-class CredentialRequest:
-    """Parsed ``credential-request`` payload (defensive; raw kept)."""
-
-    request_id: str
-    provider_id: str
-    provider_label: str = ""
-    secret_key_name: str = ""
-    message: str = ""
-    tool_name: str = ""
-    signup_url: Optional[str] = None
-    raw: dict = field(default_factory=dict)
-
-    @property
-    def display_label(self) -> str:
-        """The human name for chips/titles -- the server's ``provider_label``
-        verbatim (the client never hardcodes a provider->label table),
-        falling back to the provider_id for a defensively-parsed envelope."""
-        return self.provider_label or self.provider_id
-
-
-def parse_credential_request(payload: dict) -> Optional[CredentialRequest]:
-    """Parse a ``credential-request`` payload; None without a ``request_id``
-    to correlate the reply, or a ``provider_id`` to scope the key under -- a
-    key in the wrong scope is one the paused tool can never re-resolve."""
-    if not isinstance(payload, dict):
-        return None
-    request_id = payload.get("request_id")
-    if not isinstance(request_id, str) or not request_id:
-        return None
-    provider_id = payload.get("provider_id")
-    if not isinstance(provider_id, str) or not provider_id:
-        return None
-    label = payload.get("provider_label")
-    key_name = payload.get("secret_key_name")
-    message = payload.get("message")
-    tool_name = payload.get("tool_name")
-    signup_url = payload.get("signup_url")
-    return CredentialRequest(
-        request_id=request_id,
-        provider_id=provider_id,
-        provider_label=label if isinstance(label, str) else "",
-        secret_key_name=key_name if isinstance(key_name, str) else "",
-        message=message if isinstance(message, str) else "",
-        tool_name=tool_name if isinstance(tool_name, str) else "",
-        signup_url=(
-            signup_url if isinstance(signup_url, str) and signup_url else None
-        ),
-        raw=payload,
-    )
-
-
-def credential_note_lines(request: CredentialRequest) -> list:
-    """The card's muted metadata lines. Every value is a structured envelope
-    field, never re-derived from prose, and the raw key never appears."""
-    lines = []
-    if request.secret_key_name:
-        lines.append(f"Key name: {request.secret_key_name}")
-    if request.tool_name:
-        lines.append(f"Waiting tool: {request.tool_name}")
-    return lines
 
 
 #

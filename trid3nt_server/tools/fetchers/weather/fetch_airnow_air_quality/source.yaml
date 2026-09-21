@@ -12,9 +12,11 @@ endpoints:
     url: https://www.airnowapi.org/aq/data/
 auth:
   mode: api_key_env
-  api_key_env:
-    var: TRID3NT_AIRNOW_API_KEY
-    required: true
+  credential:
+    name: airnow
+    label: EPA AirNow
+    signup_url: https://docs.airnowapi.org/account/request/
+    env_var: TRID3NT_AIRNOW_API_KEY
   user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
     agent@trid3nt.dev)
 params:

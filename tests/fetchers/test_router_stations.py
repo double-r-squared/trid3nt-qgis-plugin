@@ -23,7 +23,6 @@ from trid3nt_server.tools.fetchers._router.executors import (
 from trid3nt_server.tools.fetchers._router.executors import http_json
 from trid3nt_server.tools.fetchers._router.registration import _SPEC_REGISTRY
 from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
-from trid3nt_server.credentials.credential_registry import is_credential_shaped_error
 
 _FETCHERS = Path("trid3nt_server/tools/fetchers")
 _SPECS = {
@@ -243,14 +242,17 @@ def test_openaq_paging_and_sensor_join():
         ("fetch_openaq_measurements", "TRID3NT_OPENAQ_API_KEY", "OPENAQ_KEY_REQUIRED"),
     ],
 )
-def test_keyed_missing_key_is_credential_shaped(name, env, code, monkeypatch):
+def test_keyed_missing_key_refuses_pre_network(name, env, code, monkeypatch):
+    """The row states its credential, so a hook with no key raises its own typed
+    error before any request goes out."""
     monkeypatch.delenv(env, raising=False)
     spec = _spec(name)
+    assert spec.auth.credential is not None
+    assert spec.auth.credential.env_var == env
     with pytest.raises(Exception) as exc:
         router.route(spec, {"bbox": [76.8, 28.4, 77.4, 28.9]})
     assert exc.value.error_code == code
     assert exc.value.retryable is False
-    assert is_credential_shaped_error(name, exc.value) is True
 
 
 @pytest.mark.parametrize(

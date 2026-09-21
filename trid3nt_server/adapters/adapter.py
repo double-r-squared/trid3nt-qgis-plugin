@@ -290,11 +290,10 @@ Key behaviors:
   the returned metrics — do not invent values.
 - Keep responses concise and focused on the geospatial task at hand.
 - Key-gated tools (e.g. fetch_airnow_air_quality, fetch_era5_reanalysis): CALL
-  them normally even if you think an API key may be missing. If a credential is
-  needed the system automatically shows the user a credential-request card and
-  retries the call once the key is entered -- a missing key is NOT a failure and
-  is NOT a reason to route to a different tool. Never substitute a sibling tool
-  just to avoid a possible key prompt.
+  them normally even if you think an API key may be missing. With no key the
+  tool REFUSES by name before it calls anything, and the refusal names the key
+  and where it is entered -- relay that; never substitute a sibling tool just to
+  avoid a possible key prompt.
 
 The QGIS session runs the geoprocessing and the follow-ups (CRITICAL):
 Two tools run in the user's own QGIS session through the plugin, over the
@@ -493,27 +492,18 @@ which is a wrong answer no matter how cleanly the tools ran. Reusing earlier
 results is correct ONLY when the new request explicitly refers to the same
 place or the same layer ("that area", "the same map", "zoom into it").
 
-Geocode loop guard — NEVER re-issue the SAME geocode (CRITICAL — job F71,
-NATE 2026-06-17): geocode_location is deterministic for a given query string.
-If you already called geocode_location with a query THIS turn, do NOT call it
-again with the IDENTICAL query — the answer will not change and you will burn
-the turn looping. A vernacular sub-state region ("South Florida", "Southern
-California", "Central Texas", "the Florida Panhandle") does not have a precise
-OSM feature, so geocode_location may either (a) land far from the named region
-(e.g. "South Florida" once resolved to KANSAS) or (b) snap to the full state
-and return source="state-bbox-fallback" with a fallback_reason. In BOTH cases
-the tool has ALREADY done the best it can:
-  - If the result carries source="state-bbox-fallback" (or a fallback_reason),
-    that IS the answer for a vague region — USE the returned (state) bbox and
-    narrate the fallback_reason honestly ("no precise match for 'South Florida';
-    using the full state of Florida — refine for a smaller area"). Do NOT
-    re-geocode hoping for a tighter box.
-  - If the returned centroid clearly lands in the WRONG place for the named
-    region and there was NO snap, do NOT re-issue the same query. Either narrow
-    the query ONCE with a more specific phrasing the user implied (a named
-    city/county inside the region), fall back to the snapped region/state bbox,
-    or ask the user to name a more specific area. Never repeat an identical
-    failing geocode_location call.
+Geocode loop guard — NEVER re-issue the SAME geocode (CRITICAL):
+geocode_location is deterministic for a given query string. If you already
+called geocode_location with a query THIS turn, do NOT call it again with the
+IDENTICAL query — the answer will not change and you will burn the turn
+looping. A vernacular sub-state region ("South Florida", "Southern California",
+"Central Texas", "the Florida Panhandle") has no precise OSM feature, so the
+result may land far from the named region (e.g. "South Florida" once resolved
+to KANSAS). If the returned centroid clearly lands in the WRONG place, do NOT
+re-issue the same query. Either narrow the query ONCE with a more specific
+phrasing the user implied (a named city or county inside the region), or ask
+the user to name a more specific area. Never repeat an identical failing
+geocode_location call.
 
 Fit / zoom / resize the view to a layer (CRITICAL - the map moves itself):
 Fitting the view is the CANVAS's own behaviour, not a tool call. Every layer
@@ -589,24 +579,19 @@ card complete and then nothing, which is a broken interaction.
   and ask them to clarify or refine it: add a state or country (e.g. "Springfield,
   IL"), fix a likely spelling, name a nearby larger place, or give coordinates.
   Do not fabricate a location or silently pick a different place.
-- CREDENTIAL / API-KEY errors (error_code ends in _AUTH_ERROR or _MISSING_KEY,
-  e.g. FIRMS_AUTH_ERROR — a keyed data source like NASA FIRMS rejected or is
-  missing a key): the agent surface AUTOMATICALLY pauses the tool, shows the
-  user a secure key-entry CARD, and RETRIES the tool once the user enters the
-  key into that card. So: tell the user PLAINLY that this data source needs an
-  API key and that a key-entry card has appeared (or will appear) for them to
-  enter it. SECURITY — CRITICAL: NEVER ask the user to type, paste, or send the
-  API key in the chat. The chat is NOT the key path — a key pasted into chat is
-  exposed to the model and the conversation history. The ONLY path is the
-  key-entry card: the user enters the key THERE, it is saved securely to the
-  encrypted vault, and the fetch retries automatically. DO NOT pretend the data
-  is unavailable, DO NOT invent a workaround with a different source, and DO NOT
-  fabricate a "no results" answer — the source works; it just needs a key.
-  Example honest narration: "NASA FIRMS needs a free API key to return
-  active-fire detections. A secure key-entry card has appeared — enter your
-  FIRMS MAP_KEY there (it saves securely, and please don't paste it into the
-  chat) and I'll retry the fetch automatically." If the user declines the key,
-  say so honestly and stop — do not substitute fake data.
+- CREDENTIAL / API-KEY errors (error_code CREDENTIAL_MISSING, or one ending in
+  _AUTH_ERROR — a keyed data source needs a key or rejected the one stored): the
+  refusal already names the credential and the ONE place a key is entered, the
+  plugin's Settings -> Keys form. Relay it plainly: which source, which key, and
+  that the key goes in that form. SECURITY — CRITICAL: NEVER ask the user to
+  type, paste, or send the API key in the chat. The chat is NOT the key path — a
+  key pasted into chat is exposed to the model and the conversation history. DO
+  NOT pretend the data is unavailable, DO NOT invent a workaround with a
+  different source, and DO NOT fabricate a "no results" answer — the source
+  works; it just needs a key. Example honest narration: "NASA FIRMS needs a free
+  API key to return active-fire detections. Open Settings -> Keys in the plugin
+  and enter your FIRMS key there (please don't paste it into the chat), then ask
+  me again." Once the key is stored, the same call works.
 - If the result is self-explanatory (e.g. coordinates already shown in the
   tool card), still emit at least one short confirming sentence ("Here are
   the coordinates for Fort Myers." / "I've added the layer to the map.") so
@@ -1266,28 +1251,6 @@ def _classify_error(error: BaseException) -> tuple[str, bool]:
     return code, True
 
 
-def _user_narration_message(tool_name: str, fallback: str) -> str:
-    """Concise user-actionable text for a credential or auth-config failure.
-    Reuses the credential registry's own copy when the tool has a provider;
-    NEVER raises, degrading to ``fallback`` with an honest pointer."""
-    try:
-        from trid3nt_server.credentials.credential_registry import (
-            generic_provider_for_tool,
-            provider_for_tool,
-        )
-
-        provider = provider_for_tool(tool_name)
-        if provider is not None:
-            return provider.default_message
-        generic = generic_provider_for_tool(tool_name)
-        return generic.default_message
-    except Exception:  # noqa: BLE001 -- narration must never break dispatch
-        return (
-            f"{fallback} This looks like a missing or invalid credential; "
-            "provide a valid API key/token and retry."
-        )
-
-
 def _summarize_chart_emission(tool_name: str, result: dict[str, Any]) -> dict[str, Any]:
     """Compact summary for a chart-emission tool result.
     The full ``vega_lite_spec`` is DROPPED -- it already reached the client on
@@ -1501,12 +1464,6 @@ def summarize_tool_result(
             # site, and error_code / actionability still ride the telemetry
             # record.
             message = "internal error, logged"
-        elif actionability == "user":
-            # Missing-credential/auth-config: a concise narration directive
-            # (what happened + what the user can do) replaces the raw
-            # exception text so a small model relays it rather than
-            # paraphrasing internals.
-            message = _user_narration_message(tool_name, message)
         envelope = {
             "tool": tool_name,
             "status": "error",

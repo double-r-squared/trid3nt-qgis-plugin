@@ -165,10 +165,6 @@ class SessionState:
     # records the outcome after; a tripped breaker raises, and the result
     # summary surfaces that as a structured envelope the model narrates.
     circuit_breaker: ToolCircuitBreaker = field(default_factory=ToolCircuitBreaker)
-    # Per-TURN set of tools that already surfaced a credential request. The
-    # pipeline prompts and retries ONCE per tool per turn; without this guard a
-    # still-invalid key would re-trip the auth error and re-prompt forever.
-    credential_prompted_tools: set[str] = field(default_factory=set)
     # Per-TURN memory of gate decisions, keyed by tool name plus the rounded
     # bbox, or the full normalized args when there is no bbox. A model that
     # retries a gated tool with corrected NON-bbox args would otherwise re-emit

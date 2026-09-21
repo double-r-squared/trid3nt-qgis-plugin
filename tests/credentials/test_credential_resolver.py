@@ -1,9 +1,9 @@
-"""The runtime credential resolver: session cache first, env as the floor.
+"""The runtime credential resolver over the credential each source row declares.
 
-Resolution order (the session cache over env, a non-keyed tool resolving to
-None), the session-cache lifecycle with blank inputs ignored, and the
+Resolution order (the session cache over the row's env var, a public tool
+resolving to None), the session-cache lifecycle with blank inputs ignored, the
 ``secret-add`` handler writing the pushed value into that cache without
-Persistence and without a file vault."""
+Persistence and without a file vault, and the rows the keys form offers."""
 
 from __future__ import annotations
 
@@ -40,11 +40,38 @@ def test_session_cache_beats_env(monkeypatch):
     assert resolver.resolve_credential("sess-1", "fetch_firms_active_fire") == "cache-key"
 
 
-def test_shared_cds_provider_resolves_for_both_tools(monkeypatch):
+def test_shared_cds_credential_resolves_for_both_tools(monkeypatch):
     monkeypatch.setenv("TRID3NT_COPERNICUS_CDS_API_KEY", "cds-env")
-    # ERA5 and GTSM share the ecmwf_cds provider -> both resolve.
+    # ERA5 and GTSM state the SAME credential name, so one key serves both.
     assert resolver.resolve_credential("s", "fetch_era5_reanalysis") == "cds-env"
     assert resolver.resolve_credential("s", "fetch_gtsm_tide_surge") == "cds-env"
+
+
+def test_one_pushed_key_serves_every_row_naming_it():
+    resolver.set_session_credential("s", "ecmwf_cds", "pushed")
+    assert resolver.resolve_credential("s", "fetch_era5_reanalysis") == "pushed"
+    assert resolver.resolve_credential("s", "fetch_gtsm_tide_surge") == "pushed"
+
+
+def test_keyed_credentials_are_the_rows_that_declare_one():
+    creds = resolver.keyed_credentials()
+    assert set(creds) == {"firms", "ecmwf_cds", "openaq", "airnow"}
+    assert creds["airnow"].env_var == "TRID3NT_AIRNOW_API_KEY"
+    assert creds["firms"].signup_url is not None
+
+
+def test_credential_for_public_tool_is_none():
+    assert resolver.credential_for_tool("fetch_usgs_water_gauges") is None
+
+
+def test_refusal_names_the_credential_and_the_form():
+    credential = resolver.credential_for_tool("fetch_firms_active_fire")
+    err = resolver.MissingCredentialError(credential)
+    assert err.credential_name == "firms"
+    assert err.actionability == "user"
+    assert err.retryable is False
+    assert "Settings -> Keys" in str(err)
+    assert credential.signup_url in str(err)
 
 
 def test_non_keyed_tool_resolves_none():

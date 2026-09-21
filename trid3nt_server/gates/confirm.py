@@ -14,17 +14,14 @@ from trid3nt_contracts.gate_spec import GateSpec
 from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload, PayloadWarningEnvelopePayload
 from trid3nt_contracts.region_choice import RegionChoiceProvidedEnvelopePayload
 from trid3nt_contracts.processing_contracts import CodeExecRequestPayload
-from trid3nt_contracts.secrets import CredentialProvidedEnvelopePayload
 from trid3nt_contracts.ws import SpatialInputResponsePayload
-from trid3nt_server.credentials.credential_registry import CredentialProvider, generic_provider_for_tool, is_credential_error, is_credential_shaped_error, provider_for_tool
-from trid3nt_server.credentials.resolver import resolve_credential
+from trid3nt_server.credentials.resolver import MissingCredentialError, credential_for_tool, resolve_credential
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.gates.cards import _build_credential_request_payload, _build_region_choice_request_payload, _build_spatial_input_request_payload, _gate_memory_key, _get_hard_cap_mb, _get_warning_threshold_mb, _resolve_payload_estimator, _spatial_response_to_result
+from trid3nt_server.gates.cards import _build_region_choice_request_payload, _build_spatial_input_request_payload, _gate_memory_key, _get_hard_cap_mb, _get_warning_threshold_mb, _resolve_payload_estimator, _spatial_response_to_result
 from trid3nt_server.gates.cards.estimate import call_provider
 from trid3nt_server.gates.pending import _pop_pending_confirmation, _register_pending_confirmation
 from trid3nt_server.server.config import CODE_EXEC_CONFIRM_TIMEOUT_SECONDS, _code_exec_approval_timeout_s
 from trid3nt_server.server.errors import GateConfirmationTimeoutError, SpatialInputInvalidResponseError
-from trid3nt_server.server.interactions import _pop_pending_credential, _register_pending_credential
 from trid3nt_server.server.session.state import SessionState
 from trid3nt_server.server.spatial import _pop_pending_region_choice, _pop_pending_spatial_input, _register_pending_region_choice, _register_pending_spatial_input
 from trid3nt_server.server.turn.wire import _new_envelope, _send_error, _session_safe_send
@@ -597,8 +594,9 @@ async def _gate_on_code_exec(
     approved["code_exec_id"] = code_exec_id
     return True, approved
 
-# Credential pipeline: secret_ref injection, then auth-error ->
-# credential-request -> retry.
+# The credential path: a keyed tool's key is resolved onto its ``secret_ref``
+# before dispatch, and a keyed tool with no key REFUSES by name rather than
+# dispatching a call that cannot succeed.
 
 
 async def _inject_secret_ref(
@@ -609,182 +607,29 @@ async def _inject_secret_ref(
 ) -> dict:
     """Thread the resolved credential VALUE into a keyed tool's ``secret_ref``.
 
-    A no-op for a non-keyed tool, for an explicit caller-supplied ref, and when
-    no source has a value, where the fetcher's own env fallback then runs."""
+    A no-op for a public tool and for an explicit caller-supplied ref; a keyed
+    tool with no key anywhere raises the refusal that names the keys form."""
     # ``case_id`` is unused: the credential cache is session-scoped, not
     # per-Case.
-    if provider_for_tool(tool_name) is None:
+    credential = credential_for_tool(tool_name)
+    if credential is None:
         return params
     # Respect an explicit override already on params (dev/test path).
     if params.get("secret_ref") is not None:
         return params
     value = resolve_credential(state.session_id, tool_name)
     if not value:
-        return params
+        raise MissingCredentialError(credential)
     params = dict(params)
     # The raw value goes in as a plain ``str``, which every keyed fetcher accepts
     # verbatim: no file vault and no persistence read on this path.
     params["secret_ref"] = value
     logger.info(
-        "secret_ref injected tool=%s provider=%s (session cache / env)",
+        "secret_ref injected tool=%s credential=%s (session cache / env)",
         tool_name,
-        provider_for_tool(tool_name).provider_id,
+        credential.name,
     )
     return params
-
-async def _maybe_handle_credential_error(
-    websocket: ServerConnection,
-    state: SessionState,
-    tool_name: str,
-    params: dict,
-    error: BaseException,
-    case_id: str | None,
-) -> dict | None:
-    """Handle a keyed-tool credential error: prompt, await, then re-resolve.
-
-    Retry params when the user supplied a key, else ``None`` and the caller
-    re-raises the original typed error for the LLM to narrate."""
-    provider = provider_for_tool(tool_name)
-    is_registered_credential = (
-        provider is not None and is_credential_error(tool_name, error)
-    )
-    is_generic_credential = (
-        provider is None and is_credential_shaped_error(tool_name, error)
-    )
-    if not is_registered_credential and not is_generic_credential:
-        return None
-
-    # One prompt per tool per turn -- don't loop forever on a still-bad key.
-    if tool_name in state.credential_prompted_tools:
-        logger.info(
-            "credential-request suppressed (already prompted this turn) tool=%s",
-            tool_name,
-        )
-        return None
-
-    if is_generic_credential:
-        # NAME-ONLY card for a tool with no registered provider: a human
-        # credential name and ``signup_url=None``, because the registry is the
-        # only source of real URLs and the agent must NEVER narrate a fabricated
-        # one. Best-effort: when the generic ``provider_id`` is not a valid wire
-        # ProviderID the payload build returns None and the original typed error
-        # is surfaced instead -- still without inventing a URL.
-        generic_provider = generic_provider_for_tool(tool_name)
-        state.credential_prompted_tools.add(tool_name)
-        logger.info(
-            "credential-request (generic name-only) tool=%s label=%r "
-            "signup_url=None — no registered provider",
-            tool_name,
-            generic_provider.label,
-        )
-        provided = await _emit_credential_request_and_wait(
-            websocket, state, tool_name, generic_provider, error
-        )
-        if provided is None or not provided.provided:
-            return None
-        # Unregistered provider: no per-Case secret_ref to inject. Retry once
-        # with the original params (minus any stale inline key) so the tool can
-        # pick up a key from its own resolution path.
-        return {
-            k: v for k, v in params.items()
-            if k not in ("secret_ref", "map_key", "api_key")
-        }
-
-    # REGISTERED path: real per-provider card with a real signup_url.
-    assert provider is not None  # narrowed by is_registered_credential
-    state.credential_prompted_tools.add(tool_name)
-
-    provided = await _emit_credential_request_and_wait(
-        websocket, state, tool_name, provider, error
-    )
-    if provided is None or not provided.provided:
-        # Declined / timed out: surface the original typed error.
-        return None
-
-    # Key pushed to the session cache: re-resolve the secret_ref so the retry
-    # reads the NEW key. Strip any stale secret_ref/map_key from params first.
-    retry_params = {
-        k: v for k, v in params.items()
-        if k not in ("secret_ref", "map_key", "api_key")
-    }
-    retry_params = await _inject_secret_ref(
-        state, tool_name, retry_params, case_id
-    )
-    return retry_params
-
-async def _emit_credential_request_and_wait(
-    websocket: ServerConnection,
-    state: SessionState,
-    tool_name: str,
-    provider: CredentialProvider,
-    error: BaseException,
-) -> "CredentialProvidedEnvelopePayload | None":
-    """Emit a ``credential-request`` envelope and await ``credential-provided``.
-
-    ``None`` on timeout, so the caller fails open to the original typed error."""
-    request_id = new_ulid()
-    # Prefer the tool's typed-error message (honest, specific) over the
-    # registry default; both name that a key is needed (no silent dead-end).
-    err_detail = str(error).strip()
-    message = provider.default_message
-    if err_detail:
-        message = f"{provider.default_message} ({err_detail[:400]})"
-
-    # Build the envelope scoped to the REAL provider (every registered
-    # provider_id is now a valid ``ProviderID`` Literal member). If validation
-    # fails for an unregistered provider, ``_build_credential_request_payload``
-    # returns ``None`` -- we abandon the prompt rather than mis-scope the
-    # secret-add (which would save the key where the retry can't re-resolve it).
-    # The caller then surfaces the original typed error (honest narration).
-    payload = _build_credential_request_payload(
-        request_id=request_id,
-        provider=provider,
-        tool_name=tool_name,
-        message=message,
-    )
-    if payload is None:
-        return None
-
-    loop = asyncio.get_running_loop()
-    fut: asyncio.Future = loop.create_future()
-    # Registered session-scoped rather than per-connection, so a reply arriving
-    # on a sibling connection still resolves this wait.
-    _register_pending_credential(state.session_id, request_id, fut)
-
-    await _session_safe_send(websocket, state.session_id,
-        _new_envelope("credential-request", state.session_id, payload)
-    )
-    logger.info(
-        "credential-request emitted session=%s tool=%s provider=%s request_id=%s",
-        state.session_id,
-        tool_name,
-        provider.provider_id,
-        request_id,
-    )
-
-    try:
-        provided: CredentialProvidedEnvelopePayload = await asyncio.wait_for(
-            fut, timeout=_gate_wait_timeout(CODE_EXEC_CONFIRM_TIMEOUT_SECONDS)
-        )
-    except asyncio.TimeoutError:
-        logger.warning(
-            "credential-request timeout session=%s tool=%s request_id=%s",
-            state.session_id,
-            tool_name,
-            request_id,
-        )
-        return None
-    finally:
-        _pop_pending_credential(request_id)
-
-    logger.info(
-        "credential-provided received session=%s tool=%s request_id=%s provided=%s",
-        state.session_id,
-        tool_name,
-        request_id,
-        provided.provided,
-    )
-    return provided
 
 async def _emit_region_choice_and_wait(
     websocket: ServerConnection,

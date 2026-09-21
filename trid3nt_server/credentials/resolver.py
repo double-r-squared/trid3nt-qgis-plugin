@@ -1,7 +1,9 @@
-"""Runtime credential resolver: in-memory session cache -> env fallback.
+"""Runtime credential resolver: in-memory session cache -> the row's env var.
 
-The cache holds raw key material only in process memory for the session's
-lifetime; it is never persisted, logged, or echoed on any reply envelope.
+A source that needs a key STATES it on its own row (``auth.credential``), so the
+name a key is stored under, the env var it falls back to and the form that offers
+it all read one fact. The cache holds raw key material only in process memory for
+the session's lifetime; it is never persisted, logged, or echoed on any envelope.
 """
 
 from __future__ import annotations
@@ -11,12 +13,14 @@ import os
 import threading
 from typing import Final
 
-from trid3nt_server.credentials.credential_registry import provider_for_tool
+from trid3nt_contracts.source_spec import CredentialSpec
 
 logger = logging.getLogger("trid3nt_server.credentials.resolver")
 
 __all__ = [
     "MissingCredentialError",
+    "credential_for_tool",
+    "keyed_credentials",
     "resolve_credential",
     "set_session_credential",
     "clear_session",
@@ -25,10 +29,23 @@ __all__ = [
 
 
 class MissingCredentialError(RuntimeError):
-    """No credential value could be resolved for a keyed tool.
-    Raised by callers that require a value; the resolver itself returns
-    ``None``, leaving the fetcher's own env path as the floor."""
+    """A keyed source was asked for with no key anywhere to serve it.
 
+    The refusal names the credential and the one place a key is entered; the
+    chat is never that place, so it points at the plugin's keys form."""
+
+    error_code: str = "CREDENTIAL_MISSING"
+    retryable: bool = False
+    actionability: str = "user"
+
+    def __init__(self, credential: CredentialSpec) -> None:
+        signup = f" A key is issued at {credential.signup_url}." if credential.signup_url else ""
+        super().__init__(
+            f"{credential.label} needs a key and none is stored. Open the "
+            f"plugin's Settings -> Keys and enter the {credential.label} key "
+            f"there (never in the chat).{signup}"
+        )
+        self.credential_name = credential.name
 
 
 # Guarded by a lock: ``secret-add`` handling and tool-dispatch resolution run on
@@ -38,16 +55,29 @@ _LOCK: Final[threading.Lock] = threading.Lock()
 _SESSION_CREDENTIALS: dict[str, dict[str, str]] = {}
 
 
-# Env fallback: provider_id -> the env var the tool's own resolver reads.
-# Single-key providers only. Movebank is deliberately absent: its credential is
-# a composite user + password pair its own fetcher resolves, so the resolver
-# never has to reassemble one.
-_PROVIDER_ENV_VARS: Final[dict[str, tuple[str, ...]]] = {
-    "firms": ("TRID3NT_FIRMS_MAP_KEY",),
-    "ebird": ("TRID3NT_EBIRD_API_KEY",),
-    "ecmwf_cds": ("TRID3NT_COPERNICUS_CDS_API_KEY",),
-    "iucn_red_list": ("TRID3NT_IUCN_RED_LIST_API_KEY",),
-}
+def credential_for_tool(tool_name: str) -> CredentialSpec | None:
+    """The credential ``tool_name``'s row declares, or ``None`` for a public one."""
+    from trid3nt_server.tools.fetchers._router.registration import get_spec
+
+    spec = get_spec(tool_name)
+    return spec.auth.credential if spec is not None else None
+
+
+def keyed_credentials() -> dict[str, CredentialSpec]:
+    """Every declared credential by name: the rows the keys form offers.
+    Two rows served by one upstream account collapse to the single name both
+    state, which is why one entered key serves both."""
+    from trid3nt_server.tools.fetchers._router.registration import (
+        get_spec,
+        registered_spec_names,
+    )
+
+    out: dict[str, CredentialSpec] = {}
+    for name in sorted(registered_spec_names()):
+        spec = get_spec(name)
+        if spec is not None and spec.auth.credential is not None:
+            out[spec.auth.credential.name] = spec.auth.credential
+    return out
 
 
 def set_session_credential(session_id: str, provider_id: str, value: str) -> None:
@@ -59,7 +89,7 @@ def set_session_credential(session_id: str, provider_id: str, value: str) -> Non
     with _LOCK:
         _SESSION_CREDENTIALS.setdefault(session_id, {})[provider_id] = value
     logger.info(
-        "credential cached session=%s provider=%s (value hidden)",
+        "credential cached session=%s credential=%s (value hidden)",
         session_id,
         provider_id,
     )
@@ -74,30 +104,21 @@ def clear_session(session_id: str) -> None:
 
 
 def session_provider_ids(session_id: str) -> frozenset[str]:
-    """The provider_ids currently cached for ``session_id`` (test/introspection)."""
+    """The credential names currently cached for ``session_id``."""
     with _LOCK:
         return frozenset(_SESSION_CREDENTIALS.get(session_id, {}))
 
 
-def _env_value_for_provider(provider_id: str) -> str | None:
-    """First non-empty env value across the provider's candidate env vars."""
-    for env_name in _PROVIDER_ENV_VARS.get(provider_id, ()):  # noqa: SIM110
-        val = os.environ.get(env_name)
-        if val and val.strip():
-            return val.strip()
-    return None
-
-
 def resolve_credential(session_id: str, tool_name: str) -> str | None:
-    """Resolve a keyed tool's credential value: session cache -> env fallback.
+    """Resolve a keyed tool's credential value: session cache -> the row's env var.
     ``None`` when the tool is not keyed or neither source holds a value; never
-    raises for a missing key."""
-    provider = provider_for_tool(tool_name)
-    if provider is None:
+    raises for a missing key, which is the caller's refusal to make."""
+    credential = credential_for_tool(tool_name)
+    if credential is None:
         return None
-    provider_id = provider.provider_id
     with _LOCK:
-        cached = _SESSION_CREDENTIALS.get(session_id, {}).get(provider_id)
+        cached = _SESSION_CREDENTIALS.get(session_id, {}).get(credential.name)
     if cached:
         return cached
-    return _env_value_for_provider(provider_id)
+    env_value = os.environ.get(credential.env_var)
+    return env_value.strip() if env_value and env_value.strip() else None

@@ -35,7 +35,6 @@ from . import draw_tools, gate
 from .charts_window import ChartsWindow
 from .cards import (
     CodeExecCard,
-    CredentialCard,
     FormCard,
     GateCard,
     RegionChoiceCard,
@@ -1515,10 +1514,6 @@ class Trid3ntDock(QDockWidget):
             # The code-exec HARD confirm gate: the agent BLOCKS until the
             # reply lands, so this envelope must never be dropped.
             self._show_code_exec_card(data)
-        elif kind == "credential-request":
-            # The key prompt for a PAUSED keyed tool. The pause has a
-            # server-side TTL, so an undelivered card fails the tool.
-            self._show_credential_card(data)
         elif kind == "tool-candidates":
             # The tool-selection picker: ranked candidates, free text and
             # let-agent-decide, replying on ONE envelope. FAIL-OPEN --
@@ -1902,7 +1897,7 @@ class Trid3ntDock(QDockWidget):
     def _reply(self, label: str, send, *args, **kwargs) -> None:
         """One gate answer out through the bridge, a send failure noted by the
         name of what failed. ``exc`` carries transport state and never the
-        arguments, so a credential reply is safe to route through here."""
+        arguments, so a secret-bearing reply is safe to route through here."""
         try:
             send(*args, **kwargs)
         except Exception as exc:  # noqa: BLE001
@@ -2106,37 +2101,6 @@ class Trid3ntDock(QDockWidget):
                     features=wire.get("features"),
                     name=wire.get("name"),
                     cancelled=bool(wire.get("cancelled")))
-
-    # -- credential-request key-entry card -------------------------------------- #
-
-    def _show_credential_card(self, payload: dict) -> None:
-        """Render the credential prompt as an inline key-entry card: a keyed
-        tool hit a missing key and the agent PAUSED it. A malformed envelope
-        is noted honestly rather than dropped."""
-        request = gate.parse_credential_request(payload)
-        if request is None:
-            self._note(
-                "Received a malformed credential-request (no request_id / "
-                "provider_id) -- cannot answer it; the agent's key prompt "
-                "will time out server-side.",
-                error=True,
-            )
-            return
-        self._present_card(CredentialCard(request,
-                                          self._on_credential_decision))
-
-    def _on_credential_decision(
-        self, request_id: str, provider_id: str, key_value: Optional[str]
-    ) -> None:
-        """Send the credential reply: a key submits, ``None`` skips. The raw
-        key rides ``secret-add`` ALONE and is never logged or echoed in an
-        error note; a skip saves nothing and lets the tool's error stand."""
-        if key_value is None:
-            self._reply("credential reply", self.bridge.decline_credential,
-                        request_id)
-        else:
-            self._reply("credential reply", self.bridge.submit_credential,
-                        request_id, provider_id, key_value)
 
     # -- tool-selection picker card
 

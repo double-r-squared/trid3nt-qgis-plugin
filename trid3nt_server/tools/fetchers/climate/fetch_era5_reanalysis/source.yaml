@@ -14,7 +14,11 @@ endpoints:
     url: "https://cds.climate.copernicus.eu/api"
 auth:
   mode: cds
-  api_key_env: {var: TRID3NT_COPERNICUS_CDS_API_KEY, required: false}
+  credential:
+    name: ecmwf_cds
+    label: Copernicus Climate Data Store
+    signup_url: https://cds.climate.copernicus.eu/how-to-api
+    env_var: TRID3NT_COPERNICUS_CDS_API_KEY
   user_agent: trid3nt_default
 
 params:
