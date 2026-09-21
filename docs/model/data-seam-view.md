@@ -18,7 +18,7 @@ flowchart LR
     boundaryRunSlot["BoundaryRunSlot<br/>trid3nt_server/inputs/boundary.py"]
     coastalComposite["CoastalComposite<br/>trid3nt_server/tools/fetchers/_router/hooks/topobathy.py"]
     coastalDeclaration["BedSourceDeclaration<br/>trid3nt_server/tools/fetchers/ocean/fetch_topobathy/source.yaml"]
-    coastlineDeclaration["BedSourceDeclaration<br/>trid3nt_server/tools/fetchers/ocean/fetch_osm_coastline/source.yaml"]
+    coastlineDeclaration["BedSourceDeclaration<br/>trid3nt_server/tools/fetchers/socioeconomic/fetch_osm_features/source.yaml"]
     contextRow["ContextRow<br/>trid3nt_server/workflows/runtime/data.py"]
     copernicusDeclaration["BedSourceDeclaration<br/>trid3nt_server/tools/fetchers/terrain/fetch_copernicus_dem/source.yaml"]
     coverageContract["SourceCoverage<br/>contracts/trid3nt_contracts/coverage.py"]

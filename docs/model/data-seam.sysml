@@ -378,7 +378,7 @@ package DataSeam {
 
     part coastlineDeclaration : BedSourceDeclaration {
         doc /*
-        code: trid3nt_server/tools/fetchers/ocean/fetch_osm_coastline/source.yaml
+        code: trid3nt_server/tools/fetchers/socioeconomic/fetch_osm_features/source.yaml
         */
     }
 
