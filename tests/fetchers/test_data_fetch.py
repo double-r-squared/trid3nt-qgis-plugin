@@ -33,7 +33,6 @@ from trid3nt_server.tools.fetchers._fetch_common import (
 )
 from trid3nt_server.tools.fetchers.socioeconomic.geocode_location.geocode_location import (
     GeocodeNoMatchError,
-    GeocodeUnconfirmableError,
     geocode_location,
 )
 
@@ -237,10 +236,6 @@ def test_geocode_location_happy_path(monkeypatch):
         ),
     )
 
-    monkeypatch.setattr(
-        "trid3nt_server.render.pipeline_emitter.current_emitter", lambda: object()
-    )
-
     result = geocode_location("Fort Myers, FL")
     assert result["source"] == "nominatim"
     assert result["bbox"] == [-81.93, 26.55, -81.78, 26.71]
@@ -257,13 +252,6 @@ def test_geocode_location_rejects_empty_query():
 # geocode_location -- STRICT (R31): the query travels as written, the answer
 # is exactly what the service gives back. No state table, no snap, no
 # qualifier stripping, no result-class reorder, no AOI-floor expansion.
-
-
-def _bind_session(monkeypatch):
-    """Bind a stand-in session: the geocoder refuses with nobody to confirm."""
-    monkeypatch.setattr(
-        "trid3nt_server.render.pipeline_emitter.current_emitter", lambda: object()
-    )
 
 
 def _bind_geocode_cache(monkeypatch):
@@ -302,7 +290,6 @@ def _geocode_stub(monkeypatch, location):
 def test_geocode_sends_the_query_verbatim_no_stripping_or_detection(monkeypatch):
     """"south Florida" reaches geopy UNCHANGED -- no directional-qualifier
     strip, no state table lookup, no rewrite of any kind."""
-    _bind_session(monkeypatch)
     _bind_geocode_cache(monkeypatch)
     calls = _geocode_stub(monkeypatch, _FakeLocation(
         {"display_name": "South Florida", "boundingbox": ["24.4", "27.0", "-82.0", "-80.0"],
@@ -314,7 +301,6 @@ def test_geocode_sends_the_query_verbatim_no_stripping_or_detection(monkeypatch)
 
 
 def test_geocode_returns_the_services_own_answer_unmodified(monkeypatch):
-    _bind_session(monkeypatch)
     _bind_geocode_cache(monkeypatch)
     _geocode_stub(monkeypatch, _FakeLocation(
         {"display_name": "Kansas, United States",
@@ -331,7 +317,6 @@ def test_geocode_returns_the_services_own_answer_unmodified(monkeypatch):
 
 
 def test_geocode_refuses_when_the_service_finds_nothing(monkeypatch):
-    _bind_session(monkeypatch)
     _bind_geocode_cache(monkeypatch)
     _geocode_stub(monkeypatch, None)
     with pytest.raises(GeocodeNoMatchError):
@@ -339,7 +324,6 @@ def test_geocode_refuses_when_the_service_finds_nothing(monkeypatch):
 
 
 def test_geocode_refuses_a_match_with_no_bounding_box(monkeypatch):
-    _bind_session(monkeypatch)
     _bind_geocode_cache(monkeypatch)
     _geocode_stub(monkeypatch, _FakeLocation(
         {"display_name": "Nowhere", "boundingbox": []}, 0.0, 0.0,
@@ -351,9 +335,6 @@ def test_geocode_refuses_a_match_with_no_bounding_box(monkeypatch):
 def test_geocode_upstream_failure_raises_upstream_error(monkeypatch):
     from geopy.exc import GeocoderServiceError
 
-    _bind_session(monkeypatch)
-    _bind_geocode_cache(monkeypatch)
-
     class _Client:
         def geocode(self, query, **kw):
             raise GeocoderServiceError("timed out")
@@ -363,23 +344,7 @@ def test_geocode_upstream_failure_raises_upstream_error(monkeypatch):
         geocode_location("Fort Myers, FL")
 
 
-def test_geocode_refuses_with_no_session_to_confirm_the_match(monkeypatch):
-    """Headless, the top match has nobody to look at it, so it is not accepted."""
-    _bind_geocode_cache(monkeypatch)
-    calls = _geocode_stub(monkeypatch, _FakeLocation(
-        {"display_name": "Kansas", "boundingbox": ["36.9", "40.0", "-102.1", "-94.6"]},
-        38.5, -98.4,
-    ))
-    monkeypatch.setattr(
-        "trid3nt_server.render.pipeline_emitter.current_emitter", lambda: None
-    )
-    with pytest.raises(GeocodeUnconfirmableError, match="Kansas"):
-        geocode_location("Kansas")
-    assert calls == []
-
-
 def test_geocode_auto_mode_labels_the_match_auto_accepted(monkeypatch):
-    _bind_session(monkeypatch)
     _bind_geocode_cache(monkeypatch)
     _geocode_stub(monkeypatch, _FakeLocation(
         {"display_name": "Fort Myers, FL", "boundingbox": ["26.55", "26.71", "-81.93", "-81.78"]},
@@ -392,7 +357,6 @@ def test_geocode_auto_mode_labels_the_match_auto_accepted(monkeypatch):
 def test_geocode_user_gated_labels_pending_confirm(monkeypatch):
     """The tool always returns at once; the case-AOI-commit step is what
     shows the confirm gate on this label, not this call."""
-    _bind_session(monkeypatch)
     _bind_geocode_cache(monkeypatch)
     _geocode_stub(monkeypatch, _FakeLocation(
         {"display_name": "Fort Myers, FL", "boundingbox": ["26.55", "26.71", "-81.93", "-81.78"]},
