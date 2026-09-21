@@ -42,8 +42,9 @@ def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
 
     ``source`` is ONE surface - a raster fetcher's name, an object-store uri, a
     layer, a layer of soundings, or a depth in metres below the free surface. A
-    bed built from a measurement over a wider surface is composed BEFORE here,
-    by the merge derive, and arrives as the one layer it produced."""
+    bed composed of several rows is composed BEFORE here, by the ops the run
+    stated on its bed slot, and arrives as the one layer they produced. A node
+    the surface has nothing for refuses: nothing is put there on its behalf."""
     import numpy as np
 
     if str(interp) not in _INTERPOLATIONS:
@@ -55,14 +56,7 @@ def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
     cell_m = _node_spacing_m(mesh)
     values, provenance, note = _painted(source, lonlat, box, interp, condition,
                                         cell_m)
-    unpainted = int((~np.isfinite(values)).sum())
-    if unpainted:
-        raise MeshToolError(
-            "MESH_BED_UNPAINTED",
-            f"{unpainted} of {values.size} nodes have no elevation from "
-            f"{provenance}: the domain reaches past the surface it was given. "
-            "Merge that surface with one that covers the rest, name a source "
-            "that covers it whole, or state the depth this water body holds.")
+    _reached(source, values, lonlat, provenance)
     painted = f"{provenance} at {values.size} nodes"
     _journal_bed(source, provenance, lonlat, values.size)
     return _with_meta(
@@ -83,34 +77,74 @@ def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
                      "domain's bathymetry"}])
 
 
+def _reached(source: Any, values: Any, lonlat: Any, provenance: str) -> None:
+    """REFUSE a mesh with a node no value reached, naming how many and where.
+
+    A node standing on a cell nothing measured has no elevation, and a number
+    put there on its behalf is a bed nobody surveyed. The refusal carries the
+    count, the box those nodes stand in and the surface's own coverage feedback,
+    because what would cover them is the thing the person has to act on."""
+    import numpy as np
+
+    blank = ~np.isfinite(np.asarray(values, dtype=float))
+    if not int(blank.sum()):
+        return
+    at = np.asarray(lonlat, dtype=float)[blank]
+    raise MeshToolError(
+        "MESH_BED_UNPAINTED",
+        f"{int(blank.sum())} of {np.asarray(values).size} nodes have no "
+        f"elevation from {provenance}: they stand between "
+        f"({at[:, 0].min():.5f}, {at[:, 1].min():.5f}) and "
+        f"({at[:, 0].max():.5f}, {at[:, 1].max():.5f}), on cells no row of this "
+        f"bed measured. {_feedback(source)} Name a row that covers them, state "
+        "the ops that would lay one and interpolate what is left, supply a bed "
+        "of your own, or state the depth this water body holds.")
+
+
+def _feedback(source: Any) -> str:
+    """The coverage feedback the bed surface STATES about itself, or "".
+
+    Said again in the refusal because a person reading why a run stopped is
+    exactly the person the feedback was written for."""
+    from trid3nt_server.inputs.bed import bed as read_bed
+
+    slot = read_bed(source, label="bed")
+    return " ".join(str(note) for note in
+                    getattr(getattr(slot, "source", None), "notes", None) or [])
+
+
 def _journal_bed(source: Any, provenance: str, lonlat: Any, nodes: int) -> None:
     """What the run SAYS about the bed its nodes were painted from.
 
     On the run journal and not in a log line: which dataset reached each node is
-    part of the answer, and a composed bed is two datasets whose shares of the
-    NODES a reader has to be able to see."""
+    part of the answer, and a composed bed is several datasets whose shares of
+    the NODES a reader has to be able to see."""
     from trid3nt_server.workflows.runtime import journal_note
 
     shares = _node_shares(source, lonlat)
     journal_note(f"bed: {provenance} painted all {nodes} nodes."
                  if shares is None else
-                 f"bed: {provenance} painted {nodes} nodes - the measurement "
-                 f"reached {shares[0] * 100.0:.1f}% of them and the wider "
-                 f"surface under it {shares[1] * 100.0:.1f}%.")
+                 f"bed: {provenance} painted {nodes} nodes - "
+                 + "; ".join(f"{label} reached {share * 100.0:.1f}% of them"
+                             for label, share in shares) + ".")
 
 
-def _node_shares(source: Any, lonlat: Any) -> tuple[float, float] | None:
-    """The share of the NODES each input of a composed bed painted, or ``None``.
+def _node_shares(source: Any, lonlat: Any) -> list[tuple[str, float]] | None:
+    """The share of the NODES each row of a composed bed painted, or ``None``.
 
-    The merge writes which input won at each CELL; a node takes the cell it
-    stands in, so the shares a run reports are the ones its own solve reads."""
+    The merge writes which row won at each CELL and names them in the order it
+    laid them; a node takes the cell it stands in, so the shares a run reports
+    are the ones its own solve reads. Every row is counted: a pair of numbers
+    over a bed of five answers a question nobody asked, and the two it leaves
+    out are exactly the ones a reader is trying to find."""
     import numpy as np
 
     from trid3nt_server.inputs.bed import bed as read_bed
     from trid3nt_server.workflows.mesh.shared.nodes import sample_raster_at_nodes
 
     slot = read_bed(source, label="bed")
-    uri = str(getattr(getattr(slot, "source", None), "provenance_uri", "") or "")
+    surface = getattr(slot, "source", None)
+    uri = str(getattr(surface, "provenance_uri", "") or "")
     if not uri:
         return None
     # STAGED the way every other raster this op reads is: the sidecar lives in
@@ -118,7 +152,11 @@ def _node_shares(source: Any, lonlat: Any) -> tuple[float, float] | None:
     won = np.asarray(sample_raster_at_nodes(str(op_raster(uri)), lonlat,
                                             interp="nearest", fill_holes=False))
     total = float(won.size) or 1.0
-    return (float((won == 0).sum()) / total, float((won == 1).sum()) / total)
+    laid = [label for label, _share in (getattr(surface, "water_rows", None)
+                                        or getattr(surface, "land_rows", None)
+                                        or [])]
+    return [(label, float((won == rank).sum()) / total)
+            for rank, label in enumerate(laid)]
 
 
 def _stated_depth(source: Any) -> bool:
@@ -134,8 +172,8 @@ def _painted(source: Any, lonlat: Any, box: tuple[float, float, float, float],
              ) -> tuple[Any, str, str | None]:
     """One bed source sampled at the nodes -> ``(values, provenance, note)``.
 
-    A node the source has nothing for comes back NaN, which is what lets a
-    second source paint it; a STATED DEPTH covers every node by construction."""
+    A node the source has nothing for comes back NaN, which is what lets the
+    refusal above name it; a STATED DEPTH covers every node by construction."""
     import numpy as np
 
     from trid3nt_server.inputs.bed import DEPTH, POINTS, bed as read_bed
@@ -319,10 +357,10 @@ def _bed_raster(source: Any, bbox: tuple[float, float, float, float]
             "set_bed was given no source, so the mesh has no elevation to carry.")
     if name in TOOL_REGISTRY:
         _refuse_undated_source(name)
-        # The PRIMARY source and nothing else: no ladder rung is permitted from
+        # The NAMED source and nothing else: no second row is permitted from
         # here. A bed is TOPOBATHY - the channel bottom and the sea floor - and a
         # standard DEM measures the water SURFACE, so which substitutions a bed
-        # tolerates is the DATA row's declaration; a rung this op permitted on
+        # tolerates is the DATA row's declaration; a row this op permitted on
         # the author's behalf would be a cross-dataset bed nobody wrote down.
         layer = TOOL_REGISTRY[name].fn(bbox=bbox, target_crs="EPSG:4326")
         return (op_raster(layer), _provenance(name, layer),
@@ -359,7 +397,7 @@ def _provenance(name: str, layer: Any) -> str:
     note = fetch_fallback_note(layer)
     if rows:
         painted = f"{name}: " + ", ".join(
-            f"{rung} {coverage * 100:.0f}%" for rung, coverage in rows)
+            f"{name} {coverage * 100:.0f}%" for name, coverage in rows)
     elif note:
         painted = f"{name} ({note})"
     else:

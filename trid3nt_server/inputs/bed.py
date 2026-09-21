@@ -2,12 +2,15 @@
 
 One slot over every source a user can have: a fetched DEM, a fetched or supplied
 bathymetry raster, a survey raster, a layer of soundings, or a stated depth below
-the free surface. The slot takes ONE source - a measurement over a wider surface
-is composed by the merge derive in the DATA body, before anything reaches here -
-says WHICH shape it was handed, and nothing above here branches on where it came
-from. One thing happens on the way in, because only the slot knows the bed is an
-ELEVATION: the surface is read on the RUN's own vertical frame, and a surface of
-depths is turned into elevations counted up from the zero it states.
+the free surface. The slot lays the ONE row the match ranked first and STATES
+what that row covers - the water and the land it measured, the water and the
+land nothing measured, the rows that could cover the gap - so a person reads the
+hole before a solve stands on it. Composing more is theirs to state: the ops
+below lay named rows under the first and paint what is left between them. The
+slot says WHICH shape it was handed, and nothing above here branches on where it
+came from. One thing happens on the way in, because only the slot knows the bed
+is an ELEVATION: the surface is read on the RUN's own vertical frame, and a
+surface of depths is turned into elevations counted up from the zero it states.
 """
 
 from __future__ import annotations
@@ -24,16 +27,21 @@ from .user_input import UserInputError
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["Bed", "DEPTH", "INTERPOLATED", "MERGE_DERIVE", "MergeRastersError",
-           "MergedRasterLayerURI", "POINTS", "RASTER", "SURVEY_DERIVE",
-           "SurveySurfaceError", "SurveySurfaceLayerURI", "bed", "elevations",
-           "merged_surface", "survey_surface"]
+__all__ = ["Bed", "DEPTH", "INTERPOLATED", "MERGE", "MERGE_DERIVE",
+           "MergeRastersError", "MergedRasterLayerURI", "POINTS", "RASTER",
+           "SURVEY_DERIVE", "SurveySurfaceError", "SurveySurfaceLayerURI",
+           "bed", "elevations", "merge_rows", "merged_surface",
+           "survey_surface"]
 
 _CODE = "BED_INVALID"
 
-#: The one OP this slot takes: paint the water no rung measured by interpolating
-#: between the measurements and the shoreline. A move somebody states on the call,
-#: never a default - an interpolated bed is not a measured one.
+#: The two OPS this slot takes, applied in the order a call states them. MERGE
+#: lays the rows it names under the one the match ranked first, provenance per
+#: cell; INTERPOLATED paints the water no row measured, between the measurements
+#: and the shoreline. Each is stated on the call or it does not happen - a bed
+#: composed of rows nobody named is not the bed anybody asked for, and an
+#: interpolated bed is not a measured one.
+MERGE = "merge"
 INTERPOLATED = "interpolated"
 
 #: The three shapes an elevation source arrives in.
@@ -90,13 +98,13 @@ def bed(value: Any, *, frame: Any = None, offset: Any = None, op: Any = None,
     is the RUN's vertical frame, which the runtime states once and every
     elevation here is read on, and ``offset`` is the measured shift onto it the
     runtime's own DATA row produced where the source states another frame. ``op``
-    is the move the RUN states for this slot, read here because only the slot
-    knows what its own op names mean."""
+    is the move, or the ordered list of moves, the RUN states for this slot,
+    read here because only the slot knows what its own op names mean."""
     if isinstance(value, Bed):
         return value
     if value is None:
         return None
-    _whole_water(value, _fill_op(op, code), label, code)
+    _whole_water(value, _stated_ops(op, code), label, code)
     depth = _depth(value)
     if depth is not None:
         lo, hi = _DEPTH_RANGE_M
@@ -124,39 +132,61 @@ def bed(value: Any, *, frame: Any = None, offset: Any = None, op: Any = None,
                                  code=code))
 
 
-def _fill_op(op: Any, code: str) -> str:
-    """The op the call states for the water no rung measured, validated BY NAME.
+def _stated_ops(op: Any, code: str) -> list[str]:
+    """The ops the call states for this slot, IN ORDER, validated by name.
 
-    A mapping states arguments for it; the bed's one op takes none, so an op
-    this slot does not know - and an argument it does not read - refuses rather
-    than being dropped on the way in."""
-    if not op:
-        return ""
-    stated = dict(op) if isinstance(op, Mapping) else {"name": str(op)}
-    name = str(stated.pop("name", ""))
-    if name != INTERPOLATED or stated:
-        raise UserInputError(
-            f"the bed takes one op, {INTERPOLATED!r} with no arguments, and "
-            f"the run states {op!r}.", code=code)
-    return name
+    A slot takes one op or an ordered list of them, each a name or a mapping
+    naming it and carrying what it reads: MERGE reads the rows it lays,
+    INTERPOLATED reads nothing. A name this slot has no move for, an argument a
+    move does not read, or a merge naming no rows refuses here rather than being
+    dropped on the way in."""
+    laid: list[str] = []
+    for one in _listed(op) if op else []:
+        stated = dict(one) if isinstance(one, Mapping) else {"name": str(one)}
+        name = str(stated.pop("name", ""))
+        rows = [str(row) for row in _listed(stated.pop("rows", None))]
+        if name not in (MERGE, INTERPOLATED) or stated or bool(rows) != (name == MERGE):
+            raise UserInputError(
+                f"the bed takes {MERGE!r} naming the rows it lays and "
+                f"{INTERPOLATED!r} with no arguments, and the run states "
+                f"{one!r}.", code=code)
+        laid.append(name)
+    return laid
 
 
-def _whole_water(value: Any, op: str, label: str, code: str) -> None:
-    """Refuse a bed whose water no rung measured, where the call states no op.
+def merge_rows(op: Any) -> list[str]:
+    """The rows the MERGE op names, in the order it names them.
 
-    The merge states the share of the water measured by nothing; a run stands on
-    the bed it was handed, so water with no bed under it is refused here rather
-    than flattened to a plane somewhere below. The op is the person's, and
-    naming it is the whole of the remedy this refusal carries."""
+    Empty where the call states no merge. An op NAME means something only to the
+    ingestion that reads it, so the runtime that produces those rows reads which
+    ones they are from here."""
+    for one in _listed(op) if op else []:
+        if isinstance(one, Mapping) and str(one.get("name", "")) == MERGE:
+            return [str(row) for row in _listed(one.get("rows"))]
+    return []
+
+
+def _whole_water(value: Any, ops: list[str], label: str, code: str) -> None:
+    """Refuse a bed whose water no row measured, where the call states no fill.
+
+    The surface states the share of the water measured by nothing and the rows
+    that could cover it; a run stands on the bed it was handed, so water with no
+    bed under it is refused here rather than flattened to a plane somewhere
+    below. The remedy is the person's, and the feedback the surface carries is
+    the whole of what this refusal has to hand them."""
     share = getattr(value, "unmeasured_water_fraction", None)
-    if not share or op:
+    if not share or INTERPOLATED in ops:
         return
+    could = [row for row in getattr(value, "alternatives", None) or []]
+    named = (f" These rows also matched this bed and could cover it: "
+             f"{', '.join(could)}." if could else "")
     raise UserInputError(
-        f"{share * 100.0:.1f}% of the water in this domain is measured by no "
-        f"rung of the {label}, and a wider surface over it measures the water "
-        "TOP rather than the bottom. Name a survey that covers the rest, supply "
-        f"a bed of your own, or state ops={{{label!r}: {INTERPOLATED!r}}} to "
-        "interpolate between the measurements and the shoreline.", code=code)
+        f"{_percent(share)} of the water in this domain is measured by no "
+        f"row of the {label}, and a wider surface over it measures the water "
+        f"TOP rather than the bottom.{named} State "
+        f"ops={{{label!r}: [{{'name': {MERGE!r}, 'rows': [...]}}, "
+        f"{INTERPOLATED!r}]}} to lay them under this one and interpolate what "
+        "is left, or supply a bed of your own.", code=code)
 
 
 def _depth(value: Any) -> float | None:
@@ -677,31 +707,33 @@ class MergeRastersError(UserInputError):
 class MergedRasterLayerURI(LayerURI):
     """The merged surface, with WHAT PAINTED IT rather than what was offered."""
 
-    #: The share of the merged cells the MEASUREMENTS painted between them, and
-    #: the share the wider surface under all of them painted.
-    primary_fraction: float = 0.0
-    fallback_fraction: float = 0.0
-    #: The share of the WATER - the cells inside the polygon the domain was cut
-    #: with - that no rung of this ladder measured. ``None`` where the merge was
-    #: handed no polygon, because a bed with no water to be inside claims
-    #: nothing about it. It is the number a reader weighs before asking for a
-    #: surface between the measurements, and the shares above are over the whole
-    #: grid rather than over the water, so neither of them answers it.
+    #: THE COVERAGE FEEDBACK, over the two grounds a bed answers for separately:
+    #: the WATER is the cells inside the polygon the domain was cut with, the
+    #: LAND is every other cell. Each list is what the rows painted there, in
+    #: the order they were laid, and each fraction is what nothing measured. A
+    #: share over the whole grid mixes the land a terrain surface painted with
+    #: the channel the run is about, so neither ground answers for the other.
+    #: The water is ``None``/empty where no polygon was handed in, because a bed
+    #: with no water to be inside claims nothing about it.
+    water_rows: list[tuple[str, float]] = []
+    land_rows: list[tuple[str, float]] = []
     unmeasured_water_fraction: float | None = None
-    #: What each RUNG of the ladder painted, in rank order: the name the rung
-    #: carries and its share of the merged cells. The provenance sidecar below
-    #: writes a cell's rung as its index into this list.
-    rungs: list[tuple[str, float]] = []
-    #: The single-band raster carrying which rung won at each cell, by its rank -
-    #: 0 the top rung, then each rung that painted what the ones above it left -
-    #: and nodata where none of them measured. A sidecar rather than a second
+    unmeasured_land_fraction: float | None = None
+    #: The rows the match ALSO ranked for this bed and nothing laid, by name:
+    #: what a person names in a merge op to cover what this bed does not. The
+    #: provenance sidecar below writes a cell's row as its index into the lists
+    #: above.
+    alternatives: list[str] = []
+    #: The single-band raster carrying which row won at each cell, by the place
+    #: it was laid in - 0 the first, then each row that painted what the ones
+    #: before it left - and nodata where none of them measured. A sidecar rather than a second
     #: band, so the surface stays the one-band grid every sampler reads, and the
     #: mesh reads it to say which source painted each node.
     provenance_uri: str | None = None
     resolution_m: float = 0.0
-    #: The metres added to the top rung and to the wider surface to read each on
-    #: the frame the merge landed on, zero wherever it already counted from it.
-    #: Every rung's own shift is on the notes, said in the words a reader needs.
+    #: The metres added to the first row and to the wider surface to read each
+    #: on the frame the merge landed on, zero wherever it already counted from
+    #: it. Every row's own shift is on the notes, in the words a reader needs.
     datum_shift_m: float = 0.0
     fallback_shift_m: float = 0.0
     notes: list[str] = []
@@ -709,15 +741,16 @@ class MergedRasterLayerURI(LayerURI):
     def input_row(self) -> dict[str, Any]:
         """What the raster publishing seam takes to put this surface on the map.
 
-        Stated by the surface itself, because the ledger carries the row onto
-        the merge's record: a REPLAYED merge publishes the bed a fresh one
-        published, rather than leaving a resumed run with nothing to see."""
-        painted = ", ".join(f"{label} {share * 100.0:.1f}%"
-                            for label, share in self.rungs)
-        said = [f"merged: {painted}"] if painted else []
-        if self.unmeasured_water_fraction is not None:
-            said.append(f"{self.unmeasured_water_fraction * 100.0:.1f}% of the "
-                        "water measured by nothing")
+        The coverage feedback rides in the NAME, because the input row is where
+        a person meets this bed: what measured the water, what measured the
+        land, and what neither of them reached. Stated by the surface itself,
+        because the ledger carries the row onto the merge's record: a REPLAYED
+        merge publishes the bed a fresh one published, rather than leaving a
+        resumed run with nothing to see."""
+        said = [ground for ground in
+                (_ground("water", self.water_rows, self.unmeasured_water_fraction),
+                 _ground("land", self.land_rows, self.unmeasured_land_fraction))
+                if ground]
         if self.vertical_datum:
             said.append(f"datum {self.vertical_datum}")
         return {"cog_uri": self.uri, "layer_id": f"input-{self.layer_id}",
@@ -726,8 +759,19 @@ class MergedRasterLayerURI(LayerURI):
                 "style": self.style}
 
 
+def _ground(name: str, rows: list[tuple[str, float]],
+            unmeasured: float | None) -> str:
+    """What a bed covers over ONE ground, short enough to ride in a layer name."""
+    if unmeasured is None or not rows:
+        return ""
+    painted = ", ".join(f"{label} {_percent(share)}" for label, share in rows
+                        if share)
+    return (f"{name}: {painted or 'nothing'}, "
+            f"{_percent(unmeasured)} measured by nothing")
+
+
 #: The merged surface is an elevation in metres, so it draws as one: the merge
-#: lands each rung on the run's own frame, whatever unit the rung arrived in.
+#: lands each row on the run's own frame, whatever unit the row arrived in.
 _BED_STYLE = {"kind": "continuous", "ramp": "terrain", "units": "m"}
 
 #: The surfacing tasks in flight, held because a bare ``create_task`` reference
@@ -742,7 +786,7 @@ _PROVENANCE_NODATA = 255
 
 
 def _staged(layer: Any, role: str, scratch: str) -> str:
-    """One rung's raster, local and readable, or a refusal naming it."""
+    """One row's raster, local and readable, or a refusal naming it."""
     from trid3nt_server.tools.derive._hydrology_common import _stage_uri_local
 
     from .geometry import source_uri
@@ -753,7 +797,7 @@ def _staged(layer: Any, role: str, scratch: str) -> str:
             "MERGE_RASTERS_NO_SOURCE",
             f"the {role} {layer!r} names no raster file to read.")
     try:
-        # The role is a rung's own name and reaches a FILENAME here, so what is
+        # The role is a row's own name and reaches a FILENAME here, so what is
         # not a word in it is not carried into one.
         return _stage_uri_local(
             uri, scratch, "".join(c if c.isalnum() else "_" for c in role))
@@ -770,20 +814,21 @@ def _listed(value: Any) -> list[Any]:
     return list(value) if isinstance(value, (list, tuple)) else [value]
 
 
-def _rungs(surfaces: Any, offsets: Any) -> list[tuple[Any, Any]]:
-    """The surfaces one argument names, in rank order, each with its own offset.
+def _laid(surfaces: Any, offsets: Any) -> list[tuple[Any, Any]]:
+    """The surfaces one argument names, in the order it names them, each with its
+    own offset.
 
-    A caller states one surface and the one offset row declared for it, or a
-    ranked list and the rows declared for each; the two are paired by rank, and
-    a rung the caller named no row for owes none."""
+    A caller states one surface and the one offset row declared for it, or an
+    ordered list and the rows declared for each; the two are paired by position,
+    and a surface the caller named no row for owes none."""
     shifts = _listed(offsets)
     return [(layer, shifts[rank] if rank < len(shifts) else None)
             for rank, layer in enumerate(_listed(surfaces))]
 
 
-def _rung_label(layer: Any, rank: int) -> str:
-    """What the merge CALLS one rung: the name it carries, else its rank."""
-    return str(getattr(layer, "name", "") or "").strip() or f"rung {rank + 1}"
+def _row_label(layer: Any, rank: int) -> str:
+    """What the merge CALLS one row: the name it carries, else its place."""
+    return str(getattr(layer, "name", "") or "").strip() or f"row {rank + 1}"
 
 
 def _metres_per_unit(crs: Any) -> float:
@@ -835,8 +880,8 @@ def _warped(src: Any, crs: Any, width: int, height: int, transform: Any,
     both read back for the provenance and left on disk for the overlay below.
     ``values`` is that source's grid already re-zeroed, which is what the caller
     passes where the two surfaces did not count from one zero. ``never`` is the
-    cells this rung may not paint whatever it holds there - a terrain surface
-    measures the water TOP, so inside the water it is not a bed and the rungs
+    cells this row may not paint whatever it holds there - a terrain surface
+    measures the water TOP, so inside the water it is not a bed and the rows
     that measured the bottom are the only ones that speak for it."""
     import os
 
@@ -868,24 +913,24 @@ def _counts_down(layer: Any) -> bool:
 
 
 def _merge_frame(under: Any, frame: Any) -> str:
-    """The zero this merge lands on: the RUN's, else the LAST rung's own.
+    """The zero this merge lands on: the RUN's, else the LAST row's own.
 
     A run states its frame and every elevation it ingests is read onto it. A
-    merge called outside one lands on the bottom rung, which paints every cell
-    the rungs above it left, so nothing it already holds moves."""
+    merge called outside one lands on the last row, which paints every cell the
+    ones before it left, so nothing it already holds moves."""
     from .vertical_datum import datum_of
 
     return str(frame or "").strip() or datum_of(under)
 
 
-def _placed(ladder: list[tuple[Any, Any]], labels: list[str], zero: str
+def _placed(surfaces: list[tuple[Any, Any]], labels: list[str], zero: str
             ) -> list[tuple[int, Any]]:
-    """Every rung that can be READ on the frame this merge lands on, by rank,
-    each with what it costs to read there.
+    """Every surface that can be READ on the frame this merge lands on, in the
+    order they were laid, each with what it costs to read there.
 
-    A rung whose zero nothing measures against that frame is not a rung of this
+    A surface whose zero nothing measures against that frame is not part of this
     bed: it drops off the way an empty one does, the journal says which and why,
-    and the rungs under it paint the cells it would have. The TOP rung is the
+    and the ones after it paint the cells it would have. The FIRST is the
     exception - a bed whose best source cannot be placed is not that bed - and
     what is left still has to paint the grid, which the overlay below refuses on."""
     from trid3nt_server.workflows.runtime import journal_note
@@ -893,7 +938,7 @@ def _placed(ladder: list[tuple[Any, Any]], labels: list[str], zero: str
     from .vertical_datum import datum_of
 
     standing: list[tuple[int, Any]] = []
-    for rank, (layer, row) in enumerate(ladder):
+    for rank, (layer, row) in enumerate(surfaces):
         try:
             standing.append((rank, _merge_aligned(layer, zero, row)))
         except MergeRastersError:
@@ -901,17 +946,17 @@ def _placed(ladder: list[tuple[Any, Any]], labels: list[str], zero: str
                 raise
             line = (f"{labels[rank]} counts from "
                     f"{datum_of(layer) or 'no stated zero'} and nothing measures "
-                    f"that against {zero}, so it drops off the ladder and the "
-                    "rungs under it paint what it would have.")
+                    f"that against {zero}, so it drops off this bed and the "
+                    "rows after it paint what it would have.")
             logger.info("bed merge: %s", line)
             journal_note(line)
     return standing
 
 
 def _merge_aligned(source: Any, frame: str, offset: Any) -> Any:
-    """What it costs to read ONE rung of the ladder on the frame it lands on.
+    """What it costs to read ONE row of this bed on the frame it lands on.
 
-    Every rung is read onto that zero before any of them paints a cell, so the
+    Every row is read onto that zero before any of them paints a cell, so the
     overlay is over one axis. An offset the call does not state is the one the
     source
     publishes about itself - a survey measured on a district's project datum
@@ -931,8 +976,8 @@ def _merge_aligned(source: Any, frame: str, offset: Any) -> Any:
 
 
 def _read_as(layer: Any, role: str, aligned: Any, *, depths: bool) -> str:
-    """The sentence a run SAYS about a rung this merge moved onto its frame, or
-    "" where that rung already stood on it.
+    """The sentence a run SAYS about a row this merge moved onto its frame, or
+    "" where that row already stood on it.
 
     The packet's note and the journal line are one statement, said once."""
     from .vertical_datum import datum_of
@@ -947,7 +992,7 @@ def _read_as(layer: Any, role: str, aligned: Any, *, depths: bool) -> str:
 
 
 def _rezeroed(source: Any, aligned: Any, *, depths: bool) -> Any:
-    """One rung's own grid read on the frame the merge lands on, or ``None``
+    """One row's own grid read on the frame the merge lands on, or ``None``
     where nothing moved it.
 
     On its OWN grid, before anything reads it onto the common one, so the cells
@@ -967,7 +1012,7 @@ def _water_cells(water: Any, crs: Any, transform: Any, width: int, height: int
     The cut is the run's statement of where the water is, and a bed is only
     asked to measure under it. The polygon is read in the frame the domain
     publishes it in - lon/lat - and put on this grid's own CRS here, because the
-    grid is the finest rung's and no caller knows which rung that was."""
+    grid is the finest row's and no caller knows which row that was."""
     import numpy as np
     from rasterio.features import geometry_mask
     from rasterio.warp import transform_geom
@@ -989,7 +1034,7 @@ def _water_cells(water: Any, crs: Any, transform: Any, width: int, height: int
 
 
 def _interpolated(band: Any, wet: Any, hole: Any) -> Any:
-    """The water no rung measured, painted BETWEEN the measurements and the shore.
+    """The water no row measured, painted BETWEEN the measurements and the shore.
 
     The substrate's own inverse-distance fill, run on the water ALONE: the ground
     outside the cut is never read into it, and the polygon's own edge is seeded at
@@ -1024,41 +1069,6 @@ def _bbox_4326(crs: Any, transform: Any, width: int, height: int
         crs, "EPSG:4326", west, south, east, north, densify_pts=21))
 
 
-def _passed_through(only: Any, absent: str) -> MergedRasterLayerURI:
-    """The one surface there is, carried through under the merge's own shape.
-
-    An absent row is an answer - a reach with no published survey has a terrain
-    bed and nothing else - and the result says which side was missing rather
-    than presenting one input as a merge of two."""
-    from .geometry import source_uri
-
-    uri = str(source_uri(only) or "").strip()
-    if not uri:
-        raise MergeRastersError(
-            "MERGE_RASTERS_NO_SOURCE",
-            f"only the {'fallback' if absent == 'primary' else 'primary'} "
-            f"surface was given and it names no raster file to read ({only!r}).")
-    seed = layer_seed()
-    note = (f"The {absent} surface was absent, so the other one passed through "
-            "unchanged: this is that surface, not a merge of two.")
-    logger.info("bed merge: %s absent, %s passed through", absent, uri)
-    return MergedRasterLayerURI.published(
-        "merged-bed", seed=seed,
-        name=getattr(only, "name", None) or "merged bed surface",
-        layer_type="raster",
-        uri=uri,
-        style=getattr(only, "style", None) or _BED_STYLE,
-        role="primary",
-        units=getattr(only, "units", None),
-        quantity=getattr(only, "quantity", None),
-        bbox=getattr(only, "bbox", None),
-        vertical_datum=getattr(only, "vertical_datum", None),
-        primary_fraction=0.0 if absent == "primary" else 1.0,
-        fallback_fraction=1.0 if absent == "primary" else 0.0,
-        resolution_m=0.0,
-        notes=[note])
-
-
 def _surfaced(merged: MergedRasterLayerURI) -> None:
     """Put the merged bed on the map as an input row, so the surface the mesh is
     painted from is SEEN rather than inferred from a survey's outline.
@@ -1086,7 +1096,7 @@ def _surfaced(merged: MergedRasterLayerURI) -> None:
 
 
 def _band(spans: list[tuple[float, float, str]]) -> str:
-    """One population of painted values: what it spans, and which rungs painted it."""
+    """One population of painted values: what it spans, and which rows painted it."""
     return (f"{min(low for low, _high, _label in spans):.2f} to "
             f"{max(high for _low, high, _label in spans):.2f} m from "
             f"{', '.join(label for _low, _high, label in spans)}")
@@ -1095,7 +1105,7 @@ def _band(spans: list[tuple[float, float, str]]) -> str:
 def _no_cliff(grids: list[Any], won: Any, labels: list[str]) -> None:
     """REFUSE a merged bed whose painted values split into two populations.
 
-    The rungs paint ONE landscape, so what they paint sits within that
+    The rows paint ONE landscape, so what they paint sits within that
     landscape's own relief - the range of the surface under all of them. A step
     wider than the whole of it, a hundred metres on a reach that falls ten, is
     two zeros that never met rather than a bed, and every node is painted, so
@@ -1123,9 +1133,79 @@ def _no_cliff(grids: list[Any], won: Any, labels: list[str]) -> None:
             f"the merged bed splits into two populations {gap:.1f} m apart, more "
             f"than the {relief:.1f} m of relief {labels[-1]} measures over this "
             f"domain: {_band(spans[:split])}, and {_band(spans[split:])}. No "
-            "ground holds that step - the rungs were read onto zeros that never "
-            "met. Name the offset row each rung is read through, or name a rung "
+            "ground holds that step - the rows were read onto zeros that never "
+            "met. Name the offset row each is read through, or name a row "
             "measured on the frame this bed lands on.")
+
+
+def _shares(won: Any, labels: list[str], ground: Any
+            ) -> tuple[list[tuple[str, float]], float]:
+    """What each row painted over ONE ground, and what nothing measured there.
+
+    ``ground`` is the cells this answer is about - the water, or the land. A
+    share is only ever over one of them: a share over the whole grid mixes the
+    land a terrain surface painted with the channel the run is about."""
+    import numpy as np
+
+    cells = float(np.count_nonzero(ground))
+    if not cells:
+        return [], 0.0
+    painted = [(label, _share(np.count_nonzero((won == rank) & ground), cells))
+               for rank, label in enumerate(labels)]
+    return painted, _share(np.count_nonzero((won == _PROVENANCE_NODATA) & ground),
+                           cells)
+
+
+def _share(part: Any, whole: float) -> float:
+    """A count as a fraction of the ground it is over, NEVER rounded to nothing.
+
+    A hole the rounding erases reads as no hole at every gate below, and the
+    three cells nobody sounded are exactly the ones a person is owed; so a part
+    that exists is stated at the smallest fraction this surface prints."""
+    if not whole or not float(part):
+        return 0.0
+    return max(round(float(part) / float(whole), 4), 0.0001)
+
+
+def _percent(share: float) -> str:
+    """One fraction as the percentage a person reads, HONEST at the small end.
+
+    A share under a tenth of a percent says so rather than printing as none:
+    rounding a hole away is the silence this slot exists to refuse."""
+    if not share:
+        return "0.0%"
+    return (f"{share * 100.0:.1f}%" if share * 100.0 >= 0.1
+            else "less than 0.1%")
+
+
+def _covers(name: str, painted: list[tuple[str, float]], blank: float) -> str:
+    """The sentence a run SAYS about what this bed covers over one ground."""
+    measured = "; ".join(f"{label} {_percent(share)}"
+                         for label, share in painted if share)
+    return (f"Over the {name} the bed is measured by {measured or 'nothing'}, "
+            f"and {_percent(blank)} of it is measured by nothing.")
+
+
+def _remedy(alternatives: list[str], blank: float, laid: list[str]) -> str:
+    """What WOULD cover the water this bed does not, named so a person can state it.
+
+    The feedback is the whole point of laying one row: the hole is stated with
+    the rows that could fill it and the ops that would, and stating them is
+    theirs. Nothing here acts on it."""
+    if not blank:
+        return ""
+    could = (f" These rows also matched this bed and could cover it: "
+             f"{', '.join(alternatives)}." if alternatives else "")
+    moves = [move for move in (
+        (f"{{'name': {MERGE!r}, 'rows': [...]}}" if MERGE not in laid
+         and alternatives else ""),
+        (repr(INTERPOLATED) if INTERPOLATED not in laid else ""))
+        if move]
+    states = (f" State ops={{'bed': [{', '.join(moves)}]}} to lay them under "
+              "this one and interpolate what is left, or supply a bed of your "
+              "own." if moves else "")
+    return (f"{_percent(blank)} of the water in this domain is measured by "
+            f"no row of this bed.{could}{states}")
 
 
 def merged_surface(
@@ -1136,36 +1216,40 @@ def merged_surface(
     primary_offset: Any = None,
     fallback_offset: Any = None,
     water: Any = None,
-    fill: Any = None,
+    ops: Any = None,
+    alternatives: Any = None,
     *,
     _output_dir: str | None = None,
 ) -> MergedRasterLayerURI:
-    """MERGE a ranked LADDER of surfaces into one bed, each rung winning where it measured.
+    """LAY the rows a run states into one bed and STATE what they cover.
 
-    ``primary`` is the measurement, or the ranked list of measurements highest
-    rung first; ``fallback`` is the wider surface under all of them, and each
-    offset is the row declared for the rung of the same rank. A rung paints only
-    the cells the rungs above it left, because a domain reaching past the top
-    pick is what the next rung is for. Every rung is re-zeroed onto the run's
-    vertical frame by the flip above - through its own offset row, else the shift
-    it publishes about itself - before any of them is read onto the common grid,
-    so the overlay is over one axis; one whose zero nothing measures against that
-    frame drops off the ladder as an empty rung does, and only the TOP rung being
-    unplaceable refuses. They then land on one grid at the finest of
-    their cell sizes over the union of what they cover, and the OVERLAY is the
-    substrate's own merge over those single-source warps with priority by order -
-    nothing here re-implements it. Which rung won at each cell is rebuilt from the
-    same warps and written as a sidecar, because the mesh records which source
-    painted each node.
+    ``primary`` is the row the match ranked first, or that row and the rows a
+    merge op named after it, in the order they are laid; ``fallback`` is the
+    wider surface the run named under all of them, and each offset is the row
+    declared for the surface in the same place. A surface paints only the cells
+    the ones before it left. Every one is re-zeroed onto the run's vertical
+    frame by the flip above - through its own offset row, else the shift it
+    publishes about itself - before any of them is read onto the common grid, so
+    the overlay is over one axis; one whose zero nothing measures against that
+    frame drops off as an empty one does, and only the FIRST being unplaceable
+    refuses. They then land on one grid at the finest of their cell sizes over
+    the union of what they cover, and the OVERLAY is the substrate's own merge
+    over those single-source warps with priority by order - nothing here
+    re-implements it. Which row won at each cell is rebuilt from the same warps
+    and written as a sidecar, because the mesh records which source painted each
+    node.
 
     ``water`` is the polygon the domain was CUT with. Inside it the fallback
     measures the water top rather than the bottom, so it paints only OUTSIDE it
-    and water no measured rung reached is left unpainted; the share of the water
-    measured by nothing is stated on the result and on the journal, which is the
-    number a reader weighs before asking for a surface between the measurements.
-    ``fill`` is the op they then state: ``interpolated`` lays that surface as one
-    more rung, ranked under every measured one, and the share above still reads as
-    what nothing measured.
+    and water no measured row reached is left unpainted. What each row covers
+    over the water and over the land, and what nothing measured over either, is
+    STATED on the result and on the journal beside the rows ``alternatives``
+    names - the feedback a person weighs before a solve stands on this bed.
+
+    ``ops`` is what they then state, in order: ``interpolated`` lays a surface
+    between the measurements and the shoreline as one more row, last, and the
+    share above still reads as what nothing measured. The merge op itself is
+    read by the runtime that produces the rows it names.
     """
     import tempfile
     from contextlib import ExitStack
@@ -1177,32 +1261,27 @@ def merged_surface(
     from trid3nt_server.tools.derive._hydrology_common import write_cog
     from trid3nt_server.workflows.runtime import journal_note
 
-    laid = _fill_op(fill, "MERGE_BED_OP_INVALID")
-    offered = _rungs(primary, primary_offset)
-    ladder = offered + _rungs(fallback, fallback_offset)
-    if not ladder:
+    laid = _stated_ops(ops, "MERGE_BED_OP_INVALID")
+    named = [str(row) for row in _listed(alternatives)]
+    offered = _laid(primary, primary_offset)
+    rows = offered + _laid(fallback, fallback_offset)
+    if not rows:
         raise MergeRastersError(
             "MERGE_RASTERS_NO_SOURCE",
-            "a bed merge was given neither surface, so there is nothing to merge.")
-    if len(ladder) == 1:
-        return _passed_through(ladder[0][0],
-                               absent="fallback" if offered else "primary")
-    zero = _merge_frame(ladder[-1][0], frame)
-    labels = [_rung_label(layer, rank) for rank, (layer, _row) in enumerate(ladder)]
-    standing = _placed(ladder, labels, zero)
+            "a bed merge was given no surface, so there is nothing to lay.")
+    zero = _merge_frame(rows[-1][0], frame)
+    labels = [_row_label(layer, rank) for rank, (layer, _row) in enumerate(rows)]
+    standing = _placed(rows, labels, zero)
     measured = sum(1 for rank, _cost in standing if rank < len(offered))
     aligned = [cost for _rank, cost in standing]
     labels = [labels[rank] for rank, _cost in standing]
-    ladder = [ladder[rank] for rank, _cost in standing]
-    if len(ladder) == 1:
-        return _passed_through(ladder[0][0],
-                               absent="fallback" if measured else "primary")
-    counts_down = [_counts_down(layer) for layer, _row in ladder]
+    rows = [rows[rank] for rank, _cost in standing]
+    counts_down = [_counts_down(layer) for layer, _row in rows]
 
     seed = layer_seed()
     with tempfile.TemporaryDirectory(prefix="bed-merge-") as scratch:
         staged = [_staged(layer, labels[rank], scratch)
-                  for rank, (layer, _row) in enumerate(ladder)]
+                  for rank, (layer, _row) in enumerate(rows)]
         with ExitStack() as opened:
             surfaces = [opened.enter_context(rasterio.open(path))
                         for path in staged]
@@ -1214,19 +1293,19 @@ def merged_surface(
                 values, path = _warped(
                     src, crs, width, height, transform,
                     _rezeroed(src, aligned[rank], depths=counts_down[rank]),
-                    scratch, f"rung{rank}",
+                    scratch, f"row{rank}",
                     None if rank < measured else wet)
                 grids.append(values)
                 paths.append(path)
-        # BOTTOM UP, so the rung with the best claim to a cell is the last to
-        # write it: the ladder's order IS the priority the overlay below applies.
+        # BOTTOM UP, so the row with the best claim to a cell is the last to
+        # write it: the order they were laid IS the priority the overlay applies.
         won = np.full(grids[0].shape, _PROVENANCE_NODATA, dtype="uint8")
         for rank in range(len(grids) - 1, -1, -1):
             won[np.isfinite(grids[rank])] = rank
         if not int((won != _PROVENANCE_NODATA).sum()):
             raise MergeRastersError(
                 "MERGE_RASTERS_DISJOINT",
-                f"none of the {len(ladder)} surfaces tried ({', '.join(labels)}) "
+                f"none of the {len(rows)} surfaces laid ({', '.join(labels)}) "
                 "measured a single cell of the grid they span together, so there "
                 "is nothing to merge. Name surfaces over the same ground.")
         _no_cliff(grids, won, labels)
@@ -1236,16 +1315,22 @@ def merged_surface(
                                  west + width * transform.a, north),
                          res=(cell, cell))
         hole = (wet & (won == _PROVENANCE_NODATA)) if wet is not None else None
-        unmeasured = (round(float(hole.sum()) / float(wet.sum()), 4)
+        # WHAT NO MEASUREMENT REACHED, read before the fill paints any of it: an
+        # interpolation is not a sounding, so the number a person weighs is the
+        # same whether or not they pulled the trigger on the op.
+        unmeasured = (_share(hole.sum(), float(wet.sum()))
                       if hole is not None else None)
-        if laid and unmeasured:
-            # THE LAST RUNG, laid after the ladder because it is painted OUT of
-            # what the ladder left: it wins only the cells no measurement reached,
-            # and the provenance carries it as its own rung so a node painted by
-            # an interpolation is never read as a node somebody sounded.
+        if INTERPOLATED in laid and hole is not None and bool(hole.any()):
+            # THE LAST ROW, laid after the rest because it is painted OUT of
+            # what they left: it wins only the cells no measurement reached, and
+            # the provenance carries it as its own row so a node painted by an
+            # interpolation is never read as a node somebody sounded. The HOLE
+            # itself is the gate, never its rounded share - a hole that reads as
+            # zero percent is still a hole, and skipping the op the run stated
+            # over one would be the silence this slot exists to refuse.
             stack[0] = _interpolated(stack[0], wet, hole)
-            won[hole] = len(ladder)
-            labels.append(laid)
+            won[hole] = len(rows)
+            labels.append(INTERPOLATED)
         metres = float(cell * _metres_per_unit(crs))
         uri = write_cog(stack[0], crs=crs, transform=transform, prefix="merged_bed",
                         seed=seed, output_dir=_output_dir,
@@ -1256,39 +1341,29 @@ def merged_surface(
                                code="MERGE_RASTERS_WRITE_FAILED",
                                nodata=float(_PROVENANCE_NODATA))
 
-    shares = [float((won == rank).sum()) / float(won.size)
-              for rank in range(len(labels))]
+    dry = np.ones(won.shape, dtype=bool) if wet is None else ~wet
+    water_rows = _shares(won, labels, wet)[0] if wet is not None else []
+    land_rows, ashore = _shares(won, labels, dry)
     moved = [line for line in
              (_read_as(layer, labels[rank], aligned[rank], depths=counts_down[rank])
-              for rank, (layer, _row) in enumerate(ladder)) if line]
-    painted = "; ".join(f"{label} {share * 100.0:.1f}%"
-                        for label, share in zip(labels, shares))
-    # ONE NUMBER PER RUNG, in rank order: a reader asking what measured this bed
-    # is asking about each rung, and a pair of fractions over a ladder of three
-    # is an answer to a question nobody asked.
-    covered = (f"The ladder painted the merged grid in rank order - {painted} - "
-               f"and {(1.0 - sum(shares)) * 100.0:.1f}% is measured by none of "
-               "them and left as nodata.")
-    # THE ONE NUMBER A READER WEIGHS before asking for a surface between the
-    # measurements, so it is said in the same breath as the rule that produced
-    # it rather than left to be read off two shares over a different denominator.
-    wet_said = (["Only the measured rungs paint inside the polygon the domain "
-                 "was cut with - a wider surface measures the water TOP, not "
-                 f"the bed - and {unmeasured * 100.0:.1f}% of the water inside "
-                 "it is measured by nothing" +
-                 (f", painted here by the {laid} rung between them and the "
-                  "shoreline at depth zero." if laid and unmeasured else ".")]
-                if unmeasured is not None else [])
+              for rank, (layer, _row) in enumerate(rows)) if line]
+    covered = [_covers("LAND", land_rows, ashore)]
+    if unmeasured is not None:
+        # THE WATER FIRST: it is the ground the run is about, and the land a
+        # terrain surface painted says nothing about the channel under it.
+        covered.insert(0, _covers("WATER - the polygon the domain was cut with",
+                                  water_rows, unmeasured))
+        covered.append(_remedy(named, unmeasured, laid))
+    covered = [line for line in covered if line]
     notes = [
-        covered,
-        *wet_said,
-        f"Merged at {metres:.3g} m in {crs}, the finest of the rungs unless a "
-        "resolution was stated.",
+        *covered,
+        f"Merged at {metres:.3g} m in {crs}, the finest of the surfaces unless "
+        "a resolution was stated.",
         *(moved or [f"Every surface counts from {zero}."]),
     ]
-    logger.info("bed merge: %dx%d at %.3g m over %d rungs - %s",
-                width, height, metres, len(ladder), painted)
-    for line in (covered, *wet_said, *moved):
+    logger.info("bed merge: %dx%d at %.3g m over %d rows - %s",
+                width, height, metres, len(rows), "; ".join(covered))
+    for line in (*covered, *moved):
         journal_note(line)
     merged = MergedRasterLayerURI.published(
         "merged-bed", seed=seed,
@@ -1297,23 +1372,24 @@ def merged_surface(
         uri=uri,
         style=_BED_STYLE,
         role="primary",
-        units=next((getattr(layer, "units", None) for layer, _row in ladder
+        units=next((getattr(layer, "units", None) for layer, _row in rows
                     if getattr(layer, "units", None)), None),
-        # A rung read the other way round no longer carries the quantity it
+        # A surface read the other way round no longer carries the quantity it
         # named, so the merged surface states the one it was read onto.
         quantity=next((getattr(layer, "quantity", None)
-                       for rank, (layer, _row) in enumerate(ladder)
+                       for rank, (layer, _row) in enumerate(rows)
                        if not counts_down[rank] and getattr(layer, "quantity", None)),
                       None),
         bbox=_bbox_4326(crs, transform, width, height),
         vertical_datum=zero or None,
         datum_shift_m=round(float(aligned[0].shift_m), 4),
         fallback_shift_m=(round(float(aligned[-1].shift_m), 4)
-                          if len(ladder) > measured else 0.0),
-        primary_fraction=round(sum(shares[:measured]), 4),
-        fallback_fraction=round(sum(shares[measured:len(ladder)]), 4),
+                          if len(rows) > measured else 0.0),
+        water_rows=water_rows,
+        land_rows=land_rows,
         unmeasured_water_fraction=unmeasured,
-        rungs=[(label, round(share, 4)) for label, share in zip(labels, shares)],
+        unmeasured_land_fraction=ashore,
+        alternatives=named,
         provenance_uri=provenance,
         resolution_m=round(metres, 4),
         notes=notes)

@@ -453,9 +453,9 @@ class Workflow:
 
 #: Controls every workflow carries: whether the run PAUSES, whether it resumes,
 #: the RAW KEYWORD floor a caller states the engine's own keywords through, the
-#: source a caller NAMES for a matched slot, and the OP a caller states for one -
-#: how that slot is filled where nothing measured it. None of the five is a
-#: physical value, so none of them is a Param.
+#: source a caller NAMES for a matched slot, and the OPS a caller states for one
+#: - the ordered moves that compose it past the one row the match ranked first.
+#: None of the five is a physical value, so none of them is a Param.
 _CONTROLS: tuple[tuple[str, Any, Any], ...] = (
     ("input_mode", str | None, None),
     ("restart_clean", bool, False),

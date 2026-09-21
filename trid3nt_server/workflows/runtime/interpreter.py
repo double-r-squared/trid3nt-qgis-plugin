@@ -451,12 +451,13 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
 async def _matched(env: _Env, decl: DataDecl) -> Any:
     """Fill a slot that states a NEED, through the match.
 
-    The bed is the one slot whose physics rule the runtime owns: the measurement
-    where it measured, the terrain everywhere else. Every other slot takes the
-    one source its own class matched."""
+    Every slot takes the ONE source its own class matched. The bed takes the
+    same one and then whatever the run's own ops lay over it, because a bed is
+    the slot a domain most often reaches past and what to do about that is the
+    person's statement, never this walk's."""
     await _somewhere_to_ask(env)
     if decl.role == BED:
-        return await _ingested(env, decl, await _matched_bed(env, decl))
+        return await _ingested(env, decl, await _bed_surface(env, decl))
     # The INGESTION rides INSIDE the probe: a source that answered with rows this
     # slot finds nothing usable in - a gauge reporting no streamflow over a
     # closed body - held nothing for this run either, and the next survivor
@@ -477,110 +478,78 @@ async def _matched(env: _Env, decl: DataDecl) -> Any:
     return value
 
 
-async def _matched_bed(env: _Env, decl: DataDecl) -> Any:
-    """THE BED, stated once here: EVERY rung the class survives with, laid in rank
-    order over the terrain under all of them.
+async def _bed_surface(env: _Env, decl: DataDecl) -> Any:
+    """THE BED: the ONE row the match ranked first, with the ops the run states
+    laid over it.
 
-    A domain reaching past the top pick is what the next rung is for, so a source
-    is called even where a higher one answered and the merge lays the whole
-    ladder; a rung that arrives as soundings is gridded at the mesh's own cell
-    before the merge reads it. With no measurement at all the terrain is the whole
-    bed, which is what the sheet then says."""
-    from trid3nt_server.inputs.bed import MERGE_DERIVE
+    Nothing else paints. A second row reaches this bed only because the call
+    named it in a merge op, and the water no row measured is painted only
+    because the call stated the fill; what the run was NOT given is the surface's
+    own coverage feedback to say, in the layer it publishes and on the journal.
+    The rows a merge names are produced here, where every other fact about the
+    world is produced, and which side of the cut each paints is its own
+    declaration: a row serving this slot's class measured the bed, and one
+    serving terrain measures the water TOP and stays outside the cut."""
+    from trid3nt_server.inputs.bed import MERGE_DERIVE, merge_rows
     from .levers import run_frame
 
-    _choice, terrain = await _probe(env, decl, "terrain", f"{decl.name} terrain")
-    if decl.data_class == "terrain":
-        # A CATCHMENT is dry ground: the terrain is the whole bed and there is
-        # no measurement under the water to lay over it.
-        if terrain is None:
-            raise StepFailedError(
-                _choice.sentence, error_code="DATA_NEED_UNMATCHED",
-                step=_data_step_label(decl.name))
-        return terrain
-    laid = await _every_rung(env, decl, f"{decl.name} {decl.data_class}")
-    if not laid:
-        if terrain is None:
-            raise StepFailedError(
-                _choice.sentence, error_code="DATA_NEED_UNMATCHED",
-                step=_data_step_label(decl.name))
-        return terrain
-    rungs = [await _surfaced(env, decl, picked, value) for picked, value in laid]
-    if terrain is None and len(rungs) == 1:
-        return rungs[0]
-    # THE LADDER MEETS HERE, before any slot sees a rung of it, so the zero they
-    # are overlaid on is the run's: each rung published on another frame owes the
-    # same offset row a slot's source owes, declared by the same runtime.
+    choice, top = await _probe(env, decl, decl.data_class,
+                               f"{decl.name} {decl.data_class}")
+    if top is None:
+        raise StepFailedError(choice.sentence, error_code="DATA_NEED_UNMATCHED",
+                              step=_data_step_label(decl.name))
+    stated = env.ops.get(decl.name)
+    laid = [(choice.picked, top)]
+    under: list[tuple[str, Any]] = []
+    for picked in merge_rows(stated):
+        measures = _coverage_row(picked, decl.data_class) is not None
+        held = await _named_row(env, decl, picked,
+                                decl.data_class if measures else "terrain")
+        (laid if measures else under).append((picked, held))
     frame = run_frame(env.params)
+    surfaces = [await _surfaced(env, decl, picked, held)
+                for picked, held in laid + under]
     return await _produce(env, _runtime_row(
         env, f"{decl.name}_merged", MERGE_DERIVE,
-        {"primary": rungs, "fallback": terrain, "frame": frame,
-         # THE OP THE RUN STATES for this slot, which the merge lays as its last
-         # rung: the water the ladder left is painted only where somebody asked
-         # for it, so a bed nothing measured refuses instead of being invented.
-         "fill": env.ops.get(decl.name),
-         # THE CUT IS WHERE THE WATER IS, and the terrain under the ladder
-         # measures the water top rather than the bed, so it paints outside it
-         # only and the merge states what share of the water nothing measured.
+        {"primary": surfaces[:len(laid)], "fallback": surfaces[len(laid):],
+         "frame": frame, "ops": stated,
+         # THE CUT IS WHERE THE WATER IS, and a terrain surface measures the
+         # water top rather than the bed, so it paints outside it only and the
+         # feedback states the water and the land separately.
          "water": _cut_polygon(),
+         # WHAT ELSE MATCHED and nothing laid: the rows a person names in a
+         # merge op to cover what this bed does not, stated in the feedback
+         # rather than laid on their behalf.
+         "alternatives": [row.fetcher for row in choice.rows if not row.excluded
+                          and row.fetcher not in dict(laid + under)],
          "primary_offset": [await _offset_row(env, f"{decl.name}_{picked}",
                                               surface, frame)
-                            for (picked, _held), surface in zip(laid, rungs)],
-         "fallback_offset": await _offset_row(
-             env, f"{decl.name}_terrain", terrain, frame)}))
+                            for (picked, _held), surface
+                            in zip(laid, surfaces[:len(laid)])],
+         "fallback_offset": [await _offset_row(env, f"{decl.name}_{picked}",
+                                               surface, frame)
+                             for (picked, _held), surface
+                             in zip(under, surfaces[len(laid):])]}))
 
 
-async def _every_rung(env: _Env, decl: DataDecl, label: str
-                      ) -> list[tuple[str, Any]]:
-    """EVERY survivor of the bed's class, called in rank order -> what each held.
+async def _named_row(env: _Env, decl: DataDecl, picked: str,
+                     data_class: str) -> Any:
+    """One row a merge op NAMED, produced under this slot.
 
-    The bed is the one slot that lays a whole ladder rather than standing on the
-    first answer, so the list is walked to its end; a source that held nothing
-    here drops off it the way it does under any other slot, and the sheet says
-    so."""
-    choice = match(await _need(env, decl, decl.data_class, label),
+    Matched for the class the row serves so the ask it is called with is the one
+    that class states, then called by name: the run named it, so the rank the
+    match would have put it at decides nothing here."""
+    choice = match(await _need(env, decl, data_class, f"{decl.name} {picked}"),
                    sources_with_coverage())
-    asked = [row.fetcher for row in choice.rows if not row.excluded]
-    laid: list[tuple[str, Any]] = []
-    for picked in asked:
-        asking = choice.model_copy(update={"picked": picked})
-        row = _runtime_row(env, f"{label.replace(' ', '_')}_{picked}", picked,
-                           await _ask_for(env, asking, decl))
-        try:
-            laid.append((picked, await _produce(env, row)))
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:  # noqa: BLE001 - an empty source drops a rung
-            if getattr(exc, "retryable", False) or _malformed_ask(exc):
-                raise
-            logger.info("%s: %s held nothing (%s); the rung drops off the ladder",
-                        label, picked, exc)
-            choice = dropped_from(choice, picked, f"held nothing here ({exc})")
-    if laid:
-        choice = choice.model_copy(
-            update={"sentence": _ladder_sentence(choice, asked, laid)})
-    slot_choice(choice)
-    journal_note(choice.sentence)
-    return laid
-
-
-def _ladder_sentence(choice: SourceChoice, asked: Sequence[str],
-                     laid: Sequence[tuple[str, Any]]) -> str:
-    """What the run SAYS about a bed's whole LADDER: every source it asked, in
-    rank order, and what each one held.
-
-    The probe's line names one drop and its successor, which is the wrong shape
-    here: a ladder has no successor, it has rungs, and each of them paints."""
-    held = {picked for picked, _value in laid}
-    rungs = "; ".join(
-        f"{name} laid a rung" if name in held else f"{name} held nothing"
-        for name in asked)
-    return f"{choice.slot}: the ladder in rank order - {rungs}."
+    return await _produce(env, _runtime_row(
+        env, f"{decl.name}_{picked}", picked,
+        await _ask_for(env, choice.model_copy(update={"picked": picked}), decl)))
 
 
 async def _surfaced(env: _Env, decl: DataDecl, picked: str, held: Any) -> Any:
-    """One rung as a SURFACE: soundings through the grid that makes one of them,
-    a raster as it came."""
+    """One row as a SURFACE: soundings through the grid that makes one of them,
+    a raster as it came. What a bed covers is a statement about cells, so every
+    row laid on one is read at the mesh's own scale first."""
     from trid3nt_server.inputs.bed import SURVEY_DERIVE
 
     if _spec_of(picked).output.layer_type != "vector":
@@ -598,8 +567,8 @@ async def _probe(env: _Env, decl: DataDecl, data_class: str, label: str, *,
     A source that held nothing over this domain is dropped and the next takes
     its turn, which is how the list a reader sees says what the world answered
     rather than what the sort preferred. ``read`` is the slot's own reading of an
-    answer, handed the row that was matched and run HERE so a record this slot cannot read drops its rung like an
-    empty one. ``None`` where none of them answered."""
+    answer, handed the row that was matched and run HERE so a record this slot
+    cannot read drops out like an empty one. ``None`` where none answered."""
     choice = match(await _need(env, decl, data_class, label),
                    sources_with_coverage())
     while choice.picked:
@@ -612,7 +581,7 @@ async def _probe(env: _Env, decl: DataDecl, data_class: str, label: str, *,
                 value = await read(value, _matched_row(choice, choice.picked))
         except asyncio.CancelledError:
             raise
-        except Exception as exc:  # noqa: BLE001 - an empty source drops a rung
+        except Exception as exc:  # noqa: BLE001 - an empty source drops out
             if getattr(exc, "retryable", False) or _malformed_ask(exc):
                 raise
             logger.info("%s: %s held nothing (%s); the next survivor takes its "
