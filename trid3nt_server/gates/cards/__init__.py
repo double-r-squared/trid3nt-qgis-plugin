@@ -7,11 +7,6 @@ from .payload_warning import (
     _get_warning_threshold_mb,
     _resolve_payload_estimator,
 )
-from .region_choice import (
-    _build_region_candidates,
-    _build_region_choice_request_payload,
-    _region_admin_level_for,
-)
 from .solver_confirm import (
     MAX_FETCH_PX,
     _FETCH_MAX_PX_BY_TOOL,
@@ -30,14 +25,11 @@ __all__ = [
     "_FETCH_MAX_PX_BY_TOOL",
     "_LANDCOVER_DEFAULT_RES_M",
     "_build_fetch_resolution_envelope",
-    "_build_region_candidates",
-    "_build_region_choice_request_payload",
     "_build_spatial_input_request_payload",
     "_clamp_fetch_resolution",
     "_gate_memory_key",
     "_get_hard_cap_mb",
     "_get_warning_threshold_mb",
-    "_region_admin_level_for",
     "_resolve_payload_estimator",
     "_spatial_response_to_result",
 ]

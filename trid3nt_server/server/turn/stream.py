@@ -52,7 +52,6 @@ async def _stream_model_reply(
     from trid3nt_server.gates.confirm import (
         SPATIAL_INPUT_SENTINEL_KEY,
         _handle_request_spatial_input,
-        _maybe_handle_region_choice,
     )
 
     logger.info(
@@ -918,8 +917,7 @@ async def _stream_model_reply(
                     # here -- where the live socket + the session future registry ARE
                     # reachable -- we emit the spatial-input-request, await the drawn
                     # reply, and REPLACE result with the parsed, role-split geometry
-                    # (aoi_bbox + points + the section line). Mirrors the
-                    # geocode_location -> region-choice pause/resume seam. Fail-open:
+                    # (aoi_bbox + points + the section line). Fail-open:
                     # timeout / cancel / no client / malformed draw all become a TYPED
                     # result (honesty floor), never a fabricated AOI.
                     if (
@@ -929,22 +927,6 @@ async def _stream_model_reply(
                     ):
                         result = await _handle_request_spatial_input(
                             websocket, state, call.args or {}
-                        )
-                    # Region-disambiguation picker: when geocode_location came back as a
-                    # state-bbox-fallback snap, offer the user a narrower sub-region
-                    # (default: counties) on top of the whole-state default. PAUSES the
-                    # turn awaiting the region-choice-provided reply; on a "region" pick
-                    # this MUTATES result["bbox"] in place so the immediate zoom-to below
-                    # AND the function_response the model reads next turn use the narrowed
-                    # extent. Fail-open: headless client / timeout / whole-state pick keeps
-                    # the state bbox unchanged. MUST run BEFORE the zoom-to so the camera
-                    # snaps to the final extent.
-                    if (
-                        call.name == "geocode_location"
-                        and isinstance(result, dict)
-                    ):
-                        await _maybe_handle_region_choice(
-                            websocket, state, result
                         )
                     # Demo UX: snap the map to a geocoded location
                     # IMMEDIATELY -- the user should not wait for a downstream

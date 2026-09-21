@@ -9,7 +9,6 @@ from pydantic import ValidationError
 from trid3nt_contracts.case import CaseCommandEnvelopePayload
 from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
 from trid3nt_contracts.processing_contracts import ProcessingResponsePayload
-from trid3nt_contracts.region_choice import RegionChoiceProvidedEnvelopePayload
 from trid3nt_contracts.secrets import SecretAddEnvelopePayload
 from trid3nt_contracts.ws import CancelPayload, ErrorPayload, LayerResponsePayload, SessionResumePayload, SpatialInputResponsePayload, UserMessagePayload
 from trid3nt_server.adapters.model_selection import ModelSettings, load_settings
@@ -25,7 +24,7 @@ from trid3nt_server.server.protocol.handlers import _BG_TASKS, _drain_bg_tasks, 
 from trid3nt_server.server.session.case_state import _clear_case_list_hash, _set_active_aoi_from_payload, _set_drawn_geometry_from_payload
 from trid3nt_server.server.session.persistence_ref import init_persistence_from_env
 from trid3nt_server.server.session.state import SessionState, _ROOT_STREAM_KEY
-from trid3nt_server.server.spatial import _fail_pending_spatial_input, _resolve_pending_region_choice, _resolve_pending_spatial_input
+from trid3nt_server.server.spatial import _fail_pending_spatial_input, _resolve_pending_spatial_input
 from trid3nt_server.server.turn.cases import _handle_case_command
 from trid3nt_server.server.turn.engine import _handle_max_turns_reached, _prepare_user_turn
 from trid3nt_server.server.turn.live_turn import _SESSION_LIVE_TURNS, _any_live_turn, _find_live_turn, _rebind_live_turns, _register_live_turn
@@ -389,43 +388,6 @@ def _make_handler(settings: ModelSettings):
                             state.session_id,
                             conf.warning_id,
                             conf.decision,
-                        )
-
-                    elif msg_type == "region-choice-provided":
-                        # The user narrowed a state-bbox-fallback geocode to a
-                        # sub-region, or kept the whole state; resolving the
-                        # paused future applies that choice. May arrive on a
-                        # sibling connection of the session.
-                        try:
-                            rc = (
-                                RegionChoiceProvidedEnvelopePayload.model_validate(
-                                    payload_dict
-                                )
-                            )
-                        except ValidationError as ve:
-                            await _send_error(
-                                websocket,
-                                state.session_id,
-                                "TOOL_PARAMS_INVALID",
-                                f"region-choice-provided invalid: {ve.errors()[0]['msg']}",
-                            )
-                            continue
-                        if not _resolve_pending_region_choice(
-                            state.session_id, rc
-                        ):
-                            logger.warning(
-                                "region-choice-provided for unknown/closed "
-                                "request_id=%s session=%s",
-                                rc.request_id,
-                                state.session_id,
-                            )
-                            continue
-                        logger.info(
-                            "region-choice-provided accepted session=%s "
-                            "request_id=%s choice=%s",
-                            state.session_id,
-                            rc.request_id,
-                            rc.choice,
                         )
 
                     elif msg_type == "spatial-input-response":

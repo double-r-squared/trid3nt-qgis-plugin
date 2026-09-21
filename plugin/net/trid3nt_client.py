@@ -1401,29 +1401,6 @@ class AgentClient:
             queue_if_closed=True,
         )
 
-    def send_region_choice(
-        self,
-        request_id: str,
-        choice: str,
-        selected_region_id: Optional[str] = None,
-        selected_bbox: Optional[list] = None,
-    ) -> None:
-        """Answer a ``region-choice-request`` gate. ``choice`` is ``"region"``
-        or ``"whole_state"``; on a region pick the server re-resolves the bbox
-        from ``selected_region_id``, which outranks any bbox sent here."""
-        self._send(
-            "region-choice-provided",
-            {
-                "envelope_type": "region-choice-provided",
-                "request_id": request_id,
-                "choice": choice,
-                "selected_region_id": selected_region_id,
-                "selected_bbox": selected_bbox,
-            },
-            case_id=self.case_id,
-            queue_if_closed=True,
-        )
-
     def send_spatial_input(
         self,
         request_id: str,
@@ -1595,12 +1572,6 @@ class AgentClient:
             # input-only frame arrives at dispatch START, the full one on
             # completion.
             return AgentEvent("tool-io", payload)
-        if etype == "region-choice-request":
-            # A gate WAIT: the server snapped a vague geocode to the whole
-            # state and PAUSES the turn until a reply arrives. A
-            # ``whole_state`` answer keeps that default, so the gate always
-            # has a closing move.
-            return AgentEvent("region-choice-request", payload)
         if etype == "spatial-input-request":
             # A gate WAIT: the agent needs a picked geometry and PAUSES the
             # turn until a response arrives. Cancel sends ``cancelled=True``

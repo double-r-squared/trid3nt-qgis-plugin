@@ -7,8 +7,8 @@ context-budget, and actionability classification.
 ## What lives here
 
 - `cards/` -- the user-decision gate cards: `estimate`, `payload_warning`,
-  `region_choice`, `solver_confirm`, `spatial_input`, `credential`. Each card
-  is a DECLARED gate whose pure estimate/pin providers are owned by the engine.
+  `solver_confirm`, `spatial_input`. Each card is a DECLARED gate whose pure
+  estimate/pin providers are owned by the engine.
 - `tool_gating.py`, `pending.py` -- visible-tool gating + pending-decision
   registry.
 - `runaway_guard.py`, `circuit_breaker.py` -- loop-runaway + repeated-failure
@@ -29,9 +29,8 @@ context-budget, and actionability classification.
 `cards/*` import (deferred, function-local) from `data/`, `workflows/`, and
 `mesh/` to compute estimates -- absolute cross-package imports since these are
 now peer top-level packages. The GateSpec confirm engine + the shared gate-wait
-seam + the five user-decision emit-wait gate families (payload, code-exec,
-solver-confirm, credential, region, spatial) now live in `confirm.py`,
-evicted from `server/_core`. The server callers import those functions
+seam + the four user-decision emit-wait gate families (payload, code-exec,
+solver-confirm, spatial) live in `confirm.py`. The server callers import those functions
 function-locally to keep the `server <-> gates` package edge acyclic.
 
 ## The mesh gate loop

@@ -1,6 +1,6 @@
 """Envelope kinds that used to fall through the client's classifier and be dropped.
 
-Two are gate-WAITS, where the server pauses the turn awaiting a reply, so an
+One is a gate-WAIT, where the server pauses the turn awaiting a reply, so an
 unhandled envelope hung the turn forever; the rest are fire-and-forget side
 effects the dock now renders. Offline: a missing correlation id parses to None,
 a decision maps to the exact reply, and a gate resumes only on its own reply."""
@@ -18,66 +18,12 @@ sys.path.insert(0, os.path.dirname(__file__))
 from plugin.net import trid3nt_client as tc  # noqa: E402
 from plugin.ui import gate  # noqa: E402
 from stub_server import (  # noqa: E402
-    REGION_CHOICE_REQUEST_ROW,
     SPATIAL_INPUT_BBOX_ROW,
     SPATIAL_INPUT_POINT_ROW,
     SPATIAL_INPUT_VECTOR_ROW,
-    STUB_REGION_CHOICE_REQUEST_ID,
-    STUB_REGION_ID,
     STUB_SPATIAL_POINT_REQUEST_ID,
     StubAgentServer,
 )
-
-
-
-
-class TestRegionChoiceParsing(unittest.TestCase):
-    def test_parse_fields(self):
-        req = gate.parse_region_choice(REGION_CHOICE_REQUEST_ROW)
-        self.assertEqual(req.request_id, STUB_REGION_CHOICE_REQUEST_ID)
-        self.assertEqual(req.state_name, "Florida")
-        self.assertEqual(req.state_code, "FL")
-        self.assertEqual(req.state_label, "Florida (FL)")
-        self.assertEqual(len(req.candidates), 2)
-        self.assertEqual(req.candidates[0].region_id, STUB_REGION_ID)
-        self.assertEqual(req.candidates[0].name, "Lee County")
-        self.assertEqual(req.candidates[0].admin_level, "county")
-
-    def test_parse_malformed_is_none(self):
-        # No request_id -> nothing to correlate; the paused turn would hang.
-        self.assertIsNone(gate.parse_region_choice({"state_name": "Florida"}))
-        self.assertIsNone(gate.parse_region_choice("not-a-dict"))
-        self.assertIsNone(gate.parse_region_choice(None))
-
-    def test_parse_skips_bad_candidates(self):
-        req = gate.parse_region_choice(
-            {
-                "request_id": "r1",
-                "candidates": [
-                    {"region_id": "a", "name": "A", "bbox": [-1, -1, 1, 1]},
-                    {"name": "no-id", "bbox": [-1, -1, 1, 1]},  # skipped
-                    {"region_id": "b", "name": "B", "bbox": "bad"},  # skipped
-                    "not-a-dict",  # skipped
-                ],
-            }
-        )
-        self.assertEqual([c.region_id for c in req.candidates], ["a"])
-
-    def test_resolve_region_pick(self):
-        req = gate.parse_region_choice(REGION_CHOICE_REQUEST_ROW)
-        wire = gate.resolve_region_choice(req, STUB_REGION_ID)
-        self.assertEqual(wire["choice"], "region")
-        self.assertEqual(wire["selected_region_id"], STUB_REGION_ID)
-        self.assertEqual(wire["selected_bbox"], [-82.32, 26.32, -81.56, 26.79])
-
-    def test_resolve_whole_state_is_decline_path(self):
-        req = gate.parse_region_choice(REGION_CHOICE_REQUEST_ROW)
-        # None (or an unknown id) -> the honest already-resolved default.
-        for sel in (None, "unknown-county"):
-            wire = gate.resolve_region_choice(req, sel)
-            self.assertEqual(wire["choice"], "whole_state")
-            self.assertIsNone(wire["selected_region_id"])
-            self.assertIsNone(wire["selected_bbox"])
 
 
 
@@ -187,47 +133,6 @@ class _RoundTripBase(unittest.TestCase):
             if ev is not None and ev.kind == kind:
                 return ev
         self.fail(f"no {kind!r} event within {deadline_s}s")
-
-
-class TestRegionChoiceRoundTrip(_RoundTripBase):
-    def test_classified_not_raw(self):
-        # The regression itself: the gate-WAIT surfaces as its own kind, never
-        # the dropped-on-the-floor "raw" fallthrough that hung the turn.
-        self.client.send_chat("narrow-region south florida flood")
-        ev = self._await_kind("region-choice-request")
-        self.assertEqual(ev.data["request_id"], STUB_REGION_CHOICE_REQUEST_ID)
-
-    def test_region_pick_resumes_turn(self):
-        self.client.send_chat("narrow-region south florida flood")
-        ev = self._await_kind("region-choice-request")
-        req = gate.parse_region_choice(ev.data)
-        wire = gate.resolve_region_choice(req, STUB_REGION_ID)
-        self.client.send_region_choice(
-            wire["request_id"], wire["choice"],
-            selected_region_id=wire["selected_region_id"],
-            selected_bbox=wire["selected_bbox"],
-        )
-        chunk = self._await_kind("chunk")
-        self.assertIn(STUB_REGION_ID, chunk.data["delta"])
-        self._await_kind("turn-complete")
-        got = self.server.region_choices[-1]
-        self.assertEqual(got["choice"], "region")
-        self.assertEqual(got["selected_region_id"], STUB_REGION_ID)
-
-    def test_whole_state_is_decline_path(self):
-        self.client.send_chat("narrow-region south florida flood")
-        ev = self._await_kind("region-choice-request")
-        req = gate.parse_region_choice(ev.data)
-        wire = gate.resolve_region_choice(req, None)  # keep the whole state
-        self.client.send_region_choice(
-            wire["request_id"], wire["choice"],
-            selected_region_id=wire["selected_region_id"],
-            selected_bbox=wire["selected_bbox"],
-        )
-        chunk = self._await_kind("chunk")
-        self.assertIn("whole state", chunk.data["delta"].lower())
-        self._await_kind("turn-complete")
-        self.assertEqual(self.server.region_choices[-1]["choice"], "whole_state")
 
 
 class TestSpatialInputRoundTrip(_RoundTripBase):

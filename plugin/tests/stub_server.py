@@ -296,43 +296,6 @@ WAVE_TOOL_CANDIDATES_STEP2: dict[str, Any] = {
     "timeout_s": 60.0,
 }
 
-STUB_REGION_CHOICE_REQUEST_ID = "01STUBREGIONCHOICEAAAAAAAA"
-STUB_REGION_ID = "county-12071"
-
-# A region-choice-request payload field-for-field the
-# RegionChoiceRequestEnvelopePayload contract (contracts .../region_choice.py).
-# CRITICAL gate-WAIT: the server snapped a vague geocode to the
-# WHOLE state and PAUSES the turn awaiting a region-choice-provided reply
-# (region pick OR whole_state default) -- handled in the
-# region-choice-provided branch below. Previously the plugin had ZERO handling
-# so the paused turn hung (the code-exec stall class).
-REGION_CHOICE_REQUEST_ROW: dict[str, Any] = {
-    "envelope_type": "region-choice-request",
-    "request_id": STUB_REGION_CHOICE_REQUEST_ID,
-    "state_name": "Florida",
-    "state_code": "FL",
-    "state_bbox": [-87.63, 24.52, -80.03, 31.0],
-    "candidates": [
-        {
-            "region_id": STUB_REGION_ID,
-            "name": "Lee County",
-            "bbox": [-82.32, 26.32, -81.56, 26.79],
-            "admin_level": "county",
-        },
-        {
-            "region_id": "county-12086",
-            "name": "Miami-Dade County",
-            "bbox": [-80.87, 25.13, -80.11, 25.98],
-            "admin_level": "county",
-        },
-    ],
-    "default_action": "use_whole_state",
-    "message": (
-        "I snapped 'south Florida' to the whole state of Florida. Pick a "
-        "county to narrow it, or keep the whole state."
-    ),
-}
-
 STUB_SPATIAL_POINT_REQUEST_ID = "01STUBSPATIALPOINTAAAAAAAA"
 STUB_SPATIAL_BBOX_REQUEST_ID = "01STUBSPATIALBBOXAAAAAAAAA"
 STUB_SPATIAL_VECTOR_REQUEST_ID = "01STUBSPATIALVECTORAAAAAAA"
@@ -421,8 +384,6 @@ class StubAgentServer:
         self.confirmations: list[dict] = []  # tool-payload-confirmation payloads
         self.secret_adds: list[dict] = []  # secret-add payloads
         self.tool_choices: list[dict] = []  # tool-choice payloads
-        #: region-choice-provided payloads (LANE A region-choice gate-WAIT).
-        self.region_choices: list[dict] = []
         #: spatial-input-response payloads (LANE A spatial-input gate-WAIT).
         self.spatial_inputs: list[dict] = []
         #: processing-response payloads (the session's answers).
@@ -658,18 +619,6 @@ class StubAgentServer:
                     # layer-response arrives -- handled in that branch below.
                     self._pending_gate_case = case_id
                     await send("layer-request", LAYER_REQUEST_ROW, case_id=case_id)
-                    continue
-                if "narrow-region" in text:
-                    # Region-choice gate-WAIT (LANE A): the server snapped a
-                    # vague geocode to the whole state and BLOCKS until the
-                    # region-choice-provided reply arrives -- handled in the
-                    # region-choice-provided branch below.
-                    self._pending_gate_case = case_id
-                    await send(
-                        "region-choice-request",
-                        REGION_CHOICE_REQUEST_ROW,
-                        case_id=case_id,
-                    )
                     continue
                 if "pick-point" in text or "pick-bbox" in text or "pick-vector" in text:
                     # Spatial-input gate-WAIT (LANE A): the agent needs a
@@ -997,27 +946,6 @@ class StubAgentServer:
                 await send(
                     "agent-message-chunk",
                     {"message_id": "m-pick", "delta": delta, "done": True},
-                    case_id=gate_case,
-                )
-                await send("turn-complete", {}, case_id=gate_case)
-            elif etype == "region-choice-provided":
-                # LANE A region-choice gate-WAIT (contract
-                # RegionChoiceProvidedEnvelopePayload): the reply that resumes
-                # the paused turn. choice="region" narrows to the picked
-                # county; choice="whole_state" keeps the honest already-
-                # resolved bbox (the decline path). The narration names which
-                # ran so round-trip tests can assert it.
-                payload = env.get("payload") or {}
-                self.region_choices.append(payload)
-                gate_case = getattr(self, "_pending_gate_case", None)
-                if payload.get("choice") == "region":
-                    rid = payload.get("selected_region_id")
-                    delta = f"Narrowed to region {rid}."
-                else:
-                    delta = "Kept the whole state of Florida."
-                await send(
-                    "agent-message-chunk",
-                    {"message_id": "m-region", "delta": delta, "done": True},
                     case_id=gate_case,
                 )
                 await send("turn-complete", {}, case_id=gate_case)

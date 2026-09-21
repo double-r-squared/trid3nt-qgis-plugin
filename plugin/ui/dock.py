@@ -37,7 +37,6 @@ from .cards import (
     CodeExecCard,
     FormCard,
     GateCard,
-    RegionChoiceCard,
     SimCard,
     SpatialInputCard,
     ToolCandidatesCard,
@@ -1519,11 +1518,6 @@ class Trid3ntDock(QDockWidget):
             # let-agent-decide, replying on ONE envelope. FAIL-OPEN --
             # unanswered, the server proceeds and the hook above folds it.
             self._show_tool_candidates_card(data)
-        elif kind == "region-choice-request":
-            # A gate WAIT: the server snapped a vague geocode to the whole
-            # state and PAUSES the turn on the reply. A whole-state answer
-            # keeps the honest default, so the gate always closes.
-            self._show_region_choice_card(data)
         elif kind == "spatial-input-request":
             # A gate WAIT: the agent needs a picked geometry and PAUSES the
             # turn. The card is wired to the canvas point and AOI tools, and
@@ -2027,38 +2021,6 @@ class Trid3ntDock(QDockWidget):
                 + (", ..." if len(active) > 6 else "") + ")"
             )
             self._scroll_to_bottom()
-
-    # -- region-choice picker card (a gate WAIT) -------------------------------- #
-
-    def _show_region_choice_card(self, payload: dict) -> None:
-        """Render the region-choice gate as an inline picker card. A
-        malformed envelope cannot be answered, but the server's own default is
-        the whole-state bbox, so the note says the turn proceeds with that."""
-        request = gate.parse_region_choice(payload)
-        if request is None:
-            self._note(
-                "Received a malformed region-choice-request (no request_id) -- "
-                "cannot answer it; the agent will proceed with the whole-state "
-                "bbox it already resolved.",
-                error=True,
-            )
-            return
-        self._present_card(RegionChoiceCard(request,
-                                           self._on_region_choice_decision))
-
-    def _on_region_choice_decision(
-        self,
-        request_id: str,
-        choice: str,
-        selected_region_id: Optional[str],
-        selected_bbox: Optional[list],
-    ) -> None:
-        """Send the region-choice reply. A whole-state answer keeps the honest
-        already-resolved bbox: the decline path that still CLOSES the gate."""
-        self._reply("region choice", self.bridge.send_region_choice,
-                    request_id, choice,
-                    selected_region_id=selected_region_id,
-                    selected_bbox=selected_bbox)
 
     # -- spatial-input pick card (a gate WAIT) ---------------------------------- #
 

@@ -312,11 +312,11 @@ def test_the_pump_collects_status_layers_and_charts():
 
 
 def test_the_pump_reports_a_blocking_event_it_cannot_answer():
-    ws = _FakeWS([_msg("region-choice-request", {"request_id": "r"})])
+    ws = _FakeWS([_msg("processing-request", {"request_id": "r"})])
     ev = _env()
     asyncio.run(_pump(ws, "S", LiveRun(tool="t", args={}, case_title="c",
                                        timeout_s=5), ev))
-    assert "BLOCKED by region-choice-request" in ev.detail
+    assert "BLOCKED by processing-request" in ev.detail
     assert ev.turn_complete is False
 
 
@@ -336,7 +336,7 @@ def test_a_turn_that_never_completed_is_not_an_ok_run():
     ws = _FakeWS([
         _msg("tool-io", {"function_response": json.dumps({"status": "ok"}),
                          "is_error": False}),
-        _msg("region-choice-request", {"candidates": []}),
+        _msg("processing-request", {"candidates": []}),
     ])
     ev = _env()
     asyncio.run(_pump(ws, "S", LiveRun(tool="t", args={}, case_title="c",

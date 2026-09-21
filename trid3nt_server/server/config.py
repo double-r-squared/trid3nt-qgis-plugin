@@ -25,8 +25,8 @@ def _tool_retrieval_k() -> int:
         return DEFAULT_K
 
 
-# The default decision window (seconds) the credential, region-choice and
-# solver-confirm gates share; the code-exec gate has its own below.
+# The default decision window (seconds) the payload and solver-confirm gates
+# share; the code-exec gate has its own below.
 CODE_EXEC_CONFIRM_TIMEOUT_SECONDS: int = int(
     os.environ.get("TRID3NT_CODE_EXEC_CONFIRM_TIMEOUT", "300")
 )

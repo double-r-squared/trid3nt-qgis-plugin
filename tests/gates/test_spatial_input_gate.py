@@ -263,7 +263,7 @@ def test_resolve_unknown_request_id_is_noop():
 
 
 def test_resolve_cross_session_refused():
-    """A response from a non-owner session is refused (mirrors region-choice)."""
+    """A response from a non-owner session is refused."""
     async def _run() -> tuple[bool, bool]:
         owner = new_ulid()
         loop = asyncio.get_running_loop()
@@ -295,7 +295,7 @@ class _MockWebSocket:
 
 def test_emit_and_wait_round_trips_a_drawn_reply():
     """_emit_spatial_input_and_wait emits the request, then resolves on the
-    matching spatial-input-response (mirrors the region-choice emit/await)."""
+    matching spatial-input-response."""
     async def _run() -> SpatialInputResponsePayload | None:
         ws = _MockWebSocket()
         state = SessionState(session_id=new_ulid())

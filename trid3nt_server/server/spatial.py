@@ -1,8 +1,8 @@
-"""Bbox / AOI helpers and the spatial pending-input registries.
+"""Bbox / AOI helpers and the spatial pending-input registry.
 
-The coercion and zoom-to helpers never touch session state; the region-choice
-and spatial-input registries take the owner-checked register/pop/resolve shape
-and fail open on timeout, so an unanswered picker never hangs the turn."""
+The coercion and zoom-to helpers never touch session state; the spatial-input
+registry takes the owner-checked register/pop/resolve shape and fails open on
+timeout, so an unanswered draw never hangs the turn."""
 
 from __future__ import annotations
 
@@ -13,9 +13,6 @@ from typing import TYPE_CHECKING, Any
 from .errors import SpatialInputInvalidResponseError
 
 if TYPE_CHECKING:
-    from trid3nt_contracts.region_choice import (
-        RegionChoiceProvidedEnvelopePayload,
-    )
     from trid3nt_contracts.ws import SpatialInputResponsePayload
 
 logger = logging.getLogger("trid3nt_server.server")
@@ -79,53 +76,6 @@ def _last_zoom_to_bbox(commands: list[dict]) -> list | None:
                     return list(bbox)
             return None
     return None
-
-
-#
-# A geocode that lands on a state-bbox fallback emits a region-choice request
-# and pauses on a future keyed by the choice ``request_id``; the reply, which
-# may arrive on a sibling connection of the same session, either narrows the
-# bbox to the picked region or keeps the whole state, and a cross-session reply
-# is refused. Fail-open: on timeout the whole-state bbox is used unchanged so
-# the automated path never blocks.
-_PENDING_REGION_CHOICES: dict[str, tuple[str, asyncio.Future]] = {}
-
-
-def _register_pending_region_choice(
-    session_id: str, request_id: str, fut: "asyncio.Future"
-) -> None:
-    _PENDING_REGION_CHOICES[request_id] = (session_id, fut)
-
-
-def _pop_pending_region_choice(request_id: str) -> None:
-    _PENDING_REGION_CHOICES.pop(request_id, None)
-
-
-def _resolve_pending_region_choice(
-    session_id: str, provided: "RegionChoiceProvidedEnvelopePayload"
-) -> bool:
-    """Complete the pending region-choice future for ``provided.request_id``,
-    True when a live future was resolved; an unknown, already-resolved or
-    cross-session request_id is refused."""
-    entry = _PENDING_REGION_CHOICES.get(provided.request_id)
-    if entry is None:
-        return False
-    owner_session, fut = entry
-    if owner_session != session_id:
-        logger.warning(
-            "region-choice-provided REFUSED: session=%s is not the owner "
-            "(owner=%s) for request_id=%s",
-            session_id,
-            owner_session,
-            provided.request_id,
-        )
-        return False
-    if fut.done():
-        _PENDING_REGION_CHOICES.pop(provided.request_id, None)
-        return False
-    fut.set_result(provided)
-    _PENDING_REGION_CHOICES.pop(provided.request_id, None)
-    return True
 
 
 #

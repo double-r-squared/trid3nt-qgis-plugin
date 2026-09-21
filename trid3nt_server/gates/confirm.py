@@ -12,18 +12,17 @@ import logging
 from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.gate_spec import GateSpec
 from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload, PayloadWarningEnvelopePayload
-from trid3nt_contracts.region_choice import RegionChoiceProvidedEnvelopePayload
 from trid3nt_contracts.processing_contracts import CodeExecRequestPayload
 from trid3nt_contracts.ws import SpatialInputResponsePayload
 from trid3nt_server.credentials.resolver import MissingCredentialError, credential_for_tool, resolve_credential
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.gates.cards import _build_region_choice_request_payload, _build_spatial_input_request_payload, _gate_memory_key, _get_hard_cap_mb, _get_warning_threshold_mb, _resolve_payload_estimator, _spatial_response_to_result
+from trid3nt_server.gates.cards import _build_spatial_input_request_payload, _gate_memory_key, _get_hard_cap_mb, _get_warning_threshold_mb, _resolve_payload_estimator, _spatial_response_to_result
 from trid3nt_server.gates.cards.estimate import call_provider
 from trid3nt_server.gates.pending import _pop_pending_confirmation, _register_pending_confirmation
 from trid3nt_server.server.config import CODE_EXEC_CONFIRM_TIMEOUT_SECONDS, _code_exec_approval_timeout_s
 from trid3nt_server.server.errors import GateConfirmationTimeoutError, SpatialInputInvalidResponseError
 from trid3nt_server.server.session.state import SessionState
-from trid3nt_server.server.spatial import _pop_pending_region_choice, _pop_pending_spatial_input, _register_pending_region_choice, _register_pending_spatial_input
+from trid3nt_server.server.spatial import _pop_pending_spatial_input, _register_pending_spatial_input
 from trid3nt_server.server.turn.wire import _new_envelope, _send_error, _session_safe_send
 from typing import Any
 from websockets.asyncio.server import ServerConnection
@@ -630,133 +629,6 @@ async def _inject_secret_ref(
         credential.name,
     )
     return params
-
-async def _emit_region_choice_and_wait(
-    websocket: ServerConnection,
-    state: SessionState,
-    payload: "RegionChoiceRequestEnvelopePayload",
-) -> "RegionChoiceProvidedEnvelopePayload | None":
-    """Emit a ``region-choice-request`` and await ``region-choice-provided``.
-
-    ``None`` on timeout, so the caller keeps the whole-state default."""
-    loop = asyncio.get_running_loop()
-    fut: asyncio.Future = loop.create_future()
-    # Session-scoped, so a reply on a sibling connection still resolves it.
-    _register_pending_region_choice(state.session_id, payload.request_id, fut)
-
-    await _session_safe_send(websocket, state.session_id,
-        _new_envelope("region-choice-request", state.session_id, payload)
-    )
-    logger.info(
-        "region-choice-request emitted session=%s state=%s candidates=%d request_id=%s",
-        state.session_id,
-        payload.state_code,
-        len(payload.candidates),
-        payload.request_id,
-    )
-
-    try:
-        provided: RegionChoiceProvidedEnvelopePayload = await asyncio.wait_for(
-            fut, timeout=_gate_wait_timeout(CODE_EXEC_CONFIRM_TIMEOUT_SECONDS)
-        )
-    except asyncio.TimeoutError:
-        logger.info(
-            "region-choice-request timeout session=%s request_id=%s; "
-            "using whole-state default",
-            state.session_id,
-            payload.request_id,
-        )
-        return None
-    finally:
-        _pop_pending_region_choice(payload.request_id)
-
-    logger.info(
-        "region-choice-provided received session=%s request_id=%s choice=%s",
-        state.session_id,
-        payload.request_id,
-        provided.choice,
-    )
-    return provided
-
-async def _maybe_handle_region_choice(
-    websocket: ServerConnection,
-    state: SessionState,
-    geocode_result: dict,
-) -> None:
-    """If ``geocode_result`` is a state-snap, offer and apply a narrower region.
-
-    Never raises: any failure leaves the whole-state bbox intact, the narrowing
-    sitting on top of an already-correct result."""
-    if geocode_result.get("source") != "state-bbox-fallback":
-        return
-    if state.emitter is None:
-        # No interactive surface bound; keep the whole-state default.
-        return
-    try:
-        request_id = new_ulid()
-        payload = _build_region_choice_request_payload(
-            request_id=request_id, geocode_result=geocode_result
-        )
-        if payload is None:
-            return
-        provided = await _emit_region_choice_and_wait(websocket, state, payload)
-        if provided is None or provided.choice == "whole_state":
-            # Declined / timed out / explicit whole-state -- keep the state bbox.
-            geocode_result["region_choice"] = "whole_state"
-            return
-        # choice == "region": resolve the picked candidate. Prefer re-resolving
-        # by region_id against the candidate set (a tampered client bbox cannot
-        # redirect the workflow); fall back to the echoed bbox only if unknown.
-        chosen = None
-        if provided.selected_region_id:
-            chosen = next(
-                (
-                    c
-                    for c in payload.candidates
-                    if c.region_id == provided.selected_region_id
-                ),
-                None,
-            )
-        new_bbox: tuple[float, float, float, float] | None = None
-        chosen_name: str | None = None
-        if chosen is not None:
-            new_bbox = chosen.bbox
-            chosen_name = chosen.name
-        elif provided.selected_bbox is not None:
-            new_bbox = provided.selected_bbox
-        if new_bbox is None:
-            # The client said "region" but supplied neither a known id nor a
-            # bbox -- keep the state default rather than guess.
-            geocode_result["region_choice"] = "whole_state"
-            return
-        # Mutate the geocode result IN PLACE so the immediate zoom-to AND the
-        # function_response the model reads (and any downstream bbox consumer) use
-        # the narrowed extent.
-        geocode_result["bbox"] = list(new_bbox)
-        # The result is no longer a whole-state snap -- drop the fallback source
-        # so a downstream re-trigger does not re-offer the picker, and record
-        # honest provenance of the narrowing.
-        geocode_result["source"] = "region-choice-narrowed"
-        geocode_result["region_choice"] = "region"
-        geocode_result["selected_region_id"] = provided.selected_region_id
-        if chosen_name:
-            geocode_result["name"] = chosen_name
-            geocode_result["region_name"] = chosen_name
-        # Recompute a rough centroid for the narrowed bbox so map snaps + any
-        # centroid consumer stay consistent with the new extent.
-        geocode_result["longitude"] = (new_bbox[0] + new_bbox[2]) / 2.0
-        geocode_result["latitude"] = (new_bbox[1] + new_bbox[3]) / 2.0
-        logger.info(
-            "region-choice: narrowed to region_id=%s name=%r bbox=%s",
-            provided.selected_region_id,
-            chosen_name,
-            new_bbox,
-        )
-    except Exception:  # noqa: BLE001 -- narrowing is a best-effort UX layer
-        logger.warning(
-            "region-choice handling failed; keeping whole-state bbox",
-            exc_info=True,
-        )
 
 #
 # The LLM-facing tool returns a sentinel result that the turn loop replaces with

@@ -14,8 +14,6 @@ __all__ = [
     "CodeExecResult",
     "GateDecision",
     "PayloadWarning",
-    "RegionCandidate",
-    "RegionChoiceRequest",
     "SecretRow",
     "SpatialInputRequest",
     "ToolCandidate",
@@ -27,14 +25,11 @@ __all__ = [
     "estimate_frames",
     "parse_code_exec_request",
     "parse_payload_warning",
-    "parse_region_choice",
     "parse_secrets_list",
     "parse_spatial_input_request",
     "parse_tool_candidates",
-    "region_choice_summary",
     "resolve_code_exec_decision",
     "resolve_gate_decision",
-    "resolve_region_choice",
     "resolve_spatial_input_bbox",
     "resolve_spatial_input_cancel",
     "resolve_spatial_input_point",
@@ -672,145 +667,6 @@ def summary_lines(warning: PayloadWarning) -> list:
         if reason:
             lines.append(str(reason))
     return lines
-
-
-#
-# The server snapped a vague geocode to the WHOLE state bbox, which is the
-# honest already-resolved default, and offers a narrower pick. Candidates MAY
-# be empty on a region-set build failure, and the card then offers only that
-# default. On a region pick the server re-resolves the bbox from the id, which
-# is authoritative over any bbox sent with it. A ``whole_state`` answer IS the
-# decline path, so the card ALWAYS has a move that closes the gate.
-
-
-@dataclass
-class RegionCandidate:
-    """One selectable sub-region (defensive parse of the contract shape)."""
-
-    region_id: str
-    name: str
-    bbox: list  # [min_lon, min_lat, max_lon, max_lat]
-    admin_level: str = "county"
-
-
-@dataclass
-class RegionChoiceRequest:
-    """Parsed ``region-choice-request`` payload (defensive; raw kept)."""
-
-    request_id: str
-    state_name: str
-    state_code: str
-    state_bbox: Optional[list] = None
-    candidates: list = field(default_factory=list)  # list[RegionCandidate]
-    message: str = ""
-    raw: dict = field(default_factory=dict)
-
-    @property
-    def state_label(self) -> str:
-        """The whole-state option's label -- the state name, with the code in
-        parens when both are present (never invented -- both are envelope
-        fields)."""
-        if self.state_name and self.state_code:
-            return f"{self.state_name} ({self.state_code})"
-        return self.state_name or self.state_code or "the whole state"
-
-
-def _coerce_bbox4(value) -> Optional[list]:
-    """A candidate ``[min_lon, min_lat, max_lon, max_lat]`` -> a clean float
-    4-list, or None. Never raises."""
-    if (
-        isinstance(value, (list, tuple))
-        and len(value) == 4
-        and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in value)
-    ):
-        return [float(v) for v in value]
-    return None
-
-
-def parse_region_choice(payload: dict) -> Optional[RegionChoiceRequest]:
-    """Parse a ``region-choice-request``; None without a ``request_id``, since
-    an unanswerable one leaves the turn paused. A malformed candidate is
-    SKIPPED and an empty list is legal: the whole-state default still answers."""
-    if not isinstance(payload, dict):
-        return None
-    request_id = payload.get("request_id")
-    if not isinstance(request_id, str) or not request_id:
-        return None
-    rows = payload.get("candidates")
-    candidates: list = []
-    if isinstance(rows, list):
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
-            region_id = row.get("region_id")
-            name = row.get("name")
-            bbox = _coerce_bbox4(row.get("bbox"))
-            if (
-                not isinstance(region_id, str)
-                or not region_id
-                or not isinstance(name, str)
-                or not name
-                or bbox is None
-            ):
-                continue
-            admin_level = row.get("admin_level")
-            candidates.append(
-                RegionCandidate(
-                    region_id=region_id,
-                    name=name,
-                    bbox=bbox,
-                    admin_level=(
-                        admin_level if isinstance(admin_level, str) and admin_level
-                        else "county"
-                    ),
-                )
-            )
-    state_name = payload.get("state_name")
-    state_code = payload.get("state_code")
-    message = payload.get("message")
-    return RegionChoiceRequest(
-        request_id=request_id,
-        state_name=state_name if isinstance(state_name, str) else "",
-        state_code=state_code if isinstance(state_code, str) else "",
-        state_bbox=_coerce_bbox4(payload.get("state_bbox")),
-        candidates=candidates,
-        message=message if isinstance(message, str) else "",
-        raw=payload,
-    )
-
-
-def resolve_region_choice(
-    request: RegionChoiceRequest, selected_region_id: Optional[str]
-) -> dict:
-    """Build the ``region-choice-provided`` wire dict. An id matching a
-    candidate narrows; anything else keeps the whole state, which is the honest
-    default AND the decline path, so the gate always closes."""
-    if isinstance(selected_region_id, str) and selected_region_id:
-        for cand in request.candidates:
-            if cand.region_id == selected_region_id:
-                return {
-                    "request_id": request.request_id,
-                    "choice": "region",
-                    "selected_region_id": cand.region_id,
-                    "selected_bbox": list(cand.bbox),
-                }
-    return {
-        "request_id": request.request_id,
-        "choice": "whole_state",
-        "selected_region_id": None,
-        "selected_bbox": None,
-    }
-
-
-def region_choice_summary(
-    request: RegionChoiceRequest, selected_region_id: Optional[str]
-) -> str:
-    """The folded chip line for an ANSWERED region-choice card."""
-    if isinstance(selected_region_id, str) and selected_region_id:
-        for cand in request.candidates:
-            if cand.region_id == selected_region_id:
-                return f"narrowed to {cand.name}"
-    return f"kept the whole state ({request.state_label})"
 
 
 #

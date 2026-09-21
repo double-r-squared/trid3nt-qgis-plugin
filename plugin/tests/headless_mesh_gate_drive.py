@@ -24,7 +24,6 @@ DEADLINE_S = int(os.environ.get("E2E_DEADLINE_S", "1800"))
 EXPECT_SUBSTANCE = (os.environ.get("E2E_EXPECT_SUBSTANCE") or "").strip().lower()
 RUNS_DIR = os.environ.get("E2E_RUNS_DIR",
                           "/home/nate/Documents/trid3nt-local/data/runs")
-REGION_HINT = (os.environ.get("E2E_REGION_HINT") or "twin falls").lower()
 
 t_start = time.time()
 
@@ -130,23 +129,6 @@ def main():
                 # was on screen, so there is nothing left to re-present.
                 cli.confirm_payload(wid, "proceed")
                 print("CONFIRMED proceed (sheet unchanged)", flush=True)
-
-        # A state-level geocode triggers the region-choice county picker - answer
-        # it like a user tapping their county.
-        if k == "raw" and data.get("type") == "region-choice-request":
-            p = data.get("payload") or {}
-            cands = p.get("candidates") or []
-            pick = next((c for c in cands
-                         if REGION_HINT in str(c.get("name", "")).lower()),
-                        cands[0] if cands else None)
-            if pick:
-                cli._send("region-choice-provided", {
-                    "request_id": p.get("request_id"),
-                    "choice": "region",
-                    "selected_region_id": pick.get("region_id"),
-                    "selected_bbox": pick.get("bbox"),
-                }, queue_if_closed=True)
-                print(f"REGION-CHOICE answered: {pick.get('name')}", flush=True)
 
         if STUB and k == "turn-complete" and saw_gate:
             saw_peak_layer = True  # stub: post-confirm turn completion = chain closed

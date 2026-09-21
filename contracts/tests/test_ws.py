@@ -16,11 +16,6 @@ from pydantic import ValidationError
 from trid3nt_contracts import ws
 from trid3nt_contracts.chart_contracts import ChartEmissionPayload
 from trid3nt_contracts.common import GraceModel, new_ulid
-from trid3nt_contracts.region_choice import (
-    RegionCandidate,
-    RegionChoiceProvidedEnvelopePayload,
-    RegionChoiceRequestEnvelopePayload,
-)
 from trid3nt_contracts.processing_contracts import (
     CodeExecRequestPayload,
     ProcessingRequestPayload,
@@ -723,8 +718,7 @@ def test_tool_candidates_reason_closed_enum() -> None:
 
 def test_tool_candidates_empty_candidates_allowed(session_id: str) -> None:
     """Retrieval degrade: an empty candidate list is legal -- the client then
-    offers only the free-text + let-agent-decide affordances (region-choice
-    empty-candidates precedent)."""
+    offers only the free-text + let-agent-decide affordances."""
     payload = ws.ToolCandidatesPayload(
         request_id=new_ulid(), stage_label="Data step", reason="ambiguity"
     )
@@ -876,32 +870,6 @@ def test_every_a3_a4_a4b_payload_round_trips(session_id: str) -> None:
             request_id=new_ulid(),
             status="ok",
             result={"layer_name": "Slope", "kind": "raster"},
-        ),
-        # region-disambiguation picker (state-bbox-fallback narrowing). Request
-        # is agent->client (whole-state default + candidate counties); provided
-        # is client->agent (the user's pick).
-        "region-choice-request": lambda: RegionChoiceRequestEnvelopePayload(
-            request_id=new_ulid(),
-            state_name="Florida",
-            state_code="FL",
-            state_bbox=(-87.634896, 24.396308, -79.974306, 31.000888),
-            candidates=[
-                RegionCandidate(
-                    region_id="county-12071",
-                    name="Lee County",
-                    bbox=(-82.331, 26.317, -81.564, 26.795),
-                )
-            ],
-            message=(
-                "Snapped to the whole state of Florida; pick a county to "
-                "narrow the area."
-            ),
-        ),
-        "region-choice-provided": lambda: RegionChoiceProvidedEnvelopePayload(
-            request_id=new_ulid(),
-            choice="region",
-            selected_region_id="county-12071",
-            selected_bbox=(-82.331, 26.317, -81.564, 26.795),
         ),
         # solve-progress — LIVE big-sim telemetry (tool-accuracy panel, 2026-06-17)
         "solve-progress": lambda: ws.SolveProgressPayload(

@@ -282,21 +282,6 @@ class AgentWorker(QObject):
                 request_id, tool_name=tool_name, free_text=free_text
             )
 
-    def send_region_choice(
-        self,
-        request_id: str,
-        choice: str,
-        selected_region_id: Optional[str] = None,
-        selected_bbox: Optional[list] = None,
-    ) -> None:
-        if self.client is not None:
-            self.client.send_region_choice(
-                request_id,
-                choice,
-                selected_region_id=selected_region_id,
-                selected_bbox=selected_bbox,
-            )
-
     def send_spatial_input(
         self,
         request_id: str,
@@ -484,21 +469,6 @@ class AgentBridge(QObject):
         if self._worker is not None:
             self._worker.send_tool_choice(
                 request_id, tool_name=tool_name, free_text=free_text
-            )
-
-    def send_region_choice(
-        self,
-        request_id: str,
-        choice: str,
-        selected_region_id: Optional[str] = None,
-        selected_bbox: Optional[list] = None,
-    ) -> None:
-        if self._worker is not None:
-            self._worker.send_region_choice(
-                request_id,
-                choice,
-                selected_region_id=selected_region_id,
-                selected_bbox=selected_bbox,
             )
 
     def send_spatial_input(
