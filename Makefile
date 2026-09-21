@@ -5,7 +5,7 @@ DEV       := $(REPO_ROOT)/dev
 RUN_DIR   := $(REPO_ROOT)/run
 LOG_DIR   := $(REPO_ROOT)/logs
 
-.PHONY: binaries minio agent venv status stop setup up down plugin env help plugin-zip plugin-repo
+.PHONY: binaries minio agent venv status stop setup up down plugin env help plugin-zip plugin-repo reap
 .PHONY: test test-fetchers test-spatial test-engines test-server test-model-surface test-packages lint
 
 # ---- orchestration (the clone -> run flow) ----------------------------------
@@ -135,6 +135,15 @@ status:
 	@printf "ollama (11434): " && \
 	  if curl -sf http://127.0.0.1:11434/api/tags > /dev/null 2>&1; \
 	  then echo "OK (optional local LLM)"; else echo "not running (optional)"; fi
+
+# Object-store retention: what no live Case pins and what is past its TTL class
+# window goes. The daemon runs no periodic task, so retention happens when this
+# is typed; it reads the same .env.local the stack runs on.
+reap:
+	@set -a; . $(REPO_ROOT)/.env.local; set +a; \
+	  $(REPO_ROOT)/venvs/agent/bin/python -c "import asyncio; \
+	  from trid3nt_server.retention import reap; \
+	  print(len(asyncio.run(reap())), 'spent cache objects deleted')"
 
 stop:
 	@echo "=== stopping TRID3NT Local services ==="
