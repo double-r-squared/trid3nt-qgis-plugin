@@ -1,8 +1,9 @@
 """airnow_air_quality hooks: EPA AirNow current-hour AQI observations, keyed.
 
 ``build_request`` resolves the API key, validates the pollutant filter and builds the
-bounded-box query; ``parse_response`` keeps the LATEST row per (lat, lon, parameter) and
-appends the derived category and parameter-name columns."""
+bounded-box query; ``parse_response`` keeps the LATEST row per (lat, lon, parameter). The
+declared ``column_map`` derives ``ParameterName`` / ``AQICategoryName`` off the raw
+``Parameter`` / ``Category`` this hands it."""
 
 # With NO key the build raises a credential-shaped ``AIRNOW_MISSING_KEY``: the
 # ``_MISSING_KEY`` suffix is what the surface recognizes to show a name-only credential
@@ -30,14 +31,6 @@ _WINDOW_HOURS = 3
 _VALID_PARAMETERS: dict[str, str] = {
     "pm25": "PM25", "pm2.5": "PM25", "pm10": "PM10", "ozone": "OZONE",
     "o3": "OZONE", "no2": "NO2", "so2": "SO2", "co": "CO",
-}
-_PARAMETER_LONG_NAME: dict[str, str] = {
-    "PM25": "PM2.5 (fine particulate matter)", "PM10": "PM10 (coarse particulate matter)",
-    "OZONE": "Ozone", "NO2": "Nitrogen dioxide", "SO2": "Sulfur dioxide", "CO": "Carbon monoxide",
-}
-_AQI_CATEGORY_NAMES: dict[int, str] = {
-    1: "Good", 2: "Moderate", 3: "Unhealthy for Sensitive Groups", 4: "Unhealthy",
-    5: "Very Unhealthy", 6: "Hazardous", 7: "Unavailable",
 }
 _PRESERVED_PROPERTIES = (
     "Latitude", "Longitude", "UTC", "Parameter", "Unit", "Value", "RawConcentration",
@@ -112,16 +105,11 @@ def build_request(spec: SourceSpec, params: dict[str, Any]) -> list["_hooks.Requ
     return [_hooks.RequestPlan(url=_AIRNOW_BASE, params=q, headers=headers)]
 
 
-def _aqi_category_name(category: Any) -> str:
-    try:
-        return _AQI_CATEGORY_NAMES.get(int(category), "Unavailable")
-    except (TypeError, ValueError):
-        return "Unavailable"
-
-
 @_hooks.register_hook("airnow_air_quality.parse_response")
 def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]) -> list[dict[str, Any]]:
-    """Keep the LATEST row per (lat, lon, parameter); append derived AQI columns."""
+    """Keep the LATEST row per (lat, lon, parameter). The raw ``Parameter`` / ``Category``
+    columns ride through for the declared column_map's lookups to derive the display
+    names off."""
     sc = spec.error_code_prefix
     raw = bodies[0] if bodies else b""
     try:
@@ -158,8 +146,5 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
             if isinstance(v, (dict, list)):
                 v = json.dumps(v)
             props[k] = v
-        tok = str(rec.get("Parameter") or "")
-        props["ParameterName"] = _PARAMETER_LONG_NAME.get(tok, tok)
-        props["AQICategoryName"] = _aqi_category_name(rec.get("Category"))
         out.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]}, "properties": props})
     return out

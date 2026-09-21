@@ -44,22 +44,43 @@ hooks:
   build_request: airnow_air_quality.build_request
   parse_response: airnow_air_quality.parse_response
 ingest:
-  properties:
-  - Latitude
-  - Longitude
-  - UTC
-  - Parameter
-  - Unit
-  - Value
-  - RawConcentration
-  - AQI
-  - Category
-  - SiteName
-  - AgencyName
-  - FullAQSCode
-  - IntlAQSCode
-  - ParameterName
-  - AQICategoryName
+  column_map:
+    Latitude: {from: Latitude}
+    Longitude: {from: Longitude}
+    UTC: {from: UTC}
+    Parameter: {from: Parameter}
+    Unit: {from: Unit}
+    Value: {from: Value}
+    RawConcentration: {from: RawConcentration}
+    AQI: {from: AQI}
+    Category: {from: Category}
+    SiteName: {from: SiteName}
+    AgencyName: {from: AgencyName}
+    FullAQSCode: {from: FullAQSCode}
+    IntlAQSCode: {from: IntlAQSCode}
+    ParameterName:
+      from: Parameter
+      kind: lookup
+      table:
+        PM25: PM2.5 (fine particulate matter)
+        PM10: PM10 (coarse particulate matter)
+        OZONE: Ozone
+        NO2: Nitrogen dioxide
+        SO2: Sulfur dioxide
+        CO: Carbon monoxide
+      default_template: '{key}'
+    AQICategoryName:
+      from: Category
+      kind: lookup
+      table:
+        1: Good
+        2: Moderate
+        3: Unhealthy for Sensitive Groups
+        4: Unhealthy
+        5: Very Unhealthy
+        6: Hazardous
+        7: Unavailable
+      default: Unavailable
 normalize:
   crs: EPSG:4326
   units: AQI
