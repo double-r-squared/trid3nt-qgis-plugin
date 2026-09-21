@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import os
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -501,13 +502,73 @@ async def _handle_probe_point_post(raw_body: bytes) -> bytes:
 
 _HTTP_VERSION = b"HTTP/1.1"
 _CRLF = b"\r\n"
+_JSON = "application/json; charset=utf-8"
+
+
+class _HttpError(Exception):
+    """The status and message one route answers a rejected request with."""
+
+    def __init__(self, status: int, message: str, detail: str = "") -> None:
+        super().__init__(message)
+        self.status = status
+        self.message = message
+        self.detail = detail
+
+
+@dataclass(frozen=True)
+class _Request:
+    """One parsed request: the path with its query split off, the body already
+    read to Content-Length, and the Host the client dialled."""
+
+    method: str
+    path: str
+    query: str
+    body: bytes
+    host: str
+
+
+@dataclass(frozen=True)
+class _Reply:
+    """What a route answers with: the bytes, their type, and any header a
+    download needs beyond the common set."""
+
+    body: bytes
+    content_type: str = _JSON
+    headers: dict[str, str] | None = None
+
+
+@dataclass(frozen=True)
+class _Route:
+    """One entry of the route table. ``failure`` is what an unhandled fault
+    answers with, so no route hand-writes a 500. A POST route reads its body
+    first: ``body_required`` refuses an empty one, ``body_cap`` names the byte
+    cap to reject at BEFORE the body is read into memory."""
+
+    handler: Any
+    failure: str
+    body_required: bool = False
+    body_cap: Any = None
+    body_timeout: float = 30.0
+
+
+def _json_reply(payload: Any) -> _Reply:
+    """A JSON body with no whitespace, the one shape every data route answers in."""
+    return _Reply(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
+
+
+def _json_error(status: int, message: str, detail: str = "") -> bytes:
+    """The one error body: a message, and a detail only where the route has one."""
+    payload: dict[str, Any] = {"error": message}
+    if detail:
+        payload["detail"] = detail
+    return json.dumps(payload, separators=(",", ":")).encode("utf-8")
 
 
 def _format_response(
     status: int,
     body: bytes,
     *,
-    content_type: str = "application/json; charset=utf-8",
+    content_type: str = _JSON,
     extra_headers: dict[str, str] | None = None,
 ) -> bytes:
     """Assemble a minimal HTTP/1.1 response."""
@@ -548,36 +609,262 @@ def _format_response(
     return header_lines + _CRLF + body
 
 
-async def _handle_http(
+async def _route_tool_catalog(_req: _Request) -> _Reply:
+    """``GET /api/tool-catalog``: every registered tool with its routing
+    docstring and the credential its source row declares."""
+    return _json_reply(build_catalog_payload())
+
+
+async def _route_catalog_page(_req: _Request) -> _Reply:
+    """``GET /catalog``: the same payload as a self-contained HTML page."""
+    return _Reply(render_catalog_page(), content_type="text/html; charset=utf-8")
+
+
+async def _route_telemetry_summary(_req: _Request) -> _Reply:
+    """``GET /api/telemetry/summary``: the routing-quality summary the telemetry
+    module aggregates over its own sink."""
+    from trid3nt_server.telemetry import build_telemetry_summary
+
+    return _json_reply(await build_telemetry_summary())
+
+
+async def _route_case_list(_req: _Request) -> _Reply:
+    """``GET /api/case-list``: the cold case list, for a client with no
+    WebSocket session yet."""
+    if not _case_list_route_enabled():
+        raise _HttpError(404, "not found")
+    try:
+        return _json_reply(await build_case_list_payload())
+    except _CaseListPersistenceUnavailable as exc:
+        raise _HttpError(503, str(exc)) from exc
+
+
+async def _route_local_models(_req: _Request) -> _Reply:
+    """``GET /api/local-models``: the installed local models, for a client's
+    model picker. Absent, like any unknown path, unless the local provider is
+    active; the upstream fetch runs off the event loop."""
+    if not model_discovery._local_models_route_enabled():
+        raise _HttpError(404, "not found")
+    try:
+        body = await asyncio.to_thread(model_discovery._fetch_local_models)
+    except model_discovery._LocalModelsUpstreamError as exc:
+        raise _HttpError(502, str(exc)) from exc
+    return _Reply(body)
+
+
+async def _route_building_detail(req: _Request) -> _Reply:
+    """``GET /api/building-detail``: the full tag bag for one clicked footprint,
+    read off the per-AOI sidecar or live Overpass, both off the event loop."""
+    try:
+        return _Reply(await _handle_building_detail(req.query))
+    except _BuildingDetailNotFound as exc:
+        raise _HttpError(404, "building detail not found", str(exc)) from exc
+    except _BuildingDetailBadRequest as exc:
+        raise _HttpError(400, "bad request", str(exc)) from exc
+
+
+async def _route_version(_req: _Request) -> _Reply:
+    """``GET /api/version``: the daemon's git sha and active model provider."""
+    from trid3nt_server import plugin_repo
+
+    return _json_reply(await asyncio.to_thread(plugin_repo.build_version_payload))
+
+
+async def _route_plugins_xml(req: _Request) -> _Reply:
+    """``GET /plugin-repo/plugins.xml``: the QGIS custom repository index. The
+    download_url host is filled from the REQUEST's own Host header, so a tailnet
+    client's "Add repository" URL round-trips to a reachable zip URL."""
+    from trid3nt_server import plugin_repo
+
+    host = req.host or (
+        f"127.0.0.1:{os.environ.get('TRID3NT_AGENT_HTTP_PORT', DEFAULT_HTTP_PORT)}"
+    )
+    try:
+        body = await asyncio.to_thread(plugin_repo.render_plugins_xml, host)
+    except plugin_repo.PluginRepoBuildError as exc:
+        raise _HttpError(503, str(exc)) from exc
+    return _Reply(body, content_type="text/xml; charset=utf-8")
+
+
+async def _route_fresh_zip(_req: _Request) -> _Reply:
+    """``GET /plugin-repo/trid3nt.zip``: THE zip every plugins.xml download_url
+    points at, built on demand straight from ``plugin/`` and mtime-cached."""
+    from trid3nt_server import plugin_repo
+
+    try:
+        data, _version, zip_filename = await asyncio.to_thread(
+            plugin_repo.build_fresh_zip
+        )
+    except plugin_repo.PluginRepoBuildError as exc:
+        raise _HttpError(503, str(exc)) from exc
+    return _Reply(
+        data,
+        content_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{zip_filename}"'},
+    )
+
+
+async def _route_packaged_zip(req: _Request) -> _Reply:
+    """``GET /plugin-repo/<name>.zip``: the versioned zip ``package_plugin_repo``
+    built, kept as the manual-QA fallback path plugins.xml no longer advertises."""
+    from trid3nt_server import plugin_repo
+
+    filename = req.path[len("/plugin-repo/"):]
+    try:
+        zip_path = await asyncio.to_thread(plugin_repo.served_zip_path, filename)
+        data = await asyncio.to_thread(zip_path.read_bytes)
+    except FileNotFoundError as exc:
+        raise _HttpError(404, "not found") from exc
+    return _Reply(
+        data,
+        content_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{zip_path.name}"'},
+    )
+
+
+async def _route_ingest_layer_file(req: _Request) -> _Reply:
+    """``POST /api/ingest-layer-file``: stage the client's raw upload bytes to
+    object storage. The QGIS Python runtime is stdlib-only, so the plugin cannot
+    PUT to the store itself and streams the exported file's bytes here."""
+    from trid3nt_server.inputs.user_layer import ImportLayerError, ObjectTooLargeError
+
+    if not _ingest_layer_route_enabled():
+        raise _HttpError(404, "not found")
+    try:
+        filename = _parse_ingest_layer_filename(req.query)
+        s3_uri = await asyncio.to_thread(
+            _upload_layer_file_fn(), filename, req.body
+        )
+    except _IngestLayerBadRequest as exc:
+        raise _HttpError(400, str(exc)) from exc
+    except ObjectTooLargeError as exc:
+        raise _HttpError(413, str(exc)) from exc
+    except ImportLayerError as exc:
+        raise _HttpError(400, str(exc)) from exc
+    return _json_reply({"s3_uri": s3_uri})
+
+
+async def _route_ingest_layer(req: _Request) -> _Reply:
+    """``POST /api/ingest-layer``: register an already-uploaded object onto the
+    case, through the ingest core, which merges it into the case's durable
+    layer summaries and best-effort-pins the AOI."""
+    from trid3nt_server.inputs.user_layer import (
+        CaseNotFoundError,
+        ImportLayerError,
+        ObjectNotFoundError,
+    )
+
+    if not _ingest_layer_route_enabled():
+        raise _HttpError(404, "not found")
+    try:
+        return _Reply(await _handle_ingest_layer_post(req.body))
+    except _IngestLayerBadRequest as exc:
+        raise _HttpError(400, str(exc)) from exc
+    except (CaseNotFoundError, ObjectNotFoundError) as exc:
+        raise _HttpError(404, str(exc)) from exc
+    except ImportLayerError as exc:
+        # The request was well-formed HTTP but ingestion cannot succeed.
+        raise _HttpError(400, str(exc)) from exc
+
+
+async def _route_probe_point(req: _Request) -> _Reply:
+    """``POST /api/probe-point``: the deterministic map-click probe, sampling
+    every raster layer and any detected frame sequence on the case at one point."""
+    from trid3nt_server.inputs.user_input import UserInputError
+    from trid3nt_server.tools.derive.probe_point.probe_point import (
+        ProbePointCaseNotFoundError,
+        ProbePointInputError,
+    )
+
+    if not _probe_point_route_enabled():
+        raise _HttpError(404, "not found")
+    try:
+        return _Reply(await _handle_probe_point_post(req.body))
+    except _ProbePointBadRequest as exc:
+        raise _HttpError(400, str(exc)) from exc
+    except ProbePointCaseNotFoundError as exc:
+        raise _HttpError(404, str(exc)) from exc
+    except (ProbePointInputError, UserInputError) as exc:
+        raise _HttpError(400, str(exc)) from exc
+
+
+async def _route_provider_config(req: _Request) -> _Reply:
+    """``POST /api/provider-config``: a provider, model or key switch that takes
+    effect on the NEXT turn with no restart, because the adapter reads the env
+    per call. The api_key rides the body into the env and is never logged or
+    echoed; the coherence gate's short blocking probe runs off the event loop."""
+    if not model_discovery._local_models_route_enabled():
+        raise _HttpError(404, "not found")
+    try:
+        body = await asyncio.to_thread(
+            model_discovery.apply_provider_config, req.body)
+    except model_discovery.ProviderConfigBadRequest as exc:
+        raise _HttpError(400, str(exc)) from exc
+    return _Reply(body)
+
+
+def _max_ingest_bytes() -> int:
+    from trid3nt_server.inputs.user_layer import MAX_INGEST_BYTES
+
+    return MAX_INGEST_BYTES
+
+
+#: (method, path) -> the route that answers it. An exact miss on the path falls
+#: through to the packaged-zip prefix and then to 404; a hit on the path under
+#: another method is 405.
+_ROUTES: dict[tuple[str, str], _Route] = {
+    ("GET", "/api/tool-catalog"): _Route(
+        _route_tool_catalog, "catalog build failed"),
+    ("GET", "/catalog"): _Route(
+        _route_catalog_page, "catalog render failed"),
+    ("GET", "/api/telemetry/summary"): _Route(
+        _route_telemetry_summary, "telemetry summary failed"),
+    ("GET", "/api/case-list"): _Route(
+        _route_case_list, "case list failed"),
+    ("GET", "/api/local-models"): _Route(
+        _route_local_models, "local models failed"),
+    ("GET", "/api/building-detail"): _Route(
+        _route_building_detail, "building detail failed"),
+    ("GET", "/api/version"): _Route(
+        _route_version, "version lookup failed"),
+    ("GET", "/plugin-repo/plugins.xml"): _Route(
+        _route_plugins_xml, "plugin repo index failed"),
+    ("GET", "/plugin-repo/trid3nt.zip"): _Route(
+        _route_fresh_zip, "plugin zip failed"),
+    ("POST", "/api/ingest-layer-file"): _Route(
+        _route_ingest_layer_file, "layer upload failed",
+        body_required=True, body_cap=_max_ingest_bytes, body_timeout=120.0),
+    ("POST", "/api/ingest-layer"): _Route(
+        _route_ingest_layer, "layer ingest failed"),
+    ("POST", "/api/probe-point"): _Route(
+        _route_probe_point, "probe point failed"),
+    ("POST", "/api/provider-config"): _Route(
+        _route_provider_config, "provider config update failed"),
+}
+
+
+async def _read_request(
     reader: asyncio.StreamReader,
-    writer: asyncio.StreamWriter,
-) -> None:
-    """Handle one HTTP request. The protocol implementation is deliberately
-    minimal: an unknown path is 404, an unknown method 405, and a body is read
-    to Content-Length or end-of-stream so a stray POST cannot hang."""
+) -> tuple[_Request, _Route | None] | _Reply | None:
+    """Parse one request and find its route, or answer it outright.
+
+    A parse fault, an unknown route and a body the route refuses each come back
+    as the reply to write; ``None`` means the peer left nothing to answer."""
     try:
         request_line = await asyncio.wait_for(reader.readline(), timeout=5.0)
     except asyncio.TimeoutError:
-        writer.close()
-        return
+        return None
     if not request_line:
-        writer.close()
-        return
+        return None
     try:
-        method, path, _version = request_line.decode("ascii", "replace").split()
+        method, raw_path, _version = request_line.decode("ascii", "replace").split()
     except ValueError:
-        body = _format_response(400, b'{"error":"bad request line"}')
-        writer.write(body)
-        await writer.drain()
-        writer.close()
-        return
+        raise _HttpError(400, "bad request line") from None
 
-    # Drain headers; the ones we consume are Content-Length (so a POST body
-    # can be read) and Host (so /plugin-repo/plugins.xml can build a download_url
-    # that matches the host:port the client actually dialed -- e.g. a
-    # tailnet client's daemon-host address, not a hardcoded 127.0.0.1). The
-    # socket must be advanced past the rest before we close so the client
-    # sees our response cleanly.
+    # The headers consumed are Content-Length, so a POST body can be read, and
+    # Host, so plugins.xml builds a download_url matching the host:port the
+    # client actually dialled. The socket must be advanced past the rest before
+    # the close so the client sees the response cleanly.
     content_length = 0
     host_header = ""
     while True:
@@ -599,503 +886,78 @@ async def _handle_http(
 
     if method == "OPTIONS":
         # CORS preflight.
-        writer.write(_format_response(204, b""))
-        await writer.drain()
-        writer.close()
-        return
+        return _Reply(b"", content_type=_JSON)
 
-    proxy_path, _, proxy_qs = path.partition("?")
+    path, _, query = raw_path.partition("?")
+    route = _ROUTES.get((method, path))
+    if route is None and method == "GET" and path.startswith("/plugin-repo/") \
+            and path.endswith(".zip"):
+        route = _Route(_route_packaged_zip, "plugin zip failed")
+    if route is None:
+        # A GET nobody serves is an unknown path; anything else is the method.
+        if method != "GET":
+            raise _HttpError(405, "method not allowed")
+        raise _HttpError(404, "not found")
 
-    
-    if method == "POST" and proxy_path == "/api/ingest-layer-file":
-        # Bidirectional layer push, half 1: stage the client's raw upload bytes
-        # to object storage.
-        if not _ingest_layer_route_enabled():
-            writer.write(_format_response(404, b'{"error":"not found"}'))
-            await writer.drain()
-            writer.close()
-            return
-        from trid3nt_server.inputs.user_layer import MAX_INGEST_BYTES
-
-        if content_length <= 0:
-            writer.write(
-                _format_response(400, b'{"error":"missing or empty request body"}')
-            )
-            await writer.drain()
-            writer.close()
-            return
-        if content_length > MAX_INGEST_BYTES:
+    body = b""
+    if content_length > 0:
+        cap = route.body_cap() if route.body_cap is not None else None
+        if cap is not None and content_length > cap:
             # Reject BEFORE reading the oversized body into memory.
-            writer.write(
-                _format_response(
-                    413,
-                    json.dumps(
-                        {
-                            "error": f"upload is {content_length} bytes, exceeds "
-                            f"the {MAX_INGEST_BYTES}-byte cap"
-                        },
-                        separators=(",", ":"),
-                    ).encode("utf-8"),
-                )
-            )
-            await writer.drain()
+            raise _HttpError(
+                413, f"upload is {content_length} bytes, exceeds the {cap}-byte cap")
+        try:
+            body = await asyncio.wait_for(
+                reader.readexactly(content_length), timeout=route.body_timeout)
+        except (asyncio.TimeoutError, asyncio.IncompleteReadError) as exc:
+            if route.body_required:
+                raise _HttpError(400, "upload body read failed") from exc
+            body = b""
+    if route.body_required and not body:
+        raise _HttpError(400, "missing or empty request body")
+    return _Request(method, path, query, body, host_header), route
+
+
+async def _handle_http(
+    reader: asyncio.StreamReader,
+    writer: asyncio.StreamWriter,
+) -> None:
+    """Handle one HTTP request off the route table: an unknown path is 404, a
+    known path under the wrong method 405, and every fault a route does not name
+    itself answers with that route's one failure message."""
+    status = 200
+    reply: _Reply | None = None
+    failure = "request failed"
+    try:
+        parsed = await _read_request(reader)
+        if parsed is None:
             writer.close()
             return
-        from trid3nt_server.inputs.user_layer import ImportLayerError, ObjectTooLargeError
-
-        try:
-            filename = _parse_ingest_layer_filename(proxy_qs)
-            raw_body = await asyncio.wait_for(
-                reader.readexactly(content_length), timeout=120.0
-            )
-            s3_uri = await asyncio.to_thread(
-                _upload_layer_file_fn(), filename, raw_body
-            )
-            writer.write(
-                _format_response(
-                    200,
-                    json.dumps({"s3_uri": s3_uri}, separators=(",", ":")).encode(
-                        "utf-8"
-                    ),
-                )
-            )
-        except _IngestLayerBadRequest as exc:
-            writer.write(
-                _format_response(
-                    400,
-                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
-                        "utf-8"
-                    ),
-                )
-            )
-        except (asyncio.TimeoutError, asyncio.IncompleteReadError):
-            writer.write(
-                _format_response(400, b'{"error":"upload body read failed"}')
-            )
-        except ObjectTooLargeError as exc:
-            writer.write(
-                _format_response(
-                    413,
-                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
-                        "utf-8"
-                    ),
-                )
-            )
-        except ImportLayerError as exc:
-            writer.write(
-                _format_response(
-                    400,
-                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
-                        "utf-8"
-                    ),
-                )
-            )
-        except Exception:  # noqa: BLE001
-            logger.exception("ingest-layer-file upload failed")
-            writer.write(_format_response(500, b'{"error":"layer upload failed"}'))
-        await writer.drain()
-        writer.close()
-        return
-
-    if method == "POST" and proxy_path == "/api/ingest-layer":
-        # Bidirectional layer push, half 2: register an already-uploaded
-        # object onto the case (see the module section above for the
-        # request/response contract).
-        if not _ingest_layer_route_enabled():
-            writer.write(_format_response(404, b'{"error":"not found"}'))
-            await writer.drain()
-            writer.close()
-            return
-        raw_body = b""
-        if content_length > 0:
-            try:
-                raw_body = await asyncio.wait_for(
-                    reader.readexactly(content_length), timeout=30.0
-                )
-            except (asyncio.TimeoutError, asyncio.IncompleteReadError):
-                raw_body = b""
-        from trid3nt_server.inputs.user_layer import CaseNotFoundError, ImportLayerError, ObjectNotFoundError
-
-        try:
-            body = await _handle_ingest_layer_post(raw_body)
-            writer.write(_format_response(200, body))
-        except _IngestLayerBadRequest as exc:
-            writer.write(
-                _format_response(
-                    400,
-                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
-                        "utf-8"
-                    ),
-                )
-            )
-        except (CaseNotFoundError, ObjectNotFoundError) as exc:
-            writer.write(
-                _format_response(
-                    404,
-                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
-                        "utf-8"
-                    ),
-                )
-            )
-        except ImportLayerError as exc:
-            # INVALID_INPUT / OBJECT_TOO_LARGE / UNREADABLE_LAYER / other typed
-            # core errors -- the request was well-formed HTTP but ingestion
-            # cannot succeed.
-            writer.write(
-                _format_response(
-                    400,
-                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
-                        "utf-8"
-                    ),
-                )
-            )
-        except Exception:  # noqa: BLE001
-            logger.exception("ingest-layer run failed")
-            writer.write(_format_response(500, b'{"error":"layer ingest failed"}'))
-        await writer.drain()
-        writer.close()
-        return
-
-    if method == "POST" and proxy_path == "/api/probe-point":
-        # Deterministic map-click point probe.
-        if not _probe_point_route_enabled():
-            writer.write(_format_response(404, b'{"error":"not found"}'))
-            await writer.drain()
-            writer.close()
-            return
-        raw_body = b""
-        if content_length > 0:
-            try:
-                raw_body = await asyncio.wait_for(
-                    reader.readexactly(content_length), timeout=30.0
-                )
-            except (asyncio.TimeoutError, asyncio.IncompleteReadError):
-                raw_body = b""
-        from trid3nt_server.tools.derive.probe_point.probe_point import (
-            ProbePointCaseNotFoundError,
-            ProbePointInputError,
-        )
-        from trid3nt_server.inputs.user_input import UserInputError
-
-        try:
-            body = await _handle_probe_point_post(raw_body)
-            writer.write(_format_response(200, body))
-        except _ProbePointBadRequest as exc:
-            writer.write(
-                _format_response(
-                    400,
-                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
-                        "utf-8"
-                    ),
-                )
-            )
-        except ProbePointCaseNotFoundError as exc:
-            writer.write(
-                _format_response(
-                    404,
-                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
-                        "utf-8"
-                    ),
-                )
-            )
-        except (ProbePointInputError, UserInputError) as exc:
-            writer.write(
-                _format_response(
-                    400,
-                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
-                        "utf-8"
-                    ),
-                )
-            )
-        except Exception:  # noqa: BLE001
-            logger.exception("probe-point run failed")
-            writer.write(_format_response(500, b'{"error":"probe point failed"}'))
-        await writer.drain()
-        writer.close()
-        return
-
-    if method == "POST" and proxy_path == "/api/provider-config":
-        # The live provider config: a provider, model or key switch takes effect
-        # on the NEXT turn with no restart, because the adapter reads the env per
-        # call. SECURITY: the api_key rides the body and is written to the env,
-        # never logged or echoed - only the base URL host and effective model
-        # return. Runs in a thread, because the coherence gate may make a short
-        # blocking probe that must never sit on the event loop.
-        if not model_discovery._local_models_route_enabled():
-            writer.write(_format_response(404, b'{"error":"not found"}'))
-            await writer.drain()
-            writer.close()
-            return
-        raw_body = b""
-        if content_length > 0:
-            try:
-                raw_body = await asyncio.wait_for(
-                    reader.readexactly(content_length), timeout=30.0
-                )
-            except (asyncio.TimeoutError, asyncio.IncompleteReadError):
-                raw_body = b""
-        try:
-            body = await asyncio.to_thread(
-                model_discovery.apply_provider_config, raw_body)
-            writer.write(_format_response(200, body))
-        except model_discovery.ProviderConfigBadRequest as exc:
-            writer.write(
-                _format_response(
-                    400,
-                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
-                        "utf-8"
-                    ),
-                )
-            )
-        except Exception:  # noqa: BLE001 -- NEVER surface the body/key in logs
-            # A generic static message + no request context: the traceback
-            # references the raw body variable by name only, never its value.
-            logger.exception("provider-config update failed")
-            writer.write(
-                _format_response(500, b'{"error":"provider config update failed"}')
-            )
-        await writer.drain()
-        writer.close()
-        return
-
-    if method != "GET":
-        writer.write(
-            _format_response(405, b'{"error":"method not allowed"}')
-        )
-        await writer.drain()
-        writer.close()
-        return
-
-    if path == "/api/tool-catalog":
-        try:
-            payload = build_catalog_payload()
-            body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
-            writer.write(_format_response(200, body))
-        except Exception:  # noqa: BLE001
-            logger.exception("tool-catalog payload build failed")
-            writer.write(
-                _format_response(500, b'{"error":"catalog build failed"}')
-            )
-    elif proxy_path == "/catalog":
-        # Self-contained HTML catalog page (the agent's-eye view). Inline
-        # CSS + JS + embedded data -- no external assets.
-        try:
-            body = render_catalog_page()
-            writer.write(
-                _format_response(
-                    200, body, content_type="text/html; charset=utf-8"
-                )
-            )
-        except Exception:  # noqa: BLE001
-            logger.exception("catalog page render failed")
-            writer.write(
-                _format_response(
-                    500,
-                    b"<!doctype html><p>catalog render failed</p>",
-                    content_type="text/html; charset=utf-8",
-                )
-            )
-    elif path == "/api/telemetry/summary":
-        try:
-            from trid3nt_server.telemetry import build_telemetry_summary
-
-            summary = await build_telemetry_summary()
-            body = json.dumps(summary, separators=(",", ":")).encode("utf-8")
-            writer.write(_format_response(200, body))
-        except Exception:  # noqa: BLE001
-            logger.exception("telemetry summary build failed")
-            writer.write(
-                _format_response(500, b'{"error":"telemetry summary failed"}')
-            )
-    elif proxy_path == "/api/case-list":
-        # The cold case list, for a client with no WebSocket session yet.
-        if not _case_list_route_enabled():
-            writer.write(_format_response(404, b'{"error":"not found"}'))
+        if isinstance(parsed, _Reply):
+            status, reply = 204, parsed
         else:
-            try:
-                payload = await build_case_list_payload()
-                body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
-                writer.write(_format_response(200, body))
-            except _CaseListPersistenceUnavailable as exc:
-                writer.write(
-                    _format_response(
-                        503,
-                        json.dumps(
-                            {"error": str(exc)}, separators=(",", ":")
-                        ).encode("utf-8"),
-                    )
-                )
-            except Exception:  # noqa: BLE001
-                logger.exception("case-list build failed")
-                writer.write(
-                    _format_response(500, b'{"error":"case list failed"}')
-                )
-    elif proxy_path == "/api/local-models":
-        # The installed local models, for a client's model picker. The route is
-        # absent, like any unknown path, unless the local provider is active,
-        # and the upstream fetch runs off the event loop.
-        if not model_discovery._local_models_route_enabled():
-            writer.write(_format_response(404, b'{"error":"not found"}'))
-        else:
-            try:
-                body = await asyncio.to_thread(model_discovery._fetch_local_models)
-                writer.write(_format_response(200, body))
-            except model_discovery._LocalModelsUpstreamError as exc:
-                writer.write(
-                    _format_response(
-                        502,
-                        json.dumps(
-                            {"error": str(exc)}, separators=(",", ":")
-                        ).encode("utf-8"),
-                    )
-                )
-            except Exception:  # noqa: BLE001
-                logger.exception("local-models listing failed")
-                writer.write(
-                    _format_response(500, b'{"error":"local models failed"}')
-                )
-    elif proxy_path == "/api/building-detail":
-        # Click-to-enrich: the building footprint inline
-        # GeoJSON is now SLIM (id-only props). The popup fetches the full tag
-        # bag on demand by (osm_type, osm_id) here. Cold/box-off friendly + off
-        # the event loop (S3 + Overpass run via asyncio.to_thread).
-        try:
-            body = await _handle_building_detail(proxy_qs)
-            writer.write(_format_response(200, body))
-        except _BuildingDetailNotFound as exc:
-            writer.write(
-                _format_response(
-                    404,
-                    json.dumps(
-                        {"error": "building detail not found", "detail": str(exc)},
-                        separators=(",", ":"),
-                    ).encode("utf-8"),
-                )
-            )
-        except _BuildingDetailBadRequest as exc:
-            writer.write(
-                _format_response(
-                    400,
-                    json.dumps(
-                        {"error": "bad request", "detail": str(exc)},
-                        separators=(",", ":"),
-                    ).encode("utf-8"),
-                )
-            )
-        except Exception:  # noqa: BLE001
-            logger.exception("building-detail lookup failed")
-            writer.write(
-                _format_response(500, b'{"error":"building detail failed"}')
-            )
-    elif path == "/api/version":
-        # Daemon git sha + active model provider -- the version indicator the
-        # removed plugin-settings Update section wanted. Cheap: one
-        # `git rev-parse` subprocess, off the
-        # event loop.
-        try:
-            from trid3nt_server import plugin_repo
-
-            payload = await asyncio.to_thread(plugin_repo.build_version_payload)
-            body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
-            writer.write(_format_response(200, body))
-        except Exception:  # noqa: BLE001
-            logger.exception("version payload build failed")
-            writer.write(_format_response(500, b'{"error":"version lookup failed"}'))
-    elif proxy_path == "/plugin-repo/plugins.xml":
-        # QGIS custom plugin repository index. The
-        # packaged plugins.xml carries a HOST_SENTINEL; the download_url host
-        # is filled from the REQUEST's own Host header so a tailnet client's
-        # "Add repository" URL (http://<daemon-host>:8766/plugin-repo/plugins.xml)
-        # round-trips to a reachable zip URL without a hardcoded host.
-        from trid3nt_server import plugin_repo
-
-        try:
-            host = host_header or (
-                f"127.0.0.1:{os.environ.get('TRID3NT_AGENT_HTTP_PORT', DEFAULT_HTTP_PORT)}"
-            )
-            body = await asyncio.to_thread(plugin_repo.render_plugins_xml, host)
-            writer.write(
-                _format_response(200, body, content_type="text/xml; charset=utf-8")
-            )
-        except plugin_repo.PluginRepoBuildError as exc:
-            writer.write(
-                _format_response(
-                    503,
-                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
-                        "utf-8"
-                    ),
-                )
-            )
-        except Exception:  # noqa: BLE001
-            logger.exception("plugins.xml serve failed")
-            writer.write(
-                _format_response(500, b'{"error":"plugin repo index failed"}')
-            )
-    elif proxy_path == "/plugin-repo/trid3nt.zip":
-        # THE zip Plugin Manager / Install-from-ZIP downloads -- every
-        # plugins.xml download_url now points here. Fixed name (must match
-        # plugin_repo.FRESH_ZIP_URL_PATH), built on demand straight from
-        # plugin/ and mtime-cached. No deploy-time
-        # package_plugin_repo() step required. ?v=<version> (already
-        # stripped into proxy_qs above) is a pure cache-busting hint.
-        from trid3nt_server import plugin_repo
-
-        try:
-            data, _version, zip_filename = await asyncio.to_thread(
-                plugin_repo.build_fresh_zip
-            )
-            writer.write(
-                _format_response(
-                    200,
-                    data,
-                    content_type="application/zip",
-                    extra_headers={
-                        "Content-Disposition": f'attachment; filename="{zip_filename}"'
-                    },
-                )
-            )
-        except plugin_repo.PluginRepoBuildError as exc:
-            writer.write(
-                _format_response(
-                    503,
-                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
-                        "utf-8"
-                    ),
-                )
-            )
-        except Exception:  # noqa: BLE001
-            logger.exception("plugin zip (fresh) serve failed")
-            writer.write(_format_response(500, b'{"error":"plugin zip failed"}'))
-    elif proxy_path.startswith("/plugin-repo/") and proxy_path.endswith(".zip"):
-        # The versioned zip built by package_plugin_repo() -- kept as a
-        # manual-QA / fallback path; served straight from the packaged
-        # directory (deploy-time artifact). Not what plugins.xml advertises
-        # anymore (see the /plugin-repo/trid3nt.zip branch above).
-        from trid3nt_server import plugin_repo
-
-        filename = proxy_path[len("/plugin-repo/") :]
-        try:
-            zip_path = await asyncio.to_thread(plugin_repo.served_zip_path, filename)
-            data = await asyncio.to_thread(zip_path.read_bytes)
-            writer.write(
-                _format_response(
-                    200,
-                    data,
-                    content_type="application/zip",
-                    extra_headers={
-                        "Content-Disposition": f'attachment; filename="{zip_path.name}"'
-                    },
-                )
-            )
-        except FileNotFoundError:
-            writer.write(_format_response(404, b'{"error":"not found"}'))
-        except Exception:  # noqa: BLE001
-            logger.exception("plugin zip serve failed")
-            writer.write(_format_response(500, b'{"error":"plugin zip failed"}'))
-    else:
-        writer.write(_format_response(404, b'{"error":"not found"}'))
+            request, route = parsed
+            failure = route.failure
+            reply = await route.handler(request)
+    except _HttpError as exc:
+        status = exc.status
+        reply = _Reply(_json_error(exc.status, exc.message, exc.detail))
+    except Exception:  # noqa: BLE001 -- one honest 500 per route, never a traceback
+        logger.exception("%s", failure)
+        status = 500
+        reply = _Reply(_json_error(500, failure))
+    writer.write(
+        _format_response(
+            status,
+            reply.body,
+            content_type=reply.content_type,
+            extra_headers=reply.headers,
+        )
+    )
     await writer.drain()
     writer.close()
+
+
 
 
 async def serve_catalog_http(
