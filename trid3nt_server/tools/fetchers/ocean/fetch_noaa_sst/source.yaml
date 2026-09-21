@@ -1,119 +1,100 @@
-# NOAA Coral Reef Watch daily 5 km SST through the ERDDAP griddap access mode: the
-# bracket-selector .nc endpoint does the bbox and day subset server-side, so one GET
-# yields an in-memory xarray subset and a north-up float32 array for the COG serialize.
-# A 404 carrying the no-matching or axis-range markers is an honest no-data, as is an
-# all-NaN fully-land window.
+# NOAA Coral Reef Watch daily 5 km SST, opened on the user's map through
+# QGIS's own WMS provider on the ERDDAP WMS endpoint (dhw_5km), MEASURED:
+# coastwatch.pfeg.noaa.gov's WMS 302-redirects to pae-paha.pacioos.hawaii.edu,
+# which is the endpoint actually opened.
 schema_version: v1
 name: fetch_noaa_sst
 source_class: noaa_sst
-shape: raster-cog
+shape: record
 supports_global_query: false
-empty_error_suffix: NO_DATA
 endpoints:
   data:
-    url: https://coastwatch.pfeg.noaa.gov/erddap
+    url: "https://pae-paha.pacioos.hawaii.edu/erddap/wms/dhw_5km/request"
 auth:
   mode: none
-  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
-    agent@trid3nt.dev)
+  user_agent: trid3nt_default
 params:
   bbox:
     type: bbox
     required: true
     quantize: round_4dp
-  date:
-    type: iso_date
-    schema_optional: true
   variable:
     type: enum
-    values:
-    - sst
-    - anomaly
-    default: sst
-    lowercase: true
-gates:
-  max_bbox_deg2: 25.0
+    values: [CRW_SST, CRW_SSTANOMALY]
+    default: CRW_SST
+    aliases: {sst: CRW_SST, temperature: CRW_SST, anomaly: CRW_SSTANOMALY,
+              sst_anomaly: CRW_SSTANOMALY}
+
 ingest:
-  access: griddap
-  griddap:
-    dataset: NOAA_DHW
-    time_of_day: "12:00:00Z"
-    lat_descending: true
-    var_by_param:
-      param: variable
-      map:
-        sst: CRW_SST
-        anomaly: CRW_SSTANOMALY
-    nodata_body_markers:
-    - no matching results
-    - axis maximum
-    - axis minimum
+  access: qgis_provider
+  qgis_provider:
+    provider: wms
+    uri: "crs='EPSG:4326' format='image/png' layers='dhw_5km:{variable}' styles='' url='{url}'"
+    mode: open
+
 normalize:
   crs: EPSG:4326
   units: degrees Celsius
+
 output:
-  layer_type: raster
-  ext: tif
-  role: primary
-  style:
-    kind: continuous
-  emit_bbox: true
+  layer_type: record
+  ext: json
+
 cache:
-  ttl_class: static-30d
+  ttl_class: live-no-cache
 payload_estimate:
   model: bbox_area
-  mb_per_sq_deg: 0.001
-  floor_mb: 0.01
+  mb_per_sq_deg: 0.0
+  floor_mb: 0.0
+
 caveats:
-- "model-callable, not matched: a sea-surface temperature is not weather forcing, so it carries no coverage row"
-- NOAA Coral Reef Watch operational daily 5 km SST (NOAA_DHW; CRW_SST / CRW_SSTANOMALY) via
-  the keyless NOAA CoastWatch ERDDAP griddap endpoint, AOI-scoped (<= 25 deg^2), single day.
-  Ocean-only -- a fully-land AOI returns an honest NOAA_SST_NO_DATA (CRW masks land). An
-  out-of-coverage date (pre-1985 / future) surfaces as NOAA_SST_NO_DATA from ERDDAP's own
-  axis-range 404 rather than a pre-network input error. Default date = the most recent likely
-  day (today-1 UTC), which does not enter the cache key.
+  - "NOAA Coral Reef Watch operational daily 5 km SST, opened as a live WMS map overlay through the ERDDAP dhw_5km dataset; the day the overlay draws is whatever the service's WMS TIME default carries, since a single provider-open call has no per-day subset - use fetch_goes_abi or a griddap tool for a specific day's raster"
+  - "the layer is drawn by QGIS from the service, so it is on the map but not in the case store and no analysis reads it"
+  - "Ocean-only -- CRW masks land; a fully-land AOI draws a transparent overlay, never fabricated content"
+  - "model-callable, not matched: a sea-surface temperature is not weather forcing, so it carries no coverage row"
+
 docstring: |-
-  Fetch a daily NOAA sea-surface-temperature (SST) COG for a bbox.
+  NOAA sea-surface-temperature (SST) WMS overlay, added to the map.
 
-  **What it does:** Subsets the NOAA Coral Reef Watch operational daily 5 km
-  global SST product (via the keyless NOAA CoastWatch ERDDAP griddap endpoint)
-  to a single day + the requested ocean ``bbox``, and returns a single-band
-  float32 COG in degrees Celsius (). Pass
-  ``variable="anomaly"`` for the SST ANOMALY (observed minus climatology,
-  degrees C, diverging blue-red ramp ``sst_anomaly``).
+  Opens the NOAA Coral Reef Watch operational daily 5 km global SST product
+  (``dhw_5km``) as a live WMS layer served by QGIS's own WMS provider on the
+  NOAA CoastWatch / PacIOOS ERDDAP endpoint. Pass ``variable="CRW_SSTANOMALY"``
+  (or the alias ``"anomaly"``) for the SST ANOMALY overlay instead.
 
-  The CRW product is global, gap-filled (no cloud holes), updated daily with
-  ~1 day latency, and covers 1985-present -- the go-to "how warm is the ocean
-  here" / marine-heatwave / coral-bleaching-stress / hurricane-fuel layer.
+  The CRW product is global, gap-filled, updated daily, and covers
+  1985-present -- the go-to "how warm is the ocean here" / marine-heatwave /
+  coral-bleaching-stress / hurricane-fuel layer.
 
   **When to use:**
-  - User wants ocean / sea-surface temperature for an area or a date
+  - User wants ocean / sea-surface temperature visual context for an area
     ("show SST in the Gulf", "how warm is the water off Florida").
-  - SST ANOMALY / marine-heatwave context (``variable="anomaly"``): how far
-    above or below normal today's water is.
-  - Hurricane-intensification context (warm SST = storm fuel), coral-bleaching
-    heat stress, fisheries / ecosystem temperature context.
+  - SST ANOMALY / marine-heatwave visual context.
 
   **When NOT to use:**
-  - LAND-surface temperature -- this is OCEAN ONLY; a land bbox returns an
-    honest no-data error (CRW masks land).
-  - Air / 2 m temperature -- use ``fetch_era5_reanalysis`` /
-    ``fetch_gridmet`` (those are atmospheric, not sea-surface).
-  - Sub-5 km coastal detail -- CRW is 5 km; for finer SST a higher-res
-    product (e.g. MUR 1 km) would be a separate fetcher.
+  - To COMPUTE with the SST values - a per-pixel read, a mean over an AOI,
+    feed a model. The overlay is drawn from the service and its pixels never
+    reach the store; nothing downstream can read them.
+  - A specific past day's SST raster - the WMS layer draws the service's own
+    current default; there is no per-call day subset under mode open.
+  - LAND-surface or air / 2 m temperature -- this is OCEAN ONLY.
 
   **Parameters:**
-  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326.
-    Required. AOI-scoped (<= 25 deg^2). Must cover ocean.
-  - ``date`` (str, optional): ``"YYYY-MM-DD"`` UTC day. Default: the most
-    recent likely-published day (today-1); 1985-present.
-  - ``variable`` (str, default ``"sst"``): ``"sst"`` for sea-surface
-    temperature, ``"anomaly"`` for the SST anomaly vs climatology (both C).
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required.
+          Must cover ocean.
+      variable: ``"CRW_SST"`` (default) or ``"CRW_SSTANOMALY"`` (aliases
+          accepted: ``"sst"``, ``"anomaly"``, ``"sst_anomaly"``).
 
-  **Returns:** A ``LayerURI`` (``layer_type="raster"``, ``role="primary"``,
-  ``units="degrees Celsius"``) pointing at a single-band float32 COG in the
-  ``static-30d``/``noaa_sst`` cache prefix.(or ``"sst_anomaly"`` for the anomaly).
+  **Returns:**
+      A record naming what was opened: the provider, the service uri behind
+      the layer, the layer name and the bbox the map was taken to.
+  **Error types:**
+      - ``NOAA_SSTInputError``: bad bbox or variable (retryable=False).
+      - ``NOAA_SSTUpstreamError``: the provider's own text when it cannot
+        open the service (retryable=True).
+
+  Requires a live QGIS session: the layer is opened in the user's QGIS, so a
+  headless or direct call refuses by name rather than returning nothing.
 
   **Data source:** NOAA Coral Reef Watch Operational Daily 5 km
-  (``NOAA_DHW``; ``CRW_SST`` / ``CRW_SSTANOMALY``) via the NOAA CoastWatch
-  ERDDAP griddap endpoint. Tier-1 free (no API key).
+  (``CRW_SST`` / ``CRW_SSTANOMALY``), WMS served from the PacIOOS ERDDAP
+  mirror the CoastWatch endpoint redirects to. Tier-1 free (no API key).

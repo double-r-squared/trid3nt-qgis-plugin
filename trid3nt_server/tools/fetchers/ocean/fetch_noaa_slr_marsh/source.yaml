@@ -1,123 +1,113 @@
-# NOAA OCM SLR Viewer marsh migration: a server-symbolized PNG32 from MapServer/export,
-# georeferenced client-side into a 4-band RGBA COG. A fully transparent export -- no
-# coverage at that level -- is a VALID transparent overlay, never a typed EMPTY (the
-# honesty floor).
+# NOAA OCM SLR Viewer marsh migration, opened on the user's map through
+# QGIS's own ArcGIS MapServer (image) provider: one level, one MapServer
+# per call.
 schema_version: v1
 
 name: fetch_noaa_slr_marsh
 source_class: noaa_slr_marsh
 error_prefix: NOAA_SLR_RASTER
 input_error_suffix: INPUT_INVALID
-empty_error_suffix: EMPTY
-shape: raster-cog
+shape: record
 supports_global_query: false
 
 endpoints:
-  data:
-    url: "https://coast.noaa.gov/arcgis/rest/services/dc_slr"
+  "0.0": {url: "https://coast.noaa.gov/arcgis/rest/services/dc_slr/marsh_000/MapServer"}
+  "0.5": {url: "https://coast.noaa.gov/arcgis/rest/services/dc_slr/marsh_050/MapServer"}
+  "1.0": {url: "https://coast.noaa.gov/arcgis/rest/services/dc_slr/marsh_100/MapServer"}
+  "1.5": {url: "https://coast.noaa.gov/arcgis/rest/services/dc_slr/marsh_150/MapServer"}
+  "2.0": {url: "https://coast.noaa.gov/arcgis/rest/services/dc_slr/marsh_200/MapServer"}
+  "2.5": {url: "https://coast.noaa.gov/arcgis/rest/services/dc_slr/marsh_250/MapServer"}
+  "3.0": {url: "https://coast.noaa.gov/arcgis/rest/services/dc_slr/marsh_300/MapServer"}
+  "3.5": {url: "https://coast.noaa.gov/arcgis/rest/services/dc_slr/marsh_350/MapServer"}
+  "4.0": {url: "https://coast.noaa.gov/arcgis/rest/services/dc_slr/marsh_400/MapServer"}
+  "4.5": {url: "https://coast.noaa.gov/arcgis/rest/services/dc_slr/marsh_450/MapServer"}
+  "5.0": {url: "https://coast.noaa.gov/arcgis/rest/services/dc_slr/marsh_500/MapServer"}
+  "5.5": {url: "https://coast.noaa.gov/arcgis/rest/services/dc_slr/marsh_550/MapServer"}
+  "6.0": {url: "https://coast.noaa.gov/arcgis/rest/services/dc_slr/marsh_600/MapServer"}
+  "6.5": {url: "https://coast.noaa.gov/arcgis/rest/services/dc_slr/marsh_650/MapServer"}
+  "7.0": {url: "https://coast.noaa.gov/arcgis/rest/services/dc_slr/marsh_700/MapServer"}
+  "7.5": {url: "https://coast.noaa.gov/arcgis/rest/services/dc_slr/marsh_750/MapServer"}
+  "8.0": {url: "https://coast.noaa.gov/arcgis/rest/services/dc_slr/marsh_800/MapServer"}
+  "8.5": {url: "https://coast.noaa.gov/arcgis/rest/services/dc_slr/marsh_850/MapServer"}
+  "9.0": {url: "https://coast.noaa.gov/arcgis/rest/services/dc_slr/marsh_900/MapServer"}
+  "9.5": {url: "https://coast.noaa.gov/arcgis/rest/services/dc_slr/marsh_950/MapServer"}
+  "10.0": {url: "https://coast.noaa.gov/arcgis/rest/services/dc_slr/marsh_1000/MapServer"}
 auth:
   mode: none
-  user_agent: "trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
+  user_agent: trid3nt_default
 
 params:
   bbox: {type: bbox, required: true, quantize: round_6dp}
-  slr_ft:
-    type: float
-    default: 3.0
-  res_deg:
-    type: float
-    default: 0.0005
-    schema_optional: true
+  slr_ft: {type: enum, required: false, default: 3.0,
+           values: [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0,
+                    5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0]}
 
 ingest:
-  access: mapserver_export
-  mapserver:
-    service_by_param:
-      param: slr_ft
-      map:
-        0.0: marsh_000
-        0.5: marsh_050
-        1.0: marsh_100
-        1.5: marsh_150
-        2.0: marsh_200
-        2.5: marsh_250
-        3.0: marsh_300
-        3.5: marsh_350
-        4.0: marsh_400
-        4.5: marsh_450
-        5.0: marsh_500
-        5.5: marsh_550
-        6.0: marsh_600
-        6.5: marsh_650
-        7.0: marsh_700
-        7.5: marsh_750
-        8.0: marsh_800
-        8.5: marsh_850
-        9.0: marsh_900
-        9.5: marsh_950
-        10.0: marsh_1000
-    res_deg: 0.0005
-    px_min: 16
-    px_max: 2048
-    export_query: {bboxSR: "4326", imageSR: "4326", format: png32, transparent: "true", f: image}
+  access: qgis_provider
+  qgis_provider:
+    provider: arcgismapserver
+    uri: "crs='EPSG:4326' format='PNG32' layer='0' url='{url}'"
+    mode: open
+  endpoint_by_param:
+    param: slr_ft
+    map: {0.0: "0.0", 0.5: "0.5", 1.0: "1.0", 1.5: "1.5", 2.0: "2.0", 2.5: "2.5",
+          3.0: "3.0", 3.5: "3.5", 4.0: "4.0", 4.5: "4.5", 5.0: "5.0", 5.5: "5.5",
+          6.0: "6.0", 6.5: "6.5", 7.0: "7.0", 7.5: "7.5", 8.0: "8.0", 8.5: "8.5",
+          9.0: "9.0", 9.5: "9.5", 10.0: "10.0"}
 
 normalize:
   crs: "EPSG:4326"
-  orientation: north_up
 
 output:
-  layer_type: raster
-  ext: tif
-  role: context
-  emit_bbox: true
-  style:
-    kind: continuous
+  layer_type: record
+  ext: json
 
 cache:
-  ttl_class: static-30d
+  ttl_class: live-no-cache
 payload_estimate:
   model: bbox_area
-  mb_per_sq_deg: 8.0
-  floor_mb: 0.1
-  ceil_mb: 60.0
+  mb_per_sq_deg: 0.0
+  floor_mb: 0.0
 
 caveats:
+  - "NOAA OCM SLR Viewer marsh-migration overlay (marsh_* MapServer) via QGIS's arcgismapserver provider, opened as a live map overlay; existing marsh / migrated marsh / open water symbology baked into the service's own export"
+  - "CONUS coastal product only; marsh migration is published at 0..10 ft in 0.5-ft steps"
+  - "the layer is drawn by QGIS from the service, so it is on the map but not in the case store and no analysis reads it"
   - "model-callable, not matched: a marsh-migration scenario surface answers no run window, so it carries no coverage row"
-  - "NOAA OCM SLR Viewer marsh-migration overlay (marsh_* MapServer/export PNG32 -> 4-band RGBA COG); existing marsh / migrated marsh / open water symbology baked in"
-  - "CONUS coastal product only; a bbox with no coverage at this level returns a valid transparent (empty) overlay, never fabricated content"
-  - "marsh migration is published at 0..10 ft in 0.5-ft steps"
-
-# corpus lifted from sibling corpus.yaml.
 
 docstring: |-
-  Fetch the NOAA Sea-Level-Rise MARSH-MIGRATION raster for one SLR level.
+  NOAA Sea-Level-Rise MARSH-MIGRATION overlay for one level, added to the map.
 
-  **What it does:** Reads NOAA OCM's SLR Viewer marsh-migration projection for one
-  SLR level (0..10 ft, 0.5-ft steps) and returns it as a transparent RGBA raster
-  overlay (the NOAA marsh-class symbology baked in: existing marsh, migrated marsh,
-  open water / drowned, etc.). Shows how coastal wetlands shift under sea-level rise
-  -- the habitat-transition companion to ``fetch_noaa_slr_scenarios`` (footprint)
-  and ``fetch_noaa_slr_confidence`` (mapping confidence).
+  Opens NOAA OCM's SLR Viewer marsh-migration projection for one ``slr_ft``
+  level as a live raster overlay served by QGIS's own ArcGIS MapServer
+  provider (the NOAA marsh-class symbology baked in: existing marsh,
+  migrated marsh, open water / drowned). The habitat-transition companion
+  to ``fetch_noaa_slr_scenarios`` and ``fetch_noaa_slr_confidence``.
 
   **When to use:**
-  - "How does the marsh / coastal wetland migrate under 3 ft of sea-level rise?"
-  - "Show the NOAA marsh-migration projection for this estuary."
-  - As a habitat-transition overlay for conservation / wetland exposure analysis.
+  - "How does the marsh / coastal wetland migrate under 3 ft of sea-level
+    rise?"
+  - Habitat-transition visual context for conservation / wetland exposure.
 
   **When NOT to use:**
-  - For the inundation FOOTPRINT -> ``fetch_noaa_slr_scenarios``.
-  - For mapping CONFIDENCE -> ``fetch_noaa_slr_confidence``.
-  - For event-driven storm surge -> ``fetch_gtsm_tide_surge`` (storm-surge modeling is not currently supported here).
-  - Outside CONUS -> not covered (CONUS coastal product only).
+  - The inundation FOOTPRINT -> ``fetch_noaa_slr_scenarios``. Mapping
+    CONFIDENCE -> ``fetch_noaa_slr_confidence``.
+  - Event-driven storm surge -> ``fetch_gtsm_tide_surge``. Outside CONUS.
 
   **Parameters:**
-  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326. Required.
-    Example coastal Lee County FL: ``(-82.2, 26.2, -81.5, 26.9)``.
-  - ``slr_ft`` (float, default ``3.0``): 0..10 ft in 0.5-ft steps.
-  - ``res_deg`` (float, optional): output cell size in degrees (finer = opt-in,
-    payload-warning-coupled). Defaults to ~50 m.
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required.
+      slr_ft: One level, ``0`` to ``10`` ft in 0.5-ft steps. Defaults to
+          ``3.0``.
 
-  **Returns:** a 4-band transparent RGBA COG ``LayerURI`` (``layer_type="raster"``,
-  ``role="context"``). A bbox with no marsh
-  coverage at this level returns a valid transparent (empty) overlay -- never
-  fabricated content.
+  **Returns:**
+      A record naming what was opened: the provider, the service uri behind
+      the layer, the layer name and the bbox the map was taken to.
+  **Error types:**
+      - ``NOAA_SLR_RASTERInputError``: bad bbox or slr_ft (retryable=False).
+      - ``NOAA_SLR_RASTERUpstreamError``: the provider's own text when it
+        cannot open the service (retryable=True).
+
+  Requires a live QGIS session: the layer is opened in the user's QGIS, so a
+  headless or direct call refuses by name rather than returning nothing.
+
+  ``supports_global_query=False``. No API key required.

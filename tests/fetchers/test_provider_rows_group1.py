@@ -159,6 +159,41 @@ def test_nhdplus_hr_flowlines_is_a_provider_row_in_mode_open() -> None:
     assert filtered.endswith("sql=UPPER(gnis_name)=UPPER('Eel River')")
 
 
+def test_noaa_slr_scenarios_is_a_provider_row_per_level() -> None:
+    _assert_open_row("fetch_noaa_slr_scenarios")
+    spec = _spec("fetch_noaa_slr_scenarios")
+    one_ft = qgis_provider.build_uri(spec, {"bbox": _BBOX, "scenario_ft": 1.0})
+    assert one_ft.endswith("slr_1ft/MapServer/0'")
+    three_ft = qgis_provider.build_uri(spec, {"bbox": _BBOX, "scenario_ft": 3.0})
+    assert three_ft.endswith("slr_3ft/MapServer/0'")
+
+
+def test_noaa_slr_confidence_is_a_provider_row_per_level() -> None:
+    _assert_open_row("fetch_noaa_slr_confidence")
+    spec = _spec("fetch_noaa_slr_confidence")
+    uri = qgis_provider.build_uri(spec, {"bbox": _BBOX, "slr_ft": 3.0})
+    assert uri.endswith("conf_3ft/MapServer'")
+    assert "format='PNG32'" in uri
+
+
+def test_noaa_slr_marsh_is_a_provider_row_per_level() -> None:
+    _assert_open_row("fetch_noaa_slr_marsh")
+    spec = _spec("fetch_noaa_slr_marsh")
+    uri = qgis_provider.build_uri(spec, {"bbox": _BBOX, "slr_ft": 0.5})
+    assert uri.endswith("marsh_050/MapServer'")
+
+
+def test_noaa_sst_is_a_provider_row_wms() -> None:
+    _assert_open_row("fetch_noaa_sst")
+    spec = _spec("fetch_noaa_sst")
+    sst = qgis_provider.build_uri(spec, {"bbox": _BBOX, "variable": "CRW_SST"})
+    assert "layers='dhw_5km:CRW_SST'" in sst
+    anomaly = qgis_provider.build_uri(
+        spec, {"bbox": _BBOX, "variable": "CRW_SSTANOMALY"}
+    )
+    assert "layers='dhw_5km:CRW_SSTANOMALY'" in anomaly
+
+
 @pytest.mark.parametrize("name, extra", [
     ("fetch_hifld_critical_infrastructure", {"facility_type": "hospitals"}),
     ("fetch_hifld_transmission_lines", {}),
@@ -168,6 +203,10 @@ def test_nhdplus_hr_flowlines_is_a_provider_row_in_mode_open() -> None:
     ("fetch_nhd_area_water", {}),
     ("fetch_nhd_waterbodies", {}),
     ("fetch_nhdplus_hr_flowlines", {}),
+    ("fetch_noaa_slr_scenarios", {}),
+    ("fetch_noaa_slr_confidence", {}),
+    ("fetch_noaa_slr_marsh", {}),
+    ("fetch_noaa_sst", {}),
 ])
 def test_group1_row_refuses_by_name_with_no_session(name: str, extra: dict) -> None:
     _assert_refuses_with_no_session(name, **extra)

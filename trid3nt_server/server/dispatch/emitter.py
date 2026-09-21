@@ -189,7 +189,6 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
         "fetch_jrc_global_surface_water",
         "fetch_soilgrids",
         "fetch_esri_landcover_10m",
-        "fetch_noaa_sst",
         # the sibling DEM fetch over the whole window, then a D8 condition and
         # trace over up to 16 million cells, in one sync call
         "fetch_watershed",
