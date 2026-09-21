@@ -131,8 +131,6 @@ def fetch_source_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, A
         return _multi_url_to_array(spec, params)
     if access == "projected_vrt_window":
         return _projected_vrt_window_to_array(spec, params)
-    if access == "gzip_object":
-        return _gzip_object_to_array(spec, params)
     if access == "grib_object":
         return _grib_object_to_array(spec, params)
     if access == "fixed_tile_grid":
@@ -645,126 +643,6 @@ def _projected_vrt_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> 
     return out, dst_transform, "EPSG:4326"
 
 
-# gzip_object: a whole-object GET of a date-templated ``.tif.gz``, gunzip, in-
-# memory open + window. A gzip stream is NOT a byte-servable COG (it has no
-# windowable layout), so the whole-object cost is accepted and gated honestly by the
-# payload estimator; ``bbox=None`` reads the full grid.
-
-
-def _resolve_gzip_url(spec: SourceSpec, params: dict[str, Any], go: dict[str, Any]) -> str:
-    """Build the date-templated object URL for a ``gzip_object`` source. A template
-    referencing ``{day}`` requires a full ``YYYY-MM-DD``; a monthly one accepts
-    ``YYYY-MM``. Coverage bounds raise a typed INPUT error before any network call."""
-    import re
-    from datetime import date as _date
-    from datetime import datetime, timezone
-
-    endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
-    base = (endpoint.url or endpoint.url_template or "").rstrip("/")
-    templates = go.get("url_templates", {})
-    period = params.get(go.get("period_param", "period"))
-    tmpl = templates.get(period)
-    if tmpl is None:
-        raise router_input_error(
-            spec.error_code_prefix, f"no URL template for period={period!r}", spec.input_error_suffix)
-    date_str = params.get(go.get("date_param", "date"))
-    if not isinstance(date_str, str) or not date_str.strip():
-        raise router_input_error(
-            spec.error_code_prefix, f"date must be a non-empty string; got {date_str!r}", spec.input_error_suffix)
-    needs_day = "{day" in tmpl
-    s = date_str.strip()
-    if needs_day:
-        m = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", s)
-        if not m:
-            raise router_input_error(spec.error_code_prefix, f"date={date_str!r} is not a valid {period} date: expected YYYY-MM-DD", spec.input_error_suffix)
-        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
-    else:
-        m = re.fullmatch(r"(\d{4})-(\d{2})(?:-\d{2})?", s)
-        if not m:
-            raise router_input_error(spec.error_code_prefix, f"date={date_str!r} is not a valid {period} date: expected YYYY-MM or YYYY-MM-DD", spec.input_error_suffix)
-        y, mo, d = int(m.group(1)), int(m.group(2)), 1
-    try:
-        parsed = _date(y, mo, d)
-    except ValueError as exc:
-        raise router_input_error(spec.error_code_prefix, f"date={date_str!r} is not a valid {period} date: {exc}", spec.input_error_suffix)
-    min_year = int(go.get("min_year", 0))
-    if parsed.year < min_year:
-        raise router_input_error(spec.error_code_prefix, f"source record starts in {min_year}; date={date_str!r} predates it", spec.input_error_suffix)
-    if parsed > datetime.now(timezone.utc).date():
-        raise router_input_error(spec.error_code_prefix, f"date={date_str!r} is in the future; only past data is published", spec.input_error_suffix)
-    return tmpl.format(base=base, year=y, month=mo, day=d)
-
-
-def _gzip_object_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
-    """Whole-object GET, gunzip, in-memory window to ``bbox`` (``None`` reads the full
-    grid). A source-embedded nodata sentinel collapses to NaN and an all-nodata
-    window is EMPTY; a 404 is NOT_AVAILABLE, any other failure UPSTREAM."""
-    import gzip
-    import math
-
-    import numpy as np
-    import rasterio
-    from rasterio.io import MemoryFile
-    from rasterio.windows import Window
-    from rasterio.windows import from_bounds as window_from_bounds
-
-    from ..transport import (
-        TransportError,
-        TransportNotFound,
-        get_bytes,
-        get_client,
-    )
-
-    ingest = spec.ingest or {}
-    go = ingest.get("gzip_object", {})
-    bbox = params.get("bbox")
-    url = _resolve_gzip_url(spec, params, go)
-    ua = spec.auth.user_agent if spec.auth else "trid3nt_default"
-    try:
-        gz_bytes, _ct, _u = get_bytes(get_client(), url, headers={"User-Agent": ua})
-    except TransportNotFound as exc:
-        raise router_not_available_error(
-            spec.error_code_prefix,
-            f"no raster published at {url} (HTTP 404) -- the date may be too recent or outside the record: {exc}")
-    except TransportError as exc:
-        raise router_upstream_error(spec.error_code_prefix, f"object fetch failed url={url}: {exc}")
-    if not gz_bytes:
-        raise router_upstream_error(spec.error_code_prefix, f"empty response from {url}")
-    try:
-        tif_bytes = gzip.decompress(gz_bytes)
-    except (OSError, gzip.BadGzipFile) as exc:
-        raise router_upstream_error(spec.error_code_prefix, f"gzip decompression failed for {url}: {exc}")
-
-    with MemoryFile(tif_bytes) as mf, mf.open() as src:
-        src_crs = src.crs or rasterio.crs.CRS.from_epsg(4326)
-        if bbox is not None:
-            window = window_from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], transform=src.transform)
-            row_off = max(0, int(math.floor(window.row_off)))
-            col_off = max(0, int(math.floor(window.col_off)))
-            row_end = min(src.height, int(math.ceil(window.row_off + window.height)))
-            col_end = min(src.width, int(math.ceil(window.col_off + window.width)))
-            if row_end <= row_off or col_end <= col_off:
-                raise router_empty_error(
-                    spec.error_code_prefix, f"bbox={bbox} does not intersect the source extent",
-                    spec.empty_error_suffix)
-            rw = Window(col_off, row_off, col_end - col_off, row_end - row_off)
-            arr = src.read(1, window=rw).astype("float32")
-            out_transform = src.window_transform(rw)
-        else:
-            arr = src.read(1).astype("float32")
-            out_transform = src.transform
-
-    sentinel = go.get("nodata_sentinel")
-    if sentinel is not None:
-        arr = np.where(arr <= float(sentinel), np.nan, arr).astype("float32")
-    if not bool(np.isfinite(arr).any()):
-        raise router_empty_error(
-            spec.error_code_prefix,
-            f"bbox={bbox} clipped to all-nodata (ocean / outside land coverage); no valid pixels",
-            spec.empty_error_suffix)
-    return arr, out_transform, src_crs
-
-
 # grib_object: a whole-object GET of a resolved ``.grib2(.gz)`` key, gunzip, GRIB
 # decode, a source-grid bbox window, a sentinel-to-nodata collapse, and a conditional
 # reproject to EPSG:4326. The GRIB driver needs a REAL PATH -- a MemoryFile cannot
@@ -1046,97 +924,6 @@ def _fixed_tile_grid_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple
                 d.close()
             except Exception:  # noqa: BLE001
                 pass
-
-
-# wcs_getcoverage: a WCS 1.0.0 GetCoverage templated GET of a CATEGORICAL coverage
-# (NLCD via the MRLC GeoServer) returning the canonical class integers in the band
-# (NOT palette indices), then a background(0)-to-nodata pixel remap, then a palette
-# COG with the embedded band-1 color table preserved. The coverage id resolves from
-# the vintage year through a declarative map; the resolution asked for and the bbox
-# quantized to it come from pre_resolve, merged into params before the cache key. The GET runs through the shared ogc adapter, the ONE sanctioned socket for this
-# mode, and ``execute`` bakes the source's embedded palette into the serialized COG.
-
-
-def _wcs_getcoverage_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any, dict | None, float | None]:
-    """WCS 1.0.0 GetCoverage to ``(array uint8, transform, crs, colormap|None,
-    nodata)``. A missing coverage or non-TIFF body is a typed UPSTREAM error."""
-
-    # The published color table paints class 0 (Background: open ocean, international
-    # waters) opaque black rather than transparent, and 0 is NEVER a legitimate NLCD
-    # code -- the real codes are 11-95 -- so every 0-valued pixel folds into the
-    # raster's declared nodata sentinel, which is already transparent.
-    import numpy as np
-    import rasterio
-    from rasterio.io import MemoryFile
-
-    from trid3nt_server.tools.fetchers._router.transport.ogc_adapter import OGCAdapterError, fetch_ogc_layer
-
-    ingest = spec.ingest or {}
-    w = ingest.get("wcs", {})
-    bbox = tuple(float(v) for v in params["bbox"])
-    vintage_year = int(params["vintage_year"])
-    res_m = max(1, int(params["resolution_m"]))
-    background_class = int(w.get("background_class", 0))
-
-    coverage_by_year = {int(k): v for k, v in (w.get("coverage_by_year") or {}).items()}
-    coverage = coverage_by_year.get(vintage_year)
-    if coverage is None:
-        raise router_upstream_error(
-            spec.error_code_prefix,
-            f"NLCD vintage year {vintage_year} not in the WCS catalog "
-            f"(available: {sorted(coverage_by_year)}).",
-        )
-
-    # WCS 1.0.0 GetCoverage requires an explicit WIDTH/HEIGHT: size the pixel grid to
-    # the bbox at the effective resolution, clamped to the service's per-axis cap.
-    min_lon, min_lat, max_lon, max_lat = bbox
-    mid_lat = 0.5 * (min_lat + max_lat)
-    from pyproj import Geod
-
-    geod = Geod(ellps="WGS84")
-    max_px = int(w.get("max_px", 4000))
-    width_m = geod.inv(min_lon, mid_lat, max_lon, mid_lat)[2]
-    height_m = geod.inv(min_lon, min_lat, min_lon, max_lat)[2]
-    width_px = max(16, min(max_px, int(round(width_m / res_m))))
-    height_px = max(16, min(max_px, int(round(height_m / res_m))))
-
-    endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
-    wcs_url = endpoint.url or endpoint.url_template or ""
-    ua = spec.auth.user_agent if spec.auth else "trid3nt_default"
-    try:
-        resp = fetch_ogc_layer(
-            url=wcs_url, layer_name=coverage, bbox=bbox, crs="EPSG:4326",
-            image_format=str(w.get("image_format", "GeoTIFF")),
-            version="1.0.0", width_px=width_px, height_px=height_px,
-            timeout_s=float(w.get("timeout_s", 120.0)), user_agent=ua,
-        )
-    except OGCAdapterError as exc:
-        raise router_upstream_error(
-            spec.error_code_prefix, f"MRLC WCS GetCoverage failed for coverage={coverage} bbox={bbox}: {exc}"
-        )
-    ct = (resp.content_type or "").lower()
-    if "tiff" not in ct and "geotiff" not in ct:
-        raise router_upstream_error(
-            spec.error_code_prefix,
-            f"MRLC WCS returned unexpected content-type={resp.content_type!r} for coverage={coverage} "
-            f"bbox={bbox}; body preview: {resp.content[:200]!r}",
-        )
-
-    with MemoryFile(resp.content) as mem, mem.open() as src:
-        arr = src.read(1)
-        transform = src.transform
-        crs = src.crs
-        try:
-            colormap = src.colormap(1)
-        except (ValueError, KeyError):
-            colormap = None
-        src_nodata = src.nodata
-
-    target_nodata = float(background_class) if src_nodata is None else float(src_nodata)
-    if int(target_nodata) != background_class:
-        arr = arr.copy()
-        arr[arr == background_class] = int(target_nodata)
-    return np.asarray(arr, dtype="uint8"), transform, crs, colormap, target_nodata
 
 
 # categorical_tile_grid: a global CATEGORICAL raster cut into a fixed h/v degree
@@ -1440,14 +1227,6 @@ def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
         arr, transform, crs = _categorical_tile_grid_to_array(spec, params)
         colors = {int(k): tuple(int(c) for c in v) for k, v in (g.get("colors") or {}).items()}
         colormap = {i: colors.get(i, (0, 0, 0, 0)) for i in range(256)}
-        return array_to_cog_bytes(
-            arr, transform, crs, nodata=nodata, dtype="uint8", colormap=colormap
-        )
-    if access == "wcs_getcoverage":
-        # WCS 1.0.0 GetCoverage categorical NLCD -> background(0)->nodata
-        # remap -> palette COG (the source's embedded band-1 color table preserved,
-        # nodata transparent) -- a paletted, overview-carrying categorical COG.
-        arr, transform, crs, colormap, nodata = _wcs_getcoverage_to_array(spec, params)
         return array_to_cog_bytes(
             arr, transform, crs, nodata=nodata, dtype="uint8", colormap=colormap
         )

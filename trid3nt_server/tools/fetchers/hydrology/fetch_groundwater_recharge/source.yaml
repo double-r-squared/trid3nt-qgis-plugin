@@ -2,6 +2,9 @@
 # COGs by dev/staging/stage_groundwater_recharge.py. The s3:// endpoints name bucket
 # and key only: the transport resolves the host from the active object-store endpoint at
 # read time.
+# Read here rather than through the session's own provider: the staged object is the
+# object store's own and answers an anonymous GET with HTTP 403, so nothing outside
+# the daemon's credentials can open it.
 schema_version: v1
 
 name: fetch_groundwater_recharge

@@ -1,5 +1,8 @@
 # NOAA MRMS gauge-corrected QPE: a whole-object .grib2.gz behind a listed key, with the
 # key resolved pre-cache-key by the resolve phase. The corpus is the sibling corpus.yaml.
+# Read here rather than through the session's own provider: the object key is resolved
+# by a listing walk before the cache key, and GRIB decodes from a real path rather
+# than a datasource string.
 schema_version: v1
 name: fetch_mrms_qpe
 source_class: mrms_qpe

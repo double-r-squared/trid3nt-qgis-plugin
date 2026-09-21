@@ -1,6 +1,8 @@
 # Meta and CIESIN HRSL ~30 m gridded population. The global mosaic is a multi-tile .vrt,
 # which the single-URL opener would read as all-NaN, so the VRT fan-out resolves the
 # member tiles and windows the intersecting ones.
+# Read here rather than through the session's own provider: MEASURED, opening the
+# mosaic VRT alone did not return within 90 s, so the member fan-out is the read.
 schema_version: v1
 
 name: fetch_hrsl_population

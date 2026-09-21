@@ -1,6 +1,9 @@
 # GCN250 global SCS curve numbers. The enum resolves to a published archive URL that
 # redirects and refuses HEAD, so the transport follows the redirect and recovers the size
 # by range-GET; the read is a windowed int16 with an all-nodata coverage gate.
+# Read here rather than through the session's own provider: the archive URL redirects
+# and refuses HEAD, so the read is the transport's redirect-and-range recovery rather
+# than a datasource string a provider takes.
 schema_version: v1
 
 name: fetch_gcn250_curve_numbers

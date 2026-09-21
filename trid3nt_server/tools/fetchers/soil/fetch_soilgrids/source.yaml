@@ -2,6 +2,9 @@
 # SOURCE projection (bounds transformed and densified, with a floor/ceil and a 2 px pad),
 # the intersecting members read through the coalescing transport, the window reprojected
 # to EPSG:4326 bilinear, and the fixed-point Int16 scaled to physical units per property.
+# Read here rather than through the session's own provider: MEASURED, the VRT opens
+# with no authority CRS (it is Homolosine), so an exported window would be
+# georeferenced by nothing.
 schema_version: v1
 
 name: fetch_soilgrids

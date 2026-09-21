@@ -4,6 +4,9 @@
 # active object-store endpoint at read time. It carries its own name, units and style
 # ramp because a single static quantity stamp could not label both a transmissivity in
 # m2/day and a saturated thickness.
+# Read here rather than through the session's own provider: the staged object is the
+# object store's own and answers an anonymous GET with HTTP 403, so nothing outside
+# the daemon's credentials can open it.
 schema_version: v1
 
 name: fetch_aquifer_transmissivity
