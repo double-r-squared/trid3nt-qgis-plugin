@@ -115,6 +115,7 @@ plugin-repo:
 agent: plugin-repo
 	@mkdir -p $(LOG_DIR) $(RUN_DIR)
 	@bash $(SCRIPTS)/start_agent.sh
+	@bash $(SCRIPTS)/start_headless_qgis.sh
 
 venv:
 	@~/.local/bin/uv venv --python 3.12 $(REPO_ROOT)/venvs/agent
@@ -151,4 +152,11 @@ stop:
 	  else echo "agent not running (stale pid $$PID)"; fi; \
 	  rm -f $(RUN_DIR)/agent.pid; \
 	else echo "no agent.pid found"; fi
+	@if [ -f $(RUN_DIR)/headless_qgis.pid ]; then \
+	  PID=$$(cat $(RUN_DIR)/headless_qgis.pid); \
+	  if kill -0 $$PID 2>/dev/null; then \
+	    echo "stopping headless qgis (pid $$PID)"; kill $$PID; \
+	  else echo "headless qgis not running (stale pid $$PID)"; fi; \
+	  rm -f $(RUN_DIR)/headless_qgis.pid; \
+	else echo "no headless_qgis.pid found"; fi
 	@echo "done"
