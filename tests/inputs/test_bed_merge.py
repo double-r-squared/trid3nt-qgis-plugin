@@ -20,7 +20,10 @@ relief refusing as a cliff while an ordinary channel cut into the terrain around
 it merges, the terrain rung painting only OUTSIDE the polygon the domain was cut
 with, the share of the water measured by nothing reaching the result, the
 journal and the input row, a merge handed no cut claiming nothing about the
-water, and a cut carrying no polygon refusing rather than painting it."""
+water, a cut carrying no polygon refusing rather than painting it, and the op a
+run states painting that water from the shoreline at depth zero to the
+measurements as one more rung, ranked last and per cell, while an op the merge
+does not know refuses by name."""
 
 from __future__ import annotations
 
@@ -582,3 +585,71 @@ def test_a_cut_carrying_no_polygon_refuses_rather_than_painting_the_water(
                               "coordinates": [[-122.0, 36.0], [-122.0, 36.1]]},
                        _output_dir=str(tmp_path))
     assert excinfo.value.error_code == "MERGE_RASTERS_NO_SOURCE"
+
+
+def test_the_stated_op_paints_the_water_from_the_shore_to_the_measurements(
+        tmp_path) -> None:
+    """The op the run states lays one more rung, ranked under every measured
+    one: the water the ladder left is interpolated between the soundings and the
+    polygon's own edge, which is seeded at depth zero because the bed meets the
+    water surface where the water ends."""
+    merged = merged_surface(
+        primary=_survey(), fallback=_terrain(), frame="NAVD88",
+        water=_cut(500_004.0, 3_999_992.0, 500_012.0, 4_000_000.0),
+        fill="interpolated", _output_dir=str(tmp_path))
+    with rasterio.open(merged.uri) as surface:
+        values = surface.read(1)
+    # The cut is columns 4-11 over rows 0-7 of the 1 m grid, the survey its
+    # top-left 4 x 4: every cell of it carries a bed now.
+    water = values[0:8, 4:12]
+    assert not np.isnan(water).any()
+    assert float(values[0, 4]) == pytest.approx(-5.0)
+    # Between the sounded bed and the shore it was painted from, and nowhere
+    # near the terrain standing over the water.
+    painted = water[~np.isclose(water, -5.0)]
+    assert float(painted.min()) >= -5.0 and float(painted.max()) <= 0.0
+    # The shore is the edge of the cut, seeded at the water surface itself.
+    assert float(values[7, 11]) == pytest.approx(0.0)
+    # Outside the cut the terrain is the bed, as it is with no op at all.
+    assert float(values[0, 12]) == pytest.approx(10.0)
+
+
+def test_the_interpolated_rung_is_ranked_last_and_says_so_per_cell(
+        tmp_path) -> None:
+    """A node painted by an interpolation is never read as one somebody
+    sounded: the fill is its own rung on the result, under every measured one,
+    and the provenance sidecar carries it cell by cell."""
+    from trid3nt_server.workflows.runtime.journal import bind_notes, drain_notes
+
+    token = bind_notes()
+    merged = merged_surface(
+        primary=_survey(), fallback=_terrain(), frame="NAVD88",
+        water=_cut(500_004.0, 3_999_992.0, 500_012.0, 4_000_000.0),
+        fill="interpolated", _output_dir=str(tmp_path))
+    said = drain_notes(token)
+    label, share = merged.rungs[-1]
+    assert label == "interpolated"
+    # The 48 cells of the cut no rung measured, over the whole 16 x 16 grid.
+    assert share == pytest.approx(48.0 / 256.0)
+    assert "interpolated" in merged.input_row()["name"]
+    with rasterio.open(merged.provenance_uri) as sidecar:
+        won = sidecar.read(1)
+    assert int(won[7, 11]) == len(merged.rungs) - 1
+    assert int(won[0, 4]) == 0
+    # The share is what MEASURED the water, so the fill never moves it: an
+    # interpolation is not a sounding, and the reader weighs the same number.
+    assert merged.unmeasured_water_fraction == pytest.approx(0.75)
+    assert merged.fallback_fraction == pytest.approx(
+        [share for label, share in merged.rungs if label != "interpolated"][-1])
+    stated = [line for line in said if "measured by nothing" in line]
+    assert "painted here by the interpolated rung" in stated[0]
+
+
+def test_an_op_the_merge_does_not_know_refuses_before_it_reads_a_surface(
+        tmp_path) -> None:
+    from trid3nt_server.inputs.user_input import UserInputError
+
+    with pytest.raises(UserInputError) as excinfo:
+        merged_surface(primary=_survey(), fallback=_terrain(), frame="NAVD88",
+                       fill="smoothed", _output_dir=str(tmp_path))
+    assert excinfo.value.error_code == "MERGE_BED_OP_INVALID"

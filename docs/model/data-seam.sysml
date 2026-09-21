@@ -846,6 +846,26 @@ package DataSeam {
         */
     }
 
+    requirement def WaterNothingMeasuredIsPaintedOnlyWhenAskedFor {
+        doc /*
+        A wider surface over the water measures its TOP, so it is not a bed
+        there: the fallback rungs paint outside the polygon the domain was cut
+        with, and the merge states the share of the water no measured rung
+        reached. That share is the heuristic a reader weighs, and the slot
+        REFUSES over it - naming the share and the op that would paint it -
+        rather than standing on a bed nobody measured.
+
+        The op is the person's: a run states it for the slot on the call, beside
+        the source it picks, and the bed's one op interpolates from the
+        measurements to the polygon's own edge, seeded at depth zero because the
+        bed meets the water surface where the water ends. It lays as the LAST
+        rung, under every measured one, with no distance cap - a hole far from
+        every sounding is painted and says so through its provenance, and a cap
+        would be this code choosing a radius for the person who asked. The share
+        does not move when the op runs: an interpolation is not a sounding.
+        */
+    }
+
     requirement def TheRunHasOneVerticalFrame {
         doc /*
         A run counts every elevation it ingests from ONE zero, and that zero is
@@ -1355,6 +1375,24 @@ package DataSeam {
     verify requirement SubstitutionIsDeclared by
         "tests/fetchers/test_fallback_sweep_guard.py::test_every_ladder_is_a_complete_account_of_its_own_rungs";
 
+    satisfy requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by bedSlot;
+    satisfy requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by bedComposer;
+    verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
+        "tests/inputs/test_bed_merge.py::test_the_terrain_paints_only_outside_the_polygon_the_domain_was_cut_with";
+    verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
+        "tests/inputs/test_bed_merge.py::test_the_merge_states_the_share_of_the_water_measured_by_nothing";
+    verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
+        "tests/inputs/test_bed_merge.py::test_the_stated_op_paints_the_water_from_the_shore_to_the_measurements";
+    verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
+        "tests/inputs/test_bed_merge.py::test_the_interpolated_rung_is_ranked_last_and_says_so_per_cell";
+    verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
+        "tests/inputs/test_slot_inputs.py::test_water_no_rung_measured_refuses_and_names_the_share_and_the_op";
+    verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
+        "tests/inputs/test_slot_inputs.py::test_the_op_the_run_states_is_what_lets_the_unmeasured_water_through";
+    verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
+        "tests/runtime/test_matched_slots.py::test_the_op_the_run_states_reaches_the_merge_as_its_fill";
+    verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
+        "tests/runtime/test_matched_slots.py::test_an_op_stated_for_a_row_the_workflow_does_not_declare_refuses_by_name";
     satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by lakeLevelDeclaration;
     satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by lakeDeclaration;
     satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by freeSurfaceReader;

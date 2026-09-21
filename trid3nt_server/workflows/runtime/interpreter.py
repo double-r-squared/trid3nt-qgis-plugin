@@ -137,6 +137,7 @@ async def interpret(
     input_mode: str | None = None,
     keywords: Mapping[str, Any] | None = None,
     picks: Mapping[str, str] | None = None,
+    ops: Mapping[str, Any] | None = None,
     domain: Domain | None = None,
     resume: bool = True,
     supplied: Mapping[str, Any] | None = None,
@@ -163,7 +164,7 @@ async def interpret(
     env = _Env(params=params, data={d.name: d for d in data}, results={},
                input_mode=input_mode, keywords=dict(keywords or {}),
                picks={str(k): str(v) for k, v in dict(picks or {}).items()},
-               ledger=ledger,
+               ops=_ops(ops, data), ledger=ledger,
                resume=resume, supplied=dict(supplied or {}), workflow=plan.name,
                continued=continued, window_s=window_s,
                slot_units=dict(slot_units or {}),
@@ -310,6 +311,10 @@ class _Env:
     #: The source the run NAMES for a slot, by slot name. It picks among the
     #: survivors of that slot's match and never past its filters.
     picks: dict[str, str] = field(default_factory=dict)
+    #: The op the run STATES for a slot, by slot name - how the slot is filled
+    #: where nothing measured it. The twin of ``picks``: a control somebody
+    #: states on the call, read by the slot's own ingestion.
+    ops: dict[str, Any] = field(default_factory=dict)
     #: The run this one CONTINUES, as the artifact its state is read out of.
     #: Empty for a run that starts from its own initial conditions.
     continued: str | None = None
@@ -510,6 +515,10 @@ async def _matched_bed(env: _Env, decl: DataDecl) -> Any:
     return await _produce(env, _runtime_row(
         env, f"{decl.name}_merged", MERGE_DERIVE,
         {"primary": rungs, "fallback": terrain, "frame": frame,
+         # THE OP THE RUN STATES for this slot, which the merge lays as its last
+         # rung: the water the ladder left is painted only where somebody asked
+         # for it, so a bed nothing measured refuses instead of being invented.
+         "fill": env.ops.get(decl.name),
          # THE CUT IS WHERE THE WATER IS, and the terrain under the ladder
          # measures the water top rather than the bed, so it paints outside it
          # only and the merge states what share of the water nothing measured.
@@ -748,6 +757,31 @@ def _cut_polygon() -> dict[str, Any] | None:
     return dict(dom.geometry) if dom is not None and dom.geometry else None
 
 
+def _ops(ops: Mapping[str, Any] | None,
+         data: Sequence[DataDecl]) -> dict[str, Any]:
+    """The ops this invocation states, by slot name - refusing the ones no slot
+    can read.
+
+    An op NAME means something only to the ingestion that reads it, so that half
+    is the slot's to refuse. What is refused here is the half only the workflow
+    knows: an op stated for a row it does not declare, or for one whose ingestion
+    takes no op at all, which would otherwise be dropped in silence."""
+    from trid3nt_server.inputs.slots import takes_op
+
+    stated = {str(name): op for name, op in dict(ops or {}).items() if op}
+    rows = sorted(decl.name for decl in data)
+    for name in stated:
+        if name not in rows:
+            raise PlanValidationError(
+                f"the run states an op for {name!r}, which is not a row this "
+                f"workflow declares: {', '.join(rows)}.")
+        if not takes_op(name):
+            raise PlanValidationError(
+                f"the run states an op for the {name!r} row, whose ingestion "
+                "reads none: an op is read by the slot it fills.")
+    return stated
+
+
 def _pick(env: _Env, decl: DataDecl, data_class: str) -> str:
     """The source this RUN names for this slot, "" where it names none.
 
@@ -869,6 +903,7 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any,
     coercion.update(_the_window_it_is_cut_from(decl))
     coercion.update(await _on_the_run_s_frame(env, decl, value))
     coercion.update(_what_the_record_reports(env, decl, row))
+    coercion["op"] = env.ops.get(decl.name)
     ingested = await asyncio.to_thread(ingest_slot, decl.role, value,
                                        label=decl.name, **coercion)
     if decl.role == DOMAIN and ingested is not None:

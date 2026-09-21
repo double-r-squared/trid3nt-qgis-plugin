@@ -265,3 +265,41 @@ def test_a_bed_the_runs_frame_cannot_reach_names_its_zero_once():
     said = str(excinfo.value)
     assert said.count("CRD") == 1 and said.count("NAVD88") == 1
     assert "a charted survey" in said
+
+
+def _merged(share: float | None):
+    """A merged bed stating the share of the water no rung of it measured."""
+    from trid3nt_server.inputs.bed import MergedRasterLayerURI
+
+    return MergedRasterLayerURI(layer_id="m", name="merged bed surface",
+                                layer_type="raster", uri="s3://b/k/merged.tif",
+                                unmeasured_water_fraction=share)
+
+
+def test_water_no_rung_measured_refuses_and_names_the_share_and_the_op():
+    """The remedy is the person's to state, so the refusal carries both halves
+    of it: how much of the water nothing measured, and the op that paints it."""
+    with pytest.raises(UserInputError) as excinfo:
+        bed(_merged(0.74), label="bed")
+    said = str(excinfo.value)
+    assert "74.0%" in said
+    assert "ops={'bed': 'interpolated'}" in said
+
+
+def test_a_bed_whose_water_is_measured_whole_needs_no_op():
+    assert bed(_merged(0.0)).kind == RASTER
+    assert bed(_merged(None)).kind == RASTER
+
+
+def test_the_op_the_run_states_is_what_lets_the_unmeasured_water_through():
+    assert bed(_merged(0.74), op="interpolated").kind == RASTER
+    assert bed(_merged(0.74), op={"name": "interpolated"}).kind == RASTER
+
+
+def test_an_op_this_slot_does_not_know_refuses_by_name():
+    """The op NAME is the slot's own to read, so the slot is where a name it
+    has no move for - or an argument its move does not take - refuses."""
+    with pytest.raises(UserInputError, match="'interpolated'"):
+        bed(_merged(0.74), op="smoothed")
+    with pytest.raises(UserInputError, match="'interpolated'"):
+        bed(_merged(0.74), op={"name": "interpolated", "max_distance_m": 500.0})

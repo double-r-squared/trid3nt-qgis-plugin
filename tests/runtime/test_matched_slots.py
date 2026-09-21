@@ -510,3 +510,51 @@ def test_the_cut_domain_is_what_the_rest_of_the_run_is_bound_to(coastline):
     bound = asyncio.run(_fill_then_read())
     assert bound.geometry["type"] in ("Polygon", "MultiPolygon")
     assert bound.bbox[0] == pytest.approx(-122.67)
+
+
+def test_the_op_the_run_states_reaches_the_merge_as_its_fill(world):
+    """The fifth control is the twin of the pick: stated for a slot on the call,
+    carried no further than the ingestion that reads it - here the merge, which
+    lays the op as the rung under every measured one."""
+    env = _env()
+    env.ops["bed"] = "interpolated"
+    asyncio.run(interpreter._matched_bed(env, _row(Data.need("bathymetry"), "bed")))
+    merge = dict(world[-1][1])
+    assert merge["fill"] == "interpolated"
+
+
+def test_a_run_that_states_no_op_hands_the_merge_none(world):
+    """An op is stated or it is not: the merge is handed nothing to lay, and the
+    water the ladder left stays unpainted for the slot to refuse over."""
+    asyncio.run(interpreter._matched_bed(_env(), _row(Data.need("bathymetry"),
+                                                      "bed")))
+    assert dict(world[-1][1])["fill"] is None
+
+
+def test_an_op_stated_for_a_row_the_workflow_does_not_declare_refuses_by_name():
+    """The half of the validation only the workflow knows, the way an unknown
+    pick is refused: the row is named and so are the rows it could have been."""
+    from trid3nt_server.workflows.runtime.errors import PlanValidationError
+
+    rows = (_row(Data.need("bathymetry"), "bed"),)
+    with pytest.raises(PlanValidationError) as excinfo:
+        interpreter._ops({"riverbed": "interpolated"}, rows)
+    assert "'riverbed'" in str(excinfo.value) and "bed" in str(excinfo.value)
+
+
+def test_an_op_stated_for_a_row_whose_ingestion_reads_none_refuses_by_name():
+    """An op nothing would read is refused rather than dropped in silence - a
+    coercion key no ingestion declares is dropped on the way in."""
+    from trid3nt_server.workflows.runtime.errors import PlanValidationError
+
+    rows = (_row(Data.need("weather forcing"), "weather"),)
+    with pytest.raises(PlanValidationError) as excinfo:
+        interpreter._ops({"weather": "interpolated"}, rows)
+    assert "'weather'" in str(excinfo.value)
+
+
+def test_the_ops_a_run_states_are_carried_by_slot_name():
+    rows = (_row(Data.need("bathymetry"), "bed"),)
+    assert interpreter._ops({"bed": "interpolated"}, rows) == {
+        "bed": "interpolated"}
+    assert interpreter._ops(None, rows) == {}

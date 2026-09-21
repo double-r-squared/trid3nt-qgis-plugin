@@ -120,7 +120,7 @@ def test_the_generated_signature_is_the_declaration_plus_aliases_and_controls():
     sig, annotations = _wire_signature(params, (("alias", str | None),))
     assert list(sig.parameters) == ["location", "depth_m", "armed", "alias",
                                     "input_mode", "restart_clean", "keywords",
-                                    "picks", "_extra_ignored"]
+                                    "picks", "ops", "_extra_ignored"]
     assert annotations["depth_m"] == (float | None)      # bounded -> float
     assert annotations["armed"] == (bool | None)         # declared type wins
     assert annotations["location"] == (str | None)       # inferred

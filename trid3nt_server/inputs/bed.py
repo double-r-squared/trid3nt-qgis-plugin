@@ -24,12 +24,17 @@ from .user_input import UserInputError
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["Bed", "DEPTH", "MERGE_DERIVE", "MergeRastersError",
+__all__ = ["Bed", "DEPTH", "INTERPOLATED", "MERGE_DERIVE", "MergeRastersError",
            "MergedRasterLayerURI", "POINTS", "RASTER", "SURVEY_DERIVE",
            "SurveySurfaceError", "SurveySurfaceLayerURI", "bed", "elevations",
            "merged_surface", "survey_surface"]
 
 _CODE = "BED_INVALID"
+
+#: The one OP this slot takes: paint the water no rung measured by interpolating
+#: between the measurements and the shoreline. A move somebody states on the call,
+#: never a default - an interpolated bed is not a measured one.
+INTERPOLATED = "interpolated"
 
 #: The three shapes an elevation source arrives in.
 RASTER = "raster"
@@ -76,7 +81,7 @@ class Bed:
         return self.kind == DEPTH
 
 
-def bed(value: Any, *, frame: Any = None, offset: Any = None,
+def bed(value: Any, *, frame: Any = None, offset: Any = None, op: Any = None,
         label: str = "bed", code: str = _CODE) -> Bed | None:
     """THE ingestion: a raster, a sounding layer, or a depth in metres -> Bed.
 
@@ -84,11 +89,14 @@ def bed(value: Any, *, frame: Any = None, offset: Any = None,
     a vector artifact is a point survey; everything else is a surface. ``frame``
     is the RUN's vertical frame, which the runtime states once and every
     elevation here is read on, and ``offset`` is the measured shift onto it the
-    runtime's own DATA row produced where the source states another frame."""
+    runtime's own DATA row produced where the source states another frame. ``op``
+    is the move the RUN states for this slot, read here because only the slot
+    knows what its own op names mean."""
     if isinstance(value, Bed):
         return value
     if value is None:
         return None
+    _whole_water(value, _fill_op(op, code), label, code)
     depth = _depth(value)
     if depth is not None:
         lo, hi = _DEPTH_RANGE_M
@@ -114,6 +122,41 @@ def bed(value: Any, *, frame: Any = None, offset: Any = None,
     return Bed(kind=RASTER,
                source=elevations(value, frame=frame, offset=offset, label=label,
                                  code=code))
+
+
+def _fill_op(op: Any, code: str) -> str:
+    """The op the call states for the water no rung measured, validated BY NAME.
+
+    A mapping states arguments for it; the bed's one op takes none, so an op
+    this slot does not know - and an argument it does not read - refuses rather
+    than being dropped on the way in."""
+    if not op:
+        return ""
+    stated = dict(op) if isinstance(op, Mapping) else {"name": str(op)}
+    name = str(stated.pop("name", ""))
+    if name != INTERPOLATED or stated:
+        raise UserInputError(
+            f"the bed takes one op, {INTERPOLATED!r} with no arguments, and "
+            f"the run states {op!r}.", code=code)
+    return name
+
+
+def _whole_water(value: Any, op: str, label: str, code: str) -> None:
+    """Refuse a bed whose water no rung measured, where the call states no op.
+
+    The merge states the share of the water measured by nothing; a run stands on
+    the bed it was handed, so water with no bed under it is refused here rather
+    than flattened to a plane somewhere below. The op is the person's, and
+    naming it is the whole of the remedy this refusal carries."""
+    share = getattr(value, "unmeasured_water_fraction", None)
+    if not share or op:
+        return
+    raise UserInputError(
+        f"{share * 100.0:.1f}% of the water in this domain is measured by no "
+        f"rung of the {label}, and a wider surface over it measures the water "
+        "TOP rather than the bottom. Name a survey that covers the rest, supply "
+        f"a bed of your own, or state ops={{{label!r}: {INTERPOLATED!r}}} to "
+        "interpolate between the measurements and the shoreline.", code=code)
 
 
 def _depth(value: Any) -> float | None:
@@ -945,6 +988,30 @@ def _water_cells(water: Any, crs: Any, transform: Any, width: int, height: int
     return inside if int(np.count_nonzero(inside)) else None
 
 
+def _interpolated(band: Any, wet: Any, hole: Any) -> Any:
+    """The water no rung measured, painted BETWEEN the measurements and the shore.
+
+    The substrate's own inverse-distance fill, run on the water ALONE: the ground
+    outside the cut is never read into it, and the polygon's own edge is seeded at
+    depth zero because the bed meets the water surface where the water ends. There
+    is no distance cap - a hole far from every measurement is painted and says so
+    through its provenance, which is the thing a reader weighs rather than a
+    radius this code would have chosen for them."""
+    import numpy as np
+    from rasterio.fill import fillnodata
+
+    inner = wet.copy()
+    inner[1:, :] &= wet[:-1, :]
+    inner[:-1, :] &= wet[1:, :]
+    inner[:, 1:] &= wet[:, :-1]
+    inner[:, :-1] &= wet[:, 1:]
+    work = np.where(wet, band, _NODATA)
+    work[wet & ~inner & hole] = 0.0
+    filled = fillnodata(work, mask=np.isfinite(work).astype("uint8"),
+                        max_search_distance=float(sum(band.shape)))
+    return np.where(hole, filled, band)
+
+
 def _bbox_4326(crs: Any, transform: Any, width: int, height: int
                ) -> tuple[float, float, float, float]:
     """The lon/lat box the merged grid spans, so the camera can fly to it."""
@@ -1069,6 +1136,7 @@ def merged_surface(
     primary_offset: Any = None,
     fallback_offset: Any = None,
     water: Any = None,
+    fill: Any = None,
     *,
     _output_dir: str | None = None,
 ) -> MergedRasterLayerURI:
@@ -1095,6 +1163,9 @@ def merged_surface(
     and water no measured rung reached is left unpainted; the share of the water
     measured by nothing is stated on the result and on the journal, which is the
     number a reader weighs before asking for a surface between the measurements.
+    ``fill`` is the op they then state: ``interpolated`` lays that surface as one
+    more rung, ranked under every measured one, and the share above still reads as
+    what nothing measured.
     """
     import tempfile
     from contextlib import ExitStack
@@ -1106,6 +1177,7 @@ def merged_surface(
     from trid3nt_server.tools.derive._hydrology_common import write_cog
     from trid3nt_server.workflows.runtime import journal_note
 
+    laid = _fill_op(fill, "MERGE_BED_OP_INVALID")
     offered = _rungs(primary, primary_offset)
     ladder = offered + _rungs(fallback, fallback_offset)
     if not ladder:
@@ -1163,6 +1235,17 @@ def merged_surface(
                          bounds=(west, north + height * transform.e,
                                  west + width * transform.a, north),
                          res=(cell, cell))
+        hole = (wet & (won == _PROVENANCE_NODATA)) if wet is not None else None
+        unmeasured = (round(float(hole.sum()) / float(wet.sum()), 4)
+                      if hole is not None else None)
+        if laid and unmeasured:
+            # THE LAST RUNG, laid after the ladder because it is painted OUT of
+            # what the ladder left: it wins only the cells no measurement reached,
+            # and the provenance carries it as its own rung so a node painted by
+            # an interpolation is never read as a node somebody sounded.
+            stack[0] = _interpolated(stack[0], wet, hole)
+            won[hole] = len(ladder)
+            labels.append(laid)
         metres = float(cell * _metres_per_unit(crs))
         uri = write_cog(stack[0], crs=crs, transform=transform, prefix="merged_bed",
                         seed=seed, output_dir=_output_dir,
@@ -1174,7 +1257,7 @@ def merged_surface(
                                nodata=float(_PROVENANCE_NODATA))
 
     shares = [float((won == rank).sum()) / float(won.size)
-              for rank in range(len(ladder))]
+              for rank in range(len(labels))]
     moved = [line for line in
              (_read_as(layer, labels[rank], aligned[rank], depths=counts_down[rank])
               for rank, (layer, _row) in enumerate(ladder)) if line]
@@ -1186,15 +1269,15 @@ def merged_surface(
     covered = (f"The ladder painted the merged grid in rank order - {painted} - "
                f"and {(1.0 - sum(shares)) * 100.0:.1f}% is measured by none of "
                "them and left as nodata.")
-    unmeasured = (round(float((won[wet] == _PROVENANCE_NODATA).sum())
-                        / float(wet.sum()), 4) if wet is not None else None)
     # THE ONE NUMBER A READER WEIGHS before asking for a surface between the
     # measurements, so it is said in the same breath as the rule that produced
     # it rather than left to be read off two shares over a different denominator.
     wet_said = (["Only the measured rungs paint inside the polygon the domain "
                  "was cut with - a wider surface measures the water TOP, not "
                  f"the bed - and {unmeasured * 100.0:.1f}% of the water inside "
-                 "it is measured by nothing."]
+                 "it is measured by nothing" +
+                 (f", painted here by the {laid} rung between them and the "
+                  "shoreline at depth zero." if laid and unmeasured else ".")]
                 if unmeasured is not None else [])
     notes = [
         covered,
@@ -1228,7 +1311,7 @@ def merged_surface(
         fallback_shift_m=(round(float(aligned[-1].shift_m), 4)
                           if len(ladder) > measured else 0.0),
         primary_fraction=round(sum(shares[:measured]), 4),
-        fallback_fraction=round(sum(shares[measured:]), 4),
+        fallback_fraction=round(sum(shares[measured:len(ladder)]), 4),
         unmeasured_water_fraction=unmeasured,
         rungs=[(label, round(share, 4)) for label, share in zip(labels, shares)],
         provenance_uri=provenance,

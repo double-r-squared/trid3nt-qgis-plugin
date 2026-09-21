@@ -35,7 +35,8 @@ from .line import line
 from .observation import observation
 from .wave import wave
 
-__all__ = ["SLOTS", "Slot", "ask_on_canvas", "ingest_slot", "role_of"]
+__all__ = ["SLOTS", "Slot", "ask_on_canvas", "ingest_slot", "role_of",
+           "takes_op"]
 
 logger = logging.getLogger("trid3nt_server.inputs.slots")
 
@@ -91,6 +92,17 @@ SLOTS: Mapping[str, Slot] = MappingProxyType({
 def role_of(name: str) -> str:
     """The role a row called ``name`` plays, or "" for a plain row."""
     return str(name) if str(name) in SLOTS else ""
+
+
+def takes_op(role: str) -> bool:
+    """Whether this slot's ingestion reads an OP - the move a run states for
+    filling the slot where nothing measured it.
+
+    A slot that declares none is never handed one, so the runtime refuses an op
+    stated for it rather than dropping it the way an unread coercion key is."""
+    slot = SLOTS.get(str(role))
+    return bool(slot and slot.ingest
+                and "op" in inspect.signature(slot.ingest).parameters)
 
 
 def ingest_slot(role: str, value: Any, *, label: str = "",
