@@ -61,9 +61,9 @@ class PluginSettings:
 
     @property
     def token(self) -> str:
-        """The optional shared tailnet token; empty means OFF. Pasted verbatim
-        into the connect handshake and never expires -- a static shared secret
-        is either accepted or rejected."""
+        """The daemon's access token, required on every connect. Pasted
+        verbatim into the connect handshake and never expires -- a static
+        shared secret is either accepted or refused."""
         return self._get("token", "")
 
     @token.setter
@@ -215,5 +215,5 @@ class PluginSettings:
         return self.local_url
 
     def effective_token(self) -> str:
-        """The optional shared tailnet token (``""`` = OFF, the default)."""
+        """The daemon's access token; empty is refused at the handshake."""
         return self.token

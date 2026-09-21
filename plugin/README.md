@@ -128,9 +128,9 @@ exactly two fields:
 - **Server URL** -- `ws://127.0.0.1:8765/ws` by default (the local daemon on
   this same machine). Point it at a remote daemon's tailnet address instead,
   e.g. `ws://100.x.x.x:8765/ws`, for the client-only setup.
-- **Server token** -- leave blank unless the daemon set the
-  `TRID3NT_ACCESS_TOKEN` environment variable, in which case paste the same
-  value here.
+- **Server token** -- required. The daemon mints it at first start, prints it
+  once and keeps it in `~/.trid3nt/access_token`; paste that value here. A
+  connection presenting no token is refused.
 
 That one URL is the whole setup -- MinIO and the agent's HTTP API are
 auto-derived from the connect handshake, not configured separately. See

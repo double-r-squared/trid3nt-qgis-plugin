@@ -125,17 +125,19 @@ class SettingsDialog(QDialog):
         form = QFormLayout(self)
 
         # "Server" section: the agent runs locally or on a tailnet peer,
-        # reached over ws://. One "Server URL" row, plus an optional shared
-        # token (OFF by default; only needed when the daemon opts into the
-        # TRID3NT_ACCESS_TOKEN gate -- the tailnet itself is the trust boundary).
+        # reached over ws://. One "Server URL" row, plus the server token -
+        # REQUIRED, because the daemon refuses every connection that presents
+        # no token; it mints one into its config file at first start.
         self.local_url_edit = QLineEdit(settings.local_url)
         self.local_url_edit.setPlaceholderText("ws://127.0.0.1:8765/ws")
         form.addRow("Server URL", self.local_url_edit)
 
         self.token_edit = QLineEdit(settings.token)
         self.token_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        self.token_edit.setPlaceholderText("optional shared tailnet token")
-        form.addRow("Server token (optional)", self.token_edit)
+        self.token_edit.setPlaceholderText(
+            "required -- the daemon printed it at ~/.trid3nt/access_token"
+        )
+        form.addRow("Server token", self.token_edit)
 
         # There is NEVER a second data-endpoint field. Pointing this one URL at
         # a tailnet peer is the whole remote-daemon story: the agent's :8766

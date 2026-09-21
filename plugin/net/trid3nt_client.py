@@ -703,10 +703,9 @@ def is_auth_failure(text: str) -> bool:
     if "upgrade rejected" in low and (" 401" in low or " 403" in low):
         return True
     markers = (
-        "auth_required",
+        "auth_failed",
         "auth-ack without user_id",
         "unauthorized",
-        "token expired",
         "invalid token",
         "code=1008",
     )
@@ -1118,7 +1117,6 @@ class AgentClient:
         self.connect_timeout = connect_timeout
         self.handshake_timeout = handshake_timeout
         self.user_id: Optional[str] = None
-        self.is_anonymous: Optional[bool] = None
         self.case_id: Optional[str] = None
         self.last_session_state: Optional[dict] = None
         #: The most recent ``case-list`` observed, stashed by BOTH the
@@ -1126,7 +1124,7 @@ class AgentClient:
         #: either side of session-state. None until one arrives.
         self.last_case_list: Optional[list] = None
         #: The last ``error`` envelope payload seen while draining a handshake
-        #: wait (AUTH_REQUIRED before a 1008 close, say). It is folded into the
+        #: wait (AUTH_FAILED before a 1008 close, say). It is folded into the
         #: failure text so a token rejection stays classifiable.
         self.last_handshake_error: Optional[dict] = None
         #: Server-advertised endpoint bases from the last ``auth-ack``. When
@@ -1171,7 +1169,6 @@ class AgentClient:
         if not isinstance(user_id, str) or not user_id:
             raise HandshakeFailed(f"auth-ack without user_id: {payload!r}")
         self.user_id = user_id
-        self.is_anonymous = bool(payload.get("is_anonymous", not self.token))
         # Endpoint advertisement is OPTIONAL and arrives in either of two
         # shapes -- flat on the payload, or nested under ``endpoints`` -- so
         # both are read defensively; absence just means the caller falls back.

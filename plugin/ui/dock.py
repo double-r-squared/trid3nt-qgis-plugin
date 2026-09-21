@@ -1381,7 +1381,6 @@ class Trid3ntDock(QDockWidget):
     def _on_connected(
         self,
         user_id: str,
-        is_anonymous: bool,
         http_base: str = "",
         data_base: str = "",
     ) -> None:
@@ -1422,14 +1421,14 @@ class Trid3ntDock(QDockWidget):
         self.status_label.setText(f"Connection failed: {message}")
 
     def _on_auth_expired(self, message: str) -> None:
-        """The shared tailnet token was rejected (broker 401/403 or in-band
-        AUTH_REQUIRED): the worker has STOPPED -- no silent reconnect loop. Say
-        exactly what to do next."""
+        """The server token was refused (broker 401/403 or in-band AUTH_FAILED):
+        the worker has STOPPED -- no silent reconnect loop. Say exactly what to
+        do next."""
         self._connected = False
         self._pending_open_case = None  # the connect this was riding died
         self._set_dot("error")
         self.status_label.setText(
-            "Token rejected -- check the shared token in Settings"
+            "Token refused -- Add the token under Settings"
         )
         self._note(f"Authentication failed: {message}", error=True)
 

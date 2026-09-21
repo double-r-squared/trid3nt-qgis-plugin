@@ -32,8 +32,8 @@ class AgentWorker(QObject):
     # ChildAdded from ``QThread(self)`` in AgentBridge.start -- makes PyQt call
     # the attribute as the reimplemented handler: "native Qt signal is not
     # callable", then a qFatal abort of the whole QGIS process.
-    # user_id, is_anonymous, advertised_http_base ("" if none), advertised_data_base ("" if none)
-    connected = pyqtSignal(str, bool, str, str)
+    # user_id, advertised_http_base ("" if none), advertised_data_base ("" if none)
+    connected = pyqtSignal(str, str, str)
     case_ready = pyqtSignal(str)       # case_id
     agent_event = pyqtSignal(str, object)  # AgentEvent.kind, AgentEvent.data
     failed = pyqtSignal(str)           # terminal setup failure (human-readable)
@@ -83,7 +83,6 @@ class AgentWorker(QObject):
             user_id = self.client.connect()
             self.connected.emit(
                 user_id,
-                bool(self.client.is_anonymous),
                 self.client.advertised_http_base or "",
                 self.client.advertised_data_base or "",
             )
@@ -189,7 +188,7 @@ class AgentWorker(QObject):
 
     def _failure_text(self, exc: Exception) -> str:
         """The exception, plus any error envelope the handshake drained
-        (e.g. AUTH_REQUIRED before a 1008 close) -- one classifiable line."""
+        (e.g. AUTH_FAILED before a 1008 close) -- one classifiable line."""
         text = f"{type(exc).__name__}: {exc}"
         err = getattr(self.client, "last_handshake_error", None)
         if isinstance(err, dict):
@@ -329,12 +328,12 @@ class AgentBridge(QObject):
 
     # ``agent_event``, NOT ``event``: naming a signal after a QObject virtual
     # aborts the QGIS process (see the AgentWorker signal block).
-    # ``connected`` carries (user_id, is_anonymous, http_base, data_base) --
-    # the signature MUST match the worker's 4-arg signal it forwards at
+    # ``connected`` carries (user_id, http_base, data_base) --
+    # the signature MUST match the worker's 3-arg signal it forwards at
     # start(); a narrower signature here silently DROPS the advertised
     # endpoints and every remote (tailnet) client falls back to localhost
     # layer fetches.
-    connected = pyqtSignal(str, bool, str, str)
+    connected = pyqtSignal(str, str, str)
     case_ready = pyqtSignal(str)
     agent_event = pyqtSignal(str, object)
     failed = pyqtSignal(str)
