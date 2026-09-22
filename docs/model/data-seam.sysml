@@ -868,9 +868,17 @@ package DataSeam {
         nothing measured, and the rows that also matched and could cover the
         gap. A wider surface over the water measures its TOP, so it is not a bed
         there: a row serving terrain paints outside the cut polygon only. The
-        feedback is the whole of what the slot hands a person, and the slot
-        REFUSES over unmeasured water - naming the share, those rows and the ops
-        that would lay them - rather than standing on a bed nobody measured.
+        feedback is the whole of what the slot hands a person, and it is stated
+        BEFORE THE SOLVE where they meet the fill: on the run's own card beside
+        the sources it matched, and on the journal.
+
+        NO REFUSING SHARE EXISTS IN THE SYSTEM. A node no value reaches is what
+        refuses; a share is feedback. A fill that knows the share it would not
+        stand on names it as an argument on its own merge op, and the slot
+        refuses above that number - naming the share, the share stated, those
+        rows and the ops that would lay them. A fill that states none refuses on
+        no share at all: a number this code invented would be our nuance rather
+        than the person's.
 
         A HOLE IS OFFERED THE CLASS THAT MEASURES ITS OWN GROUND. The feedback
         says which KIND of hole it is - a WET one inside the cut polygon, a DRY
@@ -1436,6 +1444,12 @@ package DataSeam {
     verify requirement SubstitutionIsDeclared by
         "tests/fetchers/test_fallback_sweep_guard.py::test_every_ladder_is_a_complete_account_of_its_own_rungs";
 
+    verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
+        "tests/inputs/test_slot_inputs.py::test_water_no_row_measured_is_feedback_and_not_a_refusal";
+    verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
+        "tests/inputs/test_slot_inputs.py::test_a_fill_that_names_the_share_it_refuses_at_is_refused_above_it";
+    verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
+        "tests/telemac/test_telemac_run_identity.py::test_what_the_cut_covers_is_on_the_card_before_the_solve";
     satisfy requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by bedSlot;
     satisfy requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by bedComposer;
     verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
@@ -1447,7 +1461,7 @@ package DataSeam {
     verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
         "tests/inputs/test_bed_merge.py::test_the_interpolated_row_is_laid_last_and_says_so_per_cell";
     verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
-        "tests/inputs/test_slot_inputs.py::test_water_no_row_measured_refuses_and_names_the_share_the_rows_and_the_ops";
+        "tests/inputs/test_slot_inputs.py::test_a_fill_that_names_the_share_it_refuses_at_is_refused_above_it";
     verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
         "tests/inputs/test_slot_inputs.py::test_the_op_the_run_states_is_what_lets_the_unmeasured_water_through";
     verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by

@@ -502,8 +502,9 @@ def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
     is OPEN, then the rest.
 
     The rest is the whole module, folded under advanced with its engine default."""
-    rows = _source_rows() + [_slot_row(name, row)
-                             for name, row in sheet.filled.items()]
+    rows = _source_rows() + _coverage_rows() + [_slot_row(name, row)
+                                               for name, row
+                                               in sheet.filled.items()]
     rows += _coupled_rows(sheet)
     rows += _written_rows(sheet)
     rows += _serial_rows(sheet)
@@ -538,6 +539,24 @@ def _source_rows() -> list[ParamSheetRow]:
                       if choice.tie else "matched on the coverage rows"),
         note=choice.sentence, choices=choice, group="Sources")
         for choice in run_choices()]
+
+
+def _coverage_rows() -> list[ParamSheetRow]:
+    """WHAT THE CUT COVERS, over the water and over the land, one row each.
+
+    The share of this domain measured by nothing is a number a person weighs
+    BEFORE the solve, so it is on the card the fill is reviewed on and not only
+    on the journal the run is read back from. Not editable: what covers a
+    domain is changed by an op or by supplying the slot, never by typing over
+    the share."""
+    from trid3nt_server.workflows.runtime.journal import run_coverage
+
+    return [ParamSheetRow(
+        name=f"coverage {index}", value=line[:200], desc=line[:512],
+        door="scenario", basis="derived", origin="derived", editable=False,
+        source_badge="measured on the grid the rows were merged at",
+        group="Sources")
+        for index, line in enumerate(run_coverage(), start=1)]
 
 
 def _decks(sheet: Sheet) -> list[tuple[Any, list[str], Mapping[str, Any]]]:

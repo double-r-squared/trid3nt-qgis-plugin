@@ -277,16 +277,43 @@ def _merged(share: float | None, alternatives: list[str] | None = None):
                                 water_alternatives=alternatives or [])
 
 
-def test_water_no_row_measured_refuses_and_names_the_share_the_rows_and_the_ops():
+def test_water_no_row_measured_is_feedback_and_not_a_refusal():
+    """NO refusing share exists in the system. The surface states what it
+    covers before the solve and a node no value reaches is what refuses, so a
+    hole the fill named no share for is a foot gun with feedback beside it."""
+    assert bed(_merged(0.74, ["fetch_chs_nonna"]), label="bed").kind == RASTER
+
+
+def test_a_fill_that_names_the_share_it_refuses_at_is_refused_above_it():
     """The remedy is the person's to state, so the refusal carries every half of
-    it: how much of the water nothing measured, which rows could cover it, and
-    the ops that would lay them and paint what is left."""
+    it: how much of the water nothing measured, the share they said they would
+    not stand on, which rows could cover it, and the ops that would lay them."""
+    op = [{"name": "merge", "rows": ["fetch_gebco"], "refuse_above": 0.3}]
     with pytest.raises(UserInputError) as excinfo:
-        bed(_merged(0.74, ["fetch_chs_nonna"]), label="bed")
+        bed(_merged(0.74, ["fetch_chs_nonna"]), label="bed", op=op)
     said = str(excinfo.value)
-    assert "74.0%" in said
+    assert "74.0%" in said and "30.0%" in said
     assert "fetch_chs_nonna" in said
-    assert "'name': 'merge'" in said and "'interpolated'" in said
+    assert "'interpolated'" in said
+
+
+def test_a_hole_inside_the_share_the_fill_named_stands():
+    op = [{"name": "merge", "rows": ["fetch_gebco"], "refuse_above": 0.8}]
+    assert bed(_merged(0.74), label="bed", op=op).kind == RASTER
+
+
+def test_a_share_that_is_not_a_share_refuses_at_the_op():
+    from trid3nt_server.inputs.bed import refuse_above
+
+    with pytest.raises(UserInputError, match="refuse_above"):
+        bed(_merged(0.1), op=[{"name": "merge", "rows": ["a"],
+                               "refuse_above": 7.0}])
+    # The STRICTEST of several merges answers: a run that stated two shares
+    # meant the tighter of them.
+    assert refuse_above([{"name": "merge", "rows": ["a"], "refuse_above": 0.6},
+                         {"name": "merge", "rows": ["b"],
+                          "refuse_above": 0.2}]) == 0.2
+    assert refuse_above([{"name": "merge", "rows": ["a"]}]) is None
 
 
 def test_every_merge_the_call_states_names_rows_that_are_laid():

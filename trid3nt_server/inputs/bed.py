@@ -28,6 +28,7 @@ from .user_input import UserInputError
 logger = logging.getLogger(__name__)
 
 __all__ = ["Bed", "DEPTH", "INTERPOLATED", "MERGE", "MERGE_DERIVE",
+           "REFUSE_ABOVE", "refuse_above",
            "MergeRastersError", "MergedRasterLayerURI", "POINTS", "RASTER",
            "SURVEY_DERIVE", "SurveySurfaceError", "SurveySurfaceLayerURI",
            "bed", "elevations", "interpolates", "merge_rows",
@@ -43,6 +44,9 @@ _CODE = "BED_INVALID"
 #: interpolated bed is not a measured one.
 MERGE = "merge"
 INTERPOLATED = "interpolated"
+#: The argument a MERGE carries when the fill names a share of the water it
+#: would rather refuse at than stand on. The system invents no such share.
+REFUSE_ABOVE = "refuse_above"
 
 #: THE TWO GROUNDS a bed answers for, and what a hole over each IS. The water is
 #: inside the polygon the domain was cut with and a hole there is WET, covered by
@@ -114,7 +118,7 @@ def bed(value: Any, *, frame: Any = None, offset: Any = None, op: Any = None,
         return value
     if value is None:
         return None
-    _whole_water(value, _stated_ops(op, code), code)
+    _whole_water(value, op, _stated_ops(op, code), code)
     depth = _depth(value)
     if depth is not None:
         lo, hi = _DEPTH_RANGE_M
@@ -146,22 +150,41 @@ def _stated_ops(op: Any, code: str) -> list[str]:
     """The ops the call states for this slot, IN ORDER, validated by name.
 
     A slot takes one op or an ordered list of them, each a name or a mapping
-    naming it and carrying what it reads: MERGE reads the rows it lays,
-    INTERPOLATED reads nothing. A name this slot has no move for, an argument a
-    move does not read, or a merge naming no rows refuses here rather than being
-    dropped on the way in."""
+    naming it and carrying what it reads: MERGE reads the rows it lays and, on
+    top of them, the share of the water it would rather refuse at than stand
+    on; INTERPOLATED reads nothing. A name this slot has no move for, an
+    argument a move does not read, or a merge naming no rows refuses here
+    rather than being dropped on the way in."""
     laid: list[str] = []
     for one in _listed(op) if op else []:
         stated = dict(one) if isinstance(one, Mapping) else {"name": str(one)}
         name = str(stated.pop("name", ""))
         rows = [str(row) for row in _listed(stated.pop("rows", None))]
-        if name not in (MERGE, INTERPOLATED) or stated or bool(rows) != (name == MERGE):
+        share = stated.pop(REFUSE_ABOVE, None) if name == MERGE else None
+        if name not in (MERGE, INTERPOLATED) or stated \
+                or bool(rows) != (name == MERGE) \
+                or (share is not None and not 0.0 <= float(share) <= 1.0):
             raise UserInputError(
-                f"the bed takes {MERGE!r} naming the rows it lays and "
-                f"{INTERPOLATED!r} with no arguments, and the run states "
-                f"{one!r}.", code=code)
+                f"the bed takes {MERGE!r} naming the rows it lays and, if the "
+                f"run wants one, a {REFUSE_ABOVE!r} share between 0 and 1 to "
+                f"refuse at, and {INTERPOLATED!r} with no arguments; the run "
+                f"states {one!r}.", code=code)
         laid.append(name)
     return laid
+
+
+def refuse_above(op: Any) -> float | None:
+    """The share of the water measured by NOTHING that this fill would rather
+    refuse at than stand on, or ``None`` where it states none.
+
+    No refusing share exists in the system: a hole is feedback, an unpainted
+    node is what refuses, and the number a person would not accept is theirs to
+    name. The strictest of several merges answers - a run that stated two
+    shares meant the tighter of them."""
+    stated = [float(one[REFUSE_ABOVE]) for one in (_listed(op) if op else [])
+              if isinstance(one, Mapping) and str(one.get("name", "")) == MERGE
+              and one.get(REFUSE_ABOVE) is not None]
+    return min(stated) if stated else None
 
 
 def merge_rows(op: Any) -> list[str]:
@@ -188,20 +211,25 @@ def interpolates(op: Any) -> bool:
                for one in (_listed(op) if op else []))
 
 
-def _whole_water(value: Any, ops: list[str], code: str) -> None:
-    """Refuse a bed whose water no row measured, where the call states no fill.
+def _whole_water(value: Any, op: Any, ops: list[str], code: str) -> None:
+    """Refuse a bed whose unmeasured water is past the share the FILL named.
 
-    The surface states the share of the water measured by nothing and the rows
-    that could cover it; a run stands on the bed it was handed, so water with no
-    bed under it is refused here rather than flattened to a plane somewhere
-    below. The remedy is the person's, and the feedback the surface carries is
-    the whole of what this refusal has to hand them."""
+    Nothing refuses on a share the run did not state: the surface says what it
+    covers over the water and over the land before the solve, the rows that
+    could cover the hole are named beside it, and a node no value reaches is
+    what refuses. A person who knows the share they would not stand on states
+    it on the merge, and this is where that number is read."""
     share = getattr(value, "unmeasured_water_fraction", None)
-    if not share or INTERPOLATED in ops:
+    refuse_at = refuse_above(op)
+    if not share or refuse_at is None or INTERPOLATED in ops \
+            or float(share) <= refuse_at:
         return
     raise UserInputError(
-        _remedy(_WATER, list(getattr(value, "water_alternatives", None) or []),
-                share, ops), code=code)
+        f"{_percent(float(share))} of the water in this domain is measured by "
+        f"no row of this bed, past the {_percent(refuse_at)} this fill states "
+        f"it refuses above. "
+        + _remedy(_WATER, list(getattr(value, "water_alternatives", None) or []),
+                  share, ops), code=code)
 
 
 def _depth(value: Any) -> float | None:
@@ -1289,7 +1317,7 @@ def merged_surface(
     from rasterio.merge import merge
 
     from trid3nt_server.tools.derive._hydrology_common import write_cog
-    from trid3nt_server.workflows.runtime import journal_note
+    from trid3nt_server.workflows.runtime import cut_coverage, journal_note
 
     laid = _stated_ops(ops, "MERGE_BED_OP_INVALID")
     wet_rows = [str(row) for row in _listed(water_alternatives)]
@@ -1405,7 +1433,11 @@ def merged_surface(
     ]
     logger.info("bed merge: %dx%d at %.3g m over %d rows - %s",
                 width, height, metres, len(rows), "; ".join(covered))
-    for line in (*covered, *moved):
+    # WHAT THE CUT COVERS goes where the person meets it BEFORE the solve; the
+    # rest of what the merge did is a note like any other.
+    for line in covered:
+        cut_coverage(line)
+    for line in moved:
         journal_note(line)
     merged = MergedRasterLayerURI.published(
         "merged-bed", seed=seed,

@@ -31,7 +31,7 @@ from .errors import (
     WorkflowParkedError,
 )
 from .interpreter import PlanNode, RunResult, expand_plan, interpret
-from .journal import journal_note
+from .journal import cut_coverage, journal_note, run_coverage
 from .ledger import LedgerRecord, StepLedger, invocation_key
 from .levers import lever
 from .params import (
@@ -112,7 +112,7 @@ __all__ = [
     "expand_plan",
     "interpret",
     "invocation_key",
-    "journal_note", "lever",
+    "cut_coverage", "journal_note", "lever", "run_coverage",
     "merge_provenance", "param_rows", "provenance_entries",
     "read_snapshot",
     "rederive_revised",

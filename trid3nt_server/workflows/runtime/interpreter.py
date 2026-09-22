@@ -50,8 +50,9 @@ from .errors import (
     ParamRefLeakedError,
     StepFailedError,
 )
-from .journal import (bind_choices, bind_notes, bind_outputs, drain_choices,
-                      drain_notes, drain_outputs, journal_note, slot_choice)
+from .journal import (bind_choices, bind_coverage, bind_notes, bind_outputs,
+                      drain_choices, drain_coverage, drain_notes,
+                      drain_outputs, journal_note, slot_choice)
 from .ledger import LedgerRecord, StepLedger, inputs_digest, invocation_key
 from .params import Param, ResolvedParams
 from .plan import (
@@ -176,6 +177,7 @@ async def interpret(
     notes_token = bind_notes()
     outputs_token = bind_outputs()
     choices_token = bind_choices()
+    coverage_token = bind_coverage()
     final_index = _final_recordable_index(nodes)
     first_step = next((n.index for n in nodes if n.kind == "step"), None)
     self_reviewed = any(n.step.self_gating for n in nodes)
@@ -253,6 +255,7 @@ async def interpret(
         out.notes.extend(drain_notes(notes_token))
         out.outputs.extend(drain_outputs(outputs_token))
         out.choices.extend(drain_choices(choices_token))
+        drain_coverage(coverage_token)
     # The terminal leak guard: a ParamRef in what the caller receives is a
     # declaration that escaped binding, never data. Three surfaces, three budgets,
     # one shared cycle guard - so the value that is also a step result is walked

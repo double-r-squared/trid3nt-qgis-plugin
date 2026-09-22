@@ -17,9 +17,10 @@ from typing import Any, Mapping, Sequence
 
 logger = logging.getLogger("trid3nt_server.workflows.runtime.journal")
 
-__all__ = ["append_record", "bind_choices", "bind_notes", "bind_outputs",
-           "drain_choices", "drain_notes", "drain_outputs", "journal_note",
-           "journal_outputs", "journal_path", "read_records", "run_choices",
+__all__ = ["append_record", "bind_choices", "bind_coverage", "bind_notes",
+           "bind_outputs", "cut_coverage", "drain_choices", "drain_coverage",
+           "drain_notes", "drain_outputs", "journal_note", "journal_outputs",
+           "journal_path", "read_records", "run_choices", "run_coverage",
            "run_origin", "run_outputs", "slot_choice"]
 
 #: The notes the step now running has written for THIS run's record. Bound by the
@@ -76,6 +77,40 @@ def drain_notes(token: contextvars.Token) -> list[str]:
     notes = _NOTES.get() or []
     _NOTES.reset(token)
     return list(notes)
+
+#: WHAT THE CUT COVERS - the share of the water and of the land each row
+#: painted, and what nothing measured. Bound beside the notes because the card
+#: is built inside the run and the journal is written after it: a share a person
+#: would refuse at is a number to weigh BEFORE the solve, and a number only the
+#: journal carried would be read after the run it was about.
+_COVERAGE: contextvars.ContextVar[list[str] | None] = contextvars.ContextVar(
+    "trid3nt_run_coverage", default=None)
+
+
+def cut_coverage(text: str) -> None:
+    """State what the cut covers, on the journal AND on the run's own card."""
+    journal_note(text)
+    covered = _COVERAGE.get()
+    if covered is not None:
+        covered.append(str(text))
+
+
+def run_coverage() -> list[str]:
+    """What the run in progress has said its cut covers, in the order it said it."""
+    return list(_COVERAGE.get() or ())
+
+
+def bind_coverage() -> contextvars.Token:
+    """Open a coverage channel for one plan run -> the token that closes it."""
+    return _COVERAGE.set([])
+
+
+def drain_coverage(token: contextvars.Token) -> list[str]:
+    """Close the channel and return what was written into it."""
+    covered = _COVERAGE.get() or []
+    _COVERAGE.reset(token)
+    return list(covered)
+
 
 #: The RANKED LIST each matched slot was filled from. Bound beside the notes for
 #: the same reason: the card is built inside the run, the record is written after
