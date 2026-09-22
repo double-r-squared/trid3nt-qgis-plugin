@@ -177,11 +177,9 @@ class STEERING(T2D):
     #: without it the wave field would be solved and thrown away.
     coupling = [WAC.wave(
         geometry=_GEOMETRY, boundary=_BOUNDARY,
-        # The wave deck marches the host's clock, seen once per coupling period.
+        # The wave deck marches the host's clock.
         TIME_STEP=_WAVE_TIME_STEP_S,
         NUMBER_OF_TIME_STEP=_WAVE_STEPS,
-        PERIOD_FOR_GRAPHIC_PRINTOUTS=1,
-        PERIOD_FOR_LISTING_PRINTOUTS=1,
         # THE SPECTRAL GRID. Twenty-four directions is a sector every fifteen
         # degrees, which resolves a swell refracting round into the shore-normal
         # it drives no current at; twenty-five frequencies from 0.04 Hz at the
@@ -189,9 +187,6 @@ class STEERING(T2D):
         NUMBER_OF_DIRECTIONS=24,
         NUMBER_OF_FREQUENCIES=25,
         MINIMAL_FREQUENCY=0.04,
-        # The domain opens EMPTY and fills from the boundary: the sea state that
-        # arrives is the whole of the forcing.
-        TYPE_OF_INITIAL_DIRECTIONAL_SPECTRUM=0,
         # THE OPEN EDGE, as the keywords the dictionary spells it in: a JONSWAP
         # shape at the buoy's own height, one over its period, and the bearing
         # the waves run toward, which the wave slot's ingestion turns from the

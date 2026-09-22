@@ -132,13 +132,14 @@ def test_the_dredge_reads_its_levels_off_the_line_slot_and_the_settled_run():
 
 
 def test_the_bed_the_dredger_cuts_is_stated_as_the_module_s_own_keywords():
-    """The class, the stock, the transport law and the morphological factor are
-    keywords GAIA carries, so the deck states them and a user overrides each by
-    its own name; the composite carries only the gradation and the dredge."""
+    """The class, the stock and the morphological factor are keywords GAIA
+    carries, so the deck states them and a user overrides each by its own name;
+    the composite carries only the gradation and the dredge. The transport law
+    the deck wants IS the dictionary's own, so the deck states nothing."""
     slots = _STEERING.ASSERTED["coupling"][0]["slots"]
     assert slots["CLASSES_SEDIMENT_DIAMETERS"] == [2.0e-4]
     assert slots["LAYERS_INITIAL_THICKNESS"] == [channel_dredging._BED_STOCK_M]
-    assert slots["BED_LOAD_TRANSPORT_FORMULA_FOR_ALL_SANDS"] == 1
+    assert "BED_LOAD_TRANSPORT_FORMULA_FOR_ALL_SANDS" not in slots
     assert slots["MORPHOLOGICAL_FACTOR"] == 10.0
     assert slots["MASS_BALANCE"] is True
     assert slots["bed"] == {"gradation": None, "presets": None}

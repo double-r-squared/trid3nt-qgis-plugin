@@ -165,10 +165,8 @@ class STEERING(T3D):
     # advects the temperature by whatever the VELOCITIES are advected by (5, MURD
     # PSI), which stops a baroclinic solve at its first tracer step. 13 is the
     # NERD family the telemac2d dictionary defaults this same keyword to and the
-    # only one monotone across a thermocline; the ceiling governs schemes 13 and
-    # 14 and nothing else, so the two are one statement and are written together.
+    # only one monotone across a thermocline.
     SCHEME_FOR_ADVECTION_OF_TRACERS = [13]
-    MAXIMUM_NUMBER_OF_ITERATIONS_FOR_ADVECTION_SCHEMES = 50
     # AND UNDER WHICH OPTION. The dictionary's own default here is 4, implicit,
     # and murd3d_pos answers to 1 and 2 only - an unstated deck loops "UNKNOWN
     # OPTION IN MURD3D_POS: 4 / OPTION 1 TAKEN INSTEAD" and stops on the explicit

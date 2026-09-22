@@ -207,10 +207,6 @@ class STEERING(T2D):
                          # this question makes, so the answer is never
                          # stock-limited.
                          LAYERS_INITIAL_THICKNESS=[5.0],
-                         # Meyer-Peter-Mueller, the bed-load law a sand bed under
-                         # a channel flow is screened with; the dictionary
-                         # publishes all ten choices.
-                         BED_LOAD_TRANSPORT_FORMULA_FOR_ALL_SANDS=1,
                          # The classes of a MIXTURE shelter each other, and 1 is
                          # the engine's own Egiazaroff hiding factor; a single
                          # class hides behind nothing and never reads it.

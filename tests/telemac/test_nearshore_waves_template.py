@@ -195,9 +195,9 @@ def test_the_deck_states_the_physics_the_question_is_about():
     assert stated["DEPTH-INDUCED BREAKING DISSIPATION"] == 1
     assert stated["BOTTOM FRICTION DISSIPATION"] == 1
     assert stated["TYPE OF BOUNDARY DIRECTIONAL SPECTRUM"] == 6
-    # The domain opens EMPTY and fills from the boundary: a spectrum laid over
-    # the whole of it at t = 0 is wave energy nobody measured.
-    assert stated["TYPE OF INITIAL DIRECTIONAL SPECTRUM"] == 0
+    # The domain opens EMPTY and fills from the boundary, which is the
+    # dictionary's own opening, so the deck states nothing about it.
+    assert "TYPE OF INITIAL DIRECTIONAL SPECTRUM" not in stated
     assert not sheet.required()
 
 

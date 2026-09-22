@@ -220,8 +220,6 @@ class STEERING(T2D):
         # The erodible stock, deeper than any cut this question makes, so the
         # dredged volume is never limited by the material under the fairway.
         LAYERS_INITIAL_THICKNESS=[_BED_STOCK_M],
-        # Meyer-Peter-Mueller: the bedload law this shoaling is read under.
-        BED_LOAD_TRANSPORT_FORMULA_FOR_ALL_SANDS=1,
         # What makes a short hydraulic window produce a readable bed change.
         MORPHOLOGICAL_FACTOR=10.0,
         dredging=Dredging(

@@ -125,11 +125,6 @@ class STEERING(WAC):
     NUMBER_OF_FREQUENCIES = 25
     MINIMAL_FREQUENCY = 0.04
 
-    # The domain opens EMPTY and fills from the boundary: what this question is
-    # about is the sea state that arrives, so a spectrum laid over the whole
-    # domain at t = 0 would be wave energy nobody measured.
-    TYPE_OF_INITIAL_DIRECTIONAL_SPECTRUM = 0
-
     #: THE OPEN EDGE, as the keywords the dictionary spells it in. A JONSWAP
     #: spectrum is the shape a developing sea and a swell are both described
     #: by, and the three numbers under it are the buoy's own - the height it

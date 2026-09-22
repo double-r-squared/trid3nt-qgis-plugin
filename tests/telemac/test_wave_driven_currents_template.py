@@ -130,7 +130,6 @@ def test_the_breaking_is_on_because_the_breaking_is_the_forcing():
     stated = dict(_sheet().coupled[0]["slots"])
     assert stated["DEPTH_INDUCED_BREAKING_DISSIPATION"] == 1
     assert stated["BOTTOM_FRICTION_DISSIPATION"] == 1
-    assert stated["TYPE_OF_INITIAL_DIRECTIONAL_SPECTRUM"] == 0
 
 
 def test_the_seaward_rim_is_opened_so_the_tide_and_the_spectrum_both_enter():
