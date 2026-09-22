@@ -59,7 +59,7 @@ async def mesh_op(fn: str | None = None, at: int | None = None,
         kwargs: the function's own arguments.
     """
     from trid3nt_server.workflows.mesh.gate import (
-        active_mesh_session, open_mesh_gates, present_mesh,
+        active_mesh_session, present_mesh,
     )
 
     session = active_mesh_session(mesh)
@@ -76,8 +76,7 @@ async def mesh_op(fn: str | None = None, at: int | None = None,
             await asyncio.to_thread(session.append_op, entry)
         else:
             await asyncio.to_thread(session.alter_op, int(at), entry)
-    gate = next(g for g in open_mesh_gates() if g.mesh_id == session.mesh_id)
-    return await present_mesh(gate)
+    return await present_mesh(session)
 
 
 def _entry(session: Any, fn: str | None, kwargs: dict[str, Any]) -> MeshOp:

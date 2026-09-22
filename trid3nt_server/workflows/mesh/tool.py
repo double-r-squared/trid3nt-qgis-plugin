@@ -261,16 +261,14 @@ async def build_mesh(
         ops: the ordered program, [{"fn": name, ...kwargs}], calling the mesh
             library's own functions plus set_bed and set_boundary_roles. Omit for
             the mesher's defaults; refine a built one with mesh_op.
-        input_mode: user_gated stops at the mesh gate to edit; auto accepts inline.
+        input_mode: user_gated presents the mesh at the gate to edit and accept;
+            auto accepts inline.
     """
     import asyncio
 
-    from trid3nt_server.render.pipeline_emitter import (
-        current_emitter, current_turn_case,
-    )
-    from trid3nt_server.gates.input_review import resolve_input_gate_mode
+    from trid3nt_server.render.pipeline_emitter import current_turn_case
     from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.mesh.gate import open_mesh_gate, present_mesh
+    from trid3nt_server.workflows.mesh.gate import gate_mesh_build
     from trid3nt_server.workflows.mesh.session import MeshSession
 
     if not (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip():
@@ -292,12 +290,9 @@ async def build_mesh(
         ops=None if ops is None else [_wire_op(entry) for entry in ops])
     name = location or f"{mesher} mesh"
     session = MeshSession(recipe, case_id=current_turn_case(), name=name)
-    if (resolve_input_gate_mode(input_mode) == "user_gated"
-            and current_emitter() is not None):
-        # The mesh stops at the gate: presented, editable, and NOT yet the
-        # case's mesh - accepting it is the user's next act, not this call's.
-        return await present_mesh(open_mesh_gate(session))
-    await asyncio.to_thread(session.accept)
+    # user_gated stops at the gate - presented, editable, accepted by the reply;
+    # auto and a headless call accept inline. The gate owns both.
+    await gate_mesh_build(session, tool_name="build_mesh", input_mode=input_mode)
     return session.snapshot()
 
 

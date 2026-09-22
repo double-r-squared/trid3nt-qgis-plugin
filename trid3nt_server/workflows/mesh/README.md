@@ -15,7 +15,7 @@ carrying that recipe as its provenance - is what the solve reads.
 | `__init__.py` | The package door. Re-exports nothing. |
 | `artifact.py` | `MeshArtifact` - the accepted mesh's record (its files, counts, CRS, probes, boundary roles) and the case-scoped seam a later run rediscovers it through. |
 | `corpus.yaml` | The retrieval phrasings that route "build the mesh a solver runs on" to `build_mesh` and "change how this mesh was built" to `mesh_op`. |
-| `gate.py` | The gate loop: a built mesh presented with its probes, its numbered recipe and its editable layer, then edited, reset or accepted. One card path for every mesher. |
+| `gate.py` | The mesh's face on the ONE gate (`gates/input_review.py`): it builds the round's card - the probes, the numbered recipe, the editable layer, and the rows for the size word, the revert and a hand-edited layer - and applies the reply back onto the session. One card path for every mesher, and no gate machine of its own. |
 | `grid_geometry.py` | Regular-grid domain math - a geographic bbox plus a metre resolution to the canonical origin, spans, cell size and row/col counts. |
 | `inputs.py` | The ONE typed conversion a data-valued op kwarg passes through: a typed slot value -> its own collection, raster -> the readable raster, layer -> the geometry document. Nothing is guessed. |
 | `kinds.py` | The mesh KIND vocabulary: the shapes a mesher in this tree builds, and what a template may declare it accepts. |

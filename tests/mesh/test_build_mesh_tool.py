@@ -532,13 +532,14 @@ def test_snapshot_is_the_display_face(tmp_path):
 
 
 def test_probes_measure_the_lattice_and_number_the_recipe(tmp_path):
+    """What is measured is what the gate card quotes, and nothing beside it."""
     probes = MeshSession(_recipe(), workdir=tmp_path).probes()
-    assert probes["nodes_per_cell"] == 4
     assert probes["boundary_loops"] == 1
     assert probes["min_angle_deg"] == pytest.approx(90.0, abs=1e-6)
     assert probes["edge_length_m"]["mean"] == pytest.approx(400.0, rel=0.05)
-    assert len(probes["edge_length_m"]["histogram"]["counts"]) == 10
     assert probes["ops"] == []
+    assert not {"area_km2", "nodes_per_cell", "boundary_nodes"} & set(probes)
+    assert "histogram" not in probes["edge_length_m"]
 
 
 def test_the_accepted_artifact_carries_what_was_measured_on_it(tmp_path):

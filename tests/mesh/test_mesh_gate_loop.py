@@ -1,9 +1,9 @@
 """Offline tests for the mesh gate loop.
 
 No object store, no live session, no container: a fake emitter stands in for the
-map and a background driver answers the card. Pinned: the three loop tools
-mounted only while a session is open, ONE generic card path for every mesher,
-AUTO building inline, ``mesh_op`` as the whole edit surface, reset via the gate."""
+map and a background driver answers the card. Pinned: ONE gate machine for the
+mesh too, ONE generic card path for every mesher, AUTO building inline,
+``mesh_op`` as the whole edit surface, reset and adopt as rows on the card."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ import pytest
 from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
 from trid3nt_server.render import pipeline_emitter as pe
 from trid3nt_server.gates import pending
-from trid3nt_server.tools import MOUNTED_TOOLS, TOOL_REGISTRY, mount_tool
+from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.workflows.mesh import gate as mesh_gate
 from trid3nt_server.workflows.mesh.artifact import MeshArtifact
 from trid3nt_server.workflows.mesh.meshers import MeshToolError
@@ -74,95 +74,34 @@ async def _drive(script, *, seen=None, appear_timeout=5.0) -> None:
 
 
 @pytest.fixture(autouse=True)
-def _closed_gates(monkeypatch):
-    """Every test starts and ends with no gate open and nothing mounted."""
+def _no_mesh_at_the_gate(monkeypatch):
+    """Every test starts and ends with no mesh under construction."""
     monkeypatch.delenv("TRID3NT_INPUT_GATE_MODE", raising=False)
-    for open_gate in mesh_gate.open_mesh_gates():
-        mesh_gate.close_mesh_gate(open_gate)
+    monkeypatch.setattr(mesh_gate, "_AT_GATE", None)
     yield
-    for open_gate in mesh_gate.open_mesh_gates():
-        mesh_gate.close_mesh_gate(open_gate)
-    assert not MOUNTED_TOOLS
 
 
-def test_no_gate_tool_is_mounted_before_a_gate_opens():
-    assert not MOUNTED_TOOLS
-    assert "mesh_accept" not in TOOL_REGISTRY
-    assert "mesh_reset" not in TOOL_REGISTRY
-
-
-def test_the_gate_mounts_the_three_loop_tools_and_no_per_mesher_ones(tmp_path):
-    """Every mesher gets the SAME gate: nothing here knows what a library does."""
-    gate = mesh_gate.open_mesh_gate(_session(tmp_path))
-
-    expected = {mesh_gate.ACCEPT_TOOL, mesh_gate.RESET_TOOL, mesh_gate.ADOPT_TOOL}
-    assert set(gate.tools) == expected
-    assert expected <= set(MOUNTED_TOOLS)
-    for name in expected:
-        assert name in TOOL_REGISTRY
-        assert TOOL_REGISTRY[name].metadata.cacheable is False
-
-    mesh_gate.close_mesh_gate(gate)
-    for name in expected:
-        assert name not in TOOL_REGISTRY
-        assert name not in MOUNTED_TOOLS
+def _at_the_gate(monkeypatch, session: MeshSession) -> MeshSession:
+    """Put ``session`` at the gate, the way a build under the gate does."""
+    monkeypatch.setattr(mesh_gate, "_AT_GATE", session)
+    return session
 
 
 def test_mesh_op_is_registered_rather_than_mounted_per_mesher():
-    """ONE atomic tool: it is in the catalog whether or not a gate is open, and
-    it says so when nothing is under construction."""
+    """ONE atomic tool: it is in the catalog whether or not a mesh is at the
+    gate, and it says so when nothing is under construction."""
     assert "mesh_op" in TOOL_REGISTRY
     with pytest.raises(MeshToolError) as excinfo:
         asyncio.run(TOOL_REGISTRY["mesh_op"].fn(fn="laplacian2"))
     assert excinfo.value.error_code == "MESH_NO_ACTIVE_SESSION"
 
 
-def test_a_mounted_tool_refuses_once_its_gate_is_closed(tmp_path):
-    gate = mesh_gate.open_mesh_gate(_session(tmp_path))
-    fn = TOOL_REGISTRY[mesh_gate.ACCEPT_TOOL].fn
-    mesh_gate.close_mesh_gate(gate)
-    with pytest.raises(MeshToolError) as excinfo:
-        asyncio.run(fn())
-    assert excinfo.value.error_code == "MESH_SESSION_CLOSED"
-
-
-def test_opening_a_gate_supersedes_the_previous_one(tmp_path):
-    first = mesh_gate.open_mesh_gate(_session(tmp_path / "one"))
-    second = mesh_gate.open_mesh_gate(_session(tmp_path / "two"))
-    assert mesh_gate.open_mesh_gates() == (second,)
-    assert first.tools == ()
-    assert set(second.tools) <= set(MOUNTED_TOOLS)
-    mesh_gate.close_mesh_gate(second)
-
-
-def test_a_mounted_tool_never_shadows_a_registered_one(tmp_path):
-    from trid3nt_contracts.tool_registry import AtomicToolMetadata
-    from trid3nt_server.tools import ToolRegistrationError
-
-    with pytest.raises(ToolRegistrationError):
-        mount_tool(AtomicToolMetadata(name="build_mesh",
-                                      ttl_class="live-no-cache",
-                                      cacheable=False), lambda: None)
-    assert "build_mesh" not in MOUNTED_TOOLS
-
-
-def test_mounted_tools_ride_the_retrieval_floor(tmp_path):
-    from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
-
-    gate = mesh_gate.open_mesh_gate(_session(tmp_path))
-    visible = retrieve_visible_tools("what is the weather", None, 8)
-    assert set(gate.tools) <= visible
-    mesh_gate.close_mesh_gate(gate)
-    assert not set(gate.tools) & retrieve_visible_tools(
-        "what is the weather", None, 8)
-
-
 @pytest.mark.asyncio
 async def test_mesh_op_appends_regenerates_and_re_presents(tmp_path, monkeypatch):
     fake = _FakeEmitter()
     monkeypatch.setattr(pe, "current_emitter", lambda: fake)
-    gate = mesh_gate.open_mesh_gate(_session(tmp_path))
-    await mesh_gate.present_mesh(gate)
+    session = _at_the_gate(monkeypatch, _session(tmp_path))
+    await mesh_gate.present_mesh(session)
 
     out = await TOOL_REGISTRY["mesh_op"].fn(fn="set_boundary_roles")
 
@@ -171,43 +110,40 @@ async def test_mesh_op_appends_regenerates_and_re_presents(tmp_path, monkeypatch
     # The presentation is a MESH layer on the map, not a picture of one.
     assert fake.layers and fake.layers[-1].layer_type == "mesh"
     assert fake.layers[-1].style == {"kind": "reference", "geometry": "line"}
-    mesh_gate.close_mesh_gate(gate)
 
 
 @pytest.mark.asyncio
 async def test_mesh_op_alters_and_removes_by_index(tmp_path, monkeypatch):
     monkeypatch.setattr(pe, "current_emitter", lambda: _FakeEmitter())
-    gate = mesh_gate.open_mesh_gate(_session(tmp_path))
+    session = _at_the_gate(monkeypatch, _session(tmp_path))
 
     await TOOL_REGISTRY["mesh_op"].fn(fn="set_boundary_roles")
     await TOOL_REGISTRY["mesh_op"].fn(fn="set_boundary_roles", at=0)
     out = await TOOL_REGISTRY["mesh_op"].fn(at=0, remove=True)
 
     assert out["ops"] == []
-    assert gate.session.recipe.ops == ()
-    mesh_gate.close_mesh_gate(gate)
+    assert session.recipe.ops == ()
 
 
 @pytest.mark.asyncio
 async def test_mesh_op_refuses_an_unknown_name_with_the_nearest_matches(
         tmp_path, monkeypatch):
     monkeypatch.setattr(pe, "current_emitter", lambda: _FakeEmitter())
-    gate = mesh_gate.open_mesh_gate(_session(tmp_path))
+    session = _at_the_gate(monkeypatch, _session(tmp_path))
 
     with pytest.raises(MeshToolError) as excinfo:
         await TOOL_REGISTRY["mesh_op"].fn(fn="set_bedd")
 
     assert excinfo.value.error_code == "MESH_OP_UNKNOWN"
     assert "set_bed" in str(excinfo.value)
-    assert gate.session.recipe.ops == ()
-    mesh_gate.close_mesh_gate(gate)
+    assert session.recipe.ops == ()
 
 
 @pytest.mark.asyncio
 async def test_removing_without_an_index_names_the_numbered_recipe(
         tmp_path, monkeypatch):
     monkeypatch.setattr(pe, "current_emitter", lambda: _FakeEmitter())
-    gate = mesh_gate.open_mesh_gate(_session(tmp_path))
+    _at_the_gate(monkeypatch, _session(tmp_path))
     await TOOL_REGISTRY["mesh_op"].fn(fn="set_boundary_roles")
 
     with pytest.raises(MeshToolError) as excinfo:
@@ -215,7 +151,6 @@ async def test_removing_without_an_index_names_the_numbered_recipe(
 
     assert excinfo.value.error_code == "MESH_OP_INDEX"
     assert "0: mesh_op('set_boundary_roles')" in str(excinfo.value)
-    mesh_gate.close_mesh_gate(gate)
 
 
 def test_mesh_op_surfaces_in_top8():
@@ -238,36 +173,27 @@ def test_mesh_op_surfaces_in_top8():
 
 
 @pytest.mark.asyncio
-async def test_reset_tool_puts_the_recipe_back_and_re_presents(
+async def test_the_accept_is_the_card_submitted_rather_than_a_tool(
         tmp_path, monkeypatch):
+    """The one gate accepts what it presented: there is no accept tool to call."""
     monkeypatch.setattr(pe, "current_emitter", lambda: _FakeEmitter())
-    gate = mesh_gate.open_mesh_gate(_session(tmp_path))
-    await TOOL_REGISTRY["mesh_op"].fn(fn="set_boundary_roles")
+    driver = asyncio.create_task(_drive([("proceed", None)]))
 
-    out = await TOOL_REGISTRY[mesh_gate.RESET_TOOL].fn()
+    art = await mesh_gate.gate_mesh_build(
+        _session(tmp_path), tool_name="telemac_dye_release",
+        input_mode="user_gated")
 
-    assert out["ops"] == []
-    assert gate.session.recipe == gate.session.declared
-    mesh_gate.close_mesh_gate(gate)
+    await driver
+    assert isinstance(art, MeshArtifact)
+    assert art.element_count > 0
+    assert "mesh_accept" not in TOOL_REGISTRY
+    assert "mesh_adopt_layer" not in TOOL_REGISTRY
 
 
 @pytest.mark.asyncio
-async def test_accept_tool_freezes_the_mesh_and_unmounts(tmp_path, monkeypatch):
-    monkeypatch.setattr(pe, "current_emitter", lambda: _FakeEmitter())
-    gate = mesh_gate.open_mesh_gate(_session(tmp_path))
-    names = gate.tools
-
-    summary = await TOOL_REGISTRY[mesh_gate.ACCEPT_TOOL].fn()
-
-    assert summary["mesher"] == "reg_grid"
-    assert summary["element_count"] > 0
-    assert isinstance(gate.accepted, MeshArtifact)
-    assert not MOUNTED_TOOLS
-    assert all(name not in TOOL_REGISTRY for name in names)
-
-
-@pytest.mark.asyncio
-async def test_adopting_a_hand_edited_layer_flags_the_mesh(tmp_path, monkeypatch):
+async def test_adopting_a_hand_edited_layer_is_a_row_on_the_card(
+        tmp_path, monkeypatch):
+    """A mesh reshaped by hand comes back in on the card, and is FLAGGED."""
     import numpy as np
 
     from trid3nt_server.render.mesh_display import write_2dm
@@ -278,13 +204,19 @@ async def test_adopting_a_hand_edited_layer_flags_the_mesh(tmp_path, monkeypatch
     edited.write_text(write_2dm(Mesh(
         points=np.array([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]]),
         cells=np.array([[0, 1, 2], [1, 3, 2]]), crs_authid="EPSG:4326")))
-    gate = mesh_gate.open_mesh_gate(_session(tmp_path))
+    session = _session(tmp_path)
+    driver = asyncio.create_task(_drive([
+        ("narrow_scope", {"adopt_layer": str(edited)}),
+        ("proceed", None),
+    ]))
 
-    out = await TOOL_REGISTRY[mesh_gate.ADOPT_TOOL].fn(layer=str(edited))
+    art = await mesh_gate.gate_mesh_build(
+        session, tool_name="telemac_dye_release", input_mode="user_gated")
 
-    assert out["probes"]["element_count"] == 2
-    assert "regen" in out["regen_note"]
-    mesh_gate.close_mesh_gate(gate)
+    await driver
+    assert art.element_count == 2
+    assert "regen" in session.regen_note
+    assert "regen_note" in art.provenance
 
 
 @pytest.mark.asyncio
@@ -297,8 +229,6 @@ async def test_auto_mode_builds_inline_with_no_gate(tmp_path, monkeypatch):
 
     assert isinstance(art, MeshArtifact)
     assert fake.sent == []
-    assert not MOUNTED_TOOLS
-    assert mesh_gate.open_mesh_gates() == ()
 
 
 @pytest.mark.asyncio
@@ -310,7 +240,6 @@ async def test_user_gated_with_no_session_builds_inline(tmp_path, monkeypatch):
         input_mode="user_gated")
 
     assert isinstance(art, MeshArtifact)
-    assert not MOUNTED_TOOLS
 
 
 @pytest.mark.asyncio
@@ -341,13 +270,13 @@ async def test_gate_presents_probes_then_accepts(tmp_path, monkeypatch):
     await driver
     assert isinstance(art, MeshArtifact)
     _mtype, envelope = fake.sent[0]
-    assert envelope.options == ["proceed", "cancel", "narrow_scope"]
+    assert envelope.options == ["proceed", "narrow_scope", "cancel"]
     assert "nodes" in envelope.recommendation
     assert "mesh_op" in envelope.recommendation
     assert envelope.tool_args["mesh_id"]
     assert fake.layers  # the editable mesh layer went to the map
-    # The session closed behind the accept.
-    assert not MOUNTED_TOOLS
+    # The mesh left the gate behind the accept.
+    assert mesh_gate._AT_GATE is None
     assert not pending._PENDING_CONFIRMATIONS
 
 
@@ -363,7 +292,7 @@ async def test_gate_cancel_refuses_the_run(tmp_path, monkeypatch):
 
     await driver
     assert excinfo.value.error_code == "MESH_GATE_DECLINED"
-    assert not MOUNTED_TOOLS
+    assert mesh_gate._AT_GATE is None
 
 
 @pytest.mark.asyncio
@@ -400,7 +329,6 @@ async def test_gate_refuses_a_revision_it_cannot_read(tmp_path, monkeypatch):
     await driver
     assert excinfo.value.error_code == "MESH_GATE_REVISION_UNREADABLE"
     assert "mesh_op" in str(excinfo.value)
-    assert not MOUNTED_TOOLS
 
 
 @pytest.mark.asyncio
@@ -423,8 +351,7 @@ def _card_rows(session) -> list[str]:
     The sheet is assembled from the RECIPE, so a mesher that only builds inside a
     container still answers what its card would carry.
     """
-    sheet = mesh_gate._mesh_param_sheet(session, tool_name="build_mesh",
-                                        round_idx=1, max_rounds=3)
+    sheet = mesh_gate._mesh_param_sheet(session, tool_name="build_mesh")
     return [row.name for row in sheet.rows]
 
 
@@ -432,7 +359,7 @@ def test_every_mesher_gets_the_same_card(tmp_path):
     """GENERALITY: a lattice and a triangulation render through one path, and
     nothing on the card is a name any particular library knows."""
     lattice = MeshSession(_recipe(), workdir=tmp_path / "grid")
-    assert _card_rows(lattice) == ["resolution_m", "reset"]
+    assert _card_rows(lattice) == ["resolution_m", "reset", "adopt_layer"]
 
     triangulated = MeshSession(
         tool.build_mesh(mesher="om2d", kind="unstructured_tri", extent=_AOI,
@@ -441,7 +368,7 @@ def test_every_mesher_gets_the_same_card(tmp_path):
                              mesh_op("set_bed", source="fetch_cudem")]),
         workdir=tmp_path / "tri")
     assert _card_rows(triangulated) == [
-        "resolution_m", "op[0]", "op[1]", "reset"]
+        "resolution_m", "op[0]", "op[1]", "reset", "adopt_layer"]
 
 
 def test_no_mesher_has_card_code_of_its_own():
@@ -472,8 +399,7 @@ def test_the_ops_are_numbered_on_the_card_because_an_index_is_what_targets_one(
                         resolution_m=60.0,
                         ops=[mesh_op("enforce_mesh_gradation", gradation=0.2)]),
         workdir=tmp_path)
-    sheet = mesh_gate._mesh_param_sheet(session, tool_name="build_mesh",
-                                        round_idx=1, max_rounds=3)
+    sheet = mesh_gate._mesh_param_sheet(session, tool_name="build_mesh")
     row = next(r for r in sheet.rows if r.name == "op[0]")
     assert "enforce_mesh_gradation" in row.value
     assert row.user_lever is False

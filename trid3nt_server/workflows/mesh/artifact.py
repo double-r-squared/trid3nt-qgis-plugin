@@ -45,10 +45,11 @@ class MeshArtifact:
     utm_epsg: int | None = None
     #: The ``mesh_recipe.jsonl`` (spec + ordered edit chain) this mesh replays from.
     recipe_uri: str | None = None
-    #: What was MEASURED on the accepted topology - counts, the edge-length band and
-    #: its histogram, min angle, boundary segments, plus whatever the mesher measured
-    #: about its own build. A consumer that needs the finest edge reads it here
-    #: rather than re-deriving it from the ask, which is only what was requested.
+    #: What was MEASURED on the accepted topology - what the gate card quotes:
+    #: counts, the edge-length band, min angle, boundary segments, plus whatever
+    #: the mesher measured about its own build. A consumer that needs the finest
+    #: edge reads it here rather than re-deriving it from the ask, which is only
+    #: what was requested.
     probes: dict[str, Any] = field(default_factory=dict)
     #: The TELEMAC boundary-conditions file written from THIS geometry's own
     #: boundary numbering; only valid against the ``slf_uri`` beside it.

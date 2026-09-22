@@ -417,21 +417,6 @@ def _min_angle_deg(points: Any, cells: Any, scale: tuple[float, float]) -> float
     return smallest
 
 
-def _area_km2(points: Any, cells: Any, scale: tuple[float, float]) -> float:
-    """The MESHED domain's own area, summed over its cells, in km2.
-
-    Measured on the accepted topology, never on the polygon the ask was cut from."""
-    xy = points * np.asarray(scale, dtype=float)
-    k = int(cells.shape[1])
-    origin = xy[cells[:, 0]]
-    twice = np.zeros(cells.shape[0], dtype=float)
-    for i in range(1, k - 1):
-        a = xy[cells[:, i]] - origin
-        b = xy[cells[:, i + 1]] - origin
-        twice += a[:, 0] * b[:, 1] - b[:, 0] * a[:, 1]
-    return float(np.abs(twice).sum() / 2.0 / 1.0e6)
-
-
 def _boundary_loops(boundary: Any) -> int:
     adjacency: dict[int, list[int]] = {}
     for a, b in boundary:
@@ -471,7 +456,6 @@ def _probes(mesh: Mesh, recipe: MeshRecipe) -> dict[str, Any]:
         return {
             "node_count": mesh.node_count,
             "element_count": mesh.element_count,
-            "nodes_per_cell": 0,
             "crs_authid": mesh.crs_authid,
             "has_bed": mesh.has_bed,
             "cells_realized_by_engine": True,
@@ -484,24 +468,18 @@ def _probes(mesh: Mesh, recipe: MeshRecipe) -> dict[str, Any]:
     edges, counts = _unique_edges(cells)
     delta = (pts[edges[:, 0]] - pts[edges[:, 1]]) * np.asarray(scale, dtype=float)
     lengths = np.hypot(delta[:, 0], delta[:, 1])
-    hist, bin_edges = np.histogram(lengths, bins=10)
     boundary = edges[counts == 1]
     return {
         "node_count": mesh.node_count,
         "element_count": mesh.element_count,
-        "nodes_per_cell": mesh.nodes_per_cell,
         "crs_authid": mesh.crs_authid,
         "has_bed": mesh.has_bed,
         "edge_length_m": {
             "min": float(lengths.min()), "max": float(lengths.max()),
             "mean": float(lengths.mean()),
-            "histogram": {"counts": [int(c) for c in hist],
-                          "bin_edges": [float(b) for b in bin_edges]},
         },
         "min_angle_deg": _min_angle_deg(pts, cells, scale),
-        "area_km2": _area_km2(pts, cells, scale),
         "boundary_edges": int(boundary.shape[0]),
-        "boundary_nodes": int(np.unique(boundary).size),
         "boundary_loops": _boundary_loops(boundary),
         # What the MESHER measured about its own build - island count, how much of
         # the mapped water the domain covered, which boundary it opened. Nothing

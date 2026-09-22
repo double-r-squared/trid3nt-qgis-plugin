@@ -62,10 +62,11 @@ package MeshSeam {
 
     part def MeshGate {
         doc /*
-        The one card path. Presents the built mesh with its probes and its
-        numbered ops, and takes back the size word or the revert - nothing
-        per-mesher, because everything an op can say is said through the op
-        tool.
+        The mesh's face on the ONE gate: it builds the round's card - the probes,
+        the numbered ops, the size word, the revert and the hand-edit - and reads
+        a reply back onto the session, while the asking, the rounds and the
+        timeout are the input-review gate's. Nothing per-mesher, because
+        everything an op can say is said through the op tool.
         */
     }
 
@@ -620,6 +621,20 @@ package MeshSeam {
         */
     }
 
+    requirement def TheGateIsNeverSpecialised {
+        doc /*
+        One gate machine presents, asks and accepts every user-gated thing. A
+        mesh edit is a CARD on it - lines, rows and a reply applied back onto the
+        session - never a loop, a card contract or a tool surface of its own: a
+        second gate machine is a second place a person is asked, and the two
+        drift in what they promise. The mesh gate therefore reaches the tool
+        registry for nothing; the one edit tool it needs is registered like any
+        other.
+
+        forbid: trid3nt_server.workflows.mesh.gate -> trid3nt_server.tools
+        */
+    }
+
     requirement def RegenerationIsWholesale {
         doc /*
         Every change swaps the recipe and rebuilds the WHOLE mesh. Nothing is
@@ -792,6 +807,14 @@ package MeshSeam {
         "tests/mesh/test_build_mesh_tool.py::test_accept_freezes_the_recipe_as_the_artifacts_provenance";
     verify requirement RecipeIsTheOneMeshDefiningObject by
         "tests/telemac/test_mesh_declaration_travel.py::test_the_mesh_step_carries_the_recipe_whole";
+
+    satisfy requirement TheGateIsNeverSpecialised by meshGate;
+    verify requirement TheGateIsNeverSpecialised by
+        "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
+    verify requirement TheGateIsNeverSpecialised by
+        "tests/mesh/test_mesh_gate_loop.py::test_the_accept_is_the_card_submitted_rather_than_a_tool";
+    verify requirement TheGateIsNeverSpecialised by
+        "tests/mesh/test_mesh_gate_loop.py::test_adopting_a_hand_edited_layer_is_a_row_on_the_card";
 
     satisfy requirement RegenerationIsWholesale by meshSession;
     satisfy requirement RegenerationIsWholesale by opTool;

@@ -33,22 +33,24 @@ seam + the four user-decision emit-wait gate families (payload, code-exec,
 solver-confirm, spatial) live in `confirm.py`. The server callers import those functions
 function-locally to keep the `server <-> gates` package edge acyclic.
 
-## The mesh gate loop
+## The mesh on the gate
 
-`workflows/mesh/gate.py` rides this same spine for the one gate whose card is
-not the whole interaction. Under USER-GATED a built mesh is presented as an
+There is no second gate machine. `workflows/mesh/gate.py` builds the round's
+CARD for the mesh under construction and hands it to `gate_input_review` like
+any other user-gated thing: under USER-GATED the built mesh is presented as an
 editable MDAL layer (through `render.publish_input_layer`) plus its numeric
-probes, and the gate MOUNTS one agent tool per edit action the building mesher
-registered -- `mesh_edit_<action>`, plus `mesh_accept` and `mesh_restart` --
-into `TOOL_REGISTRY` for exactly as long as the session is open. A mounted tool
-is unrankable (the retrieval index predates it), so `MOUNTED_TOOLS` is a
-visibility floor in `tool_retrieval` and in the openai tool gate. AUTO builds
-inline: no card, no layer, no mounted tools.
+probes quoted as the card's lines, and its rows are the one size word, the
+numbered recipe ops (read-only - `mesh_op` is where an op is written), the
+revert and the path of a hand-edited layer to adopt. `proceed` accepts the mesh,
+`narrow_scope` applies the reply back onto the session and re-presents, `cancel`
+refuses the run. AUTO, and a headless call with no session to present on, builds
+inline: no card, no layer.
 
-A DEMANDED build (a plan step pulling `MESH`) additionally parks on the
-pending-confirmation future like any other card: `proceed` accepts,
-`narrow_scope` carries `{"restart": true}` or `{"edit": "<action>", ...inputs}`
-and re-presents, `cancel` refuses the run.
+Two general capabilities on the one gate make that possible, and neither names a
+mesh: `present` (a per-round `GateCard` - lines, sheet and envelope `tool_args` -
+from a caller that owns the thing under review) and `apply_revision` (a reply
+taken as a change to that thing, then another round). `ReviewOutcome.cancel_code`
+says which cancel it was, so a caller raises its own typed refusal.
 
 ## Invariants / extension points
 
@@ -68,6 +70,6 @@ and re-presents, `cancel` refuses the run.
   that the user declined it.
 - INPUT_REQUIRED has two modes (AUTO labeled-defaults vs USER-GATED); the
   model never invents physics for un-fetchable inputs.
-- A mounted tool never shadows a registered one, and never outlives the thing
-  it acts on: the mount seam refuses a duplicate name and the gate unmounts in
-  a `finally`.
+- ONE gate machine presents, asks and accepts every user-gated thing. A caller
+  with a thing of its own under review supplies a card and a revision handler;
+  a gate loop, a card contract or a tool surface of its own is a defect.
