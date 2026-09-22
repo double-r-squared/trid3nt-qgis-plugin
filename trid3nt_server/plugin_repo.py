@@ -42,8 +42,8 @@ _DEFAULT_QGIS_MINIMUM_VERSION = "3.28"
 #: always points at a host the client can actually reach.
 HOST_SENTINEL = "__TRID3NT_DAEMON_HOST__"
 
-#: Fixed-name route the FRESH zip is served at. The literal in
-#: ``catalog_http.py``'s route dispatch MUST match this string.
+#: Fixed-name route the FRESH zip is served at. The literal in the plugin repo
+#: door's route table MUST match this string.
 FRESH_ZIP_URL_PATH = "/plugin-repo/trid3nt.zip"
 
 #: Basename patterns never carried into the zip (caches, hidden files, and the

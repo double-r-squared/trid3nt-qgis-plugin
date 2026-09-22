@@ -748,16 +748,15 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
 
     handler = _make_handler(settings)
 
-    # Best-effort mount of the catalog HTTP listener.
+    # Best-effort mount of the HTTP doors.
     http_server = None
     try:
-        from trid3nt_server.server.protocol.catalog_http import serve_catalog_http
+        from trid3nt_server.server.protocol.doors import serve_doors
 
-        http_server = await serve_catalog_http(host=host)
+        http_server = await serve_doors(host=host)
     except Exception:  # noqa: BLE001 -- discovery surface, never blocks WS
         logger.exception(
-            "tool-catalog HTTP listener failed to start; "
-            "continuing without /api/tool-catalog"
+            "HTTP doors failed to start; continuing without the /api routes"
         )
 
     try:
@@ -789,8 +788,7 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
         # the exit.
         await _drain_bg_tasks()
         if http_server is not None:
-            http_server.close()
             try:
-                await http_server.wait_closed()
+                await http_server.cleanup()
             except Exception:  # noqa: BLE001
                 pass
