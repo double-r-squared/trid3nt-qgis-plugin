@@ -1,5 +1,6 @@
-"""The TIN writers a solver reads: SCHISM ``gr3``, ADCIRC ``fort.14``, SMS ``2dm``.
+"""The TIN's boundary topology: the pinch clean, the CCW pass, the boundary walk.
 
-One topology pass - pinch cleaning, CCW orientation, the boundary walk - stands
-behind every writer, so two formats written from one mesh carry one numbering.
+One topology pass stands behind every reader of a mesh built here, so the
+numbering and the winding a consumer sees are the mesh's own and not a
+per-consumer recomputation.
 """
