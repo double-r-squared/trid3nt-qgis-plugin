@@ -629,20 +629,20 @@ def _clean_once(lonlat: Any, cells: Any) -> tuple[Any, Any, int]:
     """Orphan re-indexing, CCW normalization and the fusions a FILE forces.
 
     How many elements were dropped is reported, never absorbed."""
-    from trid3nt_server.workflows.mesh.shared.nodes import tin_formats
+    from trid3nt_server.workflows.mesh.shared.nodes import tin_topology
 
-    formats = tin_formats()
+    topo = tin_topology()
     depths = _zeros(lonlat)
-    points, cells, depths = formats._clean_and_orient(lonlat, cells, depths)
+    points, cells, depths = topo.clean_and_orient(lonlat, cells, depths)
     points, cells, depths, merged = _merge_coincident(points, cells, depths)
     keep = _has_area(points, cells)
     collapsed = int((~keep).sum())
     if collapsed or merged:
-        points, cells, depths = formats._clean_and_orient(points, cells[keep],
-                                                          depths)
+        points, cells, depths = topo.clean_and_orient(points, cells[keep],
+                                                      depths)
     cells, folded = _unfolded(points, cells)
     if folded:
-        points, cells, depths = formats._clean_and_orient(points, cells, depths)
+        points, cells, depths = topo.clean_and_orient(points, cells, depths)
     return points, cells, collapsed + merged + folded
 
 

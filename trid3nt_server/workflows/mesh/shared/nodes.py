@@ -23,7 +23,7 @@ __all__ = [
     "reproject_nodes_to_utm",
     "sample_layer_at_nodes",
     "sample_raster_at_nodes",
-    "tin_formats",
+    "tin_topology",
 ]
 
 #: How far inside a raster's edge a node is sampled, in pixels: past the rim
@@ -32,18 +32,18 @@ __all__ = [
 _RIM_PIXELS = 1.5
 
 
-def tin_formats() -> Any:
-    """The shared TIN writers - the one home of the boundary walk and orient pass."""
-    from trid3nt_server.workflows.mesh.shared.formats import mesh_formats
+def tin_topology() -> Any:
+    """The shared TIN topology - the one home of the boundary walk and orient pass."""
+    from trid3nt_server.workflows.mesh.shared.formats import tin_topology as mod
 
-    return mesh_formats
+    return mod
 
 
 def boundary_contours(cells: Any) -> list[list[int]]:
     """The mesh's boundary walks, each a closed run of node ids in walk order."""
     import numpy as np
 
-    return tin_formats().extract_boundary_loops(np.asarray(cells, dtype=np.int64))
+    return tin_topology().extract_boundary_loops(np.asarray(cells, dtype=np.int64))
 
 
 def interior_nodes(cells: Any, count: int) -> Any:
