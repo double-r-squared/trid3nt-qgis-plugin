@@ -7,12 +7,13 @@ never invoked; a typed core error is an honest 404 or 400; an oversized
 
 from __future__ import annotations
 
-import asyncio
 import json
 
 import pytest
 
-from trid3nt_server.server.protocol import catalog_http as tool_catalog_http
+from door_client import drive, drive_raw
+
+from trid3nt_server.server.protocol.doors import layers
 from trid3nt_server.inputs.user_layer import (
     CaseNotFoundError,
     ImportLayerInputError,
@@ -21,86 +22,36 @@ from trid3nt_server.inputs.user_layer import (
 )
 
 
-class _FakeReader:
-    """Feed a single raw HTTP/1.1 request (headers + optional body), then EOF."""
-
-    def __init__(self, request: bytes):
-        self._data = request
-        self._pos = 0
-
-    async def readline(self):
-        idx = self._data.find(b"\n", self._pos)
-        if idx == -1:
-            chunk = self._data[self._pos :]
-            self._pos = len(self._data)
-            return chunk
-        chunk = self._data[self._pos : idx + 1]
-        self._pos = idx + 1
-        return chunk
-
-    async def readexactly(self, n: int):
-        if len(self._data) - self._pos < n:
-            raise asyncio.IncompleteReadError(self._data[self._pos :], n)
-        chunk = self._data[self._pos : self._pos + n]
-        self._pos += n
-        return chunk
+def _post(path: str, body: bytes) -> tuple:
+    return ("POST", path, body)
 
 
-class _FakeWriter:
-    def __init__(self):
-        self.buffer = bytearray()
-        self.closed = False
-
-    def write(self, data: bytes):
-        self.buffer.extend(data)
-
-    async def drain(self):
-        return None
-
-    def close(self):
-        self.closed = True
+def _get(path: str) -> tuple:
+    return ("GET", path, None)
 
 
-def _post(path: str, body: bytes) -> bytes:
+def _post_declaring(path: str, content_length: int) -> bytes:
+    """A raw request declaring ``content_length`` but carrying NO body -- used
+    to prove the 413 fires BEFORE the body is read."""
     return (
         f"POST {path} HTTP/1.1\r\n"
         "Host: agent.local\r\n"
-        "Content-Type: application/json\r\n"
-        f"Content-Length: {len(body)}\r\n"
-        "\r\n"
-    ).encode() + body
-
-
-def _post_no_length(path: str, content_length: int) -> bytes:
-    """Headers-only request declaring ``content_length`` but with NO body --
-    used to prove the 413 fires BEFORE any ``readexactly``."""
-    return (
-        f"POST {path} HTTP/1.1\r\n"
-        "Host: agent.local\r\n"
+        "Connection: close\r\n"
         f"Content-Length: {content_length}\r\n"
         "\r\n"
     ).encode()
 
 
-def _get(path: str) -> bytes:
-    return (f"GET {path} HTTP/1.1\r\nHost: agent.local\r\n\r\n").encode()
+def _drive(spec: tuple):
+    return drive(*spec)
 
 
-def _drive(request: bytes) -> bytes:
-    reader = _FakeReader(request)
-    writer = _FakeWriter()
-    asyncio.run(tool_catalog_http._handle_http(reader, writer))
-    assert writer.closed is True
-    return bytes(writer.buffer)
+def _status(out) -> int:
+    return out.status
 
 
-def _status(out: bytes) -> int:
-    return int(out.split(b" ", 2)[1])
-
-
-def _body_json(out: bytes) -> dict:
-    _, _, body = out.partition(b"\r\n\r\n")
-    return json.loads(body.decode("utf-8"))
+def _body_json(out) -> dict:
+    return out.json()
 
 
 @pytest.fixture(autouse=True)
@@ -129,7 +80,7 @@ def test_ingest_layer_file_route_served_without_env_arming(monkeypatch):
         return f"s3://cache/user-uploads/01ULID/{filename}"
 
     monkeypatch.setattr(
-        tool_catalog_http, "_upload_layer_file_fn", lambda: _fake_upload
+        layers, "_upload_layer_file_fn", lambda: _fake_upload
     )
     monkeypatch.delenv("TRID3NT_SOLVER_BACKEND", raising=False)
     out = _drive(_post("/api/ingest-layer-file?filename=x.tif", b"data"))
@@ -156,7 +107,7 @@ def test_ingest_layer_post_happy_path(monkeypatch):
         calls.append(kwargs)
         return dict(result)
 
-    monkeypatch.setattr(tool_catalog_http, "_ingest_layer_fn", lambda: _fake_ingest)
+    monkeypatch.setattr(layers, "_ingest_layer_fn", lambda: _fake_ingest)
 
     body = json.dumps(
         {
@@ -186,7 +137,7 @@ def test_ingest_layer_post_missing_case_id_400(monkeypatch):
     def _never():  # pragma: no cover
         raise AssertionError("ingest fn must not be resolved on a bad request")
 
-    monkeypatch.setattr(tool_catalog_http, "_ingest_layer_fn", _never)
+    monkeypatch.setattr(layers, "_ingest_layer_fn", _never)
     body = json.dumps({"name": "x", "kind": "vector", "s3_uri": "s3://b/k"}).encode()
     out = _drive(_post("/api/ingest-layer", body))
     assert _status(out) == 400
@@ -197,7 +148,7 @@ def test_ingest_layer_post_bad_kind_400(monkeypatch):
     def _never():  # pragma: no cover
         raise AssertionError("ingest fn must not be resolved on a bad request")
 
-    monkeypatch.setattr(tool_catalog_http, "_ingest_layer_fn", _never)
+    monkeypatch.setattr(layers, "_ingest_layer_fn", _never)
     body = json.dumps(
         {"case_id": "01CASE", "name": "x", "kind": "mesh", "s3_uri": "s3://b/k"}
     ).encode()
@@ -210,7 +161,7 @@ def test_ingest_layer_post_missing_s3_uri_400(monkeypatch):
     def _never():  # pragma: no cover
         raise AssertionError("ingest fn must not be resolved on a bad request")
 
-    monkeypatch.setattr(tool_catalog_http, "_ingest_layer_fn", _never)
+    monkeypatch.setattr(layers, "_ingest_layer_fn", _never)
     body = json.dumps({"case_id": "01CASE", "name": "x", "kind": "vector"}).encode()
     out = _drive(_post("/api/ingest-layer", body))
     assert _status(out) == 400
@@ -227,7 +178,7 @@ def test_ingest_layer_post_case_not_found_404(monkeypatch):
     async def _fake_ingest(**kwargs):
         raise CaseNotFoundError("case '01GONE' not found")
 
-    monkeypatch.setattr(tool_catalog_http, "_ingest_layer_fn", lambda: _fake_ingest)
+    monkeypatch.setattr(layers, "_ingest_layer_fn", lambda: _fake_ingest)
     body = json.dumps(
         {"case_id": "01GONE", "name": "x", "kind": "vector", "s3_uri": "s3://b/k"}
     ).encode()
@@ -240,7 +191,7 @@ def test_ingest_layer_post_object_not_found_404(monkeypatch):
     async def _fake_ingest(**kwargs):
         raise ObjectNotFoundError("no such object: s3://b/k")
 
-    monkeypatch.setattr(tool_catalog_http, "_ingest_layer_fn", lambda: _fake_ingest)
+    monkeypatch.setattr(layers, "_ingest_layer_fn", lambda: _fake_ingest)
     body = json.dumps(
         {"case_id": "01CASE", "name": "x", "kind": "vector", "s3_uri": "s3://b/k"}
     ).encode()
@@ -252,21 +203,21 @@ def test_ingest_layer_post_object_too_large_400(monkeypatch):
     async def _fake_ingest(**kwargs):
         raise ObjectTooLargeError("too large")
 
-    monkeypatch.setattr(tool_catalog_http, "_ingest_layer_fn", lambda: _fake_ingest)
+    monkeypatch.setattr(layers, "_ingest_layer_fn", lambda: _fake_ingest)
     body = json.dumps(
         {"case_id": "01CASE", "name": "x", "kind": "raster", "s3_uri": "s3://b/k"}
     ).encode()
     out = _drive(_post("/api/ingest-layer", body))
     assert _status(out) == 400
     assert "too large" in _body_json(out)["error"]
-    assert b"Traceback" not in out
+    assert b"Traceback" not in out.body
 
 
 def test_ingest_layer_post_typed_input_error_400(monkeypatch):
     async def _fake_ingest(**kwargs):
         raise ImportLayerInputError("bad input")
 
-    monkeypatch.setattr(tool_catalog_http, "_ingest_layer_fn", lambda: _fake_ingest)
+    monkeypatch.setattr(layers, "_ingest_layer_fn", lambda: _fake_ingest)
     body = json.dumps(
         {"case_id": "01CASE", "name": "x", "kind": "vector", "s3_uri": "s3://b/k"}
     ).encode()
@@ -284,7 +235,7 @@ def test_ingest_layer_file_happy_path(monkeypatch):
         return f"s3://cache/user-uploads/01ULID/{filename}"
 
     monkeypatch.setattr(
-        tool_catalog_http, "_upload_layer_file_fn", lambda: _fake_upload
+        layers, "_upload_layer_file_fn", lambda: _fake_upload
     )
 
     body = b"PK\x03\x04fakebytes"
@@ -298,7 +249,7 @@ def test_ingest_layer_file_missing_filename_400(monkeypatch):
     def _never(filename, data):  # pragma: no cover
         raise AssertionError("upload fn must not run without a filename")
 
-    monkeypatch.setattr(tool_catalog_http, "_upload_layer_file_fn", lambda: _never)
+    monkeypatch.setattr(layers, "_upload_layer_file_fn", lambda: _never)
     out = _drive(_post("/api/ingest-layer-file", b"data"))
     assert _status(out) == 400
     assert "filename" in _body_json(out)["error"]
@@ -308,24 +259,24 @@ def test_ingest_layer_file_empty_body_400(monkeypatch):
     def _never(filename, data):  # pragma: no cover
         raise AssertionError("upload fn must not run on an empty body")
 
-    monkeypatch.setattr(tool_catalog_http, "_upload_layer_file_fn", lambda: _never)
+    monkeypatch.setattr(layers, "_upload_layer_file_fn", lambda: _never)
     out = _drive(_post("/api/ingest-layer-file?filename=x.tif", b""))
     assert _status(out) == 400
 
 
 def test_ingest_layer_file_oversized_413_before_read(monkeypatch):
     """A Content-Length beyond the cap is rejected BEFORE the (absent) body
-    is read -- ``_post_no_length`` sends NO body bytes at all, so a bug that
+    is read -- ``_post_declaring`` sends NO body bytes at all, so a bug that
     tried to read first would raise/hang instead of cleanly 413ing."""
 
     def _never(filename, data):  # pragma: no cover
         raise AssertionError("upload fn must not run on an oversized body")
 
-    monkeypatch.setattr(tool_catalog_http, "_upload_layer_file_fn", lambda: _never)
+    monkeypatch.setattr(layers, "_upload_layer_file_fn", lambda: _never)
     from trid3nt_server.inputs.user_layer import MAX_INGEST_BYTES
 
-    out = _drive(
-        _post_no_length(
+    out = drive_raw(
+        _post_declaring(
             "/api/ingest-layer-file?filename=huge.tif", MAX_INGEST_BYTES + 1
         )
     )

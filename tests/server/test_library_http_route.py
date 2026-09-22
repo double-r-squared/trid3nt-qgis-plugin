@@ -7,73 +7,27 @@ model routes on, and the dispatcher's 404/405/OPTIONS arms hold."""
 
 from __future__ import annotations
 
-import asyncio
-import json
-
 import pytest
 
-from trid3nt_server.server.protocol import catalog_http as door
+from door_client import drive
+
+from trid3nt_server.server.protocol.doors import library as door
 
 
-class _FakeReader:
-    """Feed one raw HTTP/1.1 request, then EOF."""
-
-    def __init__(self, request: bytes):
-        self._data = request
-        self._pos = 0
-
-    async def readline(self):
-        idx = self._data.find(b"\n", self._pos)
-        if idx == -1:
-            chunk = self._data[self._pos:]
-            self._pos = len(self._data)
-            return chunk
-        chunk = self._data[self._pos:idx + 1]
-        self._pos = idx + 1
-        return chunk
-
-    async def readexactly(self, n: int):
-        if len(self._data) - self._pos < n:
-            raise asyncio.IncompleteReadError(b"", n)
-        chunk = self._data[self._pos:self._pos + n]
-        self._pos += n
-        return chunk
+def _get(path: str) -> tuple:
+    return ("GET", path, None)
 
 
-class _FakeWriter:
-    def __init__(self):
-        self.buffer = bytearray()
-        self.closed = False
-
-    def write(self, data: bytes):
-        self.buffer.extend(data)
-
-    async def drain(self):
-        return None
-
-    def close(self):
-        self.closed = True
+def _drive(spec: tuple):
+    return drive(*spec)
 
 
-def _drive(request: bytes) -> bytes:
-    reader = _FakeReader(request)
-    writer = _FakeWriter()
-    asyncio.run(door._handle_http(reader, writer))
-    assert writer.closed is True
-    return bytes(writer.buffer)
+def _status(out) -> int:
+    return out.status
 
 
-def _get(path: str) -> bytes:
-    return f"GET {path} HTTP/1.1\r\nHost: agent.local\r\n\r\n".encode()
-
-
-def _status(out: bytes) -> int:
-    return int(out.split(b" ", 2)[1])
-
-
-def _body_json(out: bytes) -> dict:
-    _, _, body = out.partition(b"\r\n\r\n")
-    return json.loads(body.decode("utf-8"))
+def _body_json(out) -> dict:
+    return out.json()
 
 
 @pytest.fixture
@@ -187,14 +141,14 @@ def test_search_with_no_query_answers_no_hits():
 
 def test_unknown_path_is_404_and_a_known_path_under_a_bad_method_is_405():
     assert _status(_drive(_get("/api/nothing-here"))) == 404
-    out = _drive(b"PUT /api/library HTTP/1.1\r\nHost: agent.local\r\n\r\n")
+    out = _drive(("PUT", "/api/library", None))
     assert _status(out) == 405
 
 
 def test_preflight_is_204_with_the_cors_headers():
-    out = _drive(b"OPTIONS /api/library HTTP/1.1\r\nHost: agent.local\r\n\r\n")
+    out = _drive(("OPTIONS", "/api/library", None))
     assert _status(out) == 204
-    assert b"Access-Control-Allow-Origin: *" in out
+    assert out.headers["Access-Control-Allow-Origin"] == "*"
 
 
 def test_a_route_fault_answers_that_route_s_one_message(monkeypatch):

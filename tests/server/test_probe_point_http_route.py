@@ -1,4 +1,4 @@
-"""HTTP-route wiring for ``/api/probe-point`` on the catalog listener.
+"""HTTP-route wiring for ``/api/probe-point`` on the layer door.
 
 Dispatch only - the sampling logic is covered where it lives. The route is served
 UNCONDITIONALLY; a missing or invalid field is a typed 400 with the core never
@@ -6,87 +6,37 @@ invoked; a typed core error is an honest 404 or 400."""
 
 from __future__ import annotations
 
-import asyncio
 import json
 
 import pytest
 
-from trid3nt_server.server.protocol import catalog_http as tool_catalog_http
+from door_client import drive
+
+from trid3nt_server.server.protocol.doors import layers
 from trid3nt_server.tools.derive.probe_point.probe_point import (
     ProbePointCaseNotFoundError,
     ProbePointInputError,
 )
 
 
-class _FakeReader:
-    """Feed a single raw HTTP/1.1 request (headers + optional body), then EOF."""
-
-    def __init__(self, request: bytes):
-        self._data = request
-        self._pos = 0
-
-    async def readline(self):
-        idx = self._data.find(b"\n", self._pos)
-        if idx == -1:
-            chunk = self._data[self._pos :]
-            self._pos = len(self._data)
-            return chunk
-        chunk = self._data[self._pos : idx + 1]
-        self._pos = idx + 1
-        return chunk
-
-    async def readexactly(self, n: int):
-        if len(self._data) - self._pos < n:
-            raise asyncio.IncompleteReadError(self._data[self._pos :], n)
-        chunk = self._data[self._pos : self._pos + n]
-        self._pos += n
-        return chunk
+def _post(path: str, body: bytes) -> tuple:
+    return ("POST", path, body)
 
 
-class _FakeWriter:
-    def __init__(self):
-        self.buffer = bytearray()
-        self.closed = False
-
-    def write(self, data: bytes):
-        self.buffer.extend(data)
-
-    async def drain(self):
-        return None
-
-    def close(self):
-        self.closed = True
+def _get(path: str) -> tuple:
+    return ("GET", path, None)
 
 
-def _post(path: str, body: bytes) -> bytes:
-    return (
-        f"POST {path} HTTP/1.1\r\n"
-        "Host: agent.local\r\n"
-        "Content-Type: application/json\r\n"
-        f"Content-Length: {len(body)}\r\n"
-        "\r\n"
-    ).encode() + body
+def _drive(spec: tuple):
+    return drive(*spec)
 
 
-def _get(path: str) -> bytes:
-    return (f"GET {path} HTTP/1.1\r\nHost: agent.local\r\n\r\n").encode()
+def _status(out) -> int:
+    return out.status
 
 
-def _drive(request: bytes) -> bytes:
-    reader = _FakeReader(request)
-    writer = _FakeWriter()
-    asyncio.run(tool_catalog_http._handle_http(reader, writer))
-    assert writer.closed is True
-    return bytes(writer.buffer)
-
-
-def _status(out: bytes) -> int:
-    return int(out.split(b" ", 2)[1])
-
-
-def _body_json(out: bytes) -> dict:
-    _, _, body = out.partition(b"\r\n\r\n")
-    return json.loads(body.decode("utf-8"))
+def _body_json(out) -> dict:
+    return out.json()
 
 
 @pytest.fixture(autouse=True)
@@ -136,7 +86,7 @@ def test_probe_point_post_happy_path(monkeypatch):
         calls.append(kwargs)
         return dict(result)
 
-    monkeypatch.setattr(tool_catalog_http, "_probe_point_fn", lambda: _fake_probe)
+    monkeypatch.setattr(layers, "_probe_point_fn", lambda: _fake_probe)
 
     body = json.dumps(
         {"case_id": "01CASE", "lon": -85.42, "lat": 29.95}
@@ -151,7 +101,7 @@ def test_probe_point_post_missing_case_id_400(monkeypatch):
     def _never():  # pragma: no cover
         raise AssertionError("probe fn must not be resolved on a bad request")
 
-    monkeypatch.setattr(tool_catalog_http, "_probe_point_fn", _never)
+    monkeypatch.setattr(layers, "_probe_point_fn", _never)
     body = json.dumps({"lon": -85.42, "lat": 29.95}).encode()
     out = _drive(_post("/api/probe-point", body))
     assert _status(out) == 400
@@ -162,7 +112,7 @@ def test_probe_point_post_missing_lon_400(monkeypatch):
     def _never():  # pragma: no cover
         raise AssertionError("probe fn must not be resolved on a bad request")
 
-    monkeypatch.setattr(tool_catalog_http, "_probe_point_fn", _never)
+    monkeypatch.setattr(layers, "_probe_point_fn", _never)
     body = json.dumps({"case_id": "01CASE", "lat": 29.95}).encode()
     out = _drive(_post("/api/probe-point", body))
     assert _status(out) == 400
@@ -179,7 +129,7 @@ def test_probe_point_post_case_not_found_404(monkeypatch):
     async def _fake_probe(**kwargs):
         raise ProbePointCaseNotFoundError("case '01GONE' not found.")
 
-    monkeypatch.setattr(tool_catalog_http, "_probe_point_fn", lambda: _fake_probe)
+    monkeypatch.setattr(layers, "_probe_point_fn", lambda: _fake_probe)
     body = json.dumps({"case_id": "01GONE", "lon": -85.42, "lat": 29.95}).encode()
     out = _drive(_post("/api/probe-point", body))
     assert _status(out) == 404
@@ -190,7 +140,7 @@ def test_probe_point_post_invalid_point_400(monkeypatch):
     async def _fake_probe(**kwargs):
         raise ProbePointInputError("lon/lat out of range")
 
-    monkeypatch.setattr(tool_catalog_http, "_probe_point_fn", lambda: _fake_probe)
+    monkeypatch.setattr(layers, "_probe_point_fn", lambda: _fake_probe)
     body = json.dumps({"case_id": "01CASE", "lon": 999.0, "lat": 29.95}).encode()
     out = _drive(_post("/api/probe-point", body))
     assert _status(out) == 400
@@ -201,7 +151,7 @@ def test_probe_point_post_unexpected_error_500(monkeypatch):
     async def _fake_probe(**kwargs):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr(tool_catalog_http, "_probe_point_fn", lambda: _fake_probe)
+    monkeypatch.setattr(layers, "_probe_point_fn", lambda: _fake_probe)
     body = json.dumps({"case_id": "01CASE", "lon": -85.42, "lat": 29.95}).encode()
     out = _drive(_post("/api/probe-point", body))
     assert _status(out) == 500

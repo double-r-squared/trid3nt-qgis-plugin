@@ -1,83 +1,41 @@
 """HTTP-route tests for ``GET /api/local-models``.
 
-The browser cannot reach Ollama directly, so the catalog listener proxies its
+The browser cannot reach Ollama directly, so the settings door proxies its
 tags. The route is ABSENT unless the active provider is openai; a 200 carries the
 mapped list with the configured default first; an unreachable upstream is an
 honest 502 rather than a fabricated success."""
 
 from __future__ import annotations
 
-import asyncio
 import json
 
-from trid3nt_server.server.protocol import catalog_http as tool_catalog_http
+from door_client import drive
+
 from trid3nt_server.adapters import model_discovery
 
 
-class _FakeReader:
-    """Feed a single HTTP/1.1 GET request, then EOF."""
-
-    def __init__(self, request: bytes):
-        self._lines = request.split(b"\r\n")
-        self._buf = [ln + b"\r\n" for ln in self._lines]
-
-    async def readline(self):
-        if self._buf:
-            return self._buf.pop(0)
-        return b""
+def _status(out) -> int:
+    return out.status
 
 
-class _FakeWriter:
-    def __init__(self):
-        self.buffer = bytearray()
-        self.closed = False
-
-    def write(self, data: bytes):
-        self.buffer.extend(data)
-
-    async def drain(self):
-        return None
-
-    def close(self):
-        self.closed = True
+def _body(out) -> dict:
+    return out.json()
 
 
-def _request(path: str) -> bytes:
-    return (f"GET {path} HTTP/1.1\r\nHost: agent.local\r\n\r\n").encode()
-
-
-def _run(coro):
-    return asyncio.run(coro)
-
-
-def _status(out: bytes) -> int:
-    return int(out.split(b" ", 2)[1])
-
-
-def _body(out: bytes) -> dict:
-    _, _, body = out.partition(b"\r\n\r\n")
-    return json.loads(body.decode("utf-8"))
-
-
-def _dispatch() -> _FakeWriter:
-    reader = _FakeReader(_request("/api/local-models"))
-    writer = _FakeWriter()
-    _run(tool_catalog_http._handle_http(reader, writer))
-    return writer
-
-
+def _dispatch():
+    return drive("GET", "/api/local-models")
 
 
 def test_route_absent_when_provider_is_not_openai(monkeypatch):
     monkeypatch.setenv("MODEL_PROVIDER", "anthropic")
-    writer = _dispatch()
-    assert _status(bytes(writer.buffer)) == 404
+    out = _dispatch()
+    assert _status(out) == 404
 
 
 def test_route_absent_when_provider_is_scripted(monkeypatch):
     monkeypatch.setenv("MODEL_PROVIDER", "scripted")
-    writer = _dispatch()
-    assert _status(bytes(writer.buffer)) == 404
+    out = _dispatch()
+    assert _status(out) == 404
 
 
 
@@ -98,8 +56,7 @@ def test_local_models_listed_with_default_first(monkeypatch):
     ).encode("utf-8")
     monkeypatch.setattr(model_discovery, "_fetch_local_models", lambda: body)
 
-    writer = _dispatch()
-    out = bytes(writer.buffer)
+    out = _dispatch()
     assert _status(out) == 200
     payload = _body(out)
     assert payload["default"] == "qwen3:8b-16k"
@@ -116,8 +73,7 @@ def test_upstream_unreachable_is_typed_502(monkeypatch):
         raise model_discovery._LocalModelsUpstreamError("ollama down")
 
     monkeypatch.setattr(model_discovery, "_fetch_local_models", _boom)
-    writer = _dispatch()
-    out = bytes(writer.buffer)
+    out = _dispatch()
     assert _status(out) == 502
     assert "ollama down" in _body(out)["error"]
 

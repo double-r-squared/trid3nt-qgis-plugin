@@ -6,9 +6,15 @@ relying on import ordering."""
 
 from __future__ import annotations
 
+import os
+import sys
 from typing import Any
 
 import pytest
+
+# The test-only helpers beside this file (``door_client``) are imported by name
+# from every slice; nothing puts their directory on the path but this.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from trid3nt_server import tools as agent_tools
 

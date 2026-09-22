@@ -151,9 +151,6 @@ def test_build_telemetry_summary_file_fallback(tmp_path, monkeypatch):
         ]:
             fh.write(json.dumps(r) + "\n")
 
-    # Force the server.get_persistence import to return None.
-    import trid3nt_server.server.protocol.catalog_http as mod
-
     async def go():
         # Patch the inline import at call-time by inserting a fake server module.
         return await build_telemetry_summary()

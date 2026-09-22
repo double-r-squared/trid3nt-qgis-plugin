@@ -7,7 +7,6 @@ index's sentinel, the zip-serve traversal guard, and the dispatcher's routing.""
 
 from __future__ import annotations
 
-import asyncio
 import io
 import json
 import logging
@@ -17,8 +16,9 @@ from pathlib import Path
 
 import pytest
 
+from door_client import drive, drive_raw
+
 from trid3nt_server import plugin_repo
-from trid3nt_server.server.protocol import catalog_http as tool_catalog_http
 
 
 _METADATA_TXT = """[general]
@@ -326,64 +326,29 @@ def test_build_version_payload_degrades_without_git(fake_repo):
 
 
 
-class _FakeReader:
-    def __init__(self, request: bytes):
-        self._buf = [ln + b"\r\n" for ln in request.split(b"\r\n")]
-
-    async def readline(self):
-        return self._buf.pop(0) if self._buf else b""
+def _status(out) -> int:
+    return out.status
 
 
-class _FakeWriter:
-    def __init__(self):
-        self.buffer = bytearray()
-        self.closed = False
-
-    def write(self, data: bytes):
-        self.buffer.extend(data)
-
-    async def drain(self):
-        return None
-
-    def close(self):
-        self.closed = True
+def _headers(out) -> dict[str, str]:
+    return {k.lower(): v for k, v in out.headers.items()}
 
 
-def _request(path: str, *, host: str | None = "agent.local") -> bytes:
+def _body_bytes(out) -> bytes:
+    return out.body
+
+
+def _body_json(out) -> dict:
+    return out.json()
+
+
+def _dispatch(path: str, *, host: str | None = "agent.local"):
+    """One GET at the door. ``host=None`` sends NO Host header at all, which is
+    the only way to reach the index's loopback fallback."""
     if host is None:
-        return f"GET {path} HTTP/1.1\r\n\r\n".encode()
-    return f"GET {path} HTTP/1.1\r\nHost: {host}\r\n\r\n".encode()
-
-
-def _status(out: bytes) -> int:
-    return int(out.split(b" ", 2)[1])
-
-
-def _headers(out: bytes) -> dict[str, str]:
-    head, _, _ = out.partition(b"\r\n\r\n")
-    lines = head.decode("latin-1").split("\r\n")[1:]
-    result: dict[str, str] = {}
-    for line in lines:
-        name, _, value = line.partition(":")
-        if name:
-            result[name.strip().lower()] = value.strip()
-    return result
-
-
-def _body_bytes(out: bytes) -> bytes:
-    _, _, body = out.partition(b"\r\n\r\n")
-    return body
-
-
-def _body_json(out: bytes) -> dict:
-    return json.loads(_body_bytes(out).decode("utf-8"))
-
-
-def _dispatch(path: str, *, host: str | None = "agent.local") -> _FakeWriter:
-    reader = _FakeReader(_request(path, host=host))
-    writer = _FakeWriter()
-    asyncio.run(tool_catalog_http._handle_http(reader, writer))
-    return writer
+        return drive_raw(
+            f"GET {path} HTTP/1.0\r\n\r\n".encode())
+    return drive("GET", path, headers={"Host": host})
 
 
 # --- /api/version -----------------------------------------------------------
@@ -395,7 +360,7 @@ def test_version_route_200(monkeypatch):
         "build_version_payload",
         lambda: {"git_sha": "abc1234", "provider": "bedrock"},
     )
-    out = bytes(_dispatch("/api/version").buffer)
+    out = (_dispatch("/api/version"))
     assert _status(out) == 200
     assert _body_json(out) == {"git_sha": "abc1234", "provider": "bedrock"}
 
@@ -405,7 +370,7 @@ def test_version_route_failure_is_500(monkeypatch):
         raise RuntimeError("git subprocess exploded")
 
     monkeypatch.setattr(plugin_repo, "build_version_payload", _boom)
-    out = bytes(_dispatch("/api/version").buffer)
+    out = (_dispatch("/api/version"))
     assert _status(out) == 500
 
 
@@ -414,7 +379,7 @@ def test_version_route_failure_is_500(monkeypatch):
 
 def test_plugins_xml_route_serves_packaged_index_with_host(fake_repo):
     plugin_repo.package_plugin_repo()
-    out = bytes(_dispatch("/plugin-repo/plugins.xml", host="agent.local:8766").buffer)
+    out = (_dispatch("/plugin-repo/plugins.xml", host="agent.local:8766"))
     assert _status(out) == 200
     assert _headers(out)["content-type"].startswith("text/xml")
     body = _body_bytes(out).decode()
@@ -427,13 +392,13 @@ def test_plugins_xml_route_serves_packaged_index_with_host(fake_repo):
 def test_plugins_xml_route_falls_back_when_host_absent(fake_repo, monkeypatch):
     monkeypatch.delenv("TRID3NT_AGENT_HTTP_PORT", raising=False)
     plugin_repo.package_plugin_repo()
-    out = bytes(_dispatch("/plugin-repo/plugins.xml", host=None).buffer)
+    out = (_dispatch("/plugin-repo/plugins.xml", host=None))
     assert _status(out) == 200
     assert "http://127.0.0.1:8766/plugin-repo/trid3nt.zip?v=1.2.3" in _body_bytes(out).decode()
 
 
 def test_plugins_xml_route_before_package_is_503(fake_repo):
-    out = bytes(_dispatch("/plugin-repo/plugins.xml").buffer)
+    out = (_dispatch("/plugin-repo/plugins.xml"))
     assert _status(out) == 503
     assert "not packaged" in _body_json(out)["error"]
 
@@ -443,7 +408,7 @@ def test_plugins_xml_route_unexpected_error_is_500(fake_repo, monkeypatch):
         raise RuntimeError("kaboom")
 
     monkeypatch.setattr(plugin_repo, "render_plugins_xml", _boom)
-    out = bytes(_dispatch("/plugin-repo/plugins.xml").buffer)
+    out = (_dispatch("/plugin-repo/plugins.xml"))
     assert _status(out) == 500
 
 
@@ -452,7 +417,7 @@ def test_plugins_xml_route_unexpected_error_is_500(fake_repo, monkeypatch):
 
 def test_zip_route_serves_packaged_bytes(fake_repo):
     info = plugin_repo.package_plugin_repo()
-    out = bytes(_dispatch(f"/plugin-repo/{info['zip_filename']}").buffer)
+    out = (_dispatch(f"/plugin-repo/{info['zip_filename']}"))
     assert _status(out) == 200
     headers = _headers(out)
     assert headers["content-type"] == "application/zip"
@@ -463,13 +428,13 @@ def test_zip_route_serves_packaged_bytes(fake_repo):
 
 def test_zip_route_unknown_file_is_404(fake_repo):
     plugin_repo.package_plugin_repo()
-    out = bytes(_dispatch("/plugin-repo/trid3nt-9.9.9.zip").buffer)
+    out = (_dispatch("/plugin-repo/trid3nt-9.9.9.zip"))
     assert _status(out) == 404
 
 
 def test_zip_route_traversal_is_404(fake_repo):
     plugin_repo.package_plugin_repo()
-    out = bytes(_dispatch("/plugin-repo/nope.zip").buffer)
+    out = (_dispatch("/plugin-repo/nope.zip"))
     assert _status(out) == 404
 
 
@@ -479,7 +444,7 @@ def test_zip_route_traversal_is_404(fake_repo):
 def test_fresh_zip_route_serves_valid_zip_no_packaging(fake_repo):
     # Deliberately no package_plugin_repo() call -- the whole point of this
     # route is that it works without the deploy-time step.
-    out = bytes(_dispatch("/plugin-repo/trid3nt.zip").buffer)
+    out = (_dispatch("/plugin-repo/trid3nt.zip"))
     assert _status(out) == 200
     headers = _headers(out)
     assert headers["content-type"] == "application/zip"
@@ -494,7 +459,7 @@ def test_fresh_zip_route_serves_valid_zip_no_packaging(fake_repo):
 
 
 def test_fresh_zip_route_ignores_cache_bust_query_string(fake_repo):
-    out = bytes(_dispatch("/plugin-repo/trid3nt.zip?v=1.2.3").buffer)
+    out = (_dispatch("/plugin-repo/trid3nt.zip?v=1.2.3"))
     assert _status(out) == 200
     assert _headers(out)["content-type"] == "application/zip"
 
@@ -503,7 +468,7 @@ def test_fresh_zip_route_missing_source_tree_is_503(tmp_path, monkeypatch):
     empty_root = tmp_path / "empty"
     empty_root.mkdir()
     monkeypatch.setenv("TRID3NT_REPO_ROOT", str(empty_root))
-    out = bytes(_dispatch("/plugin-repo/trid3nt.zip").buffer)
+    out = (_dispatch("/plugin-repo/trid3nt.zip"))
     assert _status(out) == 503
 
 
@@ -512,7 +477,7 @@ def test_fresh_zip_route_unexpected_error_is_500(fake_repo, monkeypatch):
         raise RuntimeError("kaboom")
 
     monkeypatch.setattr(plugin_repo, "build_fresh_zip", _boom)
-    out = bytes(_dispatch("/plugin-repo/trid3nt.zip").buffer)
+    out = (_dispatch("/plugin-repo/trid3nt.zip"))
     assert _status(out) == 500
 
 
@@ -520,5 +485,5 @@ def test_fresh_zip_route_unexpected_error_is_500(fake_repo, monkeypatch):
 
 
 def test_unknown_plugin_repo_path_is_404(fake_repo):
-    out = bytes(_dispatch("/plugin-repo/does-not-exist").buffer)
+    out = (_dispatch("/plugin-repo/does-not-exist"))
     assert _status(out) == 404

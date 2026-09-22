@@ -7,13 +7,13 @@ pure filter keeps free, tool-capable models and skips a malformed row."""
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 
 import pytest
 
-from trid3nt_server.server.protocol import catalog_http as tool_catalog_http
+from door_client import drive
+
 from trid3nt_server.adapters import model_discovery
 from trid3nt_server.gates import context_budget
 
@@ -43,83 +43,28 @@ def _isolate_provider_env():
 
 
 
-class _FakeReader:
-    def __init__(self, request: bytes):
-        self._lines = request.split(b"\r\n")
-        self._buf = [ln + b"\r\n" for ln in self._lines]
-        self._body = b""
-        # Split header block from body (the double CRLF).
-        head, _, body = request.partition(b"\r\n\r\n")
-        self._body = body
-        head_lines = head.split(b"\r\n")
-        self._buf = [ln + b"\r\n" for ln in head_lines] + [b"\r\n"]
-
-    async def readline(self):
-        if self._buf:
-            return self._buf.pop(0)
-        return b""
-
-    async def readexactly(self, n: int):
-        data = self._body[:n]
-        self._body = self._body[n:]
-        return data
+def _status(out) -> int:
+    return out.status
 
 
-class _FakeWriter:
-    def __init__(self):
-        self.buffer = bytearray()
-        self.closed = False
-
-    def write(self, data: bytes):
-        self.buffer.extend(data)
-
-    async def drain(self):
-        return None
-
-    def close(self):
-        self.closed = True
+def _resp_body(out) -> dict:
+    return out.json()
 
 
-def _post(path: str, body: bytes) -> bytes:
-    return (
-        f"POST {path} HTTP/1.1\r\nHost: agent.local\r\n"
-        f"Content-Type: application/json\r\n"
-        f"Content-Length: {len(body)}\r\n\r\n"
-    ).encode() + body
-
-
-def _run(coro):
-    return asyncio.run(coro)
-
-
-def _status(out: bytes) -> int:
-    return int(out.split(b" ", 2)[1])
-
-
-def _resp_body(out: bytes) -> dict:
-    _, _, body = out.partition(b"\r\n\r\n")
-    return json.loads(body.decode("utf-8"))
-
-
-def _dispatch(path: str, body: bytes) -> _FakeWriter:
-    reader = _FakeReader(_post(path, body))
-    writer = _FakeWriter()
-    _run(tool_catalog_http._handle_http(reader, writer))
-    return writer
-
-
+def _dispatch(path: str, body: bytes):
+    return drive("POST", path, body)
 
 
 def test_provider_config_absent_when_provider_is_not_openai(monkeypatch):
     monkeypatch.setenv("MODEL_PROVIDER", "anthropic")
-    writer = _dispatch("/api/provider-config", b'{"model":"x"}')
-    assert _status(bytes(writer.buffer)) == 404
+    out = _dispatch("/api/provider-config", b'{"model":"x"}')
+    assert _status(out) == 404
 
 
 def test_provider_config_absent_when_provider_is_scripted(monkeypatch):
     monkeypatch.setenv("MODEL_PROVIDER", "scripted")
-    writer = _dispatch("/api/provider-config", b'{"model":"x"}')
-    assert _status(bytes(writer.buffer)) == 404
+    out = _dispatch("/api/provider-config", b'{"model":"x"}')
+    assert _status(out) == 404
 
 
 
@@ -146,8 +91,7 @@ def test_provider_config_updates_env_and_returns_host(monkeypatch):
             "num_ctx": 32768,
         }
     ).encode("utf-8")
-    writer = _dispatch("/api/provider-config", body)
-    out = bytes(writer.buffer)
+    out = _dispatch("/api/provider-config", body)
 
     assert _status(out) == 200
     payload = _resp_body(out)
@@ -178,8 +122,7 @@ def test_provider_config_partial_body_only_sets_present(monkeypatch):
     monkeypatch.delenv("TRID3NT_OPENAI_MODEL", raising=False)
 
     # Only model present -> base_url + key untouched.
-    writer = _dispatch("/api/provider-config", b'{"model":"qwen3:8b-24k"}')
-    out = bytes(writer.buffer)
+    out = _dispatch("/api/provider-config", b'{"model":"qwen3:8b-24k"}')
     assert _status(out) == 200
     import os
 
@@ -198,8 +141,8 @@ def test_provider_config_empty_values_do_not_clobber(monkeypatch):
     # result depend on the sourcing box rather than on this test's own setup.
     monkeypatch.setenv("TRID3NT_OPENAI_BASE_URL", "http://127.0.0.1:11434/v1")
     # Empty api_key string must NOT overwrite an existing key.
-    writer = _dispatch("/api/provider-config", b'{"api_key":"","model":"m"}')
-    assert _status(bytes(writer.buffer)) == 200
+    out = _dispatch("/api/provider-config", b'{"api_key":"","model":"m"}')
+    assert _status(out) == 200
     import os
 
     assert os.environ["TRID3NT_OPENAI_API_KEY"] == "existing-key"
@@ -207,8 +150,7 @@ def test_provider_config_empty_values_do_not_clobber(monkeypatch):
 
 def test_provider_config_malformed_body_is_honest_400(monkeypatch):
     monkeypatch.setenv("MODEL_PROVIDER", "openai")
-    writer = _dispatch("/api/provider-config", b"not json at all")
-    out = bytes(writer.buffer)
+    out = _dispatch("/api/provider-config", b"not json at all")
     assert _status(out) == 400
     # Error is generic and does NOT echo the raw body.
     err = _resp_body(out)["error"]
@@ -217,8 +159,8 @@ def test_provider_config_malformed_body_is_honest_400(monkeypatch):
 
 def test_provider_config_non_object_body_is_400(monkeypatch):
     monkeypatch.setenv("MODEL_PROVIDER", "openai")
-    writer = _dispatch("/api/provider-config", b'["a","list"]')
-    assert _status(bytes(writer.buffer)) == 400
+    out = _dispatch("/api/provider-config", b'["a","list"]')
+    assert _status(out) == 400
 
 
 # base_url/model provider-coherence gate
@@ -247,8 +189,7 @@ def test_coherent_openrouter_pair_is_applied(monkeypatch):
             "model": "deepseek/deepseek-chat",
         }
     ).encode("utf-8")
-    writer = _dispatch("/api/provider-config", body)
-    out = bytes(writer.buffer)
+    out = _dispatch("/api/provider-config", body)
 
     assert _status(out) == 200
     assert _resp_body(out)["base_url_host"] == "openrouter.ai"
@@ -266,8 +207,7 @@ def test_coherent_ollama_pair_is_applied(monkeypatch):
     body = json.dumps(
         {"base_url": "http://127.0.0.1:11434/v1", "model": "llama3.1:8b"}
     ).encode("utf-8")
-    writer = _dispatch("/api/provider-config", body)
-    out = bytes(writer.buffer)
+    out = _dispatch("/api/provider-config", body)
 
     assert _status(out) == 200
     assert os.environ["TRID3NT_OPENAI_BASE_URL"] == "http://127.0.0.1:11434/v1"
@@ -287,8 +227,7 @@ def test_ollama_base_url_with_openrouter_model_is_rejected(monkeypatch):
     )
     # Only base_url is pushed -- the model rides in from the live env.
     body = b'{"base_url":"http://127.0.0.1:11434/v1"}'
-    writer = _dispatch("/api/provider-config", body)
-    out = bytes(writer.buffer)
+    out = _dispatch("/api/provider-config", body)
 
     assert _status(out) == 400
     err = _resp_body(out)["error"]
@@ -311,8 +250,7 @@ def test_openrouter_base_url_with_bare_tag_is_rejected(monkeypatch):
     body = json.dumps(
         {"base_url": "https://openrouter.ai/api/v1", "api_key": "sk-or-NEW-SECRET"}
     ).encode("utf-8")
-    writer = _dispatch("/api/provider-config", body)
-    out = bytes(writer.buffer)
+    out = _dispatch("/api/provider-config", body)
 
     assert _status(out) == 400
     err = _resp_body(out)["error"]
@@ -337,9 +275,9 @@ def test_unknown_provider_endpoint_is_not_gated(monkeypatch):
             "model": "meta-llama/Llama-3.1-8B-Instruct",
         }
     ).encode("utf-8")
-    writer = _dispatch("/api/provider-config", body)
+    out = _dispatch("/api/provider-config", body)
 
-    assert _status(bytes(writer.buffer)) == 200
+    assert _status(out) == 200
     assert os.environ["TRID3NT_OPENAI_MODEL"] == "meta-llama/Llama-3.1-8B-Instruct"
 
 
@@ -390,10 +328,9 @@ def test_namespaced_model_absent_from_ollama_is_rejected(monkeypatch):
         monkeypatch,
         payload={"models": [{"name": "qwen3:8b-24k"}, {"name": "llama3.1:8b"}]},
     )
-    writer = _dispatch(
+    out = _dispatch(
         "/api/provider-config", b'{"base_url":"http://127.0.0.1:11434/v1"}'
     )
-    out = bytes(writer.buffer)
 
     assert _TagsClient.calls == 1
     assert _status(out) == 400
@@ -417,9 +354,9 @@ def test_namespaced_model_installed_in_ollama_is_accepted(monkeypatch):
             "model": "hf.co/user/some-model",
         }
     ).encode("utf-8")
-    writer = _dispatch("/api/provider-config", body)
+    out = _dispatch("/api/provider-config", body)
 
-    assert _status(bytes(writer.buffer)) == 200
+    assert _status(out) == 200
     assert os.environ["TRID3NT_OPENAI_MODEL"] == "hf.co/user/some-model"
 
 
@@ -431,11 +368,11 @@ def test_probe_unreachable_does_not_reject(monkeypatch):
         monkeypatch, "https://openrouter.ai/api/v1", "deepseek/deepseek-chat"
     )
     _install_tags_probe(monkeypatch, boom=RuntimeError("connection refused"))
-    writer = _dispatch(
+    out = _dispatch(
         "/api/provider-config", b'{"base_url":"http://127.0.0.1:11434/v1"}'
     )
 
-    assert _status(bytes(writer.buffer)) == 200
+    assert _status(out) == 200
     assert os.environ["TRID3NT_OPENAI_BASE_URL"] == "http://127.0.0.1:11434/v1"
     assert os.environ["TRID3NT_OPENAI_MODEL"] == "deepseek/deepseek-chat"
 
@@ -448,17 +385,17 @@ def test_probe_empty_or_unusable_body_does_not_reject(monkeypatch):
         monkeypatch, "https://openrouter.ai/api/v1", "deepseek/deepseek-chat"
     )
     _install_tags_probe(monkeypatch, payload={"models": []})
-    writer = _dispatch(
+    out = _dispatch(
         "/api/provider-config", b'{"base_url":"http://127.0.0.1:11434/v1"}'
     )
-    assert _status(bytes(writer.buffer)) == 200
+    assert _status(out) == 200
     assert os.environ["TRID3NT_OPENAI_BASE_URL"] == "http://127.0.0.1:11434/v1"
 
     _install_tags_probe(monkeypatch, payload="not-a-dict")
-    writer = _dispatch(
+    out = _dispatch(
         "/api/provider-config", b'{"base_url":"http://127.0.0.1:11434/v1"}'
     )
-    assert _status(bytes(writer.buffer)) == 200
+    assert _status(out) == 200
 
 
 
