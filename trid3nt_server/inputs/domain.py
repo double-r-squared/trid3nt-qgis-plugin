@@ -251,11 +251,30 @@ def _carried_by(doc: Any, name: str | None, uri: str | None,
                       stated or _prescribed(doc, label, code), _companions(doc))
     if not any(str(g.get("type")) in ("LineString", "MultiLineString")
                for g in geometries):
-        raise UserInputError(
-            f"the {label} carries no polygon geometry. A domain is the CLOSED "
-            "outline the equations are solved over: draw it, name a polygon "
-            "layer, or let the template's own producer find one.", code=code)
+        raise UserInputError(_nothing_closed(geometries, uri, label), code=code)
     return Domain(_water_left_by(doc, extent, label, code), name, uri)
+
+
+def _nothing_closed(geometries: list[dict[str, Any]], uri: str | None,
+                    label: str) -> str:
+    """Why this document closes nothing, in the two cases a reader acts on
+    differently: a producer that RAN and returned nothing, and a document that
+    carries the wrong shape. An empty artifact and an absent one read alike
+    otherwise, and the reader is told to draw a polygon that already exists."""
+    closed = ("A domain is the CLOSED outline the equations are solved over: "
+              "draw it, name a polygon layer, or let the template's own "
+              "producer find one.")
+    if not uri:
+        return f"the {label} carries no polygon geometry. {closed}"
+    if not geometries:
+        return (f"the {label} was produced by {uri} and that artifact carries "
+                "ZERO features: the producer RAN and found nothing, which is "
+                "not the same as no producer running. Read that row's own "
+                f"refusal for what the service answered. {closed}")
+    kinds = sorted({str(g.get("type")) for g in geometries})
+    return (f"the {label} came from {uri}, which carries {len(geometries)} "
+            f"geometries of kind {', '.join(kinds)} - no polygon and no "
+            f"land-water edge among them. {closed}")
 
 
 def _one_polygon(polygons: list[dict[str, Any]]) -> dict[str, Any]:

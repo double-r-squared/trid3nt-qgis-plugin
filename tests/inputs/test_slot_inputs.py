@@ -349,3 +349,30 @@ def test_an_op_this_slot_does_not_know_refuses_by_name():
         bed(_merged(0.74), op={"name": "interpolated", "max_distance_m": 500.0})
     with pytest.raises(UserInputError, match="'merge'"):
         bed(_merged(0.74), op={"name": "merge"})
+
+
+def test_an_empty_artifact_and_an_absent_producer_refuse_DIFFERENTLY(tmp_path):
+    """An empty fetch and an absent fetch read identically otherwise, and the
+    reader is told to draw a polygon a producer already went looking for."""
+    import json
+
+    with pytest.raises(UserInputError) as drawn:
+        domain({"type": "Point", "coordinates": [0.0, 0.0]})
+    assert "producer RAN" not in str(drawn.value)
+
+    nothing = tmp_path / "water.geojson"
+    nothing.write_text(json.dumps({"type": "FeatureCollection", "features": []}))
+    with pytest.raises(UserInputError) as ran:
+        domain(str(nothing))
+    message = str(ran.value)
+    assert "producer RAN and found nothing" in message
+    assert str(nothing) in message
+
+    gauges = tmp_path / "gauges.geojson"
+    gauges.write_text(json.dumps({"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {},
+         "geometry": {"type": "Point", "coordinates": [0.0, 0.0]}}]}))
+    with pytest.raises(UserInputError) as wrong_shape:
+        domain(str(gauges))
+    assert "1 geometries of kind Point" in str(wrong_shape.value)
+    assert "producer RAN" not in str(wrong_shape.value)
