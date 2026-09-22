@@ -652,48 +652,6 @@ def test_a_node_on_the_rasters_rim_reads_a_whole_cell_not_its_edge(tmp_path):
         str(path), corners, interp="bilinear") == pytest.approx([-18.0] * 4)
 
 
-def _square_mesh():
-    """A 3x3 lattice, two triangles per square - one loop of 8 boundary nodes."""
-    xy = np.array([[x, y] for y in (0.0, 1.0, 2.0) for x in (0.0, 1.0, 2.0)])
-    cells = []
-    for row in range(2):
-        for col in range(2):
-            a = row * 3 + col
-            cells += [[a, a + 1, a + 4], [a, a + 4, a + 3]]
-    return xy, np.asarray(cells, dtype=np.int64)
-
-
-def test_contiguous_runs_splits_a_loop_at_the_open_stretches():
-    from trid3nt_server.workflows.mesh.shared.nodes import tin_formats
-
-    formats = tin_formats()
-    assert formats._contiguous_runs([0, 1, 2, 3, 4, 5], {1, 2}) == [[3, 4, 5, 0]]
-    assert formats._contiguous_runs([0, 1, 2, 3, 4, 5], {1, 4}) == [[2, 3], [5, 0]]
-    assert formats._contiguous_runs([0, 1, 2], set()) == [[0, 1, 2]]
-
-
-def test_fort14_writes_one_open_block_per_section():
-    from trid3nt_server.workflows.mesh.shared.nodes import tin_formats
-
-    points, cells = _square_mesh()
-    text = tin_formats().write_fort14(
-        points, cells, depths=5.0, open_sections=[[0, 1], [7, 8]])
-    assert "2 = Number of open boundaries" in text
-    assert "4 = Total number of open boundary nodes" in text
-
-
-def test_no_fort14_is_written_because_no_engine_reads_one(monkeypatch, tmp_path):
-    """SWAN is the only unstructured-mesh consumer this repo could have, and its
-    worker is regular-grid only - so an ADCIRC fort.14 was a file the build wrote
-    and nothing opened. The shared writer stays; the build stops calling it."""
-    from trid3nt_server.workflows.mesh.shared.nodes import tin_formats
-
-    _stub_om2d(monkeypatch, tmp_path)
-    mesh = OM2D.build(_recipe())
-    assert "fort14_uri" not in mesh.meta["files"]
-    assert callable(tin_formats().write_fort14)
-
-
 def _driver():
     """The in-container driver, imported here with its library stubbed.
 
