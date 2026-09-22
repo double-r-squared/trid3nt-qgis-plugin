@@ -27,7 +27,7 @@ __all__ = [
     "gate_input_review",
 ]
 
-#: Run-mode lever (shared vocabulary with the mesh preview gate). ``auto``
+#: Run-mode lever for every gated thing. ``auto``
 #: proceeds immediately with labeled inputs; ``user_gated`` pauses for review.
 InputGateMode = Literal["auto", "user_gated"]
 
