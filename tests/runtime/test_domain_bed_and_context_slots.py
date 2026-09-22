@@ -34,13 +34,13 @@ def test_a_domain_row_is_one_slot_however_it_is_filled():
         domain = Data.supplied(geometry="polygon")
 
     class FETCHED:
-        domain = Data(tool("fetch_river_reach", seed=[1.0, 2.0]))
+        domain = Data(tool("fetch_nhd_waterbody_at_point", seed_point=[1.0, 2.0]))
 
     drawn, fetched = data_rows(DRAWN)[0], data_rows(FETCHED)[0]
     assert drawn.role == fetched.role == DOMAIN
     # BOTH are on the wire: what the user hands in supersedes the producer.
     assert drawn.fills_from_user and fetched.fills_from_user
-    assert fetched.producer.runner == "fetch_river_reach"
+    assert fetched.producer.runner == "fetch_nhd_waterbody_at_point"
 
 
 def test_a_bed_row_takes_every_source_a_survey_arrives_in_but_a_mesh():

@@ -46,7 +46,7 @@ def test_the_world_is_the_water_a_coastline_leaves_inside_the_window():
     assert rows["extent"].role == EXTENT
     assert rows["extent"].geometry == "rectangle"
     domain = rows["domain"]
-    assert (domain.role, domain.data_class, domain.observes, domain.geometry) \
+    assert (domain.role, domain.data_class, domain.kind, domain.geometry) \
         == (DOMAIN, "hydrography", "coastline", "polyline")
     assert domain.producer is None
     assert rows["bed"].role == BED

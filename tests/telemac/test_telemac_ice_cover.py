@@ -146,7 +146,7 @@ def test_the_only_params_are_the_questions_own_inputs():
     from trid3nt_server.workflows.runtime import param_rows
 
     assert {p.name for p in param_rows(template.PARAMS)} == {
-        "seed", "body", "station", "cover_threshold", "mesh_resolution_m"}
+        "seed", "station", "cover_threshold", "mesh_resolution_m"}
 
 
 def test_the_granularity_row_is_restated_only_for_its_own_default():

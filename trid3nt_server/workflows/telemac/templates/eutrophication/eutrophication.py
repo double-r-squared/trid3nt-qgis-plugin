@@ -83,7 +83,7 @@ class DATA:
     # the mapped water and arrives with its two end transects - which is where
     # the inflow and the outflow are prescribed - and with its centerline, which
     # is the line every longitudinal read below is taken along.
-    domain = Data.need("hydrography", of="reach", at=Ref("seed"),
+    domain = Data.need("hydrography", at=Ref("seed"),
                        span_km=_REACH_LENGTH_KM)
     # THE LINE every longitudinal read is taken along.
     line = Data.supplied(geometry="polyline")

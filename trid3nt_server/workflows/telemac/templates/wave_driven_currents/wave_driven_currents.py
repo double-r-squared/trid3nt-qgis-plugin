@@ -92,7 +92,7 @@ class DATA:
     #: the source it comes from, and the feature of that class this question
     #: reads. A line is not a domain, so the slot cuts the window above with it
     #: and the water that leaves is what both modules are solved over.
-    domain = Data.need("hydrography", of="coastline", geometry="polyline")
+    domain = Data.need("hydrography", kind="coastline", geometry="polyline")
     #: ONE bed: the class it is defined over rather than the source it comes
     #: from. Where the depth falls is where the waves break, and where they
     #: break is where the current is driven, so this surface decides the answer

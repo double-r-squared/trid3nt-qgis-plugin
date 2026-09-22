@@ -205,7 +205,7 @@ docstring: |-
   Rendering: a VECTOR layer renders INLINE on the map automatically.
 
   Cross-tool dependencies:
-      - Composes WITH: ``fetch_river_reach`` (the domain the survey is read
+      - Composes WITH: ``fetch_nhd_water_surface`` (the water the survey is read
         over),
         ``fetch_dem`` (the banks the survey does not measure).
       - Upstream data source: USACE eHydro

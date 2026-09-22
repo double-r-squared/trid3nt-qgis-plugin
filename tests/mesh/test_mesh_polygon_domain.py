@@ -252,20 +252,21 @@ def test_a_lattice_still_builds_from_a_box():
     assert REG_GRID.build(recipe).node_count > 0
 
 
-def test_a_reach_the_fetcher_cut_meshes_as_the_domain(monkeypatch, tmp_path):
-    """The reach fetcher cuts the mapped water square to the walk and publishes the
-    polygon; the mesher takes that polygon the way it takes any fetched vector."""
-    from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
-    from trid3nt_server.tools.fetchers.hydrology.fetch_river_reach.hooks import (
-        _cut_reach)
+def test_a_stretch_the_domain_slot_cut_meshes_as_the_domain(monkeypatch, tmp_path):
+    """The domain slot cuts the mapped water surface square to the line it was
+    handed; the mesher takes that polygon the way it takes any fetched vector."""
+    from shapely.geometry import LineString, shape
+
+    from trid3nt_server.inputs.domain import _cut_square
 
     sent = _stub_om2d(monkeypatch, tmp_path)
     water = {"type": "Polygon", "coordinates": [[
         [-75.80, 36.12], [-75.70, 36.12], [-75.70, 36.18], [-75.80, 36.18],
         [-75.80, 36.12]]]}
-    spec = compose_specs_from_tree()["fetch_river_reach"]
-    geom, _props = _cut_reach(spec, water, [[-75.78, 36.15], [-75.72, 36.15]])
-    path = tmp_path / "reach.geojson"
+    geom, _faces = _cut_square(
+        [shape(water)], LineString([(-75.78, 36.15), (-75.72, 36.15)]),
+        "domain", "DOMAIN_INVALID")
+    path = tmp_path / "stretch.geojson"
     path.write_text(json.dumps(geom))
     OM2D.build(_recipe(extent=str(path)))
     assert sent["config"]["domain_geojson"] == "/data/domain.geojson"

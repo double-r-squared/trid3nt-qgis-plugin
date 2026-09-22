@@ -1,0 +1,164 @@
+# The mapped WATER SURFACE at a seed: NHDArea (NHDPlus HR MapServer layer 8), the
+# polygons a wide channel has two banks in. One service, queried over an envelope
+# the seed and the radius make, returned as polygons a domain can be cut out of.
+schema_version: v1
+
+name: fetch_nhd_water_surface
+source_class: nhd_water_surface
+error_prefix: NHD_WATER_SURFACE
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+shape: vector-fgb
+supports_global_query: false
+
+endpoints:
+  data:
+    url: "https://hydro.nationalmap.gov/arcgis/rest/services/NHDPlus_HR/MapServer/8/query"
+    # NHDArea maps every water surface, including the structures ON a river. The
+    # water itself is StreamRiver and CanalDitch, named by the service's own FType
+    # codes. The generalization tolerance is the bank detail a mesh needs rather
+    # than every vertex of the mainstem.
+    query:
+      where: "FType IN (460, 537)"
+      geometryType: "esriGeometryEnvelope"
+      inSR: "4326"
+      outSR: "4326"
+      spatialRel: "esriSpatialRelIntersects"
+      outFields: "ftype"
+      returnGeometry: "true"
+      maxAllowableOffset: "0.00005"
+      resultRecordCount: "200"
+      f: "geojson"
+
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+params:
+  seed_point: {type: point, required: true}
+  radius_km: {type: float, default: 3.0, min: 0.1, max: 50.0}
+
+ingest:
+  access: http_json
+  body:
+    format: geojson
+    rows_path: features
+    geometry:
+      kind: geojson
+      path: geometry
+  column_map:
+    ftype:
+      from: properties.ftype
+  geometry_filter:
+    geom_types: [Polygon, MultiPolygon]
+    require_finite: true
+
+hooks:
+  build_request: nhd_water_surface.build_request
+
+normalize:
+  crs: "EPSG:4326"
+  units: null
+
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  display_name: "NHD water surface"
+  bbox_from_features:
+    pad: 0.002
+  style:
+    kind: reference
+    geometry: polygon
+
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: per_feature
+  kb_per_feature: 120.0
+  features_per_sq_deg: 20.0
+  floor_mb: 0.05
+  ceil_mb: 5.0
+
+coverage:
+-   data_class: hydrography
+    kind: measured
+    extent:
+      kind: surface
+      rings:
+      - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
+      note: NHDPlus HR NHDArea over CONUS; a channel too narrow for NHD to map a
+        water surface is a flowline only and draws nothing here
+    window:
+      series: false
+      latest: '2023-01-01'
+    resolution_m: 5.0
+    datum: null
+    units: {}
+    # HOW FAR the question reaches is stated generically on the row and heard
+    # here in this source's word for it.
+    ask: {radius_km: "need:span_km"}
+    # WHAT THIS ROW PUBLISHES of its class: the mapped WATER SURFACE - the two
+    # banks of a channel wide enough for NHD to map one. Not the centreline
+    # through it and not the closed body a shoreline encloses.
+    vocabulary:
+      water surface: water surface
+
+caveats:
+  - "a channel too narrow for NHD to map a water SURFACE has no polygon here - that is a fact about the channel, not a fetch failure"
+  - "every surface intersecting the envelope comes back WHOLE, so a polygon reaches well past the radius asked for"
+  - "StreamRiver and CanalDitch only: the dams, locks and bridges NHDArea also maps are structures on the water rather than the water"
+  - "CONUS only (NHDPlus HR)"
+
+docstring: |-
+  Fetch the mapped WATER SURFACE around a seed -> the polygons a wide channel has two banks in.
+
+  What it does:
+      Queries USGS NHDPlus HR NHDArea over an envelope the seed and
+      ``radius_km`` make and returns every StreamRiver or CanalDitch polygon
+      that intersects it, whole. This is the river's WIDTH: unlike a flowline,
+      which is a one-dimensional centreline, these polygons are the two banks
+      the water runs between.
+
+  When to use:
+      - A river question needs the water its domain is cut out of: the domain
+        slot asks for this beside the flowline and cuts the two together.
+      - You want to see or measure how WIDE a river, estuary or canal is at a
+        place.
+
+  When NOT to use:
+      - DO NOT use for a lake, pond or reservoir - that is a closed body,
+        ``fetch_nhd_waterbody_at_point``.
+      - DO NOT use for the centreline or the stream NETWORK - that is
+        ``fetch_nhdplus_nldi_navigate``.
+      - DO NOT use for the river BED: this is geometry only. The bed comes from
+        ``fetch_ehydro_surveys``, a bathymetry fetcher, or a DEM.
+
+  Parameters:
+      seed_point: ``(lon, lat)`` in EPSG:4326, on or near the channel. Example,
+          the Willamette at Portland: ``(-122.6735, 45.5175)``.
+      radius_km: how far around the seed the envelope reaches, default ``3.0``,
+          range ``[0.1, 50]``.
+
+  Returns:
+      ``LayerURI`` for a FlatGeobuf in EPSG:4326 whose rows carry ``ftype``
+      (460 StreamRiver, 537 CanalDitch). ``layer_type="vector"``,
+      ``role="primary"``.
+
+  Rendering: a VECTOR layer renders INLINE on the map automatically.
+
+  Cross-tool dependencies:
+      - Upstream: ``geocode_location`` for the seed from a place name.
+      - Composes WITH: ``fetch_nhdplus_nldi_navigate`` (the centreline through
+        these banks), ``build_mesh`` (a polygon is its extent).
+      - Upstream data source: USGS NHDPlus HR NHDArea.
+
+  Cache: ``ttl_class="static-30d"``, keyed on the seed and the radius; the
+  mapped banks are multi-year stable.
+
+  Errors:
+      - ``NHD_WATER_SURFACE_INPUT_INVALID``: a malformed seed point.
+      - ``NHD_WATER_SURFACE_EMPTY``: NHD maps no water surface in the envelope.
+      - ``NHD_WATER_SURFACE_UPSTREAM_ERROR``: the NHD service failed.
+
+  Tier-1 free. No API key.

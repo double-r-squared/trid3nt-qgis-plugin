@@ -54,7 +54,7 @@ def test_the_catchment_is_one_need_row_asked_at_the_pour_point():
     rows = _rows()
     domain = rows["domain"]
     assert domain.role == "domain" and domain.data_class == "hydrography"
-    assert domain.observes == "basin"
+    assert domain.kind == "basin"
     assert domain.coercion["near"].path == "pour_point"
     assert domain.span_km == 15.0
     assert domain.producer is None
@@ -70,7 +70,7 @@ def test_a_pond_beside_the_pour_point_is_not_this_question_s_catchment():
 
     domain = _rows()["domain"]
     choice = match(Need(slot="domain", data_class=domain.data_class,
-                        lon=-83.40402, lat=35.05746, of=domain.observes),
+                        lon=-83.40402, lat=35.05746, of=domain.kind),
                    sources_with_coverage())
     assert choice.picked == "fetch_watershed"
     assert [row.fetcher for row in choice.rows if not row.excluded] == [

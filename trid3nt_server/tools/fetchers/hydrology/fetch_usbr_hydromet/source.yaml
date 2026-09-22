@@ -160,7 +160,7 @@ docstring: |-
   Rendering: a VECTOR layer renders INLINE on the map automatically.
 
   Cross-tool dependencies:
-      - Composes WITH: ``fetch_river_reach`` (the reach the dam sits on).
+      - Composes WITH: ``fetch_nhd_water_surface`` (the water the dam sits on).
       - Upstream data source: USBR RISE (data.usbr.gov/rise/api).
 
   Cache: ``ttl_class="dynamic-1h"``; RISE values are provisional and can revise.

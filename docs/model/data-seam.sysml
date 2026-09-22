@@ -1051,15 +1051,24 @@ package DataSeam {
         the moment the run asks at, the vertical lever - and the place is the
         domain's centre unless the row states the point it is asked at.
         WHAT OF THE CLASS the row asks for is the word the answering
-        source publishes it under, and where ONE question is asked of two
-        kinds of thing it is a read of the param that settles which, bound
-        before the match runs the way the point the row is asked at is. A
-        DOMAIN that states no feature at all is answered for the water its SEED
-        stands on: which kind of water a place is is a fact of the PLACE, read
-        off the word the service that resolved it already published and turned
-        by the domain slot into the word the sources publish that feature
-        under, so a question never carries the narrowing itself. A seed nothing
-        said a type for is unclassified and every row of the class is ranked.
+        source publishes it under: the published variable a record is a
+        measurement of, and on the DOMAIN the KIND the equations are solved
+        over. A domain's kind is a fact of the PLACE, read off the word the
+        service that resolved it already published and turned by the domain
+        slot into the word the sources publish that feature under, so a
+        question never carries the narrowing itself. A seed nothing said a type
+        for is unclassified and every row of the class is ranked. Where the
+        seed CANNOT imply the kind - the land draining through a pour point,
+        the water inside a box drawn over land and water - the template states
+        its domain's kind as one word on the need, and a stated kind wins.
+
+        A SLOT MAY DECLARE ROWS BESIDE ITS OWN. What fills a slot is not always
+        one artifact: a place on a flowline reaches the domain as a line, and a
+        line is not something the equations are solved over. The slot states
+        the rows it needs - the water surface the line runs between - and the
+        runtime produces each through the match, under the slot, the way the
+        rows a merge op names are produced; the cut between them is the slot's
+        own coercion. Declaring a need is not fetching.
 
         NO ROW STATES A UNIT. What a measured slot's record is read in is the
         unit of the KEYWORD its role fills, which the engine's transform fixes,
@@ -1537,7 +1546,17 @@ package DataSeam {
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
         "tests/inputs/test_place_kind.py::test_a_place_that_is_not_water_says_nothing";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
-        "tests/runtime/test_feature_ref.py::test_a_domain_states_no_feature_and_the_seed_says_which_water";
+        "tests/runtime/test_feature_ref.py::test_a_domain_states_no_kind_and_the_seed_says_which_water";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/runtime/test_feature_ref.py::test_the_kind_a_template_states_is_not_overruled_by_the_place";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/runtime/test_declared_rows.py::test_a_place_on_a_flowline_has_its_water_surface_produced_for_it";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/runtime/test_declared_rows.py::test_a_declared_row_nothing_measured_refuses_by_name";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/inputs/test_domain_cut.py::test_a_place_on_a_flowline_declares_the_water_surface_beside_it";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/inputs/test_domain_cut.py::test_the_cut_domain_carries_its_two_runs_and_the_centerline";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
         "tests/search/test_source_match.py::test_one_survivor_fills_the_slot_and_the_sentence_names_the_facts";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by

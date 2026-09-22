@@ -126,7 +126,7 @@ caveats:
   - "a seed inside several nested outlines takes the SMALLEST containing body, which is the one a person pointing at that spot means"
   - "a body over 2,000 km2 REFUSES by name with the area it found: a mesh over it is a quarter of a million nodes at a 100 m edge before the bed is painted, and a Great Lake is not a canvas domain - the refusal names the draw-the-outline path"
   - "the high-resolution service is primary and the medium-resolution service is its same-data mirror"
-  - "open water only - lakes, ponds, reservoirs, playas, estuaries; a vegetated wetland is fetch_nwi_wetlands and a river's mapped surface is fetch_river_reach"
+  - "open water only - lakes, ponds, reservoirs, playas, estuaries; a vegetated wetland is fetch_nwi_wetlands and a river's mapped surface is fetch_nhd_water_surface"
 
 docstring: |-
   Fetch ONE NHD WATERBODY POLYGON from one seed point -> a lake, pond or reservoir as a model domain.
@@ -154,7 +154,9 @@ docstring: |-
         in a box.
 
   When NOT to use:
-      - DO NOT use for a stretch of RIVER - that is ``fetch_river_reach``.
+      - DO NOT use for a stretch of RIVER - that is
+        ``fetch_nhd_water_surface`` cut at the ends of a walk from
+        ``fetch_nhdplus_nldi_navigate``.
       - DO NOT use for a catchment - that is ``fetch_watershed``.
       - DO NOT use to map EVERY waterbody in an area - that is
         ``fetch_nhd_waterbodies``, which takes a bbox and returns the set.

@@ -462,9 +462,10 @@ async def _matched(env: _Env, decl: DataDecl) -> Any:
     # slot finds nothing usable in - a gauge reporting no streamflow over a
     # closed body - held nothing for this run either, and the next survivor
     # takes its turn rather than the run standing on the first answer.
+    beside = await _beside(env, decl)
     choice, value = await _probe(
         env, decl, decl.data_class, decl.name,
-        read=lambda answer, row: _ingested(env, decl, answer, row))
+        read=lambda answer, row: _ingested(env, decl, answer, row, beside))
     if value is None:
         if decl.is_optional or decl.is_context:
             # A slot nothing measured is an absence the run STATES - the run's
@@ -476,6 +477,33 @@ async def _matched(env: _Env, decl: DataDecl) -> Any:
         raise StepFailedError(choice.sentence, error_code="DATA_NEED_UNMATCHED",
                               step=_data_step_label(decl.name))
     return value
+
+
+async def _beside(env: _Env, decl: DataDecl) -> dict[str, Any]:
+    """The rows this SLOT declared beside the one its own class matched.
+
+    A slot may state that what fills it is not one artifact - a line and the
+    water surface it runs between - and each of those is produced here, under
+    this slot, through the match, exactly as the rows a merge op names are. The
+    slot still fetches nothing: it states a need and the match fills it. Empty
+    for every slot and every kind that declares none."""
+    from trid3nt_server.inputs.slots import needs_of
+
+    seed = await _bind_value(decl.coercion.get("near"), env)
+    held: dict[str, Any] = {}
+    for name, word, geometry in needs_of(decl.role, _asked_of(decl, seed)):
+        aside = dataclasses.replace(decl, name=f"{decl.name}_{name}", kind="",
+                                    observes=word, geometry=geometry)
+        _choice, value = await _probe(env, aside, decl.data_class, aside.name)
+        if value is None:
+            raise StepFailedError(
+                f"the {decl.name!r} slot needs the {word} at this place beside "
+                f"the {_asked_of(decl, seed)} it stands on, and nothing "
+                "measured one here.",
+                error_code="DATA_NEED_UNMATCHED",
+                step=_data_step_label(aside.name))
+        held[name] = value
+    return held
 
 
 async def _bed_surface(env: _Env, decl: DataDecl) -> Any:
@@ -708,24 +736,22 @@ async def _need(env: _Env, decl: DataDecl, data_class: str,
                 opens=str(opens) if opens else None,
                 until=_closes(opens, env.window_s), frame=run_frame(env.params),
                 mesh_m=_mesh_m(env), pick=_pick(env, decl, data_class),
-                of=await _asked_of(env, decl, seed), water=_water())
+                of=_asked_of(decl, seed), water=_water())
 
 
-async def _asked_of(env: _Env, decl: DataDecl, seed: Any) -> str:
-    """WHAT OF ITS CLASS this row asks the world for, bound.
+def _asked_of(decl: DataDecl, seed: Any) -> str:
+    """WHAT OF ITS CLASS this row asks the world for.
 
-    A question asked of two kinds of water states the feature as a read of the
-    param that settles it, and the read is bound here rather than at
-    declaration, the way the point the row is asked at is. A DOMAIN the
-    question states no feature for takes the one the SEED stands on: which
-    water a place is, is a fact of the place, so the run reads it off the seed
-    rather than hearing it from the question."""
+    THE DOMAIN asks for its own KIND: the one the template states where the
+    seed cannot imply it, else the one the SEED stands on - which water a place
+    is, is a fact of the place, so the run reads it off the seed rather than
+    hearing it from the question. Every other row asks for the variable it
+    observes."""
     from trid3nt_server.inputs.domain import place_kind
 
-    stated = str(await _bind_value(decl.observes, env) or "")
-    if stated or decl.role != DOMAIN:
-        return stated
-    return place_kind(seed)
+    if decl.role == DOMAIN:
+        return decl.kind or place_kind(seed)
+    return str(decl.observes or "")
 
 
 async def _somewhere_to_ask(env: _Env) -> None:
@@ -863,7 +889,7 @@ async def _ask_for(env: _Env, choice: SourceChoice,
         _around(dom.bbox, _mesh_m(env)) if dom is not None and dom.bbox else None,
         lon, lat, str(opens) if opens else None,
         _closes(opens, env.window_s)), lon, lat,
-        {"span_km": decl.span_km, "of": await _asked_of(env, decl, seed) or None,
+        {"span_km": decl.span_km, "of": _asked_of(decl, seed) or None,
          "seed_point": None if lon is None or lat is None else [lon, lat]})
 
 
@@ -903,7 +929,8 @@ async def _domain_companion(env: _Env, named: str) -> Any:
 
 
 async def _ingested(env: _Env, decl: DataDecl, value: Any,
-                    row: Any = None) -> Any:
+                    row: Any = None, beside: Mapping[str, Any] | None = None
+                    ) -> Any:
     """A SLOT's value through the one ingestion its role reads; a plain row's
     value as it came.
 
@@ -918,10 +945,15 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any,
     stated = str(coercion.pop("measures", "") or "")
     coercion.pop("opens", None)
     coercion.update(_what_the_run_calls_it(
-        env, decl, stated, await _asked_of(env, decl, coercion.get("near"))))
+        env, decl, stated, _asked_of(decl, coercion.get("near"))))
     coercion.update(_the_window_it_is_cut_from(decl))
     coercion.update(await _on_the_run_s_frame(env, decl, value))
     coercion.update(_what_the_record_reports(env, decl, row))
+    # WHAT THE SLOT DECLARED BESIDE the matched row, and how far the question
+    # reaches: the ingestion that states a need is the ingestion that reads it.
+    coercion.update(dict(beside or {}))
+    if beside:
+        coercion["span_km"] = decl.span_km
     coercion["op"] = env.ops.get(decl.name)
     ingested = await asyncio.to_thread(ingest_slot, decl.role, value,
                                        label=decl.name, **coercion)

@@ -251,14 +251,17 @@ class DataDecl(Row):
     #: off it, so a question states none of them.
     data_class: str = ""
     #: WHAT OF ITS CLASS this row asks for, by the name the source publishes it
-    #: under. On a slot that reads a RECORD it is the variable the run itself
-    #: publishes - a measurement and the thing it measures are comparable in one
-    #: unit, so the record is read in that variable's, off the run's published
-    #: table and never off the row. On every other slot it is the FEATURE asked
-    #: for. Empty where any of the class will do. A :class:`Ref` where the
-    #: feature is the CALLER'S - one question asked of two kinds of water - and
-    #: it is bound at run time the way the point the row is asked at is.
-    observes: str | Ref = ""
+    #: under: the variable the run itself publishes, which a measurement of it
+    #: is comparable against in one unit and no other. Empty where any of the
+    #: class will do. The DOMAIN states none - the water it is solved over is
+    #: the place's own kind, which is ``kind`` above.
+    observes: str = ""
+    #: THE DOMAIN'S OWN KIND, in the word a source publishes that feature under.
+    #: Stated only where the SEED cannot imply it - the land draining through a
+    #: pour point, the water inside a box drawn over land and water - because
+    #: which water a place is, is a fact of the place and is read off the seed
+    #: otherwise. A stated kind always wins.
+    kind: str = ""
     #: HOW FAR this question's domain reaches, in kilometres: the one opinion a
     #: question has about its own extent. Generic, because every source calls it
     #: something else - the coverage row's ``ask`` block maps it to the param
@@ -322,6 +325,16 @@ class DataDecl(Row):
                 "whose absence is legal. A row nothing goes out for already says "
                 "absence with .optional()."
             )
+
+    def __set_name__(self, owner: type, name: str) -> None:
+        """The row's name IS its slot, so what only one slot may state is
+        refused here, where the name first exists."""
+        Row.__set_name__(self, owner, name)
+        if self.kind and self.role != DOMAIN:
+            raise PlanValidationError(
+                f"Data {name!r} states kind={self.kind!r} and is not the "
+                "domain: a kind is the DOMAIN'S own - the water the equations "
+                "are solved over - and no other row has one to state.")
 
     @property
     def is_supplied(self) -> bool:
@@ -473,8 +486,8 @@ class DataDecl(Row):
         return replace(self, producer=producer)
 
     def need(self, data_class: str, *, at: Any = None, of: Any = "",
-             span_km: float | None = None, geometry: str | None = None,
-             ) -> "DataDecl":
+             kind: str = "", span_km: float | None = None,
+             geometry: str | None = None) -> "DataDecl":
         """THE CLASS this row needs, which the match fills from whatever measures
         it here.
 
@@ -483,10 +496,11 @@ class DataDecl(Row):
         row is asked at where the domain's own centre is not it - the seed a
         reach is cut from, the place the nearest reporting site is ranked
         against. ``of`` names WHAT OF THE CLASS is asked for - the variable a
-        record is read for, the feature a map is read for - and a source
-        publishing none of it leaves the match's list; where the feature is the
-        caller's rather than the question's it is a ``Ref`` to the param that
-        settles it, bound before the match runs the way ``at`` is;
+        record is read for - and a source publishing none of it leaves the
+        match's list;
+        ``kind`` is the DOMAIN'S own kind, stated only where the seed cannot
+        imply it - a basin from a pour point, the water inside a drawn box -
+        and it wins over what the seed carries;
         ``span_km`` is how far the question reaches,
         which the answering source's coverage row maps to its own param.
         ``geometry`` is the SHAPE this row is read as - a class measured in more
@@ -497,8 +511,8 @@ class DataDecl(Row):
                 f"Data {self.name!r}: .need(geometry={geometry!r}) is not a "
                 f"declared shape; the shapes are {sorted(_GEOMETRIES)}.")
         return replace(self, data_class=str(data_class),
-                       observes=of if isinstance(of, Ref) else str(of),
-                       geometry=geometry,
+                       observes=str(of),
+                       kind=str(kind), geometry=geometry,
                        span_km=None if span_km is None else float(span_km),
                        coercion=MappingProxyType({"near": at}))
 

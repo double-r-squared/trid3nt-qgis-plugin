@@ -209,7 +209,7 @@ docstring: |-
       sample states none). ``layer_type="vector"``.
 
   Cross-tool dependencies:
-      - Composes WITH: ``fetch_river_reach`` (the reach the sample sits on),
+      - Composes WITH: ``fetch_nhd_water_surface`` (the water the sample sits on),
         ``fetch_usgs_nwis_gauges`` (the same site's discharge record).
       - Cross-checks: ``fetch_usseabed`` (coastal), ``fetch_ehydro_surveys``
         (dredged channels).

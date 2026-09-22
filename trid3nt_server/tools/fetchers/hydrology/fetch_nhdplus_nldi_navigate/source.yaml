@@ -56,9 +56,32 @@ payload_estimate:
   model: bbox_area
   mb_per_sq_deg: 0.0004
   floor_mb: 0.05
+coverage:
+-   data_class: hydrography
+    kind: measured
+    extent:
+      kind: surface
+      rings:
+      - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
+      note: NHDPlus v2.1 over CONUS; a channel NHD does not map has no flowline
+        here
+    window:
+      series: false
+      latest: '2023-01-01'
+    resolution_m: 5.0
+    datum: null
+    units: {}
+    # HOW FAR the walk runs is the question's own opinion about its domain,
+    # stated generically on the row and heard here in this source's word for it.
+    ask: {distance_km: "need:span_km"}
+    # WHAT THIS ROW PUBLISHES of its class: FLOWLINES - the mapped channel
+    # network as lines, walked from the seed. Not the water surface they run
+    # between and not the body a closed shore encloses.
+    vocabulary:
+      flowline: flowline
+
 caveats:
-- "model-callable, not matched: a navigation result is a traversal of the network, not a domain a slot reads, so it carries no coverage row"
-- "model-callable, not matched: a many-feature network layer, not a single-domain hydrography row - a run names this tool directly, never through the class match"
+- "a line, never a polygon: a domain cut from these is the water surface cut at the two ends of the walk, which the domain slot does"
 - CONUS only (NHDPlus v2.1); a seed outside (-130,20,-60,55) -> NHDPLUS_NLDI_INPUT_INVALID
 - exactly one of seed_point / comid (mutual exclusion) -> NHDPLUS_NLDI_INPUT_INVALID
 - a seed at a network terminus / stub reach -> zero flowlines -> NHDPLUS_NLDI_EMPTY (retryable=false)

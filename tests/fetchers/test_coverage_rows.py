@@ -158,7 +158,8 @@ def test_the_nearest_station_is_what_a_listed_set_is_measured_from():
 _HYDROGRAPHY_FEATURES = {
     "fetch_osm_features": {"coastline"},
     "fetch_river_geometry": {"channel network", "drainage network"},
-    "fetch_river_reach": {"reach"},
+    "fetch_nhdplus_nldi_navigate": {"flowline"},
+    "fetch_nhd_water_surface": {"water surface"},
     "fetch_watershed": {"basin"},
     "fetch_nhd_waterbody_at_point": {"waterbody"},
 }
@@ -166,9 +167,9 @@ _HYDROGRAPHY_FEATURES = {
 
 @pytest.mark.parametrize("path", SPECS, ids=lambda p: p.parent.name)
 def test_every_hydrography_row_names_the_features_it_publishes(path):
-    """One class, many things: a coastline, a waterbody, a channel network, a
-    reach and a traced basin are all hydrography, and a row that named none of
-    them would answer a question asking for any of them."""
+    """One class, many things: a coastline, a waterbody, a flowline, the water
+    surface it runs between and a traced basin are all hydrography, and a row
+    that named none of them would answer a question asking for any of them."""
     spec = load_spec_from_path(path)
     rows = [row for row in spec.coverage if row.data_class == "hydrography"]
     if not rows:

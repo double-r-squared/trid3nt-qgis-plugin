@@ -71,7 +71,7 @@ class DATA:
     #: the source it comes from, and the feature of that class this question
     #: reads. A line is not a domain, so the slot cuts the window above with it
     #: and the water that leaves is what the waves are solved over.
-    domain = Data.need("hydrography", of="coastline", geometry="polyline")
+    domain = Data.need("hydrography", kind="coastline", geometry="polyline")
     #: ONE bed: the class it is defined over rather than the source it comes
     #: from - the survey where something sounded it, the terrain everywhere
     #: else. The whole question is what the waves do as the depth falls, so this

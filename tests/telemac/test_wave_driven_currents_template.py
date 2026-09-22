@@ -63,7 +63,7 @@ def test_the_world_is_the_water_a_coastline_leaves_inside_the_window():
     assert rows["extent"].role == EXTENT and rows["extent"].supplied
     assert rows["domain"].role == DOMAIN
     assert rows["domain"].data_class == "hydrography"
-    assert rows["domain"].observes == "coastline"
+    assert rows["domain"].kind == "coastline"
     assert rows["bed"].role == BED and rows["bed"].data_class == "bathymetry"
     assert rows["wave"].role == WAVE and rows["wave"].data_class == "wave series"
     assert rows["wave"].coercion["near"] == Ref("seed")

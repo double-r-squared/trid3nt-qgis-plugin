@@ -45,7 +45,7 @@ def test_the_domain_is_asked_for_as_the_land_water_edge():
     assert domain.role == DOMAIN
     assert domain.fills_from_user
     assert domain.producer is None
-    assert (domain.data_class, domain.observes, domain.geometry) == (
+    assert (domain.data_class, domain.kind, domain.geometry) == (
         "hydrography", "coastline", "polyline")
 
 
@@ -57,7 +57,7 @@ def test_the_coastline_is_the_only_hydrography_source_this_row_can_take():
 
     domain = _rows()["domain"]
     choice = match(Need(slot="domain", data_class=domain.data_class,
-                        lon=-71.36, lat=41.36, of=domain.observes,
+                        lon=-71.36, lat=41.36, of=domain.kind,
                         geometry=domain.geometry), sources_with_coverage())
     assert choice.picked == "fetch_osm_features"
     assert [row.fetcher for row in choice.rows if not row.excluded] == [

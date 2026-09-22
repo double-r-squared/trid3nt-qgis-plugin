@@ -79,12 +79,12 @@ class DATA:
     heat budget is driven by."""
 
     # THE DOMAIN, as the CLASS it is: a polygon the caller supplies or draws
-    # supersedes this; unfilled, the water the seed stands on is matched from
-    # the mapped hydrography as the FEATURE the caller named. A reach arrives
-    # cut to length with its two end transects, which is where the inflow and
-    # the outflow are prescribed; a closed body arrives as one outline, states
-    # no run and its whole edge is wall.
-    domain = Data.need("hydrography", of=Ref("body"), at=Ref("seed"),
+    # supersedes this; unfilled, the water the SEED STANDS ON is matched from
+    # the mapped hydrography. A stretch of channel arrives cut to length with
+    # its two end transects, which is where the inflow and the outflow are
+    # prescribed; a closed body arrives as one outline, states no run and its
+    # whole edge is wall.
+    domain = Data.need("hydrography", at=Ref("seed"),
                        span_km=_REACH_LENGTH_KM)
 
     # THE BED, as the CLASS it is rather than the source it comes from: the

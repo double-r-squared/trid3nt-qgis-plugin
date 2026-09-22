@@ -89,7 +89,7 @@ class DATA:
     #: onto the traced channel, walks the D8 grid upslope and returns the divide
     #: with the outlet run it drains through - a basin the user draws or owns
     #: supersedes it and carries its own runs, or none.
-    domain = Data.need("hydrography", of="basin", at=Ref("pour_point"),
+    domain = Data.need("hydrography", kind="basin", at=Ref("pour_point"),
                        span_km=_BASIN_WINDOW_KM)
     #: THE GROUND the water runs over, as the whole surface rather than a bed
     #: measured over something else: an OVERLAND domain has no channel bottom
@@ -99,7 +99,7 @@ class DATA:
     #: geometry is a hydrography row too, so the FEATURE is named: a coastline
     #: and a basin divide are the same class and neither is a channel. A sizing
     #: function measures DISTANCE FROM A LINE, so the shape is stated too.
-    rivers = Data.need("hydrography", of="channel network", geometry="polyline")
+    rivers = Data.need("hydrography", geometry="polyline")
     landcover = Data.need("land cover")
     #: THE MEASURED STORM, as the hourly analysis of record published it over
     #: this catchment, read over the window the run opens at and its own length

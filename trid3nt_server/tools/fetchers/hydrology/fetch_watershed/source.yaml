@@ -1,4 +1,4 @@
-# The mirror of fetch_river_reach: a pour point in, a domain out. The DEM over the
+# A pour point in, a domain out. The DEM over the
 # buffer window is the sibling DEM fetcher's - its source ladder, its cache prefix -
 # and the D8 delineation runs on ingestion, so the basin, the outlet run it drains
 # through and the DEM the trace used come back as one artifact.
@@ -146,7 +146,7 @@ docstring: |-
 
   When NOT to use:
       - DO NOT use for a stretch of RIVER between two ends - that is
-        ``fetch_river_reach``, this tool's mirror.
+        ``fetch_nhd_water_surface`` with ``fetch_nhdplus_nldi_navigate``.
       - DO NOT use for a lake, pond or reservoir outline -
         ``fetch_nhd_waterbody_at_point``.
       - DO NOT use for a named regional basin or the upstream flowline network -

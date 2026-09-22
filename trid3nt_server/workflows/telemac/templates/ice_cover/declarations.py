@@ -32,19 +32,6 @@ class PARAMS:
              "a point layer. Geocode a place name first. It seeds the reach the "
              "domain is cut from; supply the domain polygon - a lake, a pond, a "
              "reservoir - instead and this is not read")
-    # WHICH KIND OF WATER the question is asked of, where no domain is handed
-    # in. Both are hydrography and both are mapped at the same seed, so the
-    # feature the domain row asks for is what tells them apart: a reach arrives
-    # cut to length with its two end transects, which is where the inflow and
-    # the outflow are prescribed, and a closed body arrives as one outline that
-    # states no run and whose whole edge is wall.
-    body = Param(
-        door=doors.QUESTION, optional=True, default="reach",
-        consequence="aoi", user_lever=True,
-        desc="Which kind of water the seed is on: 'reach' (default) cuts a "
-             "stretch of river from the mapped channel; 'waterbody' takes the "
-             "lake, pond or reservoir the seed stands in. Read only when no "
-             "domain polygon is supplied")
     station = Param(
         door=doors.USER, optional=True, consequence="scenario",
         user_lever=True, type=Point,
@@ -93,8 +80,8 @@ DOC = dict(
         "PRINTOUT PERIOD, LAW OF BOTTOM FRICTION, FRICTION COEFFICIENT; on the "
         "ice deck ATMOSPHERE-WATER EXCHANGE MODEL, DYNAMIC ICE COVER, MODEL FOR "
         "MASS EXCHANGE BETWEEN FRAZIL AND ICE COVER, BORDER ICE COVER. Supply "
-        "the domain or `seed` - `body='waterbody'` for a lake - and "
-        "`event_time`, the moment the snap opens at."
+        "the domain or `seed`, and `event_time`, the moment the snap opens "
+        "at."
     ),
     not_for=(
         "how warm the water gets with no ice in the question "

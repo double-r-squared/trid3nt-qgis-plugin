@@ -63,7 +63,7 @@ class DATA:
     #: A line is not a domain, so the slot cuts the window above with it and the
     #: water that leaves is what the mesh is built over; a basin the user
     #: outlines supersedes the cut.
-    domain = Data.need("hydrography", of="coastline", geometry="polyline")
+    domain = Data.need("hydrography", kind="coastline", geometry="polyline")
     #: ONE bed: the class it is defined over rather than the source it comes
     #: from - the measurement where something sounded it, the terrain everywhere
     #: else. Supply a survey raster, a layer of soundings or a depth in metres

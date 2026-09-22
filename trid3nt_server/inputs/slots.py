@@ -29,14 +29,14 @@ from trid3nt_server.workflows.runtime.data import (
 )
 
 from .bed import bed
-from .domain import domain
+from .domain import domain, needs_beside
 from .extent import extent
 from .line import line
 from .observation import observation
 from .wave import wave
 
-__all__ = ["SLOTS", "Slot", "ask_on_canvas", "ingest_slot", "role_of",
-           "takes_op"]
+__all__ = ["SLOTS", "Slot", "ask_on_canvas", "ingest_slot", "needs_of",
+           "role_of", "takes_op"]
 
 logger = logging.getLogger("trid3nt_server.inputs.slots")
 
@@ -103,6 +103,16 @@ def takes_op(role: str) -> bool:
     slot = SLOTS.get(str(role))
     return bool(slot and slot.ingest
                 and "op" in inspect.signature(slot.ingest).parameters)
+
+
+def needs_of(role: str, kind: str) -> tuple[tuple[str, str, str], ...]:
+    """The rows a slot of this ROLE declares beside the one its own class
+    matched, for a value of this KIND.
+
+    Only the domain declares any, and only for the kinds that do not arrive
+    closed. The runtime produces them through the match and hands each back
+    under its own name; the slot states the need and never fetches."""
+    return needs_beside(kind) if str(role) == DOMAIN else ()
 
 
 def ingest_slot(role: str, value: Any, *, label: str = "",
