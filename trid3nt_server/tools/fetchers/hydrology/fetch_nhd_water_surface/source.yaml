@@ -49,9 +49,15 @@ ingest:
   column_map:
     ftype:
       from: properties.ftype
-  geometry_filter:
-    geom_types: [Polygon, MultiPolygon]
-    require_finite: true
+  # Layer 8 is a polygon layer and the where clause already keeps only the water,
+  # so every row it answers with is a feature this row publishes. A row the service
+  # returned and the file does not carry would be a silent loss, so there is no
+  # post-parse filter here: zero rows REFUSES by name instead.
+  empty:
+    message: >-
+      NHD maps no StreamRiver or CanalDitch water surface in the envelope around
+      the seed. A channel too narrow for NHD to map a surface is a flowline only.
+      Widen radius_km or seed on a wider reach.
 
 hooks:
   build_request: nhd_water_surface.build_request
@@ -105,7 +111,7 @@ coverage:
       water surface: water surface
 
 caveats:
-  - "a channel too narrow for NHD to map a water SURFACE has no polygon here - that is a fact about the channel, not a fetch failure"
+  - "a channel too narrow for NHD to map a water SURFACE has no polygon here, and the row REFUSES with NHD_WATER_SURFACE_EMPTY rather than publishing an empty file - that is a fact about the channel, not a fetch failure"
   - "every surface intersecting the envelope comes back WHOLE, so a polygon reaches well past the radius asked for"
   - "StreamRiver and CanalDitch only: the dams, locks and bridges NHDArea also maps are structures on the water rather than the water"
   - "CONUS only (NHDPlus HR)"

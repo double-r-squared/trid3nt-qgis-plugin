@@ -8,9 +8,14 @@ structures on it, and the class door the domain slot reaches this row through.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
-from trid3nt_server.tools.fetchers._router.errors import RouterInputError
+from trid3nt_server.tools.fetchers._router.errors import RouterError, RouterInputError
+from trid3nt_server.tools.fetchers._router.executors import http_json
+from trid3nt_server.tools.fetchers._router.executors.vector_fgb import (
+    apply_ingest_transforms)
 from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 from trid3nt_server.tools.fetchers.hydrology.fetch_nhd_water_surface import (
     hooks as ws)
@@ -68,3 +73,33 @@ def test_a_wider_radius_asks_a_wider_box(spec):
 def test_the_water_surface_is_found_through_its_class(class_routes_to_the_match):
     """A covered fetcher carries no corpus: its class is the door."""
     class_routes_to_the_match("hydrography", "fetch_nhd_water_surface")
+
+
+def _polygon(x: float = 0.0) -> dict:
+    ring = [[x, 0.0], [x + 0.01, 0.0], [x + 0.01, 0.01], [x, 0.01], [x, 0.0]]
+    return {"type": "Polygon", "coordinates": [ring]}
+
+
+def _body(geometries: list[dict]) -> bytes:
+    return json.dumps({"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {"ftype": 460}, "geometry": geom}
+        for geom in geometries]}).encode("utf-8")
+
+
+def test_every_polygon_the_service_answers_with_reaches_the_file(spec):
+    """The published artifact carries what the body carried. A row that answers
+    200 and publishes nothing is a loss no reader can see."""
+    geometries = [_polygon(), _polygon(0.1),
+                  {"type": "MultiPolygon",
+                   "coordinates": [_polygon(0.2)["coordinates"]]}]
+    features = http_json._features(spec, _params(), [_body(geometries)])
+    assert len(features) == 3
+    kept = apply_ingest_transforms(features, spec, _params())
+    assert len(kept) == 3
+    assert [f["properties"]["ftype"] for f in kept] == [460, 460, 460]
+
+
+def test_an_empty_answer_refuses_by_name_rather_than_publishing_an_empty_file(spec):
+    with pytest.raises(RouterError) as excinfo:
+        http_json._features(spec, _params(), [_body([])])
+    assert excinfo.value.error_code == "NHD_WATER_SURFACE_EMPTY"
