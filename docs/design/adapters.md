@@ -30,7 +30,7 @@ surface the turn engine drives regardless of backend.
   `anthropic_max_input_tokens`, and their pure parsers), each returning `None`
   rather than a guess when the provider states nothing. The provider nouns
   (`openrouter.ai`, Ollama, `model_provider() == "openai"`) that used to sit in
-  the catalog HTTP module + `gates/context_budget` are quarantined here.
+  the settings door + `gates/context_budget` are quarantined here.
 - `scripted_adapter.py` -- deterministic test double.
 
 ## Composition
@@ -44,7 +44,7 @@ shape both provider APIs take.
 `server/turn/stream.py` drives these via the shared `adapter.py` surface. The
 pluggable-LLM story (cloud API or local model) is a provider swap behind this
 seam. Provider model-discovery folded into `model_discovery.py`: the
-`protocol/catalog_http` route handler and `gates/context_budget` import it
+`protocol/doors/settings` route handlers and `gates/context_budget` import it
 instead of defining provider logic themselves.
 
 ## Context budget

@@ -381,7 +381,7 @@ package DataSeam {
 
     part keyedSourceCatalog : KeyedSourceCatalog {
         doc /*
-        code: trid3nt_server/server/protocol/catalog_http.py
+        code: trid3nt_server/server/protocol/doors/settings.py
         */
         port keyedCatalogIn : KeyedCatalogIn;
         port credentialOut : CredentialOut;
