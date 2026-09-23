@@ -79,11 +79,12 @@ def test_a_refusal_names_the_file(tmp_path):
 
 
 def test_a_result_whose_frames_are_cut_short_refuses_by_name(tmp_path):
-    """A header that opens is not a file that reads: the short read refuses too."""
+    """A file whose frames do not add up to its header refuses by name too."""
     written = _written(tmp_path)
     whole = Path(written["geo_slf"]).read_bytes()
     cut = tmp_path / "cut.slf"
-    # the header lands whole and the single frame is severed mid-record.
+    # the header states one frame over four nodes and the bytes are 16 short of
+    # it, which is the mismatch the reader reports rather than a short series.
     cut.write_bytes(whole[:-16])
 
     with pytest.raises(R.SelafinReadError) as ei:
@@ -143,3 +144,132 @@ def test_no_reader_on_this_side_starts_a_container(module):
             imported.add(node.module or "")
     assert not {name for name in imported if "image_script" in name}
     assert "docker" not in (_REPO / module).read_text()
+
+
+#: A square ring of sixteen nodes with the middle square left out, so the walk
+#: returns two contours. The writer's own numbering of that geometry and ours
+#: disagree on which node each ring reaches when - the one shape where handing
+#: the walk's IPOBO over is the difference between the ``.cli`` rows and the
+#: geometry agreeing and not.
+_RING_X = np.array([float(k % 4) for k in range(16)])
+_RING_Y = np.array([float(k // 4) for k in range(16)])
+_RING_CELLS = np.array(
+    [tri for j in range(3) for i in range(3) if (i, j) != (1, 1)
+     for tri in ([j * 4 + i, j * 4 + i + 1, j * 4 + i + 5],
+                 [j * 4 + i, j * 4 + i + 5, j * 4 + i + 4])])
+
+
+def test_the_geometry_carries_the_walks_own_numbering(tmp_path):
+    """IPOBO in the file is the walk's, not the writer's own rebuild of it.
+
+    The ``.cli`` rows are written in the walk's order, so a geometry numbered by
+    any other walk classifies the wrong nodes without saying anything."""
+    from serafin import SerafinHeader, SerafinReader
+
+    from trid3nt_server.workflows.mesh.shared.formats.tin_topology import (
+        boundary_numbering)
+
+    ours, _ = boundary_numbering(_RING_CELLS, _RING_X.shape[0])
+    rebuilt = SerafinHeader(title="RING")
+    rebuilt.from_triangulation(
+        np.column_stack([_RING_X, _RING_Y]), _RING_CELLS + 1)
+    # the two walks disagree on this shape, so the assertion below discriminates.
+    assert not np.array_equal(np.asarray(rebuilt.ipobo), ours)
+
+    written = IO.write_telemac_pair(
+        tmp_path, x=_RING_X, y=_RING_Y, cells=_RING_CELLS,
+        bed=np.zeros(16), roles={"inflow": [0, 1]})
+    with SerafinReader(str(written["geo_slf"]), "en") as reader:
+        reader.read_header()
+        assert np.array_equal(np.asarray(reader.header.ipobo), ours)
+
+
+def test_the_origin_is_reported_and_the_coordinates_stay_as_stored(tmp_path):
+    """A file carrying an origin reads back at its STORED coordinates.
+
+    Every postprocess recovers the origin itself and adds it, so applying it
+    here would place the mesh twice as far out as the file puts it."""
+    from serafin import SerafinHeader, SerafinWriter
+
+    from trid3nt_server.workflows.mesh.shared.formats.tin_topology import (
+        boundary_numbering)
+
+    ipobo, _ = boundary_numbering(_CELLS, 4)
+    header = SerafinHeader(title="OFFSET")
+    header.from_triangulation(np.column_stack([_X, _Y]), _CELLS + 1, ipobo)
+    header.add_variable_str("BOTTOM", "BOTTOM", "M")
+    header.set_mesh_origin(100, 200)
+    slf = tmp_path / "offset.slf"
+    with SerafinWriter(str(slf), "en", overwrite=True) as writer:
+        writer.write_header(header)
+        writer.write_entire_frame(header, 0.0, np.zeros((1, 4)))
+
+    mesh = R.read_selafin(slf)
+    assert (mesh["x_origin"], mesh["y_origin"]) == (100, 200)
+    assert mesh["x"].tolist() == _X.tolist()
+    assert mesh["y"].tolist() == _Y.tolist()
+
+
+def test_a_three_dimensional_result_keeps_every_plane(tmp_path):
+    """NPLAN planes over the 2D mesh, and ``ikle`` is the PRISM connectivity.
+
+    Reading the 2D connectivity for a 3D file drops every plane but one."""
+    from serafin import SerafinHeader, SerafinWriter
+
+    from trid3nt_server.workflows.mesh.shared.formats.tin_topology import (
+        boundary_numbering)
+
+    ipobo, _ = boundary_numbering(_CELLS, 4)
+    flat = SerafinHeader(title="BASIN")
+    flat.from_triangulation(np.column_stack([_X, _Y]), _CELLS + 1, ipobo)
+    flat.add_variable_str("ELEVATION Z", "ELEVATION Z", "M")
+    header = flat.copy_as_3d(3)
+    slf = tmp_path / "basin3d.slf"
+    with SerafinWriter(str(slf), "en", overwrite=True) as writer:
+        writer.write_header(header)
+        writer.write_entire_frame(
+            header, 0.0, np.arange(12, dtype=float).reshape(1, -1))
+
+    mesh = R.read_selafin(slf)
+    assert (mesh["nplan"], mesh["npoin2"], mesh["nelem2"]) == (3, 4, 2)
+    assert mesh["npoin"] == 12 and mesh["nelem"] == 4
+    assert mesh["ikle"].shape == (4, 6)
+    assert mesh["ikle2"].shape == (2, 3)
+    assert mesh["data"]["ELEVATION Z"].shape == (1, 12)
+
+
+def test_a_frame_that_will_not_read_refuses_by_the_same_name(tmp_path,
+                                                             monkeypatch):
+    """A header that opens is not a file that reads.
+
+    The library raises where a frame disagrees with the header it was declared
+    by; that is unreadable too, and says so by the file's name rather than
+    returning a series one frame short."""
+    import serafin
+
+    written = _written(tmp_path)
+    broken = tmp_path / "half.slf"
+    broken.write_bytes(Path(written["geo_slf"]).read_bytes())
+
+    def refuse(self, index):
+        raise serafin.SerafinRequestError("frame is not the header's")
+
+    monkeypatch.setattr(serafin.SerafinReader, "read_vars_in_frame", refuse)
+    with pytest.raises(R.SelafinReadError) as ei:
+        R.read_selafin(broken)
+    assert "half.slf" in str(ei.value)
+
+
+def test_every_image_run_left_on_this_side_is_a_solve():
+    """Nothing but an engine run costs a container start.
+
+    The result read and the pair write are this process's own; a third caller
+    here is a per-file container start that nobody asked for."""
+    server = _REPO / "trid3nt_server"
+    callers = {module.relative_to(_REPO).as_posix()
+               for module in sorted(server.rglob("*.py"))
+               if "run_image_script" in module.read_text()
+               and module.name != "image_script.py"}
+    assert callers == {
+        "trid3nt_server/workflows/mesh/meshers/om2d.py",
+        "trid3nt_server/workflows/telemac/authoring/cas_validate.py"}

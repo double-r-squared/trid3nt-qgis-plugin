@@ -27,31 +27,44 @@ _ROLE_OF_RANK = {0: "inflow", 1: "inflow", 11: "inflow",
                  4: "outflow", 5: "outflow"}
 
 
-def _domain(table=None):
-    """``(x, y, bnodes, codes, contour_lengths)`` for that rectangle."""
+def _roles(start=0):
+    """``{row: role}`` once the walk is re-cut to begin ``start`` rows along."""
+    return {k: _ROLE_OF_RANK.get((k + start) % len(_XY), "wall")
+            for k in range(len(_XY))}
+
+
+def _domain(table=None, start=0):
+    """``(x, y, bnodes, codes, contour_lengths)`` for that rectangle.
+
+    ``start`` re-cuts the SAME ring to begin at another of its nodes, which
+    moves row order and leaves the geometry - and the engine's answer - alone."""
     codes_for = table or D._ROLE_CODES
-    x = [p[0] for p in _XY]
-    y = [p[1] for p in _XY]
-    bnodes = list(range(len(_XY)))
-    codes = [codes_for[_ROLE_OF_RANK.get(k, "wall")] for k in bnodes]
-    return x, y, bnodes, codes, [len(_XY)]
+    xy = [_XY[(k + start) % len(_XY)] for k in range(len(_XY))]
+    x = [p[0] for p in xy]
+    y = [p[1] for p in xy]
+    bnodes = list(range(len(xy)))
+    roles = _roles(start)
+    codes = [codes_for[roles[k]] for k in bnodes]
+    return x, y, bnodes, codes, [len(xy)]
 
 
-def _numbered(table=None):
+def _numbered(table=None, start=0):
     """``[(role, prescribes), ...]`` in the order the ENGINE will number them."""
-    x, y, bnodes, codes, lengths = _domain(table)
+    x, y, bnodes, codes, lengths = _domain(table, start)
+    roles = _roles(start)
     runs = D._liquid_boundaries(x, y, bnodes, codes, lengths)
     numliq = D._numliq(runs, D._successors(lengths), len(bnodes))
     rows = [[k for k in bnodes if numliq[k] == n] for n in range(1, len(runs) + 1)]
-    return [(D._joined([_ROLE_OF_RANK[k] for k in here]),
+    return [(D._joined([roles[k] for k in here]),
              D._joined([D._prescribes(codes[k]) for k in here])) for here in rows]
 
 
 def test_the_engine_numbers_from_its_own_south_west_corner_not_from_row_order():
-    """Row order would number the outflow first; the engine starts at the south-west
-    corner, which sits on the inflow. A file written to the row-order answer
-    prescribes both values into codes that never read them."""
-    assert [role for role, _ in _numbered()] == ["inflow", "outflow"]
+    """Cut three rows along, row 0 is a wall on the south face and row order
+    reaches the outflow first; the engine still starts at the south-west corner,
+    which sits on the inflow. A file written to the row-order answer prescribes
+    both values into codes that never read them."""
+    assert [role for role, _ in _numbered(start=3)] == ["inflow", "outflow"]
 
 
 def test_a_liquid_run_that_straddles_the_first_row_is_ONE_boundary():

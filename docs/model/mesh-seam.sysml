@@ -907,6 +907,8 @@ package MeshSeam {
         "tests/telemac/test_telemac_result_reader.py::test_a_result_whose_frames_are_cut_short_refuses_by_name";
     verify requirement AnUnreadableFileRefusesRatherThanFallBack by
         "tests/telemac/test_telemac_result_reader.py::test_a_pair_that_cannot_be_written_refuses_by_name";
+    verify requirement AnUnreadableFileRefusesRatherThanFallBack by
+        "tests/telemac/test_telemac_result_reader.py::test_a_frame_that_will_not_read_refuses_by_the_same_name";
 
     satisfy requirement SignatureIsTheSchema by mesherRegistry;
     satisfy requirement SignatureIsTheSchema by om2dAdapter;
