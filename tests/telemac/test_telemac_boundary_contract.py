@@ -7,17 +7,12 @@ each contour starts south-westernmost - and the KEYWORD follows the quad."""
 
 from __future__ import annotations
 
-import sys
-
 import pytest
 
 from trid3nt_server.workflows.mesh import topology as T
+from trid3nt_server.workflows.mesh.shared import selafin_io as D
 from trid3nt_server.workflows.telemac.modules import T2D
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
-from trid3nt_server.workflows.solver.image_script import scripts_dir
-
-sys.path.insert(0, str(scripts_dir("mesh")))
-import selafin_cli as D  # noqa: E402
 
 
 # One contour whose SOUTH-WEST corner lies on a liquid face, which is the
@@ -153,44 +148,17 @@ def test_the_free_exit_role_prescribes_nothing_as_a_stated_choice():
     assert slots["PRESCRIBED_ELEVATIONS"] == [0.0, 0.0]
 
 
-def test_a_walk_whose_rings_share_a_node_refuses_naming_them():
-    """IPOBO is a permutation of 1..NPTFR, so a node two rings both pass through
-    would need two positions and gets the second. What follows is an index error
-    several functions later; what is owed is the node."""
-    with pytest.raises(D._Refusal) as excinfo:
-        D._refuse_shared_ring_nodes([[0, 1, 2, 7], [7, 3, 4], [5, 6, 7]])
-    assert excinfo.value.document["code"] == "MESH_BOUNDARY_PINCHED"
-    message = excinfo.value.document["message"]
-    assert "3 rings over 10 rows but only 8 distinct nodes" in message
-    assert "1 node(s) - 7" in message
-
-
-def test_a_walk_that_visits_every_node_once_states_nothing():
-    D._refuse_shared_ring_nodes([[0, 1, 2, 3], [4, 5, 6]])
-
-
-def test_the_host_re_raises_the_walks_own_refusal_typed(tmp_path, monkeypatch):
-    """The document travels; the host does not re-derive it from a host-side walk
-    of the same cells, which returns different rings."""
-    import json
-    import subprocess
-
+def test_a_pinched_boundary_refuses_by_name(tmp_path):
+    """A domain pinched to a point has no IPOBO permutation, and the walk that
+    decides it is the daemon's own - nothing shells out to learn it."""
     import numpy as np
 
     from trid3nt_server.workflows.mesh.meshers import MeshToolError
-    from trid3nt_server.workflows.mesh.shared import selafin_cli as SC
-    from trid3nt_server.workflows.solver import image_script
 
-    document = {"code": "MESH_BOUNDARY_PINCHED",
-                "message": "the boundary walk returned 5 rings over 226 rows ..."}
-
-    def fake_run(argv, **kw):
-        (tmp_path / SC._REFUSAL_FILE).write_text(json.dumps(document))
-        return subprocess.CompletedProcess(argv, 3, "SELAFIN_CLI_REFUSED", "")
-
-    monkeypatch.setattr(image_script.subprocess, "run", fake_run)
+    x = np.array([0.0, 1.0, 0.0, 2.0, 1.0, 2.0])
+    y = np.array([0.0, 1.0, 2.0, 0.0, 1.0, 2.0])
+    cells = np.array([[0, 1, 2], [1, 3, 4], [1, 4, 5]])
     with pytest.raises(MeshToolError) as excinfo:
-        SC.write_telemac_pair(tmp_path, x=np.zeros(3), y=np.zeros(3),
-                              cells=np.array([[0, 1, 2]]), bed=np.zeros(3))
+        D.write_telemac_pair(tmp_path, x=x, y=y, cells=cells, bed=np.zeros(6))
     assert excinfo.value.error_code == "MESH_BOUNDARY_PINCHED"
-    assert "226 rows" in str(excinfo.value)
+    assert "pinched" in str(excinfo.value)

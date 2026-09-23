@@ -103,6 +103,16 @@ package MeshSeam {
         */
     }
 
+    part def SelafinIo {
+        doc /*
+        The daemon's own SELAFIN: the geometry pair out, a result in. The pair is
+        one artifact - the boundary rows are ordered by the geometry's own IPOBO -
+        and the numbering is the engine's own rule, so which liquid boundary is
+        number 1 follows from where FRONT2 starts its walk and not from the order
+        the rows were written. Nothing here starts a container: the image solves.
+        */
+    }
+
     part def SharedPrimitives {
         doc /*
         What we impose on a mesh that no library does: the bed, and which
@@ -478,14 +488,9 @@ package MeshSeam {
         port refusalOut : RefusalOut;
     }
 
-    part selafinCliDriver : ShippedDriver {
+    part selafinIo : SelafinIo {
         doc /*
-        The TELEMAC geometry pair, written by telapy's own Hermes inside the
-        engine image, and numbered by the engine's own rule: which liquid
-        boundary is number 1 follows from where FRONT2 starts its walk, not from
-        the order the rows were written.
-
-        code: workers/mesh/scripts/selafin_cli.py
+        code: trid3nt_server/workflows/mesh/shared/selafin_io.py
         */
     }
 
@@ -495,15 +500,6 @@ package MeshSeam {
         against the module dictionary, inside the engine image.
 
         code: workers/telemac/scripts/cas.py
-        */
-    }
-
-    part telemacResultDriver : ShippedDriver {
-        doc /*
-        The solved result read through the engine's own TelemacFile, inside the
-        engine image, over a result directory mounted read-only.
-
-        code: workers/telemac/scripts/result.py
         */
     }
 
@@ -885,13 +881,13 @@ package MeshSeam {
     verify requirement TopologyIsWrittenForEveryMesh by
         "tests/mesh/test_mesh_topology_and_bed.py::test_an_empty_role_is_not_a_role";
 
-    satisfy requirement APinchedBoundaryIsRefusedByName by selafinCliDriver;
+    satisfy requirement APinchedBoundaryIsRefusedByName by selafinIo;
     verify requirement APinchedBoundaryIsRefusedByName by
-        "tests/telemac/test_telemac_boundary_contract.py::test_a_walk_whose_rings_share_a_node_refuses_naming_them";
+        "tests/mesh/test_mesh_topology_and_bed.py::test_a_boundary_walk_whose_loops_share_a_node_refuses_naming_it";
     verify requirement APinchedBoundaryIsRefusedByName by
-        "tests/telemac/test_telemac_boundary_contract.py::test_a_walk_that_visits_every_node_once_states_nothing";
+        "tests/mesh/test_mesh_topology_and_bed.py::test_the_boundary_numbering_is_one_count_across_every_loop";
     verify requirement APinchedBoundaryIsRefusedByName by
-        "tests/telemac/test_telemac_boundary_contract.py::test_the_host_re_raises_the_walks_own_refusal_typed";
+        "tests/telemac/test_telemac_boundary_contract.py::test_a_pinched_boundary_refuses_by_name";
 
     satisfy requirement SignatureIsTheSchema by mesherRegistry;
     satisfy requirement SignatureIsTheSchema by om2dAdapter;
@@ -917,9 +913,7 @@ package MeshSeam {
         "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
 
     satisfy requirement TheBoxNeverImportsTheServer by om2dBox;
-    satisfy requirement TheBoxNeverImportsTheServer by selafinCliDriver;
     satisfy requirement TheBoxNeverImportsTheServer by telemacCasDriver;
-    satisfy requirement TheBoxNeverImportsTheServer by telemacResultDriver;
     verify requirement TheBoxNeverImportsTheServer by
         "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
     verify requirement TheBoxNeverImportsTheServer by

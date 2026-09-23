@@ -65,7 +65,7 @@ def _stub_om2d(monkeypatch, tmp_path, *, stats=None):
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
     monkeypatch.setattr(OM2D, "_run_op", fake_run_op)
     monkeypatch.setattr(
-        "trid3nt_server.workflows.mesh.shared.selafin_cli.write_telemac_pair",
+        "trid3nt_server.workflows.mesh.shared.selafin_io.write_telemac_pair",
         fake_pair)
     return sent
 

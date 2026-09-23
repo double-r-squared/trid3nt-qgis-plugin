@@ -238,7 +238,7 @@ def _stub_om2d(monkeypatch, tmp_path, *, pfix=None, stats=None,
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
     monkeypatch.setattr(OM2D, "_run_op", fake_run_op)
     monkeypatch.setattr(
-        "trid3nt_server.workflows.mesh.shared.selafin_cli.write_telemac_pair",
+        "trid3nt_server.workflows.mesh.shared.selafin_io.write_telemac_pair",
         fake_pair)
     return sent
 
@@ -511,8 +511,10 @@ def test_the_scripts_live_in_the_worker_tree_beside_their_dockerfiles():
                   if p.name != "__init__.py"}
     telemac_names = {p.name for p in scripts_dir("telemac").glob("*.py")
                       if p.name != "__init__.py"}
-    assert mesh_names == {"om2d.py", "selafin_cli.py"}
-    assert telemac_names == {"cas.py", "dico.py", "result.py"}
+    # Only what the image DOES lives there: meshing and the steering files. The
+    # SELAFIN pair and the result read are the daemon's own.
+    assert mesh_names == {"om2d.py"}
+    assert telemac_names == {"cas.py", "dico.py"}
     assert "sandbox" not in str(scripts_dir("mesh"))
     assert "sandbox" not in str(scripts_dir("telemac"))
 

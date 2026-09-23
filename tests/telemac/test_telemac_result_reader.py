@@ -1,140 +1,85 @@
-"""The result read runs in the engine's box, and nothing on this side parses.
+"""The result is opened by the daemon itself, and nothing shells into the image.
 
-Offline: the container boundary is stubbed one level down, at ``subprocess.run``,
-so the launch line, the mount set and the assembly of the arrays the driver
-leaves are exercised without the image. The parse itself is the engine's own
-``TelemacFile`` and is proved against real result files in the image it runs in.
+Offline: the pair is written and read back in this process, so the numbering, the
+header and the arrays every downstream read consumes are exercised without the
+engine. That the ENGINE accepts what is written here is proved by a solve.
 """
 
 from __future__ import annotations
 
 import ast
-import json
-import subprocess
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.solver import image_script
+from trid3nt_server.workflows.mesh.shared import selafin_io as IO
 from trid3nt_server.workflows.telemac.modules import outputs as R
 
-#: Every module on this side that reads a solved result. None may parse the
-#: format: a second implementation of it is a second thing to be wrong about it.
+#: Every module on this side that reaches a solved result. None may run a
+#: container to do it: the image solves and does nothing else.
 _READERS = (
+    "trid3nt_server/workflows/mesh/shared/selafin_io.py",
     "trid3nt_server/workflows/telemac/modules/outputs.py",
     "trid3nt_server/workflows/telemac/authoring/assembler.py",
 )
 
 _REPO = Path(__file__).resolve().parents[2]
 
-
-def _scratch_of(argv: list[str]) -> Path:
-    """The host directory the launch line mounts as the driver's ``/data``."""
-    return Path(next(a.split(":")[0] for a in argv if a.endswith(":/data")))
-
-
-def _driver_leaves(fields: dict, meta: dict):
-    """A fake ``subprocess.run`` that writes what the driver would have left."""
-    def run(argv, **_kw):
-        out = _scratch_of(argv)
-        np.savez(out / "telemac_result_fields.npz", **fields)
-        (out / "telemac_result_meta.json").write_text(json.dumps(meta))
-        return subprocess.CompletedProcess(argv, 0, "TELEMAC_RESULT_OK", "")
-    return run
+#: A unit square split in two, walked as one contour of four boundary nodes.
+_X = np.array([0.0, 1.0, 1.0, 0.0])
+_Y = np.array([0.0, 0.0, 1.0, 1.0])
+_CELLS = np.array([[0, 1, 2], [0, 2, 3]])
 
 
-def test_the_read_runs_in_the_telemac_box_with_no_network(tmp_path, monkeypatch):
-    slf = tmp_path / "r2d_river.slf"
-    slf.write_bytes(b"result")
-    seen: dict = {}
-
-    leave = _driver_leaves(
-        {"x": np.zeros(3), "y": np.zeros(3), "ikle": np.array([[0, 1, 2]]),
-         "times": np.array([0.0]), "v0": np.zeros((1, 3))},
-        {"varnames": ["DYE"], "npoin": 3, "nelem": 1, "x_origin": 0,
-         "y_origin": 0, "ntimestep": 1, "fields": "telemac_result_fields.npz"})
-
-    def run(argv, **kw):
-        seen["argv"] = argv
-        return leave(argv, **kw)
-
-    monkeypatch.setattr(image_script.subprocess, "run", run)
-    R.read_selafin(slf)
-
-    argv = seen["argv"]
-    # the box is sealed: the read needs the file and nothing else.
-    assert argv[:5] == ["docker", "run", "--rm", "--network", "none"]
-    # the result's directory goes in READ-ONLY; only the scratch dir is writable.
-    assert f"{slf.resolve().parent}:/in:ro" in argv
-    assert f"{image_script.scripts_dir('telemac')}:/drivers:ro" in argv
-    assert "/drivers/result.py" in argv
+def _written(tmp_path, bed=None):
+    """The geometry pair for that square -> the written paths and stats."""
+    return IO.write_telemac_pair(
+        tmp_path, x=_X, y=_Y, cells=_CELLS,
+        bed=np.array([1.0, 2.0, 3.0, 4.0]) if bed is None else bed,
+        roles={"inflow": [0, 3]}, title="SQUARE")
 
 
-def test_the_fields_the_driver_left_become_the_reader_s_answer(tmp_path,
-                                                               monkeypatch):
-    slf = tmp_path / "res_coastal.slf"
-    slf.write_bytes(b"result")
-    monkeypatch.setattr(image_script.subprocess, "run", _driver_leaves(
-        {"x": np.array([0.0, 1.0, 0.0]), "y": np.array([0.0, 0.0, 1.0]),
-         "ikle": np.array([[0, 1, 2]]), "times": np.array([0.0, 60.0]),
-         "v0": np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]),
-         "v1": np.zeros((2, 3))},
-        {"varnames": ["WATER DEPTH", "FREE SURFACE"], "npoin": 3, "nelem": 1,
-         "x_origin": 425000, "y_origin": 5150000, "ntimestep": 2,
-         "fields": "telemac_result_fields.npz"}))
+def test_the_pair_is_written_here_and_read_back_here(tmp_path):
+    written = _written(tmp_path)
+    mesh = R.read_selafin(written["geo_slf"])
 
-    mesh = R.read_selafin(slf)
-
-    # the variable NAME is the engine's own, with no unit glued to it.
-    assert mesh["varnames"] == ["WATER DEPTH", "FREE SURFACE"]
-    assert mesh["data"]["WATER DEPTH"].shape == (2, 3)
-    assert mesh["data"]["WATER DEPTH"][1].max() == pytest.approx(6.0)
-    assert mesh["npoin"] == 3 and mesh["nelem"] == 1
+    # the variable NAME is the module's own, with no unit glued to it.
+    assert mesh["varnames"] == ["BOTTOM"]
+    assert mesh["varunits"] == ["M"]
+    assert mesh["npoin"] == 4 and mesh["nelem"] == 2
+    assert mesh["data"]["BOTTOM"].shape == (1, 4)
+    assert mesh["data"]["BOTTOM"][0].tolist() == [1.0, 2.0, 3.0, 4.0]
+    assert np.array_equal(mesh["ikle"], _CELLS)
+    assert mesh["x"].tolist() == _X.tolist()
     # the origin is REPORTED, never applied: the coordinates stay as the file
     # stores them, because every postprocess adds the origin it recovered itself.
-    assert (mesh["x_origin"], mesh["y_origin"]) == (425000, 5150000)
-    assert mesh["x"].max() == pytest.approx(1.0)
+    assert (mesh["x_origin"], mesh["y_origin"]) == (0, 0)
 
 
-def test_the_scratch_directory_does_not_outlive_the_read(tmp_path, monkeypatch):
-    """A result is up to a hundred megabytes; a leaked copy per read fills a disk."""
-    slf = tmp_path / "r2d_river.slf"
-    slf.write_bytes(b"result")
-    scratch: list[Path] = []
-
-    leave = _driver_leaves(
-        {"x": np.zeros(3), "y": np.zeros(3), "ikle": np.array([[0, 1, 2]]),
-         "times": np.array([0.0]), "v0": np.zeros((1, 3))},
-        {"varnames": ["DYE"], "npoin": 3, "nelem": 1, "x_origin": 0,
-         "y_origin": 0, "ntimestep": 1, "fields": "telemac_result_fields.npz"})
-
-    def run(argv, **kw):
-        scratch.append(_scratch_of(argv))
-        return leave(argv, **kw)
-
-    monkeypatch.setattr(image_script.subprocess, "run", run)
-    R.read_selafin(slf)
-    assert scratch and not scratch[0].exists()
+def test_the_boundary_file_is_numbered_by_the_geometrys_own_ipobo(tmp_path):
+    """The two files are one artifact: row k of the ``.cli`` is IPOBO position k."""
+    written = _written(tmp_path)
+    rows = [line.split() for line in written["cli"].read_text().splitlines()]
+    assert len(rows) == written["stats"]["nptfr"] == 4
+    assert [int(row[-1]) for row in rows] == [1, 2, 3, 4]
+    quads = {int(row[-2]) - 1: (int(row[0]), int(row[1])) for row in rows}
+    assert quads[0] == (IO.KSORT, IO.KENT) and quads[3] == (IO.KSORT, IO.KENT)
+    assert quads[1] == (IO.KLOG, IO.KLOG)
+    assert written["stats"]["liquid_boundary_prescribes"] == ["flowrate"]
 
 
-def test_a_refusal_names_the_file_and_what_the_engine_said(tmp_path, monkeypatch):
+def test_a_refusal_names_the_file(tmp_path):
     slf = tmp_path / "truncated.slf"
     slf.write_bytes(b"")
-    monkeypatch.setattr(image_script.subprocess, "run", lambda argv, **kw:
-                        subprocess.CompletedProcess(argv, 1, "", "not a result"))
     with pytest.raises(R.SelafinReadError) as ei:
         R.read_selafin(slf)
     assert "truncated.slf" in str(ei.value)
-    assert "not a result" in str(ei.value)
 
 
 @pytest.mark.parametrize("module", _READERS)
-def test_no_reader_on_this_side_parses_the_format(module):
-    """The byte layout is the engine's to know.
-
-    The reader this replaced refused a truncated result the engine reads without
-    complaint, and glued a record's unit onto every variable name it handed back."""
+def test_no_reader_on_this_side_starts_a_container(module):
+    """The engine image solves; a read that wakes one costs a container per file."""
     tree = ast.parse((_REPO / module).read_text())
     imported = set()
     for node in ast.walk(tree):
@@ -142,4 +87,5 @@ def test_no_reader_on_this_side_parses_the_format(module):
             imported.update(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom):
             imported.add(node.module or "")
-    assert "struct" not in imported
+    assert not {name for name in imported if "image_script" in name}
+    assert "docker" not in (_REPO / module).read_text()

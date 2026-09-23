@@ -581,3 +581,38 @@ def test_a_network_that_is_not_one_reach_refuses():
     with pytest.raises(MeshNodeError) as excinfo:
         read_centerline_utm(disjoint, 32617)
     assert excinfo.value.error_code == "MESH_CENTERLINE_NOT_CONTINUOUS"
+
+
+def test_the_boundary_numbering_is_one_count_across_every_loop():
+    """IPOBO is a permutation of 1..NPTFR: a per-loop count breaks it."""
+    import numpy as np
+
+    from trid3nt_server.workflows.mesh.shared.formats.tin_topology import (
+        boundary_numbering,
+    )
+
+    # two squares that share no node: eight boundary nodes on two loops.
+    x = np.array([0.0, 1.0, 1.0, 0.0, 5.0, 6.0, 6.0, 5.0])
+    cells = np.array([[0, 1, 2], [0, 2, 3], [4, 5, 6], [4, 6, 7]])
+    ipobo, loops = boundary_numbering(cells, x.shape[0])
+    assert sorted(ipobo.tolist()) == list(range(1, 9))
+    assert sorted(len(loop) for loop in loops) == [4, 4]
+
+
+def test_a_boundary_walk_whose_loops_share_a_node_refuses_naming_it():
+    """A node two loops both pass through would need two positions and gets the
+    second; what follows is an index error several functions later."""
+    import numpy as np
+    import pytest
+
+    from trid3nt_server.workflows.mesh.shared.formats.tin_topology import (
+        BoundaryPinched,
+        boundary_numbering,
+    )
+
+    x = np.array([0.0, 1.0, 0.0, 2.0, 1.0, 2.0])
+    cells = np.array([[0, 1, 2], [1, 3, 4], [1, 4, 5]])
+    with pytest.raises(BoundaryPinched) as excinfo:
+        boundary_numbering(cells, x.shape[0])
+    assert "lie on more than one ring" in str(excinfo.value)
+    assert "1 node(s) - 1" in str(excinfo.value)
