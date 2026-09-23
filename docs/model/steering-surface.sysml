@@ -1158,7 +1158,7 @@ package SteeringSurface {
     verify requirement OneTemplatePerQuestion by
         "tests/search/test_door_dissolution.py::test_all_templates_registered_and_callable";
     verify requirement OneTemplatePerQuestion by
-        "tests/telemac/test_telemac_module_surface.py::test_a_template_reads_its_answer_through_the_primitives_its_module_binds";
+        "tests/telemac/test_telemac_module_surface.py::test_a_template_places_its_reads_through_the_primitives_its_module_binds";
     verify requirement OneTemplatePerQuestion by
         "tests/telemac/test_telemac_outputs.py::test_a_primitive_names_the_coupled_module_whose_result_it_reads";
     verify requirement OneTemplatePerQuestion by
@@ -1331,7 +1331,7 @@ package SteeringSurface {
     verify requirement OutputsAreTheModules by
         "tests/telemac/test_telemac_khione.py::test_the_wrapper_writes_its_own_result_beside_the_host_s";
     verify requirement OutputsAreTheModules by
-        "tests/telemac/test_telemac_ice_cover.py::test_every_answer_is_read_off_the_ice_modules_own_result";
+        "tests/telemac/test_telemac_ice_cover.py::test_every_ice_read_is_taken_off_the_ice_modules_own_result";
     verify requirement OutputsAreTheModules by
         "tests/telemac/test_telemac_ice_cover.py::test_the_module_declares_the_tracers_and_the_deck_declares_none";
     verify requirement OutputsAreTheModules by
