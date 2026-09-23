@@ -261,10 +261,20 @@ def write_telemac_pair(rundir: Path | str, *, x: Any, y: Any, cells: Any,
     header.add_variable_str("BOTTOM", "BOTTOM", "M")
     bottom = (np.asarray(bed, dtype=float) if bed is not None
               else np.zeros(npoin, dtype=float))
-    with SerafinWriter(str(geo_slf), "en", overwrite=True) as writer:
-        writer.write_header(header)
-        writer.write_entire_frame(header, 0.0, bottom.reshape(1, -1))
-    _write_cli(cli, bnodes, codes)
+    # The pair is ONE artifact: a geometry without its .cli, or a .cli written
+    # against a geometry that never landed, is a numbering nothing agrees with.
+    # Either half failing refuses by name here - there is no in-image writer
+    # left to fall back to.
+    try:
+        with SerafinWriter(str(geo_slf), "en", overwrite=True) as writer:
+            writer.write_header(header)
+            writer.write_entire_frame(header, 0.0, bottom.reshape(1, -1))
+        _write_cli(cli, bnodes, codes)
+    except Exception as failure:
+        raise MeshToolError(
+            "MESH_PAIR_WRITE_FAILED",
+            f"the SELAFIN writer could not write {geo_slf.name} and "
+            f"{cli.name} into {rundir}: {failure}") from failure
 
     lengths = [len(c) for c in contours]
     runs = _liquid_boundaries(x, y, bnodes, codes, lengths)
@@ -350,5 +360,10 @@ def read_selafin(path: str | Path) -> dict[str, Any]:
             "times": times,
             "data": data,
         }
+    # A file whose header opens and whose frames do not is unreadable too, and
+    # says so by the same name rather than returning a short series.
+    except Exception as failure:
+        raise SelafinReadError(
+            f"the SELAFIN reader could not read {slf.name}: {failure}") from failure
     finally:
         reader.__exit__(None, None, None)

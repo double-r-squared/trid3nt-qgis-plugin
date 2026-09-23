@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from trid3nt_server.workflows.mesh.meshers import MeshToolError
 from trid3nt_server.workflows.mesh.shared import selafin_io as IO
 from trid3nt_server.workflows.telemac.modules import outputs as R
 
@@ -75,6 +76,59 @@ def test_a_refusal_names_the_file(tmp_path):
     with pytest.raises(R.SelafinReadError) as ei:
         R.read_selafin(slf)
     assert "truncated.slf" in str(ei.value)
+
+
+def test_a_result_whose_frames_are_cut_short_refuses_by_name(tmp_path):
+    """A header that opens is not a file that reads: the short read refuses too."""
+    written = _written(tmp_path)
+    whole = Path(written["geo_slf"]).read_bytes()
+    cut = tmp_path / "cut.slf"
+    # the header lands whole and the single frame is severed mid-record.
+    cut.write_bytes(whole[:-16])
+
+    with pytest.raises(R.SelafinReadError) as ei:
+        R.read_selafin(cut)
+    assert "cut.slf" in str(ei.value)
+
+
+def test_a_pair_that_cannot_be_written_refuses_by_name(tmp_path):
+    """No in-image writer is left to fall back to, so the failure is named."""
+    missing = tmp_path / "no" / "such" / "rundir"
+
+    with pytest.raises(MeshToolError) as ei:
+        IO.write_telemac_pair(missing, x=_X, y=_Y, cells=_CELLS,
+                              bed=np.zeros(4), roles={"inflow": [0, 3]})
+    assert ei.value.error_code == "MESH_PAIR_WRITE_FAILED"
+    assert "mesh.slf" in str(ei.value) and "mesh.cli" in str(ei.value)
+
+
+def test_no_reader_on_this_side_parses_the_format():
+    """One reader of the format's fields, and it is the library's, not ours.
+
+    The byte layout is the engine's to know. A second parser was wrong about it
+    twice - it refused a truncated result the engine reads, and it glued the
+    record's unit onto every variable name - so every consumer reaches the
+    fields through ``read_selafin`` and nothing else opens them.
+    """
+    server = _REPO / "trid3nt_server"
+    opens_format, hand_rolls = set(), set()
+    for module in sorted(server.rglob("*.py")):
+        text = module.read_text()
+        tree = ast.parse(text)
+        imported = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported.update(alias.name.split(".")[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                imported.add((node.module or "").split(".")[0])
+        rel = module.relative_to(_REPO).as_posix()
+        if "serafin" in imported:
+            opens_format.add(rel)
+        if "struct" in imported and "selafin" in text.lower():
+            hand_rolls.add(rel)
+
+    assert opens_format == {"trid3nt_server/workflows/mesh/shared/selafin_io.py"}
+    assert not hand_rolls
 
 
 @pytest.mark.parametrize("module", _READERS)
