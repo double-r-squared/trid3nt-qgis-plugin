@@ -71,8 +71,9 @@ Each new engine adds, roughly in order:
 
 1. **A result contract**: every result layer rides the shared `LayerURI` shapes
    in `contracts/trid3nt_contracts/execution.py`, and a run's headline layer is
-   the `AnswerLayerURI` carrying its measures. An engine adds a subclass there
-   only when it has typed scalars of its own the agent narrates. A product's
+   the `LayerURI` the mesh every published group rides on. An engine adds a
+   subclass there only when a fetched layer carries typed fields of its own
+   computed post-serialize. A product's
    STYLE row is not a contract: it is declared beside the template that draws
    it, referenced by that template's `OUTPUTS`.
 

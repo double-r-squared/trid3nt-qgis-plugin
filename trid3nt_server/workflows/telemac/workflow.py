@@ -16,7 +16,7 @@ from importlib import import_module
 from typing import Any, Callable, Mapping, Sequence
 
 from trid3nt_contracts.common import SyntheticInput
-from trid3nt_contracts.execution import AnswerLayerURI
+from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
 
 from trid3nt_server.render.formats import publish
@@ -36,10 +36,7 @@ from trid3nt_server.workflows.telemac.errors import TelemacError
 from trid3nt_server.workflows.telemac.modules import wrapper_for
 from trid3nt_server.workflows.telemac.modules.module import SlotRefused, identify_on
 from trid3nt_server.workflows.telemac.modules.outputs import (
-    NOT_ASKED,
-    NOT_READ,
     Line,
-    Measure,
     OutputEmpty,
     Primitive,
     Profile,
@@ -228,24 +225,20 @@ def _stated_value(value: Any) -> str:
 
 
 def _unanchored(primitive: Primitive) -> Primitive:
-    return replace(primitive, at=None, along=None, within=None, over=None,
-                   above=None)
+    return replace(primitive, at=None, along=None, within=None)
 
 
 def _anchored(primitive: Primitive, anchor: Mapping[str, Any]) -> Primitive:
     return replace(primitive, at=anchor["at"], along=anchor["along"],
-                   within=anchor.get("within"), over=anchor.get("over"),
-                   above=anchor.get("above"))
+                   within=anchor.get("within"))
 
 
 async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive],
                           captions: Mapping[str, str],
-                          answer: Mapping[str, Measure],
                           params: Mapping[str, Any],
-                          anchors: Sequence[Mapping[str, Any]] = (),
-                          against: Mapping[str, Any] | None = None
-                          ) -> AnswerLayerURI:
-    """Read what the run wrote off it, publish every variable, answer.
+                          anchors: Sequence[Mapping[str, Any]] = ()
+                          ) -> LayerURI:
+    """Read what the run wrote off it and publish every variable.
 
     WHAT THE RESULT FILES WROTE is the outputs list - the host's and each
     coupled module's - published as ONE layer each: the temporal one where the
@@ -256,7 +249,7 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
     is read ONCE; a coupled module's own file goes through its own wrapper. A
     chart's reference is a callable computing lines beside the read, or another
     primitive read where the chart's own is anchored and drawn as a line. A
-    placed read the result lacks refuses; an answer over one is ``None``."""
+    placed read the result lacks refuses."""
     solved: dict[str, Solved] = {}
 
     def _solved(module: str) -> Solved:
@@ -265,26 +258,20 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
         return solved[module]
 
     table = await asyncio.to_thread(_written, run, _solved)
-    listed = [*outputs, *(m.primitive for m in answer.values())]
     if anchors:
-        listed = [_anchored(p, a) for p, a in zip(listed, anchors)]
-    outputs = listed[:len(outputs)]
-    answer = {name: replace(m, primitive=p, against=(against or {}).get(name))
-              for (name, m), p in zip(answer.items(), listed[len(outputs):])}
+        outputs = [_anchored(p, a) for p, a in zip(outputs, anchors)]
+
     published_keys = {primitive.key for primitive in outputs}
-    empty: dict[Primitive, str] = {}
 
     def _read(key: Primitive) -> Any:
         read = _solved(key.module or str(run["module"]))
         try:
             return read.body.READS[key.kind](key, read)
-        except OutputEmpty as exc:
-            # A run that carried nothing a measure could read answers with the
-            # REASON it carried nothing, which the delivery refuses; a published
-            # output that is missing is a refusal here.
+        except OutputEmpty:
+            # A row of the module's OWN table the result does not carry is
+            # skipped; a read the template PLACED is a refusal.
             if key in published_keys:
                 raise
-            empty[key] = str(exc)
             return None
 
     def _beside(primitive: Primitive) -> Primitive | None:
@@ -294,11 +281,6 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
         return replace(reference, at=primitive.at, along=primitive.along).key
 
     wanted = {primitive.key for primitive in (*table, *outputs)}
-    wanted |= {measure.primitive for measure in answer.values()}
-    # A measure held against ANOTHER measure reads that one too; its primitive
-    # carries no anchor, so it needs no place resolved for it.
-    wanted |= {m.against.primitive for m in answer.values()
-               if isinstance(m.against, Measure)}
     wanted |= {_beside(p) for p in outputs if _beside(p) is not None}
     reads = await asyncio.to_thread(lambda: {key: _read(key) for key in wanted})
     for primitive in outputs:
@@ -332,47 +314,29 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
     published = await publish(run_id=str(run["run_id"]), engine="telemac",
                               name=name, items=items)
 
-    def _answered(measure: Measure) -> Any:
-        if measure.primitive in empty:
-            if measure.unasked and measure.against is None:
-                return f"{NOT_ASKED}{measure.unasked}"
-            return f"{NOT_READ}{empty[measure.primitive]}"
-        against = measure.against
-        if isinstance(against, Measure):
-            if against.primitive in empty:
-                return f"{NOT_READ}{empty[against.primitive]}"
-            other = reads[against.primitive]
-            against = None if other is None else other.measures.get(against.stat)
-        read = reads[measure.primitive]
-        return measure.answer(
-            None if read is None else read.measures.get(measure.stat), against)
-
-    answered = {name: _answered(measure) for name, measure in answer.items()}
     if not published.layers:
         raise SlotRefused(
             f"the {run['module']} run's result files carry no variable at all, "
             "so it published nothing and there is nothing to paint.")
-    logger.info("telemac outputs published run_id=%s layers=%d charts=%d answer=%s",
-                run["run_id"], len(published.layers), len(published.charts),
-                answered)
+    logger.info("telemac outputs published run_id=%s layers=%d charts=%d",
+                run["run_id"], len(published.layers), len(published.charts))
     return await asyncio.to_thread(_record, _solved(str(run["module"])),
-                                   name=name, answer=answered)
+                                   name=name)
 
 
-def _record(solved: Solved, *, name: str,
-            answer: Mapping[str, Any]) -> AnswerLayerURI:
-    """The run's own record: the mesh every published group rides, and the answer.
+def _record(solved: Solved, *, name: str) -> LayerURI:
+    """The run's own record: the mesh every published group rides.
 
     It binds no group and ranks none of the rows the run published, so it is
     DRAWN rather than measured; its extent is what the camera frames."""
     from trid3nt_server import storage
 
-    return AnswerLayerURI(
+    return LayerURI(
         layer_id=f"telemac-{solved.run_id}", name=name, layer_type="mesh",
         uri=f"s3://{storage.runs_bucket()}/{solved.run_id}/{solved.display_file}",
         style={"kind": "reference"}, bbox=solved.bbox,
         crs_authid=f"EPSG:{solved.utm_epsg}",
-        reference_time=solved.run.get("started_at"), answer=dict(answer))
+        reference_time=solved.run.get("started_at"))
 
 
 def stated(*, steering: type, keywords: Mapping[str, Any]) -> dict[str, Any]:
@@ -726,7 +690,7 @@ class TelemacWorkflow(Workflow):
     """TELEMAC: the template module, read by its own names.
 
     A template DECLARES - STEERING and the coupling on it, DATA, PARAMS, OUTPUTS,
-    CAPTIONS, ANSWER, DOC, and the run's own files beside them - and this builds
+    CAPTIONS, DOC, and the run's own files beside them - and this builds
     every stage off those declarations: the world, the mesh, the placements, the
     settle, the fill, the solve and the publish. Nothing here restates a
     template, and a name a template does not state takes the default beside it."""
@@ -1027,12 +991,9 @@ class TelemacWorkflow(Workflow):
         """Every point this question PLACES, in the order it is first named.
 
         Read off whatever names it - the deck's own composites, the reads the
-        outputs and the answer are anchored on - because the thing that reads a
-        placement is what knows there is one, and nothing else has to be told
-        twice."""
-        answer = self._states("ANSWER", {})
-        anchors = [p.at for p in (*self._states("OUTPUTS", ()),
-                                  *(m.primitive for m in answer.values()))]
+        outputs are anchored on - because the thing that reads a placement is
+        what knows there is one, and nothing else has to be told twice."""
+        anchors = [p.at for p in self._states("OUTPUTS", ())]
         found: dict[str, Placed] = {}
         for surface in (self.steering.ASSERTED, anchors):
             for ref in declared_reads(surface, Ref):
@@ -1095,15 +1056,13 @@ class TelemacWorkflow(Workflow):
         """Every measurement this question asks for, in the order it is named.
 
         Read off the deck's own assertions, off the mesh recipe a template
-        declared and off the reads the outputs and the answer are taken along,
-        because the thing that asks for a measurement is what knows there is
-        one - the footprint a mesher cuts a structure out of is named in the
-        recipe, and the line a profile is read along is named on the read."""
+        declared and off the reads the outputs are taken along, because the
+        thing that asks for a measurement is what knows there is one - the
+        footprint a mesher cuts a structure out of is named in the recipe, and
+        the line a profile is read along is named on the read."""
         found: dict[str, Measured] = {}
         ops = [dict(op.kwargs) for op in getattr(recipe, "ops", ())]
-        answer = self._states("ANSWER", {})
-        reads = [(p.at, p.along) for p in (*self._states("OUTPUTS", ()),
-                                           *(m.primitive for m in answer.values()))]
+        reads = [(p.at, p.along) for p in self._states("OUTPUTS", ())]
         for surface in (self.steering.ASSERTED, ops, reads):
             for ref in declared_reads(surface, Ref):
                 if isinstance(ref, Measured):
@@ -1135,34 +1094,26 @@ class TelemacWorkflow(Workflow):
         the run writes is the module's table, published without being asked."""
         outputs = tuple(self._states("OUTPUTS", ()))
         captions = dict(self._states("CAPTIONS", {}))
-        answer = dict(self._states("ANSWER", {}))
         for primitive in outputs:
             if primitive.publish is None:
                 raise PlanValidationError(
                     f"OUTPUTS lists {primitive.kind}({primitive.variable!r}) with "
                     "no .layer(), .chart() or .animate(); a listed primitive is "
-                    "published, and an answer is named under ANSWER.")
+                    "published.")
             named = primitive.variable or primitive.kind
             if named not in captions:
                 raise PlanValidationError(
                     f"OUTPUTS publishes {named!r} and CAPTIONS names no caption "
                     "for it.")
-        # A primitive's point, line and band, and the sheet value a measure is
-        # held against, are reads the run resolves; they ride beside the list,
-        # where the plan's binder walks, and rejoin it at publish.
-        listed = [*outputs, *(m.primitive for m in answer.values())]
-        anchors = [{"at": p.at, "along": p.along, "within": p.within,
-                    "over": p.over, "above": p.above} for p in listed]
+        # A primitive's point, line and band are reads the run resolves; they
+        # ride beside the list, where the plan's binder walks, and rejoin it at
+        # publish.
+        anchors = [{"at": p.at, "along": p.along, "within": p.within}
+                   for p in outputs]
         return Step(runner=f"{_TELEMAC}.workflow.publish_outputs", stage="publish",
                     kwargs={"run": Ref("solve"),
                             "outputs": [_unanchored(p) for p in outputs],
                             "captions": captions,
-                            "answer": {name: replace(m,
-                                                     primitive=_unanchored(m.primitive),
-                                                     against=None)
-                                       for name, m in answer.items()},
-                            "against": {name: m.against
-                                        for name, m in answer.items()},
                             "anchors": anchors,
                             "params": dict(params)}).named("outputs")
 
