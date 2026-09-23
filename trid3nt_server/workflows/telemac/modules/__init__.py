@@ -11,7 +11,6 @@ from typing import Mapping
 
 from .module import Composite, Module, Output, Slot, SlotRefused, load_module_input
 from .outputs import (
-    Measure,
     Primitive,
     column,
     extent,
@@ -32,7 +31,7 @@ from .tomawac import WAC
 from .waqtel import WAQTEL
 
 __all__ = [
-    "ART", "Composite", "Filled", "GAIA", "KHIONE", "Measure", "Module", "Output",
+    "ART", "Composite", "Filled", "GAIA", "KHIONE", "Module", "Output",
     "Primitive", "Sheet", "SheetIncomplete", "Slot", "SlotRefused", "T2D", "T3D",
     "WAC", "WAQTEL", "WRAPPERS", "column", "draw", "extent", "field", "fill",
     "load_module_input", "mass_balance", "max_over_time", "mesh", "run", "series",

@@ -29,13 +29,10 @@ from trid3nt_server.workflows.solver.image_script import run_image_script
 logger = logging.getLogger("trid3nt_server.workflows.telemac.modules.outputs")
 
 __all__ = [
-    "NOT_ASKED",
-    "NOT_READ",
     "PRIMITIVES",
     "Field",
     "Frames",
     "Line",
-    "Measure",
     "Profile",
     "Read",
     "Series",
@@ -58,6 +55,7 @@ __all__ = [
     "mesh",
     "profile",
     "read_selafin",
+    "reference_line",
     "read_spectrum",
     "series",
     "spectrum",
@@ -300,15 +298,6 @@ class Primitive:
     #: it a node still belongs to the profile; ``None`` reads the whole domain.
     along: Any = None
     within: Any = None
-    #: The AREA a field's measures are taken within, as a geometry source;
-    #: ``None`` measures the whole domain. What is PUBLISHED is the whole field
-    #: either way - an area narrows the answer, never the picture.
-    over: Any = None
-    #: The THRESHOLD a series is asked when it first exceeds, as a number or a
-    #: declared param. A crossing is a function of the whole series rather than
-    #: of any one of its statistics, so it is read here and answered as
-    #: ``t_above``; ``None`` asks no crossing and emits no measure.
-    above: Any = None
     #: The plane of a 3D variable, bottom first; ``None`` on a 2D module.
     plane: int | None = None
     #: The coupled module whose result this reads; ``None`` reads the run's own.
@@ -320,8 +309,8 @@ class Primitive:
 
     def __hash__(self) -> int:
         return hash((self.kind, self.variable, repr(self.t), repr(self.at),
-                     repr(self.along), repr(self.within), repr(self.over),
-                     repr(self.above), self.plane, self.module))
+                     repr(self.along), repr(self.within), self.plane,
+                     self.module))
 
     def layer(self, *, style: Mapping[str, Any] | None = None) -> "Primitive":
         """Publish this field as a layer on the map, styled by ``style``."""
@@ -342,121 +331,22 @@ class Primitive:
         """Publish this series at its Point as a station layer carrying it."""
         return replace(self, publish="station")
 
-    def measure(self, stat: str) -> "Measure":
-        """One of this primitive's measures, as an answer a template names."""
-        return Measure(self.key, stat)
-
     @property
     def key(self) -> "Primitive":
-        """What one read answers: the primitive without its publishing."""
+        """What one read IS: the primitive without its publishing."""
         return replace(self, publish=None, style=None, reference=None)
 
 
-#: What a measure answers when the value it is held to was never supplied. A
-#: question nobody asked is not a gap in the delivery, so the sheet states it and
-#: the answer PASSES; the sentence rides the answer itself, which is the seam a
-#: measure already has for saying something a number cannot.
-NOT_ASKED = "not asked: "
-#: What a measure answers when the read it names came back empty: the reason,
-#: prefixed so a delivery refuses the sentence rather than reading it as an answer.
-NOT_READ = "not read: "
-
-
-@dataclass(frozen=True)
-class Measure:
-    """A measure of a primitive's read, named by a template as an answer.
-
-    ``over`` answers with the measure's ratio to a sheet value, ``below`` with
-    whether the measure lies under one: the two arithmetics a verdict needs."""
-
-    primitive: Primitive
-    stat: str
-    op: str | None = None
-    against: Any = None
-    held_to: str | None = None
-    #: What the sheet states INSTEAD when the value above was never supplied and
-    #: the read came back empty: the question was not asked, not missed.
-    unasked: str | None = None
-    #: What the run states INSTEAD when the read came back WHOLE and the stat
-    #: this measure names has no value in it - an instant nothing reached. The
-    #: run measured the question and the answer is the absence.
-    absent: str | None = None
-
-    def over(self, value: Any) -> "Measure":
-        """This measure divided by ``value``: a number, a declared param, or
-        ANOTHER MEASURE, which makes a ratio between two reads expressible.
-
-        A measure held against another reads its own primitive UNANCHORED, so
-        the place a ratio's denominator is read at is not a slot the user fills."""
-        placed = isinstance(value, Measure) and any(
-            getattr(value.primitive, slot) is not None
-            for slot in ("at", "along", "over"))
-        if placed:
-            raise DeclarativeError(
-                f"{value.primitive.kind}({value.primitive.variable}) is held to a "
-                "place the run resolves, and a measure used as a DENOMINATOR is "
-                "read without one; hold this measure to an unplaced read.")
-        return replace(self, op="over", against=value, held_to=_named(value))
-
-    def below(self, value: Any) -> "Measure":
-        """Whether this measure lies below ``value``, a number or a declared param."""
-        return replace(self, op="below", against=value, held_to=_named(value))
-
-    def otherwise(self, sentence: str) -> "Measure":
-        """What this measure reads when the stat it names carries no value: the
-        series was read whole and the instant is not in it.
-
-        An instant nothing reached is not a gap in the delivery, so the sentence
-        rides the answer and the delivery PASSES on it."""
-        return replace(self, absent=str(sentence))
-
-    def needs(self, value: Any, *, without: str) -> "Measure":
-        """Asked only where ``value`` was supplied; ``without`` says what the run
-        is instead, and a delivery PASSES on that sentence rather than refusing.
-
-        The lever is the user's: a run nobody asked the question of has no gap."""
-        return replace(self, against=value, held_to=_named(value),
-                       unasked=str(without))
-
-    def answer(self, measured: Any, against: Any) -> Any:
-        """The answer this measure names, off what was read and what it is held to."""
-        if measured is None and self.absent:
-            return f"{NOT_ASKED}{self.absent}"
-        if measured is None or self.op is None:
-            return measured
-        if against is None:
-            return (f"{NOT_ASKED}{self.held_to or 'the value it is held to'} "
-                    "was not supplied")
-        if self.op == "over":
-            return None if not float(against) else float(measured) / float(against)
-        return bool(float(measured) < float(against))
-
-
-def _named(value: Any) -> str | None:
-    """What a measure is held to: a declared param's name, another read's own
-    words, or ``None`` for a literal."""
-    if isinstance(value, Measure):
-        return f"{value.stat} of {value.primitive.variable}"
-    return getattr(value, "name", None)
-
-
 def field(name: str, t: Any = -1, *, plane: int | None = None,
-          module: str | None = None, over: Any = None) -> Primitive:
-    """A variable over the domain at an instant, or over every instant.
-
-    ``over`` narrows what the MEASURES are taken within to one area."""
-    return Primitive("field", variable=name, t=t, plane=plane, module=module,
-                     over=over)
+          module: str | None = None) -> Primitive:
+    """A variable over the domain at an instant, or over every instant."""
+    return Primitive("field", variable=name, t=t, plane=plane, module=module)
 
 
 def series(name: str, at: Any = None, *, plane: int | None = None,
-           module: str | None = None, above: Any = None) -> Primitive:
-    """A variable over time: at a Point, or the domain maximum at each instant.
-
-    ``above`` is a threshold the series is asked when it first exceeds, which
-    the read answers as ``t_above``."""
-    return Primitive("series", variable=name, at=at, plane=plane, module=module,
-                     above=above)
+           module: str | None = None) -> Primitive:
+    """A variable over time: at a Point, or the domain maximum at each instant."""
+    return Primitive("series", variable=name, at=at, plane=plane, module=module)
 
 
 def max_over_time(name: str, *, plane: int | None = None,
@@ -504,6 +394,25 @@ def spectrum(at: Any = None, t: Any = -1) -> Primitive:
     ``at`` is the Point the nearest printout point answers for; unplaced, the
     first the deck named."""
     return Primitive("spectrum", at=at, t=t)
+
+
+def reference_line(value: Any, *, label: str) -> Any:
+    """The standard a chart's own variable is read against, as one flat line.
+
+    ``value`` is a number or a declared param the sheet resolves; a run whose
+    sheet never supplied it draws nothing rather than a line at a guess."""
+
+    def lines(read: Read, reads: Mapping[Any, Any],
+              params: Mapping[str, Any]) -> list[Line]:
+        held = params.get(value.name) if hasattr(value, "name") else value
+        if held is None:
+            return []
+        axis = read.distance_m if isinstance(read, Profile) else read.times
+        named = " ".join(p for p in (f"{float(held):g}", read.units, label) if p)
+        return [Line(label=named, x=[float(axis[0]), float(axis[-1])],
+                     values=[float(held), float(held)])]
+
+    return lines
 
 
 # -- the read of each, off a solved run ------------------------------------- #
@@ -849,8 +758,8 @@ def _edge(has_edge: bool, peak: float) -> float | None:
 def _drawn(values: Any, wet: Any = None) -> Any:
     """``values`` with every node the run held no water on read as nothing.
 
-    The measures and the legend are both taken off this, so the number and the
-    picture answer over the same nodes by construction."""
+    The measures and the legend are both taken off this, so the legend and the
+    picture stand over the same nodes by construction."""
     import numpy as np
 
     if wet is None:
@@ -878,7 +787,7 @@ def _per_frame(values: Any, wet: Any) -> tuple[Any, Any, Any]:
     """Each frame's extremes over the nodes the run held water on, and which
     frames held any at all.
 
-    A frame with no wet node answers nothing rather than answering zero."""
+    A frame with no wet node reads nothing rather than reading zero."""
     import numpy as np
 
     if wet is None:
@@ -895,11 +804,10 @@ def _per_frame(values: Any, wet: Any) -> tuple[Any, Any, Any]:
 
 def _envelope(token: str, times: Any, values: Any, row: Any = None,
               has_edge: bool = False, wet: Any = None,
-              above: Any = None, injected: bool = False) -> dict[str, Any]:
+              injected: bool = False) -> dict[str, Any]:
     """The measures a series over time carries: its peak and its trough with the
     instants they fall on, where it stands at the end, how far it swings between
-    the two, how many frames it was read over, and - where a threshold was asked
-    - the first instant it stands above one, all over the WET nodes."""
+    the two, and how many frames it was read over, all over the WET nodes."""
     import numpy as np
 
     from trid3nt_server.render import presets
@@ -939,13 +847,6 @@ def _envelope(token: str, times: Any, values: Any, row: Any = None,
             "injected nothing there is a shape of.")
     if edge is not None:
         measures["active_frames"] = int((highs[live] > edge).sum())
-    if above is not None:
-        # The FIRST frame the series stands above the threshold, on the run's
-        # own clock. A threshold nothing ever crossed has no instant, and the
-        # answer is the absence rather than a number nobody measured.
-        crossed = index[highs[live] > float(above)]
-        measures["t_above"] = (float(times[int(crossed[0])]) if crossed.size
-                               else None)
     return measures
 
 
@@ -999,13 +900,11 @@ def read_field(primitive: Primitive, solved: Solved) -> Read:
     frame = values[index]
     held = (np.ones(frame.size, dtype=bool) if wet is None
             else np.asarray(wet)[index])
-    if primitive.over is not None:
-        held = held & _within(primitive.over, solved, frame.size)
     inside = frame[held]
     if not inside.size:
         raise OutputEmpty(
-            f"{primitive.variable} has no node this run held water at within "
-            f"what the measure was asked over, at t = {times[index]:g} s.")
+            f"{primitive.variable} has no node this run held water at, at "
+            f"t = {times[index]:g} s.")
     return Field(name=name, units=units, values=frame, wet=held,
                  t=float(times[index]), plane=solved.plane_label(primitive.plane),
                  floor=_floor(edge, values, row, wet),
@@ -1014,31 +913,6 @@ def read_field(primitive: Primitive, solved: Solved) -> Read:
                            "spread": float(inside.max() - inside.min()),
                            "nodes": int(inside.size),
                            "t": float(times[index]), "frames": int(times.size)})
-
-
-def _within(over: Any, solved: Solved, nodes: int) -> Any:
-    """The nodes inside ``over``, as a mask over the first ``nodes`` of the result.
-
-    An area the mesh has no node in is a refusal: a measure over nothing would
-    read as a bed that did not move."""
-    import numpy as np
-    from shapely import contains_xy
-    from shapely.geometry import shape as _shape
-    from shapely.ops import unary_union
-
-    from trid3nt_server.inputs.geometry import (
-        flatten_geometries, read_geometry_doc,
-    )
-
-    lon, lat = solved.lonlat
-    area = unary_union([_shape(g)
-                        for g in flatten_geometries(read_geometry_doc(over))])
-    mask = np.asarray(contains_xy(area, lon[:nodes], lat[:nodes]))
-    if not mask.any():
-        raise OutputEmpty(
-            "the area a measure was asked over holds no node of the mesh the run "
-            "solved on, so there is nothing in it to read.")
-    return mask
 
 
 def _point(at: Any) -> Any:
@@ -1072,7 +946,6 @@ def read_series(primitive: Primitive, solved: Solved) -> Series:
                       at="the domain maximum",
                       measures=_envelope(
                           primitive.variable, times, values, row, edge, wet,
-                          primitive.above,
                           injected=solved.injected(primitive.variable)))
     point = _point(primitive.at)
     node = solved.node_at(point)
@@ -1088,7 +961,7 @@ def read_series(primitive: Primitive, solved: Solved) -> Series:
                   at=f"at {point.name or 'the point'}",
                   lon=float(lon[node]), lat=float(lat[node]),
                   measures=_envelope(primitive.variable, times, column, row,
-                                     edge, held, primitive.above,
+                                     edge, held,
                                      injected=solved.injected(primitive.variable)))
 
 
