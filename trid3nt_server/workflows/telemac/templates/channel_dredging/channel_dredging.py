@@ -283,7 +283,6 @@ REVIEW_TITLE = "Review the dredge, the bed and the mesh"
 telemac_channel_dredging = register_workflow(
     TelemacWorkflow, _METADATA,
     sys.modules[__name__],
-    provenance=(("mesh_resolution_m", "mesh_resolution_note"),),
     # The dredged volume is a sum over the nodes inside the field, so a coarse
     # mesh resolves a narrow fairway - and the volume it holds - badly.
     sensitivity=(("dug_volume_m3", "peak"),

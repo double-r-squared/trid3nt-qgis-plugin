@@ -247,8 +247,6 @@ REVIEW_TITLE = "Review the prescribed column, the deck and the mesh"
 
 telemac3d_stratified_flow = register_workflow(
     TelemacWorkflow, _TELEMAC3D_METADATA, sys.modules[__name__],
-    provenance=(("thermocline_depth_m", "thermocline_note"),
-                ("mesh_resolution_m", "mesh_resolution_note")),
     # The surface-to-bottom temperature difference is read ACROSS the thermocline,
     # the steepest gradient in the domain, and the planes are what resolve it.
     sensitivity=(("stratification_dt", "gradient"),

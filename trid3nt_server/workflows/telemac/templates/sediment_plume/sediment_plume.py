@@ -263,7 +263,6 @@ REVIEW_TITLE = "Review the sediment-plume scenario"
 telemac_sediment_plume = register_workflow(
     TelemacWorkflow, _METADATA,
     sys.modules[__name__],
-    provenance=(("mesh_resolution_m", "mesh_resolution_note"),),
     # The suspended maximum is the canonical peak class: a concentration peak
     # lives inside one element. How far the plume REACHED is a front location and
     # moves with it, and the bed evolution is a peak over the same elements.

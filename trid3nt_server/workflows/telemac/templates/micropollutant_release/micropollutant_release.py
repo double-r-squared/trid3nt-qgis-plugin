@@ -248,7 +248,6 @@ REVIEW_TITLE = "Review the release and the sediment it partitions onto"
 telemac_micropollutant_release = register_workflow(
     TelemacWorkflow, _METADATA,
     sys.modules[__name__],
-    provenance=(("mesh_resolution_m", "mesh_resolution_note"),),
     # A concentration peak lives inside one element and is measured LOW on a
     # coarse mesh. How far the dissolved body of water reached is a front
     # location and moves with it.

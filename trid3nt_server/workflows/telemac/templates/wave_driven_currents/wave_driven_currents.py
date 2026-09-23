@@ -304,7 +304,6 @@ REVIEW_TITLE = "Review the sea state, the tide and the water they drive"
 
 tomawac_wave_driven_currents = register_workflow(
     TelemacWorkflow, _METADATA, sys.modules[__name__],
-    provenance=(("mesh_resolution_m", "mesh_resolution_note"),),
     # The longshore current lives INSIDE the surf zone, which is a band a few
     # elements wide; a coarse element averages the breaking across it and the
     # peak speed lands low.

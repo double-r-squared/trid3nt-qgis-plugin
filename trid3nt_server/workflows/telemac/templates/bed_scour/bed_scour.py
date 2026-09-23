@@ -270,7 +270,6 @@ REVIEW_TITLE = "Review the mobile-bed scenario"
 telemac_bed_scour = register_workflow(
     TelemacWorkflow, _METADATA,
     sys.modules[__name__],
-    provenance=(("mesh_resolution_m", "mesh_resolution_note"),),
     # Scour and deposition maxima live inside single elements, so a coarse mesh
     # reads both low.
     sensitivity=(("bed_evolution_max_m", "peak"),

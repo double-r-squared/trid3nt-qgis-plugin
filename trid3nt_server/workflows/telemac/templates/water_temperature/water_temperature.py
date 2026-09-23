@@ -261,7 +261,6 @@ REVIEW_TITLE = "Review the water, the week of weather, and what it opens at"
 telemac_water_temperature = register_workflow(
     TelemacWorkflow, _METADATA,
     sys.modules[__name__],
-    provenance=(("mesh_resolution_m", "mesh_resolution_note"),),
     # The peak is a saturated maximum over a domain-scale field, so it is not a
     # resolution class. The SPREAD's warm end sits in the thinnest water there
     # is, and a coarse element averages that extreme away.

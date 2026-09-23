@@ -238,8 +238,6 @@ artemis_harbor_agitation = register_workflow(
     # read no runtime lever: no dated source, no frame a level is counted from,
     # and the mesh size is this question's own param.
     levers=(),
-    provenance=(("structure", "structure_note"),
-                ("mesh_resolution_m", "mesh_edge_note")),
     # A phase-RESOLVING solve is the most mesh-dependent of the family: Kd peaks
     # inside a diffraction fringe the coarse mesh averages away.
     sensitivity=(("kd_max", "peak"),),

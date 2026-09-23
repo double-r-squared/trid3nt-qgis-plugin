@@ -257,7 +257,6 @@ REVIEW_TITLE = "Review the sea state, the tide and the water it crosses"
 
 tomawac_nearshore_waves = register_workflow(
     TelemacWorkflow, _METADATA, sys.modules[__name__],
-    provenance=(("mesh_resolution_m", "mesh_resolution_note"),),
     # A wave breaks where the depth falls below what it can stand in, so the
     # highest wave the run reports sits one element outside the breaking line -
     # and a coarse element puts that line somewhere else.
