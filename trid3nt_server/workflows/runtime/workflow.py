@@ -351,7 +351,7 @@ class Workflow:
 
         metrics = self.answer(result)
         run_id = self._run_id(result, run)
-        await self._persist(run_id, run.charts, metrics)
+        await self._persist(run_id, run.charts)
         # The journal takes the MERGED notes, not the interpreter's alone: a
         # resolution-sensitivity label that lived only on the layer would be gone
         # the moment the layer was, and the journal is the record that outlives
@@ -442,11 +442,10 @@ class Workflow:
         ))
 
     @staticmethod
-    async def _persist(run_id: str | None, charts: Mapping[str, Any],
-                       metrics: Mapping[str, Any]) -> None:
+    async def _persist(run_id: str | None, charts: Mapping[str, Any]) -> None:
         from trid3nt_server.workflows.runtime.run_products import persist_run_products
 
-        await persist_run_products(run_id, charts=charts, metrics=metrics)
+        await persist_run_products(run_id, charts=charts)
 
 
 # -- the registration factory --------------------------------------------- #

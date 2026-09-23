@@ -137,7 +137,7 @@ async def publish(*, run_id: str, engine: str, name: str,
             charts[quantity_of(item.caption)] = dict(item.product.payload)
             await emit_chart_payloads(dict(item.product.payload))
     if charts:
-        await persist_run_products(run_id, charts=charts, metrics=None)
+        await persist_run_products(run_id, charts=charts)
     record_run_outputs(layers)
     return Published(layers=tuple(layers), charts=charts)
 
