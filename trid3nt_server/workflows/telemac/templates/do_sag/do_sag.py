@@ -257,10 +257,10 @@ REVIEW_TITLE = "Review the outfall and the water it discharges to"
 telemac_do_sag = register_workflow(
     TelemacWorkflow, _METADATA,
     sys.modules[__name__],
-    # WHERE the sag sits is a local-feature LOCATION and moves with the element
-    # that resolves it. The DO minimum itself is a saturated maximum - a
-    # converged class - so it carries no label.
-    sensitivity=(("do_min_distance_m", "location"),),
+    # WHERE the sag sits on the published profile is a local-feature LOCATION and
+    # moves with the element that resolves it. The DO minimum itself is a
+    # saturated maximum - a converged class - so the profile carries one label.
+    sensitivity=(("dissolved_oxygen", "location"),),
     coerce=(
         point_arg("outfall_coords", tool="telemac_do_sag",
                   prompt="Click on the water where the outfall discharges",

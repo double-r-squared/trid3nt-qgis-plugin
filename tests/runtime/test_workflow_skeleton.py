@@ -67,7 +67,9 @@ def _workflow(cls=_Stub, **kw):
 
 def test_the_hooks_are_silent_by_default():
     wf = _workflow()
-    assert wf.checks(_Layer(), None) == ()
+    from trid3nt_server.workflows.runtime.workflow import RunResult
+
+    assert wf.checks(RunResult(value=_Layer())) == ()
 
 
 def test_the_skeleton_emits_no_input_layer_of_its_own():
@@ -88,8 +90,8 @@ async def test_a_filled_check_hook_reaches_the_result_as_a_note(monkeypatch):
     from trid3nt_server.workflows.runtime import run_products
 
     class Checked(_Stub):
-        def checks(self, result, run):
-            return (f"depth {result.depth_max_m} m is a screening figure",)
+        def checks(self, run):
+            return (f"depth {run.value.depth_max_m} m is a screening figure",)
 
     async def _no_persist(run_id, *, charts):
         return []

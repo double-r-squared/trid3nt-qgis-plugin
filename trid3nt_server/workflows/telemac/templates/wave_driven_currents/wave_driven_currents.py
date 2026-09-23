@@ -306,8 +306,8 @@ tomawac_wave_driven_currents = register_workflow(
     TelemacWorkflow, _METADATA, sys.modules[__name__],
     # The longshore current lives INSIDE the surf zone, which is a band a few
     # elements wide; a coarse element averages the breaking across it and the
-    # peak speed lands low.
-    sensitivity=(("peak_current_speed_mps", "peak"),),
+    # published speed peaks low.
+    sensitivity=(("current_speed", "peak"),),
     coerce=(
         point_arg("seed", tool="tomawac_wave_driven_currents",
                   prompt="Click offshore, where the incoming sea state is "

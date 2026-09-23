@@ -247,11 +247,11 @@ REVIEW_TITLE = "Review the prescribed column, the deck and the mesh"
 
 telemac3d_stratified_flow = register_workflow(
     TelemacWorkflow, _TELEMAC3D_METADATA, sys.modules[__name__],
-    # The surface-to-bottom temperature difference is read ACROSS the thermocline,
-    # the steepest gradient in the domain, and the planes are what resolve it.
-    sensitivity=(("stratification_dt", "gradient"),
-                 ("u_surface", "gradient"),
-                 ("u_bottom", "gradient")),
+    # The temperature the column publishes is read ACROSS the thermocline, the
+    # steepest gradient in the domain, and the planes are what resolve it; the
+    # velocity that shears over the same planes is read inside that gradient.
+    sensitivity=(("water_temperature", "gradient"),
+                 ("velocity_u", "gradient")),
     coerce=(
         point_arg("seed", tool="telemac3d_stratified_flow",
                   prompt="Click on the body of water this run solves over",

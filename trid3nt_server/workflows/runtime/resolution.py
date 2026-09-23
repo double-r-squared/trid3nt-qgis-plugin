@@ -1,12 +1,15 @@
-"""RESOLUTION SENSITIVITY: which answers a coarse mesh reads wrong, and which way.
+"""RESOLUTION SENSITIVITY: which of a run's published reads a coarse mesh gets
+wrong, and which way.
 
-A label is conditioned on the run's own SHEET, never a spacing threshold: only a
-lever row with BOTH a user basis and a seated value counts as refined.
+A label is conditioned on the run's own resolution lever, never a spacing
+threshold: only a lever row with BOTH a user basis and a seated value counts as
+refined. The note is FEEDBACK about the run's fidelity, so it names what the run
+PUBLISHED and says nothing about what the numbers mean.
 """
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Sequence
+from typing import Any, Collection, Mapping, Sequence
 
 __all__ = ["CLASSES", "SensitivityDecl", "sensitivity_notes"]
 
@@ -31,9 +34,11 @@ CLASSES: Mapping[str, tuple[str, str]] = {
 
 
 class SensitivityDecl:
-    """One template's declaration: which ANSWER fields are in which class.
-    Rows are ``(answer_field, class)``; an unknown class name is refused where it is
-    declared, because a label nobody can read is worse than no label."""
+    """One template's declaration: which PUBLISHED quantities are in which class.
+    Rows are ``(quantity, class)`` - the name the run's own layer or chart carries,
+    so a declaration stands on something a reader can open - and an unknown class
+    name is refused where it is declared, because a label nobody can read is worse
+    than no label."""
 
     __slots__ = ("rows",)
 
@@ -43,7 +48,7 @@ class SensitivityDecl:
             pair = tuple(row)
             if len(pair) != 2 or pair[1] not in CLASSES:
                 raise ValueError(
-                    f"sensitivity row {row!r} is not (answer_field, class) with "
+                    f"sensitivity row {row!r} is not (quantity, class) with "
                     f"class in {sorted(CLASSES)}.")
             out.append((str(pair[0]), str(pair[1])))
         self.rows = tuple(out)
@@ -53,7 +58,7 @@ class SensitivityDecl:
 
 
 def _lever(metadata: Any) -> str | None:
-    """The resolution PARAM this engine's answers depend on, from the tool metadata.
+    """The resolution PARAM this engine's published reads depend on, off the metadata.
     Read off the declared ``ResolutionSpec``, never restated on the sensitivity
     declaration: two names for one lever is a mirror waiting to disagree."""
     for spec in getattr(metadata, "resolution_specs", ()) or ():
@@ -63,31 +68,22 @@ def _lever(metadata: Any) -> str | None:
     return None
 
 
-def answered(result: Any, name: str) -> Any:
-    """One answer field off a result: its ``answer`` map, else its attribute.
-
-    A published outputs list carries its scalars in the map; a product layer
-    carries them as fields of its own."""
-    carried = getattr(result, "answer", None)
-    if isinstance(carried, Mapping) and name in carried:
-        return carried[name]
-    return getattr(result, name, None)
-
-
-def sensitivity_notes(decl: SensitivityDecl, metadata: Any, result: Any,
+def sensitivity_notes(decl: SensitivityDecl, metadata: Any,
+                      published: Collection[str],
                       sheet: Sequence[Any],
                       fill: Mapping[str, str] | None = None,
                       mesh_size_m: Any = None) -> tuple[str, ...]:
-    """The honesty note(s) this run's answer carries, or ``()``.
-    ONE note per run, not one per field, and fields the run did not produce are
-    dropped - a note about a number that is not there points at nothing.
+    """The honesty note(s) this run carries about its own fidelity, or ``()``.
+    ONE note per run, not one per quantity, and a declared quantity this run did
+    not publish is dropped - a note about a product that is not there points at
+    nothing. ``published`` is what the run put on the map and on its charts.
     ``fill`` is the solved deck's slots by origin, so a lever that is a KEYWORD
     rather than a param is read where the run actually states it, and
     ``mesh_size_m`` is the edge off the mesh the run published."""
     if not decl:
         return ()
-    present = [(field, cls) for field, cls in decl.rows
-               if answered(result, field) is not None]
+    present = [(quantity, cls) for quantity, cls in decl.rows
+               if quantity in published]
     if not present:
         return ()
 
@@ -108,7 +104,7 @@ def sensitivity_notes(decl: SensitivityDecl, metadata: Any, result: Any,
 
     classes = sorted({cls for _, cls in present})
     what = "; ".join(f"{CLASSES[c][0]} - {CLASSES[c][1]}" for c in classes)
-    fields = ", ".join(field for field, _ in present)
+    fields = ", ".join(quantity for quantity, _ in present)
     if refined:
         return (
             f"RESOLUTION-SENSITIVE: {fields} sit in a class the mesh decides "

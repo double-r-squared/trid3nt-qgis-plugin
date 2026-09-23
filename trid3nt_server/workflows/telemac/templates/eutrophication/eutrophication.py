@@ -267,10 +267,11 @@ REVIEW_TITLE = "Review the water this run is carrying"
 telemac_eutrophication = register_workflow(
     TelemacWorkflow, _METADATA,
     sys.modules[__name__],
-    # WHERE the oxygen bottoms out and where the biomass stands highest are
-    # local-feature LOCATIONS and move with the element that resolves them.
-    sensitivity=(("do_min_distance_m", "location"),
-                 ("phyto_max_distance_m", "location")),
+    # WHERE the oxygen bottoms out and where the biomass stands highest on the
+    # published profiles are local-feature LOCATIONS, and each moves with the
+    # element that resolves it.
+    sensitivity=(("dissolved_o2", "location"),
+                 ("phyto_biomass", "location")),
     coerce=(
         point_arg("seed", tool="telemac_eutrophication",
                   prompt="Click on the channel where the modelled stretch starts",

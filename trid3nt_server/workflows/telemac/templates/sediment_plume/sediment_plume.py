@@ -263,12 +263,12 @@ REVIEW_TITLE = "Review the sediment-plume scenario"
 telemac_sediment_plume = register_workflow(
     TelemacWorkflow, _METADATA,
     sys.modules[__name__],
-    # The suspended maximum is the canonical peak class: a concentration peak
-    # lives inside one element. How far the plume REACHED is a front location and
-    # moves with it, and the bed evolution is a peak over the same elements.
-    sensitivity=(("suspended_cmax", "peak"),
-                 ("plume_reach_m", "location"),
-                 ("bed_evolution_max_m", "peak")),
+    # The suspended concentration is the canonical peak class: a concentration
+    # peak lives inside one element, and the bed the plume leaves behind is a
+    # peak over the same elements. How far the plume reached moves with the mesh
+    # too, but no product of this run is a reach, so nothing is labeled for it.
+    sensitivity=(("suspended_sediment_concentration", "peak"),
+                 ("cumul_bed_evol", "peak")),
     coerce=(
         point_arg("release", tool="telemac_sediment_plume",
                   prompt="Click on the water where the sediment enters it",

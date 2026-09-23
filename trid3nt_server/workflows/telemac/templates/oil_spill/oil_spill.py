@@ -261,11 +261,12 @@ REVIEW_TITLE = "Review the oil spill scenario"
 telemac_oil_spill = register_workflow(
     TelemacWorkflow, _METADATA,
     sys.modules[__name__],
-    # The dissolved maximum is the canonical peak class: a concentration peak
-    # lives inside one element. How far the slick REACHED is a front location and
-    # moves with it.
-    sensitivity=(("oil_cmax_mgl", "peak"),
-                 ("plume_reach_m", "location")),
+    # The dissolved concentration is the canonical peak class: a concentration
+    # peak lives inside one element. The slick TRACK is where the drogues the
+    # current carried ended up, a local-feature location that moves with the
+    # element resolving that current.
+    sensitivity=(("dissolved_oil_concentration", "peak"),
+                 ("oil_slick_track", "location")),
     coerce=(
         point_arg("release", tool="telemac_oil_spill",
                   prompt="Click on the water where the oil enters it",

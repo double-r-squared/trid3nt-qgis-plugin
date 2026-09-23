@@ -246,11 +246,11 @@ REVIEW_TITLE = "Review the tracer-release scenario"
 telemac_dye_release = register_workflow(
     TelemacWorkflow, _METADATA,
     sys.modules[__name__],
-    # The dye maximum is the canonical peak class: measured 6x LOW on the coarse
-    # mesh, because a concentration peak lives inside one element. How far the
-    # plume REACHED is a front location and moves with it.
-    sensitivity=(("dye_cmax_mgl", "peak"),
-                 ("plume_reach_m", "location")),
+    # The dye concentration is the canonical peak class: measured 6x LOW on the
+    # coarse mesh, because a concentration peak lives inside one element. How far
+    # the plume reached is a front location that moves with the mesh too, but no
+    # product of this run is a reach, so nothing here is labeled for it.
+    sensitivity=(("dye_concentration", "peak"),),
     coerce=(
         point_arg("release", tool="telemac_dye_release",
                   prompt="Click on the water where the substance enters it",

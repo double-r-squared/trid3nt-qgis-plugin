@@ -258,9 +258,9 @@ REVIEW_TITLE = "Review the sea state, the tide and the water it crosses"
 tomawac_nearshore_waves = register_workflow(
     TelemacWorkflow, _METADATA, sys.modules[__name__],
     # A wave breaks where the depth falls below what it can stand in, so the
-    # highest wave the run reports sits one element outside the breaking line -
+    # highest wave the run publishes sits one element outside the breaking line -
     # and a coarse element puts that line somewhere else.
-    sensitivity=(("hs_max_m", "peak"),),
+    sensitivity=(("significant_wave_height", "peak"),),
     coerce=(
         point_arg("seed", tool="tomawac_nearshore_waves",
                   prompt="Click offshore, where the incoming sea state is "

@@ -151,15 +151,25 @@ class Workflow:
         states none and a series match then holds only the opening instant."""
         return None
 
-    def checks(self, result: Any, run: RunResult) -> tuple[str, ...]:
-        """Validation checks over the finished result, as NOTES the caller narrates.
+    def checks(self, run: RunResult) -> tuple[str, ...]:
+        """Validation checks over the finished run, as NOTES the caller narrates.
         A template that declares no sensitivity classes produces no note, and a
         check reports - it never retracts a solved run."""
         params = getattr(run, "params", None)
         sheet = params.rows() if params is not None else ()
-        return sensitivity_notes(self.sensitivity, self.metadata, result, sheet,
+        return sensitivity_notes(self.sensitivity, self.metadata,
+                                 self._published(run), sheet,
                                  fill=self._fill(run),
                                  mesh_size_m=self._mesh_size_m(run))
+
+    def _published(self, run: RunResult) -> set[str]:
+        """Every QUANTITY this run put on the map or on a chart, by the name the
+        publish stage wrote it under.
+
+        One name for one quantity whichever product carries it, so a declaration
+        stands on something a reader can open rather than on a field of its own."""
+        named = {str(row.get("quantity") or "") for row in run.outputs}
+        return (named | set(run.charts)) - {""}
 
     # -- the spine --------------------------------------------------------- #
 
@@ -310,7 +320,7 @@ class Workflow:
                        supplied: Mapping[str, Any] | None = None,
                        derived_from: Derivation | None = None) -> Any:
         result = run.value
-        notes = list(run.notes) + [n for n in self.checks(result, run) if n]
+        notes = list(run.notes) + [n for n in self.checks(run) if n]
         # THE TIE VIEW: several sources ranked equal on every fact the sort
         # reads, so the rows travel on the result and the model or the user
         # picks one. A list with a clear winner carries no table - the sentence

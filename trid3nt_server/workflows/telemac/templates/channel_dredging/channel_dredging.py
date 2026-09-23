@@ -283,10 +283,10 @@ REVIEW_TITLE = "Review the dredge, the bed and the mesh"
 telemac_channel_dredging = register_workflow(
     TelemacWorkflow, _METADATA,
     sys.modules[__name__],
-    # The dredged volume is a sum over the nodes inside the field, so a coarse
-    # mesh resolves a narrow fairway - and the volume it holds - badly.
-    sensitivity=(("dug_volume_m3", "peak"),
-                 ("dredged_bed_change_m", "peak")),
+    # The bed change inside a narrow fairway lives in single elements, so a
+    # coarse mesh reads it low. The dredged VOLUME is an integral over those
+    # nodes - a converged class - and this run publishes no volume anyway.
+    sensitivity=(("cumul_bed_evol", "peak"),),
     coerce=(
         point_arg("seed_point", tool="telemac_channel_dredging",
                   prompt="Click on the channel this dredge works in",

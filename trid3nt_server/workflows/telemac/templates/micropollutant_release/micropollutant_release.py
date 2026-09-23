@@ -249,10 +249,10 @@ telemac_micropollutant_release = register_workflow(
     TelemacWorkflow, _METADATA,
     sys.modules[__name__],
     # A concentration peak lives inside one element and is measured LOW on a
-    # coarse mesh. How far the dissolved body of water reached is a front
-    # location and moves with it.
-    sensitivity=(("dissolved_cmax_mgl", "peak"),
-                 ("dissolved_travel_m", "location")),
+    # coarse mesh. How far the dissolved substance travelled moves with the mesh
+    # as well, but no product of this run is a travel distance, so nothing here
+    # is labeled for it.
+    sensitivity=(("dissolved_micropollutant", "peak"),),
     coerce=(
         point_arg("release", tool="telemac_micropollutant_release",
                   prompt="Click on the water where the substance enters it",

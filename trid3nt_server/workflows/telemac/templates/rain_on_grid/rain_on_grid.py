@@ -304,10 +304,9 @@ telemac_rain_on_grid = register_workflow(
     # The overland sheet's deepest point and the hydrograph crest are magnitude
     # maxima that live inside single elements, and a coarse element averages both
     # away. WHEN the crest arrives moves with the elements that route the water
-    # to it.
-    sensitivity=(("max_depth_peak_m", "peak"),
-                 ("peak_discharge_m3s", "peak"),
-                 ("peak_discharge_time_s", "location")),
+    # to it, but no product of this run is an arrival time.
+    sensitivity=(("water_depth", "peak"),
+                 ("outlet_hydrograph", "peak")),
     coerce=(
         # Both routes to a drawn value go through one normalizer: the draw gate
         # seats what the canvas returns and this seats what the model typed, and

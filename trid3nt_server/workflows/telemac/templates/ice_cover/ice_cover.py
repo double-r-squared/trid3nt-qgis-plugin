@@ -308,10 +308,10 @@ REVIEW_TITLE = "Review the water, the cold snap, and what it opens at"
 telemac_ice_cover = register_workflow(
     TelemacWorkflow, _METADATA,
     sys.modules[__name__],
-    # The thickest ice sits where the water is thinnest and slowest - against
-    # the bank, in the shallows - and a coarse element averages that water in
-    # with the channel it is beside.
-    sensitivity=(("peak_ice_thickness_m", "peak"),),
+    # The thickest ice on the published cover sits where the water is thinnest
+    # and slowest - against the bank, in the shallows - and a coarse element
+    # averages that water in with the channel it is beside.
+    sensitivity=(("ice_cover_thickness", "peak"),),
     coerce=(
         point_arg("seed", tool="telemac_ice_cover",
                   prompt="Click on the water where the modelled stretch starts",
