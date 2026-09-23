@@ -74,8 +74,8 @@ caveats:
   clipped)
 - the dead msft/abfs GeoParquet leg is flag-not-copy; source='msft' resolves to the OSM Overpass path
   (Overpass is the reliable source)
-- the full OSM tag bag per footprint is written to a sibling .tags.json sidecar consumed by /api/building-detail;
-  the inline FGB is slim (osm_id/osm_type/fid)
+- the full OSM tag bag per footprint is written to a sibling .tags.json sidecar; the inline FGB is slim
+  (osm_id/osm_type/fid)
 - an AOI with no OSM building footprints -> BUILDINGS_EMPTY (honest typed empty)
 docstring: |-
   Fetch building footprints (polygons) for a bbox.

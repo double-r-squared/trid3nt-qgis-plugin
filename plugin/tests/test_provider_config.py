@@ -25,7 +25,7 @@ from plugin.net import trid3nt_client as tc  # noqa: E402
 
 
 # Recording stub: POST /api/provider-config + GET /api/local-models, in
-# miniature (mirrors the server's catalog_http.py).
+# miniature (mirrors the server's doors/settings.py).
 
 
 class _ProviderStub(http.server.BaseHTTPRequestHandler):

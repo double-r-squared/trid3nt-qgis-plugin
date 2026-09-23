@@ -30,7 +30,7 @@ from stub_server import (  # noqa: E402
 
 class _CaseListStub(http.server.BaseHTTPRequestHandler):
     """Mirrors the agent's real ``GET /api/case-list`` route in miniature
-    (the server's ``catalog_http.py``): 200 ``{"cases": [...]}`` on
+    (the server's ``doors/cases.py``): 200 ``{"cases": [...]}`` on
     success, or a configurable status + ``{"error": ...}`` body."""
 
     status: int = 200
