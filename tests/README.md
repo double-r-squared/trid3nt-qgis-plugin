@@ -32,6 +32,7 @@ join the run as the sixth slice.
 | file | what it is |
 |---|---|
 | `conftest.py` | The fixtures that cross subsystems, and the two autouse resets. |
+| `door_client.py` | One request driven through the HTTP doors over a real socket, on an ephemeral port. |
 
 A directory carries a `conftest.py` only when a fixture lands in it: the root
 holds what crosses subsystems (`fake_s3`, `fake_llm`, `empty_registry`, and the
