@@ -31,7 +31,7 @@ __all__ = ["Bed", "DEPTH", "INTERPOLATED", "MERGE", "MERGE_DERIVE",
            "REFUSE_ABOVE", "refuse_above",
            "MergeRastersError", "MergedRasterLayerURI", "POINTS", "RASTER",
            "SURVEY_DERIVE", "SurveySurfaceError", "SurveySurfaceLayerURI",
-           "bed", "elevations", "interpolates", "merge_rows",
+           "bed", "elevations", "interpolates", "merge_ask", "merge_rows",
            "merged_surface", "survey_surface"]
 
 _CODE = "BED_INVALID"
@@ -199,6 +199,37 @@ def merge_rows(op: Any) -> list[str]:
         if isinstance(one, Mapping) and str(one.get("name", "")) == MERGE:
             rows.extend(str(row) for row in _listed(one.get("rows")))
     return rows
+
+
+def merge_ask(picked: str, resolution_m: Any) -> dict[str, Any]:
+    """WHAT a row a merge NAMES is asked at, beside the place: the spacing this
+    run is meshed at, held inside the band the row declares it serves.
+
+    A row asked at its own posting over a domain stated in tens of kilometres is
+    asked for cells no node of this run reads, and it refuses on its own pixel
+    budget - correctly, because the ask was wrong. The band is the row's own
+    ``resolution_m`` declaration, and a row that declares no resolution at all is
+    asked for none. Where the band moves the ask, the move is STATED by name and
+    the row is still laid: nothing here drops a row to make a merge fit."""
+    from trid3nt_server.tools.fetchers._router.registration import _SPEC_REGISTRY
+    from trid3nt_server.workflows.runtime.journal import journal_note
+
+    spec = _SPEC_REGISTRY.get(picked)
+    declared = dict(getattr(spec, "params", {}) or {}).get("resolution_m")
+    if declared is None or resolution_m is None:
+        return {}
+    meshed = float(resolution_m)
+    asked = meshed
+    if declared.min is not None:
+        asked = max(asked, float(declared.min))
+    if declared.max is not None:
+        asked = min(asked, float(declared.max))
+    if asked != meshed:
+        journal_note(
+            f"{picked} is asked at {asked:g} m rather than the {meshed:g} m this "
+            f"run is meshed at: it serves no cell "
+            f"{'finer' if asked > meshed else 'coarser'} than that.")
+    return {"resolution_m": int(asked) if declared.type == "int" else asked}
 
 
 def interpolates(op: Any) -> bool:

@@ -328,6 +328,46 @@ def test_every_merge_the_call_states_names_rows_that_are_laid():
                        "interpolated"]) == ["a", "b", "c"]
 
 
+def test_a_row_a_merge_names_is_asked_at_the_spacing_the_run_is_meshed_at():
+    """A row asked at its own posting over a domain stated in tens of kilometres
+    is asked for cells no node of the run reads, and it refuses on its own pixel
+    budget. The ask is the run's spacing, held inside the band the row serves."""
+    from trid3nt_server.inputs.bed import merge_ask
+
+    assert merge_ask("fetch_chs_nonna", 40.0) == {"resolution_m": 40.0}
+    # Held at the row's own floor and at its own ceiling: a row measures what it
+    # measures, and neither end of its band is the run's to move.
+    assert merge_ask("fetch_chs_nonna", 2.0) == {"resolution_m": 10.0}
+    assert merge_ask("fetch_chs_nonna", 900.0) == {"resolution_m": 500.0}
+    # The value goes in the TYPE the row declares the param in.
+    assert merge_ask("fetch_dem", 40.0) == {"resolution_m": 40}
+    assert isinstance(merge_ask("fetch_dem", 40.0)["resolution_m"], int)
+    # A row that states no resolution is asked for none, and neither is a row
+    # asked under a run that states no spacing.
+    assert merge_ask("fetch_usgs_nwis_gauges", 40.0) == {}
+    assert merge_ask("fetch_chs_nonna", None) == {}
+
+
+def test_the_merge_ask_clears_the_budget_that_refused_the_named_row():
+    """The row's budget refusal is right and stays; the ask is what was wrong.
+    The box is the water surface a St. Clair River run is cut from, padded as a
+    slot pads it, and the run is meshed at 40 m."""
+    from trid3nt_server.inputs.bed import merge_ask
+    from trid3nt_server.tools.fetchers._fetch_common import (
+        PixelBudgetExceededError,
+        enforce_pixel_budget,
+    )
+
+    bbox = (-82.79905519992127, 42.64047202659001,
+            -82.28047480007872, 43.46420797340999)
+    with pytest.raises(PixelBudgetExceededError) as excinfo:
+        enforce_pixel_budget(bbox, 10.0, budget_px=4000, source="fetch_chs_nonna")
+    assert "9152 px" in str(excinfo.value)
+    enforce_pixel_budget(bbox, float(merge_ask("fetch_chs_nonna", 40.0)
+                                     ["resolution_m"]),
+                         budget_px=4000, source="fetch_chs_nonna")
+
+
 def test_a_bed_whose_water_is_measured_whole_needs_no_op():
     assert bed(_merged(0.0)).kind == RASTER
     assert bed(_merged(None)).kind == RASTER

@@ -1609,6 +1609,10 @@ package DataSeam {
         "tests/runtime/test_matched_slots.py::test_the_next_survivor_takes_its_turn_when_the_top_one_held_nothing";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
         "tests/runtime/test_matched_slots.py::test_a_need_and_a_producer_on_one_row_is_refused_at_declaration";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/inputs/test_slot_inputs.py::test_a_row_a_merge_names_is_asked_at_the_spacing_the_run_is_meshed_at";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/inputs/test_slot_inputs.py::test_the_merge_ask_clears_the_budget_that_refused_the_named_row";
 
     satisfy requirement TheRankedListIsOneObjectInThreeViews by rankedListCard;
     satisfy requirement TheRankedListIsOneObjectInThreeViews by rankedListRecord;

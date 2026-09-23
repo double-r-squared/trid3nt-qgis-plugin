@@ -610,11 +610,16 @@ async def _named_row(env: _Env, decl: DataDecl, picked: str,
 
     Matched for the class the row serves so the ask it is called with is the one
     that class states, then called by name: the run named it, so the rank the
-    match would have put it at decides nothing here."""
+    match would have put it at decides nothing here. The RESOLUTION a named row
+    is asked at is the merge's own statement, because a row asked at its posting
+    over the whole domain is asked for cells this run has no node for."""
+    from trid3nt_server.inputs.bed import merge_ask
+
     choice = await _ranked(env, decl, data_class, f"{decl.name} {picked}")
+    ask = await _ask_for(env, choice.model_copy(update={"picked": picked}), decl)
     return await _produce(env, _runtime_row(
         env, f"{decl.name}_{picked}", picked,
-        await _ask_for(env, choice.model_copy(update={"picked": picked}), decl)))
+        {**ask, **merge_ask(picked, _mesh_m(env))}))
 
 
 async def _surfaced(env: _Env, decl: DataDecl, picked: str, held: Any) -> Any:
