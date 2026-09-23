@@ -34,6 +34,7 @@ from dev.testing.live_run import (  # noqa: E402
     _check_declared_cards,
     _feature_collection,
     _pump,
+    _read_dispatch_card,
     _read_run_products,
 )
 
@@ -426,3 +427,36 @@ def test_context_layers_alone_locate_no_run_prefix(fake_s3):
         ev.require_run_products()
 
 
+
+
+# --- the failed card, end to end --------------------------------------------- #
+def test_a_step_that_fails_reaches_the_evidence_naming_what_stopped_it():
+    """The emitter marks a step failed, the ``pipeline-state`` frame it sends
+    carries the code and the sentence, and the evidence a packet is written from
+    reads a step error that is not empty."""
+    from trid3nt_contracts import new_ulid
+
+    from trid3nt_server.render.pipeline_emitter import PipelineEmitter
+
+    frames: list[dict] = []
+
+    async def _sink(raw: str) -> None:
+        frames.append(json.loads(raw))
+
+    async def _drive() -> None:
+        emitter = PipelineEmitter(session_id=new_ulid(), sink=_sink)
+        step_id = await emitter.add_step(name="outputs", tool_name="t")
+        await emitter.mark_running(step_id)
+        await emitter.mark_failed(
+            step_id, error_code="NO_PRIMARY_LAYER",
+            error_message="the reader found no primary layer")
+
+    asyncio.run(_drive())
+    snapshot = [f for f in frames if f["type"] == "pipeline-state"][-1]
+    ev = _env()
+    _read_dispatch_card(snapshot["payload"], ev)
+    assert ev.step_state == "failed"
+    assert ev.step_error == "NO_PRIMARY_LAYER the reader found no primary layer"
+    with pytest.raises(LiveRunError, match="NO_PRIMARY_LAYER"):
+        ev.dispatched = True
+        ev.require_ok()

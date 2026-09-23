@@ -403,6 +403,13 @@ class PipelineStep(GraceModel):
     started_at: UTCDatetime | None = None
     completed_at: UTCDatetime | None = None
     progress_percent: int | None = Field(default=None, ge=0, le=100)
+    # WHY a step ended red. A failed step names its cause on the frame a client
+    # reads, so a reader holding this snapshot alone can say what stopped the
+    # run without the persisted summary beside it. The code set is open - a
+    # workflow registers its own - and the message is capped so a stack trace
+    # cannot ride out here.
+    error_code: str | None = None
+    error_message: str | None = Field(default=None, max_length=512)
     # The AUTHORITATIVE wall-clock elapsed time, stamped on the terminal
     # transition and derived from the two stamps above. ``None`` while pending
     # or running, so a client may tick cosmetically until this lands and then

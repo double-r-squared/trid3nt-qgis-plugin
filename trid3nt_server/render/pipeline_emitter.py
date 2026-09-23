@@ -1746,9 +1746,10 @@ class PipelineEmitter:
 
     def _step_fields(self, step_id: str) -> dict[str, Any]:
         """The fields a wire step and a persisted summary BOTH carry: identity,
-        state, timing, the card-kind discriminator with its solver-run binding,
-        and the nested-substep trio - ``parent_step_id`` rides a CHILD while the
-        live-breadcrumb trio rides the PARENT and is None while it is idle.
+        state, timing, the named cause of a red step, the card-kind
+        discriminator with its solver-run binding, and the nested-substep trio -
+        ``parent_step_id`` rides a CHILD while the live-breadcrumb trio rides the
+        PARENT and is None while it is idle.
         """
         s = self._steps[step_id]
         return {
@@ -1759,6 +1760,8 @@ class PipelineEmitter:
             "started_at": s.started_at,
             "completed_at": s.completed_at,
             "progress_percent": s.progress_percent,
+            "error_code": s.error_code,
+            "error_message": s.error_message,
             "duration_ms": s.duration_ms,
             "role": s.role,
             "batch_job_id": s.batch_job_id,
@@ -1776,12 +1779,7 @@ class PipelineEmitter:
         )
 
     def _to_summary(self, step_id: str) -> PipelineStepSummary:
-        s = self._steps[step_id]
-        return PipelineStepSummary(
-            **self._step_fields(step_id),
-            error_code=s.error_code,
-            error_message=s.error_message,
-        )
+        return PipelineStepSummary(**self._step_fields(step_id))
 
     def _collect_children(self, parent_step_id: str) -> list[PersistedSubStepRecord]:
         """Snapshot the TERMINAL child substeps of ``parent_step_id``.
