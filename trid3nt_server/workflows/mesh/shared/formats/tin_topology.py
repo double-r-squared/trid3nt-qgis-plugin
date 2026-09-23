@@ -10,11 +10,21 @@ from __future__ import annotations
 import numpy as np
 
 __all__ = [
+    "boundary_numbering",
     "extract_boundary_loops",
     "signed_area_ccw",
     "remove_boundary_pinch_points",
     "clean_and_orient",
+    "BoundaryPinched",
 ]
+
+
+#: How many shared nodes a pinched boundary is named by before the rest counted.
+_NAMED_PINCH_NODES = 12
+
+
+class BoundaryPinched(ValueError):
+    """The boundary walk found a node on two rings, so no IPOBO numbers it."""
 
 
 def _boundary_degree(cells: np.ndarray) -> dict[int, int]:
@@ -154,3 +164,44 @@ def clean_and_orient(
         cells = cells.copy()
         cells[cw] = cells[cw][:, [0, 2, 1]]
     return points, cells, depths
+
+
+def boundary_numbering(
+    cells: np.ndarray, n_nodes: int
+) -> tuple[np.ndarray, list[list[int]]]:
+    """Number every boundary node along the loops -> ``(ipobo, loops)``.
+
+    One count continues across loops, so IPOBO is a permutation of 1..NPTFR."""
+    # TELEMAC's IPOBO is a permutation: one position per boundary node, counted
+    # along the contours without restarting, and a per-loop count breaks it. A
+    # node two loops both walk through would need two positions and gets the
+    # second, which leaves the successor array longer than the boundary and the
+    # numbering silently wrong, so that domain is refused here rather than
+    # written.
+    loops = extract_boundary_loops(np.asarray(cells, dtype=np.int64))
+    seen: dict[int, int] = {}
+    for loop in loops:
+        for node in loop:
+            seen[int(node)] = seen.get(int(node), 0) + 1
+    shared = sorted(node for node, count in seen.items() if count > 1)
+    if shared:
+        rows = sum(len(loop) for loop in loops)
+        named = ", ".join(str(n) for n in shared[:_NAMED_PINCH_NODES])
+        more = ("" if len(shared) <= _NAMED_PINCH_NODES
+                else f" (and {len(shared) - _NAMED_PINCH_NODES} more)")
+        raise BoundaryPinched(
+            f"the boundary walk returned {len(loops)} rings over {rows} rows but "
+            f"only {len(seen)} distinct nodes: {len(shared)} node(s) - {named}"
+            f"{more} - lie on more than one ring, so the domain is pinched to a "
+            "point there and has no IPOBO permutation to be numbered by. It is a "
+            "domain the domain cut into pieces that touch rather than a mesh "
+            "defect: give it an outline whose narrows the asked edge can "
+            "resolve, or narrow the domain to the water body the question is "
+            "about.")
+    ipobo = np.zeros(int(n_nodes), dtype=np.int64)
+    position = 0
+    for loop in loops:
+        for node in loop:
+            position += 1
+            ipobo[int(node)] = position
+    return ipobo, loops

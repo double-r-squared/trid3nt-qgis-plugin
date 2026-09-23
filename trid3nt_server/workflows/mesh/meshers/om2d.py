@@ -754,7 +754,7 @@ def _emitted(mesh: Mesh, rundir: Path, domain: _Domain,
     import dataclasses
 
     from trid3nt_server.workflows.mesh.shared.nodes import boundary_contours
-    from trid3nt_server.workflows.mesh.shared.selafin_cli import write_telemac_pair
+    from trid3nt_server.workflows.mesh.shared.selafin_io import write_telemac_pair
     from trid3nt_server.workflows.mesh.topology import write_topology
 
     roles = {role: list(nodes) for role, nodes

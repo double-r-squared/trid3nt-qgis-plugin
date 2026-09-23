@@ -14,6 +14,10 @@ authors = [{ name = "Nate Almanza" }]
 # Upper bounds are loose on purpose: the provider SDKs move faster than a pin
 # can track. Verify an installed set with `pip show`.
 dependencies = [
+    # SELAFIN in this process: the geometry pair the daemon writes for TELEMAC
+    # and the result it reads back. The engine image solves and does nothing
+    # else, so neither file may cost a container start.
+    "xarray-selafin>=0.2.3,<0.3",
     # S3-compatible object I/O: the cached-fetch store, user-layer ingest and
     # the public-bucket fetchers all speak S3 (MinIO locally).
     "boto3>=1.40,<2",

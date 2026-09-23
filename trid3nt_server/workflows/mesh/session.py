@@ -263,7 +263,7 @@ class MeshSession:
             return self._stage(Path(declared)), None
         if mesh.nodes_per_cell != 3 or not mesh.has_bed:
             return None, None
-        from trid3nt_server.workflows.mesh.shared.selafin_cli import write_telemac_pair
+        from trid3nt_server.workflows.mesh.shared.selafin_io import write_telemac_pair
 
         written = write_telemac_pair(
             self.workdir, x=mesh.points[:, 0], y=mesh.points[:, 1],
