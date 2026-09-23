@@ -646,8 +646,10 @@ package SolveSeam {
         a variable name with the record's unit still glued on.
 
         SCOPE: the FIELD DATA a delivery renders. One reader of the format's
-        fields - the engine's own, inside the image that wrote them - and no
-        second parser of fields anywhere. The packet's frame count is outside
+        fields - the SELAFIN library's, called in this process by selafin_io -
+        and no second parser of fields anywhere. It is not the engine's reader
+        inside the image: that one costs a container per file and cannot open a
+        3D result through the renderer at all. The packet's frame count is outside
         that scope and stays hand-rolled header arithmetic by design: it is the
         independent reader FrameCountCrossCheck exists to disagree with the
         worker's number, and converting it would make the cross-check agree

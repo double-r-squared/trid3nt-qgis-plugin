@@ -723,12 +723,23 @@ package MeshSeam {
         the successor array built from the contour lengths then outruns the
         boundary itself.
 
-        The walk that decides this is the engine's own, inside the image: a
-        host-side walk of the same cells returns different rings, so nothing
-        outside that process can measure it. The refusal is therefore written
-        WHERE the walk runs, naming the shared nodes and their count, and travels
-        back as a document the host re-raises typed - never as the index error
-        that named nothing.
+        The walk that decides this is OURS and runs in this process: over the
+        same cells it returns the engine's own rings - the same boundary node set
+        and the same count - differing only in which node each ring starts at.
+        The refusal names the shared nodes and their count, typed, never the
+        index error that named nothing.
+        */
+    }
+
+    requirement def AnUnreadableFileRefusesRatherThanFallBack {
+        doc /*
+        Both directions of the pair are this process's own, so neither has an
+        in-image half to retry against. A result whose header will not open, and
+        one whose header opens but whose frames are cut short, refuse by the same
+        name and name the FILE; a geometry or .cli that cannot be written refuses
+        by name and names both halves. The pair is one artifact - half of it on
+        disk is a numbering nothing agrees with - so a partial write is a refusal
+        and never a return value.
         */
     }
 
@@ -888,6 +899,14 @@ package MeshSeam {
         "tests/mesh/test_mesh_topology_and_bed.py::test_the_boundary_numbering_is_one_count_across_every_loop";
     verify requirement APinchedBoundaryIsRefusedByName by
         "tests/telemac/test_telemac_boundary_contract.py::test_a_pinched_boundary_refuses_by_name";
+
+    satisfy requirement AnUnreadableFileRefusesRatherThanFallBack by selafinIo;
+    verify requirement AnUnreadableFileRefusesRatherThanFallBack by
+        "tests/telemac/test_telemac_result_reader.py::test_a_refusal_names_the_file";
+    verify requirement AnUnreadableFileRefusesRatherThanFallBack by
+        "tests/telemac/test_telemac_result_reader.py::test_a_result_whose_frames_are_cut_short_refuses_by_name";
+    verify requirement AnUnreadableFileRefusesRatherThanFallBack by
+        "tests/telemac/test_telemac_result_reader.py::test_a_pair_that_cannot_be_written_refuses_by_name";
 
     satisfy requirement SignatureIsTheSchema by mesherRegistry;
     satisfy requirement SignatureIsTheSchema by om2dAdapter;
