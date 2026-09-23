@@ -17,7 +17,8 @@ from trid3nt_contracts import new_ulid
 from . import journal, snapshot
 from .accepts import Accepts
 from .data import DataDecl, data_rows
-from .errors import DeclarativeError, PlanValidationError, WorkflowParkedError
+from .errors import (DeclarativeError, PlanValidationError, WorkflowParkedError,
+                     said)
 from .levers import with_levers
 from .params import Param, ResolvedParams, doors, param_rows
 from .plan import Plan, Ref, Step
@@ -309,8 +310,10 @@ class Workflow:
     def _error(self, code: str, exc: BaseException) -> dict[str, Any]:
         """The failure, plus whatever auxiliary products the run also lost on the way."""
         notes = getattr(exc, "__notes__", ()) or ()
+        # The envelope's sentence is the only thing a card can print, so an
+        # exception that stringifies to nothing reports its type instead.
         return {"status": "error", "error_code": code,
-                "error_message": " ".join([str(exc), *notes])}
+                "error_message": " ".join([said(exc), *notes])}
 
     # -- post + publish ---------------------------------------------------- #
 

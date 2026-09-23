@@ -49,6 +49,7 @@ from .errors import (
     LeakScanTruncated,
     ParamRefLeakedError,
     StepFailedError,
+    said,
 )
 from .journal import (bind_choices, bind_coverage, bind_notes, bind_outputs,
                       drain_choices, drain_coverage, drain_notes,
@@ -287,7 +288,8 @@ def _note_aux_failure(out: RunResult, plan_name: str, node: PlanNode,
     kind = "chart"
     logger.warning("plan %s: %s node %r FAILED (%s); the run's primary result stands",
                    plan_name, kind, node.label, exc, exc_info=True)
-    out.notes.append(f"the {kind} {node.label!r} could not be produced: {exc}")
+    out.notes.append(
+        f"the {kind} {node.label!r} could not be produced: {said(exc)}")
 
 
 def expand_plan(plan: Plan) -> tuple[PlanNode, ...]:
@@ -1278,7 +1280,7 @@ async def _call_fn(fn: Any, kwargs: dict[str, Any], label: str) -> Any:
             # that channel.
             raise
         raise StepFailedError(
-            f"step {label!r} failed: {exc}",
+            f"step {label!r} failed: {said(exc)}",
             error_code=getattr(exc, "error_code", None) or "STEP_FAILED",
             step=label, cause=exc,
         ) from exc
@@ -1376,7 +1378,8 @@ async def _bind(kwargs: dict[str, Any], env: _Env, label: str) -> dict[str, Any]
         if getattr(exc, "retryable", False):
             raise
         raise StepFailedError(
-            f"step {label!r}: its declared arguments could not be bound: {exc}",
+            f"step {label!r}: its declared arguments could not be bound: "
+            f"{said(exc)}",
             error_code=getattr(exc, "error_code", None) or "STEP_ARGS_UNBINDABLE",
             step=label, cause=exc,
         ) from exc

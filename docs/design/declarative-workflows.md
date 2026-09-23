@@ -661,6 +661,13 @@ caller that NAMES that run. A failed attempt is recorded the same way under a
 fresh id the error envelope names, which is what makes failure recovery reuse the
 work that already succeeded.
 
+A failure NAMES why. Every typed step failure carries a code and a sentence, and
+an exception that stringifies to nothing is named by its type (`said`) rather
+than reaching the envelope as an empty message; the emitter refuses to mark a
+step failed without both, and the snapshot refuses to read `failed` off a step
+that names no cause. A run that stops in silence leaves the reader a red card and
+nothing to act on, which is the fault the refusal exists to make impossible.
+
 CONSTANT-door params ARE overridable here. The door governs what the MODEL's plan
 schema offers; naming a value explicitly, having seen an answer, is the
 sanctioned way a fixed quantity moves.

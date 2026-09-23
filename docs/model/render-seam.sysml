@@ -607,6 +607,20 @@ package RenderSeam {
         */
     }
 
+    requirement def AFailedStepNamesWhyItFailed {
+        doc /*
+        A step that ends red states a typed code and a sentence. A run that
+        stops in silence leaves the reader a failed card and nothing to read
+        off it, which is the same fault as a bed that paints in silence: the
+        machinery cannot say what stopped the run, so nobody can act on it.
+
+        Both seams refuse rather than record: the transition that marks a step
+        failed, and the verdict stated over the steps afterwards. Where the
+        cause is an upstream service the name says so, and where the raised
+        exception says nothing at all its type is the sentence.
+        */
+    }
+
     requirement def TheModelIsHandedAHandleNotAUri {
         doc /*
         A layer reaches the model as a short minted HANDLE, never as a store
@@ -701,6 +715,18 @@ package RenderSeam {
         "plugin/tests/test_raster_render.py::test_a_case_reopen_adopts_its_own_layers_and_loads_no_style_over_them";
     verify requirement UserChoiceBeatsPreset by
         "plugin/tests/test_raster_render.py::test_a_different_case_sweeps_the_group_it_did_not_open";
+
+    satisfy requirement AFailedStepNamesWhyItFailed by pipelineEmitter;
+    verify requirement AFailedStepNamesWhyItFailed by
+        "tests/server/test_nameless_step_failure.py::test_a_failure_with_no_name_is_refused_rather_than_recorded";
+    verify requirement AFailedStepNamesWhyItFailed by
+        "tests/server/test_nameless_step_failure.py::test_a_named_failure_is_recorded_with_its_code_and_sentence";
+    verify requirement AFailedStepNamesWhyItFailed by
+        "tests/server/test_nameless_step_failure.py::test_the_verdict_refuses_to_read_failed_off_a_step_that_names_nothing";
+    verify requirement AFailedStepNamesWhyItFailed by
+        "tests/runtime/test_nameless_failure.py::test_a_step_failure_raised_with_no_sentence_is_itself_refused";
+    verify requirement AFailedStepNamesWhyItFailed by
+        "tests/runtime/test_nameless_failure.py::test_a_runner_that_raises_silently_reaches_the_caller_named";
 
     satisfy requirement EmissionIsAutomatic by emissionSeamPoint;
     satisfy requirement EmissionIsAutomatic by outputsSeamPoint;

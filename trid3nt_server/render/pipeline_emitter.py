@@ -318,6 +318,27 @@ class StepNotFoundError(EmitterError):
     """``mark_*`` called with a step_id the emitter does not own."""
 
 
+class NamelessFailureError(EmitterError):
+    """A step was to be marked failed carrying no code or no sentence.
+
+    A run that stops in silence says nothing the packet can read, so the name is
+    not optional: the failure with no name is refused here rather than painted
+    red and left mute."""
+
+
+def _named(step_id: str, error_code: str, error_message: str) -> tuple[str, str]:
+    """``(code, sentence)`` for a failure, or the refusal that it carries neither."""
+    code = str(error_code or "").strip()
+    sentence = str(error_message or "").strip()
+    if not code or not sentence:
+        raise NamelessFailureError(
+            f"step {step_id!r} was marked failed carrying code {error_code!r} and "
+            f"message {error_message!r}; a failed step states WHY it failed - a "
+            "typed code and a sentence - and one that names an upstream service "
+            "says so in both.")
+    return code, sentence
+
+
 
 
 #: Type of the per-session sink the emitter pushes frames to. The sink is
@@ -1001,6 +1022,8 @@ class PipelineEmitter:
         """The current ``PipelineSnapshot``, or ``None`` when none is running.
 
         A whole snapshot every time - there is no partial view of a pipeline.
+        The verdict refuses to read ``failed`` off a step that names no cause: a
+        packet that cannot say what stopped the run has no verdict to state.
         """
         if self._pipeline_id is None or not self._step_order:
             return None
@@ -1009,6 +1032,10 @@ class PipelineEmitter:
             final_state = "complete"
         elif any(self._steps[sid].state == "failed" for sid in self._step_order):
             final_state = "failed"
+            for sid in self._step_order:
+                step = self._steps[sid]
+                if step.state == "failed":
+                    _named(sid, step.error_code or "", step.error_message or "")
         elif any(self._steps[sid].state == "cancelled" for sid in self._step_order):
             final_state = "cancelled"
         completed_at = (
@@ -1247,11 +1274,13 @@ class PipelineEmitter:
         """Flip ``step_id`` to ``failed``; record error_code and error_message.
         An unseen ``error_code`` is registered here, and the message is truncated;
         the code's shape is enforced where the summary is built, not again here.
+        A failure carrying no code or no sentence is REFUSED, never recorded.
         """
+        code, sentence = _named(step_id, error_code, error_message)
         step = self._mark_terminal(step_id, "failed")
-        EMITTER_ERROR_CODES.register(error_code)
-        step.error_code = error_code
-        step.error_message = self._truncate_message(error_message)
+        EMITTER_ERROR_CODES.register(code)
+        step.error_code = code
+        step.error_message = self._truncate_message(sentence)
         await self._emit_pipeline_state(terminal=True)
 
     async def mark_cancelled(self, step_id: str) -> None:
