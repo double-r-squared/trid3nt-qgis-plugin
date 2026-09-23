@@ -20,7 +20,6 @@ from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
 from trid3nt_server.workflows.telemac.templates.channel_dredging import channel_dredging
 
 _WORKFLOW = channel_dredging.telemac_channel_dredging.workflow
-_ANSWER = channel_dredging.ANSWER
 _STEERING = channel_dredging.STEERING
 #: The package the corpus sits in, read off the module so a rename moves both.
 _PACKAGE = Path(channel_dredging.__file__).parent
@@ -212,12 +211,6 @@ def test_the_two_measured_rows_carry_their_noun_on_the_journal():
     on, keyed by the row's own name."""
     assert channel_dredging.CAPTIONS == {"discharge": "a streamflow",
                                          "level": "a water level"}
-
-
-def test_the_answer_is_the_engine_s_own_lines_and_the_change_inside_each_area():
-    assert set(_WORKFLOW.answer_fields) == set(_ANSWER)
-    assert _ANSWER["dredged_bed_change_m"].primitive.over == DataRef("dredge_area")
-    assert _ANSWER["dumped_bed_change_m"].primitive.over == DataRef("dump_area")
 
 
 def test_the_corpus_key_is_the_registered_name():

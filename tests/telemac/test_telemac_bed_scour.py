@@ -25,7 +25,6 @@ _MODULE = bed_scour
 #: question-class rename moves the module and this test moves with it.
 _WORKFLOW = next(value.workflow for value in vars(_MODULE).values()
                  if getattr(value, "workflow", None) is not None)
-_ANSWER = _MODULE.ANSWER
 #: The package the corpus sits in, read off the module so a rename moves both.
 _PACKAGE = Path(_MODULE.__file__).parent
 
@@ -264,12 +263,6 @@ def test_the_only_published_read_is_the_placed_one_and_it_has_its_caption():
     for the one DATA row that states one, keyed by the row's own name."""
     assert [primitive.variable for primitive in _MODULE.OUTPUTS] == ["T1"]
     assert set(_MODULE.CAPTIONS) == {"T1", "discharge"}
-
-
-def test_the_answer_is_the_bed_change_the_balance_and_the_sorting_signature():
-    assert set(_WORKFLOW.answer_fields) == set(_ANSWER)
-    assert _ANSWER["bed_evolution_max_m"].primitive.module == "gaia"
-    assert _ANSWER["surface_d50_spread_m"].primitive.variable == "D50"
 
 
 def test_the_corpus_key_is_the_registered_name():

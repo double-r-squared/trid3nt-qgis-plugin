@@ -275,24 +275,6 @@ def test_the_question_places_a_series_and_captions_every_data_row_that_states_on
     assert set(template.CAPTIONS) == {"T1", "discharge", "level", "observe"}
 
 
-def test_the_answer_measures_the_point_the_question_placed():
-    at_point = {name for name, measure in template.ANSWER.items()
-                if measure.primitive.kind == "series"}
-    assert at_point == {"peak_temperature_c", "peak_temperature_time_s",
-                        "final_temperature_c", "diurnal_range_c"}
-
-
-def test_the_domain_wide_answers_take_what_any_body_of_water_offers():
-    """A lake has no centerline, so the reach-long profile is gone: the spread
-    between the warmest and the coolest water is a measure of the field itself."""
-    fields = {name: measure for name, measure in template.ANSWER.items()
-              if measure.primitive.kind == "field"}
-    assert {(name, m.primitive.variable, m.stat) for name, m in fields.items()} == {
-        ("temperature_spread_c", "T1", "spread"),
-        ("mean_velocity_mps", "M", "mean")}
-    assert all(m.primitive.along is None for m in fields.values())
-
-
 def test_the_workflow_owns_the_stages_and_the_template_states_what_differs():
     wf = _workflow()
     validate_plan(wf.plan, wf.params, wf.data)

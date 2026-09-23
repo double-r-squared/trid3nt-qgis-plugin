@@ -148,18 +148,11 @@ def test_the_seaward_rim_is_opened_so_the_tide_and_the_spectrum_both_enter():
     assert (param.default, param.door) == (-12.0, "scenario")
 
 
-def test_the_answers_are_the_two_modules_own_rows():
-    """Every number a reader is handed is a measure of one variable an engine
-    wrote. No module writes a BEARING for a current, so which way it runs is
-    answered by the pair of components the engine solved."""
-    named = {name: (measure.primitive.variable, measure.primitive.module)
-             for name, measure in template.ANSWER.items()}
-    assert named["longshore_current_speed_mps"] == ("M", None)
-    assert named["current_along_x_mps"] == ("U", None)
-    assert named["current_along_y_mps"] == ("V", None)
-    assert named["hs_at_station_m"] == ("HM0", "tomawac")
-    assert named["peak_current_speed_mps"] == ("M", None)
-    assert named["breaking_rate_peak_per_s"] == ("BETA", "tomawac")
+def test_what_the_template_places_is_the_two_modules_own_rows():
+    """Every read this template places is one variable an engine wrote: the
+    current off the host, the wave off the coupled module."""
+    assert [(p.variable, p.module) for p in template.OUTPUTS] == [
+        ("M", None), ("HM0", "tomawac")]
     assert "HM0" in WAC.MODULE_OUTPUT
 
 
@@ -178,17 +171,6 @@ def test_the_granularity_floor_is_the_step_this_deck_states():
                       if p.name == "mesh_resolution_m")
     assert resolution.default == 40.0
     assert resolution.bounds[0] == 20.0
-
-
-def test_the_breaking_answer_reads_the_magnitude_of_a_negative_field():
-    """TOMAWAC publishes its breaking rate as a NEGATIVE quantity - energy
-    leaving the spectrum - so the hardest-working node is the field's minimum,
-    and read as a maximum this answer would report the untouched water offshore.
-    The synthetic field is a shore band against still water."""
-    measure = template.ANSWER["breaking_rate_peak_per_s"]
-    assert measure.stat == "min"
-    band = [-0.205, -0.118, -0.004, 0.0, 0.0]
-    assert measure.answer(min(band), measure.against) == pytest.approx(0.205)
 
 
 def test_the_tide_reaches_the_rim_as_the_series_the_record_served():

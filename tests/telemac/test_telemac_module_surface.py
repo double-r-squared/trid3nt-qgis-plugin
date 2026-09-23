@@ -1261,33 +1261,21 @@ def test_every_template_wire_carries_the_raw_keyword_floor():
             name
 
 
-def test_a_template_reads_its_answer_through_the_primitives_its_module_binds():
+def test_a_template_places_its_reads_through_the_primitives_its_module_binds():
     """A template lists primitives, and every one is bound on its own module's
-    wrapper under the primitive's name; a template that still names a reader of
-    its own names one no other template names."""
+    wrapper under the primitive's name, published, and captioned."""
     from trid3nt_server.tools import TOOL_REGISTRY
     from trid3nt_server.workflows.telemac.modules import WRAPPERS
 
-    readers = {}
     for name in _TEMPLATES:
         workflow = TOOL_REGISTRY[name].fn.workflow
-        declared = getattr(workflow.template, "OUTPUTS", ())
-        if declared:
-            body = workflow.steering
-            for primitive in declared:
-                reader = WRAPPERS[primitive.module] if primitive.module else body
-                assert primitive.kind in reader.READS, (name, primitive)
-                assert primitive.publish in ("layer", "chart", "animate", "station")
-                assert (primitive.variable or primitive.kind) in workflow.template.CAPTIONS, (
-                    name, primitive)
-            for measure in workflow.template.ANSWER.values():
-                reader = (WRAPPERS[measure.primitive.module]
-                          if measure.primitive.module else body)
-                assert measure.primitive.kind in reader.READS, (name, measure)
-            continue
-        readers[name] = workflow.template.ANSWER
-    assert "telemac_dye_release" not in readers
-    assert len(set(readers.values())) == len(readers), readers
+        body = workflow.steering
+        for primitive in getattr(workflow.template, "OUTPUTS", ()):
+            reader = WRAPPERS[primitive.module] if primitive.module else body
+            assert primitive.kind in reader.READS, (name, primitive)
+            assert primitive.publish in ("layer", "chart", "animate", "station")
+            assert (primitive.variable or primitive.kind) in workflow.template.CAPTIONS, (
+                name, primitive)
 
 
 def test_the_fill_docstring_names_the_module_its_rubriques_and_its_open_slots():

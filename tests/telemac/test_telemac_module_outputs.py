@@ -147,7 +147,7 @@ def test_a_varying_row_is_one_temporal_layer_and_a_still_row_its_frame(published
 
     seen, run = published
     asyncio.run(door.publish_outputs(run=run, outputs=[], captions={},
-                                     answer={}, params={}))
+                                     params={}))
     # Two variables the result carries, ONE layer each, captioned by the name the
     # result file gives it - so neither caption came from a template.
     assert [item.caption for item in seen] == ["water depth", "dye"]
@@ -176,7 +176,7 @@ def test_a_temporal_layer_is_ranged_over_the_record_not_its_last_frame(
     run = _run(telemac_result, monkeypatch,
                dye=[[0.0] * 5, [25.0] * 5, [0.0] * 5])
     asyncio.run(door.publish_outputs(run=run, outputs=[], captions={},
-                                     answer={}, params={}))
+                                     params={}))
     dye = next(item.product for item in seen if item.caption == "dye")
     assert dye.frames == 3
     # The tracer's own visible edge is the bottom and its RECORD peak the top.
@@ -218,14 +218,14 @@ def test_a_row_the_result_does_not_carry_is_skipped_and_a_placed_read_refuses(
 
     seen, run = published
     asyncio.run(door.publish_outputs(run=run, outputs=[], captions={},
-                                     answer={}, params={}))
+                                     params={}))
     # FREE SURFACE, BOTTOM, FROUDE NUMBER and the rest are rows this run did not
     # write, and nothing was published of them.
     assert {item.caption for item in seen} == {"water depth", "dye"}
     with pytest.raises(OutputEmpty):
         asyncio.run(door.publish_outputs(
             run=run, outputs=[series("S").chart()],
-            captions={"S": "free surface"}, answer={}, params={}))
+            captions={"S": "free surface"}, params={}))
 
 
 def test_every_variable_the_result_wrote_is_published_even_where_no_row_names_it(
@@ -254,7 +254,7 @@ def test_every_variable_the_result_wrote_is_published_even_where_no_row_names_it
     token = journal.bind_notes()
     try:
         asyncio.run(door.publish_outputs(run=run, outputs=[], captions={},
-                                         answer={}, params={}))
+                                         params={}))
         notes = journal.drain_notes(token)
     except BaseException:
         journal.drain_notes(token)
@@ -355,7 +355,7 @@ def test_the_published_order_is_the_table_order_across_host_and_coupled(
                               "has_edge": bool(row.has_edge)}
                              for token, module, row in sheet.published()]}
     record = asyncio.run(door.publish_outputs(run=run, outputs=[], captions={},
-                                              answer={}, params={}))
+                                              params={}))
 
     # The host's row is first and the coupled module's is behind it - the order
     # the two tables state, one temporal layer each.
@@ -365,7 +365,7 @@ def test_the_published_order_is_the_table_order_across_host_and_coupled(
     # and nothing measured on it.
     assert record.uri.endswith("/RID/r2d.slf")
     assert record.style == {"kind": "reference"}
-    assert record.layer_id == "telemac-RID" and record.answer == {}
+    assert record.layer_id == "telemac-RID"
 
 
 def test_the_card_carries_a_generated_keyword_once_per_deck():

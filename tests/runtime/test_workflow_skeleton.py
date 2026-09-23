@@ -92,7 +92,7 @@ async def test_a_filled_check_hook_reaches_the_result_as_a_note(monkeypatch):
         def checks(self, result, run):
             return (f"depth {result.depth_max_m} m is a screening figure",)
 
-    async def _no_persist(run_id, *, charts, metrics):
+    async def _no_persist(run_id, *, charts):
         return []
 
     monkeypatch.setattr(run_products, "persist_run_products", _no_persist)

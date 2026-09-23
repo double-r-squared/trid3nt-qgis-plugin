@@ -3,7 +3,7 @@ with a template's outputs list.
 
 Offline: the result a read opens is stated through the ``telemac_result``
 fixture, the store and the publisher are stood in for, and what is proved is
-which numbers reach which answer."""
+which numbers reach which read."""
 
 from __future__ import annotations
 
@@ -18,7 +18,6 @@ from trid3nt_server.render.formats import Published
 from trid3nt_server.workflows.telemac.modules.outputs import Field, Frames, Series
 from trid3nt_server.workflows.telemac.modules import (
     T2D,
-    Measure,
     extent,
     field,
     mass_balance,
@@ -27,10 +26,8 @@ from trid3nt_server.workflows.telemac.modules import (
     series,
 )
 from trid3nt_server.workflows.telemac.modules.outputs import (
-    NOT_READ,
     OutputEmpty,
     Solved,
-    profile,
 )
 
 
@@ -226,45 +223,6 @@ def test_a_series_at_a_point_is_measured_at_that_point(solved):
     assert [here[stat] for stat in ("min", "last", "range")] == [0.0, 0.0, 80.0]
 
 
-def test_a_threshold_is_answered_by_the_first_instant_the_series_stands_above_it(
-        solved):
-    """WHEN a variable crosses is a function of the whole series, so the read
-    answers it rather than any statistic of the read answering it."""
-    from trid3nt_server.inputs import Point
-
-    lon, lat = solved.lonlat
-    at = Point(float(lon[1]), float(lat[1]), "outfall-a")
-    here = T2D.READS["series"](series("T1", at=at, above=25.0), solved).measures
-    assert here["t_above"] == 60.0
-
-
-def test_a_threshold_crossed_by_no_frame_answers_with_no_instant(solved):
-    from trid3nt_server.inputs import Point
-
-    lon, lat = solved.lonlat
-    at = Point(float(lon[1]), float(lat[1]), "outfall-a")
-    here = T2D.READS["series"](series("T1", at=at, above=90.0), solved).measures
-    assert here["t_above"] is None
-
-
-def test_an_unplaced_threshold_is_crossed_where_the_domain_first_stands_above_it(
-        solved):
-    """The domain's own series is its maximum per instant, so a crossing over the
-    domain is the first instant ANY node stands above the threshold."""
-    from trid3nt_server.inputs import Point
-
-    lon, lat = solved.lonlat
-    at = Point(float(lon[2]), float(lat[2]), "off the plume")
-    over_domain = T2D.READS["series"](series("T1", above=45.0), solved).measures
-    at_point = T2D.READS["series"](series("T1", at=at, above=45.0), solved).measures
-    assert over_domain["t_above"] == 60.0
-    assert at_point["t_above"] is None
-
-
-def test_a_series_asked_no_threshold_carries_no_crossing(solved):
-    assert "t_above" not in T2D.READS["series"](series("T1"), solved).measures
-
-
 def test_the_field_over_every_instant_is_the_frames_an_animation_plays(tabled):
     read = T2D.READS["field"](field("T1", t="every"), tabled)
     assert isinstance(read, Frames)
@@ -341,21 +299,8 @@ def test_a_variable_the_engine_grows_reads_zero_rather_than_refusing(
         {"token": "DYNCOVC", "module": "telemac2d", "name": "ICE COVER FRAC.",
          "unit": "", "style": {"kind": "mesh"}, "varies": True,
          "has_edge": True, "injected": False}]})
-    read = T2D.READS["series"](series("DYNCOVC", above=0.1), grown)
+    read = T2D.READS["series"](series("DYNCOVC"), grown)
     assert read.measures["max"] == 0.0 and read.measures["last"] == 0.0
-    assert read.measures["t_above"] is None
-
-
-def test_a_stat_with_no_instant_answers_the_sentence_the_measure_states():
-    """A threshold nothing crossed has no instant, and the measure says what the
-    run is instead: a delivery PASSES on that sentence rather than a null."""
-    from trid3nt_server.workflows.telemac.modules.outputs import NOT_ASKED
-
-    measure = series("DYNCOVC", above=0.1).measure("t_above").otherwise(
-        "the cover did not freeze within the window")
-    assert measure.answer(None, None) == (
-        f"{NOT_ASKED}the cover did not freeze within the window")
-    assert measure.answer(3600.0, None) == 3600.0
 
 
 def test_a_trace_substance_is_drawn_against_its_own_range(monkeypatch,
@@ -402,97 +347,15 @@ def _listing(monkeypatch) -> str:
     return str(path)
 
 
-def test_a_primitive_is_a_value_and_its_measure_names_the_read_it_comes_from():
+def test_a_primitive_is_a_value_and_its_key_is_the_read_it_comes_from():
     listed = max_over_time("T1").layer(style={"kind": "continuous"})
     assert listed.publish == "layer" and listed.key == max_over_time("T1")
     assert field("T1", t="every").animate().key == field("T1", t="every")
-    measure = max_over_time("T1").measure("max")
-    assert measure == Measure(max_over_time("T1"), "max")
-    assert max_over_time("T1").layer().measure("max") == measure
-
-
-def test_a_measure_held_against_a_sheet_value_answers_a_ratio_or_a_verdict():
-    """``over`` is the measure divided by the value, ``below`` whether it lies
-    under it; a read that came back as nothing, or a zero to divide by, answers
-    nothing rather than a number nobody measured."""
-    deposited = mass_balance(module="gaia").measure("sediment_deposited_mass_kg")
-    fraction = deposited.over(12.0)
-    assert (fraction.op, fraction.against) == ("over", 12.0)
-    assert fraction.primitive == deposited.primitive and fraction.stat == deposited.stat
-    assert fraction.answer(3.0, 12.0) == 0.25
-    assert fraction.answer(3.0, 0.0) is None and fraction.answer(None, 12.0) is None
-    verdict = series("T2").measure("min").below(5.0)
-    assert verdict.answer(4.2, 5.0) is True and verdict.answer(6.0, 5.0) is False
-    assert deposited.answer(3.0, None) == 3.0
-
-
-def test_a_measure_held_against_another_measure_is_a_ratio_of_two_reads():
-    """A ratio whose denominator is itself a read, which is how a partition is
-    stated; the denominator is read UNPLACED, so a placed one refuses."""
-    from trid3nt_server.workflows.runtime import DeclarativeError
-
-    total = field("T1").measure("mean")
-    ratio = field("T5").measure("mean").over(total)
-    assert ratio.against == total and ratio.held_to == "mean of T1"
-    assert ratio.answer(3.0, 12.0) == 0.25
-    with pytest.raises(DeclarativeError, match="unplaced read"):
-        field("T5").measure("mean").over(
-            profile("T1", along="line.geojson").measure("mean"))
-
-
-def test_a_measure_held_to_a_param_nobody_supplied_says_it_was_not_asked():
-    """The verdict is a question, and a question nobody asked has no null answer:
-    the measure names the param the run never supplied and the delivery passes."""
-    from trid3nt_server.workflows.runtime import ParamRef
-
-    verdict = series("T2").measure("min").below(ParamRef("do_standard_mgl"))
-    assert verdict.held_to == "do_standard_mgl"
-    assert verdict.answer(4.2, None) == (
-        "not asked: do_standard_mgl was not supplied")
-    assert series("T2").measure("min").below(5.0).held_to is None
 
 
 def test_a_field_at_an_instant_carries_its_spread(solved):
     frame = T2D.READS["field"](field("T1", t=1), solved)
     assert frame.measures["spread"] == 75.0
-
-
-def test_a_field_measured_over_an_area_reads_only_the_nodes_inside_it(solved,
-                                                                      tmp_path):
-    """``over`` narrows what the MEASURES are taken within and nothing else: the
-    values the read carries - and so the layer it publishes - stay the domain's."""
-    import json
-
-    whole = T2D.READS["field"](field("T1", t=1), solved)
-    lon, lat = solved.lonlat
-    # A box around the first two nodes, which hold 10 and 80 of the frame's five.
-    pad = 1e-4
-    box = tmp_path / "area.geojson"
-    box.write_text(json.dumps({
-        "type": "Polygon",
-        "coordinates": [[[float(lon[:2].min()) - pad, float(lat[:2].min()) - pad],
-                         [float(lon[:2].max()) + pad, float(lat[:2].min()) - pad],
-                         [float(lon[:2].max()) + pad, float(lat[:2].max()) + pad],
-                         [float(lon[:2].min()) - pad, float(lat[:2].max()) + pad],
-                         [float(lon[:2].min()) - pad, float(lat[:2].min()) - pad]]]}))
-    inside = T2D.READS["field"](field("T1", t=1, over=str(box)), solved)
-    assert inside.measures["nodes"] == 2
-    assert (inside.measures["max"], inside.measures["min"]) == (80.0, 10.0)
-    assert list(inside.values) == list(whole.values)
-    assert whole.measures["max"] == 80.0 and whole.measures["min"] == 5.0
-
-
-def test_an_area_holding_no_node_refuses_rather_than_measuring_nothing(solved,
-                                                                       tmp_path):
-    import json
-
-    box = tmp_path / "elsewhere.geojson"
-    box.write_text(json.dumps({
-        "type": "Polygon",
-        "coordinates": [[[10.0, 10.0], [10.1, 10.0], [10.1, 10.1],
-                         [10.0, 10.1], [10.0, 10.0]]]}))
-    with pytest.raises(OutputEmpty, match="holds no node"):
-        T2D.READS["field"](field("T1", t=1, over=str(box)), solved)
 
 
 # -- the door: the outputs list, read and published -------------------------- #
@@ -521,9 +384,9 @@ def _replanned(workflow: Any, **over: Any) -> Any:
                           template=module, data=workflow.data)
 
 
-def test_publish_outputs_reads_once_publishes_each_and_answers(monkeypatch, solved):
+def test_publish_outputs_reads_once_and_publishes_each(monkeypatch, solved):
     """One read per primitive, every deliverable handed to the publisher in the
-    listed order, and the answer read off the same reads."""
+    listed order."""
     from trid3nt_contracts.execution import LayerURI
 
     from trid3nt_server.workflows.telemac import workflow as door
@@ -545,10 +408,6 @@ def test_publish_outputs_reads_once_publishes_each_and_answers(monkeypatch, solv
                  max_over_time("T1").layer(style={"kind": "continuous"}),
                  series("T1").chart()],
         captions={"T1": "dye concentration"},
-        answer={"cmax": max_over_time("T1").measure("max"),
-                "t_peak": series("T1").measure("t_max"),
-                "reach_m": field("T1", t="every").measure("travel_m"),
-                "edge_m": mesh().measure("size_m")},
         params={"location": "the Wabash"}))
     # WHAT THE RUN WROTE comes first, captioned by the result file's own names,
     # and the template's listed reads behind it.
@@ -567,32 +426,9 @@ def test_publish_outputs_reads_once_publishes_each_and_answers(monkeypatch, solv
     assert listed[1].style == {"kind": "continuous"}
     assert (seen["run_id"], seen["engine"], seen["name"]) == (
         "RID", "telemac", "reach")
-    assert result.answer == {"cmax": 80.0, "t_peak": 60.0,
-                             "reach_m": pytest.approx(result.answer["reach_m"]),
-                             "edge_m": 7.5}
-    assert result.answer["reach_m"] > 0.0
     # The return is the run's own record, not one of the layers it published.
     assert result.layer_id == "telemac-RID" and result.quantity is None
     assert result.uri.endswith("/RID/r2d.slf")
-
-
-def test_the_answer_rides_the_layer_and_the_skeleton_reads_it_there():
-    """The workflow's answer and the sensitivity note read a scalar off the
-    answer map the layer carries, the same way a product layer's own field."""
-    from trid3nt_contracts.execution import AnswerLayerURI
-
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
-    layer = AnswerLayerURI(layer_id="L", name="n", layer_type="raster", uri="s3://x",
-                           answer={"dye_cmax_mgl": 4.5, "plume_reach_m": 120.0,
-                                   "mesh_size_m": 9.0})
-    metrics = workflow.answer(layer)
-    assert (metrics["dye_cmax_mgl"], metrics["plume_reach_m"],
-            metrics["mesh_size_m"]) == (4.5, 120.0, 9.0)
-    assert metrics["dye_peak_time_s"] is None
-    notes = workflow.checks(layer, _run_of(workflow))
-    assert any("dye_cmax_mgl" in note and "9 m" in note for note in notes)
 
 
 def _run_of(workflow: Any) -> Any:
@@ -707,38 +543,6 @@ def test_a_profile_keeps_only_the_nodes_within_the_stated_band(coupled):
         profile("T2", along=_line(coupled), within_m=20.0), coupled)
     assert list(wide.values) == list(whole.values)
     assert profile("T2", along="l", within_m=1.0) != profile("T2", along="l")
-
-
-def test_an_answer_over_a_variable_the_run_never_wrote_states_its_reason(
-        monkeypatch, solved):
-    """A listed output the result lacks refuses; a measure alone over one answers
-    with the REASON the read came back empty - a single-class bed writes no
-    surface D50 to spread - so nobody reads a null off a sheet and guesses."""
-    from trid3nt_contracts.execution import LayerURI
-
-    from trid3nt_server.workflows.telemac import workflow as door
-
-    async def _publish(**kwargs):
-        return Published(layers=(LayerURI(
-            layer_id="L", name="Peak dye concentration (reach)",
-            layer_type="raster", uri="s3://runs/RID/dye_concentration.tif",
-            quantity="dye_concentration"),))
-
-    monkeypatch.setattr(door, "publish", _publish)
-    run = {**solved.run, "module": "telemac2d"}
-    result = asyncio.run(door.publish_outputs(
-        run=run, outputs=[max_over_time("T1").layer(style={"kind": "continuous"})],
-        captions={"T1": "dye concentration"},
-        answer={"spread": field("Q", t=-1).measure("spread"),
-                "cmax": max_over_time("T1").measure("max")},
-        params={}))
-    assert result.answer["cmax"] == 80.0
-    assert result.answer["spread"].startswith(NOT_READ)
-    assert "is not among the variables the result carries" in result.answer["spread"]
-    with pytest.raises(OutputEmpty):
-        asyncio.run(door.publish_outputs(
-            run=run, outputs=[field("Q", t=-1).layer(style={"kind": "continuous"})],
-            captions={"Q": "flowrate"}, answer={}, params={}))
 
 
 def _five_nodes(telemac_result, *, oxygen, depth):
@@ -893,8 +697,8 @@ def test_the_door_carries_a_primitive_s_point_and_line_beside_the_list(monkeypat
     listed = step.kwargs["outputs"]
     assert all(p.along is None and p.at is None for p in listed)
     anchors = step.kwargs["anchors"]
-    assert len(anchors) == len(listed) + len(step.kwargs["answer"])
-    assert anchors[2]["along"] == Ref("line")
+    assert len(anchors) == len(listed)
+    assert anchors[0]["along"] == Ref("line")
 
 
 def test_publish_outputs_rejoins_the_anchors_and_draws_the_reference_lines(
@@ -924,15 +728,14 @@ def test_publish_outputs_rejoins_the_anchors_and_draws_the_reference_lines(
         outputs=[field("T2", t=-1).layer(style={"kind": "continuous"}),
                  profile("T2", along=None).chart(reference=_reference)],
         captions={"T2": "dissolved oxygen"},
-        answer={"low": profile("T2", along=None).measure("min")},
-        anchors=[{"at": None, "along": None}, {"at": None, "along": _line(coupled)},
+        anchors=[{"at": None, "along": None},
                  {"at": None, "along": _line(coupled)}],
         params={"location": "the Eel", "do_standard_mgl": 5.0}))
     chart = next(d.product.payload for d in seen["items"]
                  if type(d.product).__name__ == "Chart")
     assert any(row["series"] == "standard"
                for row in chart["vega_lite_spec"]["data"]["values"])
-    assert result.answer == {"low": 6.0}
+    assert result.layer_id == "telemac-RID"
 
 
 def _catchment_listing(monkeypatch) -> str:
@@ -1219,8 +1022,6 @@ def test_a_chart_s_reference_may_be_another_primitive_drawn_as_a_line(
         outputs=[field("T1", t=-1).layer(style={"kind": "continuous"}),
                  column("T1").chart(reference=column("T1", t=0))],
         captions={"T1": "water temperature"},
-        answer={"dt": column("T1").measure("top_minus_bottom"),
-                "dt0": column("T1", t=0).measure("top_minus_bottom")},
         params={"location": "the lake"}))
     rows = next(d.product.payload for d in seen["items"]
                 if type(d.product).__name__ == "Chart"
@@ -1228,4 +1029,4 @@ def test_a_chart_s_reference_may_be_another_primitive_drawn_as_a_line(
     beside = [r for r in rows if r["series"] == "water temperature at t = 0 s"]
     assert [r["value"] for r in beside] == [25.0, 20.0, 15.0]
     assert [r["x_m"] for r in beside] == [0.0, 10.0, 20.0]
-    assert result.answer == {"dt": 8.0, "dt0": 10.0}
+    assert result.layer_id == "telemac-RID"

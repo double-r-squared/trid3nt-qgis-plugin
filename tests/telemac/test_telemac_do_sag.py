@@ -318,19 +318,16 @@ def test_the_outputs_list_charts_the_oxygen_along_the_domains_centerline():
     assert do_sag.OUTPUTS[0].along == Ref("line")
     assert do_sag.CAPTIONS == {"T2": "dissolved oxygen", "discharge": "a streamflow",
                                "level": "a water level"}
-    assert {name: (m.primitive.kind, m.primitive.variable, m.stat)
-            for name, m in do_sag.ANSWER.items()} == {
-        "do_min_mgl": ("profile", "T2", "min"),
-        "do_below_standard": ("profile", "T2", "min"),
-        "do_min_distance_m": ("profile", "T2", "x_min_m"),
-        "bod_mixed_mgl": ("profile", "T3", "max"),
-        "mean_velocity_mps": ("profile", "T2", "velocity_mps"),
-        "mesh_size_m": ("mesh", None, "size_m")}
-    assert {m.primitive.along for m in do_sag.ANSWER.values()
-            if m.primitive.kind == "profile"} == {Ref("line")}
-    # the verdict is the minimum held below the standard the sheet declares
-    assert do_sag.ANSWER["do_below_standard"].op == "below"
-    assert do_sag.ANSWER["do_below_standard"].against.name == "do_standard_mgl"
+    # the standard the sag is judged by is a LINE on the chart that plots the
+    # oxygen, drawn at the param the sheet declares
+    from trid3nt_server.workflows.telemac.modules.outputs import Line, Profile
+
+    drawn = do_sag.OUTPUTS[0].reference(
+        Profile(name="DO", units="mg/L", distance_m=[0.0, 100.0],
+                values=[8.0, 6.0], along="downstream distance"),
+        {}, {"do_standard_mgl": 5.0})
+    assert drawn == [Line(label="5 mg/L standard", x=[0.0, 100.0],
+                          values=[5.0, 5.0])]
 
 
 # --- the deck those stages fill ---------------------------------------------- #

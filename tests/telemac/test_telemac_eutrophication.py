@@ -299,50 +299,35 @@ def test_a_clarity_the_deck_has_no_opinion_about_is_left_unwritten():
     assert "SECCHI_DEPTH" not in slots
 
 
-def test_the_answer_is_the_change_between_the_water_in_and_the_water_out():
-    """Each ratio's denominator is the concentration the water ARRIVED at, read
-    off the value the deck states for that tracer - one number, not a second
-    surface in front of it."""
+def test_each_longitudinal_chart_draws_the_water_it_entered_on():
+    """The water the reach ARRIVED at is drawn as a reference line on the chart
+    that plots that tracer, off the value the deck states for it - one number,
+    not a second surface in front of it."""
+    from trid3nt_server.workflows.telemac.modules.outputs import Line, Profile
+
     template = _template()
     entering = template.STEERING.ASSERTED["INITIAL_VALUES_OF_TRACERS"]
-    answer = template.ANSWER
-    assert answer["phyto_growth_ratio"].against == entering[0]
-    assert answer["po4_remaining_ratio"].against == entering[1]
-    assert answer["no3_remaining_ratio"].against == entering[3]
-    assert answer["do_below_standard"].held_to == "do_standard_mgl"
+    drawn = {}
+    for placed in template.OUTPUTS:
+        if placed.kind != "profile" or placed.reference is None:
+            continue
+        read = Profile(name=placed.variable, units="mg/L",
+                       distance_m=[0.0, 100.0], values=[1.0, 2.0],
+                       along="downstream distance")
+        lines = placed.reference(read, {}, {"do_standard_mgl": 5.0})
+        drawn[placed.variable] = lines[0] if lines else None
+    assert drawn["T1"].values == [entering[0], entering[0]]
+    assert drawn["T2"].values == [entering[1], entering[1]]
+    assert drawn["T4"].values == [entering[3], entering[3]]
+    assert drawn["T8"] == Line(label="5 mg/L standard", x=[0.0, 100.0],
+                               values=[5.0, 5.0])
 
 
-def test_every_answer_is_read_along_the_reach():
-    """The longitudinal change is the question, and a series' measures are the
-    whole domain's at each instant - so no answer rides one."""
-    for name, measure in _template().ANSWER.items():
-        assert measure.primitive.kind in ("profile", "mesh"), name
-
-
-def test_the_answer_reads_the_biomass_the_nutrients_and_the_oxygen():
-    reads = {name: m.primitive.variable for name, m in _template().ANSWER.items()}
-    assert reads["phyto_max_ug_l"] == "T1"
-    assert reads["po4_remaining_ratio"] == "T2"
-    assert reads["no3_remaining_ratio"] == "T4"
-    assert reads["do_min_mgl"] == "T8"
-
-
-#: What each primitive this template reads actually computes. A stat outside its
-#: own row answers None, and a delivery REFUSES a null declared answer, so the
-#: names are pinned here rather than discovered on a live run.
-_MEASURES = {
-    "series": {"max", "t_max", "frames", "truncated", "active_frames"},
-    "profile": {"min", "x_min_m", "max", "x_max_m", "t", "stations",
-                "velocity_mps"},
-    "mesh": {"nodes", "elements", "planes", "epsg", "size_m",
-             "resolution_label"},
-}
-
-
-def test_every_answer_names_a_measure_its_own_read_carries():
-    """A stat the read does not compute answers None, which a delivery refuses."""
-    for name, measure in _template().ANSWER.items():
-        assert measure.stat in _MEASURES[measure.primitive.kind], name
+def test_the_charts_plot_the_biomass_the_nutrients_and_the_oxygen():
+    """The longitudinal change is the question, so every tracer this template
+    judges is charted ALONG the reach rather than watched at one node."""
+    charted = [p.variable for p in _template().OUTPUTS if p.kind == "profile"]
+    assert charted == ["T1", "T2", "T4", "T8"]
 
 
 #: A result carrying a carrier's own variables and then the process's eight, as
@@ -499,8 +484,6 @@ def test_the_longitudinal_reads_are_taken_along_the_line_slot():
 
     template = _template()
     along = {p.along for p in template.OUTPUTS if p.kind == "profile"}
-    along |= {m.primitive.along for m in template.ANSWER.values()
-              if m.primitive.kind == "profile"}
     assert along == {Ref("line")}
     assert "centerline" not in {row.name for row in _plan().data}
     assert {row.name for row in _plan().data if row.role == "line"} == {"line"}

@@ -276,9 +276,6 @@ def test_the_workflow_owns_the_stages_and_the_template_states_what_differs():
     assert steps[-1].kwargs["captions"] == {
         "T1": "dye concentration", "discharge": "a streamflow",
         "level": "a water-surface elevation"}
-    assert set(steps[-1].kwargs["answer"]) == {
-        "dye_cmax_mgl", "dye_peak_time_s", "plume_reach_m", "active_frames",
-        "mesh_size_m"}
 
 
 def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_own_lever():

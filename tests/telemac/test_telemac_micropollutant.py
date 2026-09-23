@@ -179,19 +179,6 @@ def test_the_question_is_read_where_the_user_put_the_monitoring_point():
     assert (placed.kind, placed.variable, placed.publish) == (
         "series", "T1", "chart")
     assert placed.variable in template.CAPTIONS
-    # The peak and its instant are measures of the SAME read the chart shows.
-    for name in ("dissolved_cmax_mgl", "dissolved_peak_time_s"):
-        assert template.ANSWER[name].primitive == placed.key
-
-
-def test_the_answer_reads_all_three_phases_at_the_last_instant():
-    answer = _template().ANSWER
-    assert [answer[name].primitive.variable for name in (
-        "dissolved_final_mean_mgl", "suspended_sorbed_final_mean_mgl",
-        "bed_sorbed_final_mean_g_m2")] == ["T1", "T4", "T5"]
-    assert {answer[name].stat for name in (
-        "dissolved_final_mean_mgl", "suspended_sorbed_final_mean_mgl",
-        "bed_sorbed_final_mean_g_m2")} == {"mean"}
 
 
 def test_the_declared_params_and_the_plan_validate():

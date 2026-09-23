@@ -282,28 +282,23 @@ def test_the_question_places_the_two_series_the_cover_is_read_as():
                                       "level", "observe"}
 
 
-def test_the_answer_is_measured_by_the_threshold_the_ask_states():
-    """WHEN the water froze is a crossing of the whole series rather than any
-    statistic of it, so the threshold rides the read and is a declared param."""
-    crossings = {name: m for name, m in template.ANSWER.items()
-                 if m.stat == "t_above"}
-    assert set(crossings) == {"freeze_time_s", "domain_freeze_time_s"}
-    assert all(m.primitive.above.name == "cover_threshold"
-               for m in crossings.values())
-    # The point the ask placed, and the whole domain beside it: the unplaced
-    # read is the domain maximum at each instant, so it answers "anywhere".
-    assert crossings["freeze_time_s"].primitive.at is not None
-    assert crossings["domain_freeze_time_s"].primitive.at is None
+def test_the_cover_chart_draws_the_threshold_the_ask_states():
+    """WHAT COUNTS AS FROZEN is the user's lever, so the cover chart draws it as
+    a reference line beside the series rather than reducing the run to a verdict."""
+    from trid3nt_server.workflows.telemac.modules.outputs import Line, Series
+
+    cover = next(p for p in template.OUTPUTS if p.variable == "DYNCOVC")
+    read = Series(name="COVER", units="", times=[0.0, 3600.0], values=[0.0, 0.9],
+                  at="at the station")
+    assert cover.reference(read, {}, {"cover_threshold": 0.5}) == [
+        Line(label="0.5 cover threshold", x=[0.0, 3600.0], values=[0.5, 0.5])]
+    # A run whose sheet never supplied it draws nothing rather than a guess.
+    assert cover.reference(read, {}, {}) == []
 
 
-def test_every_answer_is_read_off_the_ice_modules_own_result():
-    reads = [m.primitive for m in template.ANSWER.values()
-             if m.primitive.kind == "series"]
-    assert {p.module for p in reads} == {"khione"}
-    assert {(p.variable, m.stat) for p, m in
-            zip(reads, [m for m in template.ANSWER.values()
-                        if m.primitive.kind == "series"])} == {
-        ("DYNCOVC", "t_above"), ("COV_THT", "max"), ("DYNCOVC", "last")}
+def test_every_ice_read_is_taken_off_the_ice_modules_own_result():
+    assert {(p.variable, p.module) for p in template.OUTPUTS} == {
+        ("DYNCOVC", "khione"), ("DYNCOVT", "khione")}
 
 
 def test_the_workflow_owns_the_stages_and_the_template_states_what_differs():

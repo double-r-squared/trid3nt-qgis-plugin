@@ -138,8 +138,7 @@ def test_the_question_keeps_only_its_own_inputs():
     the discharge ROW's, so it is no param of this one."""
     declared = {prm.name for prm in _workflow().params}
     assert "discharge_m3s" not in declared
-    assert {"release", "spill_fraction", "spill_duration_s",
-            "injected_mass_kg"} <= declared
+    assert {"release", "spill_fraction", "spill_duration_s"} <= declared
     # source strength and concentration are the deck's own fixed keyword
     # values now, not a lever this question states.
     assert not declared & {"source_q_m3s", "sediment_concentration_mgl"}
@@ -225,35 +224,6 @@ def test_a_calm_dry_deck_states_no_wind_and_no_rain_at_all():
             template.STEERING.ASSERTED[name])
         assert slots == {}, name
 
-
-def test_the_injected_mass_is_derived_from_the_pulse_the_sheet_states():
-    """The deposited fraction is held against what the pulse PUT IN, and that
-    number is the shared release-mass relation rather than a local one."""
-    from trid3nt_server.workflows.runtime import ParamRef
-
-    injected = [p for p in _workflow().params if p.name == "injected_mass_kg"][0]
-    assert injected.door == "derived"
-    # The relation lives in helpers, and what this question hands it is DECLARED
-    # rather than wrapped in a function of the template package's own.
-    assert injected.resolve == _MASS_RESOLVE
-    bound = injected.resolve_kwargs
-    assert bound["discharge_m3s"] == declarations.SOURCE_Q_M3S
-    assert bound["concentration_mgl"] == declarations.SEDIMENT_CONCENTRATION_MGL
-    assert isinstance(bound["duration_s"], ParamRef)
-    assert bound["duration_s"].name == "spill_duration_s"
-    assert template.ANSWER["deposit_fraction"].op == "over"
-
-
-def test_the_derived_mass_resolves_to_the_shared_release_relation():
-    """A DERIVED param is a declaration until the resolver can call what it
-    names: the declared bindings reach the shared relation at the deck's own two
-    fixed numbers and the window the question asks for."""
-    import asyncio
-
-    from trid3nt_server.workflows.runtime import resolve_params
-
-    sheet = asyncio.run(resolve_params(_workflow().params, {}))
-    assert sheet.value_of("injected_mass_kg") == 240.0
 
 
 def test_the_roughness_is_the_decks_own_opinion_stated_as_keywords():

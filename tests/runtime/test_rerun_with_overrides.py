@@ -533,7 +533,7 @@ def _pin_run_id(monkeypatch, wf, run_id, captured):
 def _no_persist(monkeypatch):
     from trid3nt_server.workflows.runtime import run_products
 
-    async def _skip(run_id, *, charts, metrics):
+    async def _skip(run_id, *, charts):
         return []
 
     monkeypatch.setattr(run_products, "persist_run_products", _skip)

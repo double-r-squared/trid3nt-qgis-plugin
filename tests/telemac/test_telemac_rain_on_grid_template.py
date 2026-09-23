@@ -204,15 +204,12 @@ def test_the_outputs_are_the_flux_across_the_outlet_the_user_placed():
     calibration seam pairs against a gauge."""
     from trid3nt_server.render.formats import quantity_of
     from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
-        ANSWER, CAPTIONS, OUTPUTS,
+        CAPTIONS, OUTPUTS,
     )
 
     assert [(p.kind, p.variable, p.publish) for p in OUTPUTS] == [
         ("series", "FLUX", "chart"), ("series", "FLUX", "station")]
     assert quantity_of(CAPTIONS["FLUX"]) == "outlet_hydrograph"
-    assert {"peak_discharge_m3s", "runoff_volume_m3", "rainfall_volume_m3",
-            "runoff_coefficient", "max_depth_p99_m",
-            "peak_is_window_truncated"} <= set(ANSWER)
 
 
 def test_constant_door_params_off_wire_and_the_two_slots_on_it():
