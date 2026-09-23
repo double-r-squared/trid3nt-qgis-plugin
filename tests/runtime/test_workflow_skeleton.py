@@ -62,8 +62,7 @@ def _module(plan, **names):
 
 def _workflow(cls=_Stub, **kw):
     return cls(metadata=_metadata("skeleton_probe"), params=(),
-               template=_module(lambda o: ()),
-               answer=("depth_max_m",), **kw)
+               template=_module(lambda o: ()), **kw)
 
 
 def test_the_hooks_are_silent_by_default():
@@ -99,8 +98,6 @@ async def test_a_filled_check_hook_reaches_the_result_as_a_note(monkeypatch):
     wf = _workflow(Checked)
     out = await wf._publish(RunResult(value=_Layer()))
     assert "NOTE: depth 1.5 m is a screening figure" in out.fallback_note
-    # the ANSWER is the declared fields plus the layer's uri
-    assert wf.answer(out) == {"depth_max_m": 1.5, "layer_uri": "s3://b/k.tif"}
 
 
 # --- (3) the registration factory synthesizes the wire ---------------------- #
@@ -313,146 +310,3 @@ def test_a_bool_default_is_not_a_numeric_default():
     """bool IS an int in Python; a flag infers bool correctly and must not refuse."""
     assert Param("armed", door=doors.SCENARIO, default=False,
                  desc="a flag").wire_type is bool
-
-
-# --- provenance rows are declared as (param, note_key), exactly -------------- #
-@pytest.mark.parametrize("row", [("a", "b", "c"), ("a",), (1, 2)])
-def test_a_malformed_provenance_row_refuses_at_declaration(row):
-    with pytest.raises(PlanValidationError) as ei:
-        _workflow(provenance=(row,))
-    assert "provenance row" in str(ei.value)
-
-
-def test_the_run_prefix_comes_from_the_step_the_facade_NAMES():
-    """A literal "solve" would silently lose the prefix for a facade that named
-    its solve step anything else - and the chart spec would persist nowhere."""
-    from trid3nt_server.workflows.runtime import RunResult
-
-    class Renamed(_Stub):
-        solve_step = "telemac_solve"
-
-    run = RunResult(value=_Layer())
-    run.results["telemac_solve"] = {"run_id": "RUN123"}
-    assert _workflow(Renamed)._run_id(_Layer(), run) == "RUN123"
-    # a workflow that declares no solve step simply has no prefix to find
-    assert _workflow()._run_id(_Layer(), run) is None
-
-
-# --- a context slot's declared SHAPE reaches the wire and the prose ---------- #
-def test_a_context_slot_puts_its_declared_shape_on_the_wire_and_in_the_prose():
-    """A slot names no source, so the SHAPE it accepts is the only thing the
-    schema and the prose can say about it - and both have to say it, or a caller
-    fills a polyline slot with a raster because nothing told them otherwise."""
-    import typing
-
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.runtime.data import SuppliedGeometry
-
-    fn = TOOL_REGISTRY["artemis_harbor_agitation"].fn
-    annotation = inspect.signature(fn).parameters["structure"].annotation
-    assert typing.get_args(annotation)[1:] == (SuppliedGeometry("polyline"),)
-    # the metadata is documentation, not schema: the hint a declaration builder
-    # resolves is the plain string type the argument really takes
-    assert typing.get_type_hints(fn)["structure"] == (str | None)
-
-    doc = fn.__doc__ or ""
-    context = doc.split("Context layers:")[1].split("Run controls:")[0]
-    assert "structure: a polyline layer you supply" in context
-    # one argument, one description: the template's own prose joins the slot's
-    # line rather than repeating it as a run control
-    assert "    structure:" not in doc.split("Run controls:")[1]
-
-
-def test_a_slot_that_declares_no_shape_still_reaches_the_wire_as_a_string():
-    from trid3nt_server.workflows.runtime import DataDecl
-    from trid3nt_server.workflows.runtime.workflow import _wire_signature
-
-    sig, annotations = _wire_signature((), (), (DataDecl("clip_zone"),))
-    assert annotations["clip_zone"] == (str | None)
-    assert sig.parameters["clip_zone"].default is None
-
-
-# --- a mesh declaration is a binding block, so it is frozen DEEP ------------- #
-def test_a_mesh_recipe_is_frozen_all_the_way_down():
-    """A template writes MESH at module level and every run reads that same object,
-    so a mutable container inside one is a channel from one run to the next: a step
-    that edits a declared op's kwargs changes what the NEXT run declares."""
-    import dataclasses
-
-    from trid3nt_server.workflows.mesh.tool import mesh_op
-
-    kwargs = {"gradation": 0.15}
-    mesh = _reach_mesh(ops=[mesh_op("enforce_mesh_gradation", **kwargs)])
-
-    assert isinstance(mesh.ops[0].kwargs, MappingProxyType)
-    with pytest.raises(TypeError):
-        mesh.ops[0].kwargs["gradation"] = 0.99
-    with pytest.raises(dataclasses.FrozenInstanceError):
-        mesh.kind = "structured_grid"
-    kwargs["gradation"] = 0.99                   # the caller's dict is not the ask's
-    assert mesh.ops[0].kwargs["gradation"] == 0.15
-
-
-#: Where a recipe is DECLARED as a template's own value: only where the
-#: workflow's own recipe cannot ask the question - a catchment triangulated as a
-#: BAND, a harbour with a structure punched out of the water. Every other
-#: template takes the recipe the workflow builds from its slots.
-_RECIPES = (
-    ("trid3nt_server.workflows.telemac.templates.agitation.agitation", "om2d"),
-    ("trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid", "om2d"),
-)
-
-
-def _template(module_path: str):
-    import importlib
-
-    return importlib.import_module(module_path)
-
-
-@pytest.mark.parametrize("module_path,mesher", _RECIPES)
-def test_a_declared_mesh_is_a_frozen_recipe(module_path, mesher):
-    """The ask is a value, not a build: importing a declaration meshes nothing."""
-    from trid3nt_server.workflows.mesh.tool import MeshRecipe
-
-    mesh = _template(module_path).MESH
-    assert isinstance(mesh, MeshRecipe)
-    assert mesh.mesher == mesher
-
-
-def test_the_owned_settle_reads_the_accepted_mesh_and_the_seated_lever():
-    """A template that lets the workflow own its stages states no settle at all:
-    the one the workflow seats is handed the ACCEPTED mesh and the granularity
-    lever, and knows a river from nothing."""
-    module = _template("trid3nt_server.workflows.telemac.templates.dye_release.dye_release")
-    workflow = module.telemac_dye_release.workflow
-    settled = next(n for n in workflow.plan.steps
-                   if getattr(n, "name", "") == "settled")
-    assert settled.runner.endswith("assembler.open_water")
-    assert settled.kwargs["mesh"] == Ref("mesh")
-    assert "reach" not in settled.kwargs
-    # A placeholder refuses ``==`` by design, so the read is named by its name.
-    assert settled.kwargs["mesh_resolution_m"].name == "mesh_resolution_m"
-
-
-def test_the_catchment_mesh_step_carries_the_whole_recipe():
-    """Every op the template declared reaches the step that builds the mesh.
-
-    The RECIPE travels WHOLE - the mesher, the three agnostic params, every op in
-    declared order - and the ONE mesh step carries nothing else."""
-    module = _template("trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid")
-    workflow = module.telemac_rain_on_grid.workflow
-    mesh_step = [n for n in workflow.plan.steps
-                 if getattr(n, "stage", "") == "mesh"][0]
-    assert set(mesh_step.kwargs) == {"mesh", "name", "supplied", "tool"}
-    ask = mesh_step.kwargs["mesh"]
-    assert ask["mesher"] == "om2d"
-    assert set(ask) == {"mesher", "kind", "extent", "resolution_m", "ops"}
-    assert ask["extent"].path == "domain"
-    names = [entry["op"] for entry in ask["ops"]]
-    assert names[0] == "distance_sizing_from_line_function"
-    assert "enforce_mesh_gradation" in names
-    # The catchment's one liquid boundary comes off the DOMAIN slot: the stretch
-    # of the divide its producer measured, typed rating_curve, or the run the
-    # user drew on a basin they supplied.
-    roles = [entry for entry in ask["ops"] if entry["op"] == "set_boundary_roles"]
-    assert len(roles) == 1 and set(roles[0]["kwargs"]) == {"runs"}

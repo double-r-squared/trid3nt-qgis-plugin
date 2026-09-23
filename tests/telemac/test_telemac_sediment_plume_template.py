@@ -19,10 +19,6 @@ from trid3nt_server.workflows.telemac.templates.sediment_plume import (
 )
 
 _TOOL = "telemac_sediment_plume"
-_MASS_RESOLVE = ("trid3nt_server.workflows.telemac.helpers.released_mass."
-                 "released_mass_kg")
-
-
 def _workflow():
     return getattr(template, _TOOL).workflow
 

@@ -364,7 +364,7 @@ def test_the_ranked_list_is_one_object_the_card_and_the_sheet_both_read(world):
     assert card.note == card.choices.sentence
     # the sheet stores the pick and its reason under the slot's own name
     record = build_record(
-        run_id="r", engine="telemac", module="t2d", sheet=(), answer={},
+        run_id="r", engine="telemac", module="t2d", sheet=(),
         provenance=(), result=None, wall_seconds=1.0, origin="test",
         executed=(), replayed=(), notes=(), sources=run_choices())
     assert record["sources"]["bed bathymetry"]["picked"] == "fetch_soundings"

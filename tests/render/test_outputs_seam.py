@@ -23,7 +23,7 @@ def _journal(tmp_path, monkeypatch):
 
 def _record(**overrides):
     base = dict(
-        run_id=RID, engine="telemac", module="telemac2d", sheet=(), answer={},
+        run_id=RID, engine="telemac", module="telemac2d", sheet=(),
         provenance=(), result=None, wall_seconds=1.0, origin="headless",
         executed=(), replayed=(), notes=(),
         outputs=[{"layer_id": "telemac-dye-1", "name": "Peak dye concentration",

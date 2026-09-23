@@ -355,12 +355,10 @@ def test_the_assertions_refuse_a_run_that_did_not_deliver():
         _env().require_layer(name_contains="release")
     with pytest.raises(LiveRunError, match="no run prefix"):
         _env().require_run_products()
-    with pytest.raises(LiveRunError, match="absent from the run prefix"):
-        _env(run_id="RID", chart_spec={"c": 1}).require_run_products()
-    with pytest.raises(LiveRunError, match="no metrics.json"):
-        _env().metric("dye_cmax_mgl")
-    with pytest.raises(LiveRunError, match="has no"):
-        _env(metrics={"a": 1}).metric("dye_cmax_mgl")
+    unreadable = _env(run_id="RID", chart_spec={"c": 1})
+    unreadable.product_errors["chart_spec"] = "BadRequest: boom"
+    with pytest.raises(LiveRunError, match="BadRequest"):
+        unreadable.require_run_products()
 
 
 # --- locating the run's OWN prefix ------------------------------------------- #
@@ -401,7 +399,8 @@ def test_the_run_prefix_comes_from_the_primary_product(fake_s3):
     ev.layers = [_CONTEXT_RASTER, _PRIMARY_RASTER]
     _read_run_products(ev)
     assert ev.run_id == "01RUNULID"
-    assert ev.product_uris["metrics"] == "s3://trid3nt-runs/01RUNULID/metrics.json"
+    assert ev.product_uris["chart_spec"] == (
+        "s3://trid3nt-runs/01RUNULID/chart_spec.json")
     assert {b for b, _ in fake_s3.asked} == {"trid3nt-runs"}
     ev.require_run_products()
 
@@ -427,9 +426,3 @@ def test_context_layers_alone_locate_no_run_prefix(fake_s3):
         ev.require_run_products()
 
 
-def test_a_metric_comparison_is_relative_and_typed():
-    ev = _env(metrics={"dye_cmax_mgl": 14.6854887})
-    ev.require_metric_close("dye_cmax_mgl", 14.6854887)
-    ev.require_metric_close("dye_cmax_mgl", 14.6855, rel=1e-4)
-    with pytest.raises(LiveRunError, match="not within"):
-        ev.require_metric_close("dye_cmax_mgl", 20.0, rel=1e-3)

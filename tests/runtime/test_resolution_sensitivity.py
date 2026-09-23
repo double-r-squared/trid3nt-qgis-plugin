@@ -75,7 +75,7 @@ def test_a_default_spacing_run_is_labeled_a_bound() -> None:
 
     notes = sensitivity_notes(
         workflow.sensitivity, workflow.metadata,
-        _Result(**{_FIELD: 4200.0}, mesh_size_m=250.0), sheet)
+        _Result(**{_FIELD: 4200.0}), sheet, mesh_size_m=250.0)
     assert len(notes) == 1, "one mesh is one fact, not one note per field"
     note = notes[0]
     assert note.startswith("RESOLUTION-LIMITED, TREAT AS A BOUND:")
@@ -94,7 +94,7 @@ def test_a_refined_run_says_refined_is_not_converged() -> None:
 
     notes = sensitivity_notes(
         workflow.sensitivity, workflow.metadata,
-        _Result(**{_FIELD: 4200.0}, mesh_size_m=25.0), sheet)
+        _Result(**{_FIELD: 4200.0}), sheet, mesh_size_m=25.0)
     assert len(notes) == 1
     assert notes[0].startswith("RESOLUTION-SENSITIVE:")
     assert "not a demonstrated convergence" in notes[0]
@@ -109,7 +109,7 @@ def test_a_granularity_stated_as_a_keyword_is_read_off_the_fill() -> None:
 
     workflow = TOOL_REGISTRY["telemac3d_stratified_flow"].fn.workflow
     lever = workflow.metadata.resolution_specs[0].param
-    result = _Result(stratification_dt=3.2, mesh_size_m=40.0)
+    result = _Result(stratification_dt=3.2)
     sheet = asyncio.run(resolve_params(workflow.params, {})).rows()
 
     bound = sensitivity_notes(workflow.sensitivity, workflow.metadata, result,
@@ -123,8 +123,8 @@ def test_a_granularity_stated_as_a_keyword_is_read_off_the_fill() -> None:
 def test_a_field_the_run_did_not_produce_is_not_labeled() -> None:
     """A note about a number that is not there points at nothing."""
     notes = sensitivity_notes(
-        _DECL, _Meta(), _Result(flooded_land_km2=0.03, mesh_size_m=250.0),
-        [_Row("target_resolution_m", "derived")])
+        _DECL, _Meta(), _Result(flooded_land_km2=0.03),
+        [_Row("target_resolution_m", "derived")], mesh_size_m=250.0)
     assert "inundation_peak_depth_m" not in notes[0]
     assert "flooded_land_km2" in notes[0]
 
@@ -151,3 +151,15 @@ def test_every_telemac_template_declares_its_sensitive_answers(
     # a converged class must NOT be labeled: labeling everything is labeling nothing
     for converged in ("do_min_mgl", "hs_max_m", "sheltering_ratio"):
         assert converged not in dict(workflow.sensitivity.rows)
+
+
+def test_the_spacing_is_read_off_the_mesh_the_run_published() -> None:
+    """The edge is a fact of the SOLVE, so the note reads the solve step's own
+    record rather than a field on the layer."""
+    from trid3nt_server.workflows.runtime.workflow import RunResult
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    workflow = TOOL_REGISTRY[_TEMPLATE].fn.workflow
+    run = RunResult(value=None)
+    run.results[workflow.solve_step] = {"mesh_size_m": 62.5}
+    assert workflow._mesh_size_m(run) == 62.5

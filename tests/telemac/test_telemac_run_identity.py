@@ -90,7 +90,7 @@ def test_the_run_record_carries_the_engine_and_the_module_and_no_template():
         run_id="RUN1", engine="telemac", module="telemac2d",
         fill={"DURATION": "template: telemac_dye_release",
               "GEOMETRY FILE": "producer: mesh"},
-        sheet=(), answer={}, provenance=(), result=None,
+        sheet=(), provenance=(), result=None,
         wall_seconds=1.0, origin="session", executed=(), replayed=(), notes=())
     assert record["engine"] == "telemac" and record["module"] == "telemac2d"
     assert "template" not in record

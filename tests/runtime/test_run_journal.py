@@ -43,7 +43,6 @@ def _record(**overrides):
                     consequence="physics", real_source="nhd"),
                _row("cores", 2, door="constant",
                     consequence="numerical")],
-        answer={"min_do_mgl": 6.1, "layer_uri": "s3://b/RUN9/do.tif"},
         provenance=[SimpleNamespace(param="discharge_cms", value=12.5,
                                     basis="fetched", note="NWM cycle 2026-08-19T00Z",
                                     real_source="national_water_model")],
@@ -94,9 +93,8 @@ def test_a_sheet_row_carries_its_door_and_its_basis_not_just_the_number():
                    "note": None, "real_source": "nhd"}
 
 
-def test_the_record_carries_the_answer_the_provenance_the_mesh_and_the_wall_time():
+def test_the_record_carries_the_provenance_the_mesh_and_the_wall_time():
     rec = _record()
-    assert rec["answer"]["min_do_mgl"] == 6.1
     assert rec["provenance"] == [{"param": "discharge_cms", "value": 12.5,
                                   "basis": "fetched",
                                   "note": "NWM cycle 2026-08-19T00Z",
@@ -115,19 +113,19 @@ def test_a_run_with_no_cores_row_records_none_rather_than_guessing():
 
 # --- a long list is summarized, never copied --------------------------------- #
 def test_a_long_list_value_is_truncated_to_a_shape_summary():
-    """A sag curve is hundreds of points; the journal wants the FACT that there was
-    one and its shape, not a second copy of the product."""
+    """A stage curve is hundreds of points; the journal wants the FACT that there was
+    one and its shape, not a second copy of the deck."""
     curve = [float(i) for i in range(500)]
-    rec = _record(answer={"sag_curve_do_mgl": curve, "min_do_mgl": 6.1})
-    summary = rec["answer"]["sag_curve_do_mgl"]
+    rec = _record(keywords={"STAGE_CURVE": curve, "DURATION": 3600})
+    summary = rec["keywords"]["STAGE_CURVE"]
     assert summary == {"length": 500, "head": [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
                        "truncated": True}
-    assert rec["answer"]["min_do_mgl"] == 6.1        # the scalar is untouched
+    assert rec["keywords"]["DURATION"] == 3600       # the scalar is untouched
 
 
 def test_a_short_list_value_is_kept_whole():
-    rec = _record(answer={"bbox": [-85.0, 29.7, -84.9, 29.8]})
-    assert rec["answer"]["bbox"] == [-85.0, 29.7, -84.9, 29.8]
+    rec = _record(keywords={"BBOX": [-85.0, 29.7, -84.9, 29.8]})
+    assert rec["keywords"]["BBOX"] == [-85.0, 29.7, -84.9, 29.8]
 
 
 # --- append + read round-trip ------------------------------------------------- #

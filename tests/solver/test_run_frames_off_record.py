@@ -22,7 +22,7 @@ def _journalled(tmp_path, monkeypatch):
 
     def _install(outputs: list[dict]) -> None:
         journal.append_record(journal.build_record(
-            run_id=RID, engine="telemac", module="telemac2d", sheet=(), answer={},
+            run_id=RID, engine="telemac", module="telemac2d", sheet=(),
             provenance=(), result=None, wall_seconds=1.0, origin="headless",
             executed=(), replayed=(), notes=(), outputs=outputs))
 
