@@ -76,12 +76,14 @@ def answered(result: Any, name: str) -> Any:
 
 def sensitivity_notes(decl: SensitivityDecl, metadata: Any, result: Any,
                       sheet: Sequence[Any],
-                      fill: Mapping[str, str] | None = None) -> tuple[str, ...]:
+                      fill: Mapping[str, str] | None = None,
+                      mesh_size_m: Any = None) -> tuple[str, ...]:
     """The honesty note(s) this run's answer carries, or ``()``.
     ONE note per run, not one per field, and fields the run did not produce are
     dropped - a note about a number that is not there points at nothing.
     ``fill`` is the solved deck's slots by origin, so a lever that is a KEYWORD
-    rather than a param is read where the run actually states it."""
+    rather than a param is read where the run actually states it, and
+    ``mesh_size_m`` is the edge off the mesh the run published."""
     if not decl:
         return ()
     present = [(field, cls) for field, cls in decl.rows
@@ -102,8 +104,7 @@ def sensitivity_notes(decl: SensitivityDecl, metadata: Any, result: Any,
     # for the same reason - somebody chose this granularity.
     stated = str((fill or {}).get(lever, ""))
     refined = refined or stated.startswith(("user", "model"))
-    mesh_m = answered(result, "mesh_size_m")
-    at = f" at {float(mesh_m):g} m" if mesh_m is not None else ""
+    at = f" at {float(mesh_size_m):g} m" if mesh_size_m is not None else ""
 
     classes = sorted({cls for _, cls in present})
     what = "; ".join(f"{CLASSES[c][0]} - {CLASSES[c][1]}" for c in classes)

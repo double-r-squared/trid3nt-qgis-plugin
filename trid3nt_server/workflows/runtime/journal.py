@@ -202,7 +202,7 @@ def read_records(path: Path | None = None) -> list[dict[str, Any]]:
 
 def build_record(*, run_id: str | None, engine: str | None,
                  module: str | None,
-                 sheet: Sequence[Any], answer: Mapping[str, Any],
+                 sheet: Sequence[Any],
                  provenance: Sequence[Any], result: Any,
                  wall_seconds: float | None, origin: str,
                  executed: Sequence[str], replayed: Sequence[str],
@@ -242,7 +242,6 @@ def build_record(*, run_id: str | None, engine: str | None,
         "sources": {choice.slot: {"picked": choice.picked,
                                   "reason": choice.sentence}
                     for choice in sources},
-        "answer": {k: _small(v) for k, v in answer.items()},
         "provenance": [_provenance(row) for row in provenance],
         # WHERE each slot of the solved deck came from, in the closed vocabulary
         # the card renders. A run is recorded under its engine and its module;

@@ -21,7 +21,7 @@ from .errors import DeclarativeError, PlanValidationError, WorkflowParkedError
 from .levers import with_levers
 from .params import Param, ResolvedParams, doors, param_rows
 from .plan import Plan, Ref, Step
-from .resolution import SensitivityDecl, answered, sensitivity_notes
+from .resolution import SensitivityDecl, sensitivity_notes
 from .resolver import merge_provenance, resolve_params
 from .snapshot import Derivation
 from .validate import validate_plan
@@ -37,20 +37,6 @@ class WireArgsError(DeclarativeError):
     """The wire arguments cannot be coerced into a sheet the workflow can run."""
 
     error_code = "WIRE_ARGS_INVALID"
-
-
-def _provenance_row(row: str | tuple[str, str]) -> tuple[str, str]:
-    """One declared ``provenance=`` entry, as ``(param, note_key)``.
-    A bare name takes the ``<param>_note`` key; a row that is not exactly a pair is
-    refused here rather than dropping its tail or raising at answer time."""
-    if isinstance(row, str):
-        return (row, f"{row}_note")
-    pair = tuple(row)
-    if len(pair) != 2 or not all(isinstance(part, str) for part in pair):
-        raise PlanValidationError(
-            f"provenance row {row!r} is not (param, note_key): a provenance entry is "
-            "either a param NAME or a two-string pair naming the note's key.")
-    return (pair[0], pair[1])
 
 
 class Workflow:
@@ -75,8 +61,6 @@ class Workflow:
 
     def __init__(self, *, metadata: Any, params: Any,
                  template: Any, data: Any = (),
-                 answer: Sequence[str] = (),
-                 provenance: Sequence[str | tuple[str, str]] = (),
                  sensitivity: Sequence[tuple[str, str]] = (),
                  validity: Sequence[Validity] = (),
                  coerce: Sequence[Callable[[dict], Mapping[str, Any]]] = (),
@@ -96,19 +80,14 @@ class Workflow:
         #: absence is a refusal, per role and overall.
         self.accepts = accepts
         #: The template MODULE this workflow is declared by. Every stage is read
-        #: off its own names - STEERING, OUTPUTS, CAPTIONS, ANSWER and the files
+        #: off its own names - STEERING, OUTPUTS, CAPTIONS and the files
         #: beside them - so no object stands between the declaration and the plan.
         self.template = template
-        self.answer_fields = tuple(answer)
         #: What this template CALLS each thing it names: every published variable,
         #: and every DATA row it reads a measurement into. One dict, because a
         #: caption is one kind of statement whatever it is about.
         self.captions = dict(getattr(template, "CAPTIONS", {}) or {})
-        #: Each declared provenance name lifts its resolved VALUE and its NOTE onto
-        #: the answer. A pair names the note's key where the value's name plus
-        #: "_note" is not what the answer has always called it.
-        self.answer_provenance = tuple(_provenance_row(row) for row in provenance)
-        #: Which ANSWER fields sit in a resolution-sensitive class. The skeleton
+        #: Which published reads sit in a resolution-sensitive class. The skeleton
         #: turns this into the run's honesty label; see ``resolution.py``.
         self.sensitivity = SensitivityDecl(sensitivity)
         #: Cross-param rules a single Param declaration cannot express - checked
@@ -179,7 +158,8 @@ class Workflow:
         params = getattr(run, "params", None)
         sheet = params.rows() if params is not None else ()
         return sensitivity_notes(self.sensitivity, self.metadata, result, sheet,
-                                 fill=self._fill(run))
+                                 fill=self._fill(run),
+                                 mesh_size_m=self._mesh_size_m(run))
 
     # -- the spine --------------------------------------------------------- #
 
@@ -349,14 +329,13 @@ class Workflow:
             update["fallback_note"] = " ".join(parts)
         result = result.model_copy(update=update)
 
-        metrics = self.answer(result)
         run_id = self._run_id(result, run)
         await self._persist(run_id, run.charts)
         # The journal takes the MERGED notes, not the interpreter's alone: a
         # resolution-sensitivity label that lived only on the layer would be gone
         # the moment the layer was, and the journal is the record that outlives
         # the artifacts.
-        await asyncio.to_thread(self._journal, run_id, run, result, metrics,
+        await asyncio.to_thread(self._journal, run_id, run, result,
                                 wall_seconds, notes, derived_from,
                                 dict(supplied or {}))
         # The snapshot rides the same moment for the same reason: this is where a
@@ -369,24 +348,10 @@ class Workflow:
             sheet=run.params.rows() if run.params is not None else (),
             records=run.records, data_records=run.data_records,
             supplied=dict(supplied or {}), derived_from=derived_from)
-        logger.info("%s complete layer_id=%s answer=%s executed=%s replayed=%s notes=%s",
+        logger.info("%s complete layer_id=%s executed=%s replayed=%s notes=%s",
                     self.name, getattr(result, "layer_id", None),
-                    {k: v for k, v in metrics.items() if not isinstance(v, list)},
                     run.executed, run.replayed, notes)
         return result
-
-    def answer(self, result: Any) -> dict[str, Any]:
-        """The run's ANSWER: the numbers a reader has to be able to check.
-        A declared provenance name rides its resolved value AND its note, so what a
-        row was pinned to is on the artifact rather than recomputed."""
-        out: dict[str, Any] = {f: answered(result, f) for f in self.answer_fields}
-        out["layer_uri"] = getattr(result, "uri", None)
-        rows = getattr(result, "synthetic_inputs", None) or []
-        for name, note_key in self.answer_provenance:
-            row = next((r for r in rows if getattr(r, "param", None) == name), None)
-            out[name] = getattr(row, "value", None) if row else None
-            out[note_key] = getattr(row, "note", None) if row else None
-        return out
 
     def _run_id(self, result: Any, run: RunResult) -> str | None:
         """The solve's run prefix, from the layer or from the solve step itself.
@@ -396,6 +361,14 @@ class Workflow:
         if direct or not self.solve_step:
             return direct
         return (run.results.get(self.solve_step) or {}).get("run_id")
+
+    def _mesh_size_m(self, run: RunResult) -> Any:
+        """The EDGE the run was meshed at, off the solve step's own record.
+        The mesh the run published is where this is a fact; a workflow that
+        declares no solve step meshed nothing and states no spacing."""
+        if not self.solve_step:
+            return None
+        return (run.results.get(self.solve_step) or {}).get("mesh_size_m")
 
     def _module(self, run: RunResult) -> str | None:
         """WHICH module of the engine ran, as the solve step itself states it.
@@ -416,20 +389,20 @@ class Workflow:
                 for name, row in (sheet.get("filled") or {}).items()}
 
     def _journal(self, run_id: str | None, run: RunResult, result: Any,
-                 metrics: Mapping[str, Any], wall_seconds: float,
+                 wall_seconds: float,
                  notes: Sequence[str] = (),
                  derived_from: Derivation | None = None,
                  supplied: Mapping[str, Any] | None = None) -> None:
         """Append this run to the run journal - one seam, every engine.
-        Called from publish, the one point where the sheet, the answer, the
-        provenance rows and the wall time are all in hand at once."""
+        Called from publish, the one point where the sheet, the provenance rows
+        and the wall time are all in hand at once."""
         from trid3nt_server.render.pipeline_emitter import current_emitter
 
         sheet = run.params.rows() if run.params is not None else ()
         journal.append_record(journal.build_record(
             run_id=run_id, engine=self.engine or None,
             module=self._module(run), fill=self._fill(run),
-            sheet=sheet, answer=metrics,
+            sheet=sheet,
             provenance=getattr(result, "synthetic_inputs", None) or [],
             result=result, wall_seconds=round(wall_seconds, 3),
             origin=journal.run_origin(live_session=current_emitter() is not None),
@@ -482,7 +455,6 @@ def register_workflow(
     template: Any,
     *,
     parked: str | None = None,
-    provenance: Sequence[str | tuple[str, str]] = (),
     sensitivity: Sequence[tuple[str, str]] = (),
     validity: Sequence[Validity] = (),
     coerce: Sequence[Callable[[dict], Mapping[str, Any]]] = (),
@@ -491,7 +463,7 @@ def register_workflow(
     **register_kwargs: Any,
 ) -> Callable[..., Any]:
     """Generate and register the tool for a declared workflow.
-    The TEMPLATE MODULE is the declaration: PARAMS, DATA, ACCEPTS, ANSWER and DOC
+    The TEMPLATE MODULE is the declaration: PARAMS, DATA, ACCEPTS and DOC
     are read off its own names, and the workflow class reads the rest. The
     signature is synthesized from the declared params, so the model-facing schema
     comes from the same declaration the run resolves."""
@@ -503,15 +475,13 @@ def register_workflow(
     params = param_rows(getattr(template, "PARAMS"))
     data = getattr(template, "DATA", ())
     doc = getattr(template, "DOC", None)
-    answer = tuple(getattr(template, "ANSWER", ()))
     # WHICH runtime levers this declaration takes without restating them: the
     # stages that read a lever are the workflow class's, so the class answers,
     # and a template that seats none of them states so here.
     if levers is None:
         levers = facade.levers()
     workflow = facade(metadata=metadata, params=params, template=template,
-                      data=data, answer=answer, provenance=provenance,
-                      sensitivity=sensitivity, validity=validity, coerce=coerce,
+                      data=data, sensitivity=sensitivity, validity=validity, coerce=coerce,
                       accepts=getattr(template, "ACCEPTS", None), levers=levers)
     params = workflow.params
 
