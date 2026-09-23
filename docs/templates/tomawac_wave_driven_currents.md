@@ -35,18 +35,6 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `cores` | constant | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
 | `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
 
-## What it answers
-
-| field | the proving run's value |
-|---|---|
-| `longshore_current_speed_mps` | 0.20862162113189697 |
-| `current_along_x_mps` | -0.10791587829589844 |
-| `current_along_y_mps` | -0.17854170501232147 |
-| `hs_at_station_m` | 0.5218358039855957 |
-| `peak_current_speed_mps` | 0.3357093334197998 |
-| `breaking_rate_peak_per_s` | 0.21519945561885834 |
-| `mesh_size_m` | 16.726 |
-
 It publishes these layers onto the canvas:
 
 - Input: domain (osm_coastline)

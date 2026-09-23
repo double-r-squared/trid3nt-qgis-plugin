@@ -37,26 +37,6 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `cores` | constant | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
 | `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
 
-## What it answers
-
-| field | the proving run's value |
-|---|---|
-| `catchment_area_km2` | 30.472 |
-| `peak_discharge_m3s` | 85.11542 |
-| `peak_discharge_time_s` | 97450.0 |
-| `peak_is_window_truncated` | False |
-| `rainfall_volume_m3` | 4774943.958 |
-| `runoff_volume_m3` | 1793684.0 |
-| `runoff_coefficient` | 0.375645 |
-| `max_depth_peak_m` | 11.866291046142578 |
-| `max_depth_p99_m` | 0.9218650174140735 |
-| `continuity_rel_error` | 1.042104e-15 |
-| `n_frames` | 81 |
-| `mesh_size_m` | 6.098 |
-| `mesh_node_count` | 7544 |
-| `mesh_element_count` | 14430 |
-| `domain_bbox` | [-83.47843790614064, 35.02046992041452, -83.39788075588956, 35.073695219187876] |
-
 It publishes these layers onto the canvas:
 
 - Input: domain (watershed, the DEM's own native grid - 3DEP 1-10 m US lidar, Copernicus GLO-30 30 m global)

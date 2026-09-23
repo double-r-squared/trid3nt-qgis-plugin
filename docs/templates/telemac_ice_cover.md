@@ -28,23 +28,12 @@ The values the template declares. `desc` is what the model reads when it fills o
 | param | door | units | default | desc |
 |---|---|---|---|---|
 | `seed` | user | - | optional | Where on the water the modelled stretch STARTS, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. It seeds the reach the domain is cut from; supply the domain polygon - a lake, a pond, a reservoir - instead and this is not read |
-| `body` | question | - | optional | Which kind of water the seed is on: 'reach' (default) cuts a stretch of river from the mapped channel; 'waterbody' takes the lake, pond or reservoir the seed stands in. Read only when no domain polygon is supplied |
 | `station` | user | - | optional | Where the ice cover and its thickness are read over time, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer. Geocode a place name first |
-| `cover_threshold` | question | - | optional | Fraction of the surface under ice, 0 to 1, that counts as frozen over - the answer reports the first moment the cover exceeds it, at the point and anywhere in the domain. A reporting threshold, not a physical constant: half the surface by default |
+| `cover_threshold` | question | - | optional | Fraction of the surface under ice, 0 to 1, that counts as frozen over - the cover chart draws it as a reference line beside the series. A reporting threshold, not a physical constant: half the surface by default |
 | `mesh_resolution_m` | scenario | m | 20.0 | Target element edge length the domain is triangulated at; the budget that makes the ice is divided by the local DEPTH, and the border ice grows from the BANK, so what this has to resolve is how deep the water is and where its edge runs |
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `cores` | constant | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
 | `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
-
-## What it answers
-
-| field | the proving run's value |
-|---|---|
-| `freeze_time_s` | not asked: the cover at the point did not freeze within the window |
-| `domain_freeze_time_s` | not asked: no node in the domain froze within the window |
-| `peak_ice_thickness_m` | 0.009277565404772758 |
-| `final_cover_fraction` | 0.0 |
-| `mesh_size_m` | 20.438 |
 
 It publishes these layers onto the canvas:
 

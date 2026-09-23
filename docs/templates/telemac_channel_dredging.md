@@ -42,18 +42,6 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `cores` | constant | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
 | `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
 
-## What it answers
-
-| field | the proving run's value |
-|---|---|
-| `dug_volume_m3` | 1498.61288 |
-| `dumped_volume_m3` | 1498.61288 |
-| `dredge_report` | the volumes are the engine's own report lines, summed over the passes that finished inside the run's clock |
-| `dredged_bed_change_m` | -1.0539617538452148 |
-| `dumped_bed_change_m` | 0.22317928075790405 |
-| `net_bed_mass_kg` | 0.0 |
-| `mesh_size_m` | 10.33 |
-
 It publishes these layers onto the canvas:
 
 - Input: domain (river_reach)

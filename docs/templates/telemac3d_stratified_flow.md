@@ -6,7 +6,7 @@ The 3D VERTICAL STRUCTURE of a body of water a 2D depth-averaged model cannot re
 
 |  |  |
 |---|---|
-| module | `telemac3d` - 355 keywords in its dictionary, of which this template states 31 |
+| module | `telemac3d` - 355 keywords in its dictionary, of which this template states 30 |
 | solves | `trid3nt_server.workflows.telemac.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -32,21 +32,6 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `cores` | constant | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
 | `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
-
-## What it answers
-
-| field | the proving run's value |
-|---|---|
-| `stratification_dt` | 1.2987174987792969 |
-| `stratification_dt_init` | 9.950547218322754 |
-| `column_mean_final_c` | 20.000179918381715 |
-| `column_mean_init_c` | 19.999999861290423 |
-| `column_depth_m` | 11.999975631768393 |
-| `u_surface` | -0.0001201474224217236 |
-| `u_bottom` | 0.00017139654664788395 |
-| `depth_avg_u` | -0.0010810580498722634 |
-| `planes` | 13 |
-| `mesh_size_m` | 23.506 |
 
 It publishes these layers onto the canvas:
 

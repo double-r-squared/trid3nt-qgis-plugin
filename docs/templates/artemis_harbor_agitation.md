@@ -35,16 +35,6 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `open_depth_threshold_m` | scenario | m | -12.0 | How deep a boundary stretch must reach for it to be designated the OPEN edge the incident wave enters through; every stretch that reaches it opens |
 | `cores` | constant | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
 
-## What it answers
-
-| field | the proving run's value |
-|---|---|
-| `kd_max` | 3.7250149250030518 |
-| `kd_transect_min` | 8.162245879184127e-11 |
-| `kd_transect_max` | 3.460504285612842e-05 |
-| `hs_max_m` | 3.7250149250030518 |
-| `mesh_size_m` | 6.593208586451455 |
-
 It publishes these layers onto the canvas:
 
 - Input: domain (osm_coastline)

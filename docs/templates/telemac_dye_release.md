@@ -34,16 +34,6 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `cores` | constant | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
 | `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
 
-## What it answers
-
-| field | the proving run's value |
-|---|---|
-| `dye_cmax_mgl` | 4.015129089355469 |
-| `dye_peak_time_s` | 300.0 |
-| `plume_reach_m` | 18.5 |
-| `active_frames` | 18 |
-| `mesh_size_m` | 20.888 |
-
 It publishes these layers onto the canvas:
 
 - Input: domain (river_reach)

@@ -28,27 +28,12 @@ The values the template declares. `desc` is what the model reads when it fills o
 | param | door | units | default | desc |
 |---|---|---|---|---|
 | `seed` | user | - | optional | Where on the channel the modelled stretch STARTS, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. The stretch walked downstream of it is the water one pass is measured over; supply the domain polygon instead and this is not read |
-| `station` | user | - | optional | Where to watch the biomass and the oxygen over time, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer (geocode a place name first). The answers are all longitudinal and do not move with it |
-| `do_standard_mgl` | scenario | mg/L | 5.0 | The DO water-quality standard the water is judged against; 5 is a common warm-water aquatic-life criterion. It never reaches the deck: no keyword names a standard, and the answer carries the verdict |
+| `station` | user | - | optional | Where to watch the biomass and the oxygen over time, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer (geocode a place name first). The profiles are all longitudinal and do not move with it |
+| `do_standard_mgl` | scenario | mg/L | 5.0 | The DO water-quality standard the water is judged against; 5 is a common warm-water aquatic-life criterion. It never reaches the deck: no keyword names a standard, and the oxygen profile carries it as a reference line |
 | `mesh_resolution_m` | scenario | m | 25.0 | Target element edge length the domain is triangulated at; it also sets the CFL time step, so it is what decides whether a long window finishes |
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `cores` | constant | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
 | `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
-
-## What it answers
-
-| field | the proving run's value |
-|---|---|
-| `phyto_max_ug_l` | 1.9969120786154106 |
-| `phyto_max_distance_m` | 7490.067773293982 |
-| `phyto_growth_ratio` | 0.9984560393077053 |
-| `no3_remaining_ratio` | 1.0007473611333486 |
-| `po4_remaining_ratio` | 0.9998398305059408 |
-| `do_min_mgl` | 8.55793665597367 |
-| `do_min_distance_m` | 5950.0538385980235 |
-| `do_below_standard` | False |
-| `pass_velocity_mps` | 0.013575788811176328 |
-| `mesh_size_m` | 11.711 |
 
 It publishes these layers onto the canvas:
 

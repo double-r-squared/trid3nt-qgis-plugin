@@ -6,7 +6,7 @@ NEARSHORE WAVES: what the offshore swell becomes at the shore - how high, how lo
 
 |  |  |
 |---|---|
-| module | `tomawac` - 223 keywords in its dictionary, of which this template states 22 |
+| module | `tomawac` - 223 keywords in its dictionary, of which this template states 21 |
 | solves | `trid3nt_server.workflows.telemac.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -34,18 +34,6 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `cores` | constant | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
 | `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
-
-## What it answers
-
-| field | the proving run's value |
-|---|---|
-| `hs_max_m` | 1.0109707117080688 |
-| `hs_at_station_m` | 0.7842972278594971 |
-| `peak_period_at_station_s` | 7.965770244598389 |
-| `direction_at_station_deg` | 263.46368408203125 |
-| `breaking_rate_peak_per_s` | 0.20509788393974304 |
-| `breaker_dissipation_peak_m2s` | 0.012725748121738434 |
-| `mesh_size_m` | 17.077 |
 
 It publishes these layers onto the canvas:
 
