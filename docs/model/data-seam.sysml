@@ -1613,6 +1613,10 @@ package DataSeam {
         "tests/inputs/test_slot_inputs.py::test_a_row_a_merge_names_is_asked_at_the_spacing_the_run_is_meshed_at";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
         "tests/inputs/test_slot_inputs.py::test_the_merge_ask_clears_the_budget_that_refused_the_named_row";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/inputs/test_slot_inputs.py::test_a_held_ask_is_stated_on_the_run_rather_than_coarsened_in_silence";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/runtime/test_domain_bed_and_context_slots.py::test_a_row_a_merge_names_is_fetched_at_the_spacing_the_run_is_meshed_at";
 
     satisfy requirement TheRankedListIsOneObjectInThreeViews by rankedListCard;
     satisfy requirement TheRankedListIsOneObjectInThreeViews by rankedListRecord;

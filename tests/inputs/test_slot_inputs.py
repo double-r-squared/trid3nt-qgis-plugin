@@ -348,6 +348,23 @@ def test_a_row_a_merge_names_is_asked_at_the_spacing_the_run_is_meshed_at():
     assert merge_ask("fetch_chs_nonna", None) == {}
 
 
+def test_a_held_ask_is_stated_on_the_run_rather_than_coarsened_in_silence():
+    """The band is the row's, not the run's, so a run meshed finer than the row
+    serves is asked at the row's floor - and the move is a note on the run."""
+    from trid3nt_server.inputs.bed import merge_ask
+    from trid3nt_server.workflows.runtime.journal import bind_notes, drain_notes
+
+    token = bind_notes()
+    try:
+        assert merge_ask("fetch_chs_nonna", 2.0) == {"resolution_m": 10.0}
+        assert merge_ask("fetch_chs_nonna", 40.0) == {"resolution_m": 40.0}
+    finally:
+        notes = drain_notes(token)
+    assert len(notes) == 1, "the ask the band left alone says nothing"
+    assert "fetch_chs_nonna is asked at 10 m rather than the 2 m" in notes[0]
+    assert "finer" in notes[0]
+
+
 def test_the_merge_ask_clears_the_budget_that_refused_the_named_row():
     """The row's budget refusal is right and stays; the ask is what was wrong.
     The box is the water surface a St. Clair River run is cut from, padded as a

@@ -660,3 +660,37 @@ class _Params:
 
     def value_of(self, name: str):
         return self._filled.get(name)
+
+
+def test_a_row_a_merge_names_is_fetched_at_the_spacing_the_run_is_meshed_at(
+        monkeypatch):
+    """The ask the merge states reaches the row's own producer: the runtime row
+    declared for a named row carries the resolution beside the place, so a row
+    asked over a domain stated in tens of kilometres is not asked for cells no
+    node of this run reads."""
+    from trid3nt_server.workflows.runtime import interpreter
+    from trid3nt_server.workflows.runtime.data import BED
+
+    async def _ranked(env, decl, data_class, label):
+        from trid3nt_contracts.coverage import SourceChoice
+
+        return SourceChoice(slot=decl.name, need=data_class,
+                            picked="fetch_chs_nonna")
+
+    async def _ask_for(env, choice, decl):
+        return {"bbox": (-82.8, 42.6, -82.3, 43.5)}
+
+    asked: list = []
+
+    async def _produce(env, decl):
+        asked.append(dict(decl.producer.kwargs))
+        return None
+
+    monkeypatch.setattr(interpreter, "_ranked", _ranked)
+    monkeypatch.setattr(interpreter, "_ask_for", _ask_for)
+    monkeypatch.setattr(interpreter, "_produce", _produce)
+    env = interpreter._Env(params=_Params({"mesh_resolution_m": 40.0}),
+                           data={}, results={})
+    asyncio.run(interpreter._named_row(env, _elevation_slot(BED),
+                                       "fetch_chs_nonna", BED))
+    assert asked == [{"bbox": (-82.8, 42.6, -82.3, 43.5), "resolution_m": 40.0}]
