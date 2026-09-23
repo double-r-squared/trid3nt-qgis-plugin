@@ -176,20 +176,12 @@ DOC = dict(
          "died without unwinding left on disk."),
     ),
     returns=(
-        "On success the run's record (an `AnswerLayerURI`): every variable its "
+        "On success the run's record (a `LayerURI`): every variable its "
         "module wrote, styled on one mesh layer, animated where it varies, "
-        "plus the outlet hydrograph charted at the pour point and placed there "
-        "as a station. Its `answer` carries "
-        "`peak_discharge_m3s` / `peak_discharge_time_s` / `runoff_volume_m3` / "
-        "`rainfall_volume_m3` / `runoff_coefficient` / `catchment_area_km2` / "
-        "`continuity_rel_error`, plus `max_depth_peak_m` beside `max_depth_p99_m` "
-        "(the extreme and the field - one terrain pit can set the maximum) and "
-        "`peak_is_window_truncated` (True means the discharge was still rising "
-        "when the window closed, so the peak and the volumes are LOWER BOUNDS and "
-        "must be narrated as such); narrate those typed numbers. Applicability: "
-        "SINGLE-STORM flash-flood events in small steep catchments. Infiltrated "
-        "water is permanently lost, so there is no baseflow and no inter-peak "
-        "recovery. On failure a dict with `status=\"error\"` "
-        "+ `error_code`."
+        "plus the outlet hydrograph charted at the pour point and placed "
+        "there as a station. Applicability: SINGLE-STORM flash-flood events "
+        "in small steep catchments. Infiltrated water is permanently lost, "
+        "so there is no baseflow and no inter-peak recovery. On failure a "
+        "dict with `status=\"error\"` + `error_code`."
     ),
 )

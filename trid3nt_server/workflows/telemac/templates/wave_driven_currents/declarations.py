@@ -99,17 +99,11 @@ DOC = dict(
          "invocation always re-solves against live upstream data."),
     ),
     returns=(
-        "On success the run's record (an `AnswerLayerURI`): every variable "
-        "TELEMAC-2D wrote and every variable TOMAWAC wrote, styled on one mesh "
-        "layer and animated, plus the current speed and the wave height charted "
-        "at the station. `answer` carries `longshore_current_speed_mps` (the "
-        "speed at the station when the window closes) / `current_along_x_mps` "
-        "and `current_along_y_mps` (the pair that says which way it runs, in "
-        "the mesh's own metres) / `hs_at_station_m` (the wave driving it) / "
-        "`peak_current_speed_mps` (the fastest water anywhere in the run) / "
-        "`mesh_size_m`; narrate those typed numbers. A coast the swell reaches "
-        "head-on answers a small longshore speed, which is an honest answer "
-        "about that place in that hour. On failure a dict with "
-        "`status=\"error\"` + `error_code`."
+        "On success the run's record (a `LayerURI`): every variable "
+        "TELEMAC-2D wrote and every variable TOMAWAC wrote, styled on one "
+        "mesh layer and animated, plus the current speed and the wave "
+        "height charted at the station. A coast the swell reaches head-on "
+        "charts a small longshore speed, which is what that place did in "
+        "that hour. On failure a dict with `status=\"error\"` + `error_code`."
     ),
 )

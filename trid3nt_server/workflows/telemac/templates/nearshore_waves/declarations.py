@@ -99,17 +99,11 @@ DOC = dict(
          "invocation always re-solves against live upstream data."),
     ),
     returns=(
-        "On success the run's record (an `AnswerLayerURI`): every variable "
-        "TOMAWAC wrote, styled on one mesh layer and animated, plus the height, "
-        "the period and the direction charted at the station. `answer` carries "
-        "`hs_max_m` (the highest wave anywhere in the domain) / "
-        "`hs_at_station_m` / `peak_period_at_station_s` / "
-        "`direction_at_station_deg` (the bearing the waves run TOWARD) / "
-        "`breaking_rate_max_per_s` and `breaker_dissipation_max_m2s` (how hard "
-        "the surf zone is working - the BAND it works in is the picture) / "
-        "`mesh_size_m`; narrate those typed numbers. A coast the swell reaches "
-        "calmly answers a small height and no breaking, which is an honest "
-        "answer about that place in that hour. On failure a dict with "
+        "On success the run's record (a `LayerURI`): every variable TOMAWAC "
+        "wrote, styled on one mesh layer and animated, plus the height, the "
+        "period and the direction charted at the station. A coast the swell "
+        "reaches calmly charts a small height and no breaking, which is "
+        "what that place did in that hour. On failure a dict with "
         "`status=\"error\"` + `error_code`."
     ),
 )

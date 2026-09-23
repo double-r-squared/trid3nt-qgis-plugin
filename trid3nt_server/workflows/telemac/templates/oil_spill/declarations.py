@@ -117,12 +117,9 @@ DOC = dict(
          "every step from the top."),
     ),
     returns=(
-        "On success the run's record (an `AnswerLayerURI`): every variable its "
+        "On success the run's record (a `LayerURI`): every variable its "
         "module wrote, styled on one mesh layer, animated where it varies, "
         "plus the dissolved-oil series charted and the slick track from the "
-        "floats. Its `answer` carries `oil_cmax_mgl` / "
-        "`oil_peak_time_s` / `plume_reach_m` / `slick_drift_m` / "
-        "`floats_released` / `floats_remaining`; narrate those typed numbers. "
-        "On failure a dict with `status=\"error\"` + `error_code`."
+        "floats. On failure a dict with `status=\"error\"` + `error_code`."
     ),
 )

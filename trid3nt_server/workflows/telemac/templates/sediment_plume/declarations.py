@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from trid3nt_server.inputs import Point
-from trid3nt_server.workflows.runtime import Accepts, Param, ParamRef, doors
+from trid3nt_server.workflows.runtime import Accepts, Param, doors
 
 __all__ = ["ACCEPTS", "DOC", "PARAMS", "SEDIMENT_CONCENTRATION_MGL",
            "SOURCE_Q_M3S"]
@@ -14,10 +14,6 @@ __all__ = ["ACCEPTS", "DOC", "PARAMS", "SEDIMENT_CONCENTRATION_MGL",
 #: own input, so it alone stays a Param.
 SOURCE_Q_M3S = 8.0
 SEDIMENT_CONCENTRATION_MGL = 100.0
-
-_RELEASED_MASS = ("trid3nt_server.workflows.telemac.helpers.released_mass."
-                  "released_mass_kg")
-
 
 #: What a suspended-plume run can be HANDED. The settling class rides the same
 #: triangulation the hydrodynamics runs on, so a lattice is refused at the door.
@@ -56,21 +52,6 @@ class PARAMS:
         bounds=(1.0, 86400.0), units="s", consequence="scenario",
         desc="Finite pulse injection window")
 
-    # -- the released class -------------------------------------------------- #
-    # WATER DISCHARGE OF SOURCES and VALUES OF THE TRACERS AT THE SOURCES are
-    # the deck's own fixed keyword values (SOURCE_Q_M3S, SEDIMENT_CONCENTRATION_MGL
-    # in declarations.py); the question does not ask for either by name.
-    injected_mass_kg = Param(
-        door=doors.DERIVED,
-        resolve=_RELEASED_MASS,
-        resolve_kwargs={"discharge_m3s": SOURCE_Q_M3S,
-                        "concentration_mgl": SEDIMENT_CONCENTRATION_MGL,
-                        "duration_s": ParamRef("spill_duration_s")},
-        bounds=(0.0, 1.0e9), units="kg", consequence="scenario",
-        desc="The mass the pulse released - the deck's own fixed discharge and "
-             "concentration x spill_duration_s - which the deposited fraction "
-             "is measured against")
-
 
 DOC = dict(
     summary="A SUSPENDED SEDIMENT plume in a body of water: it settles and deposits on the bed.",
@@ -103,13 +84,9 @@ DOC = dict(
          "every step from the top."),
     ),
     returns=(
-        "On success the run's record (an `AnswerLayerURI`): every variable its "
+        "On success the run's record (a `LayerURI`): every variable its "
         "modules wrote, styled on one mesh layer, animated where it varies, "
         "the bed evolution among them, plus the suspended-sediment series "
-        "charted. Its `answer` carries `suspended_cmax` / "
-        "`plume_reach_m` / `bed_evolution_max_m` / `net_bed_mass_kg` / "
-        "`deposit_fraction` (the deposited mass over the injected mass); narrate "
-        "those typed numbers. On failure a dict with `status=\"error\"` + "
-        "`error_code`."
+        "charted. On failure a dict with `status=\"error\"` + `error_code`."
     ),
 )

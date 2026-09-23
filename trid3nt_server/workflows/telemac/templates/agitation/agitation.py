@@ -18,7 +18,6 @@ from trid3nt_server.workflows.runtime import (
 )
 from trid3nt_server.workflows.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.telemac.authoring.assembler import HARBOUR_GEOMETRY
-from trid3nt_server.workflows.telemac.modules import field, mesh
 from trid3nt_server.workflows.telemac.modules.outputs import profile
 from trid3nt_server.workflows.telemac.modules.artemis import (
     ART,
@@ -35,7 +34,7 @@ from trid3nt_server.workflows.telemac.workflow import (
     Measured, TelemacWorkflow,
 )
 
-__all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING",
+__all__ = ["CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING",
            "artemis_harbor_agitation"]
 
 
@@ -190,18 +189,6 @@ OUTPUTS = [
     profile("KD", along=_TRANSECT, within_m=P.mesh_resolution_m).chart(),
 ]
 CAPTIONS = {"KD": "agitation coefficient"}
-
-#: The run's ANSWER, as the numbers a reader has to be able to check, each a
-#: measure of one of the reads above or of the wave height it is a ratio of.
-ANSWER = {
-    "kd_max": field("KD", t=-1).measure("max"),
-    "kd_transect_min": profile("KD", along=_TRANSECT,
-                               within_m=P.mesh_resolution_m).measure("min"),
-    "kd_transect_max": profile("KD", along=_TRANSECT,
-                               within_m=P.mesh_resolution_m).measure("max"),
-    "hs_max_m": field("HS", t=-1).measure("max"),
-    "mesh_size_m": mesh().measure("size_m"),
-}
 
 
 _ARTEMIS_RES_SPEC = ResolutionSpec(

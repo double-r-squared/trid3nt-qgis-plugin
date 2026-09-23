@@ -18,18 +18,17 @@ from trid3nt_server.workflows.runtime import (
 )
 from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
-from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, mesh
+from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL
 from trid3nt_server.workflows.telemac.modules.outputs import profile
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries, Sources
 from trid3nt_server.workflows.telemac.templates.do_sag import streeter_phelps
 from trid3nt_server.workflows.telemac.templates.do_sag.declarations import (
-    ACCEPTS, DOC, PARAMS, PARAMS as P,
-)
+    ACCEPTS, DOC, PARAMS, )
 from trid3nt_server.workflows.telemac.workflow import (
     Placed, TelemacWorkflow,
 )
 
-__all__ = ["ANSWER", "CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
+__all__ = ["CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_do_sag"]
 
 #: The file the run directory holds this run's picture under. The deck's own
@@ -168,7 +167,7 @@ class STEERING(T2D):
     # The carrier declares ONE tracer; WAQTEL's O2 process appends DISSOLVED O2,
     # ORGANIC LOAD and NH4 LOAD behind it, which is why every array sized to the
     # tracer count below carries four values. The reach OPENS clean: no organic
-    # load, and oxygen at saturation, so the deficit the answer reads is the
+    # load, and oxygen at saturation, so the deficit the profile carries is the
     # outfall's own and not a state the run was started in.
     NUMBER_OF_TRACERS = 1
     NAMES_OF_TRACERS = ["DYE             MG/L"]
@@ -176,7 +175,7 @@ class STEERING(T2D):
 
     #: CLEAN WATER at every liquid boundary: no organic load, its own oxygen. The
     #: load enters at the source, so which boundary the engine numbers first
-    #: cannot decide the answer. The walk is the mesh's own; the flow the inflow
+    #: cannot decide the sag. The walk is the mesh's own; the flow the inflow
     #: carries and the level the outflow holds are the open channel's.
     boundaries = Boundaries(measured=Ref("settled"), tracers=[0.0, _SATURATION_MGL, 0.0, 0.0])
 
@@ -222,22 +221,6 @@ OUTPUTS = [profile("T2", along=Ref("line")).chart(
                                       k2_per_day=_K2_PER_DAY))]
 CAPTIONS = {"T2": "dissolved oxygen", "discharge": "a streamflow",
            "level": "a water level"}
-
-#: The run's ANSWER, as the numbers a reader has to be able to check, each a
-#: measure of one of the reads above: how low the oxygen bottoms out and where,
-#: whether that is below the standard the water is held to, the mixed load that
-#: drove it, and the speed it travelled at.
-ANSWER = {
-    "do_min_mgl": profile("T2", along=Ref("line")).measure("min"),
-    "do_below_standard": profile("T2", along=Ref("line"))
-                         .measure("min").below(P.do_standard_mgl),
-    "do_min_distance_m": profile("T2", along=Ref("line"))
-                         .measure("x_min_m"),
-    "bod_mixed_mgl": profile("T3", along=Ref("line")).measure("max"),
-    "mean_velocity_mps": profile("T2", along=Ref("line"))
-                         .measure("velocity_mps"),
-    "mesh_size_m": mesh().measure("size_m"),
-}
 
 
 #: DECLARED mesh_resolution_m range. The solver floor is the finest edge the mesh

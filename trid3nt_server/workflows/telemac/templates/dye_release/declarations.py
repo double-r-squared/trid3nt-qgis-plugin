@@ -114,11 +114,9 @@ DOC = dict(
          "died without unwinding left on disk."),
     ),
     returns=(
-        "On success the run's record (an `AnswerLayerURI`): every variable its "
+        "On success the run's record (a `LayerURI`): every variable its "
         "modules wrote, styled on one mesh layer, animated where it varies, "
-        "plus the dye series charted. Its `answer` carries "
-        "`dye_cmax_mgl` / `dye_peak_time_s` / `plume_reach_m` / `active_frames`; "
-        "narrate those typed numbers. On failure a dict with `status=\"error\"` + "
-        "`error_code`."
+        "plus the dye series charted. On failure a dict with "
+        "`status=\"error\"` + `error_code`."
     ),
 )

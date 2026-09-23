@@ -20,8 +20,9 @@ from trid3nt_server.workflows.runtime import (
     Ref,
     register_workflow,
 )
-from trid3nt_server.workflows.telemac.modules import KHIONE, T2D, mesh, series
+from trid3nt_server.workflows.telemac.modules import KHIONE, T2D, series
 from trid3nt_server.workflows.telemac.modules.khione import RESULT_FILENAME
+from trid3nt_server.workflows.telemac.modules.outputs import reference_line
 from trid3nt_server.workflows.telemac.modules.telemac2d import Atmosphere, Boundaries
 from trid3nt_server.workflows.telemac.templates.ice_cover.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
@@ -30,13 +31,13 @@ from trid3nt_server.workflows.telemac.workflow import (
     Placed, TelemacWorkflow,
 )
 
-__all__ = ["ANSWER", "CAPTIONS", "DATA", "ICE_THICKNESS", "OUTPUTS", "PARAMS",
+__all__ = ["CAPTIONS", "DATA", "ICE_THICKNESS", "OUTPUTS", "PARAMS",
            "STEERING", "telemac_ice_cover"]
 
 #: THE FIELD THIS QUESTION IS ABOUT, named once: the engine's TOTAL ice
 #: thickness - the solid border ice that grows in from the banks and the dynamic
-#: cover over it, together. The answer's peak is read off it and the picture
-#: paints it, so the number and the picture cannot be about different ice.
+#: cover over it, together. The chart plots it and the picture paints it, so
+#: the two cannot be about different ice.
 ICE_THICKNESS = "COV_THT"
 
 
@@ -253,30 +254,13 @@ class STEERING(T2D):
 #: modules wrote - the heat fluxes, the frazil, the ice type - is published
 #: because their tables row it, not because this template asked.
 OUTPUTS = [
-    series("DYNCOVC", at=_STATION, module="khione").chart(),
+    series("DYNCOVC", at=_STATION, module="khione").chart(
+        reference=reference_line(P.cover_threshold, label="cover threshold")),
     series("DYNCOVT", at=_STATION, module="khione").chart(),
 ]
 CAPTIONS = {"DYNCOVC": "ice cover fraction", "DYNCOVT": "ice cover thickness",
            "discharge": "a streamflow", "level": "a water-surface elevation",
            "observe": "a water temperature"}
-
-#: The run's ANSWER, as the numbers a reader has to be able to check: when the
-#: water at the point first stood under more ice than the ask calls frozen, when
-#: anywhere in the domain first did, the thickest ice the run made anywhere, and
-#: how much of the surface the point was under when the window closed.
-ANSWER = {
-    "freeze_time_s": series("DYNCOVC", at=_STATION, module="khione",
-                            above=ParamRef("cover_threshold")).measure("t_above")
-    .otherwise("the cover at the point did not freeze within the window"),
-    "domain_freeze_time_s": series("DYNCOVC", module="khione",
-                                   above=ParamRef("cover_threshold")
-                                   ).measure("t_above")
-    .otherwise("no node in the domain froze within the window"),
-    "peak_ice_thickness_m": series(ICE_THICKNESS, module="khione").measure("max"),
-    "final_cover_fraction": series("DYNCOVC", at=_STATION, module="khione"
-                                   ).measure("last"),
-    "mesh_size_m": mesh().measure("size_m"),
-}
 
 
 #: DECLARED mesh_resolution_m range. The solver floor is the finest edge the mesh
@@ -297,7 +281,7 @@ _RES_SPEC = ResolutionSpec(
         "(self-labeled); no fixed coarse ceiling. The heat lost through the "
         "surface is divided by the local depth and border ice grows from the "
         "bank, so the DEPTH and the EDGE the mesh resolves are what move the "
-        "answer"
+        "ice"
     ),
 )
 
@@ -312,9 +296,9 @@ _METADATA = AtomicToolMetadata(
 
 
 #: WHAT THE RUN HAS TO WRITE: the host's file and the ice module's own
-#: beside it. Every measure this question answers is read off the second
-#: one, so a run that published only the host's would come back with the
-#: ice it made left in the box.
+#: beside it. Every ice read is taken off the second one, so a run that
+#: published only the host's would come back with the ice it made left in
+#: the box.
 RESULTS = (STEERING.RESULTS_FILE, RESULT_FILENAME)
 
 #: The title the card carries when the run is held for review.

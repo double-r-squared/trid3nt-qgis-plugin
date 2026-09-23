@@ -10,9 +10,15 @@ from __future__ import annotations
 from typing import Any, Callable, Mapping
 
 from trid3nt_server.workflows.telemac.helpers.oxygen_sag import do_profile
-from trid3nt_server.workflows.telemac.modules.outputs import Line, Profile
+from trid3nt_server.workflows.telemac.modules.outputs import (
+    Line, Profile, reference_line,
+)
+from trid3nt_server.workflows.telemac.templates.do_sag.declarations import PARAMS
 
 __all__ = ["overlay"]
+
+#: The standard the sag is judged against, drawn flat across the reach.
+_STANDARD = reference_line(PARAMS.do_standard_mgl, label="standard")
 
 
 def overlay(*, saturation_mgl: float, k1_per_day: float, k2_per_day: float
@@ -31,9 +37,7 @@ def overlay(*, saturation_mgl: float, k1_per_day: float, k2_per_day: float
         along-reach speed, and the standard the sag is judged against."""
         x = [float(v) for v in read.distance_m]
         do = [float(v) for v in read.values]
-        standard = float(params["do_standard_mgl"])
-        drawn = [Line(label=f"{standard:g} {read.units} standard",
-                      x=[x[0], x[-1]], values=[standard, standard])]
+        drawn = list(_STANDARD(read, reads, params))
         load = next((r for key, r in reads.items()
                      if key.kind == "profile" and key.variable == "T3"), None)
         if load is None or not len(load.values) or max(load.values) <= 0.0:

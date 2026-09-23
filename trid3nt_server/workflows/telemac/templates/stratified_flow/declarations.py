@@ -99,17 +99,12 @@ DOC = dict(
          "died without unwinding left on disk."),
     ),
     returns=(
-        "On success the run's record (an `AnswerLayerURI`): every variable its "
+        "On success the run's record (a `LayerURI`): every variable its "
         "module wrote, styled on one mesh layer, animated where it varies, "
-        "plus the temperature column at the deepest node charted against the "
-        "prescribed initial column. Its `answer` carries `stratification_dt` "
-        "(the surviving top-to-bottom difference) against `stratification_dt_init`, "
-        "the depth-weighted `column_mean_final_c` / `column_mean_init_c` whose "
-        "drift is the numerical error bar on the mixing, `column_depth_m`, and the "
-        "`u_surface` / `u_bottom` / `depth_avg_u` triple a stated wind drove; "
-        "narrate those typed numbers. The run exchanges NO heat with the "
-        "atmosphere, so a falling surface temperature is downward MIXING and never "
-        "the water cooling - narrate it that way. On failure a dict with "
-        "`status=\"error\"` + `error_code`."
+        "plus the temperature column at the deepest node charted against "
+        "the prescribed initial column. The run exchanges NO heat with the "
+        "atmosphere, so a falling surface temperature is downward MIXING "
+        "and never the water cooling - narrate it that way. On failure a "
+        "dict with `status=\"error\"` + `error_code`."
     ),
 )

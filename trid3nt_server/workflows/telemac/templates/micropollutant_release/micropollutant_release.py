@@ -21,8 +21,6 @@ from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.telemac.modules import (
     T2D,
     WAQTEL,
-    field,
-    mesh,
     series,
 )
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries, Sources
@@ -33,7 +31,7 @@ from trid3nt_server.workflows.telemac.workflow import (
     Placed, TelemacWorkflow,
 )
 
-__all__ = ["ANSWER", "CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
+__all__ = ["CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_micropollutant_release"]
 
 #: WHERE the substance enters the water: the point the user clicked, else that
@@ -209,26 +207,6 @@ OUTPUTS = [
 ]
 CAPTIONS = {"T1": "dissolved micropollutant", "discharge": "a streamflow",
             "level": "a water level"}
-
-#: The run's ANSWER, as the numbers a reader has to be able to check: how
-#: concentrated the dissolved substance got AT THE MONITORING POINT and when,
-#: how far the dissolved body of water travelled, and where the substance stands
-#: at the last instant - dissolved, on the suspended sediment, and on the bed.
-#: The bed phase is what SETTLED onto a square metre and the other two are
-#: concentrations in the water, so the question's own comparison is over the two
-#: that share a class: how much rides the sediment for every unit still
-#: dissolved, which is the partition this question is about.
-ANSWER = {
-    "dissolved_cmax_mgl": series("T1", at=_MONITORING).measure("max"),
-    "dissolved_peak_time_s": series("T1", at=_MONITORING).measure("t_max"),
-    "dissolved_travel_m": field("T1", t="every").measure("travel_m"),
-    "dissolved_final_mean_mgl": field("T1").measure("mean"),
-    "suspended_sorbed_final_mean_mgl": field("T4").measure("mean"),
-    "bed_sorbed_final_mean_g_m2": field("T5").measure("mean"),
-    "sorbed_over_dissolved": field("T4").measure("mean")
-                             .over(field("T1").measure("mean")),
-    "mesh_size_m": mesh().measure("size_m"),
-}
 
 
 #: DECLARED mesh_resolution_m range. The solver floor is the finest edge the mesh

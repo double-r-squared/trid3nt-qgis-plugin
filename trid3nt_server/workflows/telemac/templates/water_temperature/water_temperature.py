@@ -19,16 +19,15 @@ from trid3nt_server.workflows.runtime import (
     Ref,
     register_workflow,
 )
-from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, field, mesh, series
+from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, series
 from trid3nt_server.workflows.telemac.modules.telemac2d import Atmosphere, Boundaries
 from trid3nt_server.workflows.telemac.templates.water_temperature.declarations import (
-    ACCEPTS, DOC, PARAMS, PARAMS as P,
-)
+    ACCEPTS, DOC, PARAMS, )
 from trid3nt_server.workflows.telemac.workflow import (
     Placed, TelemacWorkflow,
 )
 
-__all__ = ["ANSWER", "CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
+__all__ = ["CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_water_temperature"]
 
 
@@ -222,21 +221,6 @@ OUTPUTS = [
 ]
 CAPTIONS = {"T1": "water temperature", "discharge": "a streamflow",
             "level": "a water-surface elevation", "observe": "a water temperature"}
-
-#: The run's ANSWER, as the numbers a reader has to be able to check: how warm
-#: the water at the point got and when, where it stood when the window closed,
-#: how far it swings between a day and its night, how far apart the warmest and
-#: the coolest water in the domain ended up - which is what the picture shows -
-#: and the speed the water carried that heat at.
-ANSWER = {
-    "peak_temperature_c": series("T1", at=_STATION).measure("max"),
-    "peak_temperature_time_s": series("T1", at=_STATION).measure("t_max"),
-    "final_temperature_c": series("T1", at=_STATION).measure("last"),
-    "diurnal_range_c": series("T1", at=_STATION).measure("range"),
-    "temperature_spread_c": field("T1").measure("spread"),
-    "mean_velocity_mps": field("M").measure("mean"),
-    "mesh_size_m": mesh().measure("size_m"),
-}
 
 
 #: DECLARED mesh_resolution_m range. The solver floor is the finest edge the mesh

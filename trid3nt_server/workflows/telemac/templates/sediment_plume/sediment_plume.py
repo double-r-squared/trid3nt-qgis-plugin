@@ -21,10 +21,6 @@ from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.telemac.modules import (
     GAIA,
     T2D,
-    field,
-    mass_balance,
-    max_over_time,
-    mesh,
     series,
 )
 from trid3nt_server.workflows.telemac.modules.gaia import RESULT_FILENAME
@@ -41,7 +37,7 @@ from trid3nt_server.workflows.telemac.templates.sediment_plume.declarations impo
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["ANSWER", "CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
+__all__ = ["CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_sediment_plume"]
 
 #: WHERE the substance enters the water: the point the user clicked, else that
@@ -210,7 +206,7 @@ class STEERING(T2D):
         # concentration field.
         SCHEME_FOR_ADVECTION_OF_SUSPENDED_SEDIMENTS=[1],
         # GAIA's own sediment closure, beside the water volume the carrier
-        # accounts for: the net bed mass this answer reads is a line of it.
+        # accounts for: the net bed mass the run settles at is a line of it.
         MASS_BALANCE=True)]
 
     #: CALM AND DRY: this question asks what the CURRENT does with the injected
@@ -227,21 +223,6 @@ OUTPUTS = [
     series("T2").chart(),
 ]
 CAPTIONS = {"T2": "suspended sediment concentration", "discharge": "a streamflow"}
-
-#: The run's ANSWER, as the numbers a reader has to be able to check, each a
-#: measure of one of the reads above; the deposited fraction is the listing's
-#: deposited mass over the mass the sheet says the pulse put in.
-ANSWER = {
-    "suspended_cmax": max_over_time("T2").measure("max"),
-    "suspended_peak_time_s": max_over_time("T2").measure("t_max"),
-    "plume_reach_m": field("T2", t="every").measure("travel_m"),
-    "active_frames": field("T2", t="every").measure("active_frames"),
-    "bed_evolution_max_m": field("E", t=-1, module="gaia").measure("max"),
-    "net_bed_mass_kg": mass_balance(module="gaia").measure("sediment_net_bed_mass_kg"),
-    "deposit_fraction": mass_balance(module="gaia").measure(
-        "sediment_deposited_mass_kg").over(P.injected_mass_kg),
-    "mesh_size_m": mesh().measure("size_m"),
-}
 
 
 #: DECLARED mesh_resolution_m range. The solver floor is the finest edge the mesh

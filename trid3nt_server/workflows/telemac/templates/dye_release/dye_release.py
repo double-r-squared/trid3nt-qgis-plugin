@@ -20,9 +20,6 @@ from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.telemac.modules import (
     T2D,
     WAQTEL,
-    field,
-    max_over_time,
-    mesh,
     series,
 )
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
@@ -37,7 +34,7 @@ from trid3nt_server.workflows.telemac.templates.dye_release.declarations import 
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["ANSWER", "CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
+__all__ = ["CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_dye_release"]
 
 #: WHERE the substance enters the water: the point the user clicked, else that
@@ -205,16 +202,6 @@ OUTPUTS = [
 ]
 CAPTIONS = {"T1": "dye concentration", "discharge": "a streamflow",
             "level": "a water-surface elevation"}
-
-#: The run's ANSWER, as the numbers a reader has to be able to check, each a
-#: measure of one of the reads above.
-ANSWER = {
-    "dye_cmax_mgl": max_over_time("T1").measure("max"),
-    "dye_peak_time_s": max_over_time("T1").measure("t_max"),
-    "plume_reach_m": field("T1", t="every").measure("travel_m"),
-    "active_frames": field("T1", t="every").measure("active_frames"),
-    "mesh_size_m": mesh().measure("size_m"),
-}
 
 
 #: DECLARED mesh_resolution_m range. The solver floor is the finest edge the mesh

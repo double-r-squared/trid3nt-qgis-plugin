@@ -78,11 +78,9 @@ DOC = dict(
          "died without unwinding left on disk."),
     ),
     returns=(
-        "On success the run's record (an `AnswerLayerURI`): every variable its "
+        "On success the run's record (a `LayerURI`): every variable its "
         "modules wrote, styled on one mesh layer, animated where it varies, "
-        "plus the oxygen profile on its Streeter-Phelps curve. `answer` carries "
-        "`do_min_mgl` / `do_below_standard` (vs `do_standard_mgl`) / "
-        "`do_min_distance_m` / `bod_mixed_mgl` / `mean_velocity_mps`; narrate "
-        "those numbers. On failure a dict with `status=\"error\"` + `error_code`."
+        "plus the oxygen profile on its Streeter-Phelps curve. On failure a "
+        "dict with `status=\"error\"` + `error_code`."
     ),
 )

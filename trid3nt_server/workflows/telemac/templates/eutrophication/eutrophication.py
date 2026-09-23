@@ -19,15 +19,17 @@ from trid3nt_server.workflows.runtime import (
 )
 from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
-from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, mesh, series
-from trid3nt_server.workflows.telemac.modules.outputs import profile
+from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, series
+from trid3nt_server.workflows.telemac.modules.outputs import (
+    profile, reference_line,
+)
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
 from trid3nt_server.workflows.telemac.templates.eutrophication.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
 )
 from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
-__all__ = ["ANSWER", "CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
+__all__ = ["CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_eutrophication"]
 
 
@@ -68,8 +70,8 @@ _SATURATION_FROM_TEMPERATURE = 1
 #: 0.0079910 T^2 - 0.000077774 T^3, 1 atm). The CEILING the run measures against
 #: is WAQTEL's own, computed from the same temperature.
 _ENTERING = [2.0, 0.05, 0.02, 1.0, 0.5, 0.05, 2.0, 8.667]
-#: The three the ANSWER's ratios are held to: the water entered carrying these,
-#: and the far end of the profile is what one pass made of them.
+#: The three the longitudinal charts are drawn against: the water entered
+#: carrying these, and the far end of the profile is what one pass made of them.
 _PHYTO_IN, _PO4_IN, _NO3_IN = _ENTERING[0], _ENTERING[1], _ENTERING[3]
 
 
@@ -212,36 +214,21 @@ class STEERING(T2D):
 #: which is the longitudinal change the question asks about, and the two of them
 #: over time where the user is watching.
 OUTPUTS = [
-    profile("T1", along=_CENTERLINE).chart(),
-    profile("T8", along=_CENTERLINE).chart(),
+    profile("T1", along=_CENTERLINE).chart(
+        reference=reference_line(_PHYTO_IN, label="entering")),
+    profile("T2", along=_CENTERLINE).chart(
+        reference=reference_line(_PO4_IN, label="entering")),
+    profile("T4", along=_CENTERLINE).chart(
+        reference=reference_line(_NO3_IN, label="entering")),
+    profile("T8", along=_CENTERLINE).chart(
+        reference=reference_line(P.do_standard_mgl, label="standard")),
     series("T1", at=P.station).chart(),
     series("T8", at=P.station).chart(),
 ]
-CAPTIONS = {"T1": "phyto biomass", "T8": "dissolved o2",
+CAPTIONS = {"T1": "phyto biomass", "T2": "phosphate", "T4": "nitrate",
+            "T8": "dissolved o2",
             "discharge": "a streamflow", "level": "a water-surface elevation",
             "observe": "a water temperature"}
-
-#: The run's ANSWER: what one pass did to the water, as the numbers a reader has
-#: to be able to check. Every ratio is held to the stated concentration the water
-#: ENTERED at - the boundaries hold that value flat, so it is the inlet, and the
-#: profile's other end is what the pass made of it.
-ANSWER = {
-    "phyto_max_ug_l": profile("T1", along=_CENTERLINE).measure("max"),
-    "phyto_max_distance_m": profile("T1", along=_CENTERLINE).measure("x_max_m"),
-    "phyto_growth_ratio": profile("T1", along=_CENTERLINE).measure("max")
-                          .over(_PHYTO_IN),
-    "no3_remaining_ratio": profile("T4", along=_CENTERLINE).measure("min")
-                           .over(_NO3_IN),
-    "po4_remaining_ratio": profile("T2", along=_CENTERLINE).measure("min")
-                           .over(_PO4_IN),
-    "do_min_mgl": profile("T8", along=_CENTERLINE).measure("min"),
-    "do_min_distance_m": profile("T8", along=_CENTERLINE).measure("x_min_m"),
-    "do_below_standard": profile("T8", along=_CENTERLINE).measure("min")
-                         .below(P.do_standard_mgl),
-    "pass_velocity_mps": profile("T8", along=_CENTERLINE)
-                         .measure("velocity_mps"),
-    "mesh_size_m": mesh().measure("size_m"),
-}
 
 
 #: DECLARED mesh_resolution_m range. The solver floor is the finest edge the mesh

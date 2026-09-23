@@ -25,11 +25,6 @@ from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.telemac.modules import (
     T2D,
-    extent,
-    field,
-    mass_balance,
-    max_over_time,
-    mesh,
     series,
 )
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
@@ -48,7 +43,7 @@ from trid3nt_server.workflows.telemac.workflow import (
     Measured, TelemacWorkflow,
 )
 
-__all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING",
+__all__ = ["CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_rain_on_grid"]
 
 
@@ -183,8 +178,8 @@ class STEERING(T2D):
     # about 43,200 of them - one frame every 900 steps is 48 frames of the
     # storm. A user who wants another cadence sets the keyword by its own name.
     GRAPHIC_PRINTOUT_PERIOD = 900
-    # The mass balance the runoff answer is read off is printed in the listing,
-    # so it is printed on the same beat the frames are written on.
+    # The mass balance the runoff is read off is printed in the listing, so it
+    # is printed on the same beat the frames are written on.
     LISTING_PRINTOUT_PERIOD = 900
     # TWELVE HOURS, in seconds: longer than the storm below, so the catchment
     # drains inside the window and the recession limb is watched rather than
@@ -271,28 +266,6 @@ OUTPUTS = [
     series("FLUX", at=P.pour_point).station(),
 ]
 CAPTIONS = {"FLUX": "outlet hydrograph"}
-
-#: The run's ANSWER, as the numbers a reader has to be able to check, each a
-#: measure of one of the reads above. The volumes are the engine's own final
-#: balance: what fell on the meshed catchment, what left through its boundary,
-#: and the ratio.
-ANSWER = {
-    "catchment_area_km2": extent().measure("area_km2"),
-    "peak_discharge_m3s": series("FLUX", at=P.pour_point).measure("max"),
-    "peak_discharge_time_s": series("FLUX", at=P.pour_point).measure("t_max"),
-    "peak_is_window_truncated": series("FLUX", at=P.pour_point).measure("truncated"),
-    "rainfall_volume_m3": mass_balance().measure("rain_volume_m3"),
-    "runoff_volume_m3": mass_balance().measure("outflow_volume_m3"),
-    "runoff_coefficient": mass_balance().measure("runoff_coefficient"),
-    "max_depth_peak_m": max_over_time("H").measure("max"),
-    "max_depth_p99_m": max_over_time("H").measure("p99"),
-    "continuity_rel_error": mass_balance().measure("continuity_rel_error"),
-    "n_frames": field("H", t="every").measure("frames"),
-    "mesh_size_m": mesh().measure("size_m"),
-    "mesh_node_count": mesh().measure("nodes"),
-    "mesh_element_count": mesh().measure("elements"),
-    "domain_bbox": extent().measure("bbox"),
-}
 
 
 #: DECLARED mesh_resolution_m range. 5 m is the finest the catchment triangulator

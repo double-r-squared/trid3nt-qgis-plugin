@@ -20,9 +20,6 @@ from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.telemac.modules import (
     T2D,
-    field,
-    max_over_time,
-    mesh,
     series,
 )
 from trid3nt_server.workflows.telemac.modules.outputs import drogues
@@ -40,7 +37,7 @@ from trid3nt_server.workflows.telemac.templates.oil_spill.declarations import (
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["ANSWER", "CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
+__all__ = ["CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_oil_spill"]
 
 #: WHERE the substance enters the water: the point the user clicked, else that
@@ -180,8 +177,8 @@ class STEERING(T2D):
     ABSCISSAE_OF_SOURCES = [Ref("source.at.0")]
     ORDINATES_OF_SOURCES = [Ref("source.at.1")]
     #: HOW MUCH enters, and at what concentration: a point discharge small
-    #: against the carrier flow, at the concentration the dissolved-oil answer
-    #: is measured against. What an oil question states is where the slick goes
+    #: against the carrier flow, at the concentration the dissolved-oil series
+    #: is read against. What an oil question states is where the slick goes
     #: and which oil it is, so neither number is asked for.
     WATER_DISCHARGE_OF_SOURCES = [8.0]
     VALUES_OF_THE_TRACERS_AT_THE_SOURCES = [100.0]
@@ -224,19 +221,6 @@ OUTPUTS = [
 ]
 CAPTIONS = {"T1": "dissolved oil concentration", "drogues": "oil slick track",
             "discharge": "a streamflow", "level": "a water-surface elevation"}
-
-#: The run's ANSWER, as the numbers a reader has to be able to check, each a
-#: measure of one of the reads above.
-ANSWER = {
-    "oil_cmax_mgl": max_over_time("T1").measure("max"),
-    "oil_peak_time_s": max_over_time("T1").measure("t_max"),
-    "plume_reach_m": field("T1", t="every").measure("travel_m"),
-    "active_frames": field("T1", t="every").measure("active_frames"),
-    "slick_drift_m": drogues().measure("drift_m"),
-    "floats_released": drogues().measure("released"),
-    "floats_remaining": drogues().measure("remaining"),
-    "mesh_size_m": mesh().measure("size_m"),
-}
 
 
 #: DECLARED mesh_resolution_m range. The solver floor is the finest edge the mesh

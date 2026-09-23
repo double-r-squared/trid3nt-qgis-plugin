@@ -21,10 +21,6 @@ from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.telemac.modules import (
     GAIA,
     T2D,
-    field,
-    mass_balance,
-    max_over_time,
-    mesh,
     series,
 )
 from trid3nt_server.workflows.telemac.modules.gaia import RESULT_FILENAME
@@ -40,7 +36,7 @@ from trid3nt_server.workflows.telemac.templates.bed_scour.declarations import (
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["ANSWER", "CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
+__all__ = ["CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
            "telemac_bed_scour"]
 
 #: WHERE the substance enters the water: the point the user clicked, else that
@@ -233,20 +229,6 @@ OUTPUTS = [
     series("T1").chart(),
 ]
 CAPTIONS = {"T1": "marker concentration", "discharge": "a streamflow"}
-
-#: The run's ANSWER, as the numbers a reader has to be able to check. The
-#: evolution is signed: deposition positive, scour negative. The surface D50
-#: spread is the sorting signature, in the metres the module writes: one class
-#: cannot sort, so a single-class bed reads zero and a mixture reads its grading.
-ANSWER = {
-    "bed_evolution_max_m": field("E", t=-1, module="gaia").measure("max"),
-    "bed_evolution_min_m": field("E", t=-1, module="gaia").measure("min"),
-    "net_bed_mass_kg": mass_balance(module="gaia").measure("sediment_net_bed_mass_kg"),
-    "surface_d50_spread_m": field("D50", t=-1, module="gaia").measure("spread"),
-    "marker_cmax_mgl": max_over_time("T1").measure("max"),
-    "active_frames": series("T1").measure("active_frames"),
-    "mesh_size_m": mesh().measure("size_m"),
-}
 
 
 #: DECLARED mesh_resolution_m range. The solver floor is the finest edge the mesh

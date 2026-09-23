@@ -151,15 +151,13 @@ DOC = dict(
          "died without unwinding left on disk."),
     ),
     returns=(
-        "On success the run's record (an `AnswerLayerURI`): every variable its "
+        "On success the run's record (a `LayerURI`): every variable its "
         "module wrote, styled on one mesh layer, animated where it varies, "
-        "the derived agitation coefficient Kd = Hs/H0 among them, plus the Kd "
-        "profile through the structure charted. Its `answer` carries `kd_max`, "
-        "`kd_transect_min` and `kd_transect_max` (Kd along that transect - the "
-        "lee against the exposed approach), `hs_max_m` and `mesh_size_m`; "
-        "narrate those typed numbers. kd_max is often a standing wave against "
-        "the domain's own open boundary rather than a harbour answer, so read "
-        "the transect and the field behind the structure. On failure a dict "
-        "with `status=\"error\"` + `error_code`."
+        "the derived agitation coefficient Kd = Hs/H0 among them, plus the "
+        "Kd profile through the structure charted. The Kd field peaks on a "
+        "standing wave against the domain's own open boundary as often as "
+        "inside the harbour, so read the transect chart and the field "
+        "behind the structure. On failure a dict with `status=\"error\"` + "
+        "`error_code`."
     ),
 )

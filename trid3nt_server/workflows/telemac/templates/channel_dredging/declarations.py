@@ -125,17 +125,10 @@ DOC = dict(
          "every step from the top."),
     ),
     returns=(
-        "On success the run's record (an `AnswerLayerURI`): every variable its "
+        "On success the run's record (a `LayerURI`): every variable its "
         "modules wrote, styled on one mesh layer, animated where it varies, "
         "the bed evolution in metres among them (deposition positive, the "
-        "dredged cut negative), and no read the template placed. Its `answer` "
-        "carries `dug_volume_m3` / "
-        "`dumped_volume_m3` (the engine's own report lines, summed over the "
-        "maintenance passes it printed) beside `dredge_report`, which states "
-        "why they read as they do and says so when a pass did not finish inside "
-        "the run's clock, `dredged_bed_change_m` and "
-        "`dumped_bed_change_m` (the bed change inside each area) and "
-        "`net_bed_mass_kg`; narrate those typed numbers. On failure a dict with "
-        "`status=\"error\"` + `error_code`."
+        "dredged cut negative), and no read the template placed. On failure "
+        "a dict with `status=\"error\"` + `error_code`."
     ),
 )

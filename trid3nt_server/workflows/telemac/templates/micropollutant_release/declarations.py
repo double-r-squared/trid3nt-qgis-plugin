@@ -97,17 +97,9 @@ DOC = dict(
          "died without unwinding left on disk."),
     ),
     returns=(
-        "On success the run's record (an `AnswerLayerURI`): every variable its "
-        "modules wrote, styled on one mesh layer, animated where it varies, plus "
-        "the dissolved history at the monitoring point charted. Its `answer` "
-        "carries `dissolved_cmax_mgl` / `dissolved_peak_time_s` at the "
-        "monitoring point, `dissolved_travel_m`, and the partition at the last "
-        "instant as `dissolved_final_mean_mgl` / "
-        "`suspended_sorbed_final_mean_mgl` / `bed_sorbed_final_mean_g_m2` - the "
-        "bed phase is what settled onto a square metre, not a concentration in "
-        "the water - and `sorbed_over_dissolved` as how much rides the suspended "
-        "sediment for every unit still dissolved; narrate those typed numbers. "
-        "On failure a dict with "
-        "`status=\"error\"` + `error_code`."
+        "On success the run's record (a `LayerURI`): every variable its "
+        "modules wrote, styled on one mesh layer, animated where it varies, "
+        "plus the dissolved history at the monitoring point charted. On "
+        "failure a dict with `status=\"error\"` + `error_code`."
     ),
 )

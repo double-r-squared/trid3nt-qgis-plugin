@@ -24,8 +24,6 @@ from trid3nt_server.workflows.runtime import (
 from trid3nt_server.workflows.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.telemac.modules import (
     WAC,
-    field,
-    mesh,
     series,
     spectrum,
 )
@@ -38,7 +36,7 @@ from trid3nt_server.workflows.telemac.templates.nearshore_waves.declarations imp
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING",
+__all__ = ["CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING",
            "tomawac_nearshore_waves"]
 
 
@@ -210,27 +208,6 @@ CAPTIONS = {"HM0": "significant wave height", "TPD": "peak wave period",
             "DBR": "breaker dissipation", "wave": "a sea state",
             "level": "a water-surface elevation",
             "spectrum": "wave energy by frequency at the station"}
-
-#: The run's ANSWER, as the numbers a reader has to be able to check: the highest
-#: wave anywhere in the water, the three the station stands under when the window
-#: closes, and how hard the surf zone is working. WHERE it works is the picture -
-#: both breaking rows are drawn as the band the sea makes them in - so the answer
-#: carries the magnitude and the layer carries the shape.
-ANSWER = {
-    "hs_max_m": field("HM0", t=-1).measure("max"),
-    "hs_at_station_m": series("HM0", at=_STATION).measure("last"),
-    "peak_period_at_station_s": series("TPD", at=_STATION).measure("last"),
-    "direction_at_station_deg": series("DMOY", at=_STATION).measure("last"),
-    # THE SURF ZONE AT WORK, as a MAGNITUDE. The module publishes both rows as
-    # negative quantities - energy leaving the spectrum - so the hardest-working
-    # node is the field's MINIMUM, and the number a reader checks is that
-    # minimum negated. Read as a maximum, both would answer the untouched water
-    # offshore, which is zero.
-    "breaking_rate_peak_per_s": field("BETA", t=-1).measure("min").over(-1.0),
-    "breaker_dissipation_peak_m2s": (field("DBR", t=-1).measure("min")
-                                     .over(-1.0)),
-    "mesh_size_m": mesh().measure("size_m"),
-}
 
 
 #: DECLARED mesh_resolution_m range. The solver floor is the finest edge the mesh

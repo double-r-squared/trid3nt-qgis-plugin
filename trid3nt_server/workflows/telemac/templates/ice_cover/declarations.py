@@ -49,9 +49,9 @@ class PARAMS:
         door=doors.QUESTION, optional=True, default=0.5,
         consequence="scenario", user_lever=True, type=float,
         desc="Fraction of the surface under ice, 0 to 1, that counts as frozen "
-             "over - the answer reports the first moment the cover exceeds it, "
-             "at the point and anywhere in the domain. A reporting threshold, "
-             "not a physical constant: half the surface by default")
+             "over - the cover chart draws it as a reference line beside the "
+             "series. A reporting threshold, not a physical constant: half the "
+             "surface by default")
 
     # The runtime's own granularity lever, restated ONLY for its default: a
     # surface heat budget is divided by the local depth and watched over days,
@@ -102,16 +102,11 @@ DOC = dict(
          "invocation always re-solves against live upstream data."),
     ),
     returns=(
-        "On success the run's record (an `AnswerLayerURI`): every variable its "
-        "modules wrote, styled on one mesh layer, animated where it varies, plus "
-        "the cover and thickness series charted at the station. `answer` carries "
-        "`freeze_time_s` (the first moment the cover at the point exceeds "
-        "`cover_threshold`) / `domain_freeze_time_s` (the first moment anywhere "
-        "in the domain does) / `peak_ice_thickness_m` / `final_cover_fraction`; "
-        "narrate those typed numbers. A water that never reaches the threshold "
-        "answers with no crossing time, and water that makes no ice at all "
-        "answers zero thickness and zero cover - both are honest answers "
-        "about that place in that week. On failure a dict with "
+        "On success the run's record (a `LayerURI`): every variable its "
+        "modules wrote, styled on one mesh layer, animated where it varies, "
+        "plus the cover and thickness series charted at the station. Water "
+        "that makes no ice at all charts zero thickness and zero cover, "
+        "which is what that place did in that week. On failure a dict with "
         "`status=\"error\"` + `error_code`."
     ),
 )

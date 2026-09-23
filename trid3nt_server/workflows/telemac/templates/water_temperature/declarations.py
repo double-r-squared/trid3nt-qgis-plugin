@@ -88,13 +88,9 @@ DOC = dict(
          "invocation always re-solves against live upstream data."),
     ),
     returns=(
-        "On success the run's record (an `AnswerLayerURI`): every variable its "
-        "modules wrote, styled on one mesh layer, animated where it varies, plus "
-        "the temperature series charted at the station. `answer` carries "
-        "`peak_temperature_c` / `peak_temperature_time_s` (the warmest the water "
-        "at the point got and when) / `final_temperature_c` / `diurnal_range_c` / "
-        "`temperature_spread_c` (how far apart the warmest and coolest water in "
-        "the domain ended up) / `mean_velocity_mps`; narrate those typed "
-        "numbers. On failure a dict with `status=\"error\"` + `error_code`."
+        "On success the run's record (a `LayerURI`): every variable its "
+        "modules wrote, styled on one mesh layer, animated where it varies, "
+        "plus the temperature series charted at the station. On failure a "
+        "dict with `status=\"error\"` + `error_code`."
     ),
 )

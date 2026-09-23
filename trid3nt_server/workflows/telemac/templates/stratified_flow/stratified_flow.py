@@ -14,7 +14,6 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
     Data,
-    ParamRef,
     Ref,
     register_workflow,
 )
@@ -24,7 +23,7 @@ from trid3nt_server.workflows.telemac.authoring.assembler import (
     BASIN_BOUNDARY,
     BASIN_GEOMETRY,
 )
-from trid3nt_server.workflows.telemac.modules import column, mesh
+from trid3nt_server.workflows.telemac.modules import column
 from trid3nt_server.workflows.telemac.modules.telemac3d import (
     T3D,
     Column,
@@ -38,7 +37,7 @@ from trid3nt_server.workflows.telemac.templates.stratified_flow.declarations imp
 )
 from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
-__all__ = ["ANSWER", "CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
+__all__ = ["CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
            "telemac3d_stratified_flow"]
 
 
@@ -204,25 +203,6 @@ OUTPUTS = [
     column("T1").chart(reference=column("T1", t=0)),
 ]
 CAPTIONS = {"T1": "water temperature", "level": "a water level"}
-
-#: The run's ANSWER, as the numbers a reader has to be able to check, each a
-#: measure of one of the reads above or of the velocity column beside them: the
-#: top-to-bottom difference that survived against the one prescribed, the
-#: depth-weighted column means whose drift is the numerical error bar on the
-#: mixing, and the surface-downwind / return-flow-at-depth pair a stated wind
-#: drove, whose depth average a 2D model reports as nothing.
-ANSWER = {
-    "stratification_dt": column("T1").measure("top_minus_bottom"),
-    "stratification_dt_init": column("T1", t=0).measure("top_minus_bottom"),
-    "column_mean_final_c": column("T1").measure("mean"),
-    "column_mean_init_c": column("T1", t=0).measure("mean"),
-    "column_depth_m": column("T1").measure("depth_m"),
-    "u_surface": column("U").measure("top"),
-    "u_bottom": column("U").measure("bottom"),
-    "depth_avg_u": column("U").measure("mean"),
-    "planes": mesh().measure("planes"),
-    "mesh_size_m": mesh().measure("size_m"),
-}
 
 
 _TELEMAC3D_RES_SPEC = ResolutionSpec(

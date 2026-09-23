@@ -34,16 +34,15 @@ class PARAMS:
         desc="Where to watch the biomass and the oxygen over time, as a Point: "
              "the pick's {coordinates, name} verbatim, a (lon, lat) pair, "
              "'lat,lon' or a point layer (geocode a place name first). The "
-             "answers are all "
-             "longitudinal and do not move with it")
+             "profiles are all longitudinal and do not move with it")
 
     do_standard_mgl = Param(
         door=doors.SCENARIO, default=5.0, bounds=(0.0, 15.0),
         units="mg/L", consequence="scenario",
         desc="The DO water-quality standard the water is judged against; 5 is a "
              "common warm-water aquatic-life criterion. It never reaches the "
-             "deck: no keyword names a standard, and the answer carries the "
-             "verdict")
+             "deck: no keyword names a standard, and the oxygen profile carries "
+             "it as a reference line")
 
     # The runtime's own granularity lever, restated ONLY for its default: this
     # question is domain-scale chemistry over a long window rather than a local
@@ -90,17 +89,11 @@ DOC = dict(
          "died without unwinding left on disk."),
     ),
     returns=(
-        "On success the run's record (an `AnswerLayerURI`): every variable its "
-        "modules wrote - the eight tracers the eutrophication process appends "
-        "among them - styled on one mesh layer, animated where it varies, plus "
-        "the biomass and the oxygen along the water's path as charts and their "
-        "history where the station was picked. `answer` carries `phyto_max_ug_l` / "
-        "`phyto_max_distance_m` / `phyto_growth_ratio` (how many times the "
-        "entering standing crop multiplied over one pass) / `no3_remaining_ratio` "
-        "and `po4_remaining_ratio` (the fraction of the entering nitrate and "
-        "phosphate still in the water at the drawn-down end) / `do_min_mgl` / "
-        "`do_min_distance_m` / `do_below_standard` (vs `do_standard_mgl`) / "
-        "`pass_velocity_mps` (the speed the pass was made at); narrate those "
-        "typed numbers. On failure a dict with `status=\"error\"` + `error_code`."
+        "On success the run's record (a `LayerURI`): every variable its "
+        "modules wrote - the eight tracers the eutrophication process "
+        "appends among them - styled on one mesh layer, animated where it "
+        "varies, plus the biomass and the oxygen along the water's path as "
+        "charts and their history where the station was picked. On failure "
+        "a dict with `status=\"error\"` + `error_code`."
     ),
 )

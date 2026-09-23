@@ -23,7 +23,7 @@ from trid3nt_server.workflows.runtime import (
     register_workflow,
 )
 from trid3nt_server.workflows.mesh.tool import mesh_op, tool
-from trid3nt_server.workflows.telemac.modules import T2D, WAC, field, mesh, series
+from trid3nt_server.workflows.telemac.modules import T2D, WAC, series
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries, Wind
 from trid3nt_server.workflows.telemac.modules.tomawac import RESULT_FILENAME
 from trid3nt_server.workflows.telemac.templates.wave_driven_currents.declarations import (
@@ -34,7 +34,7 @@ from trid3nt_server.workflows.telemac.templates.wave_driven_currents.declaration
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["ANSWER", "CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING",
+__all__ = ["CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING",
            "tomawac_wave_driven_currents"]
 
 
@@ -251,27 +251,6 @@ CAPTIONS = {"M": "current speed", "U": "current along x", "V": "current along y"
             "HM0": "significant wave height", "BETA": "breaking rate",
             "wave": "a sea state",
             "level": "the tide the open edge holds, over the run's window"}
-
-#: The run's ANSWER, as the numbers a reader has to be able to check: how fast
-#: the water is moving at the station when the window closes, the pair that says
-#: WHICH WAY it is running, the wave that is driving it, and the fastest water
-#: anywhere in the run. A bearing is not among them because neither module
-#: writes one for a current - the two components are what the engine solved.
-ANSWER = {
-    "longshore_current_speed_mps": series("M", at=_STATION).measure("last"),
-    "current_along_x_mps": series("U", at=_STATION).measure("last"),
-    "current_along_y_mps": series("V", at=_STATION).measure("last"),
-    "hs_at_station_m": series("HM0", at=_STATION,
-                              module="tomawac").measure("last"),
-    "peak_current_speed_mps": series("M").measure("max"),
-    # THE FORCING ITSELF, as a magnitude: the coupled module publishes its
-    # breaking rate as a negative quantity, so the hardest-working node is the
-    # field's MINIMUM negated. A current with no breaking behind it is a run
-    # that drove nothing, which is the one reading this answer separates.
-    "breaking_rate_peak_per_s": (field("BETA", t=-1, module="tomawac")
-                                 .measure("min").over(-1.0)),
-    "mesh_size_m": mesh().measure("size_m"),
-}
 
 
 #: DECLARED mesh_resolution_m range. The floor is NOT the mesh builder's: this

@@ -6,8 +6,8 @@ function of its own. The recipe is VALUES: a STEERING body of the module's own
 raw keywords restated whole, the DATA rows it consumes - the DOMAIN it solves
 over, the BED every node carries, whatever else this question reads - the
 OUTPUTS it PLACES, the reads that need a place the user gives, with the CAPTIONS
-that name them, the ANSWER measured off the solved run, and the door it hands
-them to; the declarations carry every value only this question asks.
+that name them, and the door it hands them to; the declarations carry every
+value only this question asks.
 
 A template states NO MESH RECIPE either, unless the question cannot be asked
 over the one the workflow builds from those slots: `rain_on_grid` triangulates a
