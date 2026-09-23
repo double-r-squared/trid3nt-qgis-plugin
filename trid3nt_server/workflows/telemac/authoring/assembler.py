@@ -35,6 +35,7 @@ from trid3nt_server.inputs.point import (
 )
 
 from ..errors import TelemacError
+from .staged_check import check_staged_run
 from ..helpers.time_step import MESH_H_FLOOR_M, suggest_time_step_s
 from ..helpers.uniform_flow import normal_depth_stage
 
@@ -191,6 +192,15 @@ async def stage_run(rundir: Path, run_tag: str, *, module: str, steering: str,
         module=module, steering=steering, results=results,
         user_fortran=user_fortran, coupling=coupling,
         continue_from=continue_from, cores=cores, server_facts=server_facts)
+    # THE LAST READ BEFORE THE IMAGE: the directory the box will receive,
+    # checked against itself. A run whose steering names a file nobody staged,
+    # whose boundary file is numbered against another walk, whose bed has a
+    # hole, whose clock disagrees with its own window or whose partition the box
+    # cannot seat dies in the first second of the solve, so it refuses here.
+    await asyncio.to_thread(
+        check_staged_run, rundir, steering=steering, inputs=inputs,
+        written_by_the_engine=[*results, *outputs],
+        duration_s=server_facts.get("duration_s"), cores=cores)
     manifest_uri = await asyncio.to_thread(
         _write_manifest, case, run_tag, outputs=outputs, inputs=inputs,
         prefix=prefix)

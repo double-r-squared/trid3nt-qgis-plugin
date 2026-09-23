@@ -57,6 +57,15 @@ package SolveSeam {
         */
     }
 
+    part def StagedCheck {
+        doc /*
+        The last read before the image: the run directory the box will receive,
+        checked against itself clause by clause. It reads the STAGED artifacts
+        rather than what the authoring believes it wrote, so it can disagree
+        with the author.
+        */
+    }
+
     part def BedPainter {
         doc /*
         The one op that gives every node of a domain its elevation, off the one
@@ -335,6 +344,12 @@ package SolveSeam {
         port serverFactsOut : ServerFactsOut;
         port topologyIn : TopologyIn;
         port meshIn : MeshIn;
+    }
+
+    part stagedCheck : StagedCheck {
+        doc /*
+        code: trid3nt_server/workflows/telemac/authoring/staged_check.py
+        */
     }
 
     part bedPainter : BedPainter {
@@ -659,6 +674,25 @@ package SolveSeam {
         forbid: trid3nt_server.workflows.telemac.products.postprocess_telemac -> struct
         forbid: trid3nt_server.workflows.telemac.products.run_reads -> struct
         forbid: trid3nt_server.workflows.telemac.authoring.assembler -> struct
+        */
+    }
+
+    requirement def NothingLeavesTheDaemonThatDiesInTheFirstSecond {
+        doc /*
+        One typed check stands between the authored run directory and the image,
+        and each of its clauses refuses by name: every file the steering names is
+        present with the module's own spelling, the boundary file's node count
+        and numbering match the walk over the geometry's own connectivity, every
+        liquid face the boundary file opens carries a value in the list the
+        engine reads it from, a series covers the run's window, the bed is whole
+        over the mesh, the clock the deck states is the window the fill states,
+        and the partition fits the cores this box has.
+
+        It reads the STAGED artifacts - the deck as written, the pair as staged,
+        the table as written - rather than the values the authoring held, because
+        a check that reads the author's own numbers back agrees with itself. A
+        run that would stop inside Fortran in its first second is refused here,
+        where the refusal can name which file disagrees with which.
         */
     }
 
@@ -990,6 +1024,29 @@ package SolveSeam {
         "tests/telemac/test_telemac_outflow_stage.py::test_a_flat_outlet_refuses_rather_than_holding_a_level_nobody_measured";
     verify requirement CatchmentOutletHoldsADerivedRatingCurve by
         "tests/telemac/test_telemac_outflow_stage.py::test_the_flow_range_is_the_gross_rain_rate_on_the_meshed_area";
+
+    satisfy requirement NothingLeavesTheDaemonThatDiesInTheFirstSecond by stagedCheck;
+    satisfy requirement NothingLeavesTheDaemonThatDiesInTheFirstSecond by assembler;
+    verify requirement NothingLeavesTheDaemonThatDiesInTheFirstSecond by
+        "tests/telemac/test_telemac_staged_check.py::test_a_whole_staged_run_passes_every_clause";
+    verify requirement NothingLeavesTheDaemonThatDiesInTheFirstSecond by
+        "tests/telemac/test_telemac_staged_check.py::test_a_file_the_steering_names_and_nobody_staged_refuses_by_name";
+    verify requirement NothingLeavesTheDaemonThatDiesInTheFirstSecond by
+        "tests/telemac/test_telemac_staged_check.py::test_a_name_staged_in_another_spelling_is_named_as_that";
+    verify requirement NothingLeavesTheDaemonThatDiesInTheFirstSecond by
+        "tests/telemac/test_telemac_staged_check.py::test_a_boundary_file_of_another_length_refuses_against_the_walk";
+    verify requirement NothingLeavesTheDaemonThatDiesInTheFirstSecond by
+        "tests/telemac/test_telemac_staged_check.py::test_a_boundary_file_numbered_against_another_walk_refuses";
+    verify requirement NothingLeavesTheDaemonThatDiesInTheFirstSecond by
+        "tests/telemac/test_telemac_staged_check.py::test_a_liquid_face_the_deck_prescribes_nothing_at_refuses";
+    verify requirement NothingLeavesTheDaemonThatDiesInTheFirstSecond by
+        "tests/telemac/test_telemac_staged_check.py::test_a_series_that_stops_short_of_the_window_refuses";
+    verify requirement NothingLeavesTheDaemonThatDiesInTheFirstSecond by
+        "tests/telemac/test_telemac_staged_check.py::test_a_node_the_bed_never_painted_refuses";
+    verify requirement NothingLeavesTheDaemonThatDiesInTheFirstSecond by
+        "tests/telemac/test_telemac_staged_check.py::test_a_clock_whose_steps_do_not_make_the_window_refuses";
+    verify requirement NothingLeavesTheDaemonThatDiesInTheFirstSecond by
+        "tests/telemac/test_telemac_staged_check.py::test_a_partition_past_the_box_refuses_rather_than_being_cut_to_fit";
 
     satisfy requirement OutflowStageIsNormalDepth by uniformFlow;
     satisfy requirement OutflowStageIsNormalDepth by assembler;
