@@ -53,3 +53,15 @@ def test_a_measurement_the_module_does_not_carry_refuses_where_it_is_stated():
     with pytest.raises(PlanValidationError, match="carries no 'settle_nothing'"):
         _signature("trid3nt_server.workflows.telemac.authoring.opening"
                    ".settle_nothing")
+
+
+def test_a_name_the_module_carries_that_takes_nothing_refuses_by_name():
+    """A keyword VALUE is not a runner: the lookup finding a name that takes no
+    measurement refuses under the module and the name, not as a type error."""
+    import pytest
+
+    from trid3nt_server.workflows.runtime import PlanValidationError
+    from trid3nt_server.workflows.telemac.workflow import _signature
+
+    with pytest.raises(PlanValidationError, match="carries no 'FLAT'"):
+        _signature("trid3nt_server.workflows.telemac.authoring.opening.FLAT")

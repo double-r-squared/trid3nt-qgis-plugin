@@ -1125,8 +1125,8 @@ def _signature(runner: str) -> frozenset[str]:
 
     module, _, name = runner.rpartition(".")
     op = getattr(import_module(module), name, None)
-    if op is None:
+    if not callable(op):
         raise PlanValidationError(
-            f"{module} carries no {name!r}; a measurement names the runner "
-            "that takes it.")
+            f"{module} carries no {name!r} that takes a measurement; a "
+            "measurement names the runner that takes it.")
     return frozenset(signature(op).parameters)
