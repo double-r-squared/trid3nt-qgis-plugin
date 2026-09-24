@@ -37,5 +37,5 @@ it. The wrapper is built when a question needs it, not before.
 | --- | --- |
 | `modules/` | One wrapper per exposed module - its module input, its composites, the table of what it writes and the primitive set that reads it, and nothing that opines - plus the sheet a body fills, the two acts on it, fill and run, and the listing reads the primitives share. See its own map. |
 | `templates/` | One package per question, over the module wrappers, and the one shared DATA row module the river templates read. See its own map. |
-| `authoring/` | Everything the box receives: the ONE assembler, the serializer that writes the steering format, the DAMOCLES parse that gates it, and the engine input files a run authors - the oil module's. See its own map. |
+| `authoring/` | Everything the box receives: the stages that settle a run against its accepted mesh, the serializer that writes the steering format, the DAMOCLES parse that gates it, and the engine input files a run authors - the oil module's. See its own map. |
 | `helpers/` | The pure physics and numerics: the CFL step and the solve-time estimate, uniform flow, the saturation relations. See its own map. |

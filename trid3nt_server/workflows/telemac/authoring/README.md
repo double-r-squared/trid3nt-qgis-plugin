@@ -6,8 +6,8 @@ author is here, on the server, beside the sheet the numbers came from. What
 travels to the worker is the mesh, the authored steering files and the files they
 name; nothing the container receives is a knob it has to interpret.
 
-TWO ACTS. `assembler.py` SETTLES a run - everything the accepted mesh has to be
-measured for before a keyword can be set - and `staging.py` STAGES it:
+TWO ACTS. The run is SETTLED - everything the accepted mesh has to be measured
+for before a keyword can be set - and `staging.py` STAGES it:
 everything the fill wrote is uploaded beside the mesh the solve runs on, and the
 manifest that names the case is written last. `serializer.py` is what turns the filled sheet
 into the engine's own steering files, through telapy, and every authored file is
@@ -19,7 +19,12 @@ anything is staged.
 | file | what it is |
 | --- | --- |
 | `__init__.py` | The door. Consumers import the module they mean. |
-| `assembler.py` | What the accepted mesh MEASURES before a keyword is set - what ANY domain measures (the mesh it was handed, the clock the run turns on, the files the box is given), the bed at its roles, the section its outflow face cuts, the depth that section conveys the flow at, where a source point lands, which stretch of a harbour boundary is the liquid edge, how deep a basin's deepest column is. |
+| `accepted_mesh.py` | What ANY accepted mesh hands the author, under the record's own key names: the files the box is given, the nodes and the bed, the channel a boundary face cuts, the walk over the outline and whether that outline is closed. |
+| `opening.py` | THE OPENING: the state the run starts from and the level it starts at - the level the question states, the sea it stands in, the normal depth a reach's own discharge holds over the channel its inflow face cuts, or the last surface of the run this one carries on from. |
+| `rating_curve.py` | THE RATING CURVE an outlet holds: the normal depth over the section its own face cuts, swept over the flow range the storm can send, at the roughness the deck writes at those same nodes. |
+| `reference_surface.py` | THE REFERENCE SURFACE a dredger cuts to, as NESTOR reads levels: the design grade as cross-sections along the domain's own centerline, and the stock under it measured against the bed before the run dispatches. |
+| `walked_boundary.py` | THE WALKED BOUNDARY of a harbour: which stretch of the outline the sea reaches, the structure's own segments and the basin's deepest column, so the boundary file prescribes the incident wave there and a solid face nowhere else. |
+| `release_point.py` | THE SETTLED RELEASE POINT: where on the accepted mesh a source enters water - along the domain's centerline or held inside it, and onto a node the run's own initial state has water at, off the rim. |
 | `staging.py` | The run directory the box receives: the case section every run dispatches under, a fresh run tag and its directory, every authored file uploaded beside the mesh, and the manifest written LAST so one exists only for a fully staged run. No mesh, no geometry, no physical value is read here. |
 | `staged_check.py` | The staged run directory read clause by clause before it leaves the daemon: every file the steering names present under the name the box will find, the boundary file counted and numbered against the walk over the geometry's own connectivity, a value at every liquid face the boundary file opens, a series covering the run's window, a bed whole over the mesh, the deck's clock against the window the fill states, and a partition this box can seat. Each clause refuses by name rather than letting the solve stop inside Fortran. |
 | `cas_validate.py` | The ONE door to the image for the steering format, in both directions: telapy writes, the engine's own reader reads back, and every authored file is parsed against its own dictionary before anything is staged. |
