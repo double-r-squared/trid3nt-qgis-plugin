@@ -73,9 +73,19 @@ _MESHER, _MESH_KIND = "om2d", "unstructured_tri"
 #: The dispatch a staged run goes to, by the path it is resolved at CALL time.
 _DISPATCH = f"{_TELEMAC}.engine.solve_case"
 
-#: WHERE in the plan a measurement stands: before the world is meshed, before
-#: the run is settled, as the settle itself, or against the settled run.
-_TAKEN = ("world", "produce", "settle", "derive")
+#: The measurements the workflow takes of this question's world, by the KIND a
+#: composite asks for: the runner that takes it, the stage it is taken at and
+#: WHEN - before the world is meshed, before the run is settled, as the settle
+#: itself, or against the settled run.
+_MEASURES: Mapping[str, tuple[str, str, str]] = MappingProxyType({
+    "footprint": ("trid3nt_server.inputs.structure.structure", "prep", "world"),
+    "transect": ("trid3nt_server.inputs.structure.transect", "prep", "world"),
+    "rating": (f"{_TELEMAC}.authoring.rating_curve.settle_outlet_rating",
+               "author", "produce"),
+    "harbour": (f"{_TELEMAC}.authoring.walked_boundary.settle_harbour",
+                "author", "settle"),
+    "dredge": (f"{_TELEMAC}.authoring.reference_surface.settle_dredge",
+               "author", "derive")})
 
 #: The mesher's own clean passes, under its own names, that every domain gets
 #: before anything is imposed on it. They change the TOPOLOGY, so they run ahead
@@ -119,26 +129,19 @@ class Measured(Ref):
 
     A reference first, like a placement: whoever asks for the measurement - a
     dredger, an outlet's rating curve - writes this where it would write
-    ``Ref(name)``. ``op`` is the measurement itself, stated as the runner that
-    takes it, and ``taken`` is WHERE in the plan it stands - before the world is
-    meshed, before the run is settled, as the settle itself, or against the
-    settled run. ``asked`` is what only this question can state; the mesh, the
-    line, the domain and the settled run are the workflow's and are never
-    restated here."""
+    ``Ref(name)``. ``kind`` says which measurement, and ``asked`` is what only
+    this question can state; the mesh, the line, the domain and the settled run
+    are the workflow's and are never restated here."""
 
-    op: str = ""
-    taken: str = ""
+    kind: str = ""
     asked: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         Ref.__post_init__(self)
-        if not self.op:
+        if self.kind not in _MEASURES:
             raise PlanValidationError(
-                f"{self.path}: a measurement names the runner that takes it.")
-        if self.taken not in _TAKEN:
-            raise PlanValidationError(
-                f"{self.path}: {self.taken!r} is nowhere in the plan; a "
-                f"measurement is taken {' or '.join(_TAKEN)}.")
+                f"{self.path}: there is no {self.kind!r} measurement; the "
+                f"workflow takes {tuple(_MEASURES)}.")
         object.__setattr__(self, "asked", MappingProxyType(dict(self.asked)))
 
 
@@ -1025,20 +1028,18 @@ class TelemacWorkflow(Workflow):
                  "friction_law": None}
         steps = []
         for ask in self._asked(recipe):
-            if ask.taken != when:
+            runner, stage, taken = _MEASURES[ask.kind]
+            if taken != when:
                 continue
-            signature = _signature(ask.op)
+            signature = _signature(runner)
             kwargs = {name: (self._asserted("LAW_OF_BOTTOM_FRICTION")
                              if name == "friction_law" else value)
                       for name, value in world.items() if name in signature}
-            # A measurement taken before the world is meshed is taken in the
-            # data stage; every other one reads the mesh the acceptance made.
-            step = Step(runner=ask.op,
-                        stage="prep" if when == "world" else "author",
+            step = Step(runner=runner, stage=stage,
                         kwargs={**kwargs, **dict(ask.asked)})
             # The SETTLE is named by the plan that places it, which names every
             # settle the same thing; anything else is named for what it measured.
-            steps.append(step if when == "settle" else step.named(ask.root))
+            steps.append(step if taken == "settle" else step.named(ask.root))
         return tuple(steps)
 
     def _settle(self, recipe: Any, domain: str) -> Step | None:

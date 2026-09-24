@@ -78,8 +78,7 @@ class DATA:
 #: the water the structure is subtracted FROM and a centreline bounds no area to
 #: subtract.
 _FOOTPRINT = Measured(
-    "footprint", taken="world",
-    op="trid3nt_server.inputs.structure.structure",
+    "footprint", kind="footprint",
     asked={"value": DATA.structure, "width_m": ParamRef("barrier_width_m"),
            "asked": "the structure this question asks about",
            "code": "ARTEMIS_STRUCTURE_INVALID"})
@@ -89,8 +88,7 @@ _FOOTPRINT = Measured(
 #: direction are read off the deck; the width is the one the footprint above was
 #: cut at, because what the mesher removed is what the deck calls solid.
 _HARBOUR = Measured(
-    "settled", taken="settle",
-    op="trid3nt_server.workflows.telemac.authoring.walked_boundary.settle_harbour",
+    "settled", kind="harbour",
     asked={"structure": DATA.structure,
            "structure_width_m": ParamRef("barrier_width_m"),
            "wave_period_s": Ref("stated.WAVE_PERIOD"),
@@ -177,8 +175,7 @@ MESH = tool.build_mesh(
 #: the same trigonometric convention. Measured off the structure rather than
 #: produced, because the water's own centerline runs nowhere near this read.
 _TRANSECT = Measured(
-    "transect", taken="world",
-    op="trid3nt_server.inputs.structure.transect",
+    "transect", kind="transect",
     asked={"value": DATA.structure, "convention": "trig",
            "bearing_deg": Ref("stated.DIRECTION_OF_WAVE_PROPAGATION"),
            "length_m": ParamRef("transect_length_m"),
