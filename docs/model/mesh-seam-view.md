@@ -26,7 +26,7 @@ flowchart LR
     sharedPrimitives -- "BedProvenance" --> meshSession
     om2dAdapter -- "BoxBuildConfig" --> om2dBox
     om2dAdapter -- "MesherContributedFields (meshSession pass through)" --> meshSession
-    meshSession -- "MesherContributedFields (meshSession pass through)" --> meshArtifactStore
+    meshSession -- "RecordedMeshFields (meshSession pass through)" --> meshArtifactStore
     om2dBox -- "BoxMeshArrays" --> om2dAdapter
     om2dAdapter -- "OpNamespaceDeclaration" --> mesherRegistry
     om2dAdapter -- "MesherRegistration" --> mesherRegistry
@@ -161,13 +161,12 @@ THE RECIPE: three mesher-agnostic params - the domain, the one size word, the sh
 
 ### `MesherContributedFields`
 
-The artifact fields only the MESHER can state: the per-solver files it wrote from its own boundary numbering, and what it segmented that boundary into. They ride on the mesh's own meta and the session stages them without opinion, so it names none of them.
+The artifact fields only the MESHER can state: the files an engine asked it for keyed by the name that engine uses, the named stretches of the boundary walk, and what it segmented that boundary into. They ride on the mesh's own meta and the session stages them without opinion, so it reads what none of them hold.
 
 | item | type | required |
 | --- | --- | --- |
-| `slf_uri` | Uri | required |
-| `cli_uri` | Uri | required |
-| `topology_uri` | Uri | required |
+| `files` | Map | required |
+| `boundary_roles` | Map | required |
 | `open_boundary_info` | Map | required |
 
 ### `MesherRegistration`
@@ -201,6 +200,16 @@ One entry of the ops list: a function NAME and its kwargs. The name is VERBATIM 
 | --- | --- | --- |
 | `fn` | String | required |
 | `kwargs` | Map | required |
+
+### `RecordedMeshFields`
+
+The same fields once the session has STAGED them: the local paths the mesher wrote are object-store uris now, keyed by the name the engine asked for each under, and the boundary walk rides beside them.
+
+| item | type | required |
+| --- | --- | --- |
+| `engine_files` | Map | required |
+| `boundary_roles` | Map | required |
+| `open_boundary_info` | Map | required |
 
 ### `TopologyBundle`
 

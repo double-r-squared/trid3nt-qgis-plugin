@@ -10,11 +10,16 @@ import json
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-__all__ = ["FREE_EXIT_ROLE", "RATING_CURVE_ROLE", "TOPOLOGY_FILENAME",
-           "write_topology", "read_topology"]
+__all__ = ["BOUNDARY_TOPOLOGY", "FREE_EXIT_ROLE", "RATING_CURVE_ROLE",
+           "TOPOLOGY_FILENAME", "write_topology", "read_topology"]
 
 #: Basename the bundle is written and staged under.
 TOPOLOGY_FILENAME: str = "mesh_topology.json"
+
+#: The name the bundle rides beside the pair under. TELEMAC never reads it - it
+#: is what its author reads to number the boundaries the pair states - so it is
+#: named the way the two steering keywords beside it are.
+BOUNDARY_TOPOLOGY: str = "BOUNDARY TOPOLOGY"
 
 #: The role whose ``.cli`` quad prescribes NOTHING - the water leaves at whatever
 #: level and velocity the interior brings to the face. A steering author reads

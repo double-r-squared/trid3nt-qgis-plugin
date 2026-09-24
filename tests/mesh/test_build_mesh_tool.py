@@ -64,8 +64,7 @@ def _recipe(**over):
 def _artifact(**over) -> MeshArtifact:
     base = dict(
         mesh_id="01MESH", name="Coweeta watershed", mode="reg_grid",
-        display_uri="s3://cache/mesh/01MESH/mesh.2dm",
-        slf_uri="s3://cache/mesh/01MESH/mesh.slf", utm_epsg=32617,
+        display_uri="s3://cache/mesh/01MESH/mesh.2dm", utm_epsg=32617,
         crs_authid="EPSG:32617", has_bathymetry=True, node_count=4956,
         element_count=9727, bbox=_AOI,
         # A built mesh records the RECIPE it came from, and the KIND on that
@@ -165,9 +164,10 @@ def test_explicit_mesh_wins_over_a_discovered_one():
 
 def test_explicit_mesh_no_solve_could_be_staged_on_refuses():
     with pytest.raises(MeshToolError) as excinfo:
-        resolve_mesh(_recipe(), explicit=_artifact(slf_uri=None), accepts=_GRID)
+        resolve_mesh(_recipe(), explicit=_artifact(has_bathymetry=False),
+                     accepts=_GRID)
     assert excinfo.value.error_code == "MESH_NOT_SOLVABLE"
-    assert "no SELAFIN geometry" in str(excinfo.value)
+    assert "no sampled bed" in str(excinfo.value)
 
 
 def test_explicit_mesh_with_no_readable_record_refuses():
@@ -203,7 +203,7 @@ def test_case_discovery_beats_the_declared_default():
 
 
 def test_case_discovery_skips_a_mesh_no_solve_could_be_staged_on():
-    stash_mesh_artifact("case-skip", _artifact(slf_uri=None))
+    stash_mesh_artifact("case-skip", _artifact(has_bathymetry=False))
     resolution = resolve_mesh(_recipe(), accepts=_GRID, case_id="case-skip")
     assert resolution.source == "declared"
     assert resolution.recipe is not None
@@ -318,7 +318,7 @@ async def test_a_supplied_mesh_is_adopted_instead_of_built(monkeypatch):
         supplied="s3://cache/mesh/01MESH/mesh.2dm", tool=_AGITATION)
 
     assert record["artifact"] is supplied
-    assert record["slf_uri"] == supplied.slf_uri
+    assert record["engine_files"] == supplied.engine_files
     assert record["node_count"] == supplied.node_count
 
 
@@ -514,11 +514,11 @@ def test_accept_freezes_the_recipe_as_the_artifacts_provenance(tmp_path):
     assert stashed_mesh_artifacts("case-accept")[-1] is art
 
 
-def test_a_geometry_less_mesh_says_why_no_solve_can_be_staged_on_it(tmp_path):
+def test_a_bedless_mesh_says_why_no_solve_can_be_staged_on_it(tmp_path):
     """The readiness question is the ARTIFACT's, answered off the facts it carries."""
     art = MeshSession(_recipe(), workdir=tmp_path).accept()
     reason = art.unsolvable_reason()
-    assert reason is not None and "SELAFIN" in reason
+    assert reason is not None and "no sampled bed" in reason
 
 
 def test_snapshot_is_the_display_face(tmp_path):

@@ -99,9 +99,8 @@ def mesh_record(art: Any) -> dict[str, Any]:
     return {
         "artifact": art,
         "mesh_id": art.mesh_id,
-        "slf_uri": art.slf_uri,
-        "cli_uri": art.cli_uri,
-        "topology_uri": art.topology_uri,
+        "engine_files": dict(art.engine_files or {}),
+        "boundary_roles": dict(art.boundary_roles or {}),
         "display_uri": art.display_uri,
         "recipe_uri": art.recipe_uri,
         "node_count": art.node_count,

@@ -318,9 +318,7 @@ package SolveSeam {
         */
         item artifact : MeshArtifact;
         item mesh_id : String;
-        item slf_uri : Uri;
-        item cli_uri : Uri;
-        item topology_uri : Uri;
+        item engine_files : Map;
         item display_uri : Uri;
         item node_count : Integer;
         item element_count : Integer;

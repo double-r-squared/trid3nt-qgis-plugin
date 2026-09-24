@@ -3,6 +3,11 @@
 Offline only - every runner here is a local stub; no solve, no network.
 """
 from __future__ import annotations
+from trid3nt_server.workflows.mesh.shared.selafin_io import (
+    BOUNDARY_CONDITIONS_FILE,
+    GEOMETRY_FILE,
+)
+from trid3nt_server.workflows.mesh.topology import BOUNDARY_TOPOLOGY
 
 import collections
 import contextlib
@@ -151,7 +156,8 @@ async def stub_mesh_step(**kwargs):
     _CALLS.append("stub_mesh_step")
     art = MeshArtifact(
         mesh_id="m-1", name="reach mesh", mode="om2d",
-        display_uri="s3://b/mesh.2dm", slf_uri="s3://b/mesh.slf",
+        display_uri="s3://b/mesh.2dm",
+        engine_files={GEOMETRY_FILE: "s3://b/mesh.slf"},
         crs_authid="EPSG:32610", has_bathymetry=True,
         node_count=7, element_count=6,
         bbox=(-124.1, 40.4, -124.0, 40.5), utm_epsg=32610,

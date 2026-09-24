@@ -27,14 +27,17 @@ from trid3nt_server.workflows.mesh.meshers import (
     registered_meshers,
 )
 from trid3nt_server.workflows.mesh.shared.nodes import MeshNodeError, read_2dm_mesh
+from trid3nt_server.workflows.mesh.shared.selafin_io import (
+    BOUNDARY_CONDITIONS_FILE,
+    GEOMETRY_FILE,
+)
 
 
 
 def _artifact(**over) -> MeshArtifact:
     base = dict(
         mesh_id="01ABC", name="Coweeta catchment", mode="om2d",
-        display_uri="s3://cache/mesh/01ABC/mesh.2dm",
-        slf_uri="s3://cache/mesh/01ABC/mesh.slf", utm_epsg=32617,
+        display_uri="s3://cache/mesh/01ABC/mesh.2dm", utm_epsg=32617,
         crs_authid="EPSG:32617", has_bathymetry=True, node_count=4956,
         element_count=9727, bbox=(-83.5, 35.0, -83.4, 35.09),
         )
@@ -129,7 +132,8 @@ def test_an_adopted_layer_drops_the_meta_bound_to_the_topology_it_replaced(tmp_p
         points=pts[:3], cells=np.array([[0, 1, 2]]), crs_authid="EPSG:32616",
         bed=z[:3],
         meta={"utm_epsg": 32616,
-              "files": {"slf_uri": "/stale/mesh.slf", "cli_uri": "/stale/mesh.cli"},
+              "files": {GEOMETRY_FILE: "/stale/mesh.slf",
+                        BOUNDARY_CONDITIONS_FILE: "/stale/mesh.cli"},
               "probes": {"open_node_count": 93},
               "artifact": {
                            "open_boundary_info": {"open_node_count": 93},
@@ -160,22 +164,9 @@ def test_a_solve_ready_mesh_names_no_reason():
     assert _artifact().unsolvable_reason() is None
 
 
-def test_a_mesh_with_no_geometry_file_says_so():
-    reason = _artifact(slf_uri=None).unsolvable_reason()
-    assert reason is not None and "no SELAFIN geometry" in reason
-
-
-def test_a_bedless_mesh_with_no_staged_topology_says_so():
+def test_a_bedless_mesh_says_so():
     reason = _artifact(has_bathymetry=False).unsolvable_reason()
     assert reason is not None and "no sampled bed" in reason
-
-
-def test_a_bedless_mesh_whose_bed_is_fitted_onto_a_staged_topology_is_ready():
-    """A bundle-realized mesh carries its ground in the topology it stages, so it
-    is solve-ready even though no bed was sampled at authoring."""
-    art = _artifact(has_bathymetry=False,
-                    topology_uri="s3://cache/m/mesh_topology.json")
-    assert art.unsolvable_reason() is None
 
 
 def test_sidecar_key_derivation():

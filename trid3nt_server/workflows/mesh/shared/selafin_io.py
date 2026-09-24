@@ -20,7 +20,16 @@ from trid3nt_server.workflows.mesh.shared.formats.tin_topology import (
 )
 from trid3nt_server.workflows.mesh.topology import FREE_EXIT_ROLE, RATING_CURVE_ROLE
 
-__all__ = ["write_telemac_pair", "read_selafin", "SelafinReadError"]
+__all__ = ["BOUNDARY_CONDITIONS_FILE", "GEOMETRY_FILE", "write_telemac_pair",
+           "read_selafin", "SelafinReadError"]
+
+#: The steering keywords TELEMAC reads the pair under. A mesh's file map is
+#: keyed by them, so a reader asks for a file by the name the engine uses for it
+#: and no other module spells either string.
+GEOMETRY_FILE: str = "GEOMETRY FILE"
+
+
+BOUNDARY_CONDITIONS_FILE: str = "BOUNDARY CONDITIONS FILE"
 
 #: TELEMAC's own boundary-condition type codes, from ``declarations_telemac.f``:
 #: a prescribed value, a free exit, a solid wall.

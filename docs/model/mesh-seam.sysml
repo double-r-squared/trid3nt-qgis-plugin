@@ -266,14 +266,25 @@ package MeshSeam {
 
     interface def MesherContributedFields {
         doc /*
-        The artifact fields only the MESHER can state: the per-solver files it
-        wrote from its own boundary numbering, and what it segmented that
-        boundary into. They ride on the mesh's own meta and the session stages
-        them without opinion, so it names none of them.
+        The artifact fields only the MESHER can state: the files an engine asked
+        it for keyed by the name that engine uses, the named stretches of the
+        boundary walk, and what it segmented that boundary into. They ride on the
+        mesh's own meta and the session stages them without opinion, so it reads
+        what none of them hold.
         */
-        item slf_uri : Uri;
-        item cli_uri : Uri;
-        item topology_uri : Uri;
+        item files : Map;
+        item boundary_roles : Map;
+        item open_boundary_info : Map;
+    }
+
+    interface def RecordedMeshFields {
+        doc /*
+        The same fields once the session has STAGED them: the local paths the
+        mesher wrote are object-store uris now, keyed by the name the engine
+        asked for each under, and the boundary walk rides beside them.
+        */
+        item engine_files : Map;
+        item boundary_roles : Map;
         item open_boundary_info : Map;
     }
 
@@ -584,7 +595,7 @@ package MeshSeam {
         */
     }
 
-    interface fieldsRecorded : MesherContributedFields
+    interface fieldsRecorded : RecordedMeshFields
         connect meshSession.fieldsOut to meshArtifactStore.fieldsIn {
         doc /*
         pass-through: meshSession

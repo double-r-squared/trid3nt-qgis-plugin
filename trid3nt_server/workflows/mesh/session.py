@@ -190,7 +190,7 @@ class MeshSession:
         declared.pop("node_count", None)
         declared.pop("element_count", None)
         _, display_uri = self._display_face()
-        slf_uri, cli_uri = self._telemac_pair()
+        engine_files = self._engine_files()
         recipe_uri = self._stage(self.recipe_path)
         has_bed = mesh.has_bed
         declared.pop("engine_compat", None)
@@ -219,15 +219,16 @@ class MeshSession:
                       **dict(declared.pop("provenance", None) or {})}
         art = MeshArtifact(
             mesh_id=self.mesh_id, name=self.name, mode=self.mesher.name,
-            display_uri=display_uri, slf_uri=slf_uri,
+            display_uri=display_uri, engine_files=engine_files,
+            boundary_roles={str(role): [int(n) for n in nodes] for role, nodes
+                            in dict(mesh.meta.get("boundary_roles") or {}).items()
+                            if nodes},
             crs_authid=mesh.crs_authid, has_bathymetry=has_bed,
             node_count=mesh.node_count, element_count=mesh.element_count,
             bbox=_lonlat_bbox(mesh),
             utm_epsg=mesh.meta.get("utm_epsg"), provenance=provenance,
             probes=self.probes(),
-            recipe_uri=recipe_uri, case_id=self.case_id,
-            **({"cli_uri": cli_uri} if cli_uri else {}),
-            **self._staged_files(mesh), **declared)
+            recipe_uri=recipe_uri, case_id=self.case_id, **declared)
         stash_mesh_artifact(self.case_id, art)
         if str(display_uri).startswith("s3://"):
             write_mesh_artifact_sidecar(art, _s3_client())
@@ -252,36 +253,14 @@ class MeshSession:
             self._display = (local, self._stage(local))
         return self._display
 
-    def _telemac_pair(self) -> tuple[str | None, str | None]:
-        """The TELEMAC geometry AND its ``.cli``, when this mesh IS one.
+    def _engine_files(self) -> dict[str, str]:
+        """Stage the engine files the mesher already wrote -> the map they ride.
 
-        A mesher that wrote its own pair keeps it; nothing is re-derived."""
-        mesh = self.mesh
-        files = dict(mesh.meta.get("files") or {})
-        declared = files.get("slf_uri")
-        if declared:
-            return self._stage(Path(declared)), None
-        if mesh.nodes_per_cell != 3 or not mesh.has_bed:
-            return None, None
-        from trid3nt_server.workflows.mesh.shared.selafin_io import write_telemac_pair
-
-        written = write_telemac_pair(
-            self.workdir, x=mesh.points[:, 0], y=mesh.points[:, 1],
-            cells=mesh.cells, bed=mesh.bed, title=f"TRID3NT {self.mesher.name}")
-        cli = written["cli"]
-        return self._stage(written["geo_slf"]), (
-            self._stage(cli) if not files.get("cli_uri") else None)
-
-    def _staged_files(self, mesh: Mesh) -> dict[str, Any]:
-        """Stage the per-solver files the mesher wrote.
-
-        ``meta["files"]`` maps an artifact URI field to a LOCAL path."""
-        out: dict[str, Any] = {}
-        for name, local in dict(mesh.meta.get("files") or {}).items():
-            if name in ("slf_uri", "display_uri") or not local:
-                continue
-            out[name] = self._stage(Path(local))
-        return out
+        ``meta["files"]`` maps the name an engine asks a file by to a LOCAL
+        path; a mesher that wrote none contributes an empty map."""
+        return {name: self._stage(Path(local))
+                for name, local in dict(self.mesh.meta.get("files") or {}).items()
+                if local}
 
     def _stage(self, local: Path) -> str:
         """Upload ``local`` beside this mesh's other objects -> its uri.

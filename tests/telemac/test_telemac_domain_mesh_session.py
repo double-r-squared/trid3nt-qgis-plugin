@@ -7,6 +7,11 @@ Pinned: what it measures, the dt seam's reader, and what the worker is handed.
 """
 
 from __future__ import annotations
+from trid3nt_server.workflows.mesh.shared.selafin_io import (
+    BOUNDARY_CONDITIONS_FILE,
+    GEOMETRY_FILE,
+)
+from trid3nt_server.workflows.mesh.topology import BOUNDARY_TOPOLOGY
 
 import pytest
 
@@ -33,16 +38,18 @@ def _mesh_record(*, min_edge_m: float | None = None,
               if min_edge_m is not None else {})
     artifact = MeshArtifact(
         mesh_id="M01", name="Coweeta Creek", mode="om2d",
-        display_uri="s3://m/M01/mesh.2dm", slf_uri="s3://m/M01/domain.slf",
-        cli_uri="s3://m/M01/domain.cli", topology_uri=topology_uri,
+        display_uri="s3://m/M01/mesh.2dm",
+        engine_files={GEOMETRY_FILE: "s3://m/M01/domain.slf",
+                      BOUNDARY_CONDITIONS_FILE: "s3://m/M01/domain.cli",
+                      **({BOUNDARY_TOPOLOGY: topology_uri} if topology_uri else {})},
         recipe_uri="s3://m/M01/mesh_recipe.jsonl",
         crs_authid="EPSG:32610", has_bathymetry=True, utm_epsg=32610,
         node_count=539, element_count=902,
         bbox=(-124.2, 40.4, -124.0, 40.6), probes=probes,
         provenance={"bed_source": "cop-dem-glo-30"})
     return {"artifact": artifact, "mesh_id": artifact.mesh_id,
-            "slf_uri": artifact.slf_uri, "cli_uri": artifact.cli_uri,
-            "topology_uri": artifact.topology_uri,
+            "engine_files": dict(artifact.engine_files),
+            "boundary_roles": dict(artifact.boundary_roles),
             "display_uri": artifact.display_uri,
             "recipe_uri": artifact.recipe_uri,
             "node_count": artifact.node_count,

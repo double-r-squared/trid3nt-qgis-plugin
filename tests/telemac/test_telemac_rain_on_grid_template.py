@@ -8,6 +8,11 @@ whose packets are the evidence.
 """
 
 from __future__ import annotations
+from trid3nt_server.workflows.mesh.shared.selafin_io import (
+    BOUNDARY_CONDITIONS_FILE,
+    GEOMETRY_FILE,
+)
+from trid3nt_server.workflows.mesh.topology import BOUNDARY_TOPOLOGY
 
 import numpy as np
 import pytest
@@ -284,9 +289,11 @@ def _accepted_catchment_mesh():
             utm_epsg=32617, bbox=(-83.47, 35.02, -83.36, 35.10),
             name="coweeta creek",
             probes={"area_km2": 2.5, "edge_length_m": {"min": 40.0, "max": 300.0}}),
-        "mesh_id": "M1", "slf_uri": "s3://cache/mesh/M1/mesh.slf",
-        "cli_uri": "s3://cache/mesh/M1/mesh.cli",
-        "topology_uri": "s3://cache/mesh/M1/mesh_topology.json",
+        "mesh_id": "M1",
+        "engine_files": {
+            GEOMETRY_FILE: "s3://cache/mesh/M1/mesh.slf",
+            BOUNDARY_CONDITIONS_FILE: "s3://cache/mesh/M1/mesh.cli",
+            BOUNDARY_TOPOLOGY: "s3://cache/mesh/M1/mesh_topology.json"},
         "display_uri": "s3://cache/mesh/M1/mesh.2dm",
         "node_count": 4, "element_count": 2, "min_edge_m": 40.0,
         "provenance": {"bed_source": "3dep 100%", "sizing_source": "nhdplus_hr",

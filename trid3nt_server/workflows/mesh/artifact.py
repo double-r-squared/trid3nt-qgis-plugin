@@ -33,8 +33,6 @@ class MeshArtifact:
     name: str
     mode: str  # the MESHER that built it: om2d | reg_grid
     display_uri: str  # s3:// display face (a .2dm mesh, or a cell-polygon vector)
-    #: The per-solver geometry file; ``None`` when that format was not emitted.
-    slf_uri: str | None
     crs_authid: str
     has_bathymetry: bool
     node_count: int
@@ -51,14 +49,16 @@ class MeshArtifact:
     #: edge reads it here rather than re-deriving it from the ask, which is only
     #: what was requested.
     probes: dict[str, Any] = field(default_factory=dict)
-    #: The TELEMAC boundary-conditions file written from THIS geometry's own
-    #: boundary numbering; only valid against the ``slf_uri`` beside it.
-    cli_uri: str | None = None
-    #: The mesher's record of the ACCEPTED TOPOLOGY, for an engine whose solve
-    #: needs more than a geometry file states. A SELAFIN says which nodes lie on a
-    #: boundary and never which stretch of it is the inflow, so a mesh whose
-    #: boundary carries roles ships them here beside the geometry.
-    topology_uri: str | None = None
+    #: The files an ENGINE asked this mesh for, keyed by the name that engine
+    #: uses for each. The mesh knows nothing about what any of them hold: an
+    #: engine's author step writes them from this geometry and records them here
+    #: under its own name, so a second run on the same mesh reads them back
+    #: rather than writing them again.
+    engine_files: dict[str, str] = field(default_factory=dict)
+    #: The named stretches of the boundary walk - role -> node indices into this
+    #: mesh's own numbering. What a geometry file cannot state, and what an
+    #: engine's author reads to know which edge the water crosses.
+    boundary_roles: dict[str, list[int]] = field(default_factory=dict)
     outlet_lonlat: tuple[float, float] | None = None
     pour_point_lonlat: tuple[float, float] | None = None
     #: The segmented open/land boundary; ``{}`` for a fully-closed inland catchment.
@@ -69,15 +69,10 @@ class MeshArtifact:
     def unsolvable_reason(self) -> str | None:
         """WHY no solve can be staged on this mesh, or ``None`` when one can.
 
-        A solve needs a geometry file and a bed, or a topology to fit one onto."""
-        if not self.slf_uri:
-            return (f"mesh {self.name!r} carries no SELAFIN geometry (it was "
-                    f"built as mode={self.mode!r}), so there is no file a solve "
-                    "could be staged from")
-        if not self.has_bathymetry and not self.topology_uri:
-            return (f"mesh {self.name!r} has no sampled bed and no staged "
-                    "topology to fit one onto, so a shallow-water solve has no "
-                    "ground to start from")
+        A solve needs ground to start from."""
+        if not self.has_bathymetry:
+            return (f"mesh {self.name!r} has no sampled bed, so a shallow-water "
+                    "solve has no ground to start from")
         return None
 
     def to_json(self) -> dict[str, Any]:
@@ -90,6 +85,8 @@ class MeshArtifact:
         for key in ("bbox", "outlet_lonlat", "pour_point_lonlat"):
             if isinstance(clean.get(key), list):
                 clean[key] = tuple(clean[key])
+        clean["boundary_roles"] = {str(r): [int(n) for n in nodes] for r, nodes
+                                   in (clean.get("boundary_roles") or {}).items()}
         return cls(**clean)
 
 

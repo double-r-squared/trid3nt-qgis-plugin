@@ -53,9 +53,7 @@ The recipe-frozen artifact's fields the authoring consumes. The granularity the 
 | --- | --- | --- |
 | `artifact` | MeshArtifact | required |
 | `mesh_id` | String | required |
-| `slf_uri` | Uri | required |
-| `cli_uri` | Uri | required |
-| `topology_uri` | Uri | required |
+| `engine_files` | Map | required |
 | `display_uri` | Uri | required |
 | `node_count` | Integer | required |
 | `element_count` | Integer | required |

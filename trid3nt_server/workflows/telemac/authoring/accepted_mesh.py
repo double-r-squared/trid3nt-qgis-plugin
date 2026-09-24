@@ -11,7 +11,11 @@ from __future__ import annotations
 from typing import Any, Callable, Mapping, Sequence
 
 from trid3nt_server.workflows.mesh.shared.nodes import read_accepted_mesh_nodes
-from trid3nt_server.workflows.mesh.topology import read_topology
+from trid3nt_server.workflows.mesh.shared.selafin_io import (
+    BOUNDARY_CONDITIONS_FILE,
+    GEOMETRY_FILE,
+)
+from trid3nt_server.workflows.mesh.topology import BOUNDARY_TOPOLOGY, read_topology
 from ..errors import TelemacError
 
 __all__ = ["BASIN_BOUNDARY", "BASIN_GEOMETRY", "HARBOUR_GEOMETRY",
@@ -45,6 +49,22 @@ def _field(mesh: Mapping[str, Any], name: str, *,
         raise missing(
             f"the mesh for this run carries no {name}, so the accepted mesh "
             f"cannot be staged (mesh record: {sorted((mesh or {}))}).")
+    return str(uri)
+
+
+def _engine_file(mesh: Mapping[str, Any], name: str, *,
+                 missing: Callable[[str], Exception]) -> str:
+    """The file THIS engine asked the accepted mesh for, by the name it uses.
+
+    The map is the mesh's record of what an author wrote from its geometry; a
+    mesh carrying no entry under that name has nothing a run could be staged
+    from, and says so under the engine's own word for the file."""
+    files = dict((mesh or {}).get("engine_files") or {})
+    uri = files.get(name)
+    if not uri:
+        raise missing(
+            f"the mesh for this run carries no {name}, so the accepted mesh "
+            f"cannot be staged (it holds: {sorted(files) or 'nothing'}).")
     return str(uri)
 
 
@@ -180,13 +200,13 @@ def refuse_a_sealed_domain(topology: Mapping[str, Any], *, deck: str,
 def geometry_uri(mesh: Mapping[str, Any], *,
                  missing: Callable[[str], Exception]) -> str:
     """Where the accepted mesh's own geometry stands, for the box to be given."""
-    return _field(mesh, "slf_uri", missing=missing)
+    return _engine_file(mesh, GEOMETRY_FILE, missing=missing)
 
 
 def boundary_uri(mesh: Mapping[str, Any], *,
                  missing: Callable[[str], Exception]) -> str:
     """Where the accepted mesh's own boundary file stands."""
-    return _field(mesh, "cli_uri", missing=missing)
+    return _engine_file(mesh, BOUNDARY_CONDITIONS_FILE, missing=missing)
 
 
 def topology_of(mesh: Mapping[str, Any], *,
@@ -195,4 +215,4 @@ def topology_of(mesh: Mapping[str, Any], *,
 
     Every stage that asks which face carries what asks it here, so the bundle is
     read under ONE name rather than by each stage spelling the record's key."""
-    return read_topology(_field(mesh, "topology_uri", missing=missing))
+    return read_topology(_engine_file(mesh, BOUNDARY_TOPOLOGY, missing=missing))

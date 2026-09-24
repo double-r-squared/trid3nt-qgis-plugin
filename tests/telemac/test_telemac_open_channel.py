@@ -7,6 +7,11 @@ roughness the deck is written at. Offline: no solve, no container.
 """
 
 from __future__ import annotations
+from trid3nt_server.workflows.mesh.shared.selafin_io import (
+    BOUNDARY_CONDITIONS_FILE,
+    GEOMETRY_FILE,
+)
+from trid3nt_server.workflows.mesh.topology import BOUNDARY_TOPOLOGY
 
 import asyncio
 
@@ -33,7 +38,8 @@ class _Artifact:
 
 
 def _mesh():
-    return {"artifact": _Artifact(), "topology_uri": "topology.json",
+    return {"artifact": _Artifact(),
+            "engine_files": {BOUNDARY_TOPOLOGY: "topology.json"},
             "min_edge_m": 20.0, "mesh_id": "mesh-1"}
 
 

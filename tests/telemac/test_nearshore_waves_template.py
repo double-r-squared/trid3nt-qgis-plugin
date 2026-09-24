@@ -9,6 +9,11 @@ template's arithmetic.
 """
 
 from __future__ import annotations
+from trid3nt_server.workflows.mesh.shared.selafin_io import (
+    BOUNDARY_CONDITIONS_FILE,
+    GEOMETRY_FILE,
+)
+from trid3nt_server.workflows.mesh.topology import BOUNDARY_TOPOLOGY
 
 import pytest
 
@@ -168,16 +173,16 @@ def _closed_mesh():
 
     artifact = MeshArtifact(
         mesh_id="M01", name="Duck, NC", mode="om2d",
-        display_uri="s3://m/M01/mesh.2dm", slf_uri="s3://m/M01/coast.slf",
-        cli_uri="s3://m/M01/coast.cli",
-        topology_uri="s3://m/M01/mesh_topology.json",
+        display_uri="s3://m/M01/mesh.2dm",
+        engine_files={GEOMETRY_FILE: "s3://m/M01/coast.slf",
+                      BOUNDARY_CONDITIONS_FILE: "s3://m/M01/coast.cli",
+                      BOUNDARY_TOPOLOGY: "s3://m/M01/mesh_topology.json"},
         recipe_uri="s3://m/M01/mesh_recipe.jsonl", crs_authid="EPSG:32618",
         has_bathymetry=True, utm_epsg=32618, node_count=252, element_count=400,
         bbox=(-75.755, 36.170, -75.725, 36.200),
         provenance={"bed_source": "bluetopo"})
     return {"artifact": artifact, "mesh_id": artifact.mesh_id,
-            "slf_uri": artifact.slf_uri, "cli_uri": artifact.cli_uri,
-            "topology_uri": artifact.topology_uri,
+            "engine_files": dict(artifact.engine_files),
             "display_uri": artifact.display_uri,
             "recipe_uri": artifact.recipe_uri,
             "node_count": artifact.node_count,
