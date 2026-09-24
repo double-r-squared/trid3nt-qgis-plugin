@@ -128,7 +128,8 @@ class DATA:
 #: engine only refuses a dredger with nothing left to cut part-way through its
 #: first pass.
 _DREDGE = Measured(
-    "dredge", kind="dredge",
+    "dredge", taken="derive",
+    op="trid3nt_server.workflows.telemac.authoring.reference_surface.settle_dredge",
     asked={"areas": {"dredge_area": DATA.dredge_area,
                      "dump_area": DATA.dump_area},
            "dug_area": "dredge_area",

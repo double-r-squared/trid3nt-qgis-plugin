@@ -155,7 +155,8 @@ MESH = tool.build_mesh(
 #: roughness the deck writes at those same nodes - a level read off another law
 #: is a level this run never sits at.
 _OUTLET = Measured(
-    "outlet", kind="rating",
+    "outlet", taken="produce",
+    op="trid3nt_server.workflows.telemac.authoring.rating_curve.settle_outlet_rating",
     asked={"landcover": DATA.landcover,
            "roughness": LANDCOVER_CN_MANNING,
            "unmapped": LANDCOVER_UNMAPPED,

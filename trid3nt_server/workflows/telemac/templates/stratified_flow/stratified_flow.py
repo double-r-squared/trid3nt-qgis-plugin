@@ -19,7 +19,7 @@ from trid3nt_server.workflows.runtime import (
 )
 from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
-from trid3nt_server.workflows.telemac.authoring.assembler import (
+from trid3nt_server.workflows.telemac.authoring.accepted_mesh import (
     BASIN_BOUNDARY,
     BASIN_GEOMETRY,
 )

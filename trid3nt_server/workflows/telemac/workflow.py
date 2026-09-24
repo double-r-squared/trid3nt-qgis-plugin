@@ -73,6 +73,10 @@ _MESHER, _MESH_KIND = "om2d", "unstructured_tri"
 #: The dispatch a staged run goes to, by the path it is resolved at CALL time.
 _DISPATCH = f"{_TELEMAC}.engine.solve_case"
 
+#: WHERE in the plan a measurement stands: before the world is meshed, before
+#: the run is settled, as the settle itself, or against the settled run.
+_TAKEN = ("world", "produce", "settle", "derive")
+
 #: The mesher's own clean passes, under its own names, that every domain gets
 #: before anything is imposed on it. They change the TOPOLOGY, so they run ahead
 #: of the bed and the roles - a renumbering after a primitive painted node values
@@ -109,40 +113,32 @@ class Placed(Ref):
     continues: bool = False
 
 
-#: The measurements the workflow takes of this question's world, by the KIND a
-#: composite asks for: the runner that takes it, the stage it is taken at and
-#: WHEN - before the world is meshed, before the run is settled, as the settle
-#: itself, or against the settled run.
-_MEASURES: Mapping[str, tuple[str, str, str]] = MappingProxyType({
-    "footprint": ("trid3nt_server.inputs.structure.structure", "prep", "world"),
-    "transect": ("trid3nt_server.inputs.structure.transect", "prep", "world"),
-    "rating": (f"{_TELEMAC}.authoring.assembler.settle_outlet_rating",
-               "author", "produce"),
-    "harbour": (f"{_TELEMAC}.authoring.assembler.settle_harbour",
-                "author", "settle"),
-    "dredge": (f"{_TELEMAC}.authoring.assembler.settle_dredge",
-               "author", "derive")})
-
-
 @dataclass(frozen=True, slots=True)
 class Measured(Ref):
     """A measurement the run takes against its own world, read as the ref it is.
 
     A reference first, like a placement: whoever asks for the measurement - a
     dredger, an outlet's rating curve - writes this where it would write
-    ``Ref(name)``. ``kind`` says which measurement, and ``asked`` is what only
-    this question can state; the mesh, the line, the domain and the settled run
-    are the workflow's and are never restated here."""
+    ``Ref(name)``. ``op`` is the measurement itself, stated as the runner that
+    takes it, and ``taken`` is WHERE in the plan it stands - before the world is
+    meshed, before the run is settled, as the settle itself, or against the
+    settled run. ``asked`` is what only this question can state; the mesh, the
+    line, the domain and the settled run are the workflow's and are never
+    restated here."""
 
-    kind: str = ""
+    op: str = ""
+    taken: str = ""
     asked: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         Ref.__post_init__(self)
-        if self.kind not in _MEASURES:
+        if not self.op:
             raise PlanValidationError(
-                f"{self.path}: there is no {self.kind!r} measurement; the "
-                f"workflow takes {tuple(_MEASURES)}.")
+                f"{self.path}: a measurement names the runner that takes it.")
+        if self.taken not in _TAKEN:
+            raise PlanValidationError(
+                f"{self.path}: {self.taken!r} is nowhere in the plan; a "
+                f"measurement is taken {' or '.join(_TAKEN)}.")
         object.__setattr__(self, "asked", MappingProxyType(dict(self.asked)))
 
 
@@ -804,7 +800,7 @@ class TelemacWorkflow(Workflow):
         # what the base settles on its own.
         inflow = (slots.get(DISCHARGE) or [""])[0]
         channel = (
-            (Step(runner=f"{_TELEMAC}.authoring.assembler.open_channel",
+            (Step(runner=f"{_TELEMAC}.authoring.opening.open_channel",
                   stage="author",
                   kwargs={"mesh": Ref("mesh"),
                           "carrier": DataRef(inflow),
@@ -831,7 +827,7 @@ class TelemacWorkflow(Workflow):
                  # outline carries the ones the canvas asked for.
                  mesh_op("set_boundary_roles", runs=DataRef(domain))])
         settle = self._settle(recipe, domain) or Step(
-            runner=f"{_TELEMAC}.authoring.assembler.open_water",
+            runner=f"{_TELEMAC}.authoring.opening.open_water",
             stage="author",
             kwargs={"mesh": Ref("mesh"),
                     # WHAT THE WATER STANDS AT: the channel's own measurement
@@ -1029,18 +1025,20 @@ class TelemacWorkflow(Workflow):
                  "friction_law": None}
         steps = []
         for ask in self._asked(recipe):
-            runner, stage, taken = _MEASURES[ask.kind]
-            if taken != when:
+            if ask.taken != when:
                 continue
-            signature = _signature(runner)
+            signature = _signature(ask.op)
             kwargs = {name: (self._asserted("LAW_OF_BOTTOM_FRICTION")
                              if name == "friction_law" else value)
                       for name, value in world.items() if name in signature}
-            step = Step(runner=runner, stage=stage,
+            # A measurement taken before the world is meshed is taken in the
+            # data stage; every other one reads the mesh the acceptance made.
+            step = Step(runner=ask.op,
+                        stage="prep" if when == "world" else "author",
                         kwargs={**kwargs, **dict(ask.asked)})
             # The SETTLE is named by the plan that places it, which names every
             # settle the same thing; anything else is named for what it measured.
-            steps.append(step if taken == "settle" else step.named(ask.root))
+            steps.append(step if when == "settle" else step.named(ask.root))
         return tuple(steps)
 
     def _settle(self, recipe: Any, domain: str) -> Step | None:
@@ -1078,7 +1076,7 @@ class TelemacWorkflow(Workflow):
         from trid3nt_server.workflows.runtime.plan import DataRef
 
         return tuple(
-            Step(runner=f"{_TELEMAC}.authoring.assembler.settle_release",
+            Step(runner=f"{_TELEMAC}.authoring.release_point.settle_release",
                  stage="author",
                  kwargs={"point": mark.point, "mesh": Ref("mesh"),
                          "domain": DataRef(domain), "fraction": mark.fraction,
@@ -1119,8 +1117,16 @@ class TelemacWorkflow(Workflow):
 
 
 def _signature(runner: str) -> frozenset[str]:
-    """The keyword names one assembler runner takes."""
+    """The keyword names one measurement runner takes, by ONE attribute lookup.
+
+    A name the module does not carry refuses here rather than at the call, so a
+    measurement nothing takes is seen where the template states it."""
     from inspect import signature
 
     module, _, name = runner.rpartition(".")
-    return frozenset(signature(getattr(import_module(module), name)).parameters)
+    op = getattr(import_module(module), name, None)
+    if op is None:
+        raise PlanValidationError(
+            f"{module} carries no {name!r}; a measurement names the runner "
+            "that takes it.")
+    return frozenset(signature(op).parameters)
