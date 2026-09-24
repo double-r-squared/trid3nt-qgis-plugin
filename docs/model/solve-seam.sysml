@@ -332,17 +332,55 @@ package SolveSeam {
     // Block usages, bound to the modules they are
     // ----------------------------------------------------------------- //
 
-    part assembler : Assembler {
+    part opening : Assembler {
         doc /*
-        Both authored families - a reach and a catchment - are prepared by
-        their own entry point and hand the same staging one case, so there is
-        ONE writer of the server facts.
+        THE SETTLE every authored family that stands in open water passes
+        through - a reach, a catchment, a basin - handing the same staging one
+        case, so there is ONE writer of the server facts.
 
-        code: trid3nt_server/workflows/telemac/authoring/assembler.py
+        code: trid3nt_server/workflows/telemac/authoring/opening.py
         */
         port serverFactsOut : ServerFactsOut;
         port topologyIn : TopologyIn;
+    }
+
+    part acceptedMesh : Assembler {
+        doc /*
+        What ANY accepted mesh hands the author, read once for every stage that
+        measures it: the staged files, the nodes, the bed and the channel a
+        boundary face cuts.
+
+        code: trid3nt_server/workflows/telemac/authoring/accepted_mesh.py
+        */
         port meshIn : MeshIn;
+    }
+
+    part ratingCurve : Assembler {
+        doc /*
+        code: trid3nt_server/workflows/telemac/authoring/rating_curve.py
+        */
+    }
+
+    part referenceSurface : Assembler {
+        doc /*
+        code: trid3nt_server/workflows/telemac/authoring/reference_surface.py
+        */
+    }
+
+    part walkedBoundary : Assembler {
+        doc /*
+        A harbour is settled by the wave that enters it rather than by a level
+        the water stands at, so it walks its own boundary and states its own
+        server facts.
+
+        code: trid3nt_server/workflows/telemac/authoring/walked_boundary.py
+        */
+    }
+
+    part releasePoint : Assembler {
+        doc /*
+        code: trid3nt_server/workflows/telemac/authoring/release_point.py
+        */
     }
 
     part stagedCheck : StagedCheck {
@@ -461,16 +499,16 @@ package SolveSeam {
     // ----------------------------------------------------------------- //
 
     interface meshAccepted : AcceptedMeshRecord
-        connect meshAcceptance.meshOut to assembler.meshIn;
+        connect meshAcceptance.meshOut to acceptedMesh.meshIn;
 
     interface topologyRead : TopologyBundle
-        connect topologyWriter.topologyOut to assembler.topologyIn;
+        connect topologyWriter.topologyOut to opening.topologyIn;
 
     interface caseStaged : ManifestCaseSection
         connect manifestStager.caseOut to workerEntrypoint.caseIn;
 
     interface serverFactsStaged : ServerFacts
-        connect assembler.serverFactsOut to workerEntrypoint.serverFactsIn {
+        connect opening.serverFactsOut to workerEntrypoint.serverFactsIn {
         doc /*
         pass-through: workerEntrypoint
         */
@@ -668,7 +706,8 @@ package SolveSeam {
         forbid: trid3nt_server.workflows.telemac.modules.outputs -> struct
         forbid: trid3nt_server.workflows.telemac.products.postprocess_telemac -> struct
         forbid: trid3nt_server.workflows.telemac.products.run_reads -> struct
-        forbid: trid3nt_server.workflows.telemac.authoring.assembler -> struct
+        forbid: trid3nt_server.workflows.telemac.authoring.opening -> struct
+        forbid: trid3nt_server.workflows.telemac.authoring.release_point -> struct
         */
     }
 
@@ -926,7 +965,7 @@ package SolveSeam {
     // Allocations
     // ----------------------------------------------------------------- //
 
-    satisfy requirement OneNumberDefinesTheStructure by assembler;
+    satisfy requirement OneNumberDefinesTheStructure by walkedBoundary;
     verify requirement OneNumberDefinesTheStructure by
         "tests/telemac/test_open_water_domains.py::test_the_footprint_and_the_solid_faces_are_cut_at_the_same_width";
     verify requirement OneNumberDefinesTheStructure by
@@ -946,7 +985,7 @@ package SolveSeam {
     verify requirement EveryNodeCarriesAMeasuredBed by
         "tests/inputs/test_bed_merge.py::test_two_datums_refuse_by_name";
 
-    satisfy requirement ADredgeCutsOnlyWhatTheStockHolds by assembler;
+    satisfy requirement ADredgeCutsOnlyWhatTheStockHolds by referenceSurface;
     verify requirement ADredgeCutsOnlyWhatTheStockHolds by
         "tests/telemac/test_telemac_nestor_dredge.py::test_a_grade_the_bed_has_no_stock_to_reach_refuses_at_authoring";
 
@@ -970,7 +1009,7 @@ package SolveSeam {
     verify requirement OnePartitionStatedTwice by
         "workers/telemac/test_entrypoint.py::test_a_serial_solve_still_runs_in_process_and_states_no_count";
 
-    satisfy requirement AContinuationIsARerunLedgerRow by assembler;
+    satisfy requirement AContinuationIsARerunLedgerRow by opening;
     satisfy requirement AContinuationIsARerunLedgerRow by workerEntrypoint;
     verify requirement AContinuationIsARerunLedgerRow by
         "tests/runtime/test_rerun_with_overrides.py::test_the_cut_of_a_hot_start_is_the_step_that_opens_on_the_other_run";
@@ -986,7 +1025,7 @@ package SolveSeam {
         "tests/telemac/test_telemac_module_surface.py::test_a_continuation_names_the_file_and_nothing_else";
 
     satisfy requirement BoundaryCodesMatchTheSteering by topologyWriter;
-    satisfy requirement BoundaryCodesMatchTheSteering by assembler;
+    satisfy requirement BoundaryCodesMatchTheSteering by opening;
     satisfy requirement BoundaryCodesMatchTheSteering by steeringStatements;
     verify requirement BoundaryCodesMatchTheSteering by
         "tests/telemac/test_telemac_boundary_contract.py::test_flipping_the_strategy_moves_the_quad_and_the_keyword_together";
@@ -1003,7 +1042,7 @@ package SolveSeam {
     verify requirement BoundaryCodesMatchTheSteering by
         "tests/mesh/test_mesh_topology_and_bed.py::test_a_bundle_that_states_no_prescription_per_boundary_refuses";
 
-    satisfy requirement CatchmentOutletHoldsADerivedRatingCurve by assembler;
+    satisfy requirement CatchmentOutletHoldsADerivedRatingCurve by ratingCurve;
     satisfy requirement CatchmentOutletHoldsADerivedRatingCurve by uniformFlow;
     verify requirement CatchmentOutletHoldsADerivedRatingCurve by
         "tests/telemac/test_telemac_outflow_stage.py::test_the_rating_curve_starts_dry_and_ends_at_the_stated_ceiling";
@@ -1044,7 +1083,7 @@ package SolveSeam {
         "tests/telemac/test_telemac_staged_check.py::test_a_partition_past_the_box_refuses_rather_than_being_cut_to_fit";
 
     satisfy requirement OutflowStageIsNormalDepth by uniformFlow;
-    satisfy requirement OutflowStageIsNormalDepth by assembler;
+    satisfy requirement OutflowStageIsNormalDepth by opening;
     verify requirement OutflowStageIsNormalDepth by
         "tests/telemac/test_telemac_outflow_stage.py::test_the_stage_is_the_depth_at_which_the_section_conveys_the_discharge";
     verify requirement OutflowStageIsNormalDepth by
@@ -1075,7 +1114,7 @@ package SolveSeam {
     verify requirement MetricsAlways by
         "workers/telemac/test_entrypoint.py::test_a_child_that_dies_still_leaves_the_metrics_written";
 
-    satisfy requirement ServerFactsDoctrine by assembler;
+    satisfy requirement ServerFactsDoctrine by opening;
     satisfy requirement ServerFactsDoctrine by workerEntrypoint;
     verify requirement ServerFactsDoctrine by
         "workers/telemac/test_entrypoint.py::test_a_clean_child_that_wrote_its_results_is_the_run_succeeding";
@@ -1121,7 +1160,7 @@ package SolveSeam {
 
     satisfy requirement NoSecondParserOfTheFormat by resultReader;
     satisfy requirement NoSecondParserOfTheFormat by runReader;
-    satisfy requirement NoSecondParserOfTheFormat by assembler;
+    satisfy requirement NoSecondParserOfTheFormat by opening;
     verify requirement NoSecondParserOfTheFormat by
         "tests/telemac/test_telemac_result_reader.py::test_no_reader_on_this_side_parses_the_format";
     verify requirement NoSecondParserOfTheFormat by
