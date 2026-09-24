@@ -115,7 +115,7 @@ def test_the_column_and_the_free_surface_come_from_one_measurement():
     asserted = _module().STEERING.ASSERTED
     settled = next(step for step in _workflow().plan.steps
                    if step.name == "settled")
-    assert settled.runner.endswith("assembler.open_water")
+    assert settled.runner.endswith("opening.open_water")
     assert settled.kwargs["level"].path == "level"
     assert asserted["INITIAL_ELEVATION"] == Ref("settled.level_m")
     for slot in ("vertical_grid", "column"):

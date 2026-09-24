@@ -31,7 +31,7 @@ def test_a_question_whose_discharge_may_be_absent_still_lists_the_channel():
 
 
 def test_an_absent_carrier_authors_no_channel_and_hands_back_the_level():
-    from trid3nt_server.workflows.telemac.authoring.assembler import open_channel
+    from trid3nt_server.workflows.telemac.authoring.opening import open_channel
 
     stage = object()
     opened = asyncio.run(open_channel(mesh={}, friction_law=4,

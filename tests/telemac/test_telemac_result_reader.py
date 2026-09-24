@@ -22,7 +22,8 @@ from trid3nt_server.workflows.telemac.modules import outputs as R
 _READERS = (
     "trid3nt_server/workflows/mesh/shared/selafin_io.py",
     "trid3nt_server/workflows/telemac/modules/outputs.py",
-    "trid3nt_server/workflows/telemac/authoring/assembler.py",
+    "trid3nt_server/workflows/telemac/authoring/opening.py",
+    "trid3nt_server/workflows/telemac/authoring/release_point.py",
 )
 
 _REPO = Path(__file__).resolve().parents[2]

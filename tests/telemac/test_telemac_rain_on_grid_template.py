@@ -302,16 +302,19 @@ def rog_run(monkeypatch, tmp_path):
     The DECK is real: every keyword and every file the template states is resolved
     here, without the container the serializer writes them through."""
     import trid3nt_server.workflows.mesh.shared.nodes as nodes_mod
-    from trid3nt_server.workflows.telemac.authoring import assembler as asm_mod
+    from trid3nt_server.workflows.telemac.authoring import accepted_mesh as mesh_mod
+    from trid3nt_server.workflows.telemac.authoring import opening as asm_mod
 
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
-    monkeypatch.setattr(asm_mod, "read_topology", lambda _uri: {
+    monkeypatch.setattr(mesh_mod, "read_topology", lambda _uri: {
         "roles": {"rating_curve": [1, 3]},
         "liquid_boundary_order": ["rating_curve"],
         "liquid_boundary_prescribes": ["elevation"]})
     monkeypatch.setattr(nodes_mod, "read_accepted_mesh_nodes",
                         lambda _uri, utm_epsg=None: _NODES)
     monkeypatch.setattr(asm_mod, "read_accepted_mesh_nodes",
+                        lambda _uri, utm_epsg=None: _NODES)
+    monkeypatch.setattr(mesh_mod, "read_accepted_mesh_nodes",
                         lambda _uri, utm_epsg=None: _NODES)
     monkeypatch.setattr(
         nodes_mod, "sample_raster_at_nodes",

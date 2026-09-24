@@ -250,7 +250,7 @@ _IN_THE_ARM = (-124.0975, 40.5025)
 def _nodes_at(*lonlat: tuple[float, float]):
     from shapely.geometry import mapping, Point as _Point
 
-    from trid3nt_server.workflows.telemac.authoring.assembler import to_utm
+    from trid3nt_server.workflows.telemac.authoring.accepted_mesh import to_utm
 
     return [list(to_utm(mapping(_Point(lon, lat)), 32610).coords)[0]
             for lon, lat in lonlat]
@@ -268,7 +268,7 @@ def test_a_grade_the_bed_has_no_stock_to_reach_refuses_at_authoring():
     """A grade deeper than the erodible bed is a pass the engine abandons part
     way through its first cut, so the cut the declaration asks for is measured
     against the stated stock before the run dispatches."""
-    from trid3nt_server.workflows.telemac.authoring.assembler import (
+    from trid3nt_server.workflows.telemac.authoring.reference_surface import (
         _refuse_a_cut_past_the_stock,
     )
     from trid3nt_server.workflows.telemac.errors import TelemacError
@@ -294,7 +294,7 @@ def test_a_grade_the_bed_has_no_stock_to_reach_refuses_at_authoring():
 def test_a_dredge_area_is_guarded_by_its_polygon_not_its_bounding_box():
     """The engine works the ring, so an area whose box holds nodes its interior
     does not has nothing in it to move and refuses before the solve."""
-    from trid3nt_server.workflows.telemac.authoring.assembler import _dredge_field
+    from trid3nt_server.workflows.telemac.authoring.reference_surface import _dredge_field
     from trid3nt_server.workflows.telemac.errors import TelemacError
 
     with pytest.raises(TelemacError, match="holds no node") as refused:

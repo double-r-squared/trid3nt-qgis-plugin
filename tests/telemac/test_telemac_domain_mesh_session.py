@@ -11,7 +11,8 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_server.workflows.mesh.artifact import MeshArtifact
-from trid3nt_server.workflows.telemac.authoring import assembler as asm_mod
+from trid3nt_server.workflows.telemac.authoring import accepted_mesh as mesh_mod
+from trid3nt_server.workflows.telemac.authoring import opening as asm_mod
 from trid3nt_server.workflows.telemac.errors import TelemacError
 
 #: The deck's own file statements, which is where the staged names come from.
@@ -56,7 +57,7 @@ def settle(monkeypatch, tmp_path):
     import numpy as np
 
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
-    monkeypatch.setattr(asm_mod, "read_topology",
+    monkeypatch.setattr(mesh_mod, "read_topology",
                         lambda _uri: {
                             "roles": {"inflow": [0, 3], "outflow": [1, 2]},
                             "liquid_boundary_order": ["outflow", "inflow"],
@@ -70,6 +71,7 @@ def settle(monkeypatch, tmp_path):
                 np.array([12.0, 10.2, 10.2, 12.0]), None)
 
     monkeypatch.setattr(asm_mod, "read_accepted_mesh_nodes", _accepted_nodes)
+    monkeypatch.setattr(mesh_mod, "read_accepted_mesh_nodes", _accepted_nodes)
 
     async def _settle(**kwargs):
         return await asm_mod.open_water(duration_s=3600.0,
@@ -182,7 +184,7 @@ async def test_a_closed_body_whose_level_slot_came_back_empty_refuses_by_name(
 
     from trid3nt_server.workflows.runtime import journal
 
-    monkeypatch.setattr(asm_mod, "read_topology",
+    monkeypatch.setattr(mesh_mod, "read_topology",
                         lambda _uri: {"roles": {},
                                       "liquid_boundary_order": [],
                                       "liquid_boundary_prescribes": []})
@@ -207,7 +209,7 @@ async def test_a_closed_body_that_asked_for_no_level_opens_the_way_its_deck_says
         settle, monkeypatch):
     """A question declaring no level slot - rain falling on dry ground - states
     no water and is not refused for stating none."""
-    monkeypatch.setattr(asm_mod, "read_topology",
+    monkeypatch.setattr(mesh_mod, "read_topology",
                         lambda _uri: {"roles": {},
                                       "liquid_boundary_order": [],
                                       "liquid_boundary_prescribes": []})

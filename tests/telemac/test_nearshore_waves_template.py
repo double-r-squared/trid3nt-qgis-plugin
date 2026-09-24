@@ -140,13 +140,14 @@ async def test_a_window_whose_rim_is_all_wall_refuses_rather_than_solving_zeros(
     green zero. The settle names the deck and the depth it stated."""
     import numpy as np
 
-    from trid3nt_server.workflows.telemac.authoring import assembler as asm_mod
+    from trid3nt_server.workflows.telemac.authoring import accepted_mesh as mesh_mod
+    from trid3nt_server.workflows.telemac.authoring import opening as asm_mod
     from trid3nt_server.workflows.telemac.errors import TelemacError
 
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
     # A synthetic mesh whose every boundary node is solid wall, which is what a
     # coastal window returns when no stretch of it reaches the stated depth.
-    monkeypatch.setattr(asm_mod, "read_topology", lambda _uri: {
+    monkeypatch.setattr(mesh_mod, "read_topology", lambda _uri: {
         "roles": {}, "liquid_boundary_order": [],
         "liquid_boundary_prescribes": [],
         "states": "this domain names no liquid boundary; its whole boundary "

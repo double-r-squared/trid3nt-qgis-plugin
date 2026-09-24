@@ -89,7 +89,7 @@ def test_the_keyword_is_read_off_the_quad_the_boundary_file_carries():
 
 
 #: What the accepted mesh MEASURED, as the boundaries composite reads it. The
-#: stage is a normal depth the assembler derived; here it is a number, because
+#: stage is a normal depth the opening derived; here it is a number, because
 #: what is under test is which list it lands in.
 _MEASURED = {"inflow_q_m3s": 50.0, "outflow_stage_m": 97.792}
 

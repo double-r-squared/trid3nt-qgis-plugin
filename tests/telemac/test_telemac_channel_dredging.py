@@ -87,7 +87,7 @@ def test_the_workflow_owns_every_stage_but_the_two_this_question_measures():
         "stated", "mesh", "channel", "settled", "dredge", "sheet", "solve",
         "outputs"]
     settle = _steps()["settled"]
-    assert settle.runner.endswith("assembler.open_water")
+    assert settle.runner.endswith("opening.open_water")
     assert (settle.kwargs["geometry"], settle.kwargs["boundary"],
             settle.kwargs["result"]) == ("channel.slf", "channel.cli",
                                          "r2d_channel.slf")
@@ -97,7 +97,7 @@ def test_the_deck_is_written_at_the_roughness_its_own_stage_is_derived_at():
     """A stage derived at one number under a deck written at another is a level
     the run never sits at, so the two read the same module constant."""
     channel = _steps()["channel"]
-    assert channel.runner.endswith("assembler.open_channel")
+    assert channel.runner.endswith("opening.open_channel")
     assert channel.kwargs["friction_law"] == Ref("stated.LAW_OF_BOTTOM_FRICTION")
     assert channel.kwargs["friction_coefficient"] == Ref(
         "stated.FRICTION_COEFFICIENT")
@@ -115,7 +115,7 @@ def test_the_dredge_reads_its_levels_off_the_line_slot_and_the_settled_run():
     producer fills with the centerline it measured, and which a port draws over
     a fairway nobody mapped a channel through."""
     dredge = _steps()["dredge"]
-    assert dredge.runner.endswith("assembler.settle_dredge")
+    assert dredge.runner.endswith("reference_surface.settle_dredge")
     assert dredge.kwargs["line"] == Ref("line")
     # The DOMAIN itself for the end its inflow run names, and nothing else.
     assert dredge.kwargs["domain"] == DataRef("domain")

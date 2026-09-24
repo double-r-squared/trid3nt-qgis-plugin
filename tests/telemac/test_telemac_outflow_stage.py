@@ -12,7 +12,8 @@ import math
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.telemac.authoring import assembler as D
+from trid3nt_server.workflows.telemac.authoring import opening as D
+from trid3nt_server.workflows.telemac.authoring import rating_curve as CURVE
 from trid3nt_server.workflows.telemac.helpers import uniform_flow as U
 from trid3nt_server.workflows.telemac.errors import TelemacError
 
@@ -228,14 +229,14 @@ def test_the_catchments_outlet_slope_is_the_bed_over_the_elements_it_touches():
     xy = np.array([[0.0, 0.0], [10.0, 0.0], [0.0, 10.0], [10.0, 10.0]])
     bed = np.array([1.0, 0.8, 1.0, 0.8])  # falls 0.2 m over 10 m eastward
     cells = np.array([[0, 1, 2], [1, 3, 2]])
-    assert D._bed_slope([1, 3], xy, bed, cells) == pytest.approx(0.02, rel=1e-6)
+    assert CURVE._bed_slope([1, 3], xy, bed, cells) == pytest.approx(0.02, rel=1e-6)
 
 
 def test_a_flat_outlet_refuses_rather_than_holding_a_level_nobody_measured():
     xy = np.array([[0.0, 0.0], [10.0, 0.0], [0.0, 10.0], [10.0, 10.0]])
     cells = np.array([[0, 1, 2], [1, 3, 2]])
     with pytest.raises(TelemacError) as excinfo:
-        D._bed_slope([1, 3], xy, np.zeros(4), cells)
+        CURVE._bed_slope([1, 3], xy, np.zeros(4), cells)
     assert excinfo.value.error_code == "TELEMAC_OUTLET_SLOPE_UNMEASURED"
 
 
@@ -244,12 +245,12 @@ def test_the_flow_range_is_the_gross_rain_rate_on_the_meshed_area():
     storage only delays it, so nothing can leave faster than the rain arrives."""
     xy = np.array([[0.0, 0.0], [1000.0, 0.0], [0.0, 1000.0], [1000.0, 1000.0]])
     cells = np.array([[0, 1, 2], [1, 3, 2]])  # 1 km2
-    ceiling, basis = D._rain_ceiling(
+    ceiling, basis = CURVE._rain_ceiling(
         {"kind": "design_storm", "mm_per_day": 864.0}, cells, xy)
     assert ceiling == pytest.approx(0.036 / 3600.0 * 1.0e6)
     assert "1.000 km2" in basis and "36 mm/h" in basis
 
-    peak, _basis = D._rain_ceiling(
+    peak, _basis = CURVE._rain_ceiling(
         {"kind": "hyetograph", "series": [3.0, 12.5, 0.0]}, cells, xy)
     assert peak == pytest.approx(0.0125 / 3600.0 * 1.0e6)
 

@@ -1013,7 +1013,7 @@ def test_the_open_channel_body_is_written_at_the_derivation_it_was_solved_for():
                         if getattr(n, "name", "") == "channel"), None)
         if channel is None:
             continue
-        assert channel.runner.endswith("assembler.open_channel")
+        assert channel.runner.endswith("opening.open_channel")
         # The step READS the resolved floor, which is the deck's own number
         # until the run states another.
         floor = telemac_workflow.stated(steering=body, keywords={})

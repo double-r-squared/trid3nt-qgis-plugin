@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.telemac.authoring.assembler import (
+from trid3nt_server.workflows.telemac.authoring.release_point import (
     _domain_polygon,
     _station_on_mesh,
 )

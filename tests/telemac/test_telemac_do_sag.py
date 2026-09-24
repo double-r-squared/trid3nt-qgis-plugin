@@ -184,14 +184,14 @@ def test_the_workflow_owns_the_stages_and_the_template_states_what_differs():
     assert [s.label for s in steps if s.self_gating] == ["sheet"]
     assert steps[-2].consequential
     channel = steps[2]
-    assert channel.runner.endswith("assembler.open_channel")
+    assert channel.runner.endswith("opening.open_channel")
     assert channel.kwargs["friction_law"] == Ref("stated.LAW_OF_BOTTOM_FRICTION")
     assert channel.kwargs["friction_coefficient"] == Ref(
         "stated.FRICTION_COEFFICIENT")
     # An unplaced outfall sits along the domain's OWN centerline companion, so
     # the step is handed the domain rather than a line of its own.
     outfall = steps[3]
-    assert outfall.runner.endswith("assembler.settle_release")
+    assert outfall.runner.endswith("release_point.settle_release")
     assert set(outfall.kwargs) == {"point", "mesh", "domain", "fraction", "label"}
 
 
@@ -215,7 +215,7 @@ def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_own_lever():
 
 def test_the_settle_step_reads_the_files_the_deck_itself_names():
     settle = next(s for s in _steps() if s.name == "settled")
-    assert settle.runner.endswith("assembler.open_water")
+    assert settle.runner.endswith("opening.open_water")
     assert settle.kwargs["geometry"] == "domain.slf"
     assert settle.kwargs["boundary"] == "domain.cli"
     assert settle.kwargs["result"] == "r2d_domain.slf"

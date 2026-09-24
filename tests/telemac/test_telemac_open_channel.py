@@ -14,7 +14,8 @@ import numpy as np
 import pytest
 
 from trid3nt_server.inputs.observation import Observation
-from trid3nt_server.workflows.telemac.authoring import assembler as D
+from trid3nt_server.workflows.telemac.authoring import accepted_mesh as MESH
+from trid3nt_server.workflows.telemac.authoring import opening as D
 from trid3nt_server.workflows.telemac.errors import TelemacError
 
 #: Two faces of a straight channel 1 km apart, each a trapezoid falling 3 m
@@ -40,7 +41,7 @@ def _mesh():
 def settled(monkeypatch):
     """The accepted mesh and its topology, answered without touching a store."""
     monkeypatch.setattr(D, "mesh_nodes", lambda mesh: (_XY, _BED))
-    monkeypatch.setattr(D, "read_topology", lambda uri: {
+    monkeypatch.setattr(MESH, "read_topology", lambda uri: {
         "roles": _ROLES, "liquid_boundary_order": ["inflow", "outflow"],
         "liquid_boundary_prescribes": ["flowrate", "elevation"]})
     return _mesh
@@ -118,7 +119,7 @@ def test_a_domain_with_no_inflow_run_has_no_channel_to_open(settled, monkeypatch
     """A body whose edge names no inflow is CLOSED: there is no channel here to
     measure, so the addition adds nothing, imposes no flow and hands back the
     level it was given for the base to open the water flat at."""
-    monkeypatch.setattr(D, "read_topology", lambda uri: {
+    monkeypatch.setattr(MESH, "read_topology", lambda uri: {
         "roles": {"outflow": [4, 5, 6, 7]}, "liquid_boundary_order": ["outflow"],
         "liquid_boundary_prescribes": ["elevation"]})
     closed = _run(stage=98.5)

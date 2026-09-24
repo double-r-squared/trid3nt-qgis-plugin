@@ -133,7 +133,7 @@ def test_the_boundary_runs_ride_on_the_polygon_the_domain_arrived_as():
 def test_the_settle_step_reads_the_files_the_deck_itself_names():
     workflow = _workflow()
     settle = _step(workflow, "settled")
-    assert settle.runner.endswith("assembler.open_water")
+    assert settle.runner.endswith("opening.open_water")
     assert settle.kwargs["geometry"] == "domain.slf"
     assert settle.kwargs["boundary"] == "domain.cli"
     assert settle.kwargs["result"] == "r2d_domain.slf"

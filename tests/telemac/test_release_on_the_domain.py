@@ -16,7 +16,7 @@ import pytest
 
 from trid3nt_server.inputs.domain import domain as ingest
 from trid3nt_server.inputs.point import Point, PointOutsideDomainError
-from trid3nt_server.workflows.telemac.authoring import assembler as D
+from trid3nt_server.workflows.telemac.authoring import release_point as D
 from trid3nt_server.workflows.telemac.errors import TelemacError
 
 _POND = {"type": "Polygon", "coordinates": [[
@@ -63,10 +63,9 @@ def _cells() -> np.ndarray:
 
 @pytest.fixture(autouse=True)
 def _offline(monkeypatch):
-    monkeypatch.setattr(D, "mesh_nodes", lambda mesh: (_XY, None))
     monkeypatch.setattr(D, "accepted_mesh_nodes",
                         lambda mesh: (_XY, _cells(), None, None))
-    monkeypatch.setattr(D, "_initial_state", lambda continue_from, count: {
+    monkeypatch.setattr(D, "initial_state_of", lambda continue_from, count: {
         "wet": np.ones(len(_XY), dtype=bool), "note": "dry start", "start_s": 0.0})
     monkeypatch.setattr(D, "journal_note", lambda note: None)
 
