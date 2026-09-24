@@ -484,7 +484,7 @@ def test_run_does_not_refuse_an_open_keyword_the_engine_may_yet_default():
 
 
 def test_run_serializes_then_stages_then_dispatches(monkeypatch, tmp_path):
-    from trid3nt_server.workflows.telemac.authoring import assembler, serializer
+    from trid3nt_server.workflows.telemac.authoring import serializer, staging
 
     order: list[str] = []
 
@@ -501,8 +501,8 @@ def test_run_serializes_then_stages_then_dispatches(monkeypatch, tmp_path):
         return {"run_id": "R", "uri": run["manifest_uri"]}
 
     monkeypatch.setattr(serializer, "serialize", _serialize)
-    monkeypatch.setattr(assembler, "stage_run", _stage)
-    monkeypatch.setattr(assembler, "new_rundir", lambda: ("TAG", tmp_path))
+    monkeypatch.setattr(staging, "stage_run", _stage)
+    monkeypatch.setattr(staging, "new_rundir", lambda: ("TAG", tmp_path))
 
     sheet = fill(T2D, GEOMETRY_FILE="river.slf",
                  BOUNDARY_CONDITIONS_FILE="river.cli",

@@ -335,12 +335,11 @@ package SolveSeam {
     part assembler : Assembler {
         doc /*
         Both authored families - a reach and a catchment - are prepared by
-        their own entry point and staged by the same flow, so there is ONE
-        writer of the case and ONE writer of the server facts.
+        their own entry point and hand the same staging one case, so there is
+        ONE writer of the server facts.
 
         code: trid3nt_server/workflows/telemac/authoring/assembler.py
         */
-        port caseOut : CaseOut;
         port serverFactsOut : ServerFactsOut;
         port topologyIn : TopologyIn;
         port meshIn : MeshIn;
@@ -377,9 +376,8 @@ package SolveSeam {
 
     part manifestStager : ManifestStager {
         doc /*
-        code: trid3nt_server/workflows/telemac/authoring/assembler.py
+        code: trid3nt_server/workflows/telemac/authoring/staging.py
         */
-        port caseIn : CaseIn;
         port caseOut : CaseOut;
     }
 
@@ -467,9 +465,6 @@ package SolveSeam {
 
     interface topologyRead : TopologyBundle
         connect topologyWriter.topologyOut to assembler.topologyIn;
-
-    interface caseAuthored : ManifestCaseSection
-        connect assembler.caseOut to manifestStager.caseIn;
 
     interface caseStaged : ManifestCaseSection
         connect manifestStager.caseOut to workerEntrypoint.caseIn;
@@ -955,7 +950,7 @@ package SolveSeam {
     verify requirement ADredgeCutsOnlyWhatTheStockHolds by
         "tests/telemac/test_telemac_nestor_dredge.py::test_a_grade_the_bed_has_no_stock_to_reach_refuses_at_authoring";
 
-    satisfy requirement OnePartitionStatedTwice by assembler;
+    satisfy requirement OnePartitionStatedTwice by manifestStager;
     satisfy requirement OnePartitionStatedTwice by steeringStatements;
     satisfy requirement OnePartitionStatedTwice by workerEntrypoint;
     verify requirement OnePartitionStatedTwice by
@@ -1026,7 +1021,7 @@ package SolveSeam {
         "tests/telemac/test_telemac_outflow_stage.py::test_the_flow_range_is_the_gross_rain_rate_on_the_meshed_area";
 
     satisfy requirement NothingLeavesTheDaemonThatDiesInTheFirstSecond by stagedCheck;
-    satisfy requirement NothingLeavesTheDaemonThatDiesInTheFirstSecond by assembler;
+    satisfy requirement NothingLeavesTheDaemonThatDiesInTheFirstSecond by manifestStager;
     verify requirement NothingLeavesTheDaemonThatDiesInTheFirstSecond by
         "tests/telemac/test_telemac_staged_check.py::test_a_whole_staged_run_passes_every_clause";
     verify requirement NothingLeavesTheDaemonThatDiesInTheFirstSecond by

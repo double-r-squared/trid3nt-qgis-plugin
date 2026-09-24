@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from trid3nt_server.workflows.telemac.authoring.assembler import _write_manifest
+from trid3nt_server.workflows.telemac.authoring.staging import _write_manifest
 
 
 class _FakeS3:
@@ -132,7 +132,7 @@ def test_a_continuation_is_a_rerun_row_and_no_template_declares_it():
 
 
 def test_the_case_section_names_the_engine_the_file_and_the_results():
-    from trid3nt_server.workflows.telemac.authoring.assembler import case_section
+    from trid3nt_server.workflows.telemac.authoring.staging import case_section
 
     case = case_section(
         module="telemac2d", steering="t2d_river.cas",
@@ -166,7 +166,7 @@ def test_the_case_section_names_the_engine_the_file_and_the_results():
 
 def test_a_continued_case_names_the_staged_file_it_restarts_from():
     """Absent on a fresh run, so a present key is always a real continuation."""
-    from trid3nt_server.workflows.telemac.authoring.assembler import case_section
+    from trid3nt_server.workflows.telemac.authoring.staging import case_section
 
     fresh = case_section(module="telemac2d", steering="t2d_river.cas",
                          results=[], server_facts={})
@@ -221,7 +221,7 @@ def test_the_case_names_the_module_the_DECK_says_it_couples_with():
 
 def test_the_one_writer_stages_every_front_under_its_own_prefix(monkeypatch):
     from trid3nt_server import storage
-    from trid3nt_server.workflows.telemac.authoring.assembler import stage_telemac_manifest
+    from trid3nt_server.workflows.telemac.authoring.staging import stage_telemac_manifest
 
     fake = _FakeS3()
     monkeypatch.setattr(storage, "client", lambda: fake)

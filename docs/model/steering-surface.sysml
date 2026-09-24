@@ -442,7 +442,7 @@ package SteeringSurface {
 
     part stager : Stager {
         doc /*
-        code: trid3nt_server/workflows/telemac/authoring/assembler.py
+        code: trid3nt_server/workflows/telemac/authoring/staging.py
         */
         port stageIn : StageIn;
     }

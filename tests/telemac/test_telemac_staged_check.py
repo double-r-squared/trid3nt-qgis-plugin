@@ -193,16 +193,16 @@ def test_a_mesh_still_in_the_store_is_read_through_its_staged_name(tmp_path, mon
 async def test_a_run_staged_against_a_clause_refuses_before_the_manifest(
         tmp_path, monkeypatch):
     """The clauses read on the real path: the staging seam calls them itself."""
-    from trid3nt_server.workflows.telemac.authoring import assembler
+    from trid3nt_server.workflows.telemac.authoring import staging
 
     rundir = _staged(tmp_path, **{"SOURCES FILE": "'square_sources.txt'"})
     written: list[str] = []
-    monkeypatch.setattr(assembler, "_upload_authored", lambda *a, **k: [])
-    monkeypatch.setattr(assembler, "_write_manifest",
+    monkeypatch.setattr(staging, "_upload_authored", lambda *a, **k: [])
+    monkeypatch.setattr(staging, "_write_manifest",
                         lambda *a, **k: written.append("manifest") or "s3://m")
 
     with pytest.raises(TelemacError) as caught:
-        await assembler.stage_run(
+        await staging.stage_run(
             rundir, "run-tag", module="telemac2d", steering=_DECK,
             results=["r2d_square.slf"], outputs=[], mesh_inputs=[], prefix="p",
             sheet={}, server_facts={"duration_s": 600.0},

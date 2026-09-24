@@ -14,7 +14,7 @@ import pytest
 
 from trid3nt_server.workflows.runtime.errors import CoresUnavailable
 from trid3nt_server.workflows.runtime.levers import BOX_CORES, cores_asked
-from trid3nt_server.workflows.telemac.authoring.assembler import case_section
+from trid3nt_server.workflows.telemac.authoring.staging import case_section
 from trid3nt_server.workflows.telemac.modules import T2D
 from trid3nt_server.workflows.telemac.modules.artemis import ART
 from trid3nt_server.workflows.telemac.modules.sheet import (

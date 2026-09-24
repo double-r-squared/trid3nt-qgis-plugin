@@ -21,7 +21,7 @@ flowchart LR
     serializer["Serializer<br/>trid3nt_server/workflows/telemac/authoring/serializer.py"]
     sheet["Sheet<br/>trid3nt_server/workflows/telemac/modules/sheet.py"]
     slot["Slot<br/>trid3nt_server/workflows/telemac/modules/module.py"]
-    stager["Stager<br/>trid3nt_server/workflows/telemac/authoring/assembler.py"]
+    stager["Stager<br/>trid3nt_server/workflows/telemac/authoring/staging.py"]
     steeringDriver["SteeringDriver<br/>workers/telemac/scripts/cas.py"]
     steeringGate["SteeringGate<br/>trid3nt_server/workflows/telemac/authoring/cas_validate.py"]
     temporalValue["TemporalValue<br/>trid3nt_server/workflows/runtime/temporal.py"]

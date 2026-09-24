@@ -7,9 +7,9 @@ travels to the worker is the mesh, the authored steering files and the files the
 name; nothing the container receives is a knob it has to interpret.
 
 TWO ACTS. `assembler.py` SETTLES a run - everything the accepted mesh has to be
-measured for before a keyword can be set - and then STAGES it: everything the
-fill wrote is uploaded beside the mesh the solve runs on, and the manifest that
-names the case is written last. `serializer.py` is what turns the filled sheet
+measured for before a keyword can be set - and `staging.py` STAGES it:
+everything the fill wrote is uploaded beside the mesh the solve runs on, and the
+manifest that names the case is written last. `serializer.py` is what turns the filled sheet
 into the engine's own steering files, through telapy, and every authored file is
 read straight back by the engine's own parser against its own dictionary before
 anything is staged.
@@ -19,7 +19,8 @@ anything is staged.
 | file | what it is |
 | --- | --- |
 | `__init__.py` | The door. Consumers import the module they mean. |
-| `assembler.py` | What the accepted mesh MEASURES before a keyword is set - what ANY domain measures (the mesh it was handed, the clock the run turns on, the files the box is given), the bed at its roles, the section its outflow face cuts, the depth that section conveys the flow at, where a source point lands, which stretch of a harbour boundary is the liquid edge, how deep a basin's deepest column is - the case section every run dispatches under, and the staging that turns a filled sheet into the run directory the box receives. |
+| `assembler.py` | What the accepted mesh MEASURES before a keyword is set - what ANY domain measures (the mesh it was handed, the clock the run turns on, the files the box is given), the bed at its roles, the section its outflow face cuts, the depth that section conveys the flow at, where a source point lands, which stretch of a harbour boundary is the liquid edge, how deep a basin's deepest column is. |
+| `staging.py` | The run directory the box receives: the case section every run dispatches under, a fresh run tag and its directory, every authored file uploaded beside the mesh, and the manifest written LAST so one exists only for a fully staged run. No mesh, no geometry, no physical value is read here. |
 | `staged_check.py` | The staged run directory read clause by clause before it leaves the daemon: every file the steering names present under the name the box will find, the boundary file counted and numbered against the walk over the geometry's own connectivity, a value at every liquid face the boundary file opens, a series covering the run's window, a bed whole over the mesh, the deck's clock against the window the fill states, and a partition this box can seat. Each clause refuses by name rather than letting the solve stop inside Fortran. |
 | `cas_validate.py` | The ONE door to the image for the steering format, in both directions: telapy writes, the engine's own reader reads back, and every authored file is parsed against its own dictionary before anything is staged. |
 | `serializer.py` | A sheet of raw keywords, written by telapy as the engine's own steering file and read straight back by the engine's own parser. The ONE writer of the steering format. |

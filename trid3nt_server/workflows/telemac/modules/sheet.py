@@ -661,7 +661,7 @@ async def run(sheet: Sheet, *, dispatch: Callable[..., Any],
     Checked against the REQUIRED slots only; the box entry is the caller's."""
     # Everything past the OBLIG files the engine asks for by name in its own
     # listing, so a required set invented here would refuse runs it would take.
-    from ..authoring.assembler import new_rundir, stage_run
+    from ..authoring.staging import new_rundir, stage_run
     from ..authoring.serializer import serialize
 
     unanswered = sheet.required()
