@@ -162,12 +162,14 @@ def test_explicit_mesh_wins_over_a_discovered_one():
     assert resolution.artifact is supplied
 
 
-def test_explicit_mesh_no_solve_could_be_staged_on_refuses():
-    with pytest.raises(MeshToolError) as excinfo:
-        resolve_mesh(_recipe(), explicit=_artifact(has_bathymetry=False),
-                     accepts=_GRID)
-    assert excinfo.value.error_code == "MESH_NOT_SOLVABLE"
-    assert "no sampled bed" in str(excinfo.value)
+def test_explicit_mesh_carrying_no_engine_file_is_taken_rather_than_judged():
+    """A mesh is not unsolvable in the abstract: the door checks the template's
+    own mesh row and nothing else, and what an engine needs staged is refused by
+    that engine's author against the files it names."""
+    bare = _artifact(has_bathymetry=False, engine_files={})
+    resolution = resolve_mesh(_recipe(), explicit=bare, accepts=_GRID)
+    assert resolution.source == "explicit"
+    assert resolution.artifact is bare
 
 
 def test_explicit_mesh_with_no_readable_record_refuses():
@@ -202,11 +204,12 @@ def test_case_discovery_beats_the_declared_default():
     assert resolution.artifact is art
 
 
-def test_case_discovery_skips_a_mesh_no_solve_could_be_staged_on():
-    stash_mesh_artifact("case-skip", _artifact(has_bathymetry=False))
-    resolution = resolve_mesh(_recipe(), accepts=_GRID, case_id="case-skip")
-    assert resolution.source == "declared"
-    assert resolution.recipe is not None
+def test_case_discovery_takes_a_mesh_of_the_accepted_kind_carrying_no_files():
+    bare = _artifact(has_bathymetry=False, engine_files={})
+    stash_mesh_artifact("case-bare", bare)
+    resolution = resolve_mesh(_recipe(), accepts=_GRID, case_id="case-bare")
+    assert resolution.source == "discovered"
+    assert resolution.artifact is bare
 
 
 def test_declared_default_when_the_case_holds_nothing():
@@ -503,7 +506,6 @@ def test_accept_freezes_the_recipe_as_the_artifacts_provenance(tmp_path):
     assert art.element_count == session.mesh.element_count
     assert art.crs_authid == "EPSG:4326"
     assert art.has_bathymetry is False
-    assert art.unsolvable_reason() is not None
     assert art.utm_epsg is None
     assert art.recipe_uri == str(session.recipe_path)
     assert art.provenance["recipe"] == session.recipe.to_json()
@@ -512,13 +514,6 @@ def test_accept_freezes_the_recipe_as_the_artifacts_provenance(tmp_path):
     from trid3nt_server.workflows.mesh.artifact import stashed_mesh_artifacts
 
     assert stashed_mesh_artifacts("case-accept")[-1] is art
-
-
-def test_a_bedless_mesh_says_why_no_solve_can_be_staged_on_it(tmp_path):
-    """The readiness question is the ARTIFACT's, answered off the facts it carries."""
-    art = MeshSession(_recipe(), workdir=tmp_path).accept()
-    reason = art.unsolvable_reason()
-    assert reason is not None and "no sampled bed" in reason
 
 
 def test_snapshot_is_the_display_face(tmp_path):

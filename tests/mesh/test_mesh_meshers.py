@@ -160,15 +160,6 @@ def test_read_2dm_rejects_empty():
         read_2dm_mesh(str(p))
 
 
-def test_a_solve_ready_mesh_names_no_reason():
-    assert _artifact().unsolvable_reason() is None
-
-
-def test_a_bedless_mesh_says_so():
-    reason = _artifact(has_bathymetry=False).unsolvable_reason()
-    assert reason is not None and "no sampled bed" in reason
-
-
 def test_sidecar_key_derivation():
     got = sidecar_key_for_mesh_uri("s3://cache/mesh/01ABC/mesh.2dm")
     assert got == ("cache", "mesh/01ABC/mesh_artifact.json")

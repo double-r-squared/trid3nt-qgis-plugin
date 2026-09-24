@@ -27,7 +27,11 @@ __all__ = [
 
 @dataclass
 class MeshArtifact:
-    """A computational mesh built into a case, and what it can be solved on."""
+    """A computational mesh built into a case, and the files built from it.
+
+    Whether a run can be staged on it is the ENGINE's question, asked by the
+    author that reads this record and answered against what that engine needs;
+    a mesh is not unsolvable in the abstract and states no such verdict."""
 
     mesh_id: str
     name: str
@@ -65,15 +69,6 @@ class MeshArtifact:
     open_boundary_info: dict[str, Any] = field(default_factory=dict)
     provenance: dict[str, Any] = field(default_factory=dict)
     case_id: str | None = None
-
-    def unsolvable_reason(self) -> str | None:
-        """WHY no solve can be staged on this mesh, or ``None`` when one can.
-
-        A solve needs ground to start from."""
-        if not self.has_bathymetry:
-            return (f"mesh {self.name!r} has no sampled bed, so a shallow-water "
-                    "solve has no ground to start from")
-        return None
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)

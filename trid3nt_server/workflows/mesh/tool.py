@@ -114,20 +114,16 @@ def resolve_mesh(
                 f"the mesh supplied for this run ({explicit!r}) carries no readable "
                 "mesh artifact record, so what it is cannot be checked against the "
                 "engine; supply a mesh this case built.")
-        # Two questions, two owners: the ``mesh`` row is the TEMPLATE's statement
-        # of which supplied meshes its pipeline was built and tested against, and
-        # readiness is the ARTIFACT's own. Both are asked here, at the door,
-        # rather than several steps later by a deck that assumed a shape the mesh
-        # does not have.
+        # The ``mesh`` row is the TEMPLATE's statement of which supplied meshes
+        # its pipeline was built and tested against, and it is the only question
+        # asked here. Whether the engine can be staged on this one is asked by
+        # that engine's own author, against the files it needs.
         _refuse_unaccepted_kind(art, accepts)
-        _refuse_unsolvable(art)
         return MeshResolution("explicit", "supplied on the run", artifact=art)
 
     for art in reversed(find_case_mesh_artifacts(
             case_id=case_id, loaded_mesh_uris=loaded_mesh_uris,
             s3_client=s3_client)):
-        if art.unsolvable_reason() is not None:
-            continue
         if not kind_accepted(art, accepts):
             continue
         return MeshResolution(
@@ -209,13 +205,6 @@ def _refuse_unaccepted_kind(art: MeshArtifact, accepts: Accepts | None) -> None:
         "mesh row a template declares is what its pipeline was built and tested "
         "against, so a mesh outside it is not a domain it can solve on - build or "
         f"supply one of {list(kinds)!r} instead.")
-
-
-def _refuse_unsolvable(art: MeshArtifact) -> None:
-    """Refuse a supplied mesh no solve could be staged on, in its own words."""
-    reason = art.unsolvable_reason()
-    if reason is not None:
-        raise MeshToolError("MESH_NOT_SOLVABLE", reason)
 
 
 _METADATA = AtomicToolMetadata(
