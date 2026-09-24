@@ -2,8 +2,8 @@
 //
 // The tool plane's modeled seams: the two tools that run in the user's QGIS
 // session through the plugin wire, the approval card in front of the code one,
-// and the read over the engine keyword dictionaries a caller reaches a surface
-// too large to carry through.
+// the read over the engine keyword dictionaries a caller reaches a surface too
+// large to carry through, and the library listing over the two registries.
 //
 // SysML v2 TEXTUAL notation, restricted to the subset the project checker
 // reads. Conventions as the other seams: ``code:`` binds a block to the module
@@ -126,6 +126,22 @@ package ToolPlane {
         doc /*
         The read over the engine's own keyword dictionaries. It answers a question in
         words with the dictionary's entries and runs nothing.
+        */
+    }
+
+    part def LibraryListing {
+        doc /*
+        The listing over the two registries: every registered tool under the
+        subsystem it belongs to, every source row under its class and kind. It
+        states metadata the tool or the row already carries and computes no
+        fact of its own.
+        */
+    }
+
+    part def LibraryPanel {
+        doc /*
+        The panel that reads the listing. It presents the order the listing
+        arrived in and re-sorts nothing.
         */
     }
 
@@ -337,6 +353,18 @@ package ToolPlane {
         */
     }
 
+    part libraryListing : LibraryListing {
+        doc /*
+        code: trid3nt_server/server/protocol/doors/library.py
+        */
+    }
+
+    part libraryPanel : LibraryPanel {
+        doc /*
+        code: plugin/ui/library_window.py
+        */
+    }
+
     // Hops
 
     interface approvalStripped : StrippedApproval
@@ -477,6 +505,28 @@ package ToolPlane {
         */
     }
 
+    requirement def TheLibraryStatesOnlyWhatTheRegistriesCarry {
+        doc /*
+        The library is a READ over what is registered and what is declared.
+        Every registered tool is listed once under one subsystem - a tool under
+        no known module prefix is listed as other rather than dropped, so the
+        listing can never be quietly shorter than the registry - and every
+        source row is listed under the class and kind the row itself declares.
+        Every fact beside a name is metadata the tool or the row already
+        carries; the listing measures nothing and concludes nothing.
+
+        One ask reaches both facets. The tools are ranked by the same corpus the
+        model routes on, so the person and the model are answered off one
+        shortlist. A source row carries no corpus phrasing and is reached only
+        through the data classes the ask names, and it carries no score, because
+        a number beside a row would read as a measurement of the row.
+
+        The order is the server's. The panel that reads the listing re-sorts
+        nothing, so what a person sees and what the listing states are one
+        order.
+        */
+    }
+
     // Allocations
 
     satisfy requirement ConsequentialCodeIsUserGated by runPyqgis;
@@ -565,4 +615,21 @@ package ToolPlane {
         "tests/search/test_describe_keywords.py::test_a_module_with_no_catalog_refuses_naming_the_ones_there_are";
     verify requirement ASurfaceTooLargeToCarryIsReached by
         "tests/search/test_describe_keywords.py::test_every_corpus_phrasing_surfaces_the_tool_model_free";
+
+    satisfy requirement TheLibraryStatesOnlyWhatTheRegistriesCarry by libraryListing;
+    satisfy requirement TheLibraryStatesOnlyWhatTheRegistriesCarry by libraryPanel;
+    verify requirement TheLibraryStatesOnlyWhatTheRegistriesCarry by
+        "tests/server/test_library_http_route.py::test_every_registered_tool_is_listed_once";
+    verify requirement TheLibraryStatesOnlyWhatTheRegistriesCarry by
+        "tests/server/test_library_http_route.py::test_every_coverage_row_is_listed_under_its_own_class_and_kind";
+    verify requirement TheLibraryStatesOnlyWhatTheRegistriesCarry by
+        "tests/server/test_library_http_route.py::test_a_data_row_carries_its_cell_window_and_datum";
+    verify requirement TheLibraryStatesOnlyWhatTheRegistriesCarry by
+        "tests/server/test_library_http_route.py::test_search_route_answers_both_facets_from_one_ask";
+    verify requirement TheLibraryStatesOnlyWhatTheRegistriesCarry by
+        "tests/server/test_library_http_route.py::test_a_class_the_ask_never_names_brings_no_rows";
+    verify requirement TheLibraryStatesOnlyWhatTheRegistriesCarry by
+        "plugin/tests/test_library_panel.py::test_tools_keep_their_subsystem_and_wire_order";
+    verify requirement TheLibraryStatesOnlyWhatTheRegistriesCarry by
+        "plugin/tests/test_library_panel.py::test_rows_sit_under_class_then_kind_with_their_fetcher_first";
 }
