@@ -15,7 +15,6 @@ from typing import Any, Mapping, Sequence
 
 from trid3nt_server.workflows.runtime import journal_note
 from trid3nt_server.workflows.runtime.journal import run_choices
-from trid3nt_server.workflows.mesh.shared.nodes import read_accepted_mesh_nodes
 from ..errors import TelemacError
 from ..helpers.time_step import MESH_H_FLOOR_M, suggest_time_step_s
 from ..helpers.uniform_flow import normal_depth_stage
@@ -23,8 +22,8 @@ from .accepted_mesh import (
     boundary_uri,
     face_section,
     geometry_uri,
+    mesh_artifact,
     mesh_facts,
-    mesh_field,
     mesh_missing,
     mesh_nodes,
     refuse_a_sealed_domain,
@@ -364,8 +363,7 @@ def _opening(level: Any, mesh: Mapping[str, Any]) -> dict[str, Any]:
         return dict(_NO_WATER)
     surface = float(measured["level_m"] if measured["level_m"] is not None
                     else zero)
-    _points, _cells, node_bed, _lonlat = read_accepted_mesh_nodes(
-        mesh_field(mesh, "display_uri", missing=mesh_missing))
+    _points, node_bed = mesh_nodes(mesh)
     bed = np.asarray(node_bed, dtype=float)
     floor, ceiling = float(np.nanmin(bed)), float(np.nanmax(bed))
     measured["level_m"] = round(surface, 3)
@@ -442,7 +440,7 @@ async def open_water(
         f"{mesh_size_m:.3g} m measured minimum edge over "
         f"{facts['mesh_element_count']} elements" if measured is not None
         else f"{mesh_size_m:.3g} m asked edge (mesh unmeasured)")
-    time_step_s = suggest_time_step_s(mesh_size_m, mesh=mesh.get("artifact"))
+    time_step_s = suggest_time_step_s(mesh_size_m, mesh=mesh_artifact(mesh))
     node_xy, _bed = await asyncio.to_thread(mesh_nodes, mesh)
     initial_state = await asyncio.to_thread(initial_state_of, continue_from,
                                             len(node_xy))

@@ -312,8 +312,6 @@ def rog_run(monkeypatch, tmp_path):
         "liquid_boundary_prescribes": ["elevation"]})
     monkeypatch.setattr(nodes_mod, "read_accepted_mesh_nodes",
                         lambda _uri, utm_epsg=None: _NODES)
-    monkeypatch.setattr(asm_mod, "read_accepted_mesh_nodes",
-                        lambda _uri, utm_epsg=None: _NODES)
     monkeypatch.setattr(mesh_mod, "read_accepted_mesh_nodes",
                         lambda _uri, utm_epsg=None: _NODES)
     monkeypatch.setattr(

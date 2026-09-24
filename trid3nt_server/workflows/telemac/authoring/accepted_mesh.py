@@ -15,9 +15,9 @@ from trid3nt_server.workflows.mesh.topology import read_topology
 from ..errors import TelemacError
 
 __all__ = ["BASIN_BOUNDARY", "BASIN_GEOMETRY", "HARBOUR_GEOMETRY",
-           "boundary_uri", "face_section", "geometry_uri", "mesh_facts",
-           "mesh_field", "mesh_missing", "mesh_nodes", "refuse_a_sealed_domain",
-           "slug_of", "to_utm", "topology_of"]
+           "boundary_uri", "face_section", "geometry_uri", "mesh_artifact",
+           "mesh_facts", "mesh_missing", "mesh_nodes", "mesh_zone",
+           "refuse_a_sealed_domain", "slug_of", "to_utm", "topology_of"]
 
 BASIN_GEOMETRY = "basin.slf"
 
@@ -32,9 +32,12 @@ BASIN_BOUNDARY = "basin.cli"
 HARBOUR_GEOMETRY = "harbour.slf"
 
 
-def mesh_field(mesh: Mapping[str, Any], name: str, *,
-                missing: Callable[[str], Exception]) -> str:
+def _field(mesh: Mapping[str, Any], name: str, *,
+           missing: Callable[[str], Exception]) -> str:
     """One field of the ACCEPTED mesh's record, or the refusal that names it.
+
+    Private to this module: the record is read HERE, under a name that says what
+    was read, so no stage elsewhere spells one of its keys.
 
     Falling through would solve on a mesh nobody accepted, under its name."""
     uri = (mesh or {}).get(name)
@@ -49,12 +52,24 @@ def mesh_missing(message: str) -> Exception:
     return TelemacError(message, error_code="TELEMAC_MESH_NOT_ACCEPTED")
 
 
-def mesh_nodes(mesh: Mapping[str, Any]) -> tuple[Any, Any]:
+def mesh_artifact(mesh: Mapping[str, Any]) -> Any:
+    """The mesh the acceptance produced, as the record carries it."""
+    return (mesh or {}).get("artifact")
+
+
+def mesh_zone(mesh: Mapping[str, Any]) -> int:
+    """The projected zone the accepted mesh's own metres stand in, or 0."""
+    return int(getattr(mesh_artifact(mesh), "utm_epsg", 0) or 0)
+
+
+def mesh_nodes(mesh: Mapping[str, Any], *,
+               missing: Callable[[str], Exception] | None = None,
+               ) -> tuple[Any, Any]:
     """The accepted mesh's node coordinates and bed, read off its display face.
 
     The ``.2dm`` is the one readable record of the geometry file's numbering."""
     points, _cells, z, _lonlat = read_accepted_mesh_nodes(
-        mesh_field(mesh, "display_uri", missing=mesh_missing))
+        _field(mesh, "display_uri", missing=missing or mesh_missing))
     if points is None or z is None:
         raise TelemacError(
             "the accepted mesh's display face carries no nodes or no painted bed, "
@@ -118,8 +133,8 @@ def mesh_facts(mesh: Mapping[str, Any], *,
     """The accepted mesh's own record, as every open-water sheet reads it.
 
     One reader: a harbour and a basin differ in what they DO with the mesh."""
-    artifact = mesh.get("artifact")
-    utm_epsg = int(getattr(artifact, "utm_epsg", 0) or 0)
+    artifact = mesh_artifact(mesh)
+    utm_epsg = mesh_zone(mesh)
     if not utm_epsg:
         raise missing(
             "the accepted mesh names no projected zone, so nothing solved on it "
@@ -165,13 +180,13 @@ def refuse_a_sealed_domain(topology: Mapping[str, Any], *, deck: str,
 def geometry_uri(mesh: Mapping[str, Any], *,
                  missing: Callable[[str], Exception]) -> str:
     """Where the accepted mesh's own geometry stands, for the box to be given."""
-    return mesh_field(mesh, "slf_uri", missing=missing)
+    return _field(mesh, "slf_uri", missing=missing)
 
 
 def boundary_uri(mesh: Mapping[str, Any], *,
                  missing: Callable[[str], Exception]) -> str:
     """Where the accepted mesh's own boundary file stands."""
-    return mesh_field(mesh, "cli_uri", missing=missing)
+    return _field(mesh, "cli_uri", missing=missing)
 
 
 def topology_of(mesh: Mapping[str, Any], *,
@@ -180,4 +195,4 @@ def topology_of(mesh: Mapping[str, Any], *,
 
     Every stage that asks which face carries what asks it here, so the bundle is
     read under ONE name rather than by each stage spelling the record's key."""
-    return read_topology(mesh_field(mesh, "topology_uri", missing=missing))
+    return read_topology(_field(mesh, "topology_uri", missing=missing))

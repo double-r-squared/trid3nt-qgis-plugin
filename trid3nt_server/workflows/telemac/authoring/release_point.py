@@ -19,7 +19,7 @@ from trid3nt_server.workflows.mesh.shared.nodes import (
 )
 from trid3nt_server.inputs.point import Point, as_utm, contain, publish_point, snap_to_wet
 from ..errors import TelemacError
-from .accepted_mesh import slug_of
+from .accepted_mesh import mesh_artifact, mesh_zone, slug_of
 from .opening import initial_state_of
 
 __all__ = ["settle_release"]
@@ -73,17 +73,13 @@ def _station_on_mesh(*, centerline_utm: Any, mesh: Any,
     from pyproj import Transformer
     from shapely.geometry import LineString
 
-    from trid3nt_server.workflows.mesh.shared.nodes import read_accepted_mesh_nodes
-
-    utm_epsg = int(getattr(mesh.get("artifact"), "utm_epsg", 0) or 0)
-    display_uri = str(mesh.get("display_uri") or "")
+    utm_epsg = mesh_zone(mesh)
     line = LineString(centerline_utm)
     frac = min(max(float(fraction), 0.0), 1.0)
     start = frac * line.length
     back = Transformer.from_crs(int(utm_epsg or 4326), 4326, always_xy=True)
 
-    points_utm, cells, _bed, _lonlat = read_accepted_mesh_nodes(
-        display_uri, utm_epsg=utm_epsg)
+    points_utm, cells, _bed, _lonlat = accepted_mesh_nodes(mesh)
     rings = np.asarray(points_utm, dtype=float)[np.asarray(cells, dtype=np.int64)]
     tree = shapely.STRtree(
         shapely.polygons(np.concatenate([rings, rings[:, :1]], axis=1)))
@@ -180,11 +176,11 @@ async def _settle_release(
         placed = Point(lon, lat)
     elif centerline is None:
         placed = await asyncio.to_thread(
-            _inside_domain, point, _domain_polygon(mesh.get("artifact")), label)
+            _inside_domain, point, _domain_polygon(mesh_artifact(mesh)), label)
         note = "supplied point, inside the modeled domain"
     else:
         placed, moved_m = await asyncio.to_thread(
-            contain, point, domain=_domain_polygon(mesh.get("artifact")),
+            contain, point, domain=_domain_polygon(mesh_artifact(mesh)),
             flowline=centerline, label=label)
         note = ("supplied point, inside the modeled domain and on the flowline"
                 if moved_m <= 0.0 else
@@ -227,7 +223,7 @@ async def settle_release(
     domain with no centerline and no placed point refuses rather than guessing."""
     from trid3nt_server.render.pipeline_emitter import current_emitter
 
-    utm_epsg = int(getattr(mesh.get("artifact"), "utm_epsg", 0) or 0)
+    utm_epsg = mesh_zone(mesh)
     # The producer's own centerline runs head-to-tail the way the water does, so
     # ``fraction`` counts from upstream without a seed to orient it.
     centerline = getattr(domain, "companions", {}).get("centerline")

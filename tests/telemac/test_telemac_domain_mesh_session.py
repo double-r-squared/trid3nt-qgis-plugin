@@ -70,7 +70,6 @@ def settle(monkeypatch, tmp_path):
                 np.array([[0, 1, 2], [0, 2, 3]]),
                 np.array([12.0, 10.2, 10.2, 12.0]), None)
 
-    monkeypatch.setattr(asm_mod, "read_accepted_mesh_nodes", _accepted_nodes)
     monkeypatch.setattr(mesh_mod, "read_accepted_mesh_nodes", _accepted_nodes)
 
     async def _settle(**kwargs):

@@ -11,13 +11,13 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 from trid3nt_server.workflows.runtime import journal_note
-from trid3nt_server.workflows.mesh.shared.nodes import read_accepted_mesh_nodes
 from ..errors import TelemacError
 from .accepted_mesh import (
     HARBOUR_GEOMETRY,
+    boundary_uri,
     geometry_uri,
     mesh_facts,
-    mesh_field,
+    mesh_nodes,
     refuse_a_sealed_domain,
     slug_of,
     topology_of,
@@ -36,7 +36,7 @@ def _boundary_file(mesh: Mapping[str, Any], *,
     The file written from this geometry's IPOBO is the ONE record of the walk."""
     from trid3nt_server.tools.cache import read_object_bytes_s3
 
-    uri = mesh_field(mesh, "cli_uri", missing=missing)
+    uri = boundary_uri(mesh, missing=missing)
     text = (read_object_bytes_s3(uri).decode("utf-8") if uri.startswith("s3://")
             else Path(uri).read_text(encoding="utf-8"))
     rows: list[tuple[int, int]] = []
@@ -132,9 +132,8 @@ async def settle_harbour(
                            open_depth_threshold_m=open_depth_threshold_m)
     open_nodes = [int(n) for n in topology["roles"]["open"]]
     cli_text, boundary_nodes = _boundary_file(mesh, missing=_harbour_mesh_missing)
-    points_utm, _cells, node_bed, _lonlat = await asyncio.to_thread(
-        read_accepted_mesh_nodes,
-        mesh_field(mesh, "display_uri", missing=_harbour_mesh_missing))
+    points_utm, node_bed = await asyncio.to_thread(
+        mesh_nodes, mesh, missing=_harbour_mesh_missing)
 
     drawn = await asyncio.to_thread(
         shape, structure, label="structure", code="ARTEMIS_STRUCTURE_INVALID")
