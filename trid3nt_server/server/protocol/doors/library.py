@@ -1,7 +1,7 @@
 """THE LIBRARY: what is here to run, and what data there is to run it on.
 
 Two facets over two registries nobody else joins: every registered tool under
-the subsystem it belongs to, and every coverage row under the class and kind
+the subsystem it belongs to, and every source row under the class and kind
 the match sorts on. Both halves are sorted here, because the panel that reads
 them never re-sorts, and every fact is metadata the tool or the row already
 carries - the listing computes none of its own."""
@@ -87,7 +87,7 @@ def _tool_entry(name: str, entry: Any) -> dict[str, Any]:
 
 
 def _row_name(fetcher: str, row: Any) -> str:
-    """What names one coverage row under its class and kind: the request values
+    """What names one source row under its class and kind: the request values
     it is fetched under, which are the only thing separating two rows of one
     fetcher there. A row asked under nothing is its fetcher's only row there and
     takes the fetcher's name."""
@@ -96,7 +96,7 @@ def _row_name(fetcher: str, row: Any) -> str:
 
 
 def _data_entry(fetcher: str, row: Any) -> dict[str, Any]:
-    """One coverage row as the library states it: the fetcher that answers it,
+    """One source row as the library states it: the fetcher that answers it,
     the row's own words for what it covers, and its cell, window and datum."""
     window = row.window
     facts: dict[str, Any] = {
@@ -118,7 +118,7 @@ def _data_entry(fetcher: str, row: Any) -> dict[str, Any]:
 
 
 def _classes(fetchers: frozenset[str] | None = None) -> list[dict[str, Any]]:
-    """Every coverage row under its class and then its kind, narrowed to the
+    """Every source row under its class and then its kind, narrowed to the
     named fetchers when one is given. The class is the row's own declaration and
     never inferred, so no row is listed without one."""
     from trid3nt_server.tools.search.match import sources_with_coverage
