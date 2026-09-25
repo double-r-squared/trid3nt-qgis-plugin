@@ -272,3 +272,24 @@ def test_the_solver_s_correct_end_is_read_off_the_solve_step_and_recorded():
     assert TelemacWorkflow._correct_end(TelemacWorkflow, silent) is None
     assert _record(correct_end=True)["correct_end"] is True
     assert _record()["correct_end"] is None
+
+
+def test_the_run_s_own_line_carries_the_fill_and_the_correct_end_its_solve_step_said(
+        monkeypatch):
+    """The workflow's one journal seam hands the record the solve step's fill
+    rows and its correct end, so the line on disk states both."""
+    from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
+
+    written: list[dict] = []
+    monkeypatch.setattr(journal, "append_record", written.append)
+    run = SimpleNamespace(
+        params=None, executed=(), replayed=(), outputs=(), keywords={},
+        choices=(), results={"solve": {
+            "module": "khione", "metrics": {"correct_end": False},
+            "sheet": {"filled": {"TIME_STEP": {
+                "value": 0.5, "provenance": "derived: settled.time_step_s"}}}}})
+    TelemacWorkflow._journal(object.__new__(TelemacWorkflow), "RUN1", run,
+                             SimpleNamespace(mesh_size_m=None), 1.0)
+    assert written[0]["correct_end"] is False
+    assert written[0]["fill"]["TIME_STEP"] == {
+        "value": 0.5, "from": "derived: settled.time_step_s"}
