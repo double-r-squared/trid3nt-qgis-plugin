@@ -652,6 +652,10 @@ class Solved:
                 :, nplan - 1 if plane is None else int(plane), :]
         if values.size == 0:
             raise OutputEmpty(f"{token} carries no time steps in {self.result_file}.")
+        if not np.isfinite(values).any():
+            raise OutputEmpty(
+                f"not one value {self.result_file} carries for {name.strip()!r} "
+                "is a number: the engine allocated it and never wrote it.")
         return name, units, values
 
     def plane_label(self, plane: int | None) -> str | None:
