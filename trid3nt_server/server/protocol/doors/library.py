@@ -117,16 +117,13 @@ def _data_entry(fetcher: str, row: Any) -> dict[str, Any]:
     }
 
 
-def _classes(fetchers: frozenset[str] | None = None) -> list[dict[str, Any]]:
-    """Every source row under its class and then its kind, narrowed to the
-    named fetchers when one is given. The class is the row's own declaration and
-    never inferred, so no row is listed without one."""
+def _classes() -> list[dict[str, Any]]:
+    """Every source row under its class and then its kind. The class is the
+    row's own declaration and never inferred, so no row is listed without one."""
     from trid3nt_server.tools.search.match import sources_with_coverage
 
     grouped: dict[str, dict[str, list[dict[str, Any]]]] = {}
     for name, row in sources_with_coverage():
-        if fetchers is not None and name not in fetchers:
-            continue
         by_kind = grouped.setdefault(str(row.data_class), {})
         by_kind.setdefault(str(row.kind), []).append(_data_entry(name, row))
     return [
@@ -221,7 +218,7 @@ async def build_library_search(query: str, top_k: int = 10) -> dict[str, Any]:
     # The rows carry no score: rank here is the class overlap, and a number
     # beside a row would read as a measurement of the row.
     named = _classes_named_by(query)
-    by_class = {cls["name"]: cls for cls in _classes()}
+    by_class = {cls["name"]: cls for cls in build_library_payload()["classes"]}
     for class_name in named:
         listed = by_class.get(class_name)
         if listed is None:

@@ -133,6 +133,21 @@ def test_a_class_the_ask_never_names_brings_no_rows():
     assert "water level series" in named
 
 
+def test_the_class_index_is_built_once_however_many_asks(monkeypatch):
+    """The search reads its rows off the cached listing, never a fresh walk."""
+    from trid3nt_server.tools.search import match
+
+    walked = []
+    real = match.sources_with_coverage
+    monkeypatch.setattr(match, "sources_with_coverage",
+                        lambda: walked.append(1) or real())
+    monkeypatch.setattr(door, "_LIBRARY_CACHE", None)
+    for _ in range(3):
+        payload = _body_json(_drive(_get("/api/library/search?q=water+level")))
+        assert any(h["kind"] == "row" for h in payload["hits"])
+    assert len(walked) == 1
+
+
 def test_search_with_no_query_answers_no_hits():
     """An empty ask is not the whole library; the listing route serves that."""
     payload = _body_json(_drive(_get("/api/library/search")))
