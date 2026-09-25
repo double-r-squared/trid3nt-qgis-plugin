@@ -182,6 +182,14 @@ package DataSeam {
         */
     }
 
+    part def ObjectStore {
+        doc /*
+        The one client every read and write of the object store goes through,
+        built from the store's own endpoint and key pair and nothing a shell
+        happened to inherit.
+        */
+    }
+
     part def BedResultModel {
         doc /*
         The layer a bed fetch returns, with the provenance fields that are NOT
@@ -692,6 +700,12 @@ package DataSeam {
         */
     }
 
+    part objectStore : ObjectStore {
+        doc /*
+        code: trid3nt_server/storage.py
+        */
+    }
+
     // ----------------------------------------------------------------- //
     // Hops
     // ----------------------------------------------------------------- //
@@ -918,6 +932,16 @@ package DataSeam {
         object and the provenance sidecar beside it share one fate, because a
         pinned object whose sidecar went is a miss. Only the cache is swept: a
         run's own products carry no class to age by.
+        */
+    }
+
+    requirement def TheStoreIsReachedByItsOwnSettings {
+        doc /*
+        The store's endpoint, key pair and region are passed to the client
+        explicitly, from the stack's settings file first and the process
+        second, so ambient credentials the store has never heard of are never
+        what a write carries. A store with no endpoint stated refuses by name
+        rather than reaching for a cloud nobody named.
         */
     }
 
@@ -1677,6 +1701,12 @@ package DataSeam {
         "tests/server/test_store_retention.py::test_a_deleted_case_releases_its_objects";
     verify requirement AConsumedObjectIsPinnedWhileItsCaseLives by
         "tests/server/test_store_retention.py::test_a_case_held_object_no_run_names_survives_and_is_released";
+
+    satisfy requirement TheStoreIsReachedByItsOwnSettings by objectStore;
+    verify requirement TheStoreIsReachedByItsOwnSettings by
+        "tests/server/test_store_settings.py::test_a_chart_spec_persists_on_the_store_s_settings_not_ambient_credentials";
+    verify requirement TheStoreIsReachedByItsOwnSettings by
+        "tests/server/test_store_settings.py::test_a_store_with_no_endpoint_stated_refuses_rather_than_reach_a_cloud";
 
     satisfy requirement TheRunHasOneVerticalFrame by verticalFrame;
     satisfy requirement TheRunHasOneVerticalFrame by frameLever;
