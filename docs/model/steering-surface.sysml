@@ -878,7 +878,9 @@ package SteeringSurface {
         tracer is two on the fill. A wrapper's reads are primitives named from
         the module's own output table and never from a question. A run is recorded
         under its engine and its module, with no template field; every filled
-        slot carries one of the six origins the card renders. The adapters
+        slot carries the value it was solved at beside one of the six origins
+        the card renders, and the record carries the solver's own correct-end
+        flag. The adapters
         build a turn from the contracts IR and import no provider SDK for it.
 
         ONE wrapper serves every role its module has: a template's own steering
@@ -917,7 +919,13 @@ package SteeringSurface {
         what draws it - a variable no row names is published under the spelling
         the file itself carries, in the unit the record itself carries, with a
         journal line saying so - because a real result omitted is as wrong as a
-        slot the engine never wrote published. A still beside a time series
+        slot the engine never wrote published. A slot the engine allocated and
+        never wrote carries no number at all and is published as no layer; a
+        spelling two of a run's files both carry is ONE layer, off the first row
+        that names it, so no two layers share a label. Every journal line about
+        what became of a written variable is written FROM the layer list the
+        publish surfaced, never beside it, so no line says a variable is on the
+        map that the list does not show. A still beside a time series
         would be a copy of a frame that layer already carries, so a picture of
         one instant is a render of the temporal layer rather than a second
         product. That layer's legend is ranged over EVERY frame of the record,
@@ -1298,6 +1306,10 @@ package SteeringSurface {
     verify requirement ModuleIsTheUnit by
         "tests/telemac/test_telemac_run_identity.py::test_the_run_record_carries_the_engine_and_the_module_and_no_template";
     verify requirement ModuleIsTheUnit by
+        "tests/runtime/test_run_journal.py::test_a_slot_is_recorded_with_its_value_and_where_it_came_from";
+    verify requirement ModuleIsTheUnit by
+        "tests/runtime/test_run_journal.py::test_the_solver_s_correct_end_is_read_off_the_solve_step_and_recorded";
+    verify requirement ModuleIsTheUnit by
         "tests/telemac/test_telemac_run_identity.py::test_the_vocabulary_is_the_six_the_card_renders";
     verify requirement ModuleIsTheUnit by
         "tests/telemac/test_telemac_run_identity.py::test_every_slot_of_a_template_s_default_fill_carries_one_of_the_six";
@@ -1371,6 +1383,12 @@ package SteeringSurface {
         "tests/telemac/test_telemac_module_outputs.py::test_a_row_the_result_does_not_carry_is_skipped_and_a_placed_read_refuses";
     verify requirement OutputsAreTheModules by
         "tests/telemac/test_telemac_module_outputs.py::test_every_variable_the_result_wrote_is_published_even_where_no_row_names_it";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_module_outputs.py::test_a_variable_the_engine_never_wrote_reaches_no_layer_and_the_note_says_so";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_module_outputs.py::test_a_note_never_claims_a_layer_the_publish_did_not_surface";
+    verify requirement OutputsAreTheModules by
+        "tests/telemac/test_telemac_module_outputs.py::test_a_spelling_two_result_files_carry_is_one_layer_under_one_label";
     verify requirement OutputsAreTheModules by
         "tests/telemac/test_telemac_module_outputs.py::test_a_coupled_module_states_the_tracers_it_appends_and_its_own_table";
     verify requirement OutputsAreTheModules by
