@@ -79,10 +79,10 @@ def test_a_template_that_states_only_what_differs_gets_the_whole_plan():
     """No domain steps, no mesh recipe, no settle, no file names: the workflow
     builds its stages from the slots and the deck's own statements."""
     workflow = _workflow()
-    assert _steps(workflow) == ["stated", "mesh", "settled", "sheet", "solve",
-                                "outputs"]
+    assert _steps(workflow) == ["stated", "mesh", "mesh_files", "settled",
+                                "sheet", "solve", "outputs"]
     assert [step.stage for step in workflow.plan.steps] == [
-        "prep", "mesh", "author", "author", "solve", "publish"]
+        "prep", "mesh", "author", "author", "author", "solve", "publish"]
 
 
 def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_own_lever():

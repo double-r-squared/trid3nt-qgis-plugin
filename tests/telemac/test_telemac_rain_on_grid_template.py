@@ -8,11 +8,10 @@ whose packets are the evidence.
 """
 
 from __future__ import annotations
-from trid3nt_server.workflows.mesh.shared.selafin_io import (
+from trid3nt_server.workflows.telemac.authoring.selafin_io import (
     BOUNDARY_CONDITIONS_FILE,
     GEOMETRY_FILE,
 )
-from trid3nt_server.workflows.mesh.topology import BOUNDARY_TOPOLOGY
 
 import numpy as np
 import pytest
@@ -178,7 +177,7 @@ def test_the_declared_plan_is_the_rain_on_grid_sequence():
     workflow = telemac_rain_on_grid.workflow
     plan = workflow.plan
     assert [step.label for step in plan.declared()] == [
-        "stated", "mesh", "outlet", "settled", "sheet", "solve", "outputs"]
+        "stated", "mesh", "mesh_files", "outlet", "settled", "sheet", "solve", "outputs"]
     validate_plan(plan, workflow.params, workflow.data)
 
 
@@ -292,8 +291,7 @@ def _accepted_catchment_mesh():
         "mesh_id": "M1",
         "engine_files": {
             GEOMETRY_FILE: "s3://cache/mesh/M1/mesh.slf",
-            BOUNDARY_CONDITIONS_FILE: "s3://cache/mesh/M1/mesh.cli",
-            BOUNDARY_TOPOLOGY: "s3://cache/mesh/M1/mesh_topology.json"},
+            BOUNDARY_CONDITIONS_FILE: "s3://cache/mesh/M1/mesh.cli"},
         "display_uri": "s3://cache/mesh/M1/mesh.2dm",
         "node_count": 4, "element_count": 2, "min_edge_m": 40.0,
         "provenance": {"bed_source": "3dep 100%", "sizing_source": "nhdplus_hr",
@@ -313,10 +311,6 @@ def rog_run(monkeypatch, tmp_path):
     from trid3nt_server.workflows.telemac.authoring import opening as asm_mod
 
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
-    monkeypatch.setattr(mesh_mod, "read_topology", lambda _uri: {
-        "roles": {"rating_curve": [1, 3]},
-        "liquid_boundary_order": ["rating_curve"],
-        "liquid_boundary_prescribes": ["elevation"]})
     monkeypatch.setattr(nodes_mod, "read_accepted_mesh_nodes",
                         lambda _uri, utm_epsg=None: _NODES)
     monkeypatch.setattr(mesh_mod, "read_accepted_mesh_nodes",
@@ -343,6 +337,10 @@ def rog_run(monkeypatch, tmp_path):
         # states, the way the workflow's own stage reads them off it.
         settled = await asm_mod.open_water(
             mesh=mesh,
+            files={"engine_files": dict(mesh["engine_files"]),
+                   "topology": {"roles": {"rating_curve": [1, 3]},
+                                "liquid_boundary_order": ["rating_curve"],
+                                "liquid_boundary_prescribes": ["elevation"]}},
             duration_s=(STEERING.ASSERTED["DURATION"] if duration_s is None
                         else duration_s),
             geometry=STEERING.ASSERTED["GEOMETRY_FILE"],

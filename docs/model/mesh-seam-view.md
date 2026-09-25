@@ -18,10 +18,11 @@ flowchart LR
     opTool["OpTool<br/>trid3nt_server/workflows/mesh/op_tool.py"]
     recipeObject["RecipeObject<br/>trid3nt_server/workflows/mesh/recipe.py"]
     regGridAdapter["MesherAdapter<br/>trid3nt_server/workflows/mesh/meshers/reg_grid.py"]
-    selafinIo["SelafinIo<br/>trid3nt_server/workflows/mesh/shared/selafin_io.py"]
+    selafinIo["SelafinIo<br/>trid3nt_server/workflows/telemac/authoring/selafin_io.py"]
     sharedPrimitives["SharedPrimitives<br/>trid3nt_server/workflows/mesh/shared/primitives.py"]
     telemacCasDriver["ShippedDriver<br/>workers/telemac/scripts/cas.py"]
-    topologyWriter["TopologyWriter<br/>trid3nt_server/workflows/mesh/topology.py"]
+    telemacMeshFiles["EngineMeshFiles<br/>trid3nt_server/workflows/telemac/authoring/mesh_files.py"]
+    topologyWriter["TopologyWriter<br/>trid3nt_server/workflows/telemac/authoring/topology.py"]
     meshSession -- "MeshArtifactRecord" --> meshArtifactStore
     sharedPrimitives -- "BedProvenance" --> meshSession
     om2dAdapter -- "BoxBuildConfig" --> om2dBox
@@ -38,7 +39,7 @@ flowchart LR
     regGridAdapter -- "MesherRegistration" --> mesherRegistry
     sharedPrimitives -- "BoundaryRoleRuns" --> om2dAdapter
     om2dBox -- "BoxBuildStats" --> om2dAdapter
-    om2dAdapter -- "TopologyBundle" --> topologyWriter
+    telemacMeshFiles -- "TopologyBundle" --> topologyWriter
 ```
 
 ## Interface items
@@ -161,11 +162,10 @@ THE RECIPE: three mesher-agnostic params - the domain, the one size word, the sh
 
 ### `MesherContributedFields`
 
-The artifact fields only the MESHER can state: the files an engine asked it for keyed by the name that engine uses, the named stretches of the boundary walk, and what it segmented that boundary into. They ride on the mesh's own meta and the session stages them without opinion, so it reads what none of them hold.
+The artifact fields only the MESHER can state: the named stretches of the boundary walk and what it segmented that boundary into. They ride on the mesh's own meta and the session records them without opinion, so it reads what none of them hold.
 
 | item | type | required |
 | --- | --- | --- |
-| `files` | Map | required |
 | `boundary_roles` | Map | required |
 | `open_boundary_info` | Map | required |
 
@@ -203,17 +203,16 @@ One entry of the ops list: a function NAME and its kwargs. The name is VERBATIM 
 
 ### `RecordedMeshFields`
 
-The same fields once the session has STAGED them: the local paths the mesher wrote are object-store uris now, keyed by the name the engine asked for each under, and the boundary walk rides beside them.
+The same fields once the session has RECORDED them on the accepted mesh's artifact.
 
 | item | type | required |
 | --- | --- | --- |
-| `engine_files` | Map | required |
 | `boundary_roles` | Map | required |
 | `open_boundary_info` | Map | required |
 
 ### `TopologyBundle`
 
-The mesher's answers a SELAFIN cannot hold, written for EVERY mesh. A bundle naming no liquid boundary is a recorded fact - a closed basin has no stretch its water crosses - and ``states`` is the sentence the reader says it in, so a caller that needed a role refuses about the role rather than about a file that is not there.
+What a SELAFIN cannot hold, measured off the accepted mesh's own walk for every run. A bundle naming no liquid boundary is a measured fact - a closed basin has no stretch its water crosses - and ``states`` is the sentence the reader says it in, so a caller that needed a role refuses about the role rather than about a file that is not there.
 
 | item | type | required |
 | --- | --- | --- |
@@ -237,7 +236,7 @@ The mesher's answers a SELAFIN cannot hold, written for EVERY mesh. A bundle nam
 | **TheBoxNeverImportsTheServer** | `om2dBox`, `telemacCasDriver` | `tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree`<br/>`tests/mesh/test_mesh_om2d.py::test_the_scripts_live_in_the_worker_tree_beside_their_dockerfiles` |
 | **TheGateIsNeverSpecialised** | `meshGate` | `tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree`<br/>`tests/mesh/test_mesh_gate_loop.py::test_the_accept_is_the_card_submitted_rather_than_a_tool`<br/>`tests/mesh/test_mesh_gate_loop.py::test_adopting_a_hand_edited_layer_is_a_row_on_the_card` |
 | **TheMeshFrontIsEngineAgnostic** | `meshRouter`, `meshGate`, `mesherRegistry` | `tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree`<br/>`tests/mesh/test_mesh_gate_loop.py::test_no_mesher_has_card_code_of_its_own`<br/>`tests/mesh/test_build_mesh_tool.py::test_reg_grid_conforms_with_a_near_empty_default_recipe` |
-| **TopologyIsWrittenForEveryMesh** | `om2dAdapter`, `topologyWriter` | `tests/mesh/test_mesh_topology_and_bed.py::test_a_bundle_naming_no_liquid_boundary_states_the_closed_basin`<br/>`tests/mesh/test_mesh_topology_and_bed.py::test_the_bundle_states_the_numbering_a_steering_author_reads`<br/>`tests/mesh/test_mesh_topology_and_bed.py::test_an_empty_role_is_not_a_role` |
+| **TopologyIsWrittenForEveryMesh** | `telemacMeshFiles`, `topologyWriter` | `tests/telemac/test_telemac_boundary_topology.py::test_a_walk_naming_no_liquid_boundary_states_the_closed_basin`<br/>`tests/telemac/test_telemac_boundary_topology.py::test_the_walk_states_the_numbering_a_steering_author_reads`<br/>`tests/telemac/test_telemac_boundary_topology.py::test_an_empty_role_is_not_a_role` |
 
 ## What each requirement says
 
@@ -253,4 +252,4 @@ The mesher's answers a SELAFIN cannot hold, written for EVERY mesh. A bundle nam
 - **TheBoxNeverImportsTheServer** - The mesh library runs in a GPL-isolated image with no network and nothing of this server in it. A driver that reached into the server package would be running our defaults, our fetches and our opinions inside a box whose whole point is that it holds only the library. The rule is written over the DIRECTORY every shipped driver lives in, so it holds for the engine drivers beside the mesh box for the same reason: each one is executed inside an image where nothing of this server exists to import.
 - **TheGateIsNeverSpecialised** - One gate machine presents, asks and accepts every user-gated thing. A mesh edit is a CARD on it - lines, rows and a reply applied back onto the session - never a loop, a card contract or a tool surface of its own: a second gate machine is a second place a person is asked, and the two drift in what they promise. The mesh gate therefore reaches the tool registry for nothing; the one edit tool it needs is registered like any other.
 - **TheMeshFrontIsEngineAgnostic** - A mesh is a mesh. The three params every mesher means the same thing by are the whole of the generalization, and an engine's vocabulary enters only as an op. A mesh module that imported an engine's workflows would be a second place a mesh gets built, and the mesh a human approved and the mesh a solver ran on would be two objects that happen to agree.
-- **TopologyIsWrittenForEveryMesh** - The bundle rides beside every accepted mesh, whatever its boundary carries. An absent bundle and a bundle naming no liquid boundary read alike to a caller, and only one of them is an answer: a closed basin states that its whole boundary is solid wall, and a reader that needed a role refuses in its own words about the role it needed.
+- **TopologyIsWrittenForEveryMesh** - The bundle is measured for every run on an accepted mesh, whatever its boundary carries. An absent bundle and a bundle naming no liquid boundary read alike to a caller, and only one of them is an answer: a closed basin states that its whole boundary is solid wall, and a reader that needed a role refuses in its own words about the role it needed.

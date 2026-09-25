@@ -305,7 +305,7 @@ def test_the_workflow_owns_the_stages_and_the_template_states_what_differs():
     wf = _workflow()
     validate_plan(wf.plan, wf.params, wf.data)
     steps = list(wf.plan.declared())
-    assert [s.label for s in steps] == ["stated", "mesh", "channel", "station",
+    assert [s.label for s in steps] == ["stated", "mesh", "mesh_files", "channel", "station",
                                         "settled", "sheet", "solve", "outputs"]
     named = [s.label for s in steps]
     assert named.index("station") < named.index("sheet")

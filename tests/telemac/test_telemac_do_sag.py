@@ -177,20 +177,20 @@ def test_the_outfall_seeds_the_domain_match():
 
 def test_the_workflow_owns_the_stages_and_the_template_states_what_differs():
     steps = _steps()
-    assert [s.label for s in steps] == ["stated", "mesh", "channel", "outfall",
+    assert [s.label for s in steps] == ["stated", "mesh", "mesh_files", "channel", "outfall",
                                         "settled", "sheet", "solve", "outputs"]
     # The review is the door's VIEW of the sheet it just filled, so the run is
     # held on the fill itself rather than in front of a step that has not run.
     assert [s.label for s in steps if s.self_gating] == ["sheet"]
     assert steps[-2].consequential
-    channel = steps[2]
+    channel = steps[3]
     assert channel.runner.endswith("opening.open_channel")
     assert channel.kwargs["friction_law"] == Ref("stated.LAW_OF_BOTTOM_FRICTION")
     assert channel.kwargs["friction_coefficient"] == Ref(
         "stated.FRICTION_COEFFICIENT")
     # An unplaced outfall sits along the domain's OWN centerline companion, so
     # the step is handed the domain rather than a line of its own.
-    outfall = steps[3]
+    outfall = steps[4]
     assert outfall.runner.endswith("release_point.settle_release")
     assert set(outfall.kwargs) == {"point", "mesh", "domain", "fraction", "label"}
 

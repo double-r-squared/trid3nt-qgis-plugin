@@ -29,14 +29,14 @@ def _harbour_mesh_missing(message: str) -> Exception:
     return TelemacError(message, error_code="ARTEMIS_MESH_NOT_ACCEPTED")
 
 
-def _boundary_file(mesh: Mapping[str, Any], *,
+def _boundary_file(files: Mapping[str, Any], *,
                    missing: Callable[[str], Exception]) -> tuple[str, list[int]]:
     """The pair's own ``.cli`` text and the boundary nodes it numbers, in rank order.
 
     The file written from this geometry's IPOBO is the ONE record of the walk."""
     from trid3nt_server.tools.cache import read_object_bytes_s3
 
-    uri = boundary_uri(mesh, missing=missing)
+    uri = boundary_uri(files, missing=missing)
     text = (read_object_bytes_s3(uri).decode("utf-8") if uri.startswith("s3://")
             else Path(uri).read_text(encoding="utf-8"))
     rows: list[tuple[int, int]] = []
@@ -110,6 +110,7 @@ def _segments_utm(polylines: Sequence[Any], utm_epsg: int) -> list[list[float]]:
 async def settle_harbour(
     *,
     mesh: dict[str, Any],
+    files: dict[str, Any],
     structure: Any = None,
     structure_width_m: float,
     wave_period_s: float,
@@ -127,11 +128,12 @@ async def settle_harbour(
 
     facts = mesh_facts(mesh, missing=_harbour_mesh_missing)
     utm_epsg = int(facts["utm_epsg"])
-    topology = topology_of(mesh, missing=_harbour_mesh_missing)
+    topology = topology_of(files, missing=_harbour_mesh_missing)
     refuse_a_sealed_domain(topology, deck=deck,
                            open_depth_threshold_m=open_depth_threshold_m)
     open_nodes = [int(n) for n in topology["roles"]["open"]]
-    cli_text, boundary_nodes = _boundary_file(mesh, missing=_harbour_mesh_missing)
+    cli_text, boundary_nodes = _boundary_file(files,
+                                              missing=_harbour_mesh_missing)
     points_utm, node_bed = await asyncio.to_thread(
         mesh_nodes, mesh, missing=_harbour_mesh_missing)
 
@@ -185,7 +187,7 @@ async def settle_harbour(
         "reflection_coef": float(reflection_coef),
         "max_depth_m": round(float(-np.nanmin(node_bed)), 2),
         "mesh_inputs": [
-            {"gs_uri": geometry_uri(mesh, missing=_harbour_mesh_missing),
+            {"gs_uri": geometry_uri(files, missing=_harbour_mesh_missing),
              "dest": HARBOUR_GEOMETRY}],
         "server_facts": {
             "utm_epsg": utm_epsg,

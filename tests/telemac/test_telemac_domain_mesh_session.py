@@ -7,11 +7,10 @@ Pinned: what it measures, the dt seam's reader, and what the worker is handed.
 """
 
 from __future__ import annotations
-from trid3nt_server.workflows.mesh.shared.selafin_io import (
+from trid3nt_server.workflows.telemac.authoring.selafin_io import (
     BOUNDARY_CONDITIONS_FILE,
     GEOMETRY_FILE,
 )
-from trid3nt_server.workflows.mesh.topology import BOUNDARY_TOPOLOGY
 
 import pytest
 
@@ -24,8 +23,24 @@ from trid3nt_server.workflows.telemac.errors import TelemacError
 _FILES = {"geometry": "rog.slf", "boundary": "rog.cli", "result": "r2d_rog.slf"}
 
 
-def _mesh_record(*, min_edge_m: float | None = None,
-                 topology_uri: str | None = "s3://m/M01/mesh_topology.json") -> dict:
+def _staged(*, roles=None, order=None, prescribes=None) -> dict:
+    """What the mesh-files stage hands the author: the pair and its walk."""
+    return {"engine_files": {GEOMETRY_FILE: "s3://m/M01/domain.slf",
+                             BOUNDARY_CONDITIONS_FILE: "s3://m/M01/domain.cli"},
+            "topology": {
+                "roles": {"inflow": [0, 3], "outflow": [1, 2]}
+                if roles is None else roles,
+                "liquid_boundary_order": ["outflow", "inflow"]
+                if order is None else order,
+                "liquid_boundary_prescribes": ["elevation", "flowrate"]
+                if prescribes is None else prescribes}}
+
+
+def _sealed() -> dict:
+    return _staged(roles={}, order=[], prescribes=[])
+
+
+def _mesh_record(*, min_edge_m: float | None = None) -> dict:
     """A mesh step's result, composed the way the mesh step composes a real one.
 
     Every derived field is READ off the artifact through the product's own
@@ -40,8 +55,7 @@ def _mesh_record(*, min_edge_m: float | None = None,
         mesh_id="M01", name="Coweeta Creek", mode="om2d",
         display_uri="s3://m/M01/mesh.2dm",
         engine_files={GEOMETRY_FILE: "s3://m/M01/domain.slf",
-                      BOUNDARY_CONDITIONS_FILE: "s3://m/M01/domain.cli",
-                      **({BOUNDARY_TOPOLOGY: topology_uri} if topology_uri else {})},
+                      BOUNDARY_CONDITIONS_FILE: "s3://m/M01/domain.cli"},
         recipe_uri="s3://m/M01/mesh_recipe.jsonl",
         crs_authid="EPSG:32610", has_bathymetry=True, utm_epsg=32610,
         node_count=539, element_count=902,
@@ -64,12 +78,6 @@ def settle(monkeypatch, tmp_path):
     import numpy as np
 
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
-    monkeypatch.setattr(mesh_mod, "read_topology",
-                        lambda _uri: {
-                            "roles": {"inflow": [0, 3], "outflow": [1, 2]},
-                            "liquid_boundary_order": ["outflow", "inflow"],
-                            "liquid_boundary_prescribes": ["elevation",
-                                                           "flowrate"]})
 
     def _accepted_nodes(_uri, utm_epsg=None):
         return (np.array([[-10.0, -50.0], [6010.0, -50.0], [6010.0, 50.0],
@@ -80,6 +88,7 @@ def settle(monkeypatch, tmp_path):
     monkeypatch.setattr(mesh_mod, "read_accepted_mesh_nodes", _accepted_nodes)
 
     async def _settle(**kwargs):
+        kwargs.setdefault("files", _staged())
         return await asm_mod.open_water(duration_s=3600.0,
                                         mesh_resolution_m=14.0,
                                         **_FILES, **kwargs)
@@ -150,9 +159,9 @@ async def test_the_mesh_travels_under_the_names_the_deck_states(settle):
 
 
 @pytest.mark.asyncio
-async def test_a_mesh_record_with_no_topology_refuses_rather_than_remeshing(settle):
+async def test_a_run_with_no_measured_topology_refuses_rather_than_remeshing(settle):
     with pytest.raises(TelemacError) as excinfo:
-        await settle(mesh=_mesh_record(min_edge_m=8.0, topology_uri=None))
+        await settle(mesh=_mesh_record(min_edge_m=8.0), files={"engine_files": {}})
     assert excinfo.value.error_code == "TELEMAC_MESH_NOT_ACCEPTED"
 
 
@@ -190,10 +199,6 @@ async def test_a_closed_body_whose_level_slot_came_back_empty_refuses_by_name(
 
     from trid3nt_server.workflows.runtime import journal
 
-    monkeypatch.setattr(mesh_mod, "read_topology",
-                        lambda _uri: {"roles": {},
-                                      "liquid_boundary_order": [],
-                                      "liquid_boundary_prescribes": []})
     token = journal.bind_choices()
     try:
         journal.slot_choice(SourceChoice(
@@ -202,7 +207,7 @@ async def test_a_closed_body_whose_level_slot_came_back_empty_refuses_by_name(
                                excluded="no station within reach")],
             sentence="nothing measured this water's level here."))
         with pytest.raises(TelemacError) as excinfo:
-            await settle(mesh=_mesh_record(min_edge_m=14.0))
+            await settle(mesh=_mesh_record(min_edge_m=14.0), files=_sealed())
     finally:
         journal.drain_choices(token)
     assert excinfo.value.error_code == "TELEMAC_LEVEL_UNMEASURED"
@@ -215,9 +220,5 @@ async def test_a_closed_body_that_asked_for_no_level_opens_the_way_its_deck_says
         settle, monkeypatch):
     """A question declaring no level slot - rain falling on dry ground - states
     no water and is not refused for stating none."""
-    monkeypatch.setattr(mesh_mod, "read_topology",
-                        lambda _uri: {"roles": {},
-                                      "liquid_boundary_order": [],
-                                      "liquid_boundary_prescribes": []})
-    out = await settle(mesh=_mesh_record(min_edge_m=14.0))
+    out = await settle(mesh=_mesh_record(min_edge_m=14.0), files=_sealed())
     assert out["level_m"] is None and out["opening"] is None

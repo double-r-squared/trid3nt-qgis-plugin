@@ -300,7 +300,7 @@ package SolveSeam {
 
     interface def TopologyBundle {
         doc /*
-        The mesher's answers a SELAFIN cannot hold. A bundle naming no liquid
+        What a SELAFIN cannot hold, measured off the accepted mesh's walk. A bundle naming no liquid
         boundary refuses, because a steering file cannot be authored against a
         boundary with no role on it, and one stating no prescription per boundary
         refuses too: it was numbered before the numbering was the engine's own.
@@ -487,7 +487,7 @@ package SolveSeam {
 
     part topologyWriter : TopologyWriter {
         doc /*
-        code: trid3nt_server/workflows/mesh/topology.py
+        code: trid3nt_server/workflows/telemac/authoring/topology.py
         */
         port topologyOut : TopologyOut;
     }
@@ -1038,7 +1038,7 @@ package SolveSeam {
     verify requirement BoundaryCodesMatchTheSteering by
         "tests/telemac/test_telemac_boundary_contract.py::test_the_free_exit_role_prescribes_nothing_as_a_stated_choice";
     verify requirement BoundaryCodesMatchTheSteering by
-        "tests/mesh/test_mesh_topology_and_bed.py::test_a_bundle_that_states_no_prescription_per_boundary_refuses";
+        "tests/telemac/test_telemac_boundary_topology.py::test_a_walk_that_states_no_prescription_per_boundary_refuses";
 
     satisfy requirement CatchmentOutletHoldsADerivedRatingCurve by ratingCurve;
     satisfy requirement CatchmentOutletHoldsADerivedRatingCurve by uniformFlow;

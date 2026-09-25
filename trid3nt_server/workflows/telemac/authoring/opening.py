@@ -411,6 +411,7 @@ def _opening(level: Any, mesh: Mapping[str, Any]) -> dict[str, Any]:
 async def open_water(
     *,
     mesh: dict[str, Any],
+    files: dict[str, Any],
     duration_s: float | Sequence[float] | None = None,
     level: Any = None,
     name: str = "",
@@ -444,7 +445,7 @@ async def open_water(
     node_xy, _bed = await asyncio.to_thread(mesh_nodes, mesh)
     initial_state = await asyncio.to_thread(initial_state_of, continue_from,
                                             len(node_xy))
-    topology = await asyncio.to_thread(topology_of, mesh, missing=mesh_missing)
+    topology = topology_of(files, missing=mesh_missing)
     # A deck that STATES the depth an open edge is designated at is one whose
     # sea state is prescribed across that edge; a deck that states none names a
     # body of water that may legitimately be closed.
@@ -486,9 +487,9 @@ async def open_water(
         "liquid_boundaries": _liquid_boundaries(topology, node_xy),
         "continue_from": _PREVIOUS_DEST if continue_from else None,
         "mesh_inputs": [
-            {"gs_uri": geometry_uri(mesh, missing=mesh_missing),
+            {"gs_uri": geometry_uri(files, missing=mesh_missing),
              "dest": geometry},
-            {"gs_uri": boundary_uri(mesh, missing=mesh_missing),
+            {"gs_uri": boundary_uri(files, missing=mesh_missing),
              "dest": boundary},
             *([{"gs_uri": str(continue_from), "dest": _PREVIOUS_DEST}]
               if continue_from else [])],
@@ -509,6 +510,7 @@ async def open_water(
 async def open_channel(
     *,
     mesh: dict[str, Any],
+    files: dict[str, Any],
     friction_law: int,
     friction_coefficient: float,
     carrier: Any = None,
@@ -532,8 +534,7 @@ async def open_channel(
     if carrier is None:
         return stage
     node_xy, node_bed = await asyncio.to_thread(mesh_nodes, mesh)
-    topology = await asyncio.to_thread(topology_of, mesh, missing=mesh_missing)
-    roles = topology["roles"] or {}
+    roles = topology_of(files, missing=mesh_missing)["roles"] or {}
     held = _held_level(stage)
     if not (roles.get("inflow") and roles.get("outflow")):
         return {"level_m": None if held is None else round(held[0], 3),

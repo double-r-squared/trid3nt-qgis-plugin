@@ -7,11 +7,10 @@ roughness the deck is written at. Offline: no solve, no container.
 """
 
 from __future__ import annotations
-from trid3nt_server.workflows.mesh.shared.selafin_io import (
+from trid3nt_server.workflows.telemac.authoring.selafin_io import (
     BOUNDARY_CONDITIONS_FILE,
     GEOMETRY_FILE,
 )
-from trid3nt_server.workflows.mesh.topology import BOUNDARY_TOPOLOGY
 
 import asyncio
 
@@ -38,24 +37,29 @@ class _Artifact:
 
 
 def _mesh():
-    return {"artifact": _Artifact(),
-            "engine_files": {BOUNDARY_TOPOLOGY: "topology.json"},
-            "min_edge_m": 20.0, "mesh_id": "mesh-1"}
+    return {"artifact": _Artifact(), "min_edge_m": 20.0, "mesh_id": "mesh-1"}
+
+
+def _files(**over):
+    """What the mesh-files stage hands the author: the pair and its walk."""
+    walk = {"roles": _ROLES, "liquid_boundary_order": ["inflow", "outflow"],
+            "liquid_boundary_prescribes": ["flowrate", "elevation"]}
+    walk.update(over)
+    return {"engine_files": {GEOMETRY_FILE: "mesh.slf",
+                             BOUNDARY_CONDITIONS_FILE: "mesh.cli"},
+            "topology": walk}
 
 
 @pytest.fixture()
 def settled(monkeypatch):
     """The accepted mesh and its topology, answered without touching a store."""
     monkeypatch.setattr(D, "mesh_nodes", lambda mesh: (_XY, _BED))
-    monkeypatch.setattr(MESH, "read_topology", lambda uri: {
-        "roles": _ROLES, "liquid_boundary_order": ["inflow", "outflow"],
-        "liquid_boundary_prescribes": ["flowrate", "elevation"]})
     return _mesh
 
 
 def _run(**over):
-    ask = {"mesh": _mesh(), "friction_law": 3, "friction_coefficient": 33.0,
-           "carrier": 50.0}
+    ask = {"mesh": _mesh(), "files": _files(), "friction_law": 3,
+           "friction_coefficient": 33.0, "carrier": 50.0}
     ask.update(over)
     return asyncio.run(D.open_channel(**ask))
 
@@ -121,14 +125,13 @@ def test_no_carrier_at_all_opens_no_channel_and_hands_back_the_level(settled):
     assert _run(carrier=None, stage=98.5) == 98.5
 
 
-def test_a_domain_with_no_inflow_run_has_no_channel_to_open(settled, monkeypatch):
+def test_a_domain_with_no_inflow_run_has_no_channel_to_open(settled):
     """A body whose edge names no inflow is CLOSED: there is no channel here to
     measure, so the addition adds nothing, imposes no flow and hands back the
     level it was given for the base to open the water flat at."""
-    monkeypatch.setattr(MESH, "read_topology", lambda uri: {
-        "roles": {"outflow": [4, 5, 6, 7]}, "liquid_boundary_order": ["outflow"],
-        "liquid_boundary_prescribes": ["elevation"]})
-    closed = _run(stage=98.5)
+    closed = _run(stage=98.5, files=_files(
+        roles={"outflow": [4, 5, 6, 7]}, liquid_boundary_order=["outflow"],
+        liquid_boundary_prescribes=["elevation"]))
     assert closed["level_m"] == 98.5
     assert (closed["depth_m"], closed["opening"]) == (None, None)
     assert (closed["inflow_q_m3s"], closed["outflow_stage_m"]) == (None, None)

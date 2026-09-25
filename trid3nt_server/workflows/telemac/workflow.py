@@ -805,7 +805,7 @@ class TelemacWorkflow(Workflow):
         channel = (
             (Step(runner=f"{_TELEMAC}.authoring.opening.open_channel",
                   stage="author",
-                  kwargs={"mesh": Ref("mesh"),
+                  kwargs={"mesh": Ref("mesh"), "files": Ref("mesh_files"),
                           "carrier": DataRef(inflow),
                           "stage": DataRef(level) if level else None,
                           "friction_law": self._asserted("LAW_OF_BOTTOM_FRICTION"),
@@ -832,7 +832,7 @@ class TelemacWorkflow(Workflow):
         settle = self._settle(recipe, domain) or Step(
             runner=f"{_TELEMAC}.authoring.opening.open_water",
             stage="author",
-            kwargs={"mesh": Ref("mesh"),
+            kwargs={"mesh": Ref("mesh"), "files": Ref("mesh_files"),
                     # WHAT THE WATER STANDS AT: the channel's own measurement
                     # where this question has one, else the level slot, else
                     # nothing - and a bed stated as a depth needs nothing.
@@ -887,6 +887,13 @@ class TelemacWorkflow(Workflow):
                            name=Ref(self._states("MESH_ON", "") or domain),
                            supplied=self._states("SUPPLIED_MESH", None),
                            tool=self.name).named("mesh"),
+            # THE FILES THIS ENGINE ASKS THE ACCEPTED MESH FOR, written from it
+            # before anything reads one: the pair is TELEMAC's own artifact and
+            # the boundary numbering it measures is what every stage below reads
+            # to know which face carries what.
+            Step(runner=f"{_TELEMAC}.authoring.mesh_files.telemac_mesh_files",
+                 stage="author",
+                 kwargs={"mesh": Ref("mesh")}).named("mesh_files"),
             *produce,
             settle.named("settled"),
             *derive,
@@ -1023,9 +1030,9 @@ class TelemacWorkflow(Workflow):
         template."""
         from trid3nt_server.workflows.runtime.plan import DataRef
 
-        world = {"mesh": Ref("mesh"), "line": Ref("line"),
-                 "domain": DataRef(domain), "settled": Ref("settled"),
-                 "friction_law": None}
+        world = {"mesh": Ref("mesh"), "files": Ref("mesh_files"),
+                 "line": Ref("line"), "domain": DataRef(domain),
+                 "settled": Ref("settled"), "friction_law": None}
         steps = []
         for ask in self._asked(recipe):
             runner, stage, taken = _MEASURES[ask.kind]

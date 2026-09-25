@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from trid3nt_server.render.formats import Chart, Deliverable, Mesh, Vector
-from trid3nt_server.workflows.mesh.shared.selafin_io import (
+from trid3nt_server.workflows.telemac.authoring.selafin_io import (
     SelafinReadError,
     read_selafin,
 )

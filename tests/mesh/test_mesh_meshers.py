@@ -27,10 +27,6 @@ from trid3nt_server.workflows.mesh.meshers import (
     registered_meshers,
 )
 from trid3nt_server.workflows.mesh.shared.nodes import MeshNodeError, read_2dm_mesh
-from trid3nt_server.workflows.mesh.shared.selafin_io import (
-    BOUNDARY_CONDITIONS_FILE,
-    GEOMETRY_FILE,
-)
 
 
 
@@ -132,8 +128,6 @@ def test_an_adopted_layer_drops_the_meta_bound_to_the_topology_it_replaced(tmp_p
         points=pts[:3], cells=np.array([[0, 1, 2]]), crs_authid="EPSG:32616",
         bed=z[:3],
         meta={"utm_epsg": 32616,
-              "files": {GEOMETRY_FILE: "/stale/mesh.slf",
-                        BOUNDARY_CONDITIONS_FILE: "/stale/mesh.cli"},
               "probes": {"open_node_count": 93},
               "artifact": {
                            "open_boundary_info": {"open_node_count": 93},
@@ -143,8 +137,7 @@ def test_an_adopted_layer_drops_the_meta_bound_to_the_topology_it_replaced(tmp_p
     after = session.mesh
 
     assert after.node_count == 4 and after.element_count == 2
-    for key in ("files", "probes"):
-        assert key not in after.meta, f"{key} survived the adopted layer"
+    assert "probes" not in after.meta, "probes survived the adopted layer"
     # What is ABOUT the domain rather than about its cells still rides.
     assert after.meta["utm_epsg"] == 32616
     assert after.meta["artifact"]["provenance"]["mesher"] == "om2d"

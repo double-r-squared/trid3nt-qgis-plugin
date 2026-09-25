@@ -3,11 +3,10 @@
 Offline only - every runner here is a local stub; no solve, no network.
 """
 from __future__ import annotations
-from trid3nt_server.workflows.mesh.shared.selafin_io import (
+from trid3nt_server.workflows.telemac.authoring.selafin_io import (
     BOUNDARY_CONDITIONS_FILE,
     GEOMETRY_FILE,
 )
-from trid3nt_server.workflows.mesh.topology import BOUNDARY_TOPOLOGY
 
 import collections
 import contextlib

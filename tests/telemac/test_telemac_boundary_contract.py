@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.mesh import topology as T
-from trid3nt_server.workflows.mesh.shared import selafin_io as D
+from trid3nt_server.workflows.telemac.authoring import topology as T
+from trid3nt_server.workflows.telemac.authoring import selafin_io as D
 from trid3nt_server.workflows.telemac.modules import T2D
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
 

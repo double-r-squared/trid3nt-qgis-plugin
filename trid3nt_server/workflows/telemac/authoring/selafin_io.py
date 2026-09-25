@@ -18,10 +18,10 @@ from trid3nt_server.workflows.mesh.shared.formats.tin_topology import (
     BoundaryPinched,
     boundary_numbering,
 )
-from trid3nt_server.workflows.mesh.topology import FREE_EXIT_ROLE, RATING_CURVE_ROLE
+from .topology import FREE_EXIT_ROLE, RATING_CURVE_ROLE
 
-__all__ = ["BOUNDARY_CONDITIONS_FILE", "GEOMETRY_FILE", "write_telemac_pair",
-           "read_selafin", "SelafinReadError"]
+__all__ = ["BOUNDARY_CONDITIONS_FILE", "GEOMETRY_FILE", "telemac_boundary",
+           "write_telemac_pair", "read_selafin", "SelafinReadError"]
 
 #: The steering keywords TELEMAC reads the pair under. A mesh's file map is
 #: keyed by them, so a reader asks for a file by the name the engine uses for it
@@ -237,15 +237,13 @@ def _write_cli(path: Path, bnodes, codes) -> None:
     path.write_text("\n".join(rows) + "\n")
 
 
-def write_telemac_pair(rundir: Path | str, *, x: Any, y: Any, cells: Any,
-                       bed: Any, roles: Mapping[str, Any] | None = None,
-                       title: str = "TRID3NT MESH") -> dict[str, Any]:
-    """Write the SELAFIN geometry and its ``.cli`` -> the two paths and the stats.
+def telemac_boundary(*, x: Any, y: Any, cells: Any,
+                     roles: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """The engine's OWN boundary numbering over this geometry -> the walk.
 
-    ``roles`` maps a boundary role to its node indices; the rest are wall."""
-    from serafin import SerafinHeader, SerafinWriter
-
-    rundir = Path(rundir)
+    The IPOBO order, the code quad written on every boundary row, and what each
+    numbered liquid boundary prescribes. One walk: the ``.cli`` rows and the
+    topology beside them are both read off this, so neither can disagree."""
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
     cells = np.asarray(cells, dtype=np.int64)
@@ -259,6 +257,44 @@ def write_telemac_pair(rundir: Path | str, *, x: Any, y: Any, cells: Any,
     role_of = _roles_by_node(roles or {})
     codes = np.array([_ROLE_CODES[role_of.get(int(n), "wall")] for n in bnodes],
                      dtype=np.int32)
+    lengths = [len(c) for c in contours]
+    runs = _liquid_boundaries(x, y, bnodes, codes, lengths)
+    numliq = _numliq(runs, _successors(lengths), nptfr)
+    rows = [[k for k in range(nptfr) if numliq[k] == number]
+            for number in range(1, len(runs) + 1)]
+    stats = {
+        "npoin": npoin, "nelem": int(cells.shape[0]), "nptfr": nptfr,
+        "liquid_nodes": len(role_of), "n_liquid_boundaries": len(runs),
+        "liquid_boundary_roles": [
+            _joined([role_of.get(int(bnodes[k]), "wall") for k in here])
+            for here in rows],
+        # What each numbered boundary PRESCRIBES, read off the quad written for
+        # it - the half of the cross-file contract the steering author reads.
+        "liquid_boundary_prescribes": [
+            _joined([_prescribes(codes[k]) for k in here]) for here in rows],
+        "n_contours": len(contours),
+        "ipobo_distinct": nptfr, "ipobo_max": int(ipobo.max()),
+        "ipobo_is_permutation": True,
+        "contour_lengths": lengths,
+        "cli_contour_runs": len(contours)}
+    return {"ipobo": ipobo, "bnodes": bnodes, "codes": codes, "stats": stats}
+
+
+def write_telemac_pair(rundir: Path | str, *, x: Any, y: Any, cells: Any,
+                       bed: Any, roles: Mapping[str, Any] | None = None,
+                       title: str = "TRID3NT MESH") -> dict[str, Any]:
+    """Write the SELAFIN geometry and its ``.cli`` -> the two paths and the walk.
+
+    ``roles`` maps a boundary role to its node indices; the rest are wall."""
+    from serafin import SerafinHeader, SerafinWriter
+
+    rundir = Path(rundir)
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    cells = np.asarray(cells, dtype=np.int64)
+    walk = telemac_boundary(x=x, y=y, cells=cells, roles=roles)
+    ipobo, bnodes, codes = walk["ipobo"], walk["bnodes"], walk["codes"]
+    npoin = int(x.shape[0])
 
     geo_slf, cli = rundir / "mesh.slf", rundir / "mesh.cli"
     header = SerafinHeader(title=str(title)[:72])
@@ -285,27 +321,7 @@ def write_telemac_pair(rundir: Path | str, *, x: Any, y: Any, cells: Any,
             f"the SELAFIN writer could not write {geo_slf.name} and "
             f"{cli.name} into {rundir}: {failure}") from failure
 
-    lengths = [len(c) for c in contours]
-    runs = _liquid_boundaries(x, y, bnodes, codes, lengths)
-    numliq = _numliq(runs, _successors(lengths), nptfr)
-    rows = [[k for k in range(nptfr) if numliq[k] == number]
-            for number in range(1, len(runs) + 1)]
-    stats = {
-        "npoin": npoin, "nelem": int(cells.shape[0]), "nptfr": nptfr,
-        "liquid_nodes": len(role_of), "n_liquid_boundaries": len(runs),
-        "liquid_boundary_roles": [
-            _joined([role_of.get(int(bnodes[k]), "wall") for k in here])
-            for here in rows],
-        # What each numbered boundary PRESCRIBES, read off the quad written for
-        # it - the half of the cross-file contract the steering author reads.
-        "liquid_boundary_prescribes": [
-            _joined([_prescribes(codes[k]) for k in here]) for here in rows],
-        "n_contours": len(contours),
-        "ipobo_distinct": nptfr, "ipobo_max": int(ipobo.max()),
-        "ipobo_is_permutation": True,
-        "contour_lengths": lengths,
-        "cli_contour_runs": len(contours)}
-    return {"geo_slf": geo_slf, "cli": cli, "stats": stats}
+    return {"geo_slf": geo_slf, "cli": cli, "stats": walk["stats"]}
 
 
 def read_selafin(path: str | Path) -> dict[str, Any]:

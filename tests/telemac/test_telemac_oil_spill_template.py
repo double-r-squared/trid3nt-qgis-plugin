@@ -102,7 +102,7 @@ def test_the_workflow_owns_every_stage_this_template_does_not_differ_on():
     template states is the open-channel hydraulics and where the oil enters."""
     workflow = _workflow()
     assert [step.label for step in workflow.plan.steps] == [
-        "stated", "mesh", "channel", "source", "settled", "sheet", "solve",
+        "stated", "mesh", "mesh_files", "channel", "source", "settled", "sheet", "solve",
         "outputs"]
     assert not hasattr(template, "MESH")
 

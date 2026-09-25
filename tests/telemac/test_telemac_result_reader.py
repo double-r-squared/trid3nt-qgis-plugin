@@ -14,13 +14,13 @@ import numpy as np
 import pytest
 
 from trid3nt_server.workflows.mesh.meshers import MeshToolError
-from trid3nt_server.workflows.mesh.shared import selafin_io as IO
+from trid3nt_server.workflows.telemac.authoring import selafin_io as IO
 from trid3nt_server.workflows.telemac.modules import outputs as R
 
 #: Every module on this side that reaches a solved result. None may run a
 #: container to do it: the image solves and does nothing else.
 _READERS = (
-    "trid3nt_server/workflows/mesh/shared/selafin_io.py",
+    "trid3nt_server/workflows/telemac/authoring/selafin_io.py",
     "trid3nt_server/workflows/telemac/modules/outputs.py",
     "trid3nt_server/workflows/telemac/authoring/opening.py",
     "trid3nt_server/workflows/telemac/authoring/release_point.py",
@@ -129,7 +129,7 @@ def test_no_reader_on_this_side_parses_the_format():
         if "struct" in imported and "selafin" in text.lower():
             hand_rolls.add(rel)
 
-    assert opens_format == {"trid3nt_server/workflows/mesh/shared/selafin_io.py"}
+    assert opens_format == {"trid3nt_server/workflows/telemac/authoring/selafin_io.py"}
     assert not hand_rolls
 
 

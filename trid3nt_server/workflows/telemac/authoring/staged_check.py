@@ -281,7 +281,7 @@ def check_staged_run(rundir: Path | str, *, steering: str,
         _refuse("FILE_MISSING",
                 f"{steering} states {_GEOMETRY} = {geometry!r} and {_BOUNDARY} "
                 f"= {boundary!r}; the pair is one artifact and a run needs both.")
-    from trid3nt_server.workflows.mesh.shared.selafin_io import read_selafin
+    from .selafin_io import read_selafin
 
     mesh = read_selafin(_read(staged[geometry]))
     codes = _boundary_matches_the_walk(mesh, geometry, _read(staged[boundary]))

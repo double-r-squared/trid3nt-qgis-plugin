@@ -1,74 +1,21 @@
-"""The accepted topology a geometry file cannot state, and the bed painted onto it.
+"""The named stretches of a mesh's boundary, and the bed painted onto it.
 
-Offline: no container, no object store. The pair WRITER is proved through the
-image by the mesh drivers; what is pinned here is the record the server keeps
-beside the geometry, the contiguous-run matcher ``set_boundary_roles`` IS, and
-the node assignment ``set_bed`` composes.
+Offline: no container, no object store. What is pinned here is the
+contiguous-run matcher ``set_boundary_roles`` IS, the boundary walk every ring
+is numbered by, and the node assignment ``set_bed`` composes.
 """
 
 from __future__ import annotations
 
-import json
-
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.mesh import topology as T
 from trid3nt_server.workflows.mesh.meshers import Mesh, MeshToolError
 from trid3nt_server.workflows.mesh.shared import primitives as P
 from trid3nt_server.workflows.mesh.shared.nodes import (
     MeshNodeError,
     read_centerline_utm,
 )
-
-
-def test_the_bundle_round_trips_the_roles_and_the_measured_order(tmp_path):
-    path = T.write_topology(tmp_path, roles={"inflow": [1, 2], "outflow": [7]},
-                            liquid_boundary_order=["outflow", "inflow"],
-                            liquid_boundary_prescribes=["elevation", "flowrate"])
-    assert path.name == T.TOPOLOGY_FILENAME
-    read = T.read_topology(str(path))
-    assert read["roles"] == {"inflow": [1, 2], "outflow": [7]}
-    assert read["liquid_boundary_order"] == ["outflow", "inflow"]
-    assert read["liquid_boundary_prescribes"] == ["elevation", "flowrate"]
-
-
-def test_a_bundle_that_states_no_prescription_per_boundary_refuses(tmp_path):
-    """It was numbered by the superseded row-order rule, and a steering file
-    authored against it prescribes into codes that never read it."""
-    path = tmp_path / T.TOPOLOGY_FILENAME
-    path.write_text(json.dumps({"roles": {"outflow": [7]},
-                                "liquid_boundary_order": ["outflow"]}))
-    with pytest.raises(ValueError, match="rebuild the mesh"):
-        T.read_topology(str(path))
-
-
-def test_a_bundle_naming_no_liquid_boundary_states_the_closed_basin(tmp_path):
-    """A closed basin is an ANSWER. The bundle is written for every mesh, and the
-    reader says the boundary is solid wall rather than leaving the caller to read
-    an absence."""
-    path = T.write_topology(tmp_path, roles={}, liquid_boundary_order=[],
-                            liquid_boundary_prescribes=[])
-    read = T.read_topology(str(path))
-    assert read["roles"] == {} and read["liquid_boundary_order"] == []
-    assert "names no liquid boundary" in read["states"]
-
-
-def test_the_bundle_states_the_numbering_a_steering_author_reads(tmp_path):
-    path = T.write_topology(tmp_path, roles={"open": [1]},
-                            liquid_boundary_order=["open"],
-                            liquid_boundary_prescribes=["elevation"])
-    assert T.read_topology(str(path))["states"] == (
-        "1 liquid boundary, numbered 1=open")
-
-
-def test_an_empty_role_is_not_a_role(tmp_path):
-    """A role naming no node is dropped rather than counted: nothing carries it."""
-    path = tmp_path / T.TOPOLOGY_FILENAME
-    path.write_text(json.dumps({"roles": {"inflow": []},
-                                "liquid_boundary_order": ["inflow"],
-                                "liquid_boundary_prescribes": ["flowrate"]}))
-    assert T.read_topology(str(path))["roles"] == {}
 
 
 def _lattice_mesh():

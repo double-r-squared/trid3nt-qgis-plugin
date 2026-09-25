@@ -748,21 +748,13 @@ def _conformal_probe(points_m: Any, pfix: Any, utm_epsg: int) -> dict[str, Any]:
 
 def _emitted(mesh: Mesh, rundir: Path, domain: _Domain,
              stats: Mapping[str, Any], notes: list[str]) -> Mesh:
-    """Write the per-solver geometry from ONE boundary segmentation -> the mesh.
+    """Segment the boundary ONCE and measure what the walk holds -> the mesh.
 
-    Only formats an engine READS are written."""
+    Every named stretch and every count here is read off this mesh's own nodes
+    and cells; what an engine needs written out of them is that engine's."""
     import dataclasses
 
     from trid3nt_server.workflows.mesh.shared.nodes import boundary_contours
-    from trid3nt_server.workflows.mesh.shared.selafin_io import (
-        BOUNDARY_CONDITIONS_FILE,
-        GEOMETRY_FILE,
-        write_telemac_pair,
-    )
-    from trid3nt_server.workflows.mesh.topology import (
-        BOUNDARY_TOPOLOGY,
-        write_topology,
-    )
 
     roles = {role: list(nodes) for role, nodes
              in dict(mesh.meta.get("boundary_roles") or {}).items() if nodes}
@@ -794,26 +786,7 @@ def _emitted(mesh: Mesh, rundir: Path, domain: _Domain,
         info["role_sections"] = runs
         probes["boundary_role_sections"] = runs
 
-    files: dict[str, str] = {}
-    pair = write_telemac_pair(
-        rundir, x=mesh.points[:, 0], y=mesh.points[:, 1], cells=mesh.cells,
-        bed=mesh.bed, roles=roles, title="TRID3NT OM2D MESH")
-    files[GEOMETRY_FILE] = str(pair["geo_slf"])
-    files[BOUNDARY_CONDITIONS_FILE] = str(pair["cli"])
-    lb_order = list(pair["stats"].get("liquid_boundary_roles") or [])
-    lb_prescribes = list(pair["stats"].get("liquid_boundary_prescribes") or [])
-    probes["liquid_boundaries"] = int(pair["stats"].get("n_liquid_boundaries", 0))
-    probes["liquid_boundary_roles"] = lb_order
-    probes["liquid_boundary_prescribes"] = lb_prescribes
-    probes["boundary_nodes_written"] = int(pair["stats"].get("nptfr", 0))
-    # The three facts a SELAFIN cannot state - which stretch carries which role,
-    # the order the solver will number them in, and what each one's written code
-    # quad prescribes - ride beside it, on EVERY mesh. A closed basin names no
-    # liquid boundary, and that is a fact its reader states rather than an
-    # absence the reader has to interpret.
-    files[BOUNDARY_TOPOLOGY] = str(write_topology(
-        rundir, roles=roles, liquid_boundary_order=lb_order,
-        liquid_boundary_prescribes=lb_prescribes))
+    probes["boundary_nodes"] = sum(len(nodes) for nodes in roles.values())
     artifact = {**dict(mesh.meta.get("artifact") or {}),
                 "open_boundary_info": info}
     if notes:
@@ -821,8 +794,7 @@ def _emitted(mesh: Mesh, rundir: Path, domain: _Domain,
         provenance["op_notes"] = list(provenance.get("op_notes") or ()) + notes
         artifact["provenance"] = provenance
     return dataclasses.replace(mesh, meta={
-        **dict(mesh.meta), "files": files, "artifact": artifact,
-        "boundary_roles": roles,
+        **dict(mesh.meta), "artifact": artifact, "boundary_roles": roles,
         "probes": {**dict(mesh.meta.get("probes") or {}), **probes}})
 
 

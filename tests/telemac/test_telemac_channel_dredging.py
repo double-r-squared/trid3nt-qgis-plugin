@@ -84,7 +84,7 @@ def test_the_workflow_owns_every_stage_but_the_two_this_question_measures():
     dredge's areas are measured against the SETTLED run, so that step is the
     template's and it runs after."""
     assert [step.label for step in _WORKFLOW.plan.steps] == [
-        "stated", "mesh", "channel", "settled", "dredge", "sheet", "solve",
+        "stated", "mesh", "mesh_files", "channel", "settled", "dredge", "sheet", "solve",
         "outputs"]
     settle = _steps()["settled"]
     assert settle.runner.endswith("opening.open_water")

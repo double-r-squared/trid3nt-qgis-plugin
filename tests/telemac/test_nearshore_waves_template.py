@@ -9,11 +9,10 @@ template's arithmetic.
 """
 
 from __future__ import annotations
-from trid3nt_server.workflows.mesh.shared.selafin_io import (
+from trid3nt_server.workflows.telemac.authoring.selafin_io import (
     BOUNDARY_CONDITIONS_FILE,
     GEOMETRY_FILE,
 )
-from trid3nt_server.workflows.mesh.topology import BOUNDARY_TOPOLOGY
 
 import pytest
 
@@ -152,17 +151,18 @@ async def test_a_window_whose_rim_is_all_wall_refuses_rather_than_solving_zeros(
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
     # A synthetic mesh whose every boundary node is solid wall, which is what a
     # coastal window returns when no stretch of it reaches the stated depth.
-    monkeypatch.setattr(mesh_mod, "read_topology", lambda _uri: {
+    sealed = {"topology": {
         "roles": {}, "liquid_boundary_order": [],
         "liquid_boundary_prescribes": [],
         "states": "this domain names no liquid boundary; its whole boundary "
-                  "is solid wall"})
+                  "is solid wall"}}
     monkeypatch.setattr(asm_mod, "mesh_nodes",
                         lambda _mesh: (np.zeros((4, 2)), np.zeros(4)))
 
     with pytest.raises(TelemacError) as raised:
-        await asm_mod.open_water(mesh=_closed_mesh(), duration_s=_HOUR_S,
-                                 deck=_TOOL, open_depth_threshold_m=-12.0)
+        await asm_mod.open_water(mesh=_closed_mesh(), files=sealed,
+                                 duration_s=_HOUR_S, deck=_TOOL,
+                                 open_depth_threshold_m=-12.0)
     assert raised.value.error_code == "TELEMAC_MESH_CLOSED"
     assert _TOOL in str(raised.value) and "-12 m" in str(raised.value)
 
@@ -175,8 +175,7 @@ def _closed_mesh():
         mesh_id="M01", name="Duck, NC", mode="om2d",
         display_uri="s3://m/M01/mesh.2dm",
         engine_files={GEOMETRY_FILE: "s3://m/M01/coast.slf",
-                      BOUNDARY_CONDITIONS_FILE: "s3://m/M01/coast.cli",
-                      BOUNDARY_TOPOLOGY: "s3://m/M01/mesh_topology.json"},
+                      BOUNDARY_CONDITIONS_FILE: "s3://m/M01/coast.cli"},
         recipe_uri="s3://m/M01/mesh_recipe.jsonl", crs_authid="EPSG:32618",
         has_bathymetry=True, utm_epsg=32618, node_count=252, element_count=400,
         bbox=(-75.755, 36.170, -75.725, 36.200),

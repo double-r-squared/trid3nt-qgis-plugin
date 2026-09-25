@@ -141,10 +141,10 @@ class MeshSession:
         points, cells, z = read_2dm_mesh(str(layer))
         # A .2dm always carries a node z column, so the edited layer cannot say
         # whether a bed was ever painted; the mesh it replaces is what knows. The
-        # per-solver files and the probes described the cells the edit replaced,
-        # so they are dropped rather than carried onto a different topology.
+        # probes described the cells the edit replaced, so they are dropped
+        # rather than carried onto a different topology.
         carried = {k: v for k, v in mesh.meta.items()
-                   if k not in ("files", "probes", "lonlat")}
+                   if k not in ("probes", "lonlat")}
         self._mesh = dataclasses.replace(
             mesh, points=points, cells=cells,
             bed=(z if mesh.has_bed else None), meta=carried)
@@ -190,7 +190,6 @@ class MeshSession:
         declared.pop("node_count", None)
         declared.pop("element_count", None)
         _, display_uri = self._display_face()
-        engine_files = self._engine_files()
         recipe_uri = self._stage(self.recipe_path)
         has_bed = mesh.has_bed
         declared.pop("engine_compat", None)
@@ -219,7 +218,7 @@ class MeshSession:
                       **dict(declared.pop("provenance", None) or {})}
         art = MeshArtifact(
             mesh_id=self.mesh_id, name=self.name, mode=self.mesher.name,
-            display_uri=display_uri, engine_files=engine_files,
+            display_uri=display_uri,
             boundary_roles={str(role): [int(n) for n in nodes] for role, nodes
                             in dict(mesh.meta.get("boundary_roles") or {}).items()
                             if nodes},
@@ -252,15 +251,6 @@ class MeshSession:
                 local.write_text(write_2dm(self.mesh))
             self._display = (local, self._stage(local))
         return self._display
-
-    def _engine_files(self) -> dict[str, str]:
-        """Stage the engine files the mesher already wrote -> the map they ride.
-
-        ``meta["files"]`` maps the name an engine asks a file by to a LOCAL
-        path; a mesher that wrote none contributes an empty map."""
-        return {name: self._stage(Path(local))
-                for name, local in dict(self.mesh.meta.get("files") or {}).items()
-                if local}
 
     def _stage(self, local: Path) -> str:
         """Upload ``local`` beside this mesh's other objects -> its uri.

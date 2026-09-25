@@ -55,18 +55,8 @@ def _stub_om2d(monkeypatch, tmp_path, *, stats=None):
                       "sizing_functions": ["polygon_sdf(interior)",
                                            "uniform(min_edge)"]}))
 
-    def fake_pair(rundir, **kw):
-        sent["pair"] = {k: v for k, v in kw.items() if k in ("roles", "title")}
-        Path(rundir, "mesh.slf").write_bytes(b"slf")
-        Path(rundir, "mesh.cli").write_text("2 2 2\n")
-        return {"geo_slf": Path(rundir, "mesh.slf"), "cli": Path(rundir, "mesh.cli"),
-                "stats": {"nptfr": 4, "n_liquid_boundaries": 1}}
-
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
     monkeypatch.setattr(OM2D, "_run_op", fake_run_op)
-    monkeypatch.setattr(
-        "trid3nt_server.workflows.mesh.shared.selafin_io.write_telemac_pair",
-        fake_pair)
     return sent
 
 

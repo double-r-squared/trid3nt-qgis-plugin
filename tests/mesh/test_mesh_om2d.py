@@ -226,20 +226,8 @@ def _stub_om2d(monkeypatch, tmp_path, *, pfix=None, stats=None,
         Path(rundir, config["out_stem"] + ".json").write_text(json.dumps(
             {"ops": [], "results": results or {}, "clean_notes": []}))
 
-    def fake_pair(rundir, **kw):
-        sent["pair"] = {k: v for k, v in kw.items() if k in ("roles", "title")}
-        Path(rundir, "mesh.slf").write_bytes(b"slf")
-        Path(rundir, "mesh.cli").write_text("2 2 2\n")
-        return {"geo_slf": Path(rundir, "mesh.slf"), "cli": Path(rundir, "mesh.cli"),
-                "stats": {"nptfr": 4, "n_liquid_boundaries": 1,
-                          "liquid_boundary_roles": ["open"],
-                          "liquid_boundary_prescribes": ["elevation"]}}
-
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
     monkeypatch.setattr(OM2D, "_run_op", fake_run_op)
-    monkeypatch.setattr(
-        "trid3nt_server.workflows.mesh.shared.selafin_io.write_telemac_pair",
-        fake_pair)
     return sent
 
 
@@ -417,7 +405,7 @@ def test_a_library_op_after_the_bed_runs_in_its_own_call_over_the_current_mesh(
         "identify_ocean_boundary_sections"]
     assert tail_config["ops"][0]["kwargs"] == {"depth_threshold": -10.0}
     assert mesh.meta["artifact"]["open_boundary_info"]["open_boundary_sections"] == 1
-    assert sent["pair"]["roles"] == {"open": [1, 3]}
+    assert mesh.meta["boundary_roles"] == {"open": [1, 3]}
 
 
 def test_a_recipe_that_never_asks_opens_no_boundary(monkeypatch, tmp_path):
@@ -427,7 +415,7 @@ def test_a_recipe_that_never_asks_opens_no_boundary(monkeypatch, tmp_path):
     mesh = OM2D.build(_recipe(ops=[mesh_op("set_bed", source="fetch_cudem")]))
     assert "open_boundary_sections" not in \
         mesh.meta["artifact"]["open_boundary_info"]
-    assert sent["pair"]["roles"] == {}
+    assert mesh.meta["boundary_roles"] == {}
 
 
 def test_an_op_that_renumbers_after_a_primitive_refuses_by_name(

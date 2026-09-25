@@ -14,7 +14,7 @@ from trid3nt_server.workflows.mesh.shared.nodes import (
     accepted_mesh_nodes,
     sample_layer_at_nodes,
 )
-from trid3nt_server.workflows.mesh.topology import RATING_CURVE_ROLE
+from .topology import RATING_CURVE_ROLE
 from ..errors import TelemacError
 from .accepted_mesh import face_section, mesh_missing, topology_of
 
@@ -32,11 +32,12 @@ def _outlet_section_unmeasured(message: str) -> Exception:
     return TelemacError(message, error_code="TELEMAC_OUTLET_SECTION_UNMEASURED")
 
 
-def _outlet_boundary(mesh: Mapping[str, Any]) -> tuple[dict[str, Any], int, str, int]:
+def _outlet_boundary(files: Mapping[str, Any]
+                     ) -> tuple[dict[str, Any], int, str, int]:
     """The declared OUTLET: ``(topology, number, what its quad prescribes, count)``.
 
     The number is the solver's own liquid-boundary walk order, 1-based."""
-    topology = topology_of(mesh, missing=mesh_missing)
+    topology = topology_of(files, missing=mesh_missing)
     order = list(topology["liquid_boundary_order"])
     if _OUTLET_ROLE not in topology["roles"] or _OUTLET_ROLE not in order:
         raise TelemacError(
@@ -163,6 +164,7 @@ def _rain_ceiling(rain: Mapping[str, Any], cells: Any,
 async def settle_outlet_rating(
     *,
     mesh: dict[str, Any],
+    files: dict[str, Any],
     landcover: Any,
     roughness: Mapping[Any, Any],
     unmapped: Any,
@@ -180,7 +182,7 @@ async def settle_outlet_rating(
     storage only delays it. ``friction_law`` is the deck's own LAW OF BOTTOM
     FRICTION: a curve derived under a roughness the run is not solved at is a
     level the run never sits at."""
-    topology, outlet_boundary, outlet_prescribes, n_liquid = _outlet_boundary(mesh)
+    topology, outlet_boundary, outlet_prescribes, n_liquid = _outlet_boundary(files)
     if outlet_prescribes != "elevation":
         raise TelemacError(
             f"liquid boundary {outlet_boundary} carries a .cli code quad that "

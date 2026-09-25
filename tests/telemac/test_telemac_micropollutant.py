@@ -282,11 +282,11 @@ def test_the_mesh_the_workflow_builds_paints_the_one_bed_row():
 def test_the_plan_reads_as_the_universal_stage_sequence():
     plan = _template().telemac_micropollutant_release.workflow.plan
     assert [step.name for step in plan.declared()] == [
-        "stated", "mesh", "channel", "source", "monitoring", "settled", "sheet",
-        "solve", "outputs"]
+        "stated", "mesh", "mesh_files", "channel", "source", "monitoring",
+        "settled", "sheet", "solve", "outputs"]
     assert [step.stage for step in plan.declared() if step.stage] == [
         "prep", "mesh", "author", "author", "author", "author", "author",
-        "solve", "publish"]
+        "author", "solve", "publish"]
 
 
 def test_the_ambient_sediment_is_a_stated_deck_opinion_not_a_param():

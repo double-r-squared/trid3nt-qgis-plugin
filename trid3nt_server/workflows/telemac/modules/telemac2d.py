@@ -315,7 +315,7 @@ def _boundaries(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
     boundary whose record reported a WINDOW writes its column; the engine reads
     the steering list for every column the file does not carry, so a run states
     both and each boundary is read off whichever one measured it."""
-    from trid3nt_server.workflows.mesh.topology import FREE_EXIT_ROLE
+    from ..authoring.topology import FREE_EXIT_ROLE
 
     from ..authoring.boundaries import (
         LIQUID_BOUNDARIES_FILENAME,

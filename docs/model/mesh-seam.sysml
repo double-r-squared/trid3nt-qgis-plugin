@@ -137,6 +137,15 @@ package MeshSeam {
         */
     }
 
+    part def EngineMeshFiles {
+        doc /*
+        An engine's author step over the ACCEPTED mesh: what that engine needs
+        made out of the mesh's nodes, cells and named stretches, written into
+        the run and recorded on the mesh under the engine's own name for each
+        file. The mesh states none of it.
+        */
+    }
+
     // ----------------------------------------------------------------- //
     // Ports
     // ----------------------------------------------------------------- //
@@ -266,24 +275,20 @@ package MeshSeam {
 
     interface def MesherContributedFields {
         doc /*
-        The artifact fields only the MESHER can state: the files an engine asked
-        it for keyed by the name that engine uses, the named stretches of the
-        boundary walk, and what it segmented that boundary into. They ride on the
-        mesh's own meta and the session stages them without opinion, so it reads
-        what none of them hold.
+        The artifact fields only the MESHER can state: the named stretches of
+        the boundary walk and what it segmented that boundary into. They ride on
+        the mesh's own meta and the session records them without opinion, so it
+        reads what none of them hold.
         */
-        item files : Map;
         item boundary_roles : Map;
         item open_boundary_info : Map;
     }
 
     interface def RecordedMeshFields {
         doc /*
-        The same fields once the session has STAGED them: the local paths the
-        mesher wrote are object-store uris now, keyed by the name the engine
-        asked for each under, and the boundary walk rides beside them.
+        The same fields once the session has RECORDED them on the accepted
+        mesh's artifact.
         */
-        item engine_files : Map;
         item boundary_roles : Map;
         item open_boundary_info : Map;
     }
@@ -395,13 +400,13 @@ package MeshSeam {
 
     interface def TopologyBundle {
         doc /*
-        The mesher's answers a SELAFIN cannot hold, written for EVERY mesh. A
-        bundle naming no liquid boundary is a recorded fact - a closed basin has
+        What a SELAFIN cannot hold, measured off the accepted mesh's own walk for
+        every run. A bundle naming no liquid boundary is a measured fact - a closed basin has
         no stretch its water crosses - and ``states`` is the sentence the reader
         says it in, so a caller that needed a role refuses about the role rather
         than about a file that is not there.
 
-        constructor: write_topology
+        constructor: boundary_topology
         */
         item roles : RoleMap;
         item liquid_boundary_order : StringList;
@@ -474,7 +479,6 @@ package MeshSeam {
         port arraysIn : ArraysIn;
         port statsIn : StatsIn;
         port refusalIn : RefusalIn;
-        port topologyOut : TopologyOut;
     }
 
     part regGridAdapter : MesherAdapter {
@@ -501,7 +505,7 @@ package MeshSeam {
 
     part selafinIo : SelafinIo {
         doc /*
-        code: trid3nt_server/workflows/mesh/shared/selafin_io.py
+        code: trid3nt_server/workflows/telemac/authoring/selafin_io.py
         */
     }
 
@@ -532,9 +536,16 @@ package MeshSeam {
 
     part topologyWriter : TopologyWriter {
         doc /*
-        code: trid3nt_server/workflows/mesh/topology.py
+        code: trid3nt_server/workflows/telemac/authoring/topology.py
         */
         port topologyIn : TopologyIn;
+    }
+
+    part telemacMeshFiles : EngineMeshFiles {
+        doc /*
+        code: trid3nt_server/workflows/telemac/authoring/mesh_files.py
+        */
+        port topologyOut : TopologyOut;
     }
 
     // ----------------------------------------------------------------- //
@@ -586,7 +597,7 @@ package MeshSeam {
         connect om2dBox.refusalOut to om2dAdapter.refusalIn;
 
     interface topologyWritten : TopologyBundle
-        connect om2dAdapter.topologyOut to topologyWriter.topologyIn;
+        connect telemacMeshFiles.topologyOut to topologyWriter.topologyIn;
 
     interface fieldsCarried : MesherContributedFields
         connect om2dAdapter.fieldsOut to meshSession.fieldsIn {
@@ -718,8 +729,8 @@ package MeshSeam {
 
     requirement def TopologyIsWrittenForEveryMesh {
         doc /*
-        The bundle rides beside every accepted mesh, whatever its boundary
-        carries. An absent bundle and a bundle naming no liquid boundary read
+        The bundle is measured for every run on an accepted mesh, whatever its
+        boundary carries. An absent bundle and a bundle naming no liquid boundary read
         alike to a caller, and only one of them is an answer: a closed basin
         states that its whole boundary is solid wall, and a reader that needed a
         role refuses in its own words about the role it needed.
@@ -894,14 +905,14 @@ package MeshSeam {
     verify requirement BoundaryRolesAreContiguousRuns by
         "tests/mesh/test_mesh_topology_and_bed.py::test_a_face_the_mesh_never_reaches_refuses_rather_than_going_unprescribed";
 
-    satisfy requirement TopologyIsWrittenForEveryMesh by om2dAdapter;
+    satisfy requirement TopologyIsWrittenForEveryMesh by telemacMeshFiles;
     satisfy requirement TopologyIsWrittenForEveryMesh by topologyWriter;
     verify requirement TopologyIsWrittenForEveryMesh by
-        "tests/mesh/test_mesh_topology_and_bed.py::test_a_bundle_naming_no_liquid_boundary_states_the_closed_basin";
+        "tests/telemac/test_telemac_boundary_topology.py::test_a_walk_naming_no_liquid_boundary_states_the_closed_basin";
     verify requirement TopologyIsWrittenForEveryMesh by
-        "tests/mesh/test_mesh_topology_and_bed.py::test_the_bundle_states_the_numbering_a_steering_author_reads";
+        "tests/telemac/test_telemac_boundary_topology.py::test_the_walk_states_the_numbering_a_steering_author_reads";
     verify requirement TopologyIsWrittenForEveryMesh by
-        "tests/mesh/test_mesh_topology_and_bed.py::test_an_empty_role_is_not_a_role";
+        "tests/telemac/test_telemac_boundary_topology.py::test_an_empty_role_is_not_a_role";
 
     satisfy requirement APinchedBoundaryIsRefusedByName by selafinIo;
     verify requirement APinchedBoundaryIsRefusedByName by

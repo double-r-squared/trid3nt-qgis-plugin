@@ -387,7 +387,7 @@ def test_the_workflow_owns_the_stages_and_the_template_adds_its_own_two():
     add is the one thing a question with a CURRENT derives on top of an
     engine-neutral domain: the uniform-flow opening the deck is written at."""
     assert [step.label for step in _plan().plan.steps] == [
-        "stated", "mesh", "channel", "settled", "sheet", "solve", "outputs"]
+        "stated", "mesh", "mesh_files", "channel", "settled", "sheet", "solve", "outputs"]
 
 
 def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_lever():
