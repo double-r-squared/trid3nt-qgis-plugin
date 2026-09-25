@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.mesh.meshers import MeshToolError
+from trid3nt_server.mesh.meshers import MeshToolError
 from trid3nt_server.workflows.telemac.authoring import selafin_io as IO
 from trid3nt_server.workflows.telemac.modules import outputs as R
 
@@ -167,7 +167,7 @@ def test_the_geometry_carries_the_walks_own_numbering(tmp_path):
     any other walk classifies the wrong nodes without saying anything."""
     from serafin import SerafinHeader, SerafinReader
 
-    from trid3nt_server.workflows.mesh.shared.formats.tin_topology import (
+    from trid3nt_server.mesh.shared.formats.tin_topology import (
         boundary_numbering)
 
     ours, _ = boundary_numbering(_RING_CELLS, _RING_X.shape[0])
@@ -192,7 +192,7 @@ def test_the_origin_is_reported_and_the_coordinates_stay_as_stored(tmp_path):
     here would place the mesh twice as far out as the file puts it."""
     from serafin import SerafinHeader, SerafinWriter
 
-    from trid3nt_server.workflows.mesh.shared.formats.tin_topology import (
+    from trid3nt_server.mesh.shared.formats.tin_topology import (
         boundary_numbering)
 
     ipobo, _ = boundary_numbering(_CELLS, 4)
@@ -217,7 +217,7 @@ def test_a_three_dimensional_result_keeps_every_plane(tmp_path):
     Reading the 2D connectivity for a 3D file drops every plane but one."""
     from serafin import SerafinHeader, SerafinWriter
 
-    from trid3nt_server.workflows.mesh.shared.formats.tin_topology import (
+    from trid3nt_server.mesh.shared.formats.tin_topology import (
         boundary_numbering)
 
     ipobo, _ = boundary_numbering(_CELLS, 4)
@@ -272,5 +272,5 @@ def test_every_image_run_left_on_this_side_is_a_solve():
                if "run_image_script" in module.read_text()
                and module.name != "image_script.py"}
     assert callers == {
-        "trid3nt_server/workflows/mesh/meshers/om2d.py",
+        "trid3nt_server/mesh/meshers/om2d.py",
         "trid3nt_server/workflows/telemac/authoring/cas_validate.py"}

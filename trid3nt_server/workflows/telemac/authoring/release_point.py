@@ -13,7 +13,7 @@ import logging
 from typing import Any, Mapping
 
 from trid3nt_server.workflows.runtime import journal_note
-from trid3nt_server.workflows.mesh.shared.nodes import (
+from trid3nt_server.mesh.shared.nodes import (
     accepted_mesh_nodes,
     read_centerline_utm,
 )
@@ -144,7 +144,7 @@ def _inside_water(cells: Any, wet: Any) -> Any:
     """The nodes a SOURCE may enter the water at: wet at t0, and not on the edge."""
     import numpy as np
 
-    from trid3nt_server.workflows.mesh.shared.nodes import interior_nodes
+    from trid3nt_server.mesh.shared.nodes import interior_nodes
 
     held = np.asarray(wet, dtype=bool)
     return held & interior_nodes(cells, held.shape[0])

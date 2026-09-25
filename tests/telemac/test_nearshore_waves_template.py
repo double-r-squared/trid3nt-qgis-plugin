@@ -169,7 +169,7 @@ async def test_a_window_whose_rim_is_all_wall_refuses_rather_than_solving_zeros(
 
 def _closed_mesh():
     """A mesh record over a window nothing designated open."""
-    from trid3nt_server.workflows.mesh.artifact import MeshArtifact
+    from trid3nt_server.mesh.artifact import MeshArtifact
 
     artifact = MeshArtifact(
         mesh_id="M01", name="Duck, NC", mode="om2d",

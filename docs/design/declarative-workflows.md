@@ -760,7 +760,7 @@ picture cannot show is the dishonest case this pins.
 
 Mesh is SUPPLIED-optional `Data`: AUTHORED (user-supplied - e.g. the 2dm
 import path - the top ladder rung) or GENERATED (the shared front in
-`workflows/mesh/`, the default). The default generation policy is
+`mesh/`, the default). The default generation policy is
 opinionated toward SPEED - a fast, normal-quality baseline, never a
 slow optimized guess; the mesh-economy A/B calibrates it. Both paths
 converge at the MESH GATE on the pending-confirmation spine, where

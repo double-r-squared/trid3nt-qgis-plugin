@@ -13,19 +13,19 @@ import json
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.mesh.artifact import (
+from trid3nt_server.mesh.artifact import (
     MeshArtifact,
     stash_mesh_artifact,
 )
-from trid3nt_server.workflows.mesh.meshers import MeshToolError, get_mesher
+from trid3nt_server.mesh.meshers import MeshToolError, get_mesher
 from trid3nt_server.render.mesh_display import write_2dm
-from trid3nt_server.workflows.mesh.session import (
+from trid3nt_server.mesh.session import (
     MeshSession,
     mesh_digest,
     replay_recipe,
 )
 from trid3nt_server.workflows.runtime import Accepts, AcceptsDeclarationError
-from trid3nt_server.workflows.mesh.tool import (
+from trid3nt_server.mesh.tool import (
     MeshRecipe,
     accepts_for,
     mesh_op,
@@ -101,10 +101,11 @@ def test_build_mesh_surfaces_in_top8():
     from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
 
     dd._get_index()
-    corpus_path = (Path(t.__file__).resolve().parents[1] / "workflows" / "mesh"
+    corpus_path = (Path(t.__file__).resolve().parents[1] / "mesh"
                    / "corpus.yaml")
     queries = (yaml.safe_load(corpus_path.read_text()) or {})["build_mesh"]
     assert queries
+    assert dd._compose_corpus_from_tree()["build_mesh"] == queries
     assert any("build_mesh" in retrieve_visible_tools(q, None, 8) for q in queries), (
         "build_mesh surfaces in NO top-8 for any of its corpus queries")
 
@@ -300,10 +301,10 @@ async def test_a_supplied_mesh_is_adopted_instead_of_built(monkeypatch):
     """The step that builds a mesh is the step that ADOPTS one, so a run solves on the
     mesh it was handed. The session and the gate are asserted UNREACHED: re-gating a
     mesh nobody changed asks the same question twice."""
-    from trid3nt_server.workflows.mesh import gate as gate_mod
-    from trid3nt_server.workflows.mesh import session as session_mod
-    from trid3nt_server.workflows.mesh import step as mesh_step
-    from trid3nt_server.workflows.mesh import tool as tool_mod
+    from trid3nt_server.mesh import gate as gate_mod
+    from trid3nt_server.mesh import session as session_mod
+    from trid3nt_server.mesh import step as mesh_step
+    from trid3nt_server.mesh import tool as tool_mod
 
     supplied = _tri_artifact()
 
@@ -453,7 +454,7 @@ def test_reset_puts_the_recipe_back_to_the_declaration(tmp_path):
 def test_a_hand_edit_is_recorded_flagged_and_refuses_to_replay(tmp_path):
     import numpy as np
 
-    from trid3nt_server.workflows.mesh.meshers import Mesh
+    from trid3nt_server.mesh.meshers import Mesh
 
     edited = tmp_path / "edited.2dm"
     edited.write_text(write_2dm(Mesh(
@@ -480,7 +481,7 @@ def test_a_hand_edit_is_recorded_flagged_and_refuses_to_replay(tmp_path):
 def test_a_recipe_edit_after_a_hand_edit_refuses_rather_than_discarding_it(tmp_path):
     import numpy as np
 
-    from trid3nt_server.workflows.mesh.meshers import Mesh
+    from trid3nt_server.mesh.meshers import Mesh
 
     edited = tmp_path / "edited.2dm"
     edited.write_text(write_2dm(Mesh(
@@ -511,7 +512,7 @@ def test_accept_freezes_the_recipe_as_the_artifacts_provenance(tmp_path):
     assert art.provenance["recipe"] == session.recipe.to_json()
     assert art.provenance["recipe"]["kind"] == "structured_grid"
 
-    from trid3nt_server.workflows.mesh.artifact import stashed_mesh_artifacts
+    from trid3nt_server.mesh.artifact import stashed_mesh_artifacts
 
     assert stashed_mesh_artifacts("case-accept")[-1] is art
 
@@ -545,7 +546,7 @@ def test_the_accepted_artifact_carries_what_was_measured_on_it(tmp_path):
 
 
 def test_the_measured_minimum_edge_is_read_off_the_artifact(tmp_path):
-    from trid3nt_server.workflows.mesh.artifact import measured_min_edge_m
+    from trid3nt_server.mesh.artifact import measured_min_edge_m
 
     art = MeshSession(_recipe(), workdir=tmp_path).accept()
     assert measured_min_edge_m(art) == pytest.approx(
@@ -559,7 +560,7 @@ def test_the_measured_minimum_edge_is_read_off_the_artifact(tmp_path):
     _artifact(probes={"edge_length_m": {"min": 0.0}}),  # a degenerate measurement
 ])
 def test_an_unmeasured_mesh_reports_no_minimum_edge(art):
-    from trid3nt_server.workflows.mesh.artifact import measured_min_edge_m
+    from trid3nt_server.mesh.artifact import measured_min_edge_m
 
     assert measured_min_edge_m(art) is None
 
@@ -588,7 +589,7 @@ def test_the_timestep_falls_back_to_the_ask_when_no_mesh_exists_yet():
 
 @pytest.mark.asyncio
 async def test_a_bbox_at_the_door_becomes_the_recipes_extent(monkeypatch):
-    from trid3nt_server.workflows.mesh.meshers import MeshToolError
+    from trid3nt_server.mesh.meshers import MeshToolError
 
     monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache")
     seen: dict = {}
@@ -608,7 +609,7 @@ async def test_a_bbox_at_the_door_becomes_the_recipes_extent(monkeypatch):
 @pytest.mark.asyncio
 async def test_wire_ops_become_recipe_entries(monkeypatch):
     """The ops list off the wire is the same ordered program a template writes."""
-    from trid3nt_server.workflows.mesh.meshers import MeshToolError
+    from trid3nt_server.mesh.meshers import MeshToolError
 
     monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache")
     seen: dict = {}

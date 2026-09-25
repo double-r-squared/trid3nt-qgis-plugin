@@ -10,7 +10,7 @@ import asyncio
 from typing import Any, Mapping, Sequence
 
 from trid3nt_server.workflows.runtime import journal_note
-from trid3nt_server.workflows.mesh.shared.nodes import (
+from trid3nt_server.mesh.shared.nodes import (
     accepted_mesh_nodes,
     sample_layer_at_nodes,
 )

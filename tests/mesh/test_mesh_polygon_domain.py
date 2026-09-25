@@ -16,10 +16,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.mesh.meshers import MeshToolError
-from trid3nt_server.workflows.mesh.meshers import om2d as OM2D
-from trid3nt_server.workflows.mesh.meshers import reg_grid as REG_GRID
-from trid3nt_server.workflows.mesh.tool import mesh_op, tool
+from trid3nt_server.mesh.meshers import MeshToolError
+from trid3nt_server.mesh.meshers import om2d as OM2D
+from trid3nt_server.mesh.meshers import reg_grid as REG_GRID
+from trid3nt_server.mesh.tool import mesh_op, tool
 
 _AOI = (-75.80, 36.10, -75.70, 36.20)
 
@@ -66,7 +66,7 @@ def test_the_extent_param_takes_the_polygon_however_it_was_written():
 
 
 def test_the_polygon_domain_is_the_om2d_mesher_not_a_second_one():
-    from trid3nt_server.workflows.mesh.meshers import registered_meshers
+    from trid3nt_server.mesh.meshers import registered_meshers
 
     assert registered_meshers() == ("om2d", "reg_grid")
 
@@ -404,7 +404,7 @@ _COAST = {"type": "LineString",
 
 def _cut_water(tmp_path):
     """The water polygon a coastline leaves in ``_CUT_BOX``, staged as a file."""
-    from trid3nt_server.workflows.mesh.water import water_polygon
+    from trid3nt_server.mesh.water import water_polygon
 
     path = tmp_path / "water.geojson"
     path.write_text(json.dumps(water_polygon(_COAST, _CUT_BOX)))
@@ -443,7 +443,7 @@ def test_an_island_hole_does_not_make_the_cut_boxs_edges_shore(
         monkeypatch, tmp_path):
     """The all-shore guard reads the OUTER ring: a coast still cuts the box open
     however many islands stand inside it."""
-    from trid3nt_server.workflows.mesh.water import water_polygon
+    from trid3nt_server.mesh.water import water_polygon
 
     sent = _stub_om2d(monkeypatch, tmp_path)
     path = tmp_path / "island_water.geojson"

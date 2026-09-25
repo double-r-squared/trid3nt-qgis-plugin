@@ -31,7 +31,7 @@ from trid3nt_server.workflows.runtime import (
     Workflow,
 )
 from trid3nt_server.workflows.runtime.plan import declared_reads
-from trid3nt_server.workflows.mesh.step import MeshStep
+from trid3nt_server.mesh.step import MeshStep
 from trid3nt_server.workflows.telemac.errors import TelemacError
 from trid3nt_server.workflows.telemac.modules import wrapper_for
 from trid3nt_server.workflows.telemac.modules.module import SlotRefused, identify_on
@@ -94,7 +94,7 @@ _MEASURES: Mapping[str, tuple[str, str, str]] = MappingProxyType({
 #: elements beside a rim locked at one spacing, and the boundary walk that numbers
 #: a TELEMAC geometry meets the folded pair's unpaired edges as a second rim.
 def _clean_ops() -> list[Any]:
-    from trid3nt_server.workflows.mesh.tool import mesh_op
+    from trid3nt_server.mesh.tool import mesh_op
 
     return [mesh_op("delete_boundary_faces"),
             mesh_op("delete_faces_connected_to_one_face"),
@@ -762,7 +762,7 @@ class TelemacWorkflow(Workflow):
         Every stage is built off the slots this question declares - the domain it
         solves over, the bed under it, the runs its edge names, the flow an
         inflow carries - so a template states only what differs from that."""
-        from trid3nt_server.workflows.mesh.tool import mesh_op, tool
+        from trid3nt_server.mesh.tool import mesh_op, tool
         from trid3nt_server.workflows.runtime.data import (
             BED, DISCHARGE, DOMAIN, LEVEL)
         from trid3nt_server.workflows.runtime.plan import DataRef

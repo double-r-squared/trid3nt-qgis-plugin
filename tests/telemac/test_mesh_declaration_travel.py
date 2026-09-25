@@ -11,7 +11,7 @@ import importlib
 
 import pytest
 
-from trid3nt_server.workflows.mesh.tool import (
+from trid3nt_server.mesh.tool import (
     mesh_op,
     recipe_from_plan_value,
     recipe_plan_value,

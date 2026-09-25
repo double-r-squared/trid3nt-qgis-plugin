@@ -117,7 +117,7 @@ def test_the_bed_is_one_need_row_the_match_composes():
 def test_the_boundary_roles_ride_on_the_domain_since_no_runs_row_exists():
     """There is no runs row: the boundary walk the match returned rides on the
     domain's own producer, and the mesh recipe reads that row directly."""
-    from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
+    from trid3nt_server.mesh.tool import recipe_from_plan_value
     from trid3nt_server.workflows.runtime import DataRef
 
     recipe = recipe_from_plan_value(

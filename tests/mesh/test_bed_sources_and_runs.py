@@ -11,8 +11,8 @@ import pytest
 
 from trid3nt_server.inputs.boundary import BoundaryRun
 from trid3nt_server.inputs.point import Point
-from trid3nt_server.workflows.mesh.meshers import Mesh, MeshToolError
-from trid3nt_server.workflows.mesh.shared import primitives as P
+from trid3nt_server.mesh.meshers import Mesh, MeshToolError
+from trid3nt_server.mesh.shared import primitives as P
 
 
 def _lattice_mesh() -> Mesh:
@@ -198,7 +198,7 @@ def test_the_nodes_a_source_may_enter_the_water_at_are_the_interior_ones():
     source placed there is one the solver reads as outside its own domain."""
     import numpy as np
 
-    from trid3nt_server.workflows.mesh.shared.nodes import interior_nodes
+    from trid3nt_server.mesh.shared.nodes import interior_nodes
 
     # a 3x3 lattice cut into triangles: the middle node is the only inside
     nodes = [[i, j] for i in range(3) for j in range(3)]

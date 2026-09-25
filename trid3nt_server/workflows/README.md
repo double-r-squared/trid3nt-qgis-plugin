@@ -1,9 +1,8 @@
-# `workflows/` - the declarative library, the mesh front, the engines
+# `workflows/` - the declarative library and the engines
 
 A workflow is a declaration: `PARAMS` and `DATA` class bodies plus the steps the
 door builds out of them, which the interpreter walks. `runtime/` is the language
-and the machinery that executes it, `mesh/` builds the domain a solve runs on,
-`solver/` is the one executor, and each engine package holds the templates that
+and the machinery that executes it, `solver/` is the one executor, and each engine package holds the templates that
 speak it and the one file that specializes the executor to it.
 
 ## Files
@@ -17,7 +16,6 @@ speak it and the one file that specializes the executor to it.
 | folder | what it is |
 | --- | --- |
 | `runtime/` | The declarative library - the value types, the six doors, the validator, the interpreter, the skeleton and the run's records. See below. |
-| `mesh/` | The one mesh front: router, meshers, session, gate, artifact. Has its own map. |
 | `solver/` | The one executor, which knows no engine: `solver.py` (the box - launch, supervise, poll, dispatch-and-wait, download a result), `solve_progress.py` (the live progress heartbeat a long solve emits while it runs), `code_provenance.py` (which code produced a run), `diagnostics/` (the one `read_run_diagnostics` dispatcher plus its per-engine parsers), `corpus.yaml` (routing phrasings). |
 | `telemac/` | The TELEMAC engine: the module wrappers, eight templates over them, the fill/run door, and the one engine file the executor is specialized by. Has its own map. |
 | `calibration/` | The subsystem the OBSERVE slot reveals: `pairing.py` (the record a run's observations are paired against its own reads) and `metrics.py` (the skill over those pairs). Dormant - nothing here is a tool and nothing here owns a loop's mathematics. |

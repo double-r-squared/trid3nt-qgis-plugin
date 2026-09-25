@@ -86,7 +86,7 @@ def test_a_template_that_states_only_what_differs_gets_the_whole_plan():
 
 
 def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_own_lever():
-    from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
+    from trid3nt_server.mesh.tool import recipe_from_plan_value
 
     workflow = _workflow()
     recipe = recipe_from_plan_value(_mesh(workflow).kwargs["mesh"])
@@ -100,7 +100,7 @@ def test_the_rim_is_sized_because_nothing_else_in_the_library_sizes_it():
     """Every domain is cut from a shoreline now, and no sizing function measures
     the domain's own outline: an undeclared rim meshes an order of magnitude past
     the size word, and the granularity lever is the user's."""
-    from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
+    from trid3nt_server.mesh.tool import recipe_from_plan_value
 
     workflow = _workflow()
     recipe = recipe_from_plan_value(_mesh(workflow).kwargs["mesh"])
@@ -111,7 +111,7 @@ def test_the_rim_is_sized_because_nothing_else_in_the_library_sizes_it():
 def test_the_bed_op_takes_the_one_row_the_merge_derive_produced():
     """A survey where it has data and the surface elsewhere is ONE bed, composed
     in the DATA body; the op takes that row and nothing beside it."""
-    from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
+    from trid3nt_server.mesh.tool import recipe_from_plan_value
 
     workflow = _workflow()
     recipe = recipe_from_plan_value(_mesh(workflow).kwargs["mesh"])
@@ -123,7 +123,7 @@ def test_the_boundary_runs_ride_on_the_polygon_the_domain_arrived_as():
     """The named stretches of the edge are NO ROW: a reach fetcher returns the
     section and the two faces it was cut between, and a drawn outline carries
     whatever it was drawn with, so the op reads the domain itself."""
-    from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
+    from trid3nt_server.mesh.tool import recipe_from_plan_value
 
     recipe = recipe_from_plan_value(_mesh(_workflow()).kwargs["mesh"])
     runs = next(op for op in recipe.ops if op.fn == "set_boundary_roles")

@@ -11,7 +11,7 @@ from types import MappingProxyType
 from typing import Mapping
 
 from trid3nt_server.workflows.runtime.errors import DeclarativeError
-from trid3nt_server.workflows.mesh.kinds import MeshKind
+from trid3nt_server.mesh.kinds import MeshKind
 
 __all__ = ["Accepts", "AcceptsDeclarationError"]
 

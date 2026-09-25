@@ -166,7 +166,7 @@ def test_a_pinched_boundary_refuses_by_name(tmp_path):
     decides it is the daemon's own - nothing shells out to learn it."""
     import numpy as np
 
-    from trid3nt_server.workflows.mesh.meshers import MeshToolError
+    from trid3nt_server.mesh.meshers import MeshToolError
 
     x = np.array([0.0, 1.0, 0.0, 2.0, 1.0, 2.0])
     y = np.array([0.0, 1.0, 2.0, 0.0, 1.0, 2.0])

@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Any, Iterable, Mapping
 
-from trid3nt_server.workflows.mesh.meshers import (
+from trid3nt_server.mesh.meshers import (
     MeshOp,
     MeshToolError,
     bind_ops,

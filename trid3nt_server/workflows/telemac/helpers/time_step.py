@@ -40,7 +40,7 @@ def suggest_time_step_s(mesh_size_m: float, *, mesh: Any = None) -> float:
     # criterion is about; the requested edge is all an estimate made before any
     # mesh exists can honestly use. So refining a region at the gate tightens dt
     # with it, without anybody restating the number.
-    from trid3nt_server.workflows.mesh.artifact import measured_min_edge_m
+    from trid3nt_server.mesh.artifact import measured_min_edge_m
 
     measured = measured_min_edge_m(mesh)
     h = max(float(mesh_size_m if measured is None else measured), MESH_H_FLOOR_M)

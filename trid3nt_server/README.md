@@ -29,7 +29,8 @@ on one machine against one user; the only wire shapes it speaks are
 | `render/` | The format set a product reaches the map in - a COG raster, a GeoJSON vector, an MDAL mesh, a chart payload - and everything it passes through on the way. |
 | `fallbacks/` | Declared degradation: ladders as data, and the one walker. |
 | `gates/` | The agent-loop gates - confirm, review, draw, budget, runaway. |
+| `mesh/` | The one mesh front, which knows no engine: router, meshers, session, gate, artifact. An engine's template calls it; what an engine needs written out of a mesh is that engine's. Has its own map. |
 | `inputs/` | Every input into the system as a typed value: a Point, an Extent and a Shape, each with one ingestion from every form a user hands it in, and the user's own file adopted as a layer. |
 | `server/` | The daemon core: connection loop, turn engine, dispatch, session state. |
 | `tools/` | The registered tool surface: fetchers and derive tools, with search and meta beside them. |
-| `workflows/` | The declarative engine layer: the runtime, the mesh front, TELEMAC. |
+| `workflows/` | The declarative engine layer: the runtime, the executor, TELEMAC. |

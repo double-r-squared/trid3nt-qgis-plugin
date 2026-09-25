@@ -11,11 +11,11 @@ import logging
 from typing import Any, Mapping
 
 from trid3nt_server.gates.input_review import GateCard, gate_input_review
-from trid3nt_server.workflows.mesh.artifact import MeshArtifact
-from trid3nt_server.workflows.mesh.meshers import MeshToolError
-from trid3nt_server.workflows.mesh.session import MeshSession
+from trid3nt_server.mesh.artifact import MeshArtifact
+from trid3nt_server.mesh.meshers import MeshToolError
+from trid3nt_server.mesh.session import MeshSession
 
-logger = logging.getLogger("trid3nt_server.workflows.mesh.gate")
+logger = logging.getLogger("trid3nt_server.mesh.gate")
 
 __all__ = [
     "active_mesh_session",

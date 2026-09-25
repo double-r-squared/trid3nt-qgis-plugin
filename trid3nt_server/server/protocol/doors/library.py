@@ -24,7 +24,7 @@ _SUBSYSTEM_BY_MODULE: tuple[tuple[str, str], ...] = (
     ("trid3nt_server.tools.derive", "derives"),
     ("trid3nt_server.tools.search", "search"),
     ("trid3nt_server.render", "render"),
-    ("trid3nt_server.workflows.mesh", "mesh"),
+    ("trid3nt_server.mesh", "mesh"),
     ("trid3nt_server.workflows.solver", "solver"),
     ("trid3nt_server.workflows.runtime", "runtime"),
     ("trid3nt_server.workflows.telemac", "engine"),

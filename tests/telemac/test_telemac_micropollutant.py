@@ -264,7 +264,7 @@ def test_an_unsurveyed_domain_still_runs_on_the_terrain_alone():
 
 
 def test_the_mesh_the_workflow_builds_paints_the_one_bed_row():
-    from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
+    from trid3nt_server.mesh.tool import recipe_from_plan_value
     from trid3nt_server.workflows.runtime import DataRef, Ref
 
     plan = _template().telemac_micropollutant_release.workflow.plan

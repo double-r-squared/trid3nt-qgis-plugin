@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.mesh.meshers import MeshToolError
-from trid3nt_server.workflows.mesh.water import water_polygon
+from trid3nt_server.mesh.meshers import MeshToolError
+from trid3nt_server.mesh.water import water_polygon
 
 _BOX = [-70.0, 42.0, -69.0, 43.0]
 

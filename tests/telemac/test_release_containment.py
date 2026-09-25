@@ -44,7 +44,7 @@ def _mesh_holding(x_from: float, x_to: float, monkeypatch):
     """Stand in a mesh whose cells cover only ``x_from..x_to`` of the centerline."""
     import numpy as np
 
-    from trid3nt_server.workflows.mesh.shared import nodes as nodes_mod
+    from trid3nt_server.mesh.shared import nodes as nodes_mod
 
     monkeypatch.setattr(
         nodes_mod, "read_accepted_mesh_nodes",

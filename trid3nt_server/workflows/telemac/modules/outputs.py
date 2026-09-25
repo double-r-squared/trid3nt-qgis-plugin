@@ -1211,7 +1211,7 @@ def read_profile(primitive: Primitive, solved: Solved) -> Profile:
     swing between the two ends of the range."""
     import numpy as np
 
-    from trid3nt_server.workflows.mesh.shared.nodes import read_centerline_utm
+    from trid3nt_server.mesh.shared.nodes import read_centerline_utm
 
     name, units, values = solved.frames(primitive.variable, primitive.plane)
     times = np.asarray(solved.result["times"], dtype="float64")

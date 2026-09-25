@@ -12,7 +12,7 @@ import logging
 import math
 from typing import Any, Sequence
 
-from trid3nt_server.workflows.mesh.meshers import MeshToolError
+from trid3nt_server.mesh.meshers import MeshToolError
 
 __all__ = ["water_polygon"]
 

@@ -10,14 +10,14 @@ import logging
 from typing import Any
 
 from trid3nt_server.workflows.runtime import Step
-from trid3nt_server.workflows.mesh.artifact import measured_min_edge_m
-from trid3nt_server.workflows.mesh.tool import recipe_plan_value
+from trid3nt_server.mesh.artifact import measured_min_edge_m
+from trid3nt_server.mesh.tool import recipe_plan_value
 
-logger = logging.getLogger("trid3nt_server.workflows.mesh.step")
+logger = logging.getLogger("trid3nt_server.mesh.step")
 
 __all__ = ["MeshStep", "build_declared_mesh", "mesh_record"]
 
-_RUNNER = "trid3nt_server.workflows.mesh.step.build_declared_mesh"
+_RUNNER = "trid3nt_server.mesh.step.build_declared_mesh"
 
 
 class MeshStep:
@@ -47,9 +47,9 @@ async def build_declared_mesh(*, mesh: dict[str, Any], name: Any = None,
     import asyncio
 
     from trid3nt_server.render.pipeline_emitter import current_turn_case
-    from trid3nt_server.workflows.mesh.gate import gate_mesh_build
-    from trid3nt_server.workflows.mesh.session import MeshSession
-    from trid3nt_server.workflows.mesh.tool import (
+    from trid3nt_server.mesh.gate import gate_mesh_build
+    from trid3nt_server.mesh.session import MeshSession
+    from trid3nt_server.mesh.tool import (
         recipe_from_plan_value,
         supplied_mesh_artifact,
     )

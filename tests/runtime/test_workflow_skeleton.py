@@ -211,7 +211,7 @@ def _telemac():
 
 def _reach_mesh(**params):
     """The MESH recipe a reach template writes, with test values for its ask."""
-    from trid3nt_server.workflows.mesh.tool import tool
+    from trid3nt_server.mesh.tool import tool
 
     params.setdefault("extent", Ref("reach_polygon"))
     return tool.build_mesh(mesher="om2d", kind="unstructured_tri", **params)

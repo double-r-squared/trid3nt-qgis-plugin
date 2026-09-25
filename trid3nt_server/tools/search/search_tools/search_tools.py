@@ -307,15 +307,13 @@ def _read_corpus_yaml(p: Path) -> dict[str, list[str]]:
 
 def _compose_corpus_from_tree() -> dict[str, list[str]]:
     """The flat ``{key: [queries]}`` corpus: every co-located ``corpus.yaml``
-    under ``tools/`` and under ``workflows/`` - engine templates are ordinary pool
-    members - then the residual file merged on top. A key is a tool name or a DATA
-    CLASS, which the index turns into its own document. No tier semantics."""
-    here = Path(__file__).resolve()
-    server_dir = here.parents[3]
-    tools_dir = server_dir / "tools"
-    workflows_dir = server_dir / "workflows"
+    under ``tools/``, ``mesh/`` and ``workflows/`` - engine templates are ordinary
+    pool members - then the residual file merged on top. A key is a tool name or a
+    DATA CLASS, which the index turns into its own document. No tier semantics."""
+    server_dir = Path(__file__).resolve().parents[3]
     composed: dict[str, list[str]] = {}
-    for base in (tools_dir, workflows_dir):
+    for base in (server_dir / "tools", server_dir / "mesh",
+                 server_dir / "workflows"):
         for cpath in sorted(base.rglob("corpus.yaml")):
             composed.update(_read_corpus_yaml(cpath))
     # Merge the residual: tools registered outside either tree.

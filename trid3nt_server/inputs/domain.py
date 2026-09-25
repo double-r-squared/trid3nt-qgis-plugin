@@ -301,8 +301,8 @@ def _water_left_by(doc: Any, extent: Any, label: str,
     is this slot's ingestion: the mesh seam's own cut, run where the line
     arrived. Without a window there is nothing to cut against, and a cut that
     does not close refuses in the cut's own words."""
-    from trid3nt_server.workflows.mesh.meshers import MeshToolError
-    from trid3nt_server.workflows.mesh.water import water_polygon
+    from trid3nt_server.mesh.meshers import MeshToolError
+    from trid3nt_server.mesh.water import water_polygon
 
     if extent is None:
         raise UserInputError(

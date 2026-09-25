@@ -278,10 +278,10 @@ from trid3nt_server.workflows.telemac.templates.stratified_flow.stratified_flow 
 # primitives. Declared in a template it is a frozen lazy ask; called standalone it
 # builds now and stashes the artifact in the case. Importing it registers every
 # mesher behind it.
-from trid3nt_server.workflows.mesh.tool import build_mesh as _build_mesh  # noqa: E402,F401 - mesh domain primitive (tier=general)
+from trid3nt_server.mesh.tool import build_mesh as _build_mesh  # noqa: E402,F401 - mesh domain primitive (tier=general)
 # mesh_op: append, alter or remove one call on the recipe of the mesh open at the
 # gate, then regenerate. The whole of the mesh-refinement loop.
-from trid3nt_server.workflows.mesh.op_tool import mesh_op as _mesh_op  # noqa: E402,F401 - mesh domain primitive (tier=general)
+from trid3nt_server.mesh.op_tool import mesh_op as _mesh_op  # noqa: E402,F401 - mesh domain primitive (tier=general)
 
 
 # COPY-ME authoring template. Importing it is always safe: its @register_tool call

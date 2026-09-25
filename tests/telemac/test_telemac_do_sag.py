@@ -196,7 +196,7 @@ def test_the_workflow_owns_the_stages_and_the_template_states_what_differs():
 
 
 def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_own_lever():
-    from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
+    from trid3nt_server.mesh.tool import recipe_from_plan_value
     from trid3nt_server.workflows.runtime import DataRef
 
     recipe = recipe_from_plan_value(

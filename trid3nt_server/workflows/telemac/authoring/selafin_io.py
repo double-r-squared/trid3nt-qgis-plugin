@@ -13,8 +13,8 @@ from typing import Any, Mapping
 
 import numpy as np
 
-from trid3nt_server.workflows.mesh.meshers import MeshToolError
-from trid3nt_server.workflows.mesh.shared.formats.tin_topology import (
+from trid3nt_server.mesh.meshers import MeshToolError
+from trid3nt_server.mesh.shared.formats.tin_topology import (
     BoundaryPinched,
     boundary_numbering,
 )

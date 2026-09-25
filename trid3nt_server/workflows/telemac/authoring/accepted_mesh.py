@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Mapping, Sequence
 
-from trid3nt_server.workflows.mesh.shared.nodes import read_accepted_mesh_nodes
+from trid3nt_server.mesh.shared.nodes import read_accepted_mesh_nodes
 from .selafin_io import BOUNDARY_CONDITIONS_FILE, GEOMETRY_FILE
 from ..errors import TelemacError
 

@@ -16,9 +16,9 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
   `render/` (the FORMAT SET a product reaches the map in - a COG
   raster, a GeoJSON vector, an MDAL mesh with the dataset files beside
   it, a chart payload - the one emission seam, the publish mechanism,
-  the presets and the restyle seam), `workflows/` (the declarative
-  `runtime/`, the `mesh/` front, the typed `inputs/`, the `solver/`
-  executor, and the engine package `telemac/`), `gates/` (GateSpec
+  the presets and the restyle seam), `mesh/` (the one mesh front,
+  which knows no engine), `workflows/` (the declarative `runtime/`, the
+  `solver/` executor, and the engine package `telemac/`), `gates/` (GateSpec
   engine + cards + pending
   registries), `adapters/` (LLM providers - the ONLY place provider
   nouns appear), `server/` (session/ turn/ dispatch/ protocol/),

@@ -14,7 +14,7 @@ from trid3nt_server.workflows.telemac.authoring.selafin_io import (
 
 import pytest
 
-from trid3nt_server.workflows.mesh.artifact import MeshArtifact
+from trid3nt_server.mesh.artifact import MeshArtifact
 from trid3nt_server.workflows.telemac.authoring import accepted_mesh as mesh_mod
 from trid3nt_server.workflows.telemac.authoring import opening as asm_mod
 from trid3nt_server.workflows.telemac.errors import TelemacError
@@ -46,7 +46,7 @@ def _mesh_record(*, min_edge_m: float | None = None) -> dict:
     Every derived field is READ off the artifact through the product's own
     readers, so this stand-in cannot report a measured edge its probes never
     held."""
-    from trid3nt_server.workflows.mesh.artifact import measured_min_edge_m
+    from trid3nt_server.mesh.artifact import measured_min_edge_m
 
     probes = ({"edge_length_m": {"min": float(min_edge_m), "max": 40.0,
                                  "mean": 20.0}}
@@ -171,9 +171,9 @@ async def test_the_stood_in_mesh_record_is_shaped_like_a_real_builds(monkeypatch
 
     A fixture free to invent a key is a second product with its own shape, and
     the suite stays green while the live template dies."""
-    from trid3nt_server.workflows.mesh import gate as gate_mod
-    from trid3nt_server.workflows.mesh import session as session_mod
-    from trid3nt_server.workflows.mesh import step as mesh_step
+    from trid3nt_server.mesh import gate as gate_mod
+    from trid3nt_server.mesh import session as session_mod
+    from trid3nt_server.mesh import step as mesh_step
 
     record = _mesh_record(min_edge_m=8.0)
 

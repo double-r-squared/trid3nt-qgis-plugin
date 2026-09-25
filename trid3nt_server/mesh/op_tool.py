@@ -12,7 +12,7 @@ from typing import Any
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
-from trid3nt_server.workflows.mesh.meshers import (
+from trid3nt_server.mesh.meshers import (
     MeshOp,
     MeshToolError,
     get_mesher,
@@ -58,7 +58,7 @@ async def mesh_op(fn: str | None = None, at: int | None = None,
         mesh: the mesh id, if two are open.
         kwargs: the function's own arguments.
     """
-    from trid3nt_server.workflows.mesh.gate import (
+    from trid3nt_server.mesh.gate import (
         active_mesh_session, present_mesh,
     )
 

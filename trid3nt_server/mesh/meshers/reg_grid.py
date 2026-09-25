@@ -10,10 +10,10 @@ from typing import Any
 
 import numpy as np
 
-from trid3nt_server.workflows.mesh.grid_geometry import (
+from trid3nt_server.mesh.grid_geometry import (
     RegularGrid, regular_grid_from_bbox,
 )
-from trid3nt_server.workflows.mesh.meshers import (
+from trid3nt_server.mesh.meshers import (
     Mesh,
     MeshToolError,
     register_mesher,
@@ -52,8 +52,8 @@ def _with_ops(mesh: Mesh, recipe: Any) -> Mesh:
     """Run the recipe's ops over the lattice, in their declared order.
 
     Every op a reg_grid recipe can name is a shared primitive running here."""
-    from trid3nt_server.workflows.mesh.inputs import op_input
-    from trid3nt_server.workflows.mesh.meshers import bind_ops
+    from trid3nt_server.mesh.inputs import op_input
+    from trid3nt_server.mesh.meshers import bind_ops
 
     for op in bind_ops(REG_GRID, recipe.ops):
         mesh = op.fn(mesh, **{name: op_input(value)

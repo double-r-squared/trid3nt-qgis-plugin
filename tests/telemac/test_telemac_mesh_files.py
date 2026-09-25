@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.workflows.mesh.artifact import MeshArtifact
+from trid3nt_server.mesh.artifact import MeshArtifact
 from trid3nt_server.workflows.telemac.authoring import mesh_files as MF
 from trid3nt_server.workflows.telemac.authoring.selafin_io import (
     BOUNDARY_CONDITIONS_FILE,

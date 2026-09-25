@@ -20,7 +20,7 @@ from trid3nt_server.workflows.runtime import (
     register_workflow,
     tool,
 )
-from trid3nt_server.workflows.mesh.tool import mesh_op
+from trid3nt_server.mesh.tool import mesh_op
 from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.telemac.modules import (

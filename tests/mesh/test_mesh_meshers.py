@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.mesh.artifact import (
+from trid3nt_server.mesh.artifact import (
     MeshArtifact,
     find_case_mesh_artifacts,
     sidecar_key_for_mesh_uri,
@@ -21,12 +21,12 @@ from trid3nt_server.workflows.mesh.artifact import (
     stashed_mesh_artifacts,
 )
 from trid3nt_server.render.mesh_display import write_2dm_arrays
-from trid3nt_server.workflows.mesh.meshers import (
+from trid3nt_server.mesh.meshers import (
     MeshToolError,
     get_mesher,
     registered_meshers,
 )
-from trid3nt_server.workflows.mesh.shared.nodes import MeshNodeError, read_2dm_mesh
+from trid3nt_server.mesh.shared.nodes import MeshNodeError, read_2dm_mesh
 
 
 
@@ -73,7 +73,7 @@ def test_each_mesher_declares_the_kinds_it_makes(mesher, expected):
 
 
 def test_an_op_a_mesher_never_registered_is_refused_by_name():
-    from trid3nt_server.workflows.mesh.meshers import resolve_op
+    from trid3nt_server.mesh.meshers import resolve_op
 
     with pytest.raises(MeshToolError) as excinfo:
         resolve_op(get_mesher("om2d"), "open_boundary_side")
@@ -109,9 +109,9 @@ def test_an_adopted_layer_drops_the_meta_bound_to_the_topology_it_replaced(tmp_p
     """A hand-edited layer is a different topology, so the per-solver geometry the
     mesher wrote and the probes measured on the old cells must not ride into the
     accepted artifact under the edited mesh's name."""
-    from trid3nt_server.workflows.mesh.meshers import Mesh
-    from trid3nt_server.workflows.mesh.session import MeshSession
-    from trid3nt_server.workflows.mesh.tool import tool
+    from trid3nt_server.mesh.meshers import Mesh
+    from trid3nt_server.mesh.session import MeshSession
+    from trid3nt_server.mesh.tool import tool
 
     pts = np.array([[500000.0, 3880000.0], [500100.0, 3880000.0],
                     [500000.0, 3880100.0], [500100.0, 3880100.0]])

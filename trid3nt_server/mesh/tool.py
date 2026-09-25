@@ -16,12 +16,12 @@ from trid3nt_server.tools import register_tool
 from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.workflows.runtime.accepts import Accepts
 from trid3nt_server.workflows.runtime.data import tool
-from trid3nt_server.workflows.mesh.artifact import (
+from trid3nt_server.mesh.artifact import (
     MeshArtifact,
     find_case_mesh_artifacts,
     read_mesh_artifact_sidecar,
 )
-from trid3nt_server.workflows.mesh.meshers import (
+from trid3nt_server.mesh.meshers import (
     EDGE_RESOLUTION_SPECS,
     MeshOp,
     MeshToolError,
@@ -30,7 +30,7 @@ from trid3nt_server.workflows.mesh.meshers import (
     op_names,
     registered_meshers,
 )
-from trid3nt_server.workflows.mesh.recipe import (
+from trid3nt_server.mesh.recipe import (
     MeshRecipe,
     build_recipe,
     jsonable,
@@ -38,8 +38,8 @@ from trid3nt_server.workflows.mesh.recipe import (
     recipe_plan_value,
 )
 # Importing a mesher REGISTERS it; the roster is this block and nothing else.
-from trid3nt_server.workflows.mesh.meshers import om2d as _om2d  # noqa: F401,E402
-from trid3nt_server.workflows.mesh.meshers import reg_grid as _reg_grid  # noqa: F401,E402
+from trid3nt_server.mesh.meshers import om2d as _om2d  # noqa: F401,E402
+from trid3nt_server.mesh.meshers import reg_grid as _reg_grid  # noqa: F401,E402
 
 __all__ = [
     "MeshOp",
@@ -257,8 +257,8 @@ async def build_mesh(
 
     from trid3nt_server.render.pipeline_emitter import current_turn_case
     from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.mesh.gate import gate_mesh_build
-    from trid3nt_server.workflows.mesh.session import MeshSession
+    from trid3nt_server.mesh.gate import gate_mesh_build
+    from trid3nt_server.mesh.session import MeshSession
 
     if not (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip():
         raise MeshToolError(

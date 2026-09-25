@@ -139,7 +139,7 @@ def test_a_domain_says_its_own_name_when_it_is_read_as_text():
     """A mesh session, a layer title and a run's own name are all written from
     the domain, so a domain that read as its geometry named every one of them
     after its coordinates."""
-    from trid3nt_server.workflows.mesh.step import _session_name
+    from trid3nt_server.mesh.step import _session_name
 
     named = domain({"type": "FeatureCollection", "name": "Willamette River",
                     "features": [{"type": "Feature", "properties": {},

@@ -129,7 +129,7 @@ def _boundary_matches_the_walk(mesh: Mapping[str, Any], geometry: str,
     """The ``.cli`` rows -> the LIHBOR code per row, or the refusal by name."""
     import numpy as np
 
-    from trid3nt_server.workflows.mesh.shared.formats.tin_topology import (
+    from trid3nt_server.mesh.shared.formats.tin_topology import (
         boundary_numbering)
 
     ipobo, _loops = boundary_numbering(np.asarray(mesh["ikle2"], dtype="int64"),

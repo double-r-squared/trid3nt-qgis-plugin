@@ -306,7 +306,7 @@ def rog_run(monkeypatch, tmp_path):
 
     The DECK is real: every keyword and every file the template states is resolved
     here, without the container the serializer writes them through."""
-    import trid3nt_server.workflows.mesh.shared.nodes as nodes_mod
+    import trid3nt_server.mesh.shared.nodes as nodes_mod
     from trid3nt_server.workflows.telemac.authoring import accepted_mesh as mesh_mod
     from trid3nt_server.workflows.telemac.authoring import opening as asm_mod
 

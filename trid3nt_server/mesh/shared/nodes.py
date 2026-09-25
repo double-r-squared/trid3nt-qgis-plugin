@@ -34,7 +34,7 @@ _RIM_PIXELS = 1.5
 
 def tin_topology() -> Any:
     """The shared TIN topology - the one home of the boundary walk and orient pass."""
-    from trid3nt_server.workflows.mesh.shared.formats import tin_topology as mod
+    from trid3nt_server.mesh.shared.formats import tin_topology as mod
 
     return mod
 

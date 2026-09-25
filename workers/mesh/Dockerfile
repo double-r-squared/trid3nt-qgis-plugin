@@ -2,7 +2,7 @@
 #
 # This image is an ENVIRONMENT, not a worker: it carries the CHLNDDEV
 # `oceanmesh` port and nothing of ours. The mesh recipe path
-# (trid3nt_server/workflows/mesh/meshers/om2d.py) bind-mounts its driver at
+# (trid3nt_server/mesh/meshers/om2d.py) bind-mounts its driver at
 # /drivers and a rundir at /data, overrides the entrypoint with `python`, and
 # runs the driver here; the library is the only thing this image supplies.
 #

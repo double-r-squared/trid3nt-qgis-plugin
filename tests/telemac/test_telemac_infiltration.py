@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.mesh.shared.nodes import reproject_nodes_to_utm
+from trid3nt_server.mesh.shared.nodes import reproject_nodes_to_utm
 from trid3nt_server.workflows.telemac.modules import T2D
 from trid3nt_server.workflows.telemac.modules.telemac2d import Infiltration, _huang
 from trid3nt_server.workflows.telemac.templates.rain_on_grid.declarations import (
@@ -68,7 +68,7 @@ _LONLAT = np.array([[-83.40, 35.05], [-83.399, 35.05], [-83.40, 35.051]])
 @pytest.fixture()
 def surface(monkeypatch):
     """The composite's reads stood in for: the accepted mesh and the raster."""
-    import trid3nt_server.workflows.mesh.shared.nodes as nodes_mod
+    import trid3nt_server.mesh.shared.nodes as nodes_mod
 
     monkeypatch.setattr(nodes_mod, "read_accepted_mesh_nodes",
                         lambda _uri, utm_epsg=None: (_POINTS, _CELLS, _BED, _LONLAT))

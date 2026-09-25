@@ -416,7 +416,7 @@ package DataSeam {
 
     part waterCut : WaterCut {
         doc /*
-        code: trid3nt_server/workflows/mesh/water.py
+        code: trid3nt_server/mesh/water.py
         */
     }
 
@@ -428,7 +428,7 @@ package DataSeam {
 
     part bedPainter : BedPainter {
         doc /*
-        code: trid3nt_server/workflows/mesh/shared/primitives.py
+        code: trid3nt_server/mesh/shared/primitives.py
         */
     }
 

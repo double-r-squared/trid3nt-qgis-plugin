@@ -35,7 +35,7 @@ function-locally to keep the `server <-> gates` package edge acyclic.
 
 ## The mesh on the gate
 
-There is no second gate machine. `workflows/mesh/gate.py` builds the round's
+There is no second gate machine. `mesh/gate.py` builds the round's
 CARD for the mesh under construction and hands it to `gate_input_review` like
 any other user-gated thing: under USER-GATED the built mesh is presented as an
 editable MDAL layer (through `render.publish_input_layer`) plus its numeric

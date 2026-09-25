@@ -499,7 +499,7 @@ def _infiltration(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
 
     The steep-slope correction is applied here because the installed engine has
     its own branch compiled off; the slopes are the mesh's own bed gradients."""
-    from trid3nt_server.workflows.mesh.shared.nodes import (
+    from trid3nt_server.mesh.shared.nodes import (
         accepted_mesh_nodes,
         node_slopes_from_mesh,
         sample_layer_at_nodes,

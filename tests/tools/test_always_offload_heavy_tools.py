@@ -18,7 +18,8 @@ from trid3nt_server.tools import RegisteredTool
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 _SRC = pathlib.Path(server.__file__).resolve().parent.parent
-_WORKFLOWS = _SRC / "workflows"
+#: The trees a composer or a mesher lives in.
+_SWEPT = (_SRC / "workflows", _SRC / "mesh")
 #: The heavy sync fetch this file's sweep guards. It is named by a recipe's bed
 #: row rather than called from a coroutine anywhere in the tree, so the sweep
 #: asserts ABSENCE of an on-loop call rather than a particular offload.
@@ -132,7 +133,7 @@ def test_no_workflow_calls_the_heavy_fetch_on_the_loop() -> None:
     The sweep is the guard: a new caller either stays synchronous or wraps itself in
     ``asyncio.to_thread``, and this fails the moment one does neither."""
     offenders: list[str] = []
-    for path in _WORKFLOWS.rglob("*.py"):
+    for path in (p for tree in _SWEPT for p in tree.rglob("*.py")):
         if "__pycache__" in path.parts:
             continue
         src = path.read_text(encoding="utf-8")
@@ -144,7 +145,7 @@ def test_no_workflow_calls_the_heavy_fetch_on_the_loop() -> None:
             if isinstance(node, ast.AsyncFunctionDef) and _HEAVY_FETCH[:-1] in ast.dump(
                 node
             ):
-                offenders.append(f"{path.relative_to(_WORKFLOWS)}::{node.name}")
+                offenders.append(f"{path.relative_to(_SRC)}::{node.name}")
     assert not offenders, (
         "these coroutines call the heavy sync fetch directly, which blocks the "
         "event loop; wrap it in asyncio.to_thread:\n  " + "\n  ".join(offenders)

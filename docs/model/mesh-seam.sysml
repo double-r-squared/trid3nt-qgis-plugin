@@ -419,14 +419,14 @@ package MeshSeam {
 
     part meshRouter : MeshRouter {
         doc /*
-        code: trid3nt_server/workflows/mesh/tool.py
+        code: trid3nt_server/mesh/tool.py
         */
         port recipeOut : RecipeOut;
     }
 
     part recipeObject : RecipeObject {
         doc /*
-        code: trid3nt_server/workflows/mesh/recipe.py
+        code: trid3nt_server/mesh/recipe.py
         */
         port recipeIn : RecipeIn;
         port opIn : OpIn;
@@ -434,14 +434,14 @@ package MeshSeam {
 
     part opTool : OpTool {
         doc /*
-        code: trid3nt_server/workflows/mesh/op_tool.py
+        code: trid3nt_server/mesh/op_tool.py
         */
         port opOut : OpOut;
     }
 
     part meshSession : MeshSession {
         doc /*
-        code: trid3nt_server/workflows/mesh/session.py
+        code: trid3nt_server/mesh/session.py
         */
         port opIn : OpIn;
         port opOut : OpOut;
@@ -454,14 +454,14 @@ package MeshSeam {
 
     part meshGate : MeshGate {
         doc /*
-        code: trid3nt_server/workflows/mesh/gate.py
+        code: trid3nt_server/mesh/gate.py
         */
         port probesIn : ProbesIn;
     }
 
     part mesherRegistry : MesherRegistry {
         doc /*
-        code: trid3nt_server/workflows/mesh/meshers/__init__.py
+        code: trid3nt_server/mesh/meshers/__init__.py
         */
         port registrationIn : RegistrationIn;
         port namespaceIn : NamespaceIn;
@@ -469,7 +469,7 @@ package MeshSeam {
 
     part om2dAdapter : MesherAdapter {
         doc /*
-        code: trid3nt_server/workflows/mesh/meshers/om2d.py
+        code: trid3nt_server/mesh/meshers/om2d.py
         */
         port registrationOut : RegistrationOut;
         port namespaceOut : NamespaceOut;
@@ -488,7 +488,7 @@ package MeshSeam {
         is empty because a lattice at the one size word is the whole of what an
         undeclared ask asked for.
 
-        code: trid3nt_server/workflows/mesh/meshers/reg_grid.py
+        code: trid3nt_server/mesh/meshers/reg_grid.py
         */
         port registrationOut : RegistrationOut;
     }
@@ -520,7 +520,7 @@ package MeshSeam {
 
     part sharedPrimitives : SharedPrimitives {
         doc /*
-        code: trid3nt_server/workflows/mesh/shared/primitives.py
+        code: trid3nt_server/mesh/shared/primitives.py
         */
         port bedOut : BedOut;
         port rolesOut : RolesOut;
@@ -528,7 +528,7 @@ package MeshSeam {
 
     part meshArtifactStore : MeshArtifactStore {
         doc /*
-        code: trid3nt_server/workflows/mesh/artifact.py
+        code: trid3nt_server/mesh/artifact.py
         */
         port artifactIn : ArtifactIn;
         port fieldsIn : FieldsIn;
@@ -634,8 +634,8 @@ package MeshSeam {
         that could see its session or its gate would be state with a program
         beside it, which is the shape this law replaced.
 
-        forbid: trid3nt_server.workflows.mesh.recipe -> trid3nt_server.workflows.mesh.session
-        forbid: trid3nt_server.workflows.mesh.recipe -> trid3nt_server.workflows.mesh.gate
+        forbid: trid3nt_server.mesh.recipe -> trid3nt_server.mesh.session
+        forbid: trid3nt_server.mesh.recipe -> trid3nt_server.mesh.gate
         */
     }
 
@@ -649,7 +649,7 @@ package MeshSeam {
         registry for nothing; the one edit tool it needs is registered like any
         other.
 
-        forbid: trid3nt_server.workflows.mesh.gate -> trid3nt_server.tools
+        forbid: trid3nt_server.mesh.gate -> trid3nt_server.tools
         */
     }
 
@@ -815,7 +815,7 @@ package MeshSeam {
         a second place a mesh gets built, and the mesh a human approved and the
         mesh a solver ran on would be two objects that happen to agree.
 
-        forbid: trid3nt_server.workflows.mesh -> trid3nt_server.workflows.telemac
+        forbid: trid3nt_server.mesh -> trid3nt_server.workflows.telemac
         */
     }
 

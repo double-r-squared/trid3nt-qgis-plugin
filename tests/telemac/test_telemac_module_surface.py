@@ -1053,7 +1053,7 @@ def test_every_open_water_recipe_sizes_the_domain_rim_it_meshes():
     """Nothing else sizes the rim: every sizing function measures the SHORELINE and an
     AOI's box is not one, so an undeclared rim comes back an order of magnitude past
     the size word. The op runs after the sizing and before the gradation."""
-    from trid3nt_server.workflows.mesh.tool import recipe_plan_value
+    from trid3nt_server.mesh.tool import recipe_plan_value
     from trid3nt_server.workflows.telemac.templates.agitation.agitation import (
         MESH as HARBOUR,
     )
@@ -1081,7 +1081,7 @@ def test_every_open_water_recipe_carries_the_boundary_cleaning_chain():
     library's own clean passes remove them before the boundary is walked. The two
     recipes a template states for itself and the one the workflow builds from the
     slots all list the same four, in the same order."""
-    from trid3nt_server.workflows.mesh.tool import recipe_plan_value
+    from trid3nt_server.mesh.tool import recipe_plan_value
     from trid3nt_server.workflows.telemac.templates.agitation.agitation import (
         MESH as HARBOUR,
     )
@@ -1099,7 +1099,7 @@ def test_every_open_water_recipe_carries_the_boundary_cleaning_chain():
 def _owned_recipe(tool_name: str):
     """The recipe the WORKFLOW built from a template's slots, off its own plan."""
     from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
+    from trid3nt_server.mesh.tool import recipe_from_plan_value
 
     workflow = TOOL_REGISTRY[tool_name].fn.workflow
     step = next(n for n in workflow.plan.steps

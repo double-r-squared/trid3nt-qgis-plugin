@@ -16,7 +16,7 @@ from trid3nt_server.workflows.runtime import (
     Ref,
     register_workflow,
 )
-from trid3nt_server.workflows.mesh.tool import mesh_op, tool
+from trid3nt_server.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.telemac.authoring.accepted_mesh import HARBOUR_GEOMETRY
 from trid3nt_server.workflows.telemac.modules.outputs import profile
 from trid3nt_server.workflows.telemac.modules.artemis import (

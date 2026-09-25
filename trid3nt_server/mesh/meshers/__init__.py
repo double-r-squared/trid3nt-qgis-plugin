@@ -214,7 +214,7 @@ def _shared_primitives() -> tuple[OpNamespace, ...]:
     """The primitives namespace that rides along for EVERY mesher."""
     # Imported where it is asked rather than at module scope: the primitives are
     # written against :class:`Mesh`, which is declared here.
-    from trid3nt_server.workflows.mesh.shared import primitives
+    from trid3nt_server.mesh.shared import primitives
 
     return (OpNamespace(origin="primitives", phase=POST, module=primitives),)
 

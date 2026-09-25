@@ -13,7 +13,7 @@ import json
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.mesh.shared.nodes import read_centerline_utm
+from trid3nt_server.mesh.shared.nodes import read_centerline_utm
 from trid3nt_server.workflows.telemac.authoring.release_point import _settle_release
 
 #: A west-to-east flowline near Twin Falls, Idaho. The seed is its WEST end: the
@@ -53,7 +53,7 @@ def _nodes_along(centerline_utm) -> np.ndarray:
 
 def _walk(fraction: float, centerline_utm, monkeypatch):
     """Where an unplaced release lands -> ``(lon, lat)``."""
-    from trid3nt_server.workflows.mesh.shared import nodes as nodes_mod
+    from trid3nt_server.mesh.shared import nodes as nodes_mod
 
     monkeypatch.setattr(nodes_mod, "read_accepted_mesh_nodes",
                         lambda _uri, utm_epsg=None: _HOLDS_EVERYTHING)

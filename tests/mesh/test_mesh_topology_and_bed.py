@@ -10,9 +10,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.mesh.meshers import Mesh, MeshToolError
-from trid3nt_server.workflows.mesh.shared import primitives as P
-from trid3nt_server.workflows.mesh.shared.nodes import (
+from trid3nt_server.mesh.meshers import Mesh, MeshToolError
+from trid3nt_server.mesh.shared import primitives as P
+from trid3nt_server.mesh.shared.nodes import (
     MeshNodeError,
     read_centerline_utm,
 )
@@ -382,7 +382,7 @@ def test_the_substitution_the_fetch_narrated_rides_under_one_name(tmp_path):
 
     import inspect
 
-    from trid3nt_server.workflows.mesh import session as S
+    from trid3nt_server.mesh import session as S
 
     assert "bed_fallback_note" in inspect.getsource(S.MeshSession.accept)
     assert 'mesh.meta.get("bed_fallback_note")' in inspect.getsource(S.MeshSession)
@@ -393,8 +393,8 @@ def test_the_journal_names_the_rung_that_ACTUALLY_painted_the_bed(tmp_path):
 
     A reader with only the journal beside the mesh files would otherwise see the row
     the recipe ASKED for and no sign of the substitution that answered it."""
-    from trid3nt_server.workflows.mesh.recipe import build_recipe
-    from trid3nt_server.workflows.mesh.session import MeshSession
+    from trid3nt_server.mesh.recipe import build_recipe
+    from trid3nt_server.mesh.session import MeshSession
 
     session = MeshSession(
         build_recipe(mesher="reg_grid", extent=(-75.80, 36.10, -75.70, 36.20),
@@ -434,7 +434,7 @@ _ROWS_DICT = [{"rung": "cudem_nearshore", "coverage": 0.89},
 
 
 def test_the_activation_rows_read_the_same_from_a_layer_and_from_a_dict():
-    from trid3nt_server.workflows.mesh.meshers import (
+    from trid3nt_server.mesh.meshers import (
         fetch_activation_rows,
         fetch_fallback_note,
     )
@@ -534,7 +534,7 @@ def test_the_boundary_numbering_is_one_count_across_every_loop():
     """IPOBO is a permutation of 1..NPTFR: a per-loop count breaks it."""
     import numpy as np
 
-    from trid3nt_server.workflows.mesh.shared.formats.tin_topology import (
+    from trid3nt_server.mesh.shared.formats.tin_topology import (
         boundary_numbering,
     )
 
@@ -552,7 +552,7 @@ def test_a_boundary_walk_whose_loops_share_a_node_refuses_naming_it():
     import numpy as np
     import pytest
 
-    from trid3nt_server.workflows.mesh.shared.formats.tin_topology import (
+    from trid3nt_server.mesh.shared.formats.tin_topology import (
         BoundaryPinched,
         boundary_numbering,
     )

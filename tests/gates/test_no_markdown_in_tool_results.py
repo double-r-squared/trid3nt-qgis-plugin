@@ -12,7 +12,7 @@ import re
 from pathlib import Path
 
 SRC_ROOT = Path(__file__).resolve().parents[2] / "trid3nt_server"
-SCAN_DIRS = ("tools", "data", "workflows")
+SCAN_DIRS = ("tools", "data", "workflows", "mesh")
 
 #: Repo-relative (to SRC_ROOT) files allowed to build markdown strings.
 #: Every entry MUST document why in the module docstring above.

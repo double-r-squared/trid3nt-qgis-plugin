@@ -1,4 +1,4 @@
-# `workflows/mesh/` - the one mesh front
+# `mesh/` - the one mesh front
 
 Every template's mesh ask enters here and leaves as an accepted topology. A mesh
 is defined by exactly one object: its RECIPE - three mesher-agnostic params

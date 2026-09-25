@@ -150,7 +150,7 @@ async def stub_mesh_step(**kwargs):
     Its consumers read the artifact by attribute, so what the replay hands back
     has to be the artifact and not a mapping that merely holds its fields.
     """
-    from trid3nt_server.workflows.mesh.artifact import MeshArtifact
+    from trid3nt_server.mesh.artifact import MeshArtifact
 
     _CALLS.append("stub_mesh_step")
     art = MeshArtifact(
@@ -979,7 +979,7 @@ async def test_a_replayed_artifact_comes_back_as_the_artifact_not_as_a_mapping()
 
     Serialized as plain JSON a ``MeshArtifact`` becomes a dict, and the second attempt
     then crashes on the missing ``probes`` and finds no ``provenance``."""
-    from trid3nt_server.workflows.mesh.artifact import MeshArtifact, measured_min_edge_m
+    from trid3nt_server.mesh.artifact import MeshArtifact, measured_min_edge_m
     from trid3nt_server.workflows.telemac.authoring.release_point import _domain_polygon
 
     plan = Plan("mesh_replay_w", None, (

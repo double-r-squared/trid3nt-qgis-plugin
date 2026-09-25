@@ -148,7 +148,7 @@ def _in_mesh_cells(line: Any, uri: str, epsg: int | None) -> tuple[float, float,
     import shapely
     from shapely.geometry import LineString
 
-    from trid3nt_server.workflows.mesh.shared.nodes import (
+    from trid3nt_server.mesh.shared.nodes import (
         read_accepted_mesh_nodes, read_centerline_utm,
     )
 

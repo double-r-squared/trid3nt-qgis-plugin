@@ -19,13 +19,13 @@ from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import LayerURI
 
 from trid3nt_server.render.mesh_display import mesh_display_path, write_2dm
-from trid3nt_server.workflows.mesh.grid_geometry import M_PER_DEG_LAT
-from trid3nt_server.workflows.mesh.artifact import (
+from trid3nt_server.mesh.grid_geometry import M_PER_DEG_LAT
+from trid3nt_server.mesh.artifact import (
     MeshArtifact,
     stash_mesh_artifact,
     write_mesh_artifact_sidecar,
 )
-from trid3nt_server.workflows.mesh.meshers import (
+from trid3nt_server.mesh.meshers import (
     Mesh,
     Mesher,
     MeshOp,
@@ -33,9 +33,9 @@ from trid3nt_server.workflows.mesh.meshers import (
     get_mesher,
     input_digest,
 )
-from trid3nt_server.workflows.mesh.recipe import MeshRecipe
+from trid3nt_server.mesh.recipe import MeshRecipe
 
-logger = logging.getLogger("trid3nt_server.workflows.mesh.session")
+logger = logging.getLogger("trid3nt_server.mesh.session")
 
 __all__ = ["MeshSession", "mesh_digest", "replay_recipe"]
 
@@ -129,7 +129,7 @@ class MeshSession:
         The mesh is FLAGGED and any later recipe edit refuses."""
         import dataclasses
 
-        from trid3nt_server.workflows.mesh.shared.nodes import read_2dm_mesh
+        from trid3nt_server.mesh.shared.nodes import read_2dm_mesh
 
         mesh = self.mesh
         if not mesh.has_cells:

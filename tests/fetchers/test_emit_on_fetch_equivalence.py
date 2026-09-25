@@ -15,10 +15,9 @@ from trid3nt_server.tools.fetchers._router.emit_on_fetch import (
     input_layer_name,
 )
 
-_WORKFLOWS = (
-    pathlib.Path(__file__).resolve().parents[2]
-    / "trid3nt_server" / "workflows"
-)
+_SERVER = pathlib.Path(__file__).resolve().parents[2] / "trid3nt_server"
+#: The trees a composer or a mesher lives in.
+_SWEPT = (_SERVER / "workflows", _SERVER / "mesh")
 
 
 def test_a_matched_row_is_asked_under_its_own_name():
@@ -72,7 +71,7 @@ def test_deleted_surface_helpers_are_gone():
     ]
     joined = "\n".join(
         p.read_text("utf-8")
-        for p in _WORKFLOWS.rglob("*.py")
+        for tree in _SWEPT for p in tree.rglob("*.py")
         if "__pycache__" not in p.parts
     )
     for name in gone:

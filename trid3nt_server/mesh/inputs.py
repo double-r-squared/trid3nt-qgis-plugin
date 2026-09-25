@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 from typing import Any, Mapping
 
-from trid3nt_server.workflows.mesh.meshers import MeshToolError
+from trid3nt_server.mesh.meshers import MeshToolError
 
 __all__ = ["op_geometry", "op_input", "op_raster"]
 

@@ -11,7 +11,7 @@ import asyncio
 from typing import Any, Mapping, Sequence
 
 from trid3nt_server.workflows.runtime import journal_note
-from trid3nt_server.workflows.mesh.shared.nodes import read_centerline_utm
+from trid3nt_server.mesh.shared.nodes import read_centerline_utm
 from ..errors import TelemacError
 from .accepted_mesh import mesh_nodes, to_utm
 from .opening import FLAT

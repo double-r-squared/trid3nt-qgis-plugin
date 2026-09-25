@@ -15,11 +15,11 @@ from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
 from trid3nt_server.render import pipeline_emitter as pe
 from trid3nt_server.gates import pending
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.mesh import gate as mesh_gate
-from trid3nt_server.workflows.mesh.artifact import MeshArtifact
-from trid3nt_server.workflows.mesh.meshers import MeshToolError
-from trid3nt_server.workflows.mesh.session import MeshSession
-from trid3nt_server.workflows.mesh.tool import mesh_op, tool
+from trid3nt_server.mesh import gate as mesh_gate
+from trid3nt_server.mesh.artifact import MeshArtifact
+from trid3nt_server.mesh.meshers import MeshToolError
+from trid3nt_server.mesh.session import MeshSession
+from trid3nt_server.mesh.tool import mesh_op, tool
 
 _AOI = (-83.50, 35.00, -83.40, 35.09)
 
@@ -164,7 +164,7 @@ def test_mesh_op_surfaces_in_top8():
     from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
 
     dd._get_index()
-    corpus_path = (Path(t.__file__).resolve().parents[1] / "workflows" / "mesh"
+    corpus_path = (Path(t.__file__).resolve().parents[1] / "mesh"
                    / "corpus.yaml")
     queries = (yaml.safe_load(corpus_path.read_text()) or {})["mesh_op"]
     assert queries
@@ -197,7 +197,7 @@ async def test_adopting_a_hand_edited_layer_is_a_row_on_the_card(
     import numpy as np
 
     from trid3nt_server.render.mesh_display import write_2dm
-    from trid3nt_server.workflows.mesh.meshers import Mesh
+    from trid3nt_server.mesh.meshers import Mesh
 
     monkeypatch.setattr(pe, "current_emitter", lambda: _FakeEmitter())
     edited = tmp_path / "edited.2dm"
@@ -378,7 +378,7 @@ def test_no_mesher_has_card_code_of_its_own():
     RENDERS it with - and neither may name a mesher."""
     import pathlib
 
-    from trid3nt_server.workflows.mesh.meshers import registered_meshers
+    from trid3nt_server.mesh.meshers import registered_meshers
 
     repo = pathlib.Path(__file__).resolve().parents[2]
     offenders = {

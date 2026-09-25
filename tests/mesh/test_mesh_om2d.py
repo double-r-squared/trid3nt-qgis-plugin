@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.mesh.meshers import (
+from trid3nt_server.mesh.meshers import (
     POST,
     PRE,
     Mesh,
@@ -22,8 +22,8 @@ from trid3nt_server.workflows.mesh.meshers import (
     op_names,
     resolve_op,
 )
-from trid3nt_server.workflows.mesh.meshers import om2d as OM2D
-from trid3nt_server.workflows.mesh.tool import mesh_op, tool
+from trid3nt_server.mesh.meshers import om2d as OM2D
+from trid3nt_server.mesh.tool import mesh_op, tool
 
 _AOI = (-75.80, 36.10, -75.70, 36.20)
 
@@ -178,7 +178,7 @@ def test_the_mesher_registers_the_determinism_it_was_measured_at():
 
 def test_the_journal_states_no_caveat_a_measurement_does_not_stand_behind(tmp_path):
     """The determinism line is a WARNING, so a mesher that reproduces omits it."""
-    from trid3nt_server.workflows.mesh.session import MeshSession
+    from trid3nt_server.mesh.session import MeshSession
 
     for recipe in (_recipe(),
                    tool.build_mesh(mesher="reg_grid", extent=_AOI,
@@ -381,7 +381,7 @@ def _no_fetch_bed(monkeypatch, value=-4.0):
             meta={**dict(mesh.meta), "bed_source": f"{source} (stubbed)"})
 
     monkeypatch.setattr(
-        "trid3nt_server.workflows.mesh.shared.primitives.set_bed", fake_set_bed)
+        "trid3nt_server.mesh.shared.primitives.set_bed", fake_set_bed)
 
 
 def test_a_library_op_after_the_bed_runs_in_its_own_call_over_the_current_mesh(
@@ -622,7 +622,7 @@ def test_a_node_on_the_rasters_rim_reads_a_whole_cell_not_its_edge(tmp_path):
     import rasterio
     from rasterio.transform import from_origin
 
-    from trid3nt_server.workflows.mesh.shared.nodes import sample_raster_at_nodes
+    from trid3nt_server.mesh.shared.nodes import sample_raster_at_nodes
 
     band = np.full((10, 10), -18.0, dtype="float32")
     band[-1, :] = 0.0           # the partial cell the warp filled
@@ -767,7 +767,7 @@ def test_a_name_the_library_does_not_have_refuses_in_the_box_too():
 def test_a_mesh_that_carries_no_build_state_still_takes_a_primitive():
     """An adopted topology has no om2d build behind it, and a primitive is written
     against the MESH rather than against a rebuild state, so it still applies."""
-    from trid3nt_server.workflows.mesh.shared.primitives import set_boundary_roles
+    from trid3nt_server.mesh.shared.primitives import set_boundary_roles
 
     adopted = Mesh(points=_POINTS, cells=_CELLS, crs_authid="EPSG:4326")
     assert set_boundary_roles(adopted) is adopted

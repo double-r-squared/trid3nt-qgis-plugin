@@ -218,8 +218,8 @@ def test_a_supplied_mesh_with_no_pair_is_taken_and_the_run_refuses_by_name(tmp_p
     A mesh carrying no pair is taken by the door - a mesh is not unsolvable in
     the abstract - and the run authored on it refuses here, naming the steering
     keyword and the file nobody staged."""
-    from trid3nt_server.workflows.mesh.artifact import MeshArtifact
-    from trid3nt_server.workflows.mesh.tool import resolve_mesh
+    from trid3nt_server.mesh.artifact import MeshArtifact
+    from trid3nt_server.mesh.tool import resolve_mesh
     from trid3nt_server.workflows.runtime.accepts import Accepts
 
     bare = MeshArtifact(

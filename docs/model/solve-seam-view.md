@@ -9,11 +9,11 @@ Plane: **workflow**. System: **assembler -> solver -> products**. One seam of th
 ```mermaid
 flowchart LR
     acceptedMesh["Assembler<br/>trid3nt_server/workflows/telemac/authoring/accepted_mesh.py"]
-    bedPainter["BedPainter<br/>trid3nt_server/workflows/mesh/shared/primitives.py"]
+    bedPainter["BedPainter<br/>trid3nt_server/mesh/shared/primitives.py"]
     diagnosticsReader["DiagnosticsReader<br/>trid3nt_server/workflows/solver/diagnostics/telemac.py"]
     launcherArm["LauncherArm<br/>trid3nt_server/workflows/telemac/engine.py"]
     manifestStager["ManifestStager<br/>trid3nt_server/workflows/telemac/authoring/staging.py"]
-    meshAcceptance["MeshAcceptance<br/>trid3nt_server/workflows/mesh/step.py"]
+    meshAcceptance["MeshAcceptance<br/>trid3nt_server/mesh/step.py"]
     opening["Assembler<br/>trid3nt_server/workflows/telemac/authoring/opening.py"]
     ratingCurve["Assembler<br/>trid3nt_server/workflows/telemac/authoring/rating_curve.py"]
     referenceSurface["Assembler<br/>trid3nt_server/workflows/telemac/authoring/reference_surface.py"]

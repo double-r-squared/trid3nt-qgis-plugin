@@ -299,12 +299,12 @@ import re  # noqa: E402
 _SERVER_DIR = pathlib.Path(__file__).resolve().parents[2] / "trid3nt_server"
 # The trees a COMPOSER lives in. `render/` is the seam's own home and defines
 # what this sweep counts, so sweeping it would count the definition site.
-_SWEPT = ("workflows", "inputs")
+_SWEPT = ("workflows", "inputs", "mesh")
 
 # relpath (from trid3nt_server/) -> (n_input_emission_calls, reason). Sum is the
 # only input-emission the tree is allowed to keep post-collapse.
 _ALLOWLISTED_INPUT_EMISSION: dict[str, tuple[int, str]] = {
-    "workflows/mesh/gate.py": (1, "the mesh under construction, presented at the gate as an editable MDAL layer - an AUTHORED domain, not a router fetch, so no emit-on-fetch seam can cover it; one home for every mesher's presentation"),
+    "mesh/gate.py": (1, "the mesh under construction, presented at the gate as an editable MDAL layer - an AUTHORED domain, not a router fetch, so no emit-on-fetch seam can cover it; one home for every mesher's presentation"),
     "inputs/bed.py": (1, "the MERGED bed - a surface this runtime builds from several fetched rungs, which is no one router fetch, so no emit-on-fetch seam can cover it; one home for every merged surface"),
     "inputs/point.py": (1, "the Point context-layer publisher - a resolved PARAM (picked, typed or derived), not a router fetch, so no emit-on-fetch seam can cover it; one home for every Point slot"),
 }
@@ -323,6 +323,16 @@ _SURFACE_DEF = re.compile(r"^\s*(?:async\s+)?def\s+(_surface_\w*input\w*)\s*\(",
 def _iter_workflow_py() -> list[pathlib.Path]:
     return [p for tree in _SWEPT for p in (_SERVER_DIR / tree).rglob("*.py")
             if "__pycache__" not in p.parts]
+
+
+def test_the_sweep_covers_every_tree_it_names_and_every_site_it_allows():
+    """A swept tree that moved, or an allowed site outside every swept tree, is a
+    sweep that passes while reading nothing."""
+    for tree in _SWEPT:
+        assert list((_SERVER_DIR / tree).rglob("*.py")), f"{tree}/ holds no module"
+    swept = {str(p.relative_to(_SERVER_DIR)) for p in _iter_workflow_py()}
+    unswept = sorted(set(_ALLOWLISTED_INPUT_EMISSION) - swept)
+    assert not unswept, f"allowed sites no swept tree reaches: {unswept}"
 
 
 def test_sweep_no_surface_input_helpers_except_worker_cog():

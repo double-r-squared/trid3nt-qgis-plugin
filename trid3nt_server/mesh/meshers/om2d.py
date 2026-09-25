@@ -16,8 +16,8 @@ from typing import Any, Mapping
 
 from trid3nt_contracts import new_ulid
 
-from trid3nt_server.workflows.mesh.inputs import op_geometry
-from trid3nt_server.workflows.mesh.meshers import (
+from trid3nt_server.mesh.inputs import op_geometry
+from trid3nt_server.mesh.meshers import (
     POST,
     PRE,
     BoundOp,
@@ -30,7 +30,7 @@ from trid3nt_server.workflows.mesh.meshers import (
 )
 from trid3nt_server.workflows.solver.image_script import run_image_script
 
-logger = logging.getLogger("trid3nt_server.workflows.mesh.meshers.om2d")
+logger = logging.getLogger("trid3nt_server.mesh.meshers.om2d")
 
 __all__ = ["OM2D", "build"]
 
@@ -185,7 +185,7 @@ def _read_built(rundir: Path, domain: "_Domain", resolution_m: float,
     """The container's arrays as the neutral mesh, cleaned once and projected."""
     import numpy as np
 
-    from trid3nt_server.workflows.mesh.shared.nodes import reproject_nodes_to_utm
+    from trid3nt_server.mesh.shared.nodes import reproject_nodes_to_utm
 
     npz = np.load(rundir / "om2d_mesh.npz")
     lonlat = np.asarray(npz["points"], dtype=float)
@@ -286,7 +286,7 @@ def _run_tail_op(mesh: Mesh, op: BoundOp, rundir: Path, index: int,
     new_lonlat = np.asarray(out["points"], dtype=float)
     if new_lonlat.shape == lonlat.shape and np.allclose(new_lonlat, lonlat):
         return mesh, report["results"].get(op.name)
-    from trid3nt_server.workflows.mesh.shared.nodes import reproject_nodes_to_utm
+    from trid3nt_server.mesh.shared.nodes import reproject_nodes_to_utm
 
     points, utm_epsg = reproject_nodes_to_utm(new_lonlat)
     return dataclasses.replace(
@@ -298,7 +298,7 @@ def _run_tail_op(mesh: Mesh, op: BoundOp, rundir: Path, index: int,
 
 def _bound_inputs(op: BoundOp) -> dict[str, Any]:
     """One primitive's kwargs with every data value converted, once."""
-    from trid3nt_server.workflows.mesh.inputs import op_input
+    from trid3nt_server.mesh.inputs import op_input
 
     return {name: op_input(value) for name, value in op.kwargs.items()}
 
@@ -308,7 +308,7 @@ def _staged(op: BoundOp, rundir: Path, index: int, resolution_m: float,
     """One op as the container reads it: its name and its kwargs as /data paths.
 
     Code-as-data: the name travels verbatim and the driver calls it verbatim."""
-    from trid3nt_server.workflows.mesh.inputs import op_input
+    from trid3nt_server.mesh.inputs import op_input
 
     kwargs: dict[str, Any] = {}
     for name, value in op.kwargs.items():
@@ -629,7 +629,7 @@ def _clean_once(lonlat: Any, cells: Any) -> tuple[Any, Any, int]:
     """Orphan re-indexing, CCW normalization and the fusions a FILE forces.
 
     How many elements were dropped is reported, never absorbed."""
-    from trid3nt_server.workflows.mesh.shared.nodes import tin_topology
+    from trid3nt_server.mesh.shared.nodes import tin_topology
 
     topo = tin_topology()
     depths = _zeros(lonlat)
@@ -754,7 +754,7 @@ def _emitted(mesh: Mesh, rundir: Path, domain: _Domain,
     and cells; what an engine needs written out of them is that engine's."""
     import dataclasses
 
-    from trid3nt_server.workflows.mesh.shared.nodes import boundary_contours
+    from trid3nt_server.mesh.shared.nodes import boundary_contours
 
     roles = {role: list(nodes) for role, nodes
              in dict(mesh.meta.get("boundary_roles") or {}).items() if nodes}

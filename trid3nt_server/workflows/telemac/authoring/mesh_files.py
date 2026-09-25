@@ -39,7 +39,7 @@ async def telemac_mesh_files(*, mesh: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _mesh_files(mesh: Mapping[str, Any]) -> dict[str, Any]:
-    from trid3nt_server.workflows.mesh.shared.nodes import read_accepted_mesh_nodes
+    from trid3nt_server.mesh.shared.nodes import read_accepted_mesh_nodes
 
     art = mesh_artifact(mesh)
     display = (mesh or {}).get("display_uri")
@@ -102,7 +102,7 @@ def _record(art: Any, files: Mapping[str, str]) -> None:
     The sidecar is durability, never correctness: a write that fails leaves the
     run holding the files it just wrote."""
     from trid3nt_server import storage
-    from trid3nt_server.workflows.mesh.artifact import write_mesh_artifact_sidecar
+    from trid3nt_server.mesh.artifact import write_mesh_artifact_sidecar
 
     art.engine_files = dict(files)
     if str(art.display_uri or "").startswith("s3://"):

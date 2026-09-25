@@ -11,7 +11,7 @@ import logging
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-logger = logging.getLogger("trid3nt_server.workflows.mesh.artifact")
+logger = logging.getLogger("trid3nt_server.mesh.artifact")
 
 __all__ = [
     "MeshArtifact",

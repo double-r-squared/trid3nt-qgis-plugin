@@ -117,7 +117,7 @@ def install_reach_chain(monkeypatch, tmp_path, captured: dict | None = None,
     # and the release containment through the module's, so it stands in at both.
     import numpy as np
 
-    from trid3nt_server.workflows.mesh.shared import nodes as nodes_mod
+    from trid3nt_server.mesh.shared import nodes as nodes_mod
 
     span = 1.0e7
 
