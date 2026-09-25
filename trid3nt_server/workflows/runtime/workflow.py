@@ -391,15 +391,25 @@ class Workflow:
             return None
         return (run.results.get(self.solve_step) or {}).get("module")
 
-    def _fill(self, run: RunResult) -> dict[str, str]:
-        """Every slot of the solved deck, and where the fill took it from.
-        Read off the solve step's own sheet, so a workflow that fills no sheet
-        records no fill rather than an invented one."""
+    def _fill(self, run: RunResult) -> dict[str, dict[str, Any]]:
+        """Every slot of the solved deck -> the value it was solved at, and where
+        the fill took it from. Read off the solve step's own sheet, so a workflow
+        that fills no sheet records no fill rather than an invented one."""
         if not self.solve_step:
             return {}
         sheet = (run.results.get(self.solve_step) or {}).get("sheet") or {}
-        return {name: str(row.get("provenance") or "")
+        return {name: {"value": row.get("value"),
+                       "from": str(row.get("provenance") or "")}
                 for name, row in (sheet.get("filled") or {}).items()}
+
+    def _correct_end(self, run: RunResult) -> bool | None:
+        """Did the solver say it reached its own correct end? ``None`` where the
+        solve step's metrics state nothing either way."""
+        if not self.solve_step:
+            return None
+        metrics = (run.results.get(self.solve_step) or {}).get("metrics") or {}
+        flag = metrics.get("correct_end")
+        return None if flag is None else bool(flag)
 
     def _journal(self, run_id: str | None, run: RunResult, result: Any,
                  wall_seconds: float,
@@ -415,7 +425,7 @@ class Workflow:
         journal.append_record(journal.build_record(
             run_id=run_id, engine=self.engine or None,
             module=self._module(run), fill=self._fill(run),
-            sheet=sheet,
+            correct_end=self._correct_end(run), sheet=sheet,
             provenance=getattr(result, "synthetic_inputs", None) or [],
             result=result, wall_seconds=round(wall_seconds, 3),
             origin=journal.run_origin(live_session=current_emitter() is not None),
