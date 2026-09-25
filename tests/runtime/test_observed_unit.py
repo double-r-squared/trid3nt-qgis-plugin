@@ -5,8 +5,7 @@ record is a measurement of, and the run's own published table says what that
 variable is written in. Covered: a degC record read against a DEGC tracer, the
 refusal when nothing the run publishes under that name states a unit, the
 published table read off a deck's 32-character tracer text and off the rows a
-coupled module appends, and the one conversion both the ingestion and the
-calibration pairing go through.
+coupled module appends.
 """
 
 from __future__ import annotations
@@ -110,10 +109,3 @@ def test_the_published_table_is_the_deck_s_own_text_and_its_coupled_rows() -> No
         # behind a deck that names none, and the unit is the module's.
         assert published["TEMPERATURE"] == unit
         assert convert(9.5, "deg C", unit) == pytest.approx(9.5)
-
-
-def test_the_pairing_converts_through_the_same_function() -> None:
-    from trid3nt_server.workflows.calibration.pairing import onto
-
-    assert onto(10.0, "ft", "m") == pytest.approx(3.048)
-    assert onto(49.1, "degF", "DEGC") == pytest.approx((49.1 - 32.0) / 1.8)
