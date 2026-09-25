@@ -167,9 +167,7 @@ def test_corpus_yaml_present_and_routes():
 def test_the_declared_plan_is_the_rain_on_grid_sequence():
     """The workflow owns its stages off the domain and bed slots; what this
     template adds is the outlet's own curve. mesh -> outlet -> settled -> sheet
-    -> solve -> outputs, and the sequence VALIDATES against its own declared
-    params and data."""
-    from trid3nt_server.workflows.runtime.validate import validate_plan
+    -> solve -> outputs."""
     from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
         telemac_rain_on_grid,
     )
@@ -178,7 +176,6 @@ def test_the_declared_plan_is_the_rain_on_grid_sequence():
     plan = workflow.plan
     assert [step.label for step in plan.declared()] == [
         "stated", "mesh", "mesh_files", "outlet", "settled", "sheet", "solve", "outputs"]
-    validate_plan(plan, workflow.params, workflow.data)
 
 
 def test_a_stated_friction_law_derives_the_rating_curve(monkeypatch):

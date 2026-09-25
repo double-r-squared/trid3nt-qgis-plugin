@@ -45,10 +45,8 @@ from trid3nt_server.workflows.runtime import (
     invocation_key,
     merge_provenance,
     provenance_entries,
-    register_workflow,
     render_docstring,
     resolve_params,
-    validate_plan,
 )
 
 _HERE = "tests.runtime.test_declarative_library"
@@ -467,56 +465,9 @@ def test_named_applies_once():
         step.named("b")
 
 
-# --- the plan validator ------------------------------------------------------ #
 def _params():
     return [Param("base", desc="d", door=doors.SCENARIO, default=1.0, type=float),
             Param("pt", desc="d", door=doors.USER, optional=True)]
-
-
-def test_validator_refuses_a_ref_to_nothing():
-    plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_step", kwargs={"x": Ref("nope")}),))
-    with pytest.raises(PlanValidationError, match="resolves to nothing"):
-        validate_plan(plan, _params())
-
-
-def test_validator_refuses_a_forward_ref():
-    plan = Plan("w", None, (
-        Step(runner=f"{_HERE}.stub_step", kwargs={"x": Ref("later")}),
-        Step(runner=f"{_HERE}.stub_second").named("later"),
-    ))
-    with pytest.raises(PlanValidationError, match="resolves to nothing"):
-        validate_plan(plan, _params())
-
-
-def test_validator_accepts_a_backward_ref():
-    plan = Plan("w", None, (
-        Step(runner=f"{_HERE}.stub_step").named("first"),
-        Step(runner=f"{_HERE}.stub_second", kwargs={"x": Ref("first.uri")}),
-    ))
-    validate_plan(plan, _params())
-
-
-def test_validator_refuses_two_steps_with_one_name():
-    plan = Plan("w", None, (
-        Step(runner=f"{_HERE}.stub_step").named("dup"),
-        Step(runner=f"{_HERE}.stub_second").named("dup"),
-    ))
-    with pytest.raises(PlanValidationError, match="two steps"):
-        validate_plan(plan, _params())
-
-
-def test_validator_checks_data_producer_refs():
-    with pytest.raises(PlanValidationError, match="neither"):
-        validate_plan(Plan("w", None, (Step(runner=f"{_HERE}.stub_step"),)), _params(),
-                      [DataDecl("m", tool("b", size=Ref("ghost")))])
-
-
-def test_validator_refuses_a_param_declared_twice():
-    decl = [Param("base", desc="d", door=doors.SCENARIO, default=1.0, type=float),
-            Param("base", desc="other", door=doors.SCENARIO, default=2.0,
-                  type=float)]
-    with pytest.raises(PlanValidationError, match="declared twice"):
-        validate_plan(Plan("w", None, (Step(runner=f"{_HERE}.stub_step"),)), decl)
 
 
 @pytest.mark.asyncio
@@ -876,20 +827,20 @@ async def test_a_replayed_domain_step_restores_the_domain_it_recorded():
 
 # --- the ledger: every terminal state tombstones ------------------------------ #
 async def _seed_ledger(name, wire, records, data_records=()):
-    """Plant the work a DERIVED run inherits - the replay path that survives.
-
-    The same call ``rerun-with-overrides`` makes: a successful parent's records
-    land under the child's invocation key and the ordinary resume path walks them.
-    """
+    """Leave the ledger a process that DIED mid-run leaves: records under the
+    invocation key, never completed, so the ordinary resume path walks them."""
     from trid3nt_server.workflows.runtime import StepLedger, invocation_key as _key
 
     p = await resolve_params(_params(), wire)
     ledger = await StepLedger.load(_key(name, p.values_dict()), name)
-    await ledger.seed(list(records), list(data_records))
+    ledger.records = sorted(records, key=lambda r: r.index)
+    ledger.data_records = list(data_records)
+    ledger.completed = False
+    await ledger._persist()
 
 
 @pytest.mark.asyncio
-async def test_a_FAILED_attempt_is_tombstoned_so_the_rerun_RE_EXECUTES():
+async def test_a_FAILED_attempt_is_tombstoned_so_the_retry_RE_EXECUTES():
     """The records a dead attempt left were produced by whatever the code was then, so
     replaying them into a re-run of the corrected question reports a superseded
     artifact as the new run's answer."""
@@ -913,9 +864,9 @@ async def test_a_FAILED_attempt_is_tombstoned_so_the_rerun_RE_EXECUTES():
 
 
 @pytest.mark.asyncio
-async def test_a_SEEDED_success_still_replays_that_is_derivation_working():
-    """Tombstoning failure does not retire replay: a derived rerun inherits its
-    parent's completed work and must not pay for it twice."""
+async def test_a_DIED_attempt_still_replays_its_completed_work():
+    """Tombstoning failure does not retire replay: a process that died without
+    unwinding left completed work, and the resume must not pay for it twice."""
     plan = Plan("seeded_w", None, (
         Step(runner=f"{_HERE}.stub_step").named("expensive"),
         Step(runner=f"{_HERE}.stub_second").named("cheap"),
@@ -1165,13 +1116,6 @@ async def test_an_undeclared_param_read_refuses_at_construction():
         _ = p.ghost
 
 
-def test_validator_refuses_a_param_ref_to_an_undeclared_param():
-    plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_step",
-                              kwargs={"x": ParamRef("ghost")}),))
-    with pytest.raises(PlanValidationError, match=r"ParamRef\(\'ghost\'\) names no declared param"):
-        validate_plan(plan, _params())
-
-
 @pytest.mark.asyncio
 async def test_late_binding_reaches_the_runner_with_the_resolved_value():
     p = await resolve_params(_params(), {"base": 4.0})
@@ -1228,7 +1172,6 @@ async def test_do_sag_declares_no_gate_in_front_of_its_self_gating_review():
     from trid3nt_server.tools import TOOL_REGISTRY
 
     wf = TOOL_REGISTRY["telemac_do_sag"].fn.workflow
-    validate_plan(wf.plan, wf.params, wf.data)
     assert [s.kind for s in wf.plan.declared() if hasattr(s, "kind")] == []
     assert [s.label for s in wf.plan.declared() if s.self_gating] == ["sheet"]
 
@@ -1460,13 +1403,6 @@ async def test_a_user_supplied_physics_value_is_not_refused():
     ))
     await _run(plan, decl, {"aquifer_k_ms": 9.1e-6}, resume=False)
     assert _CALLS == ["stub_step"]
-
-
-def test_validator_refuses_a_param_ref_in_a_data_producer():
-    """A producer consumes params too - the dataflow crosses the Param/Data line."""
-    data = [DataDecl("mesh", tool("b", size=ParamRef("ghost")))]
-    with pytest.raises(PlanValidationError, match=r"ParamRef\(\'ghost\'\) names no declared param"):
-        validate_plan(Plan("w", None, (Step(runner=f"{_HERE}.stub_step"),)), _params(), data)
 
 
 
@@ -1801,7 +1737,7 @@ async def test_a_concrete_read_is_value_of_and_nothing_watches_it():
 
 @pytest.mark.asyncio
 async def test_a_tombstoned_orphan_key_cannot_be_replayed(monkeypatch):
-    """What the marker BUYS: the abandoned key hands nothing back to a rerun."""
+    """What the marker BUYS: the abandoned key hands nothing back to a retry."""
     _ledger = importlib.import_module("trid3nt_server.workflows.runtime.ledger")
 
     async def _boom(client, key):
@@ -1900,65 +1836,18 @@ async def _noop():
 
 
 def _declare(params, plan_decl, data=(), name="declared_w"):
-    """Declare a workflow the way ``register_workflow`` does: the plan is built and
-    validated inside ``__init__``, so an authoring defect raises HERE."""
+    """Declare a workflow the way ``register_workflow`` does: the plan is built
+    inside ``__init__``."""
     return _StubFacade(metadata=SimpleNamespace(name=name, engine="stub"),
                        params=params, data=data,
                        template=SimpleNamespace(PARAMS=params, DATA=data,
                                                 STEPS=plan_decl))
 
 
-def test_a_mistyped_param_read_is_refused_with_the_nearest_declared_spelling():
-    """A ref built from a STRING reaches the validator, and the sheet it is checked
-    against runs to dozens of names - so the nearest spelling is the message."""
-    def _plan(ops):
-        return (Step(runner=f"{_HERE}.stub_step", kwargs={"x": ParamRef("bse")}).named("s"),)
-
-    with pytest.raises(PlanValidationError) as exc:
-        _declare(_params(), _plan)
-    message = str(exc.value)
-    assert "ParamRef('bse') names no declared param" in message
-    assert "Closest declared: base" in message
-
-
-def test_a_mistyped_data_read_is_refused_and_says_it_is_a_data_name():
-    """``DATA.terain`` is a Data typo, not a step nobody named - which body the
-    bad name came from is the difference between two very different hunts."""
-    def _plan(ops):
-        return (Step(runner=f"{_HERE}.stub_second",
-                     kwargs={"m": DataRef("terain")}).named("s"),)
-
-    data = [DataDecl("terrain", tool(f"{_HERE}.stub_producer"))]
-    with pytest.raises(PlanValidationError) as exc:
-        _declare(_params(), _plan, data)
-    message = str(exc.value)
-    assert "DataRef('terain') names no declared Data" in message
-    assert "Declared Data: ['terrain']" in message
-
-
-def test_a_bad_plan_is_refused_at_register_workflow_not_at_run_time():
-    """Registration is the last moment an authoring defect is still an authoring
-    defect; after it, the same hole surfaces mid-run as an engine failure."""
-    from trid3nt_contracts.tool_registry import AtomicToolMetadata
-
-    def _plan(ops):
-        return (Step(runner=f"{_HERE}.stub_step", kwargs={"x": ParamRef("ghost")}).named("s"),)
-
-    metadata = AtomicToolMetadata(name="never_registered_w", ttl_class="live-no-cache",
-                                  source_class="workflow_dispatch", cacheable=False,
-                                  engine="stub", tier="template")
-    with pytest.raises(PlanValidationError, match=r"ParamRef\(\'ghost\'\) names no declared param"):
-        register_workflow(_StubFacade, metadata,
-                          SimpleNamespace(PARAMS=_params(), STEPS=_plan))
-
-    from trid3nt_server.tools import TOOL_REGISTRY
-    assert "never_registered_w" not in TOOL_REGISTRY
-
-
 @pytest.mark.asyncio
 async def test_the_plan_is_built_once_at_declaration_not_per_run():
     """A STATIC plan reads no concrete value, so rebuilding it per run would buy
-    nothing and cost the one guarantee it does buy: what was validated is what runs."""
+    nothing and cost the one guarantee it does buy: what was declared is what runs."""
     built = []
 
     def _plan(ops):

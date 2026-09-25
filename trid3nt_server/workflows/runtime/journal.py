@@ -209,25 +209,22 @@ def build_record(*, run_id: str | None, engine: str | None,
                  notes: Sequence[str],
                  fill: Mapping[str, Mapping[str, Any]] | None = None,
                  correct_end: bool | None = None,
-                 parent_run_id: str | None = None,
-                 overrides: Sequence[str] = (),
+                 solved: str | None = None,
                  continued_from: str | None = None,
                  keywords: Mapping[str, Any] | None = None,
                  supplied: Mapping[str, Any] | None = None,
                  sources: Sequence[Any] = (),
                  outputs: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """One run record, from what the publish stage already holds.
-    ``parent_run_id`` + ``overrides`` make the journal a CHAIN rather than a pile:
-    the line says which parent it came from and which values moved;
-    ``continued_from`` says which run's state it carried on from."""
+    ``solved`` is the file the solve wrote, which a later run may continue from;
+    ``continued_from`` says which run's state this one carried on from."""
     return {
         "run_id": run_id,
         "recorded_at": datetime.now(timezone.utc).isoformat(),
         "engine": engine,
         "module": module,
         "origin": origin,
-        "parent_run_id": parent_run_id,
-        "overrides": list(overrides),
+        "solved": solved,
         "continued_from": continued_from,
         "sheet": [_row(row) for row in sheet],
         # THE RAW KEYWORD FLOOR this run was pinned by. It is not a Param, so it
@@ -308,12 +305,21 @@ def _small(value: Any) -> Any:
         return value
     # A row the record carries is a row a reader can HAND BACK, so a slot's own
     # value is written as the shape that slot ingests rather than as a repr
-    # nothing takes - at full precision, because the record is what a rerun is
-    # read from and a rounded coordinate is a different place.
+    # nothing takes - at full precision, because the record is what a new run
+    # is read from and a rounded coordinate is a different place.
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         return {key: _small(field) for key, field
                 in dataclasses.asdict(value).items()}
     return str(value)
+
+
+def run_solved(run_id: str) -> str | None:
+    """The file the named run's solve wrote, off its own record; ``None`` when
+    the journal has no line for it or the line names none."""
+    for record in reversed(read_records()):
+        if str(record.get("run_id") or "") == str(run_id):
+            return record.get("solved") or None
+    return None
 
 
 def run_outputs(run_id: str) -> list[dict[str, Any]]:

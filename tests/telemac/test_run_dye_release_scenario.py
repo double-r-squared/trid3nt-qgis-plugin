@@ -251,10 +251,8 @@ def test_the_domain_and_the_bed_reach_the_wire_as_the_slots_they_are():
 
 
 def test_the_workflow_owns_the_stages_and_the_template_states_what_differs():
-    from trid3nt_server.workflows.runtime import DataRef, validate_plan
+    from trid3nt_server.workflows.runtime import DataRef
 
-    wf = _workflow()
-    validate_plan(wf.plan, wf.params, wf.data)
     steps = _steps()
     # The channel is LISTED because this question declares a discharge; whether
     # a run of it carries one is the author's to settle off the discharge it is

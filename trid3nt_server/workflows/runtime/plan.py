@@ -188,7 +188,7 @@ class _Continued:
 #: one picks up from. A step that opens the water takes
 #: ``continue_from=Continued`` so the continuation reaches it without becoming a
 #: Param: it is not a value the question asks about, it is which run this one
-#: carries on from, and the rerun ledger is where that is said.
+#: carries on from, and the run's ``continue_from`` control is where that is said.
 Continued = _Continued()
 
 

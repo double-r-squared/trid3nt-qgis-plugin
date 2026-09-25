@@ -16,7 +16,7 @@ import pytest
 
 from trid3nt_server.inputs import geometry as geometry_reader
 from trid3nt_server.inputs.observation import Observation
-from trid3nt_server.workflows.runtime import Ref, data_rows, validate_plan
+from trid3nt_server.workflows.runtime import Ref, data_rows
 from trid3nt_server.workflows.telemac.authoring.atmosphere import ATMOSPHERE_FILENAME
 from trid3nt_server.workflows.telemac.modules import fill
 from trid3nt_server.workflows.telemac.modules.khione import (
@@ -303,7 +303,6 @@ def test_every_ice_read_is_taken_off_the_ice_modules_own_result():
 
 def test_the_workflow_owns_the_stages_and_the_template_states_what_differs():
     wf = _workflow()
-    validate_plan(wf.plan, wf.params, wf.data)
     steps = list(wf.plan.declared())
     assert [s.label for s in steps] == ["stated", "mesh", "mesh_files", "channel", "station",
                                         "settled", "sheet", "solve", "outputs"]

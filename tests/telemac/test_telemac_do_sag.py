@@ -75,11 +75,8 @@ def _resolve(**supplied):
     return asyncio.run(resolve_params(_workflow().params, dict(supplied)))
 
 
-def test_declared_params_and_plan_validate():
-    from trid3nt_server.workflows.runtime import validate_plan
-
+def test_declared_params_resolve():
     wf = _workflow()
-    validate_plan(wf.plan, wf.params, wf.data)
     assert [p.name for p in wf.params if p.name not in LEVER_NAMES] == [
         "outfall_coords", "do_standard_mgl"]
     assert _resolve().value_of("do_standard_mgl") == 5.0

@@ -206,8 +206,6 @@ from .derive.run_qgis_algorithm import run_qgis_algorithm  # noqa: E402,F401
 # Run-diagnostics dispatcher: one registered tool over the per-engine parser
 # modules under workflows/solver/diagnostics/, which are NOT themselves registered.
 from trid3nt_server.workflows.solver.diagnostics import read_run_diagnostics  # noqa: E402,F401
-# Derive a run from a run, with named values moved: the recalibration interface.
-from trid3nt_server.workflows.runtime.rerun import rerun_workflow  # noqa: E402,F401
 from trid3nt_server.workflows.solver import solver  # noqa: E402,F401
 # -- engine templates: tier=template members are ordinary retrieval-pool tools,
 # registered by their own @register_tool in the workflow-composer block below and

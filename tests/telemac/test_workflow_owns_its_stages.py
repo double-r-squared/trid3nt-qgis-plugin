@@ -140,7 +140,7 @@ def test_the_settle_step_reads_the_files_the_deck_itself_names():
     # THE CLOCK IS THE RESOLVED FLOOR'S, not the class attribute's: the settle
     # runs before the sheet exists, so it reads what the deck will write.
     assert settle.kwargs["duration_s"] == Ref("stated.DURATION")
-    # WHICH RUN THIS ONE CONTINUES is the rerun ledger's, so every settle reads
+    # WHICH RUN THIS ONE CONTINUES is the run's own continue_from, so every settle reads
     # it and no template declares a param that twins it.
     assert settle.kwargs["continue_from"] is Continued
 

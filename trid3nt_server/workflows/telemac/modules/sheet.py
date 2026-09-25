@@ -330,8 +330,8 @@ def _continued(body: type, filled: dict[str, Filled],
     """State the file this run picks its initial state up from, where the run
     is a continuation and the body reads one.
 
-    Which run that is came off the rerun ledger, so no deck declares it and no
-    template restates it."""
+    Which run that is is the run's own continue_from, so no deck declares it
+    and no template restates it."""
     staged = (produced.get("settled") or {}).get("continue_from") \
         if isinstance(produced.get("settled"), Mapping) else None
     if not staged or _CONTINUATION in filled or \

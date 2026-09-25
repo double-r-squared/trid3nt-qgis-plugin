@@ -69,7 +69,6 @@ from .plan import (
 )
 from .resolver import provenance_entries
 from .temporal import RATE, STATE
-from .validate import validate_plan
 
 __all__ = ["PlanNode", "RunResult", "expand_plan", "interpret"]
 
@@ -103,9 +102,7 @@ class RunResult:
     outputs: list[dict[str, Any]] = field(default_factory=list)
     #: One record per node this run completed, REPLAYED ones included. The ledger
     #: tombstones itself at completion, so these are gone from it the moment the
-    #: plan ends; a derivation of this run reads them from the snapshot the
-    #: publish stage writes out of here. Replayed records carry forward unchanged,
-    #: which is what lets a grandchild inherit work its parent never re-executed.
+    #: plan ends.
     records: list[LedgerRecord] = field(default_factory=list)
     data_records: list[LedgerRecord] = field(default_factory=list)
     #: The RANKED LIST each matched slot was filled from, in the order the slots
@@ -149,9 +146,7 @@ async def interpret(
     captions: Mapping[str, str] | None = None,
     published_units: Mapping[str, str] | None = None,
 ) -> RunResult:
-    """Validate, then walk the plan. The only place a declared workflow executes."""
-    validate_plan(plan, declared_params, data)
-
+    """Walk the plan. The only place a declared workflow executes."""
     entries = provenance_entries(params, declared_params)
     key = invocation_key(plan.name, params.values_dict(), input_mode=input_mode,
                          continued=continued)
@@ -236,17 +231,11 @@ async def interpret(
         # is the only one who can decide whether that matters.
         out.notes.extend(env.absences)
         await env.ledger.complete()
-    except Exception as exc:
-        # The failed attempt CARRIES what it got done, so the skeleton can record
-        # the partial run (see ``Workflow.execute``) - and carries it no FURTHER.
+    except Exception:
         # A failed terminal state is never replayable: the records a dead attempt
         # left behind were produced by whatever the code was at the time, and
         # replaying them into a re-run reports a superseded artifact as the new
-        # run's answer. Only a run that REACHED its end leaves work a later
-        # invocation may inherit, through the snapshot a derived run seeds from.
-        out.data_records = list(env.data_records)
-        if isinstance(exc, DeclarativeError):
-            exc.partial_run = out
+        # run's answer.
         await env.ledger.complete()
         raise
     finally:

@@ -641,14 +641,14 @@ package SolveSeam {
         */
     }
 
-    requirement def AContinuationIsARerunLedgerRow {
+    requirement def AContinuationIsAnInputOfTheRun {
         doc /*
-        A run that carries another on is a DERIVATION of it, not a value some
-        question declares: rerun_workflow names the run whose ending state this
-        one opens at, the ledger stages that run's own result as the previous
-        computation, and the record says which run was continued. The cut is
-        the step that reads the run's continuation, so a hot start re-solves
-        while inheriting the world the parent measured.
+        A run that carries another on NAMES it, as continue_from=<run id>,
+        like any other input of the run and never as a param some question
+        declares: the file that run's solve wrote, read off its own journal
+        line, is staged as the module's previous computation, the fill states
+        it and the record says which run was continued. A run id whose line
+        names no solved result is refused by name.
 
         Naming the file IS the continuation: the engine reads its last record
         as the initial state and the deck's own initial-condition statements go
@@ -1018,20 +1018,16 @@ package SolveSeam {
     verify requirement OnePartitionStatedTwice by
         "workers/telemac/test_entrypoint.py::test_a_serial_solve_still_runs_in_process_and_states_no_count";
 
-    satisfy requirement AContinuationIsARerunLedgerRow by opening;
-    satisfy requirement AContinuationIsARerunLedgerRow by initialState;
-    satisfy requirement AContinuationIsARerunLedgerRow by workerEntrypoint;
-    verify requirement AContinuationIsARerunLedgerRow by
-        "tests/runtime/test_rerun_with_overrides.py::test_the_cut_of_a_hot_start_is_the_step_that_opens_on_the_other_run";
-    verify requirement AContinuationIsARerunLedgerRow by
-        "tests/runtime/test_rerun_with_overrides.py::test_a_continuation_is_a_different_invocation_than_the_run_it_continues";
-    verify requirement AContinuationIsARerunLedgerRow by
-        "tests/runtime/test_rerun_with_overrides.py::test_a_run_with_no_solved_state_cannot_be_continued";
-    verify requirement AContinuationIsARerunLedgerRow by
-        "tests/runtime/test_rerun_with_overrides.py::test_the_record_of_a_continued_run_says_which_run_it_continued";
-    verify requirement AContinuationIsARerunLedgerRow by
-        "tests/telemac/test_telemac_reach_staged_inputs.py::test_a_continuation_is_a_rerun_row_and_no_template_declares_it";
-    verify requirement AContinuationIsARerunLedgerRow by
+    satisfy requirement AContinuationIsAnInputOfTheRun by opening;
+    satisfy requirement AContinuationIsAnInputOfTheRun by initialState;
+    satisfy requirement AContinuationIsAnInputOfTheRun by workerEntrypoint;
+    verify requirement AContinuationIsAnInputOfTheRun by
+        "tests/runtime/test_continue_from.py::test_a_run_continues_from_the_file_a_journaled_run_solved";
+    verify requirement AContinuationIsAnInputOfTheRun by
+        "tests/runtime/test_continue_from.py::test_a_run_id_with_no_solved_result_is_refused_by_name";
+    verify requirement AContinuationIsAnInputOfTheRun by
+        "tests/telemac/test_telemac_reach_staged_inputs.py::test_a_continuation_is_the_runs_input_and_no_template_declares_it";
+    verify requirement AContinuationIsAnInputOfTheRun by
         "tests/telemac/test_telemac_module_surface.py::test_a_continuation_names_the_file_and_nothing_else";
 
     satisfy requirement BoundaryCodesMatchTheSteering by topologyWriter;

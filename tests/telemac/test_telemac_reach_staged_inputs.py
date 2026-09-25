@@ -116,9 +116,9 @@ def test_no_reach_run_declares_a_bed_cog_output():
         assert "bed_bathymetry.tif" not in _results(name)
 
 
-def test_a_continuation_is_a_rerun_row_and_no_template_declares_it():
-    """Which run this one carries on from is the rerun ledger's, so no question
-    twins it as a param of its own and every settle reads the run's."""
+def test_a_continuation_is_the_runs_input_and_no_template_declares_it():
+    """Which run this one carries on from is the run's own continue_from, so no
+    question twins it as a param of its own and every settle reads the run's."""
     from trid3nt_server.workflows.runtime import Continued
     from trid3nt_server.tools import TOOL_REGISTRY
 

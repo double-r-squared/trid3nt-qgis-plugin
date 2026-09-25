@@ -181,12 +181,11 @@ def test_the_question_is_read_where_the_user_put_the_monitoring_point():
     assert placed.variable in template.CAPTIONS
 
 
-def test_the_declared_params_and_the_plan_validate():
-    from trid3nt_server.workflows.runtime import resolve_params, validate_plan
+def test_the_declared_params_resolve():
+    from trid3nt_server.workflows.runtime import resolve_params
 
     workflow = _template().telemac_micropollutant_release.workflow
     asyncio.run(resolve_params(workflow.params, {}))
-    validate_plan(workflow.plan, workflow.params, workflow.data)
 
 
 def test_the_template_declares_none_of_the_runtime_s_own_rows():

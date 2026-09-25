@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import importlib
 import inspect
-from dataclasses import replace
 from typing import Any, Mapping, Sequence
 
 from trid3nt_contracts.common import SyntheticInput
@@ -28,8 +27,7 @@ from .params import (
     wire_value,
 )
 
-__all__ = ["merge_provenance", "provenance_entries", "rederive_revised",
-           "reseat_revised", "resolve_params"]
+__all__ = ["merge_provenance", "provenance_entries", "resolve_params"]
 
 
 async def resolve_params(
@@ -141,111 +139,6 @@ def _seat_derived(param: Param, produced: Any, default_note: str) -> ResolvedPar
                        produced.note or default_note,
                        real_source=produced.real_source)
     return _finish(param, produced, doors.DERIVED, default_note)
-
-
-def reseat_revised(declared: Sequence[Param], resolved: ResolvedParams,
-                   revised: Mapping[str, Any],
-                   *, note: str = "revised at input review",
-                   door: str = doors.GATE,
-                   ) -> tuple[ResolvedParams, list[str]]:
-    """Re-seat values a PERSON gave, through the door they gave them at.
-
-    Declared bounds and the non-numeric refusal still apply - a gate is an answer
-    surface, not a bypass - and every changed row is re-stamped ``basis=user``.
-    ``door`` is GATE for an answer given at a card, USER for a value named up
-    front; both stamp ``basis=user``, and the door is what says whether a card was
-    involved. ``note`` records HOW the value was answered. Returns the new sheet
-    and the names that actually changed; a name that is not a declared param is
-    not seated, and the caller reports it rather than absorbing it.
-    """
-    by_name = {p.name: p for p in param_rows(declared)}
-    rows: dict[str, ResolvedParam] = {}
-    changed: list[str] = []
-    for name, value in revised.items():
-        param = by_name.get(name)
-        if param is None or resolved.row(name) is None:
-            continue
-        if resolved.value_of(name) == value:
-            continue
-        rows[name] = _finish(param, value, door, note)
-        changed.append(name)
-    return (resolved.replacing(rows) if rows else resolved), changed
-
-
-async def rederive_revised(
-    declared: Sequence[Param], resolved: ResolvedParams, changed: Sequence[str],
-    *, occasion: str = "input review",
-) -> tuple[ResolvedParams, list[str], list[str]]:
-    """Re-run the derivations over a REVISED sheet, to the same fixpoint.
-
-    Derived rows re-derive against the approved values, so the sheet cannot ship
-    a derivation computed from a superseded input. A row the user supplied or
-    edited (``basis=user``) is PINNED and never recomputed; where the revised
-    sheet would derive something else for one, the pin stands and the row's note
-    says so. Returns the new sheet, the names that actually RE-DERIVED - they are
-    revisions too, so dependent data is evicted on them - and the conflict notes.
-    """
-    derived = [p for p in declared if p.door == doors.DERIVED]
-    if not changed or not derived:
-        return resolved, [], []
-
-    rows: dict[str, ResolvedParam] = {r.name: r for r in resolved.rows()}
-    pinned = {name for name, row in rows.items() if row.basis == "user"}
-    revision = ", ".join(sorted(changed))
-    updates: dict[str, ResolvedParam] = {}
-    rederived: list[str] = []
-
-    # Derivations may read each other, so re-run to a fixpoint exactly as the
-    # first resolution did - one pass would leave a chain half re-derived.
-    for _ in range(len(derived) + 1):
-        progressed = False
-        for param in derived:
-            current = rows.get(param.name)
-            if current is None or param.name in pinned:
-                continue
-            fresh = await _rederive_row(param, rows, current,
-                                        f"re-derived by {param.resolve} after "
-                                        f"{occasion} revised {revision}")
-            if fresh is None:
-                continue
-            rows[param.name] = updates[param.name] = fresh
-            if param.name not in rederived:
-                rederived.append(param.name)
-            progressed = True
-        if not progressed:
-            break
-
-    notes: list[str] = []
-    for param in derived:
-        current = rows.get(param.name)
-        if current is None or param.name not in pinned:
-            continue
-        fresh = await _rederive_row(param, rows, current, "")
-        if fresh is None:
-            continue
-        note = (f"the sheet {occasion} produced would derive "
-                f"{wire_value(fresh.value)}, but this value was set explicitly "
-                "and stands")
-        rows[param.name] = updates[param.name] = replace(
-            current, note=f"{current.note}; {note}" if current.note else note)
-        notes.append(f"{param.name}: {note}")
-
-    return (resolved.replacing(updates) if updates else resolved), rederived, notes
-
-
-async def _rederive_row(param: Param, rows: Mapping[str, ResolvedParam],
-                        current: ResolvedParam, note: str) -> ResolvedParam | None:
-    """Re-run one derivation; ``None`` when it cannot run yet or lands unchanged.
-    Compared AFTER ``_finish``, so an int-typed row whose derivation moves within
-    one whole unit reads as unchanged."""
-    try:
-        value = await _derive(param, rows)
-    except ParamNotResolved:
-        return None
-    if value is None:
-        return None
-    fresh = _seat_derived(param, value, note)
-    return None if fresh.value == current.value else fresh
 
 
 def _load(dotted: str) -> Any:

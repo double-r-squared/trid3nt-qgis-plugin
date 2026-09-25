@@ -90,8 +90,6 @@ plain frozen value, and the plan becomes a pure assembly of blocks rather than a
 function that has to be called with a sheet before it means anything. A
 misspelled row or param is an `AttributeError` at the line that wrote it, because
 the body is a real class, and a name from another template's sheet is unwritable.
-A ref built from a STRING still reaches the validator, which refuses it at
-registration with the nearest declared spellings.
 
 A REF TAIL BINDS OR REFUSES. `Ref("centerline.bbox")` naming a field the result
 does not define - or one that is there and empty - is a typed `REF_FIELD_MISSING`
@@ -382,16 +380,14 @@ waits per the hybrid rule).
   .rain_on_grid) share the skeleton, override one serialization
   hook each - the generalization checkpoint made structural.
 - MEMENTO: the step ledger (completed steps + resolved params +
-  artifact URIs) - powers the work a DERIVED rerun inherits from its
-  parent now, full pause/resume later. Every terminal state, failure
-  included, tombstones it.
+  artifact URIs) - what a process that died mid-run resumes from.
+  Every terminal state, failure included, tombstones it.
 
 ## Testing
 
 Declarative: a test is a declared invocation (!run in the dock, a
-plan stepped line by line, or the same over MCP). The plan validator
-(Ref integrity, modifier legality, gate placement) runs before any
-execution. Offline pytest remains for CI.
+plan stepped line by line, or the same over MCP). Offline pytest
+remains for CI.
 
 THREE PATHS, and the split is itself diagnostic:
 
@@ -630,62 +626,22 @@ invocation working, and a canary that has to pin a 600 s window instead of
 three hours is exactly the case that needs it. The exclusion is about who
 the SCHEMA invites, and it invites the user, never the model.
 
-### Rerun-with-overrides - the recalibration interface
+### Continuing a run - an input, not a derivation
 
-**A run derives from a run.** `rerun_workflow(run_id, overrides={...})` is the one
-way any question gets asked again with something moved, and it serves three
-consumers with one implementation: failure recovery, manual what-if, and
-calibration loops (a loop is this primitive driven by a proposer, never a second
-re-run path).
-
-The sheet comes from the PARENT, not from the wire - a re-invocation would
-re-resolve every door and the two runs would differ in more than the value named.
-Overrides seat through the USER door labelled `override of run <parent_id>`,
-dependent derivations re-derive, and a row the user pinned keeps precedence.
-
-Reuse is read off the PLAN, by the same `declared_reads` walk the validator and
-the binder use (`plan.py` - one definition, three readers). The first node an
-override reaches is a CUT: work before it is inherited, work from it on is
-re-done. A PREFIX, deliberately - a step also reads the domain the steps before
-it bound, and no declaration names that.
-
-Inheritance is the LEDGER, not a copy: the parent's own records are planted under
-the child's invocation key (`StepLedger.seed`) and the ordinary resume path
-replays them, so the child never asks for the artifacts it reuses. They are the
-parent's objects at the parent's URIs.
-
-The completion TOMBSTONE is what keeps a `live-no-cache` tool from becoming a
-result cache. A finished run's records are
-copied out to a RUN SNAPSHOT keyed by run id (`snapshot.py`), reachable only by a
-caller that NAMES that run. A failed attempt is recorded the same way under a
-fresh id the error envelope names, which is what makes failure recovery reuse the
-work that already succeeded.
+A run that carries another on NAMES it: `continue_from=<run id>` is a control on
+every template's wire, like `keywords` or `restart_clean`. The skeleton reads the
+file that run's solve wrote off its own journal line (`solved`), and the step
+that opens the water stages it as the module's previous computation; the fill
+states it and the journal line says which run was continued. A run id whose line
+names no solved result refuses by name (`CONTINUATION_UNSOLVED`). Changing a
+value and running again is simply a new call with that value.
 
 A failure NAMES why. Every typed step failure carries a code and a sentence, and
 an exception that stringifies to nothing is named by its type (`said`) rather
 than reaching the envelope as an empty message; the emitter refuses to mark a
-step failed without both, and the snapshot refuses to read `failed` off a step
-that names no cause. A run that stops in silence leaves the reader a red card and
-nothing to act on, which is the fault the refusal exists to make impossible.
-
-CONSTANT-door params ARE overridable here. The door governs what the MODEL's plan
-schema offers; naming a value explicitly, having seen an answer, is the
-sanctioned way a fixed quantity moves.
-
-### Coupled validity - rules one Param cannot express
-
-A bound is a statement about ONE value. `Validity(name, reads, holds, message)`
-declares a cross-param rule: a predicate over the resolved sheet plus the message
-it refuses with, checked at resolve time on BOTH lanes. The library owns the
-mechanism (`validity.py`); the engine or template owns the rule, because only
-they know what their params mean together. A rule that reads an undeclared param
-refuses at REGISTRATION - a guard that can never fire is worse than none.
-
-The reference rule is `friction_coefficient_matches_law` on
-`coastal_tidal_surge`: TELEMAC's friction law fixes whether the coefficient is a
-Strickler Ks or its reciprocal, a Manning n. It refuses on the CROSSOVER, not on
-each law's plausible band - an atypical value the caller means still proceeds; a
-value on the wrong side is not atypical, it is the other quantity.
+step failed without both. A run that stops in silence leaves the reader a red
+card and nothing to act on, which is the fault the refusal exists to make
+impossible.
 
 ### The no-double-middleware law
 

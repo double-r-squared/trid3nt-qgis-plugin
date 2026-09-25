@@ -119,7 +119,8 @@ def test_the_generated_signature_is_the_declaration_plus_aliases_and_controls():
     sig, annotations = _wire_signature(params, (("alias", str | None),))
     assert list(sig.parameters) == ["location", "depth_m", "armed", "alias",
                                     "input_mode", "restart_clean", "keywords",
-                                    "picks", "ops", "_extra_ignored"]
+                                    "picks", "ops", "continue_from",
+                                    "_extra_ignored"]
     assert annotations["depth_m"] == (float | None)      # bounded -> float
     assert annotations["armed"] == (bool | None)         # declared type wins
     assert annotations["location"] == (str | None)       # inferred
@@ -235,23 +236,6 @@ def test_the_skeleton_names_and_engines_the_plan_the_template_does_not():
     plan = _telemac().build_plan()
     assert plan.name == "telemac_probe"      # from the metadata
     assert plan.engine == "telemac"          # from the facade
-
-
-def test_an_undeclared_data_name_refuses_at_registration_saying_it_is_a_data_name():
-    """A ref built from a STRING has no body to refuse it, so the refusal is the
-    VALIDATOR's - and it says which body the bad name claimed to come from."""
-    from trid3nt_server.workflows.runtime import DataDecl, DataRef, tool
-
-    def _plan(ops):
-        return (Step(runner="pkg.mod.fn", kwargs={"r": DataRef("terain")}).named("s"),)
-
-    with pytest.raises(PlanValidationError) as ei:
-        _Stub(metadata=_metadata("data_probe"), params=(),
-              template=_module(_plan),
-              data=(DataDecl("terrain", tool("pkg.mod.fetch")),))
-    message = str(ei.value)
-    assert "DataRef('terain') names no declared Data" in message
-    assert "Declared Data: ['terrain']" in message
 
 
 # --- (7) a coercion's failure is triaged, never flattened ------------------- #

@@ -6,6 +6,7 @@ from __future__ import annotations
 from trid3nt_server.errors import DeclarativeError
 
 __all__ = [
+    "ContinuationRefused",
     "CoresUnavailable",
     "DeclarativeError",
     "GateRefusedError",
@@ -25,6 +26,12 @@ __all__ = [
 
 class PlanValidationError(DeclarativeError):
     error_code = "PLAN_INVALID"
+
+
+class ContinuationRefused(DeclarativeError):
+    """``continue_from`` names a run with no solved result."""
+
+    error_code = "CONTINUATION_UNSOLVED"
 
 
 class CoresUnavailable(DeclarativeError):

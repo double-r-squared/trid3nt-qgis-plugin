@@ -15,10 +15,9 @@ speak it and the one file that specializes the executor to it.
 
 | folder | what it is |
 | --- | --- |
-| `runtime/` | The declarative library - the value types, the six doors, the validator, the interpreter, the skeleton and the run's records. See below. |
+| `runtime/` | The declarative library - the value types, the six doors, the interpreter, the skeleton and the run's records. See below. |
 | `solver/` | The one executor, which knows no engine: `solver.py` (the box - launch, supervise, poll, dispatch-and-wait, download a result), `solve_progress.py` (the live progress heartbeat a long solve emits while it runs), `code_provenance.py` (which code produced a run), `diagnostics/` (the one `read_run_diagnostics` dispatcher plus its per-engine parsers), `corpus.yaml` (routing phrasings). |
 | `telemac/` | The TELEMAC engine: the module wrappers, eight templates over them, the fill/run door, and the one engine file the executor is specialized by. Has its own map. |
-| `calibration/` | The subsystem the OBSERVE slot reveals: `pairing.py` (the record a run's observations are paired against its own reads) and `metrics.py` (the skill over those pairs). Dormant - nothing here is a tool and nothing here owns a loop's mathematics. |
 
 ## `runtime/` - the declarative library
 
@@ -36,12 +35,8 @@ speak it and the one file that specializes the executor to it.
 | `runtime/levers.py` | The levers the runtime declares ONCE - the mesh resolution, the event time, the compute class - so a template's `PARAMS` keeps only its question's own inputs. |
 | `runtime/params.py` | The `PARAMS` class body: one declared value per row, its door, its bounds, its consequence tag, and the resolved-sheet views. |
 | `runtime/plan.py` | The plan VALUE - steps, refs, modifiers, charts - plus the `Row` descriptor both declaration bodies are built from. |
-| `runtime/rerun/` | The rerun-with-overrides primitive: derive a run from a run (`derive.py`), what it inherits (`reuse.py`), and the tool door onto it (`rerun_workflow.py`). |
 | `runtime/resolution.py` | Resolution sensitivity: which answers a coarse mesh reads wrong, and which way. |
 | `runtime/resolver.py` | The param resolver: the six doors in order, with bounds clamping and a provenance row per resolution. |
 | `runtime/run_products.py` | The run's persisted chart spec and metrics, written under its own prefix so the products outlive the turn that emitted them. |
-| `runtime/snapshot.py` | The run snapshot: what a finished run leaves behind so a child run can derive from it. |
 | `runtime/temporal.py` | The declared temporal transforms - `.resample(...)` and `.normalize(units=...)` - and the conversions behind them. |
-| `runtime/validate.py` | The plan validator - ref integrity, modifier legality and gate placement, all before any execution. |
-| `runtime/validity.py` | Coupled validity: the cross-param rules a single `Param` declaration cannot express. |
 | `runtime/workflow.py` | The workflow SKELETON and the registration factory: normalize, resolve, interpret, post, publish, and the synthesized tool signature. |

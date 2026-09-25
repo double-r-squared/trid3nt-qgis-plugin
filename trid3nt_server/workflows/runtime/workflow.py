@@ -12,21 +12,16 @@ import logging
 import time
 from typing import Any, Callable, Mapping, Sequence
 
-from trid3nt_contracts import new_ulid
-
-from . import journal, snapshot
+from . import journal
 from .accepts import Accepts
 from .data import DataDecl, data_rows
-from .errors import (DeclarativeError, PlanValidationError, WorkflowParkedError,
+from .errors import (ContinuationRefused, DeclarativeError, WorkflowParkedError,
                      said)
 from .levers import with_levers
 from .params import Param, ResolvedParams, doors, param_rows
 from .plan import Plan, Ref, Step
 from .resolution import SensitivityDecl, sensitivity_notes
 from .resolver import merge_provenance, resolve_params
-from .snapshot import Derivation
-from .validate import validate_plan
-from .validity import Validity, check_validity, refuse_undeclared_reads
 from .interpreter import RunResult, interpret
 
 __all__ = ["Workflow", "WireArgsError", "register_workflow"]
@@ -63,7 +58,6 @@ class Workflow:
     def __init__(self, *, metadata: Any, params: Any,
                  template: Any, data: Any = (),
                  sensitivity: Sequence[tuple[str, str]] = (),
-                 validity: Sequence[Validity] = (),
                  coerce: Sequence[Callable[[dict], Mapping[str, Any]]] = (),
                  accepts: Accepts | None = None,
                  levers: Sequence[str] = ()) -> None:
@@ -91,19 +85,11 @@ class Workflow:
         #: Which published reads sit in a resolution-sensitive class. The skeleton
         #: turns this into the run's honesty label; see ``resolution.py``.
         self.sensitivity = SensitivityDecl(sensitivity)
-        #: Cross-param rules a single Param declaration cannot express - checked
-        #: on every lane, because a sheet is a sheet whether it came from a fresh
-        #: invocation or from a derivation of one. See ``validity.py``.
-        self.validity = tuple(validity)
-        refuse_undeclared_reads(self.validity, self.params)
         self.coercions = tuple(coerce)
         self.error_prefix = str(getattr(metadata, "engine", "") or "workflow").upper()
-        #: The plan is STATIC - it reads no concrete value - so it is built and
-        #: validated ONCE, here, at import. An unreachable Ref, a
-        #: misplaced gate or a physics process the facade does not model is an
-        #: AUTHORING error, and this is the last moment it can be reported as one.
+        #: The plan is STATIC - it reads no concrete value - so it is built ONCE,
+        #: here, at import.
         self.plan = self.build_plan()
-        validate_plan(self.plan, self.params, self.data)
 
     def build_plan(self) -> Plan:
         """The declared steps, named and engined by the WORKFLOW, not restated."""
@@ -184,7 +170,8 @@ class Workflow:
             keywords=wire.get("keywords"), picks=wire.get("picks"),
             ops=wire.get("ops"),
             resume=not bool(wire.get("restart_clean")),
-            supplied=self._supplied_artifacts(wire))
+            supplied=self._supplied_artifacts(wire),
+            continue_from=wire.get("continue_from"))
 
     async def execute(self, resolving: Any, *, input_mode: str | None = None,
                       keywords: Mapping[str, Any] | None = None,
@@ -192,16 +179,16 @@ class Workflow:
                       ops: Mapping[str, Any] | None = None,
                       resume: bool = True,
                       supplied: Mapping[str, Any] | None = None,
-                      derived_from: Derivation | None = None,
-                      continued: str | None = None) -> Any:
-        """Run the plan on a resolved sheet: interpret, post, publish - the spine a
-        fresh invocation and a rerun-with-overrides both take. ``resolving`` may be
-        an awaitable, so a resolve refusal lands inside this method's envelope."""
+                      continue_from: str | None = None) -> Any:
+        """Run the plan on a resolved sheet: interpret, post, publish.
+        ``resolving`` may be an awaitable, so a resolve refusal lands inside this
+        method's envelope; so does a ``continue_from`` that names no solved run."""
         supplied_artifacts = dict(supplied or {})
         started = time.monotonic()
         try:
             p = await resolving if inspect.isawaitable(resolving) else resolving
-            check_validity(self.validity, p, workflow=self.name)
+            continued = await asyncio.to_thread(_continued_state, continue_from) \
+                if continue_from else None
             run = await interpret(
                 self.plan, p, self.params, self.data,
                 input_mode=input_mode, keywords=keywords, picks=picks, ops=ops,
@@ -215,8 +202,7 @@ class Workflow:
             raise
         except DeclarativeError as exc:
             logger.warning("%s %s: %s", self.name, exc.error_code, exc)
-            return await self._record_failure(exc, input_mode, keywords,
-                                              supplied_artifacts)
+            return self._error(exc.error_code, exc)
         except Exception as exc:  # noqa: BLE001
             if getattr(exc, "retryable", False):
                 # A retryable typed error is a GATE: the adapter harvests its
@@ -226,37 +212,11 @@ class Workflow:
             logger.exception("%s unexpected failure", self.name)
             return self._error(f"{self.error_prefix}_INTERNAL_ERROR", exc)
         return await self._publish(run, time.monotonic() - started,
-                                   input_mode=input_mode, keywords=keywords,
                                    supplied=supplied_artifacts,
-                                   derived_from=derived_from)
+                                   continue_from=continue_from)
 
     async def _resolve(self, supplied: Mapping[str, Any]) -> ResolvedParams:
         return await resolve_params(self.params, supplied)
-
-    async def _record_failure(self, exc: DeclarativeError, input_mode: str | None,
-                              keywords: Mapping[str, Any] | None,
-                              supplied: Mapping[str, Any]) -> dict[str, Any]:
-        """The failure envelope, plus a handle on the work the attempt DID finish.
-        The attempt is recorded like a completed run under an id the envelope names,
-        because the retry a failure wants is a different invocation."""
-        envelope = self._error(exc.error_code, exc)
-        run = getattr(exc, "partial_run", None)
-        records = list(getattr(run, "records", ()) or ())
-        if run is None or run.params is None or not records:
-            return envelope
-        attempt = new_ulid()
-        await snapshot.write_snapshot(
-            run_id=attempt, workflow=self.name, input_mode=input_mode,
-            keywords=dict(keywords or {}),
-            sheet=run.params.rows(), records=records,
-            data_records=list(run.data_records), supplied=dict(supplied))
-        envelope["run_id"] = attempt
-        envelope["error_message"] += (
-            f" This attempt is recorded as run {attempt}, with "
-            f"{', '.join(run.executed)} already done: rerun_workflow(run_id="
-            f"'{attempt}', overrides={{...}}) re-runs the question with the value "
-            "corrected and inherits that work.")
-        return envelope
 
     # -- normalize --------------------------------------------------------- #
 
@@ -318,10 +278,8 @@ class Workflow:
     # -- post + publish ---------------------------------------------------- #
 
     async def _publish(self, run: RunResult, wall_seconds: float = 0.0, *,
-                       input_mode: str | None = None,
-                       keywords: Mapping[str, Any] | None = None,
                        supplied: Mapping[str, Any] | None = None,
-                       derived_from: Derivation | None = None) -> Any:
+                       continue_from: str | None = None) -> Any:
         result = run.value
         notes = list(run.notes) + [n for n in self.checks(run) if n]
         # THE TIE VIEW: several sources ranked equal on every fact the sort
@@ -329,8 +287,9 @@ class Workflow:
         # picks one. A list with a clear winner carries no table - the sentence
         # already said which source filled the slot and why.
         notes += [_ranked_rows(choice) for choice in run.choices if choice.tie]
-        if derived_from is not None:
-            notes.append(_derivation_note(derived_from))
+        if continue_from:
+            notes.append(f"continuing run {continue_from} from the state it "
+                         "ended at")
         update: dict[str, Any] = {
             "synthetic_inputs": merge_provenance(
                 getattr(result, "synthetic_inputs", None) or [], run.entries),
@@ -349,18 +308,8 @@ class Workflow:
         # the moment the layer was, and the journal is the record that outlives
         # the artifacts.
         await asyncio.to_thread(self._journal, run_id, run, result,
-                                wall_seconds, notes, derived_from,
+                                wall_seconds, notes, continue_from,
                                 dict(supplied or {}))
-        # The snapshot rides the same moment for the same reason: this is where a
-        # run holds its own past whole - the sheet it ran on, the records it left,
-        # the artifacts it was handed - and any later point would be reassembling
-        # it from products that are allowed to disappear.
-        await snapshot.write_snapshot(
-            run_id=run_id, workflow=self.name, input_mode=input_mode,
-            keywords=dict(keywords or {}),
-            sheet=run.params.rows() if run.params is not None else (),
-            records=run.records, data_records=run.data_records,
-            supplied=dict(supplied or {}), derived_from=derived_from)
         logger.info("%s complete layer_id=%s executed=%s replayed=%s notes=%s",
                     self.name, getattr(result, "layer_id", None),
                     run.executed, run.replayed, notes)
@@ -374,6 +323,12 @@ class Workflow:
         if direct or not self.solve_step:
             return direct
         return (run.results.get(self.solve_step) or {}).get("run_id")
+
+    def _solved(self, run: RunResult) -> str | None:
+        """The file the solve step wrote, which a later run may continue from."""
+        if not self.solve_step:
+            return None
+        return (run.results.get(self.solve_step) or {}).get("uri")
 
     def _mesh_size_m(self, run: RunResult) -> Any:
         """The EDGE the run was meshed at, off the solve step's own record.
@@ -414,7 +369,7 @@ class Workflow:
     def _journal(self, run_id: str | None, run: RunResult, result: Any,
                  wall_seconds: float,
                  notes: Sequence[str] = (),
-                 derived_from: Derivation | None = None,
+                 continue_from: str | None = None,
                  supplied: Mapping[str, Any] | None = None) -> None:
         """Append this run to the run journal - one seam, every engine.
         Called from publish, the one point where the sheet, the provenance rows
@@ -432,9 +387,7 @@ class Workflow:
             executed=run.executed, replayed=run.replayed, notes=list(notes),
             outputs=run.outputs, keywords=run.keywords,
             supplied=dict(supplied or {}), sources=run.choices,
-            parent_run_id=derived_from.parent_run_id if derived_from else None,
-            overrides=derived_from.overrides if derived_from else (),
-            continued_from=derived_from.continued_from if derived_from else None,
+            solved=self._solved(run), continued_from=continue_from,
         ))
 
     @staticmethod
@@ -448,16 +401,37 @@ class Workflow:
 
 #: Controls every workflow carries: whether the run PAUSES, whether it resumes,
 #: the RAW KEYWORD floor a caller states the engine's own keywords through, the
-#: source a caller NAMES for a matched slot, and the OPS a caller states for one
-#: - the ordered moves that compose it past the one row the match ranked first.
-#: None of the five is a physical value, so none of them is a Param.
+#: source a caller NAMES for a matched slot, the OPS a caller states for one -
+#: the ordered moves that compose it past the one row the match ranked first -
+#: and the run whose solved state this one CONTINUES from.
+#: None of the six is a physical value, so none of them is a Param.
 _CONTROLS: tuple[tuple[str, Any, Any], ...] = (
     ("input_mode", str | None, None),
     ("restart_clean", bool, False),
     ("keywords", dict | None, None),
     ("picks", dict | None, None),
     ("ops", dict | None, None),
+    ("continue_from", str | None, None),
 )
+
+#: How ``continue_from`` reads in every template's docstring: the runtime owns
+#: the control, so no template restates it.
+_CONTINUE_DOC = (
+    "continue_from",
+    "The id of a completed run whose solved state this run opens at, as the "
+    "engine's previous computation: the same scenario carried on past where "
+    "that run ended. Refused by name when that run has no solved result.")
+
+
+def _continued_state(run_id: str) -> str:
+    """The file a completed run's solve wrote, off its own journal line."""
+    solved = journal.run_solved(str(run_id).strip())
+    if not solved:
+        raise ContinuationRefused(
+            f"continue_from={run_id!r} names no solved result: only a run whose "
+            "solve completed and was journaled leaves a state to carry on.")
+    return solved
+
 
 
 # A TEMPLATE IS THE SIMULATION SURFACE. One registered template answers one
@@ -479,7 +453,6 @@ def register_workflow(
     *,
     parked: str | None = None,
     sensitivity: Sequence[tuple[str, str]] = (),
-    validity: Sequence[Validity] = (),
     coerce: Sequence[Callable[[dict], Mapping[str, Any]]] = (),
     levers: Sequence[str] | None = None,
     extra_args: Sequence[tuple[str, Any]] = (),
@@ -504,7 +477,7 @@ def register_workflow(
     if levers is None:
         levers = facade.levers()
     workflow = facade(metadata=metadata, params=params, template=template,
-                      data=data, sensitivity=sensitivity, validity=validity, coerce=coerce,
+                      data=data, sensitivity=sensitivity, coerce=coerce,
                       accepts=getattr(template, "ACCEPTS", None), levers=levers)
     params = workflow.params
 
@@ -537,7 +510,8 @@ def register_workflow(
         sheet = workflow.sheet_doc()
         doc = {**doc, "params": _wire_params(params),
                **({} if sheet is None else {"sheet": sheet}),
-               **_context_doc(workflow.data, doc.get("controls", ()))}
+               **_context_doc(workflow.data,
+                              (*doc.get("controls", ()), _CONTINUE_DOC))}
         _run.__doc__ = render_docstring(**doc)
         _run.routing_doc = render_docstring(**doc, view="routing")  # type: ignore[attr-defined]
 
@@ -628,12 +602,3 @@ def _ranked_rows(choice: Any) -> str:
     return (f"{choice.slot}: several sources rank equal for {choice.need}, and "
             f"{choice.picked} was taken. {rows}. Name another by its row to "
             "re-run on it.")
-
-
-def _derivation_note(derived_from: Derivation) -> str:
-    """What a derived run says about the run it came from, on its own journal."""
-    moved = (" by overriding " + ", ".join(derived_from.overrides)
-             if derived_from.overrides else "")
-    carried = (f", continuing run {derived_from.continued_from} from the state "
-               "it ended at" if derived_from.continued_from else "")
-    return f"derived from run {derived_from.parent_run_id}{moved}{carried}"

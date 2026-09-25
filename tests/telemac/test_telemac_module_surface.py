@@ -617,7 +617,7 @@ def test_a_rate_stated_by_name_arms_the_term_that_reads_it():
 
 def test_a_continuation_names_the_file_and_nothing_else():
     """Naming the file IS the continuation, and which run it came from is the
-    rerun ledger's - no deck states it. The staged file is the parent's own
+    run's own continue_from - no deck states it. The staged file is the parent's own
     result, whose format is the keyword's own default, so nothing states that
     either."""
     from trid3nt_server.workflows.telemac.modules.sheet import fill

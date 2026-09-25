@@ -172,8 +172,8 @@ DOC = dict(
          "every step from the top. Nothing a FAILED attempt left behind is ever "
          "replayed and a run that completed is never replayed either, so a fresh "
          "invocation always re-solves against live upstream data; what this flag "
-         "clears is the work a derived rerun inherited, or records a process that "
-         "died without unwinding left on disk."),
+         "clears is the records a process that died without unwinding left on "
+         "disk."),
     ),
     returns=(
         "On success the run's record (a `LayerURI`): every variable its "

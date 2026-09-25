@@ -15,8 +15,7 @@ from typing import Any, Mapping
 
 from trid3nt_server.persistence import DEFAULT_DATABASE, FileMCPClient
 
-__all__ = ["LedgerRecord", "StepLedger", "inputs_digest", "invocation_key",
-           "records_from_docs"]
+__all__ = ["LedgerRecord", "StepLedger", "inputs_digest", "invocation_key"]
 
 logger = logging.getLogger("trid3nt_server.workflows.runtime.ledger")
 
@@ -86,7 +85,7 @@ class LedgerRecord:
     node: str
     runner: str
     completed_at: str
-    #: A digest of the RESOLVED inputs this node ran on. A rerun inherits a
+    #: A digest of the RESOLVED inputs this node ran on. A resume replays a
     #: record only where they are unchanged, so the first producer whose inputs
     #: moved is the cut and everything downstream of it re-executes with it.
     #: Empty means a record written before the key existed, which never replays.
@@ -126,7 +125,7 @@ def _plain(value: Any) -> Any:
 
 @dataclass
 class StepLedger:
-    """One invocation's unfinished attempt. ``replay_for`` is what makes a rerun cheap."""
+    """One invocation's unfinished attempt. ``replay_for`` is what makes a resume cheap."""
 
     key: str
     workflow: str
@@ -194,18 +193,6 @@ class StepLedger:
         label = _data_label(name)
         rec = replace(rec, index=_DATA_INDEX, node=label)
         self.data_records = [r for r in self.data_records if r.node != label] + [rec]
-        await self._persist()
-
-    async def seed(self, records: list[LedgerRecord],
-                   data_records: list[LedgerRecord]) -> None:
-        """Plant the work a DERIVED run inherits from its parent, so the ordinary
-        resume path replays it. Records arrive from the parent's run SNAPSHOT,
-        never from the parent's ledger, which completion has already tombstoned."""
-        # REPLACE, never merge: this key may carry a tombstone from an identical
-        # earlier derivation, and inheriting past a tombstone is what was asked for.
-        self.records = sorted(records, key=lambda r: r.index)
-        self.data_records = list(data_records)
-        self.completed = False
         await self._persist()
 
     async def clear(self) -> None:
@@ -282,7 +269,7 @@ def _data_label(name: str) -> str:
 
 
 def records_from_docs(raw: Any) -> list[LedgerRecord]:
-    """Records back off the store - here and in the run snapshot, one reader."""
+    """Records back off the store."""
     if not isinstance(raw, list):
         return []
     return [LedgerRecord(**{**r, "artifact_uris": tuple(r.get("artifact_uris") or ())})
