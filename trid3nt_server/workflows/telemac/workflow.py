@@ -159,32 +159,60 @@ def _painted(row: Mapping[str, Any]) -> list[Primitive]:
     return [field(token, t=-1, module=module).layer(style=style)]
 
 
+@dataclass(frozen=True, slots=True)
+class _Written:
+    """One variable a result file carries, and the layer it is published as.
+
+    ``spelling`` is the file's own name for it, empty for a row the result does
+    not carry; ``first`` names the file whose layer carries a spelling this file
+    repeats, and ``rowed`` whether a module row names it."""
+
+    primitive: Primitive
+    file: str
+    spelling: str
+    rowed: bool
+    first: str | None = None
+
+
 def _written(run: Mapping[str, Any],
-             solved: Callable[[str], Solved]) -> list[Primitive]:
+             solved: Callable[[str], Solved]) -> list[_Written]:
     """EVERY variable this run wrote -> the one layer each is published under.
 
     THE RESULT FILE IS THE LIST. The module's rows come first, in the table's
     own order, styled and captioned from the row; then every variable a result
     file carries that no row resolved to, under the spelling the file itself
-    carries and with a journal line saying so. A table decides how a variable
-    is drawn, never whether what the engine wrote reaches the map."""
-    from trid3nt_server.workflows.runtime.journal import journal_note
+    carries. A spelling two of a run's files both carry is ONE layer, off the
+    first row that names it: a coupled module writes its host's tracers into its
+    own file too, and two layers of one name are two pictures nobody can tell
+    apart. A table decides how a variable is drawn, never whether it is drawn."""
     from trid3nt_server.workflows.telemac.modules.outputs import field
 
+    written: list[_Written] = []
+    claimed: dict[str, str] = {}
+    seen: set[tuple[str, str]] = set()
+
+    def _claim(primitives: list[Primitive], file: str, spelling: str,
+               rowed: bool) -> None:
+        seen.add((file, spelling.upper()))
+        first = claimed.get(spelling.upper())
+        if first is not None:
+            written.append(_Written(primitives[0], file, spelling, rowed, first))
+            return
+        claimed[spelling.upper()] = file
+        written.extend(_Written(p, file, spelling, rowed) for p in primitives)
+
     rows = list(run.get("module_output") or ())
-    painted = [p for row in rows for p in _painted(row)]
-    # The spellings already NAMED, across the whole run rather than per file: a
-    # quantity two of a run's files both carry is one layer, and the module row
-    # that names it is the one that styles it.
-    named: set[str] = set()
     for row in rows:
+        read = solved(str(row["module"]))
         try:
-            variable, _ = solved(str(row["module"])).variable(str(row["token"]))
+            variable, _ = read.variable(str(row["token"]))
         except OutputEmpty:
             # A row the result does not carry names nothing in it; the read of
             # it is skipped downstream and it claims no spelling here.
+            written.extend(_Written(p, read.result_file, "", True)
+                           for p in _painted(row))
             continue
-        named.add(variable.strip().upper())
+        _claim(_painted(row), read.result_file, variable.strip(), True)
     walked: set[str] = set()
     for module in dict.fromkeys([str(run["module"]),
                                  *(str(row["module"]) for row in rows)]):
@@ -194,14 +222,35 @@ def _written(run: Mapping[str, Any],
         walked.add(read.result_file)
         for variable in read.result["varnames"]:
             spelling = str(variable).strip()
-            if spelling.upper() in named:
+            if (read.result_file, spelling.upper()) in seen:
                 continue
-            named.add(spelling.upper())
-            journal_note(f"{read.result_file} wrote {spelling!r} and no module "
-                         "row names it; it is published under the spelling the "
-                         "result file carries")
-            painted.append(field(spelling, t="every", module=module).animate())
-    return painted
+            _claim([field(spelling, t="every", module=module).animate()],
+                   read.result_file, spelling, False)
+    return written
+
+
+def _account(written: Sequence[_Written], layers: Sequence[LayerURI],
+             why: Mapping[Primitive, str]) -> None:
+    """Journal what became of every variable a result file carries, read off
+    the layers the publish SURFACED - so a note never says a variable is on the
+    map that the layer list does not show."""
+    from trid3nt_server.render.formats import quantity_of
+    from trid3nt_server.workflows.runtime.journal import journal_note
+
+    landed = {layer.quantity for layer in layers}
+    for entry in written:
+        if not entry.spelling:
+            continue
+        where = f"{entry.file} wrote {entry.spelling!r}"
+        if quantity_of(entry.spelling.lower()) not in landed:
+            journal_note(f"{where} and no layer carries it: "
+                         f"{why.get(entry.primitive.key, 'the publish surfaced none')}")
+        elif entry.first is not None:
+            journal_note(f"{where}, which {entry.first} wrote as well; the one "
+                         f"layer of it is read off {entry.first}")
+        elif not entry.rowed:
+            journal_note(f"{where} and no module row names it; it is published "
+                         "under the spelling the result file carries")
 
 
 #: How long a stated value is printed before the doc names its shape instead: a
@@ -243,7 +292,8 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
     coupled module's - published as ONE layer each: the temporal one where the
     row varies in time, the final frame where it does not, styled from the
     module row that names it and under the file's own spelling where no row
-    does. A row naming a variable the result does not carry is skipped. The
+    does. A row naming a variable the result does not carry is skipped, and a
+    variable a file carries that reaches no layer is journalled by name. The
     template's own list is the reads it PLACED beside them. Each module's result
     is read ONCE; a coupled module's own file goes through its own wrapper. A
     chart's reference is a callable computing lines beside the read, or another
@@ -256,21 +306,25 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
             solved[module] = Solved(run, wrapper_for(module))
         return solved[module]
 
-    table = await asyncio.to_thread(_written, run, _solved)
+    written = await asyncio.to_thread(_written, run, _solved)
+    table = [entry.primitive for entry in written if entry.first is None]
     if anchors:
         outputs = [_anchored(p, a) for p, a in zip(outputs, anchors)]
 
     published_keys = {primitive.key for primitive in outputs}
+    why: dict[Primitive, str] = {}
 
     def _read(key: Primitive) -> Any:
         read = _solved(key.module or str(run["module"]))
         try:
             return read.body.READS[key.kind](key, read)
-        except OutputEmpty:
+        except OutputEmpty as exc:
             # A row of the module's OWN table the result does not carry is
-            # skipped; a read the template PLACED is a refusal.
+            # skipped, and the journal says why; a read the template PLACED is
+            # a refusal.
             if key in published_keys:
                 raise
+            why[key] = str(exc)
             return None
 
     def _beside(primitive: Primitive) -> Primitive | None:
@@ -313,6 +367,7 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
     published = await publish(run_id=str(run["run_id"]), engine="telemac",
                               name=name, items=items)
 
+    _account(written, published.layers, why)
     if not published.layers:
         raise SlotRefused(
             f"the {run['module']} run's result files carry no variable at all, "
