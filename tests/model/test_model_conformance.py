@@ -136,6 +136,19 @@ def test_a_forbid_sweeps_the_modules_the_model_never_binds(seed, tmp_path):
     assert "pkg.shared.nodes -> pkg.engine" in done.stdout
 
 
+def test_a_relative_import_in_a_package_init_resolves_from_that_package(tmp_path):
+    """A package's ``__init__`` IS the package, so ``..`` climbs one level from it."""
+    model = _five_forms_tree(tmp_path, "import json")
+    model.write_text(_SWEEP_MODEL, encoding="utf-8")
+    shared = tmp_path / "pkg" / "shared"
+    shared.mkdir()
+    (shared / "__init__.py").write_text("from ..engine import solve\n",
+                                        encoding="utf-8")
+    done = _run("--model", str(model), "--root", str(tmp_path))
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "pkg.shared -> pkg.engine" in done.stdout
+
+
 def test_a_forbid_whose_importer_names_no_module_refuses(tmp_path):
     """A rule over a path with nothing under it holds vacuously, so it says so."""
     model = _five_forms_tree(tmp_path, "import json")
