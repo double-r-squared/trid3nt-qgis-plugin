@@ -28,11 +28,27 @@ _TABLE = "square_boundaries.txt"
 _SERIES = "#measured\nT Q(1)\ns m3/s\n0.000 2.0\n600.000 2.0\n"
 
 
+#: A strip four nodes long: the bottom row 0-3, the top row 4-7.
+_STRIP_X = np.array([0.0, 1.0, 2.0, 3.0, 0.0, 1.0, 2.0, 3.0])
+_STRIP_Y = np.array([0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0])
+_STRIP_CELLS = np.array([[i, i + 1, i + 5] for i in range(3)]
+                        + [[i, i + 5, i + 4] for i in range(3)])
+
+
 def _pair(rundir, bed=None):
     IO.write_telemac_pair(
         rundir, x=_X, y=_Y, cells=_CELLS,
         bed=np.array([1.0, 2.0, 3.0, 4.0]) if bed is None else bed,
         roles={"inflow": [0, 3]}, title="SQUARE")
+
+
+def _strip(rundir, roles, flowrates):
+    """A strip whose roles open the faces, under a deck stating ``flowrates``."""
+    IO.write_telemac_pair(rundir, x=_STRIP_X, y=_STRIP_Y, cells=_STRIP_CELLS,
+                          bed=np.ones(8), roles=roles, title="STRIP")
+    (rundir / _DECK).write_text(
+        "/// the deck\n" + _deck(**{"PRESCRIBED FLOWRATES": flowrates}))
+    return rundir
 
 
 def _deck(**over):
@@ -73,7 +89,7 @@ def test_a_whole_staged_run_passes_every_clause(tmp_path):
     read = _check(_staged(tmp_path))
 
     assert read["boundary_rows"] == 4 and read["liquid_faces"] == 2
-    assert read["decks"] == [_DECK]
+    assert read["liquid_boundaries"] == 1 and read["decks"] == [_DECK]
 
 
 def test_a_file_the_steering_names_and_nobody_staged_refuses_by_name(tmp_path):
@@ -117,13 +133,23 @@ def test_a_boundary_file_numbered_against_another_walk_refuses(tmp_path):
     assert "row 1" in str(refusal)
 
 
-def test_a_liquid_face_the_deck_prescribes_nothing_at_refuses(tmp_path):
-    rundir = _staged(tmp_path, **{"PRESCRIBED FLOWRATES": "2.2"})
+def test_a_liquid_boundary_the_deck_prescribes_nothing_at_refuses(tmp_path):
+    rundir = _strip(tmp_path, {"inflow": [0, 4], "outflow": [3, 7]}, "2.2")
 
     refusal = _refusal(rundir)
 
     assert refusal.error_code == "TELEMAC_STAGED_BOUNDARY_UNPRESCRIBED"
     assert "PRESCRIBED FLOWRATES" in str(refusal)
+    assert "2 liquid boundary" in str(refusal) and "4 open face" in str(refusal)
+
+
+def test_one_liquid_boundary_many_faces_wide_takes_one_value(tmp_path):
+    """The engine prescribes per liquid boundary, never per face."""
+    rundir = _strip(tmp_path, {"inflow": [0, 1, 2, 3]}, "2.2")
+
+    read = _check(rundir)
+
+    assert read["liquid_faces"] == 4 and read["liquid_boundaries"] == 1
 
 
 def test_a_series_that_stops_short_of_the_window_refuses(tmp_path):
