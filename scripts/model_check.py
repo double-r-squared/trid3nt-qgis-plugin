@@ -553,30 +553,48 @@ def _verify_findings(model: Model, root: Path) -> list[Finding]:
     return out
 
 
-def scoped_import_edges(model: Model, root: Path) -> list[tuple[str, str]]:
-    """The import edges of the modeled modules, computed fresh at check time and
-    scoped to the blocks the model binds."""
+def _swept_modules(prefix: str, root: Path) -> list[tuple[str, Path]]:
+    """Every product module a forbid's importer prefix names -> ``(dotted, path)``."""
+    base = root.joinpath(*prefix.split("."))
+    paths = ([base.with_suffix(".py")] if base.with_suffix(".py").is_file()
+             else sorted(base.rglob("*.py")) if base.is_dir() else [])
+    found: list[tuple[str, Path]] = []
+    for path in paths:
+        rel = path.relative_to(root)
+        if any(p in ("tests", "__pycache__") for p in rel.parts):
+            continue
+        if path.name.startswith("test_"):
+            continue
+        dotted = ".".join(rel.with_suffix("").parts)
+        found.append((dotted.removesuffix(".__init__"), path))
+    return found
+
+
+def forbid_import_edges(model: Model, root: Path) -> list[tuple[str, str]]:
+    """The import edges of EVERY module under a forbid's importer prefix, bound by
+    the model or not, computed fresh at check time."""
     # A committed graph is an instrument's product: reading one makes the
     # dependency rules decorative the moment the code moves past the last run.
+    prefixes = {importer for req in model.requirement_defs.values()
+                for importer, _ in req.forbids}
     edges: set[tuple[str, str]] = set()
-    for part in model.parts.values():
-        if not part.code:
-            continue
-        path = root / part.code
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-        except (OSError, SyntaxError):
-            continue
-        importer = re.sub(r"\.py$", "", part.code).replace("/", ".")
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                edges.update((importer, alias.name) for alias in node.names)
-            elif isinstance(node, ast.ImportFrom):
-                edges.update(_imported_modules(importer, node))
+    for prefix in sorted(prefixes):
+        for importer, path in _swept_modules(prefix, root):
+            try:
+                tree = ast.parse(path.read_text(encoding="utf-8"))
+            except (OSError, SyntaxError):
+                continue
+            package = importer if path.name == "__init__.py" else (
+                importer.rpartition(".")[0])
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    edges.update((importer, alias.name) for alias in node.names)
+                elif isinstance(node, ast.ImportFrom):
+                    edges.update(_imported_modules(importer, package, node))
     return sorted(edges)
 
 
-def _imported_modules(importer: str,
+def _imported_modules(importer: str, package: str,
                       node: ast.ImportFrom) -> set[tuple[str, str]]:
     """Every module a ``from ... import`` names - the package AND each imported
     name, carried as full dotted paths beside the package."""
@@ -586,19 +604,24 @@ def _imported_modules(importer: str,
     # so an imported FUNCTION only matches a rule that already names its module.
     module = node.module or ""
     if node.level:
-        base = importer.split(".")[:-node.level]
+        parts = package.split(".")
+        base = parts[:len(parts) - (node.level - 1)]
         module = ".".join(base + ([node.module] if node.module else []))
     named = {alias.name for alias in node.names} - {"*"}
     return {(importer, module)} | {
         (importer, f"{module}.{name}" if module else name) for name in named}
 
 
-def _dependency_findings(edges: list[tuple[str, str]],
-                         model: Model) -> list[Finding]:
-    """Rule (c): every forbid rule holds against the modeled modules' imports."""
+def _dependency_findings(edges: list[tuple[str, str]], model: Model,
+                         root: Path) -> list[Finding]:
+    """Rule (c): every forbid rule holds against every module under its importer."""
     out: list[Finding] = []
     for name in sorted(model.requirement_defs):
         for importer_prefix, imported_prefix in model.requirement_defs[name].forbids:
+            if not _swept_modules(importer_prefix, root):
+                out.append(Finding(
+                    "FORBID_SWEEPS_NOTHING", name, importer_prefix,
+                    "no module lives under the importer this rule names"))
             for importer, imported in edges:
                 if _under(importer, importer_prefix) and _under(imported,
                                                                 imported_prefix):
@@ -617,7 +640,8 @@ def check(model: Model, root: Path) -> list[Finding]:
                   + _interface_findings(model, root)
                   + _author_findings(model, root)
                   + _verify_findings(model, root)
-                  + _dependency_findings(scoped_import_edges(model, root), model))
+                  + _dependency_findings(forbid_import_edges(model, root), model,
+                                         root))
 
 
 

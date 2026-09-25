@@ -679,7 +679,7 @@ package SolveSeam {
         uploaded. A reader importing worker code is a second computation of
         the same quantity, running outside the image that produced it.
 
-        forbid: trid3nt_server.workflows.telemac.products.run_reads -> workers
+        forbid: trid3nt_server.workflows.telemac.modules.listing -> workers
         forbid: trid3nt_server.workflows.solver.diagnostics -> workers
         */
     }
@@ -702,8 +702,7 @@ package SolveSeam {
         with itself.
 
         forbid: trid3nt_server.workflows.telemac.modules.outputs -> struct
-        forbid: trid3nt_server.workflows.telemac.products.postprocess_telemac -> struct
-        forbid: trid3nt_server.workflows.telemac.products.run_reads -> struct
+        forbid: trid3nt_server.workflows.telemac.modules.listing -> struct
         forbid: trid3nt_server.workflows.telemac.authoring.opening -> struct
         forbid: trid3nt_server.workflows.telemac.authoring.release_point -> struct
         */

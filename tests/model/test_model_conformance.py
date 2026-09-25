@@ -114,6 +114,38 @@ def test_a_neighbouring_module_is_not_read_as_the_forbidden_one(tmp_path):
     assert done.returncode == 0, done.stdout + done.stderr
 
 
+_SWEEP_MODEL = _FORBID_MODEL.replace(
+    "forbid: pkg.importer -> pkg.sub.leaf", "forbid: pkg -> pkg.engine")
+
+
+@pytest.mark.parametrize("seed", ["from ..engine import solve",
+                                  "from pkg.engine import solve"])
+def test_a_forbid_sweeps_the_modules_the_model_never_binds(seed, tmp_path):
+    """A forbidden import planted in an UNBOUND module under the rule's path fires.
+
+    Only ``pkg/importer.py`` is bound; the seed sits two packages down in a module
+    no block names, spelled relative and absolute."""
+    model = _five_forms_tree(tmp_path, "import json")
+    model.write_text(_SWEEP_MODEL, encoding="utf-8")
+    shared = tmp_path / "pkg" / "shared"
+    shared.mkdir()
+    (shared / "__init__.py").write_text("", encoding="utf-8")
+    (shared / "nodes.py").write_text(seed + "\n", encoding="utf-8")
+    done = _run("--model", str(model), "--root", str(tmp_path))
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "pkg.shared.nodes -> pkg.engine" in done.stdout
+
+
+def test_a_forbid_whose_importer_names_no_module_refuses(tmp_path):
+    """A rule over a path with nothing under it holds vacuously, so it says so."""
+    model = _five_forms_tree(tmp_path, "import json")
+    model.write_text(_FORBID_MODEL.replace("forbid: pkg.importer",
+                                           "forbid: pkg.gone"), encoding="utf-8")
+    done = _run("--model", str(model), "--root", str(tmp_path))
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "FORBID_SWEEPS_NOTHING" in done.stdout and "pkg.gone" in done.stdout
+
+
 @pytest.mark.parametrize("model", MODELS, ids=lambda p: p.stem)
 def test_the_view_is_derived_rather_than_drawn(model, tmp_path):
     view = model.with_name(f"{model.stem}-view.md")
