@@ -71,13 +71,13 @@ def _lever(metadata: Any) -> str | None:
 def sensitivity_notes(decl: SensitivityDecl, metadata: Any,
                       published: Collection[str],
                       sheet: Sequence[Any],
-                      fill: Mapping[str, str] | None = None,
+                      fill: Mapping[str, Mapping[str, Any]] | None = None,
                       mesh_size_m: Any = None) -> tuple[str, ...]:
     """The honesty note(s) this run carries about its own fidelity, or ``()``.
     ONE note per run, not one per quantity, and a declared quantity this run did
     not publish is dropped - a note about a product that is not there points at
     nothing. ``published`` is what the run put on the map and on its charts.
-    ``fill`` is the solved deck's slots by origin, so a lever that is a KEYWORD
+    ``fill`` is the solved deck's slots with their origins, so a lever that is a KEYWORD
     rather than a param is read where the run actually states it, and
     ``mesh_size_m`` is the edge off the mesh the run published."""
     if not decl:
@@ -98,7 +98,7 @@ def sensitivity_notes(decl: SensitivityDecl, metadata: Any,
     # A LEVER THAT IS A KEYWORD has no param row at all: the run states it on
     # the deck, and the fill records who put it there. A user or a model set it
     # for the same reason - somebody chose this granularity.
-    stated = str((fill or {}).get(lever, ""))
+    stated = str(((fill or {}).get(lever) or {}).get("from") or "")
     refined = refined or stated.startswith(("user", "model"))
     at = f" at {float(mesh_size_m):g} m" if mesh_size_m is not None else ""
 
