@@ -656,6 +656,11 @@ package SolveSeam {
         keyword's own default, so nothing states that. Every forcing file the
         child writes is read on the clock the parent ended at, because a table
         that does not span the run's own instants stops the reader.
+
+        The state a run opens at has one reader, and each settle that places
+        something on that state reads it there, never through another settle.
+
+        forbid: trid3nt_server.workflows.telemac.authoring.release_point -> trid3nt_server.workflows.telemac.authoring.opening
         */
     }
 
