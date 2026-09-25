@@ -15,7 +15,7 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Any, Mapping
 
-from .module import Module, Output
+from .module import Module, Output, Unwritten
 from .outputs import PRIMITIVES, read_spectrum
 
 __all__ = ["MODULE_OUTPUT", "RESULT_FILENAME", "STEERING_FILENAME", "WAC"]
@@ -191,7 +191,13 @@ WAC.CLOCK = ("TIME_STEP", "NUMBER_OF_TIME_STEP")
 #: than over the domain: the run keeps and publishes each file a deck names, and
 #: no primitive of the geographic mesh reads either.
 WAC.RESULT_FILES = ("PUNCTUAL_RESULTS_FILE", "ZD_SPECTRA_RESULTS_FILE")
-WAC.UNWRITTEN = frozenset(("PRI",))
+#: The source carries no DEPRECATED mark for PRI; its mark is that the array is
+#: the user's own, which the engine computes nothing into.
+WAC.UNWRITTEN = MappingProxyType({
+    "PRI": Unwritten("PRIVATE 1", (
+        "point_tomawac.f: 'USER DEDICATED ARRAY (2-DIMENSIONAL * NPRIV)', the "
+        "SPRIVE block output 17 is bound to")),
+})
 #: The wave forces reach a host as a MOMENTUM SOURCE in memory - PROSOU adds
 #: FXWAVE and FYWAVE into FU and FV - and the host records no wave row, so this
 #: module appends nothing to its host's tracers and arms the switch that

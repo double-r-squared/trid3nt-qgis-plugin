@@ -23,6 +23,7 @@ __all__ = [
     "Output",
     "Slot",
     "SlotRefused",
+    "Unwritten",
     "identify_on",
     "load_module_input",
     "module_input_dir",
@@ -251,7 +252,17 @@ class Output:
     under: str = ""
 
 
-@lru_cache(maxsize=None)
+@dataclass(frozen=True, slots=True)
+class Unwritten:
+    """A slot the ENGINE'S OWN SOURCE marks as never written: the name its result
+    file carries the slot under, and the source line that makes the mark.
+
+    The mark is the module speaking, so one entry governs both directions: the
+    slot is never asked of the engine and never published off the file."""
+
+    spelling: str
+    cited: str
+
 def load_module_input(module: str) -> Mapping[str, Slot]:
     """The module's whole keyword surface, keyed by the identifier it is written
     under. The dictionary's own order is kept: a sheet reads down it."""
@@ -393,10 +404,10 @@ class Module(metaclass=_Body):
     #: itself reads - so what a module may put on its carrier is enumerable
     #: without a body to run it against.
     APPENDABLE: tuple[tuple[str, tuple[Output, ...]], ...] = ()
-    #: Choices the printouts keyword spells that the engine never writes (slots
-    #: its own allocation marks deprecated): never a row, but a wildcard may
-    #: reach them, since what the engine puts there is never read.
-    UNWRITTEN: frozenset[str] = frozenset()
+    #: Choices the printouts keyword spells that the engine never writes, by
+    #: mnemonic, each citing the engine source line that marks it: never a row
+    #: and never a layer, though a wildcard may reach them in the file.
+    UNWRITTEN: Mapping[str, Unwritten] = MappingProxyType({})
     #: The result file the primitives read; empty reads the run's own.
     RESULT_FILE: str = ""
     #: The keyword a deck of this module NAMES that result in, by identifier.
@@ -627,7 +638,7 @@ _WILDCARD = "~"
 
 
 def _wildcarded(tokens: Sequence[str], slot: Slot,
-                unwritten: frozenset[str] = frozenset()) -> list[str]:
+                unwritten: Mapping[str, Any] = MappingProxyType({})) -> list[str]:
     """The same table written in the engine's wildcard, where one is safe.
 
     A prefix is taken only where every mnemonic the keyword spells under it is

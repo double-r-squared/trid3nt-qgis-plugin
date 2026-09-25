@@ -273,18 +273,18 @@ def test_every_variable_the_result_wrote_is_published_even_where_no_row_names_it
 
     seen = _surfacing(monkeypatch)
     run = _run(telemac_result, monkeypatch,
-               unrowed={"UNDER ICE THICK.": ("[SI]", [[0.0] * 5, [0.4] * 5]),
-                        "FRAZIL THICKNESS": ("[SI]", [[0.0] * 5, [0.2] * 5])})
+               unrowed={"SOLID ICE THICK.": ("[SI]", [[0.0] * 5, [0.4] * 5]),
+                        "FRAZIL THETA0": ("[SI]", [[0.0] * 5, [0.2] * 5])})
     notes = _notes(run)
     captions = [item.caption for item in seen]
-    assert captions == ["water depth", "dye", "under ice thick.",
-                        "frazil thickness"]
+    assert captions == ["water depth", "dye", "solid ice thick.",
+                        "frazil theta0"]
     unrowed = [item.product for item in seen if item.caption.endswith("thick.")]
-    assert isinstance(unrowed[0], Mesh) and unrowed[0].group == "UNDER ICE THICK."
+    assert isinstance(unrowed[0], Mesh) and unrowed[0].group == "SOLID ICE THICK."
     # The unit is the record's own, because no row declares one for it.
     assert unrowed[0].units == "[si]"
-    assert [n for n in notes if "'UNDER ICE THICK.'" in n and "published" in n]
-    assert [n for n in notes if "'FRAZIL THICKNESS'" in n and "published" in n]
+    assert [n for n in notes if "'SOLID ICE THICK.'" in n and "published" in n]
+    assert [n for n in notes if "'FRAZIL THETA0'" in n and "published" in n]
 
 
 def test_a_variable_the_engine_never_wrote_reaches_no_layer_and_the_note_says_so(
@@ -295,13 +295,42 @@ def test_a_variable_the_engine_never_wrote_reaches_no_layer_and_the_note_says_so
     nan = float("nan")
     seen = _surfacing(monkeypatch)
     run = _run(telemac_result, monkeypatch,
-               unrowed={"UNDER ICE THICK.": ("[SI]", [[nan] * 5, [nan] * 5])})
+               unrowed={"SOLID ICE THICK.": ("[SI]", [[nan] * 5, [nan] * 5])})
     notes = _notes(run)
-    assert "under ice thick." not in [item.caption for item in seen]
-    said = [n for n in notes if "'UNDER ICE THICK.'" in n]
+    assert "solid ice thick." not in [item.caption for item in seen]
+    said = [n for n in notes if "'SOLID ICE THICK.'" in n]
     assert said and "no layer carries it" in said[0], notes
     assert "never wrote it" in said[0], said
     assert not [n for n in said if "published under" in n]
+
+
+def test_a_slot_the_engine_source_marks_unwritten_is_neither_asked_nor_published(
+        monkeypatch, fake_s3, telemac_result):
+    """ONE SET, BOTH DIRECTIONS: a slot in UNWRITTEN is never a token the
+    printouts keyword asks for, and a file that carries it - finite values and
+    all, as a scratch array leaves it - puts it on no layer; the journal names
+    it with the engine source line that marks it."""
+    from trid3nt_server.workflows.telemac.modules.khione import KHIONE
+
+    for stated in ({}, {"HEAT_BUDGET": True, "DYNAMIC_ICE_COVER": True}):
+        assert not set(KHIONE.UNWRITTEN) & set(KHIONE.written(stated))
+        asked = fill(KHIONE, **stated).printouts()
+        for value in asked.values():
+            assert not set(KHIONE.UNWRITTEN) & set(value.split(","))
+    marked = KHIONE.UNWRITTEN["COV_THF"]
+    seen = _surfacing(monkeypatch)
+    run = _run(telemac_result, monkeypatch,
+               unrowed={marked.spelling: ("[SI]", [[0.3] * 5, [0.7] * 5]),
+                        "SOLID ICE THICK.": ("[SI]", [[0.0] * 5, [0.4] * 5])})
+    run = {**run, "module": "khione", "module_output": [],
+           "result_basename": KHIONE.RESULT_FILE}
+    notes = _notes(run)
+    captions = [item.caption for item in seen]
+    assert marked.spelling.lower() not in captions, captions
+    assert "solid ice thick." in captions
+    said = [n for n in notes if repr(marked.spelling) in n]
+    assert said and "no layer carries it" in said[0], notes
+    assert "point_khione.f" in said[0] and "DEPRECATED" in said[0], said
 
 
 def test_a_note_never_claims_a_layer_the_publish_did_not_surface(
@@ -310,8 +339,8 @@ def test_a_note_never_claims_a_layer_the_publish_did_not_surface(
     surface is never said to be published, whatever the reads handed it."""
     _surfacing(monkeypatch, surfaced={"water_depth", "dye"})
     run = _run(telemac_result, monkeypatch,
-               unrowed={"UNDER ICE THICK.": ("[SI]", [[0.0] * 5, [0.4] * 5])})
-    said = [n for n in _notes(run) if "'UNDER ICE THICK.'" in n]
+               unrowed={"SOLID ICE THICK.": ("[SI]", [[0.0] * 5, [0.4] * 5])})
+    said = [n for n in _notes(run) if "'SOLID ICE THICK.'" in n]
     assert said and "no layer carries it" in said[0], said
     assert not [n for n in said if "published under" in n]
 
@@ -334,6 +363,7 @@ def test_a_spelling_two_result_files_carry_is_one_layer_under_one_label():
         file, names = files[module]
         return SimpleNamespace(
             result_file=file, result={"varnames": names},
+            body=door.wrapper_for(module),
             variable=lambda token: ({"H": "WATER DEPTH", "T1": "FRAZIL",
                                      "F1": "FRAZIL", "SF1": "FRAZIL S"}[token],
                                     ""))

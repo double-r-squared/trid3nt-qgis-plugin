@@ -165,13 +165,15 @@ class _Written:
 
     ``spelling`` is the file's own name for it, empty for a row the result does
     not carry; ``first`` names the file whose layer carries a spelling this file
-    repeats, and ``rowed`` whether a module row names it."""
+    repeats, ``rowed`` whether a module row names it, and ``withheld`` the
+    module's own mark on a slot its engine never writes, which no layer reads."""
 
     primitive: Primitive
     file: str
     spelling: str
     rowed: bool
     first: str | None = None
+    withheld: str = ""
 
 
 def _written(run: Mapping[str, Any],
@@ -184,7 +186,9 @@ def _written(run: Mapping[str, Any],
     carries. A spelling two of a run's files both carry is ONE layer, off the
     first row that names it: a coupled module writes its host's tracers into its
     own file too, and two layers of one name are two pictures nobody can tell
-    apart. A table decides how a variable is drawn, never whether it is drawn."""
+    apart. A table decides how a variable is drawn, never whether it is drawn:
+    a slot the module's own source marks as never written is carried here with
+    that mark and published by no layer."""
     from trid3nt_server.workflows.telemac.modules.outputs import field
 
     written: list[_Written] = []
@@ -220,9 +224,19 @@ def _written(run: Mapping[str, Any],
         if read.result_file in walked:
             continue
         walked.add(read.result_file)
+        marked = {entry.spelling.upper(): entry.cited
+                  for entry in read.body.UNWRITTEN.values()}
         for variable in read.result["varnames"]:
             spelling = str(variable).strip()
             if (read.result_file, spelling.upper()) in seen:
+                continue
+            if spelling.upper() in marked:
+                seen.add((read.result_file, spelling.upper()))
+                written.append(_Written(
+                    field(spelling, t="every", module=module), read.result_file,
+                    spelling, False, withheld=(
+                        f"{read.body.MODULE} never writes it, by its own source "
+                        f"- {marked[spelling.upper()]}")))
                 continue
             _claim([field(spelling, t="every", module=module).animate()],
                    read.result_file, spelling, False)
@@ -242,7 +256,9 @@ def _account(written: Sequence[_Written], layers: Sequence[LayerURI],
         if not entry.spelling:
             continue
         where = f"{entry.file} wrote {entry.spelling!r}"
-        if quantity_of(entry.spelling.lower()) not in landed:
+        if entry.withheld:
+            journal_note(f"{where} and no layer carries it: {entry.withheld}")
+        elif quantity_of(entry.spelling.lower()) not in landed:
             journal_note(f"{where} and no layer carries it: "
                          f"{why.get(entry.primitive.key, 'the publish surfaced none')}")
         elif entry.first is not None:
@@ -307,7 +323,8 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
         return solved[module]
 
     written = await asyncio.to_thread(_written, run, _solved)
-    table = [entry.primitive for entry in written if entry.first is None]
+    table = [entry.primitive for entry in written
+             if entry.first is None and not entry.withheld]
     if anchors:
         outputs = [_anchored(p, a) for p, a in zip(outputs, anchors)]
 

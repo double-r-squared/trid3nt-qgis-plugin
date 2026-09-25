@@ -269,7 +269,7 @@ def test_the_two_slots_the_engine_marks_deprecated_are_not_rows():
     """A wildcard may still reach them: the engine writes work memory there
     and nothing reads it back, so the table publishes neither."""
     assert not {"COV_THF", "COV_THUN"} & set(KHIONE.MODULE_OUTPUT)
-    assert KHIONE.UNWRITTEN == {"COV_THF", "COV_THUN"}
+    assert set(KHIONE.UNWRITTEN) == {"COV_THF", "COV_THUN"}
     stated = dict(_ice(HEAT_BUDGET=False)["slots"])
     value = fill(KHIONE, **stated).printouts()[_PRINTOUTS]
     assert any(token.endswith("~") and "CO".startswith(token[:2])

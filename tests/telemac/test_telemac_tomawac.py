@@ -75,7 +75,7 @@ def test_the_table_is_the_engine_s_forty_less_the_slot_it_never_writes():
     choices = dict(WAC.slot(WAC.PRINTOUTS).choices)
     assert len(choices) == 40
     assert set(WAC.MODULE_OUTPUT) | set(WAC.UNWRITTEN) == set(choices)
-    assert WAC.UNWRITTEN == frozenset({"PRI"})
+    assert set(WAC.UNWRITTEN) == {"PRI"}
     assert all(row.style for row in WAC.MODULE_OUTPUT.values())
     assert WAC.MODULE_OUTPUT["TMOY"].name == "MEAN PERIOD TMOY"
     assert WAC.MODULE_OUTPUT["TMOY"].unit == "s"

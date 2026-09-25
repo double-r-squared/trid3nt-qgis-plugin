@@ -16,7 +16,7 @@ from dataclasses import replace
 from types import MappingProxyType
 from typing import Any, Mapping
 
-from .module import Module, Output
+from .module import Module, Output, Unwritten
 from .outputs import PRIMITIVES
 
 __all__ = ["KHIONE", "MODULE_OUTPUT", "RESULT_FILENAME", "STEERING_FILENAME"]
@@ -273,8 +273,15 @@ KHIONE.ONLY_3D = _ONLY_3D
 #: The slots the engine's own allocation marks deprecated and binds to work
 #: arrays it never fills. The printouts keyword may fold them into a prefix so
 #: the token list fits the engine's 72 columns, which makes the file carry them;
-#: the TABLE never rows them, so nothing is published off them.
-KHIONE.UNWRITTEN = frozenset(("COV_THF", "COV_THUN"))
+#: no row and no layer is ever read off them.
+KHIONE.UNWRITTEN = MappingProxyType({
+    "COV_THF": Unwritten("FRAZIL THICKNESS", (
+        "point_khione.f: '14 FRAZIL ICE THICKNESS EX:THIFEMF -> DEPRECATED', "
+        "the slot bound to the work array T1")),
+    "COV_THUN": Unwritten("UNDER ICE THICK.", (
+        "point_khione.f: '15 UNDERCOVER ICE THICKNESS EX:HUN -> DEPRECATED', "
+        "the slot bound to the work array T2")),
+})
 KHIONE.APPENDABLE = (
     ("every coupled run", (_TEMPERATURE_ROW,)),
     (_SALINITY, (_SALINITY_ROW,)),

@@ -322,8 +322,8 @@ def test_the_deprecated_slots_the_file_carries_are_rowed_by_nothing():
     stated = {"HEAT_BUDGET": True, "DYNAMIC_ICE_COVER": True,
               "NUMBER_OF_CLASSES_FOR_SUSPENDED_FRAZIL_ICE": 2}
     assert KHIONE.UNWRITTEN
-    assert not KHIONE.UNWRITTEN & set(KHIONE.table(stated))
-    assert not KHIONE.UNWRITTEN & set(KHIONE.MODULE_OUTPUT)
+    assert not set(KHIONE.UNWRITTEN) & set(KHIONE.table(stated))
+    assert not set(KHIONE.UNWRITTEN) & set(KHIONE.MODULE_OUTPUT)
 
 
 def test_the_inflow_tracer_is_the_record_where_one_measured_a_window():
