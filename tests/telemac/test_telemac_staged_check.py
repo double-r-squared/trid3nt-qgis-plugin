@@ -152,6 +152,21 @@ def test_one_liquid_boundary_many_faces_wide_takes_one_value(tmp_path):
     assert read["liquid_faces"] == 4 and read["liquid_boundaries"] == 1
 
 
+def test_a_lone_liquid_point_the_engine_cannot_number_refuses_by_name(tmp_path):
+    rundir = _strip(tmp_path, {"inflow": [0, 4]}, "2.2")
+    cli = tmp_path / "mesh.cli"
+    rows = cli.read_text().splitlines()
+    rows = [("  2 2 2" + row[7:]) if row.startswith("  4 5 5") else row
+            for row in rows]
+    rows[2] = "  4 5 5" + rows[2][7:]
+    cli.write_text("\n".join(rows) + "\n")
+
+    refusal = _refusal(rundir)
+
+    assert refusal.error_code == "TELEMAC_STAGED_BOUNDARY_MISMATCH"
+    assert "lone liquid point" in str(refusal)
+
+
 def test_a_series_that_stops_short_of_the_window_refuses(tmp_path):
     rundir = _staged(tmp_path, **{"LIQUID BOUNDARIES FILE": f"'{_TABLE}'"})
     (rundir / _TABLE).write_text(_SERIES.replace("600.000", "60.000"))
