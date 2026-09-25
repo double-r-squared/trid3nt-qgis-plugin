@@ -1495,3 +1495,9 @@ def test_the_oil_module_is_one_value_the_deck_s_own_preset_and_point_expand():
     with pytest.raises(ValueError, match="crude"):
         T2D.COMPOSITES["oil"].expand(Oil(
             presets=presets, named="crude", at=[0.0, 0.0], release_step=1))
+
+
+def test_a_module_dictionary_is_parsed_once_per_process():
+    """Every body, fill and printouts call reads the dictionary; a parse per read
+    re-walks the catalog on every slot lookup."""
+    assert load_module_input("khione") is load_module_input("khione")
