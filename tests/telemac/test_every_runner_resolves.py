@@ -31,15 +31,32 @@ def test_every_declared_telemac_template_states_at_least_one_runner():
     assert all(found for found in runners.values())
 
 
-def test_every_runner_of_every_telemac_plan_resolves_to_a_callable():
+def _unresolved(roster: dict[str, set[str]]) -> list[str]:
+    """Every runner the lookup cannot reach, named with its template."""
     unresolved = []
-    for tool, runners in _runners().items():
+    for tool, runners in roster.items():
         for runner in sorted(runners):
             module, _, attr = runner.rpartition(".")
-            op = getattr(import_module(module), attr, None)
+            try:
+                op = getattr(import_module(module), attr, None)
+            except ImportError as exc:
+                unresolved.append(f"{tool}: {runner} ({exc})")
+                continue
             if not callable(op):
                 unresolved.append(f"{tool}: {runner}")
-    assert unresolved == []
+    return unresolved
+
+
+def test_every_runner_of_every_telemac_plan_resolves_to_a_callable():
+    assert _unresolved(_runners()) == []
+
+
+def test_a_runner_whose_module_moved_is_named_rather_than_raised():
+    """A module that is gone is the case the guard exists for."""
+    gone = "trid3nt_server.workflows.telemac.authoring.moved_away.settle_reach"
+    assert _unresolved({"a_template": {gone}}) == [
+        f"a_template: {gone} (No module named "
+        "'trid3nt_server.workflows.telemac.authoring.moved_away')"]
 
 
 def test_a_measurement_the_module_does_not_carry_refuses_where_it_is_stated():
