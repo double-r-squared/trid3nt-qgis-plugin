@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import asyncio
 import math
-from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from trid3nt_server.workflows.runtime import journal_note
@@ -18,6 +17,7 @@ from trid3nt_server.workflows.runtime.journal import run_choices
 from ..errors import TelemacError
 from ..helpers.time_step import MESH_H_FLOOR_M, suggest_time_step_s
 from ..helpers.uniform_flow import normal_depth_stage
+from .initial_state import PREVIOUS_DEST, initial_state_of
 from .accepted_mesh import (
     boundary_uri,
     face_section,
@@ -31,27 +31,7 @@ from .accepted_mesh import (
     topology_of,
 )
 
-__all__ = ["BED_PARALLEL", "FLAT", "initial_state_of", "open_channel",
-           "open_water"]
-
-#: What a continued run's PREVIOUS COMPUTATION FILE is called in the run
-#: directory. The engine reads a file, not a URI, so the previous run's restart
-#: record is staged under one name and the steering file names that.
-_PREVIOUS_DEST = "previous.slf"
-
-
-#: The engine's perfect-restart record, under the name a body that keeps one
-#: writes it.
-_RESTART = "restart_domain.slf"
-
-
-#: How a restart record names its depth, and the depth a node has to hold at
-#: that instant to count as water a source can be released into.
-_DEPTH_VARIABLE = ("WATER DEPTH", "HAUTEUR D'EAU", "HAUTEUR D EAU")
-
-
-_WET_DEPTH_M = 0.01
-
+__all__ = ["BED_PARALLEL", "FLAT", "open_channel", "open_water"]
 
 #: What the engine is told to lay: a flat surface at the level, or a sheet of one
 #: depth following the bed. Flat is what any body of water does; bed-parallel is
@@ -107,60 +87,6 @@ def _refuse_dry(where: str) -> None:
         f"unknown. State the level on {slot!r}, or supply a bed measured as a "
         "depth below the free surface.",
         error_code="TELEMAC_LEVEL_UNMEASURED")
-
-
-def _continuation_state(uri: str) -> dict[str, Any]:
-    """The restart record's own last instant and depth field - read off the file.
-
-    A continued run is the same declared scenario over an extended horizon."""
-    import tempfile
-
-    import numpy as np
-
-    from trid3nt_server.workflows.solver.solver import _download_object
-    from trid3nt_server.workflows.telemac.modules.outputs import read_selafin
-
-    with tempfile.TemporaryDirectory(prefix="telemac-continue-") as tmp:
-        path = Path(tmp) / _PREVIOUS_DEST
-        _download_object(str(uri), path)
-        record = read_selafin(path)
-    if len(record["times"]) == 0:
-        raise TelemacError(
-            f"{uri} holds no time record, so there is no state to continue from "
-            "and no instant to continue the scenario at. Point continue_from at "
-            f"a completed run's {_RESTART}.",
-            error_code="TELEMAC_CONTINUATION_UNREADABLE")
-    depth = next((record["data"][name] for name in record["varnames"]
-                  if name.strip().upper() in _DEPTH_VARIABLE), None)
-    if depth is None:
-        raise TelemacError(
-            f"{uri} carries no water depth among {record['varnames']}, so the "
-            "state this run would start from cannot say where it is wet.",
-            error_code="TELEMAC_CONTINUATION_UNREADABLE")
-    # Only the file can say where the continued leg stopped: the engine writes the
-    # restart at its own last time step, which is not the graphic period, not the
-    # asked duration, and not anything the server can compute from the ask. The
-    # depth at that instant is the initial state, which decides where a release
-    # can land.
-    start_s = float(record["times"][-1])
-    wet = np.asarray(depth[-1], dtype=float) > _WET_DEPTH_M
-    return {
-        "start_s": start_s, "wet": wet,
-        "note": (f"the restart record this run continues from, at t={start_s:.0f} s: "
-                 f"{int(wet.sum())} of {record['npoin']} nodes clear the "
-                 f"{_WET_DEPTH_M} m wet floor"),
-    }
-
-
-def initial_state_of(continue_from: str | None, node_count: int) -> dict[str, Any]:
-    """WHAT THE RUN STARTS FROM: a fresh reach opens at the derived normal depth
-    laid bed-parallel, a positive depth at every node; a CONTINUED one opens at
-    the restart record's own wet/dry field and the instant it stands at."""
-    if continue_from:
-        return _continuation_state(str(continue_from))
-    return {"start_s": None, "wet": [True] * node_count,
-            "note": "the deck's own constant initial depth, the derived normal "
-                    "depth laid bed-parallel over every node of the accepted mesh"}
 
 
 def _liquid_boundaries(topology: Mapping[str, Any], node_xy: Any
@@ -485,13 +411,13 @@ async def open_water(
         # WHERE each numbered liquid boundary sits, so a printed flux can be read
         # at the one a Point stands on.
         "liquid_boundaries": _liquid_boundaries(topology, node_xy),
-        "continue_from": _PREVIOUS_DEST if continue_from else None,
+        "continue_from": PREVIOUS_DEST if continue_from else None,
         "mesh_inputs": [
             {"gs_uri": geometry_uri(files, missing=mesh_missing),
              "dest": geometry},
             {"gs_uri": boundary_uri(files, missing=mesh_missing),
              "dest": boundary},
-            *([{"gs_uri": str(continue_from), "dest": _PREVIOUS_DEST}]
+            *([{"gs_uri": str(continue_from), "dest": PREVIOUS_DEST}]
               if continue_from else [])],
         "server_facts": {
             "utm_epsg": facts["utm_epsg"],

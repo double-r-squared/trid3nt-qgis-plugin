@@ -381,6 +381,12 @@ package SolveSeam {
         */
     }
 
+    part initialState : Assembler {
+        doc /*
+        code: trid3nt_server/workflows/telemac/authoring/initial_state.py
+        */
+    }
+
     part stagedCheck : StagedCheck {
         doc /*
         code: trid3nt_server/workflows/telemac/authoring/staged_check.py
@@ -705,6 +711,7 @@ package SolveSeam {
         forbid: trid3nt_server.workflows.telemac.modules.listing -> struct
         forbid: trid3nt_server.workflows.telemac.authoring.opening -> struct
         forbid: trid3nt_server.workflows.telemac.authoring.release_point -> struct
+        forbid: trid3nt_server.workflows.telemac.authoring.initial_state -> struct
         */
     }
 
@@ -1007,6 +1014,7 @@ package SolveSeam {
         "workers/telemac/test_entrypoint.py::test_a_serial_solve_still_runs_in_process_and_states_no_count";
 
     satisfy requirement AContinuationIsARerunLedgerRow by opening;
+    satisfy requirement AContinuationIsARerunLedgerRow by initialState;
     satisfy requirement AContinuationIsARerunLedgerRow by workerEntrypoint;
     verify requirement AContinuationIsARerunLedgerRow by
         "tests/runtime/test_rerun_with_overrides.py::test_the_cut_of_a_hot_start_is_the_step_that_opens_on_the_other_run";
@@ -1162,6 +1170,7 @@ package SolveSeam {
     satisfy requirement NoSecondParserOfTheFormat by resultReader;
     satisfy requirement NoSecondParserOfTheFormat by runReader;
     satisfy requirement NoSecondParserOfTheFormat by opening;
+    satisfy requirement NoSecondParserOfTheFormat by initialState;
     verify requirement NoSecondParserOfTheFormat by
         "tests/telemac/test_telemac_result_reader.py::test_no_reader_on_this_side_parses_the_format";
     verify requirement NoSecondParserOfTheFormat by

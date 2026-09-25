@@ -20,7 +20,7 @@ from trid3nt_server.mesh.shared.nodes import (
 from trid3nt_server.inputs.point import Point, as_utm, contain, publish_point, snap_to_wet
 from ..errors import TelemacError
 from .accepted_mesh import mesh_artifact, mesh_zone, slug_of
-from .opening import initial_state_of
+from .initial_state import initial_state_of
 
 __all__ = ["settle_release"]
 
