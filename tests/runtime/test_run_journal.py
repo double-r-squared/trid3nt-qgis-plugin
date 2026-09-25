@@ -37,8 +37,9 @@ def _row(name, value, **kw):
 def _record(**overrides):
     base = dict(
         run_id="RUN9", engine="telemac", module="telemac2d",
-        fill={"DURATION": "template: telemac_do_sag",
-              "FRICTION_COEFFICIENT": "producer: friction"},
+        fill={"DURATION": {"value": 7200.0, "from": "template: telemac_do_sag"},
+              "FRICTION_COEFFICIENT": {"value": 33.0,
+                                       "from": "producer: friction"}},
         sheet=[_row("reach_length_km", 15.0, door="user", basis="user", units="km",
                     consequence="physics", real_source="nhd"),
                _row("cores", 2, door="constant",
@@ -247,3 +248,27 @@ def test_a_step_result_holding_a_measured_series_is_persisted_as_its_points():
     assert doc["result"]["discharge"] == {
         "times_s": [0.0, 900.0], "values": [260.8, 261.4], "units": "m3/s"}
     assert json.loads(json.dumps(doc))["result"]["discharge"]["units"] == "m3/s"
+
+
+def test_a_slot_is_recorded_with_its_value_and_where_it_came_from():
+    """The board copies a run's own numbers off its line: the time step and the
+    duration are VALUES there, each beside the origin that put it on the deck."""
+    rec = _record(fill={
+        "TIME_STEP": {"value": 0.491, "from": "derived: settled.time_step_s"},
+        "DURATION": {"value": 604800.0, "from": "template: telemac_ice_cover"}})
+    assert rec["fill"]["TIME_STEP"] == {"value": 0.491,
+                                        "from": "derived: settled.time_step_s"}
+    assert rec["fill"]["DURATION"]["value"] == 604800.0
+
+
+def test_the_solver_s_correct_end_is_read_off_the_solve_step_and_recorded():
+    """A solve says whether it reached its own correct end; the line carries the
+    flag it said, and nothing where the solve step's metrics state none."""
+    from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
+
+    ended = SimpleNamespace(results={"solve": {"metrics": {"correct_end": True}}})
+    silent = SimpleNamespace(results={"solve": {"metrics": {}}})
+    assert TelemacWorkflow._correct_end(TelemacWorkflow, ended) is True
+    assert TelemacWorkflow._correct_end(TelemacWorkflow, silent) is None
+    assert _record(correct_end=True)["correct_end"] is True
+    assert _record()["correct_end"] is None
