@@ -563,3 +563,32 @@ def test_a_boundary_walk_whose_loops_share_a_node_refuses_naming_it():
         boundary_numbering(cells, x.shape[0])
     assert "lie on more than one ring" in str(excinfo.value)
     assert "1 node(s) - 1" in str(excinfo.value)
+
+
+def test_reading_an_accepted_mesh_or_a_stored_layer_leaves_no_directory_behind(
+        tmp_path, monkeypatch):
+    import tempfile
+
+    from trid3nt_server.mesh.shared import nodes as nodes_mod
+    from trid3nt_server.tools import cache
+
+    raster = _bed_raster(tmp_path)
+    twodm = ("MESH2D\nND 1 0.0 0.0 -1.0\nND 2 10.0 0.0 -2.0\n"
+             "ND 3 0.0 10.0 -3.0\nE3T 1 1 2 3 1\n")
+    stored = {"s3://bucket/mesh.2dm": twodm.encode(),
+              "s3://bucket/bed.tif": raster.read_bytes()}
+    monkeypatch.setattr(cache, "read_object_bytes_s3", stored.__getitem__)
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(scratch))
+
+    for _ in range(3):
+        points, cells, bed, _ = nodes_mod.read_accepted_mesh_nodes(
+            "s3://bucket/mesh.2dm")
+        values = nodes_mod.sample_layer_at_nodes(
+            {"uri": "s3://bucket/bed.tif"}, _lonlat_mesh().points)
+
+    assert points.shape == (3, 2) and cells.shape == (1, 3)
+    assert bed.tolist() == [-1.0, -2.0, -3.0]
+    assert np.allclose(values, -18.0)
+    assert list(scratch.iterdir()) == []

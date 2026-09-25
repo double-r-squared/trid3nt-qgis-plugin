@@ -141,13 +141,12 @@ def sample_layer_at_nodes(layer: Any, points_lonlat: Any,
         raise MeshNodeError(
             "MESH_LAYER_NO_RASTER",
             f"the layer {layer!r} names no raster uri to sample at the nodes.")
-    local = Path(tempfile.mkdtemp(prefix="mesh-sample-")) / "layer.tif"
-    local.write_bytes(read_object_bytes_s3(uri) if uri.startswith("s3://")
-                      else Path(uri).read_bytes())
-    try:
+    if not uri.startswith("s3://"):
+        return sample_raster_at_nodes(uri, points_lonlat, interp=interp)
+    with tempfile.TemporaryDirectory(prefix="mesh-sample-") as scratch:
+        local = Path(scratch) / "layer.tif"
+        local.write_bytes(read_object_bytes_s3(uri))
         return sample_raster_at_nodes(local, points_lonlat, interp=interp)
-    finally:
-        local.unlink(missing_ok=True)
 
 
 def _bilinear(src: Any, xs: Any, ys: Any, nodata: Any) -> Any:
@@ -177,17 +176,14 @@ def read_accepted_mesh_nodes(display_uri: str, *, utm_epsg: int | None = None
     """An accepted mesh's display face -> ``(points_utm, cells, bed, points_lonlat)``.
 
     ``points_lonlat`` is ``None`` unless ``utm_epsg`` names a zone."""
-    import tempfile
-
     import numpy as np
 
     from trid3nt_server.tools.cache import read_object_bytes_s3
 
     uri = str(display_uri)
-    local = Path(tempfile.mkdtemp(prefix="mesh-nodes-")) / "mesh.2dm"
-    local.write_bytes(read_object_bytes_s3(uri) if uri.startswith("s3://")
-                      else Path(uri).read_bytes())
-    points_utm, cells, bed = read_2dm_mesh(str(local))
+    body = (read_object_bytes_s3(uri) if uri.startswith("s3://")
+            else Path(uri).read_bytes())
+    points_utm, cells, bed = _parse_2dm(body.decode(), uri)
     if utm_epsg is None:
         return points_utm, cells, bed, None
     from pyproj import Transformer
@@ -291,11 +287,15 @@ def read_2dm_mesh(twodm_path: str) -> tuple[Any, Any, Any]:
     """Parse an SMS ``.2dm`` -> ``(points (N,2), cells (M,3) 0-based, z (N,))``.
 
     ``ND`` and ``E3T`` rows, 1-based; nodes come back in id order, in metres."""
+    return _parse_2dm(Path(twodm_path).read_text(), twodm_path)
+
+
+def _parse_2dm(text: str, source: str) -> tuple[Any, Any, Any]:
     import numpy as np
 
     nodes: dict[int, tuple[float, float, float]] = {}
     tris: list[tuple[int, int, int]] = []
-    for line in Path(twodm_path).read_text().splitlines():
+    for line in text.splitlines():
         parts = line.split()
         if not parts:
             continue
@@ -306,7 +306,7 @@ def read_2dm_mesh(twodm_path: str) -> tuple[Any, Any, Any]:
     if not nodes or not tris:
         raise MeshNodeError(
             "MESH_SUPPLIED_UNREADABLE",
-            f"2dm mesh {twodm_path} parsed to {len(nodes)} nodes / {len(tris)} "
+            f"2dm mesh {source} parsed to {len(nodes)} nodes / {len(tris)} "
             "elements; expected a MESH2D ND/E3T body.")
     order = sorted(nodes)
     remap = {nid: i for i, nid in enumerate(order)}
