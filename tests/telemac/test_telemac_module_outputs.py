@@ -228,48 +228,136 @@ def test_a_row_the_result_does_not_carry_is_skipped_and_a_placed_read_refuses(
             captions={"S": "free surface"}, params={}))
 
 
-def test_every_variable_the_result_wrote_is_published_even_where_no_row_names_it(
-        monkeypatch, fake_s3, telemac_result):
-    """The RESULT FILE is the list. A variable the engine wrote and the module's
-    table rows no name for - a deprecated slot, a spelling carrying a dot or a
-    bracket - is published under the spelling the file itself carries, with a
-    journal line saying so; a row is what styles a layer, never what decides it
-    is on the map."""
-    from trid3nt_server.render.formats import Mesh
-    from trid3nt_server.workflows.runtime import journal
+def _surfacing(monkeypatch, surfaced=None) -> list[Any]:
+    """Stand in for the publish: every mesh item it is handed surfaces as a layer
+    under its caption's quantity, or only the quantities ``surfaced`` names."""
+    from trid3nt_server.render.formats import Mesh, quantity_of
     from trid3nt_server.workflows.telemac import workflow as door
 
     seen: list[Any] = []
 
     async def _publish(*, run_id, engine, name, items):
         seen.extend(items)
-        return Published(layers=(LayerURI(
-            layer_id="L", name="Water depth", layer_type="mesh",
-            uri="s3://runs/RID/r2d.slf", quantity="water_depth"),))
+        return Published(layers=tuple(
+            LayerURI(layer_id=f"L{n}", name=item.caption, layer_type="mesh",
+                     uri="s3://runs/RID/r2d.slf",
+                     quantity=quantity_of(item.caption))
+            for n, item in enumerate(items)
+            if isinstance(item.product, Mesh)
+            and (surfaced is None or quantity_of(item.caption) in surfaced)))
 
     monkeypatch.setattr(door, "publish", _publish)
-    run = _run(telemac_result, monkeypatch,
-               unrowed={"UNDER ICE THICK.": ("[SI]", [[0.0] * 5, [0.4] * 5]),
-                        "FRAZIL THICKNESS": ("[SI]", [[0.0] * 5, [0.2] * 5])})
+    return seen
+
+
+def _notes(run) -> list[str]:
+    from trid3nt_server.workflows.runtime import journal
+    from trid3nt_server.workflows.telemac import workflow as door
+
     token = journal.bind_notes()
     try:
         asyncio.run(door.publish_outputs(run=run, outputs=[], captions={},
                                          params={}))
+    finally:
         notes = journal.drain_notes(token)
-    except BaseException:
-        journal.drain_notes(token)
-        raise
+    return notes
+
+
+def test_every_variable_the_result_wrote_is_published_even_where_no_row_names_it(
+        monkeypatch, fake_s3, telemac_result):
+    """The RESULT FILE is the list. A variable the engine wrote and the module's
+    table rows no name for - a spelling ending in a full stop among them - is
+    published under the spelling the file itself carries; a row is what styles
+    a layer, never what decides it is on the map."""
+    from trid3nt_server.render.formats import Mesh
+
+    seen = _surfacing(monkeypatch)
+    run = _run(telemac_result, monkeypatch,
+               unrowed={"UNDER ICE THICK.": ("[SI]", [[0.0] * 5, [0.4] * 5]),
+                        "FRAZIL THICKNESS": ("[SI]", [[0.0] * 5, [0.2] * 5])})
+    notes = _notes(run)
     captions = [item.caption for item in seen]
-    # The rows the table names first, then what the file carried and nothing
-    # rowed - each under the spelling the file wrote it in.
     assert captions == ["water depth", "dye", "under ice thick.",
                         "frazil thickness"]
     unrowed = [item.product for item in seen if item.caption.endswith("thick.")]
     assert isinstance(unrowed[0], Mesh) and unrowed[0].group == "UNDER ICE THICK."
     # The unit is the record's own, because no row declares one for it.
     assert unrowed[0].units == "[si]"
-    assert [note for note in notes if "UNDER ICE THICK." in note]
-    assert [note for note in notes if "FRAZIL THICKNESS" in note]
+    assert [n for n in notes if "'UNDER ICE THICK.'" in n and "published" in n]
+    assert [n for n in notes if "'FRAZIL THICKNESS'" in n and "published" in n]
+
+
+def test_a_variable_the_engine_never_wrote_reaches_no_layer_and_the_note_says_so(
+        monkeypatch, fake_s3, telemac_result):
+    """UNWRITTEN NEVER: a slot the engine allocated and never wrote carries no
+    number at all, so no layer paints it - and the journal says so by the
+    file's own spelling, full stop included, rather than dropping it unsaid."""
+    nan = float("nan")
+    seen = _surfacing(monkeypatch)
+    run = _run(telemac_result, monkeypatch,
+               unrowed={"UNDER ICE THICK.": ("[SI]", [[nan] * 5, [nan] * 5])})
+    notes = _notes(run)
+    assert "under ice thick." not in [item.caption for item in seen]
+    said = [n for n in notes if "'UNDER ICE THICK.'" in n]
+    assert said and "no layer carries it" in said[0], notes
+    assert "never wrote it" in said[0], said
+    assert not [n for n in said if "published under" in n]
+
+
+def test_a_note_never_claims_a_layer_the_publish_did_not_surface(
+        monkeypatch, fake_s3, telemac_result):
+    """A note is written FROM the layer list: a variable the publish did not
+    surface is never said to be published, whatever the reads handed it."""
+    _surfacing(monkeypatch, surfaced={"water_depth", "dye"})
+    run = _run(telemac_result, monkeypatch,
+               unrowed={"UNDER ICE THICK.": ("[SI]", [[0.0] * 5, [0.4] * 5])})
+    said = [n for n in _notes(run) if "'UNDER ICE THICK.'" in n]
+    assert said and "no layer carries it" in said[0], said
+    assert not [n for n in said if "published under" in n]
+
+
+def test_a_spelling_two_result_files_carry_is_one_layer_under_one_label():
+    """A coupled module writes its host's tracers into its own file as well: the
+    spelling is ONE layer, off the first row naming it, so no two layers share
+    a label; the repeat is kept to be journalled against the layer list."""
+    from types import SimpleNamespace
+
+    from trid3nt_contracts.execution import LayerURI as Layer
+
+    from trid3nt_server.workflows.runtime import journal
+    from trid3nt_server.workflows.telemac import workflow as door
+
+    files = {"telemac2d": ("r2d.slf", ["WATER DEPTH", "FRAZIL"]),
+             "khione": ("khione.slf", ["FRAZIL", "FRAZIL S"])}
+
+    def _solved(module):
+        file, names = files[module]
+        return SimpleNamespace(
+            result_file=file, result={"varnames": names},
+            variable=lambda token: ({"H": "WATER DEPTH", "T1": "FRAZIL",
+                                     "F1": "FRAZIL", "SF1": "FRAZIL S"}[token],
+                                    ""))
+
+    run = {"module": "telemac2d", "module_output": [
+        {"token": token, "module": module, "varies": True}
+        for token, module in (("H", "telemac2d"), ("T1", "telemac2d"),
+                              ("F1", "khione"), ("SF1", "khione"))]}
+    written = door._written(run, _solved)
+    drawn = [(w.file, w.spelling) for w in written if w.first is None]
+    assert drawn == [("r2d.slf", "WATER DEPTH"), ("r2d.slf", "FRAZIL"),
+                     ("khione.slf", "FRAZIL S")]
+    echo = [w for w in written if w.first is not None]
+    assert [(w.file, w.spelling, w.first) for w in echo] == [
+        ("khione.slf", "FRAZIL", "r2d.slf")]
+    token = journal.bind_notes()
+    try:
+        door._account(written, [Layer(layer_id="F", name="Frazil",
+                                      layer_type="mesh", uri="s3://r/x.slf",
+                                      quantity="frazil")], {})
+    finally:
+        notes = journal.drain_notes(token)
+    assert [n for n in notes if n.startswith("khione.slf wrote 'FRAZIL', which "
+                                             "r2d.slf wrote as well")]
 
 
 def test_a_coupled_module_states_the_tracers_it_appends_and_its_own_table():
