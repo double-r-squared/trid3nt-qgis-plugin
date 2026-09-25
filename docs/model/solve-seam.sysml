@@ -1070,7 +1070,11 @@ package SolveSeam {
     verify requirement NothingLeavesTheDaemonThatDiesInTheFirstSecond by
         "tests/telemac/test_telemac_staged_check.py::test_a_boundary_file_numbered_against_another_walk_refuses";
     verify requirement NothingLeavesTheDaemonThatDiesInTheFirstSecond by
-        "tests/telemac/test_telemac_staged_check.py::test_a_liquid_face_the_deck_prescribes_nothing_at_refuses";
+        "tests/telemac/test_telemac_staged_check.py::test_a_liquid_boundary_the_deck_prescribes_nothing_at_refuses";
+    verify requirement NothingLeavesTheDaemonThatDiesInTheFirstSecond by
+        "tests/telemac/test_telemac_staged_check.py::test_one_liquid_boundary_many_faces_wide_takes_one_value";
+    verify requirement NothingLeavesTheDaemonThatDiesInTheFirstSecond by
+        "tests/telemac/test_telemac_staged_check.py::test_a_lone_liquid_point_the_engine_cannot_number_refuses_by_name";
     verify requirement NothingLeavesTheDaemonThatDiesInTheFirstSecond by
         "tests/telemac/test_telemac_staged_check.py::test_a_series_that_stops_short_of_the_window_refuses";
     verify requirement NothingLeavesTheDaemonThatDiesInTheFirstSecond by
