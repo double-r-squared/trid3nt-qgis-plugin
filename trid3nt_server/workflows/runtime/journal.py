@@ -206,7 +206,9 @@ def build_record(*, run_id: str | None, engine: str | None,
                  provenance: Sequence[Any], result: Any,
                  wall_seconds: float | None, origin: str,
                  executed: Sequence[str], replayed: Sequence[str],
-                 notes: Sequence[str], fill: Mapping[str, str] | None = None,
+                 notes: Sequence[str],
+                 fill: Mapping[str, Mapping[str, Any]] | None = None,
+                 correct_end: bool | None = None,
                  parent_run_id: str | None = None,
                  overrides: Sequence[str] = (),
                  continued_from: str | None = None,
@@ -243,10 +245,13 @@ def build_record(*, run_id: str | None, engine: str | None,
                                   "reason": choice.sentence}
                     for choice in sources},
         "provenance": [_provenance(row) for row in provenance],
-        # WHERE each slot of the solved deck came from, in the closed vocabulary
-        # the card renders. A run is recorded under its engine and its module;
-        # the template it started in survives here and nowhere else on the line.
-        "fill": dict(fill or {}),
+        # EACH SLOT OF THE SOLVED DECK: the value it was solved at, and where it
+        # came from in the closed vocabulary the card renders. A run is recorded
+        # under its engine and its module; the template it started in survives
+        # here and nowhere else on the line.
+        "fill": {name: {"value": _small(row.get("value")), "from": row.get("from")}
+                 for name, row in (fill or {}).items()},
+        "correct_end": correct_end,
         "mesh": {"mesh_size_m": getattr(result, "mesh_size_m", None)},
         "cores": next((r.value for r in sheet
                        if getattr(r, "name", "") == "cores"), None),
