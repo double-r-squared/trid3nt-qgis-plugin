@@ -1310,6 +1310,8 @@ package SteeringSurface {
     verify requirement ModuleIsTheUnit by
         "tests/runtime/test_run_journal.py::test_the_solver_s_correct_end_is_read_off_the_solve_step_and_recorded";
     verify requirement ModuleIsTheUnit by
+        "tests/runtime/test_run_journal.py::test_the_run_s_own_line_carries_the_fill_and_the_correct_end_its_solve_step_said";
+    verify requirement ModuleIsTheUnit by
         "tests/telemac/test_telemac_run_identity.py::test_the_vocabulary_is_the_six_the_card_renders";
     verify requirement ModuleIsTheUnit by
         "tests/telemac/test_telemac_run_identity.py::test_every_slot_of_a_template_s_default_fill_carries_one_of_the_six";
