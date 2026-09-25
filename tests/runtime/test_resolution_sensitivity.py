@@ -111,10 +111,11 @@ def test_a_granularity_stated_as_a_keyword_is_read_off_the_fill() -> None:
     rows = asyncio.run(resolve_params(workflow.params, {})).rows()
 
     bound = sensitivity_notes(workflow.sensitivity, workflow.metadata, published,
-                              rows, fill={lever: "template: STEERING"})
+                              rows, fill={lever: {"value": 6, "from": "template: STEERING"}})
     assert bound[0].startswith("RESOLUTION-LIMITED, TREAT AS A BOUND:")
     refined = sensitivity_notes(workflow.sensitivity, workflow.metadata,
-                                published, rows, fill={lever: "user"})
+                                published, rows,
+                                fill={lever: {"value": 12, "from": "user"}})
     assert refined[0].startswith("RESOLUTION-SENSITIVE:")
 
 

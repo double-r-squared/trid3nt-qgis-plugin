@@ -88,13 +88,15 @@ def test_the_run_record_carries_the_engine_and_the_module_and_no_template():
 
     record = journal.build_record(
         run_id="RUN1", engine="telemac", module="telemac2d",
-        fill={"DURATION": "template: telemac_dye_release",
-              "GEOMETRY FILE": "producer: mesh"},
+        fill={"DURATION": {"value": 3600.0,
+                           "from": "template: telemac_dye_release"},
+              "GEOMETRY FILE": {"value": "mesh.slf", "from": "producer: mesh"}},
         sheet=(), provenance=(), result=None,
         wall_seconds=1.0, origin="session", executed=(), replayed=(), notes=())
     assert record["engine"] == "telemac" and record["module"] == "telemac2d"
     assert "template" not in record
-    assert "template: telemac_dye_release" in record["fill"].values()
+    assert record["fill"]["DURATION"] == {"value": 3600.0,
+                                          "from": "template: telemac_dye_release"}
 
 
 def test_the_module_and_the_fill_are_read_off_the_solve_step_the_workflow_declares():
@@ -107,7 +109,8 @@ def test_the_module_and_the_fill_are_read_off_the_solve_step_the_workflow_declar
         "sheet": {"filled": {"DURATION": {"keyword": "DURATION", "value": 600.0,
                                           "provenance": "template: t"}}}}})
     assert TelemacWorkflow._module(TelemacWorkflow, run) == "artemis"
-    assert TelemacWorkflow._fill(TelemacWorkflow, run) == {"DURATION": "template: t"}
+    assert TelemacWorkflow._fill(TelemacWorkflow, run) == {
+        "DURATION": {"value": 600.0, "from": "template: t"}}
 
 
 @pytest.mark.parametrize("tool_name,_module", TEMPLATE_MODULES)
