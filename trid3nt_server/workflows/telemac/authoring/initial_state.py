@@ -80,5 +80,5 @@ def initial_state_of(continue_from: str | None, node_count: int) -> dict[str, An
     if continue_from:
         return _continuation_state(str(continue_from))
     return {"start_s": None, "wet": [True] * node_count,
-            "note": "the deck's own constant initial depth, the derived normal "
+            "note": "the template's own constant initial depth, the derived normal "
                     "depth laid bed-parallel over every node of the accepted mesh"}

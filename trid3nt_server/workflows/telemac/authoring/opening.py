@@ -42,7 +42,7 @@ FLAT = "CONSTANT ELEVATION"
 BED_PARALLEL = "CONSTANT DEPTH"
 
 
-#: The three keys every deck reads the water off, and the two an addition fills
+#: The three keys every template reads the water off, and the two an addition fills
 #: where the edge carries values. A body nobody stated a level for carries None
 #: in all of them: no water was measured, and nothing is claimed.
 _NO_WATER: dict[str, Any] = {
@@ -56,7 +56,7 @@ _NO_WATER: dict[str, Any] = {
 
 #: The class a level slot asks for. A run that asked for one and got nothing is
 #: the only run this refuses on: a question declaring no level slot opens the way
-#: its own deck says.
+#: its own template says.
 _LEVEL_CLASS = "water level series"
 
 
@@ -72,7 +72,7 @@ def _refuse_dry(where: str) -> None:
     """A CLOSED BODY THAT OPENED AT NOTHING: no edge feeds it, its bed is on a
     datum, and the level slot the question asked for came back empty, so the
     surface it stands at is unknown and a solve would run a dry basin and
-    report it as an answer. The refusal names that slot and lists what was
+    publish it as a result. The refusal names that slot and lists what was
     asked for it."""
     asked = [choice for choice in run_choices()
              if choice.need == _LEVEL_CLASS and not choice.picked]
@@ -272,8 +272,8 @@ def _opening(level: Any, mesh: Mapping[str, Any]) -> dict[str, Any]:
     an ADDITION returned after measuring the water over this same mesh - a reach
     holds its own opening, and the base takes it rather than deriving a second
     one. Nothing measured and a bed stated as a DEPTH is the bed's own zero;
-    nothing measured over a bed on a datum is no water, which is an answer and
-    not a refusal - a deck that needs none opens the way it says."""
+    nothing measured over a bed on a datum is no water, which is a state and
+    not a refusal - a template that needs none opens the way it says."""
     import numpy as np
 
     # A bed STATED as a depth is counted from the free surface itself, so the
@@ -372,8 +372,8 @@ async def open_water(
     initial_state = await asyncio.to_thread(initial_state_of, continue_from,
                                             len(node_xy))
     topology = topology_of(files, missing=mesh_missing)
-    # A deck that STATES the depth an open edge is designated at is one whose
-    # sea state is prescribed across that edge; a deck that states none names a
+    # A template that STATES the depth an open edge is designated at is one whose
+    # sea state is prescribed across that edge; a template that states none names a
     # body of water that may legitimately be closed.
     if open_depth_threshold_m is not None:
         refuse_a_sealed_domain(topology, deck=deck or facts["mesh_name"],
@@ -398,10 +398,10 @@ async def open_water(
         "start_time_s": start_time_s,
         "until_s": start_time_s + duration_s,
         "initial_state": initial_state["note"],
-        # THE OPENING, as every deck reads it: what the surface opens at, the
+        # THE OPENING, as every template reads it: what the surface opens at, the
         # depth under it and the keyword that says which of the two the engine is
         # to lay. A run nobody stated a level for carries None for all three and
-        # opens the way its own deck says.
+        # opens the way its own template says.
         **opening,
         # WHICH dataset painted the mesh's nodes, and where each one stopped: a
         # two-source bed says how much of the domain the survey covered.
@@ -449,7 +449,7 @@ async def open_channel(
     the call. Where a LEVEL was measured and it stands over the inflow run's own
     bed, that level is what the outflow holds and what the run opens flat at.
     Where none was, the stage is a NORMAL DEPTH over the section the outflow run
-    cuts, derived at the roughness the deck is written at, and the run opens
+    cuts, derived at the roughness the steering file is written at, and the run opens
     bed-parallel at that same depth - the equilibrium its own downstream boundary
     holds it to rather than a blanket depth draining into it.
 
