@@ -1,8 +1,9 @@
 """The object store every run reaches through: one client, the bucket names.
 
 The client is a process-wide seam a deployment or a test binds once; absent a
-binding it is built lazily from the ambient environment, so a process that
-stores nothing never pays for boto3. The runs bucket has two readings: a read of
+binding it is built lazily from the store's own settings - the endpoint and the
+key pair the stack's ``.env.local`` states - so a process that stores nothing
+never pays for boto3. The runs bucket has two readings: a read of
 a past run falls back to a default name, while a run that is about to UPLOAD
 refuses an unset environment rather than filling a bucket nobody provisioned.
 """
@@ -10,6 +11,7 @@ refuses an unset environment rather than filling a bucket nobody provisioned.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any
 
 __all__ = ["StorageError", "client", "local_runs_bucket", "runs_bucket",
@@ -29,11 +31,20 @@ _CLIENT: Any | None = None
 _RUNS_BUCKET: str | None = None
 
 
+#: The stack's own settings file, the one every process the stack starts sources.
+_SETTINGS_FILE = Path(__file__).resolve().parents[1] / ".env.local"
+
+#: What the store is reached by. Each is passed to boto3 explicitly, because a
+#: client left to find its own credentials takes whatever the process inherited
+#: - a shell's ``~/.aws`` profile the store has never heard of.
+_SETTINGS = ("AWS_ENDPOINT_URL", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
+             "AWS_REGION")
+
+
 def set_client(bound: Any) -> None:
     """Bind the boto3 S3 client used for ALL object-store I/O.
 
-    ``None`` restores the lazy default, which reads its endpoint and credentials
-    from the ambient environment."""
+    ``None`` restores the lazy default, built from the store's own settings."""
     global _CLIENT
     _CLIENT = bound
 
@@ -44,10 +55,24 @@ def set_runs_bucket(name: str | None) -> None:
     _RUNS_BUCKET = name
 
 
-def client() -> Any:
-    """The bound S3 client, or the lazily constructed boto3 default.
+def _settings() -> dict[str, str]:
+    """The store's endpoint, key pair and region: the settings file's, then the
+    process's for a setting the file does not state."""
+    stated: dict[str, str] = {}
+    if _SETTINGS_FILE.is_file():
+        for line in _SETTINGS_FILE.read_text(encoding="utf-8").splitlines():
+            name, sep, value = line.strip().partition("=")
+            if sep and name.strip() in _SETTINGS:
+                stated[name.strip()] = value.strip().strip("'\"")
+    return {name: stated.get(name) or os.environ.get(name, "")
+            for name in _SETTINGS}
 
-    boto3, never s3fs, which falls back to anonymous credentials."""
+
+def client() -> Any:
+    """The bound S3 client, or one built from the store's settings and nothing else.
+
+    boto3, never s3fs, which falls back to anonymous credentials. A store with
+    no endpoint stated refuses rather than reaching for a cloud nobody named."""
     if _CLIENT is not None:
         return _CLIENT
     try:
@@ -57,7 +82,17 @@ def client() -> Any:
             f"boto3 not importable: {exc}; the object store requires boto3 for "
             "staging and upload."
         ) from exc
-    return boto3.client("s3", region_name=os.environ.get("AWS_REGION", "us-west-2"))
+    stated = _settings()
+    missing = [name for name in _SETTINGS[:3] if not stated[name]]
+    if missing:
+        raise StorageError(
+            f"the object store's {', '.join(missing)} is stated neither in "
+            f"{_SETTINGS_FILE} nor in the environment, so there is no store to "
+            "reach.")
+    return boto3.client("s3", endpoint_url=stated["AWS_ENDPOINT_URL"],
+                        aws_access_key_id=stated["AWS_ACCESS_KEY_ID"],
+                        aws_secret_access_key=stated["AWS_SECRET_ACCESS_KEY"],
+                        region_name=stated["AWS_REGION"] or "us-east-1")
 
 
 def runs_bucket() -> str:
