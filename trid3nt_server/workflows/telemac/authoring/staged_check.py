@@ -35,7 +35,7 @@ _LIQUID = "LIQUID BOUNDARIES FILE"
 #: a comment line.
 _ASSIGN = re.compile(r"^\s*([A-Z0-9][^=:]*?)\s*[=:]\s*(.*)$")
 #: The prescribed lists, one entry per liquid boundary in the engine's own
-#: numbering.
+#: numbering, however many faces that boundary spans.
 _PRESCRIBED = ("PRESCRIBED FLOWRATES", "PRESCRIBED ELEVATIONS")
 #: A solid wall states this code; every other LIHBOR opens the face.
 _WALL = 2
@@ -125,15 +125,19 @@ def _files_are_present(decks: Mapping[str, dict[str, list[str]]],
 
 
 def _boundary_matches_the_walk(mesh: Mapping[str, Any], geometry: str,
-                               boundary: Path) -> list[int]:
-    """The ``.cli`` rows -> the LIHBOR code per row, or the refusal by name."""
+                               boundary: Path) -> tuple[list[int], int]:
+    """The ``.cli`` rows -> ``(LIHBOR per row, liquid boundaries numbered)``.
+
+    Or the refusal by name, when the file and the walk disagree."""
     import numpy as np
 
     from trid3nt_server.mesh.shared.formats.tin_topology import (
         boundary_numbering)
 
-    ipobo, _loops = boundary_numbering(np.asarray(mesh["ikle2"], dtype="int64"),
-                                       int(mesh["npoin2"]))
+    from .selafin_io import _liquid_boundaries
+
+    ipobo, loops = boundary_numbering(np.asarray(mesh["ikle2"], dtype="int64"),
+                                      int(mesh["npoin2"]))
     walk = [int(n) + 1 for n in
             np.where(ipobo > 0)[0][np.argsort(ipobo[ipobo > 0])]]
     rows = [line.split() for line in
@@ -152,7 +156,19 @@ def _boundary_matches_the_walk(mesh: Mapping[str, Any], geometry: str,
                 f"and the walk over {geometry} numbers node {walk[first]} at "
                 "that rank; the boundary file is ordered by a numbering the "
                 "geometry does not agree with.")
-    return [int(row[0]) for row in rows]
+    # The engine prescribes one value per LIQUID BOUNDARY - a run of open faces
+    # between walls, split where the codes change - never one per face, so the
+    # rows are numbered by the engine's own walk rather than counted.
+    quads = [(int(row[0]), int(row[1]), int(row[2]), int(row[7])) for row in rows]
+    try:
+        runs = _liquid_boundaries(
+            mesh["x"], mesh["y"], [n - 1 for n in walk], quads,
+            [len(loop) for loop in loops])
+    except ValueError as lone:
+        _refuse("BOUNDARY_MISMATCH",
+                f"{boundary.name} codes a boundary the engine cannot number: "
+                f"{lone}.")
+    return [quad[0] for quad in quads], len(runs)
 
 
 def _bed_is_whole(mesh: Mapping[str, Any], geometry: str) -> None:
@@ -172,11 +188,11 @@ def _bed_is_whole(mesh: Mapping[str, Any], geometry: str) -> None:
 
 
 def _boundaries_carry_a_value(values: Mapping[str, list[str]], codes: Sequence[int],
-                              staged: Mapping[str, Path | str],
+                              liquid: int, staged: Mapping[str, Path | str],
                               duration_s: float | None) -> None:
-    liquid = sum(1 for code in codes if int(code) != _WALL)
     if not liquid:
         return
+    faces = sum(1 for code in codes if int(code) != _WALL)
     for keyword in _PRESCRIBED:
         stated = values.get(keyword)
         if stated is None:
@@ -184,8 +200,9 @@ def _boundaries_carry_a_value(values: Mapping[str, list[str]], codes: Sequence[i
         numbers = [item for item in stated if _finite(item)]
         if len(numbers) < liquid:
             _refuse("BOUNDARY_UNPRESCRIBED",
-                    f"the boundary file opens {liquid} face(s) and {keyword} "
-                    f"states {len(numbers)} value(s) ({stated}); the boundary "
+                    f"the boundary file numbers {liquid} liquid boundary(ies) "
+                    f"over {faces} open face(s) and {keyword} states "
+                    f"{len(numbers)} value(s) ({stated}); the liquid boundary "
                     "the list runs out at is prescribed nothing the engine can "
                     "read, and the solve stops at its first step.")
     named = values.get(_LIQUID)
@@ -284,11 +301,12 @@ def check_staged_run(rundir: Path | str, *, steering: str,
     from .selafin_io import read_selafin
 
     mesh = read_selafin(_read(staged[geometry]))
-    codes = _boundary_matches_the_walk(mesh, geometry, _read(staged[boundary]))
+    codes, liquid = _boundary_matches_the_walk(mesh, geometry,
+                                               _read(staged[boundary]))
     _bed_is_whole(mesh, geometry)
-    _boundaries_carry_a_value(top, codes, staged, duration_s)
+    _boundaries_carry_a_value(top, codes, liquid, staged, duration_s)
     read = {"decks": sorted(decks), "staged": len(staged),
-            "boundary_rows": len(codes),
+            "boundary_rows": len(codes), "liquid_boundaries": liquid,
             "liquid_faces": sum(1 for code in codes if int(code) != _WALL)}
     logger.info("telemac staged check ok: %s", read)
     return read
