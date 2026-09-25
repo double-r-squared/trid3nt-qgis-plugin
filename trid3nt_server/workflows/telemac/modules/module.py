@@ -263,6 +263,8 @@ class Unwritten:
     spelling: str
     cited: str
 
+
+@lru_cache(maxsize=None)
 def load_module_input(module: str) -> Mapping[str, Slot]:
     """The module's whole keyword surface, keyed by the identifier it is written
     under. The dictionary's own order is kept: a sheet reads down it."""
