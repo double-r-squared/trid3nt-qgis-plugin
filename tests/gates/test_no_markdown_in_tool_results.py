@@ -97,3 +97,20 @@ def test_allowlist_entries_exist() -> None:
     """A stale allowlist entry (file moved/deleted) must fail loudly."""
     for rel in ALLOWLIST:
         assert (SRC_ROOT / rel).is_file(), f"stale ALLOWLIST entry: {rel}"
+
+
+def test_the_scan_reaches_every_tree_a_composing_tool_is_defined_in() -> None:
+    """A tree that moved out of SCAN_DIRS is a scan that passes while reading
+    nothing: every tree a registered tool is defined in is scanned. The gates
+    tree holds the one card tool and is outside this scan's reach."""
+    import inspect
+
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    trees = {
+        Path(inspect.getsourcefile(inspect.unwrap(t.fn))).resolve()
+        .relative_to(SRC_ROOT).parts[0]
+        for t in TOOL_REGISTRY.values()
+    }
+    assert "mesh" in trees
+    assert not trees - set(SCAN_DIRS) - {"gates"}, sorted(trees - set(SCAN_DIRS))

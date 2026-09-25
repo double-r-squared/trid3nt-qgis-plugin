@@ -150,3 +150,18 @@ def test_no_workflow_calls_the_heavy_fetch_on_the_loop() -> None:
         "these coroutines call the heavy sync fetch directly, which blocks the "
         "event loop; wrap it in asyncio.to_thread:\n  " + "\n  ".join(offenders)
     )
+
+
+def test_the_sweep_reaches_every_tree_a_composing_tool_is_defined_in() -> None:
+    """A composer's tree left out of the sweep is a sweep that passes while
+    reading nothing: every tree a registered tool is defined in, outside the
+    fetch side (tools) and the card tool (gates), is swept."""
+    import inspect
+
+    trees = {
+        pathlib.Path(inspect.getsourcefile(inspect.unwrap(t.fn))).resolve()
+        .relative_to(_SRC).parts[0]
+        for t in agent_tools.TOOL_REGISTRY.values()
+    } - {"tools", "gates"}
+    assert "mesh" in trees
+    assert not trees - {p.name for p in _SWEPT}, sorted(trees)

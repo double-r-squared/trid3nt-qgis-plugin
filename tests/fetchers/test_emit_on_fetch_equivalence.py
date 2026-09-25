@@ -76,3 +76,20 @@ def test_deleted_surface_helpers_are_gone():
     )
     for name in gone:
         assert f"def {name}" not in joined, f"{name} should be deleted (seam covers it)"
+
+
+def test_the_sweep_reaches_every_tree_a_composing_tool_is_defined_in():
+    """A composer's tree left out of the sweep is a sweep that passes while
+    reading nothing: every tree a registered tool is defined in, outside the
+    fetch side (tools) and the card tool (gates), is swept."""
+    import inspect
+
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    trees = {
+        pathlib.Path(inspect.getsourcefile(inspect.unwrap(t.fn))).resolve()
+        .relative_to(_SERVER).parts[0]
+        for t in TOOL_REGISTRY.values()
+    } - {"tools", "gates"}
+    assert "mesh" in trees
+    assert not trees - {p.name for p in _SWEPT}, sorted(trees)
