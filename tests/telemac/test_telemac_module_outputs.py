@@ -333,6 +333,23 @@ def test_a_slot_the_engine_source_marks_unwritten_is_neither_asked_nor_published
     assert "point_khione.f" in said[0] and "DEPRECATED" in said[0], said
 
 
+def test_tomawacs_private_slot_is_withheld_under_its_french_spelling(
+        monkeypatch, fake_s3, telemac_result):
+    """The unwritten mark holds for the file an engine wrote in French: 'PRIVE 1'
+    reaches no layer, and the journal cites the source line that marks it."""
+    from trid3nt_server.workflows.telemac.modules.tomawac import WAC
+
+    seen = _surfacing(monkeypatch)
+    run = _run(telemac_result, monkeypatch,
+               unrowed={"PRIVE 1": ("[SI]", [[0.3] * 5, [0.7] * 5])})
+    run = {**run, "module": "tomawac", "module_output": [],
+           "result_basename": WAC.RESULT_FILE}
+    notes = _notes(run)
+    assert "prive 1" not in [item.caption for item in seen]
+    said = [n for n in notes if "'PRIVE 1'" in n]
+    assert said and "point_tomawac.f" in said[0], notes
+
+
 def test_a_note_never_claims_a_layer_the_publish_did_not_surface(
         monkeypatch, fake_s3, telemac_result):
     """A note is written FROM the layer list: a variable the publish did not

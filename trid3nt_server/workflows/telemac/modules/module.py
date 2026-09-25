@@ -255,13 +255,15 @@ class Output:
 @dataclass(frozen=True, slots=True)
 class Unwritten:
     """A slot the ENGINE'S OWN SOURCE marks as never written: the name its result
-    file carries the slot under, and the source line that makes the mark.
+    file carries the slot under, in English and where it differs in French, and
+    the source line that makes the mark.
 
     The mark is the module speaking, so one entry governs both directions: the
     slot is never asked of the engine and never published off the file."""
 
     spelling: str
     cited: str
+    french: str = ""
 
 
 @lru_cache(maxsize=None)

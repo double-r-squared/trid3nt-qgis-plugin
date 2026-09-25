@@ -224,8 +224,9 @@ def _written(run: Mapping[str, Any],
         if read.result_file in walked:
             continue
         walked.add(read.result_file)
-        marked = {entry.spelling.upper(): entry.cited
-                  for entry in read.body.UNWRITTEN.values()}
+        marked = {name.upper(): entry.cited
+                  for entry in read.body.UNWRITTEN.values()
+                  for name in (entry.spelling, entry.french) if name}
         for variable in read.result["varnames"]:
             spelling = str(variable).strip()
             if (read.result_file, spelling.upper()) in seen:
@@ -918,8 +919,8 @@ class TelemacWorkflow(Workflow):
                     # count of them - so the settle reads the seconds the deck
                     # was written for rather than a lever restating it.
                     "duration_s": self._clock(),
-                    # WHICH RUN THIS ONE CARRIES ON FROM: a rerun ledger row,
-                    # not a value the question asks about.
+                    # WHICH RUN THIS ONE CARRIES ON FROM: the run's own
+                    # continue_from, not a value the question asks about.
                     "continue_from": Continued,
                     # A deck that STATES the depth an open edge is designated at
                     # is one whose sea state is prescribed across that edge, and

@@ -196,7 +196,7 @@ WAC.RESULT_FILES = ("PUNCTUAL_RESULTS_FILE", "ZD_SPECTRA_RESULTS_FILE")
 WAC.UNWRITTEN = MappingProxyType({
     "PRI": Unwritten("PRIVATE 1", (
         "point_tomawac.f: 'USER DEDICATED ARRAY (2-DIMENSIONAL * NPRIV)', the "
-        "SPRIVE block output 17 is bound to")),
+        "SPRIVE block output 17 is bound to"), french="PRIVE 1"),
 })
 #: The wave forces reach a host as a MOMENTUM SOURCE in memory - PROSOU adds
 #: FXWAVE and FYWAVE into FU and FV - and the host records no wave row, so this
