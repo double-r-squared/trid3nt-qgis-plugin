@@ -185,7 +185,7 @@ async def test_the_stood_in_mesh_record_is_shaped_like_a_real_builds(monkeypatch
     real = await mesh_step.build_declared_mesh(
         mesh={"mesher": "reg_grid", "kind": None, "extent": None,
               "resolution_m": 100.0, "ops": []})
-    assert set(record) == set(real)
+    assert set(record) | {"key"} == set(real)
     assert record["provenance"] == dict(real["artifact"].provenance)
 
 

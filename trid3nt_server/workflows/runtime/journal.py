@@ -24,7 +24,7 @@ __all__ = ["append_record", "bind_choices", "bind_coverage", "bind_notes",
            "run_origin", "run_outputs", "slot_choice"]
 
 #: The notes the step now running has written for THIS run's record. Bound by the
-#: interpreter for the length of a plan, the way the domain is: a producer deep in
+#: run for its length, the way the domain is: a producer deep in
 #: a chain measures something the reader has to know about and has no result field
 #: to say it in, and a note that only reached a log line dies with the process.
 _NOTES: contextvars.ContextVar[list[str] | None] = contextvars.ContextVar(
@@ -32,7 +32,7 @@ _NOTES: contextvars.ContextVar[list[str] | None] = contextvars.ContextVar(
 
 
 def journal_note(text: str) -> None:
-    """Record ``text`` on the run in progress. Outside a plan it only logs.
+    """Record ``text`` on the run in progress. Outside a run it only logs.
     For what a run has to SAY rather than return; the note travels to the journal
     and onto the published layer beside the run's own fallback notes."""
     logger.info("run note: %s", text)
@@ -49,7 +49,7 @@ _OUTPUTS: contextvars.ContextVar[list[dict[str, Any]] | None] = contextvars.Cont
 
 
 def journal_outputs(layers: Sequence[Mapping[str, Any]]) -> None:
-    """Record the layers the run in progress published. Outside a plan, a no-op."""
+    """Record the layers the run in progress published. Outside a run, a no-op."""
     published = _OUTPUTS.get()
     if published is not None:
         published.extend(dict(layer) for layer in layers)
@@ -120,7 +120,7 @@ _CHOICES: contextvars.ContextVar[list[Any] | None] = contextvars.ContextVar(
 
 
 def slot_choice(choice: Any) -> None:
-    """Record the list one slot was filled from. Outside a plan, a no-op."""
+    """Record the list one slot was filled from. Outside a run, a no-op."""
     chosen = _CHOICES.get()
     if chosen is not None:
         chosen.append(choice)
@@ -205,28 +205,20 @@ def build_record(*, run_id: str | None, engine: str | None,
                  sheet: Sequence[Any],
                  provenance: Sequence[Any], result: Any,
                  wall_seconds: float | None, origin: str,
-                 executed: Sequence[str], replayed: Sequence[str],
                  notes: Sequence[str],
                  fill: Mapping[str, Mapping[str, Any]] | None = None,
                  correct_end: bool | None = None,
-                 solved: str | None = None,
-                 continued_from: str | None = None,
-                 mesh_key: str | None = None,
                  keywords: Mapping[str, Any] | None = None,
                  supplied: Mapping[str, Any] | None = None,
                  sources: Sequence[Any] = (),
                  outputs: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
-    """One run record, from what the publish stage already holds.
-    ``solved`` is the file the solve wrote, which a later run may continue from;
-    ``continued_from`` says which run's state this one carried on from."""
+    """One run record, from what the publish stage already holds."""
     return {
         "run_id": run_id,
         "recorded_at": datetime.now(timezone.utc).isoformat(),
         "engine": engine,
         "module": module,
         "origin": origin,
-        "solved": solved,
-        "continued_from": continued_from,
         "sheet": [_row(row) for row in sheet],
         # THE RAW KEYWORD FLOOR this run was pinned by. It is not a Param, so it
         # is on no sheet row - and a reproduction driven from the arguments alone
@@ -250,13 +242,10 @@ def build_record(*, run_id: str | None, engine: str | None,
         "fill": {name: {"value": _small(row.get("value")), "from": row.get("from")}
                  for name, row in (fill or {}).items()},
         "correct_end": correct_end,
-        "mesh": {"mesh_size_m": getattr(result, "mesh_size_m", None),
-                 **({"key": mesh_key} if mesh_key else {})},
+        "mesh": {"mesh_size_m": getattr(result, "mesh_size_m", None)},
         "cores": next((r.value for r in sheet
                        if getattr(r, "name", "") == "cores"), None),
         "wall_seconds": wall_seconds,
-        "executed": list(executed),
-        "replayed": list(replayed),
         "notes": list(notes),
         # WHAT THE RUN PUT ON THE MAP, as the publish stage emitted it. The one
         # place a finished run's outputs are read back from: the artifacts are

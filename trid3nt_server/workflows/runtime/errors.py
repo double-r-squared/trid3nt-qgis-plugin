@@ -6,15 +6,11 @@ from __future__ import annotations
 from trid3nt_server.errors import DeclarativeError
 
 __all__ = [
-    "ContinuationRefused",
     "CoresUnavailable",
     "DeclarativeError",
     "GateRefusedError",
-    "LeakScanTruncated",
-    "ModifierIllegalError",
     "NamelessFailureError",
     "ParamOutOfRangeError",
-    "ParamRefLeakedError",
     "PlanValidationError",
     "said",
     "StepFailedError",
@@ -28,12 +24,6 @@ class PlanValidationError(DeclarativeError):
     error_code = "PLAN_INVALID"
 
 
-class ContinuationRefused(DeclarativeError):
-    """``continue_from`` names a run with no solved result."""
-
-    error_code = "CONTINUATION_UNSOLVED"
-
-
 class CoresUnavailable(DeclarativeError):
     """A run asked to be partitioned across more cores than the box has.
 
@@ -43,26 +33,8 @@ class CoresUnavailable(DeclarativeError):
     error_code = "CORES_UNAVAILABLE"
 
 
-class ModifierIllegalError(DeclarativeError):
-    error_code = "MODIFIER_ILLEGAL"
-
-
 class ParamOutOfRangeError(DeclarativeError):
     error_code = "PARAM_OUT_OF_RANGE"
-
-
-class ParamRefLeakedError(DeclarativeError):
-    """An unsubstituted ``ParamRef`` reached a persisted record or a returned result.
-    Always a bug, never data: a ref that survives to disk means a declaration
-    escaped binding."""
-
-    error_code = "PARAM_REF_LEAKED"
-
-
-class LeakScanTruncated(UserWarning):
-    """The ParamRef leak scan hit its node budget, so a surface is only PART checked.
-    Not an error, and never silent: the warning names the surfaces it could not
-    finish, because a scan that stopped looking is not a scan that found nothing."""
 
 
 class GateRefusedError(DeclarativeError):
@@ -119,7 +91,7 @@ class StepFailedError(DeclarativeError):
 
 class WorkflowParkedError(DeclarativeError):
     """A template that is DECLARED but off the model surface was invoked.
-    Parking is a state the declaration carries: the plan still validates at import,
+    Parking is a state the declaration carries: the declaration still checks at import,
     the tool is simply never registered, and this refusal names the reason."""
 
     error_code = "TEMPLATE_PARKED"

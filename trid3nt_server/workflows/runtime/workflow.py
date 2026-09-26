@@ -1,7 +1,7 @@
-"""The workflow SKELETON: the template method every declared workflow runs on.
+"""The workflow SKELETON: what every declared workflow runs on.
 
 A template file declares a workflow; :class:`Workflow` IS one, and owns the
-normalize/resolve/interpret spine, post and publish, and the registration factory.
+fill-then-launch spine, post and publish, and the registration factory.
 """
 
 from __future__ import annotations
@@ -10,24 +10,43 @@ import asyncio
 import inspect
 import logging
 import time
+from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Sequence
+
+from trid3nt_contracts.common import SyntheticInput
+from trid3nt_contracts.coverage import SourceChoice
 
 from . import journal
 from .accepts import Accepts
 from .data import DataDecl, data_rows
-from .errors import (DeclarativeError, WorkflowParkedError,
+from .domain import bind_domain, reset_domain
+from .errors import (DeclarativeError, GateRefusedError, WorkflowParkedError,
                      said)
 from .levers import with_levers
-from .params import Param, doors, param_rows
-from .plan import Plan, Ref, Step
+from .params import Param, ResolvedParams, doors, param_rows
 from .resolution import SensitivityDecl, sensitivity_notes
-from .resolver import merge_provenance
+from .resolver import merge_provenance, provenance_entries
 from .fill import Fill, fill, production
-from .interpreter import RunResult, interpret
 
-__all__ = ["Workflow", "WireArgsError", "register_workflow"]
+__all__ = ["RunResult", "Workflow", "WireArgsError", "register_workflow"]
 
 logger = logging.getLogger("trid3nt_server.workflows.runtime.workflow")
+
+
+@dataclass
+class RunResult:
+    """What a launch produced: the published result, what each stage returned by
+    name, and what the run collected on the way - its provenance rows, the notes
+    it could not produce, the layers it published and the sources it matched."""
+
+    value: Any
+    results: dict[str, Any] = field(default_factory=dict)
+    entries: list[SyntheticInput] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+    params: ResolvedParams | None = None
+    outputs: list[dict[str, Any]] = field(default_factory=list)
+    choices: list[SourceChoice] = field(default_factory=list)
+    keywords: dict[str, Any] = field(default_factory=dict)
 
 
 class WireArgsError(DeclarativeError):
@@ -48,13 +67,6 @@ class Workflow:
     #: step when the result carries none, and a workflow that renamed its solve
     #: would otherwise lose the run id to a literal guess. Declared, never assumed.
     solve_step: str = ""
-
-    #: What the MESH step is named: a continuation is held to the mesh content
-    #: that step is bound to. A workflow that meshes nothing names none.
-    mesh_step: str = ""
-
-    #: The engine module this workflow fills, which a continuation must match.
-    module_name: str | None = None
 
     @classmethod
     def levers(cls) -> tuple[str, ...]:
@@ -84,7 +96,7 @@ class Workflow:
         self.accepts = accepts
         #: The template MODULE this workflow is declared by. Every stage is read
         #: off its own names - STEERING, OUTPUTS, CAPTIONS and the files
-        #: beside them - so no object stands between the declaration and the plan.
+        #: beside them - so no object stands between the declaration and the run.
         self.template = template
         #: What this template CALLS each thing it names: every published variable,
         #: and every DATA row it reads a measurement into. One dict, because a
@@ -95,29 +107,25 @@ class Workflow:
         self.sensitivity = SensitivityDecl(sensitivity)
         self.coercions = tuple(coerce)
         self.error_prefix = str(getattr(metadata, "engine", "") or "workflow").upper()
-        #: The plan is STATIC - it reads no concrete value - so it is built ONCE,
-        #: here, at import.
-        self.plan = self.build_plan()
-
-    def build_plan(self) -> Plan:
-        """The declared steps, named and engined by the WORKFLOW, not restated."""
-        return Plan(name=self.name, engine=self.engine or None,
-                    steps=tuple(self.steps()))
+        self.check()
 
     # -- hooks: silent defaults ------------------------------------------- #
 
-    def steps(self) -> Sequence[Any]:
-        """The step sequence this template declares, read off its module.
+    def check(self) -> None:
+        """Refuse at import what this template's declarations cannot run; the
+        skeleton runs nothing of its own, so it refuses nothing."""
 
-        The skeleton knows no engine's names, so a workflow that reads none has
-        no steps and the plan's own refusal below says so."""
-        return ()
+    async def launch(self, state: Fill) -> RunResult:
+        """Write, solve and read a READY fill -> what the run produced.
+
+        The skeleton knows no engine, so it launches nothing."""
+        raise WireArgsError(f"{self.name} declares no engine to launch.")
 
     def sheet_doc(self) -> str | None:
         """The ENGINE SURFACE line of this template's docstring, or nothing.
 
-        Only the workflow knows which engine surface its steps fill, so a
-        skeleton that fills none claims none."""
+        Only the workflow knows which engine surface it fills, so a skeleton
+        that fills none claims none."""
         return None
 
     def slot_units(self) -> Mapping[str, str]:
@@ -163,8 +171,7 @@ class Workflow:
 
         One name for one quantity whichever product carries it, so a declaration
         stands on something a reader can open rather than on a field of its own."""
-        named = {str(row.get("quantity") or "") for row in run.outputs}
-        return (named | set(run.charts)) - {""}
+        return {str(row.get("quantity") or "") for row in run.outputs} - {""}
 
     # -- the spine --------------------------------------------------------- #
 
@@ -187,15 +194,10 @@ class Workflow:
         return await self.execute(state)
 
     async def execute(self, state: Fill) -> Any:
-        """Launch a READY fill: interpret, post, publish."""
+        """Launch a READY fill, then post and publish what it produced."""
         started = time.monotonic()
         try:
-            run = await interpret(
-                self.plan, state.params, self.params,
-                resume=not bool(state.carried.get("restart_clean")),
-                continued=state.continued.get("solved"),
-                continued_mesh=state.continued, mesh_step=self.mesh_step,
-                env=production(state), domain=state.domain)
+            run = await self._launched(state)
         except asyncio.CancelledError:
             raise
         except DeclarativeError as exc:
@@ -211,8 +213,36 @@ class Workflow:
             return self._error(f"{self.error_prefix}_INTERNAL_ERROR", exc)
         run.notes[:0] = state.notes
         return await self._publish(run, time.monotonic() - started,
-                                   supplied=dict(state.env.supplied),
-                                   continue_from=state.continue_from)
+                                   supplied=dict(state.env.supplied))
+
+    async def _launched(self, state: Fill) -> RunResult:
+        """The launch under the run's own domain and collectors: what a stage
+        notes, publishes or matches rides out on the run, and a failed run's
+        notes ride on the failure that ends it."""
+        env = production(state)
+        entries = provenance_entries(state.params, self.params)
+        _refuse_invented_physics(entries, self.name, env.input_mode)
+        token = bind_domain(state.domain)
+        notes, outputs = journal.bind_notes(), journal.bind_outputs()
+        choices, coverage = journal.bind_choices(), journal.bind_coverage()
+        try:
+            run = await self.launch(state)
+        except Exception as exc:
+            for note in [*journal.drain_notes(notes), *env.absences]:
+                exc.add_note(f"also missing from this run: {note}")
+            raise
+        finally:
+            reset_domain(token)
+            said_notes = journal.drain_notes(notes)
+            published = journal.drain_outputs(outputs)
+            matched = journal.drain_choices(choices)
+            journal.drain_coverage(coverage)
+        run.entries, run.params = entries, state.params
+        run.keywords = dict(state.keywords)
+        run.notes += [*said_notes, *env.absences]
+        run.outputs += published
+        run.choices += matched
+        return run
 
     def accept_keyword(self, name: str, value: Any) -> tuple[str, Any, str]:
         """One engine keyword at fill -> ``(identifier, value, note)``.
@@ -232,8 +262,7 @@ class Workflow:
     # -- post + publish ---------------------------------------------------- #
 
     async def _publish(self, run: RunResult, wall_seconds: float = 0.0, *,
-                       supplied: Mapping[str, Any] | None = None,
-                       continue_from: str | None = None) -> Any:
+                       supplied: Mapping[str, Any] | None = None) -> Any:
         result = run.value
         notes = list(run.notes) + [n for n in self.checks(run) if n]
         # THE TIE VIEW: several sources ranked equal on every fact the sort
@@ -241,9 +270,6 @@ class Workflow:
         # picks one. A list with a clear winner carries no table - the sentence
         # already said which source filled the slot and why.
         notes += [_ranked_rows(choice) for choice in run.choices if choice.tie]
-        if continue_from:
-            notes.append(f"continuing run {continue_from} from the state it "
-                         "ended at")
         update: dict[str, Any] = {
             "synthetic_inputs": merge_provenance(
                 getattr(result, "synthetic_inputs", None) or [], run.entries),
@@ -256,17 +282,15 @@ class Workflow:
         result = result.model_copy(update=update)
 
         run_id = self._run_id(result, run)
-        await self._persist(run_id, run.charts)
-        # The journal takes the MERGED notes, not the interpreter's alone: a
+        # The journal takes the MERGED notes, not the launch's alone: a
         # resolution-sensitivity label that lived only on the layer would be gone
         # the moment the layer was, and the journal is the record that outlives
         # the artifacts.
         await asyncio.to_thread(self._journal, run_id, run, result,
-                                wall_seconds, notes, continue_from,
-                                dict(supplied or {}))
-        logger.info("%s complete layer_id=%s executed=%s replayed=%s notes=%s",
+                                wall_seconds, notes, dict(supplied or {}))
+        logger.info("%s complete layer_id=%s stages=%s notes=%s",
                     self.name, getattr(result, "layer_id", None),
-                    run.executed, run.replayed, notes)
+                    list(run.results), notes)
         return result
 
     def _run_id(self, result: Any, run: RunResult) -> str | None:
@@ -278,12 +302,6 @@ class Workflow:
             return direct
         return (run.results.get(self.solve_step) or {}).get("run_id")
 
-    def _solved(self, run: RunResult) -> str | None:
-        """The file the solve step wrote, which a later run may continue from."""
-        if not self.solve_step:
-            return None
-        return (run.results.get(self.solve_step) or {}).get("uri")
-
     def _mesh_size_m(self, run: RunResult) -> Any:
         """The EDGE the run was meshed at, off the solve step's own record.
         The mesh the run published is where this is a fact; a workflow that
@@ -291,11 +309,6 @@ class Workflow:
         if not self.solve_step:
             return None
         return (run.results.get(self.solve_step) or {}).get("mesh_size_m")
-
-    def _mesh_key(self, run: RunResult) -> str | None:
-        """The content key the mesh step was bound to, off its own record."""
-        return next((rec.inputs_key for rec in getattr(run, "records", ())
-                     if rec.node == self.mesh_step), None) if self.mesh_step else None
 
     def _module(self, run: RunResult) -> str | None:
         """WHICH module of the engine ran, as the solve step itself states it.
@@ -328,7 +341,6 @@ class Workflow:
     def _journal(self, run_id: str | None, run: RunResult, result: Any,
                  wall_seconds: float,
                  notes: Sequence[str] = (),
-                 continue_from: str | None = None,
                  supplied: Mapping[str, Any] | None = None) -> None:
         """Append this run to the run journal - one seam, every engine.
         Called from publish, the one point where the sheet, the provenance rows
@@ -343,45 +355,50 @@ class Workflow:
             provenance=getattr(result, "synthetic_inputs", None) or [],
             result=result, wall_seconds=round(wall_seconds, 3),
             origin=journal.run_origin(live_session=current_emitter() is not None),
-            executed=run.executed, replayed=run.replayed, notes=list(notes),
-            outputs=run.outputs, keywords=run.keywords,
+            notes=list(notes), outputs=run.outputs, keywords=run.keywords,
             supplied=dict(supplied or {}), sources=run.choices,
-            solved=self._solved(run), continued_from=continue_from,
-            mesh_key=self._mesh_key(run),
         ))
 
-    @staticmethod
-    async def _persist(run_id: str | None, charts: Mapping[str, Any]) -> None:
-        from trid3nt_server.workflows.runtime.run_products import persist_run_products
 
-        await persist_run_products(run_id, charts=charts)
+#: The one code the invented-physics floor refuses under, so callers route on the
+#: reason rather than on the shape of the run that hit it.
+_PHYSICS_INPUT_REQUIRED = "PHYSICS_INPUT_REQUIRED"
+
+
+def _refuse_invented_physics(entries: Sequence[SyntheticInput], tool_name: str,
+                             input_mode: str | None) -> None:
+    """A physics value nobody approved never reaches a solve: only a live
+    user_gated session, whose review card puts the values in front of a
+    person, opens the floor."""
+    from trid3nt_server.gates.input_review import (physics_refusal_reason,
+                                                   resolve_input_gate_mode)
+    from trid3nt_server.render.pipeline_emitter import current_emitter
+
+    headless = resolve_input_gate_mode(input_mode) != "auto"
+    live = current_emitter() is not None
+    if headless and live:
+        return
+    reason = physics_refusal_reason(tool_name, entries,
+                                    no_session=headless and not live,
+                                    no_review_surface=False)
+    if reason:
+        raise GateRefusedError(reason, error_code=_PHYSICS_INPUT_REQUIRED)
 
 
 # -- the registration factory --------------------------------------------- #
 
-#: Controls every workflow carries: whether the run PAUSES, whether it resumes,
-#: the RAW KEYWORD floor a caller states the engine's own keywords through, the
-#: source a caller NAMES for a matched slot, the OPS a caller states for one -
-#: the ordered moves that compose it past the one row the match ranked first -
-#: and the run whose solved state this one CONTINUES from.
-#: None of the six is a physical value, so none of them is a Param.
+#: Controls every workflow carries: whether the run PAUSES, whether a kept mesh
+#: is rebuilt, the RAW KEYWORD floor a caller states the engine's own keywords
+#: through, the source a caller NAMES for a matched slot, and the OPS a caller
+#: states for one - the ordered moves that compose it past the one row the match
+#: ranked first. None of the five is a physical value, so none is a Param.
 _CONTROLS: tuple[tuple[str, Any, Any], ...] = (
     ("input_mode", str | None, None),
     ("restart_clean", bool, False),
     ("keywords", dict | None, None),
     ("picks", dict | None, None),
     ("ops", dict | None, None),
-    ("continue_from", str | None, None),
 )
-
-#: How ``continue_from`` reads in every template's docstring: the runtime owns
-#: the control, so no template restates it.
-_CONTINUE_DOC = (
-    "continue_from",
-    "The id of a completed run whose solved state this run opens at, as the "
-    "engine's previous computation: the same scenario carried on past where "
-    "that run ended. Refused by name when that run has no solved result.")
-
 
 
 # A TEMPLATE IS THE SIMULATION SURFACE. One registered template answers one
@@ -455,13 +472,13 @@ def register_workflow(
         # the factory narrows it; documenting a constant the schema does not offer
         # would be the docstring inviting a call the tool cannot take.
         # The SHEET line is the WORKFLOW's own: only it knows which engine
-        # surface its steps fill, so a template never restates it and cannot
-        # drift from what it actually declares.
+        # surface it fills, so a template never restates it and cannot drift
+        # from what it actually declares.
         sheet = workflow.sheet_doc()
         doc = {**doc, "params": _wire_params(params),
                **({} if sheet is None else {"sheet": sheet}),
                **_context_doc(workflow.data,
-                              (*doc.get("controls", ()), _CONTINUE_DOC))}
+                              doc.get("controls", ()))}
         _run.__doc__ = render_docstring(**doc)
         _run.routing_doc = render_docstring(**doc, view="routing")  # type: ignore[attr-defined]
 

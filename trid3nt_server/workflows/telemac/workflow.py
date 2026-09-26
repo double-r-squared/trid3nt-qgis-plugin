@@ -21,17 +21,15 @@ from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
 
 from trid3nt_server.render.formats import publish
 from trid3nt_server.workflows.runtime import (
+    DataRef,
     ParamRef,
     PlanValidationError,
-    Continued,
-    RawKeywords,
     Ref,
-    RunMode,
-    Step,
+    RunResult,
     Workflow,
 )
-from trid3nt_server.workflows.runtime.plan import declared_reads
-from trid3nt_server.mesh.step import MeshStep
+from trid3nt_server.workflows.runtime.fill import Fill
+from trid3nt_server.workflows.runtime.reads import declared_reads
 from trid3nt_server.workflows.telemac.errors import TelemacError
 from trid3nt_server.workflows.telemac.modules import wrapper_for
 from trid3nt_server.workflows.telemac.modules.module import (SlotRefused, accept,
@@ -48,6 +46,7 @@ from trid3nt_server.workflows.telemac.modules.sheet import (
     PROCESSORS,
     Origin,
     Sheet,
+    CONTINUATION,
 )
 from trid3nt_server.workflows.telemac.modules.sheet import fill as fill_slots
 from trid3nt_server.workflows.telemac.modules.sheet import fill_coupled, late_bound
@@ -73,6 +72,9 @@ _MESHER, _MESH_KIND = "om2d", "unstructured_tri"
 
 #: The dispatch a staged run goes to, by the path it is resolved at CALL time.
 _DISPATCH = f"{_TELEMAC}.engine.solve_case"
+
+#: What the settle is called: what the deck and every later stage read it as.
+_SETTLED = "settled"
 
 #: The measurements the workflow takes of this question's world, by the KIND a
 #: composite asks for: the runner that takes it, the stage it is taken at and
@@ -105,13 +107,13 @@ def _clean_ops() -> list[Any]:
 
 @dataclass(frozen=True, slots=True)
 class Placed(Ref):
-    """A point the run SETTLES onto a node of the accepted mesh, read as a ref.
+    """A point the run SETTLES onto a node of the accepted mesh, read as a read.
 
-    A reference first: whoever reads the placement - a source composite, a
-    weather record, a chart's anchor - writes this where it would write
-    ``Ref(name)``, and reads ``name.at``/``name.lon`` off it afterwards. What
-    rides beside the name is what settling it takes, so the stage that settles
-    it is the workflow's to build and no template names a runner."""
+    Whoever reads the placement - a source composite, a weather record, a
+    chart's anchor - writes this where it would write ``Ref(name)``, and reads
+    ``name.at``/``name.lon`` off it afterwards. What rides beside the name is
+    what settling it takes, so the workflow settles it and no template names a
+    function."""
 
     #: The point the user gave, or nothing - in which case the point sits
     #: ``fraction`` along the domain's own centerline.
@@ -126,13 +128,13 @@ class Placed(Ref):
 
 @dataclass(frozen=True, slots=True)
 class Measured(Ref):
-    """A measurement the run takes against its own world, read as the ref it is.
+    """A measurement the run takes against its own world, read as a read.
 
-    A reference first, like a placement: whoever asks for the measurement - a
-    dredger, an outlet's rating curve - writes this where it would write
-    ``Ref(name)``. ``kind`` says which measurement, and ``asked`` is what only
-    this question can state; the mesh, the line, the domain and the settled run
-    are the workflow's and are never restated here."""
+    Like a placement, whoever asks for the measurement - a dredger, an outlet's
+    rating curve - writes this where it would write ``Ref(name)``. ``kind`` says
+    which measurement, and ``asked`` is what only this question can state; the
+    mesh, the line, the domain and the settled run are the workflow's and are
+    never restated here."""
 
     kind: str = ""
     asked: Mapping[str, Any] = field(default_factory=dict)
@@ -278,7 +280,7 @@ _VALUE_CHARS = 48
 
 def _stated_value(value: Any) -> str:
     """One asserted value, as the docstring prints it."""
-    from trid3nt_server.workflows.runtime.plan import _Placeholder
+    from trid3nt_server.workflows.runtime.reads import _Placeholder
 
     if value is None:
         return "nothing (the engine's default stands)"
@@ -418,8 +420,8 @@ def stated(*, steering: type, keywords: Mapping[str, Any]) -> dict[str, Any]:
     The deck's assertions under the floor that overrides them, so a stage that
     runs before the sheet exists reads the value the deck will write. An
     assertion still holding a late-bound read has no number yet and is absent.
-    This is the floor BEFORE the fill; ``Ref("sheet.<KEYWORD>")`` is the filled
-    sheet after it, and only that one follows an edit made at the gate."""
+    ``Ref("sheet.<KEYWORD>")`` is the filled sheet after it, and only that one
+    follows an edit made at the gate."""
     out = {name: value for name, value in steering.ASSERTED.items()
            if value is not None and not late_bound(value)}
     return {**out, **_floor(steering, keywords)[0]}
@@ -820,7 +822,6 @@ class TelemacWorkflow(Workflow):
 
     engine = "telemac"
     solve_step = "solve"
-    mesh_step = "mesh"
 
     @classmethod
     def levers(cls) -> tuple[str, ...]:
@@ -835,10 +836,6 @@ class TelemacWorkflow(Workflow):
         """The STEERING body: the module wrapper, the slots this question asserts
         and the coupling it carries."""
         return self.template.STEERING
-
-    @property
-    def module_name(self) -> str:
-        return self.steering.MODULE
 
     def accept_keyword(self, name: str, value: Any) -> tuple[str, Any, str]:
         """One keyword on whichever of this run's bodies it names, through that
@@ -891,23 +888,30 @@ class TelemacWorkflow(Workflow):
         return self.steering.seconds(
             stated(steering=self.steering, keywords=keywords))
 
-    def steps(self) -> list[Any]:
-        """The step sequence: the world, then fill, then run, then the outputs.
+    def check(self) -> None:
+        """Refuse at import what this template cannot run on: a domain, one bed,
+        the deck's own clock, a function for every measurement it asks for and
+        a caption for every output it lists."""
+        from trid3nt_server.workflows.runtime.data import DISCHARGE
 
-        Every stage is built off the slots this question declares - the domain it
-        solves over, the bed under it, the runs its edge names, the flow an
-        inflow carries - so a template states only what differs from that."""
-        from trid3nt_server.mesh.tool import mesh_op, tool
-        from trid3nt_server.workflows.runtime.data import (
-            BED, DISCHARGE, DOMAIN, LEVEL)
-        from trid3nt_server.workflows.runtime.plan import DataRef
+        slots = self._slots()
+        self._clock()
+        if DISCHARGE in slots:
+            self._asserted("LAW_OF_BOTTOM_FRICTION")
+            self._asserted("FRICTION_COEFFICIENT")
+        for ask in self._asked(self._states("MESH", None)):
+            _signature(_MEASURES[ask.kind][0])
+        self._outputs()
+
+    def _slots(self) -> dict[str, str]:
+        """The row this question declares for each role a stage reads."""
+        from trid3nt_server.workflows.runtime.data import BED, DOMAIN
 
         slots: dict[str, list[str]] = {}
         for row in self.data:
             if row.role:
                 slots.setdefault(row.role, []).append(row.name)
-        domain = (slots.get(DOMAIN) or [""])[0]
-        if not domain:
+        if not slots.get(DOMAIN):
             raise PlanValidationError(
                 f"{self.name} declares no domain: a run solves over a polygon, so "
                 "the DATA body needs a row named domain.")
@@ -921,147 +925,201 @@ class TelemacWorkflow(Workflow):
                 f"{self.name} declares {len(beds)} bed rows ({beds}); the bed is "
                 "ONE source. A survey over a wider surface is composed by the "
                 "merge derive into the one row this slot takes.")
-        geometry = self._file("GEOMETRY_FILE", "geometry.slf")
-        boundary = self._file("BOUNDARY_CONDITIONS_FILE", "boundary.cli")
-        # The deck's own RESULTS statement, else the first file this template
-        # says the run has to write: a 3D deck names a 3D and a 2D result rather
-        # than one RESULTS FILE, and the run's own facts name what it wrote.
-        listed = tuple(self._states("RESULTS", ()))
-        result = self._file(self.steering.RESULT_KEYWORD,
-                            listed[0] if listed else "results.slf")
-        declared = {prm.name for prm in self.params}
-        level = (slots.get(LEVEL) or [""])[0]
-        # THE OPEN-CHANNEL ADDITION, listed wherever this question declares a
-        # discharge at all: whether a run CARRIES one is a run-time fact, so the
-        # author decides it off the carrier it is handed. An absent carrier
-        # authors no channel and the body opens on its level boundaries, which is
-        # what the base settles on its own.
-        inflow = (slots.get(DISCHARGE) or [""])[0]
-        channel = (
-            (Step(runner=f"{_TELEMAC}.authoring.opening.open_channel",
-                  stage="author",
-                  kwargs={"mesh": Ref("mesh"), "files": Ref("mesh_files"),
-                          "carrier": DataRef(inflow),
-                          "stage": DataRef(level) if level else None,
-                          "friction_law": self._asserted("LAW_OF_BOTTOM_FRICTION"),
-                          "friction_coefficient":
-                              self._asserted("FRICTION_COEFFICIENT")}
-                  ).named("channel"),)
-            if inflow else ())
+        return {role: names[0] for role, names in slots.items()}
+
+    async def launch(self, state: Fill) -> RunResult:
+        """The run, in order: the world, the mesh and its files, what the run
+        places and measures on it, the settle, the sheet, the solve, the outputs.
+
+        Every stage is built off the slots this question declares, so a template
+        states only what differs from that."""
+        from trid3nt_server.mesh.step import (build_declared_mesh, keep_mesh,
+                                              mesh_key)
+        from trid3nt_server.mesh.tool import recipe_plan_value
+        from trid3nt_server.render.pipeline_emitter import (begin_substeps,
+                                                            current_emitter,
+                                                            substep)
+        from trid3nt_server.workflows.runtime.data import (DISCHARGE, DOMAIN,
+                                                           LEVEL)
+        from trid3nt_server.workflows.runtime.fill import (_bind, _load, _produce,
+                                                           call, production)
+        from .authoring.mesh_files import telemac_mesh_files
+        from .authoring.opening import open_channel, open_water
+        from .authoring.release_point import settle_release
+
+        env = production(state)
+        slots = self._slots()
+        domain = slots[DOMAIN]
+        level, inflow = slots.get(LEVEL, ""), slots.get(DISCHARGE, "")
+        keywords = dict(state.keywords)
+        previous = _previous(self.steering, keywords)
         recipe = self._states("MESH", None)
-        mesh = recipe if recipe is not None else tool.build_mesh(
-            mesher=_MESHER, kind=_MESH_KIND, extent=DataRef(domain),
-            resolution_m=ParamRef("mesh_resolution_m"),
-            # THE RIM IS THE ASK'S TO SIZE, and every domain is cut from a
-            # shoreline now: no sizing function the library has measures the
-            # domain's own outline, so an undeclared rim comes back an order of
-            # magnitude past the size word and the granularity lever is the
-            # user's. No edge is stated, so the rim takes the recipe's own size
-            # word.
-            ops=[mesh_op("set_rim_size"), *_clean_ops(),
-                 mesh_op("set_bed", source=DataRef(beds[0])),
-                 # The runs ride on the DOMAIN: the producer measured them
-                 # where it cut the polygon between two faces, and a drawn
-                 # outline carries the ones the canvas asked for.
-                 mesh_op("set_boundary_roles", runs=DataRef(domain))])
-        settle = self._settle(recipe, domain) or Step(
-            runner=f"{_TELEMAC}.authoring.opening.open_water",
-            stage="author",
-            kwargs={"mesh": Ref("mesh"), "files": Ref("mesh_files"),
-                    # WHAT THE WATER STANDS AT: the channel's own measurement
-                    # where this question has one, else the level slot, else
-                    # nothing - and a bed stated as a depth needs nothing.
-                    "level": (Ref("channel") if channel
-                              else DataRef(level) if level else None),
-                    "geometry": geometry, "boundary": boundary,
-                    "result": result,
-                    "mesh_resolution_m": ParamRef("mesh_resolution_m"),
-                    # THE CLOCK IS THE MODULE'S: how a run length is spelled is
-                    # the module's own statement - one window, or a step and a
-                    # count of them - so the settle reads the seconds the deck
-                    # was written for rather than a lever restating it.
-                    "duration_s": self._clock(),
-                    # WHICH RUN THIS ONE CARRIES ON FROM: the run's own
-                    # continue_from, not a value the question asks about.
-                    "continue_from": Continued,
-                    # A deck that STATES the depth an open edge is designated at
-                    # is one whose sea state is prescribed across that edge, and
-                    # a mesh where nothing reaches it is sealed.
-                    **({"deck": self.name,
-                        "open_depth_threshold_m":
-                            ParamRef("open_depth_threshold_m")}
-                       if "open_depth_threshold_m" in declared else {}),
-                    **({"name": ParamRef("name")}
-                       if "name" in declared else {})})
-        produce = (self._reading_day() + channel + self._placements(domain)
-                   + self._measurements(recipe, domain, when="produce"))
-        derive = self._measurements(recipe, domain, when="derive")
+        asks = self._asked(recipe)
+        placed = self._placed()
+        day = self._reads_the_day()
+        declared = {prm.name for prm in self.params}
+        spent: set[str] = {"cores"} & declared
+        emitter = current_emitter()
+        begin_substeps(emitter, 6 + len(asks) + len(placed) + bool(inflow) + day)
+
+        async def stage(label: str, fn: Any, /, **kwargs: Any) -> Any:
+            spent.update(ref.name for ref in declared_reads(kwargs, ParamRef))
+            bound = await _bind(kwargs, env, label)
+            async with substep(emitter, label):
+                env.results[label] = await call(
+                    fn if callable(fn) else _load(fn), bound, label)
+            return env.results[label]
+
+        async def measure(when: str) -> None:
+            for ask in asks:
+                runner, _stage, taken = _MEASURES[ask.kind]
+                if taken == when:
+                    world = self._world(domain, _signature(runner))
+                    await stage(_SETTLED if taken == "settle" else ask.root,
+                                runner, **world, **dict(ask.asked))
+
+        env.results["stated"] = stated(steering=self.steering, keywords=keywords)
+        await measure("world")
+        mesh = recipe if recipe is not None else self._mesh(domain, slots)
+        await stage("mesh", build_declared_mesh, mesh=recipe_plan_value(mesh),
+                    name=Ref(self._states("MESH_ON", "") or domain),
+                    supplied=self._states("SUPPLIED_MESH", None), tool=self.name,
+                    input_mode=env.input_mode,
+                    fresh=bool(state.carried.get("restart_clean")))
+        # THE FILES THIS ENGINE ASKS THE ACCEPTED MESH FOR, written from it before
+        # anything reads one: the boundary numbering it measures is what every
+        # stage below reads to know which face carries what.
+        await stage("mesh_files", telemac_mesh_files, mesh=Ref("mesh"))
+        await keep_mesh(env.results["mesh"])
+        if day:
+            from trid3nt_server.inputs.instant import day as reading_day
+
+            await stage(_READING_DAY, reading_day, value=ParamRef("event_time"))
+        if inflow:
+            # THE OPEN-CHANNEL ADDITION: whether a run CARRIES a discharge is a
+            # run-time fact, so the author decides it off the carrier it is
+            # handed, and an absent one authors no channel.
+            await stage("channel", open_channel, mesh=Ref("mesh"),
+                        files=Ref("mesh_files"), carrier=DataRef(inflow),
+                        stage=DataRef(level) if level else None,
+                        friction_law=self._asserted("LAW_OF_BOTTOM_FRICTION"),
+                        friction_coefficient=self._asserted(
+                            "FRICTION_COEFFICIENT"))
+        for mark in placed:
+            await stage(mark.root, settle_release, point=mark.point,
+                        mesh=Ref("mesh"), domain=DataRef(domain),
+                        fraction=mark.fraction, label=mark.label,
+                        **({"continue_from": previous} if mark.continues else {}))
+        await measure("produce")
+        settles = [ask for ask in asks if _MEASURES[ask.kind][2] == "settle"]
+        if settles and previous:
+            raise TelemacError(
+                f"{self.name} is settled by the {settles[0].kind} it measures, "
+                "which opens on no previous computation: this template does not "
+                "carry a run on.", error_code="TELEMAC_CONTINUATION_REFUSED")
+        if settles:
+            await measure("settle")
+        else:
+            await stage(_SETTLED, open_water, **self._opening(
+                domain, level, inflow, declared), continue_from=previous)
+        await measure("derive")
         params = {prm.name: ParamRef(prm.name) for prm in self.params}
-        # The rows and producers the body actually READS, under the names it
-        # names them by. A DATA row nothing on the deck reads is NOT here, and
-        # that is what makes a slot demand-pulled: a caller who supplies the bed
-        # never pays for the survey and the terrain its producer would have
-        # fetched. The accepted mesh is among them: a composite that samples at
-        # its nodes reads the record the mesh step returned.
         read = self._reads()
         produced = {row.name: Ref(row.name) for row in self.data
                     if row.name in read}
-        produced |= {step.name: Ref(step.name)
-                     for step in (*produce, *derive)
-                     if step.name} | {"settled": Ref("settled"), "mesh": Ref("mesh")}
-        steps = [
-            # THE FLOOR FIRST, before any stage: the six early readers settle a
-            # clock, a rating curve and a weather record off keywords the run may
-            # have overridden, and a stage built from the deck's own number would
-            # describe a different run than the deck writes.
-            Step(runner=f"{_TELEMAC}.workflow.stated", stage="prep",
-                 kwargs={"steering": self.steering,
-                         "keywords": RawKeywords}).named("stated"),
-            *self._measurements(recipe, domain, when="world"),
-            MeshStep.build(mesh=mesh,
-                           name=Ref(self._states("MESH_ON", "") or domain),
-                           supplied=self._states("SUPPLIED_MESH", None),
-                           tool=self.name).named("mesh"),
-            # THE FILES THIS ENGINE ASKS THE ACCEPTED MESH FOR, written from it
-            # before anything reads one: the pair is TELEMAC's own artifact and
-            # the boundary numbering it measures is what every stage below reads
-            # to know which face carries what.
-            Step(runner=f"{_TELEMAC}.authoring.mesh_files.telemac_mesh_files",
-                 stage="author",
-                 kwargs={"mesh": Ref("mesh")}).named("mesh_files"),
-            *produce,
-            settle.named("settled"),
-            *derive,
-            Step(runner=f"{_TELEMAC}.workflow.fill_sheet", stage="author",
-                 self_gating=True,
-                 kwargs={"steering": self.steering, "produced": produced,
-                         "params": params, "workflow": self.name,
-                         "title": self._states("REVIEW_TITLE", ""),
-                         "keywords": RawKeywords,
-                         "input_mode": RunMode}).named("sheet"),
-            Step(runner=f"{_TELEMAC}.workflow.run_sheet", stage="solve",
-                 consequential=True,
-                 kwargs={"sheet": Ref("sheet"), "settled": Ref("settled"),
-                         "results": list(listed or (result,)),
-                         "steering": (self._states("STEERING_FILE", "")
-                                      or f"{self.steering.MODULE}_{self.name}.cas"),
-                         "prefix": self._states("PREFIX", "telemac"),
-                         "dispatch": _DISPATCH,
-                         "display": self._states("DISPLAY_FILE", ""),
-                         # HOW MANY CORES the solve is partitioned across: the
-                         # param the question declares, never a second statement
-                         # of it beside the params it already carries.
-                         "cores": (ParamRef("cores")
-                                   if "cores" in declared else None)}
-                 ).named("solve"),
-        ]
-        # WHICH PARAMS A CARD EDIT CANNOT RE-FILL: those another stage reads off
-        # the run's own params, which an edit to the sheet never reaches.
-        spent = sorted({ref.name for step in steps if step.name != "sheet"
-                        for ref in declared_reads(step.kwargs, ParamRef)})
-        return [replace(step, kwargs={**step.kwargs, "spent": spent})
-                if step.name == "sheet" else step
-                for step in steps] + [self._outputs_step(params)]
+        produced |= {name: Ref(name) for name in env.results
+                     if name not in ("stated", "mesh_files")}
+        # A CONTEXT row's product is the SENTENCE, so one nothing read is asked
+        # all the same once everything it could stand on is in hand.
+        for row in self.data:
+            if row.is_context and row.name not in env.artifacts:
+                env.artifacts[row.name] = await _produce(env, row)
+        await stage("sheet", fill_sheet, steering=self.steering,
+                    produced=produced, params=params, workflow=self.name,
+                    title=self._states("REVIEW_TITLE", ""), keywords=keywords,
+                    input_mode=env.input_mode, spent=sorted(spent))
+        listed = tuple(self._states("RESULTS", ()))
+        solved = await stage(
+            "solve", run_sheet, sheet=Ref("sheet"), settled=Ref(_SETTLED),
+            results=list(listed or (self._result(),)),
+            steering=(self._states("STEERING_FILE", "")
+                      or f"{self.steering.MODULE}_{self.name}.cas"),
+            prefix=self._states("PREFIX", "telemac"), dispatch=_DISPATCH,
+            display=self._states("DISPLAY_FILE", ""),
+            cores=ParamRef("cores") if "cores" in declared else None)
+        await keep_mesh(env.results["mesh"], solved.get("run_id"))
+        outputs, captions = self._outputs()
+        # A primitive's point, line and band are reads the run binds; they ride
+        # beside the list and rejoin it at publish.
+        value = await stage(
+            "outputs", publish_outputs, run=Ref("solve"),
+            outputs=[_unanchored(p) for p in outputs], captions=captions,
+            anchors=[{"at": p.at, "along": p.along, "within": p.within}
+                     for p in outputs], params=params)
+        return RunResult(value=value, results=dict(env.results))
+
+    def _mesh(self, domain: str, slots: Mapping[str, str]) -> Any:
+        """The mesh this workflow asks for where the template declares none."""
+        from trid3nt_server.mesh.tool import mesh_op, tool
+        from trid3nt_server.workflows.runtime.data import BED
+
+        return tool.build_mesh(
+            mesher=_MESHER, kind=_MESH_KIND, extent=DataRef(domain),
+            resolution_m=ParamRef("mesh_resolution_m"),
+            # THE RIM IS THE ASK'S TO SIZE: no sizing function the library has
+            # measures the domain's own outline, so an undeclared rim comes back
+            # an order of magnitude past the size word, and the granularity lever
+            # is the user's.
+            ops=[mesh_op("set_rim_size"), *_clean_ops(),
+                 mesh_op("set_bed", source=DataRef(slots[BED])),
+                 # The runs ride on the DOMAIN: the producer measured them where
+                 # it cut the polygon, and a drawn outline carries the ones the
+                 # canvas asked for.
+                 mesh_op("set_boundary_roles", runs=DataRef(domain))])
+
+    def _opening(self, domain: str, level: str, inflow: str,
+                 declared: set[str]) -> dict[str, Any]:
+        """What the open water is settled from, as reads of this run."""
+        return {
+            "mesh": Ref("mesh"), "files": Ref("mesh_files"),
+            # WHAT THE WATER STANDS AT: the channel's own measurement where this
+            # question has one, else the level slot, else nothing - and a bed
+            # stated as a depth needs nothing.
+            "level": (Ref("channel") if inflow
+                      else DataRef(level) if level else None),
+            "geometry": self._file("GEOMETRY_FILE", "geometry.slf"),
+            "boundary": self._file("BOUNDARY_CONDITIONS_FILE", "boundary.cli"),
+            "result": self._result(),
+            "mesh_resolution_m": ParamRef("mesh_resolution_m"),
+            # THE CLOCK IS THE MODULE'S: how a run length is spelled is the
+            # module's own statement, so the settle reads the seconds the deck
+            # was written for rather than a lever restating it.
+            "duration_s": self._clock(),
+            # A deck that STATES the depth an open edge is designated at is one
+            # whose sea state is prescribed across that edge, and a mesh where
+            # nothing reaches it is sealed.
+            **({"deck": self.name,
+                "open_depth_threshold_m": ParamRef("open_depth_threshold_m")}
+               if "open_depth_threshold_m" in declared else {}),
+            **({"name": ParamRef("name")} if "name" in declared else {})}
+
+    def _result(self) -> str:
+        """The deck's own RESULTS statement, else the first file this template
+        says the run writes: a 3D deck names a 3D and a 2D result rather than
+        one RESULTS FILE."""
+        listed = tuple(self._states("RESULTS", ()))
+        return self._file(self.steering.RESULT_KEYWORD,
+                          listed[0] if listed else "results.slf")
+
+    def _world(self, domain: str, takes: frozenset[str]) -> dict[str, Any]:
+        """What a measurement is taken against, as reads of this run, cut to
+        what its function takes."""
+        world = {"mesh": Ref("mesh"), "files": Ref("mesh_files"),
+                 "line": Ref("line"), "domain": DataRef(domain),
+                 "settled": Ref(_SETTLED)}
+        if "friction_law" in takes:
+            world["friction_law"] = self._asserted("LAW_OF_BOTTOM_FRICTION")
+        return {name: value for name, value in world.items() if name in takes}
 
     def _clock(self) -> Any:
         """How long the settle opens this run's water for, as the module spells it.
@@ -1148,56 +1206,11 @@ class TelemacWorkflow(Workflow):
                     found.setdefault(ref.root, ref)
         return tuple(found.values())
 
-    def _reading_day(self) -> tuple[Step, ...]:
-        """The calendar DAY a dated source is asked over, where a row asks for one.
-
-        It is the event_time lever read as a date, so it is the lever's own
-        coercion rather than a stage a question writes: a row that names it gets
-        it, and a run that reads no dated source never pays for it."""
-        wanted = any(ref.root == _READING_DAY for row in self.data
-                     for ref in declared_reads(dict(row.producer_kwargs), Ref))
-        if not wanted:
-            return ()
-        return (Step(runner="trid3nt_server.inputs.instant.day", stage="prep",
-                     kwargs={"value": ParamRef("event_time")}
-                     ).named(_READING_DAY),)
-
-    def _measurements(self, recipe: Any, domain: str, when: str) -> tuple[Step, ...]:
-        """The stages that MEASURE this question's world, at the point they are taken.
-
-        A composite that asks for a measurement is what says there is one; the
-        world it is measured against is the workflow's, so the mesh, the line,
-        the domain and the settled run are handed over here rather than by a
-        template."""
-        from trid3nt_server.workflows.runtime.plan import DataRef
-
-        world = {"mesh": Ref("mesh"), "files": Ref("mesh_files"),
-                 "line": Ref("line"), "domain": DataRef(domain),
-                 "settled": Ref("settled"), "friction_law": None}
-        steps = []
-        for ask in self._asked(recipe):
-            runner, stage, taken = _MEASURES[ask.kind]
-            if taken != when:
-                continue
-            signature = _signature(runner)
-            kwargs = {name: (self._asserted("LAW_OF_BOTTOM_FRICTION")
-                             if name == "friction_law" else value)
-                      for name, value in world.items() if name in signature}
-            step = Step(runner=runner, stage=stage,
-                        kwargs={**kwargs, **dict(ask.asked)})
-            # The SETTLE is named by the plan that places it, which names every
-            # settle the same thing; anything else is named for what it measured.
-            steps.append(step if taken == "settle" else step.named(ask.root))
-        return tuple(steps)
-
-    def _settle(self, recipe: Any, domain: str) -> Step | None:
-        """The stage this question is SETTLED by, where it is not open water.
-
-        A harbour is settled by the wave that enters it rather than by a level
-        the water stands at, so the composite that forces the domain is what
-        says which settle this run takes."""
-        taken = self._measurements(recipe, domain, when="settle")
-        return taken[0] if taken else None
+    def _reads_the_day(self) -> bool:
+        """Whether a row asks a dated source over the event_time lever's DAY:
+        a run that reads no dated source never pays for it."""
+        return any(ref.root == _READING_DAY for row in self.data
+                   for ref in declared_reads(dict(row.producer_kwargs), Ref))
 
     def _asked(self, recipe: Any) -> tuple["Measured", ...]:
         """Every measurement this question asks for, in the order it is named.
@@ -1216,29 +1229,9 @@ class TelemacWorkflow(Workflow):
                     found.setdefault(ref.root, ref)
         return tuple(found.values())
 
-    def _placements(self, domain: str) -> tuple[Step, ...]:
-        """The stage that settles each placed point onto a node of the mesh.
-
-        The domain rides along because an unplaced point sits its fraction along
-        that domain's centerline companion, and a supplied one is held inside the
-        water the same way."""
-        from trid3nt_server.workflows.runtime.plan import DataRef
-
-        return tuple(
-            Step(runner=f"{_TELEMAC}.authoring.release_point.settle_release",
-                 stage="author",
-                 kwargs={"point": mark.point, "mesh": Ref("mesh"),
-                         "domain": DataRef(domain), "fraction": mark.fraction,
-                         "label": mark.label,
-                         **({"continue_from": Continued} if mark.continues
-                            else {})}).named(mark.root)
-            for mark in self._placed())
-
-    def _outputs_step(self, params: Mapping[str, Any]) -> Step:
-        """The publish step, checked: every PLACED read has its caption.
-
-        A template that reads nothing the user gives a place lists nothing: what
-        the run writes is the module's table, published without being asked."""
+    def _outputs(self) -> tuple[tuple[Primitive, ...], dict[str, str]]:
+        """What this question PUBLISHES and what it calls each, checked: every
+        listed read is published and has its caption."""
         outputs = tuple(self._states("OUTPUTS", ()))
         captions = dict(self._states("CAPTIONS", {}))
         for primitive in outputs:
@@ -1252,17 +1245,19 @@ class TelemacWorkflow(Workflow):
                 raise PlanValidationError(
                     f"OUTPUTS publishes {named!r} and CAPTIONS names no caption "
                     "for it.")
-        # A primitive's point, line and band are reads the run resolves; they
-        # ride beside the list, where the plan's binder walks, and rejoin it at
-        # publish.
-        anchors = [{"at": p.at, "along": p.along, "within": p.within}
-                   for p in outputs]
-        return Step(runner=f"{_TELEMAC}.workflow.publish_outputs", stage="publish",
-                    kwargs={"run": Ref("solve"),
-                            "outputs": [_unanchored(p) for p in outputs],
-                            "captions": captions,
-                            "anchors": anchors,
-                            "params": dict(params)}).named("outputs")
+        return outputs, captions
+
+
+def _previous(steering: type, keywords: dict[str, Any]) -> str | None:
+    """The module's previous-computation file, taken off the keyword floor.
+
+    The settle stages it and reads the state it opens at, and the sheet names
+    the staged copy, so the floor never writes the caller's uri into the deck."""
+    for name in list(keywords):
+        body, identifier = identify_on(run_bodies(steering), name)
+        if body is steering and identifier == CONTINUATION:
+            return str(keywords.pop(name))
+    return None
 
 
 def _signature(runner: str) -> frozenset[str]:

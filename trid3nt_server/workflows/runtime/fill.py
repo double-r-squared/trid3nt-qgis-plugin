@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import importlib
+import inspect
 import logging
 import math
 from dataclasses import dataclass, field
@@ -26,14 +28,11 @@ from .data import (
     BED, DISCHARGE, DOMAIN, EXTENT, LEVEL, LINE, OBSERVE, WAVE, CoversAOI,
     DataDecl, Producer)
 from .domain import Domain, bind_domain, current_domain
-from .errors import (ContinuationRefused, PlanValidationError, StepFailedError,
-                     SuppliedCoverageError)
-from .interpreter import (_UNREPLAYABLE, _artifacts_live, _bind, _bind_value,
-                          _call_runner, _deref, _record_for, _rehydrate)
+from .errors import (DeclarativeError, PlanValidationError, StepFailedError,
+                     SuppliedCoverageError, said)
 from .journal import journal_note, slot_choice
-from .ledger import LedgerRecord, StepLedger, inputs_digest
 from .params import ResolvedParams
-from .plan import ParamRef, Ref
+from .reads import ParamRef, Ref
 from .temporal import RATE, STATE
 
 logger = logging.getLogger("trid3nt_server.workflows.runtime.fill")
@@ -44,7 +43,7 @@ class _Env:
     data: dict[str, DataDecl]
     results: dict[str, Any]
     input_mode: str | None = None
-    #: The workflow this walk belongs to - what a gate card names as the asker.
+    #: The workflow this fill belongs to - what a gate card names as the asker.
     workflow: str = ""
     #: The raw keyword floor this invocation carried, by the name the caller used.
     keywords: dict[str, Any] = field(default_factory=dict)
@@ -55,22 +54,13 @@ class _Env:
     #: where nothing measured it. The twin of ``picks``: a control somebody
     #: states on the call, read by the slot's own ingestion.
     ops: dict[str, Any] = field(default_factory=dict)
-    #: The run this one CONTINUES, as the artifact its state is read out of.
-    #: Empty for a run that starts from its own initial conditions.
-    continued: str | None = None
-    ledger: StepLedger | None = None
-    resume: bool = True
     artifacts: dict[str, Any] = field(default_factory=dict)
-    charts: dict[str, Any] = field(default_factory=dict)
     #: Artifacts SUPPLIED rather than produced - a layer handle, a file uri, a
     #: gate's answer. What satisfies a producer-less ``Data`` slot.
     supplied: dict[str, Any] = field(default_factory=dict)
     #: Absences worth narrating, each as the SENTENCE the run carries: an
     #: optional Data nothing satisfied, or a context row whose source was empty.
     absences: list[str] = field(default_factory=list)
-    #: One record per produced Data, replayed ones included - the Data half of what
-    #: a derivation of this run inherits.
-    data_records: list[LedgerRecord] = field(default_factory=list)
     #: How long the solve runs, in seconds, off the deck this run writes. It is
     #: the WINDOW a matched series source has to cover, so a run longer than the
     #: record refuses rather than opening on a record that stops early.
@@ -117,8 +107,8 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
             return measured
     if producer is None and decl.data_class:
         # A SLOT THAT STATES A NEED: the match reads every fetcher's coverage row
-        # and the runtime declares the row it picked, so the pick earns a ledger
-        # record and a journal line like any other producer.
+        # and the runtime declares the row it picked, so the pick earns a
+        # journal line like any other producer.
         return await _matched(env, decl)
     if producer is None and decl.role:
         # A SLOT the caller did not fill and no producer answers is asked for on
@@ -149,24 +139,10 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
         _validate_supplied(env, decl, producer.supplied_uri,
                            producer.supplied_validate)
         return await _ingested(env, decl, producer.supplied_uri)
-    cached = env.ledger.replay_data(decl.name) if (env.ledger and env.resume) else None
-    if cached is not None and await _artifacts_live(cached):
-        value = _rehydrate(cached)
-        if value is not _UNREPLAYABLE:
-            env.data_records.append(cached)
-            logger.info("data %s REPLAYED from ledger", decl.name)
-            return await _ingested(env, decl, value, _coverage_row(
-                cached.runner, decl.data_class))
     label = _data_step_label(decl.name)
     if decl.is_context:
         return await _context(env, decl, label)
-    kwargs, value = await _produced(env, producer, label)
-    record = _record_for(decl.name, producer.runner, value,
-                         inputs_key=inputs_digest(kwargs))
-    env.data_records.append(dataclasses.replace(
-        record, index=-1, node=_data_step_label(decl.name)))
-    if env.ledger is not None:
-        await env.ledger.record_data(decl.name, record)
+    value = await _produced(env, producer, label)
     return await _ingested(env, decl, value,
                            _coverage_row(producer.runner, decl.data_class))
 
@@ -177,7 +153,7 @@ async def _matched(env: _Env, decl: DataDecl) -> Any:
     Every slot takes the ONE source its own class matched. The bed takes the
     same one and then whatever the run's own ops lay over it, because a bed is
     the slot a domain most often reaches past and what to do about that is the
-    person's statement, never this walk's."""
+    person's statement, never this fill's."""
     await _somewhere_to_ask(env)
     if decl.role == BED:
         return await _ingested(env, decl, await _bed_surface(env, decl))
@@ -664,7 +640,7 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any,
 
     The whole point of a slot is that what fills it reads the same afterwards,
     so the ingestion runs wherever the value entered. Off the loop: reading a
-    layer's geometry is object-store IO, and the plan is walked on it."""
+    layer's geometry is object-store IO, and the run awaits on it."""
     if not decl.role:
         return value
     from trid3nt_server.inputs.slots import ingest_slot
@@ -847,7 +823,7 @@ async def _offset_row(env: _Env, owner: str, value: Any, frame: str) -> Any:
 
     The frame is the runtime's, so the question a differing source raises is the
     runtime's too - and it is asked the way every other fact about the world is,
-    as a producer row with a ledger record and a line on the journal naming the
+    as a producer row with a line on the journal naming the
     service that answered, at the point of the source's own footprint nearest
     the question's seed. ``None`` where the pair owes no row: the source stands
     on the frame already, publishes its own shift, or names a datum no service
@@ -882,7 +858,7 @@ async def _context(env: _Env, decl: DataDecl, label: str) -> Any:
                     "asked; the run continues", decl.name, unasked)
         return None
     try:
-        kwargs, value = await _produced(env, decl.producer, label)
+        value = await _produced(env, decl.producer, label)
         # The ingestion is INSIDE the absence: a source that answered with rows
         # its slot finds nothing usable in - sites that report another
         # characteristic, a survey with no soundings - held nothing for this run
@@ -900,12 +876,6 @@ async def _context(env: _Env, decl: DataDecl, label: str) -> Any:
         logger.info("data %s is CONTEXT and its source held nothing (%s); the run "
                     "continues", decl.name, exc)
         return None
-    record = _record_for(decl.name, decl.producer.runner, value,
-                         inputs_key=inputs_digest(kwargs))
-    env.data_records.append(dataclasses.replace(
-        record, index=-1, node=label))
-    if env.ledger is not None:
-        await env.ledger.record_data(decl.name, record)
     return ingested
 
 
@@ -929,15 +899,11 @@ def _malformed_ask(exc: BaseException) -> bool:
     return False
 
 
-async def _produced(env: _Env, producer: Producer,
-                    label: str) -> tuple[dict[str, Any], Any]:
-    """Call one producer -> the reads it was called with, and what it answered.
-
-    The reads come back because they are what the ledger record is keyed on, and
-    binding them twice would ask the plan for the same values twice."""
+async def _produced(env: _Env, producer: Producer, label: str) -> Any:
+    """Call one producer with its reads bound -> what it answered."""
     kwargs = await _bind(dict(producer.kwargs), env, label)
     async with substep(current_emitter(), producer.runner.rsplit(".", 1)[-1]):
-        return kwargs, await _call_runner(producer.runner, kwargs, label)
+        return await _call_runner(producer.runner, kwargs, label)
 
 
 def _validate_supplied(env: _Env, decl: DataDecl, supplied: Any,
@@ -974,7 +940,8 @@ ACCEPTED, REJECTED, MISSING, DEFAULTED = (
     "accepted", "rejected", "missing", "defaulted")
 
 #: What rides a fill beside its inputs and is carried as stated: how the run is
-#: reviewed, whether it resumes, and the ops a row's own ingestion reads.
+#: reviewed, whether a kept mesh is rebuilt, and the ops a row's own ingestion
+#: reads.
 _CARRIED = ("input_mode", "restart_clean", "ops")
 
 
@@ -1001,8 +968,6 @@ class Fill:
     carried: dict[str, Any] = field(default_factory=dict)
     keywords: dict[str, Any] = field(default_factory=dict)
     params: ResolvedParams | None = None
-    continue_from: str | None = None
-    continued: dict[str, Any] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
     env: _Env | None = None
     domain: Domain | None = None
@@ -1046,11 +1011,8 @@ async def fill(state: Fill, values: Mapping[str, Any]) -> Fill:
         _keyword(state, str(name), value)
     rows = {decl.name: decl for decl in wf.data}
     sourced = {n: values.pop(n) for n in list(values) if n in rows}
-    continue_from = values.pop("continue_from", None)
     state.stated.update(values)
     await _seat(state)
-    if continue_from is not None:
-        await _continuation(state, str(continue_from))
     if "ops" in state.carried:
         _carried_ops(state, rows)
     for name, value in sourced.items():
@@ -1059,7 +1021,10 @@ async def fill(state: Fill, values: Mapping[str, Any]) -> Fill:
 
 
 def _keyword(state: Fill, name: str, value: Any) -> None:
-    """One engine keyword through the module's own accept rule."""
+    """One engine keyword through the module's own accept rule; a file keyword
+    filled with a layer takes that layer as the file."""
+    if isinstance(value, Mapping) and "layer" in value:
+        value = value["layer"]
     try:
         identifier, taken, note = state.workflow.accept_keyword(name, value)
     except Exception as exc:  # noqa: BLE001 - the refusal is the verdict
@@ -1128,48 +1093,6 @@ async def _seat(state: Fill) -> None:
                 DEFAULTED if value is None else ACCEPTED, row.value,
                 origin="default" if value is None else "user")
     state.params = ResolvedParams(rows) if len(rows) == len(wf.params) else None
-
-
-async def _continuation(state: Fill, run_id: str) -> None:
-    """``continue_from``: only a journaled solved run of THIS module is taken;
-    its mesh is held to this run's once the mesh is built."""
-    from .journal import read_records
-
-    records = await asyncio.to_thread(read_records)
-    line = next((r for r in reversed(records)
-                 if str(r.get("run_id") or "") == run_id.strip()), None)
-    module = getattr(state.workflow, "module_name", None)
-    reason = ""
-    if line is None or not line.get("solved"):
-        reason = (f"continue_from={run_id!r} names no solved result: only a run "
-                  "whose solve completed and was journaled leaves a state to "
-                  "carry on.")
-    elif module and line.get("module") != module:
-        reason = (f"continue_from={run_id!r} solved {line.get('module')!r} and "
-                  f"this fill fills {module!r}: a state carries on only in the "
-                  "module that wrote it.")
-    if reason:
-        state.inputs["continue_from"] = Verdict(
-            REJECTED, run_id, reason=reason, code=ContinuationRefused.error_code,
-            remedies=("a run of this module on this mesh",))
-        return
-    state.continue_from = run_id
-    state.continued = dict(line)
-    state.inputs["continue_from"] = Verdict(ACCEPTED, run_id, origin="user")
-
-
-def refuse_other_mesh(continued: Mapping[str, Any], mesh_key: str) -> None:
-    """A continuation opens only on the mesh built by the same content as the
-    run it continues; any other mesh is refused by name."""
-    if not continued:
-        return
-    theirs = str((continued.get("mesh") or {}).get("key") or "")
-    if theirs != mesh_key:
-        raise ContinuationRefused(
-            f"continue_from={continued.get('run_id')!r} was solved on another "
-            f"mesh ({theirs or 'none recorded'}) than this run builds "
-            f"({mesh_key}): a state carries on only on the mesh built by the "
-            "same content.")
 
 
 def _carried_ops(state: Fill, rows: Mapping[str, DataDecl]) -> None:
@@ -1250,7 +1173,7 @@ def _refusal_code(exc: BaseException, name: str) -> str:
 async def _place_first(env: _Env) -> None:
     """A sourced input stands on the run's place, so the place is filled first.
 
-    Producing a row may register the runtime's own rows, so the walk is over
+    Producing a row may register the runtime's own rows, so the loop is over
     the rows as they stood before it."""
     for row in list(env.data.values()):
         if row.role == DOMAIN and row.name not in env.artifacts:
@@ -1265,3 +1188,119 @@ async def _instead(env: _Env, decl: DataDecl, picked: str) -> tuple[str, ...]:
         return ()
     return tuple(row.fetcher for row in choice.rows
                  if not row.excluded and row.fetcher != picked)
+
+
+async def _bind(kwargs: dict[str, Any], env: _Env, label: str) -> dict[str, Any]:
+    """Every read in ``kwargs`` bound to what the run holds, inside the typed
+    error family: no raw ``TypeError`` escapes the envelope a refusal takes."""
+    try:
+        return {k: await _bind_value(v, env) for k, v in kwargs.items()}
+    except asyncio.CancelledError:
+        raise
+    except DeclarativeError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - re-raised typed, cause preserved
+        if getattr(exc, "retryable", False):
+            raise
+        raise StepFailedError(
+            f"{label!r}: its reads could not be bound: {said(exc)}",
+            error_code=getattr(exc, "error_code", None) or "STEP_ARGS_UNBINDABLE",
+            step=label, cause=exc) from exc
+
+
+async def _bind_value(value: Any, env: _Env) -> Any:
+    if isinstance(value, ParamRef):
+        return env.params.value_of(value.name)
+    if isinstance(value, Ref):
+        return await _deref(value, env)
+    if isinstance(value, Mapping):
+        return {k: await _bind_value(v, env) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set, frozenset)):
+        items = [await _bind_value(v, env) for v in value]
+        if isinstance(value, tuple) and hasattr(value, "_make"):
+            return value._make(items)
+        return type(value)(items)
+    return value
+
+
+#: What a missing field reads as, distinct from a field that is present and None.
+_NO_FIELD = object()
+
+
+async def _deref(ref: Ref, env: _Env) -> Any:
+    """Bind one read, REFUSING rather than yielding a missing field."""
+    if ref.root in env.results:
+        base = env.results[ref.root]
+    elif ref.root in env.artifacts:
+        base = env.artifacts[ref.root]
+    elif ref.root in env.data:
+        base = env.artifacts[ref.root] = await _produce(env, env.data[ref.root])
+    elif ref.root in env.params:
+        base = env.params.value_of(ref.root)
+    else:
+        raise StepFailedError(f"Ref({ref.path!r}) resolves to nothing at run time.",
+                              error_code="REF_UNRESOLVED")
+    if base is None and ref.root in env.data:
+        # A row that is WHOLLY ABSENT states nothing, and what reads it - a
+        # keyword, a composite - expands to nothing in turn.
+        return None
+    read = ref.root
+    for part in ref.tail:
+        found = (base.get(part, _NO_FIELD) if isinstance(base, Mapping)
+                 else getattr(base, part, _NO_FIELD))
+        if found is _NO_FIELD or found is None:
+            missing = ("defines no field" if found is _NO_FIELD
+                       else "carries no value for")
+            raise StepFailedError(
+                f"Ref({ref.path!r}) reads {part!r} off {read}, which {missing} "
+                f"{part!r}. A read of a field that is not there is refused; "
+                "nothing downstream receives it as an absence.",
+                error_code="REF_FIELD_MISSING")
+        base = found
+        read = f"{read}.{part}"
+    return base
+
+
+async def _call_runner(runner: str, kwargs: dict[str, Any], label: str) -> Any:
+    """Call a named runner inside the typed error family."""
+    return await call(_load(runner), kwargs, label)
+
+
+async def call(fn: Any, kwargs: dict[str, Any], label: str) -> Any:
+    """Call a function, sync or async; what it raises untyped arrives typed with
+    its cause, and a retryable gate is raised as it came."""
+    try:
+        out = fn(**kwargs)
+        return await out if inspect.isawaitable(out) else out
+    except asyncio.CancelledError:
+        raise
+    except DeclarativeError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - re-raised typed, cause preserved
+        if getattr(exc, "retryable", False):
+            raise
+        raise StepFailedError(
+            f"step {label!r} failed: {said(exc)}",
+            error_code=getattr(exc, "error_code", None) or "STEP_FAILED",
+            step=label, cause=exc,
+        ) from exc
+
+
+def _load(runner: str) -> Any:
+    """The runner a row names: a REGISTERED TOOL first, then a dotted import path.
+    A name that resolves as BOTH refuses rather than letting lookup order decide."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    registered = TOOL_REGISTRY.get(runner)
+    module_path, _, attr = runner.rpartition(".")
+    if registered is not None and module_path:
+        raise StepFailedError(
+            f"runner {runner!r} is a registered tool AND reads as an import path; "
+            "rename one of them.", error_code="RUNNER_AMBIGUOUS")
+    if registered is not None:
+        return registered.fn
+    if not module_path:
+        raise StepFailedError(
+            f"runner {runner!r} is neither a registered tool nor a dotted import "
+            "path.", error_code="RUNNER_UNRESOLVED")
+    return getattr(importlib.import_module(module_path), attr)

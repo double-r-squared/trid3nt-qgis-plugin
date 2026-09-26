@@ -10,12 +10,13 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.runtime.plan import DataRef
+from trid3nt_server.workflows.runtime.reads import DataRef
 from trid3nt_server.workflows.runtime import Ref
 from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
 from trid3nt_server.workflows.telemac.workflow import stated
 from trid3nt_server.workflows.telemac.templates.sediment_plume import (
-    declarations, sediment_plume as template,
+    declarations,
+    sediment_plume as template,
 )
 
 _TOOL = "telemac_sediment_plume"
@@ -76,39 +77,6 @@ def test_the_discharge_is_a_need_row_the_match_ranks_against_the_domain():
     assert discharge.producer is None
 
 
-def test_an_unplaced_release_sits_along_the_domains_own_centerline():
-    """The release step is handed the domain, so an unplaced point has a line to
-    sit its fraction along and a supplied one is snapped onto the same line."""
-    source = [s for s in _workflow().plan.declared() if s.label == "source"][0]
-    assert source.kwargs["domain"] == DataRef("domain")
-    assert source.kwargs["mesh"] == Ref("mesh")
-    assert source.kwargs["fraction"].name == "spill_fraction"
-
-
-def test_the_workflow_owns_every_stage_this_template_does_not_differ_on():
-    """No domain steps, no mesh recipe, no settle, no file names: what the
-    template states is the open-channel hydraulics and where the sediment
-    enters."""
-    workflow = _workflow()
-    assert [step.label for step in workflow.plan.steps] == [
-        "stated", "mesh", "mesh_files", "channel", "source", "settled", "sheet", "solve",
-        "outputs"]
-    assert not hasattr(template, "MESH")
-
-
-def test_the_mesh_is_built_over_the_slots_at_the_runtimes_own_lever():
-    """The extent is the domain row, the bed is the matched row, and the runs
-    ride on the domain's own producer since there is no runs row any more."""
-    recipe = [s for s in _workflow().plan.steps if s.label == "mesh"][0].kwargs["mesh"]
-    assert recipe["extent"] == DataRef("domain")
-    # A placeholder refuses ``==`` by design, so the read is named by its name.
-    assert recipe["resolution_m"].name == "mesh_resolution_m"
-    ops = {op["op"]: op["kwargs"] for op in recipe["ops"]}
-    assert ops["set_bed"] == {"source": DataRef("bed")}
-    assert ops["set_boundary_roles"] == {"runs": DataRef("domain")}
-    assert "runs" not in _rows()
-
-
 def test_the_baseline_params_are_the_runtimes_and_are_not_restated():
     """A template declares no domain twin, no keyword twin and no lever of its
     own; the three levers are seated on it because the workflow owns its stages."""
@@ -147,15 +115,6 @@ def test_no_param_restates_a_keyword_the_module_already_carries():
     declared = {prm.name for prm in _workflow().params}
     assert not declared & {"sim_duration_s", "grain_size_um", "wind_speed_mps",
                            "wind_direction_deg", "rainfall_mm_per_day"}
-
-
-def test_the_deck_states_the_window_the_settle_is_built_off():
-    """A stage settled at one clock under a deck written at another describes a
-    different run, so the seconds are the deck's ONE statement."""
-    assert template.STEERING.ASSERTED["DURATION"] == 3600.0
-    settled = [s for s in _workflow().plan.declared() if s.label == "settled"][0]
-    assert settled.kwargs["duration_s"] == Ref("stated.DURATION")
-    assert stated(steering=template.STEERING, keywords={})["DURATION"] == 3600.0
 
 
 def test_the_settling_class_is_keywords_on_gaias_own_body():
@@ -219,17 +178,6 @@ def test_a_calm_dry_deck_states_no_wind_and_no_rain_at_all():
         slots, _files = T2D.COMPOSITES[name].expand(
             template.STEERING.ASSERTED[name])
         assert slots == {}, name
-
-
-
-def test_the_roughness_is_the_decks_own_opinion_stated_as_keywords():
-    """The stage is derived as a normal depth AT this roughness, so the number
-    the deck is written at and the number it was derived at are one number."""
-    asserted = template.STEERING.ASSERTED
-    assert asserted["LAW_OF_BOTTOM_FRICTION"] == 3
-    assert asserted["FRICTION_COEFFICIENT"] == 33.0
-    assert [step.name for step in _workflow().plan.steps
-            if step.name == "channel"] == ["channel"]
 
 
 def test_the_slots_reach_the_wire_as_arguments():

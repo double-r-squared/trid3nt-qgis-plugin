@@ -164,40 +164,6 @@ def test_corpus_yaml_present_and_routes():
     assert any("runoff" in q.lower() for q in data["telemac_rain_on_grid"])
 
 
-def test_the_declared_plan_is_the_rain_on_grid_sequence():
-    """The workflow owns its stages off the domain and bed slots; what this
-    template adds is the outlet's own curve. mesh -> outlet -> settled -> sheet
-    -> solve -> outputs."""
-    from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
-        telemac_rain_on_grid,
-    )
-
-    workflow = telemac_rain_on_grid.workflow
-    plan = workflow.plan
-    assert [step.label for step in plan.declared()] == [
-        "stated", "mesh", "mesh_files", "outlet", "settled", "sheet", "solve", "outputs"]
-
-
-def test_a_stated_friction_law_derives_the_rating_curve(monkeypatch):
-    """The outlet's stage-discharge curve is derived at the roughness the deck
-    is solved at, so it reads the resolved floor and not the class attribute."""
-    from trid3nt_server.workflows.runtime import Ref
-    from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
-        STEERING,
-        telemac_rain_on_grid,
-    )
-    from trid3nt_server.workflows.telemac.workflow import stated
-
-    outlet = next(s for s in telemac_rain_on_grid.workflow.plan.declared()
-                  if s.label == "outlet")
-    assert outlet.kwargs["friction_law"] == Ref("stated.LAW_OF_BOTTOM_FRICTION")
-    assert stated(steering=STEERING,
-                  keywords={})["LAW_OF_BOTTOM_FRICTION"] == \
-        STEERING.ASSERTED["LAW_OF_BOTTOM_FRICTION"]
-    assert stated(steering=STEERING, keywords={"LAW OF BOTTOM FRICTION": 4})[
-        "LAW_OF_BOTTOM_FRICTION"] == 4
-
-
 def test_the_outputs_are_the_flux_across_the_outlet_the_user_placed():
     """The depth is the module's to publish; what this template lists is the read
     the user gives a place - the flux the engine printed across the outlet,

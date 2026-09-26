@@ -93,10 +93,9 @@ DOC = dict(
          'for review/edit before the solve and WAITS; "auto" (session default) '
          "proceeds with every assumption labeled. Not a physical value."),
         ("restart_clean",
-         "True discards any ledger left under this same invocation and re-runs "
-         "every step from the top. Nothing a FAILED attempt left behind is ever "
-         "replayed and a run that completed is never replayed either, so a fresh "
-         "invocation always re-solves against live upstream data."),
+         "True builds the mesh again even where one built from the same domain, "
+         "bed, resolution and mesher is kept; unset, such a kept mesh is reused. "
+         "Not a physical value."),
     ),
     returns=(
         "On success the run's record (a `LayerURI`): every variable TOMAWAC "

@@ -49,7 +49,7 @@ def _record(**overrides):
                                     real_source="national_water_model")],
         result=SimpleNamespace(mesh_size_m=30.0),
         wall_seconds=91.4, origin="session",
-        executed=["aoi", "run", "solve"], replayed=[], notes=[],
+        notes=[],
     )
     base.update(overrides)
     return journal.build_record(**base)
@@ -65,7 +65,6 @@ def test_a_run_record_carries_the_run_its_engine_and_where_it_came_from():
     assert "template" not in rec
     assert rec["origin"] == "session"
     assert rec["recorded_at"].endswith("+00:00")
-    assert rec["executed"] == ["aoi", "run", "solve"] and rec["replayed"] == []
 
 
 def test_the_record_carries_the_raw_keyword_floor_the_run_was_pinned_by():
@@ -217,39 +216,6 @@ def test_draining_closes_the_channel_so_the_next_run_starts_empty():
     assert journal.drain_notes(token) == []
 
 
-def test_a_step_result_holding_a_read_only_mapping_is_persisted_as_plain_data():
-    from types import MappingProxyType
-
-    from trid3nt_server.workflows.runtime.ledger import LedgerRecord
-
-    record = LedgerRecord(
-        index=0, node="stated", runner="stated", completed_at="t1",
-        result_kind="value",
-        result={"WIND": MappingProxyType({"speed": (1.0, 2.0)})})
-    doc = record.to_doc()
-    assert doc["result"] == {"WIND": {"speed": [1.0, 2.0]}}
-    assert type(doc["result"]["WIND"]) is dict
-
-
-def test_a_step_result_holding_a_measured_series_is_persisted_as_its_points():
-    # A Series refuses to be moved, so a record that carried one could not be
-    # copied into a document at all and the whole run snapshot failed.
-    import json
-
-    from trid3nt_server.workflows.runtime.ledger import LedgerRecord
-    from trid3nt_server.workflows.runtime.temporal import Series
-
-    record = LedgerRecord(
-        index=0, node="data:carrier", runner="fetch_usgs_nwis_gauges",
-        completed_at="t1", result_kind="value",
-        result={"discharge": Series([0.0, 900.0], [260.8, 261.4],
-                                    units="m3/s")})
-    doc = record.to_doc()
-    assert doc["result"]["discharge"] == {
-        "times_s": [0.0, 900.0], "values": [260.8, 261.4], "units": "m3/s"}
-    assert json.loads(json.dumps(doc))["result"]["discharge"]["units"] == "m3/s"
-
-
 def test_a_slot_is_recorded_with_its_value_and_where_it_came_from():
     """The board copies a run's own numbers off its line: the time step and the
     duration are VALUES there, each beside the origin that put it on the deck."""
@@ -283,7 +249,7 @@ def test_the_run_s_own_line_carries_the_fill_and_the_correct_end_its_solve_step_
     written: list[dict] = []
     monkeypatch.setattr(journal, "append_record", written.append)
     run = SimpleNamespace(
-        params=None, executed=(), replayed=(), outputs=(), keywords={},
+        params=None, outputs=(), keywords={},
         choices=(), results={"solve": {
             "module": "khione", "metrics": {"correct_end": False},
             "sheet": {"filled": {"TIME_STEP": {

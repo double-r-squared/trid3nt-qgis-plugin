@@ -187,9 +187,8 @@ def test_the_spacing_is_read_off_the_mesh_the_run_published() -> None:
     assert workflow._mesh_size_m(run) == 62.5
 
 
-def test_the_published_set_is_the_run_s_own_layers_and_charts() -> None:
-    """What a run published is read off its own record, so a chart and a layer
-    of one quantity are one name."""
+def test_the_published_set_is_the_run_s_own_layers() -> None:
+    """What a run published is read off its own record."""
     from trid3nt_server.workflows.runtime.workflow import RunResult
     from trid3nt_server.tools import TOOL_REGISTRY
 
@@ -197,5 +196,4 @@ def test_the_published_set_is_the_run_s_own_layers_and_charts() -> None:
     run = RunResult(value=None)
     run.outputs.append({"quantity": "water_depth"})
     run.outputs.append({"quantity": None})
-    run.charts["dissolved_oxygen"] = {}
-    assert workflow._published(run) == {"water_depth", "dissolved_oxygen"}
+    assert workflow._published(run) == {"water_depth"}

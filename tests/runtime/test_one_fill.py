@@ -9,9 +9,16 @@ import pytest
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.workflows.runtime import fill as fill_mod
 from trid3nt_server.workflows.runtime.fill import (
-    ACCEPTED, DEFAULTED, MISSING, REJECTED, Fill, fill, refuse_other_mesh)
-from trid3nt_server.workflows.runtime.errors import ContinuationRefused
-from trid3nt_server.workflows.telemac.modules import module as module_mod
+    ACCEPTED,
+    DEFAULTED,
+    MISSING,
+    REJECTED,
+    Fill,
+    fill,
+)
+from trid3nt_server.workflows.telemac.modules import (
+    module as module_mod,
+)
 from trid3nt_server.workflows.telemac.modules import wrapper_for
 
 
@@ -116,27 +123,6 @@ def _journal(monkeypatch, line):
     monkeypatch.setattr(journal, "read_records", lambda: [line])
 
 
-def test_a_continuation_of_the_same_module_is_accepted(monkeypatch):
-    _journal(monkeypatch, {"run_id": "R1", "solved": "s3://x/r.slf",
-                           "module": _wf().module_name, "mesh": {"key": "K"}})
-    state = _filled({"location": "x", "continue_from": "R1"})
-    assert state.inputs["continue_from"].state == ACCEPTED
-    refuse_other_mesh(state.continued, "K")
-
-
-def test_a_continuation_of_another_module_is_refused(monkeypatch):
-    _journal(monkeypatch, {"run_id": "R1", "solved": "s3://x/r.slf",
-                           "module": "tomawac", "mesh": {"key": "K"}})
-    state = _filled({"location": "x", "continue_from": "R1"})
-    assert state.inputs["continue_from"].state == REJECTED
-    assert "tomawac" in state.inputs["continue_from"].reason
-
-
-def test_a_continuation_on_another_mesh_is_refused():
-    with pytest.raises(ContinuationRefused, match="another mesh"):
-        refuse_other_mesh({"run_id": "R1", "mesh": {"key": "K"}}, "OTHER")
-
-
 def test_a_card_edit_refills_through_the_modules_accept_rule(monkeypatch):
     seen = []
     real = module_mod.accept
@@ -165,40 +151,6 @@ def test_a_card_edit_refills_through_the_modules_accept_rule(monkeypatch):
                                    title="", input_mode="user_gated", spent=()))
     assert seen == ["LAW OF BOTTOM FRICTION"]
     assert sheet.edits == {"LAW OF BOTTOM FRICTION": 4}
-
-
-def test_a_continuation_carries_its_journaled_mesh_into_the_walk(monkeypatch):
-    from trid3nt_server.workflows.runtime import workflow as rw
-
-    line = {"run_id": "R1", "solved": "s3://x/r.slf",
-            "module": _wf().module_name, "mesh": {"key": "K"}}
-    _journal(monkeypatch, line)
-    seen = {}
-
-    async def _walk(*_, **kw):
-        seen.update(kw)
-        raise asyncio.CancelledError
-
-    monkeypatch.setattr(rw, "interpret", _walk)
-    state = _filled({"location": "x", "continue_from": "R1"})
-    with pytest.raises(asyncio.CancelledError):
-        asyncio.run(_wf().execute(state))
-    assert seen["continued_mesh"]["mesh"]["key"] == "K"
-    assert seen["mesh_step"] == _wf().mesh_step
-
-
-def test_the_journal_records_the_key_the_mesh_step_was_bound_to(monkeypatch):
-    from trid3nt_server.workflows.runtime import journal
-
-    wf = _wf()
-    lines = []
-    monkeypatch.setattr(journal, "append_record", lines.append)
-    run = types.SimpleNamespace(
-        params=None, results={}, executed=[], replayed=[], outputs=[],
-        keywords={}, choices=[],
-        records=[types.SimpleNamespace(node=wf.mesh_step, inputs_key="K")])
-    wf._journal("R2", run, None, 1.0)
-    assert lines[0]["mesh"]["key"] == "K"
 
 
 def _place_registers_a_row(monkeypatch):

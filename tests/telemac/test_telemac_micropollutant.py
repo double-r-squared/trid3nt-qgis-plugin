@@ -13,8 +13,15 @@ import asyncio
 import pytest
 
 from trid3nt_server.workflows.runtime import DataRef, Ref
-from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, fill, waqtel
-from trid3nt_server.workflows.telemac.modules.module import SlotRefused
+from trid3nt_server.workflows.telemac.modules import (
+    T2D,
+    WAQTEL,
+    fill,
+    waqtel,
+)
+from trid3nt_server.workflows.telemac.modules.module import (
+    SlotRefused,
+)
 
 #: The process, its rows and its body, read off the wrapper that carries them.
 PROCESS = 7
@@ -243,49 +250,12 @@ def test_the_discharge_reaches_the_channel_as_ONE_reading_never_the_record():
     assert discharge.data_class == "discharge series"
 
 
-def test_both_placed_points_carry_the_domain_they_are_placed_along():
-    """Neither point is required, and an unplaced one sits its fraction along
-    the domain's centerline companion - which only the domain carries."""
-    from trid3nt_server.workflows.runtime import DataRef, Ref
-
-    plan = _template().telemac_micropollutant_release.workflow.plan
-    placed = [step for step in plan.declared()
-              if step.name in ("source", "monitoring")]
-    assert [step.kwargs["domain"] for step in placed] == [DataRef("domain")] * 2
-
-
 def test_an_unsurveyed_domain_still_runs_on_the_terrain_alone():
     """The bed is ONE need row now; the survey-then-terrain composition is the
     matched bed's own affair, not a second CONTEXT row on this template."""
     data = {decl.name: decl for decl in
             _template().telemac_micropollutant_release.workflow.data}
     assert data["bed"].is_context is False
-
-
-def test_the_mesh_the_workflow_builds_paints_the_one_bed_row():
-    from trid3nt_server.mesh.tool import recipe_from_plan_value
-    from trid3nt_server.workflows.runtime import DataRef, Ref
-
-    plan = _template().telemac_micropollutant_release.workflow.plan
-    recipe = recipe_from_plan_value(
-        next(s for s in plan.steps if s.name == "mesh").kwargs["mesh"])
-    assert recipe.extent == DataRef("domain")
-    assert recipe.resolution_m.name == "mesh_resolution_m"
-    bed = next(op for op in recipe.ops if op.fn == "set_bed")
-    assert bed.kwargs == {"source": DataRef("bed")}
-    # No runs row: the boundary runs ride on the domain's own producer.
-    runs = next(op for op in recipe.ops if op.fn == "set_boundary_roles")
-    assert runs.kwargs == {"runs": DataRef("domain")}
-
-
-def test_the_plan_reads_as_the_universal_stage_sequence():
-    plan = _template().telemac_micropollutant_release.workflow.plan
-    assert [step.name for step in plan.declared()] == [
-        "stated", "mesh", "mesh_files", "channel", "source", "monitoring",
-        "settled", "sheet", "solve", "outputs"]
-    assert [step.stage for step in plan.declared() if step.stage] == [
-        "prep", "mesh", "author", "author", "author", "author", "author",
-        "author", "solve", "publish"]
 
 
 def test_the_ambient_sediment_is_a_stated_deck_opinion_not_a_param():

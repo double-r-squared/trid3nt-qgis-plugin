@@ -683,7 +683,7 @@ package DataSeam {
 
     part unreadContextAsk : ContextRow {
         doc /*
-        code: trid3nt_server/workflows/runtime/interpreter.py
+        code: trid3nt_server/workflows/telemac/workflow.py
         */
     }
 
@@ -1646,8 +1646,6 @@ package DataSeam {
     satisfy requirement TheRankedListIsOneObjectInThreeViews by rankedListRecord;
     satisfy requirement TheRankedListIsOneObjectInThreeViews by coverageContract;
     verify requirement TheRankedListIsOneObjectInThreeViews by
-        "tests/runtime/test_matched_slots.py::test_the_ranked_list_is_one_object_the_card_and_the_sheet_both_read";
-    verify requirement TheRankedListIsOneObjectInThreeViews by
         "tests/search/test_source_match.py::test_several_equal_on_every_fact_present_as_a_tie";
     verify requirement TheRankedListIsOneObjectInThreeViews by
         "tests/search/test_source_match.py::test_the_ranked_list_carries_at_most_five_rows";
@@ -1820,8 +1818,6 @@ package DataSeam {
     verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/inputs/test_slot_inputs.py::test_the_bed_slot_takes_one_source_and_composes_nothing";
     verify requirement OneBedOverEverySourceAUserCanHave by
-        "tests/telemac/test_workflow_owns_its_stages.py::test_the_bed_op_takes_the_one_row_the_merge_derive_produced";
-    verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/inputs/test_bed_merge.py::test_an_absent_survey_leaves_the_terrain_as_the_whole_bed";
     verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/inputs/test_slot_inputs.py::test_the_bed_slot_says_which_shape_it_was_handed";
@@ -1843,8 +1839,6 @@ package DataSeam {
         "tests/mesh/test_bed_sources_and_runs.py::test_a_domain_no_source_covers_refuses_by_name";
     verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/mesh/test_bed_sources_and_runs.py::test_a_layer_of_soundings_goes_through_the_grid_at_the_meshs_own_scale";
-    verify requirement OneBedOverEverySourceAUserCanHave by
-        "tests/telemac/test_workflow_owns_its_stages.py::test_the_bed_op_takes_the_one_row_the_merge_derive_produced";
 
     verify requirement ABoundaryRunIsTwoPointsAndAType by
         "tests/inputs/test_slot_inputs.py::test_a_domain_producer_hands_over_the_runs_it_cut_the_polygon_between";
@@ -1860,8 +1854,6 @@ package DataSeam {
         "tests/mesh/test_bed_sources_and_runs.py::test_boundary_runs_prescribe_the_roles_their_types_name";
     verify requirement ABoundaryRunIsTwoPointsAndAType by
         "tests/mesh/test_bed_sources_and_runs.py::test_a_closed_body_states_no_run_and_the_mesh_has_only_walls";
-    verify requirement ABoundaryRunIsTwoPointsAndAType by
-        "tests/telemac/test_workflow_owns_its_stages.py::test_the_boundary_runs_ride_on_the_polygon_the_domain_arrived_as";
     verify requirement ABoundaryRunIsTwoPointsAndAType by
         "tests/mesh/test_bed_sources_and_runs.py::test_runs_and_named_faces_are_the_same_statement";
     verify requirement ABoundaryRunIsTwoPointsAndAType by
@@ -1881,8 +1873,6 @@ package DataSeam {
     satisfy requirement AContextRowsAbsenceContinuesTheRun by contextRow;
     satisfy requirement AContextRowsAbsenceContinuesTheRun by unreadContextAsk;
     verify requirement AContextRowsAbsenceContinuesTheRun by
-        "tests/runtime/test_domain_bed_and_context_slots.py::test_a_context_row_no_step_reads_is_asked_all_the_same";
-    verify requirement AContextRowsAbsenceContinuesTheRun by
         "tests/runtime/test_domain_bed_and_context_slots.py::test_a_context_rows_absence_continues_the_run_and_says_so";
     verify requirement AContextRowsAbsenceContinuesTheRun by
         "tests/runtime/test_domain_bed_and_context_slots.py::test_a_hard_producer_row_still_refuses_when_its_source_is_empty";
@@ -1894,8 +1884,6 @@ package DataSeam {
         "tests/runtime/test_domain_bed_and_context_slots.py::test_context_needs_something_to_ask_and_optional_still_refuses_a_producer";
     verify requirement AContextRowsAbsenceContinuesTheRun by
         "tests/runtime/test_domain_bed_and_context_slots.py::test_a_context_row_states_what_the_sheet_says_when_its_source_is_empty";
-    verify requirement AContextRowsAbsenceContinuesTheRun by
-        "tests/runtime/test_domain_bed_and_context_slots.py::test_a_tail_read_off_a_wholly_absent_row_is_nothing";
     verify requirement AContextRowsAbsenceContinuesTheRun by
         "tests/runtime/test_domain_bed_and_context_slots.py::test_the_sheet_reads_a_wholly_absent_row_as_nothing";
 

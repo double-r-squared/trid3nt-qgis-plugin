@@ -18,7 +18,9 @@ from trid3nt_server.workflows.runtime import DataRef, Ref
 from trid3nt_server.workflows.telemac.workflow import stated
 from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
 from trid3nt_server.workflows.telemac.modules import T2D
-from trid3nt_server.workflows.telemac.templates.bed_scour import bed_scour
+from trid3nt_server.workflows.telemac.templates.bed_scour import (
+    bed_scour,
+)
 
 _MODULE = bed_scour
 #: The registered tool, found by what it CARRIES rather than by its name, so the
@@ -42,10 +44,6 @@ _DISSOLVED = {"location", "bbox", "river_geometry_uri", "reach_length_km",
 
 def _rows() -> dict:
     return {row.name: row for row in _WORKFLOW.data}
-
-
-def _step(name: str):
-    return next(s for s in _WORKFLOW.plan.steps if s.name == name)
 
 
 def _recipe():
@@ -85,20 +83,6 @@ def test_the_discharge_is_a_need_row_the_match_ranks_against_the_domain():
     assert discharge.producer is None
 
 
-def test_the_workflow_owns_every_stage_but_the_two_measured_on_the_mesh():
-    """No domain steps, no mesh recipe, no settle, no restated file names. The
-    open-channel hydraulics and the release point are measured against the
-    ACCEPTED mesh, so those two stay the template's."""
-    assert [step.label for step in _WORKFLOW.plan.steps] == [
-        "stated", "mesh", "mesh_files", "channel", "source", "settled", "sheet", "solve",
-        "outputs"]
-    settle = next(step for step in _WORKFLOW.plan.steps if step.label == "settled")
-    assert settle.runner.endswith("opening.open_water")
-    assert (settle.kwargs["geometry"], settle.kwargs["boundary"],
-            settle.kwargs["result"]) == ("domain.slf", "domain.cli",
-                                         "r2d_domain.slf")
-
-
 def test_the_deck_names_its_own_files_and_the_door_does_not_restate_them():
     """The run directory's names ARE the deck's own statements, so the settle
     step above reads them off the body rather than being told them twice."""
@@ -106,38 +90,6 @@ def test_the_deck_names_its_own_files_and_the_door_does_not_restate_them():
     assert asserted["GEOMETRY_FILE"] == "domain.slf"
     assert asserted["BOUNDARY_CONDITIONS_FILE"] == "domain.cli"
     assert asserted["RESULTS_FILE"] == "r2d_domain.slf"
-
-
-def test_the_release_step_is_handed_the_domain_the_centerline_rides_on():
-    """An unplaced marker sits at spill_fraction along the domain's centerline
-    companion, and a placed one is held on that same line - both of which need
-    the domain artifact, not just the mesh cut from it."""
-    source = next(step for step in _WORKFLOW.plan.steps if step.label == "source")
-    assert source.kwargs["domain"] == DataRef("domain")
-    assert source.kwargs["fraction"].name == "spill_fraction"
-
-
-def test_no_step_of_this_plan_calls_a_template_by_module_path():
-    """Every runner is a framework home; nothing is reached at
-    ``templates.<name>``."""
-    assert not [step.runner for step in _WORKFLOW.plan.steps
-                if ".templates." in step.runner]
-
-
-def test_the_mesh_is_built_over_the_domain_slot_at_the_runtime_lever():
-    recipe = _recipe()
-    assert recipe.extent == DataRef("domain")
-    assert recipe.resolution_m.name == "mesh_resolution_m"
-    bed = next(op for op in recipe.ops if op.fn == "set_bed")
-    assert bed.kwargs == {"source": DataRef("bed")}
-
-
-def test_the_boundary_roles_ride_on_the_domain_since_no_runs_row_exists():
-    """There is no runs row any more: the boundary walk the match returned rides
-    on the domain's own producer, and the workflow passes that row directly."""
-    runs = next(op for op in _recipe().ops if op.fn == "set_boundary_roles")
-    assert runs.kwargs == {"runs": DataRef("domain")}
-    assert "runs" not in _rows()
 
 
 def test_the_runtime_levers_are_seated_and_no_baseline_param_is_restated():
@@ -152,37 +104,6 @@ def test_the_runtime_levers_are_seated_and_no_baseline_param_is_restated():
     seated = [name for name in LEVER_NAMES if name not in own]
     assert declared[-len(seated):] == seated
     assert _DISSOLVED.isdisjoint(declared)
-
-
-def test_the_friction_this_deck_is_solved_at_is_a_keyword_not_a_param():
-    """The dictionary already describes the law and its coefficient. The
-    template states its OPINION of the value, and the stage the run opens at is
-    derived at that same number."""
-    asserted = _MODULE.STEERING.ASSERTED
-    assert asserted["LAW_OF_BOTTOM_FRICTION"] == 3
-    assert asserted["FRICTION_COEFFICIENT"] == 33.0
-    channel = _step("channel")
-    # READ at run time off the resolved floor, so a stated law derives the
-    # rating curve the deck is then written at.
-    assert channel.kwargs["friction_law"] == Ref("stated.LAW_OF_BOTTOM_FRICTION")
-    assert channel.kwargs["friction_coefficient"] == Ref(
-        "stated.FRICTION_COEFFICIENT")
-    floor = stated(steering=_MODULE.STEERING, keywords={})
-    assert (floor["LAW_OF_BOTTOM_FRICTION"], floor["FRICTION_COEFFICIENT"]) == (
-        3, 33.0)
-
-
-def test_the_clock_is_the_decks_own_keyword_and_the_settle_reads_it_there():
-    """DURATION is a keyword telemac2d carries, so the window this question is
-    asked over is stated once on the deck and the water is opened on that same
-    number rather than on a lever restating it."""
-    asserted = _MODULE.STEERING.ASSERTED
-    assert asserted["DURATION"] == 3600.0
-    settle = _step("settled")
-    assert settle.kwargs["duration_s"] == Ref("stated.DURATION")
-    assert stated(steering=_MODULE.STEERING, keywords={})["DURATION"] == 3600.0
-    assert stated(steering=_MODULE.STEERING,
-                  keywords={"DURATION": 60.0})["DURATION"] == 60.0
 
 
 def test_the_bed_the_deck_states_is_gaias_own_keywords_on_the_coupled_body():

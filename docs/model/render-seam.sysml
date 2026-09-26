@@ -673,8 +673,6 @@ package RenderSeam {
     satisfy requirement PresentationNeverInDeclarations by restyleSurface;
     satisfy requirement PresentationNeverInDeclarations by restyleTool;
     verify requirement PresentationNeverInDeclarations by
-        "tests/runtime/test_declarative_library.py::test_a_declaration_carries_no_presentation_vocabulary";
-    verify requirement PresentationNeverInDeclarations by
         "tests/fetchers/test_router_hrrr.py::test_units_and_style_by_param";
     verify requirement PresentationNeverInDeclarations by
         "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
@@ -745,22 +743,6 @@ package RenderSeam {
 
     satisfy requirement TheModelIsHandedAHandleNotAUri by layerRecord;
     satisfy requirement TheModelIsHandedAHandleNotAUri by pipelineEmitter;
-    verify requirement TheModelIsHandedAHandleNotAUri by
-        "tests/render/test_layer_handles.py::test_mint_is_idempotent_per_uri";
-    verify requirement TheModelIsHandedAHandleNotAUri by
-        "tests/render/test_layer_handles.py::test_mint_is_monotonic_per_registration_order";
-    verify requirement TheModelIsHandedAHandleNotAUri by
-        "tests/render/test_layer_handles.py::test_exact_uri_values_become_short_handles";
-    verify requirement TheModelIsHandedAHandleNotAUri by
-        "tests/render/test_layer_handles.py::test_plugin_envelope_keeps_the_real_uri";
-    verify requirement TheModelIsHandedAHandleNotAUri by
-        "tests/render/test_layer_handles.py::test_verbatim_registered_uri_dual_accepts";
-    verify requirement TheModelIsHandedAHandleNotAUri by
-        "tests/render/test_layer_handles.py::test_short_handle_case_and_padding_tolerant";
-    verify requirement TheModelIsHandedAHandleNotAUri by
-        "tests/render/test_layer_handles.py::test_unknown_short_handle_rejects_typed_with_inventory";
-    verify requirement TheModelIsHandedAHandleNotAUri by
-        "tests/render/test_layer_handles.py::test_unregistered_object_store_uri_rejects_typed";
     verify requirement TheModelIsHandedAHandleNotAUri by
         "tests/render/test_layer_handles.py::test_emit_seam_llm_sees_handle_not_uri";
 

@@ -13,11 +13,11 @@ from types import MappingProxyType
 from typing import Any, Callable, Mapping, Sequence
 
 from trid3nt_server.workflows.runtime import ParamRef, Ref
-from trid3nt_server.workflows.runtime.plan import declared_reads
+from trid3nt_server.workflows.runtime.reads import declared_reads
 
 from .module import Output, Slot, SlotRefused
 
-__all__ = ["Filled", "Origin", "Provenance", "Sheet", "SheetIncomplete",
+__all__ = ["CONTINUATION", "Filled", "Origin", "Provenance", "Sheet", "SheetIncomplete",
            "fill", "fill_coupled", "late_bound", "run", "solve_cores",
            "tracer_text"]
 
@@ -322,7 +322,7 @@ def fill(source: type | Sheet, *, template: str = "",
 #: own initial-condition statements go unread. The FORMAT it is read at and the
 #: record number are choices among what the dictionary offers, so a deck wanting
 #: a non-default one states it by name.
-_CONTINUATION = "PREVIOUS_COMPUTATION_FILE"
+CONTINUATION = "PREVIOUS_COMPUTATION_FILE"
 
 
 def _continued(body: type, filled: dict[str, Filled],
@@ -330,15 +330,15 @@ def _continued(body: type, filled: dict[str, Filled],
     """State the file this run picks its initial state up from, where the run
     is a continuation and the body reads one.
 
-    Which run that is is the run's own continue_from, so no deck declares it
-    and no template restates it."""
+    Which file that is is the run's own previous-computation fill, staged by
+    the settle, so no deck declares it and no template restates it."""
     staged = (produced.get("settled") or {}).get("continue_from") \
         if isinstance(produced.get("settled"), Mapping) else None
-    if not staged or _CONTINUATION in filled or \
-            _CONTINUATION not in body.MODULE_INPUT:
+    if not staged or CONTINUATION in filled or \
+            CONTINUATION not in body.MODULE_INPUT:
         return
-    slot = body.slot(_CONTINUATION)
-    filled[_CONTINUATION] = Filled(
+    slot = body.slot(CONTINUATION)
+    filled[CONTINUATION] = Filled(
         slot=slot, value=slot.check(str(staged)),
         provenance=Provenance(Origin.PRODUCER, "the run this one continues"))
 

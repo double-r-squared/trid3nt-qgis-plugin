@@ -18,7 +18,6 @@ from trid3nt_server.workflows.runtime import (
     Param,
     PlanValidationError,
     Ref,
-    Step,
     Workflow,
     doors,
 )
@@ -119,7 +118,7 @@ def test_the_generated_signature_is_the_declaration_plus_aliases_and_controls():
     sig, annotations = _wire_signature(params, (("alias", str | None),))
     assert list(sig.parameters) == ["location", "depth_m", "armed", "alias",
                                     "input_mode", "restart_clean", "keywords",
-                                    "picks", "ops", "continue_from",
+                                    "picks", "ops",
                                     "_extra_ignored"]
     assert annotations["depth_m"] == (float | None)      # bounded -> float
     assert annotations["armed"] == (bool | None)         # declared type wins
@@ -182,34 +181,9 @@ def test_a_constant_supplied_off_the_model_wire_still_reaches_the_sheet():
 
 
 # --- (4) a chart builder is the function, with no string fallback ----------- #
-def test_a_dotted_string_chart_builder_is_refused_with_the_fix_in_the_message():
-    step = Step(runner="pkg.mod.fn")
-    with pytest.raises(PlanValidationError) as ei:
-        step.chart("c", builder="pkg.mod.build_chart")
-    assert "function object" in str(ei.value)
-    assert "pkg.mod.build_chart" in str(ei.value)
-
-
-def test_a_chart_records_where_its_builder_lives():
-    def build(*, result, params):
-        return {}
-
-    step = Step(runner="pkg.mod.fn").chart("c", builder=build)
-    assert step.charts[0].builder_path.endswith(
-        "test_workflow_skeleton.test_a_chart_records_where_its_builder_lives"
-        ".<locals>.build")
 
 
 # --- (5) an unknown slot member is refused at plan construction ------------- #
-def _telemac():
-    """A telemac-engined workflow whose template states its steps outright: what
-    the NAME and the ENGINE on the plan come from is what is under test, not the
-    stages a real TELEMAC template's slots build."""
-    class Probe(_Stub):
-        engine = "telemac"
-
-    return Probe(metadata=_metadata("telemac_probe"), params=(),
-                 template=_module(lambda o: (Step(runner="pkg.mod.fn"),)))
 
 
 def _reach_mesh(**params):
@@ -232,12 +206,6 @@ def test_the_plan_reads_a_data_name_off_the_templates_own_body():
     assert DATA.rivers == DataRef("rivers")
     with pytest.raises(AttributeError):
         DATA.riverz
-
-
-def test_the_skeleton_names_and_engines_the_plan_the_template_does_not():
-    plan = _telemac().build_plan()
-    assert plan.name == "telemac_probe"      # from the metadata
-    assert plan.engine == "telemac"          # from the facade
 
 
 # --- (7) a coercion's failure is triaged, never flattened ------------------- #

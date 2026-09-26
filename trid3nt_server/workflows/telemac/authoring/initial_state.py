@@ -30,8 +30,9 @@ _DEPTH_VARIABLE = ("WATER DEPTH", "HAUTEUR D'EAU", "HAUTEUR D EAU")
 _WET_DEPTH_M = 0.01
 
 
-def _continuation_state(uri: str) -> dict[str, Any]:
-    """The restart record's own last instant and depth field - read off the file.
+def _continuation_state(uri: str, node_count: int) -> dict[str, Any]:
+    """The restart record's own last instant and depth field - read off the file,
+    taken only where its node count is this run's mesh's.
 
     A continued run is the same declared scenario over an extended horizon."""
     import tempfile
@@ -45,11 +46,17 @@ def _continuation_state(uri: str) -> dict[str, Any]:
         path = Path(tmp) / PREVIOUS_DEST
         _download_object(str(uri), path)
         record = read_selafin(path)
+    nodes = int(record.get("npoin2") or record["npoin"])
+    if nodes != node_count:
+        raise TelemacError(
+            f"the previous computation {uri} holds {nodes} nodes and this run's "
+            f"mesh {node_count}: a state carries on only on the mesh it was "
+            "computed on.", error_code="TELEMAC_CONTINUATION_REFUSED")
     if len(record["times"]) == 0:
         raise TelemacError(
             f"{uri} holds no time record, so there is no state to continue from "
-            "and no instant to continue the scenario at. Point continue_from at "
-            f"a completed run's {_RESTART}.",
+            "and no instant to continue the scenario at. Fill the previous "
+            f"computation with a completed run's {_RESTART}.",
             error_code="TELEMAC_CONTINUATION_UNREADABLE")
     depth = next((record["data"][name] for name in record["varnames"]
                   if name.strip().upper() in _DEPTH_VARIABLE), None)
@@ -78,7 +85,7 @@ def initial_state_of(continue_from: str | None, node_count: int) -> dict[str, An
     laid bed-parallel, a positive depth at every node; a CONTINUED one opens at
     the restart record's own wet/dry field and the instant it stands at."""
     if continue_from:
-        return _continuation_state(str(continue_from))
+        return _continuation_state(str(continue_from), node_count)
     return {"start_s": None, "wet": [True] * node_count,
             "note": "the template's own constant initial depth, the derived normal "
                     "depth laid bed-parallel over every node of the accepted mesh"}

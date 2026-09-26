@@ -1,6 +1,6 @@
-"""Declarative workflows: a workflow is PARAMS + DATA + a pure ``plan(p, d)``.
+"""Declared workflows: a template is PARAMS + DATA over one module.
 
-The plan is a value; the interpreter walks it.
+A fill puts a value into every input; a run writes, solves and reads.
 """
 
 from __future__ import annotations
@@ -22,18 +22,13 @@ from .errors import (
     SuppliedGeometryError,
     DeclarativeError,
     GateRefusedError,
-    LeakScanTruncated,
-    ModifierIllegalError,
     NamelessFailureError,
     ParamOutOfRangeError,
-    ParamRefLeakedError,
     PlanValidationError,
     StepFailedError,
     WorkflowParkedError,
 )
-from .interpreter import PlanNode, RunResult, expand_plan, interpret
 from .journal import cut_coverage, journal_note, run_coverage
-from .ledger import LedgerRecord, StepLedger, invocation_key
 from .levers import lever
 from .params import (
     Param,
@@ -43,20 +38,9 @@ from .params import (
     doors,
     param_rows,
 )
-from .plan import (
-    ChartSpec,
-    Continued,
-    DataRef,
-    ParamRef,
-    Plan,
-    Ref,
-    RawKeywords,
-    Row,
-    RunMode,
-    Step,
-    body_rows,
-)
+from .reads import DataRef, ParamRef, Ref, Row, body_rows
 from .workflow import (
+    RunResult,
     WireArgsError,
     Workflow,
     register_workflow,
@@ -79,32 +63,27 @@ from .resolver import (
 
 __all__ = [
     "Accepts", "AcceptsDeclarationError",
-    "CATEGORICAL", "ChartSpec",
+    "CATEGORICAL",
     "CoversAOI",
-    "Continued", "Data", "DataDecl", "DataRef", "DeclarativeError",
+    "Data", "DataDecl", "DataRef", "DeclarativeError",
     "Domain",
     "GateRefusedError",
-    "LeakScanTruncated", "LedgerRecord", "ModifierIllegalError",
     "Param",
-    "ParamOutOfRangeError", "ParamRef", "ParamRefLeakedError",
-    "ParamValues", "Plan", "PlanNode",
+    "ParamOutOfRangeError", "ParamRef",
+    "ParamValues",
     "PlanValidationError", "Producer", "RATE", "Ref",
     "ResolvedParam",
     "ResolvedParams",
-    "RawKeywords", "Row", "RunMode", "RunResult", "Series",
-    "NamelessFailureError", "STATE", "Step", "StepFailedError",
+    "Row", "RunResult", "Series",
+    "NamelessFailureError", "STATE", "StepFailedError",
     "SuppliedCoverageError",
     "SuppliedGeometryError",
-    "StepLedger",
     "TemporalGapError", "TemporalShapeError",
     "TemporalUnitsError", "ToolWord",
     "WireArgsError",
     "Workflow", "WorkflowParkedError", "convert_units",
     "current_domain",
     "body_rows", "data_rows", "doors",
-    "expand_plan",
-    "interpret",
-    "invocation_key",
     "cut_coverage", "journal_note", "lever", "run_coverage",
     "merge_provenance", "param_rows", "provenance_entries",
     "register_workflow",

@@ -92,7 +92,7 @@ def test_the_run_record_carries_the_engine_and_the_module_and_no_template():
                            "from": "template: telemac_dye_release"},
               "GEOMETRY FILE": {"value": "mesh.slf", "from": "producer: mesh"}},
         sheet=(), provenance=(), result=None,
-        wall_seconds=1.0, origin="session", executed=(), replayed=(), notes=())
+        wall_seconds=1.0, origin="session", notes=())
     assert record["engine"] == "telemac" and record["module"] == "telemac2d"
     assert "template" not in record
     assert record["fill"]["DURATION"] == {"value": 3600.0,

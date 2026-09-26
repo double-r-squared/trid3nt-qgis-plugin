@@ -1,7 +1,7 @@
 """The Domain environment: the current spatial extent, read implicitly.
 
 Spatial producers read it instead of threading ``aoi=`` everywhere; a step that
-refines it declares ``.overrides_domain()`` and the interpreter rebinds.
+refines it rebinds it.
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ _DOMAIN: contextvars.ContextVar[Domain | None] = contextvars.ContextVar(
 
 
 def current_domain() -> Domain | None:
-    """The domain in force for the step now running (``None`` outside a plan)."""
+    """The domain in force for the stage now running (``None`` outside a run)."""
     return _DOMAIN.get()
 
 

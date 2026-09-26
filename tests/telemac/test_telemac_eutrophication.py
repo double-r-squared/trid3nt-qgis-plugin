@@ -7,8 +7,15 @@ reference files is the driver's job, not this file's."""
 
 import pytest
 
-from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, fill, waqtel
-from trid3nt_server.workflows.telemac.modules.module import SlotRefused
+from trid3nt_server.workflows.telemac.modules import (
+    T2D,
+    WAQTEL,
+    fill,
+    waqtel,
+)
+from trid3nt_server.workflows.telemac.modules.module import (
+    SlotRefused,
+)
 from trid3nt_server.workflows.telemac.modules.outputs import (
     OutputEmpty,
     Solved,
@@ -379,32 +386,6 @@ def test_a_carrier_declaring_no_tracer_counts_them_from_its_own_table():
 
 def _plan():
     return _template().telemac_eutrophication.workflow
-
-
-def test_the_workflow_owns_the_stages_and_the_template_adds_its_own_two():
-    """The template states no mesh recipe, no file names and no settle step: the
-    domain, the bed and the runs are what the plan is built from. What it DOES
-    add is the one thing a question with a CURRENT derives on top of an
-    engine-neutral domain: the uniform-flow opening the deck is written at."""
-    assert [step.label for step in _plan().plan.steps] == [
-        "stated", "mesh", "mesh_files", "channel", "settled", "sheet", "solve", "outputs"]
-
-
-def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_lever():
-    from trid3nt_server.mesh.tool import recipe_from_plan_value
-    from trid3nt_server.workflows.runtime import DataRef
-
-    recipe = recipe_from_plan_value(
-        next(s for s in _plan().plan.steps
-             if s.name == "mesh").kwargs["mesh"])
-    assert recipe.extent == DataRef("domain")
-    assert recipe.resolution_m.name == "mesh_resolution_m"
-    bed = next(op for op in recipe.ops if op.fn == "set_bed")
-    assert bed.kwargs == {"source": DataRef("bed")}
-    # No runs row: the edge rides on the domain's own producer, which measured
-    # it where it cut the polygon.
-    runs = next(op for op in recipe.ops if op.fn == "set_boundary_roles")
-    assert runs.kwargs == {"runs": DataRef("domain")}
 
 
 def test_the_bed_is_a_class_the_match_composes():

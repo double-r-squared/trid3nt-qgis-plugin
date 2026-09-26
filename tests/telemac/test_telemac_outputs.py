@@ -684,23 +684,6 @@ def test_a_bed_that_did_not_move_states_what_it_was_measured_against():
     assert drain_notes(token) == []
 
 
-def test_the_door_carries_a_primitive_s_point_and_line_beside_the_list(monkeypatch):
-    """A read's point or line is a declared read the plan binds; it rides beside
-    the list as anchors and the publish step rejoins it to its primitive."""
-    from trid3nt_server.workflows.runtime import Ref
-    from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import (
-        telemac_do_sag,
-    )
-
-    step = next(s for s in telemac_do_sag.workflow.plan.declared()
-                if s.label == "outputs")
-    listed = step.kwargs["outputs"]
-    assert all(p.along is None and p.at is None for p in listed)
-    anchors = step.kwargs["anchors"]
-    assert len(anchors) == len(listed)
-    assert anchors[0]["along"] == Ref("line")
-
-
 def test_publish_outputs_rejoins_the_anchors_and_draws_the_reference_lines(
         monkeypatch, coupled):
     from trid3nt_contracts.execution import LayerURI

@@ -1,53 +1,48 @@
-"""The declared MESH step: a template's ``tool.build_mesh`` ask, built under the gate.
+"""The declared MESH: a template's ``tool.build_mesh`` ask, built under the gate
+or taken from the keep.
 
-One step for every template, and the RECIPE travels WHOLE - its mesher, its kind,
-its extent, its size word and every op in declared order. Nothing about the ask
-is restated here, so a param or an op cannot go missing between the two."""
+The RECIPE travels WHOLE - its mesher, its kind, its extent, its size word and
+every op in declared order. A built mesh is kept under a digest of the CONTENT
+it is built from, so a run that changes nothing the mesher reads reuses it."""
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
+import json
 import logging
-from typing import Any
+import os
+from datetime import datetime, timezone
+from typing import Any, Mapping
 
-from trid3nt_server.workflows.runtime import RunMode, Step
-from trid3nt_server.mesh.artifact import measured_min_edge_m
-from trid3nt_server.mesh.tool import recipe_plan_value
+from trid3nt_server.mesh.artifact import MeshArtifact, measured_min_edge_m
 
 logger = logging.getLogger("trid3nt_server.mesh.step")
 
-__all__ = ["MeshStep", "build_declared_mesh", "mesh_record"]
+__all__ = ["GATE_LABEL", "build_declared_mesh", "keep_mesh", "mesh_key",
+           "mesh_record"]
 
-_RUNNER = "trid3nt_server.mesh.step.build_declared_mesh"
+#: The label the mesh gate's card carries. It names the ASK - the mesh this run
+#: is about to solve on - never the template that demanded it.
+GATE_LABEL = "build_mesh"
 
+#: The store collection a built mesh is kept in, by its content key.
+_KEPT = "kept_meshes"
 
-class MeshStep:
-    """The declared mesh build, as the step a plan puts before its author stage."""
-
-    #: The label the mesh gate's card carries. It names the ASK - the mesh this
-    #: run is about to solve on - never the template that demanded it.
-    GATE_LABEL: str = "build_mesh"
-
-    @staticmethod
-    def build(*, mesh: Any, name: Any = None, supplied: Any = None,
-              tool: Any = None) -> Step:
-        """Build the declared mesh under the gate; ``supplied`` adopts a built one.
-
-        ``name`` presents the session; a supply is checked against ``tool``'s row."""
-        return Step(runner=_RUNNER, stage="mesh",
-                    kwargs={"mesh": recipe_plan_value(mesh), "name": name,
-                            "supplied": supplied, "tool": tool,
-                            "input_mode": RunMode})
+#: What names a thing rather than holding it: a produced layer's name carries a
+#: random seed, so two fetches of one surface differ here and nowhere else.
+_NAMING = frozenset({"name", "label", "layer_id", "title"})
 
 
 async def build_declared_mesh(*, mesh: dict[str, Any], name: Any = None,
                               supplied: Any = None,
                               tool: Any = None,
-                              input_mode: str | None = None) -> dict[str, Any]:
-    """The mesh a solve runs on -> the accepted mesh's record.
+                              input_mode: str | None = None,
+                              fresh: bool = False) -> dict[str, Any]:
+    """The mesh a solve runs on -> the accepted mesh's record, with its ``key``.
 
-    A SUPPLIED mesh is adopted whole; a built one is gated in the run's own mode."""
-    import asyncio
-
+    A SUPPLIED mesh is adopted whole; one KEPT under this recipe's content key
+    is reused unless ``fresh``; otherwise one is built, gated in the run's mode."""
     from trid3nt_server.render.pipeline_emitter import current_turn_case
     from trid3nt_server.mesh.gate import gate_mesh_build
     from trid3nt_server.mesh.session import MeshSession
@@ -55,6 +50,7 @@ async def build_declared_mesh(*, mesh: dict[str, Any], name: Any = None,
         recipe_from_plan_value,
         supplied_mesh_artifact,
     )
+    from trid3nt_server.workflows.runtime import journal_note
 
     art = None
     if supplied:
@@ -64,17 +60,126 @@ async def build_declared_mesh(*, mesh: dict[str, Any], name: Any = None,
         logger.info("mesh supplied: %s -> %d nodes / %d elements",
                     art.mesh_id, art.node_count, art.element_count)
         return mesh_record(art)
+    key = await asyncio.to_thread(mesh_key, mesh)
+    kept = None if fresh else await _kept(key)
+    if kept is not None:
+        art, run = kept
+        journal_note(f"the mesh kept under content key {key} is reused, built "
+                     f"by run {run or 'that did not reach its solve'}: nothing "
+                     "the mesher reads has changed")
+        return {**mesh_record(art), "key": key, "reused": True}
     recipe = recipe_from_plan_value(mesh)
     session = await asyncio.to_thread(
         MeshSession, recipe, case_id=current_turn_case(),
         name=_session_name(name, recipe.mesher))
-    art = await gate_mesh_build(session, tool_name=MeshStep.GATE_LABEL,
+    art = await gate_mesh_build(session, tool_name=GATE_LABEL,
                                 input_mode=input_mode)
     logger.info("mesh accepted: %s -> %d nodes / %d elements, min edge %s m",
                 art.mesh_id, art.node_count, art.element_count,
                 measured_min_edge_m(art))
     await asyncio.to_thread(_mesh_coverage, recipe.extent, art)
-    return mesh_record(art)
+    return {**mesh_record(art), "key": key}
+
+
+def mesh_key(recipe: Mapping[str, Any]) -> str:
+    """The CONTENT key of a bound recipe: the domain's geometry, the bytes of
+    every file the mesher reads, the resolution, the mesher and its own ops.
+    A file enters by what it holds, never by its name or uri."""
+    blob = json.dumps(_content(recipe), sort_keys=True, default=str)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:24]
+
+
+def _content(value: Any) -> Any:
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    if isinstance(value, str):
+        return {"bytes": _file_digest(value)} if _is_file(value) else value
+    if isinstance(value, Mapping):
+        return {str(k): _content(v) for k, v in value.items()
+                if str(k) not in _NAMING}
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [_content(v) for v in value]
+    uri = getattr(value, "uri", None)
+    if isinstance(uri, str) and _is_file(uri):
+        return {"bytes": _file_digest(uri)}
+    dump = getattr(value, "model_dump", None)
+    if callable(dump):
+        return _content(dump(mode="json"))
+    fields = getattr(type(value), "__dataclass_fields__", None)
+    if fields:
+        return _content({name: getattr(value, name) for name in fields})
+    return {"is": f"{type(value).__module__}.{type(value).__name__}"}
+
+
+def _is_file(text: str) -> bool:
+    return text.startswith("s3://") or ("://" not in text and os.path.isfile(text))
+
+
+def _file_digest(uri: str) -> str:
+    """What a file HOLDS, as a digest of its bytes."""
+    digest = hashlib.sha256()
+    if uri.startswith("s3://"):
+        from trid3nt_server import storage
+
+        bucket, _, key = uri[len("s3://"):].partition("/")
+        body = storage.client().get_object(Bucket=bucket, Key=key)["Body"]
+        for chunk in iter(lambda: body.read(1 << 20), b""):
+            digest.update(chunk)
+    else:
+        with open(uri, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1 << 20), b""):
+                digest.update(chunk)
+    return digest.hexdigest()
+
+
+async def keep_mesh(record: Mapping[str, Any], run: str | None = None) -> None:
+    """Keep the mesh ``record`` holds under its content key, with the run that
+    built it; a supplied mesh has no key, and a reused one keeps its builder."""
+    from trid3nt_server.persistence import DEFAULT_DATABASE, FileMCPClient
+
+    key, art = record.get("key"), record.get("artifact")
+    if not key or art is None or record.get("reused"):
+        return
+    await FileMCPClient().call_tool("update-one", {
+        "database": DEFAULT_DATABASE, "collection": _KEPT,
+        "filter": {"_id": key},
+        "update": {"$set": {"_id": key, "mesh": art.to_json(), "run": run,
+                            "kept_at": datetime.now(timezone.utc).isoformat()}},
+        "upsert": True})
+
+
+async def _kept(key: str) -> tuple[MeshArtifact, str | None] | None:
+    """The mesh kept under ``key`` and the run that built it, or ``None`` where
+    nothing is kept or a file it names is gone from the store."""
+    from trid3nt_server.persistence import DEFAULT_DATABASE, FileMCPClient
+
+    found = await FileMCPClient().call_tool("find-one", {
+        "database": DEFAULT_DATABASE, "collection": _KEPT,
+        "filter": {"_id": key}})
+    doc = (found or {}).get("document") if isinstance(found, dict) else None
+    if not doc:
+        return None
+    art = MeshArtifact.from_json(doc.get("mesh") or {})
+    files = [art.display_uri, *(art.engine_files or {}).values()]
+    live = await asyncio.to_thread(lambda: all(_live(uri) for uri in files if uri))
+    if not live:
+        logger.info("the mesh kept under %s names a file that is gone; it is "
+                    "built again", key)
+        return None
+    return art, doc.get("run")
+
+
+def _live(uri: str) -> bool:
+    if uri.startswith("s3://"):
+        from trid3nt_server import storage
+
+        bucket, _, key = uri[len("s3://"):].partition("/")
+        try:
+            storage.client().head_object(Bucket=bucket, Key=key)
+        except Exception:  # noqa: BLE001 - a file the store cannot show is not reused
+            return False
+        return True
+    return "://" in uri or os.path.exists(uri)
 
 
 def _mesh_coverage(extent: Any, art: Any) -> None:

@@ -13,7 +13,7 @@ from typing import Annotated, Any, Mapping
 from trid3nt_contracts.coverage import DATA_CLASSES
 
 from .errors import PlanValidationError, SuppliedGeometryError
-from .plan import DataRef, Ref, Row, body_rows
+from .reads import DataRef, Ref, Row, body_rows
 
 __all__ = [
     "BED",
@@ -221,7 +221,7 @@ tool = ToolWord()
 
 @dataclass(frozen=True, slots=True)
 class DataDecl(Row):
-    """A declared artifact: a name the plan Refs, and what satisfies it.
+    """A declared artifact: a name a template reads, and what satisfies it.
     A PRODUCER-LESS declaration is a CONTEXT SLOT - the artifact is named, its source
     is not; what fills it comes from outside, or ``.optional()`` allows an absence."""
 

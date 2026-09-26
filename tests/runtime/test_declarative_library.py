@@ -24,24 +24,16 @@ from trid3nt_server.workflows.runtime import (
     DataDecl,
     DataRef,
     Domain,
-    LeakScanTruncated,
-    ModifierIllegalError,
     Param,
     ParamRef,
-    ParamRefLeakedError,
     PlanValidationError,
     Ref,
     ResolvedParams,
-    RunMode,
     StepFailedError,
     SuppliedGeometryError,
-    Step,
-    Plan,
     Workflow,
     tool,
     doors,
-    interpret,
-    invocation_key,
     merge_provenance,
     provenance_entries,
     render_docstring,
@@ -63,17 +55,6 @@ def _patched(target, name, value):
         yield
     finally:
         setattr(target, name, original)
-
-
-async def _raw_ledger_doc(key: str) -> dict | None:
-    """The ledger document as it sits on disk - a tombstone is invisible above."""
-    from trid3nt_server.workflows.runtime.ledger import _COLLECTION
-    from trid3nt_server.persistence import DEFAULT_DATABASE, FileMCPClient
-
-    result = await FileMCPClient().call_tool("find-one", {
-        "database": DEFAULT_DATABASE, "collection": _COLLECTION,
-        "filter": {"_id": key}})
-    return result.get("document")
 
 
 # --- stub runners the plans below name by dotted path ----------------------- #
@@ -125,20 +106,6 @@ async def stub_noting(**kwargs):
     if "stub_noting" in _FAIL_AT:
         raise RuntimeError("noted, then failed")
     return {"uri": "s3://b/noted.tif"}
-
-
-async def stub_merged_bed(**kwargs):
-    """A step whose RESULT states the input row it publishes for itself - the
-    merged bed, which a replayed run has to put back on the map."""
-    from trid3nt_server.inputs.bed import MergedRasterLayerURI
-
-    _CALLS.append("stub_merged_bed")
-    return MergedRasterLayerURI.published(
-        "merged-bed", seed="abc123", name="merged bed surface",
-        layer_type="raster", uri="s3://b/bed.tif", role="primary",
-        style={"kind": "continuous", "ramp": "terrain", "units": "m"},
-        vertical_datum="NAVD88", land_rows=[("survey", 0.4), ("terrain", 0.6)],
-        unmeasured_land_fraction=0.0)
 
 
 async def stub_mesh_step(**kwargs):
@@ -240,24 +207,6 @@ def derive_double(params):
 def derive_broken(params):
     _ = params.base
     return "nope".missing_attribute        # a real bug, not a dependency wait
-
-
-@pytest.fixture(autouse=True)
-def _reset(tmp_path, monkeypatch):
-    # The ledger writes through the real file-persistence store; keep every test's
-    # writes inside its own tmp dir so the suite never touches ~/.trid3nt.
-    monkeypatch.setenv("TRID3NT_DEV_PERSISTENCE_DIR", str(tmp_path / "persistence"))
-    # Offline: the stub runners' s3:// URIs have no object store behind them, so
-    # the replay probe is answered from _MISSING_ARTIFACTS instead of boto3.
-    # import_module, not `import ... as`: the package re-exports `interpret` the
-    # FUNCTION, which shadows the submodule attribute of the same name.
-    _interp = importlib.import_module("trid3nt_server.workflows.runtime.interpreter")
-    monkeypatch.setattr(_interp, "_artifact_state",
-                        lambda uri: "absent" if uri in _MISSING_ARTIFACTS else "live")
-    _CALLS.clear()
-    _FAIL_AT.clear()
-    _MISSING_ARTIFACTS.clear()
-    yield
 
 
 # --- Param declarations ------------------------------------------------------ #
@@ -376,53 +325,6 @@ def test_one_author_word_declares_every_producer():
     assert fetcher.supplied("s3://mine/dem.tif").supplied_uri == "s3://mine/dem.tif"
 
 
-
-
-def test_a_runner_can_name_a_registered_tool():
-    """``tool("probe_point", ...)`` in a plan and ``probe_point(...)`` from a chat
-    resolve to the SAME function - the declaration and the direct call are one
-    namespace, which is what makes a chained tool declarable."""
-    import trid3nt_server.tools as _tools  # noqa: F401 -- registration side-effect
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.runtime.interpreter import _load
-
-    assert _load("probe_point") is TOOL_REGISTRY["probe_point"].fn
-
-
-def test_a_runner_still_resolves_a_dotted_import_path():
-    from trid3nt_server.workflows.runtime.interpreter import _load
-
-    assert _load(f"{_HERE}.stub_step").__name__ == "stub_step"
-
-
-def test_a_name_in_both_namespaces_refuses_rather_than_picking(monkeypatch):
-    """Which namespace answered must never be a matter of lookup order."""
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.runtime.errors import StepFailedError
-    from trid3nt_server.workflows.runtime.interpreter import _load
-
-    both = f"{_HERE}.stub_step"
-    monkeypatch.setitem(TOOL_REGISTRY, both, TOOL_REGISTRY["probe_point"])
-    with pytest.raises(StepFailedError) as ei:
-        _load(both)
-    assert ei.value.error_code == "RUNNER_AMBIGUOUS"
-
-
-def test_a_runner_that_is_neither_refuses_by_name():
-    from trid3nt_server.workflows.runtime.errors import StepFailedError
-    from trid3nt_server.workflows.runtime.interpreter import _load
-
-    with pytest.raises(StepFailedError) as ei:
-        _load("no_such_runner")
-    assert ei.value.error_code == "RUNNER_UNRESOLVED"
-
-
-def test_named_applies_once():
-    step = Step(runner=f"{_HERE}.stub_step").named("a")
-    with pytest.raises(ModifierIllegalError):
-        step.named("b")
-
-
 def _params():
     return [Param("base", desc="d", door=doors.SCENARIO, default=1.0, type=float),
             Param("pt", desc="d", door=doors.USER, optional=True)]
@@ -446,42 +348,7 @@ def _env(plan, p, data=(), *, input_mode=None, keywords=None, supplied=None):
                 supplied=dict(supplied or {}), workflow=plan.name)
 
 
-async def _run(plan, params_decl, wire, data=(), *, input_mode=None,
-               keywords=None, supplied=None, **kw):
-    p = await resolve_params(params_decl, wire)
-    return await interpret(plan, p, params_decl, env=_env(
-        plan, p, data, input_mode=input_mode, keywords=keywords,
-        supplied=supplied), **kw)
-
-
 # --- a ref tail is refused at BINDING, never bound to a silent None ----------- #
-@pytest.mark.asyncio
-async def test_a_tail_to_a_field_the_result_does_not_define_refuses_at_binding():
-    """The ParamRef-leak law reaches attribute tails: a ref naming a field nobody
-    produced is a DECLARATION that does not describe the value it reads, and the
-    refusal names the ref and the missing field."""
-    plan = Plan("w", None, (
-        Step(runner=f"{_HERE}.stub_step").named("first"),
-        Step(runner=f"{_HERE}.stub_second", kwargs={"x": Ref("first.bbox")}),
-    ))
-    with pytest.raises(StepFailedError) as ei:
-        await _run(plan, _params(), {}, resume=False)
-    assert ei.value.error_code == "REF_FIELD_MISSING"
-    assert "first.bbox" in str(ei.value) and "'bbox'" in str(ei.value)
-
-
-@pytest.mark.asyncio
-async def test_a_tail_to_a_field_that_is_present_and_empty_refuses_too():
-    """``centerline.bbox`` on a layer that carries no bbox: the field exists and
-    holds nothing, which is exactly the silent None the run must never receive."""
-    plan = Plan("w", None, (
-        Step(runner=f"{_HERE}.stub_no_bbox").named("centerline"),
-        Step(runner=f"{_HERE}.stub_second", kwargs={"x": Ref("centerline.bbox")}),
-    ))
-    with pytest.raises(StepFailedError) as ei:
-        await _run(plan, _params(), {}, resume=False)
-    assert ei.value.error_code == "REF_FIELD_MISSING"
-    assert "carries no value" in str(ei.value)
 
 
 # --- the DATA class body ------------------------------------------------------ #
@@ -554,100 +421,6 @@ def test_one_declaration_cannot_be_bound_to_two_names():
             second = shared
 
 
-@pytest.mark.asyncio
-async def test_interpreter_runs_steps_and_binds_refs():
-    plan = Plan("w", None, (
-        Step(runner=f"{_HERE}.stub_step").named("first"),
-        Step(runner=f"{_HERE}.stub_second", kwargs={"x": Ref("first.uri")}),
-    ))
-    out = await _run(plan, _params(), {}, resume=False)
-    assert _CALLS == ["stub_step", "stub_second"]
-    assert out.value["seen"]["x"] == "s3://b/k.tif"
-
-
-@pytest.mark.asyncio
-async def test_chart_modifier_runs_as_its_own_node():
-    plan = Plan("w", None, (
-        Step(runner=f"{_HERE}.stub_step").named("a")
-        .chart("c", builder=stub_chart),
-    ))
-    out = await _run(plan, _params(), {}, resume=False)
-    assert _CALLS == ["stub_step", "stub_chart"]
-    assert out.executed == ["a", "a.chart:c"]
-
-
-@pytest.mark.asyncio
-async def test_step_failure_is_typed_and_keeps_the_cause():
-    _FAIL_AT.add("stub_step")
-    plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_step").named("a"),))
-    with pytest.raises(StepFailedError) as exc:
-        await _run(plan, _params(), {}, resume=False)
-    assert exc.value.step == "a" and isinstance(exc.value.cause, RuntimeError)
-
-
-@pytest.mark.asyncio
-async def test_required_param_with_no_gate_refuses_at_the_consequential_step():
-    decl = [Param("needed", desc="a real value", door=doors.USER)]
-    plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_step", consequential=True),))
-    with pytest.raises(Exception, match="never invented"):
-        await _run(plan, decl, {}, resume=False)
-    assert _CALLS == []
-
-
-@pytest.mark.asyncio
-async def test_data_producer_runs_lazily_on_first_ref():
-    decl = _params()
-    data = [DataDecl("mesh", tool(f"{_HERE}.stub_producer"))]
-    plan = Plan("w", None, (
-        Step(runner=f"{_HERE}.stub_second", kwargs={"m": Ref("mesh")}),
-    ))
-    out = await _run(plan, decl, {}, data, resume=False)
-    assert _CALLS == ["stub_producer", "stub_second"]
-    assert out.value["seen"]["m"] == "s3://b/produced.tif"
-
-
-@pytest.mark.asyncio
-async def test_a_producer_row_calls_its_one_producer_and_reports_its_refusal():
-    """A ROW NAMES ONE PRODUCER. Degrading between sources is the MATCH's - it
-    ranks every source that states coverage here and drops the ones that held
-    nothing - so a row has no second rung to fall to and a refusal is the run's."""
-    data = [DataDecl("bed", tool(f"{_HERE}.stub_producer"))]
-    plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_second",
-                                 kwargs={"m": Ref("bed")}),))
-    _FAIL_AT.add("stub_producer")
-    with pytest.raises(StepFailedError):
-        await _run(plan, _params(), {}, data, resume=False)
-    assert _CALLS == ["stub_producer"]
-
-
-@pytest.mark.asyncio
-async def test_byo_artifact_short_circuits_the_producer():
-    data = [DataDecl("mesh", tool(f"{_HERE}.stub_producer").supplied("s3://mine/m.slf",
-                                                                  validate=None))]
-    plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_second", kwargs={"m": Ref("mesh")}),))
-    out = await _run(plan, _params(), {}, data, resume=False)
-    assert _CALLS == ["stub_second"]
-    assert out.value["seen"]["m"] == "s3://mine/m.slf"
-
-
-@pytest.mark.asyncio
-async def test_byo_coverage_validation_refuses_without_a_domain():
-    data = [DataDecl("mesh", tool(f"{_HERE}.stub_producer").supplied("s3://mine/m.slf",
-                                                                  validate=CoversAOI))]
-    plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_second", kwargs={"m": Ref("mesh")}),))
-    with pytest.raises(Exception, match="cannot be checked against the modelled domain"):
-        await _run(plan, _params(), {}, data, resume=False)
-
-
-@pytest.mark.asyncio
-async def test_run_mode_binds_the_runs_input_gate_mode_into_a_step():
-    plan = Plan("mode_w", None, (
-        Step(runner=f"{_HERE}.stub_second", kwargs={"input_mode": RunMode}),
-    ))
-    out = await _run(plan, _params(), {}, input_mode="user_gated", resume=False)
-    assert out.value["seen"]["input_mode"] == "user_gated"
-
-
 # --- the branch the INTERPRETER decides --------------------------------------- #
 def _flagged(**overrides):
     return [Param("flag", desc="run the extra step", door=doors.SCENARIO,
@@ -655,47 +428,6 @@ def _flagged(**overrides):
 
 
 # --- a producer-less Data slot: context handed in, or labelled absence -------- #
-@pytest.mark.asyncio
-async def test_a_context_slot_is_satisfied_by_the_artifact_handed_in():
-    data = [DataDecl("clip_zone")]
-    plan = Plan("slot_supplied", None, (
-        Step(runner=f"{_HERE}.stub_second",
-             kwargs={"z": Ref("clip_zone")}).named("a"),
-    ))
-    out = await _run(plan, _params(), {}, data, resume=False,
-                     supplied={"clip_zone": "s3://mine/zone.gpkg"},
-                     domain=Domain(bbox=(0.0, 0.0, 1.0, 1.0)))
-    assert out.value["seen"]["z"] == "s3://mine/zone.gpkg"
-
-
-@pytest.mark.asyncio
-async def test_an_unsatisfied_required_context_slot_refuses_typed():
-    """Naming a default fetcher for a slot the template deliberately left open
-    would be the library inventing the source."""
-    data = [DataDecl("clip_zone")]
-    plan = Plan("slot_req", None, (
-        Step(runner=f"{_HERE}.stub_second",
-             kwargs={"z": Ref("clip_zone")}).named("a"),
-    ))
-    with pytest.raises(StepFailedError) as exc:
-        await _run(plan, _params(), {}, data, resume=False)
-    assert exc.value.error_code == "DATA_SLOT_UNSATISFIED"
-    assert exc.value.step == "data:clip_zone"
-    assert _CALLS == []
-
-
-@pytest.mark.asyncio
-async def test_an_unsatisfied_optional_context_slot_binds_none_and_says_so():
-    """Absence is legal AND LABELLED: the run answered a slightly different
-    question than one that had the layer, and only the reader can weigh that."""
-    data = [DataDecl("clip_zone").optional()]
-    plan = Plan("slot_opt", None, (
-        Step(runner=f"{_HERE}.stub_second",
-             kwargs={"z": Ref("clip_zone")}).named("a"),
-    ))
-    out = await _run(plan, _params(), {}, data, resume=False)
-    assert out.value["seen"]["z"] is None
-    assert len(out.notes) == 1 and "clip_zone" in out.notes[0]
 
 
 def test_a_producer_backed_data_may_not_be_optional():
@@ -724,302 +456,12 @@ def test_supplied_on_a_slot_and_supplied_on_a_producer_are_different_asks():
     assert DataDecl("mesh", producer).is_supplied is True
 
 
-@pytest.mark.asyncio
-async def test_a_supplied_producer_row_is_on_the_wire_and_the_caller_fills_it():
-    """A row marked .supplied() takes the caller's artifact: the mark says the
-    caller's own thing stands in place of the build, so the row has to be
-    askable, and what the caller hands in is what the run reads."""
-    decl = DataDecl("held", tool(f"{_HERE}.stub_producer").supplied(validate=None))
-    assert decl.role == "" and decl.fills_from_user is True
-    plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_second",
-                                 kwargs={"m": Ref("held")}),))
-    p = await resolve_params(_params(), {})
-    out = await interpret(plan, p, _params(), resume=False, env=_env(
-        plan, p, [decl], supplied={"held": "file:///mine/weather.csv"}))
-    assert _CALLS == ["stub_second"]
-    assert out.value["seen"]["m"] == "file:///mine/weather.csv"
-
-
-@pytest.mark.asyncio
-async def test_a_resumed_run_does_not_refetch_produced_data():
-    decl = _params()
-    data = [DataDecl("mesh", tool(f"{_HERE}.stub_producer"))]
-    plan = Plan("data_led", None, (
-        Step(runner=f"{_HERE}.stub_step", kwargs={"m": Ref("mesh")}).named("a"),
-        Step(runner=f"{_HERE}.stub_second").named("b"),
-    ))
-    parent = await _run(plan, decl, {"base": 9.0}, data)
-    assert _CALLS == ["stub_producer", "stub_step", "stub_second"]
-    await _seed_ledger("data_led", {"base": 9.0},
-                       [r for r in parent.records if r.node == "a"],
-                       parent.data_records)
-
-    _CALLS.clear()
-    await _run(plan, decl, {"base": 9.0}, data)
-    assert _CALLS == ["stub_second"]     # neither the producer nor the step re-ran
-
-
-@pytest.mark.asyncio
-async def test_overrides_domain_rebinds_the_environment():
-    plan = Plan("w", None, (
-        Step(runner=f"{_HERE}.stub_refine").named("clip").overrides_domain(),
-    ))
-    out = await _run(plan, _params(), {}, resume=False,
-                     domain=Domain(bbox=(0.0, 0.0, 1.0, 1.0)))
-    assert out.domain is not None and out.domain.bbox == (10.0, 10.0, 11.0, 11.0)
-
-
 async def stub_refine(**kwargs):
     _CALLS.append("stub_refine")
     return {"bbox": [10.0, 10.0, 11.0, 11.0], "name": "refined"}
 
 
-@pytest.mark.asyncio
-async def test_a_replayed_domain_step_restores_the_domain_it_recorded():
-    """The RECORDED domain is what the step actually left behind - correct by
-    construction, not by re-reading the result and hoping."""
-    plan = Plan("dom_w", None, (
-        Step(runner=f"{_HERE}.stub_refine").named("clip").overrides_domain(),
-        Step(runner=f"{_HERE}.stub_second").named("b"),
-    ))
-    parent = await _run(plan, _params(), {"base": 11.0},
-                        domain=Domain(bbox=(0.0, 0.0, 1.0, 1.0)))
-    await _seed_ledger("dom_w", {"base": 11.0},
-                       [r for r in parent.records if r.node == "clip"])
-
-    _CALLS.clear()
-    out = await _run(plan, _params(), {"base": 11.0},
-                     domain=Domain(bbox=(0.0, 0.0, 1.0, 1.0)))
-    assert _CALLS == ["stub_second"]                       # the clip REPLAYED
-    assert out.domain is not None and out.domain.bbox == (10.0, 10.0, 11.0, 11.0)
-
-
 # --- the ledger: every terminal state tombstones ------------------------------ #
-async def _seed_ledger(name, wire, records, data_records=()):
-    """Leave the ledger a process that DIED mid-run leaves: records under the
-    invocation key, never completed, so the ordinary resume path walks them."""
-    from trid3nt_server.workflows.runtime import StepLedger, invocation_key as _key
-
-    p = await resolve_params(_params(), wire)
-    ledger = await StepLedger.load(_key(name, p.values_dict()), name)
-    ledger.records = sorted(records, key=lambda r: r.index)
-    ledger.data_records = list(data_records)
-    ledger.completed = False
-    await ledger._persist()
-
-
-@pytest.mark.asyncio
-async def test_a_FAILED_attempt_is_tombstoned_so_the_retry_RE_EXECUTES():
-    """The records a dead attempt left were produced by whatever the code was then, so
-    replaying them into a re-run of the corrected question reports a superseded
-    artifact as the new run's answer."""
-    plan = Plan("resume_w", None, (
-        Step(runner=f"{_HERE}.stub_step").named("expensive"),
-        Step(runner=f"{_HERE}.stub_second").named("cheap"),
-    ))
-    p = await resolve_params(_params(), {"base": 2.0})
-    key = invocation_key("resume_w", p.values_dict())
-    _FAIL_AT.add("stub_second")
-    with pytest.raises(StepFailedError):
-        await _run(plan, _params(), {"base": 2.0})
-    assert _CALLS == ["stub_step", "stub_second"]
-    assert (await _raw_ledger_doc(key))["complete"] is True
-
-    _CALLS.clear()
-    _FAIL_AT.clear()
-    out = await _run(plan, _params(), {"base": 2.0})
-    assert _CALLS == ["stub_step", "stub_second"]
-    assert out.replayed == [] and out.executed == ["expensive", "cheap"]
-
-
-@pytest.mark.asyncio
-async def test_a_DIED_attempt_still_replays_its_completed_work():
-    """Tombstoning failure does not retire replay: a process that died without
-    unwinding left completed work, and the resume must not pay for it twice."""
-    plan = Plan("seeded_w", None, (
-        Step(runner=f"{_HERE}.stub_step").named("expensive"),
-        Step(runner=f"{_HERE}.stub_second").named("cheap"),
-    ))
-    parent = await _run(plan, _params(), {"base": 31.0})
-    await _seed_ledger("seeded_w", {"base": 31.0},
-                       [r for r in parent.records if r.node == "expensive"])
-    _CALLS.clear()
-    out = await _run(plan, _params(), {"base": 31.0})
-    assert out.replayed == ["expensive"] and _CALLS == ["stub_second"]
-
-
-@pytest.mark.asyncio
-async def test_a_completed_invocation_re_executes_it_is_not_a_cache():
-    """The ledger resumes a FAILED attempt; it never becomes a permanent cache for
-    a live-no-cache tool."""
-    plan = Plan("done_w", None, (Step(runner=f"{_HERE}.stub_step").named("a"),))
-    first = await _run(plan, _params(), {"base": 5.0})
-    assert first.executed == ["a"] and first.replayed == []
-
-    _CALLS.clear()
-    second = await _run(plan, _params(), {"base": 5.0})
-    assert _CALLS == ["stub_step"]
-    assert second.executed == ["a"] and second.replayed == []
-
-
-@pytest.mark.asyncio
-async def test_a_completed_run_leaves_a_tombstone_not_a_replayable_ledger():
-    from trid3nt_server.workflows.runtime import StepLedger, invocation_key as _key
-
-    plan = Plan("reaped_w", None, (Step(runner=f"{_HERE}.stub_step").named("a"),))
-    p = await resolve_params(_params(), {"base": 6.0})
-    await interpret(plan, p, _params(), env=_env(plan, p))
-    key = _key("reaped_w", p.values_dict())
-    ledger = await StepLedger.load(key, "reaped_w")
-    assert ledger.records == []
-    assert (await _raw_ledger_doc(key))["complete"] is True
-
-
-@pytest.mark.asyncio
-async def test_replay_re_executes_when_the_cached_artifact_is_gone():
-    """A dead URI is never handed back: the artifact probe forces a re-run."""
-    plan = Plan("dead_w", None, (
-        Step(runner=f"{_HERE}.stub_step").named("expensive"),
-        Step(runner=f"{_HERE}.stub_second").named("cheap"),
-    ))
-    parent = await _run(plan, _params(), {"base": 7.0})
-    await _seed_ledger("dead_w", {"base": 7.0},
-                       [r for r in parent.records if r.node == "expensive"])
-
-    _CALLS.clear()
-    _MISSING_ARTIFACTS.add("s3://b/k.tif")          # the cached COG was pruned
-    out = await _run(plan, _params(), {"base": 7.0})
-    assert _CALLS == ["stub_step", "stub_second"]
-    assert out.replayed == [] and out.executed == ["expensive", "cheap"]
-
-
-@pytest.mark.asyncio
-async def test_a_replayed_artifact_comes_back_as_the_artifact_not_as_a_mapping():
-    """The ledger must not flatten a step's artifact into the fields it printed.
-
-    Serialized as plain JSON a ``MeshArtifact`` becomes a dict, and the second attempt
-    then crashes on the missing ``probes`` and finds no ``provenance``."""
-    from trid3nt_server.mesh.artifact import MeshArtifact, measured_min_edge_m
-    from trid3nt_server.workflows.telemac.authoring.release_point import _domain_polygon
-
-    plan = Plan("mesh_replay_w", None, (
-        Step(runner=f"{_HERE}.stub_mesh_step").named("mesh"),
-        Step(runner=f"{_HERE}.stub_second").named("run"),
-    ))
-    parent = await _run(plan, _params(), {"base": 11.0})
-    await _seed_ledger("mesh_replay_w", {"base": 11.0},
-                       [r for r in parent.records if r.node == "mesh"])
-
-    _CALLS.clear()
-    out = await _run(plan, _params(), {"base": 11.0})
-    assert out.replayed == ["mesh"] and _CALLS == ["stub_second"]
-
-    replayed = out.results["mesh"]["artifact"]
-    assert isinstance(replayed, MeshArtifact)
-    assert measured_min_edge_m(replayed) == 40.5
-    assert _domain_polygon(replayed)["type"] == "Polygon"
-
-
-@pytest.mark.asyncio
-async def test_a_replayed_merge_publishes_its_bed_again(monkeypatch):
-    """The published surface is part of what the record replays. A cached merge
-    never reaches its own publish, and a resumed run must still show the bed."""
-    from trid3nt_server.render import layer_uri_emit
-
-    published: list[dict] = []
-
-    async def _publish(emitter, **fields) -> bool:
-        published.append(fields)
-        return True
-
-    monkeypatch.setattr(layer_uri_emit, "publish_raster_input_cog", _publish)
-    plan = Plan("bed_replay_w", None, (
-        Step(runner=f"{_HERE}.stub_merged_bed").named("bed"),
-        Step(runner=f"{_HERE}.stub_second").named("run"),
-    ))
-    parent = await _run(plan, _params(), {"base": 13.0})
-    row = [r for r in parent.records if r.node == "bed"][0].layer
-    assert row["name"] == ("Input: bed (land: survey 40.0%, terrain 60.0%, "
-                           "0.0% measured by nothing, datum NAVD88)")
-    assert row["cog_uri"] == "s3://b/bed.tif"
-    assert published == []                  # the merge itself publishes, not the plan
-
-    await _seed_ledger("bed_replay_w", {"base": 13.0},
-                       [r for r in parent.records if r.node == "bed"])
-    _CALLS.clear()
-    out = await _run(plan, _params(), {"base": 13.0})
-    assert out.replayed == ["bed"] and _CALLS == ["stub_second"]
-    assert [r.layer for r in out.records if r.node == "bed"] == [row]
-    assert published == [row]
-
-
-@pytest.mark.asyncio
-async def test_restart_clean_discards_whatever_ledger_it_finds():
-    """What survives a terminal state is nothing; what survives a process that
-    DIED without unwinding is records. restart_clean discards those too, which is
-    what makes a driver run exercise the code that changed."""
-    plan = Plan("clean_w", None, (
-        Step(runner=f"{_HERE}.stub_step").named("a"),
-        Step(runner=f"{_HERE}.stub_second").named("b"),
-    ))
-    parent = await _run(plan, _params(), {"base": 3.0})
-    await _seed_ledger("clean_w", {"base": 3.0},
-                       [r for r in parent.records if r.node == "a"])
-    _CALLS.clear()
-    out = await _run(plan, _params(), {"base": 3.0}, resume=False)
-    assert _CALLS == ["stub_step", "stub_second"] and out.replayed == []
-
-
-@pytest.mark.asyncio
-async def test_a_retryable_typed_gate_is_RAISED_not_flattened():
-    """The adapter harvests .suggestions off the RAISED exception; wrapping it in a
-    StepFailedError envelope destroys the retry channel."""
-    plan = Plan("gate_w", None, (Step(runner=f"{_HERE}.stub_gate_raiser").named("g"),))
-    with pytest.raises(_RetryableGate) as exc:
-        await _run(plan, _params(), {}, resume=False)
-    assert exc.value.suggestions
-
-
-@pytest.mark.asyncio
-async def test_an_auxiliary_chart_failure_does_not_kill_the_run():
-    """failure retracts nothing: the primary result stands, the miss is narrated."""
-    _FAIL_AT.add("stub_chart")
-    plan = Plan("aux_w", None, (
-        Step(runner=f"{_HERE}.stub_step").named("a")
-        .chart("c", builder=stub_chart),
-    ))
-    out = await _run(plan, _params(), {}, resume=False)
-    assert out.value["uri"] == "s3://b/k.tif"
-    assert out.executed == ["a"]
-    assert len(out.notes) == 1 and "chart-boom" in out.notes[0]
-
-
-@pytest.mark.asyncio
-async def test_a_failed_auxiliary_node_re_executes_on_the_next_run():
-    _FAIL_AT.add("stub_chart")
-    plan = Plan("aux_led", None, (
-        Step(runner=f"{_HERE}.stub_step").named("a")
-        .chart("c", builder=stub_chart),
-    ))
-    await _run(plan, _params(), {"base": 8.0})
-    _CALLS.clear()
-    _FAIL_AT.clear()
-    out = await _run(plan, _params(), {"base": 8.0})
-    assert _CALLS == ["stub_step", "stub_chart"] and out.notes == []
-
-
-def test_invocation_key_is_stable_and_param_sensitive():
-    assert invocation_key("w", {"a": 1}) == invocation_key("w", {"a": 1})
-    assert invocation_key("w", {"a": 1}) != invocation_key("w", {"a": 2})
-
-
-def test_invocation_key_separates_the_two_input_modes():
-    """A failed AUTO attempt must not seed a user_gated replay: the gated run may
-    revise the very params the auto attempt cached."""
-    auto = invocation_key("w", {"a": 1}, input_mode="auto")
-    gated = invocation_key("w", {"a": 1}, input_mode="user_gated")
-    assert auto != gated
-    assert invocation_key("w", {"a": 1}, input_mode=None) == gated
 
 
 # --- generated docstring ------------------------------------------------------ #
@@ -1069,13 +511,6 @@ def test_docstring_reports_bounds_units_and_labeled_defaults():
 
 
 # --- late binding: a plan DESCRIBES, the interpreter SUBSTITUTES -------------- #
-@pytest.mark.asyncio
-async def test_a_plan_reads_params_as_late_bound_refs_not_baked_values():
-    p = await resolve_params(_params(), {"base": 4.0})
-    assert isinstance(p.base, ParamRef) and p.base.name == "base"
-    step = Step(runner=f"{_HERE}.stub_step", kwargs={"x": p.base})
-    baked = step.kwargs["x"]                        # the VALUE 4.0 is nowhere in it
-    assert isinstance(baked, ParamRef) and baked.name == "base"
 
 
 @pytest.mark.asyncio
@@ -1085,200 +520,16 @@ async def test_an_undeclared_param_read_refuses_at_construction():
         _ = p.ghost
 
 
-@pytest.mark.asyncio
-async def test_late_binding_reaches_the_runner_with_the_resolved_value():
-    p = await resolve_params(_params(), {"base": 4.0})
-    plan = Plan("late_w", None, (
-        Step(runner=f"{_HERE}.stub_second", kwargs={"x": p.base}).named("a"),))
-    out = await interpret(plan, p, _params(), resume=False, env=_env(plan, p))
-    assert out.value["seen"]["x"] == 4.0
-
-
-@pytest.mark.asyncio
-async def test_the_raw_keyword_floor_rides_out_on_the_runs_own_result():
-    """The floor is a CONTROL and no Param, so it is on no param sheet; the run
-    carries it out so its record can say which deck was actually solved."""
-    p = await resolve_params(_params(), {})
-    plan = Plan("floor_w", None, (Step(runner=f"{_HERE}.stub_step").named("a"),))
-    out = await interpret(plan, p, _params(), resume=False, env=_env(
-        plan, p, keywords={"LAW OF BOTTOM FRICTION": 4}))
-    assert out.keywords == {"LAW OF BOTTOM FRICTION": 4}
-
-
 # --- the form gate's revision REACHES the run -------------------------------- #
-def _review(revised, monkeypatch):
-    """Patch the review spine so it approves, carrying ``revised`` back."""
-    from trid3nt_server.gates.input_review import ReviewOutcome, _apply_revision
-
-    _interp = importlib.import_module("trid3nt_server.workflows.runtime.interpreter")
-
-    async def _fake(*, tool_name, mode, entries, params, **kw):
-        merged_e, merged_p = _apply_revision(list(entries), dict(params), revised)
-        return ReviewOutcome(proceed=True, entries=merged_e, params=merged_p,
-                             mode="user_gated", rounds_used=1)
-
-    monkeypatch.setattr(_interp, "gate_input_review", _fake)
-
-
-def _recording_review(revised, monkeypatch):
-    """``_review``, plus a mark in ``_CALLS`` so gate ORDER is assertable."""
-    _review(revised, monkeypatch)
-    _interp = importlib.import_module("trid3nt_server.workflows.runtime.interpreter")
-    approved = _interp.gate_input_review
-
-    async def _marked(**kw):
-        _CALLS.append("form_gate")
-        return await approved(**kw)
-
-    monkeypatch.setattr(_interp, "gate_input_review", _marked)
-
-
-@pytest.mark.asyncio
-async def test_do_sag_declares_no_gate_in_front_of_its_self_gating_review():
-    """The fill/run door reviews the sheet it just filled, so the plan declares
-    no gate of its own: a second card's edits would land on a sheet the door
-    never reads."""
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    wf = TOOL_REGISTRY["telemac_do_sag"].fn.workflow
-    assert [s.kind for s in wf.plan.declared() if hasattr(s, "kind")] == []
-    assert [s.label for s in wf.plan.declared() if s.self_gating] == ["sheet"]
 
 
 # --- the completion tombstone: three ghost paths ----------------------------- #
-@pytest.mark.asyncio
-async def test_a_finished_run_whose_reap_would_fail_is_still_marked_complete(monkeypatch):
-    """The wave-1b reap was a DELETE whose failure only warned, so a finished run
-    stayed replayable. The tombstone is a positive marker on the same write path."""
-    from trid3nt_server.persistence import FileMCPClient
-
-    real = FileMCPClient.call_tool
-
-    async def _no_deletes(self, name, arguments=None):
-        if name == "delete-one":
-            raise OSError("simulated persistence failure on delete")
-        return await real(self, name, arguments)
-
-    monkeypatch.setattr(FileMCPClient, "call_tool", _no_deletes)
-    plan = Plan("ghost1", None, (Step(runner=f"{_HERE}.stub_step").named("a"),))
-    await _run(plan, _params(), {"base": 21.0})
-    _CALLS.clear()
-    out = await _run(plan, _params(), {"base": 21.0})
-    assert _CALLS == ["stub_step"]
-    assert out.executed == ["a"] and out.replayed == []
-
-
-@pytest.mark.asyncio
-async def test_a_crash_between_the_last_record_and_completion_leaves_no_ghost():
-    from trid3nt_server.workflows.runtime import StepLedger
-
-    async def _die(self):
-        raise KeyboardInterrupt("SIGINT before the completion call")
-
-    plan = Plan("ghost2", None, (Step(runner=f"{_HERE}.stub_step").named("a"),))
-    with _patched(StepLedger, "complete", _die):
-        with pytest.raises(KeyboardInterrupt):
-            await _run(plan, _params(), {"base": 22.0})
-
-    _CALLS.clear()
-    out = await _run(plan, _params(), {"base": 22.0})
-    assert _CALLS == ["stub_step"]
-    assert out.executed == ["a"] and out.replayed == []
-
-
-@pytest.mark.asyncio
-async def test_a_cancel_after_the_last_record_leaves_no_ghost():
-    import asyncio
-
-    from trid3nt_server.workflows.runtime import StepLedger
-
-    async def _cancel(self):
-        raise asyncio.CancelledError()
-
-    plan = Plan("ghost3", None, (Step(runner=f"{_HERE}.stub_step").named("a"),))
-    with _patched(StepLedger, "complete", _cancel):
-        with pytest.raises(asyncio.CancelledError):
-            await _run(plan, _params(), {"base": 23.0})
-
-    _CALLS.clear()
-    out = await _run(plan, _params(), {"base": 23.0})
-    assert _CALLS == ["stub_step"] and out.replayed == []
-
-
-@pytest.mark.asyncio
-async def test_a_cancel_MID_plan_stays_resumable_that_is_resume_working():
-    """A cancelled run is not a finished run: its completed steps must survive."""
-    import asyncio
-
-    async def _cancel_step(**kwargs):
-        raise asyncio.CancelledError()
-
-    globals()["stub_cancel"] = _cancel_step
-    plan = Plan("cancel_w", None, (
-        Step(runner=f"{_HERE}.stub_step").named("expensive"),
-        Step(runner=f"{_HERE}.stub_cancel").named("interrupted"),
-    ))
-    with pytest.raises(asyncio.CancelledError):
-        await _run(plan, _params(), {"base": 24.0})
-    _CALLS.clear()
-
-    plan2 = Plan("cancel_w", None, (
-        Step(runner=f"{_HERE}.stub_step").named("expensive"),
-        Step(runner=f"{_HERE}.stub_second").named("interrupted"),
-    ))
-    out = await _run(plan2, _params(), {"base": 24.0})
-    assert out.replayed == ["expensive"] and _CALLS == ["stub_second"]
-
-
-@pytest.mark.asyncio
-async def test_the_sweep_reaps_tombstones_past_the_ttl(monkeypatch):
-    """Tombstones are bounded: they are reaped on AGE, not kept forever."""
-    from trid3nt_server.workflows.runtime import StepLedger, invocation_key as _key
-    import trid3nt_server.workflows.runtime.ledger as _led
-
-    plan = Plan("ttl_w", None, (Step(runner=f"{_HERE}.stub_step").named("a"),))
-    p = await resolve_params(_params(), {"base": 25.0})
-    await interpret(plan, p, _params(), env=_env(plan, p))
-    key = _key("ttl_w", p.values_dict())
-    assert (await _raw_ledger_doc(key))["complete"] is True
-
-    monkeypatch.setattr(_led, "_TTL", _led.timedelta(seconds=-1))
-    await StepLedger.load("some-other-key", "ttl_w")     # the sweep runs on load
-    assert await _raw_ledger_doc(key) is None
 
 
 # --- aux notes survive a later failure ---------------------------------------- #
-@pytest.mark.asyncio
-async def test_an_aux_note_is_carried_into_the_failure_that_ends_the_run():
-    _FAIL_AT.add("stub_chart")
-    _FAIL_AT.add("stub_second")
-    plan = Plan("notes_w", None, (
-        Step(runner=f"{_HERE}.stub_step").named("a")
-        .chart("c", builder=stub_chart),
-        Step(runner=f"{_HERE}.stub_second").named("b"),
-    ))
-    with pytest.raises(StepFailedError) as exc:
-        await _run(plan, _params(), {}, resume=False)
-    assert any("chart-boom" in n for n in getattr(exc.value, "__notes__", ()))
 
 
 # --- eager Data producer errors are typed too --------------------------------- #
-@pytest.mark.asyncio
-async def test_an_eager_data_producer_failure_is_typed_with_its_own_error_code():
-    async def _bad_producer(**kwargs):
-        _CALLS.append("bad_producer")
-        raise _DataDown()
-
-    globals()["bad_producer"] = _bad_producer
-    data = [DataDecl("mesh", tool(f"{_HERE}.bad_producer"))]
-    plan = Plan("eager_w", None, (
-        Step(runner=f"{_HERE}.stub_second", kwargs={"m": Ref("mesh")}).named("a"),
-    ))
-    with pytest.raises(StepFailedError) as exc:
-        await _run(plan, _params(), {}, data, resume=False,
-                   domain=Domain(bbox=(0.0, 0.0, 1.0, 1.0)))
-    assert exc.value.error_code == "MESH_SOURCE_DOWN"
-    assert exc.value.step == "data:mesh"
 
 
 class _DataDown(RuntimeError):
@@ -1289,53 +540,6 @@ class _DataDown(RuntimeError):
 
 
 # --- the ledger under concurrency --------------------------------------------- #
-@pytest.mark.asyncio
-async def test_two_ledgers_over_one_store_share_a_lock():
-    from trid3nt_server.workflows.runtime import StepLedger
-    from trid3nt_server.workflows.runtime.ledger import _COLLECTION
-    from trid3nt_server.persistence import DEFAULT_DATABASE
-
-    a = await StepLedger.load("KEY_A", "wf")
-    b = await StepLedger.load("KEY_B", "wf")
-    path = a._client._collection_path(DEFAULT_DATABASE, _COLLECTION)
-    assert a._client is not b._client
-    assert a._client._lock_for(path) is b._client._lock_for(path)
-
-
-@pytest.mark.asyncio
-async def test_a_concurrent_ledger_cannot_resurrect_a_completed_one():
-    """A whole-store write computed from a stale snapshot would put the reaped
-    records back and make a FINISHED run replayable again."""
-    import asyncio
-    import time
-
-    from trid3nt_server.workflows.runtime import StepLedger
-    from trid3nt_server.workflows.runtime.ledger import LedgerRecord
-    from trid3nt_server.persistence import FileMCPClient
-
-    real_read = FileMCPClient._read_store
-
-    def _slow_read(path):
-        time.sleep(0.05)                 # force the two cycles to overlap
-        return real_read(path)
-
-    def _rec(node, uri):
-        return LedgerRecord(index=0, node=node, runner="r",
-                            completed_at="2026-08-23T00:00:00+00:00",
-                            result_kind="json", result={"uri": uri},
-                            artifact_uris=(uri,))
-
-    a = await StepLedger.load("KEY_A", "wf")
-    b = await StepLedger.load("KEY_B", "wf")
-    await a.record(_rec("a0", "s3://x/a0"))
-    await b.record(_rec("b0", "s3://x/b0"))
-
-    with _patched(FileMCPClient, "_read_store", staticmethod(_slow_read)):
-        await asyncio.gather(a.complete(), b.record(_rec("b1", "s3://x/b1")))
-
-    assert (await _raw_ledger_doc("KEY_A"))["complete"] is True
-    assert (await _raw_ledger_doc("KEY_A"))["records"] == []
-    assert [r["node"] for r in (await _raw_ledger_doc("KEY_B"))["records"]] == ["b1"]
 
 
 def test_the_store_cycle_is_locked_across_processes(tmp_path):
@@ -1363,18 +567,6 @@ def test_the_store_cycle_is_locked_across_processes(tmp_path):
         f"doc{i}" for i in range(12))
 
 
-@pytest.mark.asyncio
-async def test_a_user_supplied_physics_value_is_not_refused():
-    decl = [Param("aquifer_k_ms", desc="hydraulic conductivity", door=doors.SCENARIO,
-                  default=1e-4, type=float, units="m/s", consequence="physics")]
-    plan = Plan("law9_ok", None, (
-        Step(runner=f"{_HERE}.stub_step", consequential=True).named("solve"),
-    ))
-    await _run(plan, decl, {"aquifer_k_ms": 9.1e-6}, resume=False)
-    assert _CALLS == ["stub_step"]
-
-
-
 # --- R3-1: a ParamRef may not leak past the late-binding seam ----------------- #
 def test_a_param_ref_refuses_every_silent_leak_path():
     """Each of these used to answer QUIETLY: an f-string baked ``ParamRef(...)``
@@ -1392,22 +584,6 @@ def test_a_param_ref_refuses_every_silent_leak_path():
     with pytest.raises(PlanValidationError, match="hashing"):
         _ = {ref}
     assert repr(ref) == "ParamRef('reach_km')"     # naming it is what repr is for
-
-
-@pytest.mark.asyncio
-async def test_the_binder_walks_sets_and_frozensets_like_the_validator_does():
-    """The validator has always walked sets for declared reads; a binder that did
-    not would hand the runner a set of DESCRIPTIONS."""
-    plan = Plan("setbind", None, (
-        Step(runner=f"{_HERE}.stub_step").named("first"),
-        Step(runner=f"{_HERE}.stub_second", kwargs={
-            "s": {Ref("first.uri")},
-            "f": frozenset({Ref("first.uri")}),
-        }).named("second"),
-    ))
-    out = await _run(plan, _params(), {}, resume=False)
-    assert out.value["seen"]["s"] == {"s3://b/k.tif"}
-    assert out.value["seen"]["f"] == frozenset({"s3://b/k.tif"})
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -1444,52 +620,6 @@ async def stub_returns_a_leaked_ref(**kwargs):
             "held": _Holder(ParamRef("base"))}
 
 
-@pytest.mark.asyncio
-async def test_a_ref_hidden_on_a_slotted_object_never_reaches_a_runner():
-    """frozen+slots has no __dict__; a guard that read only __dict__ handed the
-    runner a description and json.dumps(default=str) put it on the wire as text."""
-    plan = Plan("leak_args", None, (
-        Step(runner=f"{_HERE}.stub_step",
-             kwargs={"held": _Holder(ParamRef("base"))}).named("s"),
-    ))
-    with pytest.raises(ParamRefLeakedError, match="arguments"):
-        await _run(plan, _params(), {}, resume=False)
-    assert _CALLS == []
-
-
-@pytest.mark.asyncio
-async def test_a_ref_hidden_on_a_dict_object_never_reaches_a_runner():
-    plan = Plan("leak_args_dict", None, (
-        Step(runner=f"{_HERE}.stub_step",
-             kwargs={"held": _DictHolder(ParamRef("base"))}).named("s"),
-    ))
-    with pytest.raises(ParamRefLeakedError, match="arguments"):
-        await _run(plan, _params(), {}, resume=False)
-    assert _CALLS == []
-
-
-@pytest.mark.asyncio
-async def test_a_ref_in_a_result_never_reaches_the_ledger_or_the_caller():
-    """A ref on disk is always a bug, never data - so the record is refused rather
-    than written, sequence and slotted-object arms included."""
-    plan = Plan("leak_result", None, (
-        Step(runner=f"{_HERE}.stub_returns_a_leaked_ref").named("s"),
-    ))
-    with pytest.raises(ParamRefLeakedError, match="ledger record"):
-        await _run(plan, _params(), {}, resume=False)
-
-
-def test_the_guard_reads_slots_dataclass_fields_and_dict_alike():
-    """The three attribute shapes an author can hand the guard, at the seam itself."""
-    from trid3nt_server.workflows.runtime.interpreter import _refuse_leaked_param_refs
-
-    for holder in (_Holder(ParamRef("base")), _DictHolder(ParamRef("base")),
-                   _SlotsNoDataclass(ParamRef("base"))):
-        with pytest.raises(ParamRefLeakedError, match=r"ParamRef\('base'\)") as exc:
-            _refuse_leaked_param_refs({"result": {"deep": [holder]}}, "a test surface")
-        assert "['result']['deep'][0].value" in str(exc.value)
-
-
 # --- R3-2: a revision re-derives what depends on it -------------------------- #
 # --- R3-3: a revision invalidates the data produced from the old values ------ #
 async def stub_dem(**kwargs):
@@ -1498,17 +628,6 @@ async def stub_dem(**kwargs):
 
 
 # --- R3-4 / R4-3: the law-9 floor needs a review SURFACE, not just a session -- #
-class _FakeEmitter:
-    """Just enough emitter for the interpreter: a live session to pause on."""
-
-    session_id = "sess-1d"
-
-    def begin_substeps(self, total):
-        return None
-
-    @contextlib.asynccontextmanager
-    async def substep(self, raw_name):
-        yield "child"
 
 
 def _physics_only():
@@ -1517,70 +636,18 @@ def _physics_only():
                   consequence="physics")]
 
 
-def _gateless_plan(*, consequential, self_gating=False):
-    return Plan("law9_mode", None, (
-        Step(runner=f"{_HERE}.stub_step", consequential=consequential,
-             self_gating=self_gating).named("solve"),
-    ))
-
-
 @pytest.mark.asyncio
 @pytest.mark.parametrize("mode", ["auto", None, "user_gated"])
 async def test_the_law9_floor_refuses_in_every_mode_without_a_live_session(mode):
     """user_gated with NO emitter is the headless direct call: the caller asked for
     review and there is nobody to review. That is not a licence to invent."""
+    from trid3nt_server.workflows.runtime.workflow import _refuse_invented_physics
+
+    entries = provenance_entries(await resolve_params(_physics_only(), {}),
+                                 _physics_only())
     with pytest.raises(Exception) as exc:
-        await _run(_gateless_plan(consequential=True), _physics_only(), {},
-                   input_mode=mode, resume=False)
+        _refuse_invented_physics(entries, "t", mode)
     assert exc.value.error_code == "PHYSICS_INPUT_REQUIRED"
-    assert _CALLS == []
-
-
-@pytest.mark.asyncio
-async def test_a_self_gating_step_owns_the_approval_instead(monkeypatch):
-    """The exemption needs a REVIEW SURFACE, and a self-gating step is one: it puts
-    its own card in front of the live session. Then the floor steps aside."""
-    _interp = importlib.import_module("trid3nt_server.workflows.runtime.interpreter")
-    monkeypatch.setattr(_interp, "current_emitter", lambda: _FakeEmitter())
-    await _run(_gateless_plan(consequential=True, self_gating=True), _physics_only(),
-               {}, input_mode="user_gated", resume=False)
-    assert _CALLS == ["stub_step"]
-
-
-@pytest.mark.asyncio
-async def test_a_live_session_with_no_card_anywhere_still_refuses(monkeypatch):
-    """An emitter is where a card COULD be shown, never evidence that one was. A
-    gateless plan whose step does not review its own inputs has no review surface
-    at all, so a live user_gated session must not be the softer path."""
-    _interp = importlib.import_module("trid3nt_server.workflows.runtime.interpreter")
-    monkeypatch.setattr(_interp, "current_emitter", lambda: _FakeEmitter())
-    with pytest.raises(Exception) as exc:
-        await _run(_gateless_plan(consequential=True), _physics_only(), {},
-                   input_mode="user_gated", resume=False)
-    assert exc.value.error_code == "PHYSICS_INPUT_REQUIRED"
-    assert "nothing in this workflow reviews these values" in str(exc.value)
-    assert _CALLS == []
-
-
-@pytest.mark.asyncio
-async def test_the_law9_floor_does_not_wait_for_a_consequential_step():
-    """An invented physics value poisons the prep as surely as the solve, and a
-    plan that tags nothing consequential would otherwise skip the floor."""
-    with pytest.raises(Exception, match="PHYSICS_INPUT_REQUIRED"):
-        await _run(_gateless_plan(consequential=False), _physics_only(), {},
-                   resume=False)
-    assert _CALLS == []
-
-
-@pytest.mark.asyncio
-async def test_no_step_runs_before_the_law9_refusal():
-    plan = Plan("law9_prefix", None, (
-        Step(runner=f"{_HERE}.stub_second").named("prep"),
-        Step(runner=f"{_HERE}.stub_step", consequential=True).named("solve"),
-    ))
-    with pytest.raises(Exception, match="PHYSICS_INPUT_REQUIRED"):
-        await _run(plan, _physics_only(), {}, resume=False)
-    assert _CALLS == []
 
 
 # --- observation 6: a binding fault is a typed plan error -------------------- #
@@ -1594,30 +661,6 @@ class _HostileTuple(tuple):
         return super().__new__(cls, (a, b))
 
 
-@pytest.mark.asyncio
-async def test_a_namedtuple_kwarg_keeps_its_shape_through_binding():
-    plan = Plan("nt", None, (
-        Step(runner=f"{_HERE}.stub_step").named("first"),
-        Step(runner=f"{_HERE}.stub_second",
-             kwargs={"pt": _Point(Ref("first.uri"), 2.0)}).named("second"),
-    ))
-    out = await _run(plan, _params(), {}, resume=False)
-    assert out.value["seen"]["pt"] == _Point("s3://b/k.tif", 2.0)
-
-
-@pytest.mark.asyncio
-async def test_a_binding_fault_arrives_typed_not_raw():
-    plan = Plan("bindfail", None, (
-        Step(runner=f"{_HERE}.stub_step").named("first"),
-        Step(runner=f"{_HERE}.stub_second",
-             kwargs={"t": _HostileTuple(Ref("first.uri"), 1)}).named("second"),
-    ))
-    with pytest.raises(StepFailedError) as exc:
-        await _run(plan, _params(), {}, resume=False)
-    assert exc.value.error_code == "STEP_ARGS_UNBINDABLE"
-    assert exc.value.step == "second"
-
-
 # --- R4-1: the leak guard never passes on an exhausted budget ---------------- #
 def _deep_clean(depth):
     """A clean nested structure whose node count the scan budget can be set under."""
@@ -1625,48 +668,6 @@ def _deep_clean(depth):
     for i in range(depth):
         node = {"n": node, "i": i}
     return node
-
-
-def test_a_budget_exhausted_leak_scan_warns_and_names_the_surface(monkeypatch):
-    """A scan that stopped looking has NOT found the surface clean. Silence there
-    let a leak behind a large value pass as verified."""
-    _interp = importlib.import_module("trid3nt_server.workflows.runtime.interpreter")
-    monkeypatch.setattr(_interp, "_LEAK_SCAN_BUDGET", 8)
-    with pytest.warns(LeakScanTruncated, match="'value'"):
-        _interp._refuse_leaked_param_refs(
-            {"value": _deep_clean(50)}, "a test surface")
-
-
-def test_a_clean_scan_inside_the_budget_warns_about_nothing(monkeypatch):
-    _interp = importlib.import_module("trid3nt_server.workflows.runtime.interpreter")
-    monkeypatch.setattr(_interp, "_LEAK_SCAN_BUDGET", 500)
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", LeakScanTruncated)
-        _interp._refuse_leaked_param_refs({"value": _deep_clean(50)}, "a test surface")
-
-
-def test_a_large_value_cannot_starve_the_entries_scan(monkeypatch):
-    """Per-surface budgets: one shared budget let a 60k-node value spend it all and
-    leave the entries - where the leak actually was - never looked at."""
-    _interp = importlib.import_module("trid3nt_server.workflows.runtime.interpreter")
-    monkeypatch.setattr(_interp, "_LEAK_SCAN_BUDGET", 20)
-    with pytest.warns(LeakScanTruncated, match="'value'"):
-        with pytest.raises(ParamRefLeakedError, match=r"ParamRef\('base'\)"):
-            _interp._refuse_leaked_param_refs(
-                {"value": _deep_clean(200), "entries": [{"param": ParamRef("base")}]},
-                "a test surface")
-
-
-@pytest.mark.asyncio
-async def test_the_run_warns_rather_than_silently_passing_a_truncated_scan(monkeypatch):
-    """The guard is a floor, not a gate: an over-budget surface still runs, but the
-    partial check is said out loud rather than reported as clean."""
-    _interp = importlib.import_module("trid3nt_server.workflows.runtime.interpreter")
-    monkeypatch.setattr(_interp, "_LEAK_SCAN_BUDGET", 4)
-    plan = Plan("truncated", None, (Step(runner=f"{_HERE}.stub_deep").named("a"),))
-    with pytest.warns(LeakScanTruncated):
-        out = await _run(plan, _params(), {}, resume=False)
-    assert out.value["uri"] == "s3://b/k.tif"
 
 
 # --- the read-recording machinery is GONE: a read is just a read ------------- #
@@ -1689,88 +690,7 @@ async def test_a_concrete_read_is_value_of_and_nothing_watches_it():
     assert isinstance(p.base, ParamRef) and p.base.name == "base"
 
 
-@pytest.mark.asyncio
-async def test_a_tombstoned_orphan_key_cannot_be_replayed(monkeypatch):
-    """What the marker BUYS: the abandoned key hands nothing back to a retry."""
-    _ledger = importlib.import_module("trid3nt_server.workflows.runtime.ledger")
-
-    async def _boom(client, key):
-        raise RuntimeError("delete-one is down")
-
-    ledger = await _ledger.StepLedger.load("orphan_key", "w")
-    await ledger.record(_ledger.LedgerRecord(index=0, node="a", runner="r",
-                                             completed_at="2026-08-23T00:00:00+00:00"))
-    monkeypatch.setattr(_ledger, "_reap", _boom)
-    await ledger.clear()
-    reloaded = await _ledger.StepLedger.load("orphan_key", "w")
-    assert reloaded.replay_for(0, "a", "") is None
-
-
 # --- the chart PAYLOAD is the surface, not the node's return dict ------------ #
-@pytest.mark.asyncio
-async def test_a_leaked_ref_in_a_chart_payload_never_reaches_the_wire(monkeypatch):
-    """The node returns a small marker dict; the PAYLOAD is what goes over the WS.
-    Guarding only the marker let a ref in a chart title through."""
-    _interp = importlib.import_module("trid3nt_server.workflows.runtime.interpreter")
-    emitted = []
-
-    async def _emit(payload):
-        emitted.append(payload)
-
-    monkeypatch.setattr(_interp, "emit_chart_payloads", _emit)
-    plan = Plan("chart_leak", None, (
-        Step(runner=f"{_HERE}.stub_step").named("a")
-        .chart("c", builder=stub_chart_leaks),
-    ))
-    out = await _run(plan, _params(), {}, resume=False)
-    assert emitted == []
-    assert out.value["uri"] == "s3://b/k.tif"       # the primary result stands
-    assert len(out.notes) == 1 and "ParamRef('base')" in out.notes[0]
-
-
-@pytest.mark.asyncio
-async def test_a_clean_chart_payload_still_reaches_the_wire(monkeypatch):
-    _interp = importlib.import_module("trid3nt_server.workflows.runtime.interpreter")
-    emitted = []
-
-    async def _emit(payload):
-        emitted.append(payload)
-
-    monkeypatch.setattr(_interp, "emit_chart_payloads", _emit)
-    plan = Plan("chart_ok", None, (
-        Step(runner=f"{_HERE}.stub_step").named("a")
-        .chart("c", builder=stub_chart),
-    ))
-    out = await _run(plan, _params(), {}, resume=False)
-    assert emitted == [{"chart_id": "c1", "title": "t"}]
-    assert out.notes == []
-    # The SPEC is the product: the run carries its own chart out so the caller can
-    # persist it, rather than leaving a reader to rebuild one from the scalars.
-    assert out.charts == {"c": {"chart_id": "c1", "title": "t"}}
-
-
-@pytest.mark.asyncio
-async def test_a_chart_that_failed_leaves_no_spec_to_persist(monkeypatch):
-    _interp = importlib.import_module("trid3nt_server.workflows.runtime.interpreter")
-    monkeypatch.setattr(_interp, "emit_chart_payloads", lambda payload: _noop())
-    plan = Plan("chart_none", None, (
-        Step(runner=f"{_HERE}.stub_step").named("a")
-        .chart("c", builder=stub_chart_empty),
-    ))
-    out = await _run(plan, _params(), {}, resume=False)
-    assert out.charts == {} and len(out.notes) == 1
-
-
-def test_a_declaration_carries_no_presentation_vocabulary():
-    """A ramp moves no water, so a workflow has no way to state one.
-
-    Presentation is DISPLAY STATE and lives on the restyle surface; how a dataset
-    draws is a fact about the DATA and lives beside the source."""
-    runtime = importlib.import_module("trid3nt_server.workflows.runtime")
-    assert [n for n in runtime.__all__
-            if any(w in n.lower() for w in _PRESENTATION_WORDS)] == []
-    for cls in (runtime.Plan, runtime.Step, runtime.Workflow, runtime.ChartSpec):
-        assert _presentation_named_by(cls) == [], cls.__name__
 
 
 class _StubFacade(Workflow):
@@ -1798,128 +718,10 @@ def _declare(params, plan_decl, data=(), name="declared_w"):
                                                 STEPS=plan_decl))
 
 
-@pytest.mark.asyncio
-async def test_the_plan_is_built_once_at_declaration_not_per_run():
-    """A STATIC plan reads no concrete value, so rebuilding it per run would buy
-    nothing and cost the one guarantee it does buy: what was declared is what runs."""
-    built = []
-
-    def _plan(ops):
-        built.append(ops)
-        return (Step(runner=f"{_HERE}.stub_product").named("a"),)
-
-    wf = _declare(_params(), _plan, name="built_once_w")
-    assert len(built) == 1 and built[0] is wf
-    declared = wf.plan
-    assert wf.plan is declared
-
-    await wf.run({"base": 2.0})
-    await wf.run({"base": 3.0})
-    assert _CALLS == ["stub_product", "stub_product"]
-    assert len(built) == 1                      # two runs, one plan construction
-    assert wf.plan is declared
-
-
-def test_build_plan_takes_no_sheet():
-    """The signature IS the contract: a sheet argument is what a plan that read
-    concrete values needed, and there is no such plan any more."""
-    import inspect
-
-    def _plan(ops):
-        return (Step(runner=f"{_HERE}.stub_step").named("a"),)
-
-    wf = _declare(_params(), _plan, name="nosheet_w")
-    assert list(inspect.signature(wf.build_plan).parameters) == []
-    rebuilt = wf.build_plan()
-    assert [s.label for s in rebuilt.declared()] == [s.label for s in wf.plan.declared()]
-
-
-def test_a_data_ref_refuses_every_read_that_would_turn_it_into_data():
-    """``D.<name>`` describes an artifact the interpreter has not produced yet, so
-    the three silent conversions - a branch, str(), an f-string - all refuse."""
-    ref = DataRef("mesh")
-    with pytest.raises(PlanValidationError, match="truth-value testing"):
-        bool(ref)
-    with pytest.raises(PlanValidationError, match=r"str\(\)"):
-        str(ref)
-    with pytest.raises(PlanValidationError, match="f-string"):
-        f"{ref}"
-    with pytest.raises(PlanValidationError, match="f-string"):
-        f"{DataRef("mesh")}"
-    assert repr(ref) == "DataRef('mesh')"       # naming it is what a diagnostic does
-
-
 # --- a context slot's declared SHAPE is checked at the front door ------------- #
-@pytest.mark.asyncio
-async def test_a_supplied_artifact_of_the_wrong_shape_is_refused_typed():
-    data = [DataDecl("structure").supplied(geometry="polyline").optional()]
-    plan = Plan("shape_w", None, (
-        Step(runner=f"{_HERE}.stub_second",
-             kwargs={"s": Ref("structure")}).named("a"),))
-    with pytest.raises(SuppliedGeometryError) as exc:
-        await _run(plan, _params(), {}, data, resume=False,
-                   supplied={"structure": "s3://mine/terrain.tif"},
-                   domain=Domain(bbox=(0.0, 0.0, 1.0, 1.0)))
-    assert exc.value.error_code == "SUPPLIED_GEOMETRY_MISMATCH"
-    assert "raster" in str(exc.value) and _CALLS == []
-
-
-@pytest.mark.asyncio
-async def test_a_supplied_artifact_of_the_declared_shape_is_adopted():
-    """Suffix-deep and no deeper: a vector satisfies a polyline slot here, and
-    whether its features are lines is the consumer's species reader's answer."""
-    data = [DataDecl("structure").supplied(geometry="polyline").optional()]
-    plan = Plan("shape_ok_w", None, (
-        Step(runner=f"{_HERE}.stub_second",
-             kwargs={"s": Ref("structure")}).named("a"),))
-    out = await _run(plan, _params(), {}, data, resume=False,
-                     supplied={"structure": "s3://mine/breakwater.fgb"},
-                     domain=Domain(bbox=(0.0, 0.0, 1.0, 1.0)))
-    assert out.value["seen"]["s"] == "s3://mine/breakwater.fgb"
-
-
-@pytest.mark.asyncio
-async def test_an_unclassifiable_supplied_artifact_is_adopted_not_guessed_at():
-    """A layer name carries no suffix, and a refusal must never rest on a guess."""
-    data = [DataDecl("structure").supplied(geometry="polyline").optional()]
-    plan = Plan("shape_unknown_w", None, (
-        Step(runner=f"{_HERE}.stub_second",
-             kwargs={"s": Ref("structure")}).named("a"),))
-    out = await _run(plan, _params(), {}, data, resume=False,
-                     supplied={"structure": "harbor-breakwater-layer"},
-                     domain=Domain(bbox=(0.0, 0.0, 1.0, 1.0)))
-    assert out.value["seen"]["s"] == "harbor-breakwater-layer"
 
 
 # --- the run's own NOTES ------------------------------------------------------ #
-@pytest.mark.asyncio
-async def test_a_note_a_step_wrote_travels_out_on_the_run():
-    """A measurement a step has no result field for still reaches the reader."""
-    plan = Plan("noted", None, (Step(runner=f"{_HERE}.stub_noting").named("a"),))
-    out = await _run(plan, _params(), {}, resume=False)
-    assert "measured 42.0% coverage" in out.notes
-
-
-@pytest.mark.asyncio
-async def test_a_note_survives_the_failure_it_was_written_on_the_way_to():
-    """The note a step wrote before it failed is often the reason for the failure,
-    so it is drained in the FINALLY rather than on the success path."""
-    _FAIL_AT.add("stub_noting")
-    try:
-        plan = Plan("noted_fail", None,
-                    (Step(runner=f"{_HERE}.stub_noting").named("a"),))
-        with pytest.raises(StepFailedError):
-            await _run(plan, _params(), {}, resume=False)
-    finally:
-        _FAIL_AT.discard("stub_noting")
-
-
-@pytest.mark.asyncio
-async def test_one_runs_notes_do_not_leak_into_the_next():
-    plan = Plan("noted", None, (Step(runner=f"{_HERE}.stub_noting").named("a"),))
-    first = await _run(plan, _params(), {}, resume=False)
-    second = await _run(plan, _params(), {}, resume=False)
-    assert first.notes == second.notes == ["measured 42.0% coverage"]
 
 
 # --- presentation is not declaration vocabulary ------------------------------- #
@@ -1939,28 +741,3 @@ def _presentation_named_by(cls) -> list[str]:
 
 
 # --- a continuation opens only on the mesh the journal recorded --------------- #
-@pytest.mark.asyncio
-async def test_a_continuation_is_held_to_the_mesh_key_the_journal_recorded():
-    """The mesh step's content key is journaled, is the same for the same content
-    on a second run, and the walk refuses a continuation keyed to another mesh."""
-    from trid3nt_server.workflows.runtime import journal
-    from trid3nt_server.workflows.runtime.errors import ContinuationRefused
-    from trid3nt_server.workflows.runtime.workflow import Workflow
-
-    plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_step",
-                                 kwargs={"edge": 50.0}).named("mesh"),))
-    owner = SimpleNamespace(mesh_step="mesh")
-    first = await _run(plan, _params(), {}, resume=False)
-    key = Workflow._mesh_key(owner, first)
-    assert key
-    line = journal.build_record(
-        run_id="R0", engine=None, module=None, sheet=(), provenance=(),
-        result=None, wall_seconds=None, origin="test", executed=(),
-        replayed=(), notes=(), mesh_key=key)
-    assert line["mesh"]["key"] == key
-    second = await _run(plan, _params(), {}, resume=False,
-                        continued_mesh=line, mesh_step="mesh")
-    assert Workflow._mesh_key(owner, second) == key
-    with pytest.raises(ContinuationRefused, match="another mesh"):
-        await _run(plan, _params(), {}, resume=False, mesh_step="mesh",
-                   continued_mesh={**line, "mesh": {"key": "OTHER"}})

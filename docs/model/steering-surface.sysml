@@ -838,17 +838,6 @@ package SteeringSurface {
         */
     }
 
-    requirement def AStepsKwargsAreItsRunnersCall {
-        doc /*
-        A plan is built once at import and its steps are not called until a run
-        reaches them, so a step whose kwargs the runner cannot take is a
-        declaration that imports, registers and validates - and dies at the
-        stage it was written for, on a live run, after the mesh was built. The
-        kwargs a step declares ARE the call: every parameter the runner requires
-        is among them, and nothing it does not take is.
-        */
-    }
-
     requirement def ReviewIsTheWorkflowsView {
         doc /*
         The sheet is STATE. The review is how the workflow renders what fill
@@ -1100,13 +1089,9 @@ package SteeringSurface {
     verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_module_surface.py::test_two_sources_on_the_floor_are_two_sources_in_the_deck";
     verify requirement EverythingOverridable by
-        "tests/telemac/test_telemac_module_surface.py::test_every_template_wire_carries_the_raw_keyword_floor";
-    verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_module_surface.py::test_a_floor_that_is_not_a_mapping_refuses_by_name";
     verify requirement EverythingOverridable by
         "tests/runtime/test_run_journal.py::test_the_record_carries_the_raw_keyword_floor_the_run_was_pinned_by";
-    verify requirement EverythingOverridable by
-        "tests/runtime/test_declarative_library.py::test_the_raw_keyword_floor_rides_out_on_the_runs_own_result";
     verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_module_surface.py::test_resolution_order_is_engine_then_template_then_fill";
     verify requirement EverythingOverridable by
@@ -1122,17 +1107,9 @@ package SteeringSurface {
     verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_do_sag.py::test_the_card_groups_the_coupled_deck_under_its_own_body";
     verify requirement EverythingOverridable by
-        "tests/telemac/test_workflow_owns_its_stages.py::test_the_floor_is_resolved_once_before_any_stage_runs";
-    verify requirement EverythingOverridable by
-        "tests/telemac/test_workflow_owns_its_stages.py::test_the_settle_step_reads_the_files_the_deck_itself_names";
-    verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_water_temperature.py::test_a_stated_duration_sizes_the_weather_record";
     verify requirement EverythingOverridable by
-        "tests/telemac/test_telemac_rain_on_grid_template.py::test_a_stated_friction_law_derives_the_rating_curve";
-    verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_module_surface.py::test_a_read_placed_on_a_keyword_resolves_through_the_filled_sheet";
-    verify requirement EverythingOverridable by
-        "tests/telemac/test_agitation_template.py::test_the_transect_is_measured_off_the_structure_the_question_asks_about";
     verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_module_surface.py::test_a_rate_stated_by_name_arms_the_term_that_reads_it";
     verify requirement EverythingOverridable by
@@ -1177,10 +1154,6 @@ package SteeringSurface {
         "tests/telemac/test_telemac_tomawac.py::test_both_hosts_couple_the_waves_through_the_seam_they_share";
     satisfy requirement OneTemplatePerQuestion by engineWorkflow;
     verify requirement OneTemplatePerQuestion by
-        "tests/telemac/test_telemac_module_surface.py::test_a_structural_fork_is_a_template_and_never_a_switch";
-    verify requirement OneTemplatePerQuestion by
-        "tests/telemac/test_telemac_module_surface.py::test_no_flipped_body_branches_on_anything";
-    verify requirement OneTemplatePerQuestion by
         "tests/search/test_door_dissolution.py::test_all_templates_registered_and_callable";
     verify requirement OneTemplatePerQuestion by
         "tests/telemac/test_telemac_module_surface.py::test_a_template_places_its_reads_through_the_primitives_its_module_binds";
@@ -1189,10 +1162,6 @@ package SteeringSurface {
     verify requirement OneTemplatePerQuestion by
         "tests/telemac/test_telemac_outputs.py::test_a_series_at_a_point_is_measured_at_that_point";
 
-    satisfy requirement AStepsKwargsAreItsRunnersCall by engineWorkflow;
-    satisfy requirement AStepsKwargsAreItsRunnersCall by stager;
-    verify requirement AStepsKwargsAreItsRunnersCall by
-        "tests/runtime/test_step_signatures.py::test_every_step_binds_against_its_own_runners_signature";
 
     satisfy requirement ReviewIsTheWorkflowsView by engineWorkflow;
     verify requirement ReviewIsTheWorkflowsView by
@@ -1200,15 +1169,9 @@ package SteeringSurface {
     verify requirement ReviewIsTheWorkflowsView by
         "tests/telemac/test_telemac_module_surface.py::test_the_fill_docstring_names_the_module_its_rubriques_and_its_open_slots";
     verify requirement ReviewIsTheWorkflowsView by
-        "tests/telemac/test_telemac_module_surface.py::test_the_review_is_the_workflows_view_and_never_a_step_of_its_own";
-    verify requirement ReviewIsTheWorkflowsView by
-        "tests/runtime/test_declarative_library.py::test_do_sag_declares_no_gate_in_front_of_its_self_gating_review";
-    verify requirement ReviewIsTheWorkflowsView by
         "tests/telemac/test_telemac_module_surface.py::test_a_template_param_edited_on_the_card_lands_and_the_card_redraws";
     verify requirement ReviewIsTheWorkflowsView by
         "tests/telemac/test_telemac_module_surface.py::test_a_name_that_is_no_input_of_the_run_refuses_by_name";
-    verify requirement ReviewIsTheWorkflowsView by
-        "tests/telemac/test_telemac_module_surface.py::test_the_sheet_is_told_which_params_another_stage_reads";
 
     satisfy requirement CompositesSetOnlyPresence by composite;
     satisfy requirement CompositesSetOnlyPresence by wrapper;
@@ -1281,8 +1244,6 @@ package SteeringSurface {
 
     satisfy requirement ATemplateNumberIsMetToTheMeshsPrecision by engineWorkflow;
     satisfy requirement ATemplateNumberIsMetToTheMeshsPrecision by sheet;
-    verify requirement ATemplateNumberIsMetToTheMeshsPrecision by
-        "tests/telemac/test_open_water_domains.py::test_the_footprint_and_the_solid_faces_are_cut_at_the_same_width";
     verify requirement ATemplateNumberIsMetToTheMeshsPrecision by
         "tests/telemac/test_open_water_domains.py::test_a_boundary_node_is_on_the_structure_when_it_stands_on_the_punched_outline";
     verify requirement ATemplateNumberIsMetToTheMeshsPrecision by
@@ -1443,10 +1404,6 @@ package SteeringSurface {
         "tests/telemac/test_telemac_tomawac.py::test_the_module_states_the_keyword_its_own_result_is_named_in";
     verify requirement ModuleIsTheUnit by
         "tests/telemac/test_telemac_tomawac.py::test_the_module_states_how_its_own_run_length_is_spelled";
-    verify requirement ModuleIsTheUnit by
-        "tests/telemac/test_nearshore_waves_template.py::test_the_run_length_is_the_product_the_module_spells_it_as";
-    verify requirement ModuleIsTheUnit by
-        "tests/telemac/test_nearshore_waves_template.py::test_the_run_is_read_off_the_file_the_module_spells_its_results_in";
 
     satisfy requirement InputsAreTypedPrimitives by point;
     satisfy requirement InputsAreTypedPrimitives by canvasGate;

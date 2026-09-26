@@ -17,13 +17,17 @@ import pytest
 from trid3nt_server.inputs import geometry as geometry_reader
 from trid3nt_server.inputs.observation import Observation
 from trid3nt_server.workflows.runtime import Ref, data_rows
-from trid3nt_server.workflows.telemac.authoring.atmosphere import ATMOSPHERE_FILENAME
+from trid3nt_server.workflows.telemac.authoring.atmosphere import (
+    ATMOSPHERE_FILENAME,
+)
 from trid3nt_server.workflows.telemac.modules import fill
 from trid3nt_server.workflows.telemac.modules.khione import (
     RESULT_FILENAME,
     STEERING_FILENAME,
 )
-from trid3nt_server.workflows.telemac.templates.ice_cover import ice_cover as template
+from trid3nt_server.workflows.telemac.templates.ice_cover import (
+    ice_cover as template,
+)
 
 #: The week the deck states as DURATION, as the hourly record that has to span
 #: it: the engine stops at an instant outside the table, so a week-long run is
@@ -66,15 +70,6 @@ def test_every_slot_this_run_stands_on_reaches_the_wire_as_the_slot_it_is():
             "water_temperature"}.isdisjoint(wire)
 
 
-def test_the_run_writes_the_ice_modules_own_result_beside_the_hosts():
-    """Every measure this question answers is read off KHIONE's own file, so the
-    run has to publish it: a run that wrote only the host's would come back with
-    the ice it made still in the box."""
-    solve = next(step for step in _workflow().plan.steps if step.name == "solve")
-    assert solve.kwargs["results"] == [template.STEERING.RESULTS_FILE,
-                                       RESULT_FILENAME]
-
-
 def test_the_water_opens_on_one_reading_ranked_from_where_it_is_read():
     """Which site the run opens on is the observation slot's choice, ranked
     against the point the series is read at. The row is LOAD-BEARING: the run
@@ -112,21 +107,6 @@ def test_the_bed_is_one_need_row_the_match_composes():
     assert [name for name, row in rows.items() if row.role == "bed"] == ["bed"]
     assert rows["bed"].data_class == "bathymetry"
     assert rows["bed"].producer is None
-
-
-def test_the_boundary_roles_ride_on_the_domain_since_no_runs_row_exists():
-    """There is no runs row: the boundary walk the match returned rides on the
-    domain's own producer, and the mesh recipe reads that row directly."""
-    from trid3nt_server.mesh.tool import recipe_from_plan_value
-    from trid3nt_server.workflows.runtime import DataRef
-
-    recipe = recipe_from_plan_value(
-        next(s for s in _workflow().plan.steps if s.name == "mesh").kwargs["mesh"])
-    runs = next(op for op in recipe.ops if op.fn == "set_boundary_roles")
-    assert runs.kwargs == {"runs": DataRef("domain")}
-    bed = next(op for op in recipe.ops if op.fn == "set_bed")
-    assert bed.kwargs == {"source": DataRef("bed")}
-    assert "runs" not in _rows()
 
 
 def test_no_keyword_twin_and_no_domain_twin_is_declared_here():
@@ -299,17 +279,6 @@ def test_the_cover_chart_draws_the_threshold_the_ask_states():
 def test_every_ice_read_is_taken_off_the_ice_modules_own_result():
     assert {(p.variable, p.module) for p in template.OUTPUTS} == {
         ("DYNCOVC", "khione"), ("DYNCOVT", "khione")}
-
-
-def test_the_workflow_owns_the_stages_and_the_template_states_what_differs():
-    wf = _workflow()
-    steps = list(wf.plan.declared())
-    assert [s.label for s in steps] == ["stated", "mesh", "mesh_files", "channel", "station",
-                                        "settled", "sheet", "solve", "outputs"]
-    named = [s.label for s in steps]
-    assert named.index("station") < named.index("sheet")
-    assert [s.label for s in steps if s.self_gating] == ["sheet"]
-    assert steps[-2].consequential
 
 
 def test_the_deprecated_slots_the_file_carries_are_rowed_by_nothing():

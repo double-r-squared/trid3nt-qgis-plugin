@@ -11,7 +11,7 @@ from dataclasses import dataclass, replace
 from typing import Any, Literal, Sequence
 
 from .errors import PlanValidationError
-from .plan import ParamRef, Row, body_rows
+from .reads import ParamRef, Row, body_rows
 
 __all__ = [
     "Door",
@@ -182,7 +182,7 @@ class ResolvedParam:
 
 
 class ResolvedParams:
-    """The resolved param sheet - what the RUN reads, never what the plan reads.
+    """The resolved param sheet - what the RUN reads, never what a declaration reads.
     Nothing here is reachable at plan-construction time; ``p.name`` yields a
     :class:`ParamRef` so a read written against a sheet stays late-bound."""
 
@@ -209,7 +209,7 @@ class ResolvedParams:
         return iter(self._rows.values())
 
     def value_of(self, name: str, default: Any = None) -> Any:
-        """The concrete value of one row - the interpreter's own read."""
+        """The concrete value of one row - the run's own read."""
         row = self._rows.get(name)
         return default if row is None else row.value
 
@@ -233,7 +233,7 @@ class ResolvedParams:
 
 class ParamValues:
     """Concrete-value view of a resolved sheet: ``v.name`` IS the value.
-    A separate type from :class:`ResolvedParams` so a plan-construction read can
+    A separate type from :class:`ResolvedParams` so a declaration-time read can
     never silently collapse into an early-bound value."""
 
     __slots__ = ("_rows",)

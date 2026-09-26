@@ -80,67 +80,6 @@ def test_the_level_is_ranked_against_the_domain_and_may_be_absent():
 
 # -- the plan the workflow owns ------------------------------------------------ #
 
-def test_the_workflow_owns_the_stages_and_the_template_states_no_recipe():
-    """The mesh recipe, the file names and the settle step are the runtime's now;
-    what the template states is what DIFFERS from every other domain."""
-    module = _module()
-    workflow = _workflow()
-
-    assert not hasattr(module, "MESH")
-    assert [step.label for step in workflow.plan.steps][:2] == ["stated", "mesh"]
-    assert workflow.levers() == ("mesh_resolution_m", "event_time",
-                                 "cores", "vertical_frame")
-
-
-def test_the_owned_mesh_paints_its_bed_and_takes_its_roles_from_the_domain():
-    """One bed row painted at the nodes, and the runs from wherever they were
-    stated - here the domain, which measured none."""
-    workflow = _workflow()
-    mesh = next(step for step in workflow.plan.steps if step.label == "mesh")
-    ask = dict(mesh.kwargs["mesh"])
-    assert repr(ask["extent"]) == "DataRef('domain')"
-    assert repr(ask["resolution_m"]) == "ParamRef('mesh_resolution_m')"
-    ops = {op["op"]: dict(op["kwargs"]) for op in ask["ops"]}
-    assert repr(ops["set_bed"]["source"]) == "DataRef('bed')"
-    assert repr(ops["set_boundary_roles"]["runs"]) == "DataRef('domain')"
-
-
-def test_the_column_and_the_free_surface_come_from_one_measurement():
-    """The vertical grid and the initial column are planned over the SAME deepest
-    column under the SAME free surface - the BASE settle's, which measures the
-    water any body of water holds, so a grid that holds the thermocline and a
-    hook that places it cannot disagree."""
-    from trid3nt_server.workflows.runtime import Ref
-
-    asserted = _module().STEERING.ASSERTED
-    settled = next(step for step in _workflow().plan.steps
-                   if step.name == "settled")
-    assert settled.runner.endswith("opening.open_water")
-    assert settled.kwargs["level"].path == "level"
-    assert asserted["INITIAL_ELEVATION"] == Ref("settled.level_m")
-    for slot in ("vertical_grid", "column"):
-        assert asserted[slot]["max_depth_m"] == Ref("settled.max_depth_m")
-    assert asserted["column"]["surface_m"] == Ref("settled.level_m")
-
-
-def test_the_clock_is_the_settled_domains_and_the_duration_the_decks():
-    """The step follows the edge the accepted mesh was BUILT at; the window is the
-    deck's own DURATION in seconds, so the engine counts the steps and the settle
-    reads the same number the deck was written for."""
-    from trid3nt_server.workflows.runtime import Ref
-
-    module = _module()
-    asserted = module.STEERING.ASSERTED
-    assert asserted["TIME_STEP"] == Ref("settled.time_step_s")
-    # The CADENCE is the template's own opinion of the module's own keyword: in
-    # steps, stated, because the dictionary's default writes every step.
-    assert asserted["GRAPHIC_PRINTOUT_PERIOD"] == 360
-    assert asserted["DURATION"] == 18000.0
-    assert "NUMBER_OF_TIME_STEPS" not in asserted
-    settled = next(step for step in _workflow().plan.steps
-                   if step.name == "settled")
-    assert settled.kwargs["duration_s"] == Ref("stated.DURATION")
-
 
 def test_the_plane_count_is_the_modules_keyword_and_the_planner_reads_it():
     """The plane count is NUMBER OF HORIZONTAL LEVELS, and the grid plan and the

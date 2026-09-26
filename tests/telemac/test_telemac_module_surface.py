@@ -25,9 +25,16 @@ from trid3nt_server.workflows.telemac.modules import (
     load_module_input,
     run,
 )
-from trid3nt_server.workflows.telemac.modules.module import UNSET, Module
-from trid3nt_server.workflows.telemac.modules.telemac2d import Sources
-from trid3nt_server.workflows.telemac import workflow as telemac_workflow
+from trid3nt_server.workflows.telemac.modules.module import (
+    UNSET,
+    Module,
+)
+from trid3nt_server.workflows.telemac.modules.telemac2d import (
+    Sources,
+)
+from trid3nt_server.workflows.telemac import (
+    workflow as telemac_workflow,
+)
 
 _EXPOSED = ("telemac2d", "telemac3d", "artemis", "waqtel", "gaia")
 
@@ -902,100 +909,6 @@ _FLIPPED = ("telemac_dye_release", "telemac_oil_spill", "telemac_bed_scour",
             "telemac_rain_on_grid", "telemac_channel_dredging")
 
 
-def _bodies():
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    for name in _FLIPPED:
-        plan = TOOL_REGISTRY[name].fn.workflow.plan
-        fill_step = next(s for s in plan.declared() if s.label == "sheet")
-        yield name, fill_step.kwargs["steering"]
-
-
-def test_a_structural_fork_is_a_template_and_never_a_switch():
-    """Several questions release something into the same reach and each fills
-    DIFFERENT slots for it. The arity of the carrier's tracer surface moves with the fork,
-    which is why each body states it rather than a composite owning it out of sight.
-
-    The dredge releases NOTHING into the reach, so it prescribes no tracer at
-    all: an empty list would be a keyword with nothing after it."""
-    from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
-
-    measured = {"inflow_q_m3s": 50.0, "outflow_stage_m": 97.8,
-                "liquid_boundary_order": ["inflow", "outflow"],
-                "liquid_boundary_prescribes": ["flowrate", "elevation"]}
-    arity = {}
-    for name, body in _bodies():
-        stated = body.ASSERTED.get("boundaries")
-        if stated is None:
-            continue
-        slots, _files = T2D.COMPOSITES["boundaries"].expand(
-            Boundaries(measured=measured, tracers=[0.0] * len(stated["tracers"])))
-        arity[name] = len(slots.get("PRESCRIBED_TRACERS_VALUES", ()))
-    assert arity == {"telemac_dye_release": 2, "telemac_oil_spill": 2,
-                     "telemac_bed_scour": 2, "telemac_channel_dredging": 0,
-                     "telemac_sediment_plume": 4, "telemac_do_sag": 8,
-                     "telemac_water_temperature": 2,
-                     "telemac_micropollutant_release": 10,
-                     "telemac_eutrophication": 16,
-                     "telemac_ice_cover": 8}
-
-
-def test_no_flipped_body_branches_on_anything():
-    """A body is DATA. A template that switched on a resolved value would be two
-    questions wearing one name, which is the fork this stage exists to end."""
-    for _name, body in _bodies():
-        for key, value in body.ASSERTED.items():
-            assert not callable(value), f"{body.__name__}.{key} is code"
-
-
-def test_the_review_is_the_workflows_view_and_never_a_step_of_its_own():
-    """The sheet is state; the door renders what fill returned and HOLDS. A gate
-    in front of it would edit a sheet the door never reads."""
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    for name in _FLIPPED:
-        plan = TOOL_REGISTRY[name].fn.workflow.plan
-        assert [s.label for s in plan.declared() if hasattr(s, "kind")] == [], name
-        assert [s.label for s in plan.declared() if s.self_gating] == ["sheet"], name
-
-
-def test_the_open_channel_body_is_written_at_the_derivation_it_was_solved_for():
-    """ONE normal depth: the level the outflow is held to and the depth the run
-    opens at are the same number, read off the same producer - the open-channel
-    step, never the domain's - so the initial free surface and the prescribed
-    boundary agree by construction."""
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    for name, body in _bodies():
-        stated = body.ASSERTED.get("boundaries")
-        if stated is None:
-            continue
-        assert body.ASSERTED["INITIAL_DEPTH"] == Ref("settled.depth_m")
-        assert stated["measured"] == Ref("settled")
-        # ONE ROUGHNESS. The depth was derived at the roughness the deck is
-        # written at, so the two numbers are the same constant: a stage derived
-        # at one and a deck written at another is a level the run never sits at.
-        workflow = TOOL_REGISTRY[name].fn.workflow
-        # A question whose runs may carry no discharge authors no channel at
-        # all: it opens on its level boundaries.
-        channel = next((n for n in workflow.plan.steps
-                        if getattr(n, "name", "") == "channel"), None)
-        if channel is None:
-            continue
-        assert channel.runner.endswith("opening.open_channel")
-        # The step READS the resolved floor, which is the deck's own number
-        # until the run states another.
-        floor = telemac_workflow.stated(steering=body, keywords={})
-        assert channel.kwargs["friction_coefficient"] == Ref(
-            "stated.FRICTION_COEFFICIENT")
-        assert channel.kwargs["friction_law"] == Ref(
-            "stated.LAW_OF_BOTTOM_FRICTION")
-        assert floor["FRICTION_COEFFICIENT"] == \
-            body.ASSERTED["FRICTION_COEFFICIENT"]
-        assert floor["LAW_OF_BOTTOM_FRICTION"] == \
-            body.ASSERTED["LAW_OF_BOTTOM_FRICTION"]
-
-
 def test_the_basin_states_how_its_tracer_is_carried_and_under_what_ceiling():
     """The dictionary gives the tracer advection scheme no 3D default, so an unstated
     deck advects temperature by whatever the VELOCITIES use. The template states the
@@ -1043,37 +956,6 @@ def test_every_open_water_recipe_sizes_the_domain_rim_it_meshes():
         entry = next(op for op in recipe_plan_value(recipe)["ops"]
                      if op["op"] == "set_rim_size")
         assert not entry["kwargs"]
-
-
-def test_every_open_water_recipe_carries_the_boundary_cleaning_chain():
-    """A domain cut from a shoreline can leave scraps that touch at points, and the
-    library's own clean passes remove them before the boundary is walked. The two
-    recipes a template states for itself and the one the workflow builds from the
-    slots all list the same four, in the same order."""
-    from trid3nt_server.mesh.tool import recipe_plan_value
-    from trid3nt_server.workflows.telemac.templates.agitation.agitation import (
-        MESH as HARBOUR,
-    )
-    from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
-        MESH as CATCHMENT,
-    )
-
-    cleaning = ("delete_boundary_faces", "delete_faces_connected_to_one_face",
-                "make_mesh_boundaries_traversable", "fix_mesh")
-    for recipe in (CATCHMENT, HARBOUR, _owned_recipe("telemac_dye_release")):
-        ops = [op["op"] for op in recipe_plan_value(recipe)["ops"]]
-        assert [op for op in ops if op in cleaning] == list(cleaning)
-
-
-def _owned_recipe(tool_name: str):
-    """The recipe the WORKFLOW built from a template's slots, off its own plan."""
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.mesh.tool import recipe_from_plan_value
-
-    workflow = TOOL_REGISTRY[tool_name].fn.workflow
-    step = next(n for n in workflow.plan.steps
-                if getattr(n, "name", "") == "mesh")
-    return recipe_from_plan_value(step.kwargs["mesh"])
 
 
 # -- the LLM surface: the raw floor, the docstring, the card ------------------ #
@@ -1208,26 +1090,6 @@ def test_a_floor_that_is_not_a_mapping_refuses_by_name():
                                workflow="probe", title="", input_mode="auto",
                                keywords='{"LAW OF BOTTOM FRICTION": 4}'))
     assert "mapping" in str(caught.value) and "got str" in str(caught.value)
-
-
-def test_every_template_wire_carries_the_raw_keyword_floor():
-    """The floor is a CONTROL, on every wire, and it reaches the fill step."""
-    import inspect
-
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.runtime import RawKeywords
-
-    for name in _TEMPLATES:
-        entry = TOOL_REGISTRY[name]
-        assert "keywords" in inspect.signature(entry.fn).parameters, name
-        plan = entry.fn.workflow.plan
-        fill_step = next(s for s in plan.declared() if s.label == "sheet")
-        assert fill_step.kwargs["keywords"] is RawKeywords, name
-        # THE SAME FLOOR, resolved BEFORE any stage: the first step of every
-        # plan, so a stage that runs before the sheet exists reads it too.
-        first = plan.declared()[0]
-        assert (first.label, first.kwargs["keywords"]) == ("stated", RawKeywords), \
-            name
 
 
 def test_a_template_places_its_reads_through_the_primitives_its_module_binds():
@@ -1579,46 +1441,3 @@ def test_auto_launches_at_once_with_no_card(monkeypatch):
     assert emitter.sent == [] and dict(sheet.resolved())["DURATION"] == 600.0
 
 
-def test_the_mesh_gate_receives_the_runs_own_mode(monkeypatch):
-    from types import SimpleNamespace
-
-    from trid3nt_server.mesh import gate as mesh_gate
-    from trid3nt_server.mesh import session as mesh_session
-    from trid3nt_server.mesh import step as mesh_step
-    from trid3nt_server.mesh import tool as mesh_tool
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.runtime import RunMode
-
-    plan = TOOL_REGISTRY["telemac_dye_release"].fn.workflow.plan
-    mesh = next(s for s in plan.declared() if s.label == "mesh")
-    assert mesh.kwargs["input_mode"] is RunMode
-    seen = {}
-
-    async def gate(session, *, tool_name, input_mode=None):
-        seen["mode"] = input_mode
-        raise RuntimeError("stop at the gate")
-
-    monkeypatch.setattr(mesh_gate, "gate_mesh_build", gate)
-    monkeypatch.setattr(mesh_tool, "recipe_from_plan_value",
-                        lambda value: SimpleNamespace(mesher="reg_grid"))
-    monkeypatch.setattr(mesh_session, "MeshSession",
-                        lambda recipe, **_: SimpleNamespace(recipe=recipe))
-    with pytest.raises(RuntimeError):
-        asyncio.run(mesh_step.build_declared_mesh(mesh={}, input_mode=None))
-    assert seen["mode"] is None
-    with pytest.raises(RuntimeError):
-        asyncio.run(mesh_step.build_declared_mesh(mesh={}, input_mode="user_gated"))
-    assert seen["mode"] == "user_gated"
-
-
-def test_the_sheet_is_told_which_params_another_stage_reads():
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.runtime.plan import declared_reads
-
-    steps = {s.label: s for s in
-             TOOL_REGISTRY["telemac_dye_release"].fn.workflow.plan.declared()}
-    read_elsewhere = {ref.name for label, step in steps.items()
-                      if label not in ("sheet", "outputs")
-                      for ref in declared_reads(step.kwargs, ParamRef)}
-    assert {"mesh_resolution_m", "release"} <= read_elsewhere
-    assert steps["sheet"].kwargs["spent"] == sorted(read_elsewhere)

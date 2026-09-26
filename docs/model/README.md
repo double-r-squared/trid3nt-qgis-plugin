@@ -29,7 +29,7 @@ record planes that surround it.
 | **assembler** | everything the box receives - steering file, manifest and aux, staged | `solve-seam.sysml`, its authoring end; `steering-surface.sysml`, the serializer and stager end of the module surface |
 | **solver** | the box's run, its completion and its diagnostics | `solve-seam.sysml` |
 | **products** | the layers, charts and packets read back out | `solve-seam.sysml`, its reader end; `render-seam.sysml` - how a product becomes a picture |
-| **runtime** | the plan a flow executes as - `workflows/runtime/plan.py` and its interpreter, where "step" lives | MODELED at ONE EDGE: `steering-surface.sysml`, the module surface that is replacing it - the dictionary, the wrapper, the sheet and the serializer. The plan value itself, its steps and its gates are unmodeled, and are the half being replaced |
+| **runtime** | the fill and the straight-line run a flow executes as - `workflows/runtime/fill.py` and `workflows/runtime/workflow.py` | MODELED at ONE EDGE: `steering-surface.sysml`, the module surface that is replacing it - the dictionary, the wrapper, the sheet and the serializer. The plan value itself, its steps and its gates are unmodeled, and are the half being replaced |
 
 One seam can be drawn across more than one system, and two of them are: the
 solve seam runs from the assembler through the box to the readers, and the

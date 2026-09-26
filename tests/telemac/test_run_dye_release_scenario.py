@@ -37,14 +37,6 @@ def _resolve(**supplied):
     return asyncio.run(resolve_params(_workflow().params, dict(supplied)))
 
 
-def _steps():
-    return list(_workflow().plan.declared())
-
-
-def _step(name: str):
-    return next(s for s in _workflow().plan.steps if s.name == name)
-
-
 def _template():
     from trid3nt_server.workflows.telemac.templates.dye_release import dye_release
 
@@ -245,75 +237,6 @@ def test_the_domain_and_the_bed_reach_the_wire_as_the_slots_they_are():
     wire = set(inspect.signature(TOOL_REGISTRY["telemac_dye_release"].fn).parameters)
     assert {"domain", "bed", "discharge"} <= wire
     assert {"survey", "terrain"}.isdisjoint(wire)
-
-
-def test_the_workflow_owns_the_stages_and_the_template_states_what_differs():
-    from trid3nt_server.workflows.runtime import DataRef
-
-    steps = _steps()
-    # The channel is LISTED because this question declares a discharge; whether
-    # a run of it carries one is the author's to settle off the discharge it is
-    # handed, and an absent one opens on the level boundaries instead.
-    assert [s.label for s in steps] == ["stated", "mesh", "mesh_files", "channel", "source",
-                                        "settled", "sheet", "solve", "outputs"]
-    # The review is the door's VIEW of the sheet it just filled, so the run is
-    # held on the fill itself rather than in front of a step that has not run.
-    assert [s.label for s in steps if s.self_gating] == ["sheet"]
-    assert steps[-2].consequential
-    # The release reads the DOMAIN, not a centerline row of its own: an unplaced
-    # point sits its fraction along the companion the producer wrote beside the
-    # polygon, and a supplied one is snapped onto the same line.
-    source = next(s for s in steps if s.label == "source")
-    assert source.kwargs["domain"] == DataRef("domain")
-    listed = steps[-1].kwargs["outputs"]
-    assert [(p.kind, p.variable, p.publish) for p in listed] == [
-        ("series", "T1", "chart")]
-    assert steps[-1].kwargs["captions"] == {
-        "T1": "dye concentration", "discharge": "a streamflow",
-        "level": "a water-surface elevation"}
-
-
-def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_own_lever():
-    from trid3nt_server.mesh.tool import recipe_from_plan_value
-    from trid3nt_server.workflows.runtime import DataRef
-
-    recipe = recipe_from_plan_value(_step("mesh").kwargs["mesh"])
-    assert recipe.mesher == "om2d" and recipe.kind == "unstructured_tri"
-    assert recipe.extent == DataRef("domain")
-    assert recipe.resolution_m.name == "mesh_resolution_m"
-    bed = next(op for op in recipe.ops if op.fn == "set_bed")
-    assert bed.kwargs == {"source": DataRef("bed")}
-    # The RUNS slot: filled by the domain producer that cut the polygon between
-    # two faces, by the user's own runs, or by what they draw on the canvas.
-    runs = next(op for op in recipe.ops if op.fn == "set_boundary_roles")
-    assert runs.kwargs == {"runs": DataRef("domain")}
-
-
-def test_the_settle_step_reads_the_files_the_deck_itself_names():
-    from trid3nt_server.workflows.runtime import Ref
-    from trid3nt_server.workflows.telemac.workflow import stated
-
-    settle = _step("settled")
-    assert settle.runner.endswith("opening.open_water")
-    assert settle.kwargs["geometry"] == "domain.slf"
-    assert settle.kwargs["boundary"] == "domain.cli"
-    assert settle.kwargs["result"] == "r2d_domain.slf"
-    # THE CLOCK IS THE RESOLVED FLOOR'S: the settle runs before the sheet
-    # exists, so it reads the DURATION the deck will write.
-    assert settle.kwargs["duration_s"] == Ref("stated.DURATION")
-    assert stated(steering=_template().STEERING,
-                  keywords={})["DURATION"] == 3600.0
-    # The restart travels beside the result: a continuation reads it, and the
-    # deck's own RESULTS statement cannot name it.
-    assert list(_step("solve").kwargs["results"]) == ["r2d_domain.slf",
-                                                      "restart_domain.slf"]
-
-
-def test_no_step_names_a_template_module_as_a_tool():
-    """The reach chain is dissolved: nothing this template runs is reached by
-    module path into the templates tree."""
-    assert not [s.runner for s in _steps()
-                if ".templates." in s.runner]
 
 
 def test_an_unknown_data_row_is_an_attribute_error_at_the_line_that_wrote_it():

@@ -11,7 +11,9 @@ import json
 
 import pytest
 
-from trid3nt_server.workflows.telemac.authoring.staging import _write_manifest
+from trid3nt_server.workflows.telemac.authoring.staging import (
+    _write_manifest,
+)
 
 
 class _FakeS3:
@@ -116,21 +118,6 @@ def test_no_reach_run_declares_a_bed_cog_output():
         assert "bed_bathymetry.tif" not in _results(name)
 
 
-def test_a_continuation_is_the_runs_input_and_no_template_declares_it():
-    """Which run this one carries on from is the run's own continue_from, so no
-    question twins it as a param of its own and every settle reads the run's."""
-    from trid3nt_server.workflows.runtime import Continued
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    for name in ("telemac_dye_release", "telemac_do_sag", "telemac_bed_scour",
-                 "telemac_sediment_plume", "telemac_oil_spill"):
-        workflow = TOOL_REGISTRY[name].fn.workflow
-        assert "continue_from" not in {p.name for p in workflow.params}, name
-        settle = next(n for n in workflow.plan.steps
-                      if getattr(n, "name", "") == "settled")
-        assert settle.kwargs["continue_from"] is Continued, name
-
-
 def test_the_case_section_names_the_engine_the_file_and_the_results():
     from trid3nt_server.workflows.telemac.authoring.staging import case_section
 
@@ -197,15 +184,38 @@ def test_the_continuation_starts_where_the_restart_file_says_it_does(monkeypatch
         "data": {"WATER DEPTH": [[1.0, 1.0, 1.0], [1.0, 0.5, 0.0],
                                  [0.7, 0.0, 0.0]],
                  "FREE SURFACE": [[9.0] * 3] * 3}})
-    state = _continuation_state(str(previous))
+    state = _continuation_state(str(previous), 3)
     assert state["start_s"] == 600.192
     # the state a release is settled against is the LAST frame's own wet/dry
     assert list(state["wet"]) == [True, False, False]
 
-    monkeypatch.setattr(reader, "read_selafin", lambda path: {"times": []})
+    monkeypatch.setattr(reader, "read_selafin", lambda path: {"times": [],
+                                                               "npoin": 3})
     with pytest.raises(TelemacError) as exc:
-        _continuation_state(str(previous))
+        _continuation_state(str(previous), 3)
     assert exc.value.error_code == "TELEMAC_CONTINUATION_UNREADABLE"
+
+
+def test_a_previous_computation_on_this_mesh_is_accepted_and_another_refused(
+        monkeypatch, tmp_path):
+    """The previous-computation slot accepts a result whose header counts this
+    run's mesh nodes, and refuses by name, with both counts, any other."""
+    import trid3nt_server.workflows.telemac.modules.outputs as reader
+    from trid3nt_server.workflows.telemac.authoring.initial_state import (
+        initial_state_of,
+    )
+    from trid3nt_server.workflows.telemac.errors import TelemacError
+
+    previous = tmp_path / "restart_river.slf"
+    previous.write_bytes(b"selafin")
+    monkeypatch.setattr(reader, "read_selafin", lambda path: {
+        "times": [0.0, 60.0], "npoin": 4, "npoin2": 4,
+        "varnames": ["WATER DEPTH"], "data": {"WATER DEPTH": [[1.0] * 4] * 2}})
+    assert initial_state_of(str(previous), 4)["start_s"] == 60.0
+    with pytest.raises(TelemacError, match="holds 4 nodes and this run's mesh 5"
+                       ) as exc:
+        initial_state_of(str(previous), 5)
+    assert exc.value.error_code == "TELEMAC_CONTINUATION_REFUSED"
 
 
 def test_the_case_names_the_module_the_DECK_says_it_couples_with():

@@ -145,7 +145,7 @@ def test_ops_that_are_not_recipe_entries_refuse():
 
 
 def test_late_bound_reads_pass_declaration_and_refuse_serialization():
-    from trid3nt_server.workflows.runtime.plan import ParamRef
+    from trid3nt_server.workflows.runtime.reads import ParamRef
 
     recipe = tool.build_mesh(mesher="reg_grid", extent=_AOI,
                              resolution_m=ParamRef("mesh_resolution_m"))
@@ -369,7 +369,7 @@ def test_a_recipe_builds_nothing(tmp_path):
 
 def test_building_an_unbound_recipe_refuses_by_name(tmp_path):
     """A placeholder must not reach the mesh library as a value it cannot read."""
-    from trid3nt_server.workflows.runtime.plan import ParamRef
+    from trid3nt_server.workflows.runtime.reads import ParamRef
 
     recipe = tool.build_mesh(mesher="reg_grid", extent=_AOI,
                              resolution_m=ParamRef("mesh_resolution_m"))
@@ -380,7 +380,7 @@ def test_building_an_unbound_recipe_refuses_by_name(tmp_path):
 
 
 def test_an_unbound_op_kwarg_refuses_at_build(tmp_path):
-    from trid3nt_server.workflows.runtime.plan import ParamRef
+    from trid3nt_server.workflows.runtime.reads import ParamRef
 
     recipe = _recipe(ops=[mesh_op("set_bed", source=ParamRef("bed_uri"))])
     with pytest.raises(MeshToolError) as excinfo:

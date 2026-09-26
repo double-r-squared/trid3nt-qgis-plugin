@@ -643,24 +643,12 @@ package SolveSeam {
 
     requirement def AContinuationIsAnInputOfTheRun {
         doc /*
-        A run that carries another on NAMES it, as continue_from=<run id>,
-        like any other input of the run and never as a param some question
-        declares: the file that run's solve wrote, read off its own journal
-        line, is staged as the module's previous computation, the fill states
-        it and the record says which run was continued. A run id whose line
-        names no solved result is refused by name.
-
-        Naming the file IS the continuation: the engine reads its last record
-        as the initial state and the deck's own initial-condition statements go
-        unread. The staged file is the parent's result, whose format is the
-        keyword's own default, so nothing states that. Every forcing file the
-        child writes is read on the clock the parent ended at, because a table
-        that does not span the run's own instants stops the reader.
-
-        The state a run opens at has one reader, and each settle that places
-        something on that state reads it there, never through another settle.
-
-        forbid: trid3nt_server.workflows.telemac.authoring.release_point -> trid3nt_server.workflows.telemac.authoring.opening
+        A run that carries another on fills the module's own previous-
+        computation slot with the earlier result's layer, like any other layer
+        fill and never through a control of its own: the settle stages that file
+        as the previous computation and the sheet names the staged copy. The
+        slot accepts a result whose header counts this run's mesh nodes and
+        refuses any other by name with both counts.
         */
     }
 
@@ -976,8 +964,6 @@ package SolveSeam {
 
     satisfy requirement OneNumberDefinesTheStructure by walkedBoundary;
     verify requirement OneNumberDefinesTheStructure by
-        "tests/telemac/test_open_water_domains.py::test_the_footprint_and_the_solid_faces_are_cut_at_the_same_width";
-    verify requirement OneNumberDefinesTheStructure by
         "tests/telemac/test_open_water_domains.py::test_a_boundary_node_is_on_the_structure_when_it_stands_on_the_punched_outline";
     verify requirement OneNumberDefinesTheStructure by
         "tests/telemac/test_open_water_domains.py::test_a_lone_node_between_two_of_another_kind_is_not_a_face";
@@ -1022,13 +1008,11 @@ package SolveSeam {
     satisfy requirement AContinuationIsAnInputOfTheRun by initialState;
     satisfy requirement AContinuationIsAnInputOfTheRun by workerEntrypoint;
     verify requirement AContinuationIsAnInputOfTheRun by
-        "tests/runtime/test_continue_from.py::test_a_run_continues_from_the_file_a_journaled_run_solved";
-    verify requirement AContinuationIsAnInputOfTheRun by
-        "tests/runtime/test_continue_from.py::test_a_run_id_with_no_solved_result_is_refused_by_name";
-    verify requirement AContinuationIsAnInputOfTheRun by
-        "tests/telemac/test_telemac_reach_staged_inputs.py::test_a_continuation_is_the_runs_input_and_no_template_declares_it";
-    verify requirement AContinuationIsAnInputOfTheRun by
         "tests/telemac/test_telemac_module_surface.py::test_a_continuation_names_the_file_and_nothing_else";
+    verify requirement AContinuationIsAnInputOfTheRun by
+        "tests/telemac/test_telemac_reach_staged_inputs.py::test_a_previous_computation_on_this_mesh_is_accepted_and_another_refused";
+    verify requirement AContinuationIsAnInputOfTheRun by
+        "tests/telemac/test_straight_line_run.py::test_the_previous_computation_leaves_the_floor_for_the_settle";
 
     satisfy requirement BoundaryCodesMatchTheSteering by topologyWriter;
     satisfy requirement BoundaryCodesMatchTheSteering by opening;
@@ -1109,8 +1093,6 @@ package SolveSeam {
     verify requirement OutflowStageIsNormalDepth by
         "tests/telemac/test_telemac_outflow_stage.py::test_an_input_the_stage_cannot_be_derived_from_refuses_by_name";
 
-    verify requirement OutflowStageIsNormalDepth by
-        "tests/telemac/test_telemac_module_surface.py::test_the_open_channel_body_is_written_at_the_derivation_it_was_solved_for";
     verify requirement OutflowStageIsNormalDepth by
         "tests/telemac/test_telemac_outflow_stage.py::test_a_flatter_reach_stands_higher_for_the_same_flow";
     verify requirement OutflowStageIsNormalDepth by

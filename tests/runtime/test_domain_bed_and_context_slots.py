@@ -18,13 +18,16 @@ from trid3nt_server.workflows.runtime import (
     Param,
     PlanValidationError,
     Ref,
-    Step,
     data_rows,
     doors,
     tool,
 )
 from trid3nt_server.workflows.runtime.data import BED, DOMAIN
-from trid3nt_server.workflows.runtime.levers import LEVER_NAMES, LEVERS, with_levers
+from trid3nt_server.workflows.runtime.levers import (
+    LEVER_NAMES,
+    LEVERS,
+    with_levers,
+)
 
 
 def test_a_domain_row_is_one_slot_however_it_is_filled():
@@ -125,36 +128,6 @@ def test_a_context_rows_absence_continues_the_run_and_says_so(monkeypatch):
         "no sample near this domain; the stated value stands (WQP_NO_SITES)"]
 
 
-def test_a_context_row_no_step_reads_is_asked_all_the_same(monkeypatch):
-    """The sentence IS the product: a context row no step and no sibling row
-    dereferences is still asked, while a plain row nothing reads costs no fetch."""
-    from trid3nt_server.workflows.runtime import fill, interpreter
-
-    class DATA:
-        read = Data(tool("fetch_ehydro_surveys")).context("no survey here")
-        unread = Data(tool("fetch_usgs_water_quality")).context(
-            "no water-quality site near this domain; the stated value stands")
-        plain = Data(tool("fetch_dem"))
-
-    asked: list[str] = []
-
-    async def _asked(env, producer, label):
-        asked.append(producer.runner)
-        raise RuntimeError("WQP_NO_SITES")
-
-    monkeypatch.setattr(fill, "_produced", _asked)
-    rows = {row.name: row for row in data_rows(DATA)}
-    env = fill._Env(params=None, data=rows, results={})
-    node = interpreter.PlanNode(index=0, label="step", runner="r", kind="step",
-                                step=Step(runner="r",
-                                          kwargs={"survey": Ref("read")}))
-    asyncio.run(interpreter._ask_unread_context(env, (node,)))
-    assert asked == ["fetch_usgs_water_quality"]
-    assert env.absences == [
-        "no water-quality site near this domain; the stated value stands "
-        "(WQP_NO_SITES)"]
-
-
 #: What a reach producer returns: the section it cut, and the two faces it was
 #: cut between, each row naming which stretch it is.
 _REACH = {"type": "FeatureCollection", "features": [
@@ -180,7 +153,7 @@ def _env_over(value, monkeypatch, body=_RIVER):
     from trid3nt_server.workflows.runtime import fill
 
     async def _answered(env, producer, label):
-        return {}, value
+        return value
 
     monkeypatch.setattr(fill, "_produced", _answered)
     rows = {row.name: row for row in data_rows(body)}
@@ -263,29 +236,6 @@ def test_a_malformed_value_handed_to_a_context_rows_slot_refuses_too(monkeypatch
         asyncio.run(fill._produce(env, row))
     assert exc.value.error_code == "OBSERVATION_INVALID"
     assert env.absences == []
-
-
-def test_a_tail_read_off_a_wholly_absent_row_is_nothing(monkeypatch):
-    """A row that is absent reads like a field that is present and empty. What
-    a context row EXISTS for is that the run continues, so the keyword reading
-    it states nothing rather than refusing on a field nobody wrote."""
-    from trid3nt_server.workflows.runtime import fill, interpreter
-
-    class DATA:
-        sample = Data(tool("fetch_usgs_water_quality")).context()
-
-    async def _empty(env, producer, label):
-        raise RuntimeError("WQP_NO_SITES")
-
-    monkeypatch.setattr(fill, "_produced", _empty)
-    rows = {row.name: row for row in data_rows(DATA)}
-    env = fill._Env(params=None, data=rows, results={})
-    assert asyncio.run(interpreter._deref(Ref("sample.value"), env)) is None
-    # a field the row HAS but does not carry still refuses by name
-    env = fill._Env(params=None, data=rows, results={},
-                           artifacts={"sample": {"value": 3.0}})
-    with pytest.raises(Exception, match="REF_FIELD_MISSING|reads 'units'"):
-        asyncio.run(interpreter._deref(Ref("sample.units"), env))
 
 
 def test_the_sheet_reads_a_wholly_absent_row_as_nothing():
@@ -372,19 +322,10 @@ def _answered(monkeypatch, value: Any):
     from trid3nt_server.workflows.runtime import fill
 
     async def _found(env, producer, label):
-        return {}, value
+        return value
 
     monkeypatch.setattr(fill, "_produced", _found)
-    monkeypatch.setattr(fill, "_record_for",
-                        lambda *a, **k: _Record())
     return fill
-
-
-class _Record:
-    """The ledger row a produced artifact writes; nothing here reads it."""
-
-    index = -1
-    node = ""
 
 
 def test_an_observation_row_yields_the_reading_not_the_record(monkeypatch):
@@ -568,7 +509,6 @@ def test_the_runtime_declares_the_offset_row_a_differing_source_owes(monkeypatch
     assert one["point"] == pytest.approx([_MEASURED_EAST_OF + 0.005, 45.49])
     # the row is ON the run: a declared row with a record, not a hidden call
     assert "bed_datum_offset" in env.data
-    assert [r.node for r in env.data_records] == ["data:bed_datum_offset"]
 
 
 def test_an_offset_row_is_asked_where_the_source_measured_not_at_the_seed(

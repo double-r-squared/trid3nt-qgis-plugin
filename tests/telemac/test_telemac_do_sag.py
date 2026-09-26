@@ -19,8 +19,13 @@ from trid3nt_server.workflows.telemac.helpers.oxygen_sag import (
 from trid3nt_server.workflows.runtime import Ref
 from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
 from trid3nt_server.workflows.telemac.workflow import stated
-from trid3nt_server.workflows.telemac.modules.outputs import Line, Profile
-from trid3nt_server.workflows.telemac.templates.do_sag.streeter_phelps import overlay
+from trid3nt_server.workflows.telemac.modules.outputs import (
+    Line,
+    Profile,
+)
+from trid3nt_server.workflows.telemac.templates.do_sag.streeter_phelps import (
+    overlay,
+)
 
 _FIXTURE = Path(__file__).parents[1] / "fixtures" / "telemac_o2_sp_idealized_profile.json"
 
@@ -65,10 +70,6 @@ def _template():
     return do_sag
 
 
-def _steps():
-    return list(_workflow().plan.declared())
-
-
 def _resolve(**supplied):
     from trid3nt_server.workflows.runtime import resolve_params
 
@@ -80,41 +81,6 @@ def test_declared_params_resolve():
     assert [p.name for p in wf.params if p.name not in LEVER_NAMES] == [
         "outfall_coords", "do_standard_mgl"]
     assert _resolve().value_of("do_standard_mgl") == 5.0
-
-
-def test_the_params_are_the_questions_own_plus_the_runtimes_levers():
-    """No keyword twin, no domain twin, no lever restated: the dictionary
-    describes the clock, the roughness, the cadence and the O2 kinetics, the
-    slots describe the water, and the runtime declares the granularity, the
-    moment and the sizing class."""
-    declared = {p.name for p in _workflow().params}
-    assert not declared & {"friction_law", "friction_coefficient",
-                           "output_interval_min"}
-    assert not declared & {"location", "bbox", "river_geometry_uri",
-                           "reach_length_km"}
-    # The keywords this deck has an opinion about: stated in STEERING, set by
-    # the user under the dictionary's own name, and never a second time here.
-    assert not declared & {"sim_duration_s", "water_temp_c", "k1_per_day",
-                           "k2_per_day", "do_saturation_mgl", "upstream_do_mgl"}
-    # Every lever is on the sheet; the ones this question does not state for
-    # itself are seated at the end, in the order the runtime declares them.
-    from trid3nt_server.workflows.runtime import param_rows
-
-    own = {p.name for p in param_rows(_template().PARAMS)}
-    seated = [p.name for p in _workflow().params]
-    assert set(LEVER_NAMES) <= set(seated)
-    appended = [name for name in LEVER_NAMES if name not in own]
-    assert seated[-len(appended):] == appended
-    # The roughness the outflow stage is derived at is the roughness the deck is
-    # written at - one number, stated once on the body. The clock is the deck's
-    # too: the settle reads the DURATION it states.
-    steering = _template().STEERING
-    assert steering.LAW_OF_BOTTOM_FRICTION == 3
-    assert steering.FRICTION_COEFFICIENT == 33.0
-    assert steering.ASSERTED["DURATION"] == 172800.0
-    settled = next(s for s in _steps() if s.name == "settled")
-    assert settled.kwargs["duration_s"] == Ref("stated.DURATION")
-    assert stated(steering=steering, keywords={})["DURATION"] == 172800.0
 
 
 def test_the_data_rows_are_the_engine_neutral_slots_this_run_stands_on():
@@ -170,62 +136,6 @@ def test_the_outfall_seeds_the_domain_match():
     assert {"domain", "bed"} <= wire
     assert not {"location", "bbox", "river_geometry_uri", "reach_length_km",
                 "outfall_lat", "outfall_lon"} & wire
-
-
-def test_the_workflow_owns_the_stages_and_the_template_states_what_differs():
-    steps = _steps()
-    assert [s.label for s in steps] == ["stated", "mesh", "mesh_files", "channel", "outfall",
-                                        "settled", "sheet", "solve", "outputs"]
-    # The review is the door's VIEW of the sheet it just filled, so the run is
-    # held on the fill itself rather than in front of a step that has not run.
-    assert [s.label for s in steps if s.self_gating] == ["sheet"]
-    assert steps[-2].consequential
-    channel = steps[3]
-    assert channel.runner.endswith("opening.open_channel")
-    assert channel.kwargs["friction_law"] == Ref("stated.LAW_OF_BOTTOM_FRICTION")
-    assert channel.kwargs["friction_coefficient"] == Ref(
-        "stated.FRICTION_COEFFICIENT")
-    # An unplaced outfall sits along the domain's OWN centerline companion, so
-    # the step is handed the domain rather than a line of its own.
-    outfall = steps[4]
-    assert outfall.runner.endswith("release_point.settle_release")
-    assert set(outfall.kwargs) == {"point", "mesh", "domain", "fraction", "label"}
-
-
-def test_the_mesh_is_built_over_the_domain_slot_at_the_runtimes_own_lever():
-    from trid3nt_server.mesh.tool import recipe_from_plan_value
-    from trid3nt_server.workflows.runtime import DataRef
-
-    recipe = recipe_from_plan_value(
-        next(s for s in _steps() if s.name == "mesh").kwargs["mesh"])
-    assert recipe.mesher == "om2d" and recipe.kind == "unstructured_tri"
-    assert recipe.extent == DataRef("domain")
-    assert recipe.resolution_m.name == "mesh_resolution_m"
-    # The rim is sized FIRST: no sizing function measures the domain's own edge.
-    assert recipe.ops[0].fn == "set_rim_size"
-    bed = next(op for op in recipe.ops if op.fn == "set_bed")
-    assert bed.kwargs == {"source": DataRef("bed")}
-    runs = next(op for op in recipe.ops if op.fn == "set_boundary_roles")
-    # No runs row: the boundary runs ride on the domain's own producer.
-    assert runs.kwargs == {"runs": DataRef("domain")}
-
-
-def test_the_settle_step_reads_the_files_the_deck_itself_names():
-    settle = next(s for s in _steps() if s.name == "settled")
-    assert settle.runner.endswith("opening.open_water")
-    assert settle.kwargs["geometry"] == "domain.slf"
-    assert settle.kwargs["boundary"] == "domain.cli"
-    assert settle.kwargs["result"] == "r2d_domain.slf"
-    # A coupled run drives the module's own launcher whole, so it is asked for
-    # the carrier's result and nothing else.
-    assert list(next(s for s in _steps() if s.name == "solve").kwargs[
-        "results"]) == ["r2d_domain.slf"]
-
-
-def test_no_step_names_a_template_module_as_a_tool():
-    """The reach chain is dissolved: nothing this template runs is reached by
-    module path into the templates tree."""
-    assert not [s.runner for s in _steps() if ".templates." in s.runner]
 
 
 def test_the_ex_release_params_are_gone_from_the_declared_wire():
@@ -291,14 +201,6 @@ def test_a_supplied_outfall_is_carried_as_a_user_row():
 
 
 # --- the gate-mode lever reaches the resolved-input review ------------------- #
-def test_the_door_declares_the_run_mode_read_for_the_sheet_review():
-    """input_mode is the gate lever, not a Param: without this the user_gated
-    review of the filled sheet is silently lost."""
-    from trid3nt_server.workflows.runtime import RunMode
-
-    review = next(s for s in _steps() if s.name == "sheet")
-    assert review.kwargs["input_mode"] is RunMode
-    assert review.self_gating is True    # so no gate may be declared in front
 
 
 # --- the outputs list: the oxygen profile along what the domain offers -------- #

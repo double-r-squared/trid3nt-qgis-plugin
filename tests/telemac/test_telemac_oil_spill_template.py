@@ -10,9 +10,13 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.runtime.plan import DataRef
+from trid3nt_server.workflows.runtime.reads import DataRef
 from trid3nt_server.workflows.runtime import Ref
-from trid3nt_server.workflows.runtime.data import BED, DISCHARGE, DOMAIN
+from trid3nt_server.workflows.runtime.data import (
+    BED,
+    DISCHARGE,
+    DOMAIN,
+)
 from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
 from trid3nt_server.workflows.telemac.modules import T2D
 from trid3nt_server.workflows.telemac.workflow import stated
@@ -87,38 +91,6 @@ def test_the_discharge_is_one_reading_and_never_the_grid_it_came_from():
     assert discharge.data_class == "discharge series"
     assert discharge.coercion["near"] is None
     assert "to_units" not in discharge.coercion
-
-
-def test_the_release_is_settled_against_the_domain_it_may_be_unplaced_in():
-    """An unplaced release sits its fraction along the domain's own centerline
-    companion, and a supplied point is snapped onto that same line."""
-    kwargs = [s for s in _workflow().plan.steps if s.label == "source"][0].kwargs
-    assert kwargs["domain"] == DataRef("domain")
-    assert kwargs["fraction"].name == "spill_fraction"
-
-
-def test_the_workflow_owns_every_stage_this_template_does_not_differ_on():
-    """No domain steps, no mesh recipe, no settle, no file names: what the
-    template states is the open-channel hydraulics and where the oil enters."""
-    workflow = _workflow()
-    assert [step.label for step in workflow.plan.steps] == [
-        "stated", "mesh", "mesh_files", "channel", "source", "settled", "sheet", "solve",
-        "outputs"]
-    assert not hasattr(template, "MESH")
-
-
-def test_the_mesh_is_built_over_the_slots_at_the_runtimes_own_lever():
-    """The extent is the domain row, the bed is the merged row, and the runs
-    come off the runs slot the domain producer's two end transects fill."""
-    from trid3nt_server.workflows.runtime.plan import DataRef
-
-    recipe = [s for s in _workflow().plan.steps if s.label == "mesh"][0].kwargs["mesh"]
-    assert recipe["extent"] == DataRef("domain")
-    # A placeholder refuses ``==`` by design, so the read is named by its name.
-    assert recipe["resolution_m"].name == "mesh_resolution_m"
-    ops = {op["op"]: op["kwargs"] for op in recipe["ops"]}
-    assert ops["set_bed"] == {"source": DataRef("bed")}
-    assert ops["set_boundary_roles"] == {"runs": DataRef("domain")}
 
 
 def test_the_baseline_params_are_the_runtimes_and_are_not_restated():
@@ -197,31 +169,6 @@ def test_the_ex_release_params_are_gone_from_the_declared_wire():
     wire = set(inspect.signature(TOOL_REGISTRY[_TOOL].fn).parameters)
     gone = {"source_q_m3s", "oil_concentration_mgl"}
     assert not (declared & gone) and not (wire & gone)
-
-
-def test_the_roughness_is_the_decks_own_opinion_stated_as_keywords():
-    """The stage is derived as a normal depth AT this roughness, so the number
-    the deck is written at and the number it was derived at are one number."""
-    asserted = template.STEERING.ASSERTED
-    assert asserted["LAW_OF_BOTTOM_FRICTION"] == 3
-    assert asserted["FRICTION_COEFFICIENT"] == 33.0
-    assert [step.name for step in _workflow().plan.steps
-            if step.name == "channel"] == ["channel"]
-
-
-def test_the_clock_and_the_track_are_the_modules_own_keywords():
-    """The window, the float count and how often their positions are written
-    are keywords telemac2d carries, so the deck states them by their own names
-    and the settle is built off the same statement."""
-    asserted = template.STEERING.ASSERTED
-    assert asserted["DURATION"] == 3600.0
-    assert asserted["MAXIMUM_NUMBER_OF_DROGUES"] == 100
-    # In SOLVER STEPS, like GRAPHIC PRINTOUT PERIOD beside it - no seconds and
-    # no division by the settled step.
-    assert asserted["PRINTOUT_PERIOD_FOR_DROGUES"] == 60
-    settled = [s for s in _workflow().plan.steps if s.label == "settled"][0]
-    assert settled.kwargs["duration_s"] == Ref("stated.DURATION")
-    assert stated(steering=template.STEERING, keywords={})["DURATION"] == 3600.0
 
 
 def test_a_calm_dry_deck_writes_no_wind_and_no_rain_at_all():

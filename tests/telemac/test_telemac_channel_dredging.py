@@ -17,7 +17,9 @@ import yaml
 from trid3nt_server.workflows.runtime import DataRef, Ref
 from trid3nt_server.workflows.telemac.workflow import stated
 from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
-from trid3nt_server.workflows.telemac.templates.channel_dredging import channel_dredging
+from trid3nt_server.workflows.telemac.templates.channel_dredging import (
+    channel_dredging,
+)
 
 _WORKFLOW = channel_dredging.telemac_channel_dredging.workflow
 _STEERING = channel_dredging.STEERING
@@ -35,10 +37,6 @@ _DISSOLVED = {"location", "bbox", "river_geometry_uri", "reach_length_km",
 
 def _rows() -> dict:
     return {row.name: row for row in _WORKFLOW.data}
-
-
-def _steps() -> dict:
-    return {step.label: step for step in _WORKFLOW.plan.steps}
 
 
 def _recipe():
@@ -78,58 +76,6 @@ def test_the_flow_the_channel_is_dredged_under_is_a_need_row_not_a_record():
     assert discharge.producer is None
 
 
-def test_the_workflow_owns_every_stage_but_the_two_this_question_measures():
-    """No domain steps, no mesh recipe, no settle, no file names, and no open
-    channel: the workflow lists that off this question's own discharge row. The
-    dredge's areas are measured against the SETTLED run, so that step is the
-    template's and it runs after."""
-    assert [step.label for step in _WORKFLOW.plan.steps] == [
-        "stated", "mesh", "mesh_files", "channel", "settled", "dredge", "sheet", "solve",
-        "outputs"]
-    settle = _steps()["settled"]
-    assert settle.runner.endswith("opening.open_water")
-    assert (settle.kwargs["geometry"], settle.kwargs["boundary"],
-            settle.kwargs["result"]) == ("channel.slf", "channel.cli",
-                                         "r2d_channel.slf")
-
-
-def test_the_deck_is_written_at_the_roughness_its_own_stage_is_derived_at():
-    """A stage derived at one number under a deck written at another is a level
-    the run never sits at, so the two read the same module constant."""
-    channel = _steps()["channel"]
-    assert channel.runner.endswith("opening.open_channel")
-    assert channel.kwargs["friction_law"] == Ref("stated.LAW_OF_BOTTOM_FRICTION")
-    assert channel.kwargs["friction_coefficient"] == Ref(
-        "stated.FRICTION_COEFFICIENT")
-    floor = stated(steering=_STEERING, keywords={})
-    assert (floor["LAW_OF_BOTTOM_FRICTION"],
-            floor["FRICTION_COEFFICIENT"]) == (
-        _STEERING.ASSERTED["LAW_OF_BOTTOM_FRICTION"],
-        _STEERING.ASSERTED["FRICTION_COEFFICIENT"])
-    assert _STEERING.ASSERTED["INITIAL_DEPTH"] == Ref("settled.depth_m")
-
-
-def test_the_dredge_reads_its_levels_off_the_line_slot_and_the_settled_run():
-    """The reference surface is cross-sections down the channel at the water
-    surface the run opens at, so it reads the LINE slot - which the domain's
-    producer fills with the centerline it measured, and which a port draws over
-    a fairway nobody mapped a channel through."""
-    dredge = _steps()["dredge"]
-    assert dredge.runner.endswith("reference_surface.settle_dredge")
-    assert dredge.kwargs["line"] == Ref("line")
-    # The DOMAIN itself for the end its inflow run names, and nothing else.
-    assert dredge.kwargs["domain"] == DataRef("domain")
-    assert "centerline" not in dredge.kwargs and "seed" not in dredge.kwargs
-    assert dredge.kwargs["settled"] == Ref("settled")
-    assert set(dredge.kwargs["areas"]) == {"dredge_area", "dump_area"}
-    # The grade the question asks for, and the stock the deck lays into the bed:
-    # the cut is measured between the two, so the refusal and the deck read one
-    # number rather than two that can drift.
-    assert dredge.kwargs["dug_area"] == "dredge_area"
-    assert dredge.kwargs["grade_depth_m"].name == "design_depth_m"
-    assert dredge.kwargs["stock_m"] == channel_dredging._BED_STOCK_M
-
-
 def test_the_bed_the_dredger_cuts_is_stated_as_the_module_s_own_keywords():
     """The class, the stock and the morphological factor are keywords GAIA
     carries, so the deck states them and a user overrides each by its own name;
@@ -142,33 +88,6 @@ def test_the_bed_the_dredger_cuts_is_stated_as_the_module_s_own_keywords():
     assert slots["MORPHOLOGICAL_FACTOR"] == 10.0
     assert slots["MASS_BALANCE"] is True
     assert slots["bed"] == {"gradation": None, "presets": None}
-
-
-def test_the_clock_is_the_deck_s_own_duration_and_the_dredge_reads_its_origin():
-    """DURATION is a keyword the module carries, so the settle is handed the
-    seconds the deck was written for; NESTOR dates its actions against the same
-    origin the deck states."""
-    assert _STEERING.ASSERTED["DURATION"] == 3600.0
-    assert _steps()["settled"].kwargs["duration_s"] == Ref("stated.DURATION")
-    assert stated(steering=_STEERING, keywords={})["DURATION"] == 3600.0
-    dredging = _STEERING.ASSERTED["coupling"][0]["slots"]["dredging"]
-    assert dredging["origin"] == _STEERING.ASSERTED["time_origin"]["at"]
-
-
-def test_the_mesh_is_built_over_the_domain_slot_at_the_runtime_lever():
-    recipe = _recipe()
-    assert recipe.extent == DataRef("domain")
-    assert recipe.resolution_m.name == "mesh_resolution_m"
-    bed = next(op for op in recipe.ops if op.fn == "set_bed")
-    assert bed.kwargs == {"source": DataRef("bed")}
-
-
-def test_the_boundary_roles_ride_on_the_domain_since_no_runs_row_exists():
-    """There is no runs row any more: the boundary walk the match returned rides
-    on the domain's own producer, and the workflow passes that row directly."""
-    runs = next(op for op in _recipe().ops if op.fn == "set_boundary_roles")
-    assert runs.kwargs == {"runs": DataRef("domain")}
-    assert "runs" not in _rows()
 
 
 def test_the_runtime_levers_are_seated_and_no_baseline_param_is_restated():

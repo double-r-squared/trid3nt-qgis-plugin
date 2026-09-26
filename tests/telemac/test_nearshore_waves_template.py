@@ -17,10 +17,18 @@ from trid3nt_server.workflows.telemac.authoring.selafin_io import (
 import pytest
 
 from trid3nt_server.workflows.runtime import Ref
-from trid3nt_server.workflows.runtime.data import BED, DOMAIN, EXTENT, LEVEL, WAVE
-from trid3nt_server.workflows.runtime.plan import declared_reads
+from trid3nt_server.workflows.runtime.data import (
+    BED,
+    DOMAIN,
+    EXTENT,
+    LEVEL,
+    WAVE,
+)
+from trid3nt_server.workflows.runtime.reads import declared_reads
 from trid3nt_server.workflows.telemac.modules import WAC, fill
-from trid3nt_server.workflows.telemac.modules.tomawac import RESULT_FILENAME
+from trid3nt_server.workflows.telemac.modules.tomawac import (
+    RESULT_FILENAME,
+)
 
 _TOOL = "tomawac_nearshore_waves"
 #: The hour the deck marches, as the two keywords the module spells it in.
@@ -35,11 +43,6 @@ def _workflow():
 
 def _rows():
     return {row.name: row for row in _workflow().data}
-
-
-def _step(label):
-    return next(step for step in _workflow().plan.declared()
-                if step.label == label)
 
 
 def test_the_world_is_the_water_a_coastline_leaves_inside_the_window():
@@ -97,24 +100,6 @@ def test_the_boundary_keywords_read_the_slot_by_name():
     # value: TOMAWAC carries no free surface of its own.
     assert _rows()["level"].role == LEVEL
     assert deck.ASSERTED["INITIAL_STILL_WATER_LEVEL"] == Ref("level.value")
-
-
-def test_the_run_length_is_the_product_the_module_spells_it_as():
-    """TOMAWAC names no DURATION, so the settle and the window a matched record
-    is filtered on both read the step and the count this deck states."""
-    assert _workflow().run_window_s({}) == _HOUR_S
-    assert _step("settled").kwargs["duration_s"] == [Ref("stated.TIME_STEP"),
-                                                     Ref("stated.NUMBER_OF_TIME_STEP")]
-    # The floor still moves it: a caller who states a longer run moves the
-    # window every series source is matched against.
-    assert _workflow().run_window_s({"NUMBER OF TIME STEP": 720}) == 2 * _HOUR_S
-
-
-def test_the_run_is_read_off_the_file_the_module_spells_its_results_in():
-    """The deck names its result under 2D RESULTS FILE, and nothing restates the
-    name: the solve declares the same file the primitives open."""
-    assert _step("solve").kwargs["results"] == [RESULT_FILENAME]
-    assert WAC.RESULT_FILE == RESULT_FILENAME
 
 
 def test_the_seaward_edge_is_opened_so_the_spectrum_has_somewhere_to_enter():

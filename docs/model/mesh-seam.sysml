@@ -845,8 +845,6 @@ package MeshSeam {
         "tests/mesh/test_mesh_gate_loop.py::test_the_accept_is_the_card_submitted_rather_than_a_tool";
     verify requirement TheGateIsNeverSpecialised by
         "tests/mesh/test_mesh_gate_loop.py::test_adopting_a_hand_edited_layer_is_a_row_on_the_card";
-    verify requirement TheGateIsNeverSpecialised by
-        "tests/telemac/test_telemac_module_surface.py::test_the_mesh_gate_receives_the_runs_own_mode";
 
     satisfy requirement RegenerationIsWholesale by meshSession;
     satisfy requirement RegenerationIsWholesale by opTool;
