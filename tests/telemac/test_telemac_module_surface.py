@@ -1501,3 +1501,142 @@ def test_a_module_dictionary_is_parsed_once_per_process():
     """Every body, fill and printouts call reads the dictionary; a parse per read
     re-walks the catalog on every slot lookup."""
     assert load_module_input("khione") is load_module_input("khione")
+
+
+class _Emitter:
+    """A live session that records every card it is handed."""
+
+    session_id = "sess-card"
+
+    def __init__(self) -> None:
+        self.sent: list = []
+
+    async def send_envelope(self, message_type: str, payload) -> None:
+        self.sent.append(payload)
+
+
+async def _answer(emitter: _Emitter, *replies) -> None:
+    """Answer each card as it appears, in order: (decision, revised_args)."""
+    import asyncio
+
+    from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
+    from trid3nt_server.gates import pending
+
+    for index, (decision, revised) in enumerate(replies):
+        while len(emitter.sent) <= index or \
+                emitter.sent[index].warning_id not in pending._PENDING_CONFIRMATIONS:
+            await asyncio.sleep(0.005)
+        _session, fut = pending._PENDING_CONFIRMATIONS[emitter.sent[index].warning_id]
+        fut.set_result(PayloadConfirmationEnvelopePayload(
+            warning_id=emitter.sent[index].warning_id, decision=decision,
+            revised_args=revised))
+
+
+class _CARD(T2D):
+    DURATION = ParamRef("sim_duration_s")
+
+
+def _card_run(monkeypatch, *replies, spent=(), input_mode=None):
+    import asyncio
+
+    from trid3nt_server.render import pipeline_emitter as pe
+    from trid3nt_server.workflows.telemac.workflow import fill_sheet
+
+    emitter = _Emitter()
+    monkeypatch.setattr(pe, "current_emitter", lambda: emitter)
+
+    async def go():
+        answering = asyncio.create_task(_answer(emitter, *replies))
+        try:
+            return await fill_sheet(
+                steering=_CARD, produced={}, params={"sim_duration_s": 600.0},
+                workflow="probe", title="", keywords={}, input_mode=input_mode,
+                spent=spent)
+        finally:
+            answering.cancel()
+
+    return asyncio.run(go()), emitter
+
+
+def test_a_template_param_edited_on_the_card_lands_and_the_card_redraws(
+        monkeypatch):
+    sheet, emitter = _card_run(
+        monkeypatch, ("narrow_scope", {"sim_duration_s": 900.0}),
+        ("proceed", None))
+    assert dict(sheet.resolved())["DURATION"] == 900.0
+    drawn = [{row.name: row.value for row in card.param_sheet.rows}
+             for card in emitter.sent]
+    assert [card["sim_duration_s"] for card in drawn] == [600.0, 900.0]
+    assert [card["DURATION"] for card in drawn] == [600.0, 900.0]
+
+
+def test_a_keyword_edited_on_the_card_lands(monkeypatch):
+    sheet, _ = _card_run(monkeypatch, ("narrow_scope", {"SOLVER": 2}),
+                         ("proceed", None))
+    assert dict(sheet.resolved())["SOLVER"] == 2
+
+
+def test_a_name_that_is_no_input_of_the_run_refuses_by_name(monkeypatch):
+    with pytest.raises(SlotRefused) as caught:
+        _card_run(monkeypatch, ("narrow_scope", {"NOT_AN_INPUT": 1}))
+    assert "NOT_AN_INPUT is not an input of probe" in str(caught.value)
+
+
+def test_a_param_another_stage_reads_refuses_by_name(monkeypatch):
+    with pytest.raises(SlotRefused) as caught:
+        _card_run(monkeypatch, ("narrow_scope", {"sim_duration_s": 900.0}),
+                  spent=("sim_duration_s",))
+    assert "State sim_duration_s on the run instead" in str(caught.value)
+
+
+def test_an_unstated_mode_with_no_session_refuses_and_fills_nothing(monkeypatch):
+    import asyncio
+
+    from trid3nt_server.render import pipeline_emitter as pe
+    from trid3nt_server.workflows.telemac.errors import TelemacError
+    from trid3nt_server.workflows.telemac.workflow import fill_sheet
+
+    monkeypatch.setattr(pe, "current_emitter", lambda: None)
+    with pytest.raises(TelemacError) as caught:
+        asyncio.run(fill_sheet(steering=_CARD, produced={},
+                               params={"sim_duration_s": 600.0}, workflow="probe",
+                               title="", keywords={}, input_mode=None))
+    assert caught.value.error_code == "NO_SESSION"
+    assert "input_mode='auto'" in str(caught.value)
+
+
+def test_auto_launches_at_once_with_no_card(monkeypatch):
+    sheet, emitter = _card_run(monkeypatch, input_mode="auto")
+    assert emitter.sent == [] and dict(sheet.resolved())["DURATION"] == 600.0
+
+
+def test_the_mesh_gate_receives_the_runs_own_mode(monkeypatch):
+    from types import SimpleNamespace
+
+    from trid3nt_server.mesh import gate as mesh_gate
+    from trid3nt_server.mesh import session as mesh_session
+    from trid3nt_server.mesh import step as mesh_step
+    from trid3nt_server.mesh import tool as mesh_tool
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows.runtime import RunMode
+
+    plan = TOOL_REGISTRY["telemac_dye_release"].fn.workflow.plan
+    mesh = next(s for s in plan.declared() if s.label == "mesh")
+    assert mesh.kwargs["input_mode"] is RunMode
+    seen = {}
+
+    async def gate(session, *, tool_name, input_mode=None):
+        seen["mode"] = input_mode
+        raise RuntimeError("stop at the gate")
+
+    monkeypatch.setattr(mesh_gate, "gate_mesh_build", gate)
+    monkeypatch.setattr(mesh_tool, "recipe_from_plan_value",
+                        lambda value: SimpleNamespace(mesher="reg_grid"))
+    monkeypatch.setattr(mesh_session, "MeshSession",
+                        lambda recipe, **_: SimpleNamespace(recipe=recipe))
+    with pytest.raises(RuntimeError):
+        asyncio.run(mesh_step.build_declared_mesh(mesh={}, input_mode=None))
+    assert seen["mode"] is None
+    with pytest.raises(RuntimeError):
+        asyncio.run(mesh_step.build_declared_mesh(mesh={}, input_mode="user_gated"))
+    assert seen["mode"] == "user_gated"

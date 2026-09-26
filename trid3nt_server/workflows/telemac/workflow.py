@@ -445,7 +445,7 @@ def run_bodies(steering: type) -> list[type]:
 async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
                      params: Mapping[str, Any],
                      workflow: str, title: str, keywords: Mapping[str, Any],
-                     input_mode: str | None) -> Sheet:
+                     input_mode: str | None, spent: Sequence[str] = ()) -> Sheet:
     """Set the body's slots against what the run measured -> the sheet, HELD.
 
     The raw ``keywords`` floor is filled last and therefore beats a template value."""
@@ -466,21 +466,19 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
             stated[identifier] = value
         else:
             coupled.setdefault(body.MODULE, {})[identifier] = value
-    # A composite may read fetched data at the fill - a raster sampled at the
-    # mesh's nodes - so the fill runs off the loop.
-    sheet = await asyncio.to_thread(
-        fill_slots, steering, template=workflow, produced=dict(produced),
-        params=dict(params), **stated)
-    if coupled:
+
+    async def fill(values: Mapping[str, Any], edits: Mapping[str, Any]) -> Sheet:
+        # A composite may read fetched data at the fill - a raster sampled at
+        # the mesh's nodes - so the fill runs off the loop.
+        sheet = await asyncio.to_thread(
+            fill_slots, steering, template=workflow, produced=dict(produced),
+            params=dict(values), **{**stated, **edits})
         # After the fill, because the coupled decks are what the carrier's own
         # coupling composite wrote into the sheet's files.
-        sheet = fill_coupled(sheet, coupled)
-    revised = await _review(sheet, workflow=workflow, title=title,
-                            input_mode=input_mode)
-    if revised:
-        sheet = await asyncio.to_thread(
-            fill_slots, sheet, produced=dict(produced), params=dict(params),
-            **revised)
+        return fill_coupled(sheet, coupled) if coupled else sheet
+
+    sheet = await _review(fill, params, steering=steering, workflow=workflow,
+                          title=title, input_mode=input_mode, spent=spent)
     logger.info("telemac sheet filled: %s states %d keywords, %d open "
                 "(%d required)", sheet.body.__name__, len(sheet.filled),
                 len(sheet.open()), len(sheet.required()))
@@ -676,34 +674,86 @@ def _serial_rows(sheet: Sheet) -> list[ParamSheetRow]:
         if PROCESSORS not in body.MODULE_INPUT]
 
 
-async def _review(sheet: Sheet, *, workflow: str, title: str,
-                  input_mode: str | None) -> dict[str, Any]:
-    """Show the filled sheet and HOLD -> the slot edits the user submitted.
+async def _review(fill: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
+                  params: Mapping[str, Any], *, steering: type, workflow: str,
+                  title: str, input_mode: str | None,
+                  spent: Sequence[str]) -> Sheet:
+    """Show the filled sheet and HOLD -> the sheet the person proceeded on.
 
-    Submitting an edited sheet IS the approval; in ``auto`` nothing waits."""
-    from trid3nt_server.gates.input_review import gate_input_review
+    An edit re-fills its input and redraws the card, or refuses by name."""
+    from trid3nt_server.gates.input_review import (
+        GateCard,
+        gate_input_review,
+        render_input_review_lines,
+    )
 
-    rows = card_rows(sheet)
-    # A provenance row carries ONE value, so a keyword whose value is a list is
-    # narrated as the list it is rather than dropped.
-    entries = [SyntheticInput(
-                   param=row.name, basis=row.basis, note=row.source_badge,
-                   value=(row.value if isinstance(row.value, (int, float, str, bool))
-                          else "; ".join(str(v) for v in row.value)))
-               for row in rows if row.value is not None and not row.advanced]
+    values, edits = dict(params), {}
+    own = {ref.name for ref in declared_reads(steering.ASSERTED, ParamRef)
+           if ref.name in values} - set(spent)
+    sheet = await fill(values, edits)
+
+    def rows() -> list[ParamSheetRow]:
+        return [_param_row(name, values[name]) for name in sorted(own)] \
+            + card_rows(sheet)
+
+    async def card() -> GateCard:
+        drawn = rows()
+        return GateCard(lines=render_input_review_lines(_entries(drawn)),
+                        param_sheet=ParamSheet(
+                            workflow=workflow, rows=drawn,
+                            title=title or f"Review the {workflow} sheet"))
+
+    async def revise(revised: Mapping[str, Any]) -> None:
+        nonlocal sheet
+        for name in revised:
+            if name in params and name not in own:
+                raise SlotRefused(
+                    f"{name} is a param of {workflow} the card cannot re-fill: "
+                    + ("another stage of this run reads it off the run itself"
+                       if name in spent else "no keyword of this sheet reads it")
+                    + f". State {name} on the run instead.")
+            if name not in params and name not in steering.COMPOSITES:
+                try:
+                    steering.slot(name)
+                except SlotRefused as exc:
+                    raise SlotRefused(
+                        f"{name} is not an input of {workflow}: no param of it "
+                        f"is named so, and {exc}") from exc
+        for name, value in revised.items():
+            (values if name in own else edits)[name] = value
+        sheet = await fill(values, edits)
+
     outcome = await gate_input_review(
-        tool_name=workflow, mode=input_mode, entries=entries, params={},
-        param_sheet=ParamSheet(workflow=workflow,
-                               title=title or f"Review the {workflow} sheet",
-                               rows=rows))
+        tool_name=workflow, mode=input_mode, entries=_entries(rows()),
+        params={}, present=card, apply_revision=revise)
     if not outcome.proceed:
         # A DECLINED review is the user's answer, not a defect in the sheet, so
         # it carries the cancel code every gate in the tree refuses under.
         raise TelemacError(
             outcome.cancel_reason or f"{workflow} was cancelled at the review.",
-            error_code="USER_INPUT_CANCELLED")
-    return {name: value for name, value in outcome.params.items()
-            if name in sheet.body.MODULE_INPUT or name in sheet.body.COMPOSITES}
+            error_code=("NO_SESSION" if outcome.cancel_code == "no_session"
+                        else "USER_INPUT_CANCELLED"))
+    return sheet
+
+
+def _entries(rows: Sequence[ParamSheetRow]) -> list[SyntheticInput]:
+    """The card's rows as provenance lines; a list value is narrated whole."""
+    return [SyntheticInput(
+                param=row.name, basis=row.basis, note=row.source_badge,
+                value=(row.value if isinstance(row.value, (int, float, str, bool))
+                       else "; ".join(str(v) for v in row.value)))
+            for row in rows if row.value is not None and not row.advanced]
+
+
+def _param_row(name: str, value: Any) -> ParamSheetRow:
+    """One template param a keyword of this sheet reads, editable by its name."""
+    return ParamSheetRow(
+        name=name, value=(value if isinstance(value, (int, float, str, bool, list))
+                          or value is None else str(value)),
+        desc=f"The template param {name}; an edit re-fills every keyword that "
+             "reads it.",
+        door="scenario", basis="derived", origin="template",
+        source_badge="this run's template param", group="Template")
 
 
 def _slot_row(name: str, row: Any) -> ParamSheetRow:
@@ -947,7 +997,7 @@ class TelemacWorkflow(Workflow):
         produced |= {step.name: Ref(step.name)
                      for step in (*produce, *derive)
                      if step.name} | {"settled": Ref("settled"), "mesh": Ref("mesh")}
-        return [
+        steps = [
             # THE FLOOR FIRST, before any stage: the six early readers settle a
             # clock, a rating curve and a weather record off keywords the run may
             # have overridden, and a stage built from the deck's own number would
@@ -992,8 +1042,14 @@ class TelemacWorkflow(Workflow):
                          "cores": (ParamRef("cores")
                                    if "cores" in declared else None)}
                  ).named("solve"),
-            self._outputs_step(params),
         ]
+        # WHICH PARAMS A CARD EDIT CANNOT RE-FILL: those another stage reads off
+        # the run's own params, which an edit to the sheet never reaches.
+        spent = sorted({ref.name for step in steps if step.name != "sheet"
+                        for ref in declared_reads(step.kwargs, ParamRef)})
+        return [replace(step, kwargs={**step.kwargs, "spent": spent})
+                if step.name == "sheet" else step
+                for step in steps] + [self._outputs_step(params)]
 
     def _clock(self) -> Any:
         """How long the settle opens this run's water for, as the module spells it.

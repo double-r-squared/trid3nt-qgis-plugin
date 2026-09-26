@@ -840,8 +840,11 @@ package SteeringSurface {
         The sheet is STATE. The review is how the workflow renders what fill
         returned - the set slots with their provenance and the mandatory ones
         still open - and it HOLDS there until the user runs; an edit is another
-        fill. No gate concept survives in the plan: a card in front of the fill
-        would revise a sheet the fill never reads.
+        fill. An edit to ANY input of the run - a template param a keyword reads,
+        a keyword, a composite - re-fills that input and redraws the card, or
+        refuses BY NAME with the reason; nothing is filtered away in silence. No
+        gate concept survives in the plan: a card in front of the fill would
+        revise a sheet the fill never reads.
 
         What is SET and what is OPEN AND MANDATORY are the review; the whole
         rest of the module folds under advanced, grouped by the dictionary's
@@ -855,7 +858,11 @@ package SteeringSurface {
 
     requirement def RunIsHeld {
         doc /*
-        Nothing executes until the user runs. Fill produces a sheet and no work
+        Nothing executes until the user runs. A READY sheet is not a launched
+        one: the review's proceed is the launch, and only a call that itself
+        states input_mode='auto' launches a ready sheet on its own; a run that
+        states no mode and has no session to review on refuses by name, saying
+        how to launch it. Fill produces a sheet and no work
         beyond the producers the canvas shows; run is the separate, explicit act
         - and it refuses a sheet whose REQUIRED slots are unanswered BY NAME
         first, because a run started without the files the dictionary marks
@@ -1186,6 +1193,10 @@ package SteeringSurface {
         "tests/telemac/test_telemac_module_surface.py::test_the_review_is_the_workflows_view_and_never_a_step_of_its_own";
     verify requirement ReviewIsTheWorkflowsView by
         "tests/runtime/test_declarative_library.py::test_do_sag_declares_no_gate_in_front_of_its_self_gating_review";
+    verify requirement ReviewIsTheWorkflowsView by
+        "tests/telemac/test_telemac_module_surface.py::test_a_template_param_edited_on_the_card_lands_and_the_card_redraws";
+    verify requirement ReviewIsTheWorkflowsView by
+        "tests/telemac/test_telemac_module_surface.py::test_a_name_that_is_no_input_of_the_run_refuses_by_name";
 
     satisfy requirement CompositesSetOnlyPresence by composite;
     satisfy requirement CompositesSetOnlyPresence by wrapper;
@@ -1287,6 +1298,10 @@ package SteeringSurface {
         "tests/telemac/test_telemac_module_surface.py::test_run_serializes_then_stages_then_dispatches";
     verify requirement RunIsHeld by
         "tests/telemac/test_telemac_module_surface.py::test_run_refuses_a_deck_that_states_no_cadence";
+    verify requirement RunIsHeld by
+        "tests/telemac/test_telemac_module_surface.py::test_an_unstated_mode_with_no_session_refuses_and_fills_nothing";
+    verify requirement RunIsHeld by
+        "tests/gates/test_input_review_gate.py::test_mode_default_is_user_gated";
     verify requirement RunIsHeld by
         "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
 
