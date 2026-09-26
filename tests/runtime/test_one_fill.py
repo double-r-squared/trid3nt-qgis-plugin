@@ -199,3 +199,39 @@ def test_the_journal_records_the_key_the_mesh_step_was_bound_to(monkeypatch):
         records=[types.SimpleNamespace(node=wf.mesh_step, inputs_key="K")])
     wf._journal("R2", run, None, 1.0)
     assert lines[0]["mesh"]["key"] == "K"
+
+
+def _place_registers_a_row(monkeypatch):
+    from trid3nt_server.workflows.runtime.data import DOMAIN
+
+    async def _produce(env, decl):
+        if decl.role == DOMAIN:
+            fill_mod._runtime_row(env, f"{decl.name}_datum_offset", "x", {})
+        return "held"
+
+    monkeypatch.setattr(fill_mod, "_produce", _produce)
+    wf = _wf()
+    decl = next(d for d in wf.data if d.data_class and d.role != DOMAIN)
+    assert any(d.role == DOMAIN for d in wf.data)
+    return wf, decl
+
+
+def test_a_place_that_registers_a_row_while_it_runs_still_answers(monkeypatch):
+    wf, decl = _place_registers_a_row(monkeypatch)
+    state = asyncio.run(fill(Fill(workflow=wf), {"location": "x",
+                                                  decl.name: {"source": "stub"}}))
+    assert state.inputs[decl.name].state == ACCEPTED, state.inputs[decl.name]
+
+
+def test_an_untyped_fault_is_refused_and_its_trace_logged(monkeypatch, caplog):
+    async def _produce(env, decl):
+        raise KeyError("fault")
+
+    monkeypatch.setattr(fill_mod, "_produce", _produce)
+    wf = _wf()
+    decl = next(d for d in wf.data if d.data_class)
+    with caplog.at_level("WARNING", logger=fill_mod.logger.name):
+        state = asyncio.run(fill(Fill(workflow=wf), {
+            "location": "x", decl.name: {"layer": "L1"}}))
+    assert state.inputs[decl.name].code == "INPUT_REFUSED"
+    assert any(r.exc_info and r.levelname == "WARNING" for r in caplog.records)
