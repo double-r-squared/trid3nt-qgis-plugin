@@ -1640,3 +1640,16 @@ def test_the_mesh_gate_receives_the_runs_own_mode(monkeypatch):
     with pytest.raises(RuntimeError):
         asyncio.run(mesh_step.build_declared_mesh(mesh={}, input_mode="user_gated"))
     assert seen["mode"] == "user_gated"
+
+
+def test_the_sheet_is_told_which_params_another_stage_reads():
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows.runtime.plan import declared_reads
+
+    steps = {s.label: s for s in
+             TOOL_REGISTRY["telemac_dye_release"].fn.workflow.plan.declared()}
+    read_elsewhere = {ref.name for label, step in steps.items()
+                      if label not in ("sheet", "outputs")
+                      for ref in declared_reads(step.kwargs, ParamRef)}
+    assert {"mesh_resolution_m", "release"} <= read_elsewhere
+    assert steps["sheet"].kwargs["spent"] == sorted(read_elsewhere)
