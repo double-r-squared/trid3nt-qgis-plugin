@@ -1946,3 +1946,31 @@ def _presentation_named_by(cls) -> list[str]:
     names += [n for n in dir(cls) if not n.startswith("_")]
     return sorted({n for n in names
                    if any(w in n.lower() for w in _PRESENTATION_WORDS)})
+
+
+# --- a continuation opens only on the mesh the journal recorded --------------- #
+@pytest.mark.asyncio
+async def test_a_continuation_is_held_to_the_mesh_key_the_journal_recorded():
+    """The mesh step's content key is journaled, is the same for the same content
+    on a second run, and the walk refuses a continuation keyed to another mesh."""
+    from trid3nt_server.workflows.runtime import journal
+    from trid3nt_server.workflows.runtime.errors import ContinuationRefused
+    from trid3nt_server.workflows.runtime.workflow import Workflow
+
+    plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_step",
+                                 kwargs={"edge": 50.0}).named("mesh"),))
+    owner = SimpleNamespace(mesh_step="mesh")
+    first = await _run(plan, _params(), {}, resume=False)
+    key = Workflow._mesh_key(owner, first)
+    assert key
+    line = journal.build_record(
+        run_id="R0", engine=None, module=None, sheet=(), provenance=(),
+        result=None, wall_seconds=None, origin="test", executed=(),
+        replayed=(), notes=(), mesh_key=key)
+    assert line["mesh"]["key"] == key
+    second = await _run(plan, _params(), {}, resume=False,
+                        continued_mesh=line, mesh_step="mesh")
+    assert Workflow._mesh_key(owner, second) == key
+    with pytest.raises(ContinuationRefused, match="another mesh"):
+        await _run(plan, _params(), {}, resume=False, mesh_step="mesh",
+                   continued_mesh={**line, "mesh": {"key": "OTHER"}})

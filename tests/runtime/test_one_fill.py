@@ -27,7 +27,9 @@ def test_a_stated_value_is_accepted_and_the_rest_default():
     state = _filled({"location": "the Wabash River", "cores": 2})
     assert state.inputs["cores"].state == ACCEPTED
     assert state.inputs["cores"].value == 2
-    assert any(v.state == DEFAULTED for v in state.inputs.values())
+    assert state.inputs["cores"].origin == "user"
+    assert any(v.state == DEFAULTED and v.origin == "default"
+               for v in state.inputs.values())
 
 
 def test_a_value_outside_its_range_is_rejected_with_its_remedy():
@@ -163,3 +165,37 @@ def test_a_card_edit_refills_through_the_modules_accept_rule(monkeypatch):
                                    title="", input_mode="user_gated", spent=()))
     assert seen == ["LAW OF BOTTOM FRICTION"]
     assert sheet.edits == {"LAW OF BOTTOM FRICTION": 4}
+
+
+def test_a_continuation_carries_its_journaled_mesh_into_the_walk(monkeypatch):
+    from trid3nt_server.workflows.runtime import workflow as rw
+
+    line = {"run_id": "R1", "solved": "s3://x/r.slf",
+            "module": _wf().module_name, "mesh": {"key": "K"}}
+    _journal(monkeypatch, line)
+    seen = {}
+
+    async def _walk(*_, **kw):
+        seen.update(kw)
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(rw, "interpret", _walk)
+    state = _filled({"location": "x", "continue_from": "R1"})
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(_wf().execute(state))
+    assert seen["continued_mesh"]["mesh"]["key"] == "K"
+    assert seen["mesh_step"] == _wf().mesh_step
+
+
+def test_the_journal_records_the_key_the_mesh_step_was_bound_to(monkeypatch):
+    from trid3nt_server.workflows.runtime import journal
+
+    wf = _wf()
+    lines = []
+    monkeypatch.setattr(journal, "append_record", lines.append)
+    run = types.SimpleNamespace(
+        params=None, results={}, executed=[], replayed=[], outputs=[],
+        keywords={}, choices=[],
+        records=[types.SimpleNamespace(node=wf.mesh_step, inputs_key="K")])
+    wf._journal("R2", run, None, 1.0)
+    assert lines[0]["mesh"]["key"] == "K"
