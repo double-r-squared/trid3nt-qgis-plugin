@@ -1050,7 +1050,7 @@ def test_invocation_key_separates_the_two_input_modes():
     auto = invocation_key("w", {"a": 1}, input_mode="auto")
     gated = invocation_key("w", {"a": 1}, input_mode="user_gated")
     assert auto != gated
-    assert invocation_key("w", {"a": 1}, input_mode=None) == auto
+    assert invocation_key("w", {"a": 1}, input_mode=None) == gated
 
 
 # --- generated docstring ------------------------------------------------------ #
