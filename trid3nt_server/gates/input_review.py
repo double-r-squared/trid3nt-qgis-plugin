@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Literal
 
@@ -31,11 +30,6 @@ __all__ = [
 #: proceeds immediately with labeled inputs; ``user_gated`` pauses for review.
 InputGateMode = Literal["auto", "user_gated"]
 
-#: Session-level default when a run does not pass an explicit ``input_mode``.
-#: Env override so a whole session can opt into review-before-run; unset is
-#: ``auto``, so runs are not blocked by default.
-_INPUT_GATE_MODE_ENV = "TRID3NT_INPUT_GATE_MODE"
-
 #: Max review rounds before an honest cancel. One round == one presentation; a
 #: ``provide values`` reply consumes a round and re-presents, so the user gets
 #: up to this many looks.
@@ -46,15 +40,10 @@ _DEFAULT_TTL_SECONDS = 300
 
 
 def resolve_input_gate_mode(mode: str | None) -> InputGateMode:
-    """Resolve the effective run mode: explicit param wins, else session default.
+    """The run's own mode: ``auto`` only when the call states it, else ``user_gated``.
 
-    Anything unrecognized falls to the env default, itself ``auto``."""
-    if mode is not None:
-        m = str(mode).strip().lower()
-        if m in ("auto", "user_gated"):
-            return m  # type: ignore[return-value]
-    env = (os.environ.get(_INPUT_GATE_MODE_ENV) or "auto").strip().lower()
-    return "user_gated" if env == "user_gated" else "auto"
+    A ready run launches on an act, so nothing but the call itself opts out of it."""
+    return "auto" if str(mode or "").strip().lower() == "auto" else "user_gated"
 
 
 def _entry_field(e: Any, name: str) -> Any:
@@ -241,8 +230,8 @@ class ReviewOutcome:
     params: dict[str, Any]
     cancelled: bool = False
     cancel_reason: str | None = None
-    #: Which cancel this is - ``physics``, ``timeout``, ``declined`` or
-    #: ``not_approved`` - so a caller can raise its own typed error by it.
+    #: Which cancel this is - ``physics``, ``no_session``, ``timeout``,
+    #: ``declined`` or ``not_approved`` - so a caller can raise its own typed error by it.
     cancel_code: str | None = None
     mode: InputGateMode = "auto"
     rounds_used: int = 0
@@ -264,8 +253,8 @@ async def gate_input_review(
 ) -> ReviewOutcome:
     """Present what is under review before it runs, and ask.
 
-    In ``auto``, and with no live session, the inputs proceed unchanged UNLESS a
-    physics-consequential demo default is present, which REFUSES. ``present``
+    In ``auto`` the inputs proceed at once UNLESS a physics demo default is present;
+    ``user_gated`` with no live session REFUSES by name. ``present``
     builds the round's card where the caller owns the thing being reviewed, and
     ``apply_revision`` takes a reply as a change to that thing and re-presents."""
     resolved_mode = resolve_input_gate_mode(mode)
@@ -284,8 +273,8 @@ async def gate_input_review(
         return ReviewOutcome(proceed=True, entries=list(entries),
                              params=dict(params), mode="auto")
 
-    # user_gated: needs a live session to pause on. current_emitter() is bound at
-    # turn entry; a headless direct-call has none -> fail OPEN (labeled, no block).
+    # user_gated: the proceed on the card IS the launch, so a call with no live
+    # session to present on refuses rather than runs.
     from trid3nt_server.render.pipeline_emitter import current_emitter
     from trid3nt_server.gates.pending import (
         _register_pending_confirmation,
@@ -294,27 +283,17 @@ async def gate_input_review(
 
     emitter = current_emitter()
     if emitter is None:
-        # No live session to present the demo defaults for approval. A physics
-        # demo default still REFUSES -- the value would silently ruin the run and
-        # there is nobody to approve it; everything else fails open, labeled.
-        if physics_refusal is not None:
-            logger.info(
-                "input-review gate REFUSE (user_gated, no emitter) tool=%s -- "
-                "physics demo default(s) with no real source", tool_name,
-            )
-            return ReviewOutcome(
-                proceed=False, entries=list(entries), params=dict(params),
-                cancelled=True, mode="user_gated", cancel_code="physics",
-                cancel_reason=physics_refusal_reason(tool_name, entries,
-                                                     no_session=True),
-            )
-        logger.info(
-            "input-review gate: user_gated requested for %s but no live session "
-            "(direct-call/offline) -- proceeding with labeled inputs (fail-open)",
-            tool_name,
-        )
-        return ReviewOutcome(proceed=True, entries=list(entries),
-                             params=dict(params), mode="user_gated")
+        logger.info("input-review gate REFUSE (user_gated, no session) tool=%s",
+                    tool_name)
+        return ReviewOutcome(
+            proceed=False, entries=list(entries), params=dict(params),
+            cancelled=True, mode="user_gated", cancel_code="no_session",
+            cancel_reason=(
+                physics_refusal_reason(tool_name, entries, no_session=True)
+                or f"NO_SESSION: {tool_name} did not run - it waits for a person "
+                "to proceed on its review card and no session is open. Open a "
+                "session to review and launch it, or state input_mode='auto' on "
+                "the call to launch it at once."))
 
     cur_entries = list(entries)
     cur_params = dict(params)

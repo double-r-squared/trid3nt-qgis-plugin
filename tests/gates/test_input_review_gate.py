@@ -73,18 +73,15 @@ async def _drive(
     raise AssertionError("no fresh pending confirmation appeared")
 
 
-def test_mode_default_auto(monkeypatch) -> None:
-    monkeypatch.delenv("TRID3NT_INPUT_GATE_MODE", raising=False)
-    assert resolve_input_gate_mode(None) == "auto"
-    assert resolve_input_gate_mode("garbage") == "auto"
-
-
-def test_mode_param_overrides_session_default(monkeypatch) -> None:
-    monkeypatch.setenv("TRID3NT_INPUT_GATE_MODE", "auto")
-    assert resolve_input_gate_mode("user_gated") == "user_gated"
-    monkeypatch.setenv("TRID3NT_INPUT_GATE_MODE", "user_gated")
+def test_mode_default_is_user_gated() -> None:
     assert resolve_input_gate_mode(None) == "user_gated"
-    assert resolve_input_gate_mode("auto") == "auto"
+    assert resolve_input_gate_mode("garbage") == "user_gated"
+
+
+def test_only_the_call_states_auto(monkeypatch) -> None:
+    monkeypatch.setenv("TRID3NT_INPUT_GATE_MODE", "auto")
+    assert resolve_input_gate_mode(None) == "user_gated"
+    assert resolve_input_gate_mode(" Auto ") == "auto"
 
 
 def test_render_lines_one_per_input() -> None:
@@ -97,7 +94,6 @@ def test_render_lines_one_per_input() -> None:
 
 @pytest.mark.asyncio
 async def test_auto_mode_is_noop(monkeypatch) -> None:
-    monkeypatch.delenv("TRID3NT_INPUT_GATE_MODE", raising=False)
     fake = _FakeEmitter()
     monkeypatch.setattr(pe, "current_emitter", lambda: fake)
     out = await gate_input_review(
@@ -110,14 +106,18 @@ async def test_auto_mode_is_noop(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_user_gated_no_session_fails_open(monkeypatch) -> None:
+@pytest.mark.parametrize("mode", ["user_gated", None])
+async def test_user_gated_no_session_refuses_by_name(monkeypatch, mode) -> None:
     monkeypatch.setattr(pe, "current_emitter", lambda: None)
+    entries = [e for e in _entries() if e.basis != "default_demo"]
     out = await gate_input_review(
-        tool_name="geoclaw_inundation", mode="user_gated",
-        entries=_entries(), params={"dam_break_depth_m": 44.2},
+        tool_name="geoclaw_inundation", mode=mode,
+        entries=entries, params={"dam_break_depth_m": 44.2},
     )
-    assert out.proceed is True and out.cancelled is False
-    assert out.mode == "user_gated"
+    assert out.proceed is False and out.cancelled is True
+    assert out.mode == "user_gated" and out.cancel_code == "no_session"
+    assert out.cancel_reason.startswith("NO_SESSION: geoclaw_inundation did not run")
+    assert "input_mode='auto'" in out.cancel_reason
 
 
 @pytest.mark.asyncio
