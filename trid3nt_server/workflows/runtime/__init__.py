@@ -36,9 +36,7 @@ from .journal import cut_coverage, journal_note, run_coverage
 from .ledger import LedgerRecord, StepLedger, invocation_key
 from .levers import lever
 from .params import (
-    Derived,
     Param,
-    ParamNotResolved,
     ParamValues,
     ResolvedParam,
     ResolvedParams,
@@ -84,11 +82,10 @@ __all__ = [
     "CATEGORICAL", "ChartSpec",
     "CoversAOI",
     "Continued", "Data", "DataDecl", "DataRef", "DeclarativeError",
-    "Derived", "Domain",
+    "Domain",
     "GateRefusedError",
     "LeakScanTruncated", "LedgerRecord", "ModifierIllegalError",
     "Param",
-    "ParamNotResolved",
     "ParamOutOfRangeError", "ParamRef", "ParamRefLeakedError",
     "ParamValues", "Plan", "PlanNode",
     "PlanValidationError", "Producer", "RATE", "Ref",

@@ -27,7 +27,6 @@ from trid3nt_server.workflows.runtime import (
     LeakScanTruncated,
     ModifierIllegalError,
     Param,
-    ParamNotResolved,
     ParamRef,
     ParamRefLeakedError,
     PlanValidationError,
@@ -262,11 +261,6 @@ def _reset(tmp_path, monkeypatch):
 
 
 # --- Param declarations ------------------------------------------------------ #
-def test_derived_param_needs_a_resolve_path():
-    with pytest.raises(PlanValidationError):
-        Param("x", desc="d", door=doors.DERIVED)
-
-
 def test_scenario_param_needs_a_labeled_default():
     with pytest.raises(PlanValidationError):
         Param("x", desc="d", door=doors.SCENARIO)
@@ -1087,7 +1081,7 @@ async def test_a_plan_reads_params_as_late_bound_refs_not_baked_values():
 @pytest.mark.asyncio
 async def test_an_undeclared_param_read_refuses_at_construction():
     p = await resolve_params(_params(), {})
-    with pytest.raises(ParamNotResolved):
+    with pytest.raises(AttributeError):
         _ = p.ghost
 
 
@@ -1497,21 +1491,6 @@ def test_the_guard_reads_slots_dataclass_fields_and_dict_alike():
 
 
 # --- R3-2: a revision re-derives what depends on it -------------------------- #
-def derive_saturation(params):
-    """The classic derived row: saturation from temperature."""
-    return 2.0 * float(params.water_temp_c)
-
-
-def _wq_params():
-    return [
-        Param("water_temp_c", desc="water temperature", door=doors.SCENARIO,
-              default=20.0, bounds=(0.0, 40.0), units="C"),
-        Param("sat_mgl", desc="DO saturation", door=doors.DERIVED,
-              resolve=f"{_HERE}.derive_saturation", bounds=(0.0, 200.0),
-              units="mg/L"),
-    ]
-
-
 # --- R3-3: a revision invalidates the data produced from the old values ------ #
 async def stub_dem(**kwargs):
     _CALLS.append("stub_dem")

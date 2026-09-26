@@ -65,7 +65,7 @@ def _ordered(params: Any) -> list[Param]:
     Takes whatever the caller passes - a params sequence or a whole ``PARAMS``
     body - and documents only that, never the full declaration."""
     rank = {doors.QUESTION: 0, doors.USER: 1, doors.GATE: 1,
-            doors.SCENARIO: 2, doors.DERIVED: 3, doors.CONSTANT: 4}
+            doors.SCENARIO: 2, doors.CONSTANT: 4}
     return sorted(param_rows(params), key=lambda p: (rank.get(p.door, 5), p.name))
 
 
@@ -79,8 +79,6 @@ def _param_line(p: Param) -> str:
         bits.append(f"default {p.default!r}"
                     + (" (labeled scenario default, not a site measurement)"
                        if p.door == doors.SCENARIO else ""))
-    elif p.door == doors.DERIVED:
-        bits.append("derived when unset")
     elif p.optional:
         bits.append("optional")
     return ", ".join(bits) + "."

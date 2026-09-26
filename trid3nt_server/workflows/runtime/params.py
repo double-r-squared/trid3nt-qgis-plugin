@@ -8,16 +8,14 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass, replace
-from typing import Any, Literal, Mapping, Sequence
+from typing import Any, Literal, Sequence
 
 from .errors import PlanValidationError
 from .plan import ParamRef, Row, body_rows
 
 __all__ = [
-    "Derived",
     "Door",
     "Param",
-    "ParamNotResolved",
     "ParamValues",
     "ResolvedParam",
     "ResolvedParams",
@@ -28,42 +26,28 @@ __all__ = [
 ]
 
 
-@dataclass(frozen=True, slots=True)
-class Derived:
-    """What a derivation returns when it has EVIDENCE to record beside the value.
-    A pure arithmetic derivation returns the number alone; one that read the world
-    returns what it read, and that lands on the row rather than in a log line."""
-
-    value: Any
-    note: str = ""
-    real_source: str | None = None
-
-
 #: Resolution doors, in the order the resolver walks them.
-Door = Literal["user", "question", "derived", "scenario", "constant", "gate"]
+Door = Literal["user", "question", "scenario", "constant", "gate"]
 
 
 class doors:  # noqa: N801 - a namespace of door constants, not a type
-    """The six doors, in resolution order."""
+    """The five doors, in resolution order."""
 
     USER = "user"
     QUESTION = "question"
-    DERIVED = "derived"
     SCENARIO = "scenario"
     CONSTANT = "constant"
     GATE = "gate"
 
 
 _ORDER: tuple[str, ...] = (
-    doors.USER, doors.QUESTION, doors.DERIVED,
-    doors.SCENARIO, doors.CONSTANT, doors.GATE,
+    doors.USER, doors.QUESTION, doors.SCENARIO, doors.CONSTANT, doors.GATE,
 )
 
 #: A door's ``basis`` on the run's ``SyntheticInput`` provenance record.
 _BASIS_FOR_DOOR: dict[str, str] = {
     doors.USER: "user",
     doors.QUESTION: "prompt_interpreted",
-    doors.DERIVED: "derived",
     doors.SCENARIO: "default_demo",
     doors.CONSTANT: "default_demo",
     doors.GATE: "user",
@@ -73,8 +57,7 @@ _BASIS_FOR_DOOR: dict[str, str] = {
 @dataclass(frozen=True, slots=True)
 class Param(Row):
     """One declared value: its door, its bounds, its consequence tag.
-    The attribute name it is written under IS ``name``, and ``resolve`` is a dotted
-    import path so the declaration stays serializable."""
+    The attribute name it is written under IS ``name``."""
 
     name: str = ""
     desc: str = ""
@@ -82,13 +65,6 @@ class Param(Row):
     default: Any = None
     bounds: tuple[float, float] | None = None
     units: str | None = None
-    resolve: str | None = None
-    #: What the resolver HANDS that function, by its argument name: a plain
-    #: value, or a ``ParamRef`` read off the sheet as it stands. Absent, the
-    #: function is handed the whole sheet as its one argument - so a derivation
-    #: over named inputs is stated as values here instead of as a function of
-    #: its own beside the declaration.
-    resolve_kwargs: Mapping[str, Any] | None = None
     user_lever: bool = False
     optional: bool = False
     consequence: Literal["physics", "scenario", "numerical", "aoi"] = "scenario"
@@ -114,15 +90,6 @@ class Param(Row):
             raise PlanValidationError(f"Param {self.name!r} declares no desc.")
         if self.door not in _ORDER:
             raise PlanValidationError(f"Param {self.name!r} door {self.door!r} unknown.")
-        if self.door == doors.DERIVED and not self.resolve:
-            raise PlanValidationError(
-                f"Param {self.name!r} is door=derived but names no resolve path."
-            )
-        if self.resolve_kwargs is not None and not self.resolve:
-            raise PlanValidationError(
-                f"Param {self.name!r} declares resolve_kwargs and names no "
-                "resolve path for them to be handed to."
-            )
         if self.door in (doors.SCENARIO, doors.CONSTANT) and self.default is None \
                 and not self.optional:
             raise PlanValidationError(
@@ -193,12 +160,6 @@ def refuse_duplicate_params(declared: "Sequence[Param]") -> None:
         seen.add(param.name)
 
 
-class ParamNotResolved(AttributeError):
-    """A derivation read a param the sheet has not seated yet.
-    Its own type, so the resolver's fixpoint can tell "wait for a dependency" from
-    a real ``AttributeError`` inside a derivation, which must never be swallowed."""
-
-
 @dataclass(frozen=True, slots=True)
 class ResolvedParam:
     """One param after resolution: the value, the door it came through, the note."""
@@ -233,7 +194,7 @@ class ResolvedParams:
     def __getattr__(self, name: str) -> ParamRef:
         rows = object.__getattribute__(self, "_rows")
         if name not in rows:
-            raise ParamNotResolved(
+            raise AttributeError(
                 f"param {name!r} is not declared (declared: {sorted(rows)})"
             )
         return ParamRef(name)
@@ -283,7 +244,7 @@ class ParamValues:
     def __getattr__(self, name: str) -> Any:
         rows = object.__getattribute__(self, "_rows")
         if name not in rows:
-            raise ParamNotResolved(
+            raise AttributeError(
                 f"param {name!r} is not declared (declared: {sorted(rows)})"
             )
         return rows[name].value
