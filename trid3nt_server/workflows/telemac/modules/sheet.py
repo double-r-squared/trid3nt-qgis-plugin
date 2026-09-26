@@ -17,7 +17,7 @@ from trid3nt_server.workflows.runtime.plan import declared_reads
 
 from .module import Output, Slot, SlotRefused
 
-__all__ = ["Filled", "Origin", "Provenance", "Sheet", "SheetIncomplete", "draw",
+__all__ = ["Filled", "Origin", "Provenance", "Sheet", "SheetIncomplete",
            "fill", "fill_coupled", "late_bound", "run", "solve_cores",
            "tracer_text"]
 
@@ -477,24 +477,6 @@ def fill_coupled(sheet: Sheet, stated: Mapping[str, Mapping[str, Any]]) -> Sheet
         body["stated"] = sorted(set(body.get("stated", ())) | set(slots))
         files[basename] = body
     return replace(sheet, files=MappingProxyType(files))
-
-
-async def draw(source: type | Sheet, name: str, *, geometry: str = "point",
-               prompt: str = "") -> Sheet:
-    """Ask for ONE value on the canvas -> the sheet with it filled.
-
-    Rides the SAME gate a typed value rides; a decline is a typed refusal."""
-    from trid3nt_server.gates.draw_input import gate_draw_input
-
-    body = source.body if isinstance(source, Sheet) else source
-    outcome = await gate_draw_input(tool_name=body.MODULE, param=name,
-                                    geometry=geometry, prompt=prompt)
-    if not outcome.drawn:
-        raise SlotRefused(
-            f"{body.MODULE} needs {name!r} drawn on the canvas "
-            f"({prompt or geometry}), and {outcome.reason}. It is not invented - "
-            "supply the value explicitly or draw it.")
-    return fill(source, **{name: outcome.value})
 
 
 def _standing(source: type | Sheet, template: str = "",

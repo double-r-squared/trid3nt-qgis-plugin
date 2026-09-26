@@ -27,7 +27,7 @@ def _norm(**kw):
         "release": None, "cores": None, "input_mode": "auto",
     }
     base.update(kw)
-    return asyncio.run(_workflow()._normalize(base))
+    return asyncio.run(_normalized(_workflow(), base))
 
 
 def _resolve(**supplied):
@@ -103,14 +103,11 @@ def test_a_malformed_release_point_refuses_it_never_falls_back():
 
 def test_a_core_count_past_the_box_refuses_by_name():
     """Refused, never cut down to fit: the caller is told the box's own count."""
-    from trid3nt_server.workflows.runtime import GateRefusedError, resolve_params
     from trid3nt_server.workflows.runtime.levers import BOX_CORES
 
     supplied, err = _norm(cores=BOX_CORES + 1)
-    assert err is None, err
-    with pytest.raises(GateRefusedError) as raised:
-        asyncio.run(resolve_params(_workflow().params, supplied))
-    assert "cores" in str(raised.value) and str(BOX_CORES) in str(raised.value)
+    assert "cores" not in supplied
+    assert "cores" in err and str(BOX_CORES) in err
 
 
 def test_declared_bounds_keep_the_source_inside_the_domain():
@@ -367,3 +364,15 @@ def test_the_sources_file_the_deck_writes_is_the_series_the_engine_reads():
     assert files["river_sources.txt"].splitlines() == [
         "#", "T Q(1) TR(1,1)", "s m3/s mg/l",
         "0.000 8 100", "300.000 8 100", "300.100 0 0", "700.000 0 0"]
+
+
+async def _normalized(workflow, args):
+    """The accepted params of one fill, and the refusal where one was rejected."""
+    from trid3nt_server.workflows.runtime.fill import ACCEPTED, REJECTED, Fill, fill
+
+    state = await fill(Fill(workflow=workflow), args)
+    declared = {prm.name for prm in workflow.params}
+    refused = [v.reason for v in state.inputs.values() if v.state == REJECTED]
+    return ({n: v.value for n, v in state.inputs.items()
+             if v.state == ACCEPTED and n in declared},
+            " ".join(refused) or None)

@@ -1,4 +1,4 @@
-"""The param resolver: the six doors, in order, held to the declared bounds.
+"""The param seating: a stated value or the declared default, held to its bounds.
 
 Every resolution leaves a provenance row; a value outside its declared bounds
 refuses by name rather than being moved quietly onto the bound.
@@ -6,19 +6,13 @@ refuses by name rather than being moved quietly onto the bound.
 
 from __future__ import annotations
 
-import importlib
-import inspect
 from typing import Any, Mapping, Sequence
 
 from trid3nt_contracts.common import SyntheticInput
 
 from .errors import GateRefusedError
 from .params import (
-    Derived,
     Param,
-    ParamNotResolved,
-    ParamRef,
-    ParamValues,
     ResolvedParam,
     ResolvedParams,
     doors,
@@ -27,125 +21,33 @@ from .params import (
     wire_value,
 )
 
-__all__ = ["merge_provenance", "provenance_entries", "resolve_params"]
+__all__ = ["merge_provenance", "provenance_entries", "resolve_params", "seat_param"]
 
 
-async def resolve_params(
-    declared: Any,
-    supplied: Mapping[str, Any],
-    *,
-    question: Mapping[str, Any] | None = None,
-) -> ResolvedParams:
-    """Walk the doors for every declared param and return the resolved sheet.
-    ``supplied`` is door 1 and NEVER ambient - no case-store lookup; ``question``
-    is door 2, the agent-filled values from the ask."""
-    # The door ORDER is precedence, not evaluation order: a derivation may read any
-    # other param, so labeled defaults are seated before derivations run and a
-    # derived param competes only with its own fallbacks, never another param's.
+async def resolve_params(declared: Any,
+                         supplied: Mapping[str, Any]) -> ResolvedParams:
+    """Every declared param seated off ``supplied`` -> the resolved sheet.
+    ``supplied`` is NEVER ambient - no case-store lookup."""
     declared = param_rows(declared)
     refuse_duplicate_params(declared)
-    rows: dict[str, ResolvedParam] = {}
-
-    for param in declared:
-        value, door, note = _door_1_2(param, supplied, question or {})
-        if value is not None:
-            rows[param.name] = _finish(param, value, door, note)
-
-    for param in declared:
-        if param.name in rows or param.door == doors.DERIVED or param.default is None:
-            continue
-        rows[param.name] = _finish(param, param.default, param.door,
-                                   f"declared {param.door} default",
-                                   basis=_BASIS_DEFAULT)
-
-    # Derivations may read each other; resolve to a fixpoint rather than pinning
-    # PARAMS to a dependency-sorted order.
-    pending = [p for p in declared if p.name not in rows and p.door == doors.DERIVED]
-    while pending:
-        progressed = []
-        for param in pending:
-            try:
-                value = await _derive(param, rows)
-            except ParamNotResolved:
-                # ONLY a missing param means "wait for the next pass"; any other
-                # AttributeError is a bug inside the derivation and propagates.
-                continue
-            progressed.append(param)
-            if value is not None:
-                rows[param.name] = _seat_derived(
-                    param, value, f"derived by {param.resolve}")
-        if not progressed:
-            raise GateRefusedError(
-                "derivations "
-                + ", ".join(sorted(p.name for p in pending))
-                + " cannot resolve: each one reads a param that never arrives."
-            )
-        pending = [p for p in pending if p not in progressed and p.name not in rows]
-
-    for param in declared:
-        if param.name in rows:
-            continue
-        if param.default is not None:
-            rows[param.name] = _finish(
-                param, param.default, param.door,
-                f"declared {param.door} default",
-                basis=_BASIS_DEFAULT,
-            )
-            continue
-        # The sixth door: a value with no door left is ASKED FOR (a gate) or REFUSED typed -
-        # never invented. The refusal is the interpreter's, once the plan's gates
-        # have had their turn.
-        rows[param.name] = ResolvedParam(
-            name=param.name, value=None, door=param.door, basis=param.basis,
-            units=param.units, consequence=param.consequence,
-            note=("not supplied (declared optional)" if param.optional
-                  else "REQUIRED and not supplied"),
-            real_source=param.real_source,
-            required_missing=not param.optional,
-        )
-
-    return ResolvedParams(rows)
+    return ResolvedParams({param.name: seat_param(param, supplied.get(param.name))
+                           for param in declared})
 
 
-def _door_1_2(param: Param, supplied: Mapping[str, Any],
-              question: Mapping[str, Any]) -> tuple[Any, str, str]:
-    if param.name in supplied and supplied[param.name] is not None:
-        return supplied[param.name], doors.USER, "supplied on this invocation"
-    if param.name in question and question[param.name] is not None:
-        return question[param.name], doors.QUESTION, "read from the ask"
-    return None, param.door, ""
-
-
-async def _derive(param: Param, rows: Mapping[str, ResolvedParam]) -> Any:
-    fn = _load(param.resolve or "")
-    values = ParamValues(dict(rows))
-    # A DECLARED binding is the same shape a step's kwargs are: a ParamRef reads
-    # the sheet, anything else is the value itself. Reading a row that is not
-    # seated yet raises ParamNotResolved, which is this pass saying "wait".
-    out = fn(values) if param.resolve_kwargs is None else fn(**{
-        name: getattr(values, read.name) if isinstance(read, ParamRef) else read
-        for name, read in param.resolve_kwargs.items()})
-    if inspect.isawaitable(out):
-        out = await out
-    return out
-
-
-def _seat_derived(param: Param, produced: Any, default_note: str) -> ResolvedParam:
-    """Seat a derivation's output, keeping whatever EVIDENCE it returned with it.
-    A derivation that read the world returns :class:`Derived`; a pure one returns
-    the bare value and the declaration's own note stands."""
-    if isinstance(produced, Derived):
-        return _finish(param, produced.value, doors.DERIVED,
-                       produced.note or default_note,
-                       real_source=produced.real_source)
-    return _finish(param, produced, doors.DERIVED, default_note)
-
-
-def _load(dotted: str) -> Any:
-    module_path, _, attr = dotted.rpartition(".")
-    if not module_path:
-        raise GateRefusedError(f"resolve path {dotted!r} is not a dotted import path.")
-    return getattr(importlib.import_module(module_path), attr)
+def seat_param(param: Param, value: Any) -> ResolvedParam:
+    """One param: the stated value, else its declared default, else REQUIRED
+    and missing - never invented. A value outside its bounds refuses by name."""
+    if value is not None:
+        return _finish(param, value, doors.USER, "supplied on this invocation")
+    if param.default is not None:
+        return _finish(param, param.default, param.door,
+                       f"declared {param.door} default", basis=_BASIS_DEFAULT)
+    return ResolvedParam(
+        name=param.name, value=None, door=param.door, basis=param.basis,
+        units=param.units, consequence=param.consequence,
+        note=("not supplied (declared optional)" if param.optional
+              else "REQUIRED and not supplied"),
+        real_source=param.real_source, required_missing=not param.optional)
 
 
 #: A value seated from its own DECLARED DEFAULT is a labeled default whatever door
@@ -196,8 +98,6 @@ def _finish(param: Param, value: Any, door: str, note: str, *,
 def _basis(param: Param, door: str) -> str:
     if door == doors.QUESTION:
         return "prompt_interpreted"
-    if door == doors.DERIVED:
-        return "derived"
     return param.basis
 
 

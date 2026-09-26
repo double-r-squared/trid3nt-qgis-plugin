@@ -26,7 +26,8 @@ from .data import (
     BED, DISCHARGE, DOMAIN, EXTENT, LEVEL, LINE, OBSERVE, WAVE, CoversAOI,
     DataDecl, Producer)
 from .domain import Domain, bind_domain, current_domain
-from .errors import PlanValidationError, StepFailedError, SuppliedCoverageError
+from .errors import (ContinuationRefused, PlanValidationError, StepFailedError,
+                     SuppliedCoverageError)
 from .interpreter import (_UNREPLAYABLE, _artifacts_live, _bind, _bind_value,
                           _call_runner, _deref, _record_for, _rehydrate)
 from .journal import journal_note, slot_choice
@@ -967,3 +968,287 @@ def _validate_supplied(env: _Env, decl: DataDecl, supplied: Any,
         "modelled domain: no domain is bound. Resolve the AOI before supplying one."
     )
 
+
+
+ACCEPTED, REJECTED, MISSING, DEFAULTED = (
+    "accepted", "rejected", "missing", "defaulted")
+
+#: What rides a fill beside its inputs and is carried as stated: how the run is
+#: reviewed, whether it resumes, and the ops a row's own ingestion reads.
+_CARRIED = ("input_mode", "restart_clean", "ops")
+
+
+@dataclass(frozen=True)
+class Verdict:
+    """One input's answer on arrival: its state, the value and where it came
+    from, or the reason it was refused and what would be taken instead."""
+
+    state: str
+    value: Any = None
+    origin: str = ""
+    reason: str = ""
+    remedies: tuple[str, ...] = ()
+    code: str = ""
+
+
+@dataclass
+class Fill:
+    """The fill's state: every input's verdict, and what a launch reads."""
+
+    workflow: Any
+    inputs: dict[str, Verdict] = field(default_factory=dict)
+    stated: dict[str, Any] = field(default_factory=dict)
+    carried: dict[str, Any] = field(default_factory=dict)
+    keywords: dict[str, Any] = field(default_factory=dict)
+    params: ResolvedParams | None = None
+    continue_from: str | None = None
+    continued: dict[str, Any] = field(default_factory=dict)
+    notes: list[str] = field(default_factory=list)
+    env: _Env | None = None
+    domain: Domain | None = None
+
+    @property
+    def ready(self) -> bool:
+        return not any(v.state in (REJECTED, MISSING)
+                       for v in self.inputs.values())
+
+    def refusal(self) -> tuple[str, str]:
+        """``(code, sentence)`` naming every input that keeps this fill from ready."""
+        held = [(n, v) for n, v in self.inputs.items()
+                if v.state in (REJECTED, MISSING)]
+        code = next((v.code for _n, v in held if v.code), "FILL_NOT_READY")
+        return code, " ".join(
+            v.reason + (f" Remedies: {', '.join(v.remedies)}." if v.remedies
+                        else "") for _n, v in held)
+
+
+async def fill(state: Fill, values: Mapping[str, Any]) -> Fill:
+    """Put ``values`` into their inputs -> the fill's state, each input answered.
+
+    A value is a literal, ``{"layer": <case layer id>}`` or ``{"source": <name>}``;
+    a sourced or layer input is fetched and ingested before it answers. Inputs
+    not named keep their verdicts; the rest default to the module's own value."""
+    wf = state.workflow
+    values = {k: v for k, v in dict(values).items() if v is not None}
+    for name in _CARRIED:
+        if name in values:
+            state.carried[name] = values.pop(name)
+    for name, source in dict(values.pop("picks", None) or {}).items():
+        values[str(name)] = {"source": str(source)}
+    keywords = values.pop("keywords", None) or {}
+    if not isinstance(keywords, Mapping):
+        state.inputs["keywords"] = Verdict(
+            REJECTED, keywords, code="KEYWORD_REFUSED",
+            reason="keywords takes a mapping of the engine's own keyword names "
+            f"to values; got {type(keywords).__name__}.")
+        keywords = {}
+    for name, value in keywords.items():
+        _keyword(state, str(name), value)
+    rows = {decl.name: decl for decl in wf.data}
+    sourced = {n: values.pop(n) for n in list(values) if n in rows}
+    continue_from = values.pop("continue_from", None)
+    state.stated.update(values)
+    await _seat(state)
+    if continue_from is not None:
+        await _continuation(state, str(continue_from))
+    if "ops" in state.carried:
+        _carried_ops(state, rows)
+    for name, value in sourced.items():
+        await _row(state, rows[name], value)
+    return state
+
+
+def _keyword(state: Fill, name: str, value: Any) -> None:
+    """One engine keyword through the module's own accept rule."""
+    try:
+        identifier, taken, note = state.workflow.accept_keyword(name, value)
+    except Exception as exc:  # noqa: BLE001 - the refusal is the verdict
+        if getattr(exc, "retryable", False):
+            raise
+        state.inputs[name] = Verdict(REJECTED, value, reason=str(exc),
+                                     code="KEYWORD_REFUSED")
+        return
+    if note and note not in state.notes:
+        state.notes.append(note)
+    state.keywords[name] = value
+    state.inputs[name] = Verdict(ACCEPTED, taken, origin="user")
+
+
+async def _seat(state: Fill) -> None:
+    """Every declared param through its coercion and its own accept rule."""
+    from .resolver import seat_param
+
+    wf = state.workflow
+    args = {**state.stated, "input_mode": state.carried.get("input_mode")}
+    refused: dict[str, BaseException] = {}
+    for coercion in wf.coercions:
+        try:
+            coerced = coercion(args)
+            if asyncio.iscoroutine(coerced) or hasattr(coerced, "__await__"):
+                coerced = await coerced
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - the refusal is the verdict
+            if getattr(exc, "retryable", False) \
+                    or getattr(exc, "error_code", None) is None:
+                raise
+            refused[str(getattr(coercion, "__name__", "")).split(":")[-1]] = exc
+            continue
+        args.update(coerced or {})
+    declared = {prm.name for prm in wf.params}
+    for name, exc in refused.items():
+        if name not in declared:
+            state.inputs[name] = Verdict(REJECTED, state.stated.get(name),
+                                         reason=str(exc), code=exc.error_code)
+    rows = {}
+    for prm in wf.params:
+        if prm.name in refused:
+            exc = refused[prm.name]
+            state.inputs[prm.name] = Verdict(
+                REJECTED, state.stated.get(prm.name), reason=str(exc),
+                code=getattr(exc, "error_code", None) or "INPUT_REFUSED")
+            continue
+        value = args.get(prm.name)
+        try:
+            rows[prm.name] = row = seat_param(prm, value)
+        except Exception as exc:  # noqa: BLE001 - the refusal is the verdict
+            state.inputs[prm.name] = Verdict(
+                REJECTED, value, reason=str(exc),
+                code=getattr(exc, "error_code", None) or "INPUT_REFUSED",
+                remedies=(f"a value between {prm.bounds[0]} and "
+                          f"{prm.bounds[1]}",) if prm.bounds else ())
+            continue
+        if row.required_missing:
+            state.inputs[prm.name] = Verdict(
+                MISSING, reason=f"{prm.name} was not supplied and has no "
+                "default: supply it explicitly - it is never invented.",
+                code="GATE_REFUSED")
+        elif row.value is not None:
+            state.inputs[prm.name] = Verdict(
+                DEFAULTED if value is None else ACCEPTED, row.value,
+                origin="default" if value is None else "user")
+    state.params = ResolvedParams(rows) if len(rows) == len(wf.params) else None
+
+
+async def _continuation(state: Fill, run_id: str) -> None:
+    """``continue_from``: only a journaled solved run of THIS module is taken;
+    its mesh is held to this run's once the mesh is built."""
+    from .journal import read_records
+
+    records = await asyncio.to_thread(read_records)
+    line = next((r for r in reversed(records)
+                 if str(r.get("run_id") or "") == run_id.strip()), None)
+    module = getattr(state.workflow, "module_name", None)
+    reason = ""
+    if line is None or not line.get("solved"):
+        reason = (f"continue_from={run_id!r} names no solved result: only a run "
+                  "whose solve completed and was journaled leaves a state to "
+                  "carry on.")
+    elif module and line.get("module") != module:
+        reason = (f"continue_from={run_id!r} solved {line.get('module')!r} and "
+                  f"this fill fills {module!r}: a state carries on only in the "
+                  "module that wrote it.")
+    if reason:
+        state.inputs["continue_from"] = Verdict(
+            REJECTED, run_id, reason=reason, code=ContinuationRefused.error_code,
+            remedies=("a run of this module on this mesh",))
+        return
+    state.continue_from = run_id
+    state.continued = dict(line)
+    state.inputs["continue_from"] = Verdict(ACCEPTED, run_id, origin="user")
+
+
+def refuse_other_mesh(continued: Mapping[str, Any], mesh_key: str) -> None:
+    """A continuation opens only on the mesh built by the same content as the
+    run it continues; any other mesh is refused by name."""
+    if not continued:
+        return
+    theirs = str((continued.get("mesh") or {}).get("key") or "")
+    if theirs != mesh_key:
+        raise ContinuationRefused(
+            f"continue_from={continued.get('run_id')!r} was solved on another "
+            f"mesh ({theirs or 'none recorded'}) than this run builds "
+            f"({mesh_key}): a state carries on only on the mesh built by the "
+            "same content.")
+
+
+def _carried_ops(state: Fill, rows: Mapping[str, DataDecl]) -> None:
+    """``ops`` is carried unchanged; a row that reads none refuses it by name."""
+    ops = state.carried["ops"]
+    try:
+        _ops(ops, tuple(rows.values()))
+    except PlanValidationError as exc:
+        state.inputs["ops"] = Verdict(REJECTED, ops, reason=str(exc),
+                                      code=exc.error_code)
+        return
+    state.inputs["ops"] = Verdict(ACCEPTED, ops, origin="user")
+
+
+def production(state: Fill) -> _Env:
+    """The state a sourced input is produced under, built once per fill."""
+    wf = state.workflow
+    if state.env is None:
+        state.env = _Env(
+            params=state.params, data={d.name: d for d in wf.data}, results={},
+            input_mode=state.carried.get("input_mode"),
+            keywords=dict(state.keywords), ops=_ops(
+                state.carried.get("ops"), wf.data)
+            if state.inputs.get("ops", Verdict(ACCEPTED)).state == ACCEPTED
+            else {}, workflow=wf.name,
+            window_s=wf.run_window_s(dict(state.keywords)),
+            slot_units=wf.slot_units(), captions=wf.captions,
+            published_units=wf.published_units())
+    return state.env
+
+
+async def _row(state: Fill, decl: DataDecl, value: Any) -> None:
+    """A sourced input: fetched or read, and ingested, BEFORE it answers."""
+    if state.params is None:
+        state.inputs[decl.name] = Verdict(
+            REJECTED, value, code="FILL_NOT_READY",
+            reason=f"{decl.name} stands on the run's params, and one of them "
+            "was refused.")
+        return
+    env = production(state)
+    origin = "user"
+    if isinstance(value, Mapping) and "source" in value:
+        env.picks[decl.name] = origin = str(value["source"])
+        origin = f"source:{origin}"
+    else:
+        env.supplied[decl.name] = (value.get("layer")
+                                   if isinstance(value, Mapping) else value)
+    try:
+        if decl.role not in (DOMAIN, EXTENT):
+            await _place_first(env)
+        held = env.artifacts[decl.name] = await _produce(env, decl)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - the refusal is the verdict
+        if getattr(exc, "retryable", False):
+            raise
+        picked = env.picks.pop(decl.name, None)
+        env.supplied.pop(decl.name, None)
+        state.inputs[decl.name] = Verdict(
+            REJECTED, value, reason=str(exc),
+            code=getattr(exc, "error_code", None) or "INPUT_REFUSED",
+            remedies=await _instead(env, decl, picked) if picked else ())
+        return
+    state.domain = current_domain()
+    state.inputs[decl.name] = Verdict(ACCEPTED, held, origin=origin)
+
+
+async def _place_first(env: _Env) -> None:
+    """A sourced input stands on the run's place, so the place is filled first."""
+    for row in env.data.values():
+        if row.role == DOMAIN and row.name not in env.artifacts:
+            env.artifacts[row.name] = await _produce(env, row)
+
+
+async def _instead(env: _Env, decl: DataDecl, picked: str) -> tuple[str, ...]:
+    """The sources the match ranks for this input that a refused pick is not."""
+    try:
+        choice = await _ranked(env, decl, decl.data_class, decl.name)
+    except Exception:  # noqa: BLE001 - no ranking is no remedy to name
+        return ()
+    return tuple(row.fetcher for row in choice.rows
+                 if not row.excluded and row.fetcher != picked)

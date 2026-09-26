@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import difflib
 import json
+import os
 import re
+import sys
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -142,33 +144,36 @@ class Slot:
         A late-bound READ passes through and is checked at the fill instead."""
         if isinstance(value, (Ref, ParamRef)):
             return value
-        if self.is_list:
-            if not isinstance(value, (list, tuple)):
-                raise SlotRefused(
-                    f"{self.keyword} takes a list of {self.type} values"
-                    + (f" ({self.size} of them)" if not self.unbounded else "")
-                    + f"; got {value!r}.")
-            if not self.unbounded and len(value) != self.size:
-                raise SlotRefused(
-                    f"{self.keyword} takes exactly {self.size} values; "
-                    f"got {len(value)}.")
-            # A LIST's choices are the ENGINE'S to check, not ours: the
-            # dictionary spells a tracer choice as T*, kSi, T1*, and telapy's
-            # own reader is what knows those spellings. It reads the written
-            # file back, and that round trip is the gate.
-            #
-            # A late-bound read INSIDE the list passes through for the same
-            # reason it does outside one: a body states what it will hold, and
-            # the fill that substitutes the value is what the value is checked at.
-            return [item if isinstance(item, (Ref, ParamRef))
-                    else self._bounded(self._typed(item), position)
-                    for position, item in enumerate(value)]
-        value = self._bounded(self._typed(value), 0)
-        if self.choices and not self.multi_select and str(value) not in self.choices:
+        value = self.fits(value, typed=self._typed)
+        if self.choices and not self.multi_select and not self.is_list \
+                and str(value) not in self.choices:
             raise SlotRefused(
                 f"{self.keyword} does not take {value!r}. The dictionary's "
                 f"choices are {self._named_choices()}.")
         return value
+
+    def fits(self, value: Any, typed: Any = None) -> Any:
+        """``value`` if its ARITY and plausibility range fit this slot - what the
+        engine's own steering-file class does not check."""
+        typed = typed or (lambda item: item)
+        if not self.is_list:
+            return self._bounded(typed(value), 0)
+        if not isinstance(value, (list, tuple)):
+            raise SlotRefused(
+                f"{self.keyword} takes a list of {self.type} values"
+                + (f" ({self.size} of them)" if not self.unbounded else "")
+                + f"; got {value!r}.")
+        if not self.unbounded and len(value) != self.size:
+            raise SlotRefused(
+                f"{self.keyword} takes exactly {self.size} values; "
+                f"got {len(value)}.")
+        # A LIST's choices are the ENGINE'S to check: the dictionary spells a
+        # tracer choice as T*, kSi, T1*, and telapy's reader knows those
+        # spellings. A late-bound read inside the list is checked at the fill
+        # that substitutes it.
+        return [item if isinstance(item, (Ref, ParamRef))
+                else self._bounded(typed(item), position)
+                for position, item in enumerate(value)]
 
     def _bounded(self, value: Any, position: int) -> Any:
         """``value`` if the bounds row takes it, or the refusal that names both.
@@ -689,3 +694,59 @@ def _unshadowed(cls: type, registered: Mapping[str, Any]) -> list[tuple[str, Any
                 f"{cls.MODULE} already has the keyword {name!r}; a registration "
                 "may not shadow a keyword.")
     return list(registered.items())
+
+
+#: What a fill states where the engine's own steering-file class cannot be
+#: imported: the keyword is held to this module's copy of the dictionary.
+ENGINE_UNAVAILABLE = "the engine check is unavailable at fill; launch runs it"
+
+
+def accept(body: type, name: str, value: Any) -> tuple[str, Any, str]:
+    """One keyword at fill -> ``(identifier, value, note)``, or the refusal.
+
+    Name, type and choices are the ENGINE's own steering-file class's to judge;
+    arity and range are ours. Where the engine tree is absent, ours judges all
+    of it and the note says so."""
+    identifier = body.identify(name)
+    if identifier not in body.MODULE_INPUT:
+        return identifier, value, ""
+    slot = body.MODULE_INPUT[identifier]
+    if isinstance(value, (Ref, ParamRef)) or slot.is_file:
+        return identifier, slot.check(value), ""
+    engine = engine_check(body.MODULE)
+    if engine is None:
+        return identifier, slot.check(value), ENGINE_UNAVAILABLE
+    refusal = engine(slot.keyword, list(value) if isinstance(value, tuple)
+                     else value)
+    if refusal:
+        raise SlotRefused(f"{slot.keyword} refused by the engine: {refusal}")
+    return identifier, slot.fits(value), ""
+
+
+def engine_check(module: str) -> Any:
+    """``(keyword, value) -> refusal or ""`` through the engine's own
+    ``TelemacCas``, imported from the tree ``HOMETEL`` names; ``None`` where
+    that tree or its dictionary cannot be reached."""
+    home = os.environ.get("HOMETEL", "")
+    dico = Path(home, "sources", module, f"{module}.dico")
+    if not home or not dico.is_file():
+        return None
+    scripts = str(Path(home, "scripts", "python3"))
+    if scripts not in sys.path:
+        sys.path.append(scripts)
+    try:
+        from execution.telemac_cas import TelemacCas
+    except Exception:  # noqa: BLE001 - any import failure is the absent tree
+        return None
+
+    def check(keyword: str, value: Any) -> str:
+        cas = TelemacCas(f"{module}.cas", str(dico), access="w")
+        cas.lang = "en"
+        try:
+            cas.set(keyword, value)
+            cas._check_choix()
+        except Exception as exc:  # noqa: BLE001 - the engine's refusal is the answer
+            return str(exc).strip()
+        return ""
+
+    return check

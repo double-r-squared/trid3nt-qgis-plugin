@@ -21,7 +21,7 @@ from .outputs import (
     series,
     spectrum,
 )
-from .sheet import Filled, Sheet, SheetIncomplete, draw, fill, run
+from .sheet import Filled, Sheet, SheetIncomplete, fill, run
 from .artemis import ART
 from .gaia import GAIA
 from .khione import KHIONE
@@ -33,7 +33,7 @@ from .waqtel import WAQTEL
 __all__ = [
     "ART", "Composite", "Filled", "GAIA", "KHIONE", "Module", "Output",
     "Primitive", "Sheet", "SheetIncomplete", "Slot", "SlotRefused", "T2D", "T3D",
-    "WAC", "WAQTEL", "WRAPPERS", "column", "draw", "extent", "field", "fill",
+    "WAC", "WAQTEL", "WRAPPERS", "column", "extent", "field", "fill",
     "load_module_input", "mass_balance", "max_over_time", "mesh", "run", "series",
     "spectrum", "wrapper_for",
 ]

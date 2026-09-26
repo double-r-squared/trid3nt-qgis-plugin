@@ -243,8 +243,6 @@ async def gate_input_review(
     mode: str | None,
     entries: list[SyntheticInput],
     params: dict[str, Any],
-    reresolve: Callable[[dict[str, Any]], Awaitable[
-        tuple[list[SyntheticInput], dict[str, Any]]]] | None = None,
     max_rounds: int = _DEFAULT_MAX_ROUNDS,
     ttl_seconds: int = _DEFAULT_TTL_SECONDS,
     param_sheet: "ParamSheet | None" = None,
@@ -377,18 +375,6 @@ async def gate_input_review(
             return ReviewOutcome(proceed=True, entries=cur_entries,
                                  params=cur_params, mode="user_gated",
                                  rounds_used=round_idx)
-        # Without a reresolve callback a revision only re-stamps the affected
-        # entries to user basis; with one, revised params re-run their fetchers
-        # (a revised dam name reaching a new NID lookup, say).
-        if reresolve is not None:
-            try:
-                cur_entries, cur_params = await reresolve(cur_params)
-            except Exception:  # noqa: BLE001 -- a re-resolve fault must not orphan
-                logger.warning(
-                    "input-review gate reresolve failed session=%s tool=%s "
-                    "-- keeping the merged revision",
-                    emitter.session_id, tool_name, exc_info=True,
-                )
         if round_idx == max_rounds:
             return ReviewOutcome(
                 proceed=False, entries=cur_entries, params=cur_params,

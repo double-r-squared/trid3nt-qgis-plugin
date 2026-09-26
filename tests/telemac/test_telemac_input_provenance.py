@@ -28,7 +28,7 @@ def _resolve_bare(tool_name: str, location: str):
     from trid3nt_server.workflows.runtime.resolver import resolve_params
 
     workflow = TOOL_REGISTRY[tool_name].fn.workflow
-    supplied, err = asyncio.run(workflow._normalize({"location": location}))
+    supplied, err = asyncio.run(_normalized(workflow, {"location": location}))
     assert err is None, f"{tool_name} refused a bare location: {err}"
     return workflow, asyncio.run(resolve_params(workflow.params, supplied))
 
@@ -64,8 +64,20 @@ def test_a_supplied_count_still_reads_as_the_users() -> None:
     from trid3nt_server.workflows.runtime.resolver import resolve_params
 
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
-    supplied, err = asyncio.run(workflow._normalize(
+    supplied, err = asyncio.run(_normalized(workflow, 
         {"location": "the Wabash River", "cores": 2}))
     assert err is None, err
     row = asyncio.run(resolve_params(workflow.params, supplied)).row("cores")
     assert (row.value, row.door, row.basis) == (2, "user", "user")
+
+
+async def _normalized(workflow, args):
+    """The accepted params of one fill, and the refusal where one was rejected."""
+    from trid3nt_server.workflows.runtime.fill import ACCEPTED, REJECTED, Fill, fill
+
+    state = await fill(Fill(workflow=workflow), args)
+    declared = {prm.name for prm in workflow.params}
+    refused = [v.reason for v in state.inputs.values() if v.state == REJECTED]
+    return ({n: v.value for n, v in state.inputs.items()
+             if v.state == ACCEPTED and n in declared},
+            " ".join(refused) or None)

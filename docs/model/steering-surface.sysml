@@ -127,6 +127,14 @@ package SteeringSurface {
         */
     }
 
+    part def Fill {
+        doc /*
+        What puts a value into an input: each input answers on arrival -
+        accepted, rejected with its remedies, missing, or defaulted - and a
+        value drawn on the canvas is one more fill of one input.
+        */
+    }
+
     part def Serializer {
         doc /*
         The sheet resolved into the engine's own steering file. It holds the
@@ -406,6 +414,12 @@ package SteeringSurface {
         port surfaceIn : SurfaceIn;
         port deckOut : DeckOut;
         port stageOut : StageOut;
+    }
+
+    part fill : Fill {
+        doc /*
+        code: trid3nt_server/workflows/runtime/fill.py
+        */
         port drawIn : DrawIn;
     }
 
@@ -508,7 +522,7 @@ package SteeringSurface {
         connect sheet.stageOut to stager.stageIn;
 
     interface canvasAnswered : DrawnValue
-        connect canvasGate.drawOut to sheet.drawIn;
+        connect canvasGate.drawOut to fill.drawIn;
 
     // ----------------------------------------------------------------- //
     // The laws this seam is governed by
@@ -1098,10 +1112,6 @@ package SteeringSurface {
     verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_module_surface.py::test_a_fill_is_repeatable_and_the_later_one_stands";
     verify requirement EverythingOverridable by
-        "tests/telemac/test_telemac_module_surface.py::test_a_drawn_point_is_a_fill";
-    verify requirement EverythingOverridable by
-        "tests/telemac/test_telemac_module_surface.py::test_a_canvas_that_answers_nothing_refuses_and_invents_nothing";
-    verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_do_sag.py::test_a_coupled_keyword_is_stated_by_its_own_body_name";
     verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_do_sag.py::test_a_bare_coupled_keyword_only_one_body_spells_resolves_there";
@@ -1453,6 +1463,4 @@ package SteeringSurface {
         "tests/inputs/test_point.py::test_a_point_outside_the_domain_is_refused_by_name_and_names_the_fix";
     verify requirement InputsAreTypedPrimitives by
         "tests/inputs/test_point.py::test_a_point_landing_on_a_dry_node_moves_to_the_nearest_wet_one";
-    verify requirement InputsAreTypedPrimitives by
-        "tests/telemac/test_telemac_module_surface.py::test_a_drawn_point_is_a_fill";
 }

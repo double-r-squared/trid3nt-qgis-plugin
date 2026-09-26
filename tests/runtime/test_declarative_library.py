@@ -277,25 +277,6 @@ def test_inverted_bounds_refused():
         Param("x", desc="d", default=1.0, bounds=(9.0, 1.0))
 
 
-# --- the doors --------------------------------------------------------------- #
-@pytest.mark.asyncio
-async def test_supplied_beats_default_and_question():
-    p = await resolve_params(
-        [Param("a", desc="d", door=doors.SCENARIO, default=1.0, type=float)],
-        {"a": 7.0}, question={"a": 3.0},
-    )
-    assert p.value_of("a") == 7.0 and p.row("a").door == doors.USER
-
-
-@pytest.mark.asyncio
-async def test_question_beats_the_labeled_default():
-    p = await resolve_params(
-        [Param("a", desc="d", door=doors.SCENARIO, default=1.0, type=float)], {},
-        question={"a": 3.0},
-    )
-    assert p.value_of("a") == 3.0 and p.row("a").basis == "prompt_interpreted"
-
-
 @pytest.mark.asyncio
 async def test_a_value_outside_its_bounds_refuses_by_name_and_never_clamps():
     """The lever is the user's: a value moved onto the bound would run a question
@@ -336,15 +317,6 @@ async def test_non_numeric_bounded_value_refuses_never_defaults():
 
 
 @pytest.mark.asyncio
-async def test_derivations_resolve_regardless_of_declaration_order():
-    p = await resolve_params([
-        Param("out", desc="d", door=doors.DERIVED, resolve=f"{_HERE}.derive_double"),
-        Param("base", desc="d", door=doors.SCENARIO, default=4.0, type=float),
-    ], {})
-    assert p.value_of("out") == 8.0 and p.row("out").basis == "derived"
-
-
-@pytest.mark.asyncio
 async def test_a_bool_is_refused_for_a_bounded_param():
     """bool IS an int, so True would coerce to 1.0 - a flag is not a measurement."""
     for flag in (True, False):
@@ -381,14 +353,6 @@ async def test_an_absent_param_with_a_derived_stand_in_still_leaves_a_row():
     assert [r.param for r in rows] == ["outfall"]
     assert rows[0].basis == "derived"
     assert "derived reach point" in rows[0].note
-
-
-@pytest.mark.asyncio
-async def test_a_bug_inside_a_derivation_is_not_swallowed_as_a_dependency_wait():
-    decl = [Param("out", desc="d", door=doors.DERIVED, resolve=f"{_HERE}.derive_broken"),
-            Param("base", desc="d", door=doors.SCENARIO, default=4.0, type=float)]
-    with pytest.raises(AttributeError, match="missing_attribute"):
-        await resolve_params(decl, {})
 
 
 def test_the_composites_own_provenance_row_wins():

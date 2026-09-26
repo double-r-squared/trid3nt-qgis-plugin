@@ -34,7 +34,8 @@ from trid3nt_server.workflows.runtime.plan import declared_reads
 from trid3nt_server.mesh.step import MeshStep
 from trid3nt_server.workflows.telemac.errors import TelemacError
 from trid3nt_server.workflows.telemac.modules import wrapper_for
-from trid3nt_server.workflows.telemac.modules.module import SlotRefused, identify_on
+from trid3nt_server.workflows.telemac.modules.module import (SlotRefused, accept,
+                                                              identify_on)
 from trid3nt_server.workflows.telemac.modules.outputs import (
     Line,
     OutputEmpty,
@@ -419,14 +420,30 @@ def stated(*, steering: type, keywords: Mapping[str, Any]) -> dict[str, Any]:
     assertion still holding a late-bound read has no number yet and is absent.
     This is the floor BEFORE the fill; ``Ref("sheet.<KEYWORD>")`` is the filled
     sheet after it, and only that one follows an edit made at the gate."""
-    bodies = run_bodies(steering)
     out = {name: value for name, value in steering.ASSERTED.items()
            if value is not None and not late_bound(value)}
+    return {**out, **_floor(steering, keywords)[0]}
+
+
+def _floor(steering: type, keywords: Mapping[str, Any]
+           ) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    """The raw keyword floor routed onto this run's bodies -> the carrier's
+    values by identifier, and each coupled module's."""
+    if keywords and not isinstance(keywords, Mapping):
+        raise SlotRefused(
+            f"keywords takes a mapping of the engine's own keyword names to "
+            f"values, e.g. {{\"LAW OF BOTTOM FRICTION\": 4}}; got "
+            f"{type(keywords).__name__}.")
+    bodies = run_bodies(steering)
+    own: dict[str, Any] = {}
+    coupled: dict[str, dict[str, Any]] = {}
     for name, value in (keywords or {}).items():
         body, identifier = identify_on(bodies, name)
         if body is steering:
-            out[identifier] = value
-    return out
+            own[identifier] = value
+        else:
+            coupled.setdefault(body.MODULE, {})[identifier] = value
+    return own, coupled
 
 
 def run_bodies(steering: type) -> list[type]:
@@ -449,23 +466,7 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
     """Set the body's slots against what the run measured -> the sheet, HELD.
 
     The raw ``keywords`` floor is filled last and therefore beats a template value."""
-    stated = {}
-    if keywords and not isinstance(keywords, Mapping):
-        # A floor that arrived as anything but a mapping is a caller error worth
-        # naming: the alternative is an attribute error from inside the fill,
-        # blaming a step rather than the argument.
-        raise SlotRefused(
-            f"keywords takes a mapping of the engine's own keyword names to "
-            f"values, e.g. {{\"LAW OF BOTTOM FRICTION\": 4}}; got "
-            f"{type(keywords).__name__}.")
-    bodies = run_bodies(steering)
-    coupled: dict[str, dict[str, Any]] = {}
-    for name, value in (keywords or {}).items():
-        body, identifier = identify_on(bodies, name)
-        if body is steering:
-            stated[identifier] = value
-        else:
-            coupled.setdefault(body.MODULE, {})[identifier] = value
+    stated, coupled = _floor(steering, keywords)
 
     async def fill(values: Mapping[str, Any], edits: Mapping[str, Any]) -> Sheet:
         # A composite may read fetched data at the fill - a raster sampled at
@@ -712,9 +713,9 @@ async def _review(fill: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
                     + ("another stage of this run reads it off the run itself"
                        if name in spent else "no keyword of this sheet reads it")
                     + f". State {name} on the run instead.")
-            if name not in params and name not in steering.COMPOSITES:
+            if name not in params:
                 try:
-                    steering.slot(name)
+                    accept(steering, name, revised[name])
                 except SlotRefused as exc:
                     raise SlotRefused(
                         f"{name} is not an input of {workflow}: no param of it "
@@ -819,6 +820,7 @@ class TelemacWorkflow(Workflow):
 
     engine = "telemac"
     solve_step = "solve"
+    mesh_step = "mesh"
 
     @classmethod
     def levers(cls) -> tuple[str, ...]:
@@ -833,6 +835,16 @@ class TelemacWorkflow(Workflow):
         """The STEERING body: the module wrapper, the slots this question asserts
         and the coupling it carries."""
         return self.template.STEERING
+
+    @property
+    def module_name(self) -> str:
+        return self.steering.MODULE
+
+    def accept_keyword(self, name: str, value: Any) -> tuple[str, Any, str]:
+        """One keyword on whichever of this run's bodies it names, through that
+        module's own accept rule."""
+        body, identifier = identify_on(run_bodies(self.steering), name)
+        return accept(body, identifier, value)
 
     def _states(self, name: str, default: Any) -> Any:
         """One declaration read off the template module, or the default beside it."""

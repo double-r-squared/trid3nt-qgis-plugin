@@ -15,13 +15,14 @@ from typing import Any, Callable, Mapping, Sequence
 from . import journal
 from .accepts import Accepts
 from .data import DataDecl, data_rows
-from .errors import (ContinuationRefused, DeclarativeError, WorkflowParkedError,
+from .errors import (DeclarativeError, WorkflowParkedError,
                      said)
 from .levers import with_levers
-from .params import Param, ResolvedParams, doors, param_rows
+from .params import Param, doors, param_rows
 from .plan import Plan, Ref, Step
 from .resolution import SensitivityDecl, sensitivity_notes
-from .resolver import merge_provenance, resolve_params
+from .resolver import merge_provenance
+from .fill import Fill, fill, production
 from .interpreter import RunResult, interpret
 
 __all__ = ["Workflow", "WireArgsError", "register_workflow"]
@@ -47,6 +48,13 @@ class Workflow:
     #: step when the result carries none, and a workflow that renamed its solve
     #: would otherwise lose the run id to a literal guess. Declared, never assumed.
     solve_step: str = ""
+
+    #: What the MESH step is named: a continuation is held to the mesh content
+    #: that step is bound to. A workflow that meshes nothing names none.
+    mesh_step: str = ""
+
+    #: The engine module this workflow fills, which a continuation must match.
+    module_name: str | None = None
 
     @classmethod
     def levers(cls) -> tuple[str, ...]:
@@ -161,43 +169,35 @@ class Workflow:
     # -- the spine --------------------------------------------------------- #
 
     async def run(self, wire: Mapping[str, Any]) -> Any:
-        """The absorbed tool body: normalize, resolve, then the shared spine."""
-        supplied, err = await self._normalize(dict(wire))
-        if err is not None:
-            return err
-        return await self.execute(
-            self._resolve(supplied), input_mode=wire.get("input_mode"),
-            keywords=wire.get("keywords"), picks=wire.get("picks"),
-            ops=wire.get("ops"),
-            resume=not bool(wire.get("restart_clean")),
-            supplied=self._supplied_artifacts(wire),
-            continue_from=wire.get("continue_from"))
+        """The absorbed tool body: fill every input, then launch when READY."""
+        try:
+            state = await fill(Fill(workflow=self), wire)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            if getattr(exc, "retryable", False):
+                raise
+            logger.exception("%s fill failed", self.name)
+            return self._error(f"{self.error_prefix}_INTERNAL_ERROR", exc)
+        if not state.ready:
+            code, sentence = state.refusal()
+            logger.warning("%s %s: %s", self.name, code, sentence)
+            return {"status": "error", "error_code": code,
+                    "error_message": sentence}
+        return await self.execute(state)
 
-    async def execute(self, resolving: Any, *, input_mode: str | None = None,
-                      keywords: Mapping[str, Any] | None = None,
-                      picks: Mapping[str, str] | None = None,
-                      ops: Mapping[str, Any] | None = None,
-                      resume: bool = True,
-                      supplied: Mapping[str, Any] | None = None,
-                      continue_from: str | None = None) -> Any:
-        """Run the plan on a resolved sheet: interpret, post, publish.
-        ``resolving`` may be an awaitable, so a resolve refusal lands inside this
-        method's envelope; so does a ``continue_from`` that names no solved run."""
-        supplied_artifacts = dict(supplied or {})
+    async def execute(self, state: Fill) -> Any:
+        """Launch a READY fill: interpret, post, publish."""
         started = time.monotonic()
         try:
-            p = await resolving if inspect.isawaitable(resolving) else resolving
-            continued = await asyncio.to_thread(_continued_state, continue_from) \
-                if continue_from else None
             run = await interpret(
-                self.plan, p, self.params, self.data,
-                input_mode=input_mode, keywords=keywords, picks=picks, ops=ops,
-                resume=resume,
-                supplied=supplied_artifacts, continued=continued,
-                window_s=self.run_window_s(dict(keywords or {})),
-                slot_units=self.slot_units(), captions=self.captions,
-                published_units=self.published_units(),
-            )
+                self.plan, state.params, self.params, self.data,
+                input_mode=state.carried.get("input_mode"),
+                keywords=state.keywords, ops=state.carried.get("ops"),
+                resume=not bool(state.carried.get("restart_clean")),
+                continued=state.continued.get("solved"),
+                continued_mesh=state.continued, mesh_step=self.mesh_step,
+                env=production(state), domain=state.domain)
         except asyncio.CancelledError:
             raise
         except DeclarativeError as exc:
@@ -211,61 +211,17 @@ class Workflow:
                 raise
             logger.exception("%s unexpected failure", self.name)
             return self._error(f"{self.error_prefix}_INTERNAL_ERROR", exc)
+        run.notes[:0] = state.notes
         return await self._publish(run, time.monotonic() - started,
-                                   supplied=supplied_artifacts,
-                                   continue_from=continue_from)
+                                   supplied=dict(state.env.supplied),
+                                   continue_from=state.continue_from)
 
-    async def _resolve(self, supplied: Mapping[str, Any]) -> ResolvedParams:
-        return await resolve_params(self.params, supplied)
+    def accept_keyword(self, name: str, value: Any) -> tuple[str, Any, str]:
+        """One engine keyword at fill -> ``(identifier, value, note)``.
 
-    # -- normalize --------------------------------------------------------- #
-
-    async def _normalize(self, args: dict[str, Any]
-                         ) -> tuple[dict[str, Any], dict | None]:
-        """Coerce the wire args into the door-1 sheet through the declared coercions.
-        Three-way: a retryable typed error PROPAGATES, a typed refusal reports under
-        its own code, and anything else reports as an internal error. A coercion
-        that ingests from the world - a layer read, a geocode, a canvas pick - is
-        awaited where it stands."""
-        # A retryable error must not be flattened into an envelope: that destroys
-        # the ``.suggestions`` channel the adapter harvests off the raised exception.
-        try:
-            args = await self.coerced(args)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:  # noqa: BLE001
-            if getattr(exc, "retryable", False):
-                raise
-            code = getattr(exc, "error_code", None)
-            if code is None:
-                logger.exception("%s coercion failed", self.name)
-                code = f"{self.error_prefix}_INTERNAL_ERROR"
-            return {}, self._error(code, exc)
-        declared = {prm.name for prm in self.params}
-        return {k: v for k, v in args.items()
-                if k in declared and v is not None}, None
-
-    async def coerced(self, args: Mapping[str, Any]) -> dict[str, Any]:
-        """``args`` with every declared coercion applied, in declaration order.
-
-        The one place a value reaches the type its template reads, so a sheet
-        read back off a record and a sheet built off the wire are typed by the
-        same statement. A coercion that ingests from the world is awaited where
-        it stands."""
-        found = dict(args)
-        for coercion in self.coercions:
-            coerced = coercion(found)
-            if inspect.isawaitable(coerced):
-                coerced = await coerced
-            found.update(coerced or {})
-        return found
-
-    def _supplied_artifacts(self, wire: Mapping[str, Any]) -> dict[str, Any]:
-        """Artifacts handed in for producer-less ``Data`` slots, by slot name.
-        The wire argument carries the slot's own name, so "which layer is this" is
-        answerable from the declaration alone."""
-        return {decl.name: wire[decl.name] for decl in self.data
-                if decl.fills_from_user and wire.get(decl.name) is not None}
+        A skeleton that writes no engine input takes none."""
+        raise WireArgsError(f"{self.name} writes no engine keywords; "
+                            f"{name!r} is not an input of it.")
 
     def _error(self, code: str, exc: BaseException) -> dict[str, Any]:
         """The failure, plus whatever auxiliary products the run also lost on the way."""
@@ -338,6 +294,11 @@ class Workflow:
             return None
         return (run.results.get(self.solve_step) or {}).get("mesh_size_m")
 
+    def _mesh_key(self, run: RunResult) -> str | None:
+        """The content key the mesh step was bound to, off its own record."""
+        return next((rec.inputs_key for rec in getattr(run, "records", ())
+                     if rec.node == self.mesh_step), None) if self.mesh_step else None
+
     def _module(self, run: RunResult) -> str | None:
         """WHICH module of the engine ran, as the solve step itself states it.
         The engine is the workflow's; the module is the run's, so a family that
@@ -388,6 +349,7 @@ class Workflow:
             outputs=run.outputs, keywords=run.keywords,
             supplied=dict(supplied or {}), sources=run.choices,
             solved=self._solved(run), continued_from=continue_from,
+            mesh_key=self._mesh_key(run),
         ))
 
     @staticmethod
@@ -421,16 +383,6 @@ _CONTINUE_DOC = (
     "The id of a completed run whose solved state this run opens at, as the "
     "engine's previous computation: the same scenario carried on past where "
     "that run ended. Refused by name when that run has no solved result.")
-
-
-def _continued_state(run_id: str) -> str:
-    """The file a completed run's solve wrote, off its own journal line."""
-    solved = journal.run_solved(str(run_id).strip())
-    if not solved:
-        raise ContinuationRefused(
-            f"continue_from={run_id!r} names no solved result: only a run whose "
-            "solve completed and was journaled leaves a state to carry on.")
-    return solved
 
 
 

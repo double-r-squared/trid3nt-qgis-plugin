@@ -212,35 +212,3 @@ async def test_three_round_bound_then_cancel(monkeypatch) -> None:
     assert "3 rounds" in (out.cancel_reason or "")
     assert len(fake.sent) == 3
     assert not pending._PENDING_CONFIRMATIONS
-
-
-@pytest.mark.asyncio
-async def test_reresolve_callback_invoked(monkeypatch) -> None:
-    fake = _FakeEmitter()
-    monkeypatch.setattr(pe, "current_emitter", lambda: fake)
-    seen: list[dict] = []
-
-    async def _reresolve(params):
-        seen.append(dict(params))
-        return (
-            [SyntheticInput(param="dam_break_depth_m", value=12.0, units="m",
-                            basis="fetched", real_source_if_any="fetch_usace_dams")],
-            params,
-        )
-
-    async def _script() -> None:
-        seen: set[str] = set()
-        await _drive("narrow_scope", revised_args={"dam_name": "Other Dam"},
-                     seen=seen)
-        await _drive("proceed", seen=seen)
-
-    driver = asyncio.create_task(_script())
-    out = await gate_input_review(
-        tool_name="geoclaw_inundation", mode="user_gated",
-        entries=_entries(), params={"dam_name": "A"},
-        reresolve=_reresolve,
-    )
-    await driver
-    assert out.proceed is True
-    assert seen and seen[0]["dam_name"] == "Other Dam"
-    assert out.entries[0].value == 12.0

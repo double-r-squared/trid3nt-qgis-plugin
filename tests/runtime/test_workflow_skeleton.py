@@ -169,9 +169,11 @@ def test_a_constant_supplied_off_the_model_wire_still_reaches_the_sheet():
     from trid3nt_server.workflows.runtime.resolver import resolve_params
 
     wf = TOOL_REGISTRY["telemac_do_sag"].fn.workflow
-    supplied, err = asyncio.run(wf._normalize(
-        {"location": "x", "cores": 2, "mesh_resolution_m": 30.0}))
-    assert err is None
+    from trid3nt_server.workflows.runtime.fill import ACCEPTED, Fill, fill
+
+    state = asyncio.run(fill(Fill(workflow=wf), {"location": "x", "cores": 2,
+                                                  "mesh_resolution_m": 30.0}))
+    supplied = {n: v.value for n, v in state.inputs.items() if v.state == ACCEPTED}
     assert supplied["cores"] == 2
     assert supplied["mesh_resolution_m"] == 30.0
     sheet = asyncio.run(resolve_params(wf.params, supplied))

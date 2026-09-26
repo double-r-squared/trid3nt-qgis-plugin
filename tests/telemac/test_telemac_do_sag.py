@@ -282,7 +282,7 @@ def test_a_supplied_outfall_is_carried_as_a_user_row():
     from trid3nt_server.workflows.runtime import provenance_entries
 
     supplied, err = asyncio.run(
-        _workflow()._normalize({"outfall_coords": ["-122.6735", "45.5175"]}))
+        _normalized(_workflow(), {"outfall_coords": ["-122.6735", "45.5175"]}))
     assert err is None and supplied["outfall_coords"] == Point(*_PORTLAND)
     row = next(r for r in provenance_entries(_resolve(**supplied),
                                              _workflow().params)
@@ -529,3 +529,15 @@ def test_the_card_groups_the_coupled_deck_under_its_own_body():
     assert row.group.startswith("waqtel:")
     assert row.basis == "user"
     assert rows["waqtel.WATER_SALINITY"].basis == "derived"
+
+
+async def _normalized(workflow, args):
+    """The accepted params of one fill, and the refusal where one was rejected."""
+    from trid3nt_server.workflows.runtime.fill import ACCEPTED, REJECTED, Fill, fill
+
+    state = await fill(Fill(workflow=workflow), args)
+    declared = {prm.name for prm in workflow.params}
+    refused = [v.reason for v in state.inputs.values() if v.state == REJECTED]
+    return ({n: v.value for n, v in state.inputs.items()
+             if v.state == ACCEPTED and n in declared},
+            " ".join(refused) or None)

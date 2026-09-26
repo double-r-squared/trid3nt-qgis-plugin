@@ -140,6 +140,9 @@ async def interpret(
     slot_units: Mapping[str, str] | None = None,
     captions: Mapping[str, str] | None = None,
     published_units: Mapping[str, str] | None = None,
+    env: "_Env | None" = None,
+    continued_mesh: Mapping[str, Any] | None = None,
+    mesh_step: str = "",
 ) -> RunResult:
     """Walk the plan. The only place a declared workflow executes."""
     entries = provenance_entries(params, declared_params)
@@ -153,17 +156,18 @@ async def interpret(
     emitter = current_emitter()
     begin_substeps(emitter, len(nodes))
 
-    from .fill import _Env, _ops
+    from .fill import _Env, _ops, refuse_other_mesh
 
-    env = _Env(params=params, data={d.name: d for d in data}, results={},
-               input_mode=input_mode, keywords=dict(keywords or {}),
-               picks={str(k): str(v) for k, v in dict(picks or {}).items()},
-               ops=_ops(ops, data), ledger=ledger,
-               resume=resume, supplied=dict(supplied or {}), workflow=plan.name,
-               continued=continued, window_s=window_s,
-               slot_units=dict(slot_units or {}),
-               captions=dict(captions or {}),
-               published_units=dict(published_units or {}))
+    if env is None:
+        env = _Env(params=params, data={d.name: d for d in data}, results={},
+                   input_mode=input_mode, keywords=dict(keywords or {}),
+                   picks={str(k): str(v) for k, v in dict(picks or {}).items()},
+                   ops=_ops(ops, data), supplied=dict(supplied or {}),
+                   workflow=plan.name, window_s=window_s,
+                   slot_units=dict(slot_units or {}),
+                   captions=dict(captions or {}),
+                   published_units=dict(published_units or {}))
+    env.ledger, env.resume, env.continued = ledger, resume, continued
     out = RunResult(value=None, entries=entries, params=params,
                     keywords=dict(env.keywords))
     token = bind_domain(domain)
@@ -193,6 +197,8 @@ async def interpret(
             bound = (await _bind(dict(node.step.kwargs), env, node.label)
                      if node.kind == "step" else None)
             key = inputs_digest(bound)
+            if mesh_step and node.step.name == mesh_step:
+                refuse_other_mesh(continued_mesh or {}, key)
             cached = (ledger.replay_for(node.index, node.label, key)
                       if resume else None)
             if cached is not None and await _artifacts_live(cached):
