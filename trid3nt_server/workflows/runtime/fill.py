@@ -1114,7 +1114,7 @@ async def _seat(state: Fill) -> None:
         except Exception as exc:  # noqa: BLE001 - the refusal is the verdict
             state.inputs[prm.name] = Verdict(
                 REJECTED, value, reason=str(exc),
-                code=getattr(exc, "error_code", None) or "INPUT_REFUSED",
+                code=_refusal_code(exc, prm.name),
                 remedies=(f"a value between {prm.bounds[0]} and "
                           f"{prm.bounds[1]}",) if prm.bounds else ())
             continue
@@ -1229,17 +1229,30 @@ async def _row(state: Fill, decl: DataDecl, value: Any) -> None:
         picked = env.picks.pop(decl.name, None)
         env.supplied.pop(decl.name, None)
         state.inputs[decl.name] = Verdict(
-            REJECTED, value, reason=str(exc),
-            code=getattr(exc, "error_code", None) or "INPUT_REFUSED",
+            REJECTED, value, reason=str(exc), code=_refusal_code(exc, decl.name),
             remedies=await _instead(env, decl, picked) if picked else ())
         return
     state.domain = current_domain()
     state.inputs[decl.name] = Verdict(ACCEPTED, held, origin=origin)
 
 
+def _refusal_code(exc: BaseException, name: str) -> str:
+    """The code a refused input carries. An error that states no code is a
+    fault, not a refusal of the value: the caller still gets the refusal, and
+    the log gets the trace."""
+    code = getattr(exc, "error_code", None)
+    if code is None:
+        logger.warning("input %s refused on an untyped error", name,
+                       exc_info=exc)
+    return code or "INPUT_REFUSED"
+
+
 async def _place_first(env: _Env) -> None:
-    """A sourced input stands on the run's place, so the place is filled first."""
-    for row in env.data.values():
+    """A sourced input stands on the run's place, so the place is filled first.
+
+    Producing a row may register the runtime's own rows, so the walk is over
+    the rows as they stood before it."""
+    for row in list(env.data.values()):
         if row.role == DOMAIN and row.name not in env.artifacts:
             env.artifacts[row.name] = await _produce(env, row)
 
