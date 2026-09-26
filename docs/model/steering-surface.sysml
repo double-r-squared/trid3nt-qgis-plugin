@@ -1197,6 +1197,8 @@ package SteeringSurface {
         "tests/telemac/test_telemac_module_surface.py::test_a_template_param_edited_on_the_card_lands_and_the_card_redraws";
     verify requirement ReviewIsTheWorkflowsView by
         "tests/telemac/test_telemac_module_surface.py::test_a_name_that_is_no_input_of_the_run_refuses_by_name";
+    verify requirement ReviewIsTheWorkflowsView by
+        "tests/telemac/test_telemac_module_surface.py::test_the_sheet_is_told_which_params_another_stage_reads";
 
     satisfy requirement CompositesSetOnlyPresence by composite;
     satisfy requirement CompositesSetOnlyPresence by wrapper;
