@@ -76,7 +76,6 @@ async def _drive(script, *, seen=None, appear_timeout=5.0) -> None:
 @pytest.fixture(autouse=True)
 def _no_mesh_at_the_gate(monkeypatch):
     """Every test starts and ends with no mesh under construction."""
-    monkeypatch.delenv("TRID3NT_INPUT_GATE_MODE", raising=False)
     monkeypatch.setattr(mesh_gate, "_AT_GATE", None)
     yield
 
@@ -232,19 +231,20 @@ async def test_auto_mode_builds_inline_with_no_gate(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_user_gated_with_no_session_builds_inline(tmp_path, monkeypatch):
+async def test_user_gated_with_no_session_refuses(tmp_path, monkeypatch):
     monkeypatch.setattr(pe, "current_emitter", lambda: None)
 
-    art = await mesh_gate.gate_mesh_build(
-        _session(tmp_path), tool_name="telemac_dye_release",
-        input_mode="user_gated")
+    with pytest.raises(MeshToolError) as caught:
+        await mesh_gate.gate_mesh_build(
+            _session(tmp_path), tool_name="telemac_dye_release",
+            input_mode=None)
 
-    assert isinstance(art, MeshArtifact)
+    assert "MESH_GATE_NO_SESSION" in str(caught.value.error_code)
+    assert "input_mode='auto'" in str(caught.value)
 
 
 @pytest.mark.asyncio
-async def test_session_lever_turns_the_gate_on(tmp_path, monkeypatch):
-    monkeypatch.setenv("TRID3NT_INPUT_GATE_MODE", "user_gated")
+async def test_an_unstated_mode_is_gated(tmp_path, monkeypatch):
     fake = _FakeEmitter()
     monkeypatch.setattr(pe, "current_emitter", lambda: fake)
     driver = asyncio.create_task(_drive([("proceed", None)]))

@@ -601,7 +601,8 @@ async def test_a_bbox_at_the_door_becomes_the_recipes_extent(monkeypatch):
     monkeypatch.setattr(MeshSession, "accept", _accept)
     with pytest.raises(MeshToolError):
         await TOOL_REGISTRY["build_mesh"].fn(
-            mesher="reg_grid", bbox=(-75.8, 36.1, -75.7, 36.2), resolution_m=200.0)
+            mesher="reg_grid", bbox=(-75.8, 36.1, -75.7, 36.2), resolution_m=200.0,
+            input_mode="auto")
     assert seen["recipe"].extent == (-75.8, 36.1, -75.7, 36.2)
     assert seen["recipe"].resolution_m == 200.0
 
@@ -623,7 +624,7 @@ async def test_wire_ops_become_recipe_entries(monkeypatch):
         await TOOL_REGISTRY["build_mesh"].fn(
             mesher="reg_grid", bbox=(-75.8, 36.1, -75.7, 36.2), resolution_m=200.0,
             ops=[{"fn": "set_bed", "source": "fetch_cudem",
-                  "interp": "bilinear"}])
+                  "interp": "bilinear"}], input_mode="auto")
     ops = seen["recipe"].ops
     assert [op.fn for op in ops] == ["set_bed"]
     assert dict(ops[0].kwargs) == {"source": "fetch_cudem",

@@ -108,6 +108,7 @@ _REFUSALS = {
     "timeout": "MESH_GATE_TIMEOUT",
     "declined": "MESH_GATE_DECLINED",
     "not_approved": "MESH_GATE_NOT_APPROVED",
+    "no_session": "MESH_GATE_NO_SESSION",
 }
 
 
@@ -116,7 +117,7 @@ async def gate_mesh_build(session: MeshSession, *, tool_name: str,
                           max_rounds: int = _MAX_ROUNDS) -> MeshArtifact:
     """Build the demanded mesh under the gate -> the accepted :class:`MeshArtifact`.
 
-    AUTO, or a headless run with no session to present on, builds inline."""
+    AUTO builds inline; user_gated with no session to present on refuses."""
     global _AT_GATE
 
     async def card() -> GateCard:

@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from trid3nt_server.workflows.runtime import Step
+from trid3nt_server.workflows.runtime import RunMode, Step
 from trid3nt_server.mesh.artifact import measured_min_edge_m
 from trid3nt_server.mesh.tool import recipe_plan_value
 
@@ -35,15 +35,17 @@ class MeshStep:
         ``name`` presents the session; a supply is checked against ``tool``'s row."""
         return Step(runner=_RUNNER, stage="mesh",
                     kwargs={"mesh": recipe_plan_value(mesh), "name": name,
-                            "supplied": supplied, "tool": tool})
+                            "supplied": supplied, "tool": tool,
+                            "input_mode": RunMode})
 
 
 async def build_declared_mesh(*, mesh: dict[str, Any], name: Any = None,
                               supplied: Any = None,
-                              tool: Any = None) -> dict[str, Any]:
+                              tool: Any = None,
+                              input_mode: str | None = None) -> dict[str, Any]:
     """The mesh a solve runs on -> the accepted mesh's record.
 
-    A SUPPLIED mesh is adopted whole - never rebuilt, never re-gated."""
+    A SUPPLIED mesh is adopted whole; a built one is gated in the run's own mode."""
     import asyncio
 
     from trid3nt_server.render.pipeline_emitter import current_turn_case
@@ -66,7 +68,8 @@ async def build_declared_mesh(*, mesh: dict[str, Any], name: Any = None,
     session = await asyncio.to_thread(
         MeshSession, recipe, case_id=current_turn_case(),
         name=_session_name(name, recipe.mesher))
-    art = await gate_mesh_build(session, tool_name=MeshStep.GATE_LABEL)
+    art = await gate_mesh_build(session, tool_name=MeshStep.GATE_LABEL,
+                                input_mode=input_mode)
     logger.info("mesh accepted: %s -> %d nodes / %d elements, min edge %s m",
                 art.mesh_id, art.node_count, art.element_count,
                 measured_min_edge_m(art))
