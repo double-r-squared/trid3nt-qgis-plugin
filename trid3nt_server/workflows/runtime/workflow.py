@@ -191,9 +191,7 @@ class Workflow:
         started = time.monotonic()
         try:
             run = await interpret(
-                self.plan, state.params, self.params, self.data,
-                input_mode=state.carried.get("input_mode"),
-                keywords=state.keywords, ops=state.carried.get("ops"),
+                self.plan, state.params, self.params,
                 resume=not bool(state.carried.get("restart_clean")),
                 continued=state.continued.get("solved"),
                 continued_mesh=state.continued, mesh_step=self.mesh_step,

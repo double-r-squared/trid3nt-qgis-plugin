@@ -444,9 +444,20 @@ async def test_resolver_refuses_a_param_declared_twice():
 
 
 # --- the interpreter ---------------------------------------------------------- #
-async def _run(plan, params_decl, wire, data=(), **kw):
+def _env(plan, p, data=(), *, input_mode=None, keywords=None, supplied=None):
+    from trid3nt_server.workflows.runtime.fill import _Env
+
+    return _Env(params=p, data={d.name: d for d in data}, results={},
+                input_mode=input_mode, keywords=dict(keywords or {}),
+                supplied=dict(supplied or {}), workflow=plan.name)
+
+
+async def _run(plan, params_decl, wire, data=(), *, input_mode=None,
+               keywords=None, supplied=None, **kw):
     p = await resolve_params(params_decl, wire)
-    return await interpret(plan, p, params_decl, data, **kw)
+    return await interpret(plan, p, params_decl, env=_env(
+        plan, p, data, input_mode=input_mode, keywords=keywords,
+        supplied=supplied), **kw)
 
 
 # --- a ref tail is refused at BINDING, never bound to a silent None ----------- #
@@ -729,8 +740,8 @@ async def test_a_supplied_producer_row_is_on_the_wire_and_the_caller_fills_it():
     plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_second",
                                  kwargs={"m": Ref("held")}),))
     p = await resolve_params(_params(), {})
-    out = await interpret(plan, p, _params(), [decl], resume=False,
-                          supplied={"held": "file:///mine/weather.csv"})
+    out = await interpret(plan, p, _params(), resume=False, env=_env(
+        plan, p, [decl], supplied={"held": "file:///mine/weather.csv"}))
     assert _CALLS == ["stub_second"]
     assert out.value["seen"]["m"] == "file:///mine/weather.csv"
 
@@ -863,7 +874,7 @@ async def test_a_completed_run_leaves_a_tombstone_not_a_replayable_ledger():
 
     plan = Plan("reaped_w", None, (Step(runner=f"{_HERE}.stub_step").named("a"),))
     p = await resolve_params(_params(), {"base": 6.0})
-    await interpret(plan, p, _params())
+    await interpret(plan, p, _params(), env=_env(plan, p))
     key = _key("reaped_w", p.values_dict())
     ledger = await StepLedger.load(key, "reaped_w")
     assert ledger.records == []
@@ -1085,7 +1096,7 @@ async def test_late_binding_reaches_the_runner_with_the_resolved_value():
     p = await resolve_params(_params(), {"base": 4.0})
     plan = Plan("late_w", None, (
         Step(runner=f"{_HERE}.stub_second", kwargs={"x": p.base}).named("a"),))
-    out = await interpret(plan, p, _params(), resume=False)
+    out = await interpret(plan, p, _params(), resume=False, env=_env(plan, p))
     assert out.value["seen"]["x"] == 4.0
 
 
@@ -1095,8 +1106,8 @@ async def test_the_raw_keyword_floor_rides_out_on_the_runs_own_result():
     carries it out so its record can say which deck was actually solved."""
     p = await resolve_params(_params(), {})
     plan = Plan("floor_w", None, (Step(runner=f"{_HERE}.stub_step").named("a"),))
-    out = await interpret(plan, p, _params(), resume=False,
-                          keywords={"LAW OF BOTTOM FRICTION": 4})
+    out = await interpret(plan, p, _params(), resume=False, env=_env(
+        plan, p, keywords={"LAW OF BOTTOM FRICTION": 4}))
     assert out.keywords == {"LAW OF BOTTOM FRICTION": 4}
 
 
@@ -1233,7 +1244,7 @@ async def test_the_sweep_reaps_tombstones_past_the_ttl(monkeypatch):
 
     plan = Plan("ttl_w", None, (Step(runner=f"{_HERE}.stub_step").named("a"),))
     p = await resolve_params(_params(), {"base": 25.0})
-    await interpret(plan, p, _params())
+    await interpret(plan, p, _params(), env=_env(plan, p))
     key = _key("ttl_w", p.values_dict())
     assert (await _raw_ledger_doc(key))["complete"] is True
 

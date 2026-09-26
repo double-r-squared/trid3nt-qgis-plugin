@@ -34,7 +34,6 @@ from trid3nt_server.gates.input_review import (
 
 from trid3nt_contracts.coverage import SourceChoice
 
-from .data import DataDecl
 from .domain import Domain, bind_domain, current_domain, domain_from_result, reset_domain
 from .errors import (
     DeclarativeError,
@@ -126,28 +125,18 @@ async def interpret(
     plan: Plan,
     params: ResolvedParams,
     declared_params: Sequence[Param],
-    data: Sequence[DataDecl] = (),
     *,
-    input_mode: str | None = None,
-    keywords: Mapping[str, Any] | None = None,
-    picks: Mapping[str, str] | None = None,
-    ops: Mapping[str, Any] | None = None,
+    env: "_Env",
     domain: Domain | None = None,
     resume: bool = True,
-    supplied: Mapping[str, Any] | None = None,
     continued: str | None = None,
-    window_s: float | None = None,
-    slot_units: Mapping[str, str] | None = None,
-    captions: Mapping[str, str] | None = None,
-    published_units: Mapping[str, str] | None = None,
-    env: "_Env | None" = None,
     continued_mesh: Mapping[str, Any] | None = None,
     mesh_step: str = "",
 ) -> RunResult:
     """Walk the plan. The only place a declared workflow executes."""
     entries = provenance_entries(params, declared_params)
-    key = invocation_key(plan.name, params.values_dict(), input_mode=input_mode,
-                         continued=continued)
+    key = invocation_key(plan.name, params.values_dict(),
+                         input_mode=env.input_mode, continued=continued)
     ledger = await StepLedger.load(key, plan.name)
     if not resume:
         await ledger.clear()
@@ -156,17 +145,8 @@ async def interpret(
     emitter = current_emitter()
     begin_substeps(emitter, len(nodes))
 
-    from .fill import _Env, _ops, refuse_other_mesh
+    from .fill import refuse_other_mesh
 
-    if env is None:
-        env = _Env(params=params, data={d.name: d for d in data}, results={},
-                   input_mode=input_mode, keywords=dict(keywords or {}),
-                   picks={str(k): str(v) for k, v in dict(picks or {}).items()},
-                   ops=_ops(ops, data), supplied=dict(supplied or {}),
-                   workflow=plan.name, window_s=window_s,
-                   slot_units=dict(slot_units or {}),
-                   captions=dict(captions or {}),
-                   published_units=dict(published_units or {}))
     env.ledger, env.resume, env.continued = ledger, resume, continued
     out = RunResult(value=None, entries=entries, params=params,
                     keywords=dict(env.keywords))
@@ -186,7 +166,7 @@ async def interpret(
                 # first CONSEQUENTIAL one: an invented value poisons the prep work
                 # as surely as the solve, and a plan that tags nothing consequential
                 # would otherwise skip the floor entirely.
-                _refuse_invented_physics(out.entries, plan.name, input_mode,
+                _refuse_invented_physics(out.entries, plan.name, env.input_mode,
                                          self_reviewed=self_reviewed)
             if node.step.consequential:
                 _refuse_missing_required(env.params, plan.name)
