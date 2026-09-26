@@ -16,7 +16,7 @@ from trid3nt_contracts.coverage import Coverage, CoverageExtent, CoverageWindow
 
 from trid3nt_server.tools.fetchers._router.errors import router_upstream_error
 from trid3nt_server.workflows.runtime import Data, data_rows
-from trid3nt_server.workflows.runtime import interpreter
+from trid3nt_server.workflows.runtime import fill
 from trid3nt_server.workflows.runtime.domain import Domain, bind_domain, reset_domain
 from trid3nt_server.workflows.runtime.journal import (
     bind_choices, drain_choices, run_choices)
@@ -112,11 +112,11 @@ def world(monkeypatch):
             SPECS[runner].output.layer_type == "vector" else "tif"
         return f"s3://b/{runner}.{ext}"
 
-    monkeypatch.setattr(interpreter, "_call_runner", _runner)
-    monkeypatch.setattr(interpreter, "sources_with_coverage",
+    monkeypatch.setattr(fill, "_call_runner", _runner)
+    monkeypatch.setattr(fill, "sources_with_coverage",
                         lambda: [(n, row) for n, s in SPECS.items()
                                  for row in s.coverage])
-    monkeypatch.setattr(interpreter, "_spec_of", lambda name: SPECS[name])
+    monkeypatch.setattr(fill, "_spec_of", lambda name: SPECS[name])
     # The ask closes through the match, which reads the source's own params off
     # the router's registry: the stubs stand in there too.
     from trid3nt_server.tools.fetchers._router import registration
@@ -132,7 +132,7 @@ def world(monkeypatch):
 
 
 def _env(**values):
-    return interpreter._Env(params=_Params(mesh_resolution_m=14.0, **values),
+    return fill._Env(params=_Params(mesh_resolution_m=14.0, **values),
                             data={}, results={})
 
 
@@ -146,7 +146,7 @@ def test_the_bed_lays_the_one_row_the_match_ranked_first(world):
     offer them."""
     env = _env()
     bed = _row(Data.need("bathymetry"), "bed")
-    out = asyncio.run(interpreter._bed_surface(env, bed))
+    out = asyncio.run(fill._bed_surface(env, bed))
     ran = [runner for runner, _kw in world]
     assert ran == ["fetch_soundings",
                    "trid3nt_server.inputs.bed.survey_surface",
@@ -177,7 +177,7 @@ def test_a_merge_op_lays_the_rows_it_names_in_the_order_it_names_them(world):
     env.ops["bed"] = [{"name": "merge",
                        "rows": ["fetch_bed_raster", "fetch_terrain"]},
                       "interpolated"]
-    asyncio.run(interpreter._bed_surface(env, _row(Data.need("bathymetry"),
+    asyncio.run(fill._bed_surface(env, _row(Data.need("bathymetry"),
                                                    "bed")))
     ran = [runner for runner, _kw in world]
     assert ran[:3] == ["fetch_soundings", "fetch_bed_raster", "fetch_terrain"]
@@ -198,7 +198,7 @@ def test_the_fill_is_handed_the_level_the_run_opens_at(world):
     env.ops["bed"] = ["interpolated"]
     env.data["level"] = _row(Data.need("water level series").optional(), "level")
     env.supplied["level"] = 175.685
-    asyncio.run(interpreter._bed_surface(env, _row(Data.need("bathymetry"),
+    asyncio.run(fill._bed_surface(env, _row(Data.need("bathymetry"),
                                                    "bed")))
     assert world[-1][1]["free_surface_m"] == pytest.approx(175.685)
 
@@ -209,7 +209,7 @@ def test_a_raster_measurement_reaches_the_merge_without_being_gridded(world,
                         _Spec(coverage("bathymetry", res=1.0, latest="1990-01-01"),
                               "raster", {"bbox": None}))
     env = _env()
-    out = asyncio.run(interpreter._bed_surface(
+    out = asyncio.run(fill._bed_surface(
         env, _row(Data.need("bathymetry"), "bed")))
     ran = [runner for runner, _kw in world]
     assert "trid3nt_server.inputs.bed.survey_surface" not in ran
@@ -240,11 +240,11 @@ def test_the_runtime_declares_the_offset_row_a_merge_source_owes(world,
             return record
         return f"s3://b/{runner}.tif"
 
-    monkeypatch.setattr(interpreter, "_call_runner", _runner)
+    monkeypatch.setattr(fill, "_call_runner", _runner)
     env = _env()
     env.ops["bed"] = [{"name": "merge", "rows": ["fetch_terrain"]}]
     env.data["domain"] = _row(Data.need("hydrography", at=_SEED), "domain")
-    asyncio.run(interpreter._bed_surface(env, _row(Data.need("bathymetry"), "bed")))
+    asyncio.run(fill._bed_surface(env, _row(Data.need("bathymetry"), "bed")))
     asked = {runner: kwargs for runner, kwargs in world}
     assert asked["fetch_vertical_datum_offset"]["from_frame"] == "igld85"
     assert asked["fetch_vertical_datum_offset"]["to_frame"] == "navd88"
@@ -271,10 +271,10 @@ def test_no_measurement_over_this_domain_refuses_rather_than_reaching_a_class(
             raise RuntimeError("EHYDRO_NO_SURVEYS")
         return f"s3://b/{runner}.tif"
 
-    monkeypatch.setattr(interpreter, "_call_runner", _runner)
+    monkeypatch.setattr(fill, "_call_runner", _runner)
     env = _env()
     with pytest.raises(StepFailedError) as excinfo:
-        asyncio.run(interpreter._bed_surface(
+        asyncio.run(fill._bed_surface(
             env, _row(Data.need("bathymetry"), "bed")))
     assert excinfo.value.error_code == "DATA_NEED_UNMATCHED"
     assert "fetch_terrain" not in [runner for runner, _kw in world]
@@ -291,9 +291,9 @@ def test_the_next_survivor_takes_its_turn_when_the_top_one_held_nothing(
             raise RuntimeError("EHYDRO_NO_SURVEYS")
         return f"s3://b/{runner}.tif"
 
-    monkeypatch.setattr(interpreter, "_call_runner", _runner)
+    monkeypatch.setattr(fill, "_call_runner", _runner)
     env = _env()
-    choice, value = asyncio.run(interpreter._probe(
+    choice, value = asyncio.run(fill._probe(
         env, _row(Data.need("bathymetry"), "bed"), "bathymetry", "bed"))
     assert choice.picked == "fetch_bed_raster"
     assert value == "s3://b/fetch_bed_raster.tif"
@@ -308,19 +308,19 @@ def test_a_non_retryable_upstream_error_drops_the_rung(world, monkeypatch):
                                         False)
         return f"s3://b/{runner}.tif"
 
-    monkeypatch.setattr(interpreter, "_call_runner", _runner)
-    choice, value = asyncio.run(interpreter._probe(
+    monkeypatch.setattr(fill, "_call_runner", _runner)
+    choice, value = asyncio.run(fill._probe(
         _env(), _row(Data.need("bathymetry"), "bed"), "bathymetry", "bed"))
     assert choice.picked == "fetch_bed_raster"
     assert value == "s3://b/fetch_bed_raster.tif"
 
 
 def test_a_run_series_is_asked_for_the_window_the_deck_will_solve(world):
-    env = interpreter._Env(
+    env = fill._Env(
         params=_Params(mesh_resolution_m=14.0, event_time="2026-09-13T22:00:00Z"),
         data={}, results={}, window_s=172800.0)
     discharge = _row(Data.need("discharge series"), "discharge")
-    choice, value = asyncio.run(interpreter._probe(
+    choice, value = asyncio.run(fill._probe(
         env, discharge, "discharge series", "discharge"))
     assert choice.picked == "fetch_gauges"
     _runner, ask = world[-1]
@@ -353,7 +353,7 @@ def test_the_ranked_list_is_one_object_the_card_and_the_sheet_both_read(world):
     from trid3nt_server.workflows.telemac.workflow import _source_rows
 
     env = _env()
-    asyncio.run(interpreter._bed_surface(env, _row(Data.need("bathymetry"), "bed")))
+    asyncio.run(fill._bed_surface(env, _row(Data.need("bathymetry"), "bed")))
     rows = _source_rows()
     assert [row.name for row in rows] == ["bed bathymetry source"]
     card = rows[-1]
@@ -398,8 +398,8 @@ def test_a_gauge_serving_two_classes_fills_each_slot_from_its_own_row(world,
     monkeypatch.setitem(SPECS, "fetch_gauges", gauge)
     env = _env()
     level = _row(Data.need("water level series"), "level")
-    told = interpreter._what_the_record_reports(
-        env, level, interpreter._coverage_row("fetch_gauges",
+    told = fill._what_the_record_reports(
+        env, level, fill._coverage_row("fetch_gauges",
                                               "water level series"))
     assert told["field"] == "gage_height_ft"
     assert told["series_field"] == "stage_series_csv"
@@ -409,8 +409,8 @@ def test_a_gauge_serving_two_classes_fills_each_slot_from_its_own_row(world,
                                     "stage_series_csv": "ft",
                                     "gauge_datum_ft": "ft"}
     discharge = _row(Data.need("discharge series"), "discharge")
-    flow = interpreter._what_the_record_reports(
-        env, discharge, interpreter._coverage_row("fetch_gauges",
+    flow = fill._what_the_record_reports(
+        env, discharge, fill._coverage_row("fetch_gauges",
                                                   "discharge series"))
     assert flow["field"] == "discharge_cfs"
     assert flow["series_field"] == "time_series_csv"
@@ -444,10 +444,10 @@ def test_one_column_name_in_two_units_is_read_off_the_row_that_was_matched(
 
     def told(row, data_class):
         choice, _value = asyncio.run(
-            interpreter._probe(env, row, data_class, row.name))
+            fill._probe(env, row, data_class, row.name))
         assert choice.picked == "fetch_tides"
-        return interpreter._what_the_record_reports(
-            env, row, interpreter._matched_row(choice, choice.picked))
+        return fill._what_the_record_reports(
+            env, row, fill._matched_row(choice, choice.picked))
 
     level = told(_row(Data.need("water level series"), "level"),
                  "water level series")
@@ -479,7 +479,7 @@ def test_the_question_s_span_reaches_the_source_in_its_own_word(world,
     _reach_source(monkeypatch)
     env = _env()
     row = _row(Data.need("hydrography", span_km=25.0), "domain")
-    choice, _value = asyncio.run(interpreter._probe(env, row, "hydrography",
+    choice, _value = asyncio.run(fill._probe(env, row, "hydrography",
                                                     "domain"))
     assert choice.picked == "fetch_reach"
     _runner, called = world[-1]
@@ -492,7 +492,7 @@ def test_a_question_with_no_opinion_about_its_reach_asks_for_none(world,
     own declared default answers rather than a number nobody chose."""
     _reach_source(monkeypatch)
     env = _env()
-    asyncio.run(interpreter._probe(env, _row(Data.need("hydrography"), "domain"),
+    asyncio.run(fill._probe(env, _row(Data.need("hydrography"), "domain"),
                                    "hydrography", "domain"))
     _runner, called = world[-1]
     assert "distance_km" not in called
@@ -511,7 +511,7 @@ def coastline(world, monkeypatch):
         world.append((runner, dict(kwargs)))
         return dict(_COASTLINE)
 
-    monkeypatch.setattr(interpreter, "_call_runner", _runner)
+    monkeypatch.setattr(fill, "_call_runner", _runner)
     row = coverage("hydrography", datum=None).model_copy(
         update={"vocabulary": {"coastline": "coastline"}})
     monkeypatch.setitem(SPECS, "fetch_coastline",
@@ -527,7 +527,7 @@ def test_the_domain_slot_cuts_the_window_with_the_edge_it_was_matched(coastline)
     env = _env()
     row = _row(Data.need("hydrography", of="coastline", geometry="polyline"),
                "domain")
-    out = asyncio.run(interpreter._matched(env, row))
+    out = asyncio.run(fill._matched(env, row))
     assert out.geometry["type"] in ("Polygon", "MultiPolygon")
     # The water is the half the way does not have its land on, cut at the box
     # the question was asked in rather than at the line's own span.
@@ -547,8 +547,8 @@ def test_the_cut_domain_is_what_the_rest_of_the_run_is_bound_to(coastline):
                "domain")
 
     async def _fill_then_read():
-        await interpreter._matched(env, row)
-        return interpreter.current_domain()
+        await fill._matched(env, row)
+        return fill.current_domain()
 
     bound = asyncio.run(_fill_then_read())
     assert bound.geometry["type"] in ("Polygon", "MultiPolygon")
@@ -561,7 +561,7 @@ def test_the_ops_the_run_states_reach_the_merge_in_the_order_stated(world):
     lays them in the order the run named."""
     env = _env()
     env.ops["bed"] = ["interpolated"]
-    asyncio.run(interpreter._bed_surface(env, _row(Data.need("bathymetry"), "bed")))
+    asyncio.run(fill._bed_surface(env, _row(Data.need("bathymetry"), "bed")))
     merge = dict(world[-1][1])
     assert merge["ops"] == ["interpolated"]
 
@@ -569,7 +569,7 @@ def test_the_ops_the_run_states_reach_the_merge_in_the_order_stated(world):
 def test_a_run_that_states_no_op_hands_the_merge_none(world):
     """An op is stated or it is not: the merge is handed nothing to lay, and the
     water the one row left stays unpainted for the slot to refuse over."""
-    asyncio.run(interpreter._bed_surface(_env(), _row(Data.need("bathymetry"),
+    asyncio.run(fill._bed_surface(_env(), _row(Data.need("bathymetry"),
                                                       "bed")))
     assert dict(world[-1][1])["ops"] is None
 
@@ -581,7 +581,7 @@ def test_an_op_stated_for_a_row_the_workflow_does_not_declare_refuses_by_name():
 
     rows = (_row(Data.need("bathymetry"), "bed"),)
     with pytest.raises(PlanValidationError) as excinfo:
-        interpreter._ops({"riverbed": "interpolated"}, rows)
+        fill._ops({"riverbed": "interpolated"}, rows)
     assert "'riverbed'" in str(excinfo.value) and "bed" in str(excinfo.value)
 
 
@@ -592,12 +592,12 @@ def test_an_op_stated_for_a_row_whose_ingestion_reads_none_refuses_by_name():
 
     rows = (_row(Data.need("weather forcing"), "weather"),)
     with pytest.raises(PlanValidationError) as excinfo:
-        interpreter._ops({"weather": "interpolated"}, rows)
+        fill._ops({"weather": "interpolated"}, rows)
     assert "'weather'" in str(excinfo.value)
 
 
 def test_the_ops_a_run_states_are_carried_by_slot_name():
     rows = (_row(Data.need("bathymetry"), "bed"),)
-    assert interpreter._ops({"bed": "interpolated"}, rows) == {
+    assert fill._ops({"bed": "interpolated"}, rows) == {
         "bed": "interpolated"}
-    assert interpreter._ops(None, rows) == {}
+    assert fill._ops(None, rows) == {}

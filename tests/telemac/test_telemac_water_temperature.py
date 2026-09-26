@@ -218,7 +218,7 @@ def test_the_weather_is_asked_over_a_window_bracketing_the_deck():
     same day."""
     from trid3nt_server.tools.search.match import (
         Need, base_ask, match, sources_with_coverage)
-    from trid3nt_server.workflows.runtime.interpreter import _closes
+    from trid3nt_server.workflows.runtime.fill import _closes
 
     window_s = _workflow().run_window_s({})
     assert window_s == 604800.0

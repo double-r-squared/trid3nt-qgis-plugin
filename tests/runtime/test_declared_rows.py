@@ -17,7 +17,7 @@ import pytest
 
 from trid3nt_server.inputs.point import Point
 from trid3nt_server.inputs.slots import needs_of
-from trid3nt_server.workflows.runtime import Data, interpreter, resolve_params
+from trid3nt_server.workflows.runtime import Data, fill, resolve_params
 
 
 def _row(**need):
@@ -25,7 +25,7 @@ def _row(**need):
 
 
 async def _env():
-    return interpreter._Env(params=await resolve_params((), {}), data={},
+    return fill._Env(params=await resolve_params((), {}), data={},
                             results={})
 
 
@@ -41,7 +41,7 @@ async def test_a_closed_kind_declares_nothing_and_asks_for_nothing() -> None:
     env = await _env()
     row = dataclasses.replace(_row(), coercion={"near": Point(
         -123.2, 45.5, "Hagg Lake", "reservoir")})
-    assert await interpreter._beside(env, row) == {}
+    assert await fill._beside(env, row) == {}
 
 
 @pytest.mark.asyncio
@@ -55,11 +55,11 @@ async def test_a_place_on_a_flowline_has_its_water_surface_produced_for_it(
         asked[decl.name] = decl.observes
         return (None, f"{label}-layer")
 
-    monkeypatch.setattr(interpreter, "_probe", _probe)
+    monkeypatch.setattr(fill, "_probe", _probe)
     env = await _env()
     row = dataclasses.replace(_row(span_km=3.0), coercion={"near": Point(
         -122.67, 45.52, "Willamette River", "river")})
-    assert await interpreter._beside(env, row) == {
+    assert await fill._beside(env, row) == {
         "banks": "domain_banks-layer"}
     assert asked == {"domain_banks": "water surface"}
 
@@ -69,9 +69,9 @@ async def test_a_declared_row_nothing_measured_refuses_by_name(monkeypatch) -> N
     async def _probe(env, decl, data_class, label, **kw):
         return (None, None)
 
-    monkeypatch.setattr(interpreter, "_probe", _probe)
+    monkeypatch.setattr(fill, "_probe", _probe)
     env = await _env()
     row = dataclasses.replace(_row(), coercion={"near": Point(
         -122.67, 45.52, "Willamette River", "river")})
     with pytest.raises(Exception, match="water surface"):
-        await interpreter._beside(env, row)
+        await fill._beside(env, row)
