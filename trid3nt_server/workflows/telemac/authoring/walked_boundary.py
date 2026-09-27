@@ -172,7 +172,7 @@ async def settle_harbour(
     return {
         **facts,
         "name": slug_of(facts["mesh_name"]),
-        "title": f"ARTEMIS {facts['mesh_name']}",
+        "keywords": {"TITLE": f"ARTEMIS {facts['mesh_name']}"},
         "cli_text": cli_text,
         "open_nodes": open_nodes,
         "structure_nodes": structure_nodes,

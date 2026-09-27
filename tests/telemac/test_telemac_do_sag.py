@@ -230,8 +230,10 @@ def test_the_outputs_list_charts_the_oxygen_along_the_domains_centerline():
 
 
 # --- the deck those stages fill ---------------------------------------------- #
-_SETTLED = {"title": "willamette DOMAIN", "time_step_s": 1.0,
-            "until_s": 3700.0,
+_SETTLED = {"keywords": {"TITLE": "willamette DOMAIN", "TIME_STEP": 1.0,
+                         "INITIAL_CONDITIONS": "CONSTANT DEPTH",
+                         "INITIAL_DEPTH": 1.2, "INITIAL_ELEVATION": 1.0},
+            "time_step_s": 1.0, "until_s": 3700.0,
             "liquid_boundary_order": ["inflow", "outflow"],
             "liquid_boundary_prescribes": ["flowrate", "elevation"],
             "opening": "CONSTANT DEPTH", "depth_m": 1.2, "level_m": 1.0,
@@ -243,7 +245,7 @@ def _filled(*, keywords=None, **supplied):
 
     resolved = _resolve(**supplied)
     return asyncio.run(fill_sheet(
-        steering=_template().STEERING,
+        steering=_template().STEERING, settled=_SETTLED["keywords"],
         produced={"settled": _SETTLED,
                   "outfall": {"at": [0.0, 0.0], "name": None}},
         params={row.name: resolved.value_of(row.name)

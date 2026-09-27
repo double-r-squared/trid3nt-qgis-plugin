@@ -170,8 +170,6 @@ class STEERING(T2D):
     GEOMETRY_FILE = _GEOMETRY
     BOUNDARY_CONDITIONS_FILE = _BOUNDARY
     RESULTS_FILE = _RESULT
-    TITLE = Ref("settled.title")
-
     # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own
     # default is every step, so an unwritten period is a frame per step: at
     # the 40 m default edge the CFL step is 1 s, and the DURATION below is
@@ -186,11 +184,6 @@ class STEERING(T2D):
     # inferred. A window that closes while the discharge is still rising is
     # reported as such and its peak is a LOWER BOUND.
     DURATION = 43200.0
-    # The step the catchment is solved at follows the edge the accepted mesh was
-    # BUILT at rather than the edge that was asked for: an overland sheet is
-    # CFL-tight, and the channel band is the finest ground in the domain.
-    TIME_STEP = Ref("settled.time_step_s")
-
     # The catchment starts DRY, which is the dictionary's own initial condition,
     # and it carries no tracer: the outlet hydrograph is the product.
     TYPE_OF_ADVECTION = [1, 5]

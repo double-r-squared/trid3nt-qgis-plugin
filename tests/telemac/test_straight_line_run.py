@@ -78,3 +78,19 @@ def test_the_previous_computation_leaves_the_floor_for_the_settle(monkeypatch):
     assert dict(calls)["settled"]["continue_from"] == "s3://r/prev.slf"
     assert dict(calls)["source"]["continue_from"] == "s3://r/prev.slf"
     assert "PREVIOUS COMPUTATION FILE" not in dict(calls)["sheet"]["keywords"]
+
+
+def test_the_settle_s_keywords_go_straight_to_the_sheet(monkeypatch):
+    def settled(**kwargs):
+        async def run(*_args, **_kw):
+            return {"name": "settled", "keywords": {"TIME_STEP": 0.7}}
+        return run
+
+    workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
+    calls: list = []
+    _faked(monkeypatch, calls)
+    monkeypatch.setattr(opening, "open_water", settled())
+    state = Fill(workflow=workflow, carried={},
+                 params=asyncio.run(resolve_params(workflow.params, {})))
+    asyncio.run(workflow.launch(state))
+    assert dict(calls)["sheet"]["settled"] == {"TIME_STEP": 0.7}

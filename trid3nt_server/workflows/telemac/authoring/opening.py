@@ -386,7 +386,13 @@ async def open_water(
         _refuse_dry(facts["mesh_name"])
     return {
         "name": slug,
-        "title": f"{slug} DOMAIN",
+        # THE KEYWORDS THE SETTLE FILLS, by the engine's own names: the sheet
+        # takes each one a module spells and its template does not state.
+        "keywords": {"TITLE": f"{slug} DOMAIN", "TIME_STEP": time_step_s,
+                     "DURATION": duration_s,
+                     "INITIAL_CONDITIONS": opening["opening"],
+                     "INITIAL_DEPTH": opening["depth_m"],
+                     "INITIAL_ELEVATION": opening["level_m"]},
         "location_name": name or facts["mesh_name"],
         "utm_epsg": facts["utm_epsg"],
         "mesh_id": facts["mesh_id"],

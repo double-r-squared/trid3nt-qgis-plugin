@@ -103,21 +103,7 @@ class STEERING(T2D):
     GEOMETRY_FILE = _GEOMETRY
     BOUNDARY_CONDITIONS_FILE = _BOUNDARY
     RESULTS_FILE = _RESULT
-    TITLE = Ref("settled.title")
-
-    # The step the domain is solved at follows the edge the accepted mesh was
-    # BUILT at rather than the edge that was asked for.
-    TIME_STEP = Ref("settled.time_step_s")
     LISTING_PRINTOUT_PERIOD = 500
-
-    # HOW THE WATER OPENS is the settle's, not this deck's: flat at the level
-    # somebody measured, or a sheet of one depth on the bed where a uniform-flow
-    # depth was derived instead. A horizontal surface at a level the reach does
-    # not reach leaves every node upstream of it dry - the flowrate face among
-    # them - which is why the two are not the same statement.
-    INITIAL_CONDITIONS = Ref("settled.opening")
-    INITIAL_DEPTH = Ref("settled.depth_m")
-    INITIAL_ELEVATION = Ref("settled.level_m")
 
     LAW_OF_BOTTOM_FRICTION = _FRICTION_LAW
     FRICTION_COEFFICIENT = _FRICTION_COEFFICIENT

@@ -104,7 +104,7 @@ async def test_the_settle_knows_the_mesh_the_clock_and_the_water_it_holds(
     so there is no water measured and nothing is claimed about it."""
     out = await settle(mesh=_mesh_record(min_edge_m=14.0))
     assert out["name"] == "coweeta_creek"
-    assert out["title"] == "coweeta_creek DOMAIN"
+    assert out["keywords"]["TITLE"] == "coweeta_creek DOMAIN"
     assert out["mesh_size_m"] == 14.0
     assert out["time_step_s"] == 0.7
     assert out["duration_s"] == 3600.0 and out["until_s"] == 3600.0

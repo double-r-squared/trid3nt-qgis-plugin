@@ -463,6 +463,7 @@ def run_bodies(steering: type) -> list[type]:
 
 async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
                      params: Mapping[str, Any],
+                     settled: Mapping[str, Any] | None = None,
                      workflow: str, title: str, keywords: Mapping[str, Any],
                      input_mode: str | None, spent: Sequence[str] = ()) -> Sheet:
     """Set the body's slots against what the run measured -> the sheet, HELD.
@@ -475,7 +476,7 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
         # the mesh's nodes - so the fill runs off the loop.
         sheet = await asyncio.to_thread(
             fill_slots, steering, template=workflow, produced=dict(produced),
-            params=dict(values), **{**stated, **edits})
+            params=dict(values), settled=settled, **{**stated, **edits})
         # After the fill, because the coupled decks are what the carrier's own
         # coupling composite wrote into the sheet's files.
         return fill_coupled(sheet, coupled) if coupled else sheet
@@ -1035,7 +1036,9 @@ class TelemacWorkflow(Workflow):
             if row.is_context and row.name not in env.artifacts:
                 env.artifacts[row.name] = await _produce(env, row)
         await stage("sheet", fill_sheet, steering=self.steering,
-                    produced=produced, params=params, workflow=self.name,
+                    produced=produced, params=params,
+                    settled=env.results[_SETTLED].get("keywords") or {},
+                    workflow=self.name,
                     title=self._states("REVIEW_TITLE", ""), keywords=keywords,
                     input_mode=env.input_mode, spent=sorted(spent))
         listed = tuple(self._states("RESULTS", ()))

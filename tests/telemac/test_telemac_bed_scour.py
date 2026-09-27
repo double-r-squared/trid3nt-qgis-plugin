@@ -166,8 +166,7 @@ def test_the_boundary_values_read_the_measured_walk_and_the_open_channel_step():
     the windows behind them and the clock the file is written on."""
     measured = _MODULE.STEERING.ASSERTED["boundaries"]["measured"]
     assert measured.path == "settled"
-    assert _MODULE.STEERING.ASSERTED["INITIAL_DEPTH"].path == "settled.depth_m"
-    assert _MODULE.STEERING.ASSERTED["INITIAL_ELEVATION"].path == "settled.level_m"
+    assert not {"INITIAL_DEPTH", "INITIAL_ELEVATION"} & set(_MODULE.STEERING.ASSERTED)
 
 
 def test_every_slot_a_user_can_fill_reaches_the_wire():

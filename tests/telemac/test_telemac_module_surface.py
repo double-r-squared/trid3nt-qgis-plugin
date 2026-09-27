@@ -928,7 +928,7 @@ def test_the_basin_states_how_its_tracer_is_carried_and_under_what_ceiling():
     # telemac2d dictionary defaults this same keyword to.
     assert str(scheme) in slot.choices
     assert scheme in (13, 14)
-    assert asserted["TIME_STEP"].path == "settled.time_step_s"
+    assert "TIME_STEP" not in asserted
 
 
 def test_every_open_water_recipe_sizes_the_domain_rim_it_meshes():

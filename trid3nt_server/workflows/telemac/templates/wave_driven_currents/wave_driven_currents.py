@@ -118,8 +118,6 @@ class DATA:
 
 class STEERING(T2D):
     """The host deck: the water, and the wave field it feels as a force."""
-
-    TITLE = Ref("settled.title")
     GEOMETRY_FILE = _GEOMETRY
     BOUNDARY_CONDITIONS_FILE = _BOUNDARY
     RESULTS_FILE = _RESULT
@@ -128,13 +126,6 @@ class STEERING(T2D):
     DURATION = _DURATION_S
     GRAPHIC_PRINTOUT_PERIOD = _HOST_FRAMES
     LISTING_PRINTOUT_PERIOD = _HOST_FRAMES
-
-    # HOW THE WATER OPENS is the settle's, not this deck's: flat at the tide
-    # somebody measured. A horizontal surface is what a coastal window opens at,
-    # and the nodes above it are the beach the waves run up.
-    INITIAL_CONDITIONS = Ref("settled.opening")
-    INITIAL_DEPTH = Ref("settled.depth_m")
-    INITIAL_ELEVATION = Ref("settled.level_m")
 
     LAW_OF_BOTTOM_FRICTION = _FRICTION_LAW
     FRICTION_COEFFICIENT = _FRICTION_COEFFICIENT

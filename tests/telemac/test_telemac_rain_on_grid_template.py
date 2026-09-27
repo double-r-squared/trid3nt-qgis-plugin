@@ -309,7 +309,7 @@ def rog_run(monkeypatch, tmp_path):
             geometry=STEERING.ASSERTED["GEOMETRY_FILE"],
             boundary=STEERING.ASSERTED["BOUNDARY_CONDITIONS_FILE"],
             result=STEERING.ASSERTED["RESULTS_FILE"], mesh_resolution_m=40.0)
-        sheet = fill(STEERING, **(keywords or {}),
+        sheet = fill(STEERING, **(keywords or {}), settled=settled["keywords"],
                      produced={"settled": settled, "mesh": mesh, "outlet": _OUTLET,
                                "landcover": {"uri": "s3://cache/lc.tif"},
                                # The record row is CONTEXT: where the analysis

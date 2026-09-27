@@ -147,7 +147,9 @@ def _sheet(monkeypatch, **floor):
         lambda layer: {"features": [_observation(hour)
                                     for hour in range(_WEEK_HOURS)]})
     return fill(template.STEERING, **floor,
-                params={"event_time": _OPENS}, produced={
+                params={"event_time": _OPENS}, settled={
+        "TITLE": "DOMAIN", "TIME_STEP": 5.0, "INITIAL_CONDITIONS": "CONSTANT DEPTH",
+        "INITIAL_DEPTH": 1.4, "INITIAL_ELEVATION": 3.1}, produced={
         "settled": {"title": "DOMAIN", "time_step_s": 5.0,
                     "liquid_boundary_order": ["inflow", "outflow"],
                     "liquid_boundary_prescribes": ["flowrate", "elevation"],

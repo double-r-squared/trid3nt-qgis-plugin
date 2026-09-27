@@ -85,16 +85,11 @@ class DATA:
 
 class STEERING(T3D):
     """The deck: a prescribed column, the planes that hold it, and no wind."""
-
-    TITLE = Ref("settled.title")
     GEOMETRY_FILE = BASIN_GEOMETRY
     BOUNDARY_CONDITIONS_FILE = BASIN_BOUNDARY
     RD_RESULT_FILE = _RESULT_3D
     ED_RESULT_FILE = _RESULT_2D
 
-    # The step the water is solved at follows the edge the accepted mesh was
-    # BUILT at, through the CFL producer every domain's step comes from.
-    TIME_STEP = Ref("settled.time_step_s")
     # HOW LONG the column is watched, in SECONDS. The answer is the column's
     # SETTLED state rather than an event, so the window is "long enough": five
     # hours is what a basin-scale column takes to either hold its difference or
@@ -127,8 +122,6 @@ class STEERING(T3D):
     # OBSERVED. The dictionary's own zero is the chart datum, which is where a
     # charted bed is counted from - water left there has none on its rim at all.
     INITIAL_CONDITIONS = "CONSTANT ELEVATION"
-    INITIAL_ELEVATION = Ref("settled.level_m")
-
     # The ONE pair that cannot be left to the dictionary, measured both ways:
     # LECDON stops on "THE LAW OF BOTTOM FRICTION 5 IS ASKED / GIVE THE
     # CORRESPONDING FRICTION COEFFICIENT" when only the law is defaulted, and on

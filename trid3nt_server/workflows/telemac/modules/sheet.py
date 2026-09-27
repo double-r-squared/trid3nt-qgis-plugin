@@ -262,10 +262,13 @@ def _in_dictionary_order(body: type,
 
 def fill(source: type | Sheet, *, template: str = "",
          produced: Mapping[str, Any] | None = None,
-         params: Mapping[str, Any] | None = None, **slots: Any) -> Sheet:
+         params: Mapping[str, Any] | None = None,
+         settled: Mapping[str, Any] | None = None, **slots: Any) -> Sheet:
     """Set slots on a body or on a sheet already filled -> the sheet that results.
 
-    Repeatable; an unknown keyword refuses BY NAME and None states nothing."""
+    ``settled`` is what the settle filled, by keyword; a keyword the template
+    states wins over it. Repeatable; an unknown keyword refuses BY NAME and
+    None states nothing."""
     from ..authoring.atmosphere import write_atmosphere
 
     body, standing, pending = _standing(source, template)
@@ -276,7 +279,11 @@ def fill(source: type | Sheet, *, template: str = "",
             body.slot(name)      # refuses by name, and names the nearest keyword
         pending[name] = (value, Provenance(Origin.USER))
 
-    filled = dict(standing)
+    filled = {name: Filled(slot=dictionary[name], value=dictionary[name].check(value),
+                           provenance=Provenance(Origin.DERIVED, "the settle"))
+              for name, value in (settled or {}).items()
+              if value is not None and name in dictionary
+              and name not in body.ASSERTED} | standing
     files: dict[str, Any] = dict(source.files) if isinstance(source, Sheet) else {}
     for name, (value, provenance) in _in_ref_order(pending):
         if provenance.origin is not Origin.USER:

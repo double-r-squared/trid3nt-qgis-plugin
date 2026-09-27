@@ -1027,6 +1027,30 @@ package SteeringSurface {
         "tests/scripts/test_telemac_dictionary_drift.py::test_the_help_carries_no_markup_into_the_surface";
 
     satisfy requirement EngineDefaultSurfaced by slot;
+    requirement def TheSettleFillsItsOwnKeywords {
+        doc /*
+        What the settle produces reaches the steering file directly: the
+        settle fills the title, the time step, the duration and the opening's
+        keywords by the engine's own names, the sheet takes each one its
+        module spells, and no template line routes them. A keyword the
+        template states wins over the settle's, the floor wins over both, and
+        a sheet with a required slot still empty refuses by name before
+        anything is written.
+        */
+    }
+
+    satisfy requirement TheSettleFillsItsOwnKeywords by sheet;
+    verify requirement TheSettleFillsItsOwnKeywords by
+        "tests/telemac/test_settle_fills_its_keywords.py::test_the_settle_s_six_values_reach_the_steering_file_with_no_template_line";
+    verify requirement TheSettleFillsItsOwnKeywords by
+        "tests/telemac/test_settle_fills_its_keywords.py::test_no_template_routes_a_settle_value_by_a_line_of_its_own";
+    verify requirement TheSettleFillsItsOwnKeywords by
+        "tests/telemac/test_settle_fills_its_keywords.py::test_a_template_s_own_stated_value_wins_and_the_floor_beats_both";
+    verify requirement TheSettleFillsItsOwnKeywords by
+        "tests/telemac/test_settle_fills_its_keywords.py::test_a_required_slot_left_empty_refuses_by_name_before_writing";
+    verify requirement TheSettleFillsItsOwnKeywords by
+        "tests/telemac/test_straight_line_run.py::test_the_settle_s_keywords_go_straight_to_the_sheet";
+
     satisfy requirement EngineDefaultSurfaced by sheet;
     satisfy requirement EngineDefaultSurfaced by engineWorkflow;
     verify requirement EngineDefaultSurfaced by

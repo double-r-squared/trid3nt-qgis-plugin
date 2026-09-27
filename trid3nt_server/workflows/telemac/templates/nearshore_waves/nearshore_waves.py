@@ -94,8 +94,6 @@ class DATA:
 class STEERING(WAC):
     """The deck: a measured sea state in across the open edge, and what the bed
     leaves of it at the shore."""
-
-    TITLE = Ref("settled.title")
     GEOMETRY_FILE = _GEOMETRY
     BOUNDARY_CONDITIONS_FILE = _BOUNDARY
     ED_RESULTS_FILE = RESULT_FILENAME

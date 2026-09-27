@@ -102,8 +102,6 @@ _HARBOUR = Measured(
 
 class STEERING(ART):
     """The deck: a monochromatic wave in through the open edge, and what it leaves."""
-
-    TITLE = Ref("settled.title")
     GEOMETRY_FILE = HARBOUR_GEOMETRY
     BOUNDARY_CONDITIONS_FILE = BOUNDARY_FILENAME
     RESULTS_FILE = _RESULT
