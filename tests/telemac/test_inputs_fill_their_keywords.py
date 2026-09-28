@@ -3,6 +3,7 @@ line routes it, and a value the template states wins."""
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from types import SimpleNamespace
 
 from trid3nt_server.workflows.telemac.modules import T2D, WAC
@@ -65,3 +66,44 @@ def test_a_coupled_wave_body_takes_the_sea_state_and_not_the_level():
     assert slots["BOUNDARY_SIGNIFICANT_WAVE_HEIGHT"] == 1.25
     assert slots["BOUNDARY_PEAK_FREQUENCY"] == 0.2
     assert "INITIAL_STILL_WATER_LEVEL" not in slots
+
+
+def _template_bodies():
+    import importlib
+    import inspect
+    import pkgutil
+
+    from trid3nt_server.workflows.telemac import templates
+
+    for info in pkgutil.walk_packages(templates.__path__, templates.__name__ + "."):
+        module = importlib.import_module(info.name)
+        for name, body in vars(module).items():
+            if (inspect.isclass(body) and body.__module__ == module.__name__
+                    and isinstance(getattr(body, "ASSERTED", None), Mapping)):
+                yield f"{info.name}.{name}", body
+
+
+def test_no_template_line_routes_a_keyword_an_input_fills():
+    from trid3nt_server.workflows.runtime import Ref
+    from trid3nt_server.workflows.runtime.reads import declared_reads
+
+    fills = {name for wrapper in (T2D, WAC)
+             for keywords in wrapper.FILLED_BY.values() for name in keywords}
+    bodies = dict(_template_bodies())
+    assert len(bodies) >= 8
+    routed = []
+    for where, body in bodies.items():
+        stated = dict(body.ASSERTED)
+        for coupled in body.ASSERTED.get("coupling") or ():
+            if isinstance(coupled, Mapping):
+                stated |= coupled.get("slots", {})
+        routed += [f"{where}.{name}" for name in sorted(fills & set(stated))
+                   if any(declared_reads(stated[name], Ref))]
+    assert routed == []
+
+
+def test_the_run_reads_the_input_a_coupled_body_fills_itself_from():
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    workflow = TOOL_REGISTRY["tomawac_wave_driven_currents"].fn.workflow
+    assert "wave" in workflow._reads()

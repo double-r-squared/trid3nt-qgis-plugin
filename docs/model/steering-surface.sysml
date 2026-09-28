@@ -1069,6 +1069,10 @@ package SteeringSurface {
         "tests/telemac/test_inputs_fill_their_keywords.py::test_a_value_the_template_states_wins_over_the_input_that_fills_it";
     verify requirement AnInputFillsItsOwnKeywords by
         "tests/telemac/test_inputs_fill_their_keywords.py::test_a_coupled_wave_body_takes_the_sea_state_and_not_the_level";
+    verify requirement AnInputFillsItsOwnKeywords by
+        "tests/telemac/test_inputs_fill_their_keywords.py::test_no_template_line_routes_a_keyword_an_input_fills";
+    verify requirement AnInputFillsItsOwnKeywords by
+        "tests/telemac/test_inputs_fill_their_keywords.py::test_the_run_reads_the_input_a_coupled_body_fills_itself_from";
 
     satisfy requirement EngineDefaultSurfaced by sheet;
     satisfy requirement EngineDefaultSurfaced by engineWorkflow;
