@@ -225,18 +225,21 @@ class Workflow:
         token = bind_domain(state.domain)
         notes, outputs = journal.bind_notes(), journal.bind_outputs()
         choices, coverage = journal.bind_choices(), journal.bind_coverage()
+        # A context token resets once; the drain lives only in the finally so
+        # a second reset never replaces the run's own error.
         try:
-            run = await self.launch(state)
+            try:
+                run = await self.launch(state)
+            finally:
+                reset_domain(token)
+                said_notes = journal.drain_notes(notes)
+                published = journal.drain_outputs(outputs)
+                matched = journal.drain_choices(choices)
+                journal.drain_coverage(coverage)
         except Exception as exc:
-            for note in [*journal.drain_notes(notes), *env.absences]:
+            for note in [*said_notes, *env.absences]:
                 exc.add_note(f"also missing from this run: {note}")
             raise
-        finally:
-            reset_domain(token)
-            said_notes = journal.drain_notes(notes)
-            published = journal.drain_outputs(outputs)
-            matched = journal.drain_choices(choices)
-            journal.drain_coverage(coverage)
         run.entries, run.params = entries, state.params
         run.keywords = dict(state.keywords)
         run.notes += [*said_notes, *env.absences]

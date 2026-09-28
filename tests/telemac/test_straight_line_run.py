@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.workflows.runtime import fill as fill_mod
 from trid3nt_server.workflows.runtime.fill import Fill
@@ -94,3 +96,26 @@ def test_the_settle_s_keywords_go_straight_to_the_sheet(monkeypatch):
                  params=asyncio.run(resolve_params(workflow.params, {})))
     asyncio.run(workflow.launch(state))
     assert dict(calls)["sheet"]["settled"] == {"TIME_STEP": 0.7}
+
+
+def test_a_launch_that_raises_carries_its_own_error_and_its_notes(monkeypatch):
+    from trid3nt_server.workflows.runtime.errors import StepFailedError
+    from trid3nt_server.workflows.runtime.journal import journal_note
+
+    class Refused(Exception):
+        """The run's own failure, which nothing may replace."""
+
+    async def refuse(**_kwargs):
+        journal_note("the weather row had no source")
+        raise Refused("the sheet refused")
+
+    workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
+    _faked(monkeypatch, [])
+    monkeypatch.setattr(tw, "fill_sheet", refuse)
+    state = Fill(workflow=workflow, carried={"restart_clean": False},
+                 params=asyncio.run(resolve_params(workflow.params, {})))
+    with pytest.raises(StepFailedError) as caught:
+        asyncio.run(workflow._launched(state))
+    assert isinstance(caught.value.__cause__, Refused)
+    assert "also missing from this run: the weather row had no source" \
+        in caught.value.__notes__
