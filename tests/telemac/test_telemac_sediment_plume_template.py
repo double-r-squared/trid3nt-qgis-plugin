@@ -136,8 +136,8 @@ def test_the_deck_states_the_four_source_keywords_by_name():
     """One element per source, in the engine's own positional order: where it
     enters, and how much of the fixed strength/concentration discharges."""
     asserted = template.STEERING.ASSERTED
-    assert asserted["ABSCISSAE_OF_SOURCES"] == [Ref("source.at.0")]
-    assert asserted["ORDINATES_OF_SOURCES"] == [Ref("source.at.1")]
+    assert "ABSCISSAE_OF_SOURCES" not in asserted
+    assert "ORDINATES_OF_SOURCES" not in asserted
     assert asserted["WATER_DISCHARGE_OF_SOURCES"] == [declarations.SOURCE_Q_M3S]
     assert asserted["VALUES_OF_THE_TRACERS_AT_THE_SOURCES"] == [
         declarations.SEDIMENT_CONCENTRATION_MGL]

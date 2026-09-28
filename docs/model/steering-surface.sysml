@@ -1051,6 +1051,25 @@ package SteeringSurface {
     verify requirement TheSettleFillsItsOwnKeywords by
         "tests/telemac/test_straight_line_run.py::test_the_settle_s_keywords_go_straight_to_the_sheet";
 
+    requirement def AnInputFillsItsOwnKeywords {
+        doc /*
+        An input of the run fills the keywords it determines itself: a settled
+        release point the source coordinates, a measured sample the opening
+        tracer, the fetched sea state and level a wave deck's open edge and
+        still water, a settled station the spectrum printout point. The module
+        states which, no template line routes them, a value the template
+        states wins, and an absent input fills nothing.
+        */
+    }
+
+    satisfy requirement AnInputFillsItsOwnKeywords by sheet;
+    verify requirement AnInputFillsItsOwnKeywords by
+        "tests/telemac/test_inputs_fill_their_keywords.py::test_a_settled_release_fills_the_source_coordinates_with_no_template_line";
+    verify requirement AnInputFillsItsOwnKeywords by
+        "tests/telemac/test_inputs_fill_their_keywords.py::test_a_value_the_template_states_wins_over_the_input_that_fills_it";
+    verify requirement AnInputFillsItsOwnKeywords by
+        "tests/telemac/test_inputs_fill_their_keywords.py::test_a_coupled_wave_body_takes_the_sea_state_and_not_the_level";
+
     satisfy requirement EngineDefaultSurfaced by sheet;
     satisfy requirement EngineDefaultSurfaced by engineWorkflow;
     verify requirement EngineDefaultSurfaced by

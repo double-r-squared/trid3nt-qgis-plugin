@@ -160,12 +160,6 @@ class STEERING(T2D):
     #: the same ambient sediment stated above, at every one of them.
     boundaries = Boundaries(measured=Ref("settled"), tracers=[0.0, 0.03, 0.0, 0.0, 0.0])
 
-    #: WHERE the substance enters the water, in the mesh's own metres: the
-    #: settled release point, read by position because a point is one value
-    #: with an order. One element per source, in the engine's own positional
-    #: order.
-    ABSCISSAE_OF_SOURCES = [Ref("source.at.0")]
-    ORDINATES_OF_SOURCES = [Ref("source.at.1")]
     #: HOW MUCH enters, and at what dissolved concentration before any
     #: dilution - small against the carrier flow this deck opens on; the
     #: dilution the carrier delivers is what the partition is read against,

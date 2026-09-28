@@ -283,7 +283,11 @@ def fill(source: type | Sheet, *, template: str = "",
                            provenance=Provenance(Origin.DERIVED, "the settle"))
               for name, value in (settled or {}).items()
               if value is not None and name in dictionary
-              and name not in body.ASSERTED} | standing
+              and name not in body.ASSERTED}
+    filled |= {name: Filled(slot=dictionary[name], value=dictionary[name].check(value),
+                            provenance=Provenance(Origin.DERIVED, source))
+               for source, name, value in filled_by(body, produced or {})
+               if name not in body.ASSERTED} | standing
     files: dict[str, Any] = dict(source.files) if isinstance(source, Sheet) else {}
     for name, (value, provenance) in _in_ref_order(pending):
         if provenance.origin is not Origin.USER:
@@ -314,6 +318,9 @@ def fill(source: type | Sheet, *, template: str = "",
         slot = dictionary[name]
         filled[name] = Filled(slot=slot, value=slot.check(value),
                               provenance=provenance)
+    for basename, content in list(files.items()):
+        if isinstance(content, Mapping) and content.get("filled_by"):
+            files[basename] = _coupled_filled(content, produced or {})
     _arm(body, filled, files)
     _continued(body, filled, produced or {})
     _partitioned(body, filled, params or {})
@@ -321,6 +328,30 @@ def fill(source: type | Sheet, *, template: str = "",
                      files)
     return Sheet(body=body, filled=MappingProxyType(filled),
                  files=MappingProxyType(files))
+
+
+def filled_by(body: type, produced: Mapping[str, Any],
+              only: Sequence[str] = ()) -> list[tuple[str, str, Any]]:
+    """``(input, identifier, value)`` for every keyword an input of this run
+    fills itself on ``body``; an absent input or a None value fills nothing."""
+    return [(source, name, value)
+            for source, keywords in body.FILLED_BY.items()
+            if (not only or source in only) and produced.get(source) is not None
+            for name, read in keywords.items()
+            if (value := read(produced[source])) is not None]
+
+
+def _coupled_filled(content: Mapping[str, Any],
+                    produced: Mapping[str, Any]) -> Mapping[str, Any]:
+    """A coupled body with the keywords its own inputs fill; what it states wins."""
+    from . import wrapper_for
+
+    wrapper = wrapper_for(content["module"])
+    slots = dict(content["slots"])
+    for _source, name, value in filled_by(wrapper, produced,
+                                          content["filled_by"]):
+        slots.setdefault(name, wrapper.slot(name).check(value))
+    return {**content, "slots": slots}
 
 
 #: What a run that continues another states, by the keyword the engine reads

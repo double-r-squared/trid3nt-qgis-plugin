@@ -170,6 +170,7 @@ class _Tomawac(Module("tomawac")):  # type: ignore[misc]
         for name in keywords:
             cls.slot(name)
         return {"module": "tomawac", "steering": STEERING_FILENAME,
+                "filled_by": ("wave",),
                 "slots": {"GEOMETRY_FILE": geometry,
                           "BOUNDARY_CONDITIONS_FILE": boundary,
                           "ED_RESULTS_FILE": RESULT_FILENAME, **keywords}}
@@ -206,3 +207,14 @@ WAC.ARMS_ON_HOST = ("WAVE_DRIVEN_CURRENTS",)
 #: The spectra are read by the one primitive that reads a polar grid, and by no
 #: module whose results are written over a geographic mesh.
 WAC.reads(**PRIMITIVES, spectrum=read_spectrum)
+#: The sea state at the open edge fills the JONSWAP numbers; the gauged level is
+#: the still water every depth is read under; a settled station is where the
+#: spectrum is printed. A coupled body takes only the sea state.
+WAC.FILLED_BY = MappingProxyType({
+    "wave": {"BOUNDARY_SIGNIFICANT_WAVE_HEIGHT": lambda wave: wave.height_m,
+             "BOUNDARY_PEAK_FREQUENCY": lambda wave: wave.peak_frequency_hz,
+             "BOUNDARY_MAIN_DIRECTION_1": lambda wave: wave.direction_deg},
+    "level": {"INITIAL_STILL_WATER_LEVEL": lambda level: level.value},
+    "station": {
+        "ABSCISSAE_OF_SPECTRUM_PRINTOUT_POINTS": lambda placed: [placed["at"][0]],
+        "ORDINATES_OF_SPECTRUM_PRINTOUT_POINTS": lambda placed: [placed["at"][1]]}})

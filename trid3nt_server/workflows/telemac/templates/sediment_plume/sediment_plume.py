@@ -152,11 +152,6 @@ class STEERING(T2D):
     #: suspended class behind it - or the solver refuses for want of values.
     boundaries = Boundaries(measured=Ref("settled"), tracers=[0.0, 0.0])
 
-    #: WHERE the marker enters the water, in the mesh's own metres: the settled
-    #: release point, read by position because a point is one value with an
-    #: order. One element per source, in the engine's own positional order.
-    ABSCISSAE_OF_SOURCES = [Ref("source.at.0")]
-    ORDINATES_OF_SOURCES = [Ref("source.at.1")]
     #: HOW MUCH enters, and at what concentration: the deck's own fixed source
     #: strength, small against the carrier flow so the pulse is a marker and
     #: not a flood - the question's own input is the spill WINDOW below.

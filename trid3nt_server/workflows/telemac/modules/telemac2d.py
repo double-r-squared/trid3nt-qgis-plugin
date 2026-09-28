@@ -723,3 +723,9 @@ T2D.composites(sources=_sources, wind=_wind,
                infiltration=_infiltration, rating=_rating, storm=_storm,
                time_origin=_time_origin, tracer_names=_tracer_names)
 T2D.reads(**PRIMITIVES, drogues=read_drogues)
+#: A settled release point is where the one source enters, in the mesh's own
+#: metres; a measured sample is what the one declared tracer opens at.
+T2D.FILLED_BY = MappingProxyType({
+    "source": {"ABSCISSAE_OF_SOURCES": lambda placed: [placed["at"][0]],
+               "ORDINATES_OF_SOURCES": lambda placed: [placed["at"][1]]},
+    "observe": {"INITIAL_VALUES_OF_TRACERS": lambda sample: [sample.value]}})

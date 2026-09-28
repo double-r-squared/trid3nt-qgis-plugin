@@ -255,8 +255,8 @@ def test_the_deck_states_the_four_source_keywords_and_a_sources_composite():
         STEERING,
     )
 
-    assert STEERING.ASSERTED["ABSCISSAE_OF_SOURCES"] == [Ref("source.at.0")]
-    assert STEERING.ASSERTED["ORDINATES_OF_SOURCES"] == [Ref("source.at.1")]
+    assert "ABSCISSAE_OF_SOURCES" not in STEERING.ASSERTED
+    assert "ORDINATES_OF_SOURCES" not in STEERING.ASSERTED
     assert STEERING.ASSERTED["WATER_DISCHARGE_OF_SOURCES"] == [8.0]
     assert STEERING.ASSERTED["VALUES_OF_THE_TRACERS_AT_THE_SOURCES"] == [100.0]
     for name in ("ABSCISSAE OF SOURCES", "ORDINATES OF SOURCES",

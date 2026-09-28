@@ -123,28 +123,16 @@ class STEERING(WAC):
 
     #: THE OPEN EDGE, as the keywords the dictionary spells it in. A JONSWAP
     #: spectrum is the shape a developing sea and a swell are both described
-    #: by, and the three numbers under it are the buoy's own - the height it
-    #: measured, one over the period it measured, and the bearing the waves run
-    #: toward, which the wave slot's ingestion turns from the one the record
-    #: publishes.
+    #: by; the wave slot fills the three numbers under it itself - the height
+    #: the buoy measured, one over its period, and the bearing the waves run
+    #: toward.
     TYPE_OF_BOUNDARY_DIRECTIONAL_SPECTRUM = 6
-    BOUNDARY_SIGNIFICANT_WAVE_HEIGHT = Ref("wave.height_m")
-    BOUNDARY_PEAK_FREQUENCY = Ref("wave.peak_frequency_hz")
-    BOUNDARY_MAIN_DIRECTION_1 = Ref("wave.direction_deg")
 
     #: THE SPECTRUM ITSELF at the station, which is the sea state the three
     #: charted numbers are summary statistics OF: where the energy sits in
-    #: frequency, and how it is spread over direction. The engine takes the 2D
-    #: node nearest each coordinate, so the pair is the settled station in the
-    #: mesh's own metres - one value with an order, read by position.
+    #: frequency, and how it is spread over direction. The settled station
+    #: fills the printout point itself; the engine takes the 2D node nearest it.
     PUNCTUAL_RESULTS_FILE = _SPECTRA
-    ABSCISSAE_OF_SPECTRUM_PRINTOUT_POINTS = [Ref("station.at.0")]
-    ORDINATES_OF_SPECTRUM_PRINTOUT_POINTS = [Ref("station.at.1")]
-
-    #: WHAT THE WATER STANDS AT. TOMAWAC carries no free surface of its own: the
-    #: depth every node shoals over is this level less the bed, so the tide the
-    #: gauge reported is what decides where the waves break.
-    INITIAL_STILL_WATER_LEVEL = Ref("level.value")
 
     # THE NEARSHORE PHYSICS, which is the whole of the question. Battjes-Janssen
     # depth-induced breaking is what takes a shoaling wave down at the bar and

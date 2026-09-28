@@ -171,7 +171,6 @@ class STEERING(T2D):
     #: its record in, so it names the scale rather than the dimension.
     NUMBER_OF_TRACERS = 1
     NAMES_OF_TRACERS = ["TEMPERATURE     DEGC"]
-    INITIAL_VALUES_OF_TRACERS = [Ref("observe.value")]
 
     #: The water arriving at a feeding face is the same water the sample site
     #: measured: the domain warms because of what happens OVER it, so the inflow

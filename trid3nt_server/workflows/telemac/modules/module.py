@@ -52,7 +52,8 @@ _RESERVED = frozenset((
     "MODULE", "MODULE_INPUT", "COMPOSITES", "READS", "ASSERTED", "ARMS",
     "ARMS_ON_HOST", "MODULE_OUTPUT", "LISTING", "DERIVED", "PRINTOUTS",
     "CADENCE", "CLOCK", "TRACER", "APPENDS", "APPENDABLE", "ONLY_3D",
-    "UNWRITTEN", "RESULT_FILE", "RESULT_FILES", "RESULT_KEYWORD", "composites",
+    "UNWRITTEN", "RESULT_FILE", "RESULT_FILES", "RESULT_KEYWORD", "FILLED_BY",
+    "composites",
     "reads", "appends", "printouts", "seconds", "slot",
 ))
 
@@ -383,6 +384,9 @@ class Module(metaclass=_Body):
     #: Every keyword the module has, by identifier.
     MODULE_INPUT: Mapping[str, Slot] = MappingProxyType({})
     COMPOSITES: Mapping[str, Composite] = MappingProxyType({})
+    #: The keywords a run input fills ITSELF, by the input's name: identifier ->
+    #: the value read off what that input holds. A body that states one wins.
+    FILLED_BY: Mapping[str, Mapping[str, Callable[[Any], Any]]] = MappingProxyType({})
     #: What the module WRITES, by the mnemonic its printouts keyword spells: one
     #: row per variable, and the whole statement - a variable the dictionary
     #: offers and this table does not row is not written.

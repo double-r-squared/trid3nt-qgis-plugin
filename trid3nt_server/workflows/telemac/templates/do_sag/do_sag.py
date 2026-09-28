@@ -49,7 +49,7 @@ _OUTFALL_FRAC = 0.02
 #: WHERE the outfall enters the water: the point the user clicked, else that
 #: fraction along the domain's own centerline. The workflow settles it onto a
 #: node of the accepted mesh before the sheet reads it back.
-_OUTFALL = Placed("outfall", point=PARAMS.outfall_coords, fraction=_OUTFALL_FRAC,
+_OUTFALL = Placed("source", point=PARAMS.outfall_coords, fraction=_OUTFALL_FRAC,
                   label="Outfall")
 
 #: The roughness this deck is solved at, and the law it is read under: Strickler,
@@ -165,11 +165,6 @@ class STEERING(T2D):
     #: carries and the level the outflow holds are the open channel's.
     boundaries = Boundaries(measured=Ref("settled"), tracers=[0.0, _SATURATION_MGL, 0.0, 0.0])
 
-    #: WHERE the outfall enters the water, in the mesh's own metres: the settled
-    #: discharge point, read by position because a point is one value with an
-    #: order. One element per source, in the engine's own positional order.
-    ABSCISSAE_OF_SOURCES = [Ref("outfall.at.0")]
-    ORDINATES_OF_SOURCES = [Ref("outfall.at.1")]
     #: HOW MUCH the outfall discharges, and at what concentration: the
     #: discharge, then every tracer of the one source in the order NAMES OF
     #: TRACERS declares them - DYE, then the three WAQTEL O2 tracers behind it.

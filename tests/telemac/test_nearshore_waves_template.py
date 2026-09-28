@@ -93,13 +93,13 @@ def test_the_boundary_keywords_read_the_slot_by_name():
         nearshore_waves as template)
 
     deck = template.STEERING
-    assert deck.ASSERTED["BOUNDARY_SIGNIFICANT_WAVE_HEIGHT"] == Ref("wave.height_m")
-    assert deck.ASSERTED["BOUNDARY_PEAK_FREQUENCY"] == Ref("wave.peak_frequency_hz")
-    assert deck.ASSERTED["BOUNDARY_MAIN_DIRECTION_1"] == Ref("wave.direction_deg")
+    assert "BOUNDARY_SIGNIFICANT_WAVE_HEIGHT" not in deck.ASSERTED
+    assert "BOUNDARY_PEAK_FREQUENCY" not in deck.ASSERTED
+    assert "BOUNDARY_MAIN_DIRECTION_1" not in deck.ASSERTED
     # The water the depths are counted down from is the tide slot's, as one
     # value: TOMAWAC carries no free surface of its own.
     assert _rows()["level"].role == LEVEL
-    assert deck.ASSERTED["INITIAL_STILL_WATER_LEVEL"] == Ref("level.value")
+    assert "INITIAL_STILL_WATER_LEVEL" not in deck.ASSERTED
 
 
 def test_the_seaward_edge_is_opened_so_the_spectrum_has_somewhere_to_enter():
@@ -220,11 +220,15 @@ def test_the_spectrum_is_recorded_where_the_station_settled():
     from trid3nt_server.workflows.telemac.templates.nearshore_waves import (
         nearshore_waves as template)
 
+    from trid3nt_server.workflows.telemac.modules.sheet import filled_by
+
     asserted = template.STEERING.ASSERTED
-    assert asserted["ABSCISSAE_OF_SPECTRUM_PRINTOUT_POINTS"] == [
-        Ref("station.at.0")]
-    assert asserted["ORDINATES_OF_SPECTRUM_PRINTOUT_POINTS"] == [
-        Ref("station.at.1")]
+    assert "ABSCISSAE_OF_SPECTRUM_PRINTOUT_POINTS" not in asserted
+    assert {(name, tuple(value)) for source, name, value in filled_by(
+        template.STEERING, {"station": {"at": [10.0, 20.0]}})
+        if source == "station"} == {
+        ("ABSCISSAE_OF_SPECTRUM_PRINTOUT_POINTS", (10.0,)),
+        ("ORDINATES_OF_SPECTRUM_PRINTOUT_POINTS", (20.0,))}
     # The spectra are read off the file the deck named, never off the wave field.
     assert asserted["PUNCTUAL_RESULTS_FILE"] != asserted["ED_RESULTS_FILE"]
     read = next(p for p in template.OUTPUTS if p.kind == "spectrum")

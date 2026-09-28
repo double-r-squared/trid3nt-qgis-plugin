@@ -153,11 +153,6 @@ class STEERING(T2D):
     #: when the question does.
     boundaries = Boundaries(measured=Ref("settled"), tracers=[0.0])
 
-    #: WHERE the slug enters the water, in the mesh's own metres: the settled
-    #: release point, read by position because a point is one value with an
-    #: order. One element per source, in the engine's own positional order.
-    ABSCISSAE_OF_SOURCES = [Ref("source.at.0")]
-    ORDINATES_OF_SOURCES = [Ref("source.at.1")]
     #: HOW MUCH enters, and at what concentration: a point discharge small
     #: against the carrier flow, carrying a marker the dilution downstream is
     #: read as a fraction of. A dye question asks WHERE the slug goes and for

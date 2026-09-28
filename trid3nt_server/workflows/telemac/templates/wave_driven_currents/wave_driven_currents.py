@@ -183,9 +183,6 @@ class STEERING(T2D):
         # the waves run toward, which the wave slot's ingestion turns from the
         # one the record publishes.
         TYPE_OF_BOUNDARY_DIRECTIONAL_SPECTRUM=6,
-        BOUNDARY_SIGNIFICANT_WAVE_HEIGHT=Ref("wave.height_m"),
-        BOUNDARY_PEAK_FREQUENCY=Ref("wave.peak_frequency_hz"),
-        BOUNDARY_MAIN_DIRECTION_1=Ref("wave.direction_deg"),
         # BREAKING IS THE FORCING. The longshore current is the gradient of the
         # radiation stress the breaking leaves behind, so a deck without this
         # hands its host a wave field that never loses energy and therefore

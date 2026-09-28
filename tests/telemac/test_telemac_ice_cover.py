@@ -301,4 +301,4 @@ def test_the_inflow_tracer_is_the_record_where_one_measured_a_window():
     where a station on this water served one, and the single reading where none
     did - the choice is the record's, not a branch in the deck."""
     assert template.STEERING.boundaries["tracers"][0] == Ref("observe.forcing")
-    assert template.STEERING.INITIAL_VALUES_OF_TRACERS == [Ref("observe.value")]
+    assert "INITIAL_VALUES_OF_TRACERS" not in template.STEERING.ASSERTED

@@ -156,11 +156,6 @@ class STEERING(T2D):
     #: clean-water value.
     boundaries = Boundaries(measured=Ref("settled"), tracers=[0.0])
 
-    #: WHERE the marker enters the water, in the mesh's own metres: the settled
-    #: release point, read by position because a point is one value with an
-    #: order. One element per source, in the engine's own positional order.
-    ABSCISSAE_OF_SOURCES = [Ref("source.at.0")]
-    ORDINATES_OF_SOURCES = [Ref("source.at.1")]
     #: HOW MUCH enters, small against the carrier flow this deck opens on.
     WATER_DISCHARGE_OF_SOURCES = [8.0]
     #: The concentration the deposited fraction downstream is measured against;

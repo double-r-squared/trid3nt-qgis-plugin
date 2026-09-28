@@ -143,8 +143,8 @@ def test_the_marker_is_stated_as_the_four_source_keywords_by_name():
     """No ``releases`` composite: the deck states WHERE, HOW MUCH and AT WHAT
     CONCENTRATION as the engine's own keywords, one element per source."""
     asserted = _template().STEERING.ASSERTED
-    assert asserted["ABSCISSAE_OF_SOURCES"] == [Ref("source.at.0")]
-    assert asserted["ORDINATES_OF_SOURCES"] == [Ref("source.at.1")]
+    assert "ABSCISSAE_OF_SOURCES" not in asserted
+    assert "ORDINATES_OF_SOURCES" not in asserted
     assert asserted["WATER_DISCHARGE_OF_SOURCES"] == [1.0]
     assert asserted["VALUES_OF_THE_TRACERS_AT_THE_SOURCES"] == [
         100.0, 0.0, 0.0, 0.0, 0.0]

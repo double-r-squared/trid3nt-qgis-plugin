@@ -1192,8 +1192,14 @@ class TelemacWorkflow(Workflow):
         return "; ".join(rows) if rows else "nothing"
 
     def _reads(self) -> set[str]:
-        """Every row name the deck names, off the body's own assertions."""
-        return {ref.root for ref in declared_reads(self.steering.ASSERTED, Ref)}
+        """Every row name the deck names, and every input that fills a keyword
+        of this run's bodies itself."""
+        fills = set(self.steering.FILLED_BY)
+        for body in self.steering.ASSERTED.get("coupling") or ():
+            fills |= set(body.get("filled_by", ()) if isinstance(body, Mapping)
+                         else ())
+        return fills | {ref.root
+                        for ref in declared_reads(self.steering.ASSERTED, Ref)}
 
     def _placed(self) -> tuple[Placed, ...]:
         """Every point this question PLACES, in the order it is first named.

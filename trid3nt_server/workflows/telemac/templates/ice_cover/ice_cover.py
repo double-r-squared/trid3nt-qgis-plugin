@@ -179,13 +179,6 @@ class STEERING(T2D):
     # enough of them that the first freezing night is not the last instant.
     DURATION = 604800.0
 
-    #: WHAT THE WATER OPENS AT. KHIONE declares its own tracers behind this deck,
-    #: and the temperature is the first of them, so the one value written here is
-    #: the measured temperature the whole domain starts at; the frazil and the
-    #: cover behind it open at the engine's own zero, which is water with no ice
-    #: in it yet.
-    INITIAL_VALUES_OF_TRACERS = [Ref("observe.value")]
-
     #: The water arriving at a feeding face is the OPEN water above the reach:
     #: it carries the temperature the sample site measured and no ice at all -
     #: no frazil in suspension, no cover on it. One entry per appended tracer,

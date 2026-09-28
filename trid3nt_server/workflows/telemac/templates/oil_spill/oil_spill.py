@@ -157,11 +157,6 @@ class STEERING(T2D):
     #: boundary carries one clean value.
     boundaries = Boundaries(measured=Ref("settled"), tracers=[0.0])
 
-    #: WHERE the slick enters the water, in the mesh's own metres: the settled
-    #: release point, read by position because a point is one value with an
-    #: order. One element per source, in the engine's own positional order.
-    ABSCISSAE_OF_SOURCES = [Ref("source.at.0")]
-    ORDINATES_OF_SOURCES = [Ref("source.at.1")]
     #: HOW MUCH enters, and at what concentration: a point discharge small
     #: against the carrier flow, at the concentration the dissolved-oil series
     #: is read against. What an oil question states is where the slick goes

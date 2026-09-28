@@ -247,7 +247,7 @@ def _filled(*, keywords=None, **supplied):
     return asyncio.run(fill_sheet(
         steering=_template().STEERING, settled=_SETTLED["keywords"],
         produced={"settled": _SETTLED,
-                  "outfall": {"at": [0.0, 0.0], "name": None}},
+                  "source": {"at": [0.0, 0.0], "name": None}},
         params={row.name: resolved.value_of(row.name)
                 for row in _workflow().params},
         workflow="telemac_do_sag", title="",
