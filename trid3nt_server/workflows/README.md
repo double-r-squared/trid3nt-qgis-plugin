@@ -1,8 +1,9 @@
 # `workflows/` - the declarative library and the engines
 
-A workflow is a declaration: `PARAMS` and `DATA` class bodies plus the steps the
-door builds out of them, which the interpreter walks. `runtime/` is the language
-and the machinery that executes it, `solver/` is the one executor, and each engine package holds the templates that
+A workflow is a declaration: `PARAMS` and `DATA` class bodies over one engine
+module. A fill puts a value into each input, which accepts or rejects it; a
+READY fill launches on an explicit act, and the engine's run is straight-line
+code - write, solve, read. `runtime/` is the library and the machinery that runs it, `solver/` is the one executor, and each engine package holds the templates that
 speak it and the one file that specializes the executor to it.
 
 ## Files
@@ -15,7 +16,7 @@ speak it and the one file that specializes the executor to it.
 
 | folder | what it is |
 | --- | --- |
-| `runtime/` | The declarative library - the value types, the six doors, the interpreter, the skeleton and the run's records. See below. |
+| `runtime/` | The declarative library - the declaration bodies, the fill, the skeleton and the run's records. See below. |
 | `solver/` | The one executor, which knows no engine: `solver.py` (the box - launch, supervise, poll, dispatch-and-wait, download a result), `solve_progress.py` (the live progress heartbeat a long solve emits while it runs), `code_provenance.py` (which code produced a run), `diagnostics/` (the one `read_run_diagnostics` dispatcher plus its per-engine parsers), `corpus.yaml` (routing phrasings). |
 | `telemac/` | The TELEMAC engine: the module wrappers, eight templates over them, the fill/run door, and the one engine file the executor is specialized by. Has its own map. |
 
@@ -29,14 +30,13 @@ speak it and the one file that specializes the executor to it.
 | `runtime/docstring.py` | The registered tool's model-facing docstring, rendered from the declarations in two views (routing, full). |
 | `runtime/domain.py` | The `Domain` environment - the current spatial extent every spatial producer reads implicitly. |
 | `runtime/errors.py` | The library's typed errors, each carrying the code the emitter renders. |
-| `runtime/interpreter.py` | The interpreter: it walks the steps, binds late-bound reads, runs the ledger, and guards against a leaked ref. |
+| `runtime/fill.py` | The fill: each input accepts, rejects with its remedies, is missing, or takes the module's own default; a sourced input is fetched and ingested before it answers. Filling never launches. |
 | `runtime/journal.py` | The run journal - one append-only JSONL line per completed run, plus the note channel a step writes into. |
-| `runtime/ledger.py` | The step ledger: what one invocation may replay and what it may not. |
 | `runtime/levers.py` | The levers the runtime declares ONCE - the mesh resolution, the event time, the compute class - so a template's `PARAMS` keeps only its question's own inputs. |
 | `runtime/params.py` | The `PARAMS` class body: one declared value per row, its door, its bounds, its consequence tag, and the resolved-sheet views. |
-| `runtime/plan.py` | The plan VALUE - steps, refs, modifiers, charts - plus the `Row` descriptor both declaration bodies are built from. |
+| `runtime/reads.py` | Late-bound reads: a template names a value the run has not measured yet, bound when the run holds it. |
 | `runtime/resolution.py` | Resolution sensitivity: which answers a coarse mesh reads wrong, and which way. |
-| `runtime/resolver.py` | The param resolver: the six doors in order, with bounds clamping and a provenance row per resolution. |
+| `runtime/resolver.py` | The param seating: a stated value or the declared default, held to its bounds - a value outside them refuses by name - with a provenance row per seating. |
 | `runtime/run_products.py` | The run's persisted chart spec and metrics, written under its own prefix so the products outlive the turn that emitted them. |
 | `runtime/temporal.py` | The declared temporal transforms - `.resample(...)` and `.normalize(units=...)` - and the conversions behind them. |
-| `runtime/workflow.py` | The workflow SKELETON and the registration factory: normalize, resolve, interpret, post, publish, and the synthesized tool signature. |
+| `runtime/workflow.py` | The workflow SKELETON and the registration factory: fill, launch a READY fill, post, publish, and the synthesized tool signature. |
