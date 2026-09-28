@@ -282,12 +282,12 @@ def fill(source: type | Sheet, *, template: str = "",
     filled = {name: Filled(slot=dictionary[name], value=dictionary[name].check(value),
                            provenance=Provenance(Origin.DERIVED, "the settle"))
               for name, value in (settled or {}).items()
-              if value is not None and name in dictionary
-              and name not in body.ASSERTED}
+              if value is not None and name in dictionary}
+    # A value the template states wins over the settle and the inputs because
+    # standing merges last; a pending one wins in the loop below.
     filled |= {name: Filled(slot=dictionary[name], value=dictionary[name].check(value),
                             provenance=Provenance(Origin.DERIVED, source))
-               for source, name, value in filled_by(body, produced or {})
-               if name not in body.ASSERTED} | standing
+               for source, name, value in filled_by(body, produced or {})} | standing
     files: dict[str, Any] = dict(source.files) if isinstance(source, Sheet) else {}
     for name, (value, provenance) in _in_ref_order(pending):
         if provenance.origin is not Origin.USER:
