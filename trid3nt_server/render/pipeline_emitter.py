@@ -1704,7 +1704,13 @@ class PipelineEmitter:
         Deliberately conservative: an ambiguous shape buckets into
         ``INTERNAL_ERROR`` rather than fabricate a more specific code.
         """
+        from trid3nt_server.tools.fetchers._fetch_common import UpstreamAPIError
+
         message = str(exc) or exc.__class__.__name__
+        # An upstream provider's failure is never ours: it keeps the upstream
+        # code, the source's own code leading the provider's message.
+        if isinstance(exc, UpstreamAPIError):
+            return ("UPSTREAM_API_ERROR", f"[{exc.error_code}] {message}")
         # Subclass-aware bucketing. Order matters -- most specific first.
         if isinstance(exc, ValueError) and "bbox" in message.lower():
             return ("BBOX_INVALID", message)
