@@ -1,7 +1,8 @@
-"""Pooled httpx client and the ONE retry authority for remote-FILE range reads.
+"""Pooled httpx client and the ONE retry authority for every remote read.
 
 One process-wide client reuses connections across every read and every parallel range
-frame. Retry lives here and nowhere else; a caller whose retries were already spent
+frame, and a library that owns its own socket borrows :func:`retried`. Retry
+lives here and nowhere else; a caller whose retries were already spent
 elsewhere uses the un-retried :func:`get_once`."""
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ import logging
 import random
 import threading
 import time
+from typing import Callable, TypeVar
 
 import httpx
 
@@ -22,7 +24,7 @@ logger = logging.getLogger(
 
 __all__ = [
     "get_client", "range_get", "get_bytes", "get_once", "post_bytes", "head",
-    "MAX_RETRIES",
+    "retried", "MAX_RETRIES",
 ]
 
 MAX_RETRIES = 4
@@ -30,6 +32,8 @@ _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 _BACKOFF_BASE = 0.5
 _BACKOFF_CAP = 20.0
 _DEFAULT_TIMEOUT = 60.0
+
+T = TypeVar("T")
 
 _CLIENT: httpx.Client | None = None
 _CLIENT_LOCK = threading.Lock()
@@ -78,6 +82,24 @@ def _sleep_backoff(attempt: int, retry_after: str | None) -> None:
         delay = min(_BACKOFF_BASE * (2 ** attempt), _BACKOFF_CAP)
         delay += random.uniform(0.0, _BACKOFF_BASE)
     time.sleep(delay)
+
+
+def retried(call: Callable[[], T], *, transient: Callable[[Exception], bool],
+            label: str) -> T:
+    """Run ``call`` under this module's attempt budget and backoff, for a library
+    that owns its own socket. ``transient`` names which of its exceptions another
+    attempt may cure; any other raises at once, and the last transient one raises
+    unchanged once the budget is spent, so the caller maps it to its typed error."""
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            return call()
+        except Exception as exc:
+            if attempt == MAX_RETRIES or not transient(exc):
+                raise
+            logger.warning("transport.retried %s attempt=%d: %s: %s",
+                           label, attempt, type(exc).__name__, exc)
+            _sleep_backoff(attempt, None)
+    raise AssertionError("unreachable")
 
 
 def head(client: httpx.Client, url: str) -> httpx.Response:
