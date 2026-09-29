@@ -18,7 +18,7 @@ from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
 
-from ..._router.errors import router_empty_error, router_input_error, router_upstream_error
+from ..._router.errors import router_empty_error, router_input_error
 from ..._router.hooks import register_hook
 
 logger = logging.getLogger(__name__)
@@ -102,17 +102,15 @@ def validate(spec: SourceSpec, params: dict[str, Any]) -> None:
 def _stations(spec: SourceSpec, params: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Site id -> location + the datums the Station record states for it."""
     import dataretrieval.wqp as wqp
-    from dataretrieval.exceptions import DataRetrievalError
 
-    prefix = spec.error_code_prefix
-    try:
-        df, _ = wqp.what_sites(
-            bBox=_bbox_str(params["bbox"]),
-            characteristicName=params["characteristic"],
-            providers="NWIS",
-        )
-    except DataRetrievalError as exc:
-        raise router_upstream_error(prefix, f"WQP Station search failed: {exc}")
+    from ..._router.executors.dataretrieval_delegate import retrieve
+
+    df, _ = retrieve(
+        spec, wqp.what_sites, input_on_400=False,
+        bBox=_bbox_str(params["bbox"]),
+        characteristicName=params["characteristic"],
+        providers="NWIS",
+    )
     out: dict[str, dict[str, Any]] = {}
     if df is None or not len(df):
         return out
@@ -148,24 +146,22 @@ def _samples(spec: SourceSpec, params: dict[str, Any]) -> tuple[dict[tuple[str, 
     dropped-row counts (non-bottom-material medium, non-percent unit,
     unrecognized size-class text) - never folded silently into the count."""
     import dataretrieval.wqp as wqp
-    from dataretrieval.exceptions import DataRetrievalError
 
-    prefix = spec.error_code_prefix
+    from ..._router.executors.dataretrieval_delegate import retrieve
+
     window: dict[str, str] = {}
     if params.get("start_date"):
         window["startDateLo"] = str(params["start_date"])
     if params.get("end_date"):
         window["startDateHi"] = str(params["end_date"])
-    try:
-        df, _ = wqp.get_results(
-            bBox=_bbox_str(params["bbox"]),
-            characteristicName=params["characteristic"],
-            providers="NWIS",
-            dataProfile="resultPhysChem",
-            **window,
-        )
-    except DataRetrievalError as exc:
-        raise router_upstream_error(prefix, f"WQP Result search failed: {exc}")
+    df, _ = retrieve(
+        spec, wqp.get_results, input_on_400=False,
+        bBox=_bbox_str(params["bbox"]),
+        characteristicName=params["characteristic"],
+        providers="NWIS",
+        dataProfile="resultPhysChem",
+        **window,
+    )
 
     groups: dict[tuple[str, str], dict[str, Any]] = {}
     dropped_medium = dropped_unit = dropped_basis = 0
