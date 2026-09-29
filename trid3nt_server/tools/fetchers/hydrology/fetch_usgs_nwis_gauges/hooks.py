@@ -14,7 +14,7 @@ from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
 
-from ..._router.errors import router_empty_error, router_input_error, router_upstream_error
+from ..._router.errors import router_empty_error, router_input_error
 from ..._router.hooks import register_hook
 
 __all__ = ["resolve", "read"]
@@ -154,14 +154,6 @@ def _selector_kwargs(state_code: str | None, bbox: list[float] | None) -> dict[s
     return {"bBox": f"{w},{s},{e},{n}"}
 
 
-def _map_http_error(spec: SourceSpec, exc: Exception) -> None:
-    prefix = spec.error_code_prefix
-    status = getattr(exc, "status_code", None)
-    if status == 400:
-        raise router_input_error(prefix, f"upstream rejected the request (HTTP 400): {exc}", spec.input_error_suffix)
-    raise router_upstream_error(prefix, f"{type(exc).__name__}: {exc}")
-
-
 def _number(raw: Any) -> float | None:
     """A site field as a float, or None. A frame column with any missing cell holds
     NaN where the record published nothing, and NaN is not a datum."""
@@ -247,7 +239,8 @@ def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[
     degrades to the station locations; both empty is the honest no-stations
     refusal."""
     import dataretrieval.nwis as nwis
-    from dataretrieval.exceptions import DataRetrievalError
+
+    from ..._router.executors.dataretrieval_delegate import retrieve
 
     sc = spec.error_code_prefix
     sel = _selector_kwargs(params.get("state_code"), params.get("bbox"))
@@ -261,20 +254,14 @@ def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[
         window_kwargs["start"] = str(window[0])
         window_kwargs["end"] = str(window[1])
 
-    try:
-        iv_df, _md = nwis.get_iv(
-            parameterCd=parameter_cd, siteStatus="active", multi_index=False,
-            **sel, **window_kwargs,
-        )
-    except DataRetrievalError as exc:
-        _map_http_error(spec, exc)
-    try:
-        site_df, _md2 = nwis.get_info(
-            parameterCd=parameter_cd, siteStatus="active", hasDataTypeCd="iv",
-            siteOutput="expanded", **sel,
-        )
-    except DataRetrievalError as exc:
-        _map_http_error(spec, exc)
+    iv_df, _md = retrieve(
+        spec, nwis.get_iv, parameterCd=parameter_cd, siteStatus="active",
+        multi_index=False, **sel, **window_kwargs,
+    )
+    site_df, _md2 = retrieve(
+        spec, nwis.get_info, parameterCd=parameter_cd, siteStatus="active",
+        hasDataTypeCd="iv", siteOutput="expanded", **sel,
+    )
 
     readings = _readings_by_site(iv_df, parameter_cd, mode)
 
