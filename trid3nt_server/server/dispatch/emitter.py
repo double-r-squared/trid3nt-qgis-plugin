@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetchers._fetch_common import UpstreamAPIError
 from trid3nt_server.tools.tool_arg_normalizer import autofill_missing_bbox, normalize_args
 from trid3nt_server.render.pipeline_emitter import PipelineEmitter, bind_turn_case
 from trid3nt_server.render.uri_registry import activate_registry, deactivate_registry, get_uri_registry
@@ -906,12 +907,14 @@ async def _dispatch_tool_and_persist(
             # ``error_code`` is a CLOSED set, so a tool's own code is passed
             # through only when it is already valid; otherwise the code LEADS
             # the message as a ``[MARKER]`` under INTERNAL_ERROR - honest and
-            # greppable, with no enum widening. A valid upstream-provider code
-            # passes through un-internalized.
+            # greppable. An upstream provider's failure is never ours: it goes
+            # out under UPSTREAM_API_ERROR with its own code leading the message.
             tool_code = getattr(exc, "error_code", None) or "TOOL_EXECUTION_FAILED"
             retryable = bool(getattr(exc, "retryable", False))
             if tool_code in _VALID_ERROR_CODES:
                 wire_code, message = tool_code, str(exc)
+            elif isinstance(exc, UpstreamAPIError):
+                wire_code, message = "UPSTREAM_API_ERROR", f"[{tool_code}] {exc}"
             else:
                 wire_code, message = "INTERNAL_ERROR", f"[{tool_code}] {exc}"
             logger.exception(
