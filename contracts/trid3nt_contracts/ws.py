@@ -99,6 +99,9 @@ ErrorCode = Literal[
     "AUTH_FAILED",
     "RATE_LIMITED",
     "INTERNAL_ERROR",
+    # An upstream data provider failed past the fetch's retries. Its own
+    # message rides verbatim; it is the provider's fault, never ours.
+    "UPSTREAM_API_ERROR",
     "LLM_UNAVAILABLE",
     "TOOL_NOT_FOUND",
     "TOOL_PARAMS_INVALID",
