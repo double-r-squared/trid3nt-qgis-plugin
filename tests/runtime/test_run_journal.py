@@ -266,3 +266,19 @@ def test_the_run_s_own_line_carries_the_fill_and_the_correct_end_its_solve_step_
     assert written[0]["correct_end"] is False
     assert written[0]["fill"]["TIME_STEP"] == {
         "value": 0.5, "from": "derived: settled.time_step_s"}
+
+
+def test_the_run_journals_the_mesh_its_mesh_step_returned(monkeypatch):
+    from trid3nt_server.workflows.runtime.workflow import RunResult, Workflow
+
+    lines: list = []
+    monkeypatch.setattr(journal, "append_record", lines.append)
+    skeleton = SimpleNamespace(engine="telemac", _module=lambda run: None,
+                               _fill=lambda run: {},
+                               _correct_end=lambda run: None)
+    run = RunResult(value=None, results={"mesh": {"key": "5f4d1a42f53e",
+                                                  "built_by": "RUN1"}})
+    Workflow._journal(skeleton, "RUN2", run,
+                      SimpleNamespace(mesh_size_m=30.0), 1.0)
+    assert lines[0]["mesh"] == {"mesh_size_m": 30.0, "key": "5f4d1a42f53e",
+                                "built_by": "RUN1"}
