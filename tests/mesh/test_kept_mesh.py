@@ -6,6 +6,7 @@ import asyncio
 
 import pytest
 
+from trid3nt_server.inputs.domain import Domain
 from trid3nt_server.mesh import step as mesh_step
 from trid3nt_server.mesh.artifact import MeshArtifact
 from trid3nt_server.workflows.runtime import journal
@@ -37,6 +38,24 @@ def test_a_changed_bed_or_resolution_is_a_new_key(tmp_path):
     key = mesh_step.mesh_key(_recipe(bed))
     assert mesh_step.mesh_key(_recipe(other)) != key
     assert mesh_step.mesh_key(_recipe(bed, resolution_m=10.0)) != key
+
+
+def _cut(source: str, *, east: float = 1.0) -> Domain:
+    ring = [[0, 0], [east, 0], [east, 1], [0, 0]]
+    return Domain(geometry={"type": "Polygon", "coordinates": [ring]},
+                  name="nhdplus_nldi", uri=source)
+
+
+def test_a_domain_enters_by_its_geometry_never_by_the_file_it_was_cut_from(
+        tmp_path):
+    bed = _file(tmp_path, "bed.tif", b"elevations")
+    flowline = _file(tmp_path, "flowline.fgb", b"one reach")
+    other = _file(tmp_path, "flowline_again.fgb", b"the reach fetched again")
+    recipe = {**_recipe(bed), "extent": _cut(flowline)}
+    again = {**_recipe(bed), "extent": _cut(other)}
+    assert mesh_step.mesh_key(recipe) == mesh_step.mesh_key(again)
+    wider = {**_recipe(bed), "extent": _cut(flowline, east=2.0)}
+    assert mesh_step.mesh_key(wider) != mesh_step.mesh_key(recipe)
 
 
 @pytest.fixture
@@ -75,6 +94,7 @@ def test_the_second_run_reuses_the_kept_mesh_and_says_which(built, tmp_path):
     again = _build(_recipe(_file(tmp_path, "bed_again.tif", b"elevations")))
     notes = journal.drain_notes(token)
     assert built == [1] and again["mesh_id"] == "m1"
+    assert again["built_by"] == "RUN1"
     assert any(first["key"] in note and "RUN1" in note for note in notes)
     asyncio.run(mesh_step.keep_mesh(again, "RUN2"))
     token = journal.bind_notes()
@@ -89,5 +109,8 @@ def test_a_friction_change_leaves_the_key_and_restart_clean_rebuilds(built,
     asyncio.run(mesh_step.keep_mesh(first, "RUN1"))
     assert _build(_recipe(bed, friction=45.0))["key"] == first["key"]
     assert built == [1]
+    token = journal.bind_notes()
     _build(_recipe(bed), fresh=True)
     assert built == [1, 1]
+    assert any(first["key"] in note and "restart_clean" in note
+               for note in journal.drain_notes(token))
