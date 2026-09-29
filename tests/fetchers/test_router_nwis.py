@@ -297,3 +297,76 @@ def test_a_transport_404_carries_its_own_non_retryable_verdict(spec, monkeypatch
         http_json._get(bare, hooks.RequestPlan(url="https://example.invalid/x"))
     assert ei.value.error_code.endswith("_UPSTREAM_ERROR")
     assert ei.value.retryable is False
+
+
+def _flaky(calls, failures, result):
+    def _call(**_kwargs):
+        calls.append(1)
+        if failures:
+            raise failures.pop(0)
+        return result
+    return _call
+
+
+@pytest.fixture
+def no_sleep(monkeypatch):
+    from trid3nt_server.tools.fetchers._router.transport import client
+    slept = []
+    monkeypatch.setattr(client, "_sleep_backoff", lambda attempt, _hint: slept.append(attempt))
+    return slept
+
+
+def test_a_reset_then_success_is_one_call_that_succeeds(spec, nwis_calls, no_sleep, monkeypatch):
+    import dataretrieval.nwis as nwis
+    from dataretrieval.exceptions import NetworkError
+    calls = []
+    reset = NetworkError("Could not reach waterservices.usgs.gov/nwis/iv (Connection reset by peer)")
+    monkeypatch.setattr(nwis, "get_iv", _flaky(calls, [reset], (nwis_calls["iv_df"], None)))
+    feats = nwis_hooks.read(spec, {"bbox": [-77.9, 38.9, -77.0, 39.1]}, timeout_s=5.0)
+    assert feats and len(calls) == 2 and no_sleep == [0]
+
+
+def test_a_503_then_success_succeeds(spec, nwis_calls, no_sleep, monkeypatch):
+    import dataretrieval.nwis as nwis
+    calls = []
+    down = ServiceUnavailable("HTTP 503 (URL: https://waterservices.usgs.gov/nwis/site?)", status_code=503)
+    monkeypatch.setattr(nwis, "get_info", _flaky(calls, [down], (nwis_calls["site_df"], None)))
+    feats = nwis_hooks.read(spec, {"bbox": [-77.9, 38.9, -77.0, 39.1]}, timeout_s=5.0)
+    assert feats and len(calls) == 2
+
+
+def test_a_lasting_timeout_is_the_upstream_error_after_every_attempt(spec, no_sleep, monkeypatch):
+    import dataretrieval.nwis as nwis
+    from dataretrieval.exceptions import NetworkError
+    from trid3nt_server.tools.fetchers._fetch_common import UpstreamAPIError
+    from trid3nt_server.tools.fetchers._router.transport.client import MAX_RETRIES
+    said = ("Could not reach the service at https://waterservices.usgs.gov/nwis/iv: "
+            "_ssl.c:993: The handshake operation timed out")
+    calls = []
+    monkeypatch.setattr(nwis, "get_iv", _flaky(calls, [NetworkError(said)] * 99, None))
+    with pytest.raises(UpstreamAPIError) as ei:
+        nwis_hooks.read(spec, {"bbox": [-77.9, 38.9, -77.0, 39.1]}, timeout_s=5.0)
+    assert len(calls) == MAX_RETRIES + 1 == 5
+    assert ei.value.error_code == "NWIS_GAUGES_UPSTREAM_ERROR" and ei.value.retryable
+    assert str(ei.value) == f"NetworkError: {said}"
+
+
+def test_a_404_is_not_retried(spec, no_sleep, monkeypatch):
+    import dataretrieval.nwis as nwis
+    calls = []
+    monkeypatch.setattr(nwis, "get_iv", _flaky(calls, [HTTPError("HTTP 404", status_code=404)], None))
+    with pytest.raises(Exception) as ei:
+        nwis_hooks.read(spec, {"bbox": [-77.9, 38.9, -77.0, 39.1]}, timeout_s=5.0)
+    assert len(calls) == 1 and no_sleep == []
+    assert ei.value.error_code == "NWIS_GAUGES_UPSTREAM_ERROR" and ei.value.retryable is False
+
+
+def test_a_lasting_upstream_failure_reaches_the_step_and_the_wire_as_upstream():
+    from trid3nt_server.render.pipeline_emitter import PipelineEmitter
+    from trid3nt_server.server.dispatch.persist import _VALID_ERROR_CODES
+    from trid3nt_server.tools.fetchers._router.errors import router_upstream_error
+    exc = router_upstream_error("NWIS_GAUGES", "NetworkError: Could not reach waterservices.usgs.gov/nwis/iv")
+    code, message = PipelineEmitter._classify_exception(None, exc)
+    assert (code, message) == ("UPSTREAM_API_ERROR", "[NWIS_GAUGES_UPSTREAM_ERROR] NetworkError: "
+                               "Could not reach waterservices.usgs.gov/nwis/iv")
+    assert "UPSTREAM_API_ERROR" in _VALID_ERROR_CODES
