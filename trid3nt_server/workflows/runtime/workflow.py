@@ -360,6 +360,7 @@ class Workflow:
             origin=journal.run_origin(live_session=current_emitter() is not None),
             notes=list(notes), outputs=run.outputs, keywords=run.keywords,
             supplied=dict(supplied or {}), sources=run.choices,
+            mesh=run.results.get("mesh"),
         ))
 
 
