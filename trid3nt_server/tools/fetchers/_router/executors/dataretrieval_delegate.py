@@ -8,18 +8,19 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Any
+from typing import Any, Callable
 
 from trid3nt_contracts.source_spec import SourceSpec
 
 from ..errors import router_empty_error, router_input_error, router_upstream_error
+from ..transport.client import retried
 from .vector_fgb import features_to_fgb_bytes
 
 logger = logging.getLogger(
     "trid3nt_server.tools.fetchers._router.executors.dataretrieval_delegate"
 )
 
-__all__ = ["execute", "pre_validate", "wqp_features", "nldi_features"]
+__all__ = ["execute", "pre_validate", "retrieve", "wqp_features", "nldi_features"]
 
 #: CONUS envelope and the flowline cap for the navigate service.
 _NLDI_CONUS: tuple[float, float, float, float] = (-130.0, 20.0, -60.0, 55.0)
@@ -72,15 +73,28 @@ def pre_validate(spec: SourceSpec, params: dict[str, Any]) -> None:
 
 
 
-def _map_http_error(spec: SourceSpec, exc: Exception, *, input_on_400: bool = True) -> None:
-    """Re-raise a ``dataretrieval`` exception as a router error: an HTTP 400 is a bad
-    request and maps to a non-retryable input error; every other HTTP, network or
-    transient failure maps to a retryable upstream error, provider reason verbatim."""
-    prefix = spec.error_code_prefix
-    status = getattr(exc, "status_code", None)
-    if input_on_400 and status == 400:
-        raise router_input_error(prefix, f"upstream rejected the request (HTTP 400): {exc}", spec.input_error_suffix)
-    raise router_upstream_error(prefix, f"{type(exc).__name__}: {exc}")
+def retrieve(spec: SourceSpec, call: Callable[..., Any], *, input_on_400: bool = True,
+             **kwargs: Any) -> Any:
+    """Call one ``dataretrieval`` function under the shared transport's retry: a
+    failed connection (reset, timeout, TLS handshake), a 429 or a 5xx is tried again,
+    any other status is not. What outlasts the retries is a typed upstream error with
+    the provider's own message verbatim, which names its host; an HTTP 400 is the
+    caller's bad request and a non-retryable input error when ``input_on_400``."""
+    from dataretrieval.exceptions import DataRetrievalError, NetworkError, TransientError
+
+    def transient(exc: Exception) -> bool:
+        return isinstance(exc, (NetworkError, TransientError))
+
+    try:
+        return retried(lambda: call(**kwargs), transient=transient,
+                       label=f"{spec.name} {getattr(call, '__name__', call)}")
+    except DataRetrievalError as exc:
+        prefix = spec.error_code_prefix
+        if input_on_400 and getattr(exc, "status_code", None) == 400:
+            raise router_input_error(prefix, f"upstream rejected the request (HTTP 400): {exc}",
+                                     spec.input_error_suffix) from exc
+        raise router_upstream_error(prefix, f"{type(exc).__name__}: {exc}",
+                                    retryable=transient(exc)) from exc
 
 
 def _point_feature(lon: float, lat: float, props: dict[str, Any]) -> dict[str, Any]:
@@ -169,7 +183,6 @@ def _wqp_date(valid_time: Any) -> dict[str, str]:
 def wqp_features(spec: SourceSpec, params: dict[str, Any]) -> list[dict[str, Any]]:
     """Build the WQP point features (Station left-join latest Result)."""
     import dataretrieval.wqp as wqp
-    from dataretrieval.exceptions import DataRetrievalError
 
     prefix = spec.error_code_prefix
     bbox = params.get("bbox")
@@ -196,15 +209,11 @@ def wqp_features(spec: SourceSpec, params: dict[str, Any]) -> list[dict[str, Any
     window = _wqp_date(params.get("valid_time"))
 
     # 1. Station service -- the authoritative monitoring-location locations.
-    try:
-        sites_df, _ = wqp.what_sites(bBox=bbstr, characteristicName=characteristic,
-                                     **window)
-    except DataRetrievalError as exc:
-        _map_http_error(spec, exc)
+    sites_df, _ = retrieve(spec, wqp.what_sites, bBox=bbstr,
+                           characteristicName=characteristic, **window)
 
     stations: dict[str, dict[str, Any]] = {}
     if sites_df is not None and len(sites_df):
-        scols = set(sites_df.columns)
         for row in sites_df.itertuples(index=False):
             rd = row._asdict()
             site_id = _str_or_none(rd.get("MonitoringLocationIdentifier"))
@@ -237,13 +246,9 @@ def wqp_features(spec: SourceSpec, params: dict[str, Any]) -> list[dict[str, Any
         )
 
     # 3. Result service -- latest numeric sample per site (best-effort decoration).
-    try:
-        res_df, _ = wqp.get_results(
-            bBox=bbstr, characteristicName=characteristic,
-            dataProfile="resultPhysChem", **window
-        )
-    except DataRetrievalError as exc:
-        _map_http_error(spec, exc)
+    res_df, _ = retrieve(spec, wqp.get_results, bBox=bbstr,
+                         characteristicName=characteristic,
+                         dataProfile="resultPhysChem", **window)
     results = _latest_results_by_site(res_df)
 
     # 4. Left-join: one record per station; latest result decorates (or nulls).
@@ -285,15 +290,11 @@ def wqp_features(spec: SourceSpec, params: dict[str, Any]) -> list[dict[str, Any
 def _nldi_snap(spec: SourceSpec, lon: float, lat: float) -> int:
     """Snap (lon, lat) to the nearest NHDPlus COMID via NLDI /comid/position."""
     import dataretrieval.nldi as nldi
-    from dataretrieval.exceptions import DataRetrievalError
 
     prefix = spec.error_code_prefix
-    try:
-        gf = nldi.get_features(lat=lat, long=lon)
-    except DataRetrievalError as exc:
-        # NLDI /comid/position 404s or errors an off-network point; any HTTPError on
-        # the snap call is a typed upstream error.
-        raise router_upstream_error(prefix, f"{type(exc).__name__}: {exc}")
+    # NLDI /comid/position 404s or errors an off-network point; any HTTP error on
+    # the snap call is a typed upstream error.
+    gf = retrieve(spec, nldi.get_features, input_on_400=False, lat=lat, long=lon)
     if gf is None or len(gf) == 0 or "comid" not in getattr(gf, "columns", []):
         raise router_empty_error(
             prefix,
@@ -310,7 +311,6 @@ def _nldi_snap(spec: SourceSpec, lon: float, lat: float) -> int:
 def nldi_features(spec: SourceSpec, params: dict[str, Any]) -> list[dict[str, Any]]:
     """Build the NLDI flowline LineString features (seed_point XOR comid)."""
     import dataretrieval.nldi as nldi
-    from dataretrieval.exceptions import DataRetrievalError
 
     prefix = spec.error_code_prefix
     sfx = spec.input_error_suffix
@@ -343,21 +343,19 @@ def nldi_features(spec: SourceSpec, params: dict[str, Any]) -> list[dict[str, An
 
     # Navigate the connected flowlines: get_flowlines(as_json) returns the raw NLDI
     # GeoJSON FeatureCollection, LineStrings tagged with nhdplus_comid.
-    try:
-        fc = nldi.get_flowlines(
-            navigation_mode=str(direction),
-            # The distance travels as the FLOAT it was declared as. Rounding it
-            # to a whole kilometre is not a rounding at all below 1 km: NLDI
-            # returns whole reaches until the cumulative distance is EXCEEDED, so
-            # a 0.5 km ask rounded to 0 returns the seed reach alone - one
-            # flowline where the ask means four, and a shorter river than the
-            # caller asked to model. NLDI accepts the fraction.
-            distance=float(distance_km),
-            comid=seed_comid,
-            as_json=True,
-        )
-    except DataRetrievalError as exc:
-        raise router_upstream_error(prefix, f"{type(exc).__name__}: {exc}")
+    fc = retrieve(
+        spec, nldi.get_flowlines, input_on_400=False,
+        navigation_mode=str(direction),
+        # The distance travels as the FLOAT it was declared as. Rounding it
+        # to a whole kilometre is not a rounding at all below 1 km: NLDI
+        # returns whole reaches until the cumulative distance is EXCEEDED, so
+        # a 0.5 km ask rounded to 0 returns the seed reach alone - one
+        # flowline where the ask means four, and a shorter river than the
+        # caller asked to model. NLDI accepts the fraction.
+        distance=float(distance_km),
+        comid=seed_comid,
+        as_json=True,
+    )
 
     raw_feats = (fc or {}).get("features", []) if isinstance(fc, dict) else []
     # A raw-empty navigate is a typed EMPTY; a raw-non-empty result whose features
