@@ -61,13 +61,19 @@ async def build_declared_mesh(*, mesh: dict[str, Any], name: Any = None,
                     art.mesh_id, art.node_count, art.element_count)
         return mesh_record(art)
     key = await asyncio.to_thread(mesh_key, mesh)
-    kept = None if fresh else await _kept(key)
+    kept = await _kept(key)
     if kept is not None:
         art, run = kept
-        journal_note(f"the mesh kept under content key {key} is reused, built "
-                     f"by run {run or 'that did not reach its solve'}: nothing "
-                     "the mesher reads has changed")
-        return {**mesh_record(art), "key": key, "reused": True}
+        builder = run or "that did not reach its solve"
+        if fresh:
+            journal_note(f"a mesh is kept under content key {key}, built by run "
+                         f"{builder}; restart_clean builds it again")
+        else:
+            journal_note(f"the mesh kept under content key {key} is reused, "
+                         f"built by run {builder}: nothing the mesher reads has "
+                         "changed")
+            return {**mesh_record(art), "key": key, "reused": True,
+                    "built_by": run}
     recipe = recipe_from_plan_value(mesh)
     session = await asyncio.to_thread(
         MeshSession, recipe, case_id=current_turn_case(),
@@ -84,7 +90,8 @@ async def build_declared_mesh(*, mesh: dict[str, Any], name: Any = None,
 def mesh_key(recipe: Mapping[str, Any]) -> str:
     """The CONTENT key of a bound recipe: the domain's geometry, the bytes of
     every file the mesher reads, the resolution, the mesher and its own ops.
-    A file enters by what it holds, never by its name or uri."""
+    A file enters by what it holds, never by its name or uri; an object that
+    holds its own fields enters by them, its ``uri`` only where it came from."""
     blob = json.dumps(_content(recipe), sort_keys=True, default=str)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:24]
 
@@ -99,15 +106,16 @@ def _content(value: Any) -> Any:
                 if str(k) not in _NAMING}
     if isinstance(value, (list, tuple, set, frozenset)):
         return [_content(v) for v in value]
+    fields = getattr(type(value), "__dataclass_fields__", None)
+    if fields:
+        return _content({name: getattr(value, name) for name in fields
+                         if name != "uri"})
     uri = getattr(value, "uri", None)
     if isinstance(uri, str) and _is_file(uri):
         return {"bytes": _file_digest(uri)}
     dump = getattr(value, "model_dump", None)
     if callable(dump):
         return _content(dump(mode="json"))
-    fields = getattr(type(value), "__dataclass_fields__", None)
-    if fields:
-        return _content({name: getattr(value, name) for name in fields})
     return {"is": f"{type(value).__module__}.{type(value).__name__}"}
 
 
