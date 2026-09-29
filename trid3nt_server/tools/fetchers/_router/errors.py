@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .._fetch_common import FetchError
+from .._fetch_common import FetchError, UpstreamAPIError
 
 __all__ = [
     "RouterError",
@@ -41,7 +41,7 @@ class RouterInputError(RouterError):
     retryable = False
 
 
-class RouterUpstreamError(RouterError):
+class RouterUpstreamError(RouterError, UpstreamAPIError):
     """Upstream endpoint open / read / parse / serialize failed (retryable)."""
 
     error_code = "ROUTER_UPSTREAM_ERROR"
