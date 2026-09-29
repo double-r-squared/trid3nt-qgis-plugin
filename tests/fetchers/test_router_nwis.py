@@ -370,3 +370,31 @@ def test_a_lasting_upstream_failure_reaches_the_step_and_the_wire_as_upstream():
     assert (code, message) == ("UPSTREAM_API_ERROR", "[NWIS_GAUGES_UPSTREAM_ERROR] NetworkError: "
                                "Could not reach waterservices.usgs.gov/nwis/iv")
     assert "UPSTREAM_API_ERROR" in _VALID_ERROR_CODES
+
+
+@pytest.mark.asyncio
+async def test_a_lasting_upstream_failure_on_the_invoke_path_goes_out_as_upstream(monkeypatch):
+    import json
+    from trid3nt_contracts import new_ulid
+    from trid3nt_server.server import SessionState
+    from trid3nt_server.server.dispatch import emitter
+    from trid3nt_server.tools.fetchers._router.errors import router_upstream_error
+
+    async def _raise(*_args):
+        raise router_upstream_error("NWIS_GAUGES", "NetworkError: Could not reach waterservices.usgs.gov")
+
+    class _Socket:
+        def __init__(self):
+            self.sent = []
+
+        async def send(self, msg):
+            self.sent.append(json.loads(msg))
+
+    monkeypatch.setattr(emitter, "_invoke_tool_via_emitter", _raise)
+    sock = _Socket()
+    await emitter._dispatch_tool_and_persist(sock, SessionState(session_id=new_ulid()),
+                                             "fetch_usgs_nwis_gauges", {}, "/invoke")
+    [err] = [m["payload"] for m in sock.sent if m.get("type") == "error"]
+    assert err["error_code"] == "UPSTREAM_API_ERROR" and err["retryable"] is True
+    assert err["message"] == ("[NWIS_GAUGES_UPSTREAM_ERROR] NetworkError: "
+                              "Could not reach waterservices.usgs.gov")
