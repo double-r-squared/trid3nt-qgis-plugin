@@ -129,3 +129,28 @@ def test_read_with_no_surviving_sample_refuses_by_name(spec, monkeypatch):
 def test_the_source_is_found_through_its_class(class_routes_to_the_match):
     """A covered fetcher carries no corpus: its class is the door."""
     class_routes_to_the_match("bed material", "fetch_nwis_bed_material")
+
+
+def test_a_reset_on_the_station_call_and_a_503_on_the_result_call_are_each_tried_again(spec, monkeypatch):
+    import dataretrieval.wqp as wqp
+    from dataretrieval.exceptions import NetworkError, ServiceUnavailable
+    from trid3nt_server.tools.fetchers._router.transport import client
+
+    monkeypatch.setattr(client, "_sleep_backoff", lambda *_: None)
+    calls = {"what_sites": 0, "get_results": 0}
+
+    def _once_then(name, failure, result):
+        def _call(**_kw):
+            calls[name] += 1
+            if calls[name] == 1:
+                raise failure
+            return result
+        return _call
+
+    monkeypatch.setattr(wqp, "what_sites", _once_then(
+        "what_sites", NetworkError("Could not reach www.waterqualitydata.us"), (_station_df(), None)))
+    monkeypatch.setattr(wqp, "get_results", _once_then(
+        "get_results", ServiceUnavailable("HTTP 503", status_code=503),
+        (_result_df([_result_row("USGS-11304810", "A1", "< 2 mm", 100)]), None)))
+    assert len(nb.read(spec, _params(), timeout_s=30.0)) == 1
+    assert calls == {"what_sites": 2, "get_results": 2}
