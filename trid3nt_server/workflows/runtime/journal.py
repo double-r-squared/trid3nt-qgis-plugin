@@ -211,7 +211,8 @@ def build_record(*, run_id: str | None, engine: str | None,
                  keywords: Mapping[str, Any] | None = None,
                  supplied: Mapping[str, Any] | None = None,
                  sources: Sequence[Any] = (),
-                 outputs: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
+                 outputs: Sequence[Mapping[str, Any]] = (),
+                 mesh: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """One run record, from what the publish stage already holds."""
     return {
         "run_id": run_id,
@@ -242,7 +243,11 @@ def build_record(*, run_id: str | None, engine: str | None,
         "fill": {name: {"value": _small(row.get("value")), "from": row.get("from")}
                  for name, row in (fill or {}).items()},
         "correct_end": correct_end,
-        "mesh": {"mesh_size_m": getattr(result, "mesh_size_m", None)},
+        # THE MESH'S CONTENT KEY, and on a reuse the run that built it, so a
+        # rebuild of an unchanged mesh is read off two lines side by side.
+        "mesh": {"mesh_size_m": getattr(result, "mesh_size_m", None),
+                 **{k: mesh.get(k) if isinstance(mesh, Mapping) else None
+                    for k in ("key", "built_by")}},
         "cores": next((r.value for r in sheet
                        if getattr(r, "name", "") == "cores"), None),
         "wall_seconds": wall_seconds,
