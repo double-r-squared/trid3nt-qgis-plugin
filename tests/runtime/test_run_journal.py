@@ -99,7 +99,14 @@ def test_the_record_carries_the_provenance_the_mesh_and_the_wall_time():
                                   "basis": "fetched",
                                   "note": "NWM cycle 2026-08-19T00Z",
                                   "real_source": "national_water_model"}]
-    assert rec["mesh"] == {"mesh_size_m": 30.0}
+    assert rec["mesh"] == {"mesh_size_m": 30.0, "key": None, "built_by": None}
+
+
+def test_the_mesh_field_carries_the_content_key_and_the_run_that_built_it():
+    rec = _record(mesh={"key": "54a874e9df6e", "built_by": "RUN1",
+                        "artifact": object()})
+    assert rec["mesh"] == {"mesh_size_m": 30.0, "key": "54a874e9df6e",
+                           "built_by": "RUN1"}
     assert rec["wall_seconds"] == 91.4
 
 
