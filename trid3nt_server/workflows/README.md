@@ -10,7 +10,7 @@ speak it and the one file that specializes the executor to it.
 
 | file | what it is |
 | --- | --- |
-| `__init__.py` | The package door: workflows compose atomic tools into deterministic, LLM-free chains. |
+| `__init__.py` | Exports nothing; importing it registers the TELEMAC engine's local solve specs. |
 
 ## Subfolders
 
@@ -18,7 +18,7 @@ speak it and the one file that specializes the executor to it.
 | --- | --- |
 | `runtime/` | The declarative library - the declaration bodies, the fill, the skeleton and the run's records. See below. |
 | `solver/` | The one executor, which knows no engine: `solver.py` (the box - launch, supervise, poll, dispatch-and-wait, download a result), `solve_progress.py` (the live progress heartbeat a long solve emits while it runs), `code_provenance.py` (which code produced a run), `diagnostics/` (the one `read_run_diagnostics` dispatcher plus its per-engine parsers), `corpus.yaml` (routing phrasings). |
-| `telemac/` | The TELEMAC engine: the module wrappers, eight templates over them, the fill/run door, and the one engine file the executor is specialized by. Has its own map. |
+| `telemac/` | The TELEMAC engine: the module wrappers, the templates over them, the code that fills a template, holds it for review and runs it, and the one engine file the executor is specialized by. Has its own map. |
 
 ## `runtime/` - the declarative library
 
