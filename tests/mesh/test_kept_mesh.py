@@ -12,7 +12,7 @@ from trid3nt_server.mesh.artifact import MeshArtifact
 from trid3nt_server.workflows.runtime import journal
 
 
-def _recipe(bed: str, *, resolution_m: float = 20.0, friction: float | None = None):
+def _recipe(bed: str, *, resolution_m: float = 20.0):
     domain = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]}
     return {"mesher": "om2d", "kind": "unstructured_tri",
             "extent": {"geometry": domain, "name": "domain seed 91"},
@@ -102,15 +102,42 @@ def test_the_second_run_reuses_the_kept_mesh_and_says_which(built, tmp_path):
     assert any("RUN1" in note for note in journal.drain_notes(token))
 
 
-def test_a_friction_change_leaves_the_key_and_restart_clean_rebuilds(built,
-                                                                     tmp_path):
+def _run_recipe(monkeypatch, bed: str, friction: float) -> dict:
+    """The recipe the run hands its mesh stage, off a fill stating ``friction``."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows.runtime import resolve_params
+    from trid3nt_server.workflows.runtime.fill import Fill, production
+
+    workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
+    seen: list = []
+
+    async def _stop(*, mesh, **_kw):
+        seen.append(mesh)
+        raise LookupError("the recipe is all this test reads")
+
+    state = Fill(workflow=workflow, keywords={"FRICTION_COEFFICIENT": friction},
+                 params=asyncio.run(resolve_params(workflow.params, {})))
+    env = production(state)
+    env.artifacts.update(domain=_cut(bed), bed=bed)
+    with monkeypatch.context() as patch:
+        patch.setattr(mesh_step, "build_declared_mesh", _stop)
+        with pytest.raises(Exception, match="the recipe is all this test reads"):
+            asyncio.run(workflow.launch(state))
+    return seen[0]
+
+
+def test_a_friction_change_leaves_the_key_and_restart_clean_rebuilds(
+        built, monkeypatch, tmp_path):
     bed = _file(tmp_path, "bed.tif", b"elevations")
-    first = _build(_recipe(bed))
+    recipe = _run_recipe(monkeypatch, bed, 33.0)
+    assert mesh_step.mesh_key(_run_recipe(monkeypatch, bed, 45.0)) == \
+        mesh_step.mesh_key(recipe)
+    first = _build(recipe)
     asyncio.run(mesh_step.keep_mesh(first, "RUN1"))
-    assert _build(_recipe(bed, friction=45.0))["key"] == first["key"]
+    assert _build(_run_recipe(monkeypatch, bed, 45.0))["key"] == first["key"]
     assert built == [1]
     token = journal.bind_notes()
-    _build(_recipe(bed), fresh=True)
+    _build(recipe, fresh=True)
     assert built == [1, 1]
     assert any(first["key"] in note and "restart_clean" in note
                for note in journal.drain_notes(token))
