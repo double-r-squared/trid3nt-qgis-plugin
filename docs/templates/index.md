@@ -2,125 +2,95 @@
 
 # Templates
 
-15 registered templates, one per question. A template declares raw engine keywords over a module wrapper; `fill` sets the sheet and `run` solves it. The wrappers are in [`../modules.md`](../modules.md).
+15 registered templates, one per question. A template declares raw engine keywords over a module wrapper; `fill` sets the params and `run` solves it. The wrappers are in [`../modules.md`](../modules.md).
 
 ## [`artemis_harbor_agitation`](artemis_harbor_agitation.md)
 
-[![artemis_harbor_agitation](artemis_harbor_agitation/artemis_harbor_agitation.png)](artemis_harbor_agitation.md)
-
 The WAVE AGITATION (Kd = Hs/H0) a declared structure leaves inside a harbour, marina or sheltered basin.
 
-Module `artemis`, proving run `01M2Z08QBE143NVJTDAG9523G0`.
+Module `artemis`.
 
 ## [`telemac3d_stratified_flow`](telemac3d_stratified_flow.md)
 
-[![telemac3d_stratified_flow](telemac3d_stratified_flow/telemac3d_stratified_flow.png)](telemac3d_stratified_flow.md)
-
 The 3D VERTICAL STRUCTURE of a body of water a 2D depth-averaged model cannot resolve.
 
-Module `telemac3d`, proving run `01M2Z58EWXKBFQ7ZE2FZGF1VVT`.
+Module `telemac3d`.
 
 ## [`telemac_bed_scour`](telemac_bed_scour.md)
 
-[![telemac_bed_scour](telemac_bed_scour/telemac_bed_scour.png)](telemac_bed_scour.md)
-
 Bed SCOUR and DEPOSITION: a mobile bed under moving water.
 
-Module `telemac2d`, proving run `01M2Z5THE97GFYB3Q7DD2EWCFC`.
+Module `telemac2d`.
 
 ## [`telemac_channel_dredging`](telemac_channel_dredging.md)
 
-[![telemac_channel_dredging](telemac_channel_dredging/telemac_channel_dredging.png)](telemac_channel_dredging.md)
-
 MAINTENANCE DREDGING of a navigation channel: how much comes out, and what the bed does.
 
-Module `telemac2d`, proving run `01M2ZA2BXD0MYW6FMXQR9WK861`.
+Module `telemac2d`.
 
 ## [`telemac_do_sag`](telemac_do_sag.md)
 
-[![telemac_do_sag](telemac_do_sag/telemac_do_sag.png)](telemac_do_sag.md)
-
 DISSOLVED-OXYGEN SAG below a discharge (US TMDL / permit question).
 
-Module `telemac2d`, proving run `01M2Z5T8D37A014SW9BS42SN1J`.
+Module `telemac2d`.
 
 ## [`telemac_dye_release`](telemac_dye_release.md)
 
-[![telemac_dye_release](telemac_dye_release/telemac_dye_release.png)](telemac_dye_release.md)
-
 A DYE / TRACER / CONTAMINANT plume released into a body of surface water and carried by its flow.
 
-Module `telemac2d`, proving run `01M2Z8WJKKJRQ29PJXMCN8516G`.
+Module `telemac2d`.
 
 ## [`telemac_eutrophication`](telemac_eutrophication.md)
 
-[![telemac_eutrophication](telemac_eutrophication/telemac_eutrophication.png)](telemac_eutrophication.md)
-
 NUTRIENT ENRICHMENT in a body of water: algal growth, nutrient drawdown and the oxygen response over one pass through it.
 
-Module `telemac2d`, proving run `01M2Z8WFFF7P4DR7RE0CJWRB1T`.
+Module `telemac2d`.
 
 ## [`telemac_ice_cover`](telemac_ice_cover.md)
 
-[![telemac_ice_cover](telemac_ice_cover/telemac_ice_cover.png)](telemac_ice_cover.md)
-
 ICE COVER under a cold snap: when water freezes over, and how thick.
 
-Module `telemac2d`, proving run `01M2ZBPTGNGQXG8T1W4E4PG980`.
+Module `telemac2d`.
 
 ## [`telemac_micropollutant_release`](telemac_micropollutant_release.md)
 
-[![telemac_micropollutant_release](telemac_micropollutant_release/telemac_micropollutant_release.png)](telemac_micropollutant_release.md)
-
 A SORBING substance released into water: how much stays DISSOLVED and how much ends up ON THE BED.
 
-Module `telemac2d`, proving run `01M2Z65TZT1E1YTF1WWQZ3V098`.
+Module `telemac2d`.
 
 ## [`telemac_oil_spill`](telemac_oil_spill.md)
 
-[![telemac_oil_spill](telemac_oil_spill/telemac_oil_spill.png)](telemac_oil_spill.md)
-
 An OIL SLICK released onto a body of surface water: floating particles plus the dissolved fraction.
 
-Module `telemac2d`, proving run `01M2Z6RGYRX61C6RFPRMN7KF1M`.
+Module `telemac2d`.
 
 ## [`telemac_rain_on_grid`](telemac_rain_on_grid.md)
 
-[![telemac_rain_on_grid](telemac_rain_on_grid/telemac_rain_on_grid.png)](telemac_rain_on_grid.md)
-
 How much RUNOFF a storm produces from the catchment a point drains, as an outlet hydrograph and a flood-depth map.
 
-Module `telemac2d`, proving run `01M2Z28K3DVHSQ1AXENC4F3SAG`.
+Module `telemac2d`.
 
 ## [`telemac_sediment_plume`](telemac_sediment_plume.md)
 
-[![telemac_sediment_plume](telemac_sediment_plume/telemac_sediment_plume.png)](telemac_sediment_plume.md)
-
 A SUSPENDED SEDIMENT plume in a body of water: it settles and deposits on the bed.
 
-Module `telemac2d`, proving run `01M2Z58GD0T0D3YQ91WKPRRCCS`.
+Module `telemac2d`.
 
 ## [`telemac_water_temperature`](telemac_water_temperature.md)
 
-[![telemac_water_temperature](telemac_water_temperature/telemac_water_temperature.png)](telemac_water_temperature.md)
-
 WATER TEMPERATURE over a body of water under a week of real weather.
 
-Module `telemac2d`, proving run `01M2ZCK2Z4BK96T1CN2AA7W5GH`.
+Module `telemac2d`.
 
 ## [`tomawac_nearshore_waves`](tomawac_nearshore_waves.md)
 
-[![tomawac_nearshore_waves](tomawac_nearshore_waves/tomawac_nearshore_waves.png)](tomawac_nearshore_waves.md)
-
 NEARSHORE WAVES: what the offshore swell becomes at the shore - how high, how long, which way, and where it breaks.
 
-Module `tomawac`, proving run `01M30GCFV4KJ1PFCW27NBJ7RZN`.
+Module `tomawac`.
 
 ## [`tomawac_wave_driven_currents`](tomawac_wave_driven_currents.md)
 
-[![tomawac_wave_driven_currents](tomawac_wave_driven_currents/tomawac_wave_driven_currents.png)](tomawac_wave_driven_currents.md)
-
 WAVE-DRIVEN CURRENTS: the current breaking waves drive along the shore - how fast and which way.
 
-Module `telemac2d`, proving run `01M30H98JHY3J9P4PEN0PQ4WRT`.
+Module `telemac2d`.
 

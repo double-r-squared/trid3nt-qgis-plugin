@@ -20,11 +20,11 @@ The WAVE AGITATION (Kd = Hs/H0) a declared structure leaves inside a harbour, ma
 | `structure` | supplied by the caller | a polyline layer you supply, as a uri or a layer name; required - the template names no source for it. | - |
 | `mesh` | supplied by the caller | a mesh layer you supply, as a uri or a layer name; absent is legal and the run reports it. | - |
 
-## The sheet
+## The params
 
 The values the template declares. `desc` is what the model reads when it fills one.
 
-| param | door | units | default | desc |
+| param | comes from | units | default | desc |
 |---|---|---|---|---|
 | `wave_height_m` | scenario | m | 1.0 | Incident wave height H0 on the designated liquid boundary; Kd is measured against it, so it sets the scale of every narrated height |
 | `reflection_coef` | scenario | - | 0.5 | The declared structure's reflection coefficient: 1 fully reflecting (a vertical quay), 0 fully absorbing (a rubble slope). Every other solid face is the absorbing shore |
@@ -34,64 +34,4 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `transect_length_m` | scenario | m | 1500.0 | The whole length of the transect the agitation is read along: a straight line through the structure's centroid along the incident wave direction, half of it on the exposed side and half in the lee |
 | `open_depth_threshold_m` | scenario | m | -12.0 | How deep a boundary stretch must reach for it to be designated the OPEN edge the incident wave enters through; every stretch that reaches it opens |
 | `cores` | constant | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
-
-It publishes these layers onto the canvas:
-
-- Input: domain (osm_coastline)
-- Input: bed (3dep_extra, datum NAVD88 (metres, positive up))
-- Input: bed (bluetopo, BlueTopo multi-resolution UTM tiles - 2 m / 4 m / 8 m / 16 m tiers, finer in shallow water, datum NAVD88 (metres, positive up))
-- Wave height (m) at t = 8 s (osm_coastline_osm_coastline_mesh)
-- Wave phase (rad) at t = 8 s (osm_coastline_osm_coastline_mesh)
-- Free surface (m) at t = 8 s (osm_coastline_osm_coastline_mesh)
-- Bottom (m) at t = 8 s (osm_coastline_osm_coastline_mesh)
-- Kd (Hs/H0) at t = 8 s (osm_coastline_osm_coastline_mesh)
-- osm_coastline_osm_coastline_mesh
-
-## The proving run
-
-Run `01M2Z08QBE143NVJTDAG9523G0`, 2026-09-20T08:52:48.349942+00:00, 39.196 s, at commit `39c3afe3a8cf8fe71bbffa928f18a8ea27b83fdf`.
-
-![Every layer the run published, stacked and framed on the result (run 01M2Z08QBE143NVJTDAG9523G0)](artemis_harbor_agitation/artemis_harbor_agitation.png)
-
-*Every layer the run published, stacked and framed on the result (run 01M2Z08QBE143NVJTDAG9523G0)*
-
-![peak frame (run 01M2Z08QBE143NVJTDAG9523G0)](artemis_harbor_agitation/artemis_harbor_agitation_peak_frame.png)
-
-*peak frame (run 01M2Z08QBE143NVJTDAG9523G0)*
-
-![agitation coefficient - the chart the run persisted (run 01M2Z08QBE143NVJTDAG9523G0)](artemis_harbor_agitation/artemis_harbor_agitation_chart_agitation_coefficient.png)
-
-*agitation coefficient - the chart the run persisted (run 01M2Z08QBE143NVJTDAG9523G0)*
-
-### The sheet it filled
-
-Every slot the run resolved, with where the value came from. The engine's own defaults are folded: what is not here, the engine chose.
-
-| param | value | units | basis | provenance |
-|---|---|---|---|---|
-| `wave_height_m` | 1.0 | m | user | supplied on this invocation |
-| `reflection_coef` | 0.3 | - | user | supplied on this invocation |
-| `mesh_resolution_m` | 25.0 | m | user | supplied on this invocation |
-| `mesh_grade` | 0.2 | - | default_demo | declared constant default |
-| `barrier_width_m` | 20.0 | m | default_demo | declared scenario default |
-| `transect_length_m` | 1500.0 | m | default_demo | declared scenario default |
-| `open_depth_threshold_m` | -12.0 | m | default_demo | declared scenario default |
-| `compute_class` | medium | - | default_demo | declared constant default |
-
-### Reproduce
-
-```python
-from trid3nt_server.tools import TOOL_REGISTRY
-
-await TOOL_REGISTRY['artemis_harbor_agitation'].fn(
-    mesh_resolution_m=25.0,
-    reflection_coef=0.3,
-    wave_height_m=1.0,
-    extent="{'bbox': [-71.525, 41.338, -71.492, 41.368], 'name': 'Point Judith Harbor'}",
-    structure=[{'length': 42, 'head': [[-71.48868, 41.36073], [-71.4885, 41.36065], [-71.4888, 41.36034], [-71.48908, 41.36007], [-71.48934, 41.35984], [-71.48958, 41.35967], [-71.48995, 41.35947], [-71.49028, 41.35936]], 'truncated': True}, [[-71.51466, 41.37429], [-71.51471, 41.37424], [-71.51627, 41.37261], [-71.51623, 41.3707], [-71.51618, 41.36983], [-71.51467, 41.3656], [-71.51471, 41.36549], [-71.51484, 41.36556], [-71.51639, 41.3696], [-71.51649, 41.37019], [-71.51652, 41.37268], [-71.51486, 41.37432], [-71.51466, 41.37429]], [[-71.50831, 41.35412], [-71.50726, 41.35414], [-71.49785, 41.35975], [-71.49801, 41.35998], [-71.50387, 41.3566], [-71.50434, 41.35618], [-71.50668, 41.35494], [-71.50741, 41.35436], [-71.50833, 41.35445], [-71.50942, 41.35457], [-71.5098, 41.35467], [-71.51022, 41.35484], [-71.51073, 41.35535], [-71.51145, 41.35717], [-71.51312, 41.36141], [-71.51325, 41.36145], [-71.51329, 41.36135], [-71.51109, 41.35532], [-71.51038, 41.35462], [-71.50948, 41.3543], [-71.50831, 41.35412]]],
-    keywords={'DIRECTION OF WAVE PROPAGATION': 160.0},
-)
-```
-
-That is the invocation this run came from; the figures above are stamped with run `01M2Z08QBE143NVJTDAG9523G0` and commit `39c3afe3a8cf8fe71bbffa928f18a8ea27b83fdf`. The full argument record is [`artemis_harbor_agitation/run.json`](artemis_harbor_agitation/run.json).
 

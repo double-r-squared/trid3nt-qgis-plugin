@@ -20,11 +20,11 @@ How much RUNOFF a storm produces from the catchment a point drains, as an outlet
 | `landcover` | matched on a need for land cover | the land cover this run reads, as a uri or a layer name; unfilled, the run matches a source of land cover. | - |
 | `rain` | matched on a need for precipitation series | the precipitation series this run reads, as a uri or a layer name; unfilled, the run matches a source of precipitation series. | - |
 
-## The sheet
+## The params
 
 The values the template declares. `desc` is what the model reads when it fills one.
 
-| param | door | units | default | desc |
+| param | comes from | units | default | desc |
 |---|---|---|---|---|
 | `pour_point` | user | - | - | The catchment OUTLET, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer (geocode a place name first) - the point the runoff drains to. It decides which basin is modelled at all, so it is asked for (picked on the canvas or passed explicitly) and NEVER invented. It is snapped onto the traced channel, so a click beside the stream still delineates its basin |
 | `rain_series_mm` | user | mm | optional | A MEASURED storm, as hourly GROSS millimetres in the order the record reported them - what fetch_aorc_precip returns over this catchment under `precip_mm` for any CONUS window since 1979. It is the true intensity structure, which is what resolves the hydrograph SHAPE; a record that stops inside the simulated window stops in the run too, so the recession limb appears. State event_time instead to have the run look the record up over its own window |
@@ -36,81 +36,4 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `cores` | constant | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
 | `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
-
-It publishes these layers onto the canvas:
-
-- Input: domain (watershed, the DEM's own native grid - 3DEP 1-10 m US lidar, Copernicus GLO-30 30 m global)
-- Input: rivers (river_geometry)
-- Input: bed (3dep_extra, datum NAVD88 (metres, positive up))
-- Input: landcover (esri_landcover_10m)
-- Velocity u over time (watershed_domain_mesh)
-- Velocity v over time (watershed_domain_mesh)
-- Water depth over time (watershed_domain_mesh)
-- Free surface over time (watershed_domain_mesh)
-- Bottom (m) at t = 107360 s (watershed_domain_mesh)
-- Froude number over time (watershed_domain_mesh)
-- Scalar flowrate over time (watershed_domain_mesh)
-- Scalar velocity over time (watershed_domain_mesh)
-- Outlet hydrograph (watershed_domain_mesh)
-- watershed_domain_mesh
-
-## The proving run
-
-Run `01M2Z28K3DVHSQ1AXENC4F3SAG`, 2026-09-20T09:41:52.526336+00:00, 884.481 s, at commit `170dd83dd6665b897ac9d29102dca18509935c4c`.
-
-![Every layer the run published, stacked and framed on the result (run 01M2Z28K3DVHSQ1AXENC4F3SAG)](telemac_rain_on_grid/telemac_rain_on_grid.png)
-
-*Every layer the run published, stacked and framed on the result (run 01M2Z28K3DVHSQ1AXENC4F3SAG)*
-
-![The solve, frame by frame - flow_dynamics (run 01M2Z28K3DVHSQ1AXENC4F3SAG)](telemac_rain_on_grid/telemac_rain_on_grid_animation_flow_dynamics.gif)
-
-*The solve, frame by frame - flow_dynamics (run 01M2Z28K3DVHSQ1AXENC4F3SAG)*
-
-![The solve, frame by frame - inundation_depth (run 01M2Z28K3DVHSQ1AXENC4F3SAG)](telemac_rain_on_grid/telemac_rain_on_grid_animation_inundation_depth.gif)
-
-*The solve, frame by frame - inundation_depth (run 01M2Z28K3DVHSQ1AXENC4F3SAG)*
-
-![flow dynamics peak frame (run 01M2Z28K3DVHSQ1AXENC4F3SAG)](telemac_rain_on_grid/telemac_rain_on_grid_flow_dynamics_peak_frame.png)
-
-*flow dynamics peak frame (run 01M2Z28K3DVHSQ1AXENC4F3SAG)*
-
-![inundation depth peak frame (run 01M2Z28K3DVHSQ1AXENC4F3SAG)](telemac_rain_on_grid/telemac_rain_on_grid_inundation_depth_peak_frame.png)
-
-*inundation depth peak frame (run 01M2Z28K3DVHSQ1AXENC4F3SAG)*
-
-![outlet hydrograph - the chart the run persisted (run 01M2Z28K3DVHSQ1AXENC4F3SAG)](telemac_rain_on_grid/telemac_rain_on_grid_chart_outlet_hydrograph.png)
-
-*outlet hydrograph - the chart the run persisted (run 01M2Z28K3DVHSQ1AXENC4F3SAG)*
-
-### The sheet it filled
-
-Every slot the run resolved, with where the value came from. The engine's own defaults are folded: what is not here, the engine chose.
-
-| param | value | units | basis | provenance |
-|---|---|---|---|---|
-| `pour_point` | {'lon': -83.40402, 'lat': 35.05746, 'name': None} | - | user | supplied on this invocation |
-| `design_storm_mm_per_day` | 156.7 | mm/day | user | supplied on this invocation |
-| `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
-| `steep_slope_correction` | False | - | default_demo | declared scenario default |
-| `mesh_max_edge_m` | 300.0 | m | default_demo | declared scenario default |
-| `compute_class` | medium | - | default_demo | declared constant default |
-| `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
-| `rain_series_mm` | - | mm | user | not supplied (declared optional) |
-| `curve_number` | - | - | user | not supplied (declared optional) |
-| `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
-
-### Reproduce
-
-```python
-from trid3nt_server.tools import TOOL_REGISTRY
-
-await TOOL_REGISTRY['telemac_rain_on_grid'].fn(
-    design_storm_mm_per_day=156.7,
-    mesh_resolution_m=40.0,
-    pour_point={'lon': -83.40402, 'lat': 35.05746, 'name': None},
-    keywords={'DURATION': 108000.0, 'DURATION OF RAIN OR EVAPORATION IN HOURS': 24.0, 'GRAPHIC PRINTOUT PERIOD': 4000},
-)
-```
-
-That is the invocation this run came from; the figures above are stamped with run `01M2Z28K3DVHSQ1AXENC4F3SAG` and commit `170dd83dd6665b897ac9d29102dca18509935c4c`. The full argument record is [`telemac_rain_on_grid/run.json`](telemac_rain_on_grid/run.json).
 

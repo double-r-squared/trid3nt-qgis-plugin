@@ -21,11 +21,11 @@ WAVE-DRIVEN CURRENTS: the current breaking waves drive along the shore - how fas
 | `level` | matched on a need for water level series | the water level series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of water level series. | - |
 | `mesh` | supplied by the caller | a mesh layer you supply, as a uri or a layer name; absent is legal and the run reports it. | - |
 
-## The sheet
+## The params
 
 The values the template declares. `desc` is what the model reads when it fills one.
 
-| param | door | units | default | desc |
+| param | comes from | units | default | desc |
 |---|---|---|---|---|
 | `seed` | user | - | optional | Where OFFSHORE the incoming sea state is measured, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. The nearest buoy to it is the record the wave boundary is forced at, so put it on the water the swell arrives across |
 | `station` | user | - | - | Where INSHORE the current is read over time, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. The speed and the wave height are charted at the node of the mesh it settles onto, so put it in the surf zone you are asking about |
@@ -34,113 +34,4 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `cores` | constant | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
 | `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
-
-It publishes these layers onto the canvas:
-
-- Input: domain (osm_coastline)
-- Input: bed (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88)
-- Input: bed (bluetopo, BlueTopo multi-resolution UTM tiles - 2 m / 4 m / 8 m / 16 m tiers, finer in shallow water, datum NAVD88)
-- Input: bed (topobathy, CUDEM 1/9" ~3 m nearshore; ETOPO 2022 15" ~450 m offshore fallback; 3DEP 10 m land, datum NAVD88)
-- Current station (user) - osm_coastline_osm_coastline
-- Input: level (noaa_coops_tides, datum MLLW)
-- Input: wave (ndbc_buoys)
-- Velocity u over time (osm_coastline_osm_coastline_mesh)
-- Velocity v over time (osm_coastline_osm_coastline_mesh)
-- Water depth over time (osm_coastline_osm_coastline_mesh)
-- Free surface over time (osm_coastline_osm_coastline_mesh)
-- Bottom (m) at t = 3600 s (osm_coastline_osm_coastline_mesh)
-- Froude number over time (osm_coastline_osm_coastline_mesh)
-- Scalar flowrate over time (osm_coastline_osm_coastline_mesh)
-- Scalar velocity over time (osm_coastline_osm_coastline_mesh)
-- Variance m0 over time (osm_coastline_osm_coastline_mesh)
-- Wave height hm0 over time (osm_coastline_osm_coastline_mesh)
-- Mean direction over time (osm_coastline_osm_coastline_mesh)
-- Wave spread over time (osm_coastline_osm_coastline_mesh)
-- Force fx over time (osm_coastline_osm_coastline_mesh)
-- Force fy over time (osm_coastline_osm_coastline_mesh)
-- Stress sxx over time (osm_coastline_osm_coastline_mesh)
-- Stress sxy over time (osm_coastline_osm_coastline_mesh)
-- Stress syy over time (osm_coastline_osm_coastline_mesh)
-- Bottom velocity over time (osm_coastline_osm_coastline_mesh)
-- Mean freq fmoy over time (osm_coastline_osm_coastline_mesh)
-- Mean freq fm01 over time (osm_coastline_osm_coastline_mesh)
-- Mean freq fm02 over time (osm_coastline_osm_coastline_mesh)
-- Peak freq fpd over time (osm_coastline_osm_coastline_mesh)
-- Peak freq fpr5 over time (osm_coastline_osm_coastline_mesh)
-- Peak freq fpr8 over time (osm_coastline_osm_coastline_mesh)
-- Ustar over time (osm_coastline_osm_coastline_mesh)
-- Wave stress over time (osm_coastline_osm_coastline_mesh)
-- Mean period tmoy over time (osm_coastline_osm_coastline_mesh)
-- Mean period tm01 over time (osm_coastline_osm_coastline_mesh)
-- Mean period tm02 over time (osm_coastline_osm_coastline_mesh)
-- Peak period tpd over time (osm_coastline_osm_coastline_mesh)
-- Peak period tpr5 over time (osm_coastline_osm_coastline_mesh)
-- Peak period tpr8 over time (osm_coastline_osm_coastline_mesh)
-- Wave power over time (osm_coastline_osm_coastline_mesh)
-- Breaking rat over time (osm_coastline_osm_coastline_mesh)
-- Breaker dissip over time (osm_coastline_osm_coastline_mesh)
-- Peak direction over time (osm_coastline_osm_coastline_mesh)
-- osm_coastline_osm_coastline_mesh
-
-## The proving run
-
-Run `01M30H98JHY3J9P4PEN0PQ4WRT`, 2026-09-20T23:09:58.792581+00:00, 91.272 s, at commit `4a83b7f8a8b980525179f711b64a7b252c3137cc-dirty`.
-
-![Every layer the run published, stacked and framed on the result (run 01M30H98JHY3J9P4PEN0PQ4WRT)](tomawac_wave_driven_currents/tomawac_wave_driven_currents.png)
-
-*Every layer the run published, stacked and framed on the result (run 01M30H98JHY3J9P4PEN0PQ4WRT)*
-
-![The solve, frame by frame - current (run 01M30H98JHY3J9P4PEN0PQ4WRT)](tomawac_wave_driven_currents/tomawac_wave_driven_currents_animation_current.gif)
-
-*The solve, frame by frame - current (run 01M30H98JHY3J9P4PEN0PQ4WRT)*
-
-![The solve, frame by frame - wave_height (run 01M30H98JHY3J9P4PEN0PQ4WRT)](tomawac_wave_driven_currents/tomawac_wave_driven_currents_animation_wave_height.gif)
-
-*The solve, frame by frame - wave_height (run 01M30H98JHY3J9P4PEN0PQ4WRT)*
-
-![current peak frame (run 01M30H98JHY3J9P4PEN0PQ4WRT)](tomawac_wave_driven_currents/tomawac_wave_driven_currents_current_peak_frame.png)
-
-*current peak frame (run 01M30H98JHY3J9P4PEN0PQ4WRT)*
-
-![wave height peak frame (run 01M30H98JHY3J9P4PEN0PQ4WRT)](tomawac_wave_driven_currents/tomawac_wave_driven_currents_wave_height_peak_frame.png)
-
-*wave height peak frame (run 01M30H98JHY3J9P4PEN0PQ4WRT)*
-
-![current speed - the chart the run persisted (run 01M30H98JHY3J9P4PEN0PQ4WRT)](tomawac_wave_driven_currents/tomawac_wave_driven_currents_chart_current_speed.png)
-
-*current speed - the chart the run persisted (run 01M30H98JHY3J9P4PEN0PQ4WRT)*
-
-![significant wave height - the chart the run persisted (run 01M30H98JHY3J9P4PEN0PQ4WRT)](tomawac_wave_driven_currents/tomawac_wave_driven_currents_chart_significant_wave_height.png)
-
-*significant wave height - the chart the run persisted (run 01M30H98JHY3J9P4PEN0PQ4WRT)*
-
-### The sheet it filled
-
-Every slot the run resolved, with where the value came from. The engine's own defaults are folded: what is not here, the engine chose.
-
-| param | value | units | basis | provenance |
-|---|---|---|---|---|
-| `seed` | {'lon': -71.123, 'lat': 40.966, 'name': None} | - | user | supplied on this invocation |
-| `station` | {'lon': -71.4713, 'lat': 41.3884, 'name': None} | - | user | supplied on this invocation |
-| `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
-| `event_time` | 2026-09-17T12:00:00+00:00 | - | user | supplied on this invocation |
-| `open_depth_threshold_m` | -12.0 | m | default_demo | declared scenario default |
-| `compute_class` | medium | - | default_demo | declared constant default |
-| `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
-
-### Reproduce
-
-```python
-from trid3nt_server.tools import TOOL_REGISTRY
-
-await TOOL_REGISTRY['tomawac_wave_driven_currents'].fn(
-    event_time='2026-09-17T12:00:00+00:00',
-    mesh_resolution_m=40.0,
-    seed={'lon': -71.123, 'lat': 40.966, 'name': None},
-    station={'lon': -71.4713, 'lat': 41.3884, 'name': None},
-    extent="{'bbox': [-71.474, 41.356, -71.446, 41.396], 'name': 'Scarborough, RI'}",
-)
-```
-
-That is the invocation this run came from; the figures above are stamped with run `01M30H98JHY3J9P4PEN0PQ4WRT` and commit `4a83b7f8a8b980525179f711b64a7b252c3137cc-dirty`. The full argument record is [`tomawac_wave_driven_currents/run.json`](tomawac_wave_driven_currents/run.json).
 

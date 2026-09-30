@@ -22,11 +22,11 @@ MAINTENANCE DREDGING of a navigation channel: how much comes out, and what the b
 | `dump_area` | supplied by the caller | a polygon layer you supply, as a uri or a layer name; required - the template names no source for it. | - |
 | `level` | matched on a need for water level series | the water level series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of water level series. | - |
 
-## The sheet
+## The params
 
 The values the template declares. `desc` is what the model reads when it fills one.
 
-| param | door | units | default | desc |
+| param | comes from | units | default | desc |
 |---|---|---|---|---|
 | `seed_point` | question | - | optional | A point ON the channel the dredge works in, as the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer. Geocode a place name first; the channel is fetched downstream of it and the levels every dredging action reads are stationed along the centerline that comes back with it |
 | `design_depth_m` | scenario | m | 3.0 | Depth the fairway is dredged TO, under the reference water surface the run opens at - the design draught plus its overdepth |
@@ -41,83 +41,4 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `cores` | constant | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
 | `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
-
-It publishes these layers onto the canvas:
-
-- Input: domain (river_reach)
-- Input: bed (ehydro_surveys)
-- Input: bed (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
-- Velocity u over time (river_reach_domain_mesh)
-- Velocity v over time (river_reach_domain_mesh)
-- Water depth over time (river_reach_domain_mesh)
-- Free surface over time (river_reach_domain_mesh)
-- Bottom (m) at t = 568.7 s (river_reach_domain_mesh)
-- Froude number over time (river_reach_domain_mesh)
-- Scalar flowrate over time (river_reach_domain_mesh)
-- Scalar velocity over time (river_reach_domain_mesh)
-- Cumul bed evol over time (river_reach_domain_mesh)
-- Mean diameter m over time (river_reach_domain_mesh)
-- Bed shear stress over time (river_reach_domain_mesh)
-- river_reach_domain_mesh
-
-## The proving run
-
-Run `01M2ZA2BXD0MYW6FMXQR9WK861`, 2026-09-20T11:44:16.285672+00:00, 61.2 s, at commit `170b7ad20386d55a6e38a680b153c8228587b69e`.
-
-![Every layer the run published, stacked and framed on the result (run 01M2ZA2BXD0MYW6FMXQR9WK861)](telemac_channel_dredging/telemac_channel_dredging.png)
-
-*Every layer the run published, stacked and framed on the result (run 01M2ZA2BXD0MYW6FMXQR9WK861)*
-
-![The solve, frame by frame (run 01M2ZA2BXD0MYW6FMXQR9WK861)](telemac_channel_dredging/telemac_channel_dredging_animation.gif)
-
-*The solve, frame by frame (run 01M2ZA2BXD0MYW6FMXQR9WK861)*
-
-![final frame (run 01M2ZA2BXD0MYW6FMXQR9WK861)](telemac_channel_dredging/telemac_channel_dredging_final_frame.png)
-
-*final frame (run 01M2ZA2BXD0MYW6FMXQR9WK861)*
-
-### The sheet it filled
-
-Every slot the run resolved, with where the value came from. The engine's own defaults are folded: what is not here, the engine chose.
-
-| param | value | units | basis | provenance |
-|---|---|---|---|---|
-| `seed_point` | {'lon': -122.6691667, 'lat': 45.5175, 'name': None} | - | user | supplied on this invocation |
-| `design_depth_m` | 13.0 | m | user | supplied on this invocation |
-| `trigger_depth_m` | 12.8 | m | user | supplied on this invocation |
-| `dredge_start_s` | 600.0 | s | user | supplied on this invocation |
-| `dredge_end_s` | 3600.0 | s | user | supplied on this invocation |
-| `dredge_repeat_s` | 1800.0 | s | user | supplied on this invocation |
-| `dig_rate_m_per_s` | 0.02 | m/s | user | supplied on this invocation |
-| `dump_rate_m_per_s` | 0.02 | m/s | user | supplied on this invocation |
-| `mesh_resolution_m` | 30.0 | m | user | supplied on this invocation |
-| `min_volume_m3` | 0.0 | m^3 | default_demo | declared scenario default |
-| `compute_class` | medium | - | default_demo | declared constant default |
-| `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
-| `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
-
-### Reproduce
-
-```python
-from trid3nt_server.tools import TOOL_REGISTRY
-
-await TOOL_REGISTRY['telemac_channel_dredging'].fn(
-    design_depth_m=13.0,
-    dig_rate_m_per_s=0.02,
-    dredge_end_s=3600.0,
-    dredge_repeat_s=1800.0,
-    dredge_start_s=600.0,
-    dump_rate_m_per_s=0.02,
-    mesh_resolution_m=30.0,
-    seed_point={'lon': -122.6691667, 'lat': 45.5175, 'name': None},
-    trigger_depth_m=12.8,
-    discharge=56.6,
-    dredge_area='{"type": "Polygon", "coordinates": [[[-122.669, 45.5188], [-122.668, 45.5188], [-122.668, 45.5196], [-122.669, 45.5196], [-122.669, 45.5188]]]}',
-    dump_area='{"type": "Polygon", "coordinates": [[[-122.6688, 45.5208], [-122.6678, 45.5208], [-122.6678, 45.5216], [-122.6688, 45.5216], [-122.6688, 45.5208]]]}',
-    level=2.776,
-    keywords={'DURATION': 600.0},
-)
-```
-
-That is the invocation this run came from; the figures above are stamped with run `01M2ZA2BXD0MYW6FMXQR9WK861` and commit `170b7ad20386d55a6e38a680b153c8228587b69e`. The full argument record is [`telemac_channel_dredging/run.json`](telemac_channel_dredging/run.json).
 

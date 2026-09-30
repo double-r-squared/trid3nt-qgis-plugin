@@ -19,11 +19,11 @@ A SUSPENDED SEDIMENT plume in a body of water: it settles and deposits on the be
 | `discharge` | matched on a need for discharge series | the discharge series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of discharge series. | - |
 | `level` | matched on a need for water level series | the water level series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of water level series. | - |
 
-## The sheet
+## The params
 
 The values the template declares. `desc` is what the model reads when it fills one.
 
-| param | door | units | default | desc |
+| param | comes from | units | default | desc |
 |---|---|---|---|---|
 | `release` | user | - | optional | Where the sediment enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. Its name becomes the marker's name, and on a river with no domain supplied it is also the seed the reach is walked downstream from |
 | `spill_fraction` | scenario | - | 0.25 | Along-domain release position, 0=inflow..1=outflow; the source must sit strictly INSIDE the domain, never on a boundary |
@@ -32,77 +32,4 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `cores` | constant | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
 | `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
-
-It publishes these layers onto the canvas:
-
-- Input: domain (river_reach)
-- Input: bed (ehydro_surveys)
-- Input: bed (3dep_extra, datum NAVD88 (metres, positive up))
-- Release point (user) - river_reach_domain
-- Velocity u over time (river_reach_domain_mesh)
-- Velocity v over time (river_reach_domain_mesh)
-- Water depth over time (river_reach_domain_mesh)
-- Free surface over time (river_reach_domain_mesh)
-- Bottom (m) at t = 1800 s (river_reach_domain_mesh)
-- Froude number over time (river_reach_domain_mesh)
-- Scalar flowrate over time (river_reach_domain_mesh)
-- Scalar velocity over time (river_reach_domain_mesh)
-- Marker over time (river_reach_domain_mesh)
-- Ncoh sediment1 over time (river_reach_domain_mesh)
-- Cumul bed evol over time (river_reach_domain_mesh)
-- Mean diameter m over time (river_reach_domain_mesh)
-- Bed shear stress over time (river_reach_domain_mesh)
-- river_reach_domain_mesh
-
-## The proving run
-
-Run `01M2Z58GD0T0D3YQ91WKPRRCCS`, 2026-09-20T10:20:07.007461+00:00, 42.745 s, at commit `8f01ea9ee67355d6489119bdc5c0ebc21e240205`.
-
-![Every layer the run published, stacked and framed on the result (run 01M2Z58GD0T0D3YQ91WKPRRCCS)](telemac_sediment_plume/telemac_sediment_plume.png)
-
-*Every layer the run published, stacked and framed on the result (run 01M2Z58GD0T0D3YQ91WKPRRCCS)*
-
-![The solve, frame by frame (run 01M2Z58GD0T0D3YQ91WKPRRCCS)](telemac_sediment_plume/telemac_sediment_plume_animation.gif)
-
-*The solve, frame by frame (run 01M2Z58GD0T0D3YQ91WKPRRCCS)*
-
-![peak frame (run 01M2Z58GD0T0D3YQ91WKPRRCCS)](telemac_sediment_plume/telemac_sediment_plume_peak_frame.png)
-
-*peak frame (run 01M2Z58GD0T0D3YQ91WKPRRCCS)*
-
-![suspended sediment concentration - the chart the run persisted (run 01M2Z58GD0T0D3YQ91WKPRRCCS)](telemac_sediment_plume/telemac_sediment_plume_chart_suspended_sediment_concentration.png)
-
-*suspended sediment concentration - the chart the run persisted (run 01M2Z58GD0T0D3YQ91WKPRRCCS)*
-
-### The sheet it filled
-
-Every slot the run resolved, with where the value came from. The engine's own defaults are folded: what is not here, the engine chose.
-
-| param | value | units | basis | provenance |
-|---|---|---|---|---|
-| `release` | {'lon': -122.669784, 'lat': 45.518485, 'name': None} | - | user | supplied on this invocation |
-| `spill_duration_s` | 300.0 | s | user | supplied on this invocation |
-| `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
-| `spill_fraction` | 0.25 | - | default_demo | declared scenario default |
-| `compute_class` | medium | - | default_demo | declared constant default |
-| `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
-| `injected_mass_kg` | 240.0 | kg | derived | derived by trid3nt_server.workflows.telemac.helpers.released_mass.released_mass_kg |
-| `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
-
-### Reproduce
-
-```python
-from trid3nt_server.tools import TOOL_REGISTRY
-
-await TOOL_REGISTRY['telemac_sediment_plume'].fn(
-    mesh_resolution_m=40.0,
-    release={'lon': -122.669784, 'lat': 45.518485, 'name': None},
-    spill_duration_s=300.0,
-    discharge=56.6,
-    level=2.776,
-    keywords={'DURATION': 1800.0},
-)
-```
-
-That is the invocation this run came from; the figures above are stamped with run `01M2Z58GD0T0D3YQ91WKPRRCCS` and commit `8f01ea9ee67355d6489119bdc5c0ebc21e240205`. The full argument record is [`telemac_sediment_plume/run.json`](telemac_sediment_plume/run.json).
 

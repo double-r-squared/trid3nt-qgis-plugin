@@ -19,11 +19,11 @@ A SORBING substance released into water: how much stays DISSOLVED and how much e
 | `discharge` | matched on a need for discharge series | the discharge series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of discharge series. | - |
 | `level` | matched on a need for water level series | the water level series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of water level series. | - |
 
-## The sheet
+## The params
 
 The values the template declares. `desc` is what the model reads when it fills one.
 
-| param | door | units | default | desc |
+| param | comes from | units | default | desc |
 |---|---|---|---|---|
 | `release` | user | - | optional | Where the substance enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. On a river with no domain it is also the seed the reach is walked downstream from |
 | `release_fraction` | scenario | - | 0.1 | Along-domain release position, 0=inflow..1=outflow; the source must sit strictly INSIDE the domain, never on a boundary. It sits near the top so the substance has water left to sorb and settle in |
@@ -34,88 +34,4 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `cores` | constant | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
 | `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
-
-It publishes these layers onto the canvas:
-
-- Input: domain (river_reach)
-- Input: bed (ehydro_surveys)
-- Input: bed (3dep_extra, datum NAVD88 (metres, positive up))
-- Release point (user) - river_reach_domain
-- Monitoring point (derived) - river_reach_domain
-- Velocity u over time (river_reach_domain_mesh)
-- Velocity v over time (river_reach_domain_mesh)
-- Water depth over time (river_reach_domain_mesh)
-- Free surface over time (river_reach_domain_mesh)
-- Bottom (m) at t = 14400 s (river_reach_domain_mesh)
-- Froude number over time (river_reach_domain_mesh)
-- Scalar flowrate over time (river_reach_domain_mesh)
-- Scalar velocity over time (river_reach_domain_mesh)
-- Micro pollutant over time (river_reach_domain_mesh)
-- Suspended load over time (river_reach_domain_mesh)
-- Bed sediments over time (river_reach_domain_mesh)
-- Abs. susp. load. over time (river_reach_domain_mesh)
-- Absorb. bed sed. over time (river_reach_domain_mesh)
-- river_reach_domain_mesh
-
-## The proving run
-
-Run `01M2Z65TZT1E1YTF1WWQZ3V098`, 2026-09-20T10:37:15.494666+00:00, 100.553 s, at commit `4906f0691ad38ccf726b79d7f7a8fe5760040315`.
-
-![Every layer the run published, stacked and framed on the result (run 01M2Z65TZT1E1YTF1WWQZ3V098)](telemac_micropollutant_release/telemac_micropollutant_release.png)
-
-*Every layer the run published, stacked and framed on the result (run 01M2Z65TZT1E1YTF1WWQZ3V098)*
-
-![The solve, frame by frame - dissolved (run 01M2Z65TZT1E1YTF1WWQZ3V098)](telemac_micropollutant_release/telemac_micropollutant_release_animation_dissolved.gif)
-
-*The solve, frame by frame - dissolved (run 01M2Z65TZT1E1YTF1WWQZ3V098)*
-
-![The solve, frame by frame - on_the_bed (run 01M2Z65TZT1E1YTF1WWQZ3V098)](telemac_micropollutant_release/telemac_micropollutant_release_animation_on_the_bed.gif)
-
-*The solve, frame by frame - on_the_bed (run 01M2Z65TZT1E1YTF1WWQZ3V098)*
-
-![dissolved peak frame (run 01M2Z65TZT1E1YTF1WWQZ3V098)](telemac_micropollutant_release/telemac_micropollutant_release_dissolved_peak_frame.png)
-
-*dissolved peak frame (run 01M2Z65TZT1E1YTF1WWQZ3V098)*
-
-![on the bed final frame (run 01M2Z65TZT1E1YTF1WWQZ3V098)](telemac_micropollutant_release/telemac_micropollutant_release_on_the_bed_final_frame.png)
-
-*on the bed final frame (run 01M2Z65TZT1E1YTF1WWQZ3V098)*
-
-![dissolved micropollutant - the chart the run persisted (run 01M2Z65TZT1E1YTF1WWQZ3V098)](telemac_micropollutant_release/telemac_micropollutant_release_chart_dissolved_micropollutant.png)
-
-*dissolved micropollutant - the chart the run persisted (run 01M2Z65TZT1E1YTF1WWQZ3V098)*
-
-### The sheet it filled
-
-Every slot the run resolved, with where the value came from. The engine's own defaults are folded: what is not here, the engine chose.
-
-| param | value | units | basis | provenance |
-|---|---|---|---|---|
-| `release` | {'lon': -122.669784, 'lat': 45.518485, 'name': None} | - | user | supplied on this invocation |
-| `release_duration_s` | 300.0 | s | user | supplied on this invocation |
-| `monitoring_fraction` | 0.1 | - | user | supplied on this invocation |
-| `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
-| `release_fraction` | 0.1 | - | default_demo | declared scenario default |
-| `compute_class` | medium | - | default_demo | declared constant default |
-| `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
-| `monitoring_point` | - | - | user | not supplied (declared optional) |
-| `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
-
-### Reproduce
-
-```python
-from trid3nt_server.tools import TOOL_REGISTRY
-
-await TOOL_REGISTRY['telemac_micropollutant_release'].fn(
-    mesh_resolution_m=40.0,
-    monitoring_fraction=0.1,
-    release={'lon': -122.669784, 'lat': 45.518485, 'name': None},
-    release_duration_s=300.0,
-    discharge=56.6,
-    level=2.776,
-    keywords={'DURATION': 14400.0, 'GRAPHIC PRINTOUT PERIOD': 300},
-)
-```
-
-That is the invocation this run came from; the figures above are stamped with run `01M2Z65TZT1E1YTF1WWQZ3V098` and commit `4906f0691ad38ccf726b79d7f7a8fe5760040315`. The full argument record is [`telemac_micropollutant_release/run.json`](telemac_micropollutant_release/run.json).
 

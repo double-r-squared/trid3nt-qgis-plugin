@@ -20,11 +20,11 @@ DISSOLVED-OXYGEN SAG below a discharge (US TMDL / permit question).
 | `discharge` | matched on a need for discharge series | the discharge series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of discharge series. | - |
 | `level` | matched on a need for water level series | the water level series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of water level series. | - |
 
-## The sheet
+## The params
 
 The values the template declares. `desc` is what the model reads when it fills one.
 
-| param | door | units | default | desc |
+| param | comes from | units | default | desc |
 |---|---|---|---|---|
 | `outfall_coords` | user | - | optional | Where the discharge enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. On a river with no domain supplied it is also the seed the reach is walked downstream from |
 | `do_standard_mgl` | scenario | mg/L | 5.0 | The DO water-quality standard the sag is judged against; 5 is a common warm-water aquatic-life criterion |
@@ -32,73 +32,4 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `cores` | constant | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
 | `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
-
-It publishes these layers onto the canvas:
-
-- Input: domain (river_reach)
-- Input: bed (ehydro_surveys)
-- Input: bed (3dep_extra, datum NAVD88 (metres, positive up))
-- Outfall (user) - river_reach_domain
-- Velocity u over time (river_reach_domain_mesh)
-- Velocity v over time (river_reach_domain_mesh)
-- Water depth over time (river_reach_domain_mesh)
-- Free surface over time (river_reach_domain_mesh)
-- Bottom (m) at t = 3630 s (river_reach_domain_mesh)
-- Froude number over time (river_reach_domain_mesh)
-- Scalar flowrate over time (river_reach_domain_mesh)
-- Scalar velocity over time (river_reach_domain_mesh)
-- Dissolved o2 over time (river_reach_domain_mesh)
-- Organic load over time (river_reach_domain_mesh)
-- Nh4 load over time (river_reach_domain_mesh)
-- river_reach_domain_mesh
-
-## The proving run
-
-Run `01M2Z5T8D37A014SW9BS42SN1J`, 2026-09-20T10:30:05.473585+00:00, 114.278 s, at commit `51e023434461a083a833809792aa1c54c2fb790e-dirty`.
-
-![Every layer the run published, stacked and framed on the result (run 01M2Z5T8D37A014SW9BS42SN1J)](telemac_do_sag/telemac_do_sag.png)
-
-*Every layer the run published, stacked and framed on the result (run 01M2Z5T8D37A014SW9BS42SN1J)*
-
-![The solve, frame by frame (run 01M2Z5T8D37A014SW9BS42SN1J)](telemac_do_sag/telemac_do_sag_animation.gif)
-
-*The solve, frame by frame (run 01M2Z5T8D37A014SW9BS42SN1J)*
-
-![final frame (run 01M2Z5T8D37A014SW9BS42SN1J)](telemac_do_sag/telemac_do_sag_final_frame.png)
-
-*final frame (run 01M2Z5T8D37A014SW9BS42SN1J)*
-
-![dissolved oxygen - the chart the run persisted (run 01M2Z5T8D37A014SW9BS42SN1J)](telemac_do_sag/telemac_do_sag_chart_dissolved_oxygen.png)
-
-*dissolved oxygen - the chart the run persisted (run 01M2Z5T8D37A014SW9BS42SN1J)*
-
-### The sheet it filled
-
-Every slot the run resolved, with where the value came from. The engine's own defaults are folded: what is not here, the engine chose.
-
-| param | value | units | basis | provenance |
-|---|---|---|---|---|
-| `outfall_coords` | {'lon': -122.669784, 'lat': 45.518485, 'name': None} | - | user | supplied on this invocation |
-| `do_standard_mgl` | 5.0 | mg/L | user | supplied on this invocation |
-| `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
-| `compute_class` | medium | - | default_demo | declared constant default |
-| `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
-| `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
-
-### Reproduce
-
-```python
-from trid3nt_server.tools import TOOL_REGISTRY
-
-await TOOL_REGISTRY['telemac_do_sag'].fn(
-    do_standard_mgl=5.0,
-    mesh_resolution_m=40.0,
-    outfall_coords={'lon': -122.669784, 'lat': 45.518485, 'name': None},
-    discharge=56.6,
-    level=2.776,
-    keywords={'DURATION': 7200.0, 'waqtel: CONSTANT OF DEGRADATION OF ORGANIC LOAD K1': 2.0, 'waqtel: K2 REAERATION COEFFICIENT': 6.0},
-)
-```
-
-That is the invocation this run came from; the figures above are stamped with run `01M2Z5T8D37A014SW9BS42SN1J` and commit `51e023434461a083a833809792aa1c54c2fb790e-dirty`. The full argument record is [`telemac_do_sag/run.json`](telemac_do_sag/run.json).
 

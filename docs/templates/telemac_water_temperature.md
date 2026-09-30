@@ -21,11 +21,11 @@ WATER TEMPERATURE over a body of water under a week of real weather.
 | `weather` | matched on a need for weather forcing | the weather forcing this run reads, as a uri or a layer name; unfilled, the run matches a source of weather forcing. | - |
 | `observe` | matched on a need for water quality sample | the water quality sample this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of water quality sample. | - |
 
-## The sheet
+## The params
 
 The values the template declares. `desc` is what the model reads when it fills one.
 
-| param | door | units | default | desc |
+| param | comes from | units | default | desc |
 |---|---|---|---|---|
 | `seed` | user | - | optional | Where on the channel the modelled stretch STARTS, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. It seeds the reach the domain is cut from; supply the domain polygon - a lake, a pond, a harbour - instead and this is not read |
 | `station` | user | - | optional | Where the temperature series and its diurnal range are read, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer. Geocode a place name first |
@@ -33,76 +33,4 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `cores` | constant | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
 | `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
-
-It publishes these layers onto the canvas:
-
-- Input: domain (river_reach)
-- Input: bed (ehydro_surveys)
-- Input: bed (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))
-- Temperature station (user) - river_reach_domain
-- Input: weather (asos_metar)
-- Input: observe (usgs_nwis_gauges)
-- Velocity u over time (river_reach_domain_mesh)
-- Velocity v over time (river_reach_domain_mesh)
-- Water depth over time (river_reach_domain_mesh)
-- Free surface over time (river_reach_domain_mesh)
-- Bottom (m) at t = 3574.6 s (river_reach_domain_mesh)
-- Froude number over time (river_reach_domain_mesh)
-- Scalar flowrate over time (river_reach_domain_mesh)
-- Scalar velocity over time (river_reach_domain_mesh)
-- Temperature over time (river_reach_domain_mesh)
-- Water temperature (river_reach_domain_mesh)
-- river_reach_domain_mesh
-
-## The proving run
-
-Run `01M2ZCK2Z4BK96T1CN2AA7W5GH`, 2026-09-20T12:28:20.013258+00:00, 41.214 s, at commit `1af2df40ee24bde21884f2332188a524c0671688`.
-
-![Every layer the run published, stacked and framed on the result (run 01M2ZCK2Z4BK96T1CN2AA7W5GH)](telemac_water_temperature/telemac_water_temperature.png)
-
-*Every layer the run published, stacked and framed on the result (run 01M2ZCK2Z4BK96T1CN2AA7W5GH)*
-
-![The solve, frame by frame (run 01M2ZCK2Z4BK96T1CN2AA7W5GH)](telemac_water_temperature/telemac_water_temperature_animation.gif)
-
-*The solve, frame by frame (run 01M2ZCK2Z4BK96T1CN2AA7W5GH)*
-
-![final frame (run 01M2ZCK2Z4BK96T1CN2AA7W5GH)](telemac_water_temperature/telemac_water_temperature_final_frame.png)
-
-*final frame (run 01M2ZCK2Z4BK96T1CN2AA7W5GH)*
-
-![water temperature - the chart the run persisted (run 01M2ZCK2Z4BK96T1CN2AA7W5GH)](telemac_water_temperature/telemac_water_temperature_chart_water_temperature.png)
-
-*water temperature - the chart the run persisted (run 01M2ZCK2Z4BK96T1CN2AA7W5GH)*
-
-### The sheet it filled
-
-Every slot the run resolved, with where the value came from. The engine's own defaults are folded: what is not here, the engine chose.
-
-| param | value | units | basis | provenance |
-|---|---|---|---|---|
-| `seed` | {'lon': -122.6691667, 'lat': 45.5175, 'name': None} | - | user | supplied on this invocation |
-| `station` | {'lon': -122.669784, 'lat': 45.518485, 'name': None} | - | user | supplied on this invocation |
-| `mesh_resolution_m` | 40.0 | m | user | supplied on this invocation |
-| `event_time` | 2026-09-17T00:00:00+00:00 | - | user | supplied on this invocation |
-| `body` | reach | - | default_demo | declared question default |
-| `compute_class` | medium | - | default_demo | declared constant default |
-| `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
-
-### Reproduce
-
-```python
-from trid3nt_server.tools import TOOL_REGISTRY
-
-await TOOL_REGISTRY['telemac_water_temperature'].fn(
-    event_time='2026-09-17T00:00:00+00:00',
-    mesh_resolution_m=40.0,
-    seed={'lon': -122.6691667, 'lat': 45.5175, 'name': None},
-    station={'lon': -122.669784, 'lat': 45.518485, 'name': None},
-    discharge=56.6,
-    level=2.776,
-    keywords={'DURATION': 3600.0, 'GRAPHIC PRINTOUT PERIOD': 100},
-)
-```
-
-That is the invocation this run came from; the figures above are stamped with run `01M2ZCK2Z4BK96T1CN2AA7W5GH` and commit `1af2df40ee24bde21884f2332188a524c0671688`. The full argument record is [`telemac_water_temperature/run.json`](telemac_water_temperature/run.json).
 

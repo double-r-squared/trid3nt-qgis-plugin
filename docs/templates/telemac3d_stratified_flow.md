@@ -18,11 +18,11 @@ The 3D VERTICAL STRUCTURE of a body of water a 2D depth-averaged model cannot re
 | `bed` | matched on a need for bathymetry | what the domain's nodes carry for elevation: a DEM, a bathymetry or survey raster, a layer of soundings, or a depth in metres below the free surface; unfilled, the run matches a source of bathymetry. | - |
 | `level` | matched on a need for water level series | the water level series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of water level series. | - |
 
-## The sheet
+## The params
 
 The values the template declares. `desc` is what the model reads when it fills one.
 
-| param | door | units | default | desc |
+| param | comes from | units | default | desc |
 |---|---|---|---|---|
 | `seed` | user | - | optional | A point ON or beside the body of water this question is about, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer (geocode a place name first). The mapped outline that point names becomes the domain; a domain supplied directly supersedes it, and a body nobody mapped is drawn |
 | `warm_temp_c` | scenario | C | 25.0 | Epilimnion (warm surface layer) temperature the column OPENS at. The run exchanges no heat with the atmosphere, so what happens to this difference is the whole answer |
@@ -32,66 +32,4 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `cores` | constant | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
 | `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
-
-It publishes these layers onto the canvas:
-
-- Input: domain (nhd_waterbody_at_point)
-- Elevation z over time (nhd_waterbody_mesh)
-- Velocity u over time (nhd_waterbody_mesh)
-- Velocity v over time (nhd_waterbody_mesh)
-- Velocity w over time (nhd_waterbody_mesh)
-- Temperature over time (nhd_waterbody_mesh)
-- nhd_waterbody_mesh
-
-## The proving run
-
-Run `01M2Z58EWXKBFQ7ZE2FZGF1VVT`, 2026-09-20T10:23:02.165913+00:00, 219.479 s, at commit `231a10e6ef167c99765f9ab6ae23f1ec658c4fb6`.
-
-![Every layer the run published, stacked and framed on the result (run 01M2Z58EWXKBFQ7ZE2FZGF1VVT)](telemac3d_stratified_flow/telemac3d_stratified_flow.png)
-
-*Every layer the run published, stacked and framed on the result (run 01M2Z58EWXKBFQ7ZE2FZGF1VVT)*
-
-![The solve, frame by frame (run 01M2Z58EWXKBFQ7ZE2FZGF1VVT)](telemac3d_stratified_flow/telemac3d_stratified_flow_animation.gif)
-
-*The solve, frame by frame (run 01M2Z58EWXKBFQ7ZE2FZGF1VVT)*
-
-![final frame (run 01M2Z58EWXKBFQ7ZE2FZGF1VVT)](telemac3d_stratified_flow/telemac3d_stratified_flow_final_frame.png)
-
-*final frame (run 01M2Z58EWXKBFQ7ZE2FZGF1VVT)*
-
-![water temperature - the chart the run persisted (run 01M2Z58EWXKBFQ7ZE2FZGF1VVT)](telemac3d_stratified_flow/telemac3d_stratified_flow_chart_water_temperature.png)
-
-*water temperature - the chart the run persisted (run 01M2Z58EWXKBFQ7ZE2FZGF1VVT)*
-
-### The sheet it filled
-
-Every slot the run resolved, with where the value came from. The engine's own defaults are folded: what is not here, the engine chose.
-
-| param | value | units | basis | provenance |
-|---|---|---|---|---|
-| `seed` | {'lon': -123.221649, 'lat': 45.485595, 'name': None} | - | user | supplied on this invocation |
-| `warm_temp_c` | 25.0 | C | user | supplied on this invocation |
-| `cold_temp_c` | 15.0 | C | user | supplied on this invocation |
-| `thermocline_depth_m` | 6.0 | m | user | supplied on this invocation |
-| `mesh_resolution_m` | 60.0 | m | user | supplied on this invocation |
-| `compute_class` | medium | - | default_demo | declared constant default |
-| `vertical_frame` | NAVD88 | - | default_demo | declared constant default |
-| `event_time` | - | - | prompt_interpreted | not supplied (declared optional) |
-
-### Reproduce
-
-```python
-from trid3nt_server.tools import TOOL_REGISTRY
-
-await TOOL_REGISTRY['telemac3d_stratified_flow'].fn(
-    cold_temp_c=15.0,
-    mesh_resolution_m=60.0,
-    seed={'lon': -123.221649, 'lat': 45.485595, 'name': None},
-    thermocline_depth_m=6.0,
-    warm_temp_c=25.0,
-    bed=12.0,
-)
-```
-
-That is the invocation this run came from; the figures above are stamped with run `01M2Z58EWXKBFQ7ZE2FZGF1VVT` and commit `231a10e6ef167c99765f9ab6ae23f1ec658c4fb6`. The full argument record is [`telemac3d_stratified_flow/run.json`](telemac3d_stratified_flow/run.json).
 
