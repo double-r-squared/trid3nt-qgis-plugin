@@ -55,8 +55,10 @@ def get_client() -> httpx.Client:
     return _CLIENT
 
 
-def _retry_after_seconds(raw: str | None) -> float | None:
-    """Parse a ``Retry-After`` header (delta-seconds or HTTP-date) to seconds."""
+def _retry_after_seconds(raw: str | float | None) -> float | None:
+    """Parse a ``Retry-After`` hint (seconds, delta-seconds or HTTP-date) to seconds."""
+    if isinstance(raw, (int, float)):
+        return max(0.0, float(raw))
     if not raw:
         return None
     raw = raw.strip()
@@ -73,7 +75,7 @@ def _retry_after_seconds(raw: str | None) -> float | None:
     return max(0.0, dt.timestamp() - time.time())
 
 
-def _sleep_backoff(attempt: int, retry_after: str | None) -> None:
+def _sleep_backoff(attempt: int, retry_after: str | float | None) -> None:
     """Sleep before the next attempt: honor ``Retry-After`` else exp backoff+jitter."""
     hinted = _retry_after_seconds(retry_after)
     if hinted is not None:
@@ -89,7 +91,8 @@ def retried(call: Callable[[], T], *, transient: Callable[[Exception], bool],
     """Run ``call`` under this module's attempt budget and backoff, for a library
     that owns its own socket. ``transient`` names which of its exceptions another
     attempt may cure; any other raises at once, and the last transient one raises
-    unchanged once the budget is spent, so the caller maps it to its typed error."""
+    unchanged once the budget is spent, so the caller maps it to its typed error.
+    A ``retry_after`` the exception carries is the provider's wait, and is honoured."""
     for attempt in range(MAX_RETRIES + 1):
         try:
             return call()
@@ -98,8 +101,7 @@ def retried(call: Callable[[], T], *, transient: Callable[[Exception], bool],
                 raise
             logger.warning("transport.retried %s attempt=%d: %s: %s",
                            label, attempt, type(exc).__name__, exc)
-            _sleep_backoff(attempt, None)
-    raise AssertionError("unreachable")
+            _sleep_backoff(attempt, getattr(exc, "retry_after", None))
 
 
 def head(client: httpx.Client, url: str) -> httpx.Response:

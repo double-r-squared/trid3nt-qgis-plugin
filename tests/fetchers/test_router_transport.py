@@ -273,6 +273,24 @@ def test_retry_after_header_honored(range_server, monkeypatch):
     assert seen and seen[0] == pytest.approx(2.0, abs=0.01)
 
 
+def test_retried_waits_the_retry_after_a_library_429_carries(monkeypatch):
+    from dataretrieval.exceptions import RateLimited, TransientError
+
+    seen: list[float] = []
+    monkeypatch.setattr(transport_client.time, "sleep", lambda d: seen.append(d))
+    calls = iter([RateLimited("slow down", status_code=429, retry_after=7.0)])
+
+    def call() -> str:
+        for exc in calls:
+            raise exc
+        return "read"
+
+    assert transport_client.retried(
+        call, transient=lambda exc: isinstance(exc, TransientError),
+        label="nwis") == "read"
+    assert seen == [7.0]
+
+
 
 
 def test_mid_read_disconnect_bridges_typed_error(range_server):
