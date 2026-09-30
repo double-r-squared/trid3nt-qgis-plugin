@@ -6,7 +6,7 @@ NEARSHORE WAVES: what the offshore swell becomes at the shore - how high, how lo
 
 |  |  |
 |---|---|
-| module | `tomawac` - 223 keywords in its dictionary, of which this template states 21 |
+| module | `tomawac` - 223 keywords in its dictionary, of which this template states 14 |
 | solves | `trid3nt_server.workflows.telemac.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 

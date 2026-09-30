@@ -6,7 +6,7 @@ The 3D VERTICAL STRUCTURE of a body of water a 2D depth-averaged model cannot re
 
 |  |  |
 |---|---|
-| module | `telemac3d` - 355 keywords in its dictionary, of which this template states 30 |
+| module | `telemac3d` - 355 keywords in its dictionary, of which this template states 27 |
 | solves | `trid3nt_server.workflows.telemac.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 

@@ -6,7 +6,7 @@ NUTRIENT ENRICHMENT in a body of water: algal growth, nutrient drawdown and the 
 
 |  |  |
 |---|---|
-| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 26 |
+| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 21 |
 | solves | `trid3nt_server.workflows.telemac.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 

@@ -6,7 +6,7 @@ A SUSPENDED SEDIMENT plume in a body of water: it settles and deposits on the be
 
 |  |  |
 |---|---|
-| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 35 |
+| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 28 |
 | solves | `trid3nt_server.workflows.telemac.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
