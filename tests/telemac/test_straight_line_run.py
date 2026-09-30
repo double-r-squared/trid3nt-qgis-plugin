@@ -119,3 +119,20 @@ def test_a_launch_that_raises_carries_its_own_error_and_its_notes(monkeypatch):
     assert isinstance(caught.value.__cause__, Refused)
     assert "also missing from this run: the weather row had no source" \
         in caught.value.__notes__
+
+
+def test_what_the_card_seats_is_the_value_the_outputs_stage_binds(monkeypatch):
+    workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
+    calls: list = []
+    _faked(monkeypatch, calls)
+    name = next(iter(workflow.params)).name
+
+    async def sheet(*, seat, **_kwargs):
+        seat({name: "edited on the card"})
+        return {"name": "sheet"}
+
+    monkeypatch.setattr(tw, "fill_sheet", sheet)
+    state = Fill(workflow=workflow, carried={"restart_clean": False},
+                 params=asyncio.run(resolve_params(workflow.params, {})))
+    asyncio.run(workflow.launch(state))
+    assert dict(calls)["outputs"]["params"][name] == "edited on the card"
