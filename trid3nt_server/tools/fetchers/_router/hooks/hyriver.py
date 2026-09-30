@@ -1,4 +1,4 @@
-"""Every HyRiver call rides here: the retry, the status filter, and the refusal.
+"""Every HyRiver call rides here: the status filter and the refusal, under the shared retry.
 
 Its HTTP layer has no retry, no status filter and no ``Retry-After`` read, and a 4xx
 whose body parses as JSON is RETURNED AS A VALUE, so an upstream refusal would else
@@ -21,17 +21,16 @@ from __future__ import annotations
 
 import asyncio
 import os
-import random
 import re
 from pathlib import Path
 from typing import Any, Callable, TypeVar
 
 import aiohttp
-from tenacity import RetryCallState, Retrying, retry_if_exception_type, stop_after_attempt
 
 from trid3nt_contracts.source_spec import SourceSpec
 
 from ..errors import router_upstream_error
+from ..transport.client import RETRYABLE_STATUS, retried
 
 __all__ = ["hyriver_call", "configure_cache"]
 
@@ -40,13 +39,6 @@ T = TypeVar("T")
 #: The dynamic-1h class, the shortest router cache window: a library body may not
 #: outlive the narrowest key the router would recompute.
 _CACHE_EXPIRE_S = 3600
-
-#: The retry policy is transport/client.py's, restated for a library that owns its
-#: own HTTP: the same statuses, the same backoff shape, the same attempt budget.
-_RETRY_STATUS = (429, 500, 502, 503, 504)
-_ATTEMPTS = 5
-_BACKOFF_BASE_S = 0.5
-_BACKOFF_CAP_S = 20.0
 
 #: A request that never became a response. The library discards the status but not
 #: the exception class, so this is classified on type where a body cannot be read.
@@ -61,9 +53,9 @@ _STATUS_RE = re.compile(r"\b(?:status|code)\D{0,12}?([45]\d\d)\b", re.IGNORECASE
 class _Refused(RuntimeError):
     """An upstream refusal, verbatim, plus the server's own wait when it sent one."""
 
-    def __init__(self, text: str, wait: float | None = None) -> None:
+    def __init__(self, text: str, retry_after: float | None = None) -> None:
         super().__init__(text)
-        self.wait = wait
+        self.retry_after = retry_after
 
 
 class _Throttled(_Refused):
@@ -111,18 +103,9 @@ def _refusal(text: str, exc: BaseException | None = None) -> _Refused:
     after = _RETRY_AFTER_RE.search(text)
     wait = float(after.group(1)) if after else None
     retryable = _caused_by_no_response(exc) or (
-        status is not None and int(status.group(1)) in _RETRY_STATUS
+        status is not None and int(status.group(1)) in RETRYABLE_STATUS
     )
     return (_Throttled if retryable else _Refused)(text, wait)
-
-
-def _wait(state: RetryCallState) -> float:
-    """The server's own number when it sent one, else backoff with jitter."""
-    given = getattr(state.outcome.exception() if state.outcome else None, "wait", None)
-    if given is not None:
-        return min(given, _BACKOFF_CAP_S)
-    delay = min(_BACKOFF_BASE_S * 2 ** (state.attempt_number - 1), _BACKOFF_CAP_S)
-    return delay + random.uniform(0.0, _BACKOFF_BASE_S)
 
 
 def hyriver_call(spec: SourceSpec, what: str, fn: Callable[..., T], *args: Any, **kwargs: Any) -> T:
@@ -130,22 +113,19 @@ def hyriver_call(spec: SourceSpec, what: str, fn: Callable[..., T], *args: Any, 
     the call in the error a caller reads, and anything left after the retries is a
     typed upstream error carrying the library's text verbatim."""
     configure_cache()
+
+    def call() -> T:
+        try:
+            out = fn(*args, **kwargs)
+        except Exception as exc:  # noqa: BLE001 -- classified, never leaked raw
+            raise _refusal(f"{type(exc).__name__}: {exc}", exc) from exc
+        text = _error_text(out)
+        if text is not None:
+            raise _refusal(text)
+        return out
+
     try:
-        for attempt in Retrying(
-            retry=retry_if_exception_type(_Throttled),
-            stop=stop_after_attempt(_ATTEMPTS),
-            wait=_wait,
-            reraise=True,
-        ):
-            with attempt:
-                try:
-                    out = fn(*args, **kwargs)
-                except Exception as exc:  # noqa: BLE001 -- classified, never leaked raw
-                    raise _refusal(f"{type(exc).__name__}: {exc}", exc) from exc
-                text = _error_text(out)
-                if text is not None:
-                    raise _refusal(text)
-                return out
+        return retried(call, transient=lambda exc: isinstance(exc, _Throttled),
+                       label=f"{spec.name} {what}")
     except _Refused as exc:
         raise router_upstream_error(spec.error_code_prefix, f"{what} failed: {exc}")
-    raise router_upstream_error(spec.error_code_prefix, f"{what} failed: exhausted retries")

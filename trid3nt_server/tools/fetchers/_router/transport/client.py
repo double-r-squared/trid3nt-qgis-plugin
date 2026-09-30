@@ -24,11 +24,11 @@ logger = logging.getLogger(
 
 __all__ = [
     "get_client", "range_get", "get_bytes", "get_once", "post_bytes", "head",
-    "retried", "MAX_RETRIES",
+    "retried", "MAX_RETRIES", "RETRYABLE_STATUS",
 ]
 
 MAX_RETRIES = 4
-_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 _BACKOFF_BASE = 0.5
 _BACKOFF_CAP = 20.0
 _DEFAULT_TIMEOUT = 60.0
@@ -120,7 +120,7 @@ def head(client: httpx.Client, url: str) -> httpx.Response:
                 continue
             raise TransportUpstreamError(
                 f"HEAD network failure url={url}: {exc}") from exc
-        if resp.status_code in _RETRYABLE_STATUS:
+        if resp.status_code in RETRYABLE_STATUS:
             logger.warning("transport.head HTTP %d url=%s attempt=%d",
                            resp.status_code, url, attempt)
             if attempt < MAX_RETRIES:
@@ -154,7 +154,7 @@ def get_bytes(
                 continue
             raise TransportUpstreamError(
                 f"GET network failure url={url}: {exc}") from exc
-        if resp.status_code in _RETRYABLE_STATUS:
+        if resp.status_code in RETRYABLE_STATUS:
             logger.warning("transport.get_bytes HTTP %d url=%s attempt=%d body=%r",
                            resp.status_code, url, attempt, resp.text[:400])
             if attempt < MAX_RETRIES:
@@ -204,7 +204,7 @@ def post_bytes(
                 continue
             raise TransportUpstreamError(
                 f"POST network failure url={url}: {exc}") from exc
-        if resp.status_code in _RETRYABLE_STATUS:
+        if resp.status_code in RETRYABLE_STATUS:
             logger.warning("transport.post_bytes HTTP %d url=%s attempt=%d body=%r",
                            resp.status_code, url, attempt, resp.text[:400])
             if attempt < MAX_RETRIES:
@@ -239,7 +239,7 @@ def range_get(client: httpx.Client, url: str, lo: int, hi: int) -> bytes:
             raise TransportUpstreamError(
                 f"range GET network failure bytes={lo}-{hi} url={url}: {exc}"
             ) from exc
-        if resp.status_code in _RETRYABLE_STATUS:
+        if resp.status_code in RETRYABLE_STATUS:
             logger.warning("transport.range_get HTTP %d url=%s bytes=%d-%d attempt=%d "
                            "body=%r", resp.status_code, url, lo, hi, attempt,
                            resp.text[:400])

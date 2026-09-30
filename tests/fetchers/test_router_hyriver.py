@@ -15,6 +15,7 @@ import pytest
 from trid3nt_server.tools.fetchers._router.errors import RouterUpstreamError
 from trid3nt_server.tools.fetchers._router.hooks import hyriver
 from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt_server.tools.fetchers._router.transport import client as transport_client
 
 _SPEC = compose_specs_from_tree()["fetch_high_water_marks"]
 
@@ -39,7 +40,7 @@ def test_esri_error_envelope_is_raised_verbatim():
 
 
 def test_retryable_status_recovers(monkeypatch):
-    monkeypatch.setattr(hyriver, "_BACKOFF_BASE_S", 0.0)
+    monkeypatch.setattr(transport_client.time, "sleep", lambda _d: None)
     calls = {"n": 0}
 
     def flaky():
@@ -50,6 +51,20 @@ def test_retryable_status_recovers(monkeypatch):
 
     assert hyriver.hyriver_call(_SPEC, "flaky", flaky) == "DATA"
     assert calls["n"] == 3
+
+
+def test_a_transient_status_is_retried_under_the_shared_budget(monkeypatch):
+    monkeypatch.setattr(transport_client.time, "sleep", lambda _d: None)
+    monkeypatch.setattr(transport_client, "MAX_RETRIES", 1)
+    calls = {"n": 0}
+
+    def busy():
+        calls["n"] += 1
+        return {"title": "Service Unavailable", "status": 503}
+
+    with pytest.raises(RouterUpstreamError, match="Service Unavailable"):
+        hyriver.hyriver_call(_SPEC, "busy", busy)
+    assert calls["n"] == 2
 
 
 def test_retry_after_in_the_body_is_obeyed():
@@ -63,7 +78,7 @@ def test_retry_after_in_the_body_is_obeyed():
 
 
 def test_non_retryable_status_fails_on_the_first_try(monkeypatch):
-    monkeypatch.setattr(hyriver, "_BACKOFF_BASE_S", 0.0)
+    monkeypatch.setattr(transport_client.time, "sleep", lambda _d: None)
     calls = {"n": 0}
 
     def gone():
@@ -100,7 +115,7 @@ def test_a_connection_that_never_answered_is_retried(monkeypatch):
     """A reset connection names no status; its exception class is the whole signal."""
     import aiohttp
 
-    monkeypatch.setattr(hyriver, "_BACKOFF_BASE_S", 0.0)
+    monkeypatch.setattr(transport_client.time, "sleep", lambda _d: None)
     calls = {"n": 0}
 
     def reset():
@@ -115,7 +130,7 @@ def test_a_connection_that_never_answered_is_retried(monkeypatch):
 
 def test_an_arcgis_error_page_names_its_status_through_the_markup(monkeypatch):
     """ArcGIS prints the status inside HTML; the classifier reads through it."""
-    monkeypatch.setattr(hyriver, "_BACKOFF_BASE_S", 0.0)
+    monkeypatch.setattr(transport_client.time, "sleep", lambda _d: None)
     calls = {"n": 0}
 
     def flaky():
