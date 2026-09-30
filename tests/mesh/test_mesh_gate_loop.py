@@ -524,3 +524,14 @@ async def test_a_refusal_keeps_the_code_of_its_reason_through_the_mesh_gate(
             _session(tmp_path), tool_name="telemac_dye_release", input_mode="auto")
 
     assert caught.value.error_code == code
+
+
+@pytest.mark.asyncio
+async def test_a_cancel_the_refusal_map_has_not_learned_fails_by_its_key(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(mesh_gate, "gate_input_review",
+                        _gate_answering("expired", physics=False))
+
+    with pytest.raises(KeyError, match="expired"):
+        await mesh_gate.gate_mesh_build(
+            _session(tmp_path), tool_name="telemac_dye_release", input_mode="auto")
