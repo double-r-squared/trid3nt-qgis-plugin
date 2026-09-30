@@ -1367,7 +1367,7 @@ class _CARD(T2D):
     DURATION = ParamRef("sim_duration_s")
 
 
-def _card_run(monkeypatch, *replies, spent=(), input_mode=None):
+def _card_run(monkeypatch, *replies, spent=(), input_mode=None, seat=None):
     import asyncio
 
     from trid3nt_server.render import pipeline_emitter as pe
@@ -1382,7 +1382,7 @@ def _card_run(monkeypatch, *replies, spent=(), input_mode=None):
             return await fill_sheet(
                 steering=_CARD, produced={}, params={"sim_duration_s": 600.0},
                 workflow="probe", title="", keywords={}, input_mode=input_mode,
-                spent=spent)
+                spent=spent, seat=seat)
         finally:
             answering.cancel()
 
@@ -1399,6 +1399,31 @@ def test_a_template_param_edited_on_the_card_lands_and_the_card_redraws(
              for card in emitter.sent]
     assert [card["sim_duration_s"] for card in drawn] == [600.0, 900.0]
     assert [card["DURATION"] for card in drawn] == [600.0, 900.0]
+
+
+def test_a_param_edited_on_the_card_reaches_the_chart_reference(monkeypatch):
+    """The outputs stage binds a chart reference's params off the run's values
+    after the sheet, so what the card seated is what the chart reads."""
+    import asyncio
+    from types import SimpleNamespace
+
+    from trid3nt_server.workflows.runtime import resolve_params
+    from trid3nt_server.workflows.runtime.fill import _bind
+    from trid3nt_server.workflows.runtime.params import Param
+    from trid3nt_server.workflows.telemac.workflow import _seat_on
+
+    class _P:
+        sim_duration_s = Param(desc="How long the run solves.", default=600.0,
+                               bounds=(1.0, 1.0e7))
+
+    env = SimpleNamespace(params=asyncio.run(resolve_params(_P, {})))
+    _card_run(monkeypatch, ("narrow_scope", {"sim_duration_s": 900.0}),
+              ("proceed", None), seat=_seat_on(env))
+    chart = asyncio.run(_bind(
+        {"params": {"sim_duration_s": ParamRef("sim_duration_s")}}, env,
+        "outputs"))["params"]
+    assert chart == {"sim_duration_s": 900.0}
+    assert env.params.row("sim_duration_s").basis == "user"
 
 
 def test_a_keyword_edited_on_the_card_lands(monkeypatch):

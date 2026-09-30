@@ -465,10 +465,13 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
                      params: Mapping[str, Any],
                      settled: Mapping[str, Any] | None = None,
                      workflow: str, title: str, keywords: Mapping[str, Any],
-                     input_mode: str | None, spent: Sequence[str] = ()) -> Sheet:
+                     input_mode: str | None, spent: Sequence[str] = (),
+                     seat: Callable[[Mapping[str, Any]], None] | None = None
+                     ) -> Sheet:
     """Set the body's slots against what the run measured -> the sheet, HELD.
 
-    The raw ``keywords`` floor is filled last and therefore beats a template value."""
+    The raw ``keywords`` floor is filled last and therefore beats a template
+    value. ``seat`` takes the param values the person proceeded on."""
     stated, coupled = _floor(steering, keywords)
 
     async def fill(values: Mapping[str, Any], edits: Mapping[str, Any]) -> Sheet:
@@ -482,7 +485,8 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
         return fill_coupled(sheet, coupled) if coupled else sheet
 
     sheet = await _review(fill, params, steering=steering, workflow=workflow,
-                          title=title, input_mode=input_mode, spent=spent)
+                          title=title, input_mode=input_mode, spent=spent,
+                          seat=seat)
     logger.info("telemac sheet filled: %s states %d keywords, %d open "
                 "(%d required)", sheet.body.__name__, len(sheet.filled),
                 len(sheet.open()), len(sheet.required()))
@@ -681,7 +685,9 @@ def _serial_rows(sheet: Sheet) -> list[ParamSheetRow]:
 async def _review(fill: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
                   params: Mapping[str, Any], *, steering: type, workflow: str,
                   title: str, input_mode: str | None,
-                  spent: Sequence[str]) -> Sheet:
+                  spent: Sequence[str],
+                  seat: Callable[[Mapping[str, Any]], None] | None = None
+                  ) -> Sheet:
     """Show the filled sheet and HOLD -> the sheet the person proceeded on.
 
     An edit re-fills its input and redraws the card, or refuses by name."""
@@ -737,6 +743,8 @@ async def _review(fill: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
             outcome.cancel_reason or f"{workflow} was cancelled at the review.",
             error_code=("NO_SESSION" if outcome.cancel_code == "no_session"
                         else "USER_INPUT_CANCELLED"))
+    if seat is not None:
+        seat(values)
     return sheet
 
 
@@ -747,6 +755,17 @@ def _entries(rows: Sequence[ParamSheetRow]) -> list[SyntheticInput]:
                 value=(row.value if isinstance(row.value, (int, float, str, bool))
                        else "; ".join(str(v) for v in row.value)))
             for row in rows if row.value is not None and not row.advanced]
+
+
+def _seat_on(env: Any) -> Callable[[Mapping[str, Any]], None]:
+    """Seat the values a person proceeded on as the run's own, so every read of
+    a param after the sheet - a chart's reference among them - reads the edit."""
+    def seat(values: Mapping[str, Any]) -> None:
+        env.params = env.params.replacing({
+            name: env.params.row(name).with_value(value, basis="user")
+            for name, value in values.items()
+            if name in env.params and value != env.params.value_of(name)})
+    return seat
 
 
 def _param_row(name: str, value: Any) -> ParamSheetRow:
@@ -1040,7 +1059,8 @@ class TelemacWorkflow(Workflow):
                     settled=env.results[_SETTLED].get("keywords") or {},
                     workflow=self.name,
                     title=self._states("REVIEW_TITLE", ""), keywords=keywords,
-                    input_mode=env.input_mode, spent=sorted(spent))
+                    input_mode=env.input_mode, spent=sorted(spent),
+                    seat=_seat_on(env))
         listed = tuple(self._states("RESULTS", ()))
         solved = await stage(
             "solve", run_sheet, sheet=Ref("sheet"), settled=Ref(_SETTLED),
