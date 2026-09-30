@@ -121,6 +121,21 @@ async def test_user_gated_no_session_refuses_by_name(monkeypatch, mode) -> None:
 
 
 @pytest.mark.asyncio
+async def test_user_gated_no_session_over_a_physics_default_refuses_as_physics(
+        monkeypatch) -> None:
+    monkeypatch.setattr(pe, "current_emitter", lambda: None)
+    physics = SyntheticInput(param="manning_n", value=0.03, basis="default_demo",
+                             consequence="physics")
+    out = await gate_input_review(
+        tool_name="geoclaw_inundation", mode="user_gated",
+        entries=[*_entries(), physics], params={"dam_break_depth_m": 44.2},
+    )
+    assert out.proceed is False and out.cancelled is True
+    assert out.cancel_code == "physics"
+    assert out.cancel_reason.startswith("PHYSICS_INPUT_REQUIRED: geoclaw_inundation")
+
+
+@pytest.mark.asyncio
 async def test_user_gated_proceed(monkeypatch) -> None:
     fake = _FakeEmitter()
     monkeypatch.setattr(pe, "current_emitter", lambda: fake)

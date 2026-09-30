@@ -283,11 +283,13 @@ async def gate_input_review(
     if emitter is None:
         logger.info("input-review gate REFUSE (user_gated, no session) tool=%s",
                     tool_name)
+        physics = physics_refusal_reason(tool_name, entries, no_session=True)
         return ReviewOutcome(
             proceed=False, entries=list(entries), params=dict(params),
-            cancelled=True, mode="user_gated", cancel_code="no_session",
+            cancelled=True, mode="user_gated",
+            cancel_code="physics" if physics else "no_session",
             cancel_reason=(
-                physics_refusal_reason(tool_name, entries, no_session=True)
+                physics
                 or f"NO_SESSION: {tool_name} did not run - it waits for a person "
                 "to proceed on its review card and no session is open. Open a "
                 "session to review and launch it, or state input_mode='auto' on "
