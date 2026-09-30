@@ -19,7 +19,6 @@ from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.runtime import (
     Data,
-    Ref,
     register_workflow,
 )
 from trid3nt_server.mesh.tool import mesh_op, tool
@@ -30,7 +29,6 @@ from trid3nt_server.workflows.telemac.templates.wave_driven_currents.declaration
     ACCEPTS,
     DOC,
     PARAMS,
-    PARAMS as P,
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
@@ -77,7 +75,7 @@ _FRICTION_COEFFICIENT = 0.05
 #: WHERE the current is read over time: the point the ask gave, settled onto a
 #: node of the accepted mesh. The fraction is never reached - the point is a
 #: required param, because a coast has no centerline a station could sit along.
-_STATION = Placed("station", point=PARAMS.station, label="Current station")
+_STATION = Placed("station", point="station", label="Current station")
 
 
 class DATA:
@@ -103,7 +101,7 @@ class DATA:
     #: buoy reports them near the point the question names. A swell arriving
     #: square to the beach drives no current along it, so the direction in this
     #: record is what the whole question turns on.
-    wave = Data.need("wave series", at=Ref("seed"))
+    wave = Data.need("wave series", at="seed")
     #: THE TIDE, as the SERIES the record serves rather than one reading of it.
     #: The seaward rim is a prescribed ELEVATION - that is what an ocean boundary
     #: section writes into the boundary file - so this is what the open edge
@@ -155,7 +153,7 @@ class STEERING(T2D):
     #: NO tracer: this question is about the water's own momentum, so every
     #: liquid boundary carries the measured tide and nothing else. The walk is
     #: the mesh's own.
-    boundaries = Boundaries(measured=Ref("settled"), tracers=[])
+    boundaries = Boundaries(tracers=[])
 
     #: CALM: the question is what the WAVES drive, so this deck states no
     #: surface stress of its own - a current with a wind in it would be two
@@ -201,8 +199,8 @@ class STEERING(T2D):
 MESH = tool.build_mesh(
     mesher="om2d",
     kind="unstructured_tri",
-    extent=DATA.domain,
-    resolution_m=P.mesh_resolution_m,
+    extent="domain",
+    resolution_m="mesh_resolution_m",
     ops=[
         mesh_op("feature_sizing_function"),
         # THE RIM IS THE ASK'S TO SIZE. No sizing function the library has
@@ -215,13 +213,13 @@ MESH = tool.build_mesh(
         mesh_op("delete_faces_connected_to_one_face"),
         mesh_op("make_mesh_boundaries_traversable"),
         mesh_op("fix_mesh", delete_unused=True),
-        mesh_op("set_bed", source=DATA.bed),
+        mesh_op("set_bed", source="bed"),
         # EVERY stretch the library reads as ocean at this depth OPENS. The code
         # quad an open section is written under prescribes a water LEVEL and
         # leaves the velocity free, which is exactly the tidal edge a coastal
         # window wants and exactly the edge a spectrum is imposed across.
         mesh_op("identify_ocean_boundary_sections",
-                depth_threshold=P.open_depth_threshold_m),
+                depth_threshold="open_depth_threshold_m"),
     ],
 )
 
@@ -232,8 +230,8 @@ MESH = tool.build_mesh(
 #: the wave periods and directions, the breaking band, the forces - is published
 #: because their tables row it, not because this template asked.
 OUTPUTS = [
-    series("M", at=_STATION).chart(),
-    series("HM0", at=_STATION, module="tomawac").chart(),
+    series("M", at="station").chart(),
+    series("HM0", at="station", module="tomawac").chart(),
 ]
 CAPTIONS = {"M": "current speed", "U": "current along x", "V": "current along y",
             "HM0": "significant wave height", "BETA": "breaking rate",
@@ -275,7 +273,7 @@ _METADATA = AtomicToolMetadata(
 #: WHAT the mesh is built over, and the DATA slot a caller may hand a built
 #: mesh in instead of the recipe. Filled, that mesh is adopted whole.
 MESH_ON = "domain"
-SUPPLIED_MESH = DATA.mesh
+SUPPLIED_MESH = "mesh"
 
 #: WHAT THE RUN HAS TO WRITE: the host's file and the wave module's own beside
 #: it. The wave the current is read against lives in the second one, so a run

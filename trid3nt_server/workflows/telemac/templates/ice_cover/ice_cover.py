@@ -16,8 +16,6 @@ from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.runtime import (
     Data,
-    ParamRef,
-    Ref,
     register_workflow,
 )
 from trid3nt_server.workflows.telemac.modules import KHIONE, T2D, series
@@ -25,7 +23,7 @@ from trid3nt_server.workflows.telemac.modules.khione import RESULT_FILENAME
 from trid3nt_server.workflows.telemac.modules.outputs import reference_line
 from trid3nt_server.workflows.telemac.modules.telemac2d import Atmosphere, Boundaries
 from trid3nt_server.workflows.telemac.templates.ice_cover.declarations import (
-    ACCEPTS, DOC, PARAMS, PARAMS as P,
+    ACCEPTS, DOC, PARAMS,
 )
 from trid3nt_server.workflows.telemac.workflow import (
     Placed, TelemacWorkflow,
@@ -63,7 +61,7 @@ _STATION_FRAC = 0.98
 #: WHERE the series is read: the point the user clicked, else that fraction
 #: along the domain's own centerline. The workflow settles it onto a node of the
 #: accepted mesh, so the chart is a node the run solved on.
-_STATION = Placed("station", point=PARAMS.station, fraction=_STATION_FRAC,
+_STATION = Placed("station", point="station", fraction=_STATION_FRAC,
                   label="Ice station")
 
 #: The tracers KHIONE appends to this host under the switches the ice deck below
@@ -85,7 +83,7 @@ class DATA:
     # its two end transects, which is where the inflow and the outflow are
     # prescribed; a closed body arrives as one outline, states no run and its
     # whole edge is wall.
-    domain = Data.need("hydrography", at=Ref("seed"),
+    domain = Data.need("hydrography", at="seed",
                        span_km=_REACH_LENGTH_KM)
 
     # THE BED, as the CLASS it is rather than the source it comes from: the
@@ -131,7 +129,7 @@ class DATA:
     # stands over the record, and where the portal sampled nothing in the
     # window the sheet says so and the value is the caller's.
     observe = Data.need("water quality sample", of="TEMPERATURE",
-                        at=Ref("station")).context(
+                        at="station").context(
         "no sample near this domain in this window; the stated value stands")
 
 
@@ -185,8 +183,7 @@ class STEERING(T2D):
     #: in the order the ice deck below appends them; the temperature is the
     #: record's whole window where a station on this water measured one, and
     #: the one reading where none did.
-    boundaries = Boundaries(measured=Ref("settled"),
-                            tracers=[Ref("observe.forcing"), *_INFLOW_ICE])
+    boundaries = Boundaries(tracers=["observe", *_INFLOW_ICE])
 
     #: The weather over the whole domain, as the one table the engine
     #: interpolates every column of between the same two rows. The nearest
@@ -196,9 +193,9 @@ class STEERING(T2D):
     #: DURATION this deck states rather than for a second number beside it, and
     #: its t = 0 is the moment the run opens at rather than the record's own
     #: first sample.
-    atmosphere = Atmosphere(observed=DATA.weather, at=_STATION,
-                            duration_s=Ref("sheet.DURATION"),
-                            event_time=ParamRef("event_time"))
+    atmosphere = Atmosphere(observed="weather", at="station",
+                            duration_s="DURATION",
+                            event_time="event_time")
 
     #: The ice. Five statements, and every other constant the module carries -
     #: the heat budget itself, the frazil class count and its seeding, the
@@ -233,9 +230,9 @@ class STEERING(T2D):
 #: modules wrote - the heat fluxes, the frazil, the ice type - is published
 #: because their tables row it, not because this template asked.
 OUTPUTS = [
-    series("DYNCOVC", at=_STATION, module="khione").chart(
-        reference=reference_line(P.cover_threshold, label="cover threshold")),
-    series("DYNCOVT", at=_STATION, module="khione").chart(),
+    series("DYNCOVC", at="station", module="khione").chart(
+        reference=reference_line("cover_threshold", label="cover threshold")),
+    series("DYNCOVT", at="station", module="khione").chart(),
 ]
 CAPTIONS = {"DYNCOVC": "ice cover fraction", "DYNCOVT": "ice cover thickness",
            "discharge": "a streamflow", "level": "a water-surface elevation",

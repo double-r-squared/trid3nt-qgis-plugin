@@ -12,7 +12,6 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
     Data,
-    Ref,
     register_workflow,
 )
 from trid3nt_server.inputs import point_arg
@@ -30,7 +29,7 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Wind,
 )
 from trid3nt_server.workflows.telemac.templates.dye_release.declarations import (
-    ACCEPTS, DECAY_PRESETS, DOC, PARAMS, PARAMS as P,
+    ACCEPTS, DECAY_PRESETS, DOC, PARAMS,
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
@@ -40,7 +39,7 @@ __all__ = ["CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
 #: WHERE the substance enters the water: the point the user clicked, else that
 #: fraction along the domain's own centerline. The workflow settles it onto a
 #: node of the accepted mesh before the sheet reads it back.
-_RELEASE = Placed("source", point=PARAMS.release, fraction=PARAMS.spill_fraction,
+_RELEASE = Placed("source", point="release", fraction="spill_fraction",
                   label="Release point", continues=True)
 
 #: The files the run directory holds beside the deck's own statements. The
@@ -68,7 +67,7 @@ class DATA:
 
     # A release named up front also names which stretch to model: the reach is
     # walked downstream from it. A domain the user supplies supersedes this.
-    domain = Data.need("hydrography", at=Ref("release"),
+    domain = Data.need("hydrography", at="release",
                        span_km=_REACH_LENGTH_KM)
     # THE BED, as the CLASS it is rather than the source it comes from: the
     # measurement where something measured it, the terrain under the rest. Which
@@ -142,8 +141,7 @@ class STEERING(T2D):
     NUMBER_OF_TRACERS = 1
     #: The tracer is called what the user called the release point, when a
     #: picked or named point came; the template's own name stands otherwise.
-    tracer_names = TracerNames(names=["DYE             MG/L"],
-                               named_by=Ref("source.name"))
+    tracer_names = TracerNames(names=["DYE             MG/L"])
     INITIAL_VALUES_OF_TRACERS = [0.0]
 
     #: The carrier's own boundary values, in the order the engine numbers its
@@ -151,7 +149,7 @@ class STEERING(T2D):
     #: carries and the level the outflow run holds. ONE tracer, so every liquid
     #: boundary carries one clean value - the arity of that list is what moves
     #: when the question does.
-    boundaries = Boundaries(measured=Ref("settled"), tracers=[0.0])
+    boundaries = Boundaries(tracers=[0.0])
 
     #: HOW MUCH enters, and at what concentration: a point discharge small
     #: against the carrier flow, carrying a marker the dilution downstream is
@@ -161,8 +159,7 @@ class STEERING(T2D):
     VALUES_OF_THE_TRACERS_AT_THE_SOURCES = [100.0]
     #: A FINITE pulse, so the slug advects away and dilutes instead of
     #: saturating the water.
-    sources = Sources(at=_RELEASE, window_s=P.spill_duration_s,
-                      until_s=Ref("settled.until_s"))
+    sources = Sources(window_s="spill_duration_s")
 
     #: CALM AND DRY: this question asks what the CURRENT does with the slug, so
     #: this deck states no surface stress and no distributed rain and the answer
@@ -173,7 +170,7 @@ class STEERING(T2D):
     #: First-order degradation on the same tracer - no new tracer - when a
     #: decaying substance was named; nothing otherwise. This deck states no
     #: die-off of its own: the substance word picks its narrated preset.
-    coupling = [WAQTEL.degradation(substance=P.decaying_substance,
+    coupling = [WAQTEL.degradation(substance="decaying_substance",
                                    presets=DECAY_PRESETS)]
 
 

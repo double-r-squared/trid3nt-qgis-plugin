@@ -29,7 +29,6 @@ __all__ = [
     "fetch_fallback_note",
     "get_mesher",
     "input_digest",
-    "is_late_bound",
     "mesh_op",
     "nearest_names",
     "op_names",
@@ -88,17 +87,6 @@ def nearest_names(name: str, known: Iterable[str]) -> str:
     if close:
         return f"did you mean {', '.join(repr(c) for c in close)}? declared: {pool}"
     return f"declared: {pool}"
-
-
-def is_late_bound(value: Any) -> bool:
-    """Is ``value`` a plan-time DESCRIPTION of a read rather than the value?
-
-    ``P.<name>`` / ``D.<name>`` / ``Ref(...)``, until the interpreter binds it."""
-    try:
-        from trid3nt_server.workflows.runtime.reads import ParamRef, Ref
-    except Exception:  # noqa: BLE001 -- the library is absent in a stripped env
-        return False
-    return isinstance(value, (Ref, ParamRef))
 
 
 def input_digest(value: Any) -> str:
@@ -379,8 +367,6 @@ class Mesher:
         """The kind this ask builds, checked against what this mesher makes."""
         if kind is None:
             return self.kinds[0]
-        if is_late_bound(kind):
-            return kind
         if str(kind) not in self.kinds:
             raise MeshToolError(
                 "MESH_KIND_UNSUPPORTED",

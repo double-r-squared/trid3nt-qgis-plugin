@@ -11,7 +11,8 @@ from typing import Any, Mapping
 
 from trid3nt_server.workflows.runtime import DeclarativeError
 
-from ..authoring.atmosphere import Atmosphere, expand_atmosphere
+from ..authoring.atmosphere import (ATMOSPHERE_READS, Atmosphere,
+                                     expand_atmosphere)
 from .coupling import couples
 from .module import Module, Output
 from .outputs import PRIMITIVES, read_column
@@ -180,10 +181,11 @@ def plan_vertical_grid(nplan: int, max_depth_m: float,
     }
 
 
-def VerticalGrid(*, levels: Any, max_depth_m: Any,  # noqa: N802
-                 thermocline_depth_m: Any) -> Mapping[str, Any]:
-    """The sigma grid, as the three numbers that decide it."""
-    return MappingProxyType({"levels": levels, "max_depth_m": max_depth_m,
+def VerticalGrid(*, thermocline_depth_m: Any) -> Mapping[str, Any]:  # noqa: N802
+    """The sigma grid, as the three numbers that decide it: the template's own
+    level count, the settle's deepest node, and the thermocline."""
+    return MappingProxyType({"levels": "NUMBER_OF_HORIZONTAL_LEVELS",
+                             "settled": "settled",
                              "thermocline_depth_m": thermocline_depth_m})
 
 
@@ -192,7 +194,8 @@ def _vertical_grid(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
     """The planned grid -> the transformation keyword and its coefficients.
 
     Uniform sigma is the dictionary's own, so a run needing none states NOTHING."""
-    plan = plan_vertical_grid(int(value["levels"]), float(value["max_depth_m"]),
+    plan = plan_vertical_grid(int(value["levels"]),
+                              float(value["settled"]["max_depth_m"]),
                               float(value["thermocline_depth_m"]))
     if plan["mesh_transformation"] == _UNIFORM_SIGMA:
         return ({}, {})
@@ -201,16 +204,14 @@ def _vertical_grid(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                  float(c) for c in plan["mesh_stretching_coefficients"]]}, {})
 
 
-def Column(*, levels: Any, max_depth_m: Any,  # noqa: N802
-           thermocline_depth_m: Any, warm_c: Any, cold_c: Any,
-           surface_m: Any) -> Mapping[str, Any]:
-    """The water column this run OPENS with: warm over cold, joined at a depth.
-
-    ``surface_m`` is the free-surface elevation the thermocline depth is under."""
-    return MappingProxyType({"levels": levels, "max_depth_m": max_depth_m,
+def Column(*, thermocline_depth_m: Any, warm_c: Any,  # noqa: N802
+           cold_c: Any) -> Mapping[str, Any]:
+    """The water column this run OPENS with: warm over cold, joined at a depth
+    under the free surface the settle opened at."""
+    return MappingProxyType({"levels": "NUMBER_OF_HORIZONTAL_LEVELS",
+                             "settled": "settled",
                              "thermocline_depth_m": thermocline_depth_m,
-                             "warm_c": warm_c, "cold_c": cold_c,
-                             "surface_m": surface_m})
+                             "warm_c": warm_c, "cold_c": cold_c})
 
 
 def _column(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
@@ -218,13 +219,14 @@ def _column(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
     """The declared column -> the initial-condition hook the engine compiles.
 
     No keyword carries a non-uniform initial tracer field; the hook does."""
-    plan = plan_vertical_grid(int(value["levels"]), float(value["max_depth_m"]),
+    plan = plan_vertical_grid(int(value["levels"]),
+                              float(value["settled"]["max_depth_m"]),
                               float(value["thermocline_depth_m"]))
     return ({"FORTRAN_FILE": USER_FORTRAN_DIR},
             {_CONDI_SOURCE: _condi_thermocline(
                 float(value["thermocline_depth_m"]), float(value["warm_c"]),
                 float(value["cold_c"]), float(plan["thermocline_delta_m"]),
-                float(value["surface_m"]))})
+                float(value["settled"]["level_m"]))})
 
 
 _CONDI_HEAD = """!                   ****************************
@@ -291,7 +293,11 @@ T3D.CADENCE = "GRAPHIC_PRINTOUT_PERIOD"
 T3D.TRACER = "TA"
 T3D.ARMS = MappingProxyType({
     "RAIN_OR_EVAPORATION_IN_MM_PER_DAY": "RAIN_OR_EVAPORATION"})
-T3D.composites(vertical_grid=_vertical_grid, column=_column, wind=_wind,
+T3D.composites(reads={
+    "vertical_grid": ("levels", "settled", "thermocline_depth_m"),
+    "column": ("levels", "settled", "thermocline_depth_m", "warm_c", "cold_c"),
+    "wind": ("speed_mps", "from_deg"), "atmosphere": ATMOSPHERE_READS},
+               vertical_grid=_vertical_grid, column=_column, wind=_wind,
                atmosphere=expand_atmosphere,
                coupling=couples(water_column=True))
 T3D.reads(**PRIMITIVES, column=read_column)

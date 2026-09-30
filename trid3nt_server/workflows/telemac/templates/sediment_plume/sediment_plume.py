@@ -13,7 +13,6 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
     Data,
-    Ref,
     register_workflow,
 )
 from trid3nt_server.inputs import point_arg
@@ -32,7 +31,7 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Wind,
 )
 from trid3nt_server.workflows.telemac.templates.sediment_plume.declarations import (
-    ACCEPTS, DOC, PARAMS, PARAMS as P,
+    ACCEPTS, DOC, PARAMS,
     SEDIMENT_CONCENTRATION_MGL, SOURCE_Q_M3S,
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
@@ -43,7 +42,7 @@ __all__ = ["CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
 #: WHERE the substance enters the water: the point the user clicked, else that
 #: fraction along the domain's own centerline. The workflow settles it onto a
 #: node of the accepted mesh before the sheet reads it back.
-_RELEASE = Placed("source", point=PARAMS.release, fraction=PARAMS.spill_fraction,
+_RELEASE = Placed("source", point="release", fraction="spill_fraction",
                   label="Release point")
 
 #: The names the run directory holds this run's files under, stated once on the
@@ -73,7 +72,7 @@ class DATA:
 
     # A release named up front also names which stretch to model: the reach is
     # walked downstream from it. A domain the user supplies supersedes this.
-    domain = Data.need("hydrography", at=Ref("release"),
+    domain = Data.need("hydrography", at="release",
                        span_km=_REACH_LENGTH_KM)
     # THE BED, as the CLASS it is rather than the source it comes from: the
     # measurement where something measured it, the terrain under the rest. Which
@@ -144,13 +143,12 @@ class STEERING(T2D):
     NUMBER_OF_TRACERS = 1
     #: The marker is called what the user called the release point, when a
     #: picked or named point came; the template's own name stands otherwise.
-    tracer_names = TracerNames(names=["MARKER          MG/L"],
-                               named_by=Ref("source.name"))
+    tracer_names = TracerNames(names=["MARKER          MG/L"])
     INITIAL_VALUES_OF_TRACERS = [0.0]
 
     #: TWO values on every liquid boundary - the carrier's own tracer and the
     #: suspended class behind it - or the solver refuses for want of values.
-    boundaries = Boundaries(measured=Ref("settled"), tracers=[0.0, 0.0])
+    boundaries = Boundaries(tracers=[0.0, 0.0])
 
     #: HOW MUCH enters, and at what concentration: the deck's own fixed source
     #: strength, small against the carrier flow so the pulse is a marker and
@@ -159,8 +157,7 @@ class STEERING(T2D):
     VALUES_OF_THE_TRACERS_AT_THE_SOURCES = [SEDIMENT_CONCENTRATION_MGL]
     #: A FINITE pulse, so the slug advects away and dilutes instead of
     #: saturating the water.
-    sources = Sources(at=_RELEASE, window_s=P.spill_duration_s,
-                      until_s=Ref("settled.until_s"))
+    sources = Sources(window_s="spill_duration_s")
 
     #: The settling class itself, over a bed the composite lays at zero initial
     #: thickness: nothing erodes and only the injected pulse can deposit. The

@@ -16,7 +16,7 @@ import pytest
 
 from trid3nt_server.inputs import geometry as geometry_reader
 from trid3nt_server.inputs.observation import Observation
-from trid3nt_server.workflows.runtime import Ref, data_rows
+from trid3nt_server.workflows.runtime import data_rows
 from trid3nt_server.workflows.telemac.authoring.atmosphere import (
     ATMOSPHERE_FILENAME,
 )
@@ -81,7 +81,7 @@ def test_the_water_opens_on_one_reading_ranked_from_where_it_is_read():
     assert row.data_class == "water quality sample"
     assert row.observes == "TEMPERATURE"
     assert row.producer is None
-    assert row.coercion["near"] == Ref("station")
+    assert row.coercion["near"] == "station"
     assert not row.is_context
 
 

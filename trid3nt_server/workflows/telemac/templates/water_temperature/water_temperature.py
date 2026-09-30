@@ -15,8 +15,6 @@ from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.runtime import (
     Data,
-    ParamRef,
-    Ref,
     register_workflow,
 )
 from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, series
@@ -53,7 +51,7 @@ _STATION_FRAC = 0.98
 #: WHERE the series is read: the point the user clicked, else that fraction
 #: along the domain's own centerline. The workflow settles it onto a node of the
 #: accepted mesh, so the chart is a node the run solved on.
-_STATION = Placed("station", point=PARAMS.station, fraction=_STATION_FRAC,
+_STATION = Placed("station", point="station", fraction=_STATION_FRAC,
                   label="Temperature station")
 
 
@@ -68,7 +66,7 @@ class DATA:
     # its two end transects, which is where the inflow and the outflow are
     # prescribed; a closed body arrives as one outline, states no run and its
     # whole edge is wall.
-    domain = Data.need("hydrography", at=Ref("seed"),
+    domain = Data.need("hydrography", at="seed",
                        span_km=_REACH_LENGTH_KM)
 
     # THE BED, as the CLASS it is rather than the source it comes from: the
@@ -115,7 +113,7 @@ class DATA:
     # moment, the way the discharge's does: a run dated last winter opens at
     # what the water carried then.
     observe = Data.need("water quality sample", of="TEMPERATURE",
-                        at=Ref("station"))
+                        at="station")
 
 
 class STEERING(T2D):
@@ -175,7 +173,7 @@ class STEERING(T2D):
     #: The water arriving at a feeding face is the same water the sample site
     #: measured: the domain warms because of what happens OVER it, so the inflow
     #: carries the opening temperature rather than a second number.
-    boundaries = Boundaries(measured=Ref("settled"), tracers=[Ref("observe.value")])
+    boundaries = Boundaries(tracers="INITIAL_VALUES_OF_TRACERS")
 
     #: The weather over the whole domain, as the one table the engine
     #: interpolates every column of between the same two rows. The nearest RAWS
@@ -187,9 +185,9 @@ class STEERING(T2D):
     #: DURATION this deck states rather than for a second number beside it, and
     #: its t = 0 is the moment the run opens at rather than the record's own
     #: first sample.
-    atmosphere = Atmosphere(observed=DATA.weather, at=_STATION,
-                            duration_s=Ref("sheet.DURATION"),
-                            event_time=ParamRef("event_time"))
+    atmosphere = Atmosphere(observed="weather", at="station",
+                            duration_s="DURATION",
+                            event_time="event_time")
 
     #: The heat budget, on the engine's own calibration constants: this question
     #: asks what the published exchange gives under real weather, so the run
@@ -201,8 +199,8 @@ class STEERING(T2D):
 #: What this question PLACES: the temperature over time at the point the ask
 #: gave, as the chart, and on the map as the station that carries it.
 OUTPUTS = [
-    series("T1", at=_STATION).chart(),
-    series("T1", at=_STATION).station(),
+    series("T1", at="station").chart(),
+    series("T1", at="station").station(),
 ]
 CAPTIONS = {"T1": "water temperature", "discharge": "a streamflow",
             "level": "a water-surface elevation", "observe": "a water temperature"}

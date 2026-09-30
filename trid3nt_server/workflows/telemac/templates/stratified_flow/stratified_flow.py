@@ -14,7 +14,6 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
     Data,
-    Ref,
     register_workflow,
 )
 from trid3nt_server.inputs import point_arg
@@ -33,7 +32,6 @@ from trid3nt_server.workflows.telemac.modules.telemac3d import (
 from trid3nt_server.workflows.telemac.templates.stratified_flow.declarations import (
     DOC,
     PARAMS,
-    PARAMS as P,
 )
 from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
@@ -65,7 +63,7 @@ class DATA:
     # outline is the domain, and anything the caller supplies supersedes it.
     # The feature is the WATERBODY by name, so a reach mapped at the same seed
     # never stands in for the body this question stratifies.
-    domain = Data.need("hydrography", at=Ref("seed"))
+    domain = Data.need("hydrography", at="seed")
     # THE BED, as the CLASS it is rather than the source it comes from: the
     # measurement where something measured it, the terrain under the rest. A
     # bed is TOPOBATHY and the coastal composites do not reach the Great Lakes
@@ -171,16 +169,11 @@ class STEERING(T3D):
     #: own deepest column, or the refusal that says how many planes would. The
     #: plane count is READ off the keyword above, so a run the user states
     #: another one on is planned on the column it is actually solved over.
-    vertical_grid = VerticalGrid(levels=Ref("NUMBER_OF_HORIZONTAL_LEVELS"),
-                                 max_depth_m=Ref("settled.max_depth_m"),
-                                 thermocline_depth_m=P.thermocline_depth_m)
+    vertical_grid = VerticalGrid(thermocline_depth_m="thermocline_depth_m")
     #: The column the run OPENS with, written into the engine's own initial-
     #: condition hook because no keyword carries a non-uniform tracer field.
-    column = Column(levels=Ref("NUMBER_OF_HORIZONTAL_LEVELS"),
-                    max_depth_m=Ref("settled.max_depth_m"),
-                    thermocline_depth_m=P.thermocline_depth_m,
-                    warm_c=P.warm_temp_c, cold_c=P.cold_temp_c,
-                    surface_m=Ref("settled.level_m"))
+    column = Column(thermocline_depth_m="thermocline_depth_m",
+                    warm_c="warm_temp_c", cold_c="cold_temp_c")
     #: CALM: the half of the pair in which the thermocline persists, and what
     #: this question is asked from. A zero speed writes no wind keyword at all,
     #: so the deck states none; the wind that mixes the column is TELEMAC-3D's

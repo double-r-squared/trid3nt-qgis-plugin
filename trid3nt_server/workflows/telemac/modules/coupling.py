@@ -14,22 +14,24 @@ from .module import SlotRefused
 
 __all__ = ["couples"]
 
-Expander = Callable[[Any], tuple[Mapping[str, Any], Mapping[str, Any]]]
+Expander = Callable[..., tuple[Mapping[str, Any], Mapping[str, Any]]]
 
 
 def couples(*, water_column: bool) -> Expander:
     """The composite a carrier that does or does not solve a column registers."""
 
-    def _coupling(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    def _coupling(value: Any, *, run: Mapping[str, Any]
+                  ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
         """The coupled bodies a template named -> what the CARRIER states about them.
 
         A coupled body's own slots go to that module's steering file, never here.
-        A body whose ``given`` values all resolved to nothing was asked for
-        nothing, and states nothing."""
+        A body whose ``given`` inputs all hold nothing was asked for nothing,
+        and states nothing."""
         from . import wrapper_for
 
         bodies = [body for body in value
-                  if any(v is not None for v in body.get("given", (True,)))]
+                  if any((run.get(v) if isinstance(v, str) else v) is not None
+                         for v in body.get("given", (True,)))]
         if not bodies:
             return ({}, {})
         slots: dict[str, Any] = {

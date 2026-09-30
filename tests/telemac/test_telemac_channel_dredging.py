@@ -14,7 +14,6 @@ from pathlib import Path
 
 import yaml
 
-from trid3nt_server.workflows.runtime import DataRef, Ref
 from trid3nt_server.workflows.telemac.workflow import stated
 from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
 from trid3nt_server.workflows.telemac.templates.channel_dredging import (
@@ -51,7 +50,7 @@ def test_the_domain_is_one_need_row_asked_at_the_seed_point():
     match's, ranked in the coverage order."""
     domain = _rows()["domain"]
     assert domain.role == "domain" and domain.data_class == "hydrography"
-    assert domain.coercion["near"] == Ref("seed_point")
+    assert domain.coercion["near"] == "seed_point"
     assert domain.span_km == channel_dredging._REACH_LENGTH_KM
 
 

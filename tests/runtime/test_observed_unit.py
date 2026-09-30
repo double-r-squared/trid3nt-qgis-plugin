@@ -30,7 +30,7 @@ def _row(name: str, **need):
 
 
 def _env(**published):
-    return fill._Env(params=None, data={}, results={},
+    return fill._Env(params=None, data={},
                             published_units=dict(published))
 
 

@@ -24,8 +24,7 @@ def _row(**need):
 
 
 async def _env():
-    return fill._Env(params=await resolve_params((), {}), data={},
-                            results={})
+    return fill._Env(params=await resolve_params((), {}), data={})
 
 
 def test_a_stated_variable_is_what_a_record_row_asks_for() -> None:

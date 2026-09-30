@@ -80,13 +80,13 @@ def surface(monkeypatch):
     from types import SimpleNamespace
 
     def _expand(**over):
-        return T2D.COMPOSITES["infiltration"].expand(Infiltration(**{
-            "mesh": {"artifact": SimpleNamespace(utm_epsg=32617),
-                     "display_uri": "s3://m/mesh.2dm"},
+        return T2D.COMPOSITES["infiltration"].apply(Infiltration(**{
             "landcover": {"uri": "s3://lc/nlcd.tif"},
             "table": LANDCOVER_CN_MANNING, "unmapped": LANDCOVER_UNMAPPED,
             "uniform_cn": None, "steep_slope_correction": False,
-            "antecedent_moisture": "normal", "initial_abstraction": 1, **over}))
+            "antecedent_moisture": "normal", "initial_abstraction": 1, **over}),
+            {"mesh": {"artifact": SimpleNamespace(utm_epsg=32617),
+                      "display_uri": "s3://m/mesh.2dm"}})
 
     return _expand
 

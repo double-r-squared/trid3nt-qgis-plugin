@@ -13,10 +13,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.workflows.runtime import (
     Data,
-    DataRef,
-    ParamRef,
     PlanValidationError,
-    Ref,
     tool,
 )
 from trid3nt_server.workflows.runtime.levers import (
@@ -38,7 +35,6 @@ class STEERING(T2D):
     GEOMETRY_FILE = "domain.slf"
     BOUNDARY_CONDITIONS_FILE = "domain.cli"
     RESULTS_FILE = "r2d_domain.slf"
-    TITLE = Ref("settled.title")
     # The clock is a KEYWORD the module carries, so the deck states it and the
     # settle reads it off the deck rather than off a param beside it.
     DURATION = 604800.0
@@ -49,7 +45,7 @@ class PARAMS:
 
 
 class DATA:
-    domain = Data.need("hydrography", at=Ref("seed"))
+    domain = Data.need("hydrography", at="seed")
     bed = Data.need("bathymetry")
 
 

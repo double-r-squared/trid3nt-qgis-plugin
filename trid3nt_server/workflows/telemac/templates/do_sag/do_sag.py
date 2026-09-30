@@ -13,7 +13,6 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
     Data,
-    Ref,
     register_workflow,
 )
 from trid3nt_server.inputs import point_arg
@@ -49,7 +48,7 @@ _OUTFALL_FRAC = 0.02
 #: WHERE the outfall enters the water: the point the user clicked, else that
 #: fraction along the domain's own centerline. The workflow settles it onto a
 #: node of the accepted mesh before the sheet reads it back.
-_OUTFALL = Placed("source", point=PARAMS.outfall_coords, fraction=_OUTFALL_FRAC,
+_OUTFALL = Placed("source", point="outfall_coords", fraction=_OUTFALL_FRAC,
                   label="Outfall")
 
 #: The roughness this deck is solved at, and the law it is read under: Strickler,
@@ -81,7 +80,7 @@ class DATA:
     # The outfall names which stretch to model: the reach is walked DOWNSTREAM
     # from it, so the sag develops inside the domain rather than past its end. A
     # domain the user supplies supersedes this.
-    domain = Data.need("hydrography", at=Ref("outfall_coords"),
+    domain = Data.need("hydrography", at="outfall_coords",
                        span_km=_REACH_LENGTH_KM)
     # THE LINE the oxygen is read down. The reach producer measured a centerline
     # and it fills this; a lake is asked for the line the question is about.
@@ -163,7 +162,7 @@ class STEERING(T2D):
     #: load enters at the source, so which boundary the engine numbers first
     #: cannot decide the sag. The walk is the mesh's own; the flow the inflow
     #: carries and the level the outflow holds are the open channel's.
-    boundaries = Boundaries(measured=Ref("settled"), tracers=[0.0, _SATURATION_MGL, 0.0, 0.0])
+    boundaries = Boundaries(tracers=[0.0, _SATURATION_MGL, 0.0, 0.0])
 
     #: HOW MUCH the outfall discharges, and at what concentration: the
     #: discharge, then every tracer of the one source in the order NAMES OF
@@ -175,7 +174,7 @@ class STEERING(T2D):
     VALUES_OF_THE_TRACERS_AT_THE_SOURCES = [0.0, 2.0, 250.0, 0.0]
     #: A PERMITTED discharge does not pulse: held flat across the whole run so
     #: the water reaches the steady-state sag the question is asked about.
-    sources = Sources(at=_OUTFALL, window_s=None, until_s=Ref("settled.until_s"))
+    sources = Sources()
 
     #: Deoxygenation balanced by surface reaeration, and nothing else: the
     #: modelled curve is the closed form the question is asked against, so this
@@ -196,7 +195,7 @@ class STEERING(T2D):
 #: closed form and the standard drawn beside it. The line is the LINE SLOT's:
 #: the centerline the domain's producer measured, or the one a user draws when
 #: the body it is asked of has none.
-OUTPUTS = [profile("T2", along=Ref("line")).chart(
+OUTPUTS = [profile("T2", along="line").chart(
     reference=streeter_phelps.overlay(saturation_mgl=_SATURATION_MGL,
                                       k1_per_day=_K1_PER_DAY,
                                       k2_per_day=_K2_PER_DAY))]

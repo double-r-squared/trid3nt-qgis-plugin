@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.runtime.reads import DataRef
-from trid3nt_server.workflows.runtime import Ref
 from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
 from trid3nt_server.workflows.telemac.workflow import stated
 from trid3nt_server.workflows.telemac.templates.sediment_plume import (
@@ -50,7 +48,7 @@ def test_the_domain_is_one_need_row_asked_at_the_release_point():
     the match's, ranked in the coverage order."""
     domain = _rows()["domain"]
     assert domain.role == "domain" and domain.data_class == "hydrography"
-    assert domain.coercion["near"] == Ref("release")
+    assert domain.coercion["near"] == "release"
     assert domain.span_km == 6.0
     assert domain.fills_from_user
 
@@ -144,14 +142,14 @@ def test_the_deck_states_the_four_source_keywords_by_name():
 
 
 def test_the_sources_composite_writes_the_sources_file():
-    """``sources`` carries the window and horizon, and reads the discharge and
-    tracer values off the sheet by the keywords stated above - it writes no
-    number of its own."""
+    """``sources`` carries the window, and reads the horizon off the settle and
+    the discharge and tracer values off the sheet by the keywords stated above -
+    it writes no number of its own."""
     asserted = template.STEERING.ASSERTED["sources"]
-    assert asserted["window_s"].name == "spill_duration_s"
-    assert asserted["until_s"] == Ref("settled.until_s")
-    assert asserted["q"] == Ref("WATER_DISCHARGE_OF_SOURCES")
-    assert asserted["tracers"] == Ref("VALUES_OF_THE_TRACERS_AT_THE_SOURCES")
+    assert asserted["window_s"] == "spill_duration_s"
+    assert asserted["settled"] == "settled"
+    assert asserted["q"] == "WATER_DISCHARGE_OF_SOURCES"
+    assert asserted["tracers"] == "VALUES_OF_THE_TRACERS_AT_THE_SOURCES"
 
 
 def test_the_deleted_release_params_are_refused():

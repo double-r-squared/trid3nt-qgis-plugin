@@ -6,6 +6,7 @@ ops list. Engine vocabulary is never a param here; a bed and a role are OPS."""
 
 from __future__ import annotations
 
+import inspect
 from dataclasses import dataclass, replace
 from typing import Any, Iterable, Mapping
 
@@ -14,28 +15,25 @@ from trid3nt_server.mesh.meshers import (
     MeshToolError,
     bind_ops,
     get_mesher,
-    is_late_bound,
     mesh_op,
+    resolve_op,
 )
 
 __all__ = [
     "MeshOp",
     "MeshRecipe",
     "build_recipe",
+    "input_names",
     "jsonable",
     "mesh_op",
     "recipe_from_plan_value",
     "recipe_plan_value",
+    "takes_name",
 ]
 
 
 def jsonable(value: Any) -> Any:
     """A recipe value as JSON, or a refusal naming what cannot be recorded."""
-    if is_late_bound(value):
-        raise MeshToolError(
-            "MESH_RECIPE_UNBOUND",
-            f"{value!r} is a late-bound read, not a value: the recipe records "
-            "what a run actually built with, so bind the declaration first.")
     if value is None or isinstance(value, (str, bool, int, float)):
         return value
     if isinstance(value, MeshOp):
@@ -160,15 +158,6 @@ class MeshRecipe:
                    extent=doc.get("extent"),
                    resolution_m=doc.get("resolution_m"), ops=ops)
 
-    @property
-    def unbound(self) -> list[str]:
-        """The names in this recipe the interpreter has not bound to values yet."""
-        out = [name for name in ("extent", "resolution_m")
-               if is_late_bound(getattr(self, name))]
-        out += [f"ops[{i}].{name}" for i, op in enumerate(self.ops)
-                for name, value in op.kwargs.items() if is_late_bound(value)]
-        return out
-
 
 def build_recipe(*, mesher: str, kind: Any = None, extent: Any = None,
                  resolution_m: Any = None,
@@ -187,9 +176,35 @@ def build_recipe(*, mesher: str, kind: Any = None, extent: Any = None,
     return MeshRecipe(
         mesher=registered.name, kind=registered.kind_or_default(kind),
         extent=extent,
-        resolution_m=(resolution_m if resolution_m is None or is_late_bound(
-            resolution_m) else float(resolution_m)),
+        # A string is the NAME of the run input the resolution is read off.
+        resolution_m=(resolution_m if resolution_m is None
+                      or isinstance(resolution_m, str) else float(resolution_m)),
         ops=declared)
+
+
+def takes_name(recipe: MeshRecipe, op: MeshOp, key: str) -> bool:
+    """Does the string ``op`` states under ``key`` NAME a run input? It does
+    unless the op's own signature takes a word there: the signature is the
+    schema, and an op this process cannot import takes no word."""
+    if not isinstance(op.kwargs.get(key), str):
+        return False
+    _space, fn = resolve_op(get_mesher(recipe.mesher), op.fn)
+    if fn is None:
+        return True
+    param = inspect.signature(fn).parameters.get(key)
+    annotation = "" if param is None else param.annotation
+    spelled = annotation if isinstance(annotation, str) \
+        else getattr(annotation, "__name__", "")
+    return {part.strip() for part in spelled.split("|")} - {"None"} != {"str"}
+
+
+def input_names(recipe: MeshRecipe) -> list[str]:
+    """Every run input a recipe names: its extent, a resolution stated as a
+    name, and each op argument that takes one."""
+    named = [value for value in (recipe.extent, recipe.resolution_m)
+             if isinstance(value, str)]
+    return named + [op.kwargs[key] for op in recipe.ops for key in op.kwargs
+                    if takes_name(recipe, op, key)]
 
 
 def recipe_plan_value(recipe: MeshRecipe) -> dict[str, Any]:
@@ -201,9 +216,8 @@ def recipe_plan_value(recipe: MeshRecipe) -> dict[str, Any]:
             "MESH_RECIPE_EXPECTED",
             f"a mesh step carries the template's MESH recipe "
             f"(tool.build_mesh(...)), got {type(recipe).__name__}.")
-    # Mappings and sequences are what the interpreter walks to substitute
-    # late-bound reads, so the recipe travels as one and comes back with its
-    # values bound.
+    # A string where a value belongs is the NAME of the run input it is read
+    # off; the run reads each into this mapping before the mesh is keyed.
     return {
         "mesher": recipe.mesher,
         "kind": recipe.kind,
@@ -216,7 +230,7 @@ def recipe_plan_value(recipe: MeshRecipe) -> dict[str, Any]:
 def _thaw(value: Any) -> Any:
     """A frozen recipe value as the plain containers a step's kwargs carry.
 
-    Late-bound reads pass through untouched: binding them is not this job."""
+    A named input passes through untouched: reading it is the run's job."""
     if isinstance(value, Mapping):
         return {str(k): _thaw(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):

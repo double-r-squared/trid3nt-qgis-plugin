@@ -50,7 +50,7 @@ def test_a_required_input_nothing_filled_is_missing_and_not_ready():
     from trid3nt_server.workflows.runtime import Param
 
     wf = types.SimpleNamespace(params=(Param(name="depth", desc="d", door="user", type=float),),
-                               coercions=(), data=())
+                               coercions=(), data=(), unnamed=lambda: ())
     state = asyncio.run(fill(Fill(workflow=wf), {}))
     assert state.inputs["depth"].state == MISSING and not state.ready
     state = asyncio.run(fill(state, {"depth": 3.0}))

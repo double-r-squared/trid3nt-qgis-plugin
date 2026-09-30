@@ -12,8 +12,6 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
     Data,
-    ParamRef,
-    Ref,
     register_workflow,
 )
 from trid3nt_server.mesh.tool import mesh_op, tool
@@ -28,7 +26,6 @@ from trid3nt_server.workflows.telemac.templates.agitation.declarations import (
     ACCEPTS,
     DOC,
     PARAMS,
-    PARAMS as P,
 )
 from trid3nt_server.workflows.telemac.workflow import (
     Measured, TelemacWorkflow,
@@ -79,8 +76,8 @@ class DATA:
 #: subtract.
 _FOOTPRINT = Measured(
     "footprint", kind="footprint",
-    asked={"value": DATA.structure, "width_m": ParamRef("barrier_width_m"),
-           "asked": "the structure this question asks about",
+    reads={"value": "structure", "width_m": "barrier_width_m"},
+    asked={"asked": "the structure this question asks about",
            "code": "ARTEMIS_STRUCTURE_INVALID"})
 
 #: What the accepted harbour mesh measures. The wave the settle stamps onto the
@@ -89,15 +86,14 @@ _FOOTPRINT = Measured(
 #: cut at, because what the mesher removed is what the deck calls solid.
 _HARBOUR = Measured(
     "settled", kind="harbour",
-    asked={"structure": DATA.structure,
-           "structure_width_m": ParamRef("barrier_width_m"),
-           "wave_period_s": Ref("stated.WAVE_PERIOD"),
-           "wave_height_m": ParamRef("wave_height_m"),
-           "wave_direction_deg": Ref("stated.DIRECTION_OF_WAVE_PROPAGATION"),
-           "reflection_coef": ParamRef("reflection_coef"),
-           "result_basename": _RESULT,
-           "deck": "artemis_harbor_agitation",
-           "open_depth_threshold_m": ParamRef("open_depth_threshold_m")})
+    reads={"structure": "structure",
+           "structure_width_m": "barrier_width_m",
+           "wave_period_s": "WAVE_PERIOD",
+           "wave_height_m": "wave_height_m",
+           "wave_direction_deg": "DIRECTION_OF_WAVE_PROPAGATION",
+           "reflection_coef": "reflection_coef",
+           "open_depth_threshold_m": "open_depth_threshold_m"},
+    asked={"result_basename": _RESULT, "deck": "artemis_harbor_agitation"})
 
 
 class STEERING(ART):
@@ -124,8 +120,8 @@ class STEERING(ART):
     #: The forcing, which ARTEMIS reads out of the BOUNDARY CONDITIONS FILE and
     #: not out of the deck: the designated liquid stretch carries the incident
     #: height, the structure's own faces reflect, and every other face absorbs.
-    incident_wave = IncidentWave(measured=_HARBOUR, height_m=P.wave_height_m,
-                                 reflection_coef=P.reflection_coef)
+    incident_wave = IncidentWave(measured="settled", height_m="wave_height_m",
+                                 reflection_coef="reflection_coef")
 
 
 #: The MESH RECIPE, frozen at declaration and building nothing at import. The
@@ -139,10 +135,10 @@ class STEERING(ART):
 MESH = tool.build_mesh(
     mesher="om2d",
     kind="unstructured_tri",
-    extent=DATA.domain,
-    resolution_m=P.mesh_resolution_m,
+    extent="domain",
+    resolution_m="mesh_resolution_m",
     ops=[
-        mesh_op("set_obstacle", geometry=_FOOTPRINT),
+        mesh_op("set_obstacle", geometry="footprint"),
         mesh_op("feature_sizing_function"),
         # THE RIM IS THE ASK'S TO SIZE. Nothing else sizes it: a sizing function
         # measures the water's own shape - the feature width, the distance to a
@@ -152,17 +148,17 @@ MESH = tool.build_mesh(
         # slivers. That rim is the boundary a solver forces its open condition
         # on. No edge is stated, so it is locked at the recipe's own size word.
         mesh_op("set_rim_size"),
-        mesh_op("enforce_mesh_gradation", gradation=P.mesh_grade),
+        mesh_op("enforce_mesh_gradation", gradation="mesh_grade"),
         mesh_op("delete_boundary_faces"),
         mesh_op("delete_faces_connected_to_one_face"),
         mesh_op("make_mesh_boundaries_traversable"),
         mesh_op("fix_mesh", delete_unused=True),
-        mesh_op("set_bed", source=DATA.bed),
+        mesh_op("set_bed", source="bed"),
         # EVERY stretch the library reads as ocean at this depth opens. A harbour
         # has more than one mouth, and picking one of them would number a
         # multi-mouth domain as single-mouth.
         mesh_op("identify_ocean_boundary_sections",
-                depth_threshold=P.open_depth_threshold_m),
+                depth_threshold="open_depth_threshold_m"),
     ],
 )
 
@@ -174,17 +170,17 @@ MESH = tool.build_mesh(
 #: produced, because the water's own centerline runs nowhere near this read.
 _TRANSECT = Measured(
     "transect", kind="transect",
-    asked={"value": DATA.structure, "convention": "trig",
-           "bearing_deg": Ref("stated.DIRECTION_OF_WAVE_PROPAGATION"),
-           "length_m": ParamRef("transect_length_m"),
-           "code": "ARTEMIS_STRUCTURE_INVALID"})
+    reads={"value": "structure",
+           "bearing_deg": "DIRECTION_OF_WAVE_PROPAGATION",
+           "length_m": "transect_length_m"},
+    asked={"convention": "trig", "code": "ARTEMIS_STRUCTURE_INVALID"})
 
 #: What this question PLACES: the agitation coefficient along the transect the
 #: user drew through the structure. The profile keeps the nodes within one
 #: finest mesh edge of the line - the band the structure's own nodes were laid
 #: at - so the read is the line's and not a mean over the whole basin's width.
 OUTPUTS = [
-    profile("KD", along=_TRANSECT, within_m=P.mesh_resolution_m).chart(),
+    profile("KD", along="transect", within_m="mesh_resolution_m").chart(),
 ]
 CAPTIONS = {"KD": "agitation coefficient"}
 
@@ -216,7 +212,7 @@ _ARTEMIS_METADATA = AtomicToolMetadata(
 #: WHAT the mesh is built over, and the DATA slot a caller may hand a built
 #: mesh in instead of the recipe. Filled, that mesh is adopted whole.
 MESH_ON = "domain"
-SUPPLIED_MESH = DATA.mesh
+SUPPLIED_MESH = "mesh"
 
 #: The engine files this run has to write for it to have solved
 #: anything; unstated, the deck's own RESULTS FILE is the one.

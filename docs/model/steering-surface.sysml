@@ -801,23 +801,21 @@ package SteeringSurface {
         composite names the producer that expanded it, and a value the RUN
         MEASURED reads DERIVED.
 
-        Derived is not the same statement as template. A body states WHICH
-        measurement a slot takes - the boundary walk the accepted mesh reported,
-        the normal depth of the reach, the time step the mesh's own CFL allows,
-        the stage-discharge curve fitted to the outlet - and the number itself
-        is the artifact's. Badging it template would say an author wrote a value
-        nobody wrote down. A declared PARAM is the invocation's own answer and
-        stays the template's.
+        Derived is not the same statement as template. The settle and each
+        input fill the keywords they determine themselves - the time step the
+        mesh's own CFL allows, the settled source point - and the row names the
+        settle or the input that filled it. Badging it template would say an
+        author wrote a value nobody wrote down.
         */
     }
 
     requirement def BodiesAreStatic {
         doc /*
         A body reads no value a fill produced. Its assertions are data, fixed
-        when the module is imported - a literal the dictionary checked, or a
-        description of a read the fill substitutes later - so two fills of the
-        same body start from the same statement and a body cannot branch on what
-        a run resolved.
+        when the module is imported - a literal the dictionary checked, or the
+        plain name of an input a composite reads off the run's one mapping when
+        it expands - so two fills of the same body start from the same
+        statement and a body cannot branch on what a run resolved.
         */
     }
 
@@ -1062,6 +1060,36 @@ package SteeringSurface {
         */
     }
 
+    requirement def TheRunHoldsOneMapping {
+        doc /*
+        The run holds ONE mapping - its params, the rows it fetched, what each
+        stage produced and the keywords so far - and every consumer reads it by
+        plain name. A composite reads what it needs off the mapping itself when
+        it expands, so a template passes only literals and the names of its
+        own inputs. Every name a template writes - in a mesh recipe, a
+        measurement, a placement or a composite argument - is checked at the
+        fill, and one nothing of the run is called is refused there, by name,
+        before anything runs.
+        */
+    }
+
+    satisfy requirement TheRunHoldsOneMapping by engineWorkflow;
+    satisfy requirement TheRunHoldsOneMapping by wrapper;
+    verify requirement TheRunHoldsOneMapping by
+        "tests/telemac/test_one_mapping.py::test_a_composite_expands_from_the_mapping_with_only_a_literal_passed";
+    verify requirement TheRunHoldsOneMapping by
+        "tests/telemac/test_one_mapping.py::test_a_composite_reading_a_name_the_mapping_lacks_refuses_by_name";
+    verify requirement TheRunHoldsOneMapping by
+        "tests/telemac/test_one_mapping.py::test_a_misspelled_input_in_a_recipe_is_refused_by_name_at_fill";
+    verify requirement TheRunHoldsOneMapping by
+        "tests/telemac/test_one_mapping.py::test_a_misspelled_input_in_a_measurement_is_refused_by_name_at_fill";
+    verify requirement TheRunHoldsOneMapping by
+        "tests/telemac/test_one_mapping.py::test_a_misspelled_input_in_a_composite_is_refused_by_name_at_fill";
+    verify requirement TheRunHoldsOneMapping by
+        "tests/telemac/test_one_mapping.py::test_a_measurement_reads_a_template_input_by_name";
+    verify requirement TheRunHoldsOneMapping by
+        "tests/telemac/test_one_mapping.py::test_no_placeholder_read_is_left_in_the_server";
+
     satisfy requirement AnInputFillsItsOwnKeywords by sheet;
     verify requirement AnInputFillsItsOwnKeywords by
         "tests/telemac/test_inputs_fill_their_keywords.py::test_a_settled_release_fills_the_source_coordinates_with_no_template_line";
@@ -1069,8 +1097,6 @@ package SteeringSurface {
         "tests/telemac/test_inputs_fill_their_keywords.py::test_a_value_the_template_states_wins_over_the_input_that_fills_it";
     verify requirement AnInputFillsItsOwnKeywords by
         "tests/telemac/test_inputs_fill_their_keywords.py::test_a_coupled_wave_body_takes_the_sea_state_and_not_the_level";
-    verify requirement AnInputFillsItsOwnKeywords by
-        "tests/telemac/test_inputs_fill_their_keywords.py::test_no_template_line_routes_a_keyword_an_input_fills";
     verify requirement AnInputFillsItsOwnKeywords by
         "tests/telemac/test_inputs_fill_their_keywords.py::test_the_run_reads_the_input_a_coupled_body_fills_itself_from";
 
@@ -1155,8 +1181,6 @@ package SteeringSurface {
         "tests/telemac/test_telemac_do_sag.py::test_the_card_groups_the_coupled_deck_under_its_own_body";
     verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_water_temperature.py::test_a_stated_duration_sizes_the_weather_record";
-    verify requirement EverythingOverridable by
-        "tests/telemac/test_telemac_module_surface.py::test_a_read_placed_on_a_keyword_resolves_through_the_filled_sheet";
     verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_module_surface.py::test_a_rate_stated_by_name_arms_the_term_that_reads_it";
     verify requirement EverythingOverridable by
@@ -1299,15 +1323,15 @@ package SteeringSurface {
     satisfy requirement ProvenanceNamesTheLayerThatAnswered by sheet;
     satisfy requirement ProvenanceNamesTheLayerThatAnswered by engineWorkflow;
     verify requirement ProvenanceNamesTheLayerThatAnswered by
-        "tests/telemac/test_telemac_module_surface.py::test_a_value_the_run_measured_reads_as_derived_not_as_the_body_that_named_it";
+        "tests/telemac/test_settle_fills_its_keywords.py::test_the_settle_s_six_values_reach_the_steering_file_with_no_template_line";
     verify requirement ProvenanceNamesTheLayerThatAnswered by
-        "tests/telemac/test_telemac_module_surface.py::test_a_measured_value_a_fill_overrides_still_reads_as_the_users";
+        "tests/telemac/test_inputs_fill_their_keywords.py::test_a_settled_release_fills_the_source_coordinates_with_no_template_line";
 
     satisfy requirement BodiesAreStatic by sheet;
     verify requirement BodiesAreStatic by
         "tests/telemac/test_telemac_module_surface.py::test_a_body_is_static_and_no_fill_changes_what_it_asserts";
     verify requirement BodiesAreStatic by
-        "tests/telemac/test_telemac_module_surface.py::test_a_param_a_body_reads_binds_from_the_sheet_the_invocation_resolved";
+        "tests/telemac/test_one_mapping.py::test_a_composite_expands_from_the_mapping_with_only_a_literal_passed";
 
     satisfy requirement RunIsHeld by sheet;
     satisfy requirement RunIsHeld by serializer;

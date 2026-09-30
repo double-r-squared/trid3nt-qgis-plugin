@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import bisect
 import datetime as _dt
+import inspect
 import math
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence
@@ -23,7 +24,7 @@ from trid3nt_server.workflows.runtime.temporal import (
 
 from ..errors import TelemacError
 
-__all__ = ["ATMOSPHERE_FILENAME", "COLUMNS", "DISPUTED", "READS",
+__all__ = ["ATMOSPHERE_FILENAME", "ATMOSPHERE_READS", "COLUMNS", "DISPUTED", "READS",
            "TELEMAC2D_COLUMNS", "TELEMAC3D_COLUMNS", "Atmosphere",
            "atmospheric_data_file", "expand_atmosphere", "write_atmosphere"]
 
@@ -225,8 +226,7 @@ def Atmosphere(*, times_s: Any = None, air_temp_c: Any = None,  # noqa: N802
     from; a series stated here stands over what that record reports, and one
     left out writes no column, so the host reads its own constant keyword.
     ``event_time`` is the moment the run opens at, which is the table's t = 0."""
-    # A MAPPING, not an object: the sheet's one ref walk descends mappings. Every
-    # series shares one clock, because the file is ONE table - the engine
+    # Every series shares one clock, because the file is ONE table - the engine
     # interpolates every column between the same two rows.
     return MappingProxyType({
         "times_s": times_s, "air_temp_c": air_temp_c,
@@ -238,6 +238,10 @@ def Atmosphere(*, times_s: Any = None, air_temp_c: Any = None,  # noqa: N802
         "pressure_pa": pressure_pa, "rain_mm": rain_mm,
         "observed": observed, "at": at, "duration_s": duration_s,
         "event_time": event_time})
+
+
+#: Every argument of the atmosphere: each takes a value or an input's name.
+ATMOSPHERE_READS = tuple(inspect.signature(Atmosphere).parameters)
 
 
 #: The columns whose UNIT two readers of this one file disagree on, by the

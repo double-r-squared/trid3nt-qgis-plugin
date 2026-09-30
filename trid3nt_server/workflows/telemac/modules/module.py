@@ -6,6 +6,8 @@ extending anything but its wrapper - is raised at IMPORT time."""
 
 from __future__ import annotations
 
+import inspect
+
 import difflib
 import json
 import os
@@ -17,7 +19,7 @@ from pathlib import Path
 from types import FunctionType, MappingProxyType
 from typing import Any, Callable, Mapping, Sequence
 
-from trid3nt_server.workflows.runtime import DeclarativeError, ParamRef, Ref
+from trid3nt_server.workflows.runtime import DeclarativeError
 
 __all__ = [
     "Composite",
@@ -140,11 +142,7 @@ class Slot:
         return self.is_file and self.file_mandatory and self.is_open
 
     def check(self, value: Any) -> Any:
-        """``value`` as this slot takes it, or the refusal that says why not.
-
-        A late-bound READ passes through and is checked at the fill instead."""
-        if isinstance(value, (Ref, ParamRef)):
-            return value
+        """``value`` as this slot takes it, or the refusal that says why not."""
         value = self.fits(value, typed=self._typed)
         if self.choices and not self.multi_select and not self.is_list \
                 and str(value) not in self.choices:
@@ -170,10 +168,8 @@ class Slot:
                 f"got {len(value)}.")
         # A LIST's choices are the ENGINE'S to check: the dictionary spells a
         # tracer choice as T*, kSi, T1*, and telapy's reader knows those
-        # spellings. A late-bound read inside the list is checked at the fill
-        # that substitutes it.
-        return [item if isinstance(item, (Ref, ParamRef))
-                else self._bounded(typed(item), position)
+        # spellings.
+        return [self._bounded(typed(item), position)
                 for position, item in enumerate(value)]
 
     def _bounded(self, value: Any, position: int) -> Any:
@@ -217,10 +213,49 @@ _TYPES: Mapping[str, Any] = {
 class Composite:
     """One value standing for several slots, and the file they name.
 
-    ``expand`` is ``(value) -> (slots, files)``, keyed by identifier and basename."""
+    ``expand`` is ``(value) -> (slots, files)``, keyed by identifier and basename;
+    one that also takes ``run`` reads the run's mapping itself. ``reads`` are
+    the arguments that take an input's NAME rather than a literal."""
 
     name: str
-    expand: Callable[[Any], tuple[Mapping[str, Any], Mapping[str, Any]]]
+    expand: Callable[..., tuple[Mapping[str, Any], Mapping[str, Any]]]
+    reads: frozenset[str] = frozenset()
+
+    def names(self, value: Any) -> list[str]:
+        """Every input name ``value`` states in an argument that takes one; a
+        mapping inside such an argument states its own the same way."""
+        if not isinstance(value, Mapping):
+            return []
+        found: list[str] = []
+        for key, item in value.items():
+            if key in self.reads:
+                for part in item if isinstance(item, (list, tuple)) else [item]:
+                    found += [part] if isinstance(part, str) else self.names(part)
+        return found
+
+    def apply(self, value: Any, run: Mapping[str, Any]
+              ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+        """``value`` expanded, each name its arguments state read off ``run``."""
+        if isinstance(value, Mapping):
+            value = {key: _read(run, item, self.name) if key in self.reads
+                     else item for key, item in value.items()}
+        if "run" in inspect.signature(self.expand).parameters:
+            return self.expand(value, run=run)
+        return self.expand(value)
+
+
+def _read(run: Mapping[str, Any], value: Any, composite: str) -> Any:
+    """One argument with each name it states read off ``run``, refused by name
+    where no input of the run is called that."""
+    if isinstance(value, (list, tuple)):
+        return type(value)(_read(run, item, composite) if isinstance(item, str)
+                           else item for item in value)
+    if not isinstance(value, str):
+        return value
+    if value not in run:
+        raise SlotRefused(f"{composite} reads {value!r}, which no input of this "
+                          f"run is called.")
+    return run[value]
 
 
 @dataclass(frozen=True, slots=True)
@@ -473,12 +508,37 @@ class Module(metaclass=_Body):
         return length
 
     @classmethod
-    def composites(cls, **expanders: Callable[[Any], Any]) -> None:
-        """Register the module's composites: name -> its expander."""
+    def composites(cls, reads: Mapping[str, Sequence[str]] | None = None,
+                   **expanders: Callable[[Any], Any]) -> None:
+        """Register the module's composites: name -> its expander; ``reads`` is
+        name -> the arguments of it that take an input's name."""
         cls.COMPOSITES = MappingProxyType({
             **cls.COMPOSITES,
-            **{name: Composite(name=name, expand=fn)
+            **{name: Composite(name=name, expand=fn,
+                               reads=frozenset((reads or {}).get(name, ())))
                for name, fn in _unshadowed(cls, expanders)}})
+
+    @classmethod
+    def named(cls) -> list[str]:
+        """Every input name this body's composites read, a coupled body's own
+        among them: what the fill checks against the run's inputs."""
+        from . import wrapper_for
+
+        found: list[str] = []
+        for slot, value in cls.ASSERTED.items():
+            composite = cls.COMPOSITES.get(slot)
+            if composite is None:
+                continue
+            found += composite.names(value)
+            for coupled in value if isinstance(value, (list, tuple)) else ():
+                if not (isinstance(coupled, Mapping) and "slots" in coupled):
+                    continue
+                found += [n for n in coupled.get("given", ()) if isinstance(n, str)]
+                wrapper = wrapper_for(coupled["module"])
+                found += [name for key, item in coupled["slots"].items()
+                          if key in wrapper.COMPOSITES
+                          for name in wrapper.COMPOSITES[key].names(item)]
+        return found
 
     @classmethod
     def reads(cls, **readers: Callable[..., Any]) -> None:
@@ -715,7 +775,7 @@ def accept(body: type, name: str, value: Any) -> tuple[str, Any, str]:
     if identifier not in body.MODULE_INPUT:
         return identifier, value, ""
     slot = body.MODULE_INPUT[identifier]
-    if isinstance(value, (Ref, ParamRef)) or slot.is_file:
+    if slot.is_file:
         return identifier, slot.check(value), ""
     engine = engine_check(body.MODULE)
     if engine is None:

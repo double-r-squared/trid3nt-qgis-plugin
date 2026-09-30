@@ -11,7 +11,6 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
-from trid3nt_server.workflows.runtime import Ref
 
 from .module import Module, Output
 from .outputs import PRIMITIVES
@@ -67,17 +66,10 @@ def IncidentWave(*, measured: Any, height_m: Any,  # noqa: N802 - a value constr
                  reflection_coef: Any) -> Mapping[str, Any]:
     """The wave the domain is forced with, and which faces it enters through.
 
-    ``measured`` is what the workflow measures off the accepted harbour mesh -
-    the boundary file, the open faces and the structure's own - so the stage
-    that settles this run is the workflow's to build off this statement. A
-    MAPPING, not an object: the sheet's one ref walk descends mappings."""
-    return MappingProxyType({"cli_text": Ref(f"{measured.path}.cli_text"),
-                             "open_nodes": Ref(f"{measured.path}.open_nodes"),
-                             "structure_nodes":
-                                 Ref(f"{measured.path}.structure_nodes"),
-                             "height_m": height_m,
-                             "reflection_coef": reflection_coef,
-                             "measured": measured})
+    ``measured`` names what the workflow measures off the accepted harbour mesh
+    - the boundary file, the open faces and the structure's own."""
+    return MappingProxyType({"measured": measured, "height_m": height_m,
+                             "reflection_coef": reflection_coef})
 
 
 def _incident_wave(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
@@ -85,11 +77,12 @@ def _incident_wave(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
     """The incident wave -> the CONTENT of the boundary file that carries it.
 
     The keyword that NAMES the file stays the template's own statement."""
+    harbour = value["measured"]
     return ({},
             {BOUNDARY_FILENAME: stamp_boundary_rows(
-                str(value["cli_text"]),
-                open_nodes=value["open_nodes"],
-                structure_nodes=value["structure_nodes"],
+                str(harbour["cli_text"]),
+                open_nodes=harbour["open_nodes"],
+                structure_nodes=harbour["structure_nodes"],
                 height_m=float(value["height_m"]),
                 reflection_coef=float(value["reflection_coef"]))})
 
@@ -174,5 +167,7 @@ ART = Module("artemis")
 ART.MODULE_OUTPUT = MODULE_OUTPUT
 ART.DERIVED = MappingProxyType({"KD": _kd})
 ART.PRINTOUTS = "VARIABLES_FOR_GRAPHIC_PRINTOUTS"
-ART.composites(incident_wave=_incident_wave)
+ART.composites(reads={"incident_wave": ("measured", "height_m",
+                                         "reflection_coef")},
+               incident_wave=_incident_wave)
 ART.reads(**PRIMITIVES)

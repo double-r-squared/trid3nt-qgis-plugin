@@ -12,7 +12,6 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_server.inputs.wave import Wave
-from trid3nt_server.workflows.runtime import Ref
 from trid3nt_server.workflows.runtime.data import BED, DOMAIN, EXTENT, LEVEL, WAVE
 from trid3nt_server.workflows.telemac.modules import T2D, WAC, fill
 from trid3nt_server.workflows.telemac.modules.module import SlotRefused
@@ -66,7 +65,7 @@ def test_the_world_is_the_water_a_coastline_leaves_inside_the_window():
     assert rows["domain"].kind == "coastline"
     assert rows["bed"].role == BED and rows["bed"].data_class == "bathymetry"
     assert rows["wave"].role == WAVE and rows["wave"].data_class == "wave series"
-    assert rows["wave"].coercion["near"] == Ref("seed")
+    assert rows["wave"].coercion["near"] == "seed"
     assert rows["level"].role == LEVEL and not rows["level"].is_optional
 
 
@@ -142,7 +141,7 @@ def test_the_seaward_rim_is_opened_so_the_tide_and_the_spectrum_both_enter():
     # default is deeper than every node of a coastal window, and a walled rim
     # admits neither the tide nor the spectrum.
     stated = named["identify_ocean_boundary_sections"].kwargs["depth_threshold"]
-    assert stated.name == "open_depth_threshold_m"
+    assert stated == "open_depth_threshold_m"
     param = next(p for p in _workflow().params
                  if p.name == "open_depth_threshold_m")
     assert (param.default, param.door) == (-12.0, "scenario")

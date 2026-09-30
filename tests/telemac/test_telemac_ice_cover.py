@@ -16,7 +16,7 @@ import pytest
 
 from trid3nt_server.inputs import geometry as geometry_reader
 from trid3nt_server.inputs.observation import Observation
-from trid3nt_server.workflows.runtime import Ref, data_rows
+from trid3nt_server.workflows.runtime import data_rows
 from trid3nt_server.workflows.telemac.authoring.atmosphere import (
     ATMOSPHERE_FILENAME,
 )
@@ -81,7 +81,7 @@ def test_the_water_opens_on_one_reading_ranked_from_where_it_is_read():
     assert row.data_class == "water quality sample"
     assert row.observes == "TEMPERATURE"
     assert row.producer is None
-    assert row.coercion["near"] == Ref("station")
+    assert row.coercion["near"] == "station"
     assert row.is_context
     assert "stated value stands" in row.context_sentence
 
@@ -300,5 +300,5 @@ def test_the_inflow_tracer_is_the_record_where_one_measured_a_window():
     """The temperature the arriving water carries is the record's whole window
     where a station on this water served one, and the single reading where none
     did - the choice is the record's, not a branch in the deck."""
-    assert template.STEERING.boundaries["tracers"][0] == Ref("observe.forcing")
+    assert template.STEERING.boundaries["tracers"][0] == "observe"
     assert "INITIAL_VALUES_OF_TRACERS" not in template.STEERING.ASSERTED

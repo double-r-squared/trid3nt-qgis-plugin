@@ -30,11 +30,10 @@ speak it and the one file that specializes the executor to it.
 | `runtime/docstring.py` | The registered tool's model-facing docstring, rendered from the declarations in two views (routing, full). |
 | `runtime/domain.py` | The `Domain` environment - the current spatial extent every spatial producer reads implicitly. |
 | `runtime/errors.py` | The library's typed errors, each carrying the code the emitter renders. |
-| `runtime/fill.py` | The fill: each input accepts, rejects with its remedies, is missing, or takes the module's own default; a sourced input is fetched and ingested before it accepts or rejects. Filling never launches. |
+| `runtime/fill.py` | The fill: each input accepts, rejects with its remedies, is missing, or takes the module's own default; a sourced input is fetched and ingested before it accepts or rejects, and a name the template writes that nothing of the run is called is refused. Filling never launches. The run's ONE mapping - params, fetched rows, stage products, keywords - and `read`, its one read by plain name. |
 | `runtime/journal.py` | The run journal - one append-only JSONL line per completed run, plus the note channel a step writes into. |
 | `runtime/levers.py` | The levers the runtime declares ONCE - the mesh resolution, the event time, the compute class - so a template's `PARAMS` keeps only its question's own inputs. |
 | `runtime/params.py` | The `PARAMS` class body: one declared value per row, where its value may come from, its bounds and its consequence tag; plus the seated values a run reads by name. |
-| `runtime/reads.py` | Late-bound reads: a template names a value the run has not measured yet, bound when the run holds it. |
 | `runtime/resolution.py` | Resolution sensitivity: which of a run's published reads a coarse mesh gets wrong, and which way. |
 | `runtime/resolver.py` | The param seating: a stated value or the declared default, held to its bounds - a value outside them refuses by name - with a provenance row per seating. |
 | `runtime/run_products.py` | The run's persisted chart spec and metrics, written under its own prefix so the products outlive the turn that emitted them. |

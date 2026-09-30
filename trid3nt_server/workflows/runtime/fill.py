@@ -32,16 +32,36 @@ from .errors import (DeclarativeError, PlanValidationError, StepFailedError,
                      SuppliedCoverageError, said)
 from .journal import journal_note, slot_choice
 from .params import ResolvedParams
-from .reads import ParamRef, Ref
 from .temporal import RATE, STATE
 
 logger = logging.getLogger("trid3nt_server.workflows.runtime.fill")
+
+async def read(env: "_Env", name: str) -> Any:
+    """One input of the run's mapping by its plain name: a declared row nothing
+    has read yet is produced on its first read, and a name nothing of the run
+    is called refuses by name."""
+    if name in env.run:
+        return env.run[name]
+    if name not in env.data:
+        raise StepFailedError(
+            f"{name!r} names no input of this run: its inputs are "
+            f"{sorted(set(env.run) | set(env.data))}.",
+            error_code="INPUT_UNNAMED")
+    held = await _produce(env, env.data[name])
+    env.run[name] = held
+    return held
+
+
+async def _seed(env: "_Env", decl: DataDecl) -> Any:
+    """The point a row is asked at, read off the input its ``at`` names."""
+    near = decl.coercion.get("near")
+    return await read(env, near) if isinstance(near, str) else near
+
 
 @dataclass
 class _Env:
     params: ResolvedParams
     data: dict[str, DataDecl]
-    results: dict[str, Any]
     input_mode: str | None = None
     #: The workflow this fill belongs to - what a gate card names as the asker.
     workflow: str = ""
@@ -54,7 +74,9 @@ class _Env:
     #: where nothing measured it. The twin of ``picks``: a control somebody
     #: states on the call, read by the slot's own ingestion.
     ops: dict[str, Any] = field(default_factory=dict)
-    artifacts: dict[str, Any] = field(default_factory=dict)
+    #: THE RUN'S ONE MAPPING: params, fetched rows, what each stage produced
+    #: and the keywords so far, by plain name.
+    run: dict[str, Any] = field(default_factory=dict)
     #: Artifacts SUPPLIED rather than produced - a layer handle, a file uri, a
     #: gate's answer. What satisfies a producer-less ``Data`` slot.
     supplied: dict[str, Any] = field(default_factory=dict)
@@ -188,7 +210,7 @@ async def _beside(env: _Env, decl: DataDecl) -> dict[str, Any]:
     for every slot and every kind that declares none."""
     from trid3nt_server.inputs.slots import needs_of
 
-    seed = await _bind_value(decl.coercion.get("near"), env)
+    seed = await _seed(env, decl)
     held: dict[str, Any] = {}
     for name, word, geometry in needs_of(decl.role, _asked_of(decl, seed)):
         aside = dataclasses.replace(decl, name=f"{decl.name}_{name}", kind="",
@@ -294,9 +316,9 @@ async def _free_surface(env: _Env) -> float | None:
     row = next((r for r in env.data.values() if r.role == LEVEL), None)
     if row is None:
         return None
-    held = env.artifacts.get(row.name)
+    held = env.run.get(row.name)
     if held is None:
-        held = env.artifacts[row.name] = await _produce(env, row)
+        held = env.run[row.name] = await _produce(env, row)
     return None if held is None else float(getattr(held, "value", held))
 
 
@@ -432,7 +454,7 @@ async def _need(env: _Env, decl: DataDecl, data_class: str,
     told to rank against, the window is the run's and the frame is the lever's."""
     from .levers import run_frame
 
-    seed = await _bind_value(decl.coercion.get("near"), env)
+    seed = await _seed(env, decl)
     lon, lat = _place(seed)
     opens = env.params.value_of("event_time") if env.params else None
     return Need(slot=label, data_class=data_class, lon=lon, lat=lat,
@@ -585,7 +607,7 @@ async def _ask_for(env: _Env, choice: SourceChoice,
     generic attributes travel with it, for the matched row to map onto the
     params this source states them in."""
     dom = current_domain()
-    seed = await _bind_value(decl.coercion.get("near"), env)
+    seed = await _seed(env, decl)
     lon, lat = _place(seed)
     opens = env.params.value_of("event_time") if env.params else None
     return ask_for(choice, base_ask(
@@ -608,18 +630,6 @@ def _around(bbox: Sequence[float], mesh_m: float | None) -> list[float]:
     return [west - lon_pad, south - pad, east + lon_pad, north + pad]
 
 
-async def _unstated_ask(env: _Env, decl: DataDecl) -> str:
-    """The PARAM this row's producer reads that the caller left unset, or "".
-
-    A row asked over a window nobody stated has no question to put: the param
-    that decides it says so on its own declaration, which is where the run's
-    honesty about it belongs."""
-    for name, value in decl.producer_kwargs.items():
-        if isinstance(value, ParamRef) and await _bind_value(value, env) is None:
-            return f"{value.name} (the {name} this row reads)"
-    return ""
-
-
 async def _domain_companion(env: _Env, named: str) -> Any:
     """One geometry the DOMAIN's producer measured beside its polygon, or ``None``.
 
@@ -628,7 +638,7 @@ async def _domain_companion(env: _Env, named: str) -> Any:
     row = next((r for r in env.data.values() if r.role == DOMAIN), None)
     if row is None:
         return None
-    bound = await _deref(Ref(row.name), env)
+    bound = await read(env, row.name)
     return dict(getattr(bound, "companions", None) or {}).get(named)
 
 
@@ -645,7 +655,9 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any,
         return value
     from trid3nt_server.inputs.slots import ingest_slot
 
-    coercion = await _bind_value(dict(decl.coercion), env)
+    coercion = dict(decl.coercion)
+    if "near" in coercion:
+        coercion["near"] = await _seed(env, decl)
     stated = str(coercion.pop("measures", "") or "")
     coercion.pop("opens", None)
     coercion.update(_what_the_run_calls_it(
@@ -815,7 +827,7 @@ async def _question_seed(env: _Env) -> Any:
                 and r.coercion.get("near") is not None), None)
     if row is None:
         return None
-    return lonlat_of(await _bind_value(row.coercion.get("near"), env))
+    return lonlat_of(await _seed(env, row))
 
 
 async def _offset_row(env: _Env, owner: str, value: Any, frame: str) -> Any:
@@ -848,15 +860,7 @@ async def _context(env: _Env, decl: DataDecl, label: str) -> Any:
     does not, and the run continues either way under its own stated sentence.
 
     Only an empty SOURCE is an absence - a cancelled run is not, and a retryable
-    gate error is a channel the caller still has to see. A window the caller left
-    UNSTATED is not asked at all: the row's producer reads a param that is not
-    there, so there is no question to put to the source."""
-    unasked = await _unstated_ask(env, decl)
-    if unasked:
-        env.absences.append(f"{decl.context_sentence} ({unasked} was not stated)")
-        logger.info("data %s is CONTEXT and %s was not stated, so no source was "
-                    "asked; the run continues", decl.name, unasked)
-        return None
+    gate error is a channel the caller still has to see."""
     try:
         value = await _produced(env, decl.producer, label)
         # The ingestion is INSIDE the absence: a source that answered with rows
@@ -900,8 +904,8 @@ def _malformed_ask(exc: BaseException) -> bool:
 
 
 async def _produced(env: _Env, producer: Producer, label: str) -> Any:
-    """Call one producer with its reads bound -> what it answered."""
-    kwargs = await _bind(dict(producer.kwargs), env, label)
+    """Call one producer with its stated kwargs -> what it answered."""
+    kwargs = dict(producer.kwargs)
     async with substep(current_emitter(), producer.runner.rsplit(".", 1)[-1]):
         return await _call_runner(producer.runner, kwargs, label)
 
@@ -1013,6 +1017,11 @@ async def fill(state: Fill, values: Mapping[str, Any]) -> Fill:
     sourced = {n: values.pop(n) for n in list(values) if n in rows}
     state.stated.update(values)
     await _seat(state)
+    for name in state.workflow.unnamed():
+        state.inputs[name] = Verdict(
+            REJECTED, name, code="INPUT_UNNAMED",
+            reason=f"the template names {name!r} as an input, and no param, "
+            "row or product of this run is called that.")
     if "ops" in state.carried:
         _carried_ops(state, rows)
     for name, value in sourced.items():
@@ -1112,7 +1121,7 @@ def production(state: Fill) -> _Env:
     wf = state.workflow
     if state.env is None:
         state.env = _Env(
-            params=state.params, data={d.name: d for d in wf.data}, results={},
+            params=state.params, data={d.name: d for d in wf.data},
             input_mode=state.carried.get("input_mode"),
             keywords=dict(state.keywords), ops=_ops(
                 state.carried.get("ops"), wf.data)
@@ -1121,6 +1130,7 @@ def production(state: Fill) -> _Env:
             window_s=wf.run_window_s(dict(state.keywords)),
             slot_units=wf.slot_units(), captions=wf.captions,
             published_units=wf.published_units())
+        state.env.run.update(state.params.values_dict() if state.params else {})
     return state.env
 
 
@@ -1143,7 +1153,7 @@ async def _row(state: Fill, decl: DataDecl, value: Any) -> None:
     try:
         if decl.role not in (DOMAIN, EXTENT):
             await _place_first(env)
-        held = env.artifacts[decl.name] = await _produce(env, decl)
+        held = env.run[decl.name] = await _produce(env, decl)
     except asyncio.CancelledError:
         raise
     except Exception as exc:  # noqa: BLE001 - the refusal is the verdict
@@ -1176,8 +1186,8 @@ async def _place_first(env: _Env) -> None:
     Producing a row may register the runtime's own rows, so the loop is over
     the rows as they stood before it."""
     for row in list(env.data.values()):
-        if row.role == DOMAIN and row.name not in env.artifacts:
-            env.artifacts[row.name] = await _produce(env, row)
+        if row.role == DOMAIN and row.name not in env.run:
+            env.run[row.name] = await _produce(env, row)
 
 
 async def _instead(env: _Env, decl: DataDecl, picked: str) -> tuple[str, ...]:
@@ -1188,77 +1198,6 @@ async def _instead(env: _Env, decl: DataDecl, picked: str) -> tuple[str, ...]:
         return ()
     return tuple(row.fetcher for row in choice.rows
                  if not row.excluded and row.fetcher != picked)
-
-
-async def _bind(kwargs: dict[str, Any], env: _Env, label: str) -> dict[str, Any]:
-    """Every read in ``kwargs`` bound to what the run holds, inside the typed
-    error family: no raw ``TypeError`` escapes the envelope a refusal takes."""
-    try:
-        return {k: await _bind_value(v, env) for k, v in kwargs.items()}
-    except asyncio.CancelledError:
-        raise
-    except DeclarativeError:
-        raise
-    except Exception as exc:  # noqa: BLE001 - re-raised typed, cause preserved
-        if getattr(exc, "retryable", False):
-            raise
-        raise StepFailedError(
-            f"{label!r}: its reads could not be bound: {said(exc)}",
-            error_code=getattr(exc, "error_code", None) or "STEP_ARGS_UNBINDABLE",
-            step=label, cause=exc) from exc
-
-
-async def _bind_value(value: Any, env: _Env) -> Any:
-    if isinstance(value, ParamRef):
-        return env.params.value_of(value.name)
-    if isinstance(value, Ref):
-        return await _deref(value, env)
-    if isinstance(value, Mapping):
-        return {k: await _bind_value(v, env) for k, v in value.items()}
-    if isinstance(value, (list, tuple, set, frozenset)):
-        items = [await _bind_value(v, env) for v in value]
-        if isinstance(value, tuple) and hasattr(value, "_make"):
-            return value._make(items)
-        return type(value)(items)
-    return value
-
-
-#: What a missing field reads as, distinct from a field that is present and None.
-_NO_FIELD = object()
-
-
-async def _deref(ref: Ref, env: _Env) -> Any:
-    """Bind one read, REFUSING rather than yielding a missing field."""
-    if ref.root in env.results:
-        base = env.results[ref.root]
-    elif ref.root in env.artifacts:
-        base = env.artifacts[ref.root]
-    elif ref.root in env.data:
-        base = env.artifacts[ref.root] = await _produce(env, env.data[ref.root])
-    elif ref.root in env.params:
-        base = env.params.value_of(ref.root)
-    else:
-        raise StepFailedError(f"Ref({ref.path!r}) resolves to nothing at run time.",
-                              error_code="REF_UNRESOLVED")
-    if base is None and ref.root in env.data:
-        # A row that is WHOLLY ABSENT states nothing, and what reads it - a
-        # keyword, a composite - expands to nothing in turn.
-        return None
-    read = ref.root
-    for part in ref.tail:
-        found = (base.get(part, _NO_FIELD) if isinstance(base, Mapping)
-                 else getattr(base, part, _NO_FIELD))
-        if found is _NO_FIELD or found is None:
-            missing = ("defines no field" if found is _NO_FIELD
-                       else "carries no value for")
-            raise StepFailedError(
-                f"Ref({ref.path!r}) reads {part!r} off {read}, which {missing} "
-                f"{part!r}. A read of a field that is not there is refused; "
-                "nothing downstream receives it as an absence.",
-                error_code="REF_FIELD_MISSING")
-        base = found
-        read = f"{read}.{part}"
-    return base
 
 
 async def _call_runner(runner: str, kwargs: dict[str, Any], label: str) -> Any:

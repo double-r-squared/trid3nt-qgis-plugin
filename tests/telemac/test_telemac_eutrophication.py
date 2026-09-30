@@ -461,11 +461,10 @@ def test_the_longitudinal_reads_are_taken_along_the_line_slot():
     """The producer measured the line and it rides on the domain artifact, so
     the LINE slot is filled from it rather than the network being walked twice.
     A body of water whose producer measured none is asked for the line."""
-    from trid3nt_server.workflows.runtime import Ref
 
     template = _template()
     along = {p.along for p in template.OUTPUTS if p.kind == "profile"}
-    assert along == {Ref("line")}
+    assert along == {"line"}
     assert "centerline" not in {row.name for row in _plan().data}
     assert {row.name for row in _plan().data if row.role == "line"} == {"line"}
 

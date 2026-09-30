@@ -295,13 +295,6 @@ def _s3_client() -> Any:
 
 def _build(mesher: Mesher, recipe: MeshRecipe) -> Mesh:
     """The whole mesh, from the whole recipe. There is no incremental path."""
-    unbound = recipe.unbound
-    if unbound:
-        raise MeshToolError(
-            "MESH_RECIPE_UNBOUND",
-            f"{sorted(unbound)} are late-bound reads rather than values, so this "
-            "mesh cannot be built: bind the declaration against a resolved sheet "
-            "before demanding the mesh.")
     return mesher.build(recipe)
 
 

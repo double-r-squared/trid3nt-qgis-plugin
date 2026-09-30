@@ -1884,8 +1884,6 @@ package DataSeam {
         "tests/runtime/test_domain_bed_and_context_slots.py::test_context_needs_something_to_ask_and_optional_still_refuses_a_producer";
     verify requirement AContextRowsAbsenceContinuesTheRun by
         "tests/runtime/test_domain_bed_and_context_slots.py::test_a_context_row_states_what_the_sheet_says_when_its_source_is_empty";
-    verify requirement AContextRowsAbsenceContinuesTheRun by
-        "tests/runtime/test_domain_bed_and_context_slots.py::test_the_sheet_reads_a_wholly_absent_row_as_nothing";
 
     satisfy requirement ThalwegBurningIsNeverABedSource by blueTopoSource;
     satisfy requirement ThalwegBurningIsNeverABedSource by cudemDeclaration;

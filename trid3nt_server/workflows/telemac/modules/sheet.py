@@ -12,13 +12,10 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any, Callable, Mapping, Sequence
 
-from trid3nt_server.workflows.runtime import ParamRef, Ref
-from trid3nt_server.workflows.runtime.reads import declared_reads
-
 from .module import Output, Slot, SlotRefused
 
 __all__ = ["CONTINUATION", "Filled", "Origin", "Provenance", "Sheet", "SheetIncomplete",
-           "fill", "fill_coupled", "late_bound", "run", "solve_cores",
+           "fill", "fill_coupled", "filled_by", "run", "solve_cores",
            "tracer_text"]
 
 
@@ -83,6 +80,9 @@ class Sheet:
     #: Files a composite named, by basename: content the serializer writes beside
     #: the steering file that names them.
     files: Mapping[str, Any] = MappingProxyType({})
+    #: The run's mapping the sheet was filled against: what a coupled body's
+    #: own composites read by name when the serializer fills it.
+    run: Mapping[str, Any] = MappingProxyType({})
 
     @property
     def module(self) -> str:
@@ -227,17 +227,6 @@ class Sheet:
         return tuple((row.slot.keyword, row.value)
                      for name, row in _in_dictionary_order(self.body, self.filled))
 
-    def __getattr__(self, name: str) -> Any:
-        """One FILLED keyword by identifier, so ``Ref("sheet.<KEYWORD>")`` reads
-        the value this run states wherever the sheet is a step's result.
-
-        Only what is filled: a keyword standing at the engine's own default is
-        not on the sheet, and the reader's refusal names it."""
-        row = object.__getattribute__(self, "filled").get(name)
-        if row is None:
-            raise AttributeError(name)
-        return row.value
-
     def state(self) -> dict[str, Any]:
         """What fill hands back: the sheet, said plainly."""
         return {
@@ -263,14 +252,18 @@ def _in_dictionary_order(body: type,
 def fill(source: type | Sheet, *, template: str = "",
          produced: Mapping[str, Any] | None = None,
          params: Mapping[str, Any] | None = None,
-         settled: Mapping[str, Any] | None = None, **slots: Any) -> Sheet:
+         settled: Mapping[str, Any] | None = None, inputs_fill: bool = True,
+         **slots: Any) -> Sheet:
     """Set slots on a body or on a sheet already filled -> the sheet that results.
 
-    ``settled`` is what the settle filled, by keyword; a keyword the template
-    states wins over it. Repeatable; an unknown keyword refuses BY NAME and
+    ``produced`` and ``params`` are the run's one mapping, a param stated here
+    over the same name produced; ``settled`` is what the settle filled, by
+    keyword, and a keyword the template states wins over it and over every
+    input that fills one. Repeatable; an unknown keyword refuses BY NAME and
     None states nothing."""
     from ..authoring.atmosphere import write_atmosphere
 
+    run_ = {**(produced or {}), **(params or {})}
     body, standing, pending = _standing(source, template)
     dictionary = body.MODULE_INPUT
     composites = body.COMPOSITES
@@ -287,18 +280,15 @@ def fill(source: type | Sheet, *, template: str = "",
     # standing merges last; a pending one wins in the loop below.
     filled |= {name: Filled(slot=dictionary[name], value=dictionary[name].check(value),
                             provenance=Provenance(Origin.DERIVED, source))
-               for source, name, value in filled_by(body, produced or {})} | standing
+               for source, name, value in (filled_by(body, run_) if inputs_fill
+                                           else ())} | standing
     files: dict[str, Any] = dict(source.files) if isinstance(source, Sheet) else {}
-    for name, (value, provenance) in _in_ref_order(pending):
-        if provenance.origin is not Origin.USER:
-            read = _measured(value)
-            if read is not None:
-                # A template states WHICH measurement this slot takes; the number
-                # itself is the accepted artifact's - the boundary walk, the
-                # normal depth, the time step the mesh's own CFL allows. Badging
-                # it "template" would hide that nobody wrote it down.
-                provenance = Provenance(Origin.DERIVED, read)
-        value = _bind(value, produced or {}, params or {}, filled)
+    # Keywords first, then composites in the order they are stated: a
+    # composite reads the keywords so far by name, never another composite, and
+    # a keyword stated after it wins over what it expands to.
+    order = list(pending)
+    for name, (value, provenance) in sorted(
+            pending.items(), key=lambda item: item[0] in composites):
         if value is None:
             # NOTHING is what None states. No keyword's value is None, so the
             # one thing it can mean is "this run does not state this" - a wind
@@ -307,8 +297,12 @@ def fill(source: type | Sheet, *, template: str = "",
             filled.pop(name, None)
             continue
         if name in composites:
-            expanded, named = composites[name].expand(value)
+            held = {**run_, **{key: row.value for key, row in filled.items()}}
+            expanded, named = composites[name].apply(value, held)
+            later = set(order[order.index(name) + 1:]) - set(composites)
             for key, item in expanded.items():
+                if key in later:
+                    continue
                 slot = body.slot(key)
                 filled[key] = Filled(
                     slot=slot, value=slot.check(item),
@@ -320,14 +314,14 @@ def fill(source: type | Sheet, *, template: str = "",
                               provenance=provenance)
     for basename, content in list(files.items()):
         if isinstance(content, Mapping) and content.get("filled_by"):
-            files[basename] = _coupled_filled(content, produced or {})
+            files[basename] = _coupled_filled(content, run_)
     _arm(body, filled, files)
-    _continued(body, filled, produced or {})
-    _partitioned(body, filled, params or {})
+    _continued(body, filled, run_)
+    _partitioned(body, filled, run_)
     write_atmosphere(body, {name: row.value for name, row in filled.items()},
                      files)
     return Sheet(body=body, filled=MappingProxyType(filled),
-                 files=MappingProxyType(files))
+                 files=MappingProxyType(files), run=MappingProxyType(run_))
 
 
 def filled_by(body: type, produced: Mapping[str, Any],
@@ -521,7 +515,7 @@ def _standing(source: type | Sheet, template: str = "",
               ) -> tuple[type, dict[str, Filled], dict[str, tuple[Any, str]]]:
     """What is on the sheet before this fill: the body's assertions, or a sheet.
 
-    A composite or a read is PENDING until the fill binds it."""
+    A composite is PENDING until the fill expands it."""
     if isinstance(source, Sheet):
         return source.body, dict(source.filled), {}
     standing: dict[str, Filled] = {}
@@ -532,141 +526,11 @@ def _standing(source: type | Sheet, template: str = "",
     provenance = Provenance(Origin.TEMPLATE, template or source.__name__)
     for name, value in source.ASSERTED.items():
         slot = source.MODULE_INPUT.get(name)
-        if slot is None or value is None or late_bound(value):
+        if slot is None or value is None:
             pending[name] = (value, provenance)
         else:
             standing[name] = Filled(slot=slot, value=value, provenance=provenance)
     return source, standing, pending
-
-
-def _measured(value: Any) -> str | None:
-    """The SLOT this assertion reads, or ``None`` when it reads nothing measured.
-
-    A ``Ref`` is a read of what the run measured; a ``ParamRef`` is the
-    invocation's own answer and is not."""
-    for found in declared_reads(value, Ref):
-        return str(found.path)
-    return None
-
-
-def late_bound(value: Any) -> bool:
-    """Does ``value`` still hold a read? Then it is not a value until fill binds it.
-
-    Walked rather than tested: a placeholder refuses its own truth value."""
-    for kind in (Ref, ParamRef):
-        for _found in declared_reads(value, kind):
-            return True
-    return False
-
-
-#: The root a read of THIS SHEET's own filled slots is written under, so a value
-#: placed on a keyword follows whatever the run stated that keyword at.
-_SHEET = "sheet"
-
-
-def _named(ref: Ref) -> str:
-    """WHAT this read waits on: the slot a sheet read names, else the producer."""
-    return ref.tail[0] if ref.root == _SHEET and ref.tail else ref.root
-
-
-def _in_ref_order(pending: Mapping[str, tuple[Any, str]],
-                  ) -> list[tuple[str, tuple[Any, str]]]:
-    """The pending assignments, each after the ones it reads.
-
-    A cycle refuses, naming the names in it."""
-    waiting = dict(pending)
-    ordered: list[tuple[str, tuple[Any, str]]] = []
-    while waiting:
-        ready = [name for name, (value, _) in waiting.items()
-                 if not ({_named(ref) for ref in declared_reads(value, Ref)}
-                         & (set(waiting) - {name}))]
-        if not ready:
-            raise SlotRefused(
-                f"the fill of {sorted(waiting)} reads itself in a cycle; a "
-                "producer cannot wait on its own result.")
-        for name in ready:
-            ordered.append((name, waiting.pop(name)))
-    return ordered
-
-
-def _bind(value: Any, produced: Mapping[str, Any], params: Mapping[str, Any],
-          filled: Mapping[str, Filled]) -> Any:
-    """Substitute every late-bound read in ``value`` with what it names.
-
-    A PARAM read is the invocation's sheet; a ``Ref`` is this fill's own."""
-    if isinstance(value, ParamRef):
-        if value.name not in params:
-            raise SlotRefused(
-                f"ParamRef({value.name!r}) names no declared param of this fill "
-                f"({sorted(params)}).")
-        return params[value.name]
-    if isinstance(value, Ref):
-        return _read(value, produced, filled)
-    if isinstance(value, Mapping):
-        return {k: _bind(v, produced, params, filled) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return type(value)(_bind(v, produced, params, filled) for v in value)
-    return value
-
-
-def _read(ref: Ref, produced: Mapping[str, Any],
-          filled: Mapping[str, Filled]) -> Any:
-    """One late-bound read: a producer's result, or a slot already on the sheet."""
-    if ref.root == _SHEET:
-        return _off_sheet(ref, filled)
-    if ref.root in produced:
-        base = produced[ref.root]
-    elif ref.root in filled:
-        base = filled[ref.root].value
-    else:
-        raise SlotRefused(
-            f"Ref({ref.path!r}) names neither a producer of this fill "
-            f"({sorted(produced)}) nor a slot already on the sheet.")
-    if base is None:
-        # A row that is WHOLLY ABSENT states nothing, exactly as a field that is
-        # present and empty does below.
-        return None
-    _missing = object()
-    for part in ref.tail:
-        if isinstance(base, (list, tuple)) and part.isdigit():
-            # A PAIR is one value with an order, not two fields: a settled point
-            # is [x, y] in the mesh's own metres, and a keyword that takes the
-            # abscissae apart from the ordinates reads it by position.
-            found = base[int(part)] if int(part) < len(base) else _missing
-        else:
-            found = (base.get(part, _missing) if isinstance(base, Mapping)
-                     else getattr(base, part, _missing))
-        if found is _missing:
-            raise SlotRefused(
-                f"Ref({ref.path!r}) reads {part!r} off {ref.root}, which names "
-                "no such field.")
-        # A field the row HOLDS as nothing states nothing: a wind nobody asked
-        # for, a previous run this one does not continue. That is an answer, and
-        # the composite reading it expands to no keyword at all.
-        if found is None:
-            return None
-        base = found
-    return base
-
-
-def _off_sheet(ref: Ref, filled: Mapping[str, Filled]) -> Any:
-    """A read placed on a KEYWORD, resolved through the sheet as it now stands.
-
-    The value the deck will write, whatever set it - so a placement follows an
-    override instead of the number the body was authored at."""
-    if not ref.tail:
-        raise SlotRefused(
-            f"Ref({ref.path!r}) reads the sheet and names no keyword on it.")
-    row = filled.get(ref.tail[0])
-    if row is None:
-        raise SlotRefused(
-            f"Ref({ref.path!r}) names {ref.tail[0]!r}, which this sheet does not "
-            "state; a read placed on a keyword follows a keyword the deck sets.")
-    base = row.value
-    for part in ref.tail[1:]:
-        base = base[int(part)] if isinstance(base, (list, tuple)) \
-            else base[part] if isinstance(base, Mapping) else getattr(base, part)
-    return base
 
 
 async def run(sheet: Sheet, *, dispatch: Callable[..., Any],

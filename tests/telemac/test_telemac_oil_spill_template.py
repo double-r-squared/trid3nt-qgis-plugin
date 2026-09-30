@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.runtime.reads import DataRef
-from trid3nt_server.workflows.runtime import Ref
 from trid3nt_server.workflows.runtime.data import (
     BED,
     DISCHARGE,
@@ -59,7 +57,7 @@ def test_the_domain_is_the_class_it_needs_and_a_supplied_polygon_still_wins():
     assert domain.producer is None
     assert domain.data_class == "hydrography"
     # The seed is the release POINT; a place name is geocoded before the call.
-    assert domain.coercion["near"] == Ref("release")
+    assert domain.coercion["near"] == "release"
     assert domain.fills_from_user
 
 
@@ -139,12 +137,12 @@ def test_the_source_is_stated_as_the_four_source_keywords_by_name():
 
 
 def test_the_sources_composite_writes_only_the_sources_file():
-    """``Sources(window_s=, until_s=)`` reads the discharge and the tracer value
+    """``Sources(window_s=)`` reads the discharge and the tracer value
     off the sheet by the keywords stated above, and writes the SOURCES FILE."""
     from trid3nt_server.workflows.telemac.modules.telemac2d import SOURCES_FILENAME
 
     slots, files = T2D.COMPOSITES["sources"].expand(
-        {"window_s": 300.0, "until_s": 3600.0,
+        {"window_s": 300.0, "settled": {"until_s": 3600.0},
          "q": [8.0], "tracers": [100.0]})
     assert slots == {"SOURCES_FILE": SOURCES_FILENAME}
     assert list(files) == [SOURCES_FILENAME]
@@ -152,8 +150,7 @@ def test_the_sources_composite_writes_only_the_sources_file():
 
 def test_the_spill_window_is_the_questions_own_input_and_stays_a_param():
     asserted = template.STEERING.ASSERTED
-    assert asserted["sources"]["window_s"].name == "spill_duration_s"
-    assert asserted["sources"]["until_s"].path == "settled.until_s"
+    assert asserted["sources"]["window_s"] == "spill_duration_s"
 
 
 def test_the_ex_release_params_are_gone_from_the_declared_wire():

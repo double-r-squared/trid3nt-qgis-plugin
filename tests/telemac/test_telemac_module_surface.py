@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.workflows.runtime import ParamRef, Ref
+from trid3nt_server.workflows.telemac.modules.telemac2d import Wind
 from trid3nt_server.workflows.telemac.modules import (
     Sheet,
     SheetIncomplete,
@@ -175,34 +175,22 @@ def test_a_multi_select_keyword_is_one_value_the_engine_splits_itself():
 
 # -- refusals at fill --------------------------------------------------------- #
 
+def test_a_body_is_static_and_no_fill_changes_what_it_asserts():
+    """A body reads no resolved value: its assertions are fixed when the module
+    is imported, so two fills of the same body start from the same statement."""
+    class RIVER(T2D):
+        SOLVER = 1
+        wind = Wind(speed_mps="wind_mps", from_deg=0.0)
+
+    before = dict(RIVER.ASSERTED)
+    fill(RIVER, params={"wind_mps": 6.0})
+    fill(RIVER, params={"wind_mps": 9.0}, SOLVER=3)
+    assert dict(RIVER.ASSERTED) == before
+
+
 def test_a_keyword_the_module_does_not_have_refuses_at_fill_too():
     with pytest.raises(SlotRefused, match="TITLE"):
         fill(T2D, TITEL="x")
-
-
-def test_a_ref_that_names_nothing_refuses_rather_than_binding_to_none():
-    with pytest.raises(SlotRefused, match="names neither a producer"):
-        fill(T2D, GEOMETRY_FILE=Ref("mesh.geometry"))
-
-
-def test_a_ref_reading_a_field_that_is_not_there_refuses():
-    with pytest.raises(SlotRefused, match="names no such field"):
-        fill(T2D, produced={"mesh": {}}, GEOMETRY_FILE=Ref("mesh.geometry"))
-
-
-def test_a_ref_reading_a_field_the_row_holds_as_nothing_states_nothing():
-    """A row that HOLDS a field as nothing is answering: no wind was asked for,
-    this run continues nothing. The composite reading it expands to no keyword at
-    all, which is a different thing from naming a field nobody produced."""
-    sheet = fill(T2D, produced={"mesh": {"geometry": None}},
-                 GEOMETRY_FILE=Ref("mesh.geometry"))
-    assert sheet.resolved() == ()
-
-
-def test_a_fill_that_reads_itself_in_a_cycle_refuses_naming_it():
-    with pytest.raises(SlotRefused, match="cycle"):
-        fill(T2D, GEOMETRY_FILE=Ref("BOUNDARY_CONDITIONS_FILE"),
-             BOUNDARY_CONDITIONS_FILE=Ref("GEOMETRY_FILE"))
 
 
 # -- the sheet ---------------------------------------------------------------- #
@@ -253,38 +241,6 @@ def test_resolution_order_is_engine_then_template_then_fill():
         "keyword": "TIDAL FLATS", "value": False, "provenance": "user"}
 
 
-def test_a_value_the_run_measured_reads_as_derived_not_as_the_body_that_named_it():
-    """A body states WHICH measurement a slot takes; the number is the artifact's.
-
-    Badging it template or part would say an author wrote a value nobody wrote down.
-    A declared PARAM is not this: it is the invocation's own answer."""
-    class DYE(T2D):
-        TIDAL_FLATS = Ref("settled.tidal_flats")
-        TIME_STEP = Ref("settled.time_step_s")
-        DURATION = ParamRef("sim_duration_s")
-        SOLVER = 1
-
-    rows = fill(DYE, produced={"settled": {"tidal_flats": True,
-                                           "time_step_s": 2.5}},
-                params={"sim_duration_s": 600.0}).state()["filled"]
-    assert rows["TIDAL_FLATS"]["provenance"] == "derived: settled.tidal_flats"
-    assert rows["TIME_STEP"]["provenance"] == "derived: settled.time_step_s"
-    assert rows["DURATION"]["provenance"] == "template: DYE"
-    assert rows["SOLVER"]["provenance"] == "template: DYE"
-
-
-def test_a_measured_value_a_fill_overrides_still_reads_as_the_users():
-    """The user's own edit beats the measurement, and the badge says the user."""
-    class DYE(T2D):
-        TIME_STEP = Ref("settled.time_step_s")
-
-    sheet = fill(DYE, produced={"settled": {"time_step_s": 2.5}})
-    assert (sheet.state()["filled"]["TIME_STEP"]["provenance"]
-            == "derived: settled.time_step_s")
-    edited = fill(sheet, TIME_STEP=1.0).state()["filled"]["TIME_STEP"]
-    assert edited["value"] == 1.0 and edited["provenance"] == "user"
-
-
 def test_a_body_extends_the_wrapper_and_never_a_body():
     class RIVER(T2D):
         SOLVER = 1
@@ -295,41 +251,9 @@ def test_a_body_extends_the_wrapper_and_never_a_body():
     assert "restate" in str(caught.value)
 
 
-def test_a_body_is_static_and_no_fill_changes_what_it_asserts():
-    """A body reads no resolved value: its assertions are fixed when the module
-    is imported, so two fills of the same body start from the same statement."""
-    class RIVER(T2D):
-        SOLVER = 1
-        DURATION = ParamRef("sim_duration_s")
-
-    before = dict(RIVER.ASSERTED)
-    fill(RIVER, params={"sim_duration_s": 600.0})
-    fill(RIVER, params={"sim_duration_s": 7200.0}, SOLVER=3)
-    assert dict(RIVER.ASSERTED) == before
-
-
-def test_a_param_a_body_reads_binds_from_the_sheet_the_invocation_resolved():
-    class RIVER(T2D):
-        DURATION = ParamRef("sim_duration_s")
-        VELOCITY_DIFFUSIVITY = ParamRef("velocity_diffusivity")
-
-    sheet = fill(RIVER, params={"sim_duration_s": 600.0,
-                                "velocity_diffusivity": None})
-    # The unset param states NOTHING, so the dictionary's own diffusivity stands.
-    assert sheet.resolved() == (("DURATION", 600.0),)
-
-
 def test_a_fill_is_repeatable_and_the_later_one_stands():
     sheet = fill(fill(T2D, DURATION=600.0), DURATION=1200.0)
     assert sheet.resolved() == (("DURATION", 1200.0),)
-
-
-def test_a_late_bound_read_binds_to_the_producer_that_answers_it():
-    class RIVER(T2D):
-        GEOMETRY_FILE = Ref("mesh.geometry")
-
-    sheet = fill(RIVER, produced={"mesh": {"geometry": "river.slf"}})
-    assert sheet.state()["filled"]["GEOMETRY_FILE"]["value"] == "river.slf"
 
 
 # -- composites --------------------------------------------------------------- #
@@ -498,7 +422,7 @@ def test_a_permitted_discharge_holds_flat_for_the_whole_run():
     simulated instant, so the time interpolation never reads off the end."""
     _, files = T2D.COMPOSITES["sources"].expand(
         {"q": [8.0], "tracers": [0.0, 2.0, 250.0, 0.0],
-         "window_s": None, "until_s": 600.0})
+         "window_s": None, "settled": {"until_s": 600.0}})
     rows = files["river_sources.txt"].splitlines()
     assert rows[1] == "T Q(1) TR(1,1) TR(1,2) TR(1,3) TR(1,4)"
     assert rows[3:] == ["0.000 8 0 2 250 0", "700.000 8 0 2 250 0"]
@@ -508,12 +432,12 @@ def test_the_sources_file_is_written_from_the_keywords_the_deck_states_by_name()
     """The four source keywords are the engine's own, so a deck states them by
     name and the composite shrinks to the one thing the dictionary lacks: the
     series file. It states the file's name and no other keyword at all."""
-    sheet = fill(T2D,
+    sheet = fill(T2D, produced={"settled": {"until_s": 600.0}},
                  ABSCISSAE_OF_SOURCES=[407561.831],
                  ORDINATES_OF_SOURCES=[4483518.635],
                  WATER_DISCHARGE_OF_SOURCES=[8.0],
                  VALUES_OF_THE_TRACERS_AT_THE_SOURCES=[100.0],
-                 sources=Sources(at={"at": [0.0, 0.0]}, window_s=120.0, until_s=600.0))
+                 sources=Sources(window_s=120.0))
     stated = {row.slot.keyword for row in sheet.filled.values()}
     assert stated == {"ABSCISSAE OF SOURCES", "ORDINATES OF SOURCES",
                       "WATER DISCHARGE OF SOURCES",
@@ -528,7 +452,7 @@ def test_the_sources_file_reads_the_tracer_array_by_the_engines_own_position():
     by position, and the file splits it back the same way."""
     _, files = T2D.COMPOSITES["sources"].expand(
         {"q": [3.0, 6.0], "tracers": [10.0, 11.0, 20.0, 21.0],
-         "window_s": None, "until_s": 600.0})
+         "window_s": None, "settled": {"until_s": 600.0}})
     rows = files["river_sources.txt"].splitlines()
     assert rows[1] == "T Q(1) Q(2) TR(1,1) TR(1,2) TR(2,1) TR(2,2)"
     assert rows[3:] == ["0.000 3 6 10 11 20 21", "700.000 3 6 10 11 20 21"]
@@ -539,22 +463,6 @@ def test_a_tracer_array_that_does_not_divide_across_the_sources_refuses():
         T2D.COMPOSITES["sources"].expand(
             {"q": [3.0, 6.0], "tracers": [10.0, 11.0, 20.0],
              "window_s": None, "until_s": 600.0})
-
-
-def test_a_settled_point_reaches_the_abscissae_and_the_ordinates_by_position():
-    """A settled point is ONE value with an order - [x, y] in the mesh's own
-    metres - and the two keywords that take it apart read it by position."""
-    sheet = fill(T2D, produced={"source": {"at": [407561.831, 4483518.635]}},
-                 ABSCISSAE_OF_SOURCES=[Ref("source.at.0")],
-                 ORDINATES_OF_SOURCES=[Ref("source.at.1")])
-    assert sheet.filled["ABSCISSAE_OF_SOURCES"].value == [407561.831]
-    assert sheet.filled["ORDINATES_OF_SOURCES"].value == [4483518.635]
-
-
-def test_a_position_past_the_end_of_a_pair_refuses_by_the_ref_that_read_it():
-    with pytest.raises(SlotRefused, match="source.at.2"):
-        fill(T2D, produced={"source": {"at": [1.0, 2.0]}},
-             ABSCISSAE_OF_SOURCES=[Ref("source.at.2")])
 
 
 def test_a_wind_from_the_north_reaches_the_engines_own_speed_and_direction_pair():
@@ -653,16 +561,17 @@ def test_a_value_of_none_states_nothing_and_the_engine_default_stands():
 def test_a_coupling_states_only_what_the_carrier_names_it_by():
     from trid3nt_server.workflows.telemac.modules import WAQTEL
 
-    body = WAQTEL.degradation(substance="sewage",
+    body = WAQTEL.degradation(substance="substance",
                               presets={"sewage": {"law": 1, "coef": 2.0}})
-    slots, files = T2D.COMPOSITES["coupling"].expand([body])
+    slots, files = T2D.COMPOSITES["coupling"].apply([body], {"substance": "sewage"})
     assert slots == {"COUPLING_WITH": "WAQTEL",
                      "WAQTEL_STEERING_FILE": "t2d_river.waqtel",
                      "WATER_QUALITY_PROCESS": 17}
     # The body's own slots are WAQTEL's, not the carrier's: they go to WAQTEL's
     # own deck, expanded and checked against WAQTEL's own dictionary.
     assert files["t2d_river.waqtel"]["module"] == "waqtel"
-    written = dict(fill(WAQTEL, **dict(files["t2d_river.waqtel"]["slots"])).resolved())
+    written = dict(fill(WAQTEL, produced={"substance": "sewage"},
+                        **dict(files["t2d_river.waqtel"]["slots"])).resolved())
     assert written == {"LAW OF TRACERS DEGRADATION": [1],
                        "COEFFICIENT 1 FOR LAW OF TRACERS DEGRADATION": [2.0]}
 
@@ -672,8 +581,8 @@ def test_a_degradation_given_nothing_couples_nothing():
     states no coupling at all rather than a process with nothing to run."""
     from trid3nt_server.workflows.telemac.modules import WAQTEL
 
-    body = WAQTEL.degradation(substance=None, presets={})
-    assert T2D.COMPOSITES["coupling"].expand([body]) == ({}, {})
+    body = WAQTEL.degradation(substance="substance", presets={})
+    assert T2D.COMPOSITES["coupling"].apply([body], {"substance": None}) == ({}, {})
 
 
 def test_a_named_substance_reaches_the_law_its_preset_row_carries():
@@ -681,9 +590,10 @@ def test_a_named_substance_reaches_the_law_its_preset_row_carries():
     rate of its own states the keyword pair, which is what the refusal names."""
     from trid3nt_server.workflows.telemac.modules import WAQTEL
 
-    body = WAQTEL.degradation(substance="E. coli effluent",
+    body = WAQTEL.degradation(substance="substance",
                               presets={"coli": {"law": 1, "coef": 2.0}})
-    assert dict(fill(WAQTEL, **dict(body["slots"])).resolved()) == {
+    assert dict(fill(WAQTEL, produced={"substance": "E. coli effluent"},
+                     **dict(body["slots"])).resolved()) == {
         "LAW OF TRACERS DEGRADATION": [1],
         "COEFFICIENT 1 FOR LAW OF TRACERS DEGRADATION": [2.0]}
 
@@ -705,10 +615,10 @@ def test_a_rate_is_stated_by_the_keyword_pair_and_bounded_by_the_sidecar():
 def test_a_substance_no_preset_names_refuses_rather_than_running_conservative():
     from trid3nt_server.workflows.telemac.modules import WAQTEL
 
-    body = WAQTEL.degradation(substance="arsenic",
+    body = WAQTEL.degradation(substance="substance",
                               presets={"coli": {"law": 1, "coef": 2.0}})
     with pytest.raises(ValueError, match="arsenic"):
-        fill(WAQTEL, **dict(body["slots"]))
+        fill(WAQTEL, produced={"substance": "arsenic"}, **dict(body["slots"]))
 
 
 #: Two calls of every coupled body, with no argument value shared between them.
@@ -776,10 +686,13 @@ def test_a_coupled_body_states_only_what_its_caller_handed_it():
     for (module, body), (first, second) in _COUPLED_CALLS.items():
         wrapper = WRAPPERS[module]
         dictionary = load_module_input(module)
+        # A substance is a name the run holds: each call's holds its own word.
         one = {name: row.value for name, row in fill(
-            wrapper, **dict(getattr(wrapper, body)(**first)["slots"])).filled.items()}
+            wrapper, produced={"x": "x"},
+            **dict(getattr(wrapper, body)(**first)["slots"])).filled.items()}
         two = {name: row.value for name, row in fill(
-            wrapper, **dict(getattr(wrapper, body)(**second)["slots"])).filled.items()}
+            wrapper, produced={"y": "y"},
+            **dict(getattr(wrapper, body)(**second)["slots"])).filled.items()}
         shared = ({_hashable(v) for v in first.values()}
                   & {_hashable(v) for v in second.values()})
         assert not shared, f"{module}.{body} calls share {shared}"
@@ -835,7 +748,10 @@ def _bed(**over):
                  BED_LOAD_TRANSPORT_FORMULA_FOR_ALL_SANDS=1,
                  HIDING_FACTOR_FORMULA=1,
                  MORPHOLOGICAL_FACTOR=10.0, MASS_BALANCE=True)
-    return fill(GAIA, **dict(GAIA.bed(**{**asked, **over})["slots"]))
+    named = {"gradation": over.pop("gradation")} if isinstance(
+        over.get("gradation"), str) else {}
+    return fill(GAIA, produced=named, **dict(GAIA.bed(**{
+        **asked, **over, **({"gradation": "gradation"} if named else {})})["slots"]))
 
 
 def test_the_gaia_classes_lists_are_three_of_one_length():
@@ -977,10 +893,10 @@ class _STEERING(T2D):
     FRICTION_COEFFICIENT = 0.03
 
 
-def _filled(**keywords):
-    """A sheet filled the way the door fills one: the body, then the raw floor."""
+def _filled(produced=None, **keywords):
+    """A sheet filled the way the run fills one: the body, then the raw floor."""
     stated = {_STEERING.identify(name): value for name, value in keywords.items()}
-    return fill(_STEERING, **stated)
+    return fill(_STEERING, produced=produced, **stated)
 
 
 def test_a_raw_keyword_on_the_wire_fills_the_slot_it_names():
@@ -994,16 +910,6 @@ def test_a_raw_keyword_on_the_wire_fills_the_slot_it_names():
     assert row.value == 4
     assert row.provenance.origin is Origin.USER
     assert ("LAW OF BOTTOM FRICTION", 4) in sheet.resolved()
-
-
-def test_a_read_placed_on_a_keyword_resolves_through_the_filled_sheet():
-    """Ref("sheet.<KEYWORD>") is the sheet as the fill leaves it, so a row placed
-    on a keyword follows whatever the run stated it at - and a keyword standing
-    at the engine's own default is named in the refusal rather than guessed."""
-    sheet = _filled(**{"LAW OF BOTTOM FRICTION": 4})
-    assert sheet.LAW_OF_BOTTOM_FRICTION == 4
-    with pytest.raises(AttributeError):
-        sheet.TIDAL_FLATS
 
 
 def test_a_raw_keyword_the_module_does_not_have_refuses_naming_the_nearest():
@@ -1034,11 +940,12 @@ def test_two_sources_on_the_floor_are_two_sources_in_the_deck():
     of series - and nothing in the body changed to allow it."""
     from trid3nt_server.workflows.telemac.modules.telemac2d import Sources
 
-    sheet = _filled(**{"ABSCISSAE OF SOURCES": [500.0, 900.0],
+    sheet = _filled(produced={"settled": {"until_s": 600.0}},
+                    **{"ABSCISSAE OF SOURCES": [500.0, 900.0],
                        "ORDINATES OF SOURCES": [1000.0, 1100.0],
                        "WATER DISCHARGE OF SOURCES": [8.0, 8.0],
                        "VALUES OF THE TRACERS AT THE SOURCES": [100.0, 100.0],
-                       "sources": Sources(at={"at": [0.0, 0.0]}, window_s=120.0, until_s=600.0)})
+                       "sources": Sources(window_s=120.0)})
     deck = dict(sheet.resolved())
     assert deck["ABSCISSAE OF SOURCES"] == [500.0, 900.0]
     assert deck["ORDINATES OF SOURCES"] == [1000.0, 1100.0]
@@ -1062,9 +969,9 @@ def test_a_fill_with_two_tracers_is_a_two_tracer_deck():
         ORDINATES_OF_SOURCES = [1000.0]
         WATER_DISCHARGE_OF_SOURCES = [8.0]
         VALUES_OF_THE_TRACERS_AT_THE_SOURCES = [100.0]
-        sources = Sources(at={"at": [0.0, 0.0]}, window_s=120.0, until_s=600.0)
+        sources = Sources(window_s=120.0)
 
-    sheet = fill(ONE, NUMBER_OF_TRACERS=2,
+    sheet = fill(ONE, produced={"settled": {"until_s": 600.0}}, NUMBER_OF_TRACERS=2,
                  tracer_names={"names": ["DYE             MG/L",
                                          "SALT            MG/L"]},
                  INITIAL_VALUES_OF_TRACERS=[0.0, 0.0],
@@ -1156,9 +1063,9 @@ def test_the_artemis_forcing_composite_carries_the_file_and_not_its_name():
     )
 
     slots, files = ART.COMPOSITES["incident_wave"].expand({
-        "cli_text": "1 1 1 0.0 0.0 0.0 0.0 lit 2 0.0 0.0 0.0 1 1\n",
-        "open_nodes": [1], "structure_nodes": [], "height_m": 1.0,
-        "reflection_coef": 0.3})
+        "measured": {"cli_text": "1 1 1 0.0 0.0 0.0 0.0 lit 2 0.0 0.0 0.0 1 1\n",
+                     "open_nodes": [1], "structure_nodes": []},
+        "height_m": 1.0, "reflection_coef": 0.3})
     assert slots == {}
     assert list(files) == [BOUNDARY_FILENAME]
     assert AGITATION.ASSERTED["BOUNDARY_CONDITIONS_FILE"] == BOUNDARY_FILENAME
@@ -1310,9 +1217,9 @@ def test_the_oil_module_is_one_value_the_deck_s_own_preset_and_point_expand():
                               hap=[(0.15, 610.0, 0.005, 1.0e-5, 8.0e-5)],
                               rho=840.0, eta=4.0e-6, voldev=10.0, tamb=288.0,
                               etal=1)}
-    slots, files = T2D.COMPOSITES["oil"].expand(Oil(
-        presets=presets, named="diesel", at=[512345.6, 4401234.4],
-        release_step=90))
+    slots, files = T2D.COMPOSITES["oil"].apply(Oil(
+        presets=presets, named="oil", release_step=90),
+        {"oil": "diesel", "source": {"at": [512345.6, 4401234.4]}})
     # The float COUNT and the period they are written on are the module's own
     # keywords, stated by the deck; what the composite owns is the three files.
     assert slots == {"FORTRAN_FILE": "user_fortran",
@@ -1324,8 +1231,9 @@ def test_the_oil_module_is_one_value_the_deck_s_own_preset_and_point_expand():
     assert "IF(LT.EQ.90)" in routine
     assert "COORD_X=512346.D0" in routine and "COORD_Y=4401234.D0" in routine
     with pytest.raises(ValueError, match="crude"):
-        T2D.COMPOSITES["oil"].expand(Oil(
-            presets=presets, named="crude", at=[0.0, 0.0], release_step=1))
+        T2D.COMPOSITES["oil"].apply(Oil(
+            presets=presets, named="oil", release_step=1),
+            {"oil": "crude", "source": {"at": [0.0, 0.0]}})
 
 
 def test_a_module_dictionary_is_parsed_once_per_process():
@@ -1364,7 +1272,8 @@ async def _answer(emitter: _Emitter, *replies) -> None:
 
 
 class _CARD(T2D):
-    DURATION = ParamRef("sim_duration_s")
+    DURATION = 600.0
+    wind = Wind(speed_mps="wind_mps", from_deg=0.0)
 
 
 def _card_run(monkeypatch, *replies, spent=(), input_mode=None, seat=None):
@@ -1380,7 +1289,7 @@ def _card_run(monkeypatch, *replies, spent=(), input_mode=None, seat=None):
         answering = asyncio.create_task(_answer(emitter, *replies))
         try:
             return await fill_sheet(
-                steering=_CARD, produced={}, params={"sim_duration_s": 600.0},
+                steering=_CARD, produced={}, params={"wind_mps": 6.0},
                 workflow="probe", title="", keywords={}, input_mode=input_mode,
                 spent=spent, seat=seat)
         finally:
@@ -1392,38 +1301,34 @@ def _card_run(monkeypatch, *replies, spent=(), input_mode=None, seat=None):
 def test_a_template_param_edited_on_the_card_lands_and_the_card_redraws(
         monkeypatch):
     sheet, emitter = _card_run(
-        monkeypatch, ("narrow_scope", {"sim_duration_s": 900.0}),
+        monkeypatch, ("narrow_scope", {"wind_mps": 9.0}),
         ("proceed", None))
-    assert dict(sheet.resolved())["DURATION"] == 900.0
+    assert dict(sheet.resolved())["SPEED AND DIRECTION OF WIND"][0] == 9.0
     drawn = [{row.name: row.value for row in card.param_sheet.rows}
              for card in emitter.sent]
-    assert [card["sim_duration_s"] for card in drawn] == [600.0, 900.0]
-    assert [card["DURATION"] for card in drawn] == [600.0, 900.0]
+    assert [card["wind_mps"] for card in drawn] == [6.0, 9.0]
 
 
 def test_a_param_edited_on_the_card_reaches_the_chart_reference(monkeypatch):
-    """The outputs stage binds a chart reference's params off the run's values
-    after the sheet, so what the card seated is what the chart reads."""
+    """The card seats an edit in the run's one mapping, which is what the
+    outputs stage reads a chart reference's params off."""
     import asyncio
     from types import SimpleNamespace
 
     from trid3nt_server.workflows.runtime import resolve_params
-    from trid3nt_server.workflows.runtime.fill import _bind
     from trid3nt_server.workflows.runtime.params import Param
     from trid3nt_server.workflows.telemac.workflow import _seat_on
 
     class _P:
-        sim_duration_s = Param(desc="How long the run solves.", default=600.0,
-                               bounds=(1.0, 1.0e7))
+        wind_mps = Param(desc="The wind the run is forced with.", default=6.0,
+                         bounds=(0.0, 60.0))
 
-    env = SimpleNamespace(params=asyncio.run(resolve_params(_P, {})))
-    _card_run(monkeypatch, ("narrow_scope", {"sim_duration_s": 900.0}),
+    env = SimpleNamespace(params=asyncio.run(resolve_params(_P, {})),
+                          run={"wind_mps": 6.0})
+    _card_run(monkeypatch, ("narrow_scope", {"wind_mps": 9.0}),
               ("proceed", None), seat=_seat_on(env))
-    chart = asyncio.run(_bind(
-        {"params": {"sim_duration_s": ParamRef("sim_duration_s")}}, env,
-        "outputs"))["params"]
-    assert chart == {"sim_duration_s": 900.0}
-    assert env.params.row("sim_duration_s").basis == "user"
+    assert env.run == {"wind_mps": 9.0}
+    assert env.params.row("wind_mps").basis == "user"
 
 
 def test_a_keyword_edited_on_the_card_lands(monkeypatch):
@@ -1440,9 +1345,9 @@ def test_a_name_that_is_no_input_of_the_run_refuses_by_name(monkeypatch):
 
 def test_a_param_another_stage_reads_refuses_by_name(monkeypatch):
     with pytest.raises(SlotRefused) as caught:
-        _card_run(monkeypatch, ("narrow_scope", {"sim_duration_s": 900.0}),
-                  spent=("sim_duration_s",))
-    assert "State sim_duration_s on the run instead" in str(caught.value)
+        _card_run(monkeypatch, ("narrow_scope", {"wind_mps": 9.0}),
+                  spent=("wind_mps",))
+    assert "State wind_mps on the run instead" in str(caught.value)
 
 
 def test_an_unstated_mode_with_no_session_refuses_and_fills_nothing(monkeypatch):
@@ -1455,7 +1360,7 @@ def test_an_unstated_mode_with_no_session_refuses_and_fills_nothing(monkeypatch)
     monkeypatch.setattr(pe, "current_emitter", lambda: None)
     with pytest.raises(TelemacError) as caught:
         asyncio.run(fill_sheet(steering=_CARD, produced={},
-                               params={"sim_duration_s": 600.0}, workflow="probe",
+                               params={"wind_mps": 6.0}, workflow="probe",
                                title="", keywords={}, input_mode=None))
     assert caught.value.error_code == "NO_SESSION"
     assert "input_mode='auto'" in str(caught.value)

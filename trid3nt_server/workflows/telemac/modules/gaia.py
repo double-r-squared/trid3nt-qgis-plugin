@@ -118,16 +118,17 @@ def Suspension(*, concentration_mgl: Any) -> Mapping[str, Any]:  # noqa: N802
     return {"concentration_mgl": concentration_mgl}
 
 
-def Dredging(*, actions: Any, measured: Any, reference: Any,  # noqa: N802
+def Dredging(*, actions: Any, measured: Any,  # noqa: N802
              origin: Any) -> Mapping[str, Any]:
-    """The dredge as one value: what is done, the MEASUREMENT of the areas and
-    the reference surface it is done against, the surface its levels are read
-    from, and the run's own time origin every action is dated against.
+    """The dredge as one value: what is done, the MEASUREMENT of its areas and
+    of the reference surface its levels are read from, and the run's own time
+    origin every action is dated against.
 
-    ``measured`` is what the workflow takes against the settled run, so the
-    stage that takes it is the workflow's to build off this statement."""
+    ``measured`` names what the workflow takes against the settled run; an
+    action's string argument is a name read off that measurement, else off
+    the run."""
     return {"actions": list(actions), "measured": measured,
-            "reference": reference, "origin": origin}
+            "settled": "settled", "origin": origin}
 
 
 def Dig(*, field: Any, start: Any, end: Any, volume: Any = None,  # noqa: N802
@@ -180,8 +181,8 @@ def SaveWaterLevel(*, start: Any, level: Any) -> Mapping[str, Any]:  # noqa: N80
     return {"type": "Save_water_level", "start": start, "level": level}
 
 
-def _dredging(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
-                                                 Mapping[str, Any]]:
+def _dredging(value: Mapping[str, Any], *, run: Mapping[str, Any]
+              ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     """The dredge -> NESTOR armed on this deck, and the three files it reads.
 
     The restart file is not among them: this composite authors none, so the
@@ -192,8 +193,30 @@ def _dredging(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
              "NESTOR_ACTION_FILE": nestor.ACTION_FILENAME,
              "NESTOR_POLYGON_FILE": nestor.POLYGON_FILENAME,
              "NESTOR_SURFACE_REFERENCE_FILE": nestor.REFERENCE_FILENAME},
-            nestor.files(value["actions"], reference=value["reference"],
+            nestor.files([_named_action(action, value, run)
+                          for action in value["actions"]],
+                         reference=value["measured"]["profiles"],
                          origin=value["origin"]))
+
+
+#: The arguments of an action that take an input's name; its type and its
+#: level are the engine's own words.
+_ACTION_READS = ("field", "start", "end", "volume", "rate", "depth", "crit_depth",
+                 "repeat", "min_volume", "min_volume_radius", "dump",
+                 "dump_rate", "grain_class")
+
+
+def _named_action(action: Mapping[str, Any], value: Mapping[str, Any],
+                  run: Mapping[str, Any]) -> dict[str, Any]:
+    """One action with each name it states read off the measurement, else off
+    the run; a minimum volume is gathered over the settled mesh's own edge
+    where the action states no radius of its own."""
+    held = {**run, **value["measured"]}
+    named = {key: held[item] if key in _ACTION_READS and isinstance(item, str)
+             else item for key, item in action.items()}
+    if named.get("min_volume") is not None and named.get("min_volume_radius") is None:
+        named["min_volume_radius"] = value["settled"]["mesh_size_m"]
+    return named
 
 
 def _classes(gradation: Any, presets: Mapping[str, Any]
@@ -330,6 +353,10 @@ GAIA.MODULE_OUTPUT = MODULE_OUTPUT
 GAIA.PRINTOUTS = "VARIABLES_FOR_GRAPHIC_PRINTOUTS"
 #: The result the primitives read: GAIA writes its own file beside the carrier's.
 GAIA.RESULT_FILE = RESULT_FILENAME
-GAIA.composites(bed=_bed, suspension=_suspension, dredging=_dredging)
+GAIA.composites(reads={"bed": ("gradation",),
+                       "suspension": ("concentration_mgl",),
+                       "dredging": ("measured", "settled", "actions",
+                                    *_ACTION_READS)},
+                bed=_bed, suspension=_suspension, dredging=_dredging)
 GAIA.appends(_appended)
 GAIA.reads(**{**PRIMITIVES, "field": _bed_field})

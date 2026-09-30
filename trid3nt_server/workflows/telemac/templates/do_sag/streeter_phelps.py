@@ -13,12 +13,11 @@ from trid3nt_server.workflows.telemac.helpers.oxygen_sag import do_profile
 from trid3nt_server.workflows.telemac.modules.outputs import (
     Line, Profile, reference_line,
 )
-from trid3nt_server.workflows.telemac.templates.do_sag.declarations import PARAMS
 
 __all__ = ["overlay"]
 
 #: The standard the sag is judged against, drawn flat across the reach.
-_STANDARD = reference_line(PARAMS.do_standard_mgl, label="standard")
+_STANDARD = reference_line("do_standard_mgl", label="standard")
 
 
 def overlay(*, saturation_mgl: float, k1_per_day: float, k2_per_day: float

@@ -58,10 +58,10 @@ def test_the_seed_names_which_body_of_water_and_is_a_point_never_a_place():
     """A place name is geocoded to a point before it reaches the match, so what
     ranks the domain is a lon/lat off the Point the seed was ingested into."""
     from trid3nt_server.inputs import Point
-    from trid3nt_server.workflows.runtime import Ref, data_rows
+    from trid3nt_server.workflows.runtime import data_rows
 
     domain = {d.name: d for d in data_rows(_module().DATA)}["domain"]
-    assert domain.coercion["near"] == Ref("seed")
+    assert domain.coercion["near"] == "seed"
     seed = next(p for p in _workflow().params if p.name == "seed")
     assert seed.type is Point and seed.optional
 
@@ -85,12 +85,11 @@ def test_the_plane_count_is_the_modules_keyword_and_the_planner_reads_it():
     """The plane count is NUMBER OF HORIZONTAL LEVELS, and the grid plan and the
     initial column READ that keyword rather than a second number beside it - so a
     user who states another count is planned on the column they are solved over."""
-    from trid3nt_server.workflows.runtime import Ref
 
     asserted = _module().STEERING.ASSERTED
     assert asserted["NUMBER_OF_HORIZONTAL_LEVELS"] == 13
     for slot in ("vertical_grid", "column"):
-        assert asserted[slot]["levels"] == Ref("NUMBER_OF_HORIZONTAL_LEVELS")
+        assert asserted[slot]["levels"] == "NUMBER_OF_HORIZONTAL_LEVELS"
 
 
 def test_a_stated_plane_count_replans_the_grid_and_the_initial_column():

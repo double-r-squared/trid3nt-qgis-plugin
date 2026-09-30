@@ -87,9 +87,9 @@ def test_the_mesh_is_cut_from_the_domain_polygon_and_not_from_a_box():
     and the mesher refuses one by name."""
     from trid3nt_server.workflows.telemac.templates.agitation.agitation import MESH
 
-    assert repr(MESH.extent) == "DataRef('domain')"
+    assert MESH.extent == "domain"
     set_bed = next(op for op in MESH.ops if op.fn == "set_bed")
-    assert repr(set_bed.kwargs["source"]) == "DataRef('bed')"
+    assert set_bed.kwargs["source"] == "bed"
 
 
 def test_the_template_declares_no_domain_twin():

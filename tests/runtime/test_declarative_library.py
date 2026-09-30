@@ -22,12 +22,9 @@ from trid3nt_server.workflows.runtime import (
     CoversAOI,
     Data,
     DataDecl,
-    DataRef,
     Domain,
     Param,
-    ParamRef,
     PlanValidationError,
-    Ref,
     ResolvedParams,
     StepFailedError,
     SuppliedGeometryError,
@@ -173,7 +170,7 @@ def stub_chart_leaks(*, result, params):
     """A builder that puts a DESCRIPTION in the title - the f-string leak, one call
     later, where only the emitted payload can catch it."""
     _CALLS.append("stub_chart_leaks")
-    return {"chart_id": "c1", "title": ParamRef("base")}
+    return {"chart_id": "c1", "title": "base"}
 
 
 class _StubProduct(BaseModel):
@@ -343,7 +340,7 @@ async def test_resolver_refuses_a_param_declared_twice():
 def _env(plan, p, data=(), *, input_mode=None, keywords=None, supplied=None):
     from trid3nt_server.workflows.runtime.fill import _Env
 
-    return _Env(params=p, data={d.name: d for d in data}, results={},
+    return _Env(params=p, data={d.name: d for d in data},
                 input_mode=input_mode, keywords=dict(keywords or {}),
                 supplied=dict(supplied or {}), workflow=plan.name)
 
@@ -353,25 +350,18 @@ def _env(plan, p, data=(), *, input_mode=None, keywords=None, supplied=None):
 
 # --- the DATA class body ------------------------------------------------------ #
 def test_the_class_body_names_its_rows_and_keeps_their_order():
-    """The attribute name IS the row name, the body's order IS the row order, and
-    a row-to-row read written as a plain identifier binds as the same late-bound
-    ref an out-of-body ``DATA.<row>`` yields."""
+    """The attribute name IS the row name and the body's order IS the row order."""
     from trid3nt_server.workflows.runtime import data_rows
 
     class DATA:
         dem = tool("fetch_dem", source="3dep")
-        basin = tool("fetch_watershed", dem_uri=dem)
         walls = Data.supplied(geometry="polyline").optional()
-        transect = tool("derive_transect", shape=walls)
 
     rows = data_rows(DATA)
-    assert [r.name for r in rows] == ["dem", "basin", "walls", "transect"]
-    assert rows[1].producer.kwargs["dem_uri"] == DataRef("dem")
-    assert DATA.dem == DataRef("dem")
-    assert rows[2].producer is None and rows[2].geometry == "polyline"
-    assert rows[2].is_optional is True
-    # A context slot read in-body is a row reference too, never the slot object.
-    assert rows[3].producer.kwargs["shape"] == DataRef("walls")
+    assert [r.name for r in rows] == ["dem", "walls"]
+    assert rows[0].producer.kwargs["source"] == "3dep"
+    assert rows[1].producer is None and rows[1].geometry == "polyline"
+    assert rows[1].is_optional is True
 
 
 def test_an_unknown_row_on_the_body_is_an_attribute_error():
@@ -383,9 +373,9 @@ def test_an_unknown_row_on_the_body_is_an_attribute_error():
 
 
 # --- the PARAMS class body ---------------------------------------------------- #
-def test_the_params_body_names_its_rows_keeps_their_order_and_is_its_own_ref():
-    """The attribute name IS the param name, the body's order IS the sheet order,
-    and the declaration is its own late-bound reference."""
+def test_the_params_body_names_its_rows_and_keeps_their_order():
+    """The attribute name IS the param name and the body's order IS the order
+    the card lists them in."""
     from trid3nt_server.workflows.runtime import param_rows
 
     class PARAMS:
@@ -396,7 +386,6 @@ def test_the_params_body_names_its_rows_keeps_their_order_and_is_its_own_ref():
     rows = param_rows(PARAMS)
     assert [p.name for p in rows] == ["depth_m", "armed"]
     assert rows[0].bounds == (0.0, 9.0)
-    assert isinstance(PARAMS.depth_m, ParamRef) and PARAMS.depth_m.name == "depth_m"
 
 
 def test_an_unknown_param_on_the_body_is_an_attribute_error():
@@ -415,7 +404,7 @@ def test_one_declaration_cannot_be_bound_to_two_names():
     second name silently the first."""
     shared = Param(door=doors.SCENARIO, default=1.0, bounds=(0.0, 9.0), desc="d")
 
-    with pytest.raises(PlanValidationError, match="bound to a second name"):
+    with pytest.raises(PlanValidationError, match="declared again"):
         class PARAMS:
             first = shared
             second = shared
@@ -567,59 +556,6 @@ def test_the_store_cycle_is_locked_across_processes(tmp_path):
         f"doc{i}" for i in range(12))
 
 
-# --- R3-1: a ParamRef may not leak past the late-binding seam ----------------- #
-def test_a_param_ref_refuses_every_silent_leak_path():
-    """Each of these used to answer QUIETLY: an f-string baked ``ParamRef(...)``
-    into a layer title, ``==`` answered False against the value the author meant,
-    and hashing let a ref sit in a set the binder did not walk."""
-    ref = ParamRef("reach_km")
-    with pytest.raises(PlanValidationError, match="str"):
-        str(ref)
-    with pytest.raises(PlanValidationError, match="f-string"):
-        _ = f"DO sag over {ref} km"
-    with pytest.raises(PlanValidationError, match="comparison"):
-        _ = ref == 12.0
-    with pytest.raises(PlanValidationError, match="comparison"):
-        _ = ref != 12.0
-    with pytest.raises(PlanValidationError, match="hashing"):
-        _ = {ref}
-    assert repr(ref) == "ParamRef('reach_km')"     # naming it is what repr is for
-
-
-@dataclasses.dataclass(frozen=True, slots=True)
-class _Holder:
-    """A plan author's own value type in the HOUSE idiom: frozen + slots, so it has
-    no ``__dict__`` at all. The binder does not walk into it - the LEAK GUARD is
-    what refuses the ref it is hiding, and it has to read slots to see one."""
-
-    value: object
-
-
-class _DictHolder:
-    """The plain ``__dict__`` object, kept so the slots arm does not cost this one."""
-
-    def __init__(self, value):
-        self.value = value
-
-
-class _SlotsNoDataclass:
-    """``__slots__`` without the dataclass decorator - the other half of that arm."""
-
-    __slots__ = ("value",)
-
-    def __init__(self, value):
-        self.value = value
-
-
-async def stub_returns_a_leaked_ref(**kwargs):
-    _CALLS.append("stub_returns_a_leaked_ref")
-    # A set arm and a slotted-object arm, each hiding a ref: the scan walks both.
-    # The set holds a _DictHolder, which hashes by identity - a frozen dataclass
-    # would hash its fields and ParamRef refuses hashing.
-    return {"uri": "s3://b/k.tif", "bag": {_DictHolder(ParamRef("base"))},
-            "held": _Holder(ParamRef("base"))}
-
-
 # --- R3-2: a revision re-derives what depends on it -------------------------- #
 # --- R3-3: a revision invalidates the data produced from the old values ------ #
 async def stub_dem(**kwargs):
@@ -673,9 +609,7 @@ def _deep_clean(depth):
 # --- the read-recording machinery is GONE: a read is just a read ------------- #
 @pytest.mark.asyncio
 async def test_a_concrete_read_is_value_of_and_nothing_watches_it():
-    """The plan is STATIC - it reads no concrete value - so there is no
-    plan-construction read left to record, and the machinery that recorded one is
-    gone with the branch check it fed."""
+    """A param's value is read by its name and nothing records the read."""
     for gone in ("get", "concrete_reads", "freeze_reads"):
         assert not hasattr(ResolvedParams, gone)
     p = await resolve_params(_params(), {})
@@ -686,8 +620,6 @@ async def test_a_concrete_read_is_value_of_and_nothing_watches_it():
     assert [r.name for r in p.rows()] == ["base", "pt"]
     assert p.values_view().base == 1.0
     assert p.values_view().get("base") == 1.0
-    # ...and the LATE-bound attribute read still describes rather than resolves.
-    assert isinstance(p.base, ParamRef) and p.base.name == "base"
 
 
 # --- the chart PAYLOAD is the surface, not the node's return dict ------------ #

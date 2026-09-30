@@ -412,9 +412,10 @@ def test_a_coupled_module_states_the_tracers_it_appends_and_its_own_table():
     it appends to the carrier's result are its statement, not the carrier's."""
     sheet = fill(T2D, NUMBER_OF_TRACERS=1,
                  NAMES_OF_TRACERS=["MARKER          MG/L"],
-                 boundaries=Boundaries(measured={
+                 produced={"settled": {
                      "liquid_boundary_order": [], "liquid_boundary_prescribes": [],
-                     "inflow_q_m3s": 1.0, "outflow_stage_m": 0.0}, tracers=[]),
+                     "inflow_q_m3s": 1.0, "outflow_stage_m": 0.0}},
+                 boundaries=Boundaries(tracers=[]),
                  coupling=[GAIA.suspended(
                      geometry="a.slf", boundary="a.cli", MASS_BALANCE=True,
                      CLASSES_SEDIMENT_DIAMETERS=[3e-05], concentration_mgl=250.0, SUSPENSION_TRANSPORT_FORMULA_FOR_ALL_SANDS=3,

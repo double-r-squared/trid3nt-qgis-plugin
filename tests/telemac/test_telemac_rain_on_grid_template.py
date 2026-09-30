@@ -59,7 +59,7 @@ def test_the_catchment_is_one_need_row_asked_at_the_pour_point():
     domain = rows["domain"]
     assert domain.role == "domain" and domain.data_class == "hydrography"
     assert domain.kind == "basin"
-    assert domain.coercion["near"].path == "pour_point"
+    assert domain.coercion["near"] == "pour_point"
     assert domain.span_km == 15.0
     assert domain.producer is None
     assert domain.fills_from_user
@@ -103,7 +103,7 @@ def test_the_outlet_rides_on_the_domain_since_no_runs_row_exists():
     op = [o for o in MESH.ops if o.fn == "set_boundary_roles"]
     assert len(op) == 1
     assert set(op[0].kwargs) == {"runs"}
-    assert op[0].kwargs["runs"].path == "domain"
+    assert op[0].kwargs["runs"] == "domain"
     assert "runs" not in _rows()
 
 
@@ -122,13 +122,13 @@ def test_the_mesh_is_a_band_whose_rim_is_locked_at_the_size_word():
         "delete_faces_connected_to_one_face",
         "make_mesh_boundaries_traversable", "fix_mesh", "set_bed",
         "set_boundary_roles"]
-    assert MESH.extent.path == "domain"
-    assert MESH.resolution_m.name == "mesh_resolution_m"
+    assert MESH.extent == "domain"
+    assert MESH.resolution_m == "mesh_resolution_m"
     sizing = next(o for o in MESH.ops if o.fn == "distance_sizing_from_line_function")
-    assert sizing.kwargs["line_file"].path == "rivers"
-    assert sizing.kwargs["max_edge_length"].name == "mesh_max_edge_m"
+    assert sizing.kwargs["line_file"] == "rivers"
+    assert sizing.kwargs["max_edge_length"] == "mesh_max_edge_m"
     bed = next(o for o in MESH.ops if o.fn == "set_bed")
-    assert bed.kwargs["source"].path == "bed"
+    assert bed.kwargs["source"] == "bed"
     assert bed.kwargs["condition"] == "pit_fill"
 
 

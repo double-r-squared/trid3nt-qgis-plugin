@@ -13,7 +13,7 @@ from typing import Annotated, Any, Mapping
 from trid3nt_contracts.coverage import DATA_CLASSES
 
 from .errors import PlanValidationError, SuppliedGeometryError
-from .reads import DataRef, Ref, Row, body_rows
+from .params import declarations, take_name
 
 __all__ = [
     "BED",
@@ -56,7 +56,7 @@ LINE = "line"
 #: The slot a run OPENS ON: one measured value read off whatever reports it near
 #: this domain, in the unit the keyword the role fills reads. Engine-neutral for
 #: the same reason the three above are - somebody measured something somewhere at
-#: some time - and the value it yields is reachable as ``Ref("observe.value")``.
+#: some time.
 OBSERVE = "observe"
 
 #: The two observations a solve READS BY ROLE rather than by name: the elevation
@@ -167,7 +167,7 @@ def shapes_of(data_class: str) -> frozenset[str]:
 
 
 @dataclass(frozen=True, slots=True)
-class Producer(Row):
+class Producer:
     """How an artifact comes into being: a runner name plus its declared args.
 
     ``.supplied()`` supersedes the build with an artifact the caller already has."""
@@ -182,7 +182,8 @@ class Producer(Row):
     #: The DATA-body attribute name this producer was declared under.
     row: str = ""
 
-    _ref_type = DataRef
+    def __set_name__(self, owner: type, name: str) -> None:
+        take_name(self, "row", name)
 
     def __post_init__(self) -> None:
         if not self.runner:
@@ -220,7 +221,7 @@ tool = ToolWord()
 
 
 @dataclass(frozen=True, slots=True)
-class DataDecl(Row):
+class DataDecl:
     """A declared artifact: a name a template reads, and what satisfies it.
     A PRODUCER-LESS declaration is a CONTEXT SLOT - the artifact is named, its source
     is not; what fills it comes from outside, or ``.optional()`` allows an absence."""
@@ -269,12 +270,9 @@ class DataDecl(Row):
     span_km: float | None = None
     #: What this slot's ingestion is told about the value it is handed - the
     #: point a nearest-site query ranks against, the unit the keyword reads.
-    #: Declared on the row because only the row knows them; a late-bound read
-    #: here is bound before the ingestion runs, like a producer's own kwargs.
+    #: Declared on the row because only the row knows them; ``near`` is the
+    #: NAME of the run input the point is read off.
     coercion: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
-
-    _row_attr = "name"
-    _ref_type = DataRef
 
     @property
     def role(self) -> str:
@@ -329,7 +327,7 @@ class DataDecl(Row):
     def __set_name__(self, owner: type, name: str) -> None:
         """The row's name IS its slot, so what only one slot may state is
         refused here, where the name first exists."""
-        Row.__set_name__(self, owner, name)
+        take_name(self, "name", name)
         if self.kind and self.role != DOMAIN:
             raise PlanValidationError(
                 f"Data {name!r} states kind={self.kind!r} and is not the "
@@ -495,7 +493,7 @@ class DataDecl(Row):
         are read off it, so a question states neither; ``at`` is the POINT this
         row is asked at where the domain's own centre is not it - the seed a
         reach is cut from, the place the nearest reporting site is ranked
-        against. ``of`` names WHAT OF THE CLASS is asked for - the variable a
+        against - named by the run input that holds it, a plain string. ``of`` names WHAT OF THE CLASS is asked for - the variable a
         record is read for - and a source publishing none of it leaves the
         match's list;
         ``kind`` is the DOMAIN'S own kind, stated only where the seed cannot
@@ -539,47 +537,8 @@ Data = DataDecl()
 
 
 def data_rows(body: Any) -> tuple[DataDecl, ...]:
-    """The declared rows of a ``DATA`` class body, in CLASS-BODY ORDER.
-    An in-body row-to-row identifier is rewritten into the same late-bound
-    :class:`DataRef` an out-of-body ``DATA.<row>`` yields."""
-    rows: list[DataDecl] = []
-    for value in body_rows(body, (Producer, DataDecl)):
-        if isinstance(value, Producer):
-            rows.append(DataDecl(name=value.row, producer=_bound_producer(value)))
-        else:
-            # A row written as ``Data(tool(...))`` carries its producer on the
-            # DECLARATION, and its reads of sibling rows - on the producer and on
-            # what its slot is TOLD, which names a sibling the same way - are
-            # bound here for the same reason a bare producer row's are.
-            rows.append(replace(
-                value,
-                producer=(None if value.producer is None
-                          else _bound_producer(value.producer)),
-                coercion=MappingProxyType(_row_refs(dict(value.coercion)))))
-    return tuple(rows)
-
-
-def _bound_producer(producer: Producer) -> Producer:
-    """``producer`` with its own reads resolved to row refs."""
-    return replace(producer, kwargs=_row_refs(producer.kwargs))
-
-
-def _row_refs(value: Any) -> Any:
-    """A declared value with every in-body row identifier turned into its ref."""
-    if isinstance(value, Producer):
-        if not value.row:
-            raise PlanValidationError(
-                f"a producer for {value.runner!r} is read by another row but is not "
-                "declared as one: give it a name in the DATA body.")
-        return DataRef(value.row)
-    if isinstance(value, DataDecl):
-        if not value.name:
-            raise PlanValidationError(
-                "a context slot is read by another row but is not declared as one: "
-                "give it a name in the DATA body.")
-        return DataRef(value.name)
-    if isinstance(value, Mapping):
-        return {k: _row_refs(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple, set, frozenset)):
-        return type(value)(_row_refs(v) for v in value)
-    return value
+    """The declared rows of a ``DATA`` class body, in CLASS-BODY ORDER; a bare
+    producer row is a row named for the attribute it is written under."""
+    return tuple(DataDecl(name=value.row, producer=value)
+                 if isinstance(value, Producer) else value
+                 for value in declarations(body, (Producer, DataDecl)))

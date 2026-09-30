@@ -55,7 +55,8 @@ def _spread(sheet: Any, rundir: Path, steering: str,
                        "values": {**_partitioned(sheet, host), **stated}}
     for basename, content in sheet.files.items():
         if isinstance(content, Mapping) and "slots" in content:
-            _spread(fill(wrapper_for(content["module"]), **dict(content["slots"])),
+            _spread(fill(wrapper_for(content["module"]), produced=sheet.run,
+                         inputs_fill=False, **dict(content["slots"])),
                     rundir, basename, decks, host=sheet)
             continue
         path = rundir / basename

@@ -17,7 +17,6 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.workflows.runtime import (
     Param,
     PlanValidationError,
-    Ref,
     Workflow,
     doors,
 )
@@ -190,22 +189,8 @@ def _reach_mesh(**params):
     """The MESH recipe a reach template writes, with test values for its ask."""
     from trid3nt_server.mesh.tool import tool
 
-    params.setdefault("extent", Ref("reach_polygon"))
+    params.setdefault("extent", "reach_polygon")
     return tool.build_mesh(mesher="om2d", kind="unstructured_tri", **params)
-
-
-def test_the_plan_reads_a_data_name_off_the_templates_own_body():
-    """A read is attribute access on the template's own DATA, which is what lets a
-    binding block sit at module level above the plan it feeds - and what makes a
-    name the template does not declare unwritable."""
-    from trid3nt_server.workflows.runtime import DataRef, tool
-
-    class DATA:
-        rivers = tool("fetch_river_geometry")
-
-    assert DATA.rivers == DataRef("rivers")
-    with pytest.raises(AttributeError):
-        DATA.riverz
 
 
 # --- (7) a coercion's failure is triaged, never flattened ------------------- #

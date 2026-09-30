@@ -324,12 +324,12 @@ def spectrum(at: Any = None, t: Any = -1) -> Primitive:
 def reference_line(value: Any, *, label: str) -> Any:
     """The standard a chart's own variable is read against, as one flat line.
 
-    ``value`` is a number or a declared param the sheet resolves; a run whose
-    sheet never supplied it draws nothing rather than a line at a guess."""
+    ``value`` is a number or the name of the param that holds one; a run that
+    never supplied it draws nothing rather than a line at a guess."""
 
     def lines(read: Read, reads: Mapping[Any, Any],
               params: Mapping[str, Any]) -> list[Line]:
-        held = params.get(value.name) if hasattr(value, "name") else value
+        held = params.get(value) if isinstance(value, str) else value
         if held is None:
             return []
         axis = read.distance_m if isinstance(read, Profile) else read.times

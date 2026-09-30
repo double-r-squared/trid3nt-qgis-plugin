@@ -16,7 +16,6 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
     Data,
-    Ref,
     register_workflow,
     tool,
 )
@@ -37,7 +36,6 @@ from trid3nt_server.workflows.telemac.templates.rain_on_grid.declarations import
     LANDCOVER_CN_MANNING,
     LANDCOVER_UNMAPPED,
     PARAMS,
-    PARAMS as P,
 )
 from trid3nt_server.workflows.telemac.workflow import (
     Measured, TelemacWorkflow,
@@ -84,7 +82,7 @@ class DATA:
     #: onto the traced channel, walks the D8 grid upslope and returns the divide
     #: with the outlet run it drains through - a basin the user draws or owns
     #: supersedes it and carries its own runs, or none.
-    domain = Data.need("hydrography", kind="basin", at=Ref("pour_point"),
+    domain = Data.need("hydrography", kind="basin", at="pour_point",
                        span_km=_BASIN_WINDOW_KM)
     #: THE GROUND the water runs over, as the whole surface rather than a bed
     #: measured over something else: an OVERLAND domain has no channel bottom
@@ -114,16 +112,16 @@ class DATA:
 MESH = tool.build_mesh(
     mesher="om2d",
     kind="unstructured_tri",
-    extent=DATA.domain,
-    resolution_m=P.mesh_resolution_m,
+    extent="domain",
+    resolution_m="mesh_resolution_m",
     ops=[
         # Fine along the channel network, coarsening away from it - oceanmesh's
         # own sizing functions under its own names. No sizing function the
         # library has measures the domain's own outline, so the rim is locked at
         # the size word between the sizing and the gradation, and the gradation
         # then holds the whole lattice.
-        mesh_op("distance_sizing_from_line_function", line_file=DATA.rivers,
-                rate=_MESH_GRADE, max_edge_length=P.mesh_max_edge_m),
+        mesh_op("distance_sizing_from_line_function", line_file="rivers",
+                rate=_MESH_GRADE, max_edge_length="mesh_max_edge_m"),
         mesh_op("set_rim_size"),
         mesh_op("enforce_mesh_gradation", gradation=_MESH_GRADE),
         mesh_op("delete_boundary_faces"),
@@ -135,7 +133,7 @@ MESH = tool.build_mesh(
         # from is conditioned by the same pass: an unfilled sink under an
         # overland solve ponds to its rim and sets the published peak depth from
         # a terrain artifact the routing does not believe in.
-        mesh_op("set_bed", source=DATA.bed, condition="pit_fill"),
+        mesh_op("set_bed", source="bed", condition="pit_fill"),
         # THE OUTLET, as the domain's own match measured it: the stretch of the
         # divide the terrain drains through, cut at the snapped pour point,
         # which rides on the domain row rather than a row of its own. Its
@@ -145,7 +143,7 @@ MESH = tool.build_mesh(
         # boundary file's zero. The all-KSORT free exit is not the alternative:
         # it is well-posed only while the normal velocity leaves, and
         # propin_telemac2d.f refuses an entering one by name.
-        mesh_op("set_boundary_roles", runs=DATA.domain),
+        mesh_op("set_boundary_roles", runs="domain"),
     ],
 )
 
@@ -156,12 +154,9 @@ MESH = tool.build_mesh(
 #: is a level this run never sits at.
 _OUTLET = Measured(
     "outlet", kind="rating",
-    asked={"landcover": DATA.landcover,
-           "roughness": LANDCOVER_CN_MANNING,
-           "unmapped": LANDCOVER_UNMAPPED,
-           "mm_per_day": PARAMS.design_storm_mm_per_day,
-           "series": PARAMS.rain_series_mm,
-           "record": Ref("rain.precip_mm")})
+    reads={"landcover": "landcover", "mm_per_day": "design_storm_mm_per_day",
+           "series": "rain_series_mm", "record": "rain"},
+    asked={"roughness": LANDCOVER_CN_MANNING, "unmapped": LANDCOVER_UNMAPPED})
 
 
 class STEERING(T2D):
@@ -217,24 +212,24 @@ class STEERING(T2D):
     #: past the last simulated instant; with neither, the constant design rate
     #: stops when its own window closes, so the catchment drains and the
     #: recession limb appears.
-    storm = Storm(mm_per_day=P.design_storm_mm_per_day,
+    storm = Storm(mm_per_day="design_storm_mm_per_day",
                   # DURATION OF RAIN OR EVAPORATION IN HOURS: six hours, half
                   # the window above, so the design storm CLOSES inside the run
                   # and the catchment has as long again to drain. The composite
                   # states the keyword only where the window closes, because a
                   # storm outlasting the horizon has no end to write down.
                   hours=6.0,
-                  until_s=Ref("settled.until_s"), series=P.rain_series_mm,
-                  record=Ref("rain.precip_mm"),
+                  series="rain_series_mm",
+                  record="rain",
                   tracers=0, fortran=RAINDEF3_USER_FORTRAN)
     #: The infiltration surface, read off the land cover at the accepted mesh's
     #: own nodes when the sheet is filled: the curve number the engine
     #: interpolates and the Manning zones it runs over, one table for both.
     infiltration = Infiltration(
-        mesh=Ref("mesh"), landcover=DATA.landcover,
+        landcover="landcover",
         table=LANDCOVER_CN_MANNING, unmapped=LANDCOVER_UNMAPPED,
-        uniform_cn=P.curve_number,
-        steep_slope_correction=P.steep_slope_correction,
+        uniform_cn="curve_number",
+        steep_slope_correction="steep_slope_correction",
         # ANTECEDENT MOISTURE CONDITIONS: AMC II, the mid condition the curve
         # numbers in the table are published against, so the field and the
         # condition it is read under come off the same publication.
@@ -248,15 +243,15 @@ class STEERING(T2D):
     #: elevation against that boundary's own measured flux and relaxes the depth
     #: toward it, so the outlet level rises and falls with the storm instead of
     #: standing at the boundary file's zero.
-    rating = Rating(measured=_OUTLET)
+    rating = Rating(measured="outlet")
 
 
 #: What this question PLACES: the flux the engine printed across the outlet the
 #: user gave, as the hydrograph - charted, and on the map as the station that
 #: carries it.
 OUTPUTS = [
-    series("FLUX", at=P.pour_point).chart(),
-    series("FLUX", at=P.pour_point).station(),
+    series("FLUX", at="pour_point").chart(),
+    series("FLUX", at="pour_point").station(),
 ]
 CAPTIONS = {"FLUX": "outlet hydrograph"}
 

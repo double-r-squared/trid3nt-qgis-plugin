@@ -13,7 +13,6 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
     Data,
-    Ref,
     register_workflow,
 )
 from trid3nt_server.inputs import point_arg
@@ -32,7 +31,7 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Wind,
 )
 from trid3nt_server.workflows.telemac.templates.bed_scour.declarations import (
-    ACCEPTS, DOC, GRADATION_PRESETS, PARAMS, PARAMS as P,
+    ACCEPTS, DOC, GRADATION_PRESETS, PARAMS,
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
@@ -42,7 +41,7 @@ __all__ = ["CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
 #: WHERE the substance enters the water: the point the user clicked, else that
 #: fraction along the domain's own centerline. The workflow settles it onto a
 #: node of the accepted mesh before the sheet reads it back.
-_RELEASE = Placed("source", point=PARAMS.release, fraction=PARAMS.spill_fraction,
+_RELEASE = Placed("source", point="release", fraction="spill_fraction",
                   label="Release point")
 
 #: The names the run directory holds this run's files under - the deck's own
@@ -72,7 +71,7 @@ class DATA:
 
     # A marker named up front also names which stretch to model: the reach is
     # walked downstream from it. A domain the user supplies supersedes this.
-    domain = Data.need("hydrography", at=Ref("release"),
+    domain = Data.need("hydrography", at="release",
                        span_km=_REACH_LENGTH_KM)
     # THE BED, as the CLASS it is rather than the source it comes from: the
     # measurement where something measured it, the terrain under the rest. Which
@@ -145,8 +144,7 @@ class STEERING(T2D):
     NUMBER_OF_TRACERS = 1
     #: The marker is called what the user called the release point, when a
     #: picked or named point came; the template's own name stands otherwise.
-    tracer_names = TracerNames(names=["MARKER          MG/L"],
-                               named_by=Ref("source.name"))
+    tracer_names = TracerNames(names=["MARKER          MG/L"])
     INITIAL_VALUES_OF_TRACERS = [0.0]
 
     #: The carrier's own boundary values, in the order the engine numbers its
@@ -154,7 +152,7 @@ class STEERING(T2D):
     #: carries and the level the outflow run holds. The bed is GAIA's; the
     #: carrier still runs ONE tracer, so every liquid boundary carries one
     #: clean-water value.
-    boundaries = Boundaries(measured=Ref("settled"), tracers=[0.0])
+    boundaries = Boundaries(tracers=[0.0])
 
     #: HOW MUCH enters, small against the carrier flow this deck opens on.
     WATER_DISCHARGE_OF_SOURCES = [8.0]
@@ -163,15 +161,14 @@ class STEERING(T2D):
     VALUES_OF_THE_TRACERS_AT_THE_SOURCES = [100.0]
     #: A FINITE pulse, so the marker advects and passes instead of holding the
     #: whole domain at a steady concentration.
-    sources = Sources(at=_RELEASE, window_s=P.spill_duration_s,
-                      until_s=Ref("settled.until_s"))
+    sources = Sources(window_s="spill_duration_s")
 
     #: The bed itself: bedload on, one class or a mixture, a real stock to scour
     #: into. What the dictionary has no keyword for is the GRADATION - a named
     #: mixture or the pairs one is written as - and its class table is expanded
     #: LAST, so a mixture wins over the single class stated beside it.
     coupling = [GAIA.bed(geometry=_GEOMETRY, boundary=_BOUNDARY,
-                         gradation=P.sediment_gradation, presets=GRADATION_PRESETS,
+                         gradation="sediment_gradation", presets=GRADATION_PRESETS,
                          # 100 um very fine sand, in the metres the keyword
                          # reads: the finest class the bed-load formulae treat
                          # as sand (silt below about 63 um is cohesive and they

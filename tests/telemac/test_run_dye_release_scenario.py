@@ -176,7 +176,7 @@ def test_the_params_are_the_questions_own_and_the_deck_states_the_keywords():
 def test_the_data_body_is_the_slots_and_the_classes_they_need():
     """The domain, the bed, the discharge
     and the level as the CLASSES they need - no fetcher named on any of them."""
-    from trid3nt_server.workflows.runtime import Ref, data_rows
+    from trid3nt_server.workflows.runtime import data_rows
     from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import DATA
 
     rows = data_rows(DATA)
@@ -212,13 +212,13 @@ def test_the_release_point_seeds_the_domain_producer():
     import inspect
 
     from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.runtime import Ref, data_rows
+    from trid3nt_server.workflows.runtime import data_rows
     from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import DATA
 
     domain = data_rows(DATA)[0]
     # THE POINT the reach is cut from is the one fact about the world the row
     # states; which source cuts it is the match's.
-    assert domain.coercion["near"] == Ref("release")
+    assert domain.coercion["near"] == "release"
     wire = set(inspect.signature(TOOL_REGISTRY["telemac_dye_release"].fn).parameters)
     assert "release" in wire
     assert not {"release_coords", "release_lat", "release_lon", "location",
@@ -249,7 +249,6 @@ def test_an_unknown_data_row_is_an_attribute_error_at_the_line_that_wrote_it():
 def test_the_deck_states_the_four_source_keywords_and_a_sources_composite():
     """The release enters through the engine's own keywords, one element per
     source, and the composite shrinks to the sources file plus the window."""
-    from trid3nt_server.workflows.runtime import ParamRef, Ref
     from trid3nt_server.workflows.telemac.modules.telemac2d import T2D as _T2D
     from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
         STEERING,
@@ -264,11 +263,10 @@ def test_the_deck_states_the_four_source_keywords_and_a_sources_composite():
                  "VALUES OF THE TRACERS AT THE SOURCES"):
         assert _T2D.identify(name) is not None
     sources = STEERING.ASSERTED["sources"]
-    window, until = sources["window_s"], sources["until_s"]
-    assert isinstance(window, ParamRef) and window.name == "spill_duration_s"
-    assert until == Ref("settled.until_s")
-    assert sources["q"] == Ref("WATER_DISCHARGE_OF_SOURCES")
-    assert sources["tracers"] == Ref("VALUES_OF_THE_TRACERS_AT_THE_SOURCES")
+    assert sources["window_s"] == "spill_duration_s"
+    assert sources["settled"] == "settled"
+    assert sources["q"] == "WATER_DISCHARGE_OF_SOURCES"
+    assert sources["tracers"] == "VALUES_OF_THE_TRACERS_AT_THE_SOURCES"
 
 
 def test_the_sources_file_the_deck_writes_is_the_series_the_engine_reads():
@@ -280,9 +278,10 @@ def test_the_sources_file_the_deck_writes_is_the_series_the_engine_reads():
         T2D as _T2D,
     )
 
-    stated = Sources(at={"at": [0.0, 0.0]}, window_s=300.0, until_s=600.0)
-    slots, files = _T2D.COMPOSITES["sources"].expand(
-        {**stated, "q": [8.0], "tracers": [100.0]})
+    slots, files = _T2D.COMPOSITES["sources"].apply(
+        Sources(window_s=300.0), {"settled": {"until_s": 600.0},
+                                  "WATER_DISCHARGE_OF_SOURCES": [8.0],
+                                  "VALUES_OF_THE_TRACERS_AT_THE_SOURCES": [100.0]})
     assert dict(slots) == {"SOURCES_FILE": "river_sources.txt"}
     assert files["river_sources.txt"].splitlines() == [
         "#", "T Q(1) TR(1,1)", "s m3/s mg/l",

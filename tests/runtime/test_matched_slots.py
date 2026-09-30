@@ -146,7 +146,7 @@ def world(monkeypatch):
 
 def _env(**values):
     return fill._Env(params=_Params(mesh_resolution_m=14.0, **values),
-                            data={}, results={})
+                            data={})
 
 
 def _row(decl, name):
@@ -331,7 +331,7 @@ def test_a_non_retryable_upstream_error_drops_the_rung(world, monkeypatch):
 def test_a_run_series_is_asked_for_the_window_the_deck_will_solve(world):
     env = fill._Env(
         params=_Params(mesh_resolution_m=14.0, event_time="2026-09-13T22:00:00Z"),
-        data={}, results={}, window_s=172800.0)
+        data={}, window_s=172800.0)
     discharge = _row(Data.need("discharge series"), "discharge")
     choice, value = asyncio.run(fill._probe(
         env, discharge, "discharge series", "discharge"))

@@ -144,16 +144,6 @@ def test_ops_that_are_not_recipe_entries_refuse():
     assert excinfo.value.error_code == "MESH_OPS_MALFORMED"
 
 
-def test_late_bound_reads_pass_declaration_and_refuse_serialization():
-    from trid3nt_server.workflows.runtime.reads import ParamRef
-
-    recipe = tool.build_mesh(mesher="reg_grid", extent=_AOI,
-                             resolution_m=ParamRef("mesh_resolution_m"))
-    with pytest.raises(MeshToolError) as excinfo:
-        recipe.to_json()
-    assert excinfo.value.error_code == "MESH_RECIPE_UNBOUND"
-
-
 def test_explicit_mesh_wins_over_a_discovered_one():
     stash_mesh_artifact("case-explicit", _artifact(name="discovered"))
     supplied = _artifact(mesh_id="01OTHER", name="supplied")
@@ -365,28 +355,6 @@ def test_a_recipe_builds_nothing(tmp_path):
     assert isinstance(recipe, MeshRecipe)
     with pytest.raises(ValueError):
         MeshSession(recipe, workdir=tmp_path).probes()
-
-
-def test_building_an_unbound_recipe_refuses_by_name(tmp_path):
-    """A placeholder must not reach the mesh library as a value it cannot read."""
-    from trid3nt_server.workflows.runtime.reads import ParamRef
-
-    recipe = tool.build_mesh(mesher="reg_grid", extent=_AOI,
-                             resolution_m=ParamRef("mesh_resolution_m"))
-    with pytest.raises(MeshToolError) as excinfo:
-        MeshSession(recipe, workdir=tmp_path).probes()
-    assert excinfo.value.error_code == "MESH_RECIPE_UNBOUND"
-    assert "resolution_m" in str(excinfo.value)
-
-
-def test_an_unbound_op_kwarg_refuses_at_build(tmp_path):
-    from trid3nt_server.workflows.runtime.reads import ParamRef
-
-    recipe = _recipe(ops=[mesh_op("set_bed", source=ParamRef("bed_uri"))])
-    with pytest.raises(MeshToolError) as excinfo:
-        MeshSession(recipe, workdir=tmp_path).probes()
-    assert excinfo.value.error_code == "MESH_RECIPE_UNBOUND"
-    assert "ops[0].source" in str(excinfo.value)
 
 
 def test_editing_a_recipe_returns_a_new_frozen_one():

@@ -96,11 +96,10 @@ _MEASURED = {"inflow_q_m3s": 50.0, "outflow_stage_m": 97.792}
 
 def _lists(numbered):
     """The three PRESCRIBED lists the composite writes for that walk."""
-    slots, _files = T2D.COMPOSITES["boundaries"].expand(Boundaries(
-        measured={**_MEASURED,
-                  "liquid_boundary_order": [role for role, _ in numbered],
-                  "liquid_boundary_prescribes": [what for _, what in numbered]},
-        tracers=[0.0]))
+    slots, _files = T2D.COMPOSITES["boundaries"].apply(Boundaries(tracers=[0.0]), {
+        "settled": {**_MEASURED,
+                    "liquid_boundary_order": [role for role, _ in numbered],
+                    "liquid_boundary_prescribes": [what for _, what in numbered]}})
     return slots
 
 

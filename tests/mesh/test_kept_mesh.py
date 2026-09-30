@@ -118,7 +118,7 @@ def _run_recipe(monkeypatch, bed: str, friction: float) -> dict:
     state = Fill(workflow=workflow, keywords={"FRICTION_COEFFICIENT": friction},
                  params=asyncio.run(resolve_params(workflow.params, {})))
     env = production(state)
-    env.artifacts.update(domain=_cut(bed), bed=bed)
+    env.run.update(domain=_cut(bed), bed=bed)
     with monkeypatch.context() as patch:
         patch.setattr(mesh_step, "build_declared_mesh", _stop)
         with pytest.raises(Exception, match="the recipe is all this test reads"):

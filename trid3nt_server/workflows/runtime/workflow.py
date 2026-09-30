@@ -121,6 +121,11 @@ class Workflow:
         The skeleton knows no engine, so it launches nothing."""
         raise WireArgsError(f"{self.name} declares no engine to launch.")
 
+    def unnamed(self) -> tuple[str, ...]:
+        """Every input the template names as a plain string that nothing of
+        this run is called; the fill refuses each by name."""
+        return ()
+
     def sheet_doc(self) -> str | None:
         """The ENGINE SURFACE line of this template's docstring, or nothing.
 

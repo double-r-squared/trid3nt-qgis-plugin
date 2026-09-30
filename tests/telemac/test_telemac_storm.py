@@ -14,10 +14,12 @@ from trid3nt_server.workflows.telemac.modules import telemac2d as T
 
 
 def _storm(**over):
-    ask = {"mm_per_day": 288.0, "hours": 2.0, "until_s": 36000.0,
+    ask = {"mm_per_day": 288.0, "hours": 2.0,
            "tracers": 0, "fortran": "/opt/trid3nt/user_fortran/raindef3"}
     ask.update(over)
-    return T._storm(T.Storm(**ask))
+    until_s = ask.pop("until_s", 36000.0)
+    return T.T2D.COMPOSITES["storm"].apply(T.Storm(**ask),
+                                          {"settled": {"until_s": until_s}})
 
 
 def test_a_design_rate_is_the_engines_own_constant_branch():

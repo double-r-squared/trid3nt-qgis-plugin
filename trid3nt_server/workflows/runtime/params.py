@@ -11,7 +11,6 @@ from dataclasses import dataclass, replace
 from typing import Any, Literal, Sequence
 
 from .errors import PlanValidationError
-from .reads import ParamRef, Row, body_rows
 
 __all__ = [
     "Door",
@@ -55,7 +54,7 @@ _BASIS_FOR_DOOR: dict[str, str] = {
 
 
 @dataclass(frozen=True, slots=True)
-class Param(Row):
+class Param:
     """One declared value: its door, its bounds, its consequence tag.
     The attribute name it is written under IS ``name``."""
 
@@ -80,8 +79,8 @@ class Param(Row):
     #: model never sends because a coercion resolves it from other wire args.
     wire: bool = True
 
-    _row_attr = "name"
-    _ref_type = ParamRef
+    def __set_name__(self, owner: type, name: str) -> None:
+        take_name(self, "name", name)
 
     def __post_init__(self) -> None:
         if self.name and not self.name.isidentifier():
@@ -146,7 +145,26 @@ class Param(Row):
 def param_rows(body: Any) -> tuple[Param, ...]:
     """The declared params of a ``PARAMS`` class body, in CLASS-BODY ORDER.
     The sheet's own order - what a reader sees on the card is what the template wrote."""
-    return body_rows(body, Param)
+    return declarations(body, Param)
+
+
+def declarations(body: Any, kind: type | tuple[type, ...]) -> tuple[Any, ...]:
+    """The declarations of a class body, in CLASS-BODY ORDER; a sequence passes
+    through, so a body assembled in code is still a body."""
+    if isinstance(body, (list, tuple)):
+        return tuple(body)
+    return tuple(v for v in vars(body).values() if isinstance(v, kind))
+
+
+def take_name(row: Any, attr: str, name: str) -> None:
+    """The attribute a declaration is written under IS its name; one
+    declaration under two names refuses."""
+    held = getattr(row, attr, "")
+    if held and held != name:
+        raise PlanValidationError(
+            f"{held!r} is declared again as {name!r}: a declaration is one row "
+            "in one body. Write a fresh declaration for the second row.")
+    object.__setattr__(row, attr, name)
 
 
 def refuse_duplicate_params(declared: "Sequence[Param]") -> None:
@@ -182,22 +200,12 @@ class ResolvedParam:
 
 
 class ResolvedParams:
-    """The resolved param sheet - what the RUN reads, never what a declaration reads.
-    Nothing here is reachable at plan-construction time; ``p.name`` yields a
-    :class:`ParamRef` so a read written against a sheet stays late-bound."""
+    """The resolved params - what the RUN reads, never what a declaration reads."""
 
     __slots__ = ("_rows",)
 
     def __init__(self, rows: dict[str, ResolvedParam]) -> None:
         object.__setattr__(self, "_rows", dict(rows))
-
-    def __getattr__(self, name: str) -> ParamRef:
-        rows = object.__getattribute__(self, "_rows")
-        if name not in rows:
-            raise AttributeError(
-                f"param {name!r} is not declared (declared: {sorted(rows)})"
-            )
-        return ParamRef(name)
 
     def __setattr__(self, name: str, value: Any) -> None:
         raise AttributeError("ResolvedParams is frozen; resolve a new sheet instead.")

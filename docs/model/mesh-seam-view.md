@@ -150,7 +150,7 @@ The accepted mesh's record - what a run needs to decide "can I solve on this?" a
 
 ### `MeshRecipeAsk`
 
-THE RECIPE: three mesher-agnostic params - the domain, the one size word, the shape - plus the ordered ops list that is the program. Engine vocabulary is never a param of the generalization, so a bed and a boundary role are entries in ``ops`` and nothing here. ``extent`` and ``resolution_m`` are optional because a declared ask carries a late-bound read until the interpreter binds it, and the mesher's own visible default answers for an ask that never states one.
+THE RECIPE: three mesher-agnostic params - the domain, the one size word, the shape - plus the ordered ops list that is the program. Engine vocabulary is never a param of the generalization, so a bed and a boundary role are entries in ``ops`` and nothing here. ``extent`` and ``resolution_m`` are optional because the mesher's own visible default answers for an ask that never states one; a template's recipe states either as the plain name of the run input it is read off, and the run reads it before the mesh is keyed.
 
 | item | type | required |
 | --- | --- | --- |

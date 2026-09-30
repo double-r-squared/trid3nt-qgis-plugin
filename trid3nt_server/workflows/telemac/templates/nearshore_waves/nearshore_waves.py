@@ -18,7 +18,6 @@ from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.runtime import (
     Data,
-    Ref,
     register_workflow,
 )
 from trid3nt_server.mesh.tool import mesh_op, tool
@@ -32,7 +31,6 @@ from trid3nt_server.workflows.telemac.templates.nearshore_waves.declarations imp
     ACCEPTS,
     DOC,
     PARAMS,
-    PARAMS as P,
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
@@ -54,7 +52,7 @@ _SPECTRA = "tom_nearshore.spe"
 #: node of the accepted mesh, so every chart is a node the run solved on. The
 #: fraction is never reached - the point is a required param, because a coast
 #: has no centerline a station could sit a fraction along.
-_STATION = Placed("station", point=PARAMS.station, label="Wave station")
+_STATION = Placed("station", point="station", label="Wave station")
 
 
 class DATA:
@@ -80,7 +78,7 @@ class DATA:
     #: them near the point the question names. Its ingestion is what turns those
     #: three columns into the boundary keywords - a peak FREQUENCY off the
     #: period, and the bearing the waves run TOWARD off the one they come from.
-    wave = Data.need("wave series", at=Ref("seed"))
+    wave = Data.need("wave series", at="seed")
     #: THE LEVEL the whole domain stands at, as ONE value: the still water the
     #: depths are counted down from, so a run at low water breaks further out
     #: than the same swell at high water. An ELEVATION on the datum the bed is
@@ -153,8 +151,8 @@ class STEERING(WAC):
 MESH = tool.build_mesh(
     mesher="om2d",
     kind="unstructured_tri",
-    extent=DATA.domain,
-    resolution_m=P.mesh_resolution_m,
+    extent="domain",
+    resolution_m="mesh_resolution_m",
     ops=[
         mesh_op("feature_sizing_function"),
         # THE RIM IS THE ASK'S TO SIZE. No sizing function the library has
@@ -168,13 +166,13 @@ MESH = tool.build_mesh(
         mesh_op("delete_faces_connected_to_one_face"),
         mesh_op("make_mesh_boundaries_traversable"),
         mesh_op("fix_mesh", delete_unused=True),
-        mesh_op("set_bed", source=DATA.bed),
+        mesh_op("set_bed", source="bed"),
         # EVERY stretch the library reads as ocean at this depth OPENS, and the
         # sea state is imposed along all of it: a coastal window is open on its
         # seaward side and along both ends, and picking one of them would force
         # a swell through a slot.
         mesh_op("identify_ocean_boundary_sections",
-                depth_threshold=P.open_depth_threshold_m),
+                depth_threshold="open_depth_threshold_m"),
     ],
 )
 
@@ -184,10 +182,10 @@ MESH = tool.build_mesh(
 #: breaking band, the forces - is published because its table rows it, not
 #: because this template asked.
 OUTPUTS = [
-    series("HM0", at=_STATION).chart(),
-    series("TPD", at=_STATION).chart(),
-    series("DMOY", at=_STATION).chart(),
-    spectrum(at=_STATION).chart(),
+    series("HM0", at="station").chart(),
+    series("TPD", at="station").chart(),
+    series("DMOY", at="station").chart(),
+    spectrum(at="station").chart(),
 ]
 CAPTIONS = {"HM0": "significant wave height", "TPD": "peak wave period",
             "DMOY": "mean wave direction", "BETA": "breaking rate",
@@ -228,7 +226,7 @@ _METADATA = AtomicToolMetadata(
 #: WHAT the mesh is built over, and the DATA slot a caller may hand a built
 #: mesh in instead of the recipe. Filled, that mesh is adopted whole.
 MESH_ON = "domain"
-SUPPLIED_MESH = DATA.mesh
+SUPPLIED_MESH = "mesh"
 
 #: The engine file this run has to write for it to have solved anything.
 RESULTS = (RESULT_FILENAME,)

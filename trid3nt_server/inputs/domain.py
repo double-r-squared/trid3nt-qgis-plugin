@@ -67,10 +67,8 @@ class Domain:
     #: as one artifact, and a run the user draws lands the same way.
     runs: tuple[BoundaryRun, ...] = ()
     #: The geometries a producer measured BESIDE the polygon, under its own names
-    #: - a reach's centerline, a catchment's snapped outlet. Each is addressable
-    #: as ``Ref("<row>.<name>")``, so a question that needs one asks for that one
-    #: rather than for the whole artifact; a drawn outline carries none and a
-    #: template that reads one on a domain without it is refused by name.
+    #: - a reach's centerline, a catchment's snapped outlet. A drawn outline
+    #: carries none.
     companions: Mapping[str, dict[str, Any]] = field(default_factory=dict)
 
     def __getattr__(self, name: str) -> Any:

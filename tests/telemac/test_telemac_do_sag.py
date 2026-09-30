@@ -16,7 +16,6 @@ from trid3nt_server.workflows.telemac.helpers.oxygen_sag import (
     critical_point,
     do_profile,
 )
-from trid3nt_server.workflows.runtime import Ref
 from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
 from trid3nt_server.workflows.telemac.workflow import stated
 from trid3nt_server.workflows.telemac.modules.outputs import (
@@ -127,10 +126,10 @@ def test_the_outfall_seeds_the_domain_match():
     import inspect
 
     from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.runtime import Ref, data_rows
+    from trid3nt_server.workflows.runtime import data_rows
 
     domain = data_rows(_template().DATA)[0]
-    assert domain.coercion["near"] == Ref("outfall_coords")
+    assert domain.coercion["near"] == "outfall_coords"
     wire = set(inspect.signature(TOOL_REGISTRY["telemac_do_sag"].fn).parameters)
     assert "outfall_coords" in wire
     assert {"domain", "bed"} <= wire
@@ -208,13 +207,12 @@ def test_the_outputs_list_charts_the_oxygen_along_the_domains_centerline():
     """The oxygen field is the module's to publish; what this template lists is
     the read the user gives a line - and the line is the CENTERLINE COMPANION the
     domain's own producer measured beside its polygon."""
-    from trid3nt_server.workflows.runtime import Ref
 
     do_sag = _template()
     assert [(p.kind, p.variable, p.t, p.publish) for p in do_sag.OUTPUTS] == [
         ("profile", "T2", -1, "chart")]
     assert callable(do_sag.OUTPUTS[0].reference)
-    assert do_sag.OUTPUTS[0].along == Ref("line")
+    assert do_sag.OUTPUTS[0].along == "line"
     assert do_sag.CAPTIONS == {"T2": "dissolved oxygen", "discharge": "a streamflow",
                                "level": "a water level"}
     # the standard the sag is judged by is a LINE on the chart that plots the

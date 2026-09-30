@@ -225,7 +225,7 @@ def _degradation(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
 def _body(process: int, **slots: Any) -> Mapping[str, Any]:
     """One coupled body, as the carrier's ``coupling`` composite reads it.
 
-    A MAPPING, not an object: the sheet's one ref walk descends mappings."""
+    A MAPPING: the carrier's coupling composite reads it by key."""
     return {"module": "waqtel", "steering": STEERING_FILENAME,
             "process": process, "slots": dict(slots)}
 
@@ -238,5 +238,6 @@ def _appended(body: Mapping[str, Any]) -> tuple[Output, ...]:
 WAQTEL = _Waqtel
 WAQTEL.APPENDABLE = tuple((f"process {process}", rows)
                           for process, rows in sorted(_APPENDED.items()))
-WAQTEL.composites(degradation=_degradation)
+WAQTEL.composites(reads={"degradation": ("substance",)},
+                  degradation=_degradation)
 WAQTEL.appends(_appended)

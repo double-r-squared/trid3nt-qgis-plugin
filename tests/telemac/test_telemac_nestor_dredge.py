@@ -35,12 +35,13 @@ def _area(label: str) -> dict[str, Any]:
 
 
 def _sheet(*actions: Any, reference: Any = None):
-    return fill(GAIA, **dict(GAIA.bed(
+    held = {"dredge": {"profiles": _PROFILES if reference is None else reference},
+            "settled": {"mesh_size_m": 12.0}}
+    return fill(GAIA, produced=held, **dict(GAIA.bed(
         geometry="a.slf", boundary="a.cli", MASS_BALANCE=True,
         gradation=None, presets={}, CLASSES_SEDIMENT_DIAMETERS=[0.0002], LAYERS_INITIAL_THICKNESS=[5.0], BED_LOAD_TRANSPORT_FORMULA_FOR_ALL_SANDS=1,
         HIDING_FACTOR_FORMULA=1, MORPHOLOGICAL_FACTOR=10.0,
-        dredging=Dredging(actions=list(actions), measured={},
-                          reference=_PROFILES if reference is None else reference,
+        dredging=Dredging(actions=list(actions), measured="dredge",
                           origin=_ORIGIN))["slots"]))
 
 
@@ -169,7 +170,7 @@ def test_a_dredge_over_a_bed_with_no_stock_refuses_by_name():
                        CLASSES_SEDIMENT_DIAMETERS=[3e-05], concentration_mgl=250.0,
                        SUSPENSION_TRANSPORT_FORMULA_FOR_ALL_SANDS=3, SCHEME_FOR_ADVECTION_OF_SUSPENDED_SEDIMENTS=[1],
                        dredging=Dredging(
-                           actions=[], measured={}, reference=_PROFILES, origin=_ORIGIN))
+                           actions=[], measured="dredge", origin=_ORIGIN))
 
 
 def test_the_carrier_deck_has_no_dredge_of_its_own():
@@ -178,7 +179,7 @@ def test_the_carrier_deck_has_no_dredge_of_its_own():
     from trid3nt_server.workflows.telemac.modules import T2D
 
     with pytest.raises(SlotRefused, match="no keyword 'dredging'"):
-        fill(T2D, dredging=Dredging(actions=[], measured={}, reference=_PROFILES,
+        fill(T2D, dredging=Dredging(actions=[], measured="dredge",
                                     origin=_ORIGIN))
 
 

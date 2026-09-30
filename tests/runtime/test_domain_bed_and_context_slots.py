@@ -17,7 +17,6 @@ from trid3nt_server.workflows.runtime import (
     Data,
     Param,
     PlanValidationError,
-    Ref,
     data_rows,
     doors,
     tool,
@@ -72,19 +71,6 @@ def test_a_terrain_row_refuses_the_shape_no_source_of_terrain_publishes():
         row.refuse_wrong_shape("s3://b/k/soundings.geojson")
 
 
-def test_a_row_declared_with_a_producer_binds_its_reads_like_a_bare_one():
-    """``Data(tool(...))`` is a producer row with a modifier written on it, so
-    its reads of sibling rows resolve the same way a bare row's do."""
-    class DATA:
-        box = tool("probe_point", layer_uri="x")
-        sample = Data(tool("fetch_usgs_water_quality",
-                           bbox=Ref("box.bbox"))).context()
-
-    rows = {row.name: row for row in data_rows(DATA)}
-    assert rows["sample"].is_context
-    assert rows["sample"].producer.kwargs["bbox"] == Ref("box.bbox")
-
-
 def test_a_context_row_states_what_the_sheet_says_when_its_source_is_empty():
     class DATA:
         stated = Data(tool("fetch_usgs_water_quality")).context(
@@ -121,7 +107,7 @@ def test_a_context_rows_absence_continues_the_run_and_says_so(monkeypatch):
         raise RuntimeError("WQP_NO_SITES")
 
     monkeypatch.setattr(fill, "_produced", _empty)
-    env = fill._Env(params=None, data={}, results={})
+    env = fill._Env(params=None, data={})
     row = data_rows(DATA)[0]
     assert asyncio.run(fill._produce(env, row)) is None
     assert env.absences == [
@@ -157,7 +143,7 @@ def _env_over(value, monkeypatch, body=_RIVER):
 
     monkeypatch.setattr(fill, "_produced", _answered)
     rows = {row.name: row for row in data_rows(body)}
-    return fill, fill._Env(params=None, data=rows, results={})
+    return fill, fill._Env(params=None, data=rows)
 
 
 def test_the_line_slot_is_filled_by_the_domains_own_centerline(monkeypatch):
@@ -208,7 +194,7 @@ def test_a_malformed_ask_on_a_context_row_refuses_rather_than_reading_absent(
                                  "the ask's", "INPUT_INVALID")
 
     monkeypatch.setattr(fill, "_produced", _refused)
-    env = fill._Env(params=None, data={}, results={})
+    env = fill._Env(params=None, data={})
     with pytest.raises(Exception) as exc:
         asyncio.run(fill._produce(env, data_rows(DATA)[0]))
     assert exc.value.error_code == "EHYDRO_INPUT_INVALID"
@@ -230,20 +216,12 @@ def test_a_malformed_value_handed_to_a_context_rows_slot_refuses_too(monkeypatch
                              code="OBSERVATION_INVALID")
 
     monkeypatch.setattr(fill, "_produced", _answered)
-    env = fill._Env(params=None, data={}, results={})
+    env = fill._Env(params=None, data={})
     row = data_rows(DATA)[0]
     with pytest.raises(UserInputError) as exc:
         asyncio.run(fill._produce(env, row))
     assert exc.value.error_code == "OBSERVATION_INVALID"
     assert env.absences == []
-
-
-def test_the_sheet_reads_a_wholly_absent_row_as_nothing():
-    """Same rule where the keywords are set: an absent row states nothing, and
-    the composite reading it expands to no keyword at all."""
-    from trid3nt_server.workflows.telemac.modules.sheet import _read
-
-    assert _read(Ref("sample.value"), {"sample": None}, {}) is None
 
 
 def test_a_hard_producer_row_still_refuses_when_its_source_is_empty(monkeypatch):
@@ -256,7 +234,7 @@ def test_a_hard_producer_row_still_refuses_when_its_source_is_empty(monkeypatch)
         raise RuntimeError("WQP_NO_SITES")
 
     monkeypatch.setattr(fill, "_produced", _empty)
-    env = fill._Env(params=None, data={}, results={})
+    env = fill._Env(params=None, data={})
     with pytest.raises(RuntimeError, match="WQP_NO_SITES"):
         asyncio.run(fill._produce(env, data_rows(DATA)[0]))
 
@@ -329,7 +307,7 @@ def _answered(monkeypatch, value: Any):
 
 
 def test_an_observation_row_yields_the_reading_not_the_record(monkeypatch):
-    """``Ref("<row>.value")`` reaches a keyword, which is the whole seam: the
+    """The reading is what reaches a keyword, which is the whole seam: the
     nearest site, the unit and the sample's age are the slot's own ingestion."""
     import dataclasses
 
@@ -337,7 +315,7 @@ def test_an_observation_row_yields_the_reading_not_the_record(monkeypatch):
     monkeypatch.setattr(dataclasses, "replace", lambda obj, **kw: obj)
     # NO ROW STATES A UNIT: what this slot reads is the unit of the keyword its
     # ROLE fills, which the workflow answers for.
-    env = fill._Env(params=None, data={}, results={"station": (0.11, 0.1)},
+    env = fill._Env(params=None, data={}, run={"station": (0.11, 0.1)},
                            slot_units={"observe": "degC"})
     found = asyncio.run(fill._produce(env, data_rows(_OBSERVED)[0]))
     assert found.value == pytest.approx(10.0)
@@ -348,50 +326,20 @@ def test_the_coercion_a_row_declares_is_bound_before_the_ingestion_runs():
     """``near`` is a late-bound read like any producer kwarg: the point the
     nearest site is ranked against is measured by a step, not written by hand."""
     class RANKED:
-        observe = Data.need("water quality sample", at=Ref("station"))
+        observe = Data.need("water quality sample", at="station")
 
     row = data_rows(RANKED)[0]
-    assert row.coercion["near"] == Ref("station")
+    assert row.coercion["near"] == "station"
 
 
 def test_a_supplied_number_supersedes_the_record_through_the_same_slot(monkeypatch):
     from trid3nt_server.workflows.runtime import fill
 
-    env = fill._Env(params=None, data={}, results={"station": (0.11, 0.1)},
+    env = fill._Env(params=None, data={}, run={"station": (0.11, 0.1)},
                            slot_units={"observe": "degC"},
                            supplied={"observe": 11.5})
     found = asyncio.run(fill._produce(env, data_rows(_OBSERVED)[0]))
     assert found.value == pytest.approx(11.5) and found.units == "degC"
-
-
-def test_a_context_row_over_a_window_nobody_stated_is_not_asked(monkeypatch):
-    """A row whose producer reads a param the caller left unset has no question
-    to put: asking anyway is a refusal about a window nobody chose."""
-    import asyncio
-
-    from trid3nt_server.workflows.runtime import ParamRef, fill
-
-    class DATA:
-        rain = Data(tool("fetch_aorc_precip", bbox=[0.0, 0.0, 1.0, 1.0],
-                         start_date=ParamRef("event_time"))
-                    ).context("no hourly rainfall record over this catchment "
-                              "for that window")
-
-    asked: list[str] = []
-
-    async def _never(env, producer, label):
-        asked.append(label)
-        raise AssertionError("the source must not be asked")
-
-    monkeypatch.setattr(fill, "_produced", _never)
-    env = fill._Env(params=_Params({"event_time": None}), data={},
-                           results={})
-    row = data_rows(DATA)[0]
-    assert asyncio.run(fill._produce(env, row)) is None
-    assert asked == []
-    assert env.absences == [
-        "no hourly rainfall record over this catchment for that window "
-        "(event_time (the start_date this row reads) was not stated)"]
 
 
 def _no_moment_env(**over):
@@ -400,8 +348,7 @@ def _no_moment_env(**over):
     from trid3nt_server.workflows.runtime import fill
 
     _standing_on()
-    return fill._Env(params=_Params({"event_time": None}), data={},
-                            results={}, **over)
+    return fill._Env(params=_Params({"event_time": None}), data={}, **over)
 
 
 def test_a_context_need_with_no_moment_stated_is_absent_with_its_sentence():
@@ -466,12 +413,12 @@ def test_every_elevation_slot_is_read_on_the_runs_own_vertical_frame():
         return asyncio.run(fill._on_the_run_s_frame(
             env, _elevation_slot(role), source))
 
-    env = fill._Env(params=_Params({}), data={}, results={})
+    env = fill._Env(params=_Params({}), data={})
     assert _told(env, BED) == {"frame": "NAVD88"}
     assert _told(env, LEVEL) == {"to_datum": "NAVD88"}
     assert _told(env, DISCHARGE) == {}
     stated = fill._Env(params=_Params({"vertical_frame": "IGLD85"}),
-                              data={}, results={})
+                              data={})
     assert _told(stated, BED) == {"frame": "IGLD85"}
 
 
@@ -498,7 +445,7 @@ def test_the_runtime_declares_the_offset_row_a_differing_source_owes(monkeypatch
         Data.need("hydrography", at=[_MEASURED_EAST_OF + 0.005, 45.49]),
         name="domain")
     env = fill._Env(params=_Params({"vertical_frame": "EGM2008"}),
-                           data={"domain": seeded}, results={})
+                           data={"domain": seeded})
     told = asyncio.run(fill._on_the_run_s_frame(
         env, _elevation_slot(BED),
         {"uri": _half_measured(tmp_path), "vertical_datum": "NAVD88"}))
@@ -530,7 +477,7 @@ def test_an_offset_row_is_asked_where_the_source_measured_not_at_the_seed(
         Data.need("hydrography", at=[_MEASURED_EAST_OF - 0.01, 45.49]),
         name="domain")
     env = fill._Env(params=_Params({"vertical_frame": "EGM2008"}),
-                           data={"domain": seeded}, results={})
+                           data={"domain": seeded})
     asyncio.run(fill._on_the_run_s_frame(
         env, _elevation_slot(BED),
         {"uri": _half_measured(tmp_path), "vertical_datum": "NAVD88"}))
@@ -568,7 +515,7 @@ def test_a_source_on_the_runs_own_frame_declares_no_offset_row(monkeypatch):
 
     monkeypatch.setattr(fill, "_call_runner", _never)
     _standing_on()
-    env = fill._Env(params=_Params({}), data={}, results={})
+    env = fill._Env(params=_Params({}), data={})
     told = asyncio.run(fill._on_the_run_s_frame(
         env, _elevation_slot(BED),
         {"uri": "s3://b/k/dem.tif", "vertical_datum": "NAVD88 (metres, positive up)",
@@ -630,7 +577,7 @@ def test_a_row_a_merge_names_is_fetched_at_the_spacing_the_run_is_meshed_at(
     monkeypatch.setattr(fill, "_ask_for", _ask_for)
     monkeypatch.setattr(fill, "_produce", _produce)
     env = fill._Env(params=_Params({"mesh_resolution_m": 40.0}),
-                           data={}, results={})
+                           data={})
     asyncio.run(fill._named_row(env, _elevation_slot(BED),
                                        "fetch_chs_nonna", BED))
     assert asked == [{"bbox": (-82.8, 42.6, -82.3, 43.5), "resolution_m": 40.0}]

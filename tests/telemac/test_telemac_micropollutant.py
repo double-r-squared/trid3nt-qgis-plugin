@@ -12,7 +12,6 @@ import asyncio
 
 import pytest
 
-from trid3nt_server.workflows.runtime import DataRef, Ref
 from trid3nt_server.workflows.telemac.modules import (
     T2D,
     WAQTEL,
@@ -153,8 +152,7 @@ def test_the_marker_is_stated_as_the_four_source_keywords_by_name():
 
 def test_the_spill_window_is_the_questions_own_input_and_stays_a_param():
     asserted = _template().STEERING.ASSERTED
-    assert asserted["sources"]["window_s"].name == "release_duration_s"
-    assert asserted["sources"]["until_s"].path == "settled.until_s"
+    assert asserted["sources"]["window_s"] == "release_duration_s"
 
 
 def test_the_deck_releases_the_substance_dissolved_and_carries_the_sediment_in():

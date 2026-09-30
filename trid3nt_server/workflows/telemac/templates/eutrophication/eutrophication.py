@@ -15,7 +15,7 @@ import sys
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
-    Data, Ref, register_workflow,
+    Data, register_workflow,
 )
 from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
@@ -25,7 +25,7 @@ from trid3nt_server.workflows.telemac.modules.outputs import (
 )
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
 from trid3nt_server.workflows.telemac.templates.eutrophication.declarations import (
-    ACCEPTS, DOC, PARAMS, PARAMS as P,
+    ACCEPTS, DOC, PARAMS,
 )
 from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
@@ -52,7 +52,7 @@ _REACH_LENGTH_KM = 12.0
 #: The line every longitudinal read is taken along: the LINE SLOT, which the
 #: domain's own producer fills with the centerline it measured beside the
 #: polygon and which a user draws on a body whose producer measured none.
-_CENTERLINE = Ref("line")
+_CENTERLINE = "line"
 
 #: FORMULA FOR COMPUTING CS: the oxygen saturation follows the STATED water
 #: temperature rather than the engine's constant ceiling, so the water is judged
@@ -85,7 +85,7 @@ class DATA:
     # the mapped water and arrives with its two end transects - which is where
     # the inflow and the outflow are prescribed - and with its centerline, which
     # is the line every longitudinal read below is taken along.
-    domain = Data.need("hydrography", at=Ref("seed"),
+    domain = Data.need("hydrography", at="seed",
                        span_km=_REACH_LENGTH_KM)
     # THE LINE every longitudinal read is taken along.
     line = Data.supplied(geometry="polyline")
@@ -174,7 +174,7 @@ class STEERING(T2D):
     #: The SAME water at every liquid boundary as the domain opens holding: the
     #: question is what one pass does to water of this composition, so water that
     #: arrives different from the water already in it would answer a step change.
-    boundaries = Boundaries(measured=Ref("settled"), tracers=_ENTERING)
+    boundaries = Boundaries(tracers=_ENTERING)
 
     #: Growth on the stated nutrients under the stated light, and the oxygen the
     #: growth and its decay drive. SECCHI DEPTH is unwritten, so the engine's own
@@ -207,9 +207,9 @@ OUTPUTS = [
     profile("T4", along=_CENTERLINE).chart(
         reference=reference_line(_NO3_IN, label="entering")),
     profile("T8", along=_CENTERLINE).chart(
-        reference=reference_line(P.do_standard_mgl, label="standard")),
-    series("T1", at=P.station).chart(),
-    series("T8", at=P.station).chart(),
+        reference=reference_line("do_standard_mgl", label="standard")),
+    series("T1", at="station").chart(),
+    series("T8", at="station").chart(),
 ]
 CAPTIONS = {"T1": "phyto biomass", "T2": "phosphate", "T4": "nitrate",
             "T8": "dissolved o2",

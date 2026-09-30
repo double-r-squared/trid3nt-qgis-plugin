@@ -13,7 +13,6 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
     Data,
-    Ref,
     register_workflow,
 )
 from trid3nt_server.inputs import point_arg
@@ -25,7 +24,7 @@ from trid3nt_server.workflows.telemac.modules import (
 )
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries, Sources
 from trid3nt_server.workflows.telemac.templates.micropollutant_release.declarations import (
-    ACCEPTS, DOC, PARAMS, PARAMS as P,
+    ACCEPTS, DOC, PARAMS,
 )
 from trid3nt_server.workflows.telemac.workflow import (
     Placed, TelemacWorkflow,
@@ -37,13 +36,13 @@ __all__ = ["CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
 #: WHERE the substance enters the water: the point the user clicked, else that
 #: fraction along the domain's own centerline. The workflow settles it onto a
 #: node of the accepted mesh before the sheet reads it back.
-_RELEASE = Placed("source", point=PARAMS.release, fraction=PARAMS.release_fraction,
+_RELEASE = Placed("source", point="release", fraction="release_fraction",
                   label="Release point")
 
 #: WHERE the dissolved history is read: the same placement, so the chart is
 #: anchored on a node the run actually solved on.
-_MONITORING = Placed("monitoring", point=PARAMS.monitoring_point,
-                     fraction=PARAMS.monitoring_fraction,
+_MONITORING = Placed("monitoring", point="monitoring_point",
+                     fraction="monitoring_fraction",
                      label="Monitoring point")
 
 #: How far the reach producer walks downstream from the release point when this
@@ -72,7 +71,7 @@ class DATA:
     #: THE DOMAIN, as a CLASS: a release named up front also names the seed a
     #: reach is walked downstream from. A polygon the user supplies or draws
     #: supersedes this, and states its own edges or none.
-    domain = Data.need("hydrography", at=Ref("release"),
+    domain = Data.need("hydrography", at="release",
                        span_km=_REACH_LENGTH_KM)
     #: THE BED, as the CLASS it is rather than the source it comes from: the
     #: measurement where something measured it, the terrain under the rest. Which
@@ -158,7 +157,7 @@ class STEERING(T2D):
     #: liquid boundaries: the walk the mesh measured, the flow the inflow run
     #: carries and the level the outflow run holds. The same clean water, with
     #: the same ambient sediment stated above, at every one of them.
-    boundaries = Boundaries(measured=Ref("settled"), tracers=[0.0, 0.03, 0.0, 0.0, 0.0])
+    boundaries = Boundaries(tracers=[0.0, 0.03, 0.0, 0.0, 0.0])
 
     #: HOW MUCH enters, and at what dissolved concentration before any
     #: dilution - small against the carrier flow this deck opens on; the
@@ -168,8 +167,7 @@ class STEERING(T2D):
     VALUES_OF_THE_TRACERS_AT_THE_SOURCES = [100.0, 0.0, 0.0, 0.0, 0.0]
     #: A FINITE pulse, so the slug advects away and dilutes instead of
     #: saturating the water. The spill window is the question's own input.
-    sources = Sources(at=_RELEASE, window_s=P.release_duration_s,
-                      until_s=Ref("settled.until_s"))
+    sources = Sources(window_s="release_duration_s")
 
     #: The partition: how fast the sediment settles, how hard the substance holds
     #: onto it, how fast it comes back off and how fast it decays are WAQTEL's
@@ -183,7 +181,7 @@ class STEERING(T2D):
 #: The settled point is read as the WHOLE step, whose lon/lat is where the node
 #: is looked up.
 OUTPUTS = [
-    series("T1", at=_MONITORING).chart(),
+    series("T1", at="monitoring").chart(),
 ]
 CAPTIONS = {"T1": "dissolved micropollutant", "discharge": "a streamflow",
             "level": "a water level"}

@@ -25,8 +25,7 @@ def _row(**need):
 
 
 async def _env():
-    return fill._Env(params=await resolve_params((), {}), data={},
-                            results={})
+    return fill._Env(params=await resolve_params((), {}), data={})
 
 
 def test_only_the_domain_declares_rows_beside_its_own() -> None:

@@ -16,7 +16,6 @@ from trid3nt_server.workflows.telemac.authoring.selafin_io import (
 
 import pytest
 
-from trid3nt_server.workflows.runtime import Ref
 from trid3nt_server.workflows.runtime.data import (
     BED,
     DOMAIN,
@@ -24,7 +23,6 @@ from trid3nt_server.workflows.runtime.data import (
     LEVEL,
     WAVE,
 )
-from trid3nt_server.workflows.runtime.reads import declared_reads
 from trid3nt_server.workflows.telemac.modules import WAC, fill
 from trid3nt_server.workflows.telemac.modules.tomawac import (
     RESULT_FILENAME,
@@ -68,7 +66,7 @@ def test_the_sea_state_is_a_row_on_the_reserved_wave_slot():
     assert wave.role == WAVE
     assert wave.data_class == "wave series"
     assert wave.producer is None
-    assert wave.coercion["near"] == Ref("seed")
+    assert wave.coercion["near"] == "seed"
 
 
 def test_the_buoys_are_what_answers_the_sea_state_row():
@@ -115,7 +113,7 @@ def test_the_seaward_edge_is_opened_so_the_spectrum_has_somewhere_to_enter():
     # set for a shelf-scale domain and is deeper than every node of a nearshore
     # window, so inheriting it opens nothing and walls the whole rim.
     stated = ops["identify_ocean_boundary_sections"].kwargs["depth_threshold"]
-    assert stated.name == "open_depth_threshold_m"
+    assert stated == "open_depth_threshold_m"
     param = next(p for p in _workflow().params
                  if p.name == "open_depth_threshold_m")
     assert (param.default, param.door) == (-12.0, "scenario")
@@ -178,9 +176,7 @@ def test_the_deck_states_the_physics_the_question_is_about():
     """Depth-induced breaking is what takes a shoaling wave down; without it the
     run reports a height that keeps growing into water too shallow to hold it,
     and LECDON writes no breaking row at all."""
-    sheet = fill(WAC, **{name: value for name, value in
-                         _deck().ASSERTED.items()
-                         if not any(declared_reads(value, Ref))})
+    sheet = fill(WAC, **dict(_deck().ASSERTED))
     stated = dict(sheet.resolved())
     assert stated["DEPTH-INDUCED BREAKING DISSIPATION"] == 1
     assert stated["BOTTOM FRICTION DISSIPATION"] == 1
@@ -232,7 +228,7 @@ def test_the_spectrum_is_recorded_where_the_station_settled():
     # The spectra are read off the file the deck named, never off the wave field.
     assert asserted["PUNCTUAL_RESULTS_FILE"] != asserted["ED_RESULTS_FILE"]
     read = next(p for p in template.OUTPUTS if p.kind == "spectrum")
-    assert read.at is template._STATION and read.publish == "chart"
+    assert read.at == template._STATION.name and read.publish == "chart"
 
 
 def _deck():

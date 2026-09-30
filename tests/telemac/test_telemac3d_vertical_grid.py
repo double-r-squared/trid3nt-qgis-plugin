@@ -96,8 +96,9 @@ def test_the_refusal_names_an_nplan_that_actually_works():
 
 
 def test_a_zoomed_grid_states_the_dictionary_verified_keyword_pair():
-    slots, files = T3D.COMPOSITES["vertical_grid"].expand(
-        VerticalGrid(levels=13, max_depth_m=402.0, thermocline_depth_m=8.0))
+    slots, files = T3D.COMPOSITES["vertical_grid"].apply(
+        VerticalGrid(thermocline_depth_m=8.0),
+        {"NUMBER_OF_HORIZONTAL_LEVELS": 13, "settled": {"max_depth_m": 402.0}})
 
     assert slots["MESH_TRANSFORMATION"] == 4
     assert len(slots["MESH_STRETCHING_COEFFICIENTS"]) == 2
@@ -107,7 +108,8 @@ def test_a_zoomed_grid_states_the_dictionary_verified_keyword_pair():
 def test_a_uniform_grid_states_nothing_and_lets_the_dictionary_answer():
     """Transformation 1 is the dictionary's own default, so writing it would be the
     wrapper asserting a value - which is the one thing a wrapper never does."""
-    slots, files = T3D.COMPOSITES["vertical_grid"].expand(
-        VerticalGrid(levels=13, max_depth_m=20.0, thermocline_depth_m=8.0))
+    slots, files = T3D.COMPOSITES["vertical_grid"].apply(
+        VerticalGrid(thermocline_depth_m=8.0),
+        {"NUMBER_OF_HORIZONTAL_LEVELS": 13, "settled": {"max_depth_m": 20.0}})
 
     assert slots == {} and files == {}

@@ -11,10 +11,10 @@ from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
 from trid3nt_server.inputs.series import align
-from trid3nt_server.workflows.runtime import Ref
 from trid3nt_server.workflows.runtime.temporal import RATE, STATE, Series
 
-from ..authoring.atmosphere import Atmosphere, expand_atmosphere
+from ..authoring.atmosphere import (ATMOSPHERE_READS, Atmosphere,
+                                     expand_atmosphere)
 from .coupling import couples
 from .module import Module, Output
 from .outputs import PRIMITIVES, read_drogues
@@ -93,26 +93,23 @@ _SERIES_TAIL_S = 100.0
 _STEP_GAP_S = 0.1
 
 
-def Sources(*, at: Any, until_s: Any, window_s: Any = None  # noqa: N802
-            ) -> Mapping[str, Any]:
+def Sources(*, window_s: Any = None) -> Mapping[str, Any]:  # noqa: N802
     """The SOURCES FILE for the point sources the deck states BY NAME: WHERE the
     water enters, how long each one discharges, and the horizon its series is
     written over.
 
-    ``at`` is the PLACEMENT this composite discharges at, so the stage that
-    settles it onto a node is the workflow's to build off this statement; the
-    deck reads the settled point back by name for the engine's own coordinate
-    keywords. A MAPPING, not an object: the sheet's one ref walk descends
-    mappings."""
+    The settled ``source`` placement fills the coordinate keywords itself, and
+    the horizon is the settle's own; ``window_s`` is a number, or the name of
+    the input that holds one."""
     # HOW MUCH is the engine's own keyword - one element per source, in its own
     # positional order - so it is read off the sheet rather than restated here.
     # ``window_s`` is a finite release, held and then stepped to nothing so the
     # slug advects and passes, while ``None`` is a permitted discharge held flat
     # for the whole run.
     return MappingProxyType({
-        "at": at, "window_s": window_s, "until_s": until_s,
-        "q": Ref("WATER_DISCHARGE_OF_SOURCES"),
-        "tracers": Ref("VALUES_OF_THE_TRACERS_AT_THE_SOURCES")})
+        "window_s": window_s, "settled": "settled",
+        "q": "WATER_DISCHARGE_OF_SOURCES",
+        "tracers": "VALUES_OF_THE_TRACERS_AT_THE_SOURCES"})
 
 
 def _sources(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
@@ -130,15 +127,13 @@ def _sources(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
             "carries every tracer of the first source, then of the second.")
     return ({"SOURCES_FILE": SOURCES_FILENAME},
             {SOURCES_FILENAME: _series(discharges, tracers, value["window_s"],
-                                       value["until_s"])})
+                                       value["settled"]["until_s"])})
 
 
-def TracerNames(*, names: Any, named_by: Any = None  # noqa: N802
-                ) -> Mapping[str, Any]:
-    """The tracer names, the first of them called what ``named_by`` is called.
-
-    A name the user gave a point replaces the template's word; none keeps it."""
-    return MappingProxyType({"names": names, "named_by": named_by})
+def TracerNames(*, names: Any) -> Mapping[str, Any]:  # noqa: N802
+    """The tracer names, the first of them called what the settled ``source``
+    is called: a name the user gave the point replaces the template's word."""
+    return MappingProxyType({"names": names, "named_by": "source"})
 
 
 def _tracer_names(value: Mapping[str, Any]
@@ -147,7 +142,8 @@ def _tracer_names(value: Mapping[str, Any]
 
     A tracer name is 32 characters: the name in the first 16, the unit after."""
     names = [str(name) for name in value["names"]]
-    given = value.get("named_by")
+    placed = value.get("named_by")
+    given = placed.get("name") if isinstance(placed, Mapping) else None
     if given and names:
         first = names[0].ljust(32)
         names[0] = f"{str(given).strip()[:16]:<16}{first[16:]}".rstrip()
@@ -162,10 +158,10 @@ def Wind(*, speed_mps: Any, from_deg: Any,  # noqa: N802 - a value constructor
                              "drag": drag})
 
 
-def Oil(*, presets: Any, named: Any, at: Any,  # noqa: N802
+def Oil(*, presets: Any, named: Any,  # noqa: N802
         release_step: Any) -> Mapping[str, Any]:
     """The oil module riding on top of the tracer solve: which preset, released
-    where and at which step.
+    at the settled ``source`` and at which step.
 
     ``presets`` is the table the deck carries; ``named`` picks one row of it. How
     many floats are written how often is MAXIMUM NUMBER OF DROGUES and PRINTOUT
@@ -174,7 +170,7 @@ def Oil(*, presets: Any, named: Any, at: Any,  # noqa: N802
     # sidecar restates no range for it: a period is plausible against a run's own
     # step count, which is not a number the table can hold, and the dictionary's
     # own integer type is the whole of what bounds it.
-    return MappingProxyType({"presets": presets, "named": named, "at": at,
+    return MappingProxyType({"presets": presets, "named": named, "at": "source",
                              "release_step": release_step})
 
 
@@ -236,7 +232,7 @@ def _oil(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]
     if name not in presets:
         raise ValueError(f"{value['named']!r} is not an oil preset this deck "
                          f"carries; the presets are {sorted(presets)}.")
-    x, y = value["at"]
+    x, y = value["at"]["at"]
     return ({"FORTRAN_FILE": USER_FORTRAN_DIR,
              "OIL_SPILL_STEERING_FILE": OIL_STEERING_FILENAME,
              "ASCII_DROGUES_FILE": DROGUES_FILENAME},
@@ -296,14 +292,15 @@ PRESCRIBED_UNITS: Mapping[str, str] = MappingProxyType(
     {"flowrate": "m3/s", "elevation": "m"})
 
 
-def Boundaries(*, measured: Any, tracers: Any) -> Mapping[str, Any]:  # noqa: N802
+def Boundaries(*, tracers: Any) -> Mapping[str, Any]:  # noqa: N802
     """The three PRESCRIBED lists, in the order the engine numbers its boundaries,
     and the LIQUID BOUNDARIES FILE for every one a record measured over time.
 
-    ``measured`` is the settle's own record - the mesh's walk, the flow the
+    What is measured is the settle's own record - the mesh's walk, the flow the
     inflow run carries, the level the outflow holds and the run's clock;
-    ``tracers`` is one value each."""
-    return MappingProxyType({"measured": measured, "tracers": tracers})
+    ``tracers`` is one value each, a keyword's name standing for its list and
+    an input's name for what that input forces the water with."""
+    return MappingProxyType({"measured": "settled", "tracers": tracers})
 
 
 def _boundaries(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
@@ -331,7 +328,7 @@ def _boundaries(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
     # steering list still carries one number per tracer per boundary, which is
     # what the engine reads wherever the file has no column, so a series lumps
     # to what it opened at there.
-    per_tracer = list(value["tracers"])
+    per_tracer = [getattr(v, "forcing", v) for v in value["tracers"]]
     lumped = [float(v.values[0]) if isinstance(v, Series) else float(v)
               for v in per_tracer]
     windows = {"flowrate": measured.get("inflow_q_series"),
@@ -467,7 +464,7 @@ _AMC_CONDITIONS: Mapping[str, int] = MappingProxyType({
 })
 
 
-def Infiltration(*, mesh: Any, landcover: Any, table: Any, unmapped: Any,  # noqa: N802
+def Infiltration(*, landcover: Any, table: Any, unmapped: Any,  # noqa: N802
                  uniform_cn: Any, steep_slope_correction: Any,
                  antecedent_moisture: Any, initial_abstraction: Any
                  ) -> Mapping[str, Any]:
@@ -478,7 +475,7 @@ def Infiltration(*, mesh: Any, landcover: Any, table: Any, unmapped: Any,  # noq
     is the row a class outside it takes; ``uniform_cn`` overrides the curve
     numbers alone, never the roughness."""
     return MappingProxyType({
-        "mesh": mesh, "landcover": landcover, "table": table, "unmapped": unmapped,
+        "mesh": "mesh", "landcover": landcover, "table": table, "unmapped": unmapped,
         "uniform_cn": uniform_cn, "steep_slope_correction": steep_slope_correction,
         "antecedent_moisture": antecedent_moisture,
         "initial_abstraction": initial_abstraction})
@@ -562,14 +559,9 @@ def _friction(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
 def Rating(*, measured: Any) -> Mapping[str, Any]:  # noqa: N802
     """One boundary's stage-discharge curve, and which boundary reads it.
 
-    ``measured`` is the curve the workflow derives against the mesh, so the
-    stage that derives it is the workflow's to build off this statement; what
+    ``measured`` names the curve the workflow derives against the mesh; what
     the engine reads is that measurement's own four rows."""
-    return MappingProxyType({"at_boundary": Ref(f"{measured.path}.at_boundary"),
-                             "of_boundaries": Ref(f"{measured.path}.of_boundaries"),
-                             "rows": Ref(f"{measured.path}.rows"),
-                             "note": Ref(f"{measured.path}.note"),
-                             "measured": measured})
+    return MappingProxyType({"measured": measured})
 
 
 def _rating(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
@@ -581,15 +573,16 @@ def _rating(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
     # boundary, a UNITS line it skips without checking, then two columns until a
     # blank or a ``#``. Under a ``Q(n)`` header the first column is the
     # discharge, which is the order the rows arrive in.
-    at = int(value["at_boundary"])
-    rows = [(float(q), float(z)) for q, z in value["rows"]]
-    lines = [f"#{value['note']}", f"Q({at}) Z({at})", "m3/s m",
+    curve = value["measured"]
+    at = int(curve["at_boundary"])
+    rows = [(float(q), float(z)) for q, z in curve["rows"]]
+    lines = [f"#{curve['note']}", f"Q({at}) Z({at})", "m3/s m",
              *(f"{q:.6f} {z:.4f}" for q, z in rows)]
     # ``bord.f`` reads the curve at every prescribed-depth boundary whose entry is
     # 1, so the selector is one number per liquid boundary in the walk order.
     return ({"STAGE_DISCHARGE_CURVES": [
                  1 if n == at else 0
-                 for n in range(1, int(value["of_boundaries"]) + 1)],
+                 for n in range(1, int(curve["of_boundaries"]) + 1)],
              "STAGE_DISCHARGE_CURVES_FILE": RATING_FILENAME},
             {RATING_FILENAME: "\n".join(lines) + "\n"})
 
@@ -600,7 +593,7 @@ def _rating(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
 _STORM_INTERVAL_S = 3600.0
 
 
-def Storm(*, mm_per_day: Any, hours: Any, until_s: Any,  # noqa: N802
+def Storm(*, mm_per_day: Any, hours: Any,  # noqa: N802
           series: Any = None, record: Any = None, tracers: Any = 0,
           fortran: Any = None) -> Mapping[str, Any]:
     """The storm over the domain: a measured record, or a constant design rate.
@@ -609,7 +602,7 @@ def Storm(*, mm_per_day: Any, hours: Any, until_s: Any,  # noqa: N802
     same hours as a source published them; with neither, the constant rate over
     ``hours`` drives the run, in RAIN OR EVAPORATION IN MM PER DAY's own unit."""
     return MappingProxyType({"mm_per_day": mm_per_day, "hours": hours,
-                             "until_s": until_s, "series": series,
+                             "settled": "settled", "series": series,
                              "record": record, "tracers": tracers,
                              "fortran": fortran})
 
@@ -623,7 +616,9 @@ def _storm(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
     has somewhere to fall; a design rate is the engine's own constant branch."""
     series = value.get("series")
     if series is None:
-        series = value.get("record")
+        record = value.get("record")
+        series = (record.get("precip_mm") if isinstance(record, Mapping)
+                  else getattr(record, "precip_mm", None))
     if series is None:
         rate = value["mm_per_day"]
         if rate is None:
@@ -636,7 +631,7 @@ def _storm(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                  # would be an end nothing reaches.
                  **({} if value["hours"] is None
                     or float(value["hours"]) * _STORM_INTERVAL_S
-                    >= float(value["until_s"])
+                    >= float(value["settled"]["until_s"])
                     else {"DURATION_OF_RAIN_OR_EVAPORATION_IN_HOURS":
                           float(value["hours"])})}, {})
     millimetres = [max(0.0, float(v)) for v in series]
@@ -646,7 +641,7 @@ def _storm(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                          "state a design rate.")
     blocks = [(float((i + 1) * _STORM_INTERVAL_S), millimetres[i])
               for i in range(len(millimetres))]
-    keywords, files = _blocks_file(blocks, value["until_s"], value["fortran"])
+    keywords, files = _blocks_file(blocks, value["settled"]["until_s"], value["fortran"])
     return ({**keywords, **_rain_tracers(value["tracers"])}, files)
 
 
@@ -716,7 +711,20 @@ T2D.TRACER = "T"
 T2D.ARMS = MappingProxyType({
     "SPEED_AND_DIRECTION_OF_WIND": "WIND",
     "RAIN_OR_EVAPORATION_IN_MM_PER_DAY": "RAIN_OR_EVAPORATION"})
-T2D.composites(sources=_sources, wind=_wind,
+T2D.composites(reads={
+    "sources": ("window_s", "settled", "q", "tracers"),
+    "wind": ("speed_mps", "from_deg", "drag"), "atmosphere": ATMOSPHERE_READS,
+    "oil": ("named", "at", "release_step"),
+    "rain": ("mm_per_day", "tracers", "hours"),
+    "boundaries": ("measured", "tracers"),
+    "runoff": ("node_xy", "cn2", "initial_abstraction"),
+    "friction": ("manning_per_node",),
+    "infiltration": ("mesh", "landcover", "uniform_cn", "steep_slope_correction",
+                     "initial_abstraction"),
+    "rating": ("measured",),
+    "storm": ("mm_per_day", "hours", "settled", "series", "record", "tracers"),
+    "time_origin": ("at",), "tracer_names": ("named_by",)},
+               sources=_sources, wind=_wind,
                atmosphere=expand_atmosphere,
                oil=_oil, rain=_rain, coupling=couples(water_column=False),
                boundaries=_boundaries, runoff=_runoff, friction=_friction,

@@ -14,7 +14,6 @@ from pathlib import Path
 
 import yaml
 
-from trid3nt_server.workflows.runtime import DataRef, Ref
 from trid3nt_server.workflows.telemac.workflow import stated
 from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
 from trid3nt_server.workflows.telemac.modules import T2D
@@ -58,7 +57,7 @@ def test_the_domain_is_one_need_row_asked_at_the_release_point():
     match's, ranked in the coverage order."""
     domain = _rows()["domain"]
     assert domain.role == "domain" and domain.data_class == "hydrography"
-    assert domain.coercion["near"] == Ref("release")
+    assert domain.coercion["near"] == "release"
     assert domain.span_km == 6.0
 
 
@@ -117,7 +116,7 @@ def test_the_bed_the_deck_states_is_gaias_own_keywords_on_the_coupled_body():
     assert "BED_LOAD_TRANSPORT_FORMULA_FOR_ALL_SANDS" not in slots
     assert slots["HIDING_FACTOR_FORMULA"] == 1
     assert slots["MORPHOLOGICAL_FACTOR"] == 10.0
-    assert slots["bed"]["gradation"].name == "sediment_gradation"
+    assert slots["bed"]["gradation"] == "sediment_gradation"
 
 
 def test_the_marker_is_stated_as_the_four_source_keywords_by_name():
@@ -132,12 +131,12 @@ def test_the_marker_is_stated_as_the_four_source_keywords_by_name():
 
 
 def test_the_sources_composite_writes_only_the_sources_file():
-    """``Sources(window_s=, until_s=)`` reads the discharge and the tracer value
+    """``Sources(window_s=)`` reads the discharge and the tracer value
     off the sheet by the keywords stated above, and writes the SOURCES FILE."""
     from trid3nt_server.workflows.telemac.modules.telemac2d import SOURCES_FILENAME
 
     slots, files = T2D.COMPOSITES["sources"].expand(
-        {"window_s": 300.0, "until_s": 3600.0,
+        {"window_s": 300.0, "settled": {"until_s": 3600.0},
          "q": [8.0], "tracers": [100.0]})
     assert slots == {"SOURCES_FILE": SOURCES_FILENAME}
     assert list(files) == [SOURCES_FILENAME]
@@ -145,8 +144,7 @@ def test_the_sources_composite_writes_only_the_sources_file():
 
 def test_the_spill_window_is_the_questions_own_input_and_stays_a_param():
     asserted = _MODULE.STEERING.ASSERTED
-    assert asserted["sources"]["window_s"].name == "spill_duration_s"
-    assert asserted["sources"]["until_s"].path == "settled.until_s"
+    assert asserted["sources"]["window_s"] == "spill_duration_s"
 
 
 def test_a_calm_dry_deck_writes_no_wind_and_no_rain_keyword():
@@ -165,7 +163,7 @@ def test_the_boundary_values_read_the_measured_walk_and_the_open_channel_step():
     read of the settle's own record, which carries the walk, the two numbers,
     the windows behind them and the clock the file is written on."""
     measured = _MODULE.STEERING.ASSERTED["boundaries"]["measured"]
-    assert measured.path == "settled"
+    assert measured == "settled"
     assert not {"INITIAL_DEPTH", "INITIAL_ELEVATION"} & set(_MODULE.STEERING.ASSERTED)
 
 

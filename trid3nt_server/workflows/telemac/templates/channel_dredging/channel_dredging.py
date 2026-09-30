@@ -12,8 +12,6 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
     Data,
-    ParamRef,
-    Ref,
     register_workflow,
 )
 from trid3nt_server.inputs import point_arg
@@ -25,7 +23,7 @@ from trid3nt_server.workflows.telemac.modules import (
 from trid3nt_server.workflows.telemac.modules.gaia import Dig, Dredging, RESULT_FILENAME
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries, TimeOrigin
 from trid3nt_server.workflows.telemac.templates.channel_dredging.declarations import (
-    ACCEPTS, DOC, PARAMS, PARAMS as P,
+    ACCEPTS, DOC, PARAMS,
 )
 from trid3nt_server.workflows.telemac.workflow import (
     Measured, TelemacWorkflow,
@@ -86,7 +84,7 @@ class DATA:
     #: THE CHANNEL. A seed on the water names a stretch of river and the match
     #: ranks the reach producer and the waterbody producer over it in turn; a
     #: fairway the port supplies supersedes it.
-    domain = Data.need("hydrography", at=Ref("seed_point"),
+    domain = Data.need("hydrography", at="seed_point",
                        span_km=_REACH_LENGTH_KM)
     #: THE LINE the dredge's reference profiles are stationed along: the
     #: centerline the reach producer measured, or the one the port draws over a
@@ -129,11 +127,9 @@ class DATA:
 #: first pass.
 _DREDGE = Measured(
     "dredge", kind="dredge",
-    asked={"areas": {"dredge_area": DATA.dredge_area,
-                     "dump_area": DATA.dump_area},
-           "dug_area": "dredge_area",
-           "grade_depth_m": ParamRef("design_depth_m"),
-           "stock_m": _BED_STOCK_M})
+    reads={"areas": {"dredge_area": "dredge_area", "dump_area": "dump_area"},
+           "grade_depth_m": "design_depth_m"},
+    asked={"dug_area": "dredge_area", "stock_m": _BED_STOCK_M})
 
 
 class STEERING(T2D):
@@ -184,7 +180,7 @@ class STEERING(T2D):
     #: No tracer: a dredge is a question about the bed, so every liquid boundary
     #: carries the measured flowrate and stage and nothing else. The walk is the
     #: mesh's own; the two values are the open channel's.
-    boundaries = Boundaries(measured=Ref("settled"), tracers=[])
+    boundaries = Boundaries(tracers=[])
 
     #: The bed the dredger cuts into, and the dredger itself. One class, bedload
     #: on, a real stock: the material the criterion dig takes out of the fairway
@@ -206,22 +202,17 @@ class STEERING(T2D):
         # What makes a short hydraulic window produce a readable bed change.
         MORPHOLOGICAL_FACTOR=10.0,
         dredging=Dredging(
-            measured=_DREDGE,
-            actions=[Dig(field=Ref("dredge.dredge_area"),
+            measured="dredge",
+            actions=[Dig(field="dredge_area",
                          level=_REFERENCE_LEVEL,
-                         start=P.dredge_start_s, end=P.dredge_end_s,
-                         repeat=P.dredge_repeat_s,
-                         rate=P.dig_rate_m_per_s,
-                         depth=P.design_depth_m,
-                         crit_depth=P.trigger_depth_m,
-                         min_volume=P.min_volume_m3,
-                         # The radius a minimum volume is gathered over is the
-                         # mesh's own measured edge: it is the length below which
-                         # this run resolves nothing anyway.
-                         min_volume_radius=Ref("settled.mesh_size_m"),
-                         dump=Ref("dredge.dump_area"),
-                         dump_rate=P.dump_rate_m_per_s)],
-            reference=Ref("dredge.profiles"),
+                         start="dredge_start_s", end="dredge_end_s",
+                         repeat="dredge_repeat_s",
+                         rate="dig_rate_m_per_s",
+                         depth="design_depth_m",
+                         crit_depth="trigger_depth_m",
+                         min_volume="min_volume_m3",
+                         dump="dump_area",
+                         dump_rate="dump_rate_m_per_s")],
             origin=_TIME_ORIGIN))]
 
 

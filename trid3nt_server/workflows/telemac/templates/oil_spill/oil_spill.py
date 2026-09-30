@@ -13,7 +13,6 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
     Data,
-    Ref,
     register_workflow,
 )
 from trid3nt_server.inputs import point_arg
@@ -33,7 +32,7 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Wind,
 )
 from trid3nt_server.workflows.telemac.templates.oil_spill.declarations import (
-    ACCEPTS, DOC, OIL_PRESETS, PARAMS, PARAMS as P,
+    ACCEPTS, DOC, OIL_PRESETS, PARAMS,
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
@@ -43,7 +42,7 @@ __all__ = ["CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
 #: WHERE the substance enters the water: the point the user clicked, else that
 #: fraction along the domain's own centerline. The workflow settles it onto a
 #: node of the accepted mesh before the sheet reads it back.
-_RELEASE = Placed("source", point=PARAMS.release, fraction=PARAMS.spill_fraction,
+_RELEASE = Placed("source", point="release", fraction="spill_fraction",
                   label="Release point")
 
 #: The files the run directory holds beside the deck's own statements. The
@@ -71,7 +70,7 @@ class DATA:
 
     # A release named up front also names which stretch to model: the reach is
     # walked downstream from it. A domain the user supplies supersedes this.
-    domain = Data.need("hydrography", at=Ref("release"),
+    domain = Data.need("hydrography", at="release",
                        span_km=_REACH_LENGTH_KM)
     # THE BED, as the CLASS it is rather than the source it comes from: the
     # measurement where something measured it, the terrain under the rest. Which
@@ -147,15 +146,14 @@ class STEERING(T2D):
     NUMBER_OF_TRACERS = 1
     #: The tracer is called what the user called the release point, when a
     #: picked or named point came; the template's own name stands otherwise.
-    tracer_names = TracerNames(names=["OIL             MG/L"],
-                               named_by=Ref("source.name"))
+    tracer_names = TracerNames(names=["OIL             MG/L"])
     INITIAL_VALUES_OF_TRACERS = [0.0]
 
     #: The carrier's own boundary values, in the order the engine numbers its
     #: liquid boundaries: the walk the mesh measured, the flow the inflow run
     #: carries and the level the outflow run holds. ONE tracer, so every liquid
     #: boundary carries one clean value.
-    boundaries = Boundaries(measured=Ref("settled"), tracers=[0.0])
+    boundaries = Boundaries(tracers=[0.0])
 
     #: HOW MUCH enters, and at what concentration: a point discharge small
     #: against the carrier flow, at the concentration the dissolved-oil series
@@ -165,13 +163,12 @@ class STEERING(T2D):
     VALUES_OF_THE_TRACERS_AT_THE_SOURCES = [100.0]
     #: The dissolved fraction, released as a FINITE pulse at the same point the
     #: floats are compiled to enter at.
-    sources = Sources(at=_RELEASE, window_s=P.spill_duration_s,
-                      until_s=Ref("settled.until_s"))
+    sources = Sources(window_s="spill_duration_s")
 
     #: The module itself: the preset the deck carries under the name the ask
     #: chose, and the per-run source the settled point is compiled into.
-    oil = Oil(presets=OIL_PRESETS, named=P.oil_type, at=Ref("source.at"),
-              release_step=P.oil_release_step)
+    oil = Oil(presets=OIL_PRESETS, named="oil_type",
+              release_step="oil_release_step")
 
     # HOW MANY floats the module tracks. The slick is drawn from their
     # positions alone, so the count is the resolution of the picture: a hundred
