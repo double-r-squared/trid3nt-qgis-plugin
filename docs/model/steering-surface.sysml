@@ -1089,6 +1089,8 @@ package SteeringSurface {
         "tests/telemac/test_one_mapping.py::test_a_measurement_reads_a_template_input_by_name";
     verify requirement TheRunHoldsOneMapping by
         "tests/telemac/test_one_mapping.py::test_no_placeholder_read_is_left_in_the_server";
+    verify requirement TheRunHoldsOneMapping by
+        "tests/telemac/test_one_mapping.py::test_every_template_names_only_what_its_run_is_called";
 
     satisfy requirement AnInputFillsItsOwnKeywords by sheet;
     verify requirement AnInputFillsItsOwnKeywords by

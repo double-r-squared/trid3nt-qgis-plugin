@@ -109,3 +109,19 @@ def test_no_placeholder_read_is_left_in_the_server():
             for word in ("Ref(", "ParamRef", "DataRef")
             if word in path.read_text(encoding="utf-8")]
     assert left == []
+
+
+def test_every_template_names_only_what_its_run_is_called():
+    """A word an op's own signature takes as a string - set_bed's condition -
+    stays a word; every other name a template writes is one of its run's."""
+    from trid3nt_server.mesh.recipe import input_names
+    from trid3nt_server.workflows.telemac.templates.rain_on_grid import (
+        rain_on_grid as template)
+
+    names = input_names(template.MESH)
+    assert "bed" in names and "pit_fill" not in names
+    workflows = [tool.fn.workflow for tool in TOOL_REGISTRY.values()
+                 if hasattr(getattr(tool.fn, "workflow", None), "unnamed")]
+    assert workflows
+    assert {wf.name: wf.unnamed() for wf in workflows
+            if wf.unnamed()} == {}
