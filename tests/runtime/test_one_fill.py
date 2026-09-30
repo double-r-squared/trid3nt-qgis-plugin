@@ -187,3 +187,36 @@ def test_an_untyped_fault_is_refused_and_its_trace_logged(monkeypatch, caplog):
             "location": "x", decl.name: {"layer": "L1"}}))
     assert state.inputs[decl.name].code == "INPUT_REFUSED"
     assert any(r.exc_info and r.levelname == "WARNING" for r in caplog.records)
+
+
+@pytest.mark.parametrize("physics,code", [
+    (True, "PHYSICS_INPUT_REQUIRED"),
+    (False, "USER_INPUT_CANCELLED"),
+])
+def test_a_refusal_keeps_the_code_of_its_reason_through_the_review(
+        monkeypatch, physics, code):
+    from trid3nt_contracts.common import SyntheticInput
+    from trid3nt_server.gates import input_review
+    from trid3nt_server.gates.input_review import ReviewOutcome
+    from trid3nt_server.workflows.telemac import workflow as tw
+
+    real = input_review.gate_input_review
+    monkeypatch.setattr(tw, "card_rows", lambda sheet: [])
+
+    async def _fill(values, edits):
+        return types.SimpleNamespace(values=dict(values), edits=dict(edits),
+                                     filled={}, files={})
+
+    async def _gate(**kwargs):
+        if physics:
+            return await real(**{**kwargs, "mode": "auto", "entries": [SyntheticInput(
+                param="p", value=None, basis="default_demo",
+                consequence="physics", note="no real source")]})
+        return ReviewOutcome(proceed=False, entries=[], params={}, cancelled=True,
+                             cancel_reason="declined", cancel_code="declined")
+
+    monkeypatch.setitem(input_review.__dict__, "gate_input_review", _gate)
+    with pytest.raises(tw.TelemacError) as caught:
+        asyncio.run(tw._review(_fill, {}, steering=_wf().steering, workflow="w",
+                               title="", input_mode="auto", spent=()))
+    assert caught.value.error_code == code

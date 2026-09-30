@@ -692,6 +692,7 @@ async def _review(fill: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
 
     An edit re-fills its input and redraws the card, or refuses by name."""
     from trid3nt_server.gates.input_review import (
+        PHYSICS_INPUT_REQUIRED,
         GateCard,
         gate_input_review,
         render_input_review_lines,
@@ -737,12 +738,12 @@ async def _review(fill: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
         tool_name=workflow, mode=input_mode, entries=_entries(rows()),
         params={}, present=card, apply_revision=revise)
     if not outcome.proceed:
-        # A DECLINED review is the user's answer, not a defect in the sheet, so
-        # it carries the cancel code every gate in the tree refuses under.
+        # A refusal keeps the code of its reason; only a person's own cancel is
+        # the decline code every gate in the tree cancels under.
         raise TelemacError(
             outcome.cancel_reason or f"{workflow} was cancelled at the review.",
-            error_code=("NO_SESSION" if outcome.cancel_code == "no_session"
-                        else "USER_INPUT_CANCELLED"))
+            error_code={"physics": PHYSICS_INPUT_REQUIRED, "no_session": "NO_SESSION"}
+            .get(str(outcome.cancel_code), "USER_INPUT_CANCELLED"))
     if seat is not None:
         seat(values)
     return sheet

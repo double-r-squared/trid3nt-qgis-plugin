@@ -10,7 +10,8 @@ import asyncio
 import logging
 from typing import Any, Mapping
 
-from trid3nt_server.gates.input_review import GateCard, gate_input_review
+from trid3nt_server.gates.input_review import (PHYSICS_INPUT_REQUIRED, GateCard,
+                                               gate_input_review)
 from trid3nt_server.mesh.artifact import MeshArtifact
 from trid3nt_server.mesh.meshers import MeshToolError
 from trid3nt_server.mesh.session import MeshSession
@@ -103,8 +104,11 @@ def render_probe_lines(probes: Mapping[str, Any]) -> list[str]:
     return lines
 
 
-#: The cancel a gate reports -> the mesh error a refused build raises.
+#: The cancel a gate reports -> the code a refused build raises under. A
+#: physics refusal keeps its own code; a cancel with no row here is a gate this
+#: map has not learned, and fails by its key rather than posing as a decline.
 _REFUSALS = {
+    "physics": PHYSICS_INPUT_REQUIRED,
     "timeout": "MESH_GATE_TIMEOUT",
     "declined": "MESH_GATE_DECLINED",
     "not_approved": "MESH_GATE_NOT_APPROVED",
@@ -146,7 +150,7 @@ async def gate_mesh_build(session: MeshSession, *, tool_name: str,
         _AT_GATE = None
     if not outcome.proceed:
         raise MeshToolError(
-            _REFUSALS.get(str(outcome.cancel_code), "MESH_GATE_DECLINED"),
+            _REFUSALS[str(outcome.cancel_code)],
             f"the mesh for {tool_name} was not accepted at the gate, so the run "
             f"did not proceed: {outcome.cancel_reason}")
     return await asyncio.to_thread(session.accept)

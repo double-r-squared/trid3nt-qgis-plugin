@@ -489,3 +489,38 @@ async def test_the_shipped_client_parses_the_card_and_its_reply_routes_home(
     await mesh_gate._apply_gate_revision(replayed, revised)
     assert replayed.recipe.resolution_m == 900.0
 
+
+
+def _gate_answering(cancel_code, *, physics):
+    """The real review gate, handed one physics demo default when ``physics``, or
+    an outcome a person's own cancel produces."""
+    from trid3nt_server.gates import input_review
+    from trid3nt_server.gates.input_review import ReviewOutcome
+    from trid3nt_contracts.common import SyntheticInput
+
+    async def _gate(**kwargs):
+        if physics:
+            return await input_review.gate_input_review(**{
+                **kwargs, "mode": "auto", "entries": [SyntheticInput(
+                    param="p", value=None, basis="default_demo",
+                    consequence="physics", note="no real source")]})
+        return ReviewOutcome(proceed=False, entries=[], params={}, cancelled=True,
+                             cancel_reason="declined", cancel_code=cancel_code)
+    return _gate
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cancel_code,physics,code", [
+    ("physics", True, "PHYSICS_INPUT_REQUIRED"),
+    ("declined", False, "MESH_GATE_DECLINED"),
+])
+async def test_a_refusal_keeps_the_code_of_its_reason_through_the_mesh_gate(
+        tmp_path, monkeypatch, cancel_code, physics, code):
+    monkeypatch.setattr(mesh_gate, "gate_input_review",
+                        _gate_answering(cancel_code, physics=physics))
+
+    with pytest.raises(MeshToolError) as caught:
+        await mesh_gate.gate_mesh_build(
+            _session(tmp_path), tool_name="telemac_dye_release", input_mode="auto")
+
+    assert caught.value.error_code == code

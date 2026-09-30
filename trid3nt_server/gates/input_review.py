@@ -24,7 +24,13 @@ __all__ = [
     "render_input_review_lines",
     "physics_refusal_reason",
     "gate_input_review",
+    "PHYSICS_INPUT_REQUIRED",
 ]
+
+#: The one code a physics-default refusal carries, whichever caller raises it: a
+#: refusal keeps the code of its reason, and only a person's own cancel is a
+#: decline.
+PHYSICS_INPUT_REQUIRED = "PHYSICS_INPUT_REQUIRED"
 
 #: Run-mode lever for every gated thing. ``auto``
 #: proceeds immediately with labeled inputs; ``user_gated`` pauses for review.
@@ -120,7 +126,7 @@ def physics_refusal_reason(tool_name: str, entries: Any, *,
         remedy = ("Supply real values, ensure a fetcher can resolve them, or re-run "
                   "in user_gated mode to approve the demo defaults explicitly.")
     return (
-        f"PHYSICS_INPUT_REQUIRED: {tool_name} {where} -- these "
+        f"{PHYSICS_INPUT_REQUIRED}: {tool_name} {where} -- these "
         "physics-consequential inputs have no real data source and fell back to "
         "invented demo defaults, which would silently ruin the simulation (law 9): "
         + "; ".join(needs) + ". " + remedy
