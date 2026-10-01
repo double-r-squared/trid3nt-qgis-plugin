@@ -1,15 +1,14 @@
 """``merge_rasters`` - several surfaces laid into ONE, first wins, provenance kept.
 
-Every input is read onto ONE vertical frame - the last input's zero - through the
-shift it publishes about itself or the one the offset service measures for it,
-before any of them paints a cell. The second band names which input each cell
+Every input is read onto ONE vertical frame - the last input's datum, as each
+layer states its own - through the shift it publishes about itself or an offset
+handed in, before any of them paints a cell; a derive never fetches one. The second band names which input each cell
 came from, and the share each reached is the feedback.
 """
 
 from __future__ import annotations
 
 import asyncio
-import logging
 import math
 from typing import Any
 
@@ -19,11 +18,9 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.tools import register_tool
 from trid3nt_server.tools.derive._raster_layers import (
     NODATA, UNMEASURED, RasterLayerError, RasterLayerURI, bbox_4326, coverage,
-    label_of, resolved, staged, stated, written)
+    case_layer, label_of, staged, stated, written)
 
 __all__ = ["merge_rasters", "merged"]
-
-logger = logging.getLogger(__name__)
 
 #: What a source counting DOWN from its zero names its quantity as.
 _DEPTH_QUANTITY = "depth_below_datum"
@@ -94,49 +91,44 @@ def _counts_down(layer: Any) -> bool:
     return str(quantity or "").startswith(_DEPTH_QUANTITY)
 
 
-def _aligned(source: Any, frame: str, offset: Any) -> Any:
-    """What it costs to read ONE input on the frame this merge lands on.
+def _bridge(layer: Any, zero: str, offsets: list[Any]) -> Any:
+    """The offset among ``offsets`` whose two frames are this input's zero and
+    ``zero``, either way round, or ``None``."""
+    from trid3nt_server.inputs.vertical_datum import datum_of, names_frame, offset_row
 
-    An offset nothing measured is the one the source publishes about itself;
-    a pair nothing measures refuses naming both, and a frame nothing named is
-    the unstated zero refusing by name."""
+    here = datum_of(layer)
+    for value in offsets:
+        row = offset_row(value)
+        if row is None:
+            continue
+        pair = (row.from_frame, row.to_frame)
+        if row.names_frames and any(names_frame(here, a) and names_frame(zero, b)
+                                    for a, b in (pair, pair[::-1])):
+            return row
+    return None
+
+
+def _aligned(layer: Any, label: str, zero: str, offsets: list[Any]) -> Any:
+    """What it costs to read ONE input on ``zero``: nothing on that frame, the
+    shift it publishes about itself, or the offset handed in for its pair - else
+    a refusal naming the fetch that measures one."""
     from trid3nt_server.inputs.vertical_datum import (
-        DatumError, one_datum, onto_frame)
+        OFFSET_FETCH, DatumError, datum_of, one_datum, onto_frame)
 
     try:
-        if not frame:
-            one_datum(source, code_prefix="MERGE_RASTERS_")
-        return onto_frame(source, frame, offset=offset,
+        if not zero:
+            one_datum(layer, code_prefix="MERGE_RASTERS_")
+        return onto_frame(layer, zero, offset=_bridge(layer, zero, offsets),
                           code_prefix="MERGE_RASTERS_")
     except DatumError as exc:
-        raise RasterLayerError(exc.error_code, str(exc)) from exc
-
-
-def _placed(layers: list[Any], offsets: list[Any], labels: list[str], zero: str
-            ) -> list[tuple[int, Any]]:
-    """Every input that can be READ on the landing frame, in the order laid,
-    with what it costs to read there.
-
-    One nothing places on that frame drops off and the journal says which and
-    why; the FIRST is the exception, because a merge whose best input cannot be
-    placed is not that merge."""
-    from trid3nt_server.inputs.vertical_datum import datum_of
-    from trid3nt_server.workflows.runtime import journal_note
-
-    standing: list[tuple[int, Any]] = []
-    for rank, layer in enumerate(layers):
-        try:
-            standing.append((rank, _aligned(layer, zero, offsets[rank])))
-        except RasterLayerError:
-            if rank == 0:
-                raise
-            line = (f"{labels[rank]} counts from "
-                    f"{datum_of(layer) or 'no stated zero'} and nothing measures "
-                    f"that against {zero}, so it drops off this merge and the "
-                    "inputs after it paint what it would have.")
-            logger.info("merge_rasters: %s", line)
-            journal_note(line)
-    return standing
+        if not exc.error_code.endswith("DATUMS_DIFFER"):
+            raise RasterLayerError(exc.error_code, str(exc)) from exc
+        raise RasterLayerError(
+            "MERGE_RASTERS_OFFSET_UNSTATED",
+            f"{label} counts from {datum_of(layer)} and this merge lands on "
+            f"{zero}, the last input's zero, and no offset between the two was "
+            f"handed in. Run {OFFSET_FETCH} for that pair at this ground and pass "
+            "what it returns in offsets.") from exc
 
 
 def _read_as(layer: Any, label: str, aligned: Any, *, depths: bool) -> str:
@@ -192,26 +184,7 @@ def _no_cliff(grids: list[Any], won: Any, labels: list[str]) -> None:
             "inputs on one frame, or ones whose zero the offset service knows.")
 
 
-async def _offsets(layers: list[Any], zero: str) -> list[Any]:
-    """The measured shift onto ``zero`` for each input that owes one, asked at
-    its own footprint, or ``None`` where it owes none."""
-    from trid3nt_server.inputs.vertical_datum import OFFSET_FETCH, offset_ask
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.runtime.fill import call
-
-    held: list[Any] = []
-    for layer in layers:
-        box = (layer.get("bbox") if isinstance(layer, dict)
-               else getattr(layer, "bbox", None))
-        at = (((box[0] + box[2]) / 2.0, (box[1] + box[3]) / 2.0)
-              if box else None)
-        ask = await asyncio.to_thread(offset_ask, layer, zero, at=at)
-        held.append(None if ask is None else
-                    await call(TOOL_REGISTRY[OFFSET_FETCH].fn, ask, OFFSET_FETCH))
-    return held
-
-
-def merged(layers: list[Any], name: str, offsets: list[Any],
+def merged(layers: list[Any], name: str, offsets: list[Any] = (),
            *, _output_dir: str | None = None) -> RasterLayerURI:
     """The overlay itself, over inputs already resolved: what the tool runs."""
     import tempfile
@@ -227,10 +200,8 @@ def merged(layers: list[Any], name: str, offsets: list[Any],
 
     zero = datum_of(layers[-1])
     labels = [label_of(layer, rank) for rank, layer in enumerate(layers)]
-    standing = _placed(layers, offsets, labels, zero)
-    aligned = [cost for _rank, cost in standing]
-    labels = [labels[rank] for rank, _cost in standing]
-    layers = [layers[rank] for rank, _cost in standing]
+    aligned = [_aligned(layer, labels[rank], zero, offsets)
+               for rank, layer in enumerate(layers)]
     depths = [_counts_down(layer) for layer in layers]
     seed = layer_seed()
     with tempfile.TemporaryDirectory(prefix="merge-rasters-") as scratch:
@@ -279,10 +250,7 @@ def merged(layers: list[Any], name: str, offsets: list[Any],
     return RasterLayerURI.published(
         "merged-rasters", seed=seed, name=f"{name} (on {zero})",
         layer_type="raster", uri=uri, style=_STYLE, role="primary", units="m",
-        quantity=next((getattr(layer, "quantity", None)
-                       for rank, layer in enumerate(layers)
-                       if not depths[rank] and getattr(layer, "quantity", None)),
-                      None),
+        quantity="elevation",
         bbox=bbox_4326(crs, transform, width, height),
         vertical_datum=zero or None, sources=labels, coverage=reached,
         unmeasured_fraction=blank, notes=notes)
@@ -310,6 +278,7 @@ _METADATA = AtomicToolMetadata(
                destructive_hint=False, idempotent_hint=True)
 async def merge_rasters(layers: list[Any] | None = None,
                         name: str = "merged rasters",
+                        offsets: list[Any] | None = None,
                         **_extra_ignored: Any) -> RasterLayerURI:
     """LAY several rasters into ONE, first wins, and say which painted each cell.
 
@@ -318,16 +287,15 @@ async def merge_rasters(layers: list[Any] | None = None,
     surfaces with this one on top", "fill the gaps in this raster from that one".
     A new case layer; the inputs are not changed.
 
-    `layers` is the ORDER of priority: the first paints every cell it measured,
-    each after it only the cells the ones before left. Each is a case layer id,
-    a source name fetched over the run's domain, or {"source": name, "bbox":
-    [w, s, e, n], ...} stating the place and any other argument that source
-    takes. Every input is read onto ONE vertical frame - the LAST input's own -
-    through the shift it publishes or the offset the datum service measures at
-    its footprint; one nothing places drops off, said on the journal, and the
-    first being unplaceable refuses. Cell and CRS are the finest input's, over
-    the union of all of them. Two populations farther apart than the last
-    input's relief refuse as a cliff.
+    `layers` is the ORDER of priority, each a case layer id: the first paints
+    every cell it measured, each after it only the cells the ones before left.
+    Every input is read onto ONE vertical frame - the LAST input's own datum -
+    through the shift it publishes about itself, or an offset in `offsets`:
+    the records fetch_vertical_datum_offset returns, matched by the two frames
+    each names. An input on another datum with no offset refuses, naming that
+    fetch. A layer stating DEPTHS below its datum is read as elevations. Cell
+    and CRS are the finest input's, over the union of all of them. Two
+    populations farther apart than the last input's relief refuse as a cliff.
 
     Returns a two-band raster: band 1 the values, band 2 the place in `layers`
     of the input each cell came from (255 where none reached it), with the
@@ -339,9 +307,8 @@ async def merge_rasters(layers: list[Any] | None = None,
         raise RasterLayerError(
             "MERGE_RASTERS_NO_SOURCE",
             "merge_rasters was given no layers, so there is nothing to lay.")
-    held = [await resolved(layer, f"input {rank + 1}")
+    held = [case_layer(layer, f"input {rank + 1}")
             for rank, layer in enumerate(listed)]
-    from trid3nt_server.inputs.vertical_datum import datum_of
-
-    offsets = await _offsets(held, datum_of(held[-1]))
-    return await asyncio.to_thread(merged, held, str(name), offsets)
+    stated_offsets = list(offsets) if isinstance(offsets, (list, tuple)) else \
+        ([offsets] if offsets else [])
+    return await asyncio.to_thread(merged, held, str(name), stated_offsets)
