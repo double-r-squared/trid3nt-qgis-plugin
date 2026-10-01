@@ -341,3 +341,48 @@ def test_no_slot_reads_an_op():
     reading = sorted(name for name, slot in slots.SLOTS.items() if slot.ingest
                      and "op" in inspect.signature(slot.ingest).parameters)
     assert reading == []
+
+
+#: A lon/lat box around the UTM 10N test surfaces.
+_AROUND = {"type": "Polygon", "coordinates": [[
+    [-123.01, 36.10], [-122.99, 36.10], [-122.99, 36.20], [-123.01, 36.20],
+    [-123.01, 36.10]]]}
+
+
+def test_layers_named_by_id_carry_the_offset_through_the_tool_and_the_datum_through_the_fill(
+        tmp_path, monkeypatch):
+    """The merge TOOL hands its offsets to the overlay, and a fill of a layer
+    named by id states that layer's datum, quantity and sources on what it
+    makes."""
+    from trid3nt_server.render.uri_registry import (
+        activate_registry, deactivate_registry, get_uri_registry)
+    import sys
+
+    fill_mod = sys.modules[filled.__module__]
+    merge_mod = sys.modules[merged.__module__]
+
+    monkeypatch.setattr(merge_mod, "merged", lambda layers, name, offsets: merged(
+        layers, name, offsets, _output_dir=str(tmp_path)))
+    monkeypatch.setattr(fill_mod, "filled", lambda layer, within, seed: filled(
+        layer, within, seed, _output_dir=str(tmp_path)))
+    depths = _layer(_write(np.full((4, 4), 5.0), west=500_004.0,
+                           north=4_000_000.0, cell=1.0), "survey-2",
+                    "LWD_IGLD85", quantity="depth_below_datum_m")
+    registry = get_uri_registry("merge-tool-offsets")
+    registry.register_tool_result("survey_surface", depths)
+    registry.register_tool_result("fetch_dem", _terrain())
+    token = activate_registry(registry)
+    try:
+        laid = asyncio.run(merge_mod.merge_rasters(
+            layers=["survey-2", "terrain"], name="bed",
+            offsets=[{"offset_m": 176.056, "from_frame": "NAVD88",
+                      "to_frame": "LWD_IGLD85", "source": "NOAA VDatum"}]))
+        values, _won = _bands(laid.uri)
+        assert values[0, 4] == pytest.approx(-181.056, abs=1e-3)
+        registry.register_tool_result("merge_rasters", laid)
+        out = asyncio.run(fill_nodata(layer=laid.layer_id, within=_AROUND,
+                                      seed=176.582))
+        assert (out.vertical_datum, out.quantity) == ("NAVD88", "elevation")
+        assert out.sources[:2] == ["survey-2", "terrain"]
+    finally:
+        deactivate_registry(token)
