@@ -195,6 +195,7 @@ from .derive.fill_nodata import fill_nodata  # noqa: E402,F401
 from .derive.merge_rasters import merge_rasters  # noqa: E402,F401
 from .derive.probe_point import probe_point  # noqa: E402,F401
 from .derive.restyle_layer import restyle_layer  # noqa: E402,F401 - DISPLAY-state re-emission of an already-published layer
+from .derive.survey_surface import survey_surface  # noqa: E402,F401
 # The two session tools: each is a request on the plugin wire, run in the
 # user's own QGIS session; the code one never runs without the approval card.
 from .derive.run_pyqgis import run_pyqgis  # noqa: E402,F401
