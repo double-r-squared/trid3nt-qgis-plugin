@@ -185,6 +185,14 @@ def test_a_driven_arg_the_tool_reads_nowhere_refuses_rather_than_being_swallowed
         _drive(LiveRun(tool=_TOOL, args={"reach_length_km": 6.0}, case_title="c"))
 
 
+def test_an_arg_a_call_before_states_and_its_tool_reads_nowhere_refuses():
+    """A call before the template is driven like the template: a value it states
+    that its tool reads nowhere is swallowed, so the run refuses before it starts."""
+    with pytest.raises(LiveRunError, match="fill_nodata reads none of"):
+        _drive(LiveRun(tool=_TOOL, args={}, case_title="c", before=(
+            Before("bed", "fill_nodata", {"layer": "x", "inside": "w"}),)))
+
+
 def test_a_constant_door_param_is_read_even_though_the_signature_omits_it():
     """A CONSTANT-door param is off the model-facing schema and still seats
     through the sheet, so the DECLARATION is what says an arg lands somewhere."""
