@@ -42,8 +42,8 @@ def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
 
     ``source`` is ONE surface - a raster fetcher's name, an object-store uri, a
     layer, a layer of soundings, or a depth in metres below the free surface. A
-    bed composed of several rows is composed BEFORE here, by the ops the run
-    stated on its bed slot, and arrives as the one layer they produced. A node
+    bed composed of several surfaces is composed BEFORE here, by merge_rasters
+    and fill_nodata, and arrives as the one layer they produced. A node
     the surface has nothing for refuses: nothing is put there on its behalf."""
     import numpy as np
 
@@ -96,9 +96,9 @@ def _reached(source: Any, values: Any, lonlat: Any, provenance: str) -> None:
         f"elevation from {provenance}: they stand between "
         f"({at[:, 0].min():.5f}, {at[:, 1].min():.5f}) and "
         f"({at[:, 0].max():.5f}, {at[:, 1].max():.5f}), on cells no row of this "
-        f"bed measured. {_feedback(source)} Name a row that covers them, state "
-        "the ops that would lay one and interpolate what is left, supply a bed "
-        "of your own, or state the depth this water body holds.")
+        f"bed measured. {_feedback(source)} Name a surface that covers them, "
+        "compose one with merge_rasters and fill_nodata and hand its layer to "
+        "the bed, or state the depth this water body holds.")
 
 
 def _feedback(source: Any) -> str:
@@ -130,33 +130,34 @@ def _journal_bed(source: Any, provenance: str, lonlat: Any, nodes: int) -> None:
 
 
 def _node_shares(source: Any, lonlat: Any) -> list[tuple[str, float]] | None:
-    """The share of the NODES each row of a composed bed painted, or ``None``.
+    """The share of the NODES each input of a composed bed painted, or ``None``
+    on a bed nothing composed.
 
-    The merge writes which row won at each CELL and names them in the order it
-    laid them; a node takes the cell it stands in, so the shares a run reports
-    are the ones its own solve reads. Every row is counted: a pair of numbers
-    over a bed of five answers a question nobody asked, and the two it leaves
-    out are exactly the ones a reader is trying to find."""
+    The merge's band 2 names which input won each CELL; a node takes the cell it
+    stands in, so the shares a run reports are the ones its own solve reads."""
     import numpy as np
+    import rasterio
+    from rasterio.warp import transform as warp_transform
 
-    from trid3nt_server.inputs.bed import bed as read_bed
-    from trid3nt_server.mesh.shared.nodes import sample_raster_at_nodes
+    from trid3nt_server.inputs.bed import RASTER, bed as read_bed
+    from trid3nt_server.tools.derive._raster_layers import FILLED, sources_of
 
     slot = read_bed(source, label="bed")
-    surface = getattr(slot, "source", None)
-    uri = str(getattr(surface, "provenance_uri", "") or "")
-    if not uri:
+    # A surface by bare name or address carries no band its producer named.
+    if slot is None or slot.kind != RASTER or isinstance(slot.source, str):
         return None
-    # STAGED the way every other raster this op reads is: the sidecar lives in
-    # the object store, and a sampler handed its address reads it as a public URL.
-    won = np.asarray(sample_raster_at_nodes(str(op_raster(uri)), lonlat,
-                                            interp="nearest", fill_holes=False))
+    surface = slot.source
+    with rasterio.open(str(op_raster(surface))) as src:
+        if src.count < 2:
+            return None
+        pts = np.asarray(lonlat, dtype=float)
+        xs, ys = warp_transform("EPSG:4326", src.crs, pts[:, 0].tolist(),
+                                pts[:, 1].tolist())
+        won = np.array([v[0] for v in src.sample(zip(xs, ys), indexes=2)])
     total = float(won.size) or 1.0
-    laid = [label for label, _share in (getattr(surface, "water_rows", None)
-                                        or getattr(surface, "land_rows", None)
-                                        or [])]
-    return [(label, float((won == rank).sum()) / total)
-            for rank, label in enumerate(laid)]
+    names = sources_of(surface, won.astype("uint8"))
+    return [(name, float((won == (FILLED if name == "filled" else code)).sum())
+             / total) for code, name in enumerate(names)]
 
 
 def _stated_depth(source: Any) -> bool:
@@ -222,12 +223,12 @@ def _node_spacing_m(mesh: Mesh) -> float:
 def _interpolated_survey(layer: Any, cell_m: float, slot: Any) -> tuple[Any, str]:
     """A layer of SOUNDINGS through the grid that turns it into a surface.
 
-    Interpolating scattered measurements between soundings is the BED slot's own
-    rule, so it is reached at its own address in that slot rather than through a
-    registered name. The surface it makes carries the survey's own zero, so it is
+    The soundings are gridded by the survey_surface derive at the mesh's own
+    scale. The surface it makes carries the survey's own zero, so it is
     read onto the run's frame here - the one hop a raster bed takes on the way
     into its slot, taken at the moment the surface exists."""
-    from trid3nt_server.inputs.bed import elevations, survey_surface
+    from trid3nt_server.inputs.bed import elevations
+    from trid3nt_server.tools.derive.survey_surface import survey_surface
     from trid3nt_server.inputs.geometry import source_uri
 
     if not cell_m:
