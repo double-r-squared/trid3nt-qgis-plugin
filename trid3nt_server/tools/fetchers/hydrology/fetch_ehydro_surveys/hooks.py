@@ -420,4 +420,24 @@ def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[
                     survey_id, common["survey_date"], len(points), datum,
                     f"{offset_m:+.4f} m on {offset_frame}" if offset_m is not None
                     else "unpublished")
+    _one_zero(spec, rows)
     return rows
+
+
+def _one_zero(spec: SourceSpec, rows: list[dict]) -> None:
+    """One layer of soundings counts every depth from ONE zero, or it refuses.
+
+    Depths below two zeros in one layer are measured from two different places,
+    and anything gridded or merged across them is an elevation nowhere."""
+    zeros = sorted({row["properties"]["vertical_datum"] for row in rows})
+    if len(zeros) > 1:
+        surveys = sorted({f"{row['properties']['survey_id']} "
+                          f"({row['properties']['vertical_datum']})" for row in rows})
+        raise router_empty_error(
+            spec.error_code_prefix,
+            f"the surveys over this extent count their depths from {zeros}: "
+            f"{', '.join(surveys)}. One layer of soundings is counted from one "
+            "zero; fetch a bbox one of them covers, or state since= to compare "
+            "one survey at a time.",
+            "DATUMS_DIFFER",
+        )
