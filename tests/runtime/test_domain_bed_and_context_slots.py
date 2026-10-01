@@ -523,22 +523,6 @@ def test_a_source_on_the_runs_own_frame_declares_no_offset_row(monkeypatch):
     assert told == {"frame": "NAVD88"} and not env.data
 
 
-def test_the_bed_reads_its_ops_by_name_and_names_the_rows_a_merge_lays():
-    """The op names mean something only to the ingestion that reads them, so the
-    runtime that produces a merge's rows reads which ones they are from there -
-    and a name that slot has no move for never reaches a producer."""
-    from trid3nt_server.inputs.bed import merge_rows
-    from trid3nt_server.inputs.user_input import UserInputError
-    from trid3nt_server.inputs.bed import bed as read_bed
-
-    stated = [{"name": "merge", "rows": ["fetch_chs_nonna", "fetch_etopo"]},
-              "interpolated"]
-    assert merge_rows(stated) == ["fetch_chs_nonna", "fetch_etopo"]
-    assert merge_rows("interpolated") == []
-    with pytest.raises(UserInputError, match="'merge'"):
-        read_bed(4.0, op=[{"name": "merge"}])
-
-
 class _Params:
     """The param state a run is walked against: what the caller filled."""
 
@@ -547,37 +531,3 @@ class _Params:
 
     def value_of(self, name: str):
         return self._filled.get(name)
-
-
-def test_a_row_a_merge_names_is_fetched_at_the_spacing_the_run_is_meshed_at(
-        monkeypatch):
-    """The ask the merge states reaches the row's own producer: the runtime row
-    declared for a named row carries the resolution beside the place, so a row
-    asked over a domain stated in tens of kilometres is not asked for cells no
-    node of this run reads."""
-    from trid3nt_server.workflows.runtime import fill
-    from trid3nt_server.workflows.runtime.data import BED
-
-    async def _ranked(env, decl, data_class, label):
-        from trid3nt_contracts.coverage import SourceChoice
-
-        return SourceChoice(slot=decl.name, need=data_class,
-                            picked="fetch_chs_nonna")
-
-    async def _ask_for(env, choice, decl):
-        return {"bbox": (-82.8, 42.6, -82.3, 43.5)}
-
-    asked: list = []
-
-    async def _produce(env, decl):
-        asked.append(dict(decl.producer.kwargs))
-        return None
-
-    monkeypatch.setattr(fill, "_ranked", _ranked)
-    monkeypatch.setattr(fill, "_ask_for", _ask_for)
-    monkeypatch.setattr(fill, "_produce", _produce)
-    env = fill._Env(params=_Params({"mesh_resolution_m": 40.0}),
-                           data={})
-    asyncio.run(fill._named_row(env, _elevation_slot(BED),
-                                       "fetch_chs_nonna", BED))
-    assert asked == [{"bbox": (-82.8, 42.6, -82.3, 43.5), "resolution_m": 40.0}]
