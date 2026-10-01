@@ -862,16 +862,16 @@ package SolveSeam {
         this water" is a bed that does.
 
         So the bed slot takes ONE source and the composition is a spatial MERGE
-        of the two available layers, done by a derive before the op: the survey
-        wins every cell it measured, the wider surface fills the rest, and the
-        sidecar records which input painted each cell. A ladder would pick one
-        source for the whole domain and could not say that; this picks one per
-        cell and writes it down. The merge lands both on the wider surface's
-        zero - through the offset the call states, else the one the survey
-        publishes about itself, reading a surface of DEPTHS the other way round
-        on the way - and refuses naming both frames where neither exists, as it
-        refuses a surface that states no zero at all: a floor whose zero nobody
-        carried is a floor nobody can place.
+        of the available layers, done by merge_rasters before the run: the
+        survey wins every cell it measured, the wider surface fills the rest,
+        and a second band records which input painted each cell. A ladder would
+        pick one source for the whole domain and could not say that; this picks
+        one per cell and writes it down. The merge lands every input on the last
+        one's zero - through the shift the survey publishes about itself, else
+        the offset the datum service measures, reading a surface of DEPTHS the
+        other way round on the way - and refuses naming both frames where
+        neither exists, as it refuses a surface that states no zero at all: a
+        floor whose zero nobody carried is a floor nobody can place.
 
         What survives of the clip is the REFUSAL. The painter names the count of
         nodes the one source did not measure rather than filling them, because a
@@ -973,12 +973,6 @@ package SolveSeam {
         "tests/mesh/test_bed_sources_and_runs.py::test_a_domain_no_source_covers_refuses_by_name";
     verify requirement EveryNodeCarriesAMeasuredBed by
         "tests/mesh/test_bed_sources_and_runs.py::test_the_bed_is_one_source_and_two_are_merged_before_the_op";
-    verify requirement EveryNodeCarriesAMeasuredBed by
-        "tests/inputs/test_bed_merge.py::test_the_primary_wins_where_it_measured_and_the_fallback_fills_the_rest";
-    verify requirement EveryNodeCarriesAMeasuredBed by
-        "tests/inputs/test_bed_merge.py::test_the_sidecar_says_which_input_painted_each_cell";
-    verify requirement EveryNodeCarriesAMeasuredBed by
-        "tests/inputs/test_bed_merge.py::test_two_datums_refuse_by_name";
 
     satisfy requirement ADredgeCutsOnlyWhatTheStockHolds by referenceSurface;
     verify requirement ADredgeCutsOnlyWhatTheStockHolds by
