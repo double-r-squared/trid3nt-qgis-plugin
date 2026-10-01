@@ -868,7 +868,7 @@ package SolveSeam {
         pick one source for the whole domain and could not say that; this picks
         one per cell and writes it down. The merge lands every input on the last
         one's zero - through the shift the survey publishes about itself, else
-        the offset the datum service measures, reading a surface of DEPTHS the
+        an offset the datum fetch returned, passed in, reading a surface of DEPTHS the
         other way round on the way - and refuses naming both frames where
         neither exists, as it refuses a surface that states no zero at all: a
         floor whose zero nobody carried is a floor nobody can place.
