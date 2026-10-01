@@ -77,6 +77,35 @@ def test_the_bed_is_one_source_and_two_are_merged_before_the_op(tmp_path):
     assert "merged_rasters" in bedded.meta["bed_sources"][0]
 
 
+def test_the_journal_states_the_share_of_nodes_each_input_painted_off_band_2(
+        tmp_path, monkeypatch):
+    """The per-node shares of a composed bed are read off the merge's own band 2
+    and named by the inputs it lists, so the journal says which painted what."""
+    import trid3nt_server.workflows.runtime as runtime
+    from trid3nt_contracts.execution import LayerURI
+    from trid3nt_server.tools.derive.merge_rasters.merge_rasters import merged
+
+    said: list[str] = []
+    monkeypatch.setattr(runtime, "journal_note", said.append)
+    survey = np.full((5, 5), np.nan, dtype="float32")
+    survey[:, :2] = -9.0
+
+    def _layer(path: str, name: str) -> LayerURI:
+        return LayerURI(layer_id=name, name=name, layer_type="raster", uri=path,
+                        vertical_datum="NAVD88")
+
+    laid = merged(
+        [_layer(_raster(tmp_path / "survey.tif", survey, nodata=np.nan), "survey"),
+         _layer(_raster(tmp_path / "dem.tif", np.full((5, 5), 3.0),
+                        nodata=-9999.0), "dem")],
+        "bed", [], _output_dir=str(tmp_path))
+    P.set_bed(_lattice_mesh(), laid)
+    shares = [line for line in said if line.startswith("bed: ")]
+    assert len(shares) == 1
+    assert "survey reached 33.3% of them" in shares[0]
+    assert "dem reached 66.7% of them" in shares[0]
+
+
 def test_a_domain_no_source_covers_refuses_by_name(tmp_path):
     """Filling the holes with the mean of what WAS covered is a bed nobody
     measured, so the op says how many nodes have nothing."""
@@ -121,6 +150,7 @@ def test_a_layer_of_soundings_goes_through_the_grid_at_the_meshs_own_scale(
     import sys
 
     bed = sys.modules["trid3nt_server.inputs.bed"]
+    grid = sys.modules["trid3nt_server.tools.derive.survey_surface"]
 
     asked: dict = {}
     surface = _raster(tmp_path / "surface.tif", np.full((5, 5), -4.0))
@@ -129,7 +159,7 @@ def test_a_layer_of_soundings_goes_through_the_grid_at_the_meshs_own_scale(
         asked.update(kwargs)
         return surface
 
-    monkeypatch.setattr(bed, "survey_surface", _surface)
+    monkeypatch.setattr(grid, "survey_surface", _surface)
     monkeypatch.setattr(bed, "elevations", lambda surface, **_kw: surface)
     soundings = {"type": "FeatureCollection", "features": []}
     bedded = P.set_bed(_lattice_mesh(), soundings)
