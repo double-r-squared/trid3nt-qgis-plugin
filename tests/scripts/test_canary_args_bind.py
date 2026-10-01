@@ -67,16 +67,23 @@ def test_every_layer_a_call_before_makes_is_read_by_a_call_after_it(name):
 
 
 def test_port_huron_composes_its_bed_in_the_order_the_last_passing_run_laid_it():
-    """The survey gridded first, the chart, the relief, the terrain last, each
-    off its own fetch, the two offsets passed in, then the fill."""
+    """The survey gridded first by QGIS's IDW, the chart, the relief, the
+    terrain last, each off its own fetch, the two offsets passed in, then the
+    fill."""
     run = CANARIES["telemac_ice_cover_port_huron"]
     calls = {call.name: call for call in run.before}
     assert [call.tool for call in run.before] == [
-        "fetch_ehydro_surveys", "survey_surface", "fetch_chs_nonna",
-        "fetch_etopo", "fetch_dem", "fetch_vertical_datum_offset",
-        "fetch_vertical_datum_offset", "fetch_nhd_water_surface",
-        "merge_rasters", "fill_nodata"]
-    assert calls["survey"].args["points"] == "$soundings"
+        "fetch_ehydro_surveys", "run_qgis_algorithm", "run_qgis_algorithm",
+        "fetch_chs_nonna", "fetch_etopo", "fetch_dem",
+        "fetch_vertical_datum_offset", "fetch_vertical_datum_offset",
+        "fetch_nhd_water_surface", "merge_rasters", "fill_nodata"]
+    assert calls["projected"].args["params"]["INPUT"] == "$soundings"
+    grid = calls["survey"].args
+    assert grid["algorithm"] == "gdal:gridinversedistancenearestneighbor"
+    assert grid["params"]["INPUT"] == "$projected"
+    assert (grid["params"]["Z_FIELD"], grid["params"]["RADIUS"]) == (
+        "depth_below_datum_m", 9.14)
+    assert "-tr 40 40" in grid["params"]["EXTRA"]
     assert calls["merged"].args["layers"] == [
         "$survey", "$chart", "$relief", "$terrain"]
     assert calls["merged"].args["offsets"] == ["$chart_offset", "$relief_offset"]
