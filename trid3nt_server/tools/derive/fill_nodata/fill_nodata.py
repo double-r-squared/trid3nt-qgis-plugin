@@ -19,8 +19,8 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.tools import register_tool
 from trid3nt_server.tools.derive._raster_layers import (
     FILLED, NODATA, UNMEASURED, RasterLayerError, RasterLayerURI, bbox_4326,
-    coverage, label_of, percent, polygons, read, resolved, staged, stated,
-    written)
+    case_layer, coverage, label_of, percent, polygons, read, sources_of,
+    staged, stated, written)
 
 __all__ = ["fill_nodata", "filled"]
 
@@ -74,6 +74,12 @@ def _painted(band: Any, inside: Any, hole: Any, seed: float) -> Any:
     return np.where(hole, painted, band)
 
 
+def _said(layer: Any, field: str) -> Any:
+    """One thing the input layer states about itself, by id or whole."""
+    return (layer.get(field) if isinstance(layer, dict)
+            else getattr(layer, field, None))
+
+
 def filled(layer: Any, within: Any, seed: float, *,
            _output_dir: str | None = None) -> RasterLayerURI:
     """The fill itself, over inputs already resolved: what the tool runs."""
@@ -86,11 +92,12 @@ def filled(layer: Any, within: Any, seed: float, *,
     label = label_of(layer, 0)
     with tempfile.TemporaryDirectory(prefix="fill-nodata-") as scratch:
         values, won, crs, transform = read(staged(layer, label, scratch))
-    sources = list(getattr(layer, "sources", None) or [])
     if won is None:
         # A raster nothing composed came from ONE input: itself.
         won = np.where(np.isfinite(values), 0, UNMEASURED).astype("uint8")
         sources = [label]
+    else:
+        sources = sources_of(layer, won)
     inside = _inside(within, crs, transform, values.shape)
     hole = inside & ~np.isfinite(values)
     seed_note = (f"The polygon's edge is seeded at the stated {float(seed):g} m.")
@@ -112,10 +119,9 @@ def filled(layer: Any, within: Any, seed: float, *,
     return RasterLayerURI.published(
         "filled-nodata", seed=seed_id, name=f"{label} (filled)",
         layer_type="raster", uri=uri, style=_STYLE, role="primary",
-        units=getattr(layer, "units", None) or "m",
-        quantity=getattr(layer, "quantity", None),
+        units=_said(layer, "units") or "m", quantity=_said(layer, "quantity"),
         bbox=bbox_4326(crs, transform, values.shape[1], values.shape[0]),
-        vertical_datum=getattr(layer, "vertical_datum", None),
+        vertical_datum=_said(layer, "vertical_datum"),
         sources=sources, coverage=reached, unmeasured_fraction=blank, notes=notes)
 
 
@@ -136,8 +142,8 @@ async def fill_nodata(layer: Any = None, within: Any = None,
     shoreline", "close the holes in this surface within the river polygon". A
     new case layer; the input is not changed.
 
-    `layer` is a case layer id, a source name, or {"source": name, "bbox": ...}.
-    `within` is the polygon the fill is bounded by - a case layer id or GeoJSON;
+    `layer` is a case layer id. `within` is the polygon the fill is bounded by -
+    a case layer id or GeoJSON;
     nothing outside it is touched. `seed` is the value the polygon's EDGE takes,
     in the raster's own units and frame - for a bed, the elevation the water
     surface stands at - and it is required: nothing reads it off a run. The fill
@@ -158,6 +164,6 @@ async def fill_nodata(layer: Any = None, within: Any = None,
             "fill_nodata seeds the polygon's edge at a value you STATE - for a "
             "bed, the elevation the water surface stands at - and none was "
             "stated. A number put there instead is a surface nobody measured.")
-    held = await resolved(layer, "layer")
-    polygon = await resolved(within, "within")
+    held = case_layer(layer, "layer")
+    polygon = case_layer(within, "within")
     return await asyncio.to_thread(filled, held, polygon, float(seed))
