@@ -218,6 +218,20 @@ def test_two_datums_over_one_survey_are_refused_rather_than_chosen_between(spec)
         eh._stated(spec, points, "WR_03")
 
 
+def test_two_surveys_on_two_zeros_are_refused_at_fetch_by_name(spec):
+    """Each survey states one zero, but a layer laying both side by side would
+    count its depths from two places: the fetch refuses, naming each."""
+    rows = [{"properties": {"survey_id": sid, "vertical_datum": datum}}
+            for sid, datum in (("DE_01", "LWD_IGLD85"), ("DE_02", "MLLW"),
+                               ("DE_01", "LWD_IGLD85"))]
+    with pytest.raises(RouterEmptyError) as excinfo:
+        eh._one_zero(spec, rows)
+    assert "DATUMS_DIFFER" in excinfo.value.error_code
+    assert "DE_01 (LWD_IGLD85)" in str(excinfo.value)
+    assert "DE_02 (MLLW)" in str(excinfo.value)
+    eh._one_zero(spec, rows[::2])
+
+
 def test_the_survey_is_found_through_its_class(class_routes_to_the_match):
     """A covered fetcher carries no corpus: its class is the door."""
     class_routes_to_the_match("bathymetry", "fetch_ehydro_surveys")
