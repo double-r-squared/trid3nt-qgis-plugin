@@ -7,7 +7,10 @@ input read onto the LAST input's frame through the shift it publishes or the
 offset stated for it, two surfaces with no common ground refusing, a fill
 reaching inside 'within' alone with its edge at the stated seed and every cell it
 painted marked FILLED, a fill with no seed refusing, a bed whose water nothing
-measured refused naming both derives, and ops= gone from every signature."""
+measured refused naming both derives, ops= gone from every signature, inputs on
+differing datums refusing without an offset and naming the fetch that measures
+one, a case layer by id carrying its datum and quantity, a source refused
+because a derive never fetches, and a fetched layer carrying both."""
 
 from __future__ import annotations
 
@@ -22,7 +25,7 @@ from rasterio.transform import from_origin
 
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_server.tools.derive._raster_layers import (
-    FILLED, UNMEASURED, RasterLayerError)
+    FILLED, UNMEASURED, RasterLayerError, case_layer)
 from trid3nt_server.tools.derive.fill_nodata.fill_nodata import (
     fill_nodata, filled)
 from trid3nt_server.tools.derive.merge_rasters.merge_rasters import merged
@@ -93,7 +96,8 @@ def test_a_survey_of_depths_is_read_onto_the_last_input_s_frame_through_its_own_
         tmp_path):
     """5 m of depth below a project datum that sits 1.6093 m above NAVD88 is an
     elevation of -3.3907 m on NAVD88, the frame the terrain counts from."""
-    from trid3nt_server.inputs.bed import SurveySurfaceLayerURI
+    from trid3nt_server.tools.derive.survey_surface.survey_surface import (
+        SurveySurfaceLayerURI)
 
     survey = SurveySurfaceLayerURI(
         layer_id="s", name="soundings", layer_type="raster",
@@ -116,6 +120,100 @@ def test_a_stated_offset_moves_an_input_onto_the_frame(tmp_path):
                   _output_dir=str(tmp_path))
     values, _won = _bands(laid.uri)
     assert values[0, 4] == pytest.approx(-4.5)
+
+
+def test_inputs_on_differing_datums_with_no_offset_refuse_naming_the_offset_fetch(
+        tmp_path):
+    with pytest.raises(RasterLayerError) as refused:
+        merged([_survey("EGM2008"), _terrain()], "bed", [],
+               _output_dir=str(tmp_path))
+    assert refused.value.error_code == "MERGE_RASTERS_OFFSET_UNSTATED"
+    assert "fetch_vertical_datum_offset" in str(refused.value)
+    assert "EGM2008" in str(refused.value) and "NAVD88" in str(refused.value)
+
+
+def test_one_offset_record_reads_every_input_on_its_pair_either_way_round(
+        tmp_path):
+    """The record the offset fetch returns is matched by the frames it names,
+    so a depth survey and a chart on one datum share it, in any order."""
+    record = {"offset_m": 176.056, "from_frame": "NAVD88",
+              "to_frame": "LWD_IGLD85", "source": "NOAA VDatum"}
+    depths = _layer(_write(np.full((4, 4), 5.0), west=500_004.0,
+                           north=4_000_000.0, cell=1.0), "survey", "LWD_IGLD85",
+                    quantity="depth_below_datum_m")
+    laid = merged([depths, _terrain()], "bed", [None, record],
+                  _output_dir=str(tmp_path))
+    values, _won = _bands(laid.uri)
+    assert values[0, 4] == pytest.approx(-176.056 - 5.0, abs=1e-3)
+    assert laid.quantity == "elevation"
+
+
+def test_a_case_layer_by_id_carries_its_datum_and_quantity_into_the_merge(
+        tmp_path):
+    """A layer named by id brings what its producer said about it: the depth
+    survey on its own datum is read through the offset, never as on the frame."""
+    from trid3nt_server.render.uri_registry import (
+        activate_registry, deactivate_registry, get_uri_registry)
+    from trid3nt_server.tools.derive.merge_rasters.merge_rasters import (
+        merge_rasters)
+
+    survey = _layer(_write(np.full((4, 4), 5.0), west=500_004.0,
+                           north=4_000_000.0, cell=1.0), "survey-1", "CRD",
+                    quantity="depth_below_datum_m")
+    registry = get_uri_registry("merge-by-id")
+    registry.register_tool_result("survey_surface", survey)
+    token = activate_registry(registry)
+    try:
+        held = case_layer("survey-1", "input")
+        assert held["vertical_datum"] == "CRD"
+        assert held["quantity"] == "depth_below_datum_m"
+        with pytest.raises(RasterLayerError) as refused:
+            asyncio.run(merge_rasters(layers=["survey-1", _terrain()]))
+        assert refused.value.error_code == "MERGE_RASTERS_OFFSET_UNSTATED"
+    finally:
+        deactivate_registry(token)
+
+
+def test_a_derive_never_fetches_a_source_named_to_it():
+    from trid3nt_server.tools.derive.merge_rasters.merge_rasters import (
+        merge_rasters)
+
+    with pytest.raises(RasterLayerError) as refused:
+        asyncio.run(merge_rasters(layers=[{"source": "fetch_dem",
+                                           "bbox": [0, 0, 1, 1]}]))
+    assert refused.value.error_code == "RASTER_LAYER_UNKNOWN"
+    assert "never fetches" in str(refused.value)
+
+
+def test_no_derive_reaches_the_tool_registry():
+    """A derive reaching TOOL_REGISTRY can call a fetcher by name."""
+    import ast
+    from pathlib import Path
+
+    import trid3nt_server.tools.derive as derive
+
+    found = []
+    for path in Path(derive.__file__).parent.rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name) \
+                    and node.value.id == "TOOL_REGISTRY":
+                found.append(f"{path.name}:{node.lineno}")
+    assert not found
+
+
+def test_a_fetched_layer_carries_the_datum_and_the_quantity_its_row_states():
+    import trid3nt_server.main as main
+    from trid3nt_server.tools.fetchers._router.registration import get_spec
+    from trid3nt_server.tools.fetchers._router.router import build_layer_uri
+
+    main._import_tools_registry()
+    box = {"bbox": [-82.47, 42.88, -82.40, 42.99]}
+    chart = build_layer_uri(get_spec("fetch_chs_nonna"), box, "s3://b/c.tif")
+    assert (chart.vertical_datum, chart.quantity) == ("lwd_igld85", "elevation")
+    terrain = build_layer_uri(get_spec("fetch_dem"), box, "s3://b/d.tif")
+    assert (terrain.vertical_datum, terrain.quantity) == ("NAVD88", "elevation")
+    survey = build_layer_uri(get_spec("fetch_ehydro_surveys"), box, "s3://b/e.fgb")
+    assert survey.quantity == "depth_below_datum"
 
 
 def test_surfaces_with_no_common_ground_refuse(tmp_path):
@@ -230,3 +328,16 @@ def test_ops_is_on_no_signature():
     assert carrying == []
     assert any(getattr(tool.fn, "workflow", None) is not None
                for tool in TOOL_REGISTRY.values())
+
+
+def test_no_slot_reads_an_op():
+    """The bed takes a composed layer, so no slot's ingestion declares an op and
+    the slots offer no reader of one."""
+    import inspect
+
+    from trid3nt_server.inputs import slots
+
+    assert not hasattr(slots, "takes_op")
+    reading = sorted(name for name, slot in slots.SLOTS.items() if slot.ingest
+                     and "op" in inspect.signature(slot.ingest).parameters)
+    assert reading == []
