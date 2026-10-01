@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 import rasterio
 
-from trid3nt_server.inputs.bed import (
+from trid3nt_server.tools.derive.survey_surface.survey_surface import (
     SurveySurfaceError,
     survey_surface,
 )
