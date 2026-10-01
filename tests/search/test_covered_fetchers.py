@@ -85,14 +85,13 @@ def test_a_covered_fetcher_leaves_the_index_and_an_overlay_one_stays(index):
     assert FIND_SOURCES in indexed
 
 
-def test_the_bed_grid_is_not_a_tool_at_all(registry, index):
-    """The bed's grid is the slot's own rule, reached at its own address by the
-    row that runs it: no registry name, so nothing can pick it."""
+def test_the_bed_grid_is_a_derive_tool(registry, index):
+    """The bed's grid is the survey_surface derive, run by its registry name: a
+    person or the model grids soundings with the same step, and it is no source."""
     from trid3nt_server.inputs.bed import SURVEY_DERIVE
 
-    assert SURVEY_DERIVE.startswith("trid3nt_server.inputs.bed.")
-    assert SURVEY_DERIVE not in registry
-    assert SURVEY_DERIVE not in set(index.tool_names)
+    assert registry[SURVEY_DERIVE].module.startswith("trid3nt_server.tools.derive.")
+    assert SURVEY_DERIVE in set(index.tool_names)
     assert SURVEY_DERIVE not in covered_sources()
 
 
