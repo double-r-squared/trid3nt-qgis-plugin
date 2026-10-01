@@ -1,0 +1,9 @@
+merge_rasters:
+- merge the channel survey over the DEM into one bed
+- combine these bathymetry layers into a single surface
+- lay the chart soundings first and the terrain under them
+- mosaic these rasters with this one on top
+- fill the gaps in this raster from that wider one
+- stack the lidar over the global relief, the lidar wins where it has data
+- composite several elevation surfaces in priority order
+- merge rasters and tell me which source each cell came from
