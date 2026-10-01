@@ -456,13 +456,18 @@ package DataSeam {
 
     part def BedComposer {
         doc /*
-        A raster derive a person runs BEFORE the fill, producing a case layer a
-        slot then takes by id: merge_rasters lays its inputs first wins, each
-        read onto ONE zero - a surface counting DEPTHS read as elevations up
-        from its own datum, through the shift it publishes or the offset the
-        service measures - and fill_nodata paints the cells nothing measured
-        inside a polygon, its edge seeded at a STATED value. Both write a second
-        band naming where every cell came from.
+        A raster derive a person runs BEFORE the fill, over CASE LAYERS only,
+        producing a case layer a slot then takes by id; a derive never fetches.
+        Every fetched layer carries the vertical datum and the quantity its row
+        states, and a layer named by id brings them along. survey_surface grids
+        soundings into a surface on their own datum; merge_rasters lays its
+        inputs first wins, each read onto ONE zero - a surface counting DEPTHS
+        read as elevations up from its own datum, through the shift it publishes
+        or an offset record passed in - and refuses an input on another datum
+        with none, naming the offset fetch; fill_nodata paints the cells nothing
+        measured inside a polygon, its edge seeded at a STATED value. Both write
+        a second band naming where every cell came from, which the mesh reads
+        to journal the share of nodes each input painted.
         */
     }
 
@@ -552,6 +557,12 @@ package DataSeam {
     part bedComposer : BedComposer {
         doc /*
         code: trid3nt_server/tools/derive/merge_rasters/merge_rasters.py
+        */
+    }
+
+    part surveyGrid : BedComposer {
+        doc /*
+        code: trid3nt_server/tools/derive/survey_surface/survey_surface.py
         */
     }
 
@@ -982,9 +993,9 @@ package DataSeam {
 
         The same order holds wherever surfaces meet before a slot does:
         merge_rasters reads EVERY INPUT onto the last input's own zero, each
-        through the shift it publishes or the offset the datum service measures
-        at its own footprint, before any of them paints a cell, and a pair
-        nothing measures refuses naming both. A surface counting DEPTHS down from its zero is one
+        through the shift it publishes or an offset record passed in, before
+        any of them paints a cell, and a pair nothing bridges refuses naming
+        both and the offset fetch. A surface counting DEPTHS down from its zero is one
         axis with a surface counting elevations up only through that shift, so
         it is read the other way round on the way - on its own grid, before
         either is read onto the common one.
@@ -994,17 +1005,14 @@ package DataSeam {
         they are counted below and refuses without it, while an elevation
         surface somebody handed this run stands on the run's frame.
 
-        AN UNPLACEABLE ROW DROPS OFF. A row whose zero nothing measures
-        against the frame the merge lands on is not part of this bed: it drops
-        off the way an empty one does, the run says which row and why - its own
-        zero and the frame nothing reached it from - and the rows after it paint
-        the cells it would have. The merge refuses only
-        where what is left paints nothing, or where the FIRST row itself cannot
-        be placed, because a bed whose best source is unplaceable is not that
-        bed. The refusal is built ONCE, by the datum check that knows both
-        zeros; a slot re-raises it under its own code rather than restating the
-        surface and the two frames in its own words, since two statements of
-        one fact are two chances to disagree.
+        AN UNPLACEABLE INPUT REFUSES. An input whose zero nothing passed in
+        reaches the frame the merge lands on refuses by name, naming both zeros
+        and the offset fetch that measures one; the offset is a value a fetch
+        produced, handed to the merge, never fetched by it. The refusal is
+        built ONCE, by the datum check that knows both zeros; a slot re-raises
+        it under its own code rather than restating the surface and the two
+        frames in its own words, since two statements of one fact are two
+        chances to disagree.
 
         A BED THAT SPLIT IN TWO IS REFUSED BY NAME. A shift nobody caught still
         shows in what the rows painted: values in two populations farther apart
