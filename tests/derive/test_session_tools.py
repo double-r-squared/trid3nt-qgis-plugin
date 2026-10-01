@@ -161,3 +161,39 @@ def test_bad_arguments_refuse_before_the_wire(monkeypatch) -> None:
         asyncio.run(run_qgis_algorithm("native:slope", ["INPUT"]))  # type: ignore[arg-type]
     with pytest.raises(processing.SessionProcessingFailedError):
         asyncio.run(run_pyqgis("   ", confirmed=True))
+
+
+@pytest.mark.asyncio
+async def test_an_output_carries_the_datum_and_quantity_its_input_carried(monkeypatch) -> None:
+    """The gridded survey is depths below the survey's own zero because the
+    soundings it was computed from said so, and a layer named by its id brings
+    that along to whatever reads it next."""
+    from trid3nt_server.render.uri_registry import (
+        activate_registry, deactivate_registry, get_uri_registry,
+        lookup_layer_for_handle)
+
+    registry = get_uri_registry("qgis-inherits")
+    registry.register_tool_result("fetch_ehydro_surveys", {
+        "layer_id": "ehydro_surveys-soundings", "uri": "s3://bucket/soundings.fgb",
+        "vertical_datum": "LWD_IGLD85", "quantity": "depth_below_datum",
+        "datum_offset_m": 176.0, "datum_offset_frame": "IGLD85"})
+    emitter = _FakeEmitter()
+    monkeypatch.setattr(pe, "current_emitter", lambda: emitter)
+    token = activate_registry(registry)
+    try:
+        reply = _answer_when_asked(emitter, status="ok", result={
+            "layer_name": "Grid (IDW)", "layer_id": "grid_idw_1", "kind": "raster",
+            "source": "/tmp/processing/OUTPUT.tif"})
+        out = await run_qgis_algorithm(
+            "gdal:gridinversedistancenearestneighbor",
+            {"INPUT": "ehydro_surveys-soundings", "RADIUS": 9.14})
+        await reply
+        registry.register_tool_result("run_qgis_algorithm", out)
+        named = lookup_layer_for_handle("grid_idw_1")
+    finally:
+        deactivate_registry(token)
+    assert out["uri"] == "/tmp/processing/OUTPUT.tif"
+    for layer in (out, named):
+        assert layer["vertical_datum"] == "LWD_IGLD85"
+        assert layer["quantity"] == "depth_below_datum"
+        assert (layer["datum_offset_m"], layer["datum_offset_frame"]) == (176.0, "IGLD85")
