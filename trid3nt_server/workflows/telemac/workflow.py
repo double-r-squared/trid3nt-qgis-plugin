@@ -1118,14 +1118,30 @@ class TelemacWorkflow(Workflow):
         """Every input the template names as a plain string - in a placement, a
         measurement, a row, an output, the mesh recipe or a composite - that no
         param, row, product or keyword of this run is called."""
-        from trid3nt_server.mesh.recipe import input_names
-
         known = ({prm.name for prm in self.params} | {row.name for row in self.data}
-                 | {mark.name for mark in self._declared(Placed)}
-                 | {ask.name for ask in self._declared(Measured)}
+                 | self._marks()
                  | {"mesh", "mesh_files", "channel", _SETTLED, "line"}
                  | {name for body in run_bodies(self.steering)
                     for name in body.MODULE_INPUT})
+        return tuple(dict.fromkeys(name for name in self._named()
+                                   if isinstance(name, str) and name not in known))
+
+    def named_rows(self) -> tuple[str, ...]:
+        """Every declared row the template names, but one asked near a point the
+        run places: that point is a node of the mesh, so the row is produced
+        once the point is placed, before the sheet."""
+        rows, marks = {row.name: row for row in self.data}, tuple(self._marks())
+        return tuple(dict.fromkeys(
+            name for name in self._named() if isinstance(name, str)
+            and name in rows and rows[name].coercion.get("near") not in marks))
+
+    def _marks(self) -> set[str]:
+        return ({mark.name for mark in self._declared(Placed)}
+                | {ask.name for ask in self._declared(Measured)})
+
+    def _named(self) -> list[Any]:
+        from trid3nt_server.mesh.recipe import input_names
+
         named = [mark.point for mark in self._declared(Placed)]
         named += [mark.fraction for mark in self._declared(Placed)]
         named += [name for ask in self._declared(Measured)
@@ -1137,8 +1153,7 @@ class TelemacWorkflow(Workflow):
         if recipe is not None:
             named += input_names(recipe)
         named += self.steering.named()
-        return tuple(dict.fromkeys(name for name in named
-                                   if isinstance(name, str) and name not in known))
+        return named
 
     async def _recipe(self, env: Any, recipe: Any) -> dict[str, Any]:
         """The mesh ask with every input it names read off the run: the extent,

@@ -30,6 +30,7 @@ from .data import (
 from .domain import Domain, bind_domain, current_domain
 from .errors import (DeclarativeError, PlanValidationError, StepFailedError,
                      SuppliedCoverageError, said)
+from . import journal
 from .journal import journal_note, slot_choice
 from .params import ResolvedParams
 from .temporal import RATE, STATE
@@ -975,6 +976,10 @@ class Fill:
     notes: list[str] = field(default_factory=list)
     env: _Env | None = None
     domain: Domain | None = None
+    #: What producing an input said, chose and covered, in that order: the fill
+    #: runs before the run's own channels open, so the launch restates them.
+    said: tuple[list[str], list[Any], list[str]] = field(
+        default_factory=lambda: ([], [], []))
 
     @property
     def ready(self) -> bool:
@@ -1024,9 +1029,32 @@ async def fill(state: Fill, values: Mapping[str, Any]) -> Fill:
             "row or product of this run is called that.")
     if "ops" in state.carried:
         _carried_ops(state, rows)
-    for name, value in sourced.items():
-        await _row(state, rows[name], value)
+    tokens = (journal.bind_notes(), journal.bind_choices(),
+              journal.bind_coverage())
+    try:
+        for name, value in sourced.items():
+            await _row(state, rows[name], value)
+        # EVERY ROW THE TEMPLATE NAMES is produced here, before anything
+        # expands: a consumer only reads the mapping, so a row that cannot be
+        # produced is refused now, by name.
+        for name in state.workflow.named_rows() if state.ready else ():
+            if name not in production(state).run:
+                await _row(state, rows[name], None)
+    finally:
+        for held, drain, token in zip(state.said, (
+                journal.drain_notes, journal.drain_choices,
+                journal.drain_coverage), tokens):
+            held += drain(token)
     return state
+
+
+def restate(state: Fill) -> None:
+    """Say on the run in progress what producing its inputs said at the fill."""
+    notes, choices, covered = state.said
+    for text in notes:
+        (journal.cut_coverage if text in covered else journal_note)(text)
+    for choice in choices:
+        slot_choice(choice)
 
 
 def _keyword(state: Fill, name: str, value: Any) -> None:
@@ -1143,11 +1171,11 @@ async def _row(state: Fill, decl: DataDecl, value: Any) -> None:
             "was refused.")
         return
     env = production(state)
-    origin = "user"
+    origin = "user" if value is not None else "produced"
     if isinstance(value, Mapping) and "source" in value:
         env.picks[decl.name] = origin = str(value["source"])
         origin = f"source:{origin}"
-    else:
+    elif value is not None:
         env.supplied[decl.name] = (value.get("layer")
                                    if isinstance(value, Mapping) else value)
     try:
@@ -1162,7 +1190,9 @@ async def _row(state: Fill, decl: DataDecl, value: Any) -> None:
         picked = env.picks.pop(decl.name, None)
         env.supplied.pop(decl.name, None)
         state.inputs[decl.name] = Verdict(
-            REJECTED, value, reason=str(exc), code=_refusal_code(exc, decl.name),
+            REJECTED, value, code=_refusal_code(exc, decl.name),
+            reason=str(exc) if value is not None
+            else f"{decl.name!r} could not be produced: {exc}",
             remedies=await _instead(env, decl, picked) if picked else ())
         return
     state.domain = current_domain()

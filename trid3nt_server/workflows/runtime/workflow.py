@@ -26,7 +26,7 @@ from .levers import with_levers
 from .params import Param, ResolvedParams, doors, param_rows
 from .resolution import SensitivityDecl, sensitivity_notes
 from .resolver import merge_provenance, provenance_entries
-from .fill import Fill, fill, production
+from .fill import Fill, fill, production, restate
 
 __all__ = ["RunResult", "Workflow", "WireArgsError", "register_workflow"]
 
@@ -124,6 +124,10 @@ class Workflow:
     def unnamed(self) -> tuple[str, ...]:
         """Every input the template names as a plain string that nothing of
         this run is called; the fill refuses each by name."""
+        return ()
+
+    def named_rows(self) -> tuple[str, ...]:
+        """Every declared row the template names; the fill produces each."""
         return ()
 
     def sheet_doc(self) -> str | None:
@@ -230,6 +234,7 @@ class Workflow:
         token = bind_domain(state.domain)
         notes, outputs = journal.bind_notes(), journal.bind_outputs()
         choices, coverage = journal.bind_choices(), journal.bind_coverage()
+        restate(state)
         # A context token resets once; the drain lives only in the finally so
         # a second reset never replaces the run's own error.
         try:

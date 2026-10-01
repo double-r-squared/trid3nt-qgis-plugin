@@ -1069,7 +1069,12 @@ package SteeringSurface {
         own inputs. Every name a template writes - in a mesh recipe, a
         measurement, a placement or a composite argument - is checked at the
         fill, and one nothing of the run is called is refused there, by name,
-        before anything runs.
+        before anything runs. The fill PRODUCES every declared row a template
+        names into the mapping before anything expands, so a composite only
+        looks up and a row that cannot be produced is refused at the fill by
+        name; a row asked near a point the run places is produced once that
+        point is placed, before the sheet. What producing said at the fill is
+        restated on the run.
         */
     }
 
@@ -1091,6 +1096,14 @@ package SteeringSurface {
         "tests/telemac/test_one_mapping.py::test_no_placeholder_read_is_left_in_the_server";
     verify requirement TheRunHoldsOneMapping by
         "tests/telemac/test_one_mapping.py::test_every_template_names_only_what_its_run_is_called";
+    verify requirement TheRunHoldsOneMapping by
+        "tests/telemac/test_one_mapping.py::test_a_row_only_a_composite_reads_is_in_the_mapping_after_the_fill";
+    verify requirement TheRunHoldsOneMapping by
+        "tests/telemac/test_one_mapping.py::test_a_row_its_producer_fails_is_refused_at_fill_before_any_stage";
+    verify requirement TheRunHoldsOneMapping by
+        "tests/telemac/test_one_mapping.py::test_every_row_a_template_reads_is_in_the_mapping_after_the_fill";
+    verify requirement TheRunHoldsOneMapping by
+        "tests/runtime/test_one_fill.py::test_what_producing_said_at_the_fill_is_restated_on_the_run";
 
     satisfy requirement AnInputFillsItsOwnKeywords by sheet;
     verify requirement AnInputFillsItsOwnKeywords by
