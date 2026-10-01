@@ -25,6 +25,7 @@ if not DEV.is_dir():
 sys.path.insert(0, str(REPO))
 
 from dev.testing.live_run import (  # noqa: E402
+    Before,
     GateAnswers,
     LiveRun,
     LiveRunError,
@@ -36,6 +37,8 @@ from dev.testing.live_run import (  # noqa: E402
     _pump,
     _read_dispatch_card,
     _read_run_products,
+    placed,
+    run_before,
 )
 
 
@@ -319,6 +322,53 @@ def test_the_pump_reports_a_blocking_event_it_cannot_answer():
                                        timeout_s=5), ev))
     assert "BLOCKED by processing-request" in ev.detail
     assert ev.turn_complete is False
+
+
+def _turn(layers: list[dict]) -> list[dict]:
+    """One completed tool turn that leaves ``layers`` on the canvas."""
+    return [_msg("tool-io", {"function_response": "{}", "is_error": False}),
+            _msg("session-state", {"loaded_layers": layers}),
+            _msg("turn-complete", {})]
+
+
+def test_the_calls_before_the_template_run_in_order_and_chain_their_layers():
+    """Each call's NEW layer is named for every call after it: the merge reads
+    the fetch's id, and the fill reads the merge's."""
+    water = {"layer_id": "water-1", "role": "primary"}
+    merged = {"layer_id": "merged-rasters-2", "role": "primary"}
+    filled = {"layer_id": "filled-nodata-3", "role": "primary"}
+    beside = {"layer_id": "input-chs", "role": "input"}
+    ws = _FakeWS(_turn([water]) + _turn([water, beside, merged])
+                 + _turn([water, beside, merged, filled]))
+    run = LiveRun(tool="t", args={"bed": {"layer": "$bed"}}, case_title="c",
+                  timeout_s=5, before=(
+                      Before("water", "fetch_water", {"seed_point": [0, 0]}),
+                      Before("merged", "merge_rasters", {"layers": ["a", "b"]}),
+                      Before("bed", "fill_nodata", {"layer": "$merged",
+                                                    "within": "$water",
+                                                    "seed": 176.041})))
+    made = asyncio.run(run_before(ws, "S", run, "C"))
+    assert made == {"water": "water-1", "merged": "merged-rasters-2",
+                    "bed": "filled-nodata-3"}
+    sent = [m["payload"] for m in ws.sent if m["type"] == "dev-tool-invoke"]
+    assert [p["name"] for p in sent] == ["fetch_water", "merge_rasters",
+                                         "fill_nodata"]
+    assert sent[2]["args"] == {"layer": "merged-rasters-2", "within": "water-1",
+                               "seed": 176.041}
+    assert placed(dict(run.args), made) == {"bed": {"layer": "filled-nodata-3"}}
+
+
+def test_a_placeholder_nothing_made_refuses_before_it_reaches_a_tool():
+    with pytest.raises(LiveRunError, match=r"\$missing"):
+        placed({"bed": {"layer": "$missing"}}, {"water": "w"})
+
+
+def test_a_call_before_that_publishes_no_new_layer_stops_the_run():
+    ws = _FakeWS(_turn([]))
+    run = LiveRun(tool="t", args={}, case_title="c", timeout_s=5,
+                  before=(Before("water", "fetch_water", {}),))
+    with pytest.raises(LiveRunError, match="published no new layer"):
+        asyncio.run(run_before(ws, "S", run, "C"))
 
 
 # --- the assertions ---------------------------------------------------------- #
