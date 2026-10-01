@@ -404,6 +404,9 @@ def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> Layer
         # the layer it produced so a consumer reads the row it was handed. A
         # source whose data states its own zero per feature declares none here.
         vertical_datum=spec.vertical_datum or None,
+        # WHAT the values are - an elevation, or a depth counted down from that
+        # zero - is the row's statement too, and a consumer reads it here.
+        quantity=spec.normalize.quantity or None,
     )
 
 
