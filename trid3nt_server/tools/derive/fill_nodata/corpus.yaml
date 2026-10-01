@@ -1,0 +1,9 @@
+fill_nodata:
+- fill the gaps in this bathymetry inside the lake
+- interpolate the bed where nothing was sounded
+- fill the nodata in the channel out to the shoreline
+- close the holes in this surface within the river polygon
+- the bed has holes in the water, interpolate them from the soundings
+- fill missing cells inside this polygon, the edge at the water level
+- paint the unsurveyed water between the soundings and the shore
+- fill nodata in this raster bounded by that polygon
