@@ -64,3 +64,21 @@ def test_every_layer_a_call_before_makes_is_read_by_a_call_after_it(name):
         after = [c.args for c in calls[rank + 1:]] + [CANARIES[name].args]
         assert call.name in _named(after), (
             f"{name}: nothing after {call.name!r} reads the layer it makes")
+
+
+def test_port_huron_composes_its_bed_in_the_order_the_last_passing_run_laid_it():
+    """The survey gridded first, the chart, the relief, the terrain last, each
+    off its own fetch, the two offsets passed in, then the fill."""
+    run = CANARIES["telemac_ice_cover_port_huron"]
+    calls = {call.name: call for call in run.before}
+    assert [call.tool for call in run.before] == [
+        "fetch_ehydro_surveys", "survey_surface", "fetch_chs_nonna",
+        "fetch_etopo", "fetch_dem", "fetch_vertical_datum_offset",
+        "fetch_vertical_datum_offset", "fetch_nhd_water_surface",
+        "merge_rasters", "fill_nodata"]
+    assert calls["survey"].args["points"] == "$soundings"
+    assert calls["merged"].args["layers"] == [
+        "$survey", "$chart", "$relief", "$terrain"]
+    assert calls["merged"].args["offsets"] == ["$chart_offset", "$relief_offset"]
+    assert calls["bed"].args["layer"] == "$merged"
+    assert run.args["bed"] == {"layer": "$bed"}
