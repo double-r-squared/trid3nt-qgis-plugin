@@ -30,3 +30,37 @@ def test_every_arg_a_canary_states_is_one_its_tool_declares(name):
         f"{name} states {unread}, which {declared.tool} does not declare: the "
         "values are swallowed and whatever row they were meant to fill fetches "
         "instead")
+
+
+@pytest.mark.parametrize("name", sorted(n for n in CANARIES if CANARIES[n].before))
+def test_every_arg_a_call_before_a_canary_states_is_one_its_tool_declares(name):
+    for call in CANARIES[name].before:
+        unread = sorted(set(call.args) - accepted_args(call.tool))
+        assert not unread, (
+            f"{name} calls {call.tool} as {call.name!r} with {unread}, which it "
+            "does not declare: the values are swallowed")
+
+
+def _named(args):
+    """Every ``"$" + name`` placeholder anywhere in ``args``."""
+    from dev.testing.live_run import PLACEHOLDER
+
+    if isinstance(args, str):
+        return {args[len(PLACEHOLDER):]} if args.startswith(PLACEHOLDER) else set()
+    if isinstance(args, dict):
+        args = list(args.values())
+    if isinstance(args, (list, tuple)):
+        return set().union(*(_named(value) for value in args)) if args else set()
+    return set()
+
+
+@pytest.mark.parametrize("name", sorted(n for n in CANARIES if CANARIES[n].before))
+def test_every_layer_a_call_before_makes_is_read_by_a_call_after_it(name):
+    """A placeholder names only a call before it, and a call whose layer nothing
+    after it reads is a layer the run does not stand on."""
+    calls = list(CANARIES[name].before)
+    for rank, call in enumerate(calls):
+        assert _named(call.args) <= {c.name for c in calls[:rank]}, call.name
+        after = [c.args for c in calls[rank + 1:]] + [CANARIES[name].args]
+        assert call.name in _named(after), (
+            f"{name}: nothing after {call.name!r} reads the layer it makes")
