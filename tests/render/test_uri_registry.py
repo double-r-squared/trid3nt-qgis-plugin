@@ -830,3 +830,26 @@ class TestReconnectSeedsRegistryFromCase:
         finally:
             set_persistence(saved)
             reset_uri_registries_for_tests()
+
+
+def test_a_layer_published_again_under_another_id_keeps_what_its_producer_said(
+) -> None:
+    """The canvas may name a fetched layer by a second id over the same uri; the
+    datum and quantity its producer stated ride to that id."""
+    from trid3nt_server.render.uri_registry import lookup_layer_for_handle
+
+    reset_uri_registries_for_tests()
+    registry = get_uri_registry("republish-summary")
+    registry.register_tool_result("fetch_chs_nonna", LayerURI(
+        layer_id="chart-1", name="chart", layer_type="raster",
+        uri="s3://b/chart.tif", vertical_datum="lwd_igld85",
+        quantity="elevation"))
+    registry.record("canvas-7", uri="s3://b/chart.tif")
+    token = activate_registry(registry)
+    try:
+        layer = lookup_layer_for_handle("canvas-7")
+        assert (layer["vertical_datum"], layer["quantity"]) == (
+            "lwd_igld85", "elevation")
+    finally:
+        deactivate_registry(token)
+        reset_uri_registries_for_tests()
