@@ -227,6 +227,7 @@ def test_what_producing_said_at_the_fill_is_restated_on_the_run(monkeypatch):
     """The fill runs before the run's channels open, so a station a row chose
     and what a cut covers reach the run only because the launch restates them."""
     from trid3nt_server.workflows.runtime import journal
+    from trid3nt_server.workflows.runtime.workflow import RunResult
 
     async def _produce(env, decl):
         journal.cut_coverage(f"the {decl.name} covers the cut")
@@ -234,14 +235,18 @@ def test_what_producing_said_at_the_fill_is_restated_on_the_run(monkeypatch):
         journal.slot_choice(decl.name)
         return decl.name
 
+    async def _launch(self, state):
+        covered.extend(journal.run_coverage())
+        return RunResult(value=None)
+
+    covered = []
     monkeypatch.setattr(fill_mod, "_produce", _produce)
     wf = TOOL_REGISTRY["telemac_ice_cover"].fn.workflow
+    monkeypatch.setattr(type(wf), "launch", _launch)
     state = asyncio.run(fill(Fill(workflow=wf), {"location": "Lake Huron"}))
-    tokens = journal.bind_notes(), journal.bind_choices(), journal.bind_coverage()
-    fill_mod.restate(state)
-    covered = journal.drain_coverage(tokens[2])
-    assert journal.drain_choices(tokens[1]) == ["domain", "weather"]
+    run = asyncio.run(wf._launched(state))
+    assert run.choices == ["domain", "weather"]
     assert covered == ["the domain covers the cut", "the weather covers the cut"]
-    assert journal.drain_notes(tokens[0]) == [
+    assert run.notes[:4] == [
         "the domain covers the cut", "the domain came from a stub",
         "the weather covers the cut", "the weather came from a stub"]
