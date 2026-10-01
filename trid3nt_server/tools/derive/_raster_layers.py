@@ -1,8 +1,7 @@
 """The case-layer raster the two raster derives read and write.
 
-An input is a case layer id, a layer, a file uri, or a source - a name, or
-``{"source": name, **ask}`` - fetched first through the fetcher it names. The
-output is ONE raster of two bands: the values, and where each cell came from -
+An input is a case layer, by id or whole, carrying the datum and the quantity
+its producer stated; a derive never fetches. The output is ONE raster of two bands: the values, and where each cell came from -
 each input's place in the order it was laid, FILLED, or UNMEASURED.
 """
 
@@ -38,53 +37,42 @@ class RasterLayerURI(LayerURI):
     notes: list[str] = []
 
 
-def source_named(value: Any) -> tuple[str, dict[str, Any]] | None:
-    """``(fetcher, ask)`` where ``value`` names a source, else ``None``."""
-    from trid3nt_server.tools import TOOL_REGISTRY
+def case_layer(value: Any, role: str) -> Any:
+    """One input as the case layer it names - by id, with what its producer said
+    about it - or a layer handed over whole; anything else refuses by name.
 
-    if isinstance(value, Mapping) and "source" in value:
-        ask = {k: v for k, v in value.items() if k != "source"}
-        return str(value["source"]), ask
-    if isinstance(value, str) and value.strip() in TOOL_REGISTRY \
-            and value.strip().startswith("fetch_"):
-        return value.strip(), {}
-    return None
+    A derive never fetches: a source is fetched first, and its layer named here."""
+    from trid3nt_server.render.uri_registry import lookup_layer_for_handle
 
-
-async def resolved(value: Any, role: str) -> Any:
-    """One input as a layer: a source fetched through its own fetcher, a case
-    layer id read through the session's handles, anything else as it came.
-
-    A bare source name is asked over the run's domain, and with none bound it
-    refuses: a source asked for nowhere answers for nowhere."""
-    from trid3nt_server.render.uri_registry import lookup_uri_for_handle
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.runtime import current_domain
-    from trid3nt_server.workflows.runtime.fill import call
-
-    named = source_named(value)
-    if named is not None:
-        fetcher, ask = named
-        if fetcher not in TOOL_REGISTRY:
-            raise RasterLayerError(
-                "RASTER_SOURCE_UNKNOWN", f"the {role} names {fetcher!r}, which "
-                "is no registered source.")
-        if "bbox" not in ask:
-            domain = current_domain()
-            if domain is None or not domain.bbox:
-                raise RasterLayerError(
-                    "RASTER_SOURCE_UNPLACED",
-                    f"the {role} names the source {fetcher!r} and states no "
-                    "box to fetch it over, and no run's domain is bound. State "
-                    f"it as {{'source': {fetcher!r}, 'bbox': [w, s, e, n]}}, "
-                    "or name a layer already in the case.")
-            ask["bbox"] = [float(v) for v in domain.bbox]
-        return await call(TOOL_REGISTRY[fetcher].fn, ask, fetcher)
     if isinstance(value, str):
-        uri = lookup_uri_for_handle(value)
-        if uri:
-            return {"uri": uri, "name": value.strip()}
+        layer = lookup_layer_for_handle(value)
+        if layer is None:
+            raise RasterLayerError(
+                "RASTER_LAYER_UNKNOWN",
+                f"the {role} {value!r} names no layer in this case. Fetch the "
+                "source first and name the layer it produced.")
+        return layer
+    if isinstance(value, Mapping) and "source" in value:
+        raise RasterLayerError(
+            "RASTER_LAYER_UNKNOWN",
+            f"the {role} names the source {value['source']!r}: a derive reads "
+            "case layers and never fetches. Fetch it first and name the layer "
+            "it produced.")
     return value
+
+
+def sources_of(layer: Any, won: Any) -> list[str]:
+    """The names band 2's codes stand for: what the layer says, else each
+    input's place and ``filled``."""
+    import numpy as np
+
+    named = (layer.get("sources") if isinstance(layer, Mapping)
+             else getattr(layer, "sources", None))
+    if named:
+        return list(named)
+    codes = won[np.asarray(won) < FILLED]
+    return ([f"input {code + 1}" for code in range(int(codes.max(initial=0)) + 1)]
+            + (["filled"] if (np.asarray(won) == FILLED).any() else []))
 
 
 def staged(layer: Any, role: str, scratch: str) -> str:
@@ -245,5 +233,5 @@ def over_the_cut(won: Any, crs: Any, transform: Any, polygon: Any
 
 __all__ = ["FILLED", "NODATA", "RasterLayerError", "RasterLayerURI",
            "UNMEASURED", "bbox_4326", "coverage", "label_of", "over_the_cut",
-           "percent", "polygons", "read",
-           "resolved", "share", "source_named", "staged", "stated", "written"]
+           "percent", "polygons", "read", "case_layer", "share", "sources_of",
+           "staged", "stated", "written"]
