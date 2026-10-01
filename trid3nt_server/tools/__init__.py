@@ -190,11 +190,9 @@ from .fetchers._router.registration import register_specs_from_tree as _register
 _register_router_specs()
 
 # -- derive (compute / clip / extract / vector-edit / charts) --
-# THE BED composition: a measurement over a wider surface, the finer one winning
-# where it measured, with a sidecar saying which painted each cell.
-# Scattered measurements -> the continuous surface between them: a point survey
-# becomes the bed a mesh is draped on.
 from .derive.charts.generate_chart import generate_chart  # noqa: E402,F401
+from .derive.fill_nodata import fill_nodata  # noqa: E402,F401
+from .derive.merge_rasters import merge_rasters  # noqa: E402,F401
 from .derive.probe_point import probe_point  # noqa: E402,F401
 from .derive.restyle_layer import restyle_layer  # noqa: E402,F401 - DISPLAY-state re-emission of an already-published layer
 # The two session tools: each is a request on the plugin wire, run in the
