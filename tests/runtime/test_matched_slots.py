@@ -161,7 +161,7 @@ def test_the_bed_lays_the_one_row_the_match_ranked_first(world):
     bed = _row(Data.need("bathymetry"), "bed")
     out = asyncio.run(fill._bed_surface(env, bed))
     ran = [runner for runner, _kw in world]
-    assert ran == ["fetch_soundings", "trid3nt_server.inputs.bed.survey_surface"]
+    assert ran == ["fetch_soundings", "survey_surface"]
     assert out.endswith("survey_surface.tif")
     _runner, grid = world[1]
     assert grid["value_field"] == "depth_below_datum_m"
