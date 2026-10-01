@@ -434,10 +434,18 @@ def test_the_card_groups_the_coupled_deck_under_its_own_body():
 
 
 async def _normalized(workflow, args):
-    """The accepted params of one fill, and the refusal where one was rejected."""
+    """The accepted params of one fill, and the refusal where one was rejected;
+    the rows the fill produces are stood in for, so the params alone answer."""
+    from unittest.mock import patch
+
+    from trid3nt_server.workflows.runtime import fill as fill_mod
     from trid3nt_server.workflows.runtime.fill import ACCEPTED, REJECTED, Fill, fill
 
-    state = await fill(Fill(workflow=workflow), args)
+    async def _held(env, decl):
+        return decl.name
+
+    with patch.object(fill_mod, "_produce", _held):
+        state = await fill(Fill(workflow=workflow), args)
     declared = {prm.name for prm in workflow.params}
     refused = [v.reason for v in state.inputs.values() if v.state == REJECTED]
     return ({n: v.value for n, v in state.inputs.items()

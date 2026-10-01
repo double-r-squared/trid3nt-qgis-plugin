@@ -17,9 +17,10 @@ from trid3nt_server.workflows.runtime import resolve_params
 from trid3nt_server.workflows.runtime.fill import (REJECTED, Fill, fill,
                                                    production)
 from trid3nt_server.workflows.telemac.modules import T2D
-from trid3nt_server.workflows.telemac.modules.module import SlotRefused
+from trid3nt_server.workflows.telemac.modules.module import SlotRefused, _read
 from trid3nt_server.workflows.telemac.modules.telemac2d import Sources
-from trid3nt_server.workflows.telemac.workflow import Measured, _read_named
+from trid3nt_server.workflows.telemac.workflow import (Measured, _names,
+                                                    _read_named)
 
 
 def _workflow(name: str):
@@ -125,3 +126,86 @@ def test_every_template_names_only_what_its_run_is_called():
     assert workflows
     assert {wf.name: wf.unnamed() for wf in workflows
             if wf.unnamed()} == {}
+
+
+#: The inputs a bare call has to state before its fill is ready.
+_STATED = {"location": "Lake Huron", "pour_point": [-82.42, 43.0],
+           "station": [-82.42, 43.0]}
+
+
+def _filled_with(monkeypatch, workflow, produce):
+    from trid3nt_server.workflows.runtime import fill as fill_mod
+
+    monkeypatch.setattr(fill_mod, "_produce", produce)
+    return asyncio.run(fill(Fill(workflow=workflow), dict(_STATED)))
+
+
+def test_a_row_only_a_composite_reads_is_in_the_mapping_after_the_fill(
+        monkeypatch):
+    """The weather is read by the atmosphere composite and by nothing on the way
+    in, so the fill is what produces it; the composite then only looks it up."""
+    from trid3nt_server.workflows.runtime import fill as fill_mod
+
+    async def _fetched(env, decl):
+        return f"the {decl.name} record"
+
+    monkeypatch.setattr(fill_mod, "_matched", _fetched)
+    workflow = _workflow("telemac_ice_cover")
+    state = asyncio.run(fill(Fill(workflow=workflow), dict(_STATED)))
+    assert state.ready and state.inputs["weather"].origin == "produced"
+    run = state.env.run
+    assert run["weather"] == "the weather record"
+    assert _read(run, "weather", "atmosphere") == "the weather record"
+
+
+def test_a_row_its_producer_fails_is_refused_at_fill_before_any_stage(
+        monkeypatch):
+    from trid3nt_server.workflows.runtime.errors import StepFailedError
+
+    async def _produce(env, decl):
+        if decl.name == "weather":
+            raise StepFailedError("no weather station answered for this window",
+                                  error_code="DATA_NEED_UNMATCHED")
+        return decl.name
+
+    workflow = _workflow("telemac_ice_cover")
+    state = _filled_with(monkeypatch, workflow, _produce)
+    verdict = state.inputs["weather"]
+    assert verdict.state == REJECTED and verdict.code == "DATA_NEED_UNMATCHED"
+    assert "'weather'" in verdict.reason and "no weather station" in verdict.reason
+    launched = []
+    monkeypatch.setattr(type(workflow), "launch",
+                        lambda self, state: launched.append(state))
+    out = asyncio.run(workflow.run(dict(_STATED)))
+    assert out["error_code"] == "DATA_NEED_UNMATCHED" and launched == []
+
+
+def test_every_row_a_template_reads_is_in_the_mapping_after_the_fill(
+        monkeypatch):
+    """What a composite, a recipe or a measurement reads is produced at the
+    fill; a row asked near a point the run places is produced once that point
+    is, by the read before the sheet."""
+    from trid3nt_server.mesh.recipe import input_names
+
+    async def _produce(env, decl):
+        return decl.name
+
+    workflows = [tool.fn.workflow for tool in TOOL_REGISTRY.values()
+                 if hasattr(getattr(tool.fn, "workflow", None), "named_rows")]
+    missed = {}
+    for workflow in workflows:
+        rows = {row.name: row for row in workflow.data}
+        recipe = workflow._states("MESH", None)
+        read = set(workflow.steering.named()) | set(
+            input_names(recipe) if recipe is not None else ())
+        read |= {name for ask in workflow._declared(Measured)
+                 for name in _names(dict(ask.reads))}
+        state = _filled_with(monkeypatch, workflow, _produce)
+        assert state.ready, (workflow.name, state.refusal())
+        late = {name for name in rows if name in workflow._fills()
+                and rows[name].coercion.get("near") in workflow._marks()}
+        left = sorted(name for name in read & set(rows) - late
+                      if name not in state.env.run)
+        if left:
+            missed[workflow.name] = left
+    assert missed == {}

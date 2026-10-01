@@ -50,7 +50,8 @@ def test_a_required_input_nothing_filled_is_missing_and_not_ready():
     from trid3nt_server.workflows.runtime import Param
 
     wf = types.SimpleNamespace(params=(Param(name="depth", desc="d", door="user", type=float),),
-                               coercions=(), data=(), unnamed=lambda: ())
+                               coercions=(), data=(), unnamed=lambda: (),
+                               named_rows=lambda: ())
     state = asyncio.run(fill(Fill(workflow=wf), {}))
     assert state.inputs["depth"].state == MISSING and not state.ready
     state = asyncio.run(fill(state, {"depth": 3.0}))
@@ -220,3 +221,27 @@ def test_a_refusal_keeps_the_code_of_its_reason_through_the_review(
         asyncio.run(tw._review(_fill, {}, steering=_wf().steering, workflow="w",
                                title="", input_mode="auto", spent=()))
     assert caught.value.error_code == code
+
+
+def test_what_producing_said_at_the_fill_is_restated_on_the_run(monkeypatch):
+    """The fill runs before the run's channels open, so a station a row chose
+    and what a cut covers reach the run only because the launch restates them."""
+    from trid3nt_server.workflows.runtime import journal
+
+    async def _produce(env, decl):
+        journal.cut_coverage(f"the {decl.name} covers the cut")
+        journal.journal_note(f"the {decl.name} came from a stub")
+        journal.slot_choice(decl.name)
+        return decl.name
+
+    monkeypatch.setattr(fill_mod, "_produce", _produce)
+    wf = TOOL_REGISTRY["telemac_ice_cover"].fn.workflow
+    state = asyncio.run(fill(Fill(workflow=wf), {"location": "Lake Huron"}))
+    tokens = journal.bind_notes(), journal.bind_choices(), journal.bind_coverage()
+    fill_mod.restate(state)
+    covered = journal.drain_coverage(tokens[2])
+    assert journal.drain_choices(tokens[1]) == ["domain", "weather"]
+    assert covered == ["the domain covers the cut", "the weather covers the cut"]
+    assert journal.drain_notes(tokens[0]) == [
+        "the domain covers the cut", "the domain came from a stub",
+        "the weather covers the cut", "the weather came from a stub"]
