@@ -28,6 +28,7 @@ __all__ = [
     "deactivate_registry",
     "get_uri_registry",
     "lookup_handle_for_uri",
+    "lookup_layer_for_handle",
     "lookup_uri_for_handle",
     "observe_published_layer",
     "reset_uri_registries_for_tests",
@@ -126,6 +127,15 @@ class UriRecord:
     dataset: str | None = None  # the fetch source class; None for a produced layer
     cache_key: str | None = None  # the fetch key; None for a produced layer
     seq: int = 0  # registration order (recency tie-breaks)
+    #: What the layer SAYS about its values - its datum, its quantity, the
+    #: inputs its band 2 names - as its producer returned it, so a layer named
+    #: by id carries them to whatever reads it next.
+    summary: dict[str, Any] = field(default_factory=dict)
+
+
+#: The fields of a returned layer its record keeps.
+_SUMMARY = ("name", "quantity", "vertical_datum", "units", "sources",
+            "datum_offset_m", "datum_offset_frame")
 
 
 def _is_object_store(value: str) -> bool:
@@ -235,6 +245,11 @@ class SessionUriRegistry:
                     rec.uri,
                     uri,
                 )
+            # A layer published again under another id is the same layer, and
+            # what its producer said about it rides along.
+            prior = self._records.get(self._uri_to_handle.get(uri, ""))
+            if prior is not None and not rec.summary:
+                rec.summary = dict(prior.summary)
             rec.uri = uri
             self._uri_to_handle[uri] = handle
             self._mint_short(uri)
@@ -398,6 +413,8 @@ class SessionUriRegistry:
             uri = node.get("uri")
             if isinstance(layer_id, str) and layer_id and isinstance(uri, str) and uri:
                 self.record(layer_id, uri=uri, tool_name=tool_name)
+                self._records[layer_id].summary.update(
+                    {k: node[k] for k in _SUMMARY if node.get(k) is not None})
             for key, value in list(node.items())[:_WALK_MAX_ITEMS]:
                 if key in {"inline_geojson", "features", "geometry", "chat_history"}:
                     continue  # huge / URI-free subtrees
@@ -758,6 +775,19 @@ def lookup_uri_for_handle(handle: str) -> str | None:
         return short
     record = reg._records.get(key)
     return record.uri if record is not None else None
+
+
+def lookup_layer_for_handle(handle: str) -> dict[str, Any] | None:
+    """The layer a handle stands for - its uri and what its producer said about
+    it - or ``None`` where nothing published it."""
+    uri = lookup_uri_for_handle(handle)
+    if not uri:
+        return None
+    reg = _ACTIVE_REGISTRY.get()
+    record = reg._records.get(handle.strip()) or reg._records.get(
+        reg._uri_to_handle.get(uri, ""))
+    return {"name": handle.strip(), **(record.summary if record else {}),
+            "uri": uri}
 
 
 def lookup_handle_for_uri(
