@@ -22,6 +22,25 @@ _METADATA = AtomicToolMetadata(
     source_class="workflow_dispatch",
 )
 
+#: What an output says about its values, carried from the layer it was computed
+#: from: the zero it is counted from, the shift that zero publishes, and the
+#: quantity. A key the input layers state differently is carried by none.
+_INHERITED = ("vertical_datum", "datum_offset_m", "datum_offset_frame", "quantity")
+
+
+def _inherited(params: dict[str, Any]) -> dict[str, Any]:
+    """The statements every case layer named in ``params`` agrees on."""
+    from trid3nt_server.render.uri_registry import lookup_layer_for_handle
+
+    inputs = [layer for value in params.values() if isinstance(value, str)
+              and (layer := lookup_layer_for_handle(value)) is not None]
+    out = {}
+    for key in _INHERITED:
+        stated = {layer[key] for layer in inputs if layer.get(key) is not None}
+        if len(stated) == 1:
+            out[key] = stated.pop()
+    return out
+
 
 @register_tool(
     _METADATA,
@@ -52,7 +71,8 @@ async def run_qgis_algorithm(
     written to a temporary file, added to the project and summarized back.
 
     Returns the output layer summary (layer_name, kind, crs, extent, band or
-    feature count) or the algorithm's error verbatim.
+    feature count, the uri it was written to, and the vertical datum and quantity
+    the input layer carried) or the algorithm's error verbatim.
     """
     if not isinstance(algorithm, str) or not algorithm.strip():
         raise SessionProcessingFailedError(
@@ -65,4 +85,7 @@ async def run_qgis_algorithm(
     response = await run_in_session(
         kind="algorithm", algorithm=algorithm.strip(), params=params or {}
     )
-    return {"status": "ok", "algorithm": algorithm.strip(), **(response.result or {})}
+    result = response.result or {}
+    written = {"uri": result["source"]} if result.get("source") else {}
+    return {"status": "ok", "algorithm": algorithm.strip(), **result, **written,
+            **_inherited(params or {})}
