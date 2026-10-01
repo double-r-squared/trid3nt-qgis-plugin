@@ -71,10 +71,6 @@ class _Env:
     #: The source the run NAMES for a slot, by slot name. It picks among the
     #: survivors of that slot's match and never past its filters.
     picks: dict[str, str] = field(default_factory=dict)
-    #: The op the run STATES for a slot, by slot name - how the slot is filled
-    #: where nothing measured it. The twin of ``picks``: a control somebody
-    #: states on the call, read by the slot's own ingestion.
-    ops: dict[str, Any] = field(default_factory=dict)
     #: THE RUN'S ONE MAPPING: params, fetched rows, what each stage produced
     #: and the keywords so far, by plain name.
     run: dict[str, Any] = field(default_factory=dict)
@@ -173,10 +169,9 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
 async def _matched(env: _Env, decl: DataDecl) -> Any:
     """Fill a slot that states a NEED, through the match.
 
-    Every slot takes the ONE source its own class matched. The bed takes the
-    same one and then whatever the run's own ops lay over it, because a bed is
-    the slot a domain most often reaches past and what to do about that is the
-    person's statement, never this fill's."""
+    Every slot takes the ONE source its own class matched, the bed included:
+    what covers the ground that source does not is a layer the person composes
+    and hands the slot, never this fill's."""
     await _somewhere_to_ask(env)
     if decl.role == BED:
         return await _ingested(env, decl, await _bed_surface(env, decl))
@@ -206,7 +201,7 @@ async def _beside(env: _Env, decl: DataDecl) -> dict[str, Any]:
 
     A slot may state that what fills it is not one artifact - a line and the
     water surface it runs between - and each of those is produced here, under
-    this slot, through the match, exactly as the rows a merge op names are. The
+    this slot, through the match. The
     slot still fetches nothing: it states a need and the match fills it. Empty
     for every slot and every kind that declares none."""
     from trid3nt_server.inputs.slots import needs_of
@@ -229,67 +224,17 @@ async def _beside(env: _Env, decl: DataDecl) -> dict[str, Any]:
 
 
 async def _bed_surface(env: _Env, decl: DataDecl) -> Any:
-    """THE BED: the ONE row the match ranked first, with the ops the run states
-    laid over it.
+    """THE BED: the ONE row the match ranked first, as a surface.
 
-    Nothing else paints. A second row reaches this bed only because the call
-    named it in a merge op, and the water no row measured is painted only
-    because the call stated the fill; what the run was NOT given is the surface's
-    own coverage feedback to say, in the layer it publishes and on the journal.
-    The rows a merge names are produced here, where every other fact about the
-    world is produced, and which side of the cut each paints is its own
-    declaration: a row serving this slot's class measured the bed, and one
-    serving terrain measures the water TOP and stays outside the cut."""
-    from trid3nt_server.inputs.bed import MERGE_DERIVE, interpolates, merge_rows
-    from .levers import run_frame
-
+    Nothing else paints. What that row does not cover is the surface's own
+    coverage feedback to state, and water nothing measured refuses at the
+    slot naming the steps that compose a bed which covers it."""
     choice, top = await _probe(env, decl, decl.data_class,
                                f"{decl.name} {decl.data_class}")
     if top is None:
         raise StepFailedError(choice.sentence, error_code="DATA_NEED_UNMATCHED",
                               step=_data_step_label(decl.name))
-    stated = env.ops.get(decl.name)
-    laid = [(choice.picked, top)]
-    under: list[tuple[str, Any]] = []
-    for picked in merge_rows(stated):
-        measures = _coverage_row(picked, decl.data_class) is not None
-        held = await _named_row(env, decl, picked,
-                                decl.data_class if measures else "terrain")
-        (laid if measures else under).append((picked, held))
-    frame = run_frame(env.params)
-    surfaces = [await _surfaced(env, decl, picked, held)
-                for picked, held in laid + under]
-    return await _produce(env, _runtime_row(
-        env, f"{decl.name}_merged", MERGE_DERIVE,
-        {"primary": surfaces[:len(laid)], "fallback": surfaces[len(laid):],
-         "frame": frame, "ops": stated,
-         # THE CUT IS WHERE THE WATER IS, and a terrain surface measures the
-         # water top rather than the bed, so it paints outside it only and the
-         # feedback states the water and the land separately.
-         "water": _cut_polygon(),
-         # WHAT ELSE MATCHED and nothing laid, PER GROUND: the rows a person
-         # names in a merge op to cover what this bed does not, stated in the
-         # feedback rather than laid on their behalf. A WET hole is covered by
-         # a row of this slot's own class and a DRY one by terrain, so each
-         # ground is offered the rows the match ranked for the class that
-         # measures it - never one another's.
-         "water_alternatives": _unlaid(choice, laid + under),
-         "land_alternatives": _unlaid(
-             await _ranked(env, decl, "terrain", f"{decl.name} terrain"),
-             laid + under),
-         # THE SHORELINE THE FILL SEEDS is the free surface the run opens on,
-         # so the elevation the run opens at and the elevation the shore is
-         # seeded at are one number, asked for only where the fill is stated.
-         "free_surface_m": (await _free_surface(env) if interpolates(stated)
-                            else None),
-         "primary_offset": [await _offset_row(env, f"{decl.name}_{picked}",
-                                              surface, frame)
-                            for (picked, _held), surface
-                            in zip(laid, surfaces[:len(laid)])],
-         "fallback_offset": [await _offset_row(env, f"{decl.name}_{picked}",
-                                               surface, frame)
-                             for (picked, _held), surface
-                             in zip(under, surfaces[len(laid):])]}))
+    return await _surfaced(env, decl, choice.picked, top)
 
 
 async def _ranked(env: _Env, decl: DataDecl, data_class: str,
@@ -303,48 +248,10 @@ async def _ranked(env: _Env, decl: DataDecl, data_class: str,
                  sources_with_coverage())
 
 
-def _unlaid(choice: SourceChoice, laid: Sequence[tuple[str, Any]]) -> list[str]:
-    """The rows a match ranked that nothing laid, by name."""
-    return [row.fetcher for row in choice.rows
-            if not row.excluded and row.fetcher not in dict(laid)]
-
-
-async def _free_surface(env: _Env) -> float | None:
-    """The elevation this run OPENS at, off the run's own level slot.
-
-    ``None`` where the run states no level: a bed op that needs the free surface
-    refuses on that rather than seeding a number nobody measured."""
-    row = next((r for r in env.data.values() if r.role == LEVEL), None)
-    if row is None:
-        return None
-    held = env.run.get(row.name)
-    if held is None:
-        held = env.run[row.name] = await _produce(env, row)
-    return None if held is None else float(getattr(held, "value", held))
-
-
-async def _named_row(env: _Env, decl: DataDecl, picked: str,
-                     data_class: str) -> Any:
-    """One row a merge op NAMED, produced under this slot.
-
-    Matched for the class the row serves so the ask it is called with is the one
-    that class states, then called by name: the run named it, so the rank the
-    match would have put it at decides nothing here. The RESOLUTION a named row
-    is asked at is the merge's own statement, because a row asked at its posting
-    over the whole domain is asked for cells this run has no node for."""
-    from trid3nt_server.inputs.bed import merge_ask
-
-    choice = await _ranked(env, decl, data_class, f"{decl.name} {picked}")
-    ask = await _ask_for(env, choice.model_copy(update={"picked": picked}), decl)
-    return await _produce(env, _runtime_row(
-        env, f"{decl.name}_{picked}", picked,
-        {**ask, **merge_ask(picked, _mesh_m(env))}))
-
-
 async def _surfaced(env: _Env, decl: DataDecl, picked: str, held: Any) -> Any:
     """One row as a SURFACE: soundings through the grid that makes one of them,
-    a raster as it came. What a bed covers is a statement about cells, so every
-    row laid on one is read at the mesh's own scale first."""
+    a raster as it came. What a bed covers is a statement about cells, so a
+    survey is read at the mesh's own scale first."""
     from trid3nt_server.inputs.bed import SURVEY_DERIVE
 
     if _spec_of(picked).output.layer_type != "vector":
@@ -528,31 +435,6 @@ def _cut_polygon() -> dict[str, Any] | None:
     return dict(dom.geometry) if dom is not None and dom.geometry else None
 
 
-def _ops(ops: Mapping[str, Any] | None,
-         data: Sequence[DataDecl]) -> dict[str, Any]:
-    """The ops this invocation states, by slot name - refusing the ones no slot
-    can read.
-
-    An op NAME means something only to the ingestion that reads it, so that half
-    is the slot's to refuse. What is refused here is the half only the workflow
-    knows: an op stated for a row it does not declare, or for one whose ingestion
-    takes no op at all, which would otherwise be dropped in silence."""
-    from trid3nt_server.inputs.slots import takes_op
-
-    stated = {str(name): op for name, op in dict(ops or {}).items() if op}
-    rows = sorted(decl.name for decl in data)
-    for name in stated:
-        if name not in rows:
-            raise PlanValidationError(
-                f"the run states an op for {name!r}, which is not a row this "
-                f"workflow declares: {', '.join(rows)}.")
-        if not takes_op(name):
-            raise PlanValidationError(
-                f"the run states an op for the {name!r} row, whose ingestion "
-                "reads none: an op is read by the slot it fills.")
-    return stated
-
-
 def _pick(env: _Env, decl: DataDecl, data_class: str) -> str:
     """The source this RUN names for this slot, "" where it names none.
 
@@ -671,7 +553,10 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any,
     coercion.update(dict(beside or {}))
     if beside:
         coercion["span_km"] = decl.span_km
-    coercion["op"] = env.ops.get(decl.name)
+    if decl.role == BED:
+        # THE CUT IS WHERE THE WATER IS: the bed states its coverage over it and
+        # refuses a wet hole, and an empty one says the run was cut with none.
+        coercion["water"] = _cut_polygon() or {}
     ingested = await asyncio.to_thread(ingest_slot, decl.role, value,
                                        label=decl.name, **coercion)
     if decl.role == DOMAIN and ingested is not None:
@@ -842,8 +727,7 @@ async def _offset_row(env: _Env, owner: str, value: Any, frame: str) -> Any:
     on the frame already, publishes its own shift, or names a datum no service
     transforms - and that last one leaves the alignment to refuse naming both.
 
-    ``owner`` is what the row is named after - a slot, or one of the two surfaces
-    the bed merge reads onto the frame before it overlays them."""
+    ``owner`` is the slot the row is named after."""
     from trid3nt_server.inputs.vertical_datum import OFFSET_FETCH
 
     ask = await _datum_offset_ask(value, frame, await _question_seed(env))
@@ -945,9 +829,8 @@ ACCEPTED, REJECTED, MISSING, DEFAULTED = (
     "accepted", "rejected", "missing", "defaulted")
 
 #: What rides a fill beside its inputs and is carried as stated: how the run is
-#: reviewed, whether a kept mesh is rebuilt, and the ops a row's own ingestion
-#: reads.
-_CARRIED = ("input_mode", "restart_clean", "ops")
+#: reviewed, and whether a kept mesh is rebuilt.
+_CARRIED = ("input_mode", "restart_clean")
 
 
 @dataclass(frozen=True)
@@ -1027,8 +910,6 @@ async def fill(state: Fill, values: Mapping[str, Any]) -> Fill:
             REJECTED, name, code="INPUT_UNNAMED",
             reason=f"the template names {name!r} as an input, and no param, "
             "row or product of this run is called that.")
-    if "ops" in state.carried:
-        _carried_ops(state, rows)
     tokens = (journal.bind_notes(), journal.bind_choices(),
               journal.bind_coverage())
     try:
@@ -1132,18 +1013,6 @@ async def _seat(state: Fill) -> None:
     state.params = ResolvedParams(rows) if len(rows) == len(wf.params) else None
 
 
-def _carried_ops(state: Fill, rows: Mapping[str, DataDecl]) -> None:
-    """``ops`` is carried unchanged; a row that reads none refuses it by name."""
-    ops = state.carried["ops"]
-    try:
-        _ops(ops, tuple(rows.values()))
-    except PlanValidationError as exc:
-        state.inputs["ops"] = Verdict(REJECTED, ops, reason=str(exc),
-                                      code=exc.error_code)
-        return
-    state.inputs["ops"] = Verdict(ACCEPTED, ops, origin="user")
-
-
 def production(state: Fill) -> _Env:
     """The state a sourced input is produced under, built once per fill."""
     wf = state.workflow
@@ -1151,10 +1020,7 @@ def production(state: Fill) -> _Env:
         state.env = _Env(
             params=state.params, data={d.name: d for d in wf.data},
             input_mode=state.carried.get("input_mode"),
-            keywords=dict(state.keywords), ops=_ops(
-                state.carried.get("ops"), wf.data)
-            if state.inputs.get("ops", Verdict(ACCEPTED)).state == ACCEPTED
-            else {}, workflow=wf.name,
+            keywords=dict(state.keywords), workflow=wf.name,
             window_s=wf.run_window_s(dict(state.keywords)),
             slot_units=wf.slot_units(), captions=wf.captions,
             published_units=wf.published_units())
