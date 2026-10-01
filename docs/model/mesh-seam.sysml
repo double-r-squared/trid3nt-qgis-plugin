@@ -882,12 +882,6 @@ package MeshSeam {
     verify requirement NothingPaintsSilently by
         "tests/mesh/test_bed_sources_and_runs.py::test_a_node_no_row_reached_refuses_with_the_feedback_and_never_a_zero";
     verify requirement NothingPaintsSilently by
-        "tests/mesh/test_bed_sources_and_runs.py::test_the_journal_states_what_every_row_of_a_composed_bed_reached";
-    verify requirement NothingPaintsSilently by
-        "tests/inputs/test_bed_merge.py::test_the_feedback_states_the_water_and_the_land_separately";
-    verify requirement NothingPaintsSilently by
-        "tests/inputs/test_bed_merge.py::test_a_hole_too_small_to_round_is_stated_and_still_filled";
-    verify requirement NothingPaintsSilently by
         "tests/runtime/test_matched_slots.py::test_the_bed_lays_the_one_row_the_match_ranked_first";
 
     satisfy requirement BoundaryRolesAreContiguousRuns by sharedPrimitives;
