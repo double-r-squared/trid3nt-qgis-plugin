@@ -85,16 +85,15 @@ def test_a_covered_fetcher_leaves_the_index_and_an_overlay_one_stays(index):
     assert FIND_SOURCES in indexed
 
 
-def test_the_bed_producers_are_not_tools_at_all(registry, index):
-    """The bed's grid and its merge are the slot's own rule, reached at their own
-    address by the row that runs them: no registry name, so nothing can pick them."""
-    from trid3nt_server.inputs.bed import MERGE_DERIVE, SURVEY_DERIVE
+def test_the_bed_grid_is_not_a_tool_at_all(registry, index):
+    """The bed's grid is the slot's own rule, reached at its own address by the
+    row that runs it: no registry name, so nothing can pick it."""
+    from trid3nt_server.inputs.bed import SURVEY_DERIVE
 
-    for runner in (SURVEY_DERIVE, MERGE_DERIVE):
-        assert runner.startswith("trid3nt_server.inputs.bed.")
-        assert runner not in registry
-        assert runner not in set(index.tool_names)
-        assert runner not in covered_sources()
+    assert SURVEY_DERIVE.startswith("trid3nt_server.inputs.bed.")
+    assert SURVEY_DERIVE not in registry
+    assert SURVEY_DERIVE not in set(index.tool_names)
+    assert SURVEY_DERIVE not in covered_sources()
 
 
 def test_each_class_is_its_own_document_under_the_match(index):
