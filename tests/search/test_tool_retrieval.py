@@ -169,6 +169,10 @@ _RECALL_FIXTURE = [
     ("read every raster on this case at this spot", "probe_point"),
     ("put these two runs on the same colour scale so I can compare them",
      "restyle_layer"),
+    ("lay the channel survey over the terrain and keep the survey where it "
+     "measured", "merge_rasters"),
+    ("fill the holes in the lake bathymetry out to the shoreline",
+     "fill_nodata"),
 ]
 
 
