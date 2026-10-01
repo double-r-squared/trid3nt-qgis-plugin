@@ -1,8 +1,9 @@
-"""The slots the match fills: the bed's one row and its ops, and a run's series.
+"""The slots the match fills: the bed's one row, and a run's series.
 
 Offline. The coverage rows are values and the fetchers are stubs, so what is
-proved is the RULE - the ONE row the match ranked first, the rows an op names
-laid under it, and the next survivor when the top one held nothing."""
+proved is the RULE - the ONE row the match ranked first, a wet hole refused at
+the fill naming the steps that compose a bed over it, and the next survivor when
+the top one held nothing."""
 
 from __future__ import annotations
 
@@ -155,121 +156,61 @@ def _row(decl, name):
 
 def test_the_bed_lays_the_one_row_the_match_ranked_first(world):
     """Nothing paints on the run's behalf: the bed calls the top row of its own
-    class and no other, and names the rows it did not lay so the feedback can
-    offer them."""
+    class and no other, gridded at the run's own edge where it is soundings."""
     env = _env()
     bed = _row(Data.need("bathymetry"), "bed")
     out = asyncio.run(fill._bed_surface(env, bed))
     ran = [runner for runner, _kw in world]
-    assert ran == ["fetch_soundings",
-                   "trid3nt_server.inputs.bed.survey_surface",
-                   "trid3nt_server.inputs.bed.merged_surface"]
-    assert out.endswith("merged_surface.tif")
-    merge = world[-1][1]
-    assert merge["primary"] == [
-        "s3://b/trid3nt_server.inputs.bed.survey_surface.tif"]
-    assert merge["fallback"] == []
-    # THE HOLE'S OWN CLASS: the water is offered the rows that measure a bed
-    # under water and the land the rows that measure terrain.
-    assert merge["water_alternatives"] == ["fetch_bed_raster"]
-    assert merge["land_alternatives"] == ["fetch_terrain"]
-    # No fill was stated, so no opening was asked for.
-    assert merge["free_surface_m"] is None
-    # the soundings are gridded at the run's own edge, on the column the
-    # coverage row names.
+    assert ran == ["fetch_soundings", "trid3nt_server.inputs.bed.survey_surface"]
+    assert out.endswith("survey_surface.tif")
     _runner, grid = world[1]
     assert grid["value_field"] == "depth_below_datum_m"
     assert grid["resolution_m"] == 14.0
 
 
-def test_a_merge_op_lays_the_rows_it_names_in_the_order_it_names_them(world):
-    """Composing more than one row is the run's statement, and which side of the
-    cut each paints is its own declaration: a row of the slot's class measured
-    the bed, a terrain row measures the water top and stays outside it."""
-    env = _env()
-    env.ops["bed"] = [{"name": "merge",
-                       "rows": ["fetch_bed_raster", "fetch_terrain"]},
-                      "interpolated"]
-    asyncio.run(fill._bed_surface(env, _row(Data.need("bathymetry"),
-                                                   "bed")))
-    ran = [runner for runner, _kw in world]
-    assert ran[:3] == ["fetch_soundings", "fetch_bed_raster", "fetch_terrain"]
-    merge = world[-1][1]
-    assert merge["primary"] == [
-        "s3://b/trid3nt_server.inputs.bed.survey_surface.tif",
-        "s3://b/fetch_bed_raster.tif"]
-    assert merge["fallback"] == ["s3://b/fetch_terrain.tif"]
-    assert merge["water_alternatives"] == []
-    assert merge["land_alternatives"] == []
-    assert merge["ops"] == env.ops["bed"]
-
-
-def test_the_fill_is_handed_the_level_the_run_opens_at(world):
-    """The shoreline the fill seeds is the free surface the run opens on, so the
-    number the run states for its level is the number the merge is handed."""
-    env = _env()
-    env.ops["bed"] = ["interpolated"]
-    env.data["level"] = _row(Data.need("water level series").optional(), "level")
-    env.supplied["level"] = 175.685
-    asyncio.run(fill._bed_surface(env, _row(Data.need("bathymetry"),
-                                                   "bed")))
-    assert world[-1][1]["free_surface_m"] == pytest.approx(175.685)
-
-
-def test_a_raster_measurement_reaches_the_merge_without_being_gridded(world,
-                                                                     monkeypatch):
+def test_a_raster_measurement_reaches_the_bed_without_being_gridded(world,
+                                                                   monkeypatch):
     monkeypatch.setitem(SPECS, "fetch_soundings",
                         _Spec(coverage("bathymetry", res=1.0, latest="1990-01-01"),
                               "raster", {"bbox": None}))
-    env = _env()
     out = asyncio.run(fill._bed_surface(
-        env, _row(Data.need("bathymetry"), "bed")))
-    ran = [runner for runner, _kw in world]
-    assert "trid3nt_server.inputs.bed.survey_surface" not in ran
-    assert ran[-1] == "trid3nt_server.inputs.bed.merged_surface"
-    assert out.endswith("merged_surface.tif")
+        _env(), _row(Data.need("bathymetry"), "bed")))
+    assert [runner for runner, _kw in world] == ["fetch_soundings"]
+    assert out == "s3://b/fetch_soundings.tif"
 
 
-def test_the_runtime_declares_the_offset_row_a_merge_source_owes(world,
-                                                                 monkeypatch,
-                                                                 tmp_path):
-    """Two surfaces on two zeros meet at the merge before any slot sees them, so
-    the shift each owes onto the run's frame is the RUNTIME's own row - the same
-    declaration a slot's source gets, asked where that source measured, and none
-    for the one already on the frame."""
+def test_a_wet_hole_is_refused_at_the_fill_naming_both_remedies(world,
+                                                                monkeypatch,
+                                                                tmp_path):
+    """The matched row measures the east half of water cut over the whole of
+    it, so the west half is a WET hole: the fill refuses by name and the remedy
+    is the two steps that compose a bed covering it."""
+    from trid3nt_server.inputs.user_input import UserInputError
+
     monkeypatch.setitem(SPECS, "fetch_soundings",
                         _Spec(coverage("bathymetry", res=1.0), "raster",
                               {"bbox": None}))
-    record = {"offset_m": 0.013, "from_frame": "IGLD85", "to_frame": "NAVD88",
-              "source": "NOAA VDatum"}
 
     async def _runner(runner, kwargs, label):
         world.append((runner, dict(kwargs)))
-        if runner == "fetch_soundings":
-            return {"uri": _half_measured(tmp_path), "vertical_datum": "IGLD85"}
-        if runner == "fetch_terrain":
-            return {"uri": "s3://b/dem.tif", "vertical_datum": "NAVD88"}
-        if runner == "fetch_vertical_datum_offset":
-            return record
-        return f"s3://b/{runner}.tif"
+        return {"uri": _half_measured(tmp_path), "vertical_datum": "NAVD88"}
 
     monkeypatch.setattr(fill, "_call_runner", _runner)
-    env = _env()
-    env.ops["bed"] = [{"name": "merge", "rows": ["fetch_terrain"]}]
-    env.data["domain"] = _row(Data.need("hydrography", at=_SEED), "domain")
-    asyncio.run(fill._bed_surface(env, _row(Data.need("bathymetry"), "bed")))
-    asked = {runner: kwargs for runner, kwargs in world}
-    assert asked["fetch_vertical_datum_offset"]["from_frame"] == "igld85"
-    assert asked["fetch_vertical_datum_offset"]["to_frame"] == "navd88"
-    assert asked["fetch_vertical_datum_offset"]["point"] == pytest.approx(_SEED)
-    merge = asked["trid3nt_server.inputs.bed.merged_surface"]
-    assert merge["frame"] == "NAVD88"
-    # One row per SURFACE, in the order they were laid: the one off the frame
-    # owes a row, the terrain already on it owes none.
-    assert merge["primary_offset"] == [record]
-    assert merge["fallback_offset"] == [None]
-    assert "bed_fetch_soundings_datum_offset" in env.data
-    assert "bed_fetch_terrain_datum_offset" not in env.data
+    water = {"type": "Polygon", "coordinates": [[
+        [-122.72, 45.50], [-122.62, 45.50], [-122.62, 45.56],
+        [-122.72, 45.56], [-122.72, 45.50]]]}
+    token = bind_domain(Domain(bbox=(-122.72, 45.50, -122.62, 45.56),
+                               geometry=water, label="reach"))
+    try:
+        with pytest.raises(UserInputError) as refused:
+            asyncio.run(fill._matched(_env(), _row(Data.need("bathymetry"),
+                                                   "bed")))
+    finally:
+        reset_domain(token)
+    said = str(refused.value)
+    assert refused.value.error_code == "BED_WET_HOLE"
+    assert "merge_rasters" in said and "fill_nodata" in said
+    assert "50.0%" in said
 
 
 def test_no_measurement_over_this_domain_refuses_rather_than_reaching_a_class(
@@ -535,51 +476,3 @@ def test_the_cut_domain_is_what_the_rest_of_the_run_is_bound_to(coastline):
     bound = asyncio.run(_fill_then_read())
     assert bound.geometry["type"] in ("Polygon", "MultiPolygon")
     assert bound.bbox[0] == pytest.approx(-122.67)
-
-
-def test_the_ops_the_run_states_reach_the_merge_in_the_order_stated(world):
-    """The fifth control is the twin of the pick: stated for a slot on the call,
-    carried no further than the ingestion that reads it - here the merge, which
-    lays them in the order the run named."""
-    env = _env()
-    env.ops["bed"] = ["interpolated"]
-    asyncio.run(fill._bed_surface(env, _row(Data.need("bathymetry"), "bed")))
-    merge = dict(world[-1][1])
-    assert merge["ops"] == ["interpolated"]
-
-
-def test_a_run_that_states_no_op_hands_the_merge_none(world):
-    """An op is stated or it is not: the merge is handed nothing to lay, and the
-    water the one row left stays unpainted for the slot to refuse over."""
-    asyncio.run(fill._bed_surface(_env(), _row(Data.need("bathymetry"),
-                                                      "bed")))
-    assert dict(world[-1][1])["ops"] is None
-
-
-def test_an_op_stated_for_a_row_the_workflow_does_not_declare_refuses_by_name():
-    """The half of the validation only the workflow knows, the way an unknown
-    pick is refused: the row is named and so are the rows it could have been."""
-    from trid3nt_server.workflows.runtime.errors import PlanValidationError
-
-    rows = (_row(Data.need("bathymetry"), "bed"),)
-    with pytest.raises(PlanValidationError) as excinfo:
-        fill._ops({"riverbed": "interpolated"}, rows)
-    assert "'riverbed'" in str(excinfo.value) and "bed" in str(excinfo.value)
-
-
-def test_an_op_stated_for_a_row_whose_ingestion_reads_none_refuses_by_name():
-    """An op nothing would read is refused rather than dropped in silence - a
-    coercion key no ingestion declares is dropped on the way in."""
-    from trid3nt_server.workflows.runtime.errors import PlanValidationError
-
-    rows = (_row(Data.need("weather forcing"), "weather"),)
-    with pytest.raises(PlanValidationError) as excinfo:
-        fill._ops({"weather": "interpolated"}, rows)
-    assert "'weather'" in str(excinfo.value)
-
-
-def test_the_ops_a_run_states_are_carried_by_slot_name():
-    rows = (_row(Data.need("bathymetry"), "bed"),)
-    assert fill._ops({"bed": "interpolated"}, rows) == {
-        "bed": "interpolated"}
-    assert fill._ops(None, rows) == {}
