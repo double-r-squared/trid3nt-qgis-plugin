@@ -305,7 +305,6 @@ _SWEPT = ("workflows", "inputs", "mesh")
 # only input-emission the tree is allowed to keep post-collapse.
 _ALLOWLISTED_INPUT_EMISSION: dict[str, tuple[int, str]] = {
     "mesh/gate.py": (1, "the mesh under construction, presented at the gate as an editable MDAL layer - an AUTHORED domain, not a router fetch, so no emit-on-fetch seam can cover it; one home for every mesher's presentation"),
-    "inputs/bed.py": (1, "the MERGED bed - a surface this runtime builds from several fetched rungs, which is no one router fetch, so no emit-on-fetch seam can cover it; one home for every merged surface"),
     "inputs/point.py": (1, "the Point context-layer publisher - a resolved PARAM (picked, typed or derived), not a router fetch, so no emit-on-fetch seam can cover it; one home for every Point slot"),
 }
 
