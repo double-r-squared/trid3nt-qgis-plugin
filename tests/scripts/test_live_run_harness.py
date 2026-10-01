@@ -379,6 +379,21 @@ def test_a_call_before_that_publishes_no_new_layer_stops_the_run():
         asyncio.run(run_before(ws, "S", run, "C"))
 
 
+def test_a_call_before_that_returns_a_record_is_named_by_its_value():
+    """An offset fetch publishes no layer: the record it returned is what the
+    merge after it reads."""
+    record = {"offset_m": 176.056, "from_frame": "LWD_IGLD85",
+              "to_frame": "NAVD88"}
+    ws = _FakeWS([_msg("tool-io", {"function_response": json.dumps(record),
+                                   "is_error": False}),
+                  _msg("turn-complete", {})])
+    run = LiveRun(tool="t", args={}, case_title="c", timeout_s=5,
+                  before=(Before("offset", "fetch_vertical_datum_offset", {}),))
+    made = asyncio.run(run_before(ws, "S", run, "C"))
+    assert made == {"offset": record}
+    assert placed({"offsets": ["$offset"]}, made) == {"offsets": [record]}
+
+
 # --- the assertions ---------------------------------------------------------- #
 def test_a_typed_result_carries_no_status_and_that_IS_success():
     """A tool returning a LayerURI has no ``status`` field; requiring the literal
