@@ -270,31 +270,21 @@ class _Archive:
         return self._members[name].encode("utf-8")
 
 
-def _fgb(rows: list[dict]) -> bytes:
-    import io
-
-    import geopandas as gpd
-
-    buffer = io.BytesIO()
-    gpd.GeoDataFrame.from_features(rows, crs="EPSG:4326").to_file(
-        buffer, driver="FlatGeobuf")
-    return buffer.getvalue()
-
-
 def test_the_layer_records_the_datum_and_the_shift_its_surveys_publish(
         spec, monkeypatch):
     """The fetched layer states the zero its records count from and the shift
-    the package publishes about it, on the layer record itself."""
+    the package publishes about it, on the layer record the router returns."""
+    from trid3nt_server.tools.cache import ReadThroughResult
     from trid3nt_server.tools.fetchers._router import router
 
     monkeypatch.setattr(eh, "_index", lambda *_a: [_feature("2026-01-05", "WR_03")])
     monkeypatch.setattr(eh, "_package", lambda *_a: _Archive({"WR_03.XML": (
         "CRD is 5.28 feet above the North American Vertical Datum of 1988.")}))
     monkeypatch.setattr(eh, "_soundings", lambda *_a: _points())
-    rows = eh.read(spec, {"bbox": (-122.7, 45.5, -122.6, 45.6)}, timeout_s=1.0)
-    layer = router.build_layer_uri(spec, {"bbox": (-122.7, 45.5, -122.6, 45.6)},
-                                   "s3://b/k.fgb")
-    layer = layer.model_copy(update=router._stated_by_records(_fgb(rows)))
+    monkeypatch.setattr(router, "read_through", lambda **kw: ReadThroughResult(
+        uri="s3://b/k.fgb", data=kw["fetch_fn"](), hit=False))
+    layer = router._route_once(spec, {"bbox": (-122.7, 45.5, -122.6, 45.6)},
+                               pending_emit=[])
     assert (layer.vertical_datum, layer.quantity) == ("CRD", "depth_below_datum")
     assert (layer.datum_offset_m, layer.datum_offset_frame) == (1.6093, "NAVD88")
 
