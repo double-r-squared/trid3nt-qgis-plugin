@@ -268,3 +268,43 @@ class _Archive:
 
     def read(self, name: str) -> bytes:
         return self._members[name].encode("utf-8")
+
+
+def _fgb(rows: list[dict]) -> bytes:
+    import io
+
+    import geopandas as gpd
+
+    buffer = io.BytesIO()
+    gpd.GeoDataFrame.from_features(rows, crs="EPSG:4326").to_file(
+        buffer, driver="FlatGeobuf")
+    return buffer.getvalue()
+
+
+def test_the_layer_records_the_datum_and_the_shift_its_surveys_publish(
+        spec, monkeypatch):
+    """The fetched layer states the zero its records count from and the shift
+    the package publishes about it, on the layer record itself."""
+    from trid3nt_server.tools.fetchers._router import router
+
+    monkeypatch.setattr(eh, "_index", lambda *_a: [_feature("2026-01-05", "WR_03")])
+    monkeypatch.setattr(eh, "_package", lambda *_a: _Archive({"WR_03.XML": (
+        "CRD is 5.28 feet above the North American Vertical Datum of 1988.")}))
+    monkeypatch.setattr(eh, "_soundings", lambda *_a: _points())
+    rows = eh.read(spec, {"bbox": (-122.7, 45.5, -122.6, 45.6)}, timeout_s=1.0)
+    layer = router.build_layer_uri(spec, {"bbox": (-122.7, 45.5, -122.6, 45.6)},
+                                   "s3://b/k.fgb")
+    layer = layer.model_copy(update=router._stated_by_records(_fgb(rows)))
+    assert (layer.vertical_datum, layer.quantity) == ("CRD", "depth_below_datum")
+    assert (layer.datum_offset_m, layer.datum_offset_frame) == (1.6093, "NAVD88")
+
+
+def test_surveys_on_one_frame_publish_one_shift_and_two_frames_refuse(spec):
+    """A project datum slopes, so the layer states the mean of what its surveys
+    publish; shifts onto two frames are refused by name at fetch."""
+    assert eh._one_shift(spec, [(1.6, "NAVD88"), (1.7, "NAVD88")]) == (1.65, "NAVD88")
+    assert eh._one_shift(spec, []) == (None, None)
+    with pytest.raises(RouterEmptyError) as refused:
+        eh._one_shift(spec, [(1.6, "NAVD88"), (0.3, "NGVD29")])
+    assert "DATUMS_DIFFER" in refused.value.error_code
+    assert "NAVD88" in str(refused.value) and "NGVD29" in str(refused.value)
