@@ -8,12 +8,13 @@ trips and the geodatabase read, and states the datum the survey states.
 # WHAT THE SURVEY PUBLISHES. Beside the thinned XYZ, an eHydro package carries the
 # surface as an Esri TIN and a geodatabase of derived features - there is no raster
 # in it. The measured thing is the SurveyPoint feature class, and a raster bed is
-# the bed slot's own survey grid over these points, not something to invent here.
+# QGIS's grid over these points, run before the bed slot, not something made here.
 #
 # The values are DEPTHS BELOW the survey's own datum, positive down, in the unit the
 # points state. Nothing here converts between datums: the package's own metadata
 # states how far its project datum sits above a national frame, and that sentence is
-# reported as it was measured - applying it is the bed slot's, never this fetch's.
+# reported as it was measured, on the layer - applying it is its reader's, never
+# this fetch's.
 
 from __future__ import annotations
 
@@ -382,6 +383,7 @@ def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[
     surveys = _selected(spec, _index(spec, params), since, params["bbox"])
     _journal(surveys)
     rows: list[dict] = []
+    shifts: list[tuple[float, str]] = []
     for feature in surveys:
         properties = feature.get("properties") or {}
         survey_id = str(properties.get("surveyjobidpk") or "")
@@ -389,6 +391,8 @@ def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[
         points = _soundings(spec, archive, survey_id)
         datum, uom, scale = _stated(spec, points, survey_id)
         offset_m, offset_frame = _published_offset(archive, survey_id)
+        if offset_m is not None:
+            shifts.append((offset_m, offset_frame))
         date = _survey_date(feature)
         common = {
             "survey_id": survey_id,
@@ -398,8 +402,6 @@ def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[
             "survey_type": properties.get("surveytype"),
             "vertical_datum": datum,
             "source_uom": uom,
-            "datum_offset_m": offset_m,
-            "datum_offset_frame": offset_frame or None,
         }
         rows.append({
             "type": "Feature", "geometry": feature.get("geometry"),
@@ -421,7 +423,42 @@ def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[
                     f"{offset_m:+.4f} m on {offset_frame}" if offset_m is not None
                     else "unpublished")
     _one_zero(spec, rows)
+    offset_m, offset_frame = _one_shift(spec, shifts)
+    for row in rows:
+        row["properties"].update(datum_offset_m=offset_m,
+                                 datum_offset_frame=offset_frame)
     return rows
+
+
+def _one_shift(spec: SourceSpec, shifts: list[tuple[float, str]]
+               ) -> tuple[float | None, str | None]:
+    """The ONE shift this layer publishes about its zero, onto ONE frame.
+
+    A project datum SLOPES: surveys of one river publish their shift at their own
+    river miles, so the layer carries their mean and the run states the spread.
+    Shifts onto two frames refuse - one layer's zero reaches one frame."""
+    frames = sorted({frame for _metres, frame in shifts})
+    if len(frames) > 1:
+        raise router_empty_error(
+            spec.error_code_prefix,
+            f"the surveys over this extent publish their datum's shift onto "
+            f"{frames}, and one layer's zero reaches one frame; fetch a bbox one "
+            "of them covers, or state since= to take one survey at a time.",
+            "DATUMS_DIFFER",
+        )
+    if not shifts:
+        return None, None
+    metres = [value for value, _frame in shifts]
+    mean = round(sum(metres) / len(metres), 4)
+    if len(set(metres)) > 1:
+        from trid3nt_server.workflows.runtime import journal_note
+
+        journal_note(
+            f"{len(metres)} surveys publish their datum's shift onto {frames[0]} - "
+            f"{', '.join(f'{v:+.4f}' for v in metres)} m, "
+            f"{max(metres) - min(metres):.4f} m apart, a project datum sloping "
+            f"along the water - and the layer states their mean {mean:+.4f} m.")
+    return mean, frames[0]
 
 
 def _one_zero(spec: SourceSpec, rows: list[dict]) -> None:
