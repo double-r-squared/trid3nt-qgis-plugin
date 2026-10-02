@@ -71,6 +71,16 @@ def main() -> int:
     print(f"[processing] native:slope over the canvas DEM -> {summary['layer_name']} "
           f"({summary['width']}x{summary['height']}, mean slope {stats.mean:.2f} deg)")
 
+    dem.setCustomProperty("trid3nt/layer_id", "dem-fetched-1")
+    for named in ("dem-fetched-1", summary["layer_id"]):
+        by_id = run_processing_request({
+            "request_id": "01HARNESSPROCESSINGALGCCCC",
+            "kind": "algorithm", "algorithm": "native:slope",
+            "params": {"INPUT": named, "Z_FACTOR": 1.0},
+        })
+        assert by_id["status"] == "ok", (named, by_id)
+    print("[processing] a layer named by the agent's id and by its QGIS id is found")
+
     unknown = run_processing_request({
         "request_id": "01HARNESSPROCESSINGALGBBBB",
         "kind": "algorithm", "algorithm": "native:no_such_thing", "params": {},
