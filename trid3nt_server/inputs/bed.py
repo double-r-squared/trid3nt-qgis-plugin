@@ -1,8 +1,9 @@
 """THE BED: what every node of the domain carries for elevation.
 
 One slot over every source a user can have: a fetched DEM, a fetched or supplied
-bathymetry raster, a case layer by its id, a layer of soundings, or a stated
-depth below the free surface. A surface STATES what it covers - the water and the
+bathymetry raster, a case layer by its id, or a stated depth below the free
+surface. A layer of soundings is REFUSED by name: gridding it is a step the
+person runs first. A surface STATES what it covers - the water and the
 land it measured, and what nothing measured - and water nothing measured is
 REFUSED by name: composing a bed that covers it is a merge and a fill the person
 runs first, and hands this slot the layer they produce. One thing happens on the
@@ -23,21 +24,19 @@ from .user_input import UserInputError
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["Bed", "DEPTH", "POINTS", "RASTER", "SURVEY_DERIVE", "bed",
-           "elevations", "on_the_frame"]
+__all__ = ["Bed", "DEPTH", "RASTER", "bed", "elevations", "on_the_frame"]
 
 _CODE = "BED_INVALID"
 
 #: The two steps that compose a bed covering water nothing measured.
 _REMEDIES = ("merge_rasters", "fill_nodata")
 
-#: The three shapes an elevation source arrives in.
+#: The two shapes an elevation source arrives in.
 RASTER = "raster"
-POINTS = "points"
 DEPTH = "depth"
 
-#: The derive the runtime grids a layer of soundings through, by its name.
-SURVEY_DERIVE = "survey_surface"
+#: The QGIS step a layer of soundings is gridded by before it is a bed.
+_GRID_STEP = "gdal:gridinversedistancenearestneighbor"
 
 #: What a surface of DEPTHS names its quantity as. A depth is counted DOWN from
 #: the survey's own zero, and a bed is an elevation counted UP from the run's,
@@ -59,10 +58,6 @@ class Bed:
     kind: str
     source: Any = None
     depth_m: float | None = None
-    #: The RUN's vertical frame, and the measured shift onto it - carried only on
-    #: a POINTS bed, whose surface does not exist until the mesh scale is known.
-    frame: Any = None
-    offset: Any = None
 
     @property
     def is_depth(self) -> bool:
@@ -71,11 +66,10 @@ class Bed:
 
 def bed(value: Any, *, frame: Any = None, offset: Any = None,
         water: Any = None, label: str = "bed", code: str = _CODE) -> Bed | None:
-    """THE ingestion: a raster, a case layer id, a sounding layer, or a depth in
-    metres -> Bed.
+    """THE ingestion: a raster, a case layer id, or a depth in metres -> Bed.
 
     ``None`` only when nothing came. A number is a DEPTH below the free surface;
-    a vector artifact is a point survey; everything else is a surface. ``frame``
+    a vector artifact refuses; everything else is a surface. ``frame``
     is the RUN's vertical frame and ``offset`` the measured shift onto it the
     runtime's own DATA row produced. ``water`` is the polygon the domain was cut
     with - empty where it was cut with none - handed by the fill, which is where
@@ -100,13 +94,13 @@ def bed(value: Any, *, frame: Any = None, offset: Any = None,
     value = _by_id(value)
     # A source that arrives as GeoJSON is already READ, and a geometry document
     # is a survey, never a surface.
-    points = (isinstance(value, Mapping) and "type" in value) \
-        or artifact_class(value) == "vector"
-    if points:
-        # A layer of soundings is not a surface yet, so the read onto the run's
-        # frame waits for the derive that makes one: the frame and the shift
-        # ride here until the mesh interpolates at its own scale.
-        return Bed(kind=POINTS, source=value, frame=frame, offset=offset)
+    if (isinstance(value, Mapping) and "type" in value) \
+            or artifact_class(value) == "vector":
+        raise UserInputError(
+            f"the {label} was handed a layer of points, and a bed is a raster: "
+            f"grid the soundings first with run_qgis_algorithm {_GRID_STEP} "
+            "(QGIS's IDW) and hand this slot the raster it produces.",
+            code="BED_POINTS")
     if water is not None:
         _covered(value, water, label)
     return Bed(kind=RASTER,
