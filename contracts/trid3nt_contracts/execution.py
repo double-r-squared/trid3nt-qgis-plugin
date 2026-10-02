@@ -210,6 +210,12 @@ class LayerURI(GraceModel):
     #: handed - rather than looking the producer's spec up by name. ``None`` is
     #: the layer saying nothing, which is never the same as NAVD88.
     vertical_datum: str | None = None
+    #: The shift the SOURCE publishes about its own zero: ``datum_offset_m``
+    #: added to a value on ``vertical_datum`` reads it on ``datum_offset_frame``.
+    #: The two ride together - metres onto no named frame are a shift nothing
+    #: can check - and ``None`` is the layer publishing none.
+    datum_offset_m: float | None = None
+    datum_offset_frame: str | None = None
 
     @classmethod
     def published(cls, prefix: str, *, seed: str, **fields: Any) -> "LayerURI":
