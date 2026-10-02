@@ -1,8 +1,0 @@
-survey_surface:
-- grid these soundings into a surface
-- turn this point survey into a raster
-- make a bathymetry raster from these depth points
-- interpolate the channel survey at 40 m
-- IDW these measurements onto a grid
-- a continuous surface between scattered survey points
-- grid the eHydro survey so it can be merged
