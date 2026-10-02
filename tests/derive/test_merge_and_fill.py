@@ -4,7 +4,8 @@ Covered: the first input winning every cell it measured and the next painting
 only what it left, the order of the list being the priority, the second band
 naming which input each cell came from, the coverage feedback per input, each
 input read onto the LAST input's frame through the shift it publishes or the
-offset stated for it, two surfaces with no common ground refusing, a fill
+offset stated for it, the merged surface stating the shift its zero's input
+publishes, two surfaces with no common ground refusing, a fill
 reaching inside 'within' alone with its edge at the stated seed and every cell it
 painted marked FILLED, a fill with no seed refusing, a bed whose water nothing
 measured refused naming both derives, ops= gone from every signature, inputs on
@@ -108,6 +109,16 @@ def test_a_survey_of_depths_is_read_onto_the_last_input_s_frame_through_its_own_
     assert values[0, 4] == pytest.approx(-3.3907, abs=1e-4)
     assert laid.vertical_datum == "NAVD88"
     assert any("DEPTHS below CRD" in note for note in laid.notes)
+
+
+def test_the_merged_surface_states_the_shift_its_zero_s_input_publishes(tmp_path):
+    terrain = _layer(_write(np.full((4, 4), 10.0), west=500_000.0,
+                            north=4_000_000.0, cell=4.0), "terrain", "CRD",
+                     datum_offset_m=1.6093, datum_offset_frame="NAVD88")
+    laid = merged([_survey("CRD"), terrain], "bed", [None, None],
+                  _output_dir=str(tmp_path))
+    assert (laid.vertical_datum, laid.datum_offset_m,
+            laid.datum_offset_frame) == ("CRD", 1.6093, "NAVD88")
 
 
 def test_a_stated_offset_moves_an_input_onto_the_frame(tmp_path):
