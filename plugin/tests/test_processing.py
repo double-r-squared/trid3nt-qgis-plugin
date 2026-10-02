@@ -119,3 +119,37 @@ class TestProcessingInQgis(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class _Layer:
+    def __init__(self, qgis_id, name, agent_id=None):
+        self._id, self._name, self._agent_id = qgis_id, name, agent_id
+
+    def customProperty(self, key):
+        return self._agent_id if key == "trid3nt/layer_id" else None
+
+
+class _Project:
+    def __init__(self, *layers):
+        self._layers = {layer._id: layer for layer in layers}
+
+    def mapLayer(self, qgis_id):
+        return self._layers.get(qgis_id)
+
+    def mapLayers(self):
+        return dict(self._layers)
+
+    def mapLayersByName(self, name):
+        return [layer for layer in self._layers.values() if layer._name == name]
+
+
+def test_a_layer_is_found_by_its_qgis_id_its_agent_id_or_its_canvas_name():
+    from plugin.render.processing import _layer_named
+
+    soundings = _Layer("soundings_abc123", "USACE eHydro channel survey",
+                       agent_id="ehydro_surveys-ehydro_surveys")
+    project = _Project(soundings)
+    assert _layer_named(project, "soundings_abc123") is soundings
+    assert _layer_named(project, "ehydro_surveys-ehydro_surveys") is soundings
+    assert _layer_named(project, "USACE eHydro channel survey") is soundings
+    assert _layer_named(project, "EPSG:32617") == "EPSG:32617"
