@@ -313,6 +313,30 @@
       "title": "Dataset Uris",
       "type": "array"
     },
+    "datum_offset_frame": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Datum Offset Frame"
+    },
+    "datum_offset_m": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Datum Offset M"
+    },
     "fallback_note": {
       "anyOf": [
         {
