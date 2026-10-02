@@ -122,6 +122,8 @@ def filled(layer: Any, within: Any, seed: float, *,
         units=_said(layer, "units") or "m", quantity=_said(layer, "quantity"),
         bbox=bbox_4326(crs, transform, values.shape[1], values.shape[0]),
         vertical_datum=_said(layer, "vertical_datum"),
+        datum_offset_m=_said(layer, "datum_offset_m"),
+        datum_offset_frame=_said(layer, "datum_offset_frame"),
         sources=sources, coverage=reached, unmeasured_fraction=blank, notes=notes)
 
 
