@@ -1,7 +1,7 @@
 """A ``processing-request`` from the agent, run in THIS QGIS session.
 
-An algorithm request runs ``processing.run`` over canvas layers named in its
-params and adds every output layer to the project; a code request executes the
+An algorithm request runs ``processing.run`` over project layers named in its
+params by id or canvas name and adds every output layer to the project; a code request executes the
 approved snippet in the session's Python. The response carries the outcome
 honestly: an error is the session's own traceback, never a fabricated result.
 """
@@ -64,7 +64,7 @@ def run_algorithm(algorithm: str, params: dict) -> Dict[str, Any]:
         )
     project = QgsProject.instance()
     resolved = {
-        key: _layer_by_name(project, value) if isinstance(value, str) else value
+        key: _layer_named(project, value) if isinstance(value, str) else value
         for key, value in params.items()
     }
     destinations = [p.name() for p in alg.parameterDefinitions() if p.isDestination()]
@@ -115,9 +115,15 @@ def run_code(code: str, iface: Any = None) -> Tuple[Any, str]:
     return _jsonable(namespace.get("result")), _tail(buffer.getvalue())
 
 
-def _layer_by_name(project: Any, value: str) -> Any:
-    """A canvas layer by its name; any other string passes through as the value."""
-    layers = project.mapLayersByName(value)
+def _layer_named(project: Any, value: str) -> Any:
+    """A project layer by its QGIS id, the agent's layer id stamped on it, or its
+    canvas name; any other string passes through as the value."""
+    known = project.mapLayer(value)
+    if known is not None:
+        return known
+    stamped = [layer for layer in project.mapLayers().values()
+               if layer.customProperty("trid3nt/layer_id") == value]
+    layers = stamped or project.mapLayersByName(value)
     return layers[0] if layers else value
 
 
