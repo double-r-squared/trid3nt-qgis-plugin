@@ -449,8 +449,9 @@ package DataSeam {
 
     part def BedSlot {
         doc /*
-        The one row every node's elevation comes from, over every shape a user
-        can have it in: a surface, a layer of soundings, or a stated depth.
+        The one row every node's elevation comes from: a surface or a stated
+        depth. A layer of soundings is refused by name, naming QGIS's IDW run
+        through run_qgis_algorithm as the step that grids it first.
         */
     }
 
@@ -458,9 +459,12 @@ package DataSeam {
         doc /*
         A raster derive a person runs BEFORE the fill, over CASE LAYERS only,
         producing a case layer a slot then takes by id; a derive never fetches.
-        Every fetched layer carries the vertical datum and the quantity its row
-        states, and a layer named by id brings them along. survey_surface grids
-        soundings into a surface on their own datum; merge_rasters lays its
+        Every fetched layer carries its vertical datum, its quantity and the
+        shift its source publishes about that datum as fields on the layer
+        record - a source whose rows each state their zero is stamped off what
+        its rows agree on - and a layer named by id brings them along. QGIS's
+        IDW, run through run_qgis_algorithm, grids soundings, and its output
+        carries the fields its input carried; merge_rasters lays its
         inputs first wins, each read onto ONE zero - a surface counting DEPTHS
         read as elevations up from its own datum, through the shift it publishes
         or an offset record passed in - and refuses an input on another datum
@@ -557,12 +561,6 @@ package DataSeam {
     part bedComposer : BedComposer {
         doc /*
         code: trid3nt_server/tools/derive/merge_rasters/merge_rasters.py
-        */
-    }
-
-    part surveyGrid : BedComposer {
-        doc /*
-        code: trid3nt_server/tools/derive/survey_surface/survey_surface.py
         */
     }
 
@@ -1146,9 +1144,9 @@ package DataSeam {
         than a way past them.
 
         The bed takes the ONE row its class matched, like every other slot, or
-        the layer a person hands it by id. Soundings are gridded at the run's
-        own edge before the slot reads them. What that row does not cover is
-        the surface's own coverage feedback to state.
+        the layer a person hands it by id. A row of soundings is refused at the
+        slot, naming the QGIS step that grids them. What that row does not
+        cover is the surface's own coverage feedback to state.
         */
     }
 
@@ -1301,8 +1299,9 @@ package DataSeam {
     requirement def OneBedOverEverySourceAUserCanHave {
         doc /*
         The bed is one seam fed by whatever the user has: a fetched DEM, a
-        bathymetry or survey raster, a layer of soundings, or a stated depth
-        below the free surface. The slot takes ONE source, and it is one row.
+        bathymetry or survey raster, or a stated depth below the free surface.
+        The slot takes ONE source, and it is one row; a layer of soundings is
+        refused by name, naming the QGIS step that grids it.
 
         A bed built from a survey over a wider surface is EXISTING COMPOSITION,
         not new vocabulary: merge_rasters lays the inputs first wins with a band
@@ -1677,6 +1676,13 @@ package DataSeam {
         "tests/derive/test_merge_and_fill.py::test_a_survey_of_depths_is_read_onto_the_last_input_s_frame_through_its_own_shift";
     verify requirement TheRunHasOneVerticalFrame by
         "tests/derive/test_merge_and_fill.py::test_a_stated_offset_moves_an_input_onto_the_frame";
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/derive/test_merge_and_fill.py::test_the_datum_quantity_and_shift_survive_fetch_qgis_merge_and_fill";
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/fetchers/test_router_ehydro_surveys.py::test_the_layer_records_the_datum_and_the_shift_its_surveys_publish";
+    verify requirement TheRunHasOneVerticalFrame by
+        "tests/fetchers/test_router_ehydro_surveys.py::test_surveys_on_one_frame_publish_one_shift_and_two_frames_refuse";
+    satisfy requirement TheRunHasOneVerticalFrame by fetcherRouter;
     satisfy requirement TheRunHasOneVerticalFrame by freeSurfaceReader;
     satisfy requirement TheRunHasOneVerticalFrame by offsetRowDeclaration;
     verify requirement TheRunHasOneVerticalFrame by
@@ -1784,7 +1790,11 @@ package DataSeam {
     verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/mesh/test_bed_sources_and_runs.py::test_a_domain_no_source_covers_refuses_by_name";
     verify requirement OneBedOverEverySourceAUserCanHave by
-        "tests/mesh/test_bed_sources_and_runs.py::test_a_layer_of_soundings_goes_through_the_grid_at_the_meshs_own_scale";
+        "tests/mesh/test_bed_sources_and_runs.py::test_a_layer_of_soundings_is_refused_and_nothing_grids_it";
+    verify requirement OneBedOverEverySourceAUserCanHave by
+        "tests/inputs/test_slot_inputs.py::test_a_layer_of_points_is_refused_at_fill_naming_the_qgis_idw_step";
+    verify requirement OneBedOverEverySourceAUserCanHave by
+        "tests/search/test_covered_fetchers.py::test_nothing_of_ours_grids_soundings";
 
     verify requirement ABoundaryRunIsTwoPointsAndAType by
         "tests/inputs/test_slot_inputs.py::test_a_domain_producer_hands_over_the_runs_it_cut_the_polygon_between";
