@@ -143,31 +143,16 @@ def test_a_node_no_row_reached_refuses_with_the_feedback_and_never_a_zero(
     assert "0.0" not in said.split("nodes have no elevation")[0]
 
 
-def test_a_layer_of_soundings_goes_through_the_grid_at_the_meshs_own_scale(
-        monkeypatch, tmp_path):
-    """The slot grids soundings at the scale the ELEMENTS were sized for: a
-    surface finer than them buys nothing."""
-    import sys
+def test_a_layer_of_soundings_is_refused_and_nothing_grids_it():
+    """The mesh paints a raster: soundings refuse by name before any node is
+    painted, naming the QGIS step that grids them."""
+    from trid3nt_server.inputs.user_input import UserInputError
 
-    bed = sys.modules["trid3nt_server.inputs.bed"]
-    grid = sys.modules["trid3nt_server.tools.derive.survey_surface"]
-
-    asked: dict = {}
-    surface = _raster(tmp_path / "surface.tif", np.full((5, 5), -4.0))
-
-    def _surface(**kwargs):
-        asked.update(kwargs)
-        return surface
-
-    monkeypatch.setattr(grid, "survey_surface", _surface)
-    monkeypatch.setattr(bed, "elevations", lambda surface, **_kw: surface)
     soundings = {"type": "FeatureCollection", "features": []}
-    bedded = P.set_bed(_lattice_mesh(), soundings)
-    assert asked["points"] is soundings
-    # the lattice's own edges are about 900 m on the ground
-    assert 500.0 < asked["resolution_m"] < 1500.0
-    assert list(np.unique(bedded.bed)) == [-4.0]
-    assert "survey surface" in bedded.meta["bed_source"]
+    with pytest.raises(UserInputError) as refused:
+        P.set_bed(_lattice_mesh(), soundings)
+    assert refused.value.error_code == "BED_POINTS"
+    assert "run_qgis_algorithm" in str(refused.value)
 
 
 def test_boundary_runs_prescribe_the_roles_their_types_name():
