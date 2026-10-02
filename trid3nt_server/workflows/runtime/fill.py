@@ -224,9 +224,10 @@ async def _beside(env: _Env, decl: DataDecl) -> dict[str, Any]:
 
 
 async def _bed_surface(env: _Env, decl: DataDecl) -> Any:
-    """THE BED: the ONE row the match ranked first, as a surface.
+    """THE BED: the ONE row the match ranked first, as it came.
 
-    Nothing else paints. What that row does not cover is the surface's own
+    Nothing else paints, and nothing here grids: a row of soundings refuses at
+    the slot's ingestion. What that row does not cover is the surface's own
     coverage feedback to state, and water nothing measured refuses at the
     slot naming the steps that compose a bed which covers it."""
     choice, top = await _probe(env, decl, decl.data_class,
@@ -234,7 +235,7 @@ async def _bed_surface(env: _Env, decl: DataDecl) -> Any:
     if top is None:
         raise StepFailedError(choice.sentence, error_code="DATA_NEED_UNMATCHED",
                               step=_data_step_label(decl.name))
-    return await _surfaced(env, decl, choice.picked, top)
+    return top
 
 
 async def _ranked(env: _Env, decl: DataDecl, data_class: str,
@@ -246,20 +247,6 @@ async def _ranked(env: _Env, decl: DataDecl, data_class: str,
     the ask it is called with is the one that class states."""
     return match(await _need(env, decl, data_class, label),
                  sources_with_coverage())
-
-
-async def _surfaced(env: _Env, decl: DataDecl, picked: str, held: Any) -> Any:
-    """One row as a SURFACE: soundings through the grid that makes one of them,
-    a raster as it came. What a bed covers is a statement about cells, so a
-    survey is read at the mesh's own scale first."""
-    from trid3nt_server.inputs.bed import SURVEY_DERIVE
-
-    if _spec_of(picked).output.layer_type != "vector":
-        return held
-    return await _produce(env, _runtime_row(
-        env, f"{decl.name}_surveyed_{picked}", SURVEY_DERIVE,
-        {"points": held, "value_field": _value_column(picked, decl.data_class),
-         "resolution_m": _mesh_m(env)}))
 
 
 async def _probe(env: _Env, decl: DataDecl, data_class: str, label: str, *,
@@ -339,15 +326,6 @@ def _matched_row(choice: SourceChoice, fetcher: str) -> Any:
     kind = next((row.kind for row in choice.rows
                  if row.fetcher == fetcher and not row.excluded), "")
     return _coverage_row(fetcher, choice.need, kind) if fetcher else None
-
-
-def _value_column(fetcher: str, data_class: str) -> str:
-    """The column a matched source publishes its measurement under.
-
-    Off the coverage row, which names it; a slot that states a need never names
-    a column of a source it did not choose."""
-    row = _coverage_row(fetcher, data_class)
-    return row.value_column if row is not None else ""
 
 
 def _mesh_m(env: _Env) -> float | None:
