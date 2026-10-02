@@ -12,6 +12,7 @@ import logging
 import math as _math
 from typing import Any, Callable
 
+from trid3nt_contracts.coverage import PER_RECORD
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.source_spec import SourceSpec
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
@@ -402,7 +403,8 @@ def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> Layer
         bbox=bbox,
         # What the SOURCE ROW states its elevations are counted from, carried on
         # the layer it produced so a consumer reads the row it was handed. A
-        # source whose data states its own zero per feature declares none here.
+        # source whose data states its own zero per feature is stamped off its
+        # records once they are written.
         vertical_datum=spec.vertical_datum or None,
         # WHAT the values are - an elevation, or a depth counted down from that
         # zero - is the row's statement too, and a consumer reads it here.
@@ -659,6 +661,8 @@ def _route_once(
         from .hooks import resolve_hook
         return resolve_hook(vbe)(spec, params)
     layer = build_layer_uri(spec, params, result.uri)
+    if result.data and any(row.datum == PER_RECORD for row in spec.coverage):
+        layer = layer.model_copy(update=_stated_by_records(result.data))
     # bbox_from_features: stamp the camera bbox from the emitted vector
     # features' extent (point-event fetchers auto-zoom to the events). Read from
     # the produced FGB (result.data is populated on cache hit + miss), so the
@@ -689,6 +693,29 @@ def _route_once(
         spec, params, layer, visualize=_visualize, purpose=_purpose
     )
     return layer
+
+
+#: What a source whose zero rides on each record states about its values.
+_RECORD_STATEMENTS = ("vertical_datum", "datum_offset_m", "datum_offset_frame")
+
+
+def _stated_by_records(data: bytes) -> dict[str, Any]:
+    """The datum and published shift every record of a vector layer agrees on.
+
+    A statement two records make differently is the layer's by neither, so it
+    is left unsaid rather than picked."""
+    import io
+
+    import pyogrio
+
+    frame = pyogrio.read_dataframe(io.BytesIO(data), read_geometry=False)
+    out: dict[str, Any] = {}
+    for key in _RECORD_STATEMENTS:
+        if key in frame.columns:
+            stated = set(frame[key].dropna().tolist())
+            if len(stated) == 1:
+                out[key] = stated.pop()
+    return out
 
 
 #: Honesty-floor-owned fields an envelope hook must never re-write (the layer
