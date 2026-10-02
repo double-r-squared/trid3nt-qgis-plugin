@@ -85,14 +85,21 @@ def test_a_covered_fetcher_leaves_the_index_and_an_overlay_one_stays(index):
     assert FIND_SOURCES in indexed
 
 
-def test_the_bed_grid_is_a_derive_tool(registry, index):
-    """The bed's grid is the survey_surface derive, run by its registry name: a
-    person or the model grids soundings with the same step, and it is no source."""
-    from trid3nt_server.inputs.bed import SURVEY_DERIVE
+def test_nothing_of_ours_grids_soundings(registry, index):
+    """Soundings are gridded by QGIS's IDW through run_qgis_algorithm: no tool,
+    index entry or line of the server names a grid of our own."""
+    from pathlib import Path
 
-    assert registry[SURVEY_DERIVE].module.startswith("trid3nt_server.tools.derive.")
-    assert SURVEY_DERIVE in set(index.tool_names)
-    assert SURVEY_DERIVE not in covered_sources()
+    import trid3nt_server
+
+    gone = "survey_" + "surface"
+    assert gone not in registry
+    assert gone not in set(index.tool_names)
+    root = Path(trid3nt_server.__file__).parent
+    naming = [str(path.relative_to(root)) for path in root.rglob("*")
+              if path.suffix in {".py", ".yaml", ".json"}
+              and gone in path.read_text(errors="replace")]
+    assert naming == []
 
 
 def test_each_class_is_its_own_document_under_the_match(index):
