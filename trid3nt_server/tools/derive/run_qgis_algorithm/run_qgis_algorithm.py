@@ -67,12 +67,12 @@ async def run_qgis_algorithm(
 
     `algorithm` is the Processing id `provider:name` as the QGIS Processing
     algorithm reference lists it; `params` are that algorithm's own parameters,
-    a layer given by its canvas layer NAME. Leave OUTPUT unset: the output is
+    a layer given by its layer id or its canvas layer NAME. Leave OUTPUT unset: the output is
     written to a temporary file, added to the project and summarized back.
 
     Returns the output layer summary (layer_name, kind, crs, extent, band or
-    feature count, the uri it was written to, and the vertical datum and quantity
-    the input layer carried) or the algorithm's error verbatim.
+    feature count, the uri it was written to, and the vertical datum, datum
+    shift and quantity the input layer carried) or the algorithm's error verbatim.
     """
     if not isinstance(algorithm, str) or not algorithm.strip():
         raise SessionProcessingFailedError(
