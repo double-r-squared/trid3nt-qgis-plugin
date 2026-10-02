@@ -155,17 +155,13 @@ def _row(decl, name):
 
 
 def test_the_bed_lays_the_one_row_the_match_ranked_first(world):
-    """Nothing paints on the run's behalf: the bed calls the top row of its own
-    class and no other, gridded at the run's own edge where it is soundings."""
+    """Nothing paints on the run's behalf and nothing grids: the bed calls the
+    top row of its own class and no other, and hands on what it returned."""
     env = _env()
     bed = _row(Data.need("bathymetry"), "bed")
     out = asyncio.run(fill._bed_surface(env, bed))
-    ran = [runner for runner, _kw in world]
-    assert ran == ["fetch_soundings", "survey_surface"]
-    assert out.endswith("survey_surface.tif")
-    _runner, grid = world[1]
-    assert grid["value_field"] == "depth_below_datum_m"
-    assert grid["resolution_m"] == 14.0
+    assert [runner for runner, _kw in world] == ["fetch_soundings"]
+    assert out == "s3://b/fetch_soundings.geojson"
 
 
 def test_a_raster_measurement_reaches_the_bed_without_being_gridded(world,
