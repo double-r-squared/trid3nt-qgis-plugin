@@ -41,7 +41,7 @@ def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
     """Paint every node's elevation from the bed slot -> the mesh, bedded.
 
     ``source`` is ONE surface - a raster fetcher's name, an object-store uri, a
-    layer, a layer of soundings, or a depth in metres below the free surface. A
+    raster layer, or a depth in metres below the free surface. A
     bed composed of several surfaces is composed BEFORE here, by merge_rasters
     and fill_nodata, and arrives as the one layer they produced. A node
     the surface has nothing for refuses: nothing is put there on its behalf."""
@@ -53,9 +53,7 @@ def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
             f"set_bed reads a raster {list(_INTERPOLATIONS)}, not {interp!r}.")
     lonlat = _lonlat_nodes(mesh)
     box = _grown(_extent(lonlat))
-    cell_m = _node_spacing_m(mesh)
-    values, provenance, note = _painted(source, lonlat, box, interp, condition,
-                                        cell_m)
+    values, provenance, note = _painted(source, lonlat, box, interp, condition)
     _reached(source, values, lonlat, provenance)
     painted = f"{provenance} at {values.size} nodes"
     _journal_bed(source, provenance, lonlat, values.size)
@@ -169,7 +167,7 @@ def _stated_depth(source: Any) -> bool:
 
 
 def _painted(source: Any, lonlat: Any, box: tuple[float, float, float, float],
-             interp: str, condition: str | None, cell_m: float
+             interp: str, condition: str | None
              ) -> tuple[Any, str, str | None]:
     """One bed source sampled at the nodes -> ``(values, provenance, note)``.
 
@@ -177,7 +175,7 @@ def _painted(source: Any, lonlat: Any, box: tuple[float, float, float, float],
     refusal above name it; a STATED DEPTH covers every node by construction."""
     import numpy as np
 
-    from trid3nt_server.inputs.bed import DEPTH, POINTS, bed as read_bed
+    from trid3nt_server.inputs.bed import DEPTH, bed as read_bed
     from trid3nt_server.mesh.shared.nodes import sample_raster_at_nodes
 
     slot = read_bed(source, label="bed")
@@ -192,54 +190,12 @@ def _painted(source: Any, lonlat: Any, box: tuple[float, float, float, float],
         depth = float(slot.depth_m or 0.0)
         return (np.full(np.asarray(lonlat).shape[0], -depth, dtype=float),
                 f"stated depth {depth:g} m below the free surface", None)
-    if slot.kind == POINTS:
-        raster, provenance = _interpolated_survey(slot.source, cell_m, slot)
-        note = None
-    else:
-        raster, provenance, note = _bed_raster(slot.source, box)
+    raster, provenance, note = _bed_raster(slot.source, box)
     if condition:
         raster, provenance = _conditioned(raster, provenance, condition)
     values = sample_raster_at_nodes(str(raster), lonlat, interp=str(interp),
                                     fill_holes=False)
     return values, provenance, note
-
-
-def _node_spacing_m(mesh: Mesh) -> float:
-    """This mesh's own median element edge, in metres - the scale a bed has to
-    resolve. A surface finer than the elements buys nothing, and one coarser
-    loses the channel the elements were sized for."""
-    import numpy as np
-
-    if not mesh.has_cells:
-        return 0.0
-    xy, _epsg = _metre_nodes(mesh)
-    cells = np.asarray(mesh.cells, dtype=int)
-    lengths = []
-    for a, b in ((0, 1), (1, 2), (2, 0)):
-        lengths.append(np.hypot(*(xy[cells[:, b]] - xy[cells[:, a]]).T))
-    return float(np.median(np.concatenate(lengths)))
-
-
-def _interpolated_survey(layer: Any, cell_m: float, slot: Any) -> tuple[Any, str]:
-    """A layer of SOUNDINGS through the grid that turns it into a surface.
-
-    The soundings are gridded by the survey_surface derive at the mesh's own
-    scale. The surface it makes carries the survey's own zero, so it is
-    read onto the run's frame here - the one hop a raster bed takes on the way
-    into its slot, taken at the moment the surface exists."""
-    from trid3nt_server.inputs.bed import elevations
-    from trid3nt_server.tools.derive.survey_surface import survey_surface
-    from trid3nt_server.inputs.geometry import source_uri
-
-    if not cell_m:
-        raise MeshToolError(
-            "MESH_BED_SURVEY_UNSCALED",
-            "this mesh states no cells of its own, so there is no element scale "
-            "to interpolate the soundings at; supply a survey raster instead.")
-    surface = survey_surface(points=layer, resolution_m=float(cell_m))
-    surface = elevations(surface, frame=slot.frame, offset=slot.offset)
-    return op_raster(surface), (f"a survey surface at {cell_m:.3g} m over the "
-                                f"supplied soundings ({source_uri(layer)})")
 
 
 def set_boundary_roles(mesh: Mesh, runs: Any = None, **roles: Any) -> Mesh:
