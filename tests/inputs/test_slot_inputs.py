@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_server.inputs import Point
-from trid3nt_server.inputs.bed import DEPTH, POINTS, RASTER, bed
+from trid3nt_server.inputs.bed import DEPTH, RASTER, bed
 from trid3nt_server.inputs.boundary import (
     BoundaryRun,
     boundary_runs,
@@ -93,12 +93,23 @@ def test_a_run_carries_one_of_the_declared_types():
 def test_the_bed_slot_says_which_shape_it_was_handed():
     assert bed(2.0).kind == DEPTH and bed(2.0).depth_m == 2.0
     assert bed("2.5").depth_m == 2.5
-    assert bed("s3://b/k/survey.geojson").kind == POINTS
-    assert bed({"type": "FeatureCollection", "features": []}).kind == POINTS
     assert bed("s3://b/k/dem.tif").kind == RASTER
     # a fetcher NAME is a surface the mesh op resolves, not a depth
     assert bed("fetch_cudem").kind == RASTER
     assert bed(None) is None
+
+
+@pytest.mark.parametrize("value", [
+    "s3://b/k/survey.geojson", {"type": "FeatureCollection", "features": []}])
+def test_a_layer_of_points_is_refused_at_fill_naming_the_qgis_idw_step(value):
+    """A bed is a raster: soundings are gridded by QGIS's IDW before the slot,
+    and the slot's ingestion - the one the fill runs - says so by name."""
+    with pytest.raises(UserInputError) as refused:
+        ingest_slot(BED, value, label="bed")
+    assert refused.value.error_code == "BED_POINTS"
+    said = str(refused.value)
+    assert "run_qgis_algorithm" in said
+    assert "gdal:gridinversedistancenearestneighbor" in said
 
 
 def test_the_bed_slot_takes_one_source_and_composes_nothing():
