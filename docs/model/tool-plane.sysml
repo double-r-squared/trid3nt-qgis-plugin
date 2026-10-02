@@ -32,7 +32,8 @@ package ToolPlane {
 
     A derive tool takes a layer and never fetches. The world-read stays on the
     fetch path, where it is declared, cached and gated; the session tools take
-    canvas layers by NAME and the rest of the derive set takes a layer uri.
+    project layers by id or canvas NAME and the rest of the derive set takes a
+    layer uri.
     */
 
     // Blocks
@@ -478,8 +479,9 @@ package ToolPlane {
         it needs is fetched first by the fetch tool that declares it, and the
         tool refuses, naming that fetch, when the layer was not given - it never
         reaches the registry for a fetcher, the cache shim's read-through, or a
-        fetch tool module. The session tools take canvas layers by name for the
-        same reason: the model fetches, and when the layer exists, runs.
+        fetch tool module. The session tools take project layers by id or
+        canvas name for the same reason: the model fetches, and when the layer
+        exists, runs.
 
         forbid: trid3nt_server.tools.derive.run_pyqgis -> trid3nt_server.tools.fetchers
         forbid: trid3nt_server.tools.derive.run_qgis_algorithm -> trid3nt_server.tools.fetchers
@@ -601,6 +603,8 @@ package ToolPlane {
     satisfy requirement ADeriveToolNeverFetches by runQgisAlgorithm;
     verify requirement ADeriveToolNeverFetches by
         "tests/derive/test_probe_point.py::test_outside_bounds_is_honest_null";
+    verify requirement ADeriveToolNeverFetches by
+        "plugin/tests/test_processing.py::test_a_layer_is_found_by_its_qgis_id_its_agent_id_or_its_canvas_name";
     verify requirement ADeriveToolNeverFetches by
         "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
 
