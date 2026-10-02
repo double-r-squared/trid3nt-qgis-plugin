@@ -195,10 +195,11 @@ def merged(layers: list[Any], name: str, offsets: list[Any] = (),
     from rasterio.merge import merge
 
     from trid3nt_server.inputs.bed import on_the_frame
-    from trid3nt_server.inputs.vertical_datum import datum_of
+    from trid3nt_server.inputs.vertical_datum import datum_of, published_offset
     from trid3nt_server.workflows.runtime import journal_note
 
     zero = datum_of(layers[-1])
+    published = published_offset(layers[-1])
     labels = [label_of(layer, rank) for rank, layer in enumerate(layers)]
     aligned = [_aligned(layer, labels[rank], zero, offsets)
                for rank, layer in enumerate(layers)]
@@ -252,7 +253,12 @@ def merged(layers: list[Any], name: str, offsets: list[Any] = (),
         layer_type="raster", uri=uri, style=_STYLE, role="primary", units="m",
         quantity="elevation",
         bbox=bbox_4326(crs, transform, width, height),
-        vertical_datum=zero or None, sources=labels, coverage=reached,
+        vertical_datum=zero or None,
+        # The surface lands on the last input's zero, so the shift that input
+        # publishes about it still reads this one onto its frame.
+        datum_offset_m=published.metres if published else None,
+        datum_offset_frame=published.to_frame if published else None,
+        sources=labels, coverage=reached,
         unmeasured_fraction=blank, notes=notes)
 
 
