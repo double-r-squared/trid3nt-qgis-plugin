@@ -394,6 +394,20 @@ def test_a_call_before_that_returns_a_record_is_named_by_its_value():
     assert placed({"offsets": ["$offset"]}, made) == {"offsets": [record]}
 
 
+def test_a_session_tool_s_layer_is_named_by_the_id_its_response_carries():
+    """A QGIS output lands in the user's project and never in loaded_layers:
+    the layer_id its response carries is what the call after it names."""
+    answer = {"status": "ok", "algorithm": "native:reprojectlayer",
+              "layer_id": "Reprojected_7f3a", "kind": "vector"}
+    ws = _FakeWS([_msg("tool-io", {"function_response": json.dumps(answer),
+                                   "is_error": False}),
+                  _msg("turn-complete", {})])
+    run = LiveRun(tool="t", args={}, case_title="c", timeout_s=5,
+                  before=(Before("projected", "run_qgis_algorithm", {}),))
+    made = asyncio.run(run_before(ws, "S", run, "C"))
+    assert made == {"projected": "Reprojected_7f3a"}
+
+
 # --- the assertions ---------------------------------------------------------- #
 def test_a_typed_result_carries_no_status_and_that_IS_success():
     """A tool returning a LayerURI has no ``status`` field; requiring the literal
