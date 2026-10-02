@@ -1679,6 +1679,8 @@ package DataSeam {
     verify requirement TheRunHasOneVerticalFrame by
         "tests/derive/test_merge_and_fill.py::test_the_datum_quantity_and_shift_survive_fetch_qgis_merge_and_fill";
     verify requirement TheRunHasOneVerticalFrame by
+        "tests/derive/test_merge_and_fill.py::test_the_merged_surface_states_the_shift_its_zero_s_input_publishes";
+    verify requirement TheRunHasOneVerticalFrame by
         "tests/fetchers/test_router_ehydro_surveys.py::test_the_layer_records_the_datum_and_the_shift_its_surveys_publish";
     verify requirement TheRunHasOneVerticalFrame by
         "tests/fetchers/test_router_ehydro_surveys.py::test_surveys_on_one_frame_publish_one_shift_and_two_frames_refuse";
