@@ -96,10 +96,7 @@ def test_a_survey_of_depths_is_read_onto_the_last_input_s_frame_through_its_own_
         tmp_path):
     """5 m of depth below a project datum that sits 1.6093 m above NAVD88 is an
     elevation of -3.3907 m on NAVD88, the frame the terrain counts from."""
-    from trid3nt_server.tools.derive.survey_surface.survey_surface import (
-        SurveySurfaceLayerURI)
-
-    survey = SurveySurfaceLayerURI(
+    survey = LayerURI(
         layer_id="s", name="soundings", layer_type="raster",
         uri=_write(np.full((4, 4), 5.0), west=500_004.0, north=4_000_000.0,
                    cell=1.0),
@@ -161,7 +158,7 @@ def test_a_case_layer_by_id_carries_its_datum_and_quantity_into_the_merge(
                            north=4_000_000.0, cell=1.0), "survey-1", "CRD",
                     quantity="depth_below_datum_m")
     registry = get_uri_registry("merge-by-id")
-    registry.register_tool_result("survey_surface", survey)
+    registry.register_tool_result("run_qgis_algorithm", survey)
     token = activate_registry(registry)
     try:
         held = case_layer("survey-1", "input")
@@ -369,7 +366,7 @@ def test_layers_named_by_id_carry_the_offset_through_the_tool_and_the_datum_thro
                            north=4_000_000.0, cell=1.0), "survey-2",
                     "LWD_IGLD85", quantity="depth_below_datum_m")
     registry = get_uri_registry("merge-tool-offsets")
-    registry.register_tool_result("survey_surface", depths)
+    registry.register_tool_result("run_qgis_algorithm", depths)
     registry.register_tool_result("fetch_dem", _terrain())
     token = activate_registry(registry)
     try:
@@ -386,3 +383,72 @@ def test_layers_named_by_id_carry_the_offset_through_the_tool_and_the_datum_thro
         assert out.sources[:2] == ["survey-2", "terrain"]
     finally:
         deactivate_registry(token)
+
+
+def test_the_datum_quantity_and_shift_survive_fetch_qgis_merge_and_fill(
+        tmp_path, monkeypatch):
+    """The three fields ride the layer record from the fetch through QGIS's
+    grid into the merge, which reads the depths through the shift the fetch
+    recorded, and the fill keeps what its input states."""
+    import io
+    import sys
+
+    import geopandas as gpd
+    from shapely.geometry import Point
+
+    from trid3nt_contracts.processing_contracts import ProcessingResponsePayload
+    from trid3nt_server.render.uri_registry import (
+        activate_registry, deactivate_registry, get_uri_registry)
+    from trid3nt_server.tools.derive.run_qgis_algorithm import (
+        run_qgis_algorithm as qgis)
+    from trid3nt_server.tools.fetchers._router import router
+    from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
+
+    spec = compose_specs_from_tree()["fetch_ehydro_surveys"]
+    rows = gpd.GeoDataFrame(
+        {"vertical_datum": ["CRD"] * 2, "datum_offset_m": [1.6093] * 2,
+         "datum_offset_frame": ["NAVD88"] * 2, "depth_below_datum_m": [5.0, 5.0]},
+        geometry=[Point(-122.67, 45.52), Point(-122.68, 45.53)], crs="EPSG:4326")
+    buffer = io.BytesIO()
+    rows.to_file(buffer, driver="FlatGeobuf")
+    fetched = router.build_layer_uri(spec, {"bbox": (-122.7, 45.5, -122.6, 45.6)},
+                                     "s3://b/soundings.fgb")
+    fetched = fetched.model_copy(
+        update=router._stated_by_records(buffer.getvalue()))
+    grid = _write(np.full((4, 4), 5.0), west=500_004.0, north=4_000_000.0,
+                  cell=1.0)
+
+    async def _session(**_kw):
+        return ProcessingResponsePayload(
+            request_id="01HZZZZZZZZZZZZZZZZZZZZZZZ", status="ok",
+            result={"layer_name": "Grid (IDW)", "layer_id": "grid_idw_1",
+                    "kind": "raster", "source": grid})
+
+    monkeypatch.setattr(qgis, "run_in_session", _session)
+    fill_mod = sys.modules[filled.__module__]
+    monkeypatch.setattr(fill_mod, "filled", lambda layer, within, seed: filled(
+        layer, within, seed, _output_dir=str(tmp_path)))
+    registry = get_uri_registry("three-fields")
+    registry.register_tool_result("fetch_ehydro_surveys", fetched)
+    registry.register_tool_result("fetch_dem", _terrain())
+    token = activate_registry(registry)
+    try:
+        gridded = asyncio.run(qgis.run_qgis_algorithm(
+            "gdal:gridinversedistancenearestneighbor",
+            {"INPUT": fetched.layer_id, "RADIUS": 9.14}))
+        registry.register_tool_result("run_qgis_algorithm", gridded)
+        held = case_layer("grid_idw_1", "input")
+        laid = merged([held, case_layer("terrain", "input")], "bed", [],
+                      _output_dir=str(tmp_path))
+        kept = asyncio.run(fill_nodata(layer="grid_idw_1", within=_AROUND,
+                                       seed=-3.0))
+    finally:
+        deactivate_registry(token)
+    stated = ("CRD", "depth_below_datum", 1.6093, "NAVD88")
+    assert (held["vertical_datum"], held["quantity"], held["datum_offset_m"],
+            held["datum_offset_frame"]) == stated
+    values, _won = _bands(laid.uri)
+    assert values[0, 4] == pytest.approx(1.6093 - 5.0, abs=1e-4)
+    assert (laid.vertical_datum, laid.quantity) == ("NAVD88", "elevation")
+    assert (kept.vertical_datum, kept.quantity, kept.datum_offset_m,
+            kept.datum_offset_frame) == stated
