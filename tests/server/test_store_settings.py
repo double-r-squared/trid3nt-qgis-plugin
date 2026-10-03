@@ -63,3 +63,13 @@ def test_a_store_with_no_endpoint_stated_refuses_rather_than_reach_a_cloud(
     wrong_ambient.write_text("AWS_ACCESS_KEY_ID=minio-key\n", encoding="utf-8")
     with pytest.raises(storage.StorageError, match="AWS_ENDPOINT_URL"):
         storage.client()
+
+
+def test_the_store_reads_the_settings_file_the_launcher_writes():
+    """start_agent.sh keeps the store's settings in .env.local at the repo root;
+    the store must read that same file wherever its module sits."""
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parents[2]
+    assert (repo_root / "scripts" / "start_agent.sh").is_file()
+    assert storage._SETTINGS_FILE == repo_root / ".env.local"
