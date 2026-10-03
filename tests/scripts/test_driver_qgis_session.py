@@ -81,7 +81,10 @@ def _qgis_turn(request_id: str) -> list[dict]:
                                         "algorithm": "native:reprojectlayer",
                                         "params": {"INPUT": "L-soundings"}}),
             _msg("tool-io", {"function_response": json.dumps(
-                {"status": "ok", "layer_id": "qgis-L-soundings"})}),
+                {"layer_id": "qgis-L-soundings", "layer_type": "raster"})}),
+            _msg("session-state", {"loaded_layers": [
+                {"layer_id": "L-soundings", "name": "soundings"},
+                {"layer_id": "qgis-L-soundings", "role": "primary"}]}),
             _msg("turn-complete", {})]
 
 
