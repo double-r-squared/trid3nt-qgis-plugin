@@ -12,18 +12,18 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
   `tools/` (the atomic-tool registry; a tool is one of two kinds -
   `fetch` produces data from outside through a declared source spec
   the router executes, `derive` ingests data and outputs data - with
-  `search`, `display` and `meta` beside them as infrastructure),
+  `search`, `display` and `meta` beside them as infrastructure, and
+  `mesh` the one mesh front, which knows no engine),
   `render/` (the FORMAT SET a product reaches the map in - a COG
   raster, a GeoJSON vector, an MDAL mesh with the dataset files beside
   it, a chart payload - the one emission seam, the publish mechanism,
-  the presets and the restyle seam), `mesh/` (the one mesh front,
-  which knows no engine), `workflows/` (the declarative `runtime/`, the
+  the presets and the restyle seam), `workflows/` (the declarative `runtime/`, the
   `solver/` executor, and the engine package `telemac/`), `gates/` (GateSpec
   engine + cards + pending
   registries), `adapters/` (LLM providers - the ONLY place provider
   nouns appear), `server/` (session/ turn/ dispatch/ protocol/),
-  `persistence.py`, `storage.py` (the object store's one client and the
-  bucket names).
+  `store/` (`objects.py` the object store's one client and the bucket
+  names, `cases.py` the case documents, `sweep.py` the cache sweep).
 - `workers/` - the telemac solver worker plus the mesh and qgis
   legs. Worker code is INERT until its image is
   rebuilt: absolute -f/context paths, provenance-check the new code is
