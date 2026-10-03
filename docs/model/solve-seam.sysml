@@ -395,7 +395,7 @@ package SolveSeam {
 
     part bedPainter : BedPainter {
         doc /*
-        code: trid3nt_server/mesh/shared/primitives.py
+        code: trid3nt_server/tools/mesh/shared/primitives.py
         */
     }
 
@@ -486,7 +486,7 @@ package SolveSeam {
 
     part meshAcceptance : MeshAcceptance {
         doc /*
-        code: trid3nt_server/mesh/step.py
+        code: trid3nt_server/tools/mesh/step.py
         */
         port meshOut : MeshOut;
     }

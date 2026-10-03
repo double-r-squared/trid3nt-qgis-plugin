@@ -20,7 +20,7 @@ from trid3nt_server.workflows.runtime import (
     Data,
     register_workflow,
 )
-from trid3nt_server.mesh.tool import mesh_op, tool
+from trid3nt_server.tools.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.telemac.modules import (
     WAC,
     series,

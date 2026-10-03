@@ -10,7 +10,7 @@ import inspect
 from dataclasses import dataclass, replace
 from typing import Any, Iterable, Mapping
 
-from trid3nt_server.mesh.meshers import (
+from trid3nt_server.tools.mesh.meshers import (
     MeshOp,
     MeshToolError,
     bind_ops,

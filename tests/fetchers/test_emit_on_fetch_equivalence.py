@@ -17,7 +17,16 @@ from trid3nt_server.tools.fetchers._router.emit_on_fetch import (
 
 _SERVER = pathlib.Path(__file__).resolve().parents[2] / "trid3nt_server"
 #: The trees a composer or a mesher lives in.
-_SWEPT = (_SERVER / "workflows", _SERVER / "mesh")
+_SWEPT = (_SERVER / "workflows", _SERVER / "tools" / "mesh")
+
+
+def _tree(rel: pathlib.PurePath) -> str:
+    """The swept tree a module lives in, else its top-level folder."""
+    for path in _SWEPT:
+        swept = path.relative_to(_SERVER)
+        if rel.parts[:len(swept.parts)] == swept.parts:
+            return str(swept)
+    return rel.parts[0]
 
 
 def test_a_matched_row_is_asked_under_its_own_name():
@@ -87,9 +96,9 @@ def test_the_sweep_reaches_every_tree_a_composing_tool_is_defined_in():
     from trid3nt_server.tools import TOOL_REGISTRY
 
     trees = {
-        pathlib.Path(inspect.getsourcefile(inspect.unwrap(t.fn))).resolve()
-        .relative_to(_SERVER).parts[0]
+        _tree(pathlib.Path(inspect.getsourcefile(inspect.unwrap(t.fn))).resolve()
+              .relative_to(_SERVER))
         for t in TOOL_REGISTRY.values()
     } - {"tools", "gates"}
-    assert "mesh" in trees
-    assert not trees - {p.name for p in _SWEPT}, sorted(trees)
+    assert "tools/mesh" in trees
+    assert not trees - {str(p.relative_to(_SERVER)) for p in _SWEPT}, sorted(trees)

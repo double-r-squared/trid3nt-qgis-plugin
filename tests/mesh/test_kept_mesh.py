@@ -7,8 +7,8 @@ import asyncio
 import pytest
 
 from trid3nt_server.inputs.domain import Domain
-from trid3nt_server.mesh import step as mesh_step
-from trid3nt_server.mesh.artifact import MeshArtifact
+from trid3nt_server.tools.mesh import step as mesh_step
+from trid3nt_server.tools.mesh.artifact import MeshArtifact
 from trid3nt_server.workflows.runtime import journal
 
 
@@ -71,12 +71,12 @@ def built(monkeypatch, tmp_path):
                             has_bathymetry=True, node_count=3, element_count=1,
                             bbox=(0, 0, 1, 1))
 
-    from trid3nt_server.mesh import gate, session
+    from trid3nt_server.tools.mesh import gate, session
 
     monkeypatch.setattr(session, "MeshSession", lambda *a, **k: None)
     monkeypatch.setattr(gate, "gate_mesh_build", _gate)
     monkeypatch.setattr(mesh_step, "_mesh_coverage", lambda *a: None)
-    monkeypatch.setattr("trid3nt_server.mesh.tool.recipe_from_plan_value",
+    monkeypatch.setattr("trid3nt_server.tools.mesh.tool.recipe_from_plan_value",
                         lambda value: type("R", (), {"mesher": "om2d",
                                                      "extent": None})())
     return builds

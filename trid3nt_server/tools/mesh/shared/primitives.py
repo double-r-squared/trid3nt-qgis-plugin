@@ -10,8 +10,8 @@ import dataclasses
 from pathlib import Path
 from typing import Any, Mapping
 
-from trid3nt_server.mesh.inputs import op_geometry, op_raster
-from trid3nt_server.mesh.meshers import (
+from trid3nt_server.tools.mesh.inputs import op_geometry, op_raster
+from trid3nt_server.tools.mesh.meshers import (
     Mesh,
     MeshToolError,
     fetch_fallback_note,
@@ -175,7 +175,7 @@ def _painted(source: Any, lonlat: Any, box: tuple[float, float, float, float],
     import numpy as np
 
     from trid3nt_server.inputs.bed import DEPTH, bed as read_bed
-    from trid3nt_server.mesh.shared.nodes import sample_raster_at_nodes
+    from trid3nt_server.tools.mesh.shared.nodes import sample_raster_at_nodes
 
     slot = read_bed(source, label="bed")
     if slot is None:
@@ -222,7 +222,7 @@ def set_boundary_roles(mesh: Mesh, runs: Any = None, **roles: Any) -> Mesh:
     from shapely.geometry import shape as _shape
     from shapely.ops import transform as _transform
 
-    from trid3nt_server.mesh.shared.nodes import boundary_contours
+    from trid3nt_server.tools.mesh.shared.nodes import boundary_contours
 
     declared = _declared_faces(runs, roles)
     if not declared:
@@ -419,7 +419,7 @@ def _metre_nodes(mesh: Mesh) -> tuple[Any, int]:
     A tolerance is a length, and a length in degrees weights the axes apart."""
     import numpy as np
 
-    from trid3nt_server.mesh.shared.nodes import reproject_nodes_to_utm
+    from trid3nt_server.tools.mesh.shared.nodes import reproject_nodes_to_utm
 
     authid = str(mesh.crs_authid).upper()
     if authid != "EPSG:4326":

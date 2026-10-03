@@ -12,7 +12,7 @@ import re
 from pathlib import Path
 
 SRC_ROOT = Path(__file__).resolve().parents[2] / "trid3nt_server"
-SCAN_DIRS = ("tools", "data", "workflows", "mesh")
+SCAN_DIRS = ("tools", "data", "workflows")
 
 #: Repo-relative (to SRC_ROOT) files allowed to build markdown strings.
 #: Every entry MUST document why in the module docstring above.
@@ -112,5 +112,5 @@ def test_the_scan_reaches_every_tree_a_composing_tool_is_defined_in() -> None:
         .relative_to(SRC_ROOT).parts[0]
         for t in TOOL_REGISTRY.values()
     }
-    assert "mesh" in trees
+    assert "tools" in trees
     assert not trees - set(SCAN_DIRS) - {"gates"}, sorted(trees - set(SCAN_DIRS))

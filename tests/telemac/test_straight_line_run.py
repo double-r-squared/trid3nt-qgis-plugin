@@ -14,7 +14,7 @@ from trid3nt_server.workflows.runtime.resolver import resolve_params
 from trid3nt_server.workflows.telemac import workflow as tw
 from trid3nt_server.workflows.telemac.authoring import (mesh_files, opening,
                                                         release_point)
-from trid3nt_server.mesh import step as mesh_step
+from trid3nt_server.tools.mesh import step as mesh_step
 
 
 def _faked(monkeypatch, calls: list) -> None:

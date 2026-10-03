@@ -131,7 +131,7 @@ def _boundary_matches_the_walk(mesh: Mapping[str, Any], geometry: str,
     Or the refusal by name, when the file and the walk disagree."""
     import numpy as np
 
-    from trid3nt_server.mesh.shared.formats.tin_topology import (
+    from trid3nt_server.tools.mesh.shared.formats.tin_topology import (
         boundary_numbering)
 
     from .selafin_io import _liquid_boundaries

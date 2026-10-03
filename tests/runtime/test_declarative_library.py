@@ -111,7 +111,7 @@ async def stub_mesh_step(**kwargs):
     Its consumers read the artifact by attribute, so what the replay hands back
     has to be the artifact and not a mapping that merely holds its fields.
     """
-    from trid3nt_server.mesh.artifact import MeshArtifact
+    from trid3nt_server.tools.mesh.artifact import MeshArtifact
 
     _CALLS.append("stub_mesh_step")
     art = MeshArtifact(

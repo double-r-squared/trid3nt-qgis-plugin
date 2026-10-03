@@ -10,7 +10,7 @@ Plane: **workflow**. System: **fetcher**. One seam of the system of systems inde
 flowchart LR
     bedComposer["BedComposer<br/>trid3nt_server/tools/derive/merge_rasters/merge_rasters.py"]
     bedFiller["BedComposer<br/>trid3nt_server/tools/derive/fill_nodata/fill_nodata.py"]
-    bedPainter["BedPainter<br/>trid3nt_server/mesh/shared/primitives.py"]
+    bedPainter["BedPainter<br/>trid3nt_server/tools/mesh/shared/primitives.py"]
     bedResultModel["BedResultModel<br/>contracts/trid3nt_contracts/execution.py"]
     bedSlot["BedSlot<br/>trid3nt_server/inputs/bed.py"]
     blueTopoDeclaration["BedSourceDeclaration<br/>trid3nt_server/tools/fetchers/ocean/fetch_bluetopo/source.yaml"]
@@ -54,7 +54,7 @@ flowchart LR
     stacRasterReader["CatalogRasterReader<br/>trid3nt_server/tools/fetchers/_router/executors/stac_raster.py"]
     unreadContextAsk["ContextRow<br/>trid3nt_server/workflows/telemac/workflow.py"]
     verticalFrame["VerticalFrame<br/>trid3nt_server/inputs/vertical_datum.py"]
-    waterCut["WaterCut<br/>trid3nt_server/mesh/water.py"]
+    waterCut["WaterCut<br/>trid3nt_server/tools/mesh/water.py"]
     blueTopoSource -- "BedProvenance" --> bedResultModel
     blueTopoDeclaration -- "BedSourceParams" --> blueTopoSource
     copernicusDeclaration -- "CatalogReadDeclaration" --> stacRasterReader

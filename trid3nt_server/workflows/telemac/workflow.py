@@ -90,7 +90,7 @@ _MEASURES: Mapping[str, tuple[str, str, str]] = MappingProxyType({
 #: elements beside a rim locked at one spacing, and the boundary walk that numbers
 #: a TELEMAC geometry meets the folded pair's unpaired edges as a second rim.
 def _clean_ops() -> list[Any]:
-    from trid3nt_server.mesh.tool import mesh_op
+    from trid3nt_server.tools.mesh.tool import mesh_op
 
     return [mesh_op("delete_boundary_faces"),
             mesh_op("delete_faces_connected_to_one_face"),
@@ -974,7 +974,7 @@ class TelemacWorkflow(Workflow):
 
         Every stage writes what it produced into the run's one mapping and
         reads what it needs off it by plain name."""
-        from trid3nt_server.mesh.step import build_declared_mesh, keep_mesh
+        from trid3nt_server.tools.mesh.step import build_declared_mesh, keep_mesh
         from trid3nt_server.render.pipeline_emitter import (begin_substeps,
                                                             current_emitter,
                                                             substep)
@@ -1140,7 +1140,7 @@ class TelemacWorkflow(Workflow):
                 | {ask.name for ask in self._declared(Measured)})
 
     def _named(self) -> list[Any]:
-        from trid3nt_server.mesh.recipe import input_names
+        from trid3nt_server.tools.mesh.recipe import input_names
 
         named = [mark.point for mark in self._declared(Placed)]
         named += [mark.fraction for mark in self._declared(Placed)]
@@ -1158,7 +1158,7 @@ class TelemacWorkflow(Workflow):
     async def _recipe(self, env: Any, recipe: Any) -> dict[str, Any]:
         """The mesh ask with every input it names read off the run: the extent,
         a resolution stated as a name, and each op argument that takes one."""
-        from trid3nt_server.mesh.recipe import recipe_plan_value, takes_name
+        from trid3nt_server.tools.mesh.recipe import recipe_plan_value, takes_name
         from trid3nt_server.workflows.runtime.fill import read
 
         asked = recipe_plan_value(recipe)
@@ -1173,7 +1173,7 @@ class TelemacWorkflow(Workflow):
 
     def _mesh(self, domain: str, slots: Mapping[str, str]) -> Any:
         """The mesh this workflow asks for where the template declares none."""
-        from trid3nt_server.mesh.tool import mesh_op, tool
+        from trid3nt_server.tools.mesh.tool import mesh_op, tool
         from trid3nt_server.workflows.runtime.data import BED
 
         return tool.build_mesh(

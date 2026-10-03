@@ -46,7 +46,7 @@ def _rows() -> dict:
 
 
 def _recipe():
-    from trid3nt_server.mesh.tool import recipe_from_plan_value
+    from trid3nt_server.tools.mesh.tool import recipe_from_plan_value
 
     return recipe_from_plan_value(_step("mesh").kwargs["mesh"])
 

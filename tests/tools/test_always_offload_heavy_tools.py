@@ -19,12 +19,20 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 _SRC = pathlib.Path(server.__file__).resolve().parent.parent
 #: The trees a composer or a mesher lives in.
-_SWEPT = (_SRC / "workflows", _SRC / "mesh")
+_SWEPT = (_SRC / "workflows", _SRC / "tools" / "mesh")
 #: The heavy sync fetch this file's sweep guards. It is named by a recipe's bed
 #: row rather than called from a coroutine anywhere in the tree, so the sweep
 #: asserts ABSENCE of an on-loop call rather than a particular offload.
 _HEAVY_FETCH = "fetch_cudem("
 
+
+def _tree(rel: pathlib.PurePath) -> str:
+    """The swept tree a module lives in, else its top-level folder."""
+    for path in _SWEPT:
+        swept = path.relative_to(_SRC)
+        if rel.parts[:len(swept.parts)] == swept.parts:
+            return str(swept)
+    return rel.parts[0]
 
 def test_fetch_cudem_in_always_set() -> None:
     assert "fetch_cudem" in server._ALWAYS_OFFLOAD_SYNC_TOOLS
@@ -159,9 +167,9 @@ def test_the_sweep_reaches_every_tree_a_composing_tool_is_defined_in() -> None:
     import inspect
 
     trees = {
-        pathlib.Path(inspect.getsourcefile(inspect.unwrap(t.fn))).resolve()
-        .relative_to(_SRC).parts[0]
+        _tree(pathlib.Path(inspect.getsourcefile(inspect.unwrap(t.fn))).resolve()
+              .relative_to(_SRC))
         for t in agent_tools.TOOL_REGISTRY.values()
     } - {"tools", "gates"}
-    assert "mesh" in trees
-    assert not trees - {p.name for p in _SWEPT}, sorted(trees)
+    assert "tools/mesh" in trees
+    assert not trees - {str(p.relative_to(_SRC)) for p in _SWEPT}, sorted(trees)

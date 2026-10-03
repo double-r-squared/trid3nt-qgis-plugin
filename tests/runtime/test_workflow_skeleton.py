@@ -186,7 +186,7 @@ def test_a_constant_supplied_off_the_model_wire_still_reaches_the_sheet():
 
 def _reach_mesh(**params):
     """The MESH recipe a reach template writes, with test values for its ask."""
-    from trid3nt_server.mesh.tool import tool
+    from trid3nt_server.tools.mesh.tool import tool
 
     params.setdefault("extent", "reach_polygon")
     return tool.build_mesh(mesher="om2d", kind="unstructured_tri", **params)

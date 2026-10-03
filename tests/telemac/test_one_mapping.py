@@ -53,7 +53,7 @@ def test_a_composite_reading_a_name_the_mapping_lacks_refuses_by_name():
 
 
 def test_a_misspelled_input_in_a_recipe_is_refused_by_name_at_fill(monkeypatch):
-    from trid3nt_server.mesh.tool import mesh_op, tool
+    from trid3nt_server.tools.mesh.tool import mesh_op, tool
     from trid3nt_server.workflows.telemac.templates.rain_on_grid import (
         rain_on_grid as template)
 
@@ -115,7 +115,7 @@ def test_no_placeholder_read_is_left_in_the_server():
 def test_every_template_names_only_what_its_run_is_called():
     """A word an op's own signature takes as a string - set_bed's condition -
     stays a word; every other name a template writes is one of its run's."""
-    from trid3nt_server.mesh.recipe import input_names
+    from trid3nt_server.tools.mesh.recipe import input_names
     from trid3nt_server.workflows.telemac.templates.rain_on_grid import (
         rain_on_grid as template)
 
@@ -185,7 +185,7 @@ def test_every_row_a_template_reads_is_in_the_mapping_after_the_fill(
     """What a composite, a recipe or a measurement reads is produced at the
     fill; a row asked near a point the run places is produced once that point
     is, by the read before the sheet."""
-    from trid3nt_server.mesh.recipe import input_names
+    from trid3nt_server.tools.mesh.recipe import input_names
 
     async def _produce(env, decl):
         return decl.name

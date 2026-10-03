@@ -210,7 +210,7 @@ class ToolWord:
     @staticmethod
     def build_mesh(**ask: Any) -> Any:
         """Declare a mesh ask -> a frozen declaration, checked at the mesh router."""
-        from trid3nt_server.mesh.tool import MeshTool
+        from trid3nt_server.tools.mesh.tool import MeshTool
 
         return MeshTool.build_mesh(**ask)
 

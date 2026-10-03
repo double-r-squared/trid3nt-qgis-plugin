@@ -380,7 +380,7 @@ package DataSeam {
 
     part waterCut : WaterCut {
         doc /*
-        code: trid3nt_server/mesh/water.py
+        code: trid3nt_server/tools/mesh/water.py
         */
     }
 
@@ -392,7 +392,7 @@ package DataSeam {
 
     part bedPainter : BedPainter {
         doc /*
-        code: trid3nt_server/mesh/shared/primitives.py
+        code: trid3nt_server/tools/mesh/shared/primitives.py
         */
     }
 

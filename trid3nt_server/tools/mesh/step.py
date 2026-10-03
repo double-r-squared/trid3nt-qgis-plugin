@@ -15,9 +15,9 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
-from trid3nt_server.mesh.artifact import MeshArtifact, measured_min_edge_m
+from trid3nt_server.tools.mesh.artifact import MeshArtifact, measured_min_edge_m
 
-logger = logging.getLogger("trid3nt_server.mesh.step")
+logger = logging.getLogger("trid3nt_server.tools.mesh.step")
 
 __all__ = ["GATE_LABEL", "build_declared_mesh", "keep_mesh", "mesh_key",
            "mesh_record"]
@@ -44,9 +44,9 @@ async def build_declared_mesh(*, mesh: dict[str, Any], name: Any = None,
     A SUPPLIED mesh is adopted whole; one KEPT under this recipe's content key
     is reused unless ``fresh``; otherwise one is built, gated in the run's mode."""
     from trid3nt_server.render.pipeline_emitter import current_turn_case
-    from trid3nt_server.mesh.gate import gate_mesh_build
-    from trid3nt_server.mesh.session import MeshSession
-    from trid3nt_server.mesh.tool import (
+    from trid3nt_server.tools.mesh.gate import gate_mesh_build
+    from trid3nt_server.tools.mesh.session import MeshSession
+    from trid3nt_server.tools.mesh.tool import (
         recipe_from_plan_value,
         supplied_mesh_artifact,
     )

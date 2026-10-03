@@ -299,12 +299,12 @@ import re  # noqa: E402
 _SERVER_DIR = pathlib.Path(__file__).resolve().parents[2] / "trid3nt_server"
 # The trees a COMPOSER lives in. `render/` is the seam's own home and defines
 # what this sweep counts, so sweeping it would count the definition site.
-_SWEPT = ("workflows", "inputs", "mesh")
+_SWEPT = ("workflows", "inputs", "tools/mesh")
 
 # relpath (from trid3nt_server/) -> (n_input_emission_calls, reason). Sum is the
 # only input-emission the tree is allowed to keep post-collapse.
 _ALLOWLISTED_INPUT_EMISSION: dict[str, tuple[int, str]] = {
-    "mesh/gate.py": (1, "the mesh under construction, presented at the gate as an editable MDAL layer - an AUTHORED domain, not a router fetch, so no emit-on-fetch seam can cover it; one home for every mesher's presentation"),
+    "tools/mesh/gate.py": (1, "the mesh under construction, presented at the gate as an editable MDAL layer - an AUTHORED domain, not a router fetch, so no emit-on-fetch seam can cover it; one home for every mesher's presentation"),
     "inputs/point.py": (1, "the Point context-layer publisher - a resolved PARAM (picked, typed or derived), not a router fetch, so no emit-on-fetch seam can cover it; one home for every Point slot"),
 }
 

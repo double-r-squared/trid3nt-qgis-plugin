@@ -9,11 +9,11 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-import trid3nt_server.mesh as mesh
+import trid3nt_server.tools.mesh as mesh
 import trid3nt_server.workflows as workflows
 
 _TREE = Path(mesh.__file__).resolve().parent
-_PACKAGE = "trid3nt_server.mesh"
+_PACKAGE = "trid3nt_server.tools.mesh"
 #: An engine is a package under workflows that holds its own modules; the
 #: runtime and the solver beside them are what every engine shares.
 _ENGINES = tuple(
