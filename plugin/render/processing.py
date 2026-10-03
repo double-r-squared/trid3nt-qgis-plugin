@@ -1,8 +1,9 @@
 """A ``processing-request`` from the agent, run in THIS QGIS session.
 
 An algorithm request runs ``processing.run`` over project layers named in its
-params by id or canvas name and writes every output to a file it names; the
-agent publishes that file as a case layer, which is what paints. A code request executes the
+params by id or canvas name, or case layers named by their store uri, and writes
+every output to a file it names; the agent publishes that file as a case layer,
+which is what paints. A code request executes the
 approved snippet in the session's Python. The response carries the outcome
 honestly: an error is the session's own traceback, never a fabricated result.
 """
@@ -75,7 +76,8 @@ def run_algorithm(algorithm: str, params: dict) -> Dict[str, Any]:
         ext = p.defaultFileExtension() if hasattr(p, "defaultFileExtension") else ""
         resolved.setdefault(p.name(), QgsProcessingUtils.generateTempFilename(
             f"{p.name()}.{ext}" if ext else p.name()))
-    outputs = processing.run(alg, resolved)
+    with _gdal_config_in_environ():
+        outputs = processing.run(alg, resolved)
     layers = []
     for name in destinations:
         label = alg.displayName() if len(destinations) == 1 else f"{alg.displayName()} {name}"
@@ -117,9 +119,31 @@ def run_code(code: str, iface: Any = None) -> Tuple[Any, str]:
     return _jsonable(namespace.get("result")), _tail(buffer.getvalue())
 
 
+@contextlib.contextmanager
+def _gdal_config_in_environ():
+    """The session's GDAL configuration in the process environment for the run:
+    a ``gdal:`` algorithm spawns a GDAL process, which reads ``/vsis3`` from its
+    environment and never sees an in-process config option."""
+    import os
+
+    from osgeo import gdal
+
+    added = {key: value for key, value in (gdal.GetConfigOptions() or {}).items()
+             if key not in os.environ}
+    os.environ.update(added)
+    try:
+        yield
+    finally:
+        for key in added:
+            os.environ.pop(key, None)
+
+
 def _layer_named(project: Any, value: str) -> Any:
     """A project layer by its QGIS id, the agent's layer id stamped on it, or its
-    canvas name; any other string passes through as the value."""
+    canvas name; a case layer's store uri opens the way the dock opens it; any
+    other string passes through as the value."""
+    if value.startswith("s3://"):
+        return _case_layer(project, value)
     known = project.mapLayer(value)
     if known is not None:
         return known
@@ -127,6 +151,33 @@ def _layer_named(project: Any, value: str) -> Any:
                if layer.customProperty("trid3nt/layer_id") == value]
     layers = stamped or project.mapLayersByName(value)
     return layers[0] if layers else value
+
+
+def _case_layer(project: Any, uri: str) -> Any:
+    """The project layer the dock painted from ``uri``, else the uri opened
+    through the dock's own ``/vsis3`` path; one neither reads is refused."""
+    painted = [layer for layer in project.mapLayers().values()
+               if layer.customProperty("trid3nt/source_uri") == uri]
+    if painted:
+        return painted[0]
+    from qgis.core import QgsRasterLayer, QgsVectorLayer
+
+    from ..net.trid3nt_client import s3_to_vsis3
+
+    path = s3_to_vsis3(uri)
+    if path is not None:
+        name = uri.rsplit("/", 1)[-1]
+        raster = QgsRasterLayer(path, name, "gdal")
+        if raster.isValid():
+            return raster
+        vector = QgsVectorLayer(path, name, "ogr")
+        if vector.isValid():
+            return vector
+    raise ValueError(
+        f"case layer {uri!r} is not on this project and does not open through "
+        f"the object store as {path!r}; the session reads the store at the "
+        "endpoint its settings name"
+    )
 
 
 def _as_layer(project: Any, output: Any, name: str) -> Any:
