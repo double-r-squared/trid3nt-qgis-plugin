@@ -49,7 +49,9 @@ package ToolPlane {
     part def SessionAlgorithmTool {
         doc /*
         ``run_qgis_algorithm``: the registered entry for one Processing
-        algorithm over canvas layers named in its params.
+        algorithm over case layers named in its params. Each output file is a
+        case layer the way a fetch output is - in the store, a LayerURI through
+        the one emission seam - and its layer id is what the call returns.
         */
     }
 
