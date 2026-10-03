@@ -394,18 +394,31 @@ def test_a_call_before_that_returns_a_record_is_named_by_its_value():
     assert placed({"offsets": ["$offset"]}, made) == {"offsets": [record]}
 
 
-def test_a_session_tool_s_layer_is_named_by_the_id_its_response_carries():
-    """A QGIS output lands in the user's project and never in loaded_layers:
-    the layer_id its response carries is what the call after it names."""
-    answer = {"status": "ok", "algorithm": "native:reprojectlayer",
-              "layer_id": "Reprojected_7f3a", "kind": "vector"}
+def test_a_qgis_output_is_named_by_its_case_layer_id():
+    """A QGIS output is a case layer like a fetch output: the id it reached the
+    case under is what the call after it names."""
+    answer = {"layer_id": "qgis-7f3a", "name": "Reprojected", "layer_type": "raster",
+              "uri": "s3://runs/qgis-7f3a/OUTPUT.tif", "algorithm": "native:reprojectlayer"}
+    ws = _FakeWS([_msg("tool-io", {"function_response": json.dumps(answer),
+                                   "is_error": False}),
+                  _msg("session-state", {"loaded_layers": [
+                      {"layer_id": "qgis-7f3a", "role": "primary"}]}),
+                  _msg("turn-complete", {})])
+    run = LiveRun(tool="t", args={}, case_title="c", timeout_s=5,
+                  before=(Before("projected", "run_qgis_algorithm", {}),))
+    made = asyncio.run(run_before(ws, "S", run, "C"))
+    assert made == {"projected": "qgis-7f3a"}
+
+
+def test_a_layer_id_that_never_reached_the_case_stops_the_run():
+    answer = {"status": "ok", "layer_id": "Reprojected_7f3a", "kind": "vector"}
     ws = _FakeWS([_msg("tool-io", {"function_response": json.dumps(answer),
                                    "is_error": False}),
                   _msg("turn-complete", {})])
     run = LiveRun(tool="t", args={}, case_title="c", timeout_s=5,
                   before=(Before("projected", "run_qgis_algorithm", {}),))
-    made = asyncio.run(run_before(ws, "S", run, "C"))
-    assert made == {"projected": "Reprojected_7f3a"}
+    with pytest.raises(LiveRunError, match="published no new layer"):
+        asyncio.run(run_before(ws, "S", run, "C"))
 
 
 # --- the assertions ---------------------------------------------------------- #
