@@ -1,7 +1,8 @@
 """``run_qgis_algorithm`` - one QGIS Processing algorithm run in the user's session.
 
-The body is a request on the plugin wire: the session runs ``processing.run``
-over layers named by id or canvas name and writes each output to a file. Each
+The body is a request on the plugin wire: a case layer named by its id rides as
+its store uri, which the session opens the way the dock does; the session runs
+``processing.run`` over those layers and writes each output to a file. Each
 file becomes a case layer the way a fetch output does - in the store, returned
 as a ``LayerURI`` - so the next call names it by its layer id.
 """
@@ -53,6 +54,15 @@ def _inherited(params: dict[str, Any]) -> dict[str, Any]:
         if len(stated) == 1:
             out[key] = stated.pop()
     return out
+
+
+def _readable(params: dict[str, Any]) -> dict[str, Any]:
+    """``params`` with every case layer named by its id swapped for its store
+    uri: the session opens a layer by that uri, never by an id it may not hold."""
+    from trid3nt_server.render.uri_registry import lookup_uri_for_handle
+
+    return {key: (lookup_uri_for_handle(value) or value) if isinstance(value, str)
+            else value for key, value in params.items()}
 
 
 def _case_layer(algorithm: str, output: dict[str, Any], **fields: Any) -> QgisLayerURI:
@@ -118,7 +128,8 @@ async def run_qgis_algorithm(
             f"params must be a mapping of the algorithm's parameters; got {type(params).__name__}"
         )
     algorithm = algorithm.strip()
-    response = await run_in_session(kind="algorithm", algorithm=algorithm, params=params or {})
+    response = await run_in_session(
+        kind="algorithm", algorithm=algorithm, params=_readable(params or {}))
     result = dict(response.result or {})
     outputs = [layer for layer in result.pop("layers", None) or [result]
                if layer.get("source")]
