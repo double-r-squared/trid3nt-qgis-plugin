@@ -1,7 +1,8 @@
 """A ``processing-request`` from the agent, run in THIS QGIS session.
 
 An algorithm request runs ``processing.run`` over project layers named in its
-params by id or canvas name and adds every output layer to the project; a code request executes the
+params by id or canvas name and writes every output to a file it names; the
+agent publishes that file as a case layer, which is what paints. A code request executes the
 approved snippet in the session's Python. The response carries the outcome
 honestly: an error is the session's own traceback, never a fabricated result.
 """
@@ -45,9 +46,9 @@ def _response(
 
 
 def run_algorithm(algorithm: str, params: dict) -> Dict[str, Any]:
-    """Run one Processing algorithm; every destination left unset is a temporary
-    output, and every output layer is added to the project and summarized."""
-    from qgis.core import QgsApplication, QgsProcessing, QgsProject
+    """Run one Processing algorithm; every destination left unset is written to
+    a temporary FILE, and every output layer is summarized, never added here."""
+    from qgis.core import QgsApplication, QgsProcessingUtils, QgsProject
 
     import processing
 
@@ -67,19 +68,20 @@ def run_algorithm(algorithm: str, params: dict) -> Dict[str, Any]:
         key: _layer_named(project, value) if isinstance(value, str) else value
         for key, value in params.items()
     }
-    destinations = [p.name() for p in alg.parameterDefinitions() if p.isDestination()]
-    for name in destinations:
-        resolved.setdefault(name, QgsProcessing.TEMPORARY_OUTPUT)
+    written = [p for p in alg.parameterDefinitions() if p.isDestination()]
+    destinations = [p.name() for p in written]
+    for p in written:
+        # A temporary vector output is a memory layer, which no file names.
+        ext = p.defaultFileExtension() if hasattr(p, "defaultFileExtension") else ""
+        resolved.setdefault(p.name(), QgsProcessingUtils.generateTempFilename(
+            f"{p.name()}.{ext}" if ext else p.name()))
     outputs = processing.run(alg, resolved)
     layers = []
     for name in destinations:
         label = alg.displayName() if len(destinations) == 1 else f"{alg.displayName()} {name}"
         layer = _as_layer(project, outputs.get(name), label)
-        if layer is None:
-            continue
-        if layer.id() not in project.mapLayers():
-            project.addMapLayer(layer)
-        layers.append(_summary(layer))
+        if layer is not None:
+            layers.append(_summary(layer))
     values = {
         key: value for key, value in outputs.items()
         if key not in destinations and _is_json(value)
