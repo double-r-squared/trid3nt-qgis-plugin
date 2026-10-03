@@ -4,13 +4,17 @@ Run as a SUBPROCESS by its wrapper test under the interpreter that carries
 ``qgis.core`` and the Processing plugin. A tiny DEM is written and added to the
 project; ``native:slope`` runs over it BY CANVAS NAME and the output is written
 to a file, summarized and never added to the project; a snippet reads the project back and a raising
-snippet answers with its traceback."""
+snippet answers with its traceback. A case layer named by its store uri opens
+through the dock's ``/vsis3`` path against a stub store, and reproject -> IDW
+chains through it; a uri the store does not hold is refused by name."""
 
 from __future__ import annotations
 
+import http.server
 import os
 import sys
 import tempfile
+import threading
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -33,6 +37,98 @@ def _write_dem(path: str) -> None:
     ds.GetRasterBand(1).WriteArray(np.repeat(1000.0 - rows * 2.0, n, axis=1))
     ds.FlushCache()
     ds = None
+
+
+class _StubStore(http.server.BaseHTTPRequestHandler):
+    """A path-style object store over a local directory: HEAD and ranged GET."""
+
+    root = ""
+
+    def _object(self):
+        path = os.path.join(self.root, self.path.split("?", 1)[0].lstrip("/"))
+        return path if os.path.isfile(path) else None
+
+    def do_HEAD(self):  # noqa: N802 -- BaseHTTPRequestHandler's name
+        path = self._object()
+        self.send_response(200 if path else 404)
+        self.send_header("Content-Length", str(os.path.getsize(path) if path else 0))
+        self.end_headers()
+
+    def do_GET(self):  # noqa: N802 -- BaseHTTPRequestHandler's name
+        path = self._object()
+        if path is None:
+            self.send_response(404)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        with open(path, "rb") as fh:
+            body = fh.read()
+        ranged = self.headers.get("Range", "")
+        if ranged.startswith("bytes="):
+            first, _, last = ranged[len("bytes="):].partition("-")
+            start, end = int(first), min(int(last or len(body) - 1), len(body) - 1)
+            self.send_response(206)
+            self.send_header("Content-Range", f"bytes {start}-{end}/{len(body)}")
+            body = body[start:end + 1]
+        else:
+            self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *args):
+        pass
+
+
+def _store_chain(tmp: str) -> None:
+    """reproject -> IDW where the IDW names the reprojected case layer by its
+    store uri, as the agent hands it on the wire."""
+    import json
+    import shutil
+
+    from plugin.render.layers import configure_store_access
+    from plugin.render.processing import run_processing_request
+
+    root = os.path.join(tmp, "store")
+    os.makedirs(os.path.join(root, "runs", "qgis-chain"))
+    _StubStore.root = root
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _StubStore)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    assert configure_store_access(
+        f"http://127.0.0.1:{server.server_address[1]}", "k", "s", "us-east-1") is None
+    points = os.path.join(tmp, "pts.geojson")
+    with open(points, "w") as fh:
+        json.dump({"type": "FeatureCollection", "features": [
+            {"type": "Feature", "properties": {"z": z},
+             "geometry": {"type": "Point", "coordinates": xy}}
+            for z, xy in ((1.0, [-82.42, 42.97]), (3.0, [-82.41, 42.98]),
+                          (2.0, [-82.40, 42.96]))]}, fh)
+    reprojected = run_processing_request({
+        "request_id": "01HARNESSPROCESSINGSTOREAA", "kind": "algorithm",
+        "algorithm": "native:reprojectlayer",
+        "params": {"INPUT": points, "TARGET_CRS": "EPSG:32617"},
+    })
+    assert reprojected["status"] == "ok", reprojected
+    written = reprojected["result"]["source"].split("|", 1)[0]
+    shutil.copy(written, os.path.join(root, "runs", "qgis-chain", "OUTPUT.gpkg"))
+    uri = "s3://runs/qgis-chain/OUTPUT.gpkg"
+    grid = run_processing_request({
+        "request_id": "01HARNESSPROCESSINGSTOREBB", "kind": "algorithm",
+        "algorithm": "gdal:gridinversedistance", "params": {"INPUT": uri, "Z_FIELD": "z"},
+    })
+    assert grid["status"] == "ok", grid
+    assert grid["result"]["kind"] == "raster" and grid["result"]["crs"] == "EPSG:32617", grid
+    print(f"[processing] reproject -> IDW over the case layer {uri} read through /vsis3")
+
+    missing = "s3://runs/qgis-gone/OUTPUT.gpkg"
+    refused = run_processing_request({
+        "request_id": "01HARNESSPROCESSINGSTORECC", "kind": "algorithm",
+        "algorithm": "gdal:gridinversedistance", "params": {"INPUT": missing, "Z_FIELD": "z"},
+    })
+    assert refused["status"] == "error" and f"case layer {missing!r}" in refused["error"], refused
+    print("[processing] a case layer the store does not hold is refused by name")
+    server.shutdown()
+    server.server_close()
 
 
 def main() -> int:
@@ -120,6 +216,7 @@ def main() -> int:
     })
     assert failed["status"] == "error" and "NameError" in failed["error"], failed
     print("[processing] a raising snippet answers with its traceback")
+    _store_chain(tmp)
     app.exitQgis()
     return 0
 
