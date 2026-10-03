@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -21,7 +23,8 @@ if not (REPO / "dev").is_dir():
 sys.path.insert(0, str(REPO))
 
 from dev.testing.live_run import (  # noqa: E402
-    Before, LiveRun, QgisSession, RunEvidence, _pump, placed, run_before)
+    _QGIS_PYTHON as QGIS_PYTHON, Before, LiveRun, QgisSession, RunEvidence,
+    _pump, placed, run_before)
 
 _STUB = '''
 import json, sys
@@ -172,4 +175,34 @@ def test_every_ehydro_matched_canary_states_a_chain_that_binds():
             made[step.name] = f"id-{step.name}"
         assert placed(run.args, made)["bed"] == {"layer": "id-bed"}
         cell = float(run.args["mesh_resolution_m"])
-        assert f"-tr {cell:g} {cell:g}" in run.before[-1].args["params"]["EXTRA"]
+        extra = run.before[-1].args["params"]["EXTRA"].split()
+        assert f"-tr {cell:g} {cell:g}" in " ".join(extra)
+        edges = [float(v) for v in extra[1:3] + extra[4:6]]
+        assert all(edge % cell == 0 for edge in edges), (name, edges)
+
+
+def test_the_answer_session_replies_with_the_docks_runners_on_a_clean_channel():
+    if subprocess.run([QGIS_PYTHON, "-c", "import qgis.core"],
+                      capture_output=True).returncode:
+        pytest.skip(f"{QGIS_PYTHON} carries no PyQGIS")
+    lines = [
+        {"type": "session-state", "payload": {"loaded_layers": []}},
+        {"type": "processing-request", "payload": {
+            "request_id": "R1", "kind": "code",
+            "code": "import os\nos.write(1, b'fd one noise\\n')\nresult = 2"}},
+        {"type": "processing-request", "payload": {
+            "request_id": "R2", "kind": "algorithm",
+            "algorithm": "native:createconstantrasterlayer",
+            "params": {"EXTENT": "0,10,0,10 [EPSG:32610]",
+                       "TARGET_CRS": "EPSG:32610", "PIXEL_SIZE": 1,
+                       "NUMBER": 3}}}]
+    out = subprocess.run(
+        [QGIS_PYTHON, str(REPO / "dev" / "testing" / "headless_qgis.py"),
+         "--answer"], input="".join(json.dumps(m) + "\n" for m in lines),
+        capture_output=True, text=True, timeout=180, cwd=str(REPO),
+        env={**os.environ, "QT_QPA_PLATFORM": "offscreen"})
+    replies = [json.loads(line) for line in out.stdout.splitlines()]
+    assert replies[0] is None
+    assert [(r["request_id"], r["status"]) for r in replies[1:]] == [
+        ("R1", "ok"), ("R2", "ok")], out.stderr[-2000:]
+    assert replies[2]["result"]["crs"] == "EPSG:32610"
