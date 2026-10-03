@@ -237,6 +237,29 @@ async def test_an_output_is_a_case_layer_carrying_what_its_input_carried(
 
 
 @pytest.mark.asyncio
+async def test_a_case_layer_rides_the_wire_as_its_store_uri(
+        monkeypatch, tmp_path, fake_s3) -> None:
+    """The next QGIS step names the output by its id; the session is handed the
+    store uri it opens the way the dock does, every other string untouched."""
+    from trid3nt_server.render.uri_registry import activate_registry, deactivate_registry
+
+    registry, out = await _a_qgis_output(monkeypatch, tmp_path, fake_s3, "qgis-wire")
+    emitter = _FakeEmitter()
+    monkeypatch.setattr(pe, "current_emitter", lambda: emitter)
+    reply = _answer_when_asked(emitter, status="ok", result={"outputs": {"N": 1}})
+    token = activate_registry(registry)
+    try:
+        await run_qgis_algorithm("gdal:gridinversedistance", {
+            "INPUT": out.layer_id, "Z_FIELD": "z", "MASK": "dem-1"})
+    finally:
+        deactivate_registry(token)
+    await reply
+    sent = emitter.sent[-1][1].params
+    assert sent["INPUT"] == out.uri and out.uri.startswith("s3://")
+    assert sent["MASK"] == "s3://bucket/dem.tif" and sent["Z_FIELD"] == "z"
+
+
+@pytest.mark.asyncio
 async def test_a_second_derive_takes_a_qgis_output_by_its_id(
         monkeypatch, tmp_path, fake_s3) -> None:
     from trid3nt_server.render.uri_registry import activate_registry, deactivate_registry
