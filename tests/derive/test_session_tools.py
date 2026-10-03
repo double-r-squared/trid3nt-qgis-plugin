@@ -163,37 +163,118 @@ def test_bad_arguments_refuse_before_the_wire(monkeypatch) -> None:
         asyncio.run(run_pyqgis("   ", confirmed=True))
 
 
-@pytest.mark.asyncio
-async def test_an_output_carries_the_datum_and_quantity_its_input_carried(monkeypatch) -> None:
-    """The gridded survey is depths below the survey's own zero because the
-    soundings it was computed from said so, and a layer named by its id brings
-    that along to whatever reads it next."""
-    from trid3nt_server.render.uri_registry import (
-        activate_registry, deactivate_registry, get_uri_registry,
-        lookup_layer_for_handle)
+_WITHIN = {"type": "Polygon", "coordinates": [[
+    [-82.5, 42.99], [-82.49, 42.99], [-82.49, 43.0], [-82.5, 43.0], [-82.5, 42.99]]]}
 
-    registry = get_uri_registry("qgis-inherits")
-    registry.register_tool_result("fetch_ehydro_surveys", {
-        "layer_id": "ehydro_surveys-soundings", "uri": "s3://bucket/soundings.fgb",
-        "vertical_datum": "LWD_IGLD85", "quantity": "depth_below_datum",
+
+async def _a_qgis_output(monkeypatch, tmp_path, store, session: str):
+    """One algorithm run over a fetched case layer, the QGIS side stubbed with
+    the file it would have written -> (registry, the tool's return)."""
+    import numpy as np
+    import rasterio
+    from rasterio.transform import from_origin
+
+    from trid3nt_server import storage
+    from trid3nt_server.render.uri_registry import (
+        activate_registry, deactivate_registry, get_uri_registry)
+
+    values = np.full((10, 10), 2.0, dtype="float32")
+    values[4:6, 4:6] = np.nan
+    path = tmp_path / "OUTPUT.tif"
+    with rasterio.open(path, "w", driver="GTiff", height=10, width=10, count=1,
+                       dtype="float32", crs="EPSG:4326", nodata=np.nan,
+                       transform=from_origin(-82.5, 43.0, 0.001, 0.001)) as dst:
+        dst.write(values, 1)
+    monkeypatch.setattr(storage, "_CLIENT", store)
+    registry = get_uri_registry(session)
+    registry.register_tool_result("fetch_dem", {
+        "layer_id": "dem-1", "uri": "s3://bucket/dem.tif",
+        "vertical_datum": "NAVD88", "quantity": "elevation",
         "datum_offset_m": 176.0, "datum_offset_frame": "IGLD85"})
     emitter = _FakeEmitter()
     monkeypatch.setattr(pe, "current_emitter", lambda: emitter)
+    reply = _answer_when_asked(emitter, status="ok", result={
+        "layer_name": "Reprojected", "layer_id": "Reprojected_7f3a", "kind": "raster",
+        "crs": "EPSG:4326", "extent": [-82.5, 42.99, -82.49, 43.0],
+        "source": str(path)})
     token = activate_registry(registry)
     try:
-        reply = _answer_when_asked(emitter, status="ok", result={
-            "layer_name": "Grid (IDW)", "layer_id": "grid_idw_1", "kind": "raster",
-            "source": "/tmp/processing/OUTPUT.tif"})
         out = await run_qgis_algorithm(
-            "gdal:gridinversedistancenearestneighbor",
-            {"INPUT": "ehydro_surveys-soundings", "RADIUS": 9.14})
-        await reply
-        registry.register_tool_result("run_qgis_algorithm", out)
-        named = lookup_layer_for_handle("grid_idw_1")
+            "native:reprojectlayer", {"INPUT": "dem-1", "TARGET_CRS": "EPSG:4326"})
     finally:
         deactivate_registry(token)
-    assert out["uri"] == "/tmp/processing/OUTPUT.tif"
-    for layer in (out, named):
-        assert layer["vertical_datum"] == "LWD_IGLD85"
-        assert layer["quantity"] == "depth_below_datum"
+    await reply
+    registry.register_tool_result("run_qgis_algorithm", out)
+    return registry, out
+
+
+@pytest.mark.asyncio
+async def test_an_output_is_a_case_layer_carrying_what_its_input_carried(
+        monkeypatch, tmp_path, fake_s3) -> None:
+    """The reprojected surface is published the way a fetch output is - in the
+    store, a LayerURI through the emission seam - and named by ITS id it brings
+    the zero, the shift and the quantity of the layer it was computed from."""
+    from trid3nt_contracts.execution import LayerURI
+
+    from trid3nt_server.render.layer_uri_emit import emit_layer_uri
+    from trid3nt_server.render.uri_registry import (
+        activate_registry, deactivate_registry, lookup_layer_for_handle)
+
+    registry, out = await _a_qgis_output(monkeypatch, tmp_path, fake_s3, "qgis-pub")
+    token = activate_registry(registry)
+    try:
+        named = lookup_layer_for_handle(out.layer_id)
+    finally:
+        deactivate_registry(token)
+    assert isinstance(out, LayerURI) and emit_layer_uri(out) is not None
+    assert out.layer_id.startswith("qgis-") and out.layer_id != "Reprojected_7f3a"
+    assert out.uri.startswith("s3://") and fake_s3.store[out.uri.split("/", 3)[3]]
+    assert (out.name, out.layer_type, out.crs) == ("Reprojected", "raster", "EPSG:4326")
+    assert named["uri"] == out.uri
+    for layer in (out.model_dump(), named):
+        assert layer["vertical_datum"] == "NAVD88" and layer["quantity"] == "elevation"
         assert (layer["datum_offset_m"], layer["datum_offset_frame"]) == (176.0, "IGLD85")
+
+
+@pytest.mark.asyncio
+async def test_a_second_derive_takes_a_qgis_output_by_its_id(
+        monkeypatch, tmp_path, fake_s3) -> None:
+    from trid3nt_server.render.uri_registry import activate_registry, deactivate_registry
+    from trid3nt_server.tools.derive.fill_nodata.fill_nodata import fill_nodata
+
+    registry, out = await _a_qgis_output(monkeypatch, tmp_path, fake_s3, "qgis-chain")
+    token = activate_registry(registry)
+    try:
+        filled = await fill_nodata(layer=out.layer_id, within=_WITHIN, seed=1.0)
+    finally:
+        deactivate_registry(token)
+    assert filled.name == "Reprojected (filled)"
+    assert dict(filled.coverage)["filled"] > 0.0
+    assert filled.vertical_datum == "NAVD88" and filled.quantity == "elevation"
+
+
+@pytest.mark.asyncio
+async def test_the_bed_slot_takes_a_qgis_output_by_its_id(
+        monkeypatch, tmp_path, fake_s3) -> None:
+    from trid3nt_server.inputs.bed import RASTER, bed
+    from trid3nt_server.render.uri_registry import activate_registry, deactivate_registry
+
+    registry, out = await _a_qgis_output(monkeypatch, tmp_path, fake_s3, "qgis-bed")
+    token = activate_registry(registry)
+    try:
+        held = bed(out.layer_id, frame="NAVD88")
+    finally:
+        deactivate_registry(token)
+    assert held.kind == RASTER and held.source["uri"] == out.uri
+
+
+@pytest.mark.asyncio
+async def test_an_output_no_file_names_is_refused_never_left_unpublished(
+        monkeypatch) -> None:
+    emitter = _FakeEmitter()
+    monkeypatch.setattr(pe, "current_emitter", lambda: emitter)
+    reply = _answer_when_asked(emitter, status="ok", result={
+        "layer_name": "Buffered", "kind": "vector", "source": "memory?geometry=Polygon"})
+    with pytest.raises(processing.SessionProcessingFailedError, match="cannot become a case layer"):
+        await run_qgis_algorithm("native:buffer", {"INPUT": "roads", "DISTANCE": 50})
+    await reply
