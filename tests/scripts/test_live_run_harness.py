@@ -394,6 +394,20 @@ def test_a_call_before_that_returns_a_record_is_named_by_its_value():
     assert placed({"offsets": ["$offset"]}, made) == {"offsets": [record]}
 
 
+def test_a_run_value_after_its_input_only_frame_is_the_record():
+    """A ``!run`` card gets its input-only frame first and the returned value
+    after it, on the same step; the value is what the next call reads, even a
+    bare number."""
+    ws = _FakeWS([_msg("tool-io", {"function_response": "null",
+                                   "is_error": False}),
+                  _msg("tool-io", {"function_response": "0.0",
+                                   "is_error": False}),
+                  _msg("turn-complete", {})])
+    run = LiveRun(tool="t", args={}, case_title="c", timeout_s=5,
+                  before=(Before("offset", "fetch_vertical_datum_offset", {}),))
+    assert asyncio.run(run_before(ws, "S", run, "C")) == {"offset": 0.0}
+
+
 def test_a_qgis_output_is_named_by_its_case_layer_id():
     """A QGIS output is a case layer like a fetch output: the id it reached the
     case under is what the call after it names."""

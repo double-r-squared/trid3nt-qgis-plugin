@@ -234,7 +234,7 @@ async def _persist_tool_card(
         # The persisted IO must ride the TYPED record, which is what replay
         # reads; the ``content`` JSON twin carries the identical values for
         # non-contract consumers. Computed only when at least one of raw_args /
-        # function_response was provided, so a directive-path row stays IO-less
+        # function_response was provided, so a compute card's row stays IO-less
         # and existing documents validate unchanged.
         _io_fields: dict[str, Any] = {}
         if raw_args is not None or function_response is not None:

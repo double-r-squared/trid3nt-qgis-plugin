@@ -297,6 +297,57 @@ async def test_untyped_tool_error_defaults_to_execution_failed() -> None:
     assert "boom" in payload["message"]
 
 
+def _completion_frames(ws: FakeWS, tool: str) -> list[dict]:
+    return [
+        e["payload"] for e in ws.sent
+        if e.get("type") == "tool-io"
+        and e["payload"].get("tool_name") == tool
+        and e["payload"].get("function_response") not in (None, "null")
+    ]
+
+
+@pytest.mark.asyncio
+async def test_value_returning_run_delivers_its_value_on_the_card() -> None:
+    ws = FakeWS()
+    state = server.SessionState(session_id=new_ulid())
+    await server._handle_dev_tool_invoke(
+        ws, state, {"name": _PROBE_NAME, "args": {"echo": 1.057}}
+    )
+    await _await_inflight(state)
+    frames = _completion_frames(ws, _PROBE_NAME)
+    assert len(frames) == 1
+    assert json.loads(frames[0]["function_response"])["echo"] == 1.057
+    assert frames[0]["is_error"] is False
+
+
+@pytest.mark.asyncio
+async def test_layer_returning_run_puts_no_value_on_the_card() -> None:
+    from trid3nt_contracts.execution import LayerURI
+
+    def _fn(**_kw) -> LayerURI:
+        return LayerURI(
+            layer_id=f"run-layer-{new_ulid()}",
+            name="run layer",
+            layer_type="vector",
+            uri="https://qgis.example/ogc/wms?LAYERS=out",
+        )
+
+    name = "compute_run_layer_probe"
+    meta = AtomicToolMetadata(name=name, ttl_class="live-no-cache", cacheable=False)
+    agent_tools.TOOL_REGISTRY[name] = RegisteredTool(
+        metadata=meta, fn=_fn, module=__name__
+    )
+    try:
+        ws = FakeWS()
+        state = server.SessionState(session_id=new_ulid())
+        await server._handle_dev_tool_invoke(ws, state, {"name": name, "args": {}})
+        await _await_inflight(state)
+    finally:
+        agent_tools.TOOL_REGISTRY.pop(name, None)
+    assert _completion_frames(ws, name) == []
+    assert any(e.get("type") == "tool-io" for e in ws.sent)
+
+
 def test_reconstruct_run_signature() -> None:
     assert server._reconstruct_run_signature("geocode_location", {}) == (
         "!run geocode_location"

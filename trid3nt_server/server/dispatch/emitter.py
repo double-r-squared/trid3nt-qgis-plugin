@@ -842,6 +842,35 @@ async def _invoke_tool_via_emitter(
     # already holds the layer at that point.
     return result
 
+def _is_layer_result(result: Any) -> bool:
+    if isinstance(result, LayerURI):
+        return True
+    if isinstance(result, (list, tuple)):
+        return any(isinstance(el, LayerURI) for el in result)
+    return isinstance(result, dict) and result.get("status") == "reused_existing"
+
+async def _emit_value_on_card(
+    state: SessionState, tool_name: str, params: dict, result: Any
+) -> None:
+    """Put a returned VALUE on the dispatch card's ``tool-io`` frame, the frame
+    a model-issued call fills from its summary. A layer reaches the map on its
+    own, so a layer result emits nothing here."""
+    # The directive path has no model loop to fill the completion frame, so
+    # without this a ``!run`` of a value-returning tool finishes its card with
+    # the value nowhere on the wire.
+    if result is None or _is_layer_result(result) or state.emitter is None:
+        return
+    step = state.emitter.last_tool_step
+    if step is None or step.tool_name != tool_name:
+        return
+    await state.emitter.emit_tool_io(
+        step_id=step.step_id,
+        tool_name=tool_name,
+        raw_args=_redact_secret_args(params),
+        function_response=result,
+        is_error=False,
+    )
+
 async def _dispatch_tool_and_persist(
     websocket: ServerConnection,
     state: SessionState,
@@ -864,9 +893,10 @@ async def _dispatch_tool_and_persist(
     bind_turn_case(turn_case_id)  # envelope tagging
     try:
         try:
-            await _invoke_tool_via_emitter(
+            result = await _invoke_tool_via_emitter(
                 websocket, state, tool_name, params
             )
+            await _emit_value_on_card(state, tool_name, params, result)
         except asyncio.CancelledError:
             raise
         except ToolNotFoundError as exc:
