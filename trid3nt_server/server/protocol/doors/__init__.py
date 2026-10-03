@@ -2,7 +2,7 @@
 
 One aiohttp app beside the WebSocket server, its routes registered by the
 module that owns their subject - the library, the case list, the layer round
-trips, the settings surfaces, the plugin repository and the telemetry summary.
+trips, the settings surfaces and the telemetry summary.
 Every route is unauthenticated with open CORS."""
 
 from trid3nt_server.server.protocol.doors.app import build_app, serve_doors

@@ -105,14 +105,17 @@ minio:
 	@bash $(SCRIPTS)/start_minio.sh
 	@bash $(SCRIPTS)/init_minio.sh
 
-# Refresh the daemon-served QGIS custom plugin repository (versioned zip +
-# plugins.xml + manifest under run/plugin-repo/). Runs before the agent starts
-# so every deploy serves the current plugin tree; the version stays
+# Package the plugin as a QGIS custom repository (versioned zip + plugins.xml +
+# manifest under run/plugin-repo/) with the dev copy; the version stays
 # metadata.txt-driven (warns, never auto-bumps, on an unbumped code change).
 plugin-repo:
-	@bash $(SCRIPTS)/package_plugin.sh
+	@if [ ! -f $(DEV)/plugin_repo.py ]; then \
+	  echo "plugin-repo skipped: dev/ is absent - the dev tools are not on the remote"; \
+	else \
+	  venvs/agent/bin/python $(DEV)/plugin_repo.py; \
+	fi
 
-agent: plugin-repo
+agent:
 	@mkdir -p $(LOG_DIR) $(RUN_DIR)
 	@bash $(SCRIPTS)/start_agent.sh
 	@bash $(SCRIPTS)/start_headless_qgis.sh
