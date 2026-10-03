@@ -73,6 +73,17 @@ def main() -> int:
     print(f"[processing] native:slope over the canvas DEM -> {summary['layer_name']} "
           f"({summary['width']}x{summary['height']}, mean slope {stats.mean:.2f} deg)")
 
+    points = run_processing_request({
+        "request_id": "01HARNESSPROCESSINGALGDDDD",
+        "kind": "algorithm", "algorithm": "native:pixelstopoints",
+        "params": {"INPUT_RASTER": "DEM", "RASTER_BAND": 1, "FIELD_NAME": "VALUE"},
+    })
+    assert points["status"] == "ok", points
+    written = points["result"]["source"].split("|", 1)[0]
+    assert os.path.isfile(written), points["result"]
+    assert len(QgsProject.instance().mapLayers()) == 1, "the agent's case layer paints it"
+    print(f"[processing] a vector output is the file {os.path.basename(written)}")
+
     dem.setCustomProperty("trid3nt/layer_id", "dem-fetched-1")
     for named in ("dem-fetched-1", dem.id()):
         by_id = run_processing_request({
