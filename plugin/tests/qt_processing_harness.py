@@ -2,8 +2,8 @@
 
 Run as a SUBPROCESS by its wrapper test under the interpreter that carries
 ``qgis.core`` and the Processing plugin. A tiny DEM is written and added to the
-project; ``native:slope`` runs over it BY CANVAS NAME and the output lands in
-the project with its summary; a snippet reads the project back and a raising
+project; ``native:slope`` runs over it BY CANVAS NAME and the output is written
+to a file, summarized and never added to the project; a snippet reads the project back and a raising
 snippet answers with its traceback."""
 
 from __future__ import annotations
@@ -62,17 +62,19 @@ def main() -> int:
     summary = algo["result"]
     assert summary["kind"] == "raster" and summary["band_count"] == 1, summary
     assert summary["crs"] == "EPSG:32611", summary
-    names = [l.name() for l in QgsProject.instance().mapLayers().values()]
-    assert summary["layer_name"] in names, (summary, names)
-    slope = QgsProject.instance().mapLayer(summary["layer_id"])
+    assert os.path.isfile(summary["source"]), summary
+    assert len(QgsProject.instance().mapLayers()) == 1, "the agent's case layer paints it"
+    slope = QgsRasterLayer(summary["source"], "slope")
     stats = slope.dataProvider().bandStatistics(1)
+    # A layer outside the project still alive at exitQgis segfaults the exit.
+    del slope
     # A 2 m drop per 30 m row is a 3.81 degree slope everywhere inside.
     assert abs(stats.mean - 3.81) < 0.2, stats.mean
     print(f"[processing] native:slope over the canvas DEM -> {summary['layer_name']} "
           f"({summary['width']}x{summary['height']}, mean slope {stats.mean:.2f} deg)")
 
     dem.setCustomProperty("trid3nt/layer_id", "dem-fetched-1")
-    for named in ("dem-fetched-1", summary["layer_id"]):
+    for named in ("dem-fetched-1", dem.id()):
         by_id = run_processing_request({
             "request_id": "01HARNESSPROCESSINGALGCCCC",
             "kind": "algorithm", "algorithm": "native:slope",
