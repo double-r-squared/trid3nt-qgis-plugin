@@ -397,7 +397,7 @@ def test_layers_named_by_id_carry_the_offset_through_the_tool_and_the_datum_thro
 
 
 def test_the_datum_quantity_and_shift_survive_fetch_qgis_merge_and_fill(
-        tmp_path, monkeypatch):
+        tmp_path, monkeypatch, fake_s3):
     """The three fields ride the layer record from the fetch through QGIS's
     grid into the merge, which reads the depths through the shift the fetch
     recorded, and the fill keeps what its input states."""
@@ -408,6 +408,7 @@ def test_the_datum_quantity_and_shift_survive_fetch_qgis_merge_and_fill(
     from shapely.geometry import Point
 
     from trid3nt_contracts.processing_contracts import ProcessingResponsePayload
+    from trid3nt_server import storage
     from trid3nt_server.render.uri_registry import (
         activate_registry, deactivate_registry, get_uri_registry)
     from trid3nt_server.tools.derive.run_qgis_algorithm import (
@@ -436,6 +437,7 @@ def test_the_datum_quantity_and_shift_survive_fetch_qgis_merge_and_fill(
                     "kind": "raster", "source": grid})
 
     monkeypatch.setattr(qgis, "run_in_session", _session)
+    monkeypatch.setattr(storage, "_CLIENT", fake_s3)
     fill_mod = sys.modules[filled.__module__]
     monkeypatch.setattr(fill_mod, "filled", lambda layer, within, seed: filled(
         layer, within, seed, _output_dir=str(tmp_path)))
@@ -448,10 +450,10 @@ def test_the_datum_quantity_and_shift_survive_fetch_qgis_merge_and_fill(
             "gdal:gridinversedistancenearestneighbor",
             {"INPUT": fetched.layer_id, "RADIUS": 9.14}))
         registry.register_tool_result("run_qgis_algorithm", gridded)
-        held = case_layer("grid_idw_1", "input")
+        held = case_layer(gridded.layer_id, "input")
         laid = merged([held, case_layer("terrain", "input")], "bed", [],
                       _output_dir=str(tmp_path))
-        kept = asyncio.run(fill_nodata(layer="grid_idw_1", within=_AROUND,
+        kept = asyncio.run(fill_nodata(layer=gridded.layer_id, within=_AROUND,
                                        seed=-3.0))
     finally:
         deactivate_registry(token)
