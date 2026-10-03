@@ -103,8 +103,8 @@ Return one of:
   FlatGeobuf/GeoParquet for vector), `style` (the DECLARED style row; the
   publish path resolves it into `legend`), `quantity`,
   `role` (`"primary"` | `"context"` | `"input"`), `units`, `bbox` (optional;
-  present triggers a `zoom-to`), `fallback_note` and `fallbacks` (the honesty
-  markers when a fallback source or a declared ladder rung served the layer).
+  present triggers a `zoom-to`), `fallback_note` (the honesty marker when a
+  fallback source served the layer).
 - **A plain `dict`** -- for tools whose answer is scalar/tabular, not a layer
   (the copy-me template returns a dict).
 - **A `list[LayerURI]`** -- for animation-frame sequences.

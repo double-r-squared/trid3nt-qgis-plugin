@@ -137,8 +137,7 @@ def _validate_hooks(spec: SourceSpec) -> None:
                 f"spec {spec.name!r} declares endpoint_fallback {fb!r}, which names "
                 f"no endpoint of this spec (has: {sorted(spec.endpoints)}). "
                 "endpoint_fallback is SAME-DATA mirrors of this source only; a "
-                "CROSS-DATASET alternative belongs on a declared fallback ladder "
-                "(trid3nt_server.fallbacks), which gates and stamps it."
+                "CROSS-DATASET alternative is a source row of its own."
             )
 
     # variant_by_emptiness: the emptiness-switch hook name must resolve.

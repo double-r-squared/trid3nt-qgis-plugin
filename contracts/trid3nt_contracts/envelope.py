@@ -14,7 +14,6 @@ from pydantic import Field, model_validator
 
 from .common import (
     BBox,
-    FallbackActivation,
     GraceModel,
     Lat,
     Lon,
@@ -83,9 +82,6 @@ class ResultLayer(GraceModel):
     # The declared style resolved against this layer - concrete range and the
     # .qml the map loads. None until the layer is published.
     legend: "LegendKey | None" = None
-    # Which rungs of a declared fallback ladder produced this layer's inputs.
-    # Empty means "no ladder governs this", never "nothing was substituted".
-    fallbacks: list[FallbackActivation] = Field(default_factory=list)
     fallback_note: str | None = None  # one-line narration of what was swapped
 
 

@@ -14,7 +14,6 @@ from trid3nt_server.mesh.inputs import op_geometry, op_raster
 from trid3nt_server.mesh.meshers import (
     Mesh,
     MeshToolError,
-    fetch_activation_rows,
     fetch_fallback_note,
 )
 
@@ -350,15 +349,8 @@ def _provenance(name: str, layer: Any) -> str:
     """What ACTUALLY painted the bed, and what its elevations are counted from.
 
     The datum, the acquisition instant and the native cell ride with the name."""
-    rows = fetch_activation_rows(layer)
     note = fetch_fallback_note(layer)
-    if rows:
-        painted = f"{name}: " + ", ".join(
-            f"{name} {coverage * 100:.0f}%" for name, coverage in rows)
-    elif note:
-        painted = f"{name} ({note})"
-    else:
-        painted = f"{name} (source UNMEASURED: the fetch reported no activation rows)"
+    painted = f"{name} ({note})" if note else name
     facts = [fact for fact in (_datum(name), _acquired(layer), _native_cell(name))
              if fact]
     return f"{painted} [{'; '.join(facts)}]" if facts else painted

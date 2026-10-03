@@ -1,57 +1,5 @@
 {
   "$defs": {
-    "FallbackActivation": {
-      "additionalProperties": false,
-      "description": "One rung of a declared fallback ladder that actually served a request.",
-      "properties": {
-        "capability": {
-          "title": "Capability",
-          "type": "string"
-        },
-        "consequence": {
-          "enum": [
-            "primary",
-            "user_supplied",
-            "enhancement",
-            "same_data",
-            "cross_dataset",
-            "synthetic"
-          ],
-          "title": "Consequence",
-          "type": "string"
-        },
-        "coverage": {
-          "default": 1.0,
-          "maximum": 1.0,
-          "minimum": 0.0,
-          "title": "Coverage",
-          "type": "number"
-        },
-        "note": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Note"
-        },
-        "rung": {
-          "title": "Rung",
-          "type": "string"
-        }
-      },
-      "required": [
-        "capability",
-        "rung",
-        "consequence"
-      ],
-      "title": "FallbackActivation",
-      "type": "object"
-    },
     "LegendKey": {
       "additionalProperties": false,
       "description": "A layer's RESOLVED style: what the reader is looking at, and its scale.\nThe colours and the range here are the SAME ones the render uses, because\nboth come from this one resolution - there is no second range to drift.",
@@ -348,13 +296,6 @@
       ],
       "default": null,
       "title": "Fallback Note"
-    },
-    "fallbacks": {
-      "items": {
-        "$ref": "#/$defs/FallbackActivation"
-      },
-      "title": "Fallbacks",
-      "type": "array"
     },
     "layer_id": {
       "title": "Layer Id",

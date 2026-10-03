@@ -9,9 +9,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Any, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Mapping
 
-from trid3nt_contracts.common import render_fallback_line
 from trid3nt_contracts.execution import LayerURI
 
 if TYPE_CHECKING:  # pragma: no cover - typing-only import (no runtime cycle)
@@ -25,7 +24,6 @@ __all__ = [
     "publish_input_layer",
     "publish_raster_input_cog",
     "republish_input_row",
-    "stamp_fallbacks",
 ]
 
 
@@ -84,37 +82,7 @@ async def publish_for_emission(layer: LayerURI) -> LayerURI:
     return layer.model_copy(update={"uri": published})
 
 
-def stamp_fallbacks(
-    layer: LayerURI, activations: Sequence[Any] | None
-) -> LayerURI:
-    """Merge fallback-ladder activation rows and their narration onto ``layer``.
-
-    An empty list means no ladder governs the layer, never that nothing was substituted.
-    """
-    if not activations:
-        return layer
-
-    def _rung(a: Any) -> Any:
-        return a.get("rung") if isinstance(a, dict) else getattr(a, "rung", None)
-
-    existing = list(layer.fallbacks or [])
-    seen = {_rung(a) for a in existing}
-    added = [a for a in activations if _rung(a) not in seen]
-    if not added:
-        return layer
-    merged = existing + added
-    update: dict[str, Any] = {"fallbacks": merged}
-    note = render_fallback_line(merged)
-    if note and note not in (layer.fallback_note or ""):
-        update["fallback_note"] = (
-            f"{layer.fallback_note} {note}" if layer.fallback_note else note
-        )
-    return layer.model_copy(update=update)
-
-
-def emit_layer_uri(
-    layer: LayerURI, *, fallbacks: Sequence[Any] | None = None
-) -> LayerURI | None:
+def emit_layer_uri(layer: LayerURI) -> LayerURI | None:
     """Validate a client-bound ``LayerURI`` at the single emission seam.
 
     ``None`` means DROP: the caller must not hand the layer to ``add_loaded_layer``.
@@ -138,7 +106,7 @@ def emit_layer_uri(
         )
         return None
 
-    return stamp_fallbacks(_resolve_non_raster_legend(layer), fallbacks)
+    return _resolve_non_raster_legend(layer)
 
 
 #: The preset shape a layer TYPE implies when its row names none. A vector is
@@ -181,7 +149,6 @@ async def publish_input_layer(
     layer_uri: LayerURI | None,
     *,
     role: str = "input",
-    fallbacks: Sequence[Any] | None = None,
 ) -> bool:
     """BEST-EFFORT: surface ONE extra layer on the map beside the step's return.
     ``role`` and ``bbox=None`` are FORCED onto the layer; never raises, returning
@@ -196,7 +163,7 @@ async def publish_input_layer(
         # Copy only when a field actually differs so the common path is a no-op.
         if layer_uri.role != role or layer_uri.bbox is not None:
             layer_uri = layer_uri.model_copy(update={"role": role, "bbox": None})
-        safe = emit_layer_uri(layer_uri, fallbacks=fallbacks)
+        safe = emit_layer_uri(layer_uri)
         if safe is None:
             # The guardrail dropped it (e.g. a raw-object-store raster that never
             # round-tripped through publish_layer). Honest no-surface, not fatal.
@@ -259,7 +226,6 @@ async def publish_raster_input_cog(
     style: dict[str, Any] | None = None,
     role: str = "context",
     fallback_note: str | None = None,
-    fallbacks: Sequence[Any] | None = None,
 ) -> bool:
     """BEST-EFFORT: surface an EXISTING ``s3://`` raster COG as an input/context row.
     Rides the object already in the store - no re-upload - and never raises,
@@ -327,4 +293,4 @@ async def publish_raster_input_cog(
         bbox=None,
         fallback_note=fallback_note,
     )
-    return await publish_input_layer(emitter, layer, role=role, fallbacks=fallbacks)
+    return await publish_input_layer(emitter, layer, role=role)

@@ -37,9 +37,6 @@ __all__ = [
     "InputBasis",
     "InputConsequence",
     "SyntheticInput",
-    "FallbackConsequence",
-    "FallbackActivation",
-    "render_fallback_line",
     "render_assumptions_line",
 ]
 
@@ -277,62 +274,6 @@ class SyntheticInput(GraceModel):
                 f"param={self.param!r}"
             )
         return self
-
-
-#: Which rung of a declared fallback ladder served a request, and what swapping
-#: to it COSTS. ``primary`` is the declared first choice and ``user_supplied``
-#: the caller's own data - neither is a degradation. The three degradation
-#: classes are what the loudness floor keys on: ``same_data`` (another mirror or
-#: endpoint of the SAME dataset) walks silently, ``cross_dataset`` (a different
-#: dataset, method or resolution) narrates loudly and gates in user_gated mode,
-#: ``synthetic`` (a value with no real data source) ALWAYS gates with a labeled
-#: default of refuse. ``enhancement`` is the fourth non-degradation: a source
-#: BETTER than the primary - finer, more local - laid under part of a request.
-#: It is reported so a reader can account for the whole result, but it costs
-#: nothing, so the floor ignores it and a call site cannot "permit" it.
-FallbackConsequence = Literal[
-    "primary", "user_supplied", "enhancement",
-    "same_data", "cross_dataset", "synthetic",
-]
-
-
-class FallbackActivation(GraceModel):
-    """One rung of a declared fallback ladder that actually served a request."""
-
-    #: The ladder's owner - a tool name or a seam id.
-    capability: str
-    rung: str
-    consequence: FallbackConsequence
-    #: The FRACTION of the request this rung served: 1.0 for a whole-request
-    #: swap, a share when several rungs painted one mosaic together.
-    coverage: float = Field(default=1.0, ge=0.0, le=1.0)
-    #: What the alternative IS, in the words the user reads.
-    note: str | None = None
-
-
-def render_fallback_line(activations: Any) -> str | None:
-    """Render fallback activations into ONE narration line, or None when clean.
-    A run with no degradation renders nothing: the line exists to say what was
-    SWAPPED. Takes ``FallbackActivation`` objects or their ``model_dump`` dicts."""
-    if not activations:
-        return None
-
-    def _field(a: Any, name: str) -> Any:
-        return a.get(name) if isinstance(a, dict) else getattr(a, name, None)
-
-    rows = [a for a in activations if float(_field(a, "coverage") or 0.0) > 0.0]
-    if not any(
-        _field(a, "consequence") in ("same_data", "cross_dataset", "synthetic")
-        for a in rows
-    ):
-        return None
-    parts = []
-    for a in rows:
-        cov = float(_field(a, "coverage") or 0.0)
-        share = f"{cov * 100:.0f}% " if cov < 0.999 else ""
-        parts.append(f"{share}{_field(a, 'rung')} [{_field(a, 'consequence')}]")
-    capability = _field(rows[0], "capability")
-    return f"Fallback ladder ({capability}): " + " + ".join(parts) + "."
 
 
 def render_assumptions_line(entries: Any) -> str | None:

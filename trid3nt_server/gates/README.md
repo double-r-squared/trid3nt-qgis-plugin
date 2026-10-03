@@ -15,7 +15,6 @@ resolved and carries back what the user said.
 | `confirm.py` | The confirm engine and the user-decision gates that park a turn on a card. |
 | `context_budget.py` | Per-model window discovery and the client-side history management it drives. |
 | `draw_input.py` | The DRAW gate: one declared param's value asked for on the canvas. |
-| `fallback.py` | The loudness floor over the confirm spine; a synthetic rung always pauses. |
 | `input_review.py` | The two-mode review gate - `auto` labels every non-user input, `user_gated` presents the sheet. |
 | `pending.py` | The session-scoped registry every blocking gate registers into. |
 | `runaway_guard.py` | Step cap, wall clock and loop watchdog, OR'd into one abort. |

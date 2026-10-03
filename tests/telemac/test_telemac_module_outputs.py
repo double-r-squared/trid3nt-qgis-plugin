@@ -463,7 +463,7 @@ def test_the_published_order_is_the_table_order_across_host_and_coupled(
 
     surfaced: list[str] = []
 
-    async def _surface(_emitter, layer, *, role="input", fallbacks=None):
+    async def _surface(_emitter, layer, *, role="input"):
         surfaced.append(layer.name)
         return True
 

@@ -12,7 +12,7 @@ from typing import Any, Literal
 
 from pydantic import Field
 
-from .common import FallbackActivation, GraceModel, SyntheticInput, ULIDStr, UTCDatetime
+from .common import GraceModel, SyntheticInput, ULIDStr, UTCDatetime
 
 __all__ = [
     "ModelSetup",
@@ -174,11 +174,6 @@ class LayerURI(GraceModel):
     # primary. It names BOTH sources, so fallback data can never be mistaken for
     # the primary. ``None`` means the layer is exactly the requested source.
     fallback_note: str | None = None
-    # The structured half of the same honesty: which rungs of a DECLARED ladder
-    # served this layer, and the share each painted. A mosaic several rungs built
-    # carries one row per rung. ``[]`` means no ladder governs this fetch, NEVER
-    # "nothing was substituted".
-    fallbacks: list[FallbackActivation] = Field(default_factory=list)
     # The physical model inputs this layer was built from, each tagged with
     # WHERE it came from. ``[]`` means no provenance has been declared yet, NOT
     # "all real" - which is why a narration renders these rather than assuming a

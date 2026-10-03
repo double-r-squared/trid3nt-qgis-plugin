@@ -33,8 +33,6 @@ from .chart_contracts import (
 from .common import (
     BBox,
     EngineRunArgsMixin,
-    FallbackActivation,
-    FallbackConsequence,
     GraceModel,
     InputBasis,
     Lat,
@@ -46,7 +44,6 @@ from .common import (
     new_ulid,
     now_utc,
     render_assumptions_line,
-    render_fallback_line,
 )
 from .message import (
     Message,
@@ -116,9 +113,6 @@ __all__ = [
     "EngineRunArgsMixin",
     "InputBasis",
     "SyntheticInput",
-    "FallbackActivation",
-    "FallbackConsequence",
-    "render_fallback_line",
     "render_assumptions_line",
     "new_ulid",
     "now_utc",

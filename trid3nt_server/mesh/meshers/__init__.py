@@ -25,7 +25,6 @@ __all__ = [
     "Mesher",
     "OpNamespace",
     "bind_ops",
-    "fetch_activation_rows",
     "fetch_fallback_note",
     "get_mesher",
     "input_digest",
@@ -110,20 +109,6 @@ def _field_of(layer: Any, name: str) -> Any:
     if isinstance(layer, Mapping):
         return layer.get(name)
     return getattr(layer, name, None)
-
-
-def fetch_activation_rows(layer: Any) -> list[tuple[str, float]]:
-    """The ladder rungs that ACTUALLY served a fetch -> ``[(rung, coverage), ...]``.
-
-    A zero-coverage rung was considered and not used: it is dropped."""
-    rows: list[tuple[str, float]] = []
-    for row in (_field_of(layer, "fallbacks") or []):
-        rung = _field_of(row, "rung")
-        coverage = _field_of(row, "coverage")
-        if rung is None or coverage is None or float(coverage) <= 0.0:
-            continue
-        rows.append((str(rung), float(coverage)))
-    return rows
 
 
 def fetch_fallback_note(layer: Any) -> str | None:

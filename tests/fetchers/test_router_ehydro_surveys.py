@@ -283,8 +283,7 @@ def test_the_layer_records_the_datum_and_the_shift_its_surveys_publish(
     monkeypatch.setattr(eh, "_soundings", lambda *_a: _points())
     monkeypatch.setattr(router, "read_through", lambda **kw: ReadThroughResult(
         uri="s3://b/k.fgb", data=kw["fetch_fn"](), hit=False))
-    layer = router._route_once(spec, {"bbox": (-122.7, 45.5, -122.6, 45.6)},
-                               pending_emit=[])
+    layer = router.route(spec, {"bbox": (-122.7, 45.5, -122.6, 45.6)})
     assert (layer.vertical_datum, layer.quantity) == ("CRD", "depth_below_datum")
     assert (layer.datum_offset_m, layer.datum_offset_frame) == (1.6093, "NAVD88")
 

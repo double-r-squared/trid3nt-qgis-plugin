@@ -413,58 +413,21 @@ def test_the_bed_is_fetched_past_the_extent_the_mesh_has_nodes_on():
     assert grown[2] > -75.70 and grown[3] > 36.20
 
 
-class _Row:
-    def __init__(self, rung, coverage):
-        self.rung = rung
-        self.coverage = coverage
+def test_the_note_reads_the_same_from_a_layer_and_from_a_dict():
+    from types import SimpleNamespace
 
+    from trid3nt_server.mesh.meshers import fetch_fallback_note
 
-class _Layer:
-    def __init__(self, rows, note=None):
-        self.uri = "s3://bucket/bed.tif"
-        self.fallbacks = rows
-        self.fallback_note = note
-
-
-_ROWS_TYPED = [_Row("cudem_nearshore", 0.89), _Row("etopo_bathy_base", 0.11),
-               _Row("unused_rung", 0.0)]
-_ROWS_DICT = [{"rung": "cudem_nearshore", "coverage": 0.89},
-              {"rung": "etopo_bathy_base", "coverage": 0.11},
-              {"rung": "unused_rung", "coverage": 0.0}]
-
-
-def test_the_activation_rows_read_the_same_from_a_layer_and_from_a_dict():
-    from trid3nt_server.mesh.meshers import (
-        fetch_activation_rows,
-        fetch_fallback_note,
-    )
-
-    typed = fetch_activation_rows(_Layer(_ROWS_TYPED, "swapped"))
-    mapping = fetch_activation_rows(
-        {"uri": "s3://b/x.tif", "fallbacks": _ROWS_DICT,
-         "fallback_note": "swapped"})
-    assert typed == mapping == [("cudem_nearshore", 0.89),
-                                ("etopo_bathy_base", 0.11)]
+    assert fetch_fallback_note(SimpleNamespace(fallback_note="swapped")) == "swapped"
     assert fetch_fallback_note({"fallback_note": "swapped"}) == "swapped"
     assert fetch_fallback_note({"fallback_note": None}) is None
-
-
-def test_a_dict_shaped_fetch_is_not_reported_as_unmeasured():
-    """A fetcher may answer with the layer as a mapping; reading only attributes
-    calls a MEASURED provenance unmeasured."""
-    as_dict = {"uri": "s3://b/x.tif", "fallbacks": _ROWS_DICT,
-               "fallback_note": None}
-    assert P._provenance("fetch_cudem", as_dict).startswith(
-        "fetch_cudem: cudem_nearshore 89%, etopo_bathy_base 11% [")
-    assert "UNMEASURED" not in P._provenance("fetch_cudem", as_dict)
 
 
 def test_the_bed_card_states_the_datum_and_the_native_cell_of_its_source():
     """A bed the user is shown to refine is a bed they may stitch another source
     onto, and what the two are compared on is the metadata of the rows."""
     card = P._provenance("fetch_cudem",
-                         {"uri": "s3://b/x.tif", "fallbacks": _ROWS_DICT,
-                          "fallback_note": None,
+                         {"uri": "s3://b/x.tif", "fallback_note": None,
                           "reference_time": "2019-06-01T00:00:00Z"})
     assert "datum NAVD88" in card
     assert "acquired 2019-06-01T00:00:00Z" in card
@@ -481,9 +444,13 @@ def test_a_source_row_that_states_no_datum_is_not_a_bed():
     P._refuse_undated_source("fetch_cudem")
 
 
-def test_a_fetch_that_measured_nothing_still_says_so():
-    empty = {"uri": "s3://b/x.tif", "fallbacks": [], "fallback_note": None}
-    assert "UNMEASURED" in P._provenance("fetch_cudem", empty)
+def test_the_bed_card_names_the_source_and_carries_its_note():
+    plain = P._provenance("fetch_cudem", {"uri": "s3://b/x.tif",
+                                          "fallback_note": None})
+    noted = P._provenance("fetch_cudem", {"uri": "s3://b/x.tif",
+                                          "fallback_note": "swapped"})
+    assert plain.startswith("fetch_cudem [")
+    assert noted.startswith("fetch_cudem (swapped) [")
 
 
 def _flowline_collection(order):

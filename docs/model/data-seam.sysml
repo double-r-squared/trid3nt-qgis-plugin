@@ -31,22 +31,6 @@ package DataSeam {
     // Blocks
     // ----------------------------------------------------------------- //
 
-    part def BedLadderRegistry {
-        doc /*
-        Ladders as DATA plus the per-request chooser. A capability whose
-        alternatives depend on a property of the SUBJECT rather than of the
-        capability has more than one ladder, and only the request knows which.
-        */
-    }
-
-    part def LadderWalker {
-        doc /*
-        The one walker every declared ladder runs through: rungs in order, the
-        loudness gate before a degradation, measured coverage reconciled against
-        what actually painted, and REFUSE at the end.
-        */
-    }
-
     part def KeyedSourceDeclaration {
         doc /*
         A source row that needs a key. It states WHICH key, by name, beside the
@@ -107,9 +91,8 @@ package DataSeam {
 
     part def FetcherRouter {
         doc /*
-        The door a data ask enters. It resolves which ladder governs THIS
-        request before the walk, so a row that states its water gets that
-        water's ladder and a row that states none is served as before.
+        The door a data ask enters: one source row, validated, gated,
+        dispatched, cached and emitted.
         */
     }
 
@@ -206,8 +189,6 @@ package DataSeam {
     port def ProvenanceIn;
     port def DeclarationOut;
     port def DeclarationIn;
-    port def ChoiceOut;
-    port def ChoiceIn;
     port def CredentialOut;
     port def CredentialIn;
     port def KeyedCatalogOut;
@@ -290,39 +271,14 @@ package DataSeam {
         item credential : String [0..1];
     }
 
-    interface def PerRequestLadderChoice {
-        doc /*
-        Which ladder governs ONE request. The chooser reads the request's own
-        params; returning nothing means no per-request ladder applies and the
-        capability's static ladder stands.
-        */
-        item capability : String;
-        item params : Map;
-        item selector : Callable [0..1];
-    }
-
     // ----------------------------------------------------------------- //
     // Parts - bound to the modules they ARE
     // ----------------------------------------------------------------- //
-
-    part bedLadderRegistry : BedLadderRegistry {
-        doc /*
-        code: trid3nt_server/fallbacks/ladder.py
-        */
-        port choiceOut : ChoiceOut;
-    }
-
-    part ladderWalker : LadderWalker {
-        doc /*
-        code: trid3nt_server/fallbacks/walker.py
-        */
-    }
 
     part fetcherRouter : FetcherRouter {
         doc /*
         code: trid3nt_server/tools/fetchers/_router/router.py
         */
-        port choiceIn : ChoiceIn;
     }
 
     part stacRasterReader : CatalogRasterReader {
@@ -734,9 +690,6 @@ package DataSeam {
     interface bedProvenanceCarried : BedProvenance
         connect blueTopoSource.provenanceOut to bedResultModel.provenanceIn;
 
-    interface perRequestLadderChosen : PerRequestLadderChoice
-        connect bedLadderRegistry.choiceOut to fetcherRouter.choiceIn;
-
     interface sourceCredentialDeclared : SourceCredentialDeclaration
         connect firmsDeclaration.credentialOut to credentialResolver.credentialIn;
 
@@ -793,28 +746,6 @@ package DataSeam {
         vertical datum, the resolution and the style row - stay on the source
         row whatever library performs the fetch, so a bed published through a
         catalog is as mergeable after the fold as before it.
-        */
-    }
-
-    requirement def SubstitutionIsDeclared {
-        doc /*
-        SIGNED DECISION - a cross-dataset substitution is a DECLARED rung taken
-        loudly through the gate, never a fill a fetch performs on its own.
-        Falling from BlueTopo to the CUDEM composite crosses datasets and wears
-        that consequence, so the gate asks before it happens and the activation
-        records which rung painted what share.
-
-        A rung that served only part of the request says so as a gap carrying
-        the measured share, which is what lets the next rung fill the rest under
-        the gate instead of the first rung returning a half-painted bed as a
-        whole one.
-
-        The same loudness holds one level up, on a DATA row's own declared
-        ladder: when a rung other than the primary answers, the interpreter
-        writes a note ON THE RUN naming the row, what each earlier rung refused
-        with, and which runner answered. The packet carries that note, so a
-        reader of the answer sees that a different dataset produced the
-        artifact; a log line would die with the process.
         */
     }
 
@@ -1307,10 +1238,9 @@ package DataSeam {
         not new vocabulary: merge_rasters lays the inputs first wins with a band
         recording which won at each cell, and fill_nodata paints what is left
         inside a polygon. Both are useful outside any slot, which is why they
-        are tools rather than arguments on the mesh op or on the slot, and a
-        fetcher's ladder - which is about a source being unavailable - is never
-        spelled as one. The slot takes the one layer they produced, by id, and
-        knows nothing of what went into it.
+        are tools rather than arguments on the mesh op or on the slot. The slot
+        takes the one layer they produced, by id, and knows nothing of what
+        went into it.
 
         A node the source does not cover REFUSES by name. Filling the hole with
         the mean of what was covered is a bed nobody measured, and it reads as
@@ -1448,16 +1378,6 @@ package DataSeam {
         "tests/fetchers/test_router_stac_raster.py::test_mosaic_fuse_is_first_valid_in_search_order";
     verify requirement ACatalogReaderCarriesNoProvenance by
         "tests/fetchers/test_bathymetry_data_seam.py::test_every_bed_capable_source_row_states_its_vertical_datum";
-
-
-    satisfy requirement SubstitutionIsDeclared by bedLadderRegistry;
-    satisfy requirement SubstitutionIsDeclared by ladderWalker;
-    verify requirement SubstitutionIsDeclared by
-        "tests/fetchers/test_fallback_ladder.py::test_declared_rung_fills_the_gap_and_splits_coverage";
-    verify requirement SubstitutionIsDeclared by
-        "tests/fetchers/test_fallback_ladder.py::test_gap_no_rung_permitted_keeps_the_capabilitys_coverage_code";
-    verify requirement SubstitutionIsDeclared by
-        "tests/fetchers/test_fallback_sweep_guard.py::test_every_ladder_is_a_complete_account_of_its_own_rungs";
 
     verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
         "tests/telemac/test_telemac_run_identity.py::test_what_the_cut_covers_is_on_the_card_before_the_solve";

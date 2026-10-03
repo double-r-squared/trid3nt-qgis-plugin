@@ -461,104 +461,6 @@ def route(
     """The engine: validate, gate, dispatch, cache, emit. Returns a LayerURI, a record
     dict for a ``shape: record`` source, or an ordered ``list[LayerURI]`` for a
     ``shape: animation_frames`` source."""
-
-    # Fallback-ladder control kwargs ride the same router-level absorber as
-    # ``purpose=``: ``fallback=(rung, ...)`` names the alternatives THIS call site
-    # tolerates and ``fallback_gate="auto"|"user_gated"`` picks the loudness mode.
-    # Absent ``fallback=``, a source that declares a ladder gets primary-or-typed-
-    # error; a source with no ladder is untouched. On the ladder path emit-on-fetch
-    # is DEFERRED until the activation is stamped, so the layer the map shows carries
-    # the same rows as the layer the composer holds.
-    from trid3nt_server.fallbacks import resolve_ladder, walk_ladder
-
-    raw_params = dict(raw_params)
-    allow = raw_params.pop("fallback", None) or ()
-    gate_mode = raw_params.pop("fallback_gate", None)
-    ladder = resolve_ladder(spec.name, raw_params)
-    if ladder is None:
-        return _route_once(spec, raw_params)
-    if isinstance(allow, str):
-        allow = (allow,)
-    pending_emit: list[tuple[dict[str, Any], Any, str | None]] = []
-    result, activation = walk_ladder(
-        ladder,
-        params=raw_params,
-        attempt=lambda _rung, params: _route_once(
-            spec, params, pending_emit=pending_emit
-        ),
-        allow=tuple(allow),
-        gate_mode=gate_mode,
-    )
-    result = _stamp_activation(result, activation)
-    from .emit_on_fetch import maybe_emit_input_on_fetch
-
-    if pending_emit:
-        params, visualize, purpose = pending_emit[-1]
-    else:
-        # A rung with its own ``source`` / ``call`` served WITHOUT going through
-        # _route_once, so nothing recorded the emit arguments -- the request's own
-        # are the truth for it. Without this a user_supplied bed never surfaces.
-        params, visualize, purpose = (
-            raw_params, raw_params.get("visualize"), raw_params.get("purpose"),
-        )
-    for layer in (result if isinstance(result, list) else [result]):
-        if isinstance(layer, LayerURI):
-            maybe_emit_input_on_fetch(
-                spec, params, layer, visualize=visualize, purpose=purpose
-            )
-    return result
-
-
-def _stamp_activation(result: Any, activation: Any) -> Any:
-    """Carry the ladder activation onto the result envelope and the narration."""
-
-    # A ``shape: animation_frames`` source stamps EVERY frame (they share one fetch,
-    # so they share its provenance). A ``shape: record`` source has no envelope to
-    # stamp: its rows are logged LOUDLY instead, because a silent drop is the class
-    # of hole this machinery exists to close. An exempted request has NO rows and
-    # still stamps -- its narration is the unverified note, the only visibility that
-    # serve gets -- and CLEARS the envelope's ``rung_coverage``, because an envelope
-    # whose note says the shares are UNMEASURED may not carry numbers beside it.
-    rows = activation.to_contract()
-    note = activation.narration()
-    unverified = bool(getattr(activation, "coverage_unverified", False))
-    if not rows and not note and not unverified:
-        return result
-
-    def _one(layer: Any) -> Any:
-        update: dict[str, Any] = {}
-        if rows:
-            update["fallbacks"] = rows
-        if unverified and "rung_coverage" in type(layer).model_fields:
-            update["rung_coverage"] = None
-        if note:
-            update["fallback_note"] = (
-                f"{layer.fallback_note} {note}" if layer.fallback_note else note
-            )
-        return layer.model_copy(update=update)
-
-    if isinstance(result, LayerURI):
-        return _one(result)
-    if isinstance(result, list):
-        return [_one(r) if isinstance(r, LayerURI) else r for r in result]
-    if activation.degraded:
-        logger.warning(
-            "fallback ladder %s served a non-LayerURI result (%s): the activation "
-            "rows have no envelope to ride and are recorded ONLY here -- %s",
-            activation.capability, type(result).__name__, note,
-        )
-    return result
-
-
-def _route_once(
-    spec: SourceSpec,
-    raw_params: dict[str, Any],
-    *,
-    pending_emit: list[tuple[dict[str, Any], Any, str | None]] | None = None,
-) -> LayerURI | dict[str, Any] | list[LayerURI]:
-    """ONE attempt at the pipeline: validate, gate, dispatch, cache, emit.
-    ``pending_emit``, when given, RECORDS the emit-on-fetch arguments instead of
-    surfacing the layer, so the caller can emit after stamping an activation."""
     # Emit-on-fetch control kwargs: router-level, so EVERY spec inherits
     # them via the promoted signature's ``**_extra_ignored`` absorber. Popped here
     # so they never reach validation / the cache key -- ``visualize=False`` (probe
@@ -685,9 +587,6 @@ def _route_once(
     # as its own direct dispatch), surface the fetched data as a role=context input
     # so the engine's terrain / rivers / land cover are visible. Best-effort; never
     # fails the fetch. A direct chat dispatch is skipped (the wrapper emits it).
-    if pending_emit is not None:
-        pending_emit.append((params, _visualize, _purpose))
-        return layer
     from .emit_on_fetch import maybe_emit_input_on_fetch
     maybe_emit_input_on_fetch(
         spec, params, layer, visualize=_visualize, purpose=_purpose
