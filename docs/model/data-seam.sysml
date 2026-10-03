@@ -464,7 +464,7 @@ package DataSeam {
         record - a source whose rows each state their zero is stamped off what
         its rows agree on - and a layer named by id brings them along. QGIS's
         IDW, run through run_qgis_algorithm, grids soundings, and its output
-        carries the fields its input carried; merge_rasters lays its
+        is a case layer carrying the fields its input carried; merge_rasters lays its
         inputs first wins, each read onto ONE zero - a surface counting DEPTHS
         read as elevations up from its own datum, through the shift it publishes
         or an offset record passed in - and refuses an input on another datum
@@ -1775,6 +1775,12 @@ package DataSeam {
     satisfy requirement OneBedOverEverySourceAUserCanHave by bedFiller;
     verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/derive/test_merge_and_fill.py::test_the_first_input_wins_where_it_measured_and_the_next_fills_the_rest";
+    verify requirement OneBedOverEverySourceAUserCanHave by
+        "tests/derive/test_session_tools.py::test_an_output_is_a_case_layer_carrying_what_its_input_carried";
+    verify requirement OneBedOverEverySourceAUserCanHave by
+        "tests/derive/test_session_tools.py::test_a_second_derive_takes_a_qgis_output_by_its_id";
+    verify requirement OneBedOverEverySourceAUserCanHave by
+        "tests/derive/test_session_tools.py::test_the_bed_slot_takes_a_qgis_output_by_its_id";
     verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/derive/test_merge_and_fill.py::test_the_order_of_the_list_is_the_priority";
     verify requirement OneBedOverEverySourceAUserCanHave by
