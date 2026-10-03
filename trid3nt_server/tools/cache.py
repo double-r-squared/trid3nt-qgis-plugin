@@ -332,7 +332,7 @@ def _read_through_s3(
     the sidecar is replayed on a hit and written on a miss; without one, no-op."""
     from botocore.exceptions import ClientError
 
-    from trid3nt_server import storage
+    from trid3nt_server.store import objects as storage
 
     bucket, obj_key = _split_s3_uri(uri)
     s3 = storage.client()

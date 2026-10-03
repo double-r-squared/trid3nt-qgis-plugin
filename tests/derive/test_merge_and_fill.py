@@ -408,7 +408,7 @@ def test_the_datum_quantity_and_shift_survive_fetch_qgis_merge_and_fill(
     from shapely.geometry import Point
 
     from trid3nt_contracts.processing_contracts import ProcessingResponsePayload
-    from trid3nt_server import storage
+    from trid3nt_server.store import objects as storage
     from trid3nt_server.render.uri_registry import (
         activate_registry, deactivate_registry, get_uri_registry)
     from trid3nt_server.tools.derive.run_qgis_algorithm import (

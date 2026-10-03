@@ -1,4 +1,4 @@
-"""Unit and integration tests for ``trid3nt_server.persistence``.
+"""Unit and integration tests for ``trid3nt_server.store.cases``.
 
 The ``Persistence`` wrapper translates between the typed agent-side contracts and
 a document store's ``insert-one`` / ``update-one`` / ``find-one`` / ``find``
@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from trid3nt_server.persistence import (
+from trid3nt_server.store.cases import (
     CASES_COLLECTION,
     CHAT_COLLECTION,
     Persistence,

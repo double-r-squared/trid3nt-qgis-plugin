@@ -490,7 +490,7 @@ def _split_s3_uri(uri: str) -> tuple[str, str] | None:
 
     A local path is a legal input here rather than a fault, so this never raises.
     """
-    from trid3nt_server import storage
+    from trid3nt_server.store import objects as storage
 
     try:
         _scheme, bucket, key = storage.split_object_uri(uri)
@@ -507,7 +507,7 @@ def _write_overview_cog(layer_uri: str, cog_bytes: bytes) -> str | None:
     parsed_s3 = _split_s3_uri(layer_uri)
     try:
         if layer_uri.startswith("s3://") and parsed_s3 is not None:
-            from trid3nt_server import storage
+            from trid3nt_server.store import objects as storage
 
             bucket, key = parsed_s3
             dir_prefix = key.rsplit("/", 1)[0] + "/" if "/" in key else ""

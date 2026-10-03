@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.persistence import (
+from trid3nt_server.store.cases import (
     CASES_COLLECTION,
     CHAT_COLLECTION,
     DEFAULT_DATABASE,
@@ -378,7 +378,7 @@ def test_layer_b_migration_renames_legacy_home_dir(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """With no dir override, a legacy ~/.grace2 is renamed to ~/.trid3nt once."""
-    from trid3nt_server.persistence import _default_dev_persistence_dir
+    from trid3nt_server.store.cases import _default_dev_persistence_dir
 
     monkeypatch.delenv(DEV_PERSISTENCE_DIR_ENV, raising=False)
     monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))

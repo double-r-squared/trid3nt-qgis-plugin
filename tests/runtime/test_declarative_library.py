@@ -536,7 +536,7 @@ def test_the_store_cycle_is_locked_across_processes(tmp_path):
     every writer's document survives, because none writes a stale whole store."""
     import threading
 
-    from trid3nt_server.persistence import FileMCPClient
+    from trid3nt_server.store.cases import FileMCPClient
 
     client = FileMCPClient(base_dir=tmp_path)
     path = client._collection_path("db", "coll")

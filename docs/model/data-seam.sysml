@@ -667,13 +667,13 @@ package DataSeam {
 
     part cacheRetention : CacheRetention {
         doc /*
-        code: trid3nt_server/retention.py
+        code: trid3nt_server/store/sweep.py
         */
     }
 
     part objectStore : ObjectStore {
         doc /*
-        code: trid3nt_server/storage.py
+        code: trid3nt_server/store/objects.py
         */
     }
 

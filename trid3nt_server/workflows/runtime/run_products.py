@@ -34,7 +34,7 @@ async def persist_run_products(run_id: str | None, *,
 
 def _put_json(run_id: str, key: str, body: dict[str, Any]) -> str | None:
     try:
-        from trid3nt_server import storage
+        from trid3nt_server.store import objects as storage
 
         bucket = storage.runs_bucket()
         storage.client().put_object(Bucket=bucket, Key=f"{run_id}/{key}",

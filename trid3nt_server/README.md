@@ -14,10 +14,7 @@ on one machine against one user; the only wire shapes it speaks are
 | `__main__.py` | `python -m trid3nt_server` - the way the daemon is started. |
 | `main.py` | The `trid3nt-server` console script: importing `trid3nt_server.tools` is what populates the registry. |
 | `errors.py` | `DeclarativeError` - the base every typed failure carries its `error_code` on, below both the input layer and the declarative library. |
-| `persistence.py` | The typed wrapper over the document store: cases, layers, chat, run snapshots. |
 | `plugin_repo.py` | The QGIS custom plugin repository the daemon serves: the versioned zip, `plugins.xml` and its manifest. |
-| `retention.py` | What the cache bucket keeps: the uris a live case's runs pin, and the sweep that deletes every unpinned object past its TTL class's window. |
-| `storage.py` | The object store every run reaches through: the bound S3 client and the two readings of the runs bucket - the one a read of a past run falls back on, and the one an upload refuses to default. |
 | `telemetry.py` | The JSONL sink: one line per tool call, turn, shadow selection and solve completion. |
 
 ## Subfolders
@@ -31,5 +28,6 @@ on one machine against one user; the only wire shapes it speaks are
 | `mesh/` | The one mesh front, which knows no engine: router, meshers, session, gate, artifact. An engine's template calls it; what an engine needs written out of a mesh is that engine's. Has its own map. |
 | `inputs/` | Every input into the system as a typed value: a Point, an Extent and a Shape, each with one ingestion from every form a user hands it in, and the user's own file adopted as a layer. |
 | `server/` | The daemon core: connection loop, turn engine, dispatch, session state. |
+| `store/` | What the daemon keeps: the object store, the case documents, and the sweep over the cache. |
 | `tools/` | The registered tool surface: fetchers and derive tools, with search and meta beside them. |
 | `workflows/` | The declarative engine layer: the runtime, the executor, TELEMAC. |

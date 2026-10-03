@@ -17,7 +17,7 @@ from trid3nt_contracts.case import (
     CaseSummary,
 )
 
-logger = logging.getLogger("trid3nt_server.persistence")
+logger = logging.getLogger("trid3nt_server.store.cases")
 
 # Logical database name for all Case/Secret persistence: the file backend
 # uses it as the namespace subdirectory under the dev-persistence root. Test

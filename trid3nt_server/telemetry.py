@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
-    from .persistence import Persistence
+    from .store.cases import Persistence
 
 logger = logging.getLogger("trid3nt_server.telemetry")
 

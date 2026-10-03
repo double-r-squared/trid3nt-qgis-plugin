@@ -18,7 +18,7 @@ import pytest
 from botocore.exceptions import ClientError
 
 import trid3nt_server.workflows.solver.solver as solver_mod
-from trid3nt_server import storage
+from trid3nt_server.store import objects as storage
 from trid3nt_server.workflows.solver.solver import (
     LOCAL_SOLVER_SPEC_REGISTRY,
     set_emitter_binding,

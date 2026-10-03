@@ -67,7 +67,7 @@ def _readable(params: dict[str, Any]) -> dict[str, Any]:
 
 def _case_layer(algorithm: str, output: dict[str, Any], **fields: Any) -> QgisLayerURI:
     """The file one output was written to, put in the runs bucket -> its layer."""
-    from trid3nt_server import storage
+    from trid3nt_server.store import objects as storage
 
     # A GeoPackage source names its table after a '|'; the file is before it.
     path = str(output.get("source") or "").split("|", 1)[0]

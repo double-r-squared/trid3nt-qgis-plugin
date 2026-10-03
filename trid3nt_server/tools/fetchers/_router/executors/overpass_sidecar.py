@@ -49,7 +49,7 @@ def _write_sidecar(spec: SourceSpec, params: dict[str, Any], ext: str, payload: 
         rest = uri[len("s3://"):]
         bucket, _, obj_key = rest.partition("/")
         body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
-        from trid3nt_server import storage
+        from trid3nt_server.store import objects as storage
 
         s3 = storage.client()
         s3.put_object(Bucket=bucket, Key=obj_key, Body=body, ContentType="application/json")

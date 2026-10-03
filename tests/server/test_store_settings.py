@@ -9,7 +9,7 @@ import asyncio
 
 import pytest
 
-from trid3nt_server import storage
+from trid3nt_server.store import objects as storage
 
 _MINIO = ("AWS_ENDPOINT_URL=http://127.0.0.1:9000\n"
           "AWS_ACCESS_KEY_ID=minio-key\n"

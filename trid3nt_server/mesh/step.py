@@ -127,7 +127,7 @@ def _file_digest(uri: str) -> str:
     """What a file HOLDS, as a digest of its bytes."""
     digest = hashlib.sha256()
     if uri.startswith("s3://"):
-        from trid3nt_server import storage
+        from trid3nt_server.store import objects as storage
 
         bucket, _, key = uri[len("s3://"):].partition("/")
         body = storage.client().get_object(Bucket=bucket, Key=key)["Body"]
@@ -143,7 +143,7 @@ def _file_digest(uri: str) -> str:
 async def keep_mesh(record: Mapping[str, Any], run: str | None = None) -> None:
     """Keep the mesh ``record`` holds under its content key, with the run that
     built it; a supplied mesh has no key, and a reused one keeps its builder."""
-    from trid3nt_server.persistence import DEFAULT_DATABASE, FileMCPClient
+    from trid3nt_server.store.cases import DEFAULT_DATABASE, FileMCPClient
 
     key, art = record.get("key"), record.get("artifact")
     if not key or art is None or record.get("reused"):
@@ -159,7 +159,7 @@ async def keep_mesh(record: Mapping[str, Any], run: str | None = None) -> None:
 async def _kept(key: str) -> tuple[MeshArtifact, str | None] | None:
     """The mesh kept under ``key`` and the run that built it, or ``None`` where
     nothing is kept or a file it names is gone from the store."""
-    from trid3nt_server.persistence import DEFAULT_DATABASE, FileMCPClient
+    from trid3nt_server.store.cases import DEFAULT_DATABASE, FileMCPClient
 
     found = await FileMCPClient().call_tool("find-one", {
         "database": DEFAULT_DATABASE, "collection": _KEPT,
@@ -179,7 +179,7 @@ async def _kept(key: str) -> tuple[MeshArtifact, str | None] | None:
 
 def _live(uri: str) -> bool:
     if uri.startswith("s3://"):
-        from trid3nt_server import storage
+        from trid3nt_server.store import objects as storage
 
         bucket, _, key = uri[len("s3://"):].partition("/")
         try:

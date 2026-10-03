@@ -412,7 +412,7 @@ def _record(solved: Solved, *, name: str) -> LayerURI:
 
     It binds no group and ranks none of the rows the run published, so it is
     DRAWN rather than measured; its extent is what the camera frames."""
-    from trid3nt_server import storage
+    from trid3nt_server.store import objects as storage
 
     return LayerURI(
         layer_id=f"telemac-{solved.run_id}", name=name, layer_type="mesh",

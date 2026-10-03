@@ -1461,7 +1461,7 @@ def _derived_group(read: Field, solved: Solved, *, caption: str, quantity: str,
     quantity - whose group the result file carries - masks where this one does."""
     import numpy as np
 
-    from trid3nt_server import storage
+    from trid3nt_server.store import objects as storage
     from trid3nt_server.render import presets
     from trid3nt_server.render.mesh_display import write_ascii_dataset
 

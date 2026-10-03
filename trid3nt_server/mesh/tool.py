@@ -157,7 +157,7 @@ def supplied_mesh_artifact(explicit: Any, *,
     """The mesh a run was HANDED, resolved and checked against the calling row.
 
     ``None`` for an unfilled slot; a refusal, never a fall-through, otherwise."""
-    from trid3nt_server import storage
+    from trid3nt_server.store import objects as storage
 
     if explicit is None or not str(explicit).strip():
         return None

@@ -18,7 +18,7 @@ from trid3nt_server.adapters.adapter import (
 )
 from trid3nt_server.gates.context_budget import COMPACTING_LABEL, compaction_complete_label
 from trid3nt_server.render.pipeline_emitter import complete_compaction_card, mint_compaction_card
-from trid3nt_server.persistence import make_file_persistence
+from trid3nt_server.store.cases import make_file_persistence
 from trid3nt_contracts.case import CaseCommandEnvelopePayload
 from trid3nt_contracts.common import new_ulid
 

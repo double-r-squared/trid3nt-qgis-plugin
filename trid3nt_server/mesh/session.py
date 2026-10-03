@@ -288,7 +288,7 @@ class MeshSession:
 
 
 def _s3_client() -> Any:
-    from trid3nt_server import storage
+    from trid3nt_server.store import objects as storage
 
     return storage.client()
 

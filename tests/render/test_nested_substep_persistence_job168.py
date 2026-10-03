@@ -11,7 +11,7 @@ import pytest
 
 from trid3nt_server import server
 from trid3nt_server import tools as agent_tools
-from trid3nt_server.persistence import make_file_persistence
+from trid3nt_server.store.cases import make_file_persistence
 from trid3nt_server.render.pipeline_emitter import current_emitter, substep, begin_substeps
 from trid3nt_server.tools import RegisteredTool
 from trid3nt_contracts.case import (

@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from trid3nt_server.persistence import (
+from trid3nt_server.store.cases import (
     MCPClientProtocol,
     Persistence,
     make_file_persistence,

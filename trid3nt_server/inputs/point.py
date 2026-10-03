@@ -327,7 +327,7 @@ async def publish_point(emitter: Any, pt: Point, *, label: str, basis: str,
 def _upload(pt: Point, basis: str, context: str) -> str:
     from trid3nt_contracts import new_ulid
 
-    from trid3nt_server import storage
+    from trid3nt_server.store import objects as storage
 
     body = json.dumps({
         "type": "FeatureCollection",

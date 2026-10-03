@@ -38,7 +38,7 @@ _SOLVE_INPUTS = [
 
 def _stage(monkeypatch, case: dict, *, outputs: list[str] | None = None,
            inputs: list[dict[str, str]] | None = None) -> dict:
-    from trid3nt_server import storage
+    from trid3nt_server.store import objects as storage
 
     fake = _FakeS3()
     monkeypatch.setattr(storage, "client", lambda: fake)
@@ -63,7 +63,7 @@ def test_an_unstaged_manifest_carries_an_empty_inputs_list(monkeypatch):
 
 
 def test_writing_the_manifest_requires_a_cache_bucket(monkeypatch):
-    from trid3nt_server import storage
+    from trid3nt_server.store import objects as storage
 
     from trid3nt_server.workflows.telemac.errors import TelemacError
 
@@ -230,7 +230,7 @@ def test_the_case_names_the_module_the_DECK_says_it_couples_with():
 
 
 def test_the_one_writer_stages_every_front_under_its_own_prefix(monkeypatch):
-    from trid3nt_server import storage
+    from trid3nt_server.store import objects as storage
     from trid3nt_server.workflows.telemac.authoring.staging import stage_telemac_manifest
 
     fake = _FakeS3()

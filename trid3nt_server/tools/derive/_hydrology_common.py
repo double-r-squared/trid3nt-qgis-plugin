@@ -358,7 +358,7 @@ def _write_geojson(
             f.write(payload)
         return path
     try:
-        from trid3nt_server import storage
+        from trid3nt_server.store import objects as storage
 
         bucket = storage.runs_bucket()
         key = f"{prefix}-{seed}/{filename}"
@@ -431,7 +431,7 @@ def write_cog(band: Any, *, crs: Any, transform: Any, prefix: str, seed: str,
             opened.write(payload)
         return local
     try:
-        from trid3nt_server import storage
+        from trid3nt_server.store import objects as storage
 
         bucket = storage.runs_bucket()
         key = f"{prefix.replace('_', '-')}-{seed}/{filename}"

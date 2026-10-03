@@ -19,7 +19,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server import server
 from trid3nt_server import tools as agent_tools
 from trid3nt_server.adapters.adapter import build_layers_present_note
-from trid3nt_server.persistence import CASES_COLLECTION, Persistence
+from trid3nt_server.store.cases import CASES_COLLECTION, Persistence
 from trid3nt_server.render.uri_registry import reset_uri_registries_for_tests
 from trid3nt_server.server import (
     SessionState,

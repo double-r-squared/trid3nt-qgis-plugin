@@ -194,7 +194,7 @@ def _cog_object_exists(cog_uri: str) -> bool:
     Any lookup failure reads as absent and never raises, so a fabricated uri is
     only ever registered once the store has confirmed it real.
     """
-    from trid3nt_server import storage
+    from trid3nt_server.store import objects as storage
 
     try:
         _, bucket, key = storage.split_object_uri(cog_uri)

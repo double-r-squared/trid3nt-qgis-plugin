@@ -24,8 +24,8 @@ from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import ExecutionHandle, RunResult
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server import storage
-from trid3nt_server.storage import StorageError
+from trid3nt_server.store import objects as storage
+from trid3nt_server.store.objects import StorageError
 from trid3nt_server.tools import register_tool
 
 

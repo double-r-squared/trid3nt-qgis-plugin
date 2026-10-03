@@ -15,13 +15,13 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Iterator, Mapping, Sequence
 
-from trid3nt_server import storage
+from trid3nt_server.store import objects as storage
 from trid3nt_server.tools.cache import CACHE_BUCKET, ttl_bucket_vintage
 from trid3nt_server.workflows.runtime import journal
 
 __all__ = ["pinned_uris", "reap"]
 
-logger = logging.getLogger("trid3nt_server.retention")
+logger = logging.getLogger("trid3nt_server.store.sweep")
 
 #: The one prefix under the cache bucket this module deletes from.
 _PREFIX = "cache/"
@@ -58,7 +58,7 @@ async def _live_case_layers(client: Any) -> list[Any]:
     """Every layer row held by a Case that still EXISTS - archived included,
     deleted excluded: an archived Case is hidden, not gone, so what it holds is
     still held."""
-    from trid3nt_server.persistence import CASES_COLLECTION, DEFAULT_DATABASE
+    from trid3nt_server.store.cases import CASES_COLLECTION, DEFAULT_DATABASE
 
     doc = await client.call_tool("find", {
         "database": DEFAULT_DATABASE, "collection": CASES_COLLECTION,
@@ -74,7 +74,7 @@ async def _live_case_layers(client: Any) -> list[Any]:
 async def pinned_uris(client: Any = None) -> set[str]:
     """Every uri a live Case pins: the layers its rows hold, and everything named
     on the journal record of a run that published one of them."""
-    from trid3nt_server.persistence import FileMCPClient
+    from trid3nt_server.store.cases import FileMCPClient
 
     held = _uris(await _live_case_layers(client or FileMCPClient()))
     pinned = set(held)

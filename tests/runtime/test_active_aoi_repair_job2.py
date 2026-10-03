@@ -16,7 +16,7 @@ import pytest
 from trid3nt_server import server
 from trid3nt_server import tools as agent_tools
 from trid3nt_server.adapters.adapter import build_layers_present_note
-from trid3nt_server.persistence import Persistence
+from trid3nt_server.store.cases import Persistence
 from trid3nt_server.server import (
     SessionState,
     _emit_case_open,

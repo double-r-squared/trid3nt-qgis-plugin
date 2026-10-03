@@ -12,7 +12,7 @@ import os
 
 import pytest
 
-from trid3nt_server import storage
+from trid3nt_server.store import objects as storage
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.workflows.solver import solver
 from trid3nt_server.workflows.solver import diagnostics as _diag

@@ -12,7 +12,7 @@ import asyncio
 import pytest
 
 from trid3nt_server import server as server_mod
-from trid3nt_server.persistence import CASES_COLLECTION, Persistence
+from trid3nt_server.store.cases import CASES_COLLECTION, Persistence
 from trid3nt_server.server import (
     SessionState,
     _auto_create_case_from_root,

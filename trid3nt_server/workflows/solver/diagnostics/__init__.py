@@ -173,7 +173,7 @@ def _load_completion(
         return completion, run_id, path, None
 
     runs_bucket, run_id = _resolve_run_handle(run_handle)
-    from trid3nt_server import storage
+    from trid3nt_server.store import objects as storage
     from trid3nt_server.workflows.solver import solver
 
     bucket = runs_bucket or storage.runs_bucket()

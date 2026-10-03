@@ -56,7 +56,7 @@ def test_the_last_line_for_a_run_stands(_journal) -> None:
 def test_the_seam_reads_no_object_store(monkeypatch, _journal) -> None:
     """The record is the ONE source: a seam that reached the store for a second
     registry would fail here rather than quietly reading one."""
-    from trid3nt_server import storage
+    from trid3nt_server.store import objects as storage
 
     def _refuse(*_a, **_k):
         raise AssertionError("the outputs seam reached the object store")

@@ -398,7 +398,7 @@ async def _persist_chart_record(state: SessionState, payload: dict) -> None:
             ChartEmissionPayload,
             SessionChartRecord,
         )
-        from trid3nt_server.persistence import DEFAULT_DATABASE, SESSIONS_COLLECTION
+        from trid3nt_server.store.cases import DEFAULT_DATABASE, SESSIONS_COLLECTION
 
         # Charts are turn-scoped emissions -- key them by the Case
         # that OWNS the turn, not whatever Case is visible at write time.

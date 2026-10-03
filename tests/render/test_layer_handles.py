@@ -249,7 +249,7 @@ def _mk_case(case_id: str):
 
 @pytest.mark.asyncio
 async def test_persistence_layer_handles_round_trip(tmp_path) -> None:
-    from trid3nt_server.persistence import FileMCPClient, Persistence
+    from trid3nt_server.store.cases import FileMCPClient, Persistence
 
     p = Persistence(FileMCPClient(base_dir=tmp_path))
     case_id = new_ulid()
@@ -272,7 +272,7 @@ async def test_persistence_layer_handles_round_trip(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_persistence_layer_handles_missing_case_is_noop(tmp_path) -> None:
-    from trid3nt_server.persistence import FileMCPClient, Persistence
+    from trid3nt_server.store.cases import FileMCPClient, Persistence
 
     p = Persistence(FileMCPClient(base_dir=tmp_path))
     ghost = new_ulid()
@@ -287,7 +287,7 @@ async def test_server_persist_and_seed_helpers_round_trip(tmp_path) -> None:
     """_persist_case_layer_handles writes the dirty map; _seed_registry_for_case
     restores it on a FRESH session (the reconnect/reopen path)."""
     from trid3nt_server import server as agent_server
-    from trid3nt_server.persistence import FileMCPClient, Persistence
+    from trid3nt_server.store.cases import FileMCPClient, Persistence
     from trid3nt_server.server import SessionState
 
     p = Persistence(FileMCPClient(base_dir=tmp_path))

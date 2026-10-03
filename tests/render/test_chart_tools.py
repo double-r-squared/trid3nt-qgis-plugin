@@ -321,7 +321,7 @@ class TestEmitChart:
 
     async def test_emits_envelope_and_persists(self, monkeypatch):
         import trid3nt_server.server as server
-        from trid3nt_server.persistence import Persistence
+        from trid3nt_server.store.cases import Persistence
         from trid3nt_contracts import new_ulid
 
         fake_mcp = _FakeMCP()
@@ -359,7 +359,7 @@ class TestEmitChart:
 
     async def test_persist_keyed_by_session_when_no_case(self, monkeypatch):
         import trid3nt_server.server as server
-        from trid3nt_server.persistence import Persistence
+        from trid3nt_server.store.cases import Persistence
 
         fake_mcp = _FakeMCP()
         persistence = Persistence(fake_mcp)

@@ -32,7 +32,7 @@ _RUNS_BUCKET: str | None = None
 
 
 #: The stack's own settings file, the one every process the stack starts sources.
-_SETTINGS_FILE = Path(__file__).resolve().parents[1] / ".env.local"
+_SETTINGS_FILE = Path(__file__).resolve().parents[2] / ".env.local"
 
 #: What the store is reached by. Each is passed to boto3 explicitly, because a
 #: client left to find its own credentials takes whatever the process inherited

@@ -38,7 +38,7 @@ def _maybe_bind_dev_persistence() -> None:
     """Bind the file-backed Persistence singleton at ``TRID3NT_DEV_PERSISTENCE_DIR``
     or ``~/.trid3nt/dev_persistence/``; ``TRID3NT_DEV_PERSISTENCE=0`` refuses the bind.
     """
-    from .persistence import (
+    from .store.cases import (
         is_dev_persistence_enabled,
         make_persistence_for_backend,
         resolve_persistence_backend,

@@ -12,7 +12,7 @@ import asyncio
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server.persistence import make_file_persistence
+from trid3nt_server.store.cases import make_file_persistence
 from trid3nt_contracts.case import CaseCommandEnvelopePayload
 from trid3nt_contracts.common import new_ulid
 

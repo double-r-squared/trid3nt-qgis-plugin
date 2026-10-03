@@ -16,7 +16,7 @@ import os
 from pathlib import Path
 from typing import Any, Mapping
 
-from trid3nt_server import storage
+from trid3nt_server.store import objects as storage
 from trid3nt_server.workflows.solver.solver import (
     LOCAL_DOCKER_WORKFLOW_NAME,
     LocalSolverSpec,

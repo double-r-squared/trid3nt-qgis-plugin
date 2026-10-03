@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.persistence import (
+from trid3nt_server.store.cases import (
     FileMCPClient,
     Persistence,
     SESSIONS_COLLECTION,

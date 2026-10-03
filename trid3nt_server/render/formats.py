@@ -232,7 +232,7 @@ def _style_row(item: Deliverable, *, kind: str,
 def _mesh_layer(item: Deliverable, *, run_id: str, engine: str, name: str,
                 value_range: tuple[float, float] | None) -> LayerURI:
     """An MDAL mesh + its dataset files -> ONE mesh layer painting one group."""
-    from trid3nt_server import storage
+    from trid3nt_server.store import objects as storage
 
     mesh: Mesh = item.product  # type: ignore[assignment]
     bucket = storage.runs_bucket()
@@ -277,7 +277,7 @@ def _vector_layer(item: Deliverable, *, run_id: str, engine: str,
     """A GeoJSON FeatureCollection -> ONE vector layer in the run's store."""
     import json
 
-    from trid3nt_server import storage
+    from trid3nt_server.store import objects as storage
 
     vector: Vector = item.product  # type: ignore[assignment]
     quantity = quantity_of(item.caption)

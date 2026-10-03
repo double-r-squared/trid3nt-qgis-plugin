@@ -84,7 +84,7 @@ def _stage(mesh_id: str, local: Path) -> str:
 
     With no cache bucket configured the file has nowhere to go and refuses:
     a run staged from a path inside a temporary directory reads nothing."""
-    from trid3nt_server import storage
+    from trid3nt_server.store import objects as storage
 
     bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
     if not bucket:
@@ -101,7 +101,7 @@ def _record(art: Any, files: Mapping[str, str]) -> None:
 
     The sidecar is durability, never correctness: a write that fails leaves the
     run holding the files it just wrote."""
-    from trid3nt_server import storage
+    from trid3nt_server.store import objects as storage
     from trid3nt_server.mesh.artifact import write_mesh_artifact_sidecar
 
     art.engine_files = dict(files)

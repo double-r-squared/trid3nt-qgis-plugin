@@ -736,7 +736,7 @@ class TestReconnectSeedsRegistryFromCase:
     def test_case_open_on_fresh_session_resolves_persisted_handle(self) -> None:
         import asyncio
 
-        from trid3nt_server.persistence import Persistence
+        from trid3nt_server.store.cases import Persistence
         from trid3nt_server.server import SessionState, _emit_case_open, get_persistence, set_persistence
         from trid3nt_contracts.common import new_ulid
 
@@ -785,7 +785,7 @@ class TestReconnectSeedsRegistryFromCase:
     def test_case_switch_on_same_session_replaces_not_leaks(self) -> None:
         import asyncio
 
-        from trid3nt_server.persistence import Persistence
+        from trid3nt_server.store.cases import Persistence
         from trid3nt_server.server import SessionState, _emit_case_open, get_persistence, set_persistence
         from trid3nt_contracts.common import new_ulid
 

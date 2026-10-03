@@ -195,9 +195,9 @@ def test_a_non_finite_value_is_not_written_onto_the_mesh(monkeypatch, infinite):
     monkeypatch.setattr(outputs, "write_ascii_dataset", _capture, raising=False)
     monkeypatch.setattr(
         "trid3nt_server.render.mesh_display.write_ascii_dataset", _capture)
-    monkeypatch.setattr("trid3nt_server.storage.client",
+    monkeypatch.setattr("trid3nt_server.store.objects.client",
                         lambda: type("C", (), {"put_object": lambda *a, **k: None})())
-    monkeypatch.setattr("trid3nt_server.storage.runs_bucket", lambda: "runs")
+    monkeypatch.setattr("trid3nt_server.store.objects.runs_bucket", lambda: "runs")
     primitive = field("T1", t=0)
     read = T2D.READS["field"](primitive, infinite)
     outputs.deliver(primitive, read, infinite, caption="water temperature",

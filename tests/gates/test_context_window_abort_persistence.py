@@ -21,7 +21,7 @@ from trid3nt_server.gates.context_budget import (
     ContextWindowExceededError,
     FABRICATION_CAVEAT,
 )
-from trid3nt_server.persistence import make_file_persistence
+from trid3nt_server.store.cases import make_file_persistence
 from trid3nt_server.tools import RegisteredTool
 from trid3nt_contracts.case import CaseCommandEnvelopePayload
 from trid3nt_contracts.common import new_ulid

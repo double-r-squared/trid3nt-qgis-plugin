@@ -16,9 +16,9 @@ import pytest
 
 from trid3nt_contracts.case import CaseSummary
 from trid3nt_contracts.common import new_ulid
-from trid3nt_server import storage
-from trid3nt_server.persistence import FileMCPClient, Persistence
-from trid3nt_server.retention import reap
+from trid3nt_server.store import objects as storage
+from trid3nt_server.store.cases import FileMCPClient, Persistence
+from trid3nt_server.store.sweep import reap
 
 BUCKET = "trid3nt-cache-test"
 DEM = "cache/static-30d/dem/aaaaaaaa.tif"

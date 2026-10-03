@@ -194,7 +194,7 @@ def ask_session_for_layer(payload: LayerRequestPayload) -> LayerResponsePayload:
 def _store_bytes(uri: str) -> bytes:
     """The uploaded object's bytes, read back from the store the session staged
     them in."""
-    from trid3nt_server import storage
+    from trid3nt_server.store import objects as storage
 
     _scheme, bucket, key = storage.split_object_uri(uri)
     return storage.client().get_object(Bucket=bucket, Key=key)["Body"].read()

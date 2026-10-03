@@ -12,7 +12,7 @@ import asyncio
 import pytest
 
 import trid3nt_server.server as server
-from trid3nt_server.persistence import FileMCPClient, Persistence
+from trid3nt_server.store.cases import FileMCPClient, Persistence
 from trid3nt_server.server import SessionState
 
 

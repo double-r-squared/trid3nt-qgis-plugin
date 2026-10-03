@@ -174,7 +174,7 @@ async def _a_qgis_output(monkeypatch, tmp_path, store, session: str):
     import rasterio
     from rasterio.transform import from_origin
 
-    from trid3nt_server import storage
+    from trid3nt_server.store import objects as storage
     from trid3nt_server.render.uri_registry import (
         activate_registry, deactivate_registry, get_uri_registry)
 

@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from trid3nt_server.persistence import (
+from trid3nt_server.store.cases import (
     CASES_COLLECTION,
     DEFAULT_DATABASE,
     FileMCPClient,
