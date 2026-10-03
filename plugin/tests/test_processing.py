@@ -115,6 +115,9 @@ class TestProcessingInQgis(unittest.TestCase):
         self.assertIn("[processing] native:slope over the canvas DEM", proc.stdout)
         self.assertIn("[processing] run_pyqgis snippet read the project back", proc.stdout)
         self.assertIn("[processing] a raising snippet answers with its traceback", proc.stdout)
+        self.assertIn("[processing] reproject -> IDW over the case layer", proc.stdout)
+        self.assertIn("[processing] a case layer the store does not hold is refused by name",
+                      proc.stdout)
 
 
 if __name__ == "__main__":
@@ -122,11 +125,12 @@ if __name__ == "__main__":
 
 
 class _Layer:
-    def __init__(self, qgis_id, name, agent_id=None):
-        self._id, self._name, self._agent_id = qgis_id, name, agent_id
+    def __init__(self, qgis_id, name, agent_id=None, source_uri=None):
+        self._id, self._name = qgis_id, name
+        self._props = {"trid3nt/layer_id": agent_id, "trid3nt/source_uri": source_uri}
 
     def customProperty(self, key):
-        return self._agent_id if key == "trid3nt/layer_id" else None
+        return self._props.get(key)
 
 
 class _Project:
@@ -153,3 +157,12 @@ def test_a_layer_is_found_by_its_qgis_id_its_agent_id_or_its_canvas_name():
     assert _layer_named(project, "ehydro_surveys-ehydro_surveys") is soundings
     assert _layer_named(project, "USACE eHydro channel survey") is soundings
     assert _layer_named(project, "EPSG:32617") == "EPSG:32617"
+
+
+def test_a_case_layer_named_by_its_store_uri_is_the_layer_the_dock_painted():
+    from plugin.render.processing import _layer_named
+
+    uri = "s3://trid3nt-runs/qgis-e9308c98/OUTPUT.gpkg"
+    painted = _Layer("OUTPUT_9f1", "Reprojected", agent_id="qgis-e9308c98",
+                     source_uri=uri)
+    assert _layer_named(_Project(painted), uri) is painted
