@@ -247,3 +247,30 @@ async def test_normal_turn_not_aborted_by_guards(monkeypatch):
     )
     assert "All done." in text
     assert agent_server.inflight_turn_count() == 0
+
+
+@pytest.mark.asyncio
+async def test_watchdog_reads_the_args_not_only_the_tool(monkeypatch, fake_llm):
+    """The same tool with new args each round is variation, not a loop: only the
+    iteration cap stops it. The same tool with the same args trips the watchdog."""
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
+    from trid3nt_contracts import new_ulid
+
+    async def _invoke(_ws, _state, name, args):
+        return {"ok": True}
+
+    async def _run(args_for) -> list[str]:
+        fake_llm.on_call(lambda i, _c: _fake_call_chunk("fetch_dem", args_for(i), f"c{i + 1}"))
+        sock = _FakeSocket()
+        state = SessionState(session_id=new_ulid())
+        with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_invoke), \
+             patch.object(agent_server, "build_tool_declarations", return_value=[]), \
+             patch.object(agent_server, "step_cap_for_model", return_value=12):
+            await agent_server._stream_model_reply(sock, state, _settings(), "x", "research")
+        return _abort_codes(sock)
+
+    codes = await _run(lambda i: {"n": i + 1})
+    assert ABORT_LOOP_WATCHDOG not in codes
+    assert codes
+    assert ABORT_LOOP_WATCHDOG in await _run(lambda i: {"n": 1})
