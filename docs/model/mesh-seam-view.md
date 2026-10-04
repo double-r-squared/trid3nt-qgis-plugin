@@ -46,12 +46,12 @@ flowchart LR
 
 ### `BedProvenance`
 
-What ACTUALLY painted the bed, carried back on the mesh so the journal and the artifact can both say it: the source that served, its datum, when it was measured and its native cell. A reader downstream tells coarse global relief from surveyed topobathy by this and nothing else. ``bed_fallback_note`` is the narration a SUBSTITUTION carried, so a bed painted from the row that was asked for states none.
+What ACTUALLY painted the bed, carried back on the mesh so the journal and the artifact can both say it: the source that served, its datum, when it was measured and its native cell. A reader downstream tells coarse global relief from surveyed topobathy by this and nothing else. ``bed_notes`` are the sentences the bed's fetch stated, a SUBSTITUTION among them, so a bed painted from the row that was asked for states none.
 
 | item | type | required |
 | --- | --- | --- |
 | `bed_source` | String | required |
-| `bed_fallback_note` | String | optional |
+| `bed_notes` | StringList | optional |
 | `synthetic_inputs` | RowList | required |
 
 ### `BoundaryRoleRuns`

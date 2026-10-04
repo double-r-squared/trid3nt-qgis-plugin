@@ -170,10 +170,11 @@ class LayerURI(GraceModel):
     # camera flies to it once the layer is added.
     bbox: tuple[float, float, float, float] | None = None
     legend: LegendKey | None = None  # the resolved style; None until published
-    # Set ONLY when a fallback data source was substituted for the requested
-    # primary. It names BOTH sources, so fallback data can never be mistaken for
-    # the primary. ``None`` means the layer is exactly the requested source.
-    fallback_note: str | None = None
+    # Every sentence the producer and the run state about this layer, one per
+    # entry, read by the person and the model alike. A substitution of a
+    # fallback source names BOTH sources here, so fallback data can never be
+    # mistaken for the primary.
+    notes: list[str] = Field(default_factory=list)
     # The physical model inputs this layer was built from, each tagged with
     # WHERE it came from. ``[]`` means no provenance has been declared yet, NOT
     # "all real" - which is why a narration renders these rather than assuming a
@@ -254,7 +255,6 @@ class HighWaterMarksLayerURI(LayerURI):
     #: comparison never silently pairs this against a model depth raster.
     observed_quantity: str = "water_surface_elevation"
     caveats: list[str] = []
-    notes: list[str] = []
 
 
 class FaultSourcesResult(LayerURI):
@@ -287,7 +287,6 @@ class FloodExtentObservationResult(LayerURI):
     flood_area_km2: float | None = None
     #: The detection limits and the provisional status, stated on the result.
     caveats: list[str] = []
-    notes: list[str] = []
 
 
 class LandcoverResult(LayerURI):

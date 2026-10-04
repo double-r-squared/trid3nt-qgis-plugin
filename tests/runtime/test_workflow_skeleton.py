@@ -35,7 +35,7 @@ class _Layer:
     def __init__(self) -> None:
         self.uri = "s3://b/k.tif"
         self.layer_id = "L"
-        self.fallback_note = None
+        self.notes: list[str] = []
         self.synthetic_inputs: list[Any] = []
         self.depth_max_m = 1.5
 
@@ -97,7 +97,7 @@ async def test_a_filled_check_hook_reaches_the_result_as_a_note(monkeypatch):
     monkeypatch.setattr(run_products, "persist_run_products", _no_persist)
     wf = _workflow(Checked)
     out = await wf._publish(RunResult(value=_Layer()))
-    assert "NOTE: depth 1.5 m is a screening figure" in out.fallback_note
+    assert "depth 1.5 m is a screening figure" in out.notes
 
 
 # --- (3) the registration factory synthesizes the wire ---------------------- #

@@ -288,10 +288,7 @@ class Workflow:
                 getattr(result, "synthetic_inputs", None) or [], run.entries),
         }
         if notes:
-            existing = getattr(result, "fallback_note", None)
-            parts = [existing] if existing else []
-            parts += [f"NOTE: {n}" for n in notes]
-            update["fallback_note"] = " ".join(parts)
+            update["notes"] = [*(getattr(result, "notes", None) or []), *notes]
         result = result.model_copy(update=update)
 
         run_id = self._run_id(result, run)

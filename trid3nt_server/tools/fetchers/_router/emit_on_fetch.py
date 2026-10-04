@@ -143,7 +143,7 @@ def maybe_emit_input_on_fetch(
                     name=name,
                     style=layer.style,
                     role="context",
-                    fallback_note=layer.fallback_note,
+                    notes=layer.notes,
                 )
         else:
             input_layer = layer.model_copy(

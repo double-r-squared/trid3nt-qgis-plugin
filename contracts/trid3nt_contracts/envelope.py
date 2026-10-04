@@ -82,7 +82,7 @@ class ResultLayer(GraceModel):
     # The declared style resolved against this layer - concrete range and the
     # .qml the map loads. None until the layer is published.
     legend: "LegendKey | None" = None
-    fallback_note: str | None = None  # one-line narration of what was swapped
+    notes: list[str] = Field(default_factory=list)  # one sentence per entry
 
 
 class DataSource(GraceModel):

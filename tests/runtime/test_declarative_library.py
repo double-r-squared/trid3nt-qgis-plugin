@@ -180,7 +180,7 @@ class _StubProduct(BaseModel):
     layer_id: str = "stub-product"
     run_id: str | None = None
     synthetic_inputs: list = []
-    fallback_note: str | None = None
+    notes: list[str] = []
 
 
 async def stub_product(**kwargs):

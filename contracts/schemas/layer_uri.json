@@ -285,18 +285,6 @@
       "default": null,
       "title": "Datum Offset M"
     },
-    "fallback_note": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Fallback Note"
-    },
     "layer_id": {
       "title": "Layer Id",
       "type": "string"
@@ -324,6 +312,13 @@
     "name": {
       "title": "Name",
       "type": "string"
+    },
+    "notes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Notes",
+      "type": "array"
     },
     "origin": {
       "anyOf": [

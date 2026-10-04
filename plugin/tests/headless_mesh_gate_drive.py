@@ -86,10 +86,9 @@ def main():
                     if is_peak and not saw_peak_layer:
                         saw_peak_layer = True
                         peak_layer_name = lname
-                        note = str(getattr(L, "fallback_note", "") or "")
                         coverage_line = next(
-                            (seg for seg in note.split("NOTE: ")
-                             if seg.startswith("reach banks:")), "")
+                            (str(n) for n in getattr(L, "notes", None) or []
+                             if str(n).startswith("reach banks:")), "")
                         if EXPECT_SUBSTANCE:
                             substance_ok = EXPECT_SUBSTANCE in peak_layer_name.lower()
                         print(f"PEAK LAYER PUBLISHED: {lid} name={peak_layer_name!r} "

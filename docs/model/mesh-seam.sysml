@@ -255,11 +255,11 @@ package MeshSeam {
         when it was measured and its native cell. A reader downstream tells
         coarse global relief from surveyed topobathy by this and nothing else.
 
-        ``bed_fallback_note`` is the narration a SUBSTITUTION carried, so a bed
-        painted from the row that was asked for states none.
+        ``bed_notes`` are the sentences the bed's fetch stated, a SUBSTITUTION
+        among them, so a bed painted from the row that was asked for states none.
         */
         item bed_source : String;
-        item bed_fallback_note : String [0..1];
+        item bed_notes : StringList [0..1];
         item synthetic_inputs : RowList;
     }
 

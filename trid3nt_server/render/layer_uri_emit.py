@@ -225,7 +225,7 @@ async def publish_raster_input_cog(
     name: str,
     style: dict[str, Any] | None = None,
     role: str = "context",
-    fallback_note: str | None = None,
+    notes: list[str] | None = None,
 ) -> bool:
     """BEST-EFFORT: surface an EXISTING ``s3://`` raster COG as an input/context row.
     Rides the object already in the store - no re-upload - and never raises,
@@ -291,6 +291,6 @@ async def publish_raster_input_cog(
         style=style,
         role=role,
         bbox=None,
-        fallback_note=fallback_note,
+        notes=list(notes or []),
     )
     return await publish_input_layer(emitter, layer, role=role)

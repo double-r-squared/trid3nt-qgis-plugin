@@ -25,7 +25,7 @@ __all__ = [
     "Mesher",
     "OpNamespace",
     "bind_ops",
-    "fetch_fallback_note",
+    "fetch_notes",
     "get_mesher",
     "input_digest",
     "mesh_op",
@@ -111,10 +111,9 @@ def _field_of(layer: Any, name: str) -> Any:
     return getattr(layer, name, None)
 
 
-def fetch_fallback_note(layer: Any) -> str | None:
-    """The one-line narration a fetch attached to a substitution, in either shape."""
-    note = _field_of(layer, "fallback_note")
-    return str(note) if note else None
+def fetch_notes(layer: Any) -> list[str]:
+    """The sentences a fetch stated about its layer, in either shape."""
+    return [str(note) for note in _field_of(layer, "notes") or [] if note]
 
 
 @dataclass(frozen=True)

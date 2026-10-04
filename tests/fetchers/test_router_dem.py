@@ -296,13 +296,13 @@ def test_fetch_dem_pinned_3dep_no_fallback_suggests_copernicus(monkeypatch, fake
     assert suggestions and any("copernicus" in s for s in suggestions)
 
 
-def test_fetch_dem_healthy_3dep_path_unchanged_no_fallback_note(monkeypatch, fake_s3):
+def test_fetch_dem_healthy_3dep_path_unchanged_no_notes(monkeypatch, fake_s3):
     _install_fake_array(monkeypatch)
     spy = _patch_copernicus_seam(monkeypatch)
     layer = fetch_dem(bbox=FORT_MYERS_BBOX, resolution_m=10)
     spy.assert_not_called()
     assert layer.name.startswith("USGS 3DEP DEM (10m)")
-    assert layer.fallback_note is None
+    assert layer.notes == []
 
 
 def test_fetch_dem_partial_coverage_propagates_not_ladder(monkeypatch, fake_s3):

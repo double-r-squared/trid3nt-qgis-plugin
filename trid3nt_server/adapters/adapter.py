@@ -1588,13 +1588,12 @@ def summarize_tool_result(
             "result": _coerce_to_summary_value(result),
         }
         # HONESTY FLOOR: a bare LayerURI result repr-coerces clipped to 200
-        # chars, which would drop the trailing ``fallback_note`` field. When a
-        # cross-source fallback happened, the note is hoisted to a top-level key
-        # so the model ALWAYS sees that the delivered data is the fallback
-        # source, never the primary. Scoped to fallback layers only.
-        _fb_note = getattr(result, "fallback_note", None)
-        if isinstance(_fb_note, str) and _fb_note:
-            payload["fallback_note"] = _fb_note
+        # chars, which would drop the layer's ``notes``. They are hoisted to a
+        # top-level key so the model ALWAYS reads them - a fallback source is
+        # named there, never mistaken for the primary.
+        _notes = getattr(result, "notes", None)
+        if isinstance(_notes, list) and _notes:
+            payload["notes"] = [str(n) for n in _notes]
         # Same clipping hazard, second channel: ``fallback_warning`` is the
         # LABELED degrade a fetcher writes about its own composite (which source
         # painted what share). It is the ONLY loudness a request that bypassed a

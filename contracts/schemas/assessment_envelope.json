@@ -439,18 +439,6 @@
       "additionalProperties": false,
       "description": "A renderable result layer.\nField-for-field alignable with the ``load-layer`` map command so a client\nrenders it without translating. Rasters are COG, vectors FlatGeobuf.",
       "properties": {
-        "fallback_note": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Fallback Note"
-        },
         "layer_id": {
           "title": "Layer Id",
           "type": "string"
@@ -477,6 +465,13 @@
         "name": {
           "title": "Name",
           "type": "string"
+        },
+        "notes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Notes",
+          "type": "array"
         },
         "role": {
           "enum": [

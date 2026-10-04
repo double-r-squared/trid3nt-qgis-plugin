@@ -14,7 +14,7 @@ from trid3nt_server.tools.mesh.inputs import op_geometry, op_raster
 from trid3nt_server.tools.mesh.meshers import (
     Mesh,
     MeshToolError,
-    fetch_fallback_note,
+    fetch_notes,
 )
 
 __all__ = ["set_bed", "set_boundary_roles"]
@@ -52,7 +52,7 @@ def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
             f"set_bed reads a raster {list(_INTERPOLATIONS)}, not {interp!r}.")
     lonlat = _lonlat_nodes(mesh)
     box = _grown(_extent(lonlat))
-    values, provenance, note = _painted(source, lonlat, box, interp, condition)
+    values, provenance, notes = _painted(source, lonlat, box, interp, condition)
     _reached(source, values, lonlat, provenance)
     painted = f"{provenance} at {values.size} nodes"
     _journal_bed(source, provenance, lonlat, values.size)
@@ -60,7 +60,7 @@ def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
         dataclasses.replace(mesh, bed=np.asarray(values, dtype=float)),
         bed_source=painted,
         bed_sources=[provenance],
-        bed_fallback_note=note,
+        bed_notes=notes or None,
         # A bed STATED as a depth is counted from the free surface itself, so
         # this mesh knows the elevation that surface stands at and a run over it
         # needs no gauge. A bed measured on a datum states nothing about the
@@ -167,8 +167,8 @@ def _stated_depth(source: Any) -> bool:
 
 def _painted(source: Any, lonlat: Any, box: tuple[float, float, float, float],
              interp: str, condition: str | None
-             ) -> tuple[Any, str, str | None]:
-    """One bed source sampled at the nodes -> ``(values, provenance, note)``.
+             ) -> tuple[Any, str, list[str]]:
+    """One bed source sampled at the nodes -> ``(values, provenance, notes)``.
 
     A node the source has nothing for comes back NaN, which is what lets the
     refusal above name it; a STATED DEPTH covers every node by construction."""
@@ -188,13 +188,13 @@ def _painted(source: Any, lonlat: Any, box: tuple[float, float, float, float],
         # that depth. Every node is covered, which is why it never falls back.
         depth = float(slot.depth_m or 0.0)
         return (np.full(np.asarray(lonlat).shape[0], -depth, dtype=float),
-                f"stated depth {depth:g} m below the free surface", None)
-    raster, provenance, note = _bed_raster(slot.source, box)
+                f"stated depth {depth:g} m below the free surface", [])
+    raster, provenance, notes = _bed_raster(slot.source, box)
     if condition:
         raster, provenance = _conditioned(raster, provenance, condition)
     values = sample_raster_at_nodes(str(raster), lonlat, interp=str(interp),
                                     fill_holes=False)
-    return values, provenance, note
+    return values, provenance, notes
 
 
 def set_boundary_roles(mesh: Mesh, runs: Any = None, **roles: Any) -> Mesh:
@@ -299,8 +299,8 @@ def _declared_faces(runs: Any, roles: Mapping[str, Any]
 
 
 def _bed_raster(source: Any, bbox: tuple[float, float, float, float]
-                ) -> tuple[Path, str, str | None]:
-    """Stage the bed as a local EPSG:4326 raster -> ``(path, provenance, note)``.
+                ) -> tuple[Path, str, list[str]]:
+    """Stage the bed as a local EPSG:4326 raster -> ``(path, provenance, notes)``.
 
     EPSG:4326: the nodes are sampled in lon/lat, and a projected bed reads fill."""
     from trid3nt_server.tools import TOOL_REGISTRY
@@ -320,8 +320,8 @@ def _bed_raster(source: Any, bbox: tuple[float, float, float, float]
         # the author's behalf would be a cross-dataset bed nobody wrote down.
         layer = TOOL_REGISTRY[name].fn(bbox=bbox, target_crs="EPSG:4326")
         return (op_raster(layer), _provenance(name, layer),
-                fetch_fallback_note(layer))
-    return op_raster(source), f"bed raster supplied directly: {name}", None
+                fetch_notes(layer))
+    return op_raster(source), f"bed raster supplied directly: {name}", []
 
 
 def _source_row(name: str) -> Any:
@@ -349,8 +349,8 @@ def _provenance(name: str, layer: Any) -> str:
     """What ACTUALLY painted the bed, and what its elevations are counted from.
 
     The datum, the acquisition instant and the native cell ride with the name."""
-    note = fetch_fallback_note(layer)
-    painted = f"{name} ({note})" if note else name
+    notes = fetch_notes(layer)
+    painted = f"{name} ({'; '.join(notes)})" if notes else name
     facts = [fact for fact in (_datum(name), _acquired(layer), _native_cell(name))
              if fact]
     return f"{painted} [{'; '.join(facts)}]" if facts else painted
