@@ -1,19 +1,10 @@
-"""Bbox / AOI helpers and the spatial pending-input registry.
-
-The coercion and zoom-to helpers never touch session state; the spatial-input
-registry takes the owner-checked register/pop/resolve shape and fails open on
-timeout, so an unanswered draw never hangs the turn."""
+"""Bbox / AOI helpers: coercion and zoom-to dedupe, never touching session state."""
 
 from __future__ import annotations
 
 import logging
 import math
-from typing import TYPE_CHECKING, Any
-
-from .errors import SpatialInputInvalidResponseError
-
-if TYPE_CHECKING:
-    from trid3nt_contracts.ws import SpatialInputResponsePayload
+from typing import Any
 
 logger = logging.getLogger("trid3nt_server.server")
 
@@ -78,80 +69,3 @@ def _last_zoom_to_bbox(commands: list[dict]) -> list | None:
     return None
 
 
-#
-# A ``request_spatial_input`` call emits its envelope and pauses on a future
-# keyed by the request ``request_id``; the inbound response, which may arrive on
-# a sibling connection of the same session, resolves it with the drawn features
-# or a cancellation, and a cross-session response is refused. Fail-open: on
-# timeout the gate resolves to ``None`` and the caller surfaces a typed "no
-# geometry drawn" result, never a fabricated AOI.
-_PENDING_SPATIAL_INPUTS: dict[str, tuple[str, asyncio.Future]] = {}
-
-
-def _register_pending_spatial_input(
-    session_id: str, request_id: str, fut: "asyncio.Future"
-) -> None:
-    _PENDING_SPATIAL_INPUTS[request_id] = (session_id, fut)
-
-
-def _pop_pending_spatial_input(request_id: str) -> None:
-    _PENDING_SPATIAL_INPUTS.pop(request_id, None)
-
-
-def _resolve_pending_spatial_input(
-    session_id: str, response: "SpatialInputResponsePayload"
-) -> bool:
-    """Complete the pending spatial-input future for ``response.request_id``,
-    True when a live future was resolved; an unknown, already-resolved or
-    cross-session request_id is refused."""
-    entry = _PENDING_SPATIAL_INPUTS.get(response.request_id)
-    if entry is None:
-        return False
-    owner_session, fut = entry
-    if owner_session != session_id:
-        logger.warning(
-            "spatial-input-response REFUSED: session=%s is not the owner "
-            "(owner=%s) for request_id=%s",
-            session_id,
-            owner_session,
-            response.request_id,
-        )
-        return False
-    if fut.done():
-        _PENDING_SPATIAL_INPUTS.pop(response.request_id, None)
-        return False
-    fut.set_result(response)
-    _PENDING_SPATIAL_INPUTS.pop(response.request_id, None)
-    return True
-
-
-def _fail_pending_spatial_input(
-    session_id: str,
-    request_id: str,
-    error_code: str,
-    error_message: str,
-) -> bool:
-    """Fail the pending spatial-input future with a typed error so the awaiting
-    turn wakes at once instead of hanging until the read TTL; False when the
-    request_id is unknown, already resolved, or owned by another session."""
-    entry = _PENDING_SPATIAL_INPUTS.get(request_id)
-    if entry is None:
-        return False
-    owner_session, fut = entry
-    if owner_session != session_id:
-        logger.warning(
-            "spatial-input-response (invalid) REFUSED: session=%s is not the "
-            "owner (owner=%s) for request_id=%s",
-            session_id,
-            owner_session,
-            request_id,
-        )
-        return False
-    if fut.done():
-        _PENDING_SPATIAL_INPUTS.pop(request_id, None)
-        return False
-    fut.set_exception(
-        SpatialInputInvalidResponseError(error_code, error_message)
-    )
-    _PENDING_SPATIAL_INPUTS.pop(request_id, None)
-    return True

@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.processing_contracts import ProcessingRequestPayload
 
+from trid3nt_server.inputs.gate.pending import _PENDING_PROCESSING
+
 if TYPE_CHECKING:
     from trid3nt_contracts.processing_contracts import ProcessingResponsePayload
 
@@ -27,9 +29,6 @@ __all__ = [
     "SessionProcessingTimeoutError",
     "SessionProcessingFailedError",
     "run_in_session",
-    "_register_pending_processing",
-    "_pop_pending_processing",
-    "_resolve_pending_processing",
 ]
 
 #: Wall clock a session run may take before the tool call resolves as a timeout.
@@ -72,44 +71,6 @@ class SessionProcessingFailedError(SessionProcessingError):
     error_code = "SESSION_PROCESSING_FAILED"
 
 
-# request_id -> (owner_session_id, future). The response may arrive on a sibling
-# connection of the same session; a cross-session response is refused.
-_PENDING_PROCESSING: dict[str, tuple[str, asyncio.Future]] = {}
-
-
-def _register_pending_processing(
-    session_id: str, request_id: str, fut: "asyncio.Future"
-) -> None:
-    _PENDING_PROCESSING[request_id] = (session_id, fut)
-
-
-def _pop_pending_processing(request_id: str) -> None:
-    _PENDING_PROCESSING.pop(request_id, None)
-
-
-def _resolve_pending_processing(
-    session_id: str, response: "ProcessingResponsePayload"
-) -> bool:
-    """Complete the pending future for ``response.request_id``; False for an
-    unknown, already-resolved or cross-session request."""
-    entry = _PENDING_PROCESSING.get(response.request_id)
-    if entry is None:
-        return False
-    owner_session, fut = entry
-    if owner_session != session_id:
-        logger.warning(
-            "processing-response REFUSED: session=%s is not the owner (owner=%s) "
-            "for request_id=%s", session_id, owner_session, response.request_id,
-        )
-        return False
-    if fut.done():
-        _PENDING_PROCESSING.pop(response.request_id, None)
-        return False
-    fut.set_result(response)
-    _PENDING_PROCESSING.pop(response.request_id, None)
-    return True
-
-
 async def run_in_session(
     *,
     kind: str,
@@ -135,7 +96,7 @@ async def run_in_session(
     )
     loop = asyncio.get_running_loop()
     fut: asyncio.Future = loop.create_future()
-    _register_pending_processing(emitter.session_id, request_id, fut)
+    _PENDING_PROCESSING.register(emitter.session_id, request_id, fut)
     timeout_s = _timeout_s()
     try:
         await emitter.send_envelope("processing-request", payload)
@@ -148,7 +109,7 @@ async def run_in_session(
             f"{timeout_s:.0f}s; nothing ran to completion"
         ) from None
     finally:
-        _pop_pending_processing(request_id)
+        _PENDING_PROCESSING.pop(request_id, None)
     if response.status != "ok":
         raise SessionProcessingFailedError(
             response.error or f"the QGIS session reported an error on {kind} "

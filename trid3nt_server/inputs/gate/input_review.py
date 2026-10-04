@@ -280,10 +280,7 @@ async def gate_input_review(
     # user_gated: the proceed on the card IS the launch, so a call with no live
     # session to present on refuses rather than runs.
     from trid3nt_server.render.pipeline_emitter import current_emitter
-    from trid3nt_server.inputs.gate.pending import (
-        _register_pending_confirmation,
-        _pop_pending_confirmation,
-    )
+    from trid3nt_server.inputs.gate.pending import _PENDING_CONFIRMATIONS
 
     emitter = current_emitter()
     if emitter is None:
@@ -315,7 +312,7 @@ async def gate_input_review(
         warning_id = envelope.warning_id
         loop = asyncio.get_running_loop()
         fut: asyncio.Future = loop.create_future()
-        _register_pending_confirmation(emitter.session_id, warning_id, fut)
+        _PENDING_CONFIRMATIONS.register(emitter.session_id, warning_id, fut)
         await emitter.send_envelope("tool-payload-warning", envelope)
         logger.info(
             "input-review gate emitted session=%s tool=%s warning_id=%s "
@@ -337,7 +334,7 @@ async def gate_input_review(
                 cancel_code="timeout",
             )
         finally:
-            _pop_pending_confirmation(warning_id)
+            _PENDING_CONFIRMATIONS.pop(warning_id, None)
 
         if decision.decision == "proceed":
             logger.info(

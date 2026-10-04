@@ -99,7 +99,7 @@ class _Session:
         self.asked.append(payload)
         answer = self._answer(payload)
         if answer is not None:
-            qgis_provider.resolve_pending_layer(self.session_id, answer)
+            qgis_provider._PENDING_LAYER.resolve(self.session_id, answer.key, answer)
 
 
 @pytest.fixture()

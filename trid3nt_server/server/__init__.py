@@ -28,7 +28,6 @@ from .protocol import handlers as _protocol_handlers
 from .protocol import loop as _protocol_loop
 from . import config as _config
 from . import errors as _errors
-from . import interactions as _interactions
 from . import spatial as _spatial
 from ..inputs.gate import confirm as _gates_confirm
 from ..inputs.gate import pending as _gates_pending
@@ -56,7 +55,6 @@ _LEAF_MODULES = (
     _protocol_loop,
     _errors,
     _config,
-    _interactions,
     _spatial,
     _gates_confirm,
     _gates_pending,

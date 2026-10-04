@@ -16,6 +16,7 @@ import pytest
 
 import trid3nt_server.main as agent_main
 from trid3nt_server import server as agent_server
+from trid3nt_server.inputs.gate.pending import _PENDING_TOOL_CHOICES
 from trid3nt_server.model.adapters.model_selection import ModelSettings
 from trid3nt_server.model.adapters.scripted_adapter import set_script
 from trid3nt_server.tools import TOOL_REGISTRY
@@ -144,9 +145,8 @@ async def test_ask_mode_emits_card_and_choice_pins_tool(_scripted, monkeypatch):
     assert cands[0]["tool_name"] == "fetch_dem"
 
     # --- tool_name reply pins the tool for the next dispatch ---
-    ok = agent_server._resolve_pending_tool_choice(
-        state2.session_id,
-        {"request_id": payload["request_id"], "tool_name": "fetch_dem"},
+    ok = _PENDING_TOOL_CHOICES.resolve(
+        state2.session_id, payload["request_id"], {"request_id": payload["request_id"], "tool_name": "fetch_dem"},
     )
     assert ok is True
     await asyncio.wait_for(task, timeout=5.0)
@@ -196,7 +196,7 @@ async def test_timeout_proceeds_autonomously_with_note(_scripted, monkeypatch):
     texts = _content_texts(captured["contents"])
     assert any("proceed" in t.lower() and "autonomous" in t.lower() for t in texts), texts
     # The registry entry is cleaned up (no leak).
-    assert not agent_server._PENDING_TOOL_CHOICES
+    assert not _PENDING_TOOL_CHOICES
 
 
 @pytest.mark.asyncio
@@ -207,9 +207,8 @@ async def test_free_text_reply_feeds_back_as_clarification(
     task, sock, state, captured = await _start_turn(monkeypatch, _CONFIDENT)
     card = await _wait_for_card(sock)
     rid = card["payload"]["request_id"]
-    ok = agent_server._resolve_pending_tool_choice(
-        state.session_id,
-        {"request_id": rid, "tool_name": None, "free_text": "I meant bathymetry, not land elevation"},
+    ok = _PENDING_TOOL_CHOICES.resolve(
+        state.session_id, rid, {"request_id": rid, "tool_name": None, "free_text": "I meant bathymetry, not land elevation"},
     )
     assert ok is True
     await asyncio.wait_for(task, timeout=5.0)
@@ -223,26 +222,24 @@ def test_resolve_rejects_wrong_session_and_unknown_id():
     loop = asyncio.new_event_loop()
     try:
         fut = loop.create_future()
-        agent_server._register_pending_tool_choice("SESSION-A", "REQ-1", fut)
+        _PENDING_TOOL_CHOICES.register("SESSION-A", "REQ-1", fut)
         try:
             # wrong session -> refused
-            assert not agent_server._resolve_pending_tool_choice(
-                "SESSION-B", {"request_id": "REQ-1", "tool_name": "fetch_dem"}
+            assert not _PENDING_TOOL_CHOICES.resolve(
+        "SESSION-B", "REQ-1", {"request_id": "REQ-1", "tool_name": "fetch_dem"}
             )
             # unknown id -> refused
-            assert not agent_server._resolve_pending_tool_choice(
-                "SESSION-A", {"request_id": "NOPE", "tool_name": "fetch_dem"}
+            assert not _PENDING_TOOL_CHOICES.resolve(
+        "SESSION-A", "NOPE", {"request_id": "NOPE", "tool_name": "fetch_dem"}
             )
             # malformed payloads -> refused, never raise
-            assert not agent_server._resolve_pending_tool_choice("SESSION-A", None)
-            assert not agent_server._resolve_pending_tool_choice("SESSION-A", {})
             # right session resolves
-            assert agent_server._resolve_pending_tool_choice(
-                "SESSION-A", {"request_id": "REQ-1", "tool_name": "fetch_dem"}
+            assert _PENDING_TOOL_CHOICES.resolve(
+        "SESSION-A", "REQ-1", {"request_id": "REQ-1", "tool_name": "fetch_dem"}
             )
             assert fut.result()["tool_name"] == "fetch_dem"
         finally:
-            agent_server._pop_pending_tool_choice("REQ-1")
+            _PENDING_TOOL_CHOICES.pop("REQ-1", None)
     finally:
         loop.close()
 

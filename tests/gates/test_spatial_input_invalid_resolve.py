@@ -22,10 +22,10 @@ from trid3nt_server.server import (
     SessionState,
     SpatialInputInvalidResponseError,
     _emit_spatial_input_and_wait,
-    _fail_pending_spatial_input,
     _handle_request_spatial_input,
 )
 from trid3nt_contracts.common import new_ulid
+from trid3nt_server.inputs.gate.pending import _PENDING_SPATIAL_INPUTS
 from trid3nt_contracts.ws import (
     SpatialInputRequestPayload,
     SpatialInputResponsePayload,
@@ -104,9 +104,9 @@ def test_invalid_response_resolves_pending_future_promptly_not_via_timeout():
         # Let the request emit + the pending future register.
         for _ in range(500):
             await asyncio.sleep(0)
-            if server._PENDING_SPATIAL_INPUTS.get(req_id) is not None:
+            if _PENDING_SPATIAL_INPUTS.get(req_id) is not None:
                 break
-        assert server._PENDING_SPATIAL_INPUTS.get(req_id) is not None, (
+        assert _PENDING_SPATIAL_INPUTS.get(req_id) is not None, (
             "the pending spatial-input future must be registered"
         )
 
@@ -121,11 +121,8 @@ def test_invalid_response_resolves_pending_future_promptly_not_via_timeout():
             err_msg = ve.errors()[0]["msg"]
 
         t0 = time.monotonic()
-        failed = _fail_pending_spatial_input(
-            state.session_id,
-            req_id,
-            "SPATIAL_INPUT_BAD_ROLE",
-            err_msg,
+        failed = _PENDING_SPATIAL_INPUTS.fail(
+            state.session_id, req_id, SpatialInputInvalidResponseError("SPATIAL_INPUT_BAD_ROLE", err_msg)
         )
         assert failed is True, "a live pending future must be failed"
 
@@ -145,7 +142,7 @@ def test_invalid_response_resolves_pending_future_promptly_not_via_timeout():
         f"~300s timeout path"
     )
     # And the registry is cleaned up (no leak).
-    assert not server._PENDING_SPATIAL_INPUTS
+    assert not _PENDING_SPATIAL_INPUTS
 
 
 def test_handle_request_spatial_input_returns_typed_error_on_invalid_reply():
@@ -180,7 +177,7 @@ def test_handle_request_spatial_input_returns_typed_error_on_invalid_reply():
         req_id = None
         for _ in range(500):
             await asyncio.sleep(0)
-            keys = list(server._PENDING_SPATIAL_INPUTS.keys())
+            keys = list(_PENDING_SPATIAL_INPUTS.keys())
             if keys:
                 req_id = keys[0]
                 break
@@ -194,8 +191,8 @@ def test_handle_request_spatial_input_returns_typed_error_on_invalid_reply():
             err_msg = ve.errors()[0]["msg"]
 
         t0 = time.monotonic()
-        assert _fail_pending_spatial_input(
-            state.session_id, req_id, "SPATIAL_INPUT_BAD_ROLE", err_msg
+        assert _PENDING_SPATIAL_INPUTS.fail(
+            state.session_id, req_id, SpatialInputInvalidResponseError("SPATIAL_INPUT_BAD_ROLE", err_msg)
         )
         result = await asyncio.wait_for(handler, timeout=5.0)
         elapsed = time.monotonic() - t0
@@ -220,8 +217,8 @@ def test_fail_unknown_request_id_is_safe_noop():
     state = SessionState(session_id=new_ulid())
     # Nothing pending -> False, no crash.
     assert (
-        _fail_pending_spatial_input(
-            state.session_id, new_ulid(), "SPATIAL_INPUT_BAD_ROLE", "x"
+        _PENDING_SPATIAL_INPUTS.fail(
+            state.session_id, new_ulid(), SpatialInputInvalidResponseError("SPATIAL_INPUT_BAD_ROLE", "x")
         )
         is False
     )
@@ -235,14 +232,14 @@ def test_fail_cross_session_refused():
         loop = asyncio.get_running_loop()
         fut: asyncio.Future = loop.create_future()
         req_id = new_ulid()
-        server._register_pending_spatial_input(owner, req_id, fut)
+        _PENDING_SPATIAL_INPUTS.register(owner, req_id, fut)
         try:
-            refused = _fail_pending_spatial_input(
-                "some-other-session", req_id, "SPATIAL_INPUT_BAD_ROLE", "x"
-            )
-            accepted = _fail_pending_spatial_input(
-                owner, req_id, "SPATIAL_INPUT_BAD_ROLE", "x"
-            )
+            refused = _PENDING_SPATIAL_INPUTS.fail(
+            "some-other-session", req_id, SpatialInputInvalidResponseError("SPATIAL_INPUT_BAD_ROLE", "x")
+        )
+            accepted = _PENDING_SPATIAL_INPUTS.fail(
+            owner, req_id, SpatialInputInvalidResponseError("SPATIAL_INPUT_BAD_ROLE", "x")
+        )
             # Drain the now-failed future's exception so it is not flagged as
             # never-retrieved by the event loop.
             if accepted:
@@ -250,7 +247,7 @@ def test_fail_cross_session_refused():
                     fut.result()
             return refused, accepted
         finally:
-            server._pop_pending_spatial_input(req_id)
+            _PENDING_SPATIAL_INPUTS.pop(req_id, None)
 
     refused, accepted = asyncio.run(_run())
     assert refused is False, "cross-session fail must be refused"

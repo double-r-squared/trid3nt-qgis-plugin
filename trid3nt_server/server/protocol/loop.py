@@ -12,18 +12,21 @@ from trid3nt_contracts.processing_contracts import ProcessingResponsePayload
 from trid3nt_contracts.secrets import SecretAddEnvelopePayload
 from trid3nt_contracts.ws import CancelPayload, ErrorPayload, LayerResponsePayload, SessionResumePayload, SpatialInputResponsePayload, UserMessagePayload
 from trid3nt_server.model.adapters.model_selection import ModelSettings
-from trid3nt_server.inputs.gate.pending import _resolve_pending_confirmation
+from trid3nt_server.inputs.gate.pending import (
+    _PENDING_CONFIRMATIONS,
+    _PENDING_LAYER,
+    _PENDING_PROCESSING,
+    _PENDING_SPATIAL_INPUTS,
+    _PENDING_TOOL_CHOICES,
+)
 from trid3nt_server.main import MAX_TURNS_PER_SESSION
 from trid3nt_server.server.dispatch.emitter import _assert_sync_offload_safe, _ensure_emitter
-from trid3nt_server.server.interactions import _resolve_pending_tool_choice
-from trid3nt_server.server.processing import _resolve_pending_processing
-from trid3nt_server.tools.fetchers._router.executors.qgis_provider import resolve_pending_layer
+from trid3nt_server.server.errors import SpatialInputInvalidResponseError
 from trid3nt_server.server.protocol.auth import _handle_auth_token, _handle_session_resume, reject_auth_handshake
 from trid3nt_server.server.protocol.connections import _deregister_session_connection, session_connection_count
 from trid3nt_server.server.protocol.handlers import _BG_TASKS, _drain_bg_tasks, _handle_dev_tool_invoke, _handle_secret_add
 from trid3nt_server.server.session.case_state import _clear_case_list_hash, _set_active_aoi_from_payload, _set_drawn_geometry_from_payload
 from trid3nt_server.server.session.state import SessionState, _ROOT_STREAM_KEY
-from trid3nt_server.server.spatial import _fail_pending_spatial_input, _resolve_pending_spatial_input
 from trid3nt_server.server.turn.cases import _handle_case_command
 from trid3nt_server.server.turn.engine import _handle_max_turns_reached, _prepare_user_turn
 from trid3nt_server.server.turn.live_turn import _any_live_turn, _find_live_turn, _rebind_live_turns, _register_live_turn
@@ -342,8 +345,8 @@ def _make_handler(settings: ModelSettings):
                         # Resolve through the SESSION-scoped registry: the gate
                         # may have been registered on a sibling connection of
                         # this same session.
-                        if not _resolve_pending_confirmation(
-                            state.session_id, conf
+                        if not _PENDING_CONFIRMATIONS.resolve(
+                            state.session_id, conf.warning_id, conf
                         ):
                             logger.warning(
                                 "tool-payload-confirmation for unknown/closed "
@@ -391,11 +394,12 @@ def _make_handler(settings: ModelSettings):
                                 rid = payload_dict.get("request_id")
                                 if isinstance(rid, str) and rid:
                                     req_id = rid
-                            if req_id is not None and _fail_pending_spatial_input(
+                            if req_id is not None and _PENDING_SPATIAL_INPUTS.fail(
                                 state.session_id,
                                 req_id,
-                                "SPATIAL_INPUT_BAD_BARRIER_TYPE",
-                                err_msg,
+                                SpatialInputInvalidResponseError(
+                                    "SPATIAL_INPUT_BAD_BARRIER_TYPE", err_msg
+                                ),
                             ):
                                 logger.info(
                                     "spatial-input-response invalid: FAILED "
@@ -413,8 +417,8 @@ def _make_handler(settings: ModelSettings):
                                     state.session_id,
                                 )
                             continue
-                        if not _resolve_pending_spatial_input(
-                            state.session_id, spatial_resp
+                        if not _PENDING_SPATIAL_INPUTS.resolve(
+                            state.session_id, spatial_resp.request_id, spatial_resp
                         ):
                             logger.warning(
                                 "spatial-input-response for unknown/closed "
@@ -448,7 +452,9 @@ def _make_handler(settings: ModelSettings):
                                 f"processing-response invalid: {ve.errors()[0]['msg']}",
                             )
                             continue
-                        if not _resolve_pending_processing(state.session_id, proc):
+                        if not _PENDING_PROCESSING.resolve(
+                            state.session_id, proc.request_id, proc
+                        ):
                             logger.warning(
                                 "processing-response for unknown/closed "
                                 "request_id=%s session=%s",
@@ -481,7 +487,7 @@ def _make_handler(settings: ModelSettings):
                                 f"layer-response invalid: {ve.errors()[0]['msg']}",
                             )
                             continue
-                        if not resolve_pending_layer(state.session_id, layer):
+                        if not _PENDING_LAYER.resolve(state.session_id, layer.key, layer):
                             logger.warning(
                                 "layer-response for unknown/closed key=%s "
                                 "session=%s",
@@ -511,8 +517,10 @@ def _make_handler(settings: ModelSettings):
                                 "tool-choice requires a request_id",
                             )
                             continue
-                        if not _resolve_pending_tool_choice(
-                            state.session_id, payload_dict
+                        if not _PENDING_TOOL_CHOICES.resolve(
+                            state.session_id,
+                            payload_dict["request_id"],
+                            dict(payload_dict),
                         ):
                             logger.warning(
                                 "tool-choice for unknown/closed request_id=%s "

@@ -22,6 +22,8 @@ from typing import Any
 from trid3nt_contracts.ws import LayerRequestPayload, LayerResponsePayload
 from trid3nt_contracts.source_spec import SourceSpec
 
+from trid3nt_server.inputs.gate.pending import _PENDING_LAYER
+
 from ..errors import router_empty_error, router_input_error, router_upstream_error
 from .vector_fgb import build_where, resolve_endpoints
 
@@ -29,7 +31,7 @@ logger = logging.getLogger(
     "trid3nt_server.tools.fetchers._router.executors.qgis_provider"
 )
 
-__all__ = ["ACCESS", "build_uri", "row_key", "resolve_pending_layer", "execute"]
+__all__ = ["ACCESS", "build_uri", "row_key", "execute"]
 
 #: The ``ingest.access`` value that routes a row here.
 ACCESS = "qgis_provider"
@@ -37,10 +39,6 @@ ACCESS = "qgis_provider"
 #: A WHERE that selects everything is the absence of one, not a clause to send.
 _NO_WHERE = "1=1"
 
-# key -> (owner_session_id, future). The key is the row's own, so a response can
-# only answer the request that asked and a sibling connection of the same session
-# may carry it; a cross-session answer is refused.
-_PENDING_LAYER: dict[str, tuple[str, asyncio.Future]] = {}
 
 
 def _block(spec: SourceSpec) -> dict[str, Any]:
@@ -108,33 +106,13 @@ def row_key(spec: SourceSpec, params: dict[str, Any]) -> str:
     )
 
 
-def resolve_pending_layer(session_id: str, response: LayerResponsePayload) -> bool:
-    """Complete the pending future for ``response.key``; False for an unknown,
-    already-resolved or cross-session answer."""
-    entry = _PENDING_LAYER.get(response.key)
-    if entry is None:
-        return False
-    owner_session, fut = entry
-    if owner_session != session_id:
-        logger.warning(
-            "layer-response REFUSED: session=%s is not the owner (owner=%s) for "
-            "key=%s", session_id, owner_session, response.key,
-        )
-        return False
-    _PENDING_LAYER.pop(response.key, None)
-    if fut.done():
-        return False
-    fut.set_result(response)
-    return True
-
-
 async def _ask(emitter: Any, payload: LayerRequestPayload, timeout_s: float):
     """Emit the request on the session and wait for its answer."""
     from trid3nt_server.server.processing import SessionProcessingTimeoutError
 
     loop = asyncio.get_running_loop()
     fut: asyncio.Future = loop.create_future()
-    _PENDING_LAYER[payload.key] = (emitter.session_id, fut)
+    _PENDING_LAYER.register(emitter.session_id, payload.key, fut)
     try:
         await emitter.send_envelope("layer-request", payload)
         logger.info(

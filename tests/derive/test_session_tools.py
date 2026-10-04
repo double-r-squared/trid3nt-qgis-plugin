@@ -44,8 +44,9 @@ def _answer_when_asked(emitter: _FakeEmitter, **fields):
                 break
             await asyncio.sleep(0.005)
         _kind, payload = emitter.sent[-1]
-        processing._resolve_pending_processing(
+        processing._PENDING_PROCESSING.resolve(
             emitter.session_id,
+            payload.request_id,
             ProcessingResponsePayload(request_id=payload.request_id, **fields),
         )
     return asyncio.create_task(_reply())
@@ -141,16 +142,16 @@ async def test_a_wait_that_runs_out_is_typed_and_cleans_up(monkeypatch) -> None:
 def test_a_cross_session_reply_is_refused() -> None:
     fut = asyncio.new_event_loop().create_future()
     rid = new_ulid()
-    processing._register_pending_processing("owner", rid, fut)
+    processing._PENDING_PROCESSING.register("owner", rid, fut)
     try:
-        assert not processing._resolve_pending_processing(
-            "intruder", ProcessingResponsePayload(request_id=rid, status="ok"))
+        assert not processing._PENDING_PROCESSING.resolve(
+            "intruder", rid, ProcessingResponsePayload(request_id=rid, status="ok"))
         assert not fut.done()
-        assert processing._resolve_pending_processing(
-            "owner", ProcessingResponsePayload(request_id=rid, status="ok"))
+        assert processing._PENDING_PROCESSING.resolve(
+            "owner", rid, ProcessingResponsePayload(request_id=rid, status="ok"))
         assert fut.done()
     finally:
-        processing._pop_pending_processing(rid)
+        processing._PENDING_PROCESSING.pop(rid, None)
 
 
 def test_bad_arguments_refuse_before_the_wire(monkeypatch) -> None:

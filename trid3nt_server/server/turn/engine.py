@@ -15,7 +15,7 @@ from trid3nt_server.server.config import _ambiguity_margin_threshold, _tool_choi
 from trid3nt_server.inputs.extent import bbox_overlaps
 from trid3nt_server.server.dispatch.emitter import _ensure_emitter
 from trid3nt_server.server.dispatch.persist import _persist_chat_turn
-from trid3nt_server.server.interactions import _pop_pending_tool_choice, _register_pending_tool_choice
+from trid3nt_server.inputs.gate.pending import _PENDING_TOOL_CHOICES
 from trid3nt_server.server.session.case_state import _persist_session_active_case
 from trid3nt_server.server.session.state import SessionState, _CASE_SYNC_NEVER
 from trid3nt_server.server.spatial import _coerce_bbox4
@@ -272,7 +272,7 @@ async def _maybe_emit_tool_candidates(
     import json as _json
 
     fut: asyncio.Future = asyncio.get_running_loop().create_future()
-    _register_pending_tool_choice(state.session_id, request_id, fut)
+    _PENDING_TOOL_CHOICES.register(state.session_id, request_id, fut)
     try:
         await _session_safe_send(
             websocket,
@@ -321,7 +321,7 @@ async def _maybe_emit_tool_candidates(
         )
         return None, []
     finally:
-        _pop_pending_tool_choice(request_id)
+        _PENDING_TOOL_CHOICES.pop(request_id, None)
 
     # Defensive dict parse (contracts lane declares the typed model later).
     tool_name: str | None = None

@@ -83,14 +83,11 @@ async def gate_draw_input(
         default_timeout_seconds=int(ttl_seconds),
     )
 
-    from trid3nt_server.server.spatial import (
-        _pop_pending_spatial_input,
-        _register_pending_spatial_input,
-    )
+    from trid3nt_server.inputs.gate.pending import _PENDING_SPATIAL_INPUTS
 
     loop = asyncio.get_running_loop()
     fut: asyncio.Future = loop.create_future()
-    _register_pending_spatial_input(emitter.session_id, request_id, fut)
+    _PENDING_SPATIAL_INPUTS.register(emitter.session_id, request_id, fut)
     try:
         await emitter.send_envelope("spatial-input-request", payload)
         logger.info("draw gate emitted session=%s tool=%s param=%s geometry=%s "
@@ -108,7 +105,7 @@ async def gate_draw_input(
                        emitter.session_id, tool_name, param, request_id, exc_info=True)
         return DrawOutcome(reason=f"the drawn geometry could not be used: {exc}")
     finally:
-        _pop_pending_spatial_input(request_id)
+        _PENDING_SPATIAL_INPUTS.pop(request_id, None)
 
     if response.cancelled:
         return DrawOutcome(reason="the drawing was cancelled")

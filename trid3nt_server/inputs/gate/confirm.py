@@ -18,11 +18,10 @@ from trid3nt_server.model.credentials.resolver import MissingCredentialError, cr
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.inputs.gate.cards import _build_spatial_input_request_payload, _gate_memory_key, _get_hard_cap_mb, _get_warning_threshold_mb, _resolve_payload_estimator, _spatial_response_to_result
 from trid3nt_server.inputs.gate.cards.estimate import call_provider
-from trid3nt_server.inputs.gate.pending import _pop_pending_confirmation, _register_pending_confirmation
+from trid3nt_server.inputs.gate.pending import _PENDING_CONFIRMATIONS, _PENDING_SPATIAL_INPUTS
 from trid3nt_server.server.config import CODE_EXEC_CONFIRM_TIMEOUT_SECONDS, _code_exec_approval_timeout_s
 from trid3nt_server.server.errors import GateConfirmationTimeoutError, SpatialInputInvalidResponseError
 from trid3nt_server.server.session.state import SessionState
-from trid3nt_server.server.spatial import _pop_pending_spatial_input, _register_pending_spatial_input
 from trid3nt_server.server.turn.wire import _new_envelope, _send_error, _session_safe_send
 from typing import Any
 from websockets.asyncio.server import ServerConnection
@@ -143,7 +142,7 @@ async def _gate_on_confirm(
         _warning_id_out["warning_id"] = warning_id
     loop = asyncio.get_running_loop()
     fut: asyncio.Future = loop.create_future()
-    _register_pending_confirmation(state.session_id, warning_id, fut)
+    _PENDING_CONFIRMATIONS.register(state.session_id, warning_id, fut)
 
     await _session_safe_send(websocket, state.session_id,
         _new_envelope("tool-payload-warning", state.session_id, envelope)
@@ -182,7 +181,7 @@ async def _gate_on_confirm(
             "parameter-confirmation card", tool_name, wait_s
         ) from None
     finally:
-        _pop_pending_confirmation(warning_id)
+        _PENDING_CONFIRMATIONS.pop(warning_id, None)
 
     logger.info(
         "confirm decision session=%s tool=%s warning_id=%s decision=%s",
@@ -410,7 +409,7 @@ async def _maybe_gate_on_payload_warning(
     # Create the future the inbound handler will complete.
     loop = asyncio.get_running_loop()
     fut: asyncio.Future = loop.create_future()
-    _register_pending_confirmation(state.session_id, warning_id, fut)
+    _PENDING_CONFIRMATIONS.register(state.session_id, warning_id, fut)
 
     await _session_safe_send(websocket, state.session_id,
         _new_envelope("tool-payload-warning", state.session_id, warning_payload)
@@ -451,7 +450,7 @@ async def _maybe_gate_on_payload_warning(
             "payload-size warning card", tool_name, wait_s
         ) from None
     finally:
-        _pop_pending_confirmation(warning_id)
+        _PENDING_CONFIRMATIONS.pop(warning_id, None)
 
     audit_entry["decision"] = decision_payload.decision
     audit_entry["decided_at"] = now_utc().isoformat()
@@ -521,7 +520,7 @@ async def _gate_on_code_exec(
     # (keyed on code_exec_id == warning_id). Same seam as the payload-warning gate.
     loop = asyncio.get_running_loop()
     fut: asyncio.Future = loop.create_future()
-    _register_pending_confirmation(state.session_id, code_exec_id, fut)
+    _PENDING_CONFIRMATIONS.register(state.session_id, code_exec_id, fut)
 
     await _session_safe_send(websocket, state.session_id,
         _new_envelope("code-exec-request", state.session_id, request_payload)
@@ -566,7 +565,7 @@ async def _gate_on_code_exec(
     finally:
         # Runs on approve, deny, timeout, AND CancelledError (session close /
         # turn cancel) -- the registry never leaks a dead future.
-        _pop_pending_confirmation(code_exec_id)
+        _PENDING_CONFIRMATIONS.pop(code_exec_id, None)
 
     logger.info(
         "code-exec confirm decision session=%s code_exec_id=%s decision=%s",
@@ -652,7 +651,7 @@ async def _emit_spatial_input_and_wait(
     fut: asyncio.Future = loop.create_future()
     # Session-scoped, so a reply arriving on a sibling connection after a
     # double-mount or a reconnect still resolves it.
-    _register_pending_spatial_input(state.session_id, payload.request_id, fut)
+    _PENDING_SPATIAL_INPUTS.register(state.session_id, payload.request_id, fut)
 
     await _session_safe_send(websocket, state.session_id,
         _new_envelope("spatial-input-request", state.session_id, payload)
@@ -689,7 +688,7 @@ async def _emit_spatial_input_and_wait(
         )
         raise
     finally:
-        _pop_pending_spatial_input(payload.request_id)
+        _PENDING_SPATIAL_INPUTS.pop(payload.request_id, None)
 
     logger.info(
         "spatial-input-response received session=%s request_id=%s "

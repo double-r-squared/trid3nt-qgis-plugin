@@ -22,8 +22,10 @@ from trid3nt_server.inputs.gate.cards.spatial_input import (
 from trid3nt_server.server import (
     SessionState,
     _emit_spatial_input_and_wait,
-    _resolve_pending_spatial_input,
+
 )
+from trid3nt_server.inputs.gate.pending import _PENDING_SPATIAL_INPUTS
+
 from trid3nt_server.inputs.gate.spatial_input import (
     ParsedSpatialInput,
     SpatialInputParseError,
@@ -259,7 +261,7 @@ def test_registration_in_ws_routing_registries():
 def test_resolve_unknown_request_id_is_noop():
     state = SessionState(session_id=new_ulid())
     resp = SpatialInputResponsePayload(request_id=new_ulid(), cancelled=True)
-    assert _resolve_pending_spatial_input(state.session_id, resp) is False
+    assert _PENDING_SPATIAL_INPUTS.resolve(state.session_id, resp.request_id, resp) is False
 
 
 def test_resolve_cross_session_refused():
@@ -269,14 +271,14 @@ def test_resolve_cross_session_refused():
         loop = asyncio.get_running_loop()
         fut: asyncio.Future = loop.create_future()
         req_id = new_ulid()
-        server._register_pending_spatial_input(owner, req_id, fut)
+        _PENDING_SPATIAL_INPUTS.register(owner, req_id, fut)
         try:
             resp = SpatialInputResponsePayload(request_id=req_id, cancelled=True)
-            refused = _resolve_pending_spatial_input("some-other-session", resp)
-            accepted = _resolve_pending_spatial_input(owner, resp)
+            refused = _PENDING_SPATIAL_INPUTS.resolve("some-other-session", req_id, resp)
+            accepted = _PENDING_SPATIAL_INPUTS.resolve(owner, req_id, resp)
             return refused, accepted
         finally:
-            server._pop_pending_spatial_input(req_id)
+            _PENDING_SPATIAL_INPUTS.pop(req_id, None)
 
     refused, accepted = asyncio.run(_run())
     assert refused is False, "cross-session response must be refused"
@@ -314,7 +316,7 @@ def test_emit_and_wait_round_trips_a_drawn_reply():
             await asyncio.sleep(0)
             if any(
                 e["type"] == "spatial-input-request" for e in ws.sent
-            ) and server._PENDING_SPATIAL_INPUTS:
+            ) and _PENDING_SPATIAL_INPUTS:
                 break
         reqs = [e for e in ws.sent if e["type"] == "spatial-input-request"]
         assert reqs, "a spatial-input-request must be emitted"
@@ -325,7 +327,7 @@ def test_emit_and_wait_round_trips_a_drawn_reply():
             geometry_type="vector_draw",
             features=_full_drawn_fc(),
         )
-        assert _resolve_pending_spatial_input(state.session_id, reply)
+        assert _PENDING_SPATIAL_INPUTS.resolve(state.session_id, reply.request_id, reply)
         return await handler
 
     resp = asyncio.run(_run())
