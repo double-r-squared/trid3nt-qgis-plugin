@@ -77,7 +77,7 @@ class SessionState:
     # is the legitimate "no active Case" value.
     case_context_synced_to: str | None = _CASE_SYNC_NEVER
     # Durable cache of the active Case's persisted AOI bbox, set when that Case
-    # is selected or synced and cleared on deselect. It is the AOI anchor the
+    # is selected or synced and reset when a new Case is created. It is the AOI anchor the
     # reuse short-circuits and the bbox auto-fill read; ``None`` is legitimate,
     # meaning no active Case or a Case with no recorded bbox.
     case_bbox: Any = None

@@ -243,13 +243,8 @@ class CaseOpenEnvelopePayload(GraceModel):
 
 
 # Closed enum: Case lifecycle commands. CLOSED because the dispatch table has
-# to enumerate a handler for each. ``deselect`` means the client navigated OUT
-# to the Cases root and carries no case_id; without it the session-scoped
-# active Case keeps pointing at the last one opened, and a root prompt
-# dispatches into a stale Case.
-CaseCommand = Literal[
-    "create", "select", "deselect", "rename", "archive", "delete", "set-bbox"
-]
+# to enumerate a handler for each.
+CaseCommand = Literal["create", "select", "rename", "delete", "set-bbox"]
 
 
 class CaseCommandEnvelopePayload(GraceModel):

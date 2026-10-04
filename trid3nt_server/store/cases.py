@@ -273,25 +273,6 @@ class Persistence:
             cases.append(case)
         return cases
 
-    async def archive_case(self, case_id: str) -> None:
-        """Soft-archive a Case, setting ``status="archived"``; the document
-        survives so an un-archive can restore it.
-        """
-        await self._store.call_tool(
-            "update-one",
-            {
-                "database": self._db,
-                "collection": CASES_COLLECTION,
-                "filter": {"_id": case_id},
-                "update": {
-                    "$set": {
-                        "status": "archived",
-                        "updated_at": now_utc().isoformat().replace("+00:00", "Z"),
-                    }
-                },
-            },
-        )
-
     async def delete_case(self, case_id: str) -> None:
         """Soft-delete a Case: the document survives with ``status="deleted"``
         and a ``deleted_at`` stamp; there is no hard-delete path here.

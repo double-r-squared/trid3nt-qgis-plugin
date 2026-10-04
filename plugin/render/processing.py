@@ -147,8 +147,8 @@ def _resolved(project: Any, value: Any) -> Any:
 
 def _layer_named(project: Any, value: str) -> Any:
     """A layer by its store uri, its QGIS id, the agent's layer id stamped on it,
-    or its canvas name; a layer the dock painted is read from its full source,
-    never the painted copy; any other string passes through as the value."""
+    or its canvas name; a layer the dock painted is read from its store source;
+    any other string passes through as the value."""
     if value.startswith("s3://"):
         return _full_source(value, value)
     known = project.mapLayer(value)
@@ -165,9 +165,9 @@ def _layer_named(project: Any, value: str) -> Any:
 
 
 def _full_source(uri: str, named: str) -> Any:
-    """The case layer at ``uri`` opened through the dock's ``/vsis3`` path. The
-    map may paint a capped or simplified copy, so an algorithm never reads it:
-    a layer whose full source does not open is refused by name."""
+    """The case layer at ``uri`` opened afresh through the dock's ``/vsis3``
+    path, so an algorithm reads what the store holds; a layer whose source does
+    not open is refused by name."""
     from ..net.trid3nt_client import s3_to_vsis3
 
     path = s3_to_vsis3(uri)

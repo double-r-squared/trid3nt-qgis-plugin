@@ -117,19 +117,14 @@ def test_file_mcp_rename_case(tmp_path: Path) -> None:
     assert fetched.title == "Renamed title"
 
 
-def test_file_mcp_archive_then_delete(tmp_path: Path) -> None:
-    """Archive flips status; delete flips again; both persist across restart."""
+def test_file_mcp_delete_persists_across_restart(tmp_path: Path) -> None:
+    """Delete flips status and the flip persists across restart."""
     base = tmp_path
     p = Persistence(FileMCPClient(base_dir=base))
     case = _fresh_case()
     asyncio.run(p.upsert_case(case))
 
-    asyncio.run(p.archive_case(case.case_id))
-    p2 = Persistence(FileMCPClient(base_dir=base))
-    fetched = asyncio.run(p2.get_case(case.case_id))
-    assert fetched is not None and fetched.status == "archived"
-
-    asyncio.run(p2.delete_case(case.case_id))
+    asyncio.run(p.delete_case(case.case_id))
     p3 = Persistence(FileMCPClient(base_dir=base))
     fetched = asyncio.run(p3.get_case(case.case_id))
     assert fetched is not None and fetched.status == "deleted"

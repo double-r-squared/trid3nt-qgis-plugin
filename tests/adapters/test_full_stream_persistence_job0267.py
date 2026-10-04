@@ -414,7 +414,8 @@ async def test_deleted_and_archived_cases_excluded_server_side(
         case_id=new_ulid(), title="ghost", created_at=now_utc(), updated_at=now_utc()
     )
     shelf = CaseSummary(
-        case_id=new_ulid(), title="shelf", created_at=now_utc(), updated_at=now_utc()
+        case_id=new_ulid(), title="shelf", created_at=now_utc(), updated_at=now_utc(),
+        status="archived",
     )
     # Cases are owner-scoped (the $exists:false leak clause
     # is gone). Stamp the owner so the owner-scoped listing returns them; the
@@ -422,7 +423,6 @@ async def test_deleted_and_archived_cases_excluded_server_side(
     for c in (live, ghost, shelf):
         await file_persistence.upsert_case(c, owner_user_id="anyone")
     await file_persistence.delete_case(ghost.case_id)
-    await file_persistence.archive_case(shelf.case_id)
 
     listed = await file_persistence.list_cases_for_user("anyone")
     titles = {c.title for c in listed}

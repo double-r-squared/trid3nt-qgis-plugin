@@ -311,7 +311,6 @@ def test_case_open_envelope_message_type_classvar() -> None:
         ("create", None, {"title": "Hurricane Ian — Fort Myers"}),
         ("select", "fixed", {}),
         ("rename", "fixed", {"title": "Renamed Case"}),
-        ("archive", "fixed", {}),
         ("delete", "fixed", {}),
     ],
 )

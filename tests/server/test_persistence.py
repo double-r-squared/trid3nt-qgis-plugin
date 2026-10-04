@@ -101,18 +101,6 @@ def test_list_cases_for_user() -> None:
     assert none_cases == []
 
 
-def test_archive_case_sets_status() -> None:
-    mock = MockMCPClient()
-    p = Persistence(mock)
-    case = _fresh_case_summary()
-    asyncio.run(p.upsert_case(case))
-
-    asyncio.run(p.archive_case(case.case_id))
-    fetched = asyncio.run(p.get_case(case.case_id))
-    assert fetched is not None
-    assert fetched.status == "archived"
-
-
 def test_delete_case_sets_status() -> None:
     mock = MockMCPClient()
     p = Persistence(mock)

@@ -117,13 +117,12 @@ def test_an_unreferenced_object_goes_and_a_current_one_stays(
 
 def test_a_deleted_case_releases_its_objects(store: _FakeStore,
                                              tmp_path: Path) -> None:
-    """A Case that pinned the DEM is deleted; the next sweep takes it. An
-    archived Case still holds what it held."""
+    """A Case that pinned the DEM holds it; once deleted, the next sweep
+    takes it."""
     db = FileMCPClient(base_dir=tmp_path / "db")
     p = Persistence(db)
     case = _case_holding_the_layer()
     asyncio.run(p.upsert_case(case))
-    asyncio.run(p.archive_case(case.case_id))
 
     assert asyncio.run(reap(now=NOW, client=db)) == [GAUGE]
 
