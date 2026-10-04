@@ -22,7 +22,7 @@ from trid3nt_contracts.gate_spec import GateSpec, LeverSpec
 #: and the shared estimate/pin providers, kind='fetch' (no ``confirmed``
 #: injection - fetchers ignore it). A source opts in by declaring
 #: ``confirm_gate: fetch_resolution``, which is the only thing that gates it.
-_PROVIDERS = "trid3nt_server.inputs.gate.cards.solver_confirm"
+_PROVIDERS = "trid3nt_server.inputs.gate.cards.fetch_resolution"
 FETCH_RESOLUTION_GATE_SPEC = GateSpec(
     kind="fetch",
     estimate_provider=f"{_PROVIDERS}:estimate_fetch_resolution",

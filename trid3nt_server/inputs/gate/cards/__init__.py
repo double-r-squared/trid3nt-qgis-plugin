@@ -7,7 +7,7 @@ from .payload_warning import (
     _get_warning_threshold_mb,
     _resolve_payload_estimator,
 )
-from .solver_confirm import (
+from .fetch_resolution import (
     MAX_FETCH_PX,
     _FETCH_MAX_PX_BY_TOOL,
     _LANDCOVER_DEFAULT_RES_M,

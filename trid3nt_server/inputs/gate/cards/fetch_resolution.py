@@ -12,7 +12,7 @@ from trid3nt_contracts import new_ulid
 
 from .estimate import CardEstimate
 
-logger = logging.getLogger("trid3nt_server.inputs.gate.cards.solver_confirm")
+logger = logging.getLogger("trid3nt_server.inputs.gate.cards.fetch_resolution")
 
 
 #: hard px-grid ceiling for the fetch-resolution gate. A fine

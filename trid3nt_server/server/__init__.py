@@ -32,7 +32,7 @@ from . import spatial as _spatial
 from ..inputs.gate import confirm as _gates_confirm
 from ..inputs.gate import pending as _gates_pending
 from ..inputs.gate import errors as _gates_errors
-from ..inputs.gate.cards import solver_confirm as _gates_cards_confirm
+from ..inputs.gate.cards import fetch_resolution as _gates_cards_confirm
 
 # Facade read order; monkeypatch writes propagate to EVERY leaf already binding
 # the name (so a leaf reading it as its own global sees the patch).
