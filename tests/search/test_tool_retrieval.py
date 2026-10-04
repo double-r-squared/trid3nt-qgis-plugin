@@ -120,7 +120,7 @@ def test_fail_open_on_discovery_error(warm_index, monkeypatch):
     def _boom(*a, **k):
         raise RuntimeError("synthetic discovery fault")
 
-    monkeypatch.setattr(trmod, "_discover_topk", _boom)
+    monkeypatch.setattr(trmod, "ranked_docs", _boom)
     _assert_full_failopen(retrieve_visible_tools("show me the lightning", None, DEFAULT_K))
 
 
@@ -130,7 +130,7 @@ def test_fail_open_on_cold_index(monkeypatch):
 
 
 def test_fail_open_on_empty_ranking(warm_index, monkeypatch):
-    monkeypatch.setattr(trmod, "_discover_topk", lambda *a, **k: set())
+    monkeypatch.setattr(trmod, "ranked_docs", lambda *a, **k: [])
     _assert_full_failopen(retrieve_visible_tools("zzqqxx-nomatch", None, DEFAULT_K))
 
 

@@ -22,6 +22,7 @@ from trid3nt_server.tools.search.search_tools.search_tools import (
 __all__ = [
     "retrieve_visible_tools",
     "retrieve_ranked_tools",
+    "ranked_docs",
     "CORE_FLOOR",
     "DEFAULT_K",
     "MAX_K",
@@ -148,7 +149,8 @@ def _build_channel_rankings(
             rankings.append(name_ranking)
 
     if not rankings:
-        # substring fallback over tool names (mirrors search_tools).
+        # A substring fallback over tool names, so the routing still produces
+        # something when no channel ranked.
         substr = [
             i for i, name in enumerate(index.tool_names)
             if query_clean.lower() in name.lower()
@@ -158,31 +160,15 @@ def _build_channel_rankings(
     return rankings, bm25_ranking
 
 
-def _discover_topk(user_text: str, k: int) -> set[str] | None:
-    """Top-k tool names by relevance to ``user_text`` over the CACHED index.
-    ``None`` means the index is COLD, so the caller fails open without triggering a
-    blocking build; an empty set means warm but nothing matched."""
-    query_clean = user_text.strip()
-    index = _dd._INDEX  # live module global; None until the orchestrator warms it
-    if index is None or not getattr(index, "tool_names", None):
-        return None  # cold -- never build on the hot path; caller fail-opens
-
+def ranked_docs(query_clean: str, index: Any) -> list[tuple[int, float]]:
+    """THE ranking: the channels fused by RRF, then the lexical champion's bonus, as
+    ``[(doc_index, score)]`` descending over the CACHED index. ``[]`` when no
+    channel ranked."""
     rankings, bm25_ranking = _build_channel_rankings(query_clean, index)
     if not rankings:
-        return set()
-
-    fused = _reciprocal_rank_fusion(rankings, k=60)
-    fused = _lexical_reinforcement(
-        fused, bm25_ranking, getattr(index, "tiers", None), k=60
-    )
-    # The index carries a document per DATA CLASS under the match's own name, so
-    # k counts distinct TOOLS - a class document never spends a slot twice.
-    names: set[str] = set()
-    for idx, _score in fused:
-        if len(names) >= k:
-            break
-        names.add(index.tool_names[idx])
-    return names
+        return []
+    return _lexical_reinforcement(
+        _reciprocal_rank_fusion(rankings, k=60), bm25_ranking, k=60)
 
 
 def retrieve_ranked_tools(
@@ -193,26 +179,21 @@ def retrieve_ranked_tools(
     anything. ``[]`` on a cold index or no match, and the caller MUST fail open."""
     if not isinstance(user_text, str) or not user_text.strip():
         return []
-    query_clean = user_text.strip()
     index = _dd._INDEX  # live module global; None until the orchestrator warms it
     if index is None or not getattr(index, "tool_names", None):
-        return []  # cold -- caller fails open
+        return []  # cold -- never build on the hot path; caller fails open
     try:
         k = int(k)
     except (TypeError, ValueError):
         k = DEFAULT_K
     k = max(1, min(k, len(index.tool_names)))
     try:
-        rankings, bm25_ranking = _build_channel_rankings(query_clean, index)
+        fused = ranked_docs(user_text.strip(), index)
     except Exception:  # noqa: BLE001 -- fail open, never break dispatch
-        logger.warning("retrieve_ranked_tools: channel build failed", exc_info=True)
+        logger.warning("retrieve_ranked_tools: ranking failed", exc_info=True)
         return []
-    if not rankings:
-        return []
-    fused = _reciprocal_rank_fusion(rankings, k=60)
-    fused = _lexical_reinforcement(
-        fused, bm25_ranking, getattr(index, "tiers", None), k=60
-    )
+    # The index carries a document per DATA CLASS under the match's own name, so
+    # k counts distinct TOOLS - a class document never spends a slot twice.
     ranked: list[tuple[str, float]] = []
     seen: set[str] = set()
     for idx, score in fused:
@@ -239,14 +220,12 @@ def _full_registry_floor(floor: set[str]) -> set[str]:
             "tool_retrieval: full-registry import failed on fail-open", exc_info=True
         )
     # Engine templates (tier=template) are ordinary retrieval-pool members, so the
-    # FAIL-OPEN dump INCLUDES them. Only tier="catalog" (arm-flagged; no tool
-    # carries it in the default config) and tier="internal" (an absorbed in-process
-    # seam: registry-resolvable, never model-facing) stay out of the visible set.
+    # FAIL-OPEN dump INCLUDES them. Only tier="internal" (an absorbed in-process
+    # seam: registry-resolvable, never model-facing) stays out of the visible set.
     visible = {
         name
         for name, entry in TOOL_REGISTRY.items()
-        if getattr(entry.metadata, "tier", "general")
-        not in ("catalog", "internal")
+        if getattr(entry.metadata, "tier", "general") != "internal"
     }
     return visible | floor
 
@@ -278,25 +257,13 @@ def retrieve_visible_tools(
     if not isinstance(user_text, str) or not user_text.strip():
         return floor
 
-    # --- Query relevance via the cached discover index. FAIL-OPEN on any fault. ---
-    try:
-        topk = _discover_topk(user_text, k)
-    except Exception:  # noqa: BLE001
-        logger.warning(
-            "tool_retrieval: discovery raised; FAIL-OPEN to full registry",
-            exc_info=True,
-        )
-        return _full_registry_floor(floor)
-
-    if topk is None:
-        logger.info("tool_retrieval: discover index COLD; FAIL-OPEN to full registry")
-        return _full_registry_floor(floor)
-    if not topk:
-        # warm index but nothing matched -> be safe, show everything (recall floor).
+    # --- Query relevance via the cached index. A cold index, a fault or an empty
+    # ranking all FAIL OPEN to the full registry. ---
+    ranked = retrieve_ranked_tools(user_text, k)
+    if not ranked:
         logger.info(
-            "tool_retrieval: empty ranking for %r; FAIL-OPEN to full registry",
-            user_text[:80],
+            "tool_retrieval: no ranking for %r (cold index, fault or no match); "
+            "FAIL-OPEN to full registry", user_text[:80],
         )
         return _full_registry_floor(floor)
-
-    return floor | topk
+    return floor | {name for name, _score in ranked}

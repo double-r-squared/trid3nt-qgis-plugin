@@ -94,7 +94,6 @@ class _DiscoverIndex:
         dense_encode_fn: Any,
         backend_name: str | None,
         vocabulary: frozenset[str] = frozenset(),
-        tiers: list[str] | None = None,
     ) -> None:
         self.tool_names = tool_names
         self.descriptions = descriptions
@@ -105,9 +104,6 @@ class _DiscoverIndex:
         self.dense_encode_fn = dense_encode_fn
         self.backend_name = backend_name
         self.vocabulary = vocabulary
-        # An index built without tiers defaults every tool to "general", so the
-        # reinforcement degrades to the champion-only gate rather than raising.
-        self.tiers = tiers if tiers is not None else ["general"] * len(tool_names)
 
 
 
@@ -227,18 +223,6 @@ def _short_description(docstring: str | None) -> str:
     if len(head) > 240:
         head = head[:237] + "..."
     return head
-
-
-def _default_corpus_path() -> Path:
-    """The RESIDUAL corpus file: phrasings for tools registered OUTSIDE a
-    co-located folder. Every atomic tool carries its own ``corpus.yaml`` beside it.
-    ``TRID3NT_TOOL_CORPUS_YAML`` pins a single file instead."""
-    env_path = os.environ.get("TRID3NT_TOOL_CORPUS_YAML")
-    if env_path:
-        return Path(env_path).expanduser().resolve()
-    # Four levels up is the package root that holds tools/.
-    here = Path(__file__).resolve()
-    return here.parents[3] / "tools" / "tool_query_corpus.yaml"
 
 
 def _read_corpus_yaml(p: Path) -> dict[str, list[str]]:
@@ -396,14 +380,13 @@ def _build_index(
     synthetic_queries: list[list[str]] = []
     documents: list[str] = []
     corpus_tokens: list[list[str]] = []
-    tiers: list[str] = []
 
     for name in sorted(snapshot.keys()):
         entry = snapshot[name]
         # Engine templates (tier=template) index HERE alongside general tools:
         # their practitioner phrasings do the routing. tier=internal is the ONE
         # tier withheld - an absorbed in-process seam, registry-resolvable but not
-        # searchable. tier=catalog is not withheld.
+        # searchable.
         if getattr(entry.metadata, "tier", "general") in ("internal",):
             continue
         if name in covered:
@@ -428,7 +411,6 @@ def _build_index(
         synthetic_queries.append(list(qs))
         documents.append(body)
         corpus_tokens.append(_tokenize(body))
-        tiers.append(getattr(entry.metadata, "tier", "general") or "general")
 
     # A DATA CLASS indexes as its OWN document routing to the match: one class's
     # phrasings ranked against their own length, never the whole vocabulary folded
@@ -443,7 +425,6 @@ def _build_index(
             synthetic_queries.append(queries)
             documents.append(body)
             corpus_tokens.append(_tokenize(body))
-            tiers.append(tiers[at])
 
     # The typo-expansion vocabulary REUSES the tokens the index already produced
     # rather than re-deriving them. Frozen per build, and the correction cache keys
@@ -509,7 +490,6 @@ def _build_index(
         dense_encode_fn=dense_encode_fn,
         backend_name=backend_name,
         vocabulary=vocabulary,
-        tiers=tiers,
     )
 
 
@@ -557,42 +537,26 @@ def _reciprocal_rank_fusion(
 #
 # For a short or domain-worded query the dense channel often ranks a tool's BEST
 # exact-lexical match only mid-pack, so plain RRF buries that lexical number one
-# beneath tools that merely rank mid on BOTH channels. The correction is to award a
-# lexically dominant tool ONE extra reciprocal-rank term, on the same 1/(k+rank)
-# scale as a real channel: bounded, deterministic, never a hard slot, and no corpus
-# edit. The gate is tier-aware, wider for a tier structurally disadvantaged in the
-# dense and name channels.
-_LEX_REINFORCE_GATE_GENERAL = 1  # reinforce only the BM25 champion
-_LEX_REINFORCE_GATE_DOOR = 3     # the wider gate: the top-3 BM25 lexical matches
+# beneath tools that merely rank mid on BOTH channels. The BM25 champion earns ONE
+# extra reciprocal-rank term, on the same 1/(k+rank) scale as a real channel:
+# bounded, deterministic, never a hard slot, and no corpus edit.
 
 
 def _lexical_reinforcement(
     fused: list[tuple[int, float]],
     bm25_ranking: list[int],
-    tiers: list[str] | None,
     *,
     k: int = 60,
 ) -> list[tuple[int, float]]:
-    """Re-rank ``fused`` after a bounded BM25-reinforcement term. A doc's bonus is
-    ``1.0 / (k + its_bm25_rank)``, applied ONCE and only within its tier's gate.
-    Returns a NEW list; the input comes back unchanged when no doc qualifies."""
+    """Re-rank ``fused`` after the BM25 champion's one ``1.0 / (k + 1)`` bonus.
+    Returns a NEW list; the input comes back unchanged with no BM25 ranking."""
     if not bm25_ranking:
         return fused
-    bonus: dict[int, float] = {}
-    for rank, doc in enumerate(bm25_ranking, start=1):
-        tier = tiers[doc] if tiers is not None and doc < len(tiers) else "general"
-        gate = _LEX_REINFORCE_GATE_DOOR if tier == "door" else _LEX_REINFORCE_GATE_GENERAL
-        if rank <= gate:
-            bonus[doc] = 1.0 / (k + rank)
-        elif rank > _LEX_REINFORCE_GATE_DOOR:
-            break  # ranks are ascending; nothing past the widest gate qualifies
-    if not bonus:
-        return fused
-    rescored = [(doc, score + bonus.get(doc, 0.0)) for doc, score in fused]
+    champion = bm25_ranking[0]
+    bonus = 1.0 / (k + 1)
+    rescored = [(doc, score + (bonus if doc == champion else 0.0)) for doc, score in fused]
     rescored.sort(key=lambda pair: pair[1], reverse=True)
     return rescored
-
-
 
 
 def _match_synthetic_queries(
@@ -738,99 +702,14 @@ async def search_tools(
         k = 5
     k = max(1, min(25, k))
 
+    from trid3nt_server.tools.search.tool_retrieval import ranked_docs
+
     index = _get_index()
     if not index.tool_names:
         return {"results": []}
-
-    # BM25 ranking (sorted doc indices descending).
-    bm25_ranking: list[int] = []
-    bm25_scores: list[float] = []
-    if index.bm25 is not None:
-        q_tokens = _tokenize(query_clean)
-        if q_tokens:
-            try:
-                raw = index.bm25.get_scores(q_tokens)
-                # Sort indices by score descending.
-                pairs = sorted(
-                    range(len(raw)), key=lambda i: float(raw[i]), reverse=True
-                )
-                bm25_ranking = [i for i in pairs if float(raw[i]) > 0.0]
-                bm25_scores = [float(s) for s in raw]
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("BM25 scoring failed (%s); dropping BM25 channel", exc)
-
-    # Dense ranking.
-    dense_ranking: list[int] = []
-    if index.dense_matrix is not None and index.dense_encode_fn is not None:
-        try:
-            import numpy as _np
-
-            q_vec = index.dense_encode_fn([query_clean])
-            # L2-normalize the query (the index is already normalized).
-            qn = _np.linalg.norm(q_vec, axis=1, keepdims=True)
-            qn[qn == 0.0] = 1.0
-            q_vec = q_vec / qn
-            sims = (index.dense_matrix @ q_vec[0]).astype("float32")
-            pairs = sorted(
-                range(len(sims)), key=lambda i: float(sims[i]), reverse=True
-            )
-            # Keep the dense ranking unfiltered; RRF handles low-similarity items.
-            dense_ranking = pairs
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("dense scoring failed (%s); dropping dense channel", exc)
-
-    # The name-substring channel catches a tool whose NAME carries the ask even
-    # when BM25 misses on inflection. Score = the count of query content tokens
-    # whose de-suffixed form is a substring of the tool name. Generic operator
-    # words are filtered out first, or a phrase like "national parks polygons"
-    # over-boosts every tool with "polygon" in its name.
-    name_substr_ranking: list[int] = []
-    q_content_tokens = [
-        t
-        for t in _tokenize(query_clean)
-        if t not in _STOPWORDS and t not in _NAME_RANKER_GENERICS
-    ]
-    if q_content_tokens:
-        scored_names: list[tuple[int, int]] = []
-        for i, name in enumerate(index.tool_names):
-            name_low = name.lower()
-            hits = sum(1 for t in q_content_tokens if t in name_low)
-            stem_hits = 0
-            for t in q_content_tokens:
-                stem = t
-                for suf in ("ing", "ed", "s"):
-                    if stem.endswith(suf) and len(stem) > len(suf) + 2:
-                        stem = stem[: -len(suf)]
-                        break
-                if stem != t and stem in name_low:
-                    stem_hits += 1
-            total = hits + stem_hits
-            if total > 0:
-                scored_names.append((total, i))
-        scored_names.sort(key=lambda pair: pair[0], reverse=True)
-        name_substr_ranking = [i for _, i in scored_names]
-
-    # Fuse. If no channel produced a ranking, fall back to a substring
-    # match over tool names so the routing still produces *something* (better
-    # than empty).
-    rankings = [
-        r
-        for r in (bm25_ranking, dense_ranking, name_substr_ranking)
-        if r
-    ]
-    if not rankings:
-        substr = [
-            i
-            for i, name in enumerate(index.tool_names)
-            if query_clean.lower() in name.lower()
-        ]
-        if substr:
-            rankings = [substr]
-    if not rankings:
+    fused = ranked_docs(query_clean, index)
+    if not fused:
         return {"results": []}
-
-    fused = _reciprocal_rank_fusion(rankings, k=60)
-    fused = _lexical_reinforcement(fused, bm25_ranking, index.tiers, k=60)
 
     # Build the response payload.
     results: list[dict[str, Any]] = []

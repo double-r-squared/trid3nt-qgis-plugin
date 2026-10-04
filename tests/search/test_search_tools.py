@@ -18,10 +18,7 @@ from trid3nt_server.tools.search.search_tools import search_tools as discover_mo
 from trid3nt_server.workflows.solver import solver  # noqa: F401 — registration side-effect
 
 from trid3nt_server.tools.search.search_tools.search_tools import (
-    _LEX_REINFORCE_GATE_DOOR,
-    _LEX_REINFORCE_GATE_GENERAL,
     _close_vocab_matches,
-    _default_corpus_path,
     _lexical_reinforcement,
     _load_corpus,
     _read_corpus_yaml,
@@ -196,40 +193,29 @@ def test_rrf_single_ranking_preserves_order():
 
 
 
-def test_lexical_reinforcement_lifts_bm25_champion_door():
-    """A BM25 champion the fused list buries is lifted back above a mid-ranked general
-    tool. The bonus is one RRF term, ``1/(60+1)``, which is enough to overtake the
-    leader and not enough to reorder the rest."""
-    fused = [(1, 0.040), (0, 0.028), (2, 0.027)]  # door doc 0 buried at rank 2
-    bm25_ranking = [0, 1, 2]  # door (doc 0) is the BM25 champion
-    tiers = ["door", "general", "general"]
-    boosted = _lexical_reinforcement(fused, bm25_ranking, tiers, k=60)
+def test_lexical_reinforcement_lifts_the_bm25_champion():
+    """A BM25 champion the fused list buries is lifted back above a mid-ranked tool.
+    The bonus is one RRF term, ``1/(60+1)``, which is enough to overtake the leader
+    and not enough to reorder the rest."""
+    fused = [(1, 0.040), (0, 0.028), (2, 0.027)]  # doc 0 buried at rank 2
+    boosted = _lexical_reinforcement(fused, [0, 1, 2], k=60)
     order = [d for d, _ in boosted]
-    assert order[0] == 0, f"BM25-champion door must lift to the top: {order}"
+    assert order[0] == 0, f"BM25 champion must lift to the top: {order}"
+    assert order[1:] == [1, 2]
 
 
-def test_lexical_reinforcement_gates_general_to_champion_only():
-    """The bonus gate is tier-aware and asymmetric.
-
-    A GENERAL tool at BM25 rank 2 gets nothing; the same tool as a DOOR at rank 2
-    does, because the door gate is wider."""
-    assert _LEX_REINFORCE_GATE_GENERAL == 1 and _LEX_REINFORCE_GATE_DOOR >= 2
+def test_lexical_reinforcement_rewards_the_champion_only():
+    """BM25 rank 2 earns nothing: the bonus is the champion's alone."""
     fused = [(0, 0.030), (1, 0.028)]  # doc 1 is buried just under doc 0
-    bm25_ranking = [2, 1]  # doc 1 is BM25 rank 2 (NOT the champion)
-    # As a general at rank 2 -> no reinforcement -> doc 1 stays below doc 0.
-    out_general = _lexical_reinforcement(fused, bm25_ranking, ["general", "general", "general"], k=60)
-    assert [d for d, _ in out_general] == [0, 1]
-    # As a door at rank 2 -> +1/(60+2)=~0.0161 -> 0.028+0.0161=0.0441 > 0.030.
-    out_door = _lexical_reinforcement(fused, bm25_ranking, ["general", "door", "general"], k=60)
-    assert [d for d, _ in out_door] == [1, 0]
+    out = _lexical_reinforcement(fused, [2, 1], k=60)
+    assert [d for d, _ in out] == [0, 1]
 
 
 def test_lexical_reinforcement_noop_without_bm25():
     """No BM25 channel -> the fused order is returned unchanged (deterministic)."""
     fused = [(1, 0.05), (2, 0.04)]
-    assert _lexical_reinforcement(fused, [], ["general", "general"], k=60) == fused
-    # Missing/short tiers must not raise; champion still reinforced as general.
-    out = _lexical_reinforcement(fused, [2, 1], None, k=60)
+    assert _lexical_reinforcement(fused, [], k=60) == fused
+    out = _lexical_reinforcement(fused, [2, 1], k=60)
     assert [d for d, _ in out][0] == 2
 
 

@@ -37,14 +37,14 @@ def _settings() -> ModelSettings:
 
 def _non_template_names() -> set[str]:
     """The names in the DEFAULT declarable registry: ``TOOL_REGISTRY`` minus the
-    pool-hidden ``internal`` and ``catalog`` tiers. What reaches
+    pool-hidden ``internal`` tier. What reaches
     ``build_tool_declarations`` is a NEW filtered dict, not the live registry."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
     return {
         name
         for name, entry in TOOL_REGISTRY.items()
-        if getattr(entry.metadata, "tier", "general") not in ("internal", "catalog")
+        if getattr(entry.metadata, "tier", "general") != "internal"
     }
 
 
