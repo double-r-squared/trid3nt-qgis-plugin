@@ -20,7 +20,7 @@ from trid3nt_contracts.ws import ErrorPayload, PayloadConfirmationEnvelopePayloa
 
 from trid3nt_server.model.adapters.adapter import summarize_tool_result
 from trid3nt_server.model.guards.circuit_breaker import ToolCircuitBreaker
-from trid3nt_server.gates.pending import _PENDING_CONFIRMATIONS
+from trid3nt_server.inputs.gate.pending import _PENDING_CONFIRMATIONS
 from trid3nt_server.server import SessionState, _invoke_tool_via_emitter
 from trid3nt_server.server.errors import (
     CodeExecConfirmationCancelledError,

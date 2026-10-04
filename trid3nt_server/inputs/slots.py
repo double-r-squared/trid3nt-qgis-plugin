@@ -138,13 +138,13 @@ async def ask_on_canvas(role: str, *, tool: str, param: str,
     slot = SLOTS.get(str(role))
     if slot is None or slot.draw is None:
         return None
-    from trid3nt_server.gates.input_review import resolve_input_gate_mode
+    from trid3nt_server.inputs.gate.input_review import resolve_input_gate_mode
     from trid3nt_server.render.pipeline_emitter import current_emitter
 
     if resolve_input_gate_mode(input_mode) != "user_gated" \
             or current_emitter() is None:
         return None
-    from trid3nt_server.gates.draw_input import gate_draw_input
+    from trid3nt_server.inputs.gate.draw_input import gate_draw_input
 
     geometry, purpose, prompt = slot.draw
     outcome = await gate_draw_input(tool_name=tool, param=param,

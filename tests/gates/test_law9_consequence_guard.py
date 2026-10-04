@@ -12,7 +12,7 @@ import pathlib
 import pytest
 
 from trid3nt_contracts.common import SyntheticInput
-from trid3nt_server.gates.input_review import (
+from trid3nt_server.inputs.gate.input_review import (
     gate_input_review,
     physics_refusal_reason,
 )

@@ -364,14 +364,14 @@ def point_arg(param: str, *, tool: str, prompt: str, code: str = _CODE
 
 def _gated(input_mode: Any) -> bool:
     from trid3nt_server.render.pipeline_emitter import current_emitter
-    from trid3nt_server.gates.input_review import resolve_input_gate_mode
+    from trid3nt_server.inputs.gate.input_review import resolve_input_gate_mode
 
     return (resolve_input_gate_mode(input_mode) == "user_gated"
             and current_emitter() is not None)
 
 
 async def _pick(tool: str, param: str, prompt: str) -> Point | None:
-    from trid3nt_server.gates.draw_input import gate_draw_input
+    from trid3nt_server.inputs.gate.draw_input import gate_draw_input
 
     outcome = await gate_draw_input(tool_name=tool, param=param, geometry="point",
                                     prompt=prompt)

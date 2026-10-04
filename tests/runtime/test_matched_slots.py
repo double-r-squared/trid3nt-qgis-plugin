@@ -23,7 +23,7 @@ from trid3nt_server.tools.fetchers._router.errors import (
     router_upstream_error,
 )
 from trid3nt_server.workflows.runtime import Data, data_rows
-from trid3nt_server.workflows.runtime import fill
+from trid3nt_server.inputs import fill
 from trid3nt_server.workflows.runtime.domain import (
     Domain,
     bind_domain,

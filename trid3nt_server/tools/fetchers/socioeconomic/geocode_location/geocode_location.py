@@ -13,7 +13,7 @@ from geopy.geocoders import Nominatim
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.gates.input_review import resolve_input_gate_mode
+from trid3nt_server.inputs.gate.input_review import resolve_input_gate_mode
 from trid3nt_server.tools import register_tool
 from trid3nt_server.tools.cache import read_through
 from trid3nt_server.tools.fetchers._fetch_common import (

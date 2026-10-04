@@ -39,7 +39,7 @@ def test_every_gate_wait_site_uses_the_seam():
     code-exec gate, which waits on its own bounded approval timeout."""
     import inspect
 
-    from trid3nt_server.gates import confirm as _gates_confirm
+    from trid3nt_server.inputs.gate import confirm as _gates_confirm
 
     src = inspect.getsource(_gates_confirm)
     for bare in (

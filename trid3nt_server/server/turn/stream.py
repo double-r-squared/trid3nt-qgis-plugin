@@ -16,7 +16,7 @@ from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
 from trid3nt_server.render.pipeline_emitter import bind_turn_case, complete_compaction_card, mint_compaction_card
 from trid3nt_server.render.uri_registry import get_uri_registry
 from trid3nt_server.model.guards.circuit_breaker import CircuitBreakerError
-# The gate engine (trid3nt_server.gates.confirm) is imported function-locally in
+# The gate engine (trid3nt_server.inputs.gate.confirm) is imported function-locally in
 # _stream_model_reply -- deferred to break the server<->gates load cycle.
 from trid3nt_server.model.guards.context_budget import ContextWindowExceededError, FABRICATION_CAVEAT, build_context_window_abort_note, looks_like_fabricated_action_claim
 from trid3nt_server.model.guards.runaway_guard import ABORT_STEP_CAP, ABORT_WALL_CLOCK, LoopWatchdog, abort_message, max_turn_seconds, step_cap_for_model
@@ -49,7 +49,7 @@ async def _stream_model_reply(
     """Stream one user-message reply with multi-turn tool dispatch: each round
     forwards text deltas, dispatches the round's tool calls and feeds their
     results back, until a round makes no call. A cancel aborts the whole loop."""
-    from trid3nt_server.gates.confirm import (
+    from trid3nt_server.inputs.gate.confirm import (
         SPATIAL_INPUT_SENTINEL_KEY,
         _handle_request_spatial_input,
     )

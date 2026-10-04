@@ -16,7 +16,7 @@ import pytest
 
 from trid3nt_server.inputs.observation import convert, observation
 from trid3nt_server.workflows.runtime import Data
-from trid3nt_server.workflows.runtime import fill
+from trid3nt_server.inputs import fill
 from trid3nt_server.workflows.runtime.errors import PlanValidationError
 
 _METADATA = SimpleNamespace(name="t", description="", tags=())

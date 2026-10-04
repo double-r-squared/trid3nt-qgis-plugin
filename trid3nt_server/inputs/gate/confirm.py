@@ -16,9 +16,9 @@ from trid3nt_contracts.processing_contracts import CodeExecRequestPayload
 from trid3nt_contracts.ws import SpatialInputResponsePayload
 from trid3nt_server.model.credentials.resolver import MissingCredentialError, credential_for_tool, resolve_credential
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.gates.cards import _build_spatial_input_request_payload, _gate_memory_key, _get_hard_cap_mb, _get_warning_threshold_mb, _resolve_payload_estimator, _spatial_response_to_result
-from trid3nt_server.gates.cards.estimate import call_provider
-from trid3nt_server.gates.pending import _pop_pending_confirmation, _register_pending_confirmation
+from trid3nt_server.inputs.gate.cards import _build_spatial_input_request_payload, _gate_memory_key, _get_hard_cap_mb, _get_warning_threshold_mb, _resolve_payload_estimator, _spatial_response_to_result
+from trid3nt_server.inputs.gate.cards.estimate import call_provider
+from trid3nt_server.inputs.gate.pending import _pop_pending_confirmation, _register_pending_confirmation
 from trid3nt_server.server.config import CODE_EXEC_CONFIRM_TIMEOUT_SECONDS, _code_exec_approval_timeout_s
 from trid3nt_server.server.errors import GateConfirmationTimeoutError, SpatialInputInvalidResponseError
 from trid3nt_server.server.session.state import SessionState

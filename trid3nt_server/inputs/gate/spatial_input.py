@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from trid3nt_server.gates.spatial_roles import (
+from trid3nt_server.inputs.gate.spatial_roles import (
     DrawnRoles,
     SpatialInputParseError,
     SpatialRoleError,

@@ -18,9 +18,10 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
   raster, a GeoJSON vector, an MDAL mesh with the dataset files beside
   it, a chart payload - the one emission seam, the publish mechanism,
   the presets and the restyle seam), `workflows/` (the declarative `runtime/`, the
-  `solver/` executor, and the engine package `telemac/`), `gates/` (GateSpec
-  engine + cards + pending
-  registries), `model/` (`adapters/` the LLM providers - the ONLY
+  `solver/` executor, and the engine package `telemac/`), `inputs/` (the
+  typed inputs and their ingestions, the slots, `fill.py`, and `gate/`
+  - the input review, draw, confirm, cards and pending registries),
+  `model/` (`adapters/` the LLM providers - the ONLY
   place provider nouns appear - with `credentials/` and the turn
   `guards/`), `server/` (session/ turn/ dispatch/ protocol/),
   `store/` (`objects.py` the object store's one client and the bucket

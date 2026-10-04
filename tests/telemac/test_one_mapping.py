@@ -14,7 +14,7 @@ import pytest
 import trid3nt_server
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.workflows.runtime import resolve_params
-from trid3nt_server.workflows.runtime.fill import (REJECTED, Fill, fill,
+from trid3nt_server.inputs.fill import (REJECTED, Fill, fill,
                                                    production)
 from trid3nt_server.workflows.telemac.modules import T2D
 from trid3nt_server.workflows.telemac.modules.module import SlotRefused, _read
@@ -134,7 +134,7 @@ _STATED = {"location": "Lake Huron", "pour_point": [-82.42, 43.0],
 
 
 def _filled_with(monkeypatch, workflow, produce):
-    from trid3nt_server.workflows.runtime import fill as fill_mod
+    from trid3nt_server.inputs import fill as fill_mod
 
     monkeypatch.setattr(fill_mod, "_produce", produce)
     return asyncio.run(fill(Fill(workflow=workflow), dict(_STATED)))
@@ -144,7 +144,7 @@ def test_a_row_only_a_composite_reads_is_in_the_mapping_after_the_fill(
         monkeypatch):
     """The weather is read by the atmosphere composite and by nothing on the way
     in, so the fill is what produces it; the composite then only looks it up."""
-    from trid3nt_server.workflows.runtime import fill as fill_mod
+    from trid3nt_server.inputs import fill as fill_mod
 
     async def _fetched(env, decl):
         return f"the {decl.name} record"

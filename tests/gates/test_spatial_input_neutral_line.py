@@ -12,8 +12,8 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.gates.cards.spatial_input import _spatial_response_to_result
-from trid3nt_server.gates.spatial_input import (
+from trid3nt_server.inputs.gate.cards.spatial_input import _spatial_response_to_result
+from trid3nt_server.inputs.gate.spatial_input import (
     SpatialInputParseError,
     parse_spatial_input_features,
     split_features_by_role,
@@ -162,7 +162,7 @@ def test_surfaced_line_feeds_the_line_slot():
 
 
 def test_tool_rides_purpose_line_in_sentinel():
-    from trid3nt_server.gates.spatial_input_tool import (
+    from trid3nt_server.inputs.gate.spatial_input_tool import (
         SPATIAL_INPUT_SENTINEL_KEY,
         request_spatial_input,
     )
@@ -182,7 +182,7 @@ def test_tool_rides_purpose_line_in_sentinel():
 
 def test_tool_default_purpose_is_aoi():
     """Omitting `purpose` defaults to the generic area selection."""
-    from trid3nt_server.gates.spatial_input_tool import request_spatial_input
+    from trid3nt_server.inputs.gate.spatial_input_tool import request_spatial_input
 
     out = asyncio.run(
         request_spatial_input(mode="vector_draw", title="Draw", description="x")
@@ -191,7 +191,7 @@ def test_tool_default_purpose_is_aoi():
 
 
 def test_tool_rejects_bad_purpose():
-    from trid3nt_server.gates.spatial_input_tool import (
+    from trid3nt_server.inputs.gate.spatial_input_tool import (
         SPATIAL_INPUT_SENTINEL_KEY,
         request_spatial_input,
     )
@@ -206,7 +206,7 @@ def test_tool_rejects_bad_purpose():
 
 def test_tool_rides_purpose_aoi_in_sentinel():
     """purpose='aoi' is accepted and the emitted sentinel carries purpose='aoi'."""
-    from trid3nt_server.gates.spatial_input_tool import (
+    from trid3nt_server.inputs.gate.spatial_input_tool import (
         SPATIAL_INPUT_SENTINEL_KEY,
         request_spatial_input,
     )

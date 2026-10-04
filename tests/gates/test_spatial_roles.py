@@ -1,6 +1,6 @@
 """Unit tests for the shared drawn-geometry role vocabulary.
 
-Covers the generalized role parser in ``trid3nt_server.gates.spatial_roles`` --
+Covers the generalized role parser in ``trid3nt_server.inputs.gate.spatial_roles`` --
 the canonical DOMAIN stage every engine consumes. The adapter surface over it is
 covered by ``test_spatial_input_gate.py`` / ``test_spatial_input_neutral_line.py``;
 here we exercise the mesh roles + the alias + the honesty floor.
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.gates.spatial_roles import (
+from trid3nt_server.inputs.gate.spatial_roles import (
     CANONICAL_ROLES,
     ROLE_ALIASES,
     SpatialRoleError,

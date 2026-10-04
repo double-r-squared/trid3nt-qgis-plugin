@@ -276,7 +276,7 @@ package ToolPlane {
 
     part codeExecGate : CodeExecGate {
         doc /*
-        code: trid3nt_server/gates/confirm.py
+        code: trid3nt_server/inputs/gate/confirm.py
         */
         port approvalIn : ApprovalIn;
         port approvalOut : ApprovalOut;

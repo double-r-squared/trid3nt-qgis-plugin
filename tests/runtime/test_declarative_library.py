@@ -338,7 +338,7 @@ async def test_resolver_refuses_a_param_declared_twice():
 
 # --- the interpreter ---------------------------------------------------------- #
 def _env(plan, p, data=(), *, input_mode=None, keywords=None, supplied=None):
-    from trid3nt_server.workflows.runtime.fill import _Env
+    from trid3nt_server.inputs.fill import _Env
 
     return _Env(params=p, data={d.name: d for d in data},
                 input_mode=input_mode, keywords=dict(keywords or {}),

@@ -1259,7 +1259,7 @@ async def _answer(emitter: _Emitter, *replies) -> None:
     import asyncio
 
     from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
-    from trid3nt_server.gates import pending
+    from trid3nt_server.inputs.gate import pending
 
     for index, (decision, revised) in enumerate(replies):
         while len(emitter.sent) <= index or \

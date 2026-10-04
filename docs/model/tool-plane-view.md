@@ -10,7 +10,7 @@ Plane: **tool**. System: **session-code**. One seam of the system of systems ind
 flowchart LR
     approvalCard["ApprovalCard<br/>plugin/ui/gate.py"]
     borrowedProvider["BorrowedProvider<br/>trid3nt_server/tools/fetchers/_router/executors/qgis_provider.py"]
-    codeExecGate["CodeExecGate<br/>trid3nt_server/gates/confirm.py"]
+    codeExecGate["CodeExecGate<br/>trid3nt_server/inputs/gate/confirm.py"]
     connectGate["ConnectGate<br/>trid3nt_server/server/protocol/auth.py"]
     connectionLoop["ConnectionLoop<br/>trid3nt_server/server/protocol/loop.py"]
     keywordLookup["KeywordLookup<br/>trid3nt_server/workflows/telemac/modules/describe.py"]

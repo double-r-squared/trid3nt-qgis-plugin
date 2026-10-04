@@ -105,7 +105,7 @@ def test_the_coercion_reads_the_wire_value_and_never_asks_in_auto(monkeypatch):
 
 def test_the_coercion_asks_the_canvas_only_when_gated_live_and_empty(monkeypatch):
     from trid3nt_server.render import pipeline_emitter
-    from trid3nt_server.gates import draw_input
+    from trid3nt_server.inputs.gate import draw_input
 
     asked: list[tuple[str, str]] = []
 
@@ -127,7 +127,7 @@ def test_the_coercion_asks_the_canvas_only_when_gated_live_and_empty(monkeypatch
 
 def test_a_declined_pick_leaves_the_slot_empty(monkeypatch):
     from trid3nt_server.render import pipeline_emitter
-    from trid3nt_server.gates import draw_input
+    from trid3nt_server.inputs.gate import draw_input
 
     async def _gate(**_kw):
         return draw_input.DrawOutcome(reason="the drawing was cancelled")

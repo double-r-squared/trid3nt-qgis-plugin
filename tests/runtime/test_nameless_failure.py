@@ -43,7 +43,7 @@ def test_a_step_failure_over_a_silent_cause_still_says_what_stopped_it() -> None
 
 @pytest.mark.asyncio
 async def test_a_runner_that_raises_silently_reaches_the_caller_named() -> None:
-    from trid3nt_server.workflows.runtime.fill import call as _call_fn
+    from trid3nt_server.inputs.fill import call as _call_fn
 
     def runner():
         raise _Silent()

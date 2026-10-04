@@ -13,7 +13,7 @@ from trid3nt_contracts.payload_warning import (
     WARNING_THRESHOLD_MB_DEFAULT,
 )
 
-logger = logging.getLogger("trid3nt_server.gates.cards.payload_warning")
+logger = logging.getLogger("trid3nt_server.inputs.gate.cards.payload_warning")
 
 
 def _get_warning_threshold_mb() -> float:

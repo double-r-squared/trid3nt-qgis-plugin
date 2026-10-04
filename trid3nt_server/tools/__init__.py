@@ -219,7 +219,7 @@ from .search.find_sources import find_sources  # noqa: E402,F401
 # keyword surface is reached, since no docstring budget carries it.
 from trid3nt_server.workflows.telemac.modules.describe import describe_keywords  # noqa: E402,F401
 # The draw gate's tool face lives beside the gate; importing it registers the tool.
-from trid3nt_server.gates import spatial_input_tool  # noqa: E402,F401
+from trid3nt_server.inputs.gate import spatial_input_tool  # noqa: E402,F401
 
 # Workflow-composer registrations; each module carries its OWN @register_tool.
 # The REACH templates (engine="telemac", tier="template"). ONE TEMPLATE PER

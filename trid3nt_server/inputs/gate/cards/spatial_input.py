@@ -13,7 +13,7 @@ from trid3nt_contracts.ws import SpatialInputRequestPayload
 
 from ..spatial_input import SpatialInputParseError, parse_spatial_input_features
 
-logger = logging.getLogger("trid3nt_server.gates.cards.spatial_input")
+logger = logging.getLogger("trid3nt_server.inputs.gate.cards.spatial_input")
 
 
 def _build_spatial_input_request_payload(

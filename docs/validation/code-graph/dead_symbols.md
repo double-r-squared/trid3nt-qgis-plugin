@@ -10,7 +10,7 @@ separately below. An unused parameter is reclassified from `variable` to
 | symbol | kind | file:line | confidence | loc |
 |---|---|---|---|---|
 | `return` | unreachable_code | trid3nt_server/server/protocol/connections.py:63 | 100 | 30 |
-| `default_seconds` | parameter | trid3nt_server/gates/confirm.py:86 | 100 | 1 |
+| `default_seconds` | parameter | trid3nt_server/inputs/gate/confirm.py:86 | 100 | 1 |
 | `parse_qs` | import | trid3nt_server/render/uri_registry.py:18 | 90 | 1 |
 | `unquote` | import | trid3nt_server/render/uri_registry.py:18 | 90 | 1 |
 | `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:849 | 100 | 1 |
@@ -29,9 +29,9 @@ one reached dynamically. Treat as candidates, not verdicts.
 | `scan_third_party_imports` | function | plugin/install_dependencies.py:249 | 28 |
 | `get_session_record` | method | trid3nt_server/persistence.py:569 | 27 |
 | `legend_key` | function | trid3nt_server/render/presets.py:607 | 20 |
-| `estimate_fetch_resolution` | function | trid3nt_server/gates/cards/solver_confirm.py:231 | 18 |
+| `estimate_fetch_resolution` | function | trid3nt_server/inputs/gate/cards/solver_confirm.py:231 | 18 |
 | `_selection_bbox4326` | method | plugin/ui/dock.py:633 | 17 |
-| `pin_fetch_resolution` | function | trid3nt_server/gates/cards/solver_confirm.py:251 | 17 |
+| `pin_fetch_resolution` | function | trid3nt_server/inputs/gate/cards/solver_confirm.py:251 | 17 |
 | `upsert_session_record` | method | trid3nt_server/persistence.py:435 | 16 |
 | `update_current_progress` | method | trid3nt_server/render/pipeline_emitter.py:1087 | 13 |
 | `format_number` | function | plugin/render/formatting.py:83 | 12 |

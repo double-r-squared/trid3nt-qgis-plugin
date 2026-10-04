@@ -13,7 +13,7 @@ from trid3nt_server.tools.fetchers._fetch_common import UpstreamAPIError
 from trid3nt_server.tools.tool_arg_normalizer import autofill_missing_bbox, normalize_args
 from trid3nt_server.render.pipeline_emitter import PipelineEmitter, bind_turn_case
 from trid3nt_server.render.uri_registry import activate_registry, deactivate_registry, get_uri_registry
-# The gate engine (trid3nt_server.gates.confirm) is imported function-locally in
+# The gate engine (trid3nt_server.inputs.gate.confirm) is imported function-locally in
 # _invoke_tool_via_emitter -- deferred to break the server<->gates load cycle.
 from trid3nt_server.model.guards.tool_gating import BenchBlockedError
 from trid3nt_server.server.config import _env_flag
@@ -383,7 +383,7 @@ async def _invoke_tool_via_emitter(
     """The tool-call site: every registry ``fn(...)`` runs through this wrapper,
     so each transition emits a step, a ``LayerURI`` return re-emits session
     state, and a cancel propagates while any other exception becomes a wire code."""
-    from trid3nt_server.gates.confirm import (
+    from trid3nt_server.inputs.gate.confirm import (
         _gate_on_code_exec,
         _gate_spec_for,
         _gate_with_turn_memory,

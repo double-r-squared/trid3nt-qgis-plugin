@@ -1,6 +1,6 @@
 # gates/ -- agent-loop safety and routing gates
 
-`trid3nt_server/gates/` holds the agent-loop
+`trid3nt_server/inputs/gate/` holds the agent-loop
 gates: user-decision cards, tool-gating/retrieval, runaway/circuit guards,
 context-budget, and actionability classification.
 

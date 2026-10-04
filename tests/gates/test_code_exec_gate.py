@@ -16,8 +16,8 @@ import pytest
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
 
-from trid3nt_server.gates import confirm
-from trid3nt_server.gates.pending import _PENDING_CONFIRMATIONS
+from trid3nt_server.inputs.gate import confirm
+from trid3nt_server.inputs.gate.pending import _PENDING_CONFIRMATIONS
 from trid3nt_server.server import config
 from trid3nt_server.server.dispatch import emitter as dispatch
 from trid3nt_server.server.errors import CodeExecConfirmationCancelledError, GateConfirmationTimeoutError

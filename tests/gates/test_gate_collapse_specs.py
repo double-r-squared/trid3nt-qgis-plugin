@@ -11,9 +11,9 @@ import inspect
 import pytest
 
 import trid3nt_server  # noqa: F401 -- triggers tool registration
-from trid3nt_server.gates.cards.estimate import resolve_provider
+from trid3nt_server.inputs.gate.cards.estimate import resolve_provider
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.gates import confirm as _core
+from trid3nt_server.inputs.gate import confirm as _core
 
 
 #: No engine declares a per-engine solver card: the mesh session presents the

@@ -14,7 +14,7 @@ from trid3nt_contracts import new_ulid
 from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.payload_warning import ParamSheet, PayloadWarningEnvelopePayload
 
-logger = logging.getLogger("trid3nt_server.gates.input_review")
+logger = logging.getLogger("trid3nt_server.inputs.gate.input_review")
 
 __all__ = [
     "GateCard",
@@ -280,7 +280,7 @@ async def gate_input_review(
     # user_gated: the proceed on the card IS the launch, so a call with no live
     # session to present on refuses rather than runs.
     from trid3nt_server.render.pipeline_emitter import current_emitter
-    from trid3nt_server.gates.pending import (
+    from trid3nt_server.inputs.gate.pending import (
         _register_pending_confirmation,
         _pop_pending_confirmation,
     )

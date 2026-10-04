@@ -7,8 +7,8 @@ import types
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.runtime import fill as fill_mod
-from trid3nt_server.workflows.runtime.fill import (
+from trid3nt_server.inputs import fill as fill_mod
+from trid3nt_server.inputs.fill import (
     ACCEPTED,
     DEFAULTED,
     MISSING,
@@ -146,7 +146,7 @@ def test_a_card_edit_refills_through_the_modules_accept_rule(monkeypatch):
         await apply_revision({"LAW OF BOTTOM FRICTION": 4})
         return types.SimpleNamespace(proceed=True)
 
-    monkeypatch.setitem(sys.modules["trid3nt_server.gates.input_review"].__dict__,
+    monkeypatch.setitem(sys.modules["trid3nt_server.inputs.gate.input_review"].__dict__,
                         "gate_input_review", _gate)
     sheet = asyncio.run(tw._review(_fill, {}, steering=steering, workflow="w",
                                    title="", input_mode="user_gated", spent=()))
@@ -197,8 +197,8 @@ def test_an_untyped_fault_is_refused_and_its_trace_logged(monkeypatch, caplog):
 def test_a_refusal_keeps_the_code_of_its_reason_through_the_review(
         monkeypatch, physics, code):
     from trid3nt_contracts.common import SyntheticInput
-    from trid3nt_server.gates import input_review
-    from trid3nt_server.gates.input_review import ReviewOutcome
+    from trid3nt_server.inputs.gate import input_review
+    from trid3nt_server.inputs.gate.input_review import ReviewOutcome
     from trid3nt_server.workflows.telemac import workflow as tw
 
     real = input_review.gate_input_review

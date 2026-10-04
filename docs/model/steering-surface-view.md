@@ -9,11 +9,11 @@ Plane: **workflow**. System: **runtime -> assembler**. One seam of the system of
 ```mermaid
 flowchart LR
     alignment["Alignment<br/>trid3nt_server/inputs/series.py"]
-    canvasGate["CanvasGate<br/>trid3nt_server/gates/draw_input.py"]
+    canvasGate["CanvasGate<br/>trid3nt_server/inputs/gate/draw_input.py"]
     composite["Composite<br/>trid3nt_server/workflows/telemac/modules/telemac2d.py"]
     dictionaryExtractor["Dictionary<br/>workers/telemac/scripts/dico.py"]
     engineWorkflow["EngineWorkflow<br/>trid3nt_server/workflows/telemac/workflow.py"]
-    fill["Fill<br/>trid3nt_server/workflows/runtime/fill.py"]
+    fill["Fill<br/>trid3nt_server/inputs/fill.py"]
     messageIR["MessageIR<br/>contracts/trid3nt_contracts/message.py"]
     observationSlot["ObservationSlot<br/>trid3nt_server/inputs/observation.py"]
     output["Output<br/>trid3nt_server/workflows/telemac/modules/telemac2d.py"]

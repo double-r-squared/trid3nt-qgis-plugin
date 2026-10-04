@@ -163,13 +163,13 @@ def test_no_workflow_calls_the_heavy_fetch_on_the_loop() -> None:
 def test_the_sweep_reaches_every_tree_a_composing_tool_is_defined_in() -> None:
     """A composer's tree left out of the sweep is a sweep that passes while
     reading nothing: every tree a registered tool is defined in, outside the
-    fetch side (tools) and the card tool (gates), is swept."""
+    fetch side (tools) and the card tool (inputs), is swept."""
     import inspect
 
     trees = {
         _tree(pathlib.Path(inspect.getsourcefile(inspect.unwrap(t.fn))).resolve()
               .relative_to(_SRC))
         for t in agent_tools.TOOL_REGISTRY.values()
-    } - {"tools", "gates"}
+    } - {"tools", "inputs"}
     assert "tools/mesh" in trees
     assert not trees - {str(p.relative_to(_SRC)) for p in _SWEPT}, sorted(trees)

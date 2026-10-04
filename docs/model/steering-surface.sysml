@@ -418,14 +418,14 @@ package SteeringSurface {
 
     part fill : Fill {
         doc /*
-        code: trid3nt_server/workflows/runtime/fill.py
+        code: trid3nt_server/inputs/fill.py
         */
         port drawIn : DrawIn;
     }
 
     part canvasGate : CanvasGate {
         doc /*
-        code: trid3nt_server/gates/draw_input.py
+        code: trid3nt_server/inputs/gate/draw_input.py
         */
         port drawOut : DrawOut;
     }

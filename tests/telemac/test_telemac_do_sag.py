@@ -438,8 +438,8 @@ async def _normalized(workflow, args):
     the rows the fill produces are stood in for, so the params alone answer."""
     from unittest.mock import patch
 
-    from trid3nt_server.workflows.runtime import fill as fill_mod
-    from trid3nt_server.workflows.runtime.fill import ACCEPTED, REJECTED, Fill, fill
+    from trid3nt_server.inputs import fill as fill_mod
+    from trid3nt_server.inputs.fill import ACCEPTED, REJECTED, Fill, fill
 
     async def _held(env, decl):
         return decl.name

@@ -28,7 +28,7 @@ _SUBSYSTEM_BY_MODULE: tuple[tuple[str, str], ...] = (
     ("trid3nt_server.workflows.solver", "solver"),
     ("trid3nt_server.workflows.runtime", "runtime"),
     ("trid3nt_server.workflows.telemac", "engine"),
-    ("trid3nt_server.gates", "gates"),
+    ("trid3nt_server.inputs.gate", "gates"),
 )
 
 #: The order the subsystems are listed in: what a run is made of, then what it

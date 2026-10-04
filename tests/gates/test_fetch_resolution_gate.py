@@ -93,7 +93,7 @@ def test_fetch_tools_in_fetch_confirm_set() -> None:
 )
 async def test_gate_emits_fetch_granularity_block(tool_name: str, engine: str) -> None:
     from trid3nt_server import server
-    from trid3nt_server.gates.cards import solver_confirm
+    from trid3nt_server.inputs.gate.cards import solver_confirm
 
     ws, state = _FakeWS(), _FakeState()
     approver = asyncio.create_task(_drive_decision(server, "proceed"))

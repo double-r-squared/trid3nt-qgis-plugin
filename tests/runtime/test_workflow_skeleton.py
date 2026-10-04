@@ -166,7 +166,7 @@ def test_a_constant_supplied_off_the_model_wire_still_reaches_the_sheet():
     from trid3nt_server.workflows.runtime.resolver import resolve_params
 
     wf = TOOL_REGISTRY["telemac_do_sag"].fn.workflow
-    from trid3nt_server.workflows.runtime.fill import ACCEPTED, Fill, fill
+    from trid3nt_server.inputs.fill import ACCEPTED, Fill, fill
 
     state = asyncio.run(fill(Fill(workflow=wf), {"location": "x", "cores": 2,
                                                   "mesh_resolution_m": 30.0}))

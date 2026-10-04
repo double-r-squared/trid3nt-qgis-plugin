@@ -156,7 +156,7 @@ def test_a_coercion_labels_its_refusal_with_the_param_it_reads():
 def _drawn(geometry: str, response) -> object:
     import asyncio
 
-    from trid3nt_server.gates.draw_input import _value_from
+    from trid3nt_server.inputs.gate.draw_input import _value_from
 
     return asyncio.run(_value_from(response, geometry))
 

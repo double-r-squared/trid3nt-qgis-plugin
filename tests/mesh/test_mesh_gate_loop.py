@@ -13,7 +13,7 @@ import pytest
 
 from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
 from trid3nt_server.render import pipeline_emitter as pe
-from trid3nt_server.gates import pending
+from trid3nt_server.inputs.gate import pending
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.mesh import gate as mesh_gate
 from trid3nt_server.tools.mesh.artifact import MeshArtifact
@@ -493,8 +493,8 @@ async def test_the_shipped_client_parses_the_card_and_its_reply_routes_home(
 def _gate_answering(cancel_code, *, physics):
     """The real review gate, handed one physics demo default when ``physics``, or
     an outcome a person's own cancel produces."""
-    from trid3nt_server.gates import input_review
-    from trid3nt_server.gates.input_review import ReviewOutcome
+    from trid3nt_server.inputs.gate import input_review
+    from trid3nt_server.inputs.gate.input_review import ReviewOutcome
     from trid3nt_contracts.common import SyntheticInput
 
     async def _gate(**kwargs):

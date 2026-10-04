@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
 
-logger = logging.getLogger("trid3nt_server.gates.pending")
+logger = logging.getLogger("trid3nt_server.inputs.gate.pending")
 
 __all__ = [
     "_PENDING_CONFIRMATIONS",

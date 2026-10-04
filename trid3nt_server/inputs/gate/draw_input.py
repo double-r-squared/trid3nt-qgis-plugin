@@ -13,7 +13,7 @@ from typing import Any, Literal
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.ws import SpatialInputRequestPayload
 
-logger = logging.getLogger("trid3nt_server.gates.draw_input")
+logger = logging.getLogger("trid3nt_server.inputs.gate.draw_input")
 
 __all__ = ["DrawGeometry", "DrawOutcome", "gate_draw_input"]
 
@@ -147,7 +147,7 @@ async def _value_from(response: Any, geometry: str) -> Any:
         return lonlat_bbox(coords[:4] if len(coords) >= 4 else None,
                            label="the rectangle")
 
-    from trid3nt_server.gates.spatial_input import parse_spatial_input_features
+    from trid3nt_server.inputs.gate.spatial_input import parse_spatial_input_features
 
     if not isinstance(response.features, dict):
         return None

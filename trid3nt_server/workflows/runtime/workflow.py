@@ -26,7 +26,7 @@ from .levers import with_levers
 from .params import Param, ResolvedParams, doors, param_rows
 from .resolution import SensitivityDecl, sensitivity_notes
 from .resolver import merge_provenance, provenance_entries
-from .fill import Fill, fill, production, restate
+from ...inputs.fill import Fill, fill, production, restate
 
 __all__ = ["RunResult", "Workflow", "WireArgsError", "register_workflow"]
 
@@ -381,7 +381,7 @@ def _refuse_invented_physics(entries: Sequence[SyntheticInput], tool_name: str,
     """A physics value nobody approved never reaches a solve: only a live
     user_gated session, whose review card puts the values in front of a
     person, opens the floor."""
-    from trid3nt_server.gates.input_review import (physics_refusal_reason,
+    from trid3nt_server.inputs.gate.input_review import (physics_refusal_reason,
                                                    resolve_input_gate_mode)
     from trid3nt_server.render.pipeline_emitter import current_emitter
 

@@ -101,7 +101,7 @@ def test_allowlist_entries_exist() -> None:
 
 def test_the_scan_reaches_every_tree_a_composing_tool_is_defined_in() -> None:
     """A tree that moved out of SCAN_DIRS is a scan that passes while reading
-    nothing: every tree a registered tool is defined in is scanned. The gates
+    nothing: every tree a registered tool is defined in is scanned. The inputs
     tree holds the one card tool and is outside this scan's reach."""
     import inspect
 
@@ -113,4 +113,4 @@ def test_the_scan_reaches_every_tree_a_composing_tool_is_defined_in() -> None:
         for t in TOOL_REGISTRY.values()
     }
     assert "tools" in trees
-    assert not trees - set(SCAN_DIRS) - {"gates"}, sorted(trees - set(SCAN_DIRS))
+    assert not trees - set(SCAN_DIRS) - {"inputs"}, sorted(trees - set(SCAN_DIRS))

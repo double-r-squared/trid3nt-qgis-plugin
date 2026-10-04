@@ -28,6 +28,7 @@ same standing, and it enters here too.
 | `observation.py` | `Observation` - one measured value with where, when and how far away it was measured - and `observation`, its ingestion from a fetched or supplied point layer (the nearest reporting site, the unit the slot reads) or from the number the caller stated; the sentence the run journal carries about the sample's age. |
 | `wave.py` | `Wave` - one measured sea state in the words a spectral deck states it in - and `wave`, its ingestion from a fetched buoy record: each quantity read off the column the source reports in that quantity's own unit, at the moment the run opens at, and the two turns the deck needs - a peak FREQUENCY off the period, and the bearing the waves run TOWARD off the one the record publishes them coming from. Both conventions are said on the run journal. |
 | `line.py` | The LINE a placed read is measured along - a producer's own centerline, a drawn polyline, a line layer or typed vertices - read as ONE geometry, so a profile down a reach and a profile across a lake are the same read. |
+| `fill.py` | The fill: each input accepts, rejects with its remedies, is missing, or takes the module's own default; a sourced input is fetched and ingested before it accepts or rejects, and a name the template writes that nothing of the run is called is refused. Filling never launches. The run's ONE mapping - params, fetched rows, stage products, keywords - and `read`, its one read by plain name. |
 | `slots.py` | The door onto the roles: which ingestion each ROLE reads through, what the row told its slot about the value, and what the canvas offers for a slot a user fills by hand. |
 | `instant.py` | An INSTANT - the moment a run is about - and `instant`, its ingestion from a date, a datetime or a trailing-Z timestamp; `day`, the calendar day a daily record is asked over; and the `event_time` coercion the wire route passes through. A value that does not parse refuses rather than reading the latest. |
 | `structure.py` | A STRUCTURE - a built thing in the water - ingested as the FOOTPRINT it occupies: a surveyed centreline given its declared width, or a polygon used verbatim. A centreline bounds no area, so subtracting one removes nothing. |
@@ -40,3 +41,9 @@ same standing, and it enters here too.
 | `layer_fields.py` | Reading one field off whatever shape a fetched layer arrived in. |
 | `vertical_datum.py` | The ZERO two sources count from - read off the layer that states it, or off the source row a bare name declares - and the refusal that names the two when they differ or one states none; `onto_frame`, which reads any source on the RUN's own vertical frame through the shift the source publishes about itself, else the offset the runtime fetches between the two frames at the point the run stands on. |
 | `user_layer.py` | A file the USER pushed in: staged to object storage, validated and converted, then minted as a layer on their case with origin `user`. |
+
+## Subfolders
+
+| subfolder | what lives there |
+| --- | --- |
+| `gate/` | Where a turn waits on a person: the input review, the draw and spatial input, the confirm, the pending registry and the cards. |

@@ -8,8 +8,8 @@ import asyncio
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.runtime import fill as fill_mod
-from trid3nt_server.workflows.runtime.fill import Fill
+from trid3nt_server.inputs import fill as fill_mod
+from trid3nt_server.inputs.fill import Fill
 from trid3nt_server.workflows.runtime.resolver import resolve_params
 from trid3nt_server.workflows.telemac import workflow as tw
 from trid3nt_server.workflows.telemac.authoring import (mesh_files, opening,

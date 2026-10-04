@@ -15,7 +15,8 @@ import dataclasses
 import pytest
 
 from trid3nt_server.inputs.point import Point
-from trid3nt_server.workflows.runtime import Data, fill, resolve_params
+from trid3nt_server.inputs import fill
+from trid3nt_server.workflows.runtime import Data, resolve_params
 from trid3nt_server.workflows.runtime.errors import PlanValidationError
 
 

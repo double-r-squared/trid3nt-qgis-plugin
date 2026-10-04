@@ -290,7 +290,7 @@ def test_the_sources_file_the_deck_writes_is_the_series_the_engine_reads():
 
 async def _normalized(workflow, args):
     """The accepted params of one fill, and the refusal where one was rejected."""
-    from trid3nt_server.workflows.runtime.fill import ACCEPTED, REJECTED, Fill, fill
+    from trid3nt_server.inputs.fill import ACCEPTED, REJECTED, Fill, fill
 
     state = await fill(Fill(workflow=workflow), args)
     declared = {prm.name for prm in workflow.params}

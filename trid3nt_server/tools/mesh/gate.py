@@ -10,7 +10,7 @@ import asyncio
 import logging
 from typing import Any, Mapping
 
-from trid3nt_server.gates.input_review import (PHYSICS_INPUT_REQUIRED, GateCard,
+from trid3nt_server.inputs.gate.input_review import (PHYSICS_INPUT_REQUIRED, GateCard,
                                                gate_input_review)
 from trid3nt_server.tools.mesh.artifact import MeshArtifact
 from trid3nt_server.tools.mesh.meshers import MeshToolError

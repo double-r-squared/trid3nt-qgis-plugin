@@ -4,6 +4,12 @@ Everything between the turn loop and the model answering it: the provider
 adapters that speak each provider's wire from the shared IR, the credentials a
 connection holds, and the guards that bound what one model turn may do.
 
+## Files
+
+| file | what it is |
+| --- | --- |
+| `__init__.py` | The package door. |
+
 ## Subfolders
 
 | subfolder | what lives there |

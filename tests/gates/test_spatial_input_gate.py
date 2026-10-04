@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server.gates.cards.spatial_input import (
+from trid3nt_server.inputs.gate.cards.spatial_input import (
     _spatial_response_to_result,
 )
 from trid3nt_server.server import (
@@ -24,7 +24,7 @@ from trid3nt_server.server import (
     _emit_spatial_input_and_wait,
     _resolve_pending_spatial_input,
 )
-from trid3nt_server.gates.spatial_input import (
+from trid3nt_server.inputs.gate.spatial_input import (
     ParsedSpatialInput,
     SpatialInputParseError,
     parse_spatial_input_features,
@@ -361,7 +361,7 @@ def test_emit_and_wait_timeout_returns_none(monkeypatch):
 
 
 def test_request_spatial_input_tool_returns_sentinel():
-    from trid3nt_server.gates.spatial_input_tool import (
+    from trid3nt_server.inputs.gate.spatial_input_tool import (
         SPATIAL_INPUT_SENTINEL_KEY,
         request_spatial_input,
     )
@@ -378,7 +378,7 @@ def test_request_spatial_input_tool_returns_sentinel():
 
 
 def test_request_spatial_input_tool_rejects_bad_mode():
-    from trid3nt_server.gates.spatial_input_tool import (
+    from trid3nt_server.inputs.gate.spatial_input_tool import (
         SPATIAL_INPUT_SENTINEL_KEY,
         request_spatial_input,
     )
