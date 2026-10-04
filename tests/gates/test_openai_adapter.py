@@ -548,6 +548,13 @@ class TestOpenaiModelPrecedence:
         monkeypatch.setenv("TRID3NT_OPENAI_MODEL", "qwen3:8b-16k")
         assert openai_model(None) == "qwen3:8b-16k"
 
+    def test_session_model_passes_through_whatever_its_shape(self, monkeypatch):
+        from trid3nt_server.model.adapters.openai_adapter import openai_model
+
+        monkeypatch.setenv("TRID3NT_OPENAI_MODEL", "qwen3:8b-16k")
+        for session_model in ("qwen3:0.6b", "us.anthropic.claude-x", "anthropic.y"):
+            assert openai_model(session_model) == session_model
+
     def test_session_model_works_with_no_env_default(self, monkeypatch):
         from trid3nt_server.model.adapters.openai_adapter import openai_model
 
