@@ -1,4 +1,4 @@
-"""Internal TELEMAC diagnostics parser for ``read_run_diagnostics`` (NOT registered).
+"""The TELEMAC diagnostics parser ``read_run_diagnostics`` dispatches to by engine name.
 
 Reads what the run classifier already folded into ``completion.json`` rather than
 re-parsing it; a balance the listing does not carry stays ``null``.
@@ -7,37 +7,21 @@ re-parsing it; a balance the listing does not carry stays ``null``.
 from __future__ import annotations
 
 import json
-import re
 from typing import Any
 
-from ._common import (
+from trid3nt_server.workflows.solver.diagnostics._common import (
     EngineDiagnostics,
     RunArtifacts,
 )
 
+from .modules.listing import continuity_rel_error
+
 __all__ = ["parse_telemac"]
 
-#: TELEMAC prints the relative mass-balance error as a fraction; these are the
-#: listing phrasings across TELEMAC-2D versions. The value is a FRACTION
-#: (e.g. ``0.12E-03``) which is converted to a percent (x100). Tested against a
-#: synthesized listing only -- the sole MinIO TELEMAC run is a crashed one whose
-#: listing ends before any balance line.
-_MASS_BALANCE_RE = re.compile(
-    r"RELATIVE ERROR IN (?:MASS[- ]BALANCE|VOLUME)[^:\n]*:\s*"
-    r"(-?\d+(?:\.\d+)?(?:[dDeE][+-]?\d+)?)"
-)
-
-
-def _fortran_float(text: str) -> float:
-    return float(text.replace("D", "E").replace("d", "e"))
-
-
 def _listing_mass_balance_pct(text: str) -> float | None:
-    """Max abs RELATIVE-ERROR mass-balance value in the listing, as a percent."""
-    vals = [abs(_fortran_float(x)) for x in _MASS_BALANCE_RE.findall(text)]
-    if not vals:
-        return None
-    return round(max(vals) * 100.0, 6)
+    """The run's own volume closure off the listing, as an absolute percent."""
+    closure = continuity_rel_error(text)
+    return None if closure is None else round(abs(closure) * 100.0, 6)
 
 
 def _completion_or_metrics(
@@ -96,7 +80,7 @@ def parse_telemac(art: RunArtifacts, status: str) -> EngineDiagnostics:
     )
     if listing_text is not None and listing_mass_balance_pct is None:
         notes.append(
-            "the listing carried no RELATIVE-ERROR mass-balance line "
+            "the listing carried no RELATIVE ERROR IN VOLUME line "
             "(a crashed / truncated listing); mass_balance_pct left null."
         )
 

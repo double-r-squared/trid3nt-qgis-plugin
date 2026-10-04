@@ -14,9 +14,9 @@ import pytest
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.store import objects as storage
 from trid3nt_server.workflows.solver.solver import (
+    LOCAL_SOLVER_SPEC_REGISTRY,
     NFR_P_4_TARGET_SECONDS,
     PROGRESS_CLAMP_MAX,
-    SOLVER_WORKFLOW_REGISTRY,
     SolverNotRegisteredError,
     _progress_percent,
     run_solver,
@@ -74,7 +74,7 @@ def test_run_solver_rejects_unregistered_solver(reset_solver_di_seams) -> None:
     assert "not_an_engine" in message
     # The refusal quotes the roster, so a caller can see what it could have asked.
     assert "telemac" in message
-    assert set(SOLVER_WORKFLOW_REGISTRY) >= {"telemac"}
+    assert set(LOCAL_SOLVER_SPEC_REGISTRY) >= {"telemac"}
 
 
 

@@ -11,7 +11,6 @@ import glob as _glob
 import json
 import logging
 import os
-import signal
 import subprocess
 import tempfile
 import threading
@@ -36,12 +35,9 @@ __all__ = [
     "SolverDispatchError",
     "RunOutputMissing",
     "set_emitter_binding",
-    "SOLVER_BACKEND_LOCAL_DOCKER",
     "LOCAL_DOCKER_WORKFLOW_NAME",
-    "LOCAL_EXEC_WORKFLOW_NAME",
     "LocalSolverSpec",
     "launch_local_solver",
-    "SOLVER_WORKFLOW_REGISTRY",
     "LOCAL_SOLVER_SPEC_REGISTRY",
     "register_local_solver_spec",
     "EmitterBinding",
@@ -88,34 +84,9 @@ PROGRESS_CLAMP_MAX: int = 95
 PROGRESS_TERMINAL: int = 100
 
 
-#: Solver -> workflow name registry, consumed purely as a PRESENCE GATE: an
-#: unregistered solver raises, and the backend routing comes from the handle's
-#: pinned sentinel rather than from this value. Every entry is contributed at
-#: import by the engine that owns it, beside that engine's ``LocalSolverSpec``,
-#: so a solver named here without a spec behind it cannot happen.
-SOLVER_WORKFLOW_REGISTRY: dict[str, str] = {}
-
-
-# --- Solver backend seam --- #
-
-#: The container backend: ``docker run`` on this machine, with the staging and
-#: upload envelope living in this module.
-SOLVER_BACKEND_LOCAL_DOCKER: str = "local-docker"
-
 #: ``ExecutionHandle.workflow_name`` sentinel for container handles. The poll
 #: dispatches on it, so env churn between submit and wait cannot mis-route it.
 LOCAL_DOCKER_WORKFLOW_NAME: str = "local-docker"
-
-#: ``ExecutionHandle.workflow_name`` sentinel for image-less runs that exec a
-#: solver binary directly. Same poll loop; the cancel chain kills the detached
-#: process group instead of a container.
-LOCAL_EXEC_WORKFLOW_NAME: str = "local-exec"
-
-#: The two local workflow_name sentinels ``wait_for_completion`` accepts.
-_LOCAL_WORKFLOW_NAMES: tuple[str, str] = (
-    LOCAL_DOCKER_WORKFLOW_NAME,
-    LOCAL_EXEC_WORKFLOW_NAME,
-)
 
 #: ``ExecutionHandle.workflow_location`` for local-docker handles.
 LOCAL_DOCKER_WORKFLOW_LOCATION: str = "local"
@@ -129,7 +100,7 @@ DOCKER_KILL_TIMEOUT_S: float = 25.0
 
 
 class SolverNotRegisteredError(ValueError):
-    """``solver`` is not in ``SOLVER_WORKFLOW_REGISTRY``.
+    """``solver`` is not in ``LOCAL_SOLVER_SPEC_REGISTRY``.
     Its own type, distinct from a params-invalid error, so the agent surface can
     say which solvers ARE registered rather than blaming the arguments."""
 
@@ -233,15 +204,9 @@ class LocalSolverSpec:
     stderr_name: str
     stdout_uri_field: str
     stderr_uri_field: str
-    exec_kind: str = "docker"
     classify_exit: (
         Callable[[Path, int], tuple[str, int, str | None, dict[str, Any]]] | None
     ) = None
-    env_overrides: dict[str, str] | None = None
-    """Environment variables merged into the subprocess env; ``None`` inherits the
-    parent env unchanged. A value REPLACES the matching key, so a prepend pattern
-    must be assembled by the spec factory from the current env value."""
-
     network: str | None = None
     """The docker network this solver's container runs on. ``"none"`` is the
     ENGINE-ROOM posture - a fully staged run directory and nothing reachable - and
@@ -255,7 +220,7 @@ def _with_declared_network(spec: LocalSolverSpec, cmd: list[str]) -> list[str]:
     # The flag goes in here rather than in each ``build_argv`` because the network a
     # container is allowed is a property of whether its inputs are staged, not of
     # how its argv is spelled, and a posture spread across closures drifts.
-    if not spec.network or spec.exec_kind != "docker":
+    if not spec.network:
         return cmd
     if "--network" in cmd:
         raise SolverDispatchError(
@@ -396,11 +361,7 @@ def _supervise_local_run(run: _LocalRun) -> None:
             error_msg = f"{run.spec.solver} exited with non-zero code {exit_code}"
         if run.cancel_requested.is_set():
             status = "cancelled"
-            error_msg = (
-                "run cancelled (docker kill via Invariant-8 cancel chain)"
-                if run.spec.exec_kind == "docker"
-                else "run cancelled (process-group kill via Invariant-8 cancel chain)"
-            )
+            error_msg = "run cancelled (docker kill)"
     except Exception as exc:  # noqa: BLE001 -- defensive: wait() itself failed
         logger.exception("local-docker supervisor wait failed run_id=%s", run.run_id)
         status = "error"
@@ -579,23 +540,12 @@ def launch_local_solver(
                 f"local-docker input staging failed {input_uri} -> {dest}: {exc}"
             ) from exc
 
-    # --- Detached launch (docker: container name == run_id is the cancel
-    # seam; exec: the detached process group is -- start_new_session=True
-    # makes pgid == pid for os.killpg) ---
+    # The container name == run_id is the cancel seam.
     stdout_path = rundir / spec.stdout_name
     stderr_path = rundir / spec.stderr_name
     cmd = spec.build_argv(run_id, rundir, solver_args)
     cmd = _with_declared_network(spec, cmd)
-    logger.info("local-%s exec: %s", spec.exec_kind, " ".join(cmd))
-    # Build the subprocess environment: start from the current process env and
-    # merge any spec-level overrides (e.g. PYTHONPATH for pip-only workers that
-    # use ``workers.*`` imports from the repo root).
-    proc_env: dict[str, str] | None = None
-    if spec.env_overrides:
-        import copy as _copy
-        proc_env = _copy.copy(os.environ.copy())
-        proc_env.update(spec.env_overrides)
-
+    logger.info("local-docker exec: %s", " ".join(cmd))
     try:
         with stdout_path.open("wb") as out, stderr_path.open("wb") as err:
             proc = subprocess.Popen(  # noqa: S603 -- argv list, no shell
@@ -604,11 +554,10 @@ def launch_local_solver(
                 stderr=err,
                 cwd=str(rundir),
                 start_new_session=True,  # detach from the agent's signal group
-                env=proc_env,  # None inherits the parent env unchanged
             )
     except Exception as exc:  # noqa: BLE001 -- docker/solver binary missing, etc.
         raise SolverDispatchError(
-            f"local-{spec.exec_kind} launch failed ({' '.join(cmd[:6])} ...): {exc}"
+            f"local-docker launch failed ({' '.join(cmd[:6])} ...): {exc}"
         ) from exc
 
     run = _LocalRun(
@@ -644,8 +593,7 @@ def launch_local_solver(
         submitted_at=submitted_at,
     )
     logger.info(
-        "local-%s submitted run_id=%s handle_id=%s argv0=%s inputs=%d",
-        spec.exec_kind,
+        "local-docker submitted run_id=%s handle_id=%s argv0=%s inputs=%d",
         run_id,
         handle.handle_id,
         cmd[0] if cmd else "?",
@@ -683,8 +631,7 @@ def _run_solver_local_docker(
 # (factory, not a pre-built spec) avoids circular imports: each workflow module
 # registers itself at import time via register_local_solver_spec(), and the
 # factory is only CALLED inside _run_solver_local_docker, by which time the
-# module is fully loaded. Engines with a public image use exec_kind="docker";
-# pip-only engines with none use exec_kind="exec".
+# module is fully loaded.
 
 #: solver name -> zero-arg callable returning a LocalSolverSpec.
 LOCAL_SOLVER_SPEC_REGISTRY: dict[str, Any] = {}
@@ -716,46 +663,14 @@ def _docker_kill(run_id: str) -> None:
         logger.warning("docker kill %s raised %s", run_id, exc)
 
 
-def _killpg_local_run(run: _LocalRun) -> None:
-    """Best-effort SIGKILL to the detached process group of an exec-kind run
-    (``start_new_session=True`` at launch makes pgid == pid)."""
-    try:
-        os.killpg(run.proc.pid, signal.SIGKILL)
-        logger.info("killpg(%d) issued for run_id=%s", run.proc.pid, run.run_id)
-    except ProcessLookupError:
-        logger.info(
-            "killpg for run_id=%s: process group already gone", run.run_id
-        )
-    except Exception as exc:  # noqa: BLE001 -- cancel chain still propagates
-        logger.warning("killpg for run_id=%s raised %s", run.run_id, exc)
-
-
-def _kill_local_run(run_id: str) -> None:
-    """Kind-aware best-effort kill: an exec-kind run gets a process-group SIGKILL,
-    a docker-kind or unknown run gets ``docker kill <run_id>`` - the container name
-    being the only lever left once the in-process supervisor is gone."""
-    run = _LOCAL_RUNS.get(run_id)
-    if run is not None and run.spec.exec_kind == "exec":
-        _killpg_local_run(run)
-        return
-    if run is None:
-        logger.warning(
-            "local kill for unknown run_id=%s (no in-process supervisor); "
-            "issuing docker kill only -- an exec-kind run cannot be reached "
-            "after an agent restart",
-            run_id,
-        )
-    _docker_kill(run_id)
-
-
 def _request_local_cancel(run_id: str) -> None:
-    """Flag the run cancelled, then kill the container or process group.
+    """Flag the run cancelled, then kill the container.
     The supervisor wakes on process exit and writes the ``status="cancelled"``
     completion.json, so the cancel is terminal within the kill budget."""
     run = _LOCAL_RUNS.get(run_id)
     if run is not None:
         run.cancel_requested.set()
-    _kill_local_run(run_id)
+    _docker_kill(run_id)
 
 
 def _try_get_completion_s3(runs_bucket: str, run_id: str) -> dict[str, Any] | None:
@@ -889,9 +804,8 @@ async def _wait_for_completion_local(
                 )
                 # A timeout is not a user cancel: kill WITHOUT the cancelled flag so the
                 # supervisor records status="error" (mirrors the worker path's
-                # best-effort cancel + SOLVER_TIMEOUT result). Kind-aware
-                #: docker kill or process-group kill.
-                await loop.run_in_executor(None, _kill_local_run, handle.run_id)
+                # best-effort cancel + SOLVER_TIMEOUT result).
+                await loop.run_in_executor(None, _docker_kill, handle.run_id)
                 return RunResult(
                     run_id=handle.run_id,
                     handle_id=handle.handle_id,
@@ -963,7 +877,7 @@ def run_solver(
     ``RunResult.output_uri``).
 
     Params: ``solver`` a lowercase identifier registered in
-    ``SOLVER_WORKFLOW_REGISTRY``; ``model_setup_uri`` the ``s3://`` manifest the
+    ``LOCAL_SOLVER_SPEC_REGISTRY``; ``model_setup_uri`` the ``s3://`` manifest the
     engine template composed; ``cores`` the partition the staged deck states.
 
     Returns an ``ExecutionHandle`` whose ``workflow_name`` pins the backend and
@@ -974,13 +888,10 @@ def run_solver(
         raise SolverNotRegisteredError(
             f"solver must be a non-empty string; got {solver!r}"
         )
-    workflow_name = SOLVER_WORKFLOW_REGISTRY.get(solver)
-    if workflow_name is None:
+    if solver not in LOCAL_SOLVER_SPEC_REGISTRY:
         raise SolverNotRegisteredError(
-            f"solver {solver!r} not registered for v0.1; supported: "
-            f"{sorted(SOLVER_WORKFLOW_REGISTRY)} (lazy per-milestone deploy "
-            "per sprint-07 strategy -- TELEMAC / MODFLOW / HEC-HMS land in "
-            "their respective milestones)."
+            f"solver {solver!r} is not registered; supported: "
+            f"{sorted(LOCAL_SOLVER_SPEC_REGISTRY)}."
         )
     if not isinstance(model_setup_uri, str) or not model_setup_uri:
         raise SolverDispatchError(
@@ -1078,12 +989,12 @@ async def wait_for_completion(
 
     # The HANDLE pins its backend, not the env: env churn between submit and wait
     # cannot mis-route the poll. Both local sentinels share the completion poll.
-    if handle.workflow_name in _LOCAL_WORKFLOW_NAMES:
+    if handle.workflow_name == LOCAL_DOCKER_WORKFLOW_NAME:
         return await _wait_for_completion_local(handle, poll_interval_s, timeout_s)
 
     raise SolverDispatchError(
         f"unsupported handle backend {handle.workflow_name!r}: "
-        f"expected one of {_LOCAL_WORKFLOW_NAMES}."
+        f"expected {LOCAL_DOCKER_WORKFLOW_NAME!r}."
     )
 
 
@@ -1157,22 +1068,13 @@ def download_result(run_id: str, basename: str) -> str:
 
 
 def _to_utc(value: Any) -> datetime | None:
-    """Coerce a value that may be a ``datetime``, a proto Timestamp, or a
-    string into a UTC ``datetime``. Returns ``None`` on failure."""
+    """Coerce a ``datetime`` or an ISO string into a UTC ``datetime``; ``None`` on failure."""
     if value is None:
         return None
     if isinstance(value, datetime):
         if value.tzinfo is None:
             return value.replace(tzinfo=timezone.utc)
         return value.astimezone(timezone.utc)
-    # Proto Timestamp has a ``ToDatetime`` method.
-    to_datetime = getattr(value, "ToDatetime", None)
-    if callable(to_datetime):
-        try:
-            dt = to_datetime()
-            return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
-        except Exception:  # noqa: BLE001
-            return None
     if isinstance(value, str):
         try:
             dt = datetime.fromisoformat(value.replace("Z", "+00:00"))

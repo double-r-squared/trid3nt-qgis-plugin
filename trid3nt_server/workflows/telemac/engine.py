@@ -20,11 +20,13 @@ from trid3nt_server.store import objects as storage
 from trid3nt_server.workflows.solver.solver import (
     LOCAL_DOCKER_WORKFLOW_NAME,
     LocalSolverSpec,
-    SOLVER_WORKFLOW_REGISTRY,
     dispatch_and_wait,
     register_local_solver_spec,
 )
 
+from trid3nt_server.workflows.solver.diagnostics import register_diagnostics_parser
+
+from .diagnostics import parse_telemac
 from .errors import TelemacError
 from .helpers.time_step import MESH_NODE_CAP, estimate_telemac_solve_seconds
 
@@ -34,8 +36,7 @@ __all__ = ["TELEMAC_SOLVER_NAME", "classify_exit", "read_run_metrics",
            "register_telemac_solver", "solve_case"]
 
 #: The solver identifier IS the engine name: one registration per engine, keyed
-#: in both ``SOLVER_WORKFLOW_REGISTRY`` (the presence gate ``run_solver`` reads)
-#: and ``LOCAL_SOLVER_SPEC_REGISTRY``. Which MODULE ran is the manifest's
+#: in ``LOCAL_SOLVER_SPEC_REGISTRY``. Which MODULE ran is the manifest's
 #: ``case.module``, which the worker states back in its metrics.
 TELEMAC_SOLVER_NAME: str = "telemac"
 
@@ -128,18 +129,16 @@ def _spec() -> LocalSolverSpec:
         stderr_name=f"{TELEMAC_SOLVER_NAME}.stderr",
         stdout_uri_field=f"{TELEMAC_SOLVER_NAME}_stdout_uri",
         stderr_uri_field=f"{TELEMAC_SOLVER_NAME}_stderr_uri",
-        exec_kind="docker",
         classify_exit=classify_exit,
     )
 
 
 def register_telemac_solver() -> None:
-    """Register the engine in the solver + local-spec registries. Idempotent.
+    """Register the engine in the local-spec registry. Idempotent.
 
     TELEMAC is local-docker only: the engine lives in the worker image."""
-    SOLVER_WORKFLOW_REGISTRY.setdefault(TELEMAC_SOLVER_NAME,
-                                        LOCAL_DOCKER_WORKFLOW_NAME)
     register_local_solver_spec(TELEMAC_SOLVER_NAME, _spec)
+    register_diagnostics_parser(TELEMAC_SOLVER_NAME, parse_telemac)
 
 
 def read_run_metrics(run_id: str) -> dict[str, Any]:

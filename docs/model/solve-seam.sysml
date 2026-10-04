@@ -478,7 +478,7 @@ package SolveSeam {
 
     part diagnosticsReader : DiagnosticsReader {
         doc /*
-        code: trid3nt_server/workflows/solver/diagnostics/telemac.py
+        code: trid3nt_server/workflows/telemac/diagnostics.py
         */
         port completionIn : CompletionIn;
         port listingIn : ListingIn;

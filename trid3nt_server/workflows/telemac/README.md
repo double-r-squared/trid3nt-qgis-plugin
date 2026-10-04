@@ -1,7 +1,7 @@
 # `workflows/telemac/` - the TELEMAC engine
 
 One door, one engine file and four trees. Nothing lives at this root but the
-door, the engine file and the engine's typed failures: the trees are named for
+door, the engine file, its diagnostics parser and the engine's typed failures: the trees are named for
 what they hold - `modules/` the wrappers, the module inputs their keywords are
 read out of, the tables of what each writes and the primitive set that reads it,
 `templates/` one package per question, `authoring/` the run directory the box receives, `helpers/` the
@@ -28,7 +28,8 @@ it. The wrapper is built when a question needs it, not before.
 | --- | --- |
 | `__init__.py` | The package door. |
 | `engine.py` | Everything the shared executor cannot know: the launch line and the declared network, the verdict on an exit, the metrics file, the wait sized off the sheet's own duration and timestep, and the one run path every template dispatches through. |
-| `errors.py` | The engine's typed failures - a run that could not be acquired, settled, staged, solved or read, an input it cannot model, a reach nothing maps or the mesh does not hold - each carrying the code the envelope renders and none named for a question. |
+| `diagnostics.py` | The parser `read_run_diagnostics` dispatches a TELEMAC run to: completion extras, and the volume closure read off the listing through `modules/listing.py`. |
+| `errors.py` | The engine's typed failures - a run that could not be acquired, settled, staged, solved or read - each carrying the code the envelope renders and none named for a question. |
 | `workflow.py` | The fill/run door a template hands its declarations to - stating a settle step of its own, or letting the workflow build every stage from the declared domain, bed and boundary-run slots - and `TelemacWorkflow`, the two facts the skeleton records a run of this engine under. |
 
 ## Subfolders

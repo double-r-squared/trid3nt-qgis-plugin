@@ -16,7 +16,6 @@ import pytest
 from trid3nt_server.workflows.solver.solver import (
     LOCAL_DOCKER_WORKFLOW_NAME,
     LOCAL_SOLVER_SPEC_REGISTRY,
-    SOLVER_WORKFLOW_REGISTRY,
 )
 from trid3nt_server.workflows.telemac import engine as T
 
@@ -24,7 +23,7 @@ from trid3nt_server.workflows.telemac import engine as T
 def test_the_solver_identifier_is_the_engine_name():
     # Importing the engine file (via workflows/__init__ or directly) self-registers.
     assert T.TELEMAC_SOLVER_NAME == "telemac"
-    assert SOLVER_WORKFLOW_REGISTRY.get("telemac") == LOCAL_DOCKER_WORKFLOW_NAME
+    assert T._spec().workflow_name == LOCAL_DOCKER_WORKFLOW_NAME
 
 
 def test_the_engine_registers_once_and_no_question_registers_a_solver():
@@ -41,7 +40,6 @@ def test_telemac_local_spec_factory_registered():
     assert spec.network == "none"
     assert spec.workflow_name == LOCAL_DOCKER_WORKFLOW_NAME
     assert spec.args_key == "telemac_args"
-    assert spec.exec_kind == "docker"
     assert spec.stdout_uri_field == "telemac_stdout_uri"
     assert spec.stderr_uri_field == "telemac_stderr_uri"
     assert spec.classify_exit is not None

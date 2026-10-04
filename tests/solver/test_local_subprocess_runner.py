@@ -1,8 +1,7 @@
 """The local subprocess runner, engine-AGNOSTIC half.
 
 The manifest is written to the run directory before launch, a mocked exit 0 is
-picked up by the supervisor into a correct ``completion.json``, and
-``env_overrides`` reach the subprocess environment. No AWS, no real subprocess
+picked up by the supervisor into a correct ``completion.json``. No AWS, no real subprocess
 and no docker."""
 
 from __future__ import annotations
@@ -155,7 +154,6 @@ def test_launch_writes_manifest_to_rundir(
         stderr_name="out.stderr",
         stdout_uri_field="stdout_uri",
         stderr_uri_field="stderr_uri",
-        exec_kind="exec",
         classify_exit=classify_exit,
     )
 
@@ -213,7 +211,6 @@ def test_subprocess_runner_exit0_produces_ok_completion(
         stderr_name="landlab.stderr",
         stdout_uri_field="landlab_stdout_uri",
         stderr_uri_field="landlab_stderr_uri",
-        exec_kind="exec",
         classify_exit=classify_exit,
     )
 
@@ -261,7 +258,6 @@ def test_subprocess_runner_nonzero_exit_produces_error_completion(
         stderr_name="oq.stderr",
         stdout_uri_field="oq_stdout_uri",
         stderr_uri_field="oq_stderr_uri",
-        exec_kind="exec",
         classify_exit=classify_exit,
     )
 
@@ -270,62 +266,3 @@ def test_subprocess_runner_nonzero_exit_produces_error_completion(
     assert completion["status"] == "error"
     assert completion["exit_code"] == 3
     assert completion["error"] is not None
-
-
-
-
-def test_env_overrides_set_in_subprocess_environment(
-    reset_seams,
-    local_backend_env: Path,
-) -> None:
-    """env_overrides must appear in the subprocess environment.
-    We verify by having the subprocess write os.environ['TRID3NT_TEST_PYPATH']
-    to a file and checking the file contents."""
-    from trid3nt_server.workflows.solver.solver import launch_local_solver, LocalSolverSpec
-
-    s3 = FakeS3Client()
-    storage.set_client(s3)
-
-    manifest = {"inputs": [], "build_spec": {}, "outputs": []}
-    s3.objects[("b", "env_test.json")] = json.dumps(manifest).encode()
-
-    # Use a temp path the subprocess can write to.
-    import tempfile
-
-    output_file = Path(tempfile.mktemp(suffix=".txt"))
-
-    def build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
-        # Write the injected env var value to the output file.
-        script = (
-            f"import os, pathlib; "
-            f"pathlib.Path({str(output_file)!r}).write_text("
-            f"os.environ.get('TRID3NT_TEST_PYPATH', 'MISSING'))"
-        )
-        return [sys.executable, "-c", script]
-
-    def classify_exit(rundir: Path, exit_code: int) -> tuple:
-        return ("ok" if exit_code == 0 else "error", exit_code, None, {})
-
-    spec = LocalSolverSpec(
-        solver="landlab",
-        workflow_name="local-exec",
-        args_key="build_spec",
-        build_argv=build_argv,
-        stdout_name="out.stdout",
-        stderr_name="out.stderr",
-        stdout_uri_field="stdout_uri",
-        stderr_uri_field="stderr_uri",
-        exec_kind="exec",
-        classify_exit=classify_exit,
-        env_overrides={"TRID3NT_TEST_PYPATH": "/injected/repo/root"},
-    )
-
-    handle = launch_local_solver(spec, "s3://b/env_test.json", cores=2)
-    _wait_completion(s3, handle.run_id)
-
-    assert output_file.exists(), "subprocess did not write output file"
-    value = output_file.read_text()
-    assert value == "/injected/repo/root", (
-        f"env override not propagated to subprocess; got {value!r}"
-    )
-    output_file.unlink(missing_ok=True)

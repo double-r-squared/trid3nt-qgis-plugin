@@ -26,10 +26,10 @@ from ._common import (
     RunArtifacts,
     RunHandleUnresolved,
 )
-from .telemac import parse_telemac
 
 __all__ = [
     "read_run_diagnostics",
+    "register_diagnostics_parser",
     "DiagnosticsError",
     "RunHandleUnresolved",
     "DiagnosticsRunNotFound",
@@ -45,10 +45,13 @@ logger = logging.getLogger(
 #: Crockford base32 ULID, 26 chars (matches ``trid3nt_contracts.new_ulid``).
 _ULID_RE = re.compile(r"^[0-9A-HJKMNP-TV-Z]{26}$")
 
-#: engine -> internal parser. Keys are the canonical normalized engine names.
-_PARSERS: dict[str, Callable[[RunArtifacts, str], EngineDiagnostics]] = {
-    "telemac": parse_telemac,
-}
+#: engine -> parser, contributed at import by the engine that owns it.
+_PARSERS: dict[str, Callable[[RunArtifacts, str], EngineDiagnostics]] = {}
+
+
+def register_diagnostics_parser(
+        engine: str, parser: Callable[[RunArtifacts, str], EngineDiagnostics]) -> None:
+    _PARSERS[engine] = parser
 
 _METADATA = AtomicToolMetadata(
     name="read_run_diagnostics",

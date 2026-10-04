@@ -28,7 +28,7 @@ def _spec(**over):
     fields = dict(
         solver="t", workflow_name=LOCAL_DOCKER_WORKFLOW_NAME, args_key="a",
         build_argv=build_argv, stdout_name="o", stderr_name="e",
-        stdout_uri_field="ou", stderr_uri_field="eu", exec_kind="docker",
+        stdout_uri_field="ou", stderr_uri_field="eu",
     )
     fields.update(over)
     return LocalSolverSpec(**fields)

@@ -10,7 +10,7 @@ Plane: **workflow**. System: **assembler -> solver -> products**. One seam of th
 flowchart LR
     acceptedMesh["Assembler<br/>trid3nt_server/workflows/telemac/authoring/accepted_mesh.py"]
     bedPainter["BedPainter<br/>trid3nt_server/tools/mesh/shared/primitives.py"]
-    diagnosticsReader["DiagnosticsReader<br/>trid3nt_server/workflows/solver/diagnostics/telemac.py"]
+    diagnosticsReader["DiagnosticsReader<br/>trid3nt_server/workflows/telemac/diagnostics.py"]
     initialState["Assembler<br/>trid3nt_server/workflows/telemac/authoring/initial_state.py"]
     launcherArm["LauncherArm<br/>trid3nt_server/workflows/telemac/engine.py"]
     manifestStager["ManifestStager<br/>trid3nt_server/workflows/telemac/authoring/staging.py"]

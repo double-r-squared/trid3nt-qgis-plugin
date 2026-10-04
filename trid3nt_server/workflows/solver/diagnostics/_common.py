@@ -138,17 +138,6 @@ class RunArtifacts:
         self._reader = reader
         self.output_uris: list[str] = list(completion.get("output_uris") or [])
 
-    # -- stdout ------------------------------------------------------------ #
-
-    def stdout_uri(self) -> str | None:
-        """The ``<solver>_stdout_uri`` value (the only per-engine stdout tell)."""
-        for key, val in self.completion.items():
-            if key.endswith("_stdout_uri"):
-                return val
-        return None
-
-    # -- raw byte access --------------------------------------------------- #
-
     def _read_local(self, name: str) -> bytes | None:
         import os
 
@@ -169,17 +158,6 @@ class RunArtifacts:
         except Exception:  # noqa: BLE001 -- absent/unreadable -> honest None
             return None
 
-    def read_uri(self, uri: str) -> bytes:
-        """Bytes for one REQUIRED uri; raise ``DiagnosticsArtifactMissing``."""
-        data = self.try_read_uri(uri)
-        if data is None:
-            raise DiagnosticsArtifactMissing(
-                self.engine, self.run_id, basename_of(uri)
-            )
-        return data
-
-    # -- output lookup by name / suffix ------------------------------------ #
-
     def find_output_uri(
         self, *, basename: str | None = None, suffix: str | None = None
     ) -> str | None:
@@ -192,42 +170,11 @@ class RunArtifacts:
                 return uri
         return None
 
-    def count_outputs(self, *, suffix: str | None = None, contains: str | None = None) -> int:
-        """Count ``output_uris`` whose basename matches a suffix / substring."""
-        n = 0
-        for uri in self.output_uris:
-            bn = basename_of(uri)
-            if suffix is not None and not bn.endswith(suffix):
-                continue
-            if contains is not None and contains not in bn:
-                continue
-            n += 1
-        return n
-
-    def read_output_required(
-        self, *, basename: str | None = None, suffix: str | None = None
-    ) -> tuple[str, bytes]:
-        """Locate + read a REQUIRED output; typed-raise if absent."""
-        uri = self.find_output_uri(basename=basename, suffix=suffix)
-        if uri is None:
-            want = basename or (f"*{suffix}" if suffix else "?")
-            raise DiagnosticsArtifactMissing(
-                self.engine, self.run_id, want, "not listed in output_uris"
-            )
-        return uri, self.read_uri(uri)
-
     def read_output_optional(
         self, *, basename: str | None = None, suffix: str | None = None
     ) -> tuple[str | None, bytes | None]:
         """Locate + read an OPTIONAL output; ``(None, None)`` when absent."""
         uri = self.find_output_uri(basename=basename, suffix=suffix)
         if uri is None:
-            return None, None
-        return uri, self.try_read_uri(uri)
-
-    def read_stdout_optional(self) -> tuple[str | None, bytes | None]:
-        """Read the ``<solver>_stdout_uri`` artifact; ``(None, None)`` if absent."""
-        uri = self.stdout_uri()
-        if not uri:
             return None, None
         return uri, self.try_read_uri(uri)
