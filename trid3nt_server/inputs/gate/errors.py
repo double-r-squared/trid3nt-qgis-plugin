@@ -1,4 +1,4 @@
-"""Typed gate refusals: a declined card, a card nobody answered, a bad draw.
+"""Typed gate refusals: a declined card, an expired card, a bad draw reply.
 
 Each type carries an ``error_code`` and a ``retryable`` flag that the result
 summarizer harvests, so a gate refusal reaches the model as a structured

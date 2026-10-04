@@ -36,7 +36,7 @@ CODE_EXEC_CONFIRM_TIMEOUT_SECONDS: int = int(
 
 def _code_exec_approval_timeout_s() -> float:
     """The code-exec gate's own approval window in every lane
-    (``TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S``, default 180); an unanswered card
+    (``TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S``, default 180); an expired card
     raises ``CodeExecApprovalTimeoutError`` so the turn completes honestly."""
     return _env_float("TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S", 180.0)
 

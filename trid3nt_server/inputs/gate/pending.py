@@ -65,11 +65,11 @@ class PendingReplies(dict[str, tuple[str, asyncio.Future]]):
 
 #: warning_id / code_exec_id of a confirmation card.
 _PENDING_CONFIRMATIONS = PendingReplies("tool-payload-confirmation")
-#: request_id of a draw surface; an unanswered draw resolves to None on timeout.
+#: request_id of a draw surface; a draw with no reply resolves to None on timeout.
 _PENDING_SPATIAL_INPUTS = PendingReplies("spatial-input-response")
 #: request_id of a tool-candidates card.
 _PENDING_TOOL_CHOICES = PendingReplies("tool-choice")
 #: request_id of a processing-request run in the user's QGIS session.
 _PENDING_PROCESSING = PendingReplies("processing-response")
-#: the row's own key, so a response only answers the layer request that asked.
+#: the row's own key, so a response only resolves the layer request that sent it.
 _PENDING_LAYER = PendingReplies("layer-response")
