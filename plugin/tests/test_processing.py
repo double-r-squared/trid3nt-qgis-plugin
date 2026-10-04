@@ -116,6 +116,10 @@ class TestProcessingInQgis(unittest.TestCase):
         self.assertIn("[processing] run_pyqgis snippet read the project back", proc.stdout)
         self.assertIn("[processing] a raising snippet answers with its traceback", proc.stdout)
         self.assertIn("[processing] reproject -> IDW over the case layer", proc.stdout)
+        self.assertIn("[processing] a capped painted layer reaches QGIS as its full source",
+                      proc.stdout)
+        self.assertIn("[processing] a painted layer with no full source is refused by name",
+                      proc.stdout)
         self.assertIn("[processing] a case layer the store does not hold is refused by name",
                       proc.stdout)
 
@@ -147,22 +151,34 @@ class _Project:
         return [layer for layer in self._layers.values() if layer._name == name]
 
 
-def test_a_layer_is_found_by_its_qgis_id_its_agent_id_or_its_canvas_name():
-    from plugin.render.processing import _layer_named
+def test_a_layer_is_found_by_its_qgis_id_its_agent_id_or_its_canvas_name(monkeypatch):
+    from plugin.render import processing
 
+    uri = "s3://trid3nt-data/ehydro/soundings.gpkg"
+    opened = []
+    monkeypatch.setattr(processing, "_full_source",
+                        lambda source, named: opened.append((source, named)) or source)
     soundings = _Layer("soundings_abc123", "USACE eHydro channel survey",
-                       agent_id="ehydro_surveys-ehydro_surveys")
+                       agent_id="ehydro_surveys-ehydro_surveys", source_uri=uri)
     project = _Project(soundings)
-    assert _layer_named(project, "soundings_abc123") is soundings
-    assert _layer_named(project, "ehydro_surveys-ehydro_surveys") is soundings
-    assert _layer_named(project, "USACE eHydro channel survey") is soundings
-    assert _layer_named(project, "EPSG:32617") == "EPSG:32617"
+    for named in ("soundings_abc123", "ehydro_surveys-ehydro_surveys",
+                  "USACE eHydro channel survey", uri):
+        assert processing._layer_named(project, named) == uri
+    assert [n for _, n in opened] == ["soundings_abc123", "ehydro_surveys-ehydro_surveys",
+                                      "USACE eHydro channel survey", uri]
+    assert processing._layer_named(project, "EPSG:32617") == "EPSG:32617"
 
 
-def test_a_case_layer_named_by_its_store_uri_is_the_layer_the_dock_painted():
+def test_a_layer_the_dock_did_not_paint_is_its_own_source():
     from plugin.render.processing import _layer_named
 
-    uri = "s3://trid3nt-runs/qgis-e9308c98/OUTPUT.gpkg"
-    painted = _Layer("OUTPUT_9f1", "Reprojected", agent_id="qgis-e9308c98",
-                     source_uri=uri)
-    assert _layer_named(_Project(painted), uri) is painted
+    own = _Layer("dem_42", "My DEM")
+    assert _layer_named(_Project(own), "My DEM") is own
+
+
+def test_a_painted_layer_with_no_full_source_is_refused_by_name():
+    from plugin.render.processing import _layer_named
+
+    painted = _Layer("pts_7", "Soundings", agent_id="ehydro-1")
+    with pytest.raises(ValueError, match="case layer 'Soundings' has no full source"):
+        _layer_named(_Project(painted), "Soundings")

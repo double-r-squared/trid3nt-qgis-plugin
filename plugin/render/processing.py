@@ -1,11 +1,11 @@
 """A ``processing-request`` from the agent, run in THIS QGIS session.
 
-An algorithm request runs ``processing.run`` over project layers named in its
-params by id or canvas name, or case layers named by their store uri, and writes
-every output to a file it names; the agent publishes that file as a case layer,
-which is what paints. A code request executes the
-approved snippet in the session's Python. The response carries the outcome
-honestly: an error is the session's own traceback, never a fabricated result.
+An algorithm request runs ``processing.run`` over layers named in its params by
+id, canvas name or store uri - a case layer always read from its full source,
+never the copy the map paints - and writes every output to a file it names; the
+agent publishes that file as a case layer, which is what paints. A code request
+executes the approved snippet in the session's Python. The response carries the
+outcome honestly: an error is the session's own traceback, never a fabricated result.
 """
 
 from __future__ import annotations
@@ -139,33 +139,34 @@ def _gdal_config_in_environ():
 
 
 def _layer_named(project: Any, value: str) -> Any:
-    """A project layer by its QGIS id, the agent's layer id stamped on it, or its
-    canvas name; a case layer's store uri opens the way the dock opens it; any
-    other string passes through as the value."""
+    """A layer by its store uri, its QGIS id, the agent's layer id stamped on it,
+    or its canvas name; a layer the dock painted is read from its full source,
+    never the painted copy; any other string passes through as the value."""
     if value.startswith("s3://"):
-        return _case_layer(project, value)
+        return _full_source(value, value)
     known = project.mapLayer(value)
-    if known is not None:
+    if known is None:
+        stamped = [layer for layer in project.mapLayers().values()
+                   if layer.customProperty("trid3nt/layer_id") == value]
+        layers = stamped or project.mapLayersByName(value)
+        if not layers:
+            return value
+        known = layers[0]
+    if known.customProperty("trid3nt/layer_id") is None:
         return known
-    stamped = [layer for layer in project.mapLayers().values()
-               if layer.customProperty("trid3nt/layer_id") == value]
-    layers = stamped or project.mapLayersByName(value)
-    return layers[0] if layers else value
+    return _full_source(known.customProperty("trid3nt/source_uri") or "", value)
 
 
-def _case_layer(project: Any, uri: str) -> Any:
-    """The project layer the dock painted from ``uri``, else the uri opened
-    through the dock's own ``/vsis3`` path; one neither reads is refused."""
-    painted = [layer for layer in project.mapLayers().values()
-               if layer.customProperty("trid3nt/source_uri") == uri]
-    if painted:
-        return painted[0]
-    from qgis.core import QgsRasterLayer, QgsVectorLayer
-
+def _full_source(uri: str, named: str) -> Any:
+    """The case layer at ``uri`` opened through the dock's ``/vsis3`` path. The
+    map may paint a capped or simplified copy, so an algorithm never reads it:
+    a layer whose full source does not open is refused by name."""
     from ..net.trid3nt_client import s3_to_vsis3
 
     path = s3_to_vsis3(uri)
     if path is not None:
+        from qgis.core import QgsRasterLayer, QgsVectorLayer
+
         name = uri.rsplit("/", 1)[-1]
         raster = QgsRasterLayer(path, name, "gdal")
         if raster.isValid():
@@ -174,9 +175,10 @@ def _case_layer(project: Any, uri: str) -> Any:
         if vector.isValid():
             return vector
     raise ValueError(
-        f"case layer {uri!r} is not on this project and does not open through "
-        f"the object store as {path!r}; the session reads the store at the "
-        "endpoint its settings name"
+        f"case layer {named!r} has no full source this session opens "
+        f"(store uri {uri or None!r}, read as {path!r}); an algorithm never runs "
+        "on the copy the map paints, which may be capped. The session reads the "
+        "store at the endpoint its settings name"
     )
 
 

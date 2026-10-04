@@ -6,7 +6,8 @@ project; ``native:slope`` runs over it BY CANVAS NAME and the output is written
 to a file, summarized and never added to the project; a snippet reads the project back and a raising
 snippet answers with its traceback. A case layer named by its store uri opens
 through the dock's ``/vsis3`` path against a stub store, and reproject -> IDW
-chains through it; a uri the store does not hold is refused by name."""
+chains through it; a layer the map paints capped is read from its full source;
+a uri the store does not hold is refused by name."""
 
 from __future__ import annotations
 
@@ -120,6 +121,8 @@ def _store_chain(tmp: str) -> None:
     assert grid["result"]["kind"] == "raster" and grid["result"]["crs"] == "EPSG:32617", grid
     print(f"[processing] reproject -> IDW over the case layer {uri} read through /vsis3")
 
+    _capped_copy(root)
+
     missing = "s3://runs/qgis-gone/OUTPUT.gpkg"
     refused = run_processing_request({
         "request_id": "01HARNESSPROCESSINGSTORECC", "kind": "algorithm",
@@ -129,6 +132,58 @@ def _store_chain(tmp: str) -> None:
     print("[processing] a case layer the store does not hold is refused by name")
     server.shutdown()
     server.server_close()
+
+
+def _capped_copy(root: str) -> None:
+    """A survey the map paints capped at 3 of its 50 soundings: an algorithm
+    naming it by canvas name, layer id or store uri reads all 50."""
+    from osgeo import ogr, osr
+    from qgis.core import QgsFeature, QgsGeometry, QgsPointXY, QgsVectorLayer
+
+    from plugin.render.processing import run_processing_request
+
+    os.makedirs(os.path.join(root, "data", "survey"))
+    srs = osr.SpatialReference()
+    srs.ImportFromEPSG(4326)
+    ds = ogr.GetDriverByName("GPKG").CreateDataSource(
+        os.path.join(root, "data", "survey", "soundings.gpkg"))
+    table = ds.CreateLayer("soundings", srs, ogr.wkbPoint)
+    table.CreateField(ogr.FieldDefn("z", ogr.OFTReal))
+    for i in range(50):
+        feature = ogr.Feature(table.GetLayerDefn())
+        feature.SetField("z", float(i))
+        feature.SetGeometry(ogr.CreateGeometryFromWkt(f"POINT (-82.4{i:02d} 42.97)"))
+        table.CreateFeature(feature)
+    ds = None
+    uri = "s3://data/survey/soundings.gpkg"
+    painted = QgsVectorLayer("Point?crs=EPSG:4326&field=z:double", "Survey", "memory")
+    for i in range(3):
+        feature = QgsFeature(painted.fields())
+        feature.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(-82.4 - i / 100, 42.97)))
+        feature.setAttributes([float(i)])
+        painted.dataProvider().addFeature(feature)
+    painted.setCustomProperty("trid3nt/source_uri", uri)
+    painted.setCustomProperty("trid3nt/layer_id", "ehydro-survey-1")
+    QgsProject.instance().addMapLayer(painted)
+    for named in ("Survey", "ehydro-survey-1", painted.id(), uri):
+        out = run_processing_request({
+            "request_id": "01HARNESSPROCESSINGFULLAA", "kind": "algorithm",
+            "algorithm": "native:reprojectlayer",
+            "params": {"INPUT": named, "TARGET_CRS": "EPSG:32617"},
+        })
+        assert out["status"] == "ok" and out["result"]["feature_count"] == 50, (named, out)
+    print("[processing] a capped painted layer reaches QGIS as its full source: 50 of 50")
+
+    painted.removeCustomProperty("trid3nt/source_uri")
+    refused = run_processing_request({
+        "request_id": "01HARNESSPROCESSINGFULLBB", "kind": "algorithm",
+        "algorithm": "native:reprojectlayer",
+        "params": {"INPUT": "Survey", "TARGET_CRS": "EPSG:32617"},
+    })
+    assert refused["status"] == "error" and "case layer 'Survey' has no full source" in (
+        refused["error"]), refused
+    print("[processing] a painted layer with no full source is refused by name")
+    QgsProject.instance().removeMapLayer(painted.id())
 
 
 def main() -> int:
@@ -180,15 +235,13 @@ def main() -> int:
     assert len(QgsProject.instance().mapLayers()) == 1, "the agent's case layer paints it"
     print(f"[processing] a vector output is the file {os.path.basename(written)}")
 
-    dem.setCustomProperty("trid3nt/layer_id", "dem-fetched-1")
-    for named in ("dem-fetched-1", dem.id()):
-        by_id = run_processing_request({
-            "request_id": "01HARNESSPROCESSINGALGCCCC",
-            "kind": "algorithm", "algorithm": "native:slope",
-            "params": {"INPUT": named, "Z_FACTOR": 1.0},
-        })
-        assert by_id["status"] == "ok", (named, by_id)
-    print("[processing] a layer named by the agent's id and by its QGIS id is found")
+    by_id = run_processing_request({
+        "request_id": "01HARNESSPROCESSINGALGCCCC",
+        "kind": "algorithm", "algorithm": "native:slope",
+        "params": {"INPUT": dem.id(), "Z_FACTOR": 1.0},
+    })
+    assert by_id["status"] == "ok", by_id
+    print("[processing] a layer named by its QGIS id is found")
 
     unknown = run_processing_request({
         "request_id": "01HARNESSPROCESSINGALGBBBB",
