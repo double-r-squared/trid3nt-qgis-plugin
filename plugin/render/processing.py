@@ -183,8 +183,7 @@ def _full_source(uri: str, named: str) -> Any:
             return vector
     raise ValueError(
         f"case layer {named!r} has no full source this session opens "
-        f"(store uri {uri or None!r}, read as {path!r}); an algorithm never runs "
-        "on the copy the map paints, which may be capped. The session reads the "
+        f"(store uri {uri or None!r}, read as {path!r}); the session reads the "
         "store at the endpoint its settings name"
     )
 
