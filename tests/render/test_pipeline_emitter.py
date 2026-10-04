@@ -16,11 +16,8 @@ from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import LayerURI
 
 from trid3nt_server.render.pipeline_emitter import (
-    EMITTER_ERROR_CODES,
     PipelineEmitter,
 )
-
-
 
 
 class _CapturingSink:
@@ -58,8 +55,6 @@ def _session_frames(sink: _CapturingSink) -> list[dict[str, Any]]:
     return [f for f in sink.frames if f["type"] == "session-state"]
 
 
-
-
 @pytest.mark.asyncio
 async def test_happy_path_state_transitions(
     emitter: PipelineEmitter, sink: _CapturingSink
@@ -79,8 +74,6 @@ async def test_happy_path_state_transitions(
     # Pipeline id is stable across the three frames.
     pids = {f["payload"]["pipeline_id"] for f in frames}
     assert len(pids) == 1
-
-
 
 
 @pytest.mark.asyncio
@@ -103,8 +96,6 @@ async def test_replace_not_reconcile_full_snapshot(
     # last frame — replace-not-reconcile.
     assert last["payload"]["steps"][0]["state"] == "complete"
     assert last["payload"]["steps"][1]["state"] == "pending"
-
-
 
 
 @pytest.mark.asyncio
@@ -137,7 +128,6 @@ async def test_error_path_failed_step_carries_code_and_message(
     assert failed.error_code == "UPSTREAM_API_ERROR"
     assert failed.error_message is not None
     assert len(failed.error_message) == 512  # truncated
-    assert EMITTER_ERROR_CODES.known("UPSTREAM_API_ERROR")
 
 
 @pytest.mark.asyncio
@@ -156,8 +146,6 @@ async def test_mark_failed_rejects_malformed_error_code(
     )
     with pytest.raises(Exception):
         emitter.current_snapshot()  # PipelineStepSummary regex fires here
-
-
 
 
 def _make_layer(uri: str, layer_id: str = "L1") -> LayerURI:
@@ -315,8 +303,6 @@ async def test_emit_tool_call_drops_raster_gs_uri(
     ]
 
 
-
-
 @pytest.mark.asyncio
 async def test_current_pipeline_set_and_cleared(
     emitter: PipelineEmitter, sink: _CapturingSink
@@ -330,7 +316,7 @@ async def test_current_pipeline_set_and_cleared(
 
     last = _session_frames(sink)[-1]
     assert last["payload"]["current_pipeline"] is not None
-    assert last["payload"]["current_pipeline"]["pipeline_id"] == emitter.pipeline_id
+    assert last["payload"]["current_pipeline"]["pipeline_id"] == emitter._pipeline_id
 
     await emitter.mark_complete(step_id)
     emitter.close_pipeline()
@@ -338,9 +324,7 @@ async def test_current_pipeline_set_and_cleared(
 
     last = _session_frames(sink)[-1]
     assert last["payload"]["current_pipeline"] is None
-    assert emitter.pipeline_id is None
-
-
+    assert emitter._pipeline_id is None
 
 
 @pytest.mark.asyncio
@@ -383,8 +367,6 @@ async def test_error_classifier_buckets_known_exception_types(
     assert failed.error_code == "UPSTREAM_API_ERROR"
 
 
-
-
 @pytest.mark.asyncio
 async def test_loaded_layers_dedup_by_uri(
     emitter: PipelineEmitter, sink: _CapturingSink
@@ -408,8 +390,6 @@ async def test_loaded_layers_dedup_by_uri(
     assert layers[0].name == "Demo DEM (refreshed)"
 
 
-
-
 def test_no_merge_helper_exists() -> None:
     """A.7 replace-not-reconcile is structurally enforced: the emitter must
     expose no merge / apply_delta / update_partial method. A future PR that
@@ -422,8 +402,6 @@ def test_no_merge_helper_exists() -> None:
         "Appendix A.7 mandates replace-not-reconcile, structurally enforced "
         "by NOT shipping a merge-style API. Remove or rename."
     )
-
-
 
 
 @pytest.mark.asyncio
@@ -552,8 +530,6 @@ async def test_reset_loaded_layers_clears_inline_table(
     await emitter.emit_session_state()
     last = _session_frames(sink)[-1]
     assert last["payload"]["loaded_layers"] == []
-
-
 
 
 def _stub_clock(emitter: PipelineEmitter, instants: list) -> None:
@@ -699,8 +675,6 @@ async def test_emit_tool_call_stamps_duration_end_to_end(
     assert last["duration_ms"] >= 0
 
 
-
-
 @pytest.mark.asyncio
 async def test_emit_byte_identical_with_seam_for_passing_layers(
     session_id: str,
@@ -826,50 +800,6 @@ async def test_emit_tool_call_complete_runresult_marks_card_complete(
 
 
 @pytest.mark.asyncio
-async def test_emit_tool_call_failed_envelope_dict_marks_card_failed(
-    emitter: PipelineEmitter, sink: _CapturingSink
-) -> None:
-    """A typed failed envelope returned as a dict flips the card to FAILED.
-
-    The failure anchor rides in the workflow name, so a silent green is the mislabel
-    this prevents."""
-    env_dict = {
-        "envelope_type": "modeled",
-        "hazard_type": "flood",
-        "workflow_name": "model_flood_scenario:FAILED:SOLVER_TIMEOUT",
-        "layers": [],
-    }
-    await emitter.emit_tool_call(
-        name="Flood scenario",
-        tool_name="sfincs_flood",
-        invoke=lambda: env_dict,
-    )
-    last = _pipeline_frames(sink)[-1]
-    step = last["payload"]["steps"][0]
-    assert step["state"] == "failed", step
-
-
-@pytest.mark.asyncio
-async def test_emit_tool_call_cancelled_envelope_dict_marks_card_cancelled(
-    emitter: PipelineEmitter, sink: _CapturingSink
-) -> None:
-    """A failed flood envelope tagged :FAILED:CANCELLED maps to the CANCELLED
-    (yellow) card, not failed — honest cancel surfacing."""
-    env_dict = {
-        "envelope_type": "modeled",
-        "workflow_name": "model_flood_scenario:FAILED:CANCELLED",
-        "layers": [],
-    }
-    await emitter.emit_tool_call(
-        name="Flood scenario",
-        tool_name="sfincs_flood",
-        invoke=lambda: env_dict,
-    )
-    last = _pipeline_frames(sink)[-1]
-    assert last["payload"]["steps"][0]["state"] == "cancelled"
-
-
-@pytest.mark.asyncio
 async def test_emit_tool_call_error_status_dict_marks_card_failed(
     emitter: PipelineEmitter, sink: _CapturingSink
 ) -> None:
@@ -930,34 +860,11 @@ def test_classify_tool_return_recognizes_all_failed_shapes() -> None:
     assert _classify_tool_return({"status": "error"})[0] == "failed"
     assert _classify_tool_return({"status": "cancelled"})[0] == "cancelled"
     assert _classify_tool_return({"status": "ok"}) is None
-    # Failed-envelope dict via :FAILED: anchor.
-    fenv = {"workflow_name": "x:FAILED:SOLVER_FAILED", "layers": []}
-    cls = _classify_tool_return(fenv)
-    assert cls is not None and cls[0] == "failed" and cls[1] == "SOLVER_FAILED"
     # Non-failure shapes -> None (conservative).
     assert _classify_tool_return({"foo": "bar"}) is None
     assert _classify_tool_return("a string") is None
     assert _classify_tool_return(None) is None
     assert _classify_tool_return(42) is None
-
-
-@pytest.mark.asyncio
-async def test_update_current_progress_targets_running_step(
-    emitter: PipelineEmitter, sink: _CapturingSink
-) -> None:
-    """``update_current_progress`` bumps the running step without a step_id;
-    no-op (no crash) when nothing is running."""
-    # No running step yet -> best-effort no-op (no frame, no raise).
-    await emitter.update_current_progress(10)
-    assert _pipeline_frames(sink) == []
-
-    step_id = await emitter.add_step(name="Build", tool_name="build_sfincs_model")
-    await emitter.mark_running(step_id)
-    await emitter.update_current_progress(33)
-    last = _pipeline_frames(sink)[-1]
-    assert last["payload"]["steps"][0]["progress_percent"] == 33
-
-
 
 
 def _tool_io_frames(sink: _CapturingSink) -> list[dict[str, Any]]:
@@ -1070,8 +977,6 @@ async def test_emit_tool_io_non_serializable_degrades_to_str(
     assert "Weird" in p["function_response"]
 
 
-
-
 class _ClosingSink:
     """A sink that raises on send, simulating a dead socket.
 
@@ -1181,7 +1086,7 @@ async def test_rebind_sink_replays_last_terminal_pipeline_state(
     replayed = _pipeline_frames(new_sink)
     assert len(replayed) == 1, replayed
     payload = replayed[0]["payload"]
-    assert payload["pipeline_id"] == emitter.pipeline_id
+    assert payload["pipeline_id"] == emitter._pipeline_id
     assert payload["steps"][0]["state"] == "complete"
 
 
@@ -1204,7 +1109,7 @@ async def test_rebind_sink_replays_full_live_snapshot_for_open_pipeline(
     replayed = _pipeline_frames(new_sink)
     assert len(replayed) == 1, replayed
     payload = replayed[0]["payload"]
-    assert payload["pipeline_id"] == emitter.pipeline_id
+    assert payload["pipeline_id"] == emitter._pipeline_id
     assert [s["step_id"] for s in payload["steps"]] == [step_id]
     assert payload["steps"][0]["state"] == "running"
 
@@ -1300,7 +1205,7 @@ async def test_rebind_sink_open_pipeline_replays_all_steps_mixed_states(
     replayed = _pipeline_frames(new_sink)
     assert len(replayed) == 1, replayed
     payload = replayed[0]["payload"]
-    assert payload["pipeline_id"] == emitter.pipeline_id
+    assert payload["pipeline_id"] == emitter._pipeline_id
 
     by_id = {s["step_id"]: s for s in payload["steps"]}
     # ALL three cards are present (not just the last terminal one) ...
@@ -1309,8 +1214,6 @@ async def test_rebind_sink_open_pipeline_replays_all_steps_mixed_states(
     assert by_id[setup_id]["state"] == "complete"
     assert by_id[dispatch_id]["state"] == "complete"
     assert by_id[sim_id]["state"] == "running"
-
-
 
 
 @pytest.mark.asyncio
@@ -1810,8 +1713,6 @@ async def _read_vector_uri_as_geojson_for_test(uri: str) -> Any:
     from trid3nt_server.render.pipeline_emitter import _read_vector_uri_as_geojson
 
     return await _read_vector_uri_as_geojson(uri)
-
-
 
 
 @pytest.mark.asyncio

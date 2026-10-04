@@ -19,7 +19,6 @@ def _doc(resolved):
     return ET.fromstring(presets.qml(resolved))
 
 
-
 def test_the_family_is_four_kinds_and_every_one_of_them_writes_a_document():
     assert presets.KINDS == ("continuous", "classed", "reference", "mesh")
     parameterised = {
@@ -60,12 +59,6 @@ def test_a_quantity_parameterises_the_preset_it_never_mints_one():
     assert depth.kind == velocity.kind == "continuous"
     assert (depth.units, depth.ramp) == ("m", "ylgnbu")
     assert (velocity.units, velocity.ramp) == ("m/s", "plasma")
-
-
-def test_reading_a_preset_in_units_leaves_the_shape_alone():
-    read = presets.bare_default("continuous").in_units("m")
-    assert (read.kind, read.units) == ("continuous", "m")
-
 
 
 def test_a_fixed_scale_never_asks_for_the_layers_own_range():
@@ -137,7 +130,6 @@ def test_declared_classes_are_the_scale_and_the_legend_says_how_many():
     assert resolved.legend_note() == "2 declared classes"
 
 
-
 def test_a_reversed_ramp_is_the_base_reversed():
     assert presets.ramp_stops("ylorrd_r") == tuple(reversed(presets.ramp_stops("ylorrd")))
 
@@ -160,7 +152,6 @@ def test_the_relief_ramp_is_land_coloured_and_is_not_the_default():
 def test_the_compass_ramp_is_closed_because_a_bearing_wraps():
     stops = presets.ramp_stops("hsv")
     assert stops[0] == stops[-1]
-
 
 
 def test_the_continuous_document_carries_the_resolved_range_and_the_ramp():
@@ -256,13 +247,6 @@ def test_a_legend_end_never_rounds_into_the_field_it_ends():
     # the floor is the bottom EXACTLY: that identity is what licenses the clip
     floored = presets.measured_range([5.0, peak], floor=4.911237891)
     assert floored[0] == 4.911237891 and floored[1] >= peak
-
-
-def test_the_legend_key_carries_the_floor_a_renderer_masks_on():
-    key = presets.legend_key({"kind": "mesh", "dataset_group": "DYE",
-                              "floor": 0.25},
-                             value_range=(0.25, 5.0))
-    assert key.floor == 0.25 and key.vmin == 0.25
 
 
 def test_a_label_with_xml_punctuation_survives_the_writer():

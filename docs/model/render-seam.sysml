@@ -285,6 +285,18 @@ package RenderSeam {
         item units : String [0..1];
     }
 
+    interface def PresetResolution {
+        doc /*
+        One preset resolved against one layer, as the publish path receives
+        it: the concrete range, the units it reads in, and the style document
+        that paints it. The legend key is built from this one resolution.
+        */
+        item kind : String;
+        item range : Real [0..2];
+        item qml : String;
+        item units : String [0..1];
+    }
+
     interface def LegendStash {
         doc /*
         The resolved style, keyed by the uri it was resolved for. An atomic
@@ -505,7 +517,7 @@ package RenderSeam {
     interface solvedLayerEmitted : EmittedLayer
         connect outputsSeamPoint.layerOut to pipelineEmitter.layerIn;
 
-    interface styleResolved : ResolvedStyle
+    interface styleResolved : PresetResolution
         connect presetFamily.resolvedOut to publishPath.resolvedIn;
 
     interface legendStashedByUri : LegendStash

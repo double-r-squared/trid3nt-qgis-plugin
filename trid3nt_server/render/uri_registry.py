@@ -8,14 +8,13 @@ reconnect; a NON-store string is never blocked, whatever it names.
 from __future__ import annotations
 
 import logging
-import os
 import posixpath
 import re
 from collections import OrderedDict
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
 from typing import Any
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import urlparse
 
 logger = logging.getLogger("trid3nt_server.render.uri_registry")
 
@@ -27,7 +26,6 @@ __all__ = [
     "activate_registry",
     "deactivate_registry",
     "get_uri_registry",
-    "lookup_handle_for_uri",
     "lookup_layer_for_handle",
     "lookup_uri_for_handle",
     "observe_published_layer",
@@ -35,38 +33,12 @@ __all__ = [
 ]
 
 
-
 #: Param names that consume layer/raster/vector URIs and therefore resolve
 #: through the registry at dispatch. Names, not tools -- the same param name
 #: means the same thing across the catalog. DESTINATION params (where the
 #: tool *writes*) and server-owned params (``project_qgs_uri``) must NOT be
 #: listed: branch 4 would reject a not-yet-existing output path.
-RESOLVABLE_URI_PARAMS: frozenset[str] = frozenset(
-    {
-        "hazard_raster_uri",
-        "assets_uri",
-        "layer_uri",
-        "value_layer_uri",
-        "zone_layer_uri",
-        "value_raster_uri",
-        "zone_input_uri",
-        "forcing_raster_uri",
-        "damage_layer_uri",
-        "flood_layer_uri",
-        "source_layer_uri",
-        "raster_uri",
-        "vector_uri",
-        "polygon_uri",
-        "dem_uri",
-        "landcover_uri",
-        "hazard_uri",
-        "model_setup_uri",
-        # ``compute_skill_metrics`` (paired obs/sim table) takes a handle/URI
-        # param like the ones above. ``run_handle`` (read_run_diagnostics) is
-        # excluded -- it self-resolves and must not be mangled here.
-        "paired_table_uri",
-    }
-)
+RESOLVABLE_URI_PARAMS: frozenset[str] = frozenset({"layer_uri", "model_setup_uri"})
 
 
 #: The short per-case layer-handle shape the registry mints at the
@@ -111,8 +83,6 @@ class UriResolutionError(RuntimeError):
             f"handle (the short L<n> handle or the layer_id) from a prior "
             f"tool result instead. {inventory}"
         )
-
-
 
 
 @dataclass
@@ -289,13 +259,6 @@ class SessionUriRegistry:
         if not uri:
             return None
         return self._uri_to_short.get(uri.strip())
-
-    def uri_for_short(self, short: str) -> str | None:
-        """Case-insensitive ``L<n>`` -> registered uri (None when unknown)."""
-        m = SHORT_HANDLE_RE.match(short.strip())
-        if m is None:
-            return None
-        return self._short_to_uri.get(f"L{int(m.group(1))}")
 
     def export_short_handles(self) -> dict[str, str]:
         """The persistable ``{L<n>: uri}`` map (mint order preserved)."""
@@ -694,9 +657,8 @@ class SessionUriRegistry:
         layer_recs.sort(key=lambda r: r.seq, reverse=True)
         if not layer_recs:
             return (
-                "No layers have been produced this session yet — run the "
-                "producing tool first (e.g. sfincs_flood for a "
-                "flood-depth raster, fetch_usace_nsi for building assets)."
+                "No layers have been produced this session yet - run the "
+                "tool that produces the layer first."
             )
         def _one(r: UriRecord) -> str:
             # Lead with the short handle when one exists so the
@@ -719,10 +681,6 @@ class SessionUriRegistry:
                 return handle
         return None
 
-    def known_handles(self) -> list[str]:
-        """The registered handles, minted fuzzy-match records excluded."""
-        return [h for h in self._records if not h.startswith("uri:")]
-
 
 # Module-level session store: survives reconnects, and is shared across a
 # session's sibling WebSocket connections
@@ -744,7 +702,6 @@ def get_uri_registry(session_id: str) -> SessionUriRegistry:
 def reset_uri_registries_for_tests() -> None:
     """Test hook -- wipe the module-level store."""
     _SESSION_URI_REGISTRIES.clear()
-
 
 
 _ACTIVE_REGISTRY: ContextVar[SessionUriRegistry | None] = ContextVar(
@@ -790,22 +747,6 @@ def lookup_layer_for_handle(handle: str) -> dict[str, Any] | None:
             "uri": uri}
 
 
-def lookup_handle_for_uri(
-    uri: str, registry: SessionUriRegistry | None = None
-) -> str | None:
-    """Return the registered LAYER handle whose data uri is ``uri``.
-    A minted ``uri:`` handle is never returned - it is fuzzy-match plumbing, not
-    a layer id. ``None`` outside an active dispatch.
-    """
-    reg = registry if registry is not None else _ACTIVE_REGISTRY.get()
-    if reg is None or not uri:
-        return None
-    handle = reg._uri_to_handle.get(uri.strip())
-    if handle and not handle.startswith("uri:"):
-        return handle
-    return None
-
-
 def observe_published_layer(layer_id: str, uri: str | None = None) -> None:
     """Record a published layer's handle and the one uri it carries.
 
@@ -820,6 +761,3 @@ def observe_published_layer(layer_id: str, uri: str | None = None) -> None:
         logger.exception("observe_published_layer failed layer_id=%s", layer_id)
 
 
-# The 32-hex cache-stem convention, stated. Resolution does not use it: prefix
-# matching is shape-agnostic.
-HASH_STEM_RE = re.compile(r"^[0-9a-f]{32}$")

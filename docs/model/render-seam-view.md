@@ -34,7 +34,7 @@ flowchart LR
     outputsSeamPoint -- "EmittedLayer" --> pipelineEmitter
     styleDeclaration -- "DeclaredStyleRow (fetcherRouter pass through)" --> fetcherRouter
     emissionSeamPoint -- "DeclaredStyleRow (emissionSeamPoint pass through)" --> publishPath
-    presetFamily -- "ResolvedStyle" --> publishPath
+    presetFamily -- "PresetResolution" --> publishPath
 ```
 
 ## Interface items
@@ -100,6 +100,17 @@ The four kinds, named identically where they are validated and where they are dr
 | `classed` | String | required |
 | `reference` | String | required |
 | `mesh` | String | required |
+
+### `PresetResolution`
+
+One preset resolved against one layer, as the publish path receives it: the concrete range, the units it reads in, and the style document that paints it. The legend key is built from this one resolution.
+
+| item | type | required |
+| --- | --- | --- |
+| `kind` | String | required |
+| `range` | Real | optional |
+| `qml` | String | required |
+| `units` | String | optional |
 
 ### `ResolvedStyle`
 

@@ -14,15 +14,12 @@ from rasterio.io import MemoryFile
 
 from trid3nt_server.render.publish import (
     PublishLayerError,
-    _benign_vector_noop,
     _build_cog_with_overviews,
     _ensure_raster_has_overviews,
     _is_vector_uri,
     _raster_has_overviews,
     publish_layer,
 )
-
-
 
 
 def _flat_geotiff_bytes(size: int = 1024) -> bytes:
@@ -49,8 +46,6 @@ def _cog_with_overviews_bytes(size: int = 1024) -> bytes:
     out = _build_cog_with_overviews(flat)
     assert out is not None, "test setup: could not build an overview COG"
     return out
-
-
 
 
 @pytest.mark.parametrize(
@@ -84,19 +79,7 @@ def test_is_vector_uri_false_for_rasters(uri: str) -> None:
     assert _is_vector_uri(uri) is False
 
 
-def test_benign_vector_noop_is_non_error_string() -> None:
-    """The benign signal does NOT raise and is a clear, honest message."""
-    msg = _benign_vector_noop("s3://b/roads.fgb", "roads-layer")
-    assert isinstance(msg, str)
-    assert "noop" in msg.lower()
-    assert "vector" in msg.lower()
-    # Must steer the LLM away from retrying.
-    assert "roads-layer" in msg
-
-
-
-
-def test_publish_layer_vector_returns_benign_and_registers_nothing(
+def test_publish_layer_vector_returns_its_uri_and_registers_nothing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A vector: NO raise, NO registration."""
@@ -108,17 +91,15 @@ def test_publish_layer_vector_returns_benign_and_registers_nothing(
 
     result = publish_layer(layer_uri="s3://bucket/roads.fgb", layer_id="roads")
 
-    # 1. It returned a benign string (no exception).
-    assert isinstance(result, str)
-    assert result.startswith("noop")
+    assert result == "s3://bucket/roads.fgb"
     # 2. observe_published_layer was NEVER called for the vector.
     assert calls == [], f"vector no-op must not register a layer face; got {calls}"
 
 
-def test_publish_layer_geojson_returns_benign_not_error() -> None:
-    """A .geojson vector also returns benign (does not raise)."""
+def test_publish_layer_geojson_returns_its_uri_not_error() -> None:
+    """A .geojson vector comes back as is (does not raise)."""
     out = publish_layer(layer_uri="s3://bucket/rivers.geojson", layer_id="rivers")
-    assert out.startswith("noop")
+    assert out == "s3://bucket/rivers.geojson"
 
 
 def test_publish_layer_raster_still_raises_for_non_s3() -> None:
@@ -126,8 +107,6 @@ def test_publish_layer_raster_still_raises_for_non_s3() -> None:
     with pytest.raises(PublishLayerError) as exc:
         publish_layer(layer_uri="gs://legacy/bucket/x.tif", layer_id="flood")
     assert exc.value.error_code == "LAYER_URI_NOT_FOUND"
-
-
 
 
 def test_raster_has_overviews_false_for_flat_geotiff() -> None:
@@ -150,8 +129,6 @@ def test_build_cog_with_overviews_adds_overviews() -> None:
     cog = _build_cog_with_overviews(flat)
     assert cog is not None
     assert _raster_has_overviews(cog) is True
-
-
 
 
 def test_ensure_overviews_auto_translates_when_missing(tmp_path) -> None:
@@ -193,8 +170,6 @@ def test_ensure_overviews_fail_open_on_missing_path() -> None:
     """A non-existent local path fails open (read returns None)."""
     out_uri = _ensure_raster_has_overviews("/nonexistent/path/raster.tif")
     assert out_uri == "/nonexistent/path/raster.tif"
-
-
 
 
 def test_publish_layer_auto_translates_no_overview_cog(
@@ -350,17 +325,6 @@ def test_build_cog_with_overviews_preserves_colormap() -> None:
     assert _raster_has_overviews(cog) is True
     # Band marked palette so TiTiler treats pixels as indices.
     assert _colorinterp0_name(cog) == "palette"
-
-
-def test_build_cog_with_overviews_rasterio_preserves_colormap() -> None:
-    """The pure-rasterio fallback path (no GDAL CLI) also preserves the table."""
-    from trid3nt_server.render.publish import _build_cog_with_overviews_rasterio
-
-    flat = _paletted_geotiff_bytes()
-    cog = _build_cog_with_overviews_rasterio(flat)
-    assert cog is not None
-    _assert_colormap_round_trip_equal(flat, cog)
-    assert _raster_has_overviews(cog) is True
 
 
 def test_build_cog_with_overviews_no_colormap_unchanged() -> None:

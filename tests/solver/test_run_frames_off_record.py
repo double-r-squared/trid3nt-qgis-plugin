@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.render.outputs_seam import run_outputs
+from trid3nt_server.workflows.runtime.journal import run_outputs
 from trid3nt_server.workflows.runtime import journal
 
 RID = "run-xyz"

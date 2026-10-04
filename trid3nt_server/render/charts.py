@@ -21,11 +21,9 @@ __all__ = [
     "build_chart_payload",
     "is_chart_emission_result",
     "build_budget_partition_chart",
-    "build_hydrograph_overlay_chart",
 ]
 
 logger = logging.getLogger("trid3nt_server.render.charts")
-
 
 
 #: Maximum number of inline rows in a Vega-Lite spec's ``data.values``, so the
@@ -51,7 +49,6 @@ _RASTER_EXTS = {".tif", ".tiff", ".img", ".vrt", ".nc"}
 _VECTOR_EXTS = {".fgb", ".geojson", ".gpkg", ".shp", ".json", ".gml", ".kml"}
 
 
-
 class ChartToolError(RuntimeError):
     """Raised when a chart-generation tool cannot produce a chart.
 
@@ -62,7 +59,6 @@ class ChartToolError(RuntimeError):
         super().__init__(message)
         self.error_code = error_code
         self.retryable = retryable
-
 
 
 def _download_uri_bytes(uri: str, storage_client: object | None = None) -> bytes:
@@ -129,97 +125,6 @@ def _read_geodataframe(local_path: str):  # type: ignore[return]
             "LAYER_OPEN_FAILED", f"Could not open vector layer {local_path!r}: {exc}"
         ) from exc
 
-def _summarize_raster(local_path: str) -> dict[str, Any]:
-    """Open a single-band raster and compute summary statistics + histogram.
-    A masked read: GDAL's own validity decides which pixels count, and NaN is
-    masked on top of it because a raster may carry NaN fill without tagging it.
-    """
-    try:
-        import rasterio
-    except ImportError as exc:
-        raise ChartToolError("LAYER_OPEN_FAILED", "rasterio not available") from exc
-
-    try:
-        with rasterio.open(local_path) as src:
-            band = src.read(1, masked=True).astype(np.float64)
-            units = (
-                src.tags().get("units")
-                or (src.units[0] if src.units else None)
-            )
-    except Exception as exc:  # noqa: BLE001
-        raise ChartToolError(
-            "LAYER_OPEN_FAILED",
-            f"Could not open raster {local_path!r}: {exc}",
-        ) from exc
-
-    pixels = np.ma.masked_invalid(band).compressed()
-    count = int(pixels.size)
-
-    if count == 0:
-        return {
-            "layer_type": "raster",
-            "count": 0,
-            "min": None,
-            "max": None,
-            "mean": None,
-            "sum": None,
-            "distribution": [],
-            "units": units,
-        }
-
-    hist, bin_edges = np.histogram(pixels, bins=10)
-
-    return {
-        "layer_type": "raster",
-        "count": count,
-        "min": float(pixels.min()),
-        "max": float(pixels.max()),
-        "mean": float(pixels.mean()),
-        "sum": float(pixels.sum()),
-        "distribution": [
-            {
-                "bin_start": float(bin_edges[i]),
-                "bin_end": float(bin_edges[i + 1]),
-                "count": int(hist[i]),
-            }
-            for i in range(len(hist))
-        ],
-        "units": units,
-    }
-
-def _summarize_vector(local_path: str) -> dict[str, Any]:
-    """Read a vector layer and compute per-attribute numeric summaries.
-
-    A column with no non-null values reports zeros-and-Nones, not NaN aggregates.
-    """
-    gdf = _read_geodataframe(local_path)
-    numeric = gdf.drop(columns="geometry", errors="ignore").select_dtypes("number")
-    stats = (
-        numeric.astype(np.float64)
-        .agg(["count", "min", "max", "mean", "sum"])
-        .to_dict()
-        if len(numeric.columns)
-        else {}
-    )
-
-    return {
-        "layer_type": "vector",
-        "feature_count": len(gdf),
-        "attribute_summary": {
-            col: (
-                {"count": 0, "min": None, "max": None, "mean": None, "sum": None}
-                if int(agg["count"]) == 0
-                else {
-                    "count": int(agg["count"]),
-                    "min": float(agg["min"]),
-                    "max": float(agg["max"]),
-                    "mean": float(agg["mean"]),
-                    "sum": float(agg["sum"]),
-                }
-            )
-            for col, agg in stats.items()
-        },
-    }
 
 def _validate_uri(uri: object, field: str) -> str:
     if not isinstance(uri, str) or not uri.strip():
@@ -227,8 +132,6 @@ def _validate_uri(uri: object, field: str) -> str:
             "DOWNLOAD_FAILED", f"{field} must be a non-empty URI string; got {uri!r}"
         )
     return uri.strip()
-
-
 
 
 def build_chart_payload(
@@ -356,101 +259,6 @@ def build_budget_partition_chart(
         source_layer_uri=source_layer_uri,
         created_turn_id=created_turn_id,
     )
-
-
-def build_hydrograph_overlay_chart(
-    *,
-    times: list[float] | list[str],
-    computed: list[float | None],
-    observed: list[float | None] | None = None,
-    x_title: str = "elapsed hours",
-    y_title: str = "discharge (m3/s)",
-    title: str = "Computed vs observed hydrograph",
-    computed_label: str = "computed",
-    observed_label: str = "observed",
-    nse: float | None = None,
-    r2: float | None = None,
-    source_layer_uri: str | None = None,
-    created_turn_id: str | None = None,
-) -> dict[str, Any] | None:
-    """Overlay a computed hydrograph against an optional observed one.
-    ``times`` is numeric (elapsed hours) or ISO8601 strings; ``nse``/``r2`` are
-    captioned as supplied and never recomputed here.
-    """
-    n = min(len(times), len(computed))
-    xs_raw = list(times)[:n]
-    numeric_x = all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in xs_raw)
-    x_type = "quantitative" if numeric_x else "temporal"
-
-    # Non-finite and mismatched-length samples are dropped, never interpolated.
-    def _series_rows(values: list[Any] | None, label: str) -> list[dict[str, Any]]:
-        if not values:
-            return []
-        rows: list[dict[str, Any]] = []
-        for i in range(min(n, len(values))):
-            v = values[i]
-            try:
-                fv = float(v)
-            except (TypeError, ValueError):
-                continue
-            if not math.isfinite(fv):
-                continue
-            x = float(xs_raw[i]) if numeric_x else str(xs_raw[i])
-            rows.append({"t": x, "discharge": fv, "series": label})
-        return rows
-
-    computed_rows = _series_rows(list(computed), computed_label)
-    # Fewer than 2 finite computed points is not a hydrograph: emit no chart
-    # rather than draw a single point as a series.
-    if len(computed_rows) < 2:
-        return None
-    observed_rows = _series_rows(list(observed) if observed else None, observed_label)
-    rows = computed_rows + observed_rows
-    if len(rows) > _MAX_ROWS:
-        # Uniform per-series stride so both series survive the wire-size cap.
-        keep: list[dict[str, Any]] = []
-        for label_rows in (computed_rows, observed_rows):
-            if not label_rows:
-                continue
-            stride = max(1, len(label_rows) // (_MAX_ROWS // 2))
-            keep.extend(label_rows[::stride])
-        rows = keep
-
-    spec = {
-        "title": title,
-        "data": {"values": rows},
-        "mark": {"type": "line", "point": True, "tooltip": True},
-        "encoding": {
-            "x": {"field": "t", "type": x_type, "title": x_title},
-            "y": {"field": "discharge", "type": "quantitative", "title": y_title},
-            "color": {"field": "series", "type": "nominal", "title": "series"},
-        },
-        "width": "container",
-    }
-
-    comp_peak = max(r["discharge"] for r in computed_rows)
-    skill_txt = ""
-    if nse is not None:
-        skill_txt += f" · NSE {nse:.3f}"
-    if r2 is not None:
-        skill_txt += f" · R2 {r2:.3f}"
-    if observed_rows:
-        obs_peak = max(r["discharge"] for r in observed_rows)
-        caption = (
-            f"computed (peak {comp_peak:.3g}) vs observed (peak {obs_peak:.3g}) "
-            f"{y_title}{skill_txt}"
-        )
-    else:
-        caption = f"computed outlet hydrograph · peak {comp_peak:.3g} {y_title}{skill_txt}"
-
-    return build_chart_payload(
-        vega_lite_spec=spec,
-        title=title,
-        caption=caption,
-        source_layer_uri=source_layer_uri,
-        created_turn_id=created_turn_id,
-    )
-
 
 
 def _sample_raster_values(local_path: str) -> np.ndarray:

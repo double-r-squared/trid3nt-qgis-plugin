@@ -29,8 +29,6 @@ from trid3nt_contracts.chart_contracts import (
 )
 
 
-
-
 def _make_raster(tmp_path: Path, values: np.ndarray, name: str = "r.tif") -> str:
     import rasterio
     from rasterio.transform import from_bounds
@@ -95,8 +93,6 @@ def _assert_valid_interactive_chart(payload: dict, *, expect_source: str | None 
     return str(mark.get("type"))
 
 
-
-
 class TestInteractivityByConstruction:
     def test_string_mark_becomes_interactive_dict(self):
         payload = generate_chart(
@@ -133,8 +129,6 @@ class TestInteractivityByConstruction:
                                  records=[{"t": "1", "v": 1.0, "thr": 2.0}])
         spec_out = payload["vega_lite_spec"]
         assert all(layer["mark"]["tooltip"] is True for layer in spec_out["layer"])
-
-
 
 
 class TestDataInjection:
@@ -181,8 +175,6 @@ class TestDataInjection:
         assert exc.value.error_code == "NO_DATA"
 
 
-
-
 class TestCulledShapeReplication:
     def test_histogram_bars(self):
         counts, edges = np.histogram(np.arange(100, dtype=float), bins=10)
@@ -219,8 +211,6 @@ class TestCulledShapeReplication:
         assert _assert_valid_interactive_chart(payload) == "bar"
 
 
-
-
 class TestRowCap:
     def test_inline_rows_capped(self):
         big = [{"label": str(i), "count": i} for i in range(_MAX_ROWS + 500)]
@@ -241,8 +231,6 @@ class TestRowCap:
         assert len(payload["vega_lite_spec"]["data"]["values"]) == _MAX_ROWS
 
 
-
-
 class TestChartEmissionDiscriminator:
     def test_true_on_generic_chart(self):
         payload = generate_chart(vega_lite_spec=_bar_spec(), title="t",
@@ -258,8 +246,6 @@ class TestChartEmissionDiscriminator:
         assert is_chart_emission_result(
             {"envelope_type": "chart-emission", "chart_id": "x"}
         ) is False
-
-
 
 
 class TestSummarizeChartEmission:
@@ -288,8 +274,6 @@ class TestSummarizeChartEmission:
         summary = summarize_tool_result("probe_point", ordinary)
         assert summary["status"] == "ok"
         assert summary["result"]["count"] == 9
-
-
 
 
 class _FakeWS:
@@ -385,8 +369,6 @@ class TestEmitChart:
         assert len(ws.sent) == 1
 
 
-
-
 def test_dispatch_detection_signal(tmp_path):
     from trid3nt_contracts.execution import LayerURI
 
@@ -397,8 +379,6 @@ def test_dispatch_detection_signal(tmp_path):
 
     assert is_chart_emission_result(chart) is True
     assert is_chart_emission_result(layer) is False
-
-
 
 
 class TestRegistration:
@@ -423,98 +403,3 @@ class TestRegistration:
             assert dead not in TOOL_REGISTRY
 
 
-
-
-def _summarizers():
-    from trid3nt_server.render.charts import _summarize_raster, _summarize_vector
-
-    return _summarize_raster, _summarize_vector
-
-
-def _write_masked_raster(path: Path, data: np.ndarray, mask: np.ndarray) -> Path:
-    rasterio = pytest.importorskip("rasterio")
-    from rasterio.transform import from_bounds
-
-    h, w = data.shape
-    with rasterio.open(
-        path, "w", driver="GTiff", height=h, width=w, count=1, dtype="float32",
-        crs="EPSG:4326", transform=from_bounds(-100.0, 40.0, -99.0, 41.0, w, h),
-    ) as ds:
-        ds.write(data.astype("float32"), 1)
-        ds.write_mask(mask)
-    return path
-
-
-def test_summarize_raster_excludes_mask_band_pixels(tmp_path: Path) -> None:
-    # GDAL's validity, not a nodata comparison, decides what counts: a raster
-    # whose mask band clears four pixels summarizes over the other 60.
-    summarize_raster, _ = _summarizers()
-    data = np.arange(64, dtype="float32").reshape(8, 8)
-    mask = np.full((8, 8), 255, dtype="uint8")
-    mask[0, :4] = 0
-    path = _write_masked_raster(tmp_path / "masked.tif", data, mask)
-
-    s = summarize_raster(str(path))
-    assert s["count"] == 60
-    assert s["min"] == 4.0
-    assert s["sum"] == 2010.0
-    assert sum(b["count"] for b in s["distribution"]) == 60
-
-
-def test_summarize_raster_excludes_nan_the_file_never_tagged(tmp_path: Path) -> None:
-    # NaN fill in an untagged raster is masked on top of GDAL's own validity.
-    rasterio = pytest.importorskip("rasterio")
-    from rasterio.transform import from_bounds
-
-    summarize_raster, _ = _summarizers()
-    data = np.arange(16, dtype="float32").reshape(4, 4)
-    data[0, :2] = np.nan
-    path = tmp_path / "nan.tif"
-    with rasterio.open(
-        path, "w", driver="GTiff", height=4, width=4, count=1, dtype="float32",
-        crs="EPSG:4326", transform=from_bounds(-100.0, 40.0, -99.0, 41.0, 4, 4),
-    ) as ds:
-        ds.write(data, 1)
-
-    s = summarize_raster(str(path))
-    assert s["count"] == 14
-    assert s["min"] == 2.0
-
-
-def test_summarize_vector_reports_zeros_for_an_all_null_column(tmp_path: Path) -> None:
-    gpd = pytest.importorskip("geopandas")
-    from shapely.geometry import Point
-
-    _, summarize_vector = _summarizers()
-    gdf = gpd.GeoDataFrame(
-        {"depth": [1.0, np.nan, 3.5], "empty": [np.nan, np.nan, np.nan]},
-        geometry=[Point(-99.5, 40.5), Point(-99.4, 40.6), Point(-99.3, 40.7)],
-        crs="EPSG:4326",
-    )
-    path = tmp_path / "pts.gpkg"
-    gdf.to_file(path, driver="GPKG")
-
-    s = summarize_vector(str(path))
-    assert s["feature_count"] == 3
-    assert s["attribute_summary"]["depth"] == {
-        "count": 2, "min": 1.0, "max": 3.5, "mean": 2.25, "sum": 4.5,
-    }
-    assert s["attribute_summary"]["empty"] == {
-        "count": 0, "min": None, "max": None, "mean": None, "sum": None,
-    }
-
-
-def test_summarize_vector_skips_non_numeric_columns(tmp_path: Path) -> None:
-    gpd = pytest.importorskip("geopandas")
-    from shapely.geometry import Point
-
-    _, summarize_vector = _summarizers()
-    gdf = gpd.GeoDataFrame(
-        {"depth": [1.0, 2.0], "label": ["a", "b"]},
-        geometry=[Point(-99.5, 40.5), Point(-99.4, 40.6)],
-        crs="EPSG:4326",
-    )
-    path = tmp_path / "typed.gpkg"
-    gdf.to_file(path, driver="GPKG")
-
-    assert set(summarize_vector(str(path))["attribute_summary"]) == {"depth"}

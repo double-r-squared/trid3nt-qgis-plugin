@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.render.outputs_seam import quantity_label, run_outputs
+from trid3nt_server.workflows.runtime.journal import run_outputs
 from trid3nt_server.workflows.runtime import journal
 
 RID = "01JRUNRUNRUNRUNRUNRUNRUNRU"
@@ -83,6 +83,3 @@ def test_the_publish_stage_writes_the_field() -> None:
                         "tracer": None, "units": "m"}]
 
 
-def test_quantity_label_says_the_quantity_out_loud() -> None:
-    assert quantity_label("flood_depth") == "Flood depth"
-    assert quantity_label("") == "Value"

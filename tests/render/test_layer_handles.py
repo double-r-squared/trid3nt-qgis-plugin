@@ -31,6 +31,10 @@ COG_B = "s3://trid3nt-runs/01KX00000000000000000000B2/hillshade.tif"
 FRAME_COG = "s3://trid3nt-runs/01KX00000000000000000000A1/depth_frame_07.tif"
 
 
+def _handles(reg):
+    return [h for h in reg._records if not h.startswith("uri:")]
+
+
 @pytest.fixture(autouse=True)
 def _clean_store():
     reset_uri_registries_for_tests()
@@ -60,8 +64,8 @@ class TestHandleMint:
         reg.register_tool_result("compute_hillshade", _layer("hill-b", COG_B))
         assert reg.short_for_uri(COG_A) == "L1"
         assert reg.short_for_uri(COG_B) == "L2"
-        assert reg.uri_for_short("L1") == COG_A
-        assert reg.uri_for_short("L2") == COG_B
+        assert reg.resolve_params("t", {"layer_uri": "L1"})["layer_uri"] == COG_A
+        assert reg.resolve_params("t", {"layer_uri": "L2"})["layer_uri"] == COG_B
 
     def test_mint_is_idempotent_per_uri(self) -> None:
         reg = make_registry()
@@ -79,8 +83,8 @@ class TestHandleMint:
         )
         short = reg.short_for_uri(FRAME_COG)
         assert short is not None and SHORT_HANDLE_RE.match(short)
-        out = reg.resolve_params("t", {"raster_uri": short})
-        assert out["raster_uri"] == FRAME_COG
+        out = reg.resolve_params("t", {"layer_uri": short})
+        assert out["layer_uri"] == FRAME_COG
 
     def test_export_import_round_trip_resolves_same_handles(self) -> None:
         """The persist round-trip: reopen restores the SAME L<n> numbers and
@@ -100,8 +104,8 @@ class TestHandleMint:
             short_handles=exported,
         )
         # Same handles resolve to the same URIs...
-        assert fresh.resolve_params("t", {"raster_uri": "L1"})["raster_uri"] == COG_A
-        assert fresh.resolve_params("t", {"raster_uri": "L2"})["raster_uri"] == COG_B
+        assert fresh.resolve_params("t", {"layer_uri": "L1"})["layer_uri"] == COG_A
+        assert fresh.resolve_params("t", {"layer_uri": "L2"})["layer_uri"] == COG_B
         # ...the import is not marked dirty (it just came FROM persistence)...
         assert fresh.shorts_dirty is False
         # ...and a NEW layer mints past the persisted maximum.
@@ -122,7 +126,7 @@ class TestHandleMint:
     def test_zero_padded_and_lowercase_import_normalizes(self) -> None:
         reg = make_registry()
         reg.import_short_handles({"L07": COG_A})
-        assert reg.uri_for_short("l7") == COG_A
+        assert reg.resolve_params("t", {"layer_uri": "l7"})["layer_uri"] == COG_A
         reg.record("next", uri=COG_B)
         assert reg.short_for_uri(COG_B) == "L8"  # counter resumed past 7
 
@@ -313,7 +317,7 @@ async def test_server_persist_and_seed_helpers_round_trip(tmp_path) -> None:
         )
         reg2 = get_uri_registry(state2.session_id)
         assert (
-            reg2.resolve_params("t", {"raster_uri": "L1"})["raster_uri"] == COG_A
+            reg2.resolve_params("t", {"layer_uri": "L1"})["layer_uri"] == COG_A
         )
 
 

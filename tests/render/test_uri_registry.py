@@ -64,6 +64,10 @@ MANGLED_NSI_INVENTED_HASH_0255 = (
 )
 
 
+def _handles(reg):
+    return [h for h in reg._records if not h.startswith("uri:")]
+
+
 @pytest.fixture(autouse=True)
 def _clean_store():
     reset_uri_registries_for_tests()
@@ -88,8 +92,8 @@ class TestRegistration:
         )
         new = reg.register_tool_result("fetch_usace_nsi", layer)
         assert new == {NSI_LAYER_ID: REAL_NSI_FGB}
-        assert reg.resolve_params("t", {"assets_uri": NSI_LAYER_ID}) == {
-            "assets_uri": REAL_NSI_FGB
+        assert reg.resolve_params("t", {"layer_uri": NSI_LAYER_ID}) == {
+            "layer_uri": REAL_NSI_FGB
         }
 
     def test_dict_result_with_layer_id_uri_pair(self) -> None:
@@ -98,7 +102,7 @@ class TestRegistration:
             "fetch_usace_nsi",
             {"layer_id": NSI_LAYER_ID, "uri": REAL_NSI_FGB, "feature_count": 9000},
         )
-        assert reg.known_handles() == [NSI_LAYER_ID]
+        assert _handles(reg) == [NSI_LAYER_ID]
 
     def test_nested_envelope_registers_layers_and_bare_uris(self) -> None:
         reg = make_registry()
@@ -114,12 +118,12 @@ class TestRegistration:
             "provenance": {"data_sources": [REAL_FLOOD_COG_0255]},
         }
         reg.register_tool_result("sfincs_flood", envelope)
-        handles = reg.known_handles()
+        handles = _handles(reg)
         assert FLOOD_LAYER_ID_0255 in handles
         # The bare COG string registered too (fuzzy-match inventory).
         assert (
-            reg.resolve_params("t", {"hazard_raster_uri": REAL_FLOOD_COG_0255})[
-                "hazard_raster_uri"
+            reg.resolve_params("t", {"layer_uri": REAL_FLOOD_COG_0255})[
+                "layer_uri"
             ]
             == REAL_FLOOD_COG_0255
         )
@@ -128,7 +132,7 @@ class TestRegistration:
         reg = make_registry()
         # No active registry — observation is a no-op (direct/test calls).
         observe_published_layer("h1", uri=REAL_FLOOD_COG_0253)
-        assert reg.known_handles() == []
+        assert _handles(reg) == []
         token = activate_registry(reg)
         try:
             observe_published_layer(
@@ -137,7 +141,7 @@ class TestRegistration:
             )
         finally:
             deactivate_registry(token)
-        assert reg.known_handles() == ["flood-depth-peak-01KTS5W9GTE7A7WPC3BNBE10EQ"]
+        assert _handles(reg) == ["flood-depth-peak-01KTS5W9GTE7A7WPC3BNBE10EQ"]
 
     def test_registration_never_raises_on_pathological_results(self) -> None:
         reg = make_registry()
@@ -160,14 +164,14 @@ class TestResolutionBranches:
     def test_branch1_exact_known_uri_passes_verbatim(self) -> None:
         reg = make_registry()
         reg.record(NSI_LAYER_ID, uri=REAL_NSI_FGB, tool_name="fetch_usace_nsi")
-        out = reg.resolve_params("t", {"assets_uri": REAL_NSI_FGB})
-        assert out["assets_uri"] == REAL_NSI_FGB
+        out = reg.resolve_params("t", {"layer_uri": REAL_NSI_FGB})
+        assert out["layer_uri"] == REAL_NSI_FGB
 
     def test_branch2_handle_substituted(self) -> None:
         reg = make_registry()
         reg.record(NSI_LAYER_ID, uri=REAL_NSI_FGB, tool_name="fetch_usace_nsi")
-        out = reg.resolve_params("t", {"assets_uri": NSI_LAYER_ID})
-        assert out["assets_uri"] == REAL_NSI_FGB
+        out = reg.resolve_params("t", {"layer_uri": NSI_LAYER_ID})
+        assert out["layer_uri"] == REAL_NSI_FGB
 
     def test_branch3_close_match_substituted_with_warning(self, caplog) -> None:
         reg = make_registry()
@@ -175,9 +179,9 @@ class TestResolutionBranches:
         with caplog.at_level("WARNING", logger="trid3nt_server.render.uri_registry"):
             out = reg.resolve_params(
                 "pelicun_damage_assessment",
-                {"assets_uri": MANGLED_NSI_LAYERID_BASENAME_0253},
+                {"layer_uri": MANGLED_NSI_LAYERID_BASENAME_0253},
             )
-        assert out["assets_uri"] == REAL_NSI_FGB
+        assert out["layer_uri"] == REAL_NSI_FGB
         assert any("resolved" in r.message for r in caplog.records)
 
     def test_branch4_unknown_storage_uri_rejects_typed(self) -> None:
@@ -200,9 +204,9 @@ class TestResolutionBranches:
         with pytest.raises(UriResolutionError) as exc_info:
             reg.resolve_params(
                 "pelicun_damage_assessment",
-                {"hazard_raster_uri": "s3://trid3nt-runs/never/produced.tif"},
+                {"layer_uri": "s3://trid3nt-runs/never/produced.tif"},
             )
-        assert "producing tool" in str(exc_info.value)
+        assert "produces the layer first" in str(exc_info.value)
 
     def test_foreign_bucket_unknown_uri_rejects_typed(self) -> None:
         """A foreign store path the session never produced rejects typed too -
@@ -211,12 +215,12 @@ class TestResolutionBranches:
         reg = make_registry()
         foreign = "s3://some-user-bucket/their/data.tif"
         with pytest.raises(UriResolutionError):
-            reg.resolve_params("t", {"raster_uri": foreign})
+            reg.resolve_params("t", {"layer_uri": foreign})
         # Non-object-store strings (external http(s) sources, local paths)
         # still fail open — user-supplied sources are never blocked.
         external = "https://example.com/public/cog.tif"
-        out = reg.resolve_params("t", {"raster_uri": external})
-        assert out["raster_uri"] == external
+        out = reg.resolve_params("t", {"layer_uri": external})
+        assert out["layer_uri"] == external
 
     def test_non_uri_params_and_non_strings_untouched(self) -> None:
         reg = make_registry()
@@ -251,12 +255,12 @@ class TestSessionIsolation:
         # instead of substituting session A's real URI.
         with pytest.raises(UriResolutionError):
             reg_b.resolve_params(
-                "t", {"assets_uri": MANGLED_NSI_LAYERID_BASENAME_0253}
+                "t", {"layer_uri": MANGLED_NSI_LAYERID_BASENAME_0253}
             )
         # And the same registry object comes back for the same session id
         # (reconnect-survival: the store is keyed by session_id).
         assert get_uri_registry("session-A") is reg_a
-        assert get_uri_registry("session-A").known_handles() == [NSI_LAYER_ID]
+        assert _handles(get_uri_registry("session-A")) == [NSI_LAYER_ID]
 
     def test_bare_handle_in_other_session_unresolved(self) -> None:
         get_uri_registry("session-A").record(NSI_LAYER_ID, uri=REAL_NSI_FGB)
@@ -264,8 +268,8 @@ class TestSessionIsolation:
         # A non-URI handle string that session B doesn't know just passes
         # through (fail-open for non-URI-shaped strings) — the tool's own
         # 404/typed error then feeds the retry loop.
-        out = reg_b.resolve_params("t", {"assets_uri": "some-handle-from-elsewhere"})
-        assert out["assets_uri"] == "some-handle-from-elsewhere"
+        out = reg_b.resolve_params("t", {"layer_uri": "some-handle-from-elsewhere"})
+        assert out["layer_uri"] == "some-handle-from-elsewhere"
 
 
 
@@ -291,12 +295,12 @@ class TestHistoricalIncidents:
         )
         out = reg.resolve_params(
             "pelicun_damage_assessment",
-            {"hazard_raster_uri": MANGLED_RUNS_PREFIX_0253},
+            {"layer_uri": MANGLED_RUNS_PREFIX_0253},
         )
-        assert out["hazard_raster_uri"] == REAL_FLOOD_COG_0253
+        assert out["layer_uri"] == REAL_FLOOD_COG_0253
 
     def test_i2_nsi_layer_id_as_basename_job0253(self) -> None:
-        """assets_uri carrying <layer_id>.fgb in the cache dir -> real hash."""
+        """layer_uri carrying <layer_id>.fgb in the cache dir -> real hash."""
         reg = make_registry()
         reg.register_tool_result(
             "fetch_usace_nsi",
@@ -309,9 +313,9 @@ class TestHistoricalIncidents:
         )
         out = reg.resolve_params(
             "pelicun_damage_assessment",
-            {"assets_uri": MANGLED_NSI_LAYERID_BASENAME_0253},
+            {"layer_uri": MANGLED_NSI_LAYERID_BASENAME_0253},
         )
-        assert out["assets_uri"] == REAL_NSI_FGB
+        assert out["layer_uri"] == REAL_NSI_FGB
 
     @pytest.mark.parametrize(
         ("real_base", "mangled_base"),
@@ -363,9 +367,9 @@ class TestHistoricalIncidents:
         )
         out = reg.resolve_params(
             "pelicun_damage_assessment",
-            {"assets_uri": MANGLED_NSI_INVENTED_HASH_0255},
+            {"layer_uri": MANGLED_NSI_INVENTED_HASH_0255},
         )
-        assert out["assets_uri"] == REAL_NSI_FGB
+        assert out["layer_uri"] == REAL_NSI_FGB
 
     def test_i5_invented_hash_ambiguous_dir_rejects_typed(self) -> None:
         """Two NSI fetches in the dir -> same-dir match is ambiguous -> the
@@ -384,7 +388,7 @@ class TestHistoricalIncidents:
         with pytest.raises(UriResolutionError) as exc_info:
             reg.resolve_params(
                 "pelicun_damage_assessment",
-                {"assets_uri": MANGLED_NSI_INVENTED_HASH_0255},
+                {"layer_uri": MANGLED_NSI_INVENTED_HASH_0255},
             )
         msg = str(exc_info.value)
         assert NSI_LAYER_ID in msg and "usace-nsi-tampa" in msg
@@ -418,8 +422,8 @@ def _dummy_uri_tool():
             uri=REAL_NSI_FGB,
         )
 
-    def consume_layer(assets_uri: str, **kwargs: Any) -> dict:
-        captured["assets_uri"] = assets_uri
+    def consume_layer(layer_uri: str, **kwargs: Any) -> dict:
+        captured["layer_uri"] = layer_uri
         return {"ok": True}
 
     saved = dict(TOOL_REGISTRY)
@@ -452,15 +456,15 @@ def test_invoke_seam_registers_then_resolves(_dummy_uri_tool) -> None:
         state = SessionState(session_id=new_ulid())
         # 1. Producer result registers the handle.
         await _invoke_tool_via_emitter(ws, state, "produce_layer_t", {})
-        # 2. Consumer dispatched with incident-I2's mangled assets_uri — the
+        # 2. Consumer dispatched with incident-I2's mangled layer_uri — the
         #    seam must hand the REAL fgb to the tool body.
         await _invoke_tool_via_emitter(
             ws,
             state,
             "consume_layer_t",
-            {"assets_uri": MANGLED_NSI_LAYERID_BASENAME_0253},
+            {"layer_uri": MANGLED_NSI_LAYERID_BASENAME_0253},
         )
-        assert _dummy_uri_tool["assets_uri"] == REAL_NSI_FGB
+        assert _dummy_uri_tool["layer_uri"] == REAL_NSI_FGB
 
     asyncio.run(run())
 
@@ -491,7 +495,7 @@ def test_invoke_seam_unresolved_raises_typed_error(_dummy_uri_tool) -> None:
                 state,
                 "consume_layer_t",
                 {
-                    "assets_uri": (
+                    "layer_uri": (
                         "s3://trid3nt-runs/layer/never-produced.fgb"
                     )
                 },
@@ -511,7 +515,7 @@ def test_resolvable_param_allowlist_excludes_server_owned_params() -> None:
     assert "project_qgs_uri" not in RESOLVABLE_URI_PARAMS
     assert "output_uri" not in RESOLVABLE_URI_PARAMS
     # The headline consumers from the 5 incidents ARE covered.
-    for name in ("hazard_raster_uri", "assets_uri", "layer_uri"):
+    for name in ("layer_uri", "layer_uri", "layer_uri"):
         assert name in RESOLVABLE_URI_PARAMS
 
 
@@ -676,20 +680,20 @@ class TestReplaceFromLayers:
     def test_clear_drops_everything(self) -> None:
         reg = make_registry("sess-clear")
         reg.record(NSI_LAYER_ID, uri=REAL_NSI_FGB, tool_name="fetch_usace_nsi")
-        assert reg.known_handles() == [NSI_LAYER_ID]
-        assert reg.resolve_params("t", {"assets_uri": NSI_LAYER_ID})["assets_uri"] == (
+        assert _handles(reg) == [NSI_LAYER_ID]
+        assert reg.resolve_params("t", {"layer_uri": NSI_LAYER_ID})["layer_uri"] == (
             REAL_NSI_FGB
         )
         reg.clear()
-        assert reg.known_handles() == []
+        assert _handles(reg) == []
         # A handle that resolved before clearing no longer maps to the URI —
         # a bare (non-store) handle string that resolves to nothing fails OPEN
         # (passed through unresolved, per the existing fail-open convention
         # for non-URI-shaped values — see test_bare_handle_in_other_session_
         # unresolved above), so the proof is "no longer substituted", not "now
         # raises".
-        out = reg.resolve_params("t", {"assets_uri": NSI_LAYER_ID})
-        assert out["assets_uri"] == NSI_LAYER_ID
+        out = reg.resolve_params("t", {"layer_uri": NSI_LAYER_ID})
+        assert out["layer_uri"] == NSI_LAYER_ID
 
     def test_replace_from_layers_seeds_case_open_style_payload(self) -> None:
         reg = make_registry("sess-replace")
@@ -702,9 +706,9 @@ class TestReplaceFromLayers:
             }
         ]
         reg.replace_from_layers(layers)
-        assert reg.known_handles() == [NSI_LAYER_ID]
-        out = reg.resolve_params("t", {"assets_uri": NSI_LAYER_ID})
-        assert out["assets_uri"] == REAL_NSI_FGB
+        assert _handles(reg) == [NSI_LAYER_ID]
+        out = reg.resolve_params("t", {"layer_uri": NSI_LAYER_ID})
+        assert out["layer_uri"] == REAL_NSI_FGB
 
     def test_replace_from_layers_drops_a_prior_cases_handles(self) -> None:
         """F32 part 2: a Case switch must not leak the PREVIOUS Case's handles."""
@@ -714,13 +718,13 @@ class TestReplaceFromLayers:
             [{"layer_id": "case-a-dem", "name": "DEM", "layer_type": "raster",
               "uri": DEM_COG}]
         )
-        assert reg.known_handles() == ["case-a-dem"]
+        assert _handles(reg) == ["case-a-dem"]
         # Switch to Case B — a DIFFERENT layer set entirely.
         reg.replace_from_layers(
             [{"layer_id": NSI_LAYER_ID, "name": "NSI", "layer_type": "vector",
               "uri": REAL_NSI_FGB}]
         )
-        assert reg.known_handles() == [NSI_LAYER_ID]
+        assert _handles(reg) == [NSI_LAYER_ID]
         # Case A's handle is GONE — a stale reference to it is no longer
         # substituted with Case A's URI (fails open, unresolved — see
         # test_clear_drops_everything).
@@ -768,16 +772,16 @@ class TestReconnectSeedsRegistryFromCase:
             # registry store has no entry for this session_id yet).
             ws = MockWebSocket()
             state = SessionState(session_id=new_ulid())
-            assert get_uri_registry(state.session_id).known_handles() == []
+            assert _handles(get_uri_registry(state.session_id)) == []
             asyncio.run(_emit_case_open(ws, state, case.case_id))
 
             # The registry is seeded — the handle the note just advertised
             # resolves, matching the note's own loaded_layers.
             reg = get_uri_registry(state.session_id)
-            assert NSI_LAYER_ID in reg.known_handles()
+            assert NSI_LAYER_ID in _handles(reg)
             out = reg.resolve_params("pelicun_damage_assessment",
-                                      {"assets_uri": NSI_LAYER_ID})
-            assert out["assets_uri"] == REAL_NSI_FGB
+                                      {"layer_uri": NSI_LAYER_ID})
+            assert out["layer_uri"] == REAL_NSI_FGB
         finally:
             set_persistence(saved)
             reset_uri_registries_for_tests()
@@ -815,12 +819,12 @@ class TestReconnectSeedsRegistryFromCase:
             ws = MockWebSocket()
             state = SessionState(session_id=new_ulid())
             asyncio.run(_emit_case_open(ws, state, case_a.case_id))
-            assert "case-a-dem" in get_uri_registry(state.session_id).known_handles()
+            assert "case-a-dem" in _handles(get_uri_registry(state.session_id))
 
             # Same connection/session switches to Case B (empty layers).
             asyncio.run(_emit_case_open(ws, state, case_b.case_id))
             reg = get_uri_registry(state.session_id)
-            assert reg.known_handles() == []
+            assert _handles(reg) == []
             # Case A's handle no longer maps to Case A's URI (fails open,
             # unresolved - bare non-store handle strings never raise; see
             # TestReplaceFromLayers.test_clear_drops_everything).

@@ -24,7 +24,6 @@ __all__ = [
     "Scale",
     "band_range_reader",
     "bare_default",
-    "fixed_range_reader",
     "from_row",
     "paints_a_raster",
     "qml",
@@ -141,11 +140,6 @@ class Preset:
     #: quantity show the same absent region.
     floor: float | None = None
 
-    def in_units(self, units: str | None) -> "Preset":
-        """The same preset reading its scale in a particular unit."""
-        return replace(self, units=units or self.units)
-
-
 _BARE: dict[Kind, Preset] = {
     "continuous": Preset(kind="continuous"),
     "classed": Preset(kind="classed"),
@@ -205,7 +199,6 @@ def from_row(row: Any) -> Preset:
         floor=(float(row["floor"]) if row.get("floor") is not None
                else base.floor),
     )
-
 
 
 #: Where the concrete range came from. The legend says which, because the
@@ -416,21 +409,6 @@ def band_range_reader(
     return _read
 
 
-def fixed_range_reader(
-    p_lo: float | None, p_hi: float | None
-) -> Callable[[Scale], tuple[float, float] | None]:
-    """A ``read_range`` fed by percentiles a WORKER already computed."""
-
-    def _read(_scale: Scale) -> tuple[float, float] | None:
-        if p_lo is None or p_hi is None:
-            return None
-        lo, hi = float(p_lo), float(p_hi)
-        return None if (lo != lo or hi != hi) else (lo, hi)
-
-    return _read
-
-
-
 _HEADER = ("<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n"
            '<qgis version="3.40.6" styleCategories="Symbology">\n')
 _FOOTER = "</qgis>\n"
@@ -602,28 +580,6 @@ def _mesh_qml(resolved: Resolved) -> str:
         "    </scalar-settings>\n"
         "  </mesh-renderer-settings>\n"
         f"{binding}")
-
-
-def legend_key(row: Any, *, value_range: tuple[float, float] | None = None,
-               units: str | None = None) -> Any:
-    """A declared row plus a range a producer already measured, as the wire key.
-
-    For a producer that measured while it held the field: nothing re-reads the COG.
-    """
-    from trid3nt_contracts.execution import LegendKey
-
-    preset = from_row(row).in_units(units)
-    resolved = (Resolved(preset, value_range, FIXED) if value_range is not None
-                else resolve(preset))
-    return LegendKey(
-        kind=preset.kind,
-        colormap=preset.ramp if preset.kind != "reference" else None,
-        vmin=resolved.range[0] if resolved.range else None,
-        vmax=resolved.range[1] if resolved.range else None,
-        units=preset.units,
-        floor=preset.floor,
-        qml=qml(resolved),
-    )
 
 
 def qml(resolved: Resolved) -> str | None:

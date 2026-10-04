@@ -9,13 +9,11 @@ from __future__ import annotations
 
 import logging
 import os
-import tempfile
 from typing import Any
 
 from trid3nt_contracts import new_ulid
 
 from . import presets
-from .cog import translate_to_cog
 from .presets import Scale
 from .uri_registry import observe_published_layer
 
@@ -29,8 +27,6 @@ __all__ = [
 ]
 
 logger = logging.getLogger("trid3nt_server.render.publish")
-
-
 
 
 class PublishLayerError(RuntimeError):
@@ -83,11 +79,6 @@ def _is_rgba_or_multiband(raster_bytes: bytes | None) -> bool:
         return False
 
 
-def _already_painted(raster_bytes: bytes | None) -> bool:
-    """True when the COG carries its own colours and no preset may override them."""
-    return _is_rgba_or_multiband(raster_bytes)
-
-
 def resolve_layer_style(
     style: dict[str, Any] | None,
     layer_uri: str,
@@ -95,11 +86,10 @@ def resolve_layer_style(
     override: "Scale | None" = None,
     shared: tuple[float, float] | None = None,
     raster_bytes: bytes | None = None,
-    band_stats: tuple[float | None, float | None] | None = None,
 ) -> "presets.Resolved | None":
     """Resolve a DECLARED style row against this raster. The one resolution point.
 
-    ``None`` for an already-painted raster; ``band_stats`` skips the COG read.
+    ``None`` for an already-painted raster.
     """
     preset = presets.from_row(style)
     # A vector or mesh declaration takes this same call and the same resolve: it
@@ -111,7 +101,7 @@ def resolve_layer_style(
         logger.info("publish_layer (style) uri=%s -> %s", layer_uri,
                     resolved.legend_note())
         return resolved
-    if raster_bytes is None and band_stats is None and presets.needs_run_range(
+    if raster_bytes is None and presets.needs_run_range(
             preset, override):
         raster_bytes = _read_raster_bytes(layer_uri)
     if raster_bytes:
@@ -123,11 +113,10 @@ def resolve_layer_style(
                     return None
         except Exception as exc:  # noqa: BLE001 - palette probe is best-effort
             logger.debug("palette probe skipped (%s: %s)", type(exc).__name__, exc)
-    if _already_painted(raster_bytes):
+    if _is_rgba_or_multiband(raster_bytes):
         return None
-    read_range = (presets.fixed_range_reader(*band_stats) if band_stats is not None
-                  else presets.band_range_reader(raster_bytes))
-    resolved = presets.resolve(preset, read_range=read_range, override=override,
+    resolved = presets.resolve(preset, read_range=presets.band_range_reader(raster_bytes),
+                               override=override,
                                shared=shared)
     logger.info("publish_layer (style) uri=%s -> %s", layer_uri,
                 resolved.legend_note())
@@ -162,7 +151,6 @@ def legend_for_published_layer(
     raster_bytes: bytes | None = None,
     override: "Scale | None" = None,
     shared: tuple[float, float] | None = None,
-    band_stats: tuple[float | None, float | None] | None = None,
 ) -> "LegendKey | None":
     """The layer's resolved style, as the key the map renders from.
     The declared row is resolved ONCE: the range, the ramp and the .qml all come
@@ -172,11 +160,11 @@ def legend_for_published_layer(
 
     try:
         paints_raster = presets.paints_a_raster(presets.from_row(style))
-        if paints_raster and raster_bytes is None and band_stats is None:
+        if paints_raster and raster_bytes is None:
             raster_bytes = _read_raster_bytes(layer_uri)
         resolved = resolve_layer_style(
             style, layer_uri, override=override, shared=shared,
-            raster_bytes=raster_bytes, band_stats=band_stats)
+            raster_bytes=raster_bytes)
         if resolved is None:
             return None
         preset = resolved.preset
@@ -223,7 +211,6 @@ def pop_legend_for_uri(layer_uri: str) -> "LegendKey | None":
 # XYZ tile-template mint here.
 
 
-
 #: Vector artifact extensions. ``publish_layer`` is RASTER-ONLY: a vector
 #: reaching it is already a store object the plugin opens natively, and GDAL
 #: cannot open a FlatGeobuf as a raster COG, so routing one through the raster
@@ -243,23 +230,6 @@ _VECTOR_EXTS = (
 def _is_vector_uri(layer_uri: str) -> bool:
     """True when ``layer_uri`` names a vector artifact (by extension)."""
     return layer_uri.lower().rstrip("/").endswith(_VECTOR_EXTS)
-
-
-def _benign_vector_noop(layer_uri: str, layer_id: str) -> str:
-    """Return a calm, NON-ERROR signal for a vector handed to publish_layer.
-
-    Neither raises nor registers anything: a vector needs no publish at all.
-    """
-    logger.info(
-        "publish_layer: benign vector no-op for layer_id=%s uri=%s",
-        layer_id,
-        layer_uri,
-    )
-    return (
-        f"noop: layer_id={layer_id!r} is a VECTOR ({layer_uri!r}); it is already "
-        "an object in the store and the map reads it directly, so no publish "
-        "was needed and none was performed."
-    )
 
 
 # Overview enforcement (no-overview COGs render spotty / never paint)
@@ -334,110 +304,43 @@ def _apply_band1_colormap(dst, cmap: dict | None) -> None:
 
 
 def _build_cog_with_overviews(raster_bytes: bytes) -> bytes | None:
-    """Translate flat raster bytes into a tiled COG WITH overviews.
-    ``None`` when no path produced a real overview-bearing COG; the COG encode
-    degrades to flat bytes rather than raising, so its result is checked first.
+    """Encode raster bytes as a tiled COG with overviews - render's one COG writer.
+    Keeps dtype, CRS, transform, nodata, colour interpretation and a band-1
+    palette; ``None`` when the encode fails or yields no overview.
     """
-    in_tmp: str | None = None
     try:
-        with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as in_f:
-            in_tmp = in_f.name
-            in_f.write(raster_bytes)
-        try:
-            cog_bytes = translate_to_cog(in_tmp)
-            if _raster_has_overviews(cog_bytes):
-                return cog_bytes
-            logger.info(
-                "publish_layer: the COG encode produced no overviews - trying the "
-                "rasterio fallback")
-        except Exception as exc:  # noqa: BLE001 - encode unavailable / failed
-            logger.info(
-                "publish_layer: the COG encode path is unavailable (%s: %s) - "
-                "trying the rasterio fallback", type(exc).__name__, exc)
-    finally:
-        if in_tmp is not None:
-            try:
-                os.unlink(in_tmp)
-            except OSError:
-                pass
+        from rasterio.io import MemoryFile
 
-    # 2. rasterio fallback (rio-cogeo preferred; manual overview build else).
-    try:
-        return _build_cog_with_overviews_rasterio(raster_bytes)
-    except Exception as exc:  # noqa: BLE001 - fallback failed; fail-open upstream
-        logger.warning(
-            "publish_layer: rasterio COG/overview rebuild failed (%s: %s) - "
-            "publishing original (no-overview) raster as-is",
-            type(exc).__name__,
-            exc,
-        )
-        return None
-
-
-def _build_cog_with_overviews_rasterio(raster_bytes: bytes) -> bytes | None:
-    """rasterio-only COG+overview rebuild (no GDAL CLI required)."""
-    import rasterio
-    from rasterio.io import MemoryFile
-
-    # Detect a band-1 palette color table up front. When present (NLCD land
-    # cover), SKIP the rio-cogeo path - its colormap forwarding is
-    # version-dependent - and fall through to the manual build below, which
-    # explicitly re-stamps the table. Non-paletted rasters keep the
-    # rio-cogeo fast path unchanged.
-    with MemoryFile(raster_bytes) as probe_mem, probe_mem.open() as probe:
-        has_colormap = _read_band1_colormap(probe) is not None
-
-    # rio-cogeo is the cleanest path when installed (and the source is not a
-    # palette raster whose color table we must guarantee).
-    if not has_colormap:
-        try:
-            from rio_cogeo.cogeo import cog_translate
-            from rio_cogeo.profiles import cog_profiles
-
-            with MemoryFile(raster_bytes) as src_mem, src_mem.open() as src:
-                dst_profile = cog_profiles.get("deflate")
-                with MemoryFile() as dst_mem:
-                    cog_translate(
-                        src,
-                        dst_mem.name,
-                        dst_profile,
-                        in_memory=True,
-                        quiet=True,
-                    )
-                    out = dst_mem.read()
-            if _raster_has_overviews(out):
-                return out
-        except Exception:  # noqa: BLE001 - rio-cogeo absent / failed; manual below
-            logger.debug(
-                "rio-cogeo path unavailable; manual overview build", exc_info=True
-            )
-
-    # Manual: copy into a tiled GTiff then build overviews in place.
-    from rasterio.enums import Resampling
-
-    with MemoryFile(raster_bytes) as src_mem, src_mem.open() as src:
-        profile = src.profile.copy()
-        profile.update(tiled=True, blockxsize=512, blockysize=512, compress="deflate")
-        data = src.read()
-        # Preserve a band-1 palette color table (e.g. NLCD land cover) across
-        # the overview-enforcement re-write. None for non-paletted rasters
-        # (DEM/hillshade/flood depth) - a pure no-op there.
-        cmap = _read_band1_colormap(src)
-        # Palette rasters must downsample by NEAREST, never average - averaging
-        # class indices produces meaningless in-between codes that map to wrong
-        # colors. Continuous rasters keep average.
-        overview_resampling = Resampling.nearest if cmap else Resampling.average
+        with MemoryFile(raster_bytes) as src_mem, src_mem.open() as src:
+            profile = {
+                "driver": "COG", "width": src.width, "height": src.height,
+                "count": src.count, "dtype": src.dtypes[0], "crs": src.crs,
+                "transform": src.transform, "compress": "DEFLATE",
+            }
+            if src.nodata is not None:
+                profile["nodata"] = src.nodata
+            data = src.read()
+            colorinterp = src.colorinterp
+            cmap = _read_band1_colormap(src)
+            count = len(_overview_factors(src.width, src.height))
+        # Averaging class indices invents codes the palette maps to wrong
+        # colours, so a paletted raster downsamples by nearest.
+        resampling = "NEAREST" if cmap else "AVERAGE"
         with MemoryFile() as dst_mem:
-            with dst_mem.open(**profile) as dst:
+            with dst_mem.open(OVERVIEW_COUNT=count, OVERVIEW_RESAMPLING=resampling,
+                              **profile) as dst:
                 dst.write(data)
+                try:
+                    dst.colorinterp = colorinterp
+                except Exception:  # noqa: BLE001 - colorinterp set is best-effort
+                    pass
                 _apply_band1_colormap(dst, cmap)
-                factors = _overview_factors(src.width, src.height)
-                if factors:
-                    dst.build_overviews(factors, overview_resampling)
-                    dst.update_tags(
-                        ns="rio_overview", resampling=overview_resampling.name
-                    )
             out = dst_mem.read()
+    except Exception as exc:  # noqa: BLE001 - fail-open upstream
+        logger.warning(
+            "publish_layer: COG encode failed (%s: %s) - publishing the original "
+            "(no-overview) raster as-is", type(exc).__name__, exc)
+        return None
     return out if _raster_has_overviews(out) else None
 
 
@@ -648,12 +551,10 @@ def derive_readable_layer_name(
     return f"{label} {_short_disambiguator(layer_id)}"
 
 
-
 def publish_layer(
     layer_uri: str,
     layer_id: str,
     style: dict[str, Any] | None = None,
-    name: str | None = None,
     #: A declared SPECIALIZATION of the contract's scale for this one layer -
     #: a param knob, or `restyle_layer`. Absent means the contract default,
     #: which is what nearly every publish wants.
@@ -662,24 +563,15 @@ def publish_layer(
     #: coarse-versus-refined are painted against each other rather than each
     #: against itself.
     shared_range: tuple[float, float] | None = None,
-    # Absorb extra keywords: a new keyword on one caller must not break the rest.
-    **_extra_ignored: Any,
 ) -> str:
     """Publish a COG raster: write, register, notify.
     Returns the ``s3://`` COG uri the client renders - the overview-enforced
-    sibling when one had to be built. A vector is a benign no-op, not an error.
+    sibling when one had to be built. A vector needs no publish and comes back as is.
     """
-    # ``name`` is transport-only: the name the client renders is derived later,
-    # where the published uri this call has not returned yet is in hand. Logged
-    # here only to show what the caller actually sent.
-    if name:
-        logger.info("publish_layer: name=%r layer_id=%r", name, layer_id)
-
-    # A vector needs no publish: it is already a store object the client opens
-    # natively, and GDAL cannot open a FlatGeobuf as a raster COG. The result is
-    # BENIGN and non-error, so the step completes green rather than re-calling.
+    # A vector is already a store object the client opens natively, and GDAL
+    # cannot open a FlatGeobuf as a raster COG.
     if _is_vector_uri(layer_uri):
-        return _benign_vector_noop(layer_uri, layer_id)
+        return layer_uri
     if not layer_uri.startswith("s3://"):
         raise PublishLayerError(
             "LAYER_URI_NOT_FOUND",

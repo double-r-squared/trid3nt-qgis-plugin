@@ -19,13 +19,11 @@ declared beside them.
 | --- | --- |
 | `__init__.py` | The format set, stated. |
 | `charts.py` | The one Vega-Lite chart-envelope builder every chart routes through. |
-| `cog.py` | COG encoding - the step that makes a raster renderable; best-effort by contract. |
 | `formats.py` | The four kinds a product arrives in, and the publish of one outputs list into layers and charts. |
 | `layer_uri_emit.py` | The single seam every client-bound `LayerURI` crosses. |
 | `mesh_display.py` | The MDAL faces: a built mesh as `.2dm`, and a derived value per node as the ASCII dataset loaded beside a mesh. |
-| `outputs_seam.py` | A finished run's outputs, read back off its own record. |
 | `pipeline_emitter.py` | One session's pipeline snapshot and its accumulating `loaded_layers`. |
 | `presets.py` | The preset family: four data kinds, one `.qml` writer, and the range a producer measured. |
-| `publish.py` | The raster publish mechanism - write the COG, register it, notify. |
+| `publish.py` | The raster publish mechanism - write the COG (the one COG writer), register it, notify. |
 | `restyle.py` | THE restyle seam, beside the presets: the user's edit of a declared style. |
 | `uri_registry.py` | The session-scoped layer-handle registry - one uri per layer, with the producer and, for a fetched layer, the dataset and cache key its uri addresses. |

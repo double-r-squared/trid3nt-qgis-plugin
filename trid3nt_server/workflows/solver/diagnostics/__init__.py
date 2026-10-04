@@ -207,7 +207,7 @@ def read_run_diagnostics(
 
     **When NOT to use:** comparing against observations
     (the calibration subsystem's metrics); reading a run's published layers
-    (the run record's ``outputs`` field, via ``render.outputs_seam.run_outputs``).
+    (the run record's ``outputs`` field, via ``workflows.runtime.journal.run_outputs``).
 
     **Parameters:** ``run_handle`` - a run id ULID or any ``s3://`` uri beneath it.
 

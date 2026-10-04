@@ -11,10 +11,9 @@ import asyncio
 import contextvars
 import json
 import logging
-import os
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
@@ -40,8 +39,6 @@ from trid3nt_server.model.guards.context_budget import COMPACTING_LABEL, compact
 from .layer_uri_emit import emit_layer_uri, publish_for_emission
 
 __all__ = [
-    "ErrorCodeRegistry",
-    "EMITTER_ERROR_CODES",
     "EmitterError",
     "StepNotFoundError",
     "PipelineEmitter",
@@ -212,13 +209,6 @@ def _classify_tool_return(result: Any) -> tuple[str, str, str] | None:
     """
     # Every shape below keys off STRUCTURE, never off a raised exception.
 
-    def _from_workflow_name(wf: Any) -> tuple[str, str, str] | None:
-        if isinstance(wf, str) and ":FAILED:" in wf:
-            code = wf.split(":FAILED:", 1)[1].strip() or "MODEL_RUN_FAILED"
-            state = "cancelled" if code.upper() == "CANCELLED" else "failed"
-            return (state, code, f"workflow reported {code}")
-        return None
-
     # --- Shape 1: a RunResult, or any object with the same terminal fields.
     # A non-"complete" status is the solver poll returning a killed or timed-out
     # run; "cancelled" maps to the cancelled card rather than the failed one.
@@ -243,20 +233,8 @@ def _classify_tool_return(result: Any) -> tuple[str, str, str] | None:
         terminal = "cancelled" if status == "cancelled" else "failed"
         return (terminal, str(code), str(message))
 
-    # --- Shape 2: an envelope whose ``workflow_name`` carries the ``:FAILED:``
-    # infix. Checked BEFORE the generic dict branch so that infix is the
-    # authoritative signal: such an envelope's own ``status`` field, where it has
-    # one, is unrelated to the run outcome.
-    if not isinstance(result, dict):
-        wf_hit = _from_workflow_name(getattr(result, "workflow_name", None))
-        if wf_hit is not None:
-            return wf_hit
-
-    # --- Shape 3: a dict whose ``status`` is one of the failed statuses.
+    # --- Shape 2: a dict whose ``status`` is one of the failed statuses.
     if isinstance(result, dict):
-        wf_hit = _from_workflow_name(result.get("workflow_name"))
-        if wf_hit is not None:
-            return wf_hit
         dstatus = result.get("status")
         if isinstance(dstatus, str) and dstatus.lower() in _FAILED_DICT_STATUSES:
             code = result.get("error_code") or dstatus.upper()
@@ -270,44 +248,6 @@ def _classify_tool_return(result: Any) -> tuple[str, str, str] | None:
             return (terminal, str(code), str(message))
 
     return None
-
-
-
-
-class ErrorCodeRegistry:
-    """The SCREAMING_SNAKE_CASE error codes the emitter knows about.
-    An OPEN set: a code can be registered at runtime, and the enumeration exists
-    so a typo at a call site surfaces here rather than inventing a new code.
-    """
-
-    def __init__(self, initial: list[str] | None = None) -> None:
-        self._codes: set[str] = set(initial or [])
-
-    def register(self, code: str) -> str:
-        """Register ``code`` if not present and return it. Idempotent.
-        No shape validation here - the registry stays a passive set, and a
-        malformed code raises later, where the summary is constructed.
-        """
-        self._codes.add(code)
-        return code
-
-    def known(self, code: str) -> bool:
-        return code in self._codes
-
-
-#: Seed set of error codes the atomic tools + the cancel chain may emit.
-#: Add new codes here (and at the call site) when a new failure mode lands.
-EMITTER_ERROR_CODES = ErrorCodeRegistry(
-    initial=[
-        "UPSTREAM_API_ERROR",  # external HTTP API returned non-2xx / network failure
-        "BBOX_INVALID",  # caller passed an unparseable / empty bbox
-        "GEOCODE_NO_MATCH",  # geocode returned zero candidates
-        "TOOL_NOT_FOUND",  # registry miss at the tool-call site
-        "TOOL_PARAMS_INVALID",  # tool args failed validation
-        "CANCELLED",  # the tool-call wrapper caught asyncio.CancelledError
-        "INTERNAL_ERROR",  # uncategorized exception in the tool body
-    ]
-)
 
 
 class EmitterError(RuntimeError):
@@ -339,8 +279,6 @@ def _named(step_id: str, error_code: str, error_message: str) -> tuple[str, str]
     return code, sentence
 
 
-
-
 #: Type of the per-session sink the emitter pushes frames to. The sink is
 #: ``async`` so the emitter can await ``websocket.send``; tests pass a sync
 #: capture closure wrapped in an async lambda.
@@ -360,8 +298,6 @@ ChartPersistHook = Callable[[dict], Awaitable[None]]
 ToolCardPersistHook = Callable[..., Awaitable[None]]
 
 
-
-
 def _now() -> datetime:
     """UTC ``datetime`` factory. Tests can patch via ``PipelineEmitter._now_fn``."""
     return datetime.now(timezone.utc)
@@ -378,8 +314,6 @@ def _elapsed_ms(started_at: datetime | None, completed_at: datetime | None) -> i
     if delta < 0:
         return 0
     return int(round(delta))
-
-
 
 
 def _fgb_bytes_to_geojson(fgb_bytes: bytes) -> dict[str, Any] | None:
@@ -878,10 +812,6 @@ class PipelineEmitter:
     # Snapshot accessors (read-only views; tests + integrations introspect)
 
     @property
-    def pipeline_id(self) -> str | None:
-        return self._pipeline_id
-
-    @property
     def loaded_layers(self) -> list[ProjectLayerSummary]:
         """Return a defensive shallow copy of the current loaded_layers list."""
         return list(self._loaded_layers)
@@ -1111,20 +1041,6 @@ class PipelineEmitter:
         step.progress_percent = self._coerce_progress(progress_percent)
         await self._emit_pipeline_state()
 
-    async def update_current_progress(self, progress_percent: int) -> None:
-        """Bump ``progress_percent`` on the CURRENTLY-running step; emit.
-        For a body that holds the emitter but not the step_id. Targets the most
-        recently added running step, and is a no-op when none is running.
-        """
-        running = [
-            sid for sid in self._step_order if self._steps[sid].state == "running"
-        ]
-        if not running:
-            return
-        step = self._steps[running[-1]]
-        step.progress_percent = self._coerce_progress(progress_percent)
-        await self._emit_pipeline_state()
-
     # Nested sub-step timeline -- composer-internal atomic-tool
     # calls surfaced as CHILD rows nested under the parent workflow card.
 
@@ -1272,13 +1188,12 @@ class PipelineEmitter:
         self, step_id: str, error_code: str, error_message: str
     ) -> None:
         """Flip ``step_id`` to ``failed``; record error_code and error_message.
-        An unseen ``error_code`` is registered here, and the message is truncated;
-        the code's shape is enforced where the summary is built, not again here.
+        The message is truncated; the code's shape is enforced where the summary
+        is built, not again here.
         A failure carrying no code or no sentence is REFUSED, never recorded.
         """
         code, sentence = _named(step_id, error_code, error_message)
         step = self._mark_terminal(step_id, "failed")
-        EMITTER_ERROR_CODES.register(code)
         step.error_code = code
         step.error_message = self._truncate_message(sentence)
         await self._emit_pipeline_state(terminal=True)

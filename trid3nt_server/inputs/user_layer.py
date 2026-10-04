@@ -372,7 +372,7 @@ async def _ingest_raster(
 
     try:
         published_uri = await asyncio.to_thread(
-            publish_layer, layer_uri=s3_uri, layer_id=layer_id, name=name
+            publish_layer, layer_uri=s3_uri, layer_id=layer_id
         )
     except PublishLayerError as exc:
         raise ImportLayerError(

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Any, Mapping
+from typing import TYPE_CHECKING, Any
 
 from trid3nt_contracts.execution import LayerURI
 
@@ -23,7 +23,6 @@ __all__ = [
     "publish_for_emission",
     "publish_input_layer",
     "publish_raster_input_cog",
-    "republish_input_row",
 ]
 
 
@@ -48,7 +47,6 @@ async def publish_for_emission(layer: LayerURI) -> LayerURI:
             layer_uri=uri,
             layer_id=layer.layer_id,
             style=layer.style,
-            name=layer.name,
         )
     except (asyncio.CancelledError, GeneratorExit):
         raise
@@ -204,19 +202,6 @@ def _cog_object_exists(cog_uri: str) -> bool:
         return False
 
 
-async def republish_input_row(row: Mapping[str, Any] | None) -> bool:
-    """Put a row a completed step already published back on the map.
-
-    The row is what ``publish_raster_input_cog`` takes, carried on that step's
-    ledger record: a REPLAYED step never reaches its own publish, and the run
-    resuming on its work has to show the same surface a fresh one showed."""
-    if not row:
-        return False
-    from trid3nt_server.render.pipeline_emitter import current_emitter
-
-    return await publish_raster_input_cog(current_emitter(), **row)
-
-
 async def publish_raster_input_cog(
     emitter: "PipelineEmitter | None",
     *,
@@ -263,7 +248,6 @@ async def publish_raster_input_cog(
             layer_uri=cog_uri,
             layer_id=layer_id,
             style=style,
-            name=name,
         )
     except PublishLayerError as exc:
         logger.warning(
