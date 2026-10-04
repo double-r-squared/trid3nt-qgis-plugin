@@ -67,16 +67,6 @@ payload_estimate:
   floor_mb: 0.05
   ceil_mb: 70.0
 
-resolution_declarations:
-- param: resolution_m
-  unit: m
-  min_value: 10.0
-  native_hint: NONNA-10 is posted at 0.0001 degrees (about 10 m); the WCS pyramid
-    it is served from delivers about 14 m cells
-  constraint_source: data
-  rationale: the product's own 0.0001 degree posting floors the ask, and the served
-    pyramid is coarser than that floor, so a finer request is resampling and never
-    a finer measurement
 
 coverage:
 -   data_class: bathymetry

@@ -45,7 +45,6 @@ def _fake_spec(source_class: str) -> SimpleNamespace:
     return SimpleNamespace(
         name=f"fetch_{source_class}",
         source_class=source_class,
-        resolution_declarations=[],
         output=SimpleNamespace(layer_type="raster"),
         vertical_datum=None,
     )

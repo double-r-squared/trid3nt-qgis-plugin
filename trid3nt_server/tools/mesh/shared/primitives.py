@@ -10,7 +10,7 @@ import dataclasses
 from pathlib import Path
 from typing import Any, Mapping
 
-from trid3nt_server.tools.mesh.inputs import op_geometry, op_raster
+from trid3nt_server.tools.mesh.inputs import op_geometry, op_raster, raster_cell_m
 from trid3nt_server.tools.mesh.meshers import (
     Mesh,
     MeshToolError,
@@ -52,7 +52,8 @@ def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
             f"set_bed reads a raster {list(_INTERPOLATIONS)}, not {interp!r}.")
     lonlat = _lonlat_nodes(mesh)
     box = _grown(_extent(lonlat))
-    values, provenance, notes = _painted(source, lonlat, box, interp, condition)
+    values, provenance, notes = _painted(source, lonlat, box, interp, condition,
+                                         mesh.meta.get("resolution_m"))
     _reached(source, values, lonlat, provenance)
     painted = f"{provenance} at {values.size} nodes"
     _journal_bed(source, provenance, lonlat, values.size)
@@ -166,7 +167,7 @@ def _stated_depth(source: Any) -> bool:
 
 
 def _painted(source: Any, lonlat: Any, box: tuple[float, float, float, float],
-             interp: str, condition: str | None
+             interp: str, condition: str | None, edge_m: Any = None
              ) -> tuple[Any, str, list[str]]:
     """One bed source sampled at the nodes -> ``(values, provenance, notes)``.
 
@@ -190,6 +191,12 @@ def _painted(source: Any, lonlat: Any, box: tuple[float, float, float, float],
         return (np.full(np.asarray(lonlat).shape[0], -depth, dtype=float),
                 f"stated depth {depth:g} m below the free surface", [])
     raster, provenance, notes = _bed_raster(slot.source, box)
+    cell = raster_cell_m(raster)
+    if edge_m is not None and float(edge_m) < cell:
+        notes = [*notes, (
+            f"the mesh's {float(edge_m):g} m edge is finer than the bed's "
+            f"{cell:g} m cell: the nodes between its cells carry the values it "
+            "was read at, not a measurement")]
     if condition:
         raster, provenance = _conditioned(raster, provenance, condition)
     values = sample_raster_at_nodes(str(raster), lonlat, interp=str(interp),
@@ -298,6 +305,15 @@ def _declared_faces(runs: Any, roles: Mapping[str, Any]
     return {role: faces for role, faces in out.items() if faces}
 
 
+def bed_raster_of(source: Any, bbox: tuple[float, float, float, float]
+                  ) -> Path | None:
+    """The raster ``set_bed`` would paint from, staged; ``None`` for a stated depth."""
+    from trid3nt_server.inputs.bed import bed as read_bed
+
+    slot = None if _stated_depth(source) else read_bed(source, label="bed")
+    return None if slot is None else _bed_raster(slot.source, bbox)[0]
+
+
 def _bed_raster(source: Any, bbox: tuple[float, float, float, float]
                 ) -> tuple[Path, str, list[str]]:
     """Stage the bed as a local EPSG:4326 raster -> ``(path, provenance, notes)``.
@@ -348,10 +364,10 @@ def _refuse_undated_source(name: str) -> None:
 def _provenance(name: str, layer: Any) -> str:
     """What ACTUALLY painted the bed, and what its elevations are counted from.
 
-    The datum, the acquisition instant and the native cell ride with the name."""
+    The datum and the acquisition instant ride with the name."""
     notes = fetch_notes(layer)
     painted = f"{name} ({'; '.join(notes)})" if notes else name
-    facts = [fact for fact in (_datum(name), _acquired(layer), _native_cell(name))
+    facts = [fact for fact in (_datum(name), _acquired(layer))
              if fact]
     return f"{painted} [{'; '.join(facts)}]" if facts else painted
 
@@ -369,14 +385,6 @@ def _acquired(layer: Any) -> str | None:
             else getattr(layer, field, None)
         if found:
             return f"acquired {found}"
-    return None
-
-
-def _native_cell(name: str) -> str | None:
-    spec = _source_row(name)
-    for decl in (getattr(spec, "resolution_declarations", ()) or ()):
-        if decl.native_hint:
-            return f"native {decl.native_hint}"
     return None
 
 

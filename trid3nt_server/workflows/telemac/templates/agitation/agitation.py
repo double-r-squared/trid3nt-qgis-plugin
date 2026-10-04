@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import sys
 
-from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.workflows.runtime import (
     Data,
@@ -185,27 +185,12 @@ OUTPUTS = [
 CAPTIONS = {"KD": "agitation coefficient"}
 
 
-_ARTEMIS_RES_SPEC = ResolutionSpec(
-    param="mesh_resolution_m",
-    unit="m",
-    min_value=2.0,
-    native_hint="finest triangle edge at the shoreline and the structure; the "
-                "bed's own cell is the matched source's, stated on its row",
-    constraint_source="solver",
-    rationale=(
-        "finest triangle edge at the shoreline and around the structure; a "
-        "phase-resolving elliptic solve needs several nodes per wavelength, and "
-        "Kd peaks inside a diffraction fringe the coarse mesh averages away"
-    ),
-)
-
 _ARTEMIS_METADATA = AtomicToolMetadata(
     name="artemis_harbor_agitation",
     ttl_class="live-no-cache",
     source_class="workflow_dispatch",
     engine="telemac",
     tier="template",
-    resolution_specs=(_ARTEMIS_RES_SPEC,),
 )
 
 

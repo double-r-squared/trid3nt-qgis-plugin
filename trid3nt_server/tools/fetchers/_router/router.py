@@ -90,9 +90,6 @@ def synthesize_metadata(spec: SourceSpec) -> AtomicToolMetadata:
         payload_mb_estimator_name="estimate_payload_mb",
         open_world_hint=True,
         tier="internal" if spec.internal_only else "general",
-        # data-native resolution declarations ride from the spec onto the
-        # metadata so the gate card can quote them (two-layer truth: data facts here).
-        resolution_specs=spec.resolution_declarations,
         # The declared confirm gate: a heavy fetcher's resolution gate rides onto the
         # metadata, so the server gate engine reads membership here.
         gate_spec=_gate_spec_for_source(spec),

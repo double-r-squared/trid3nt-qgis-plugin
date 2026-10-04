@@ -125,8 +125,8 @@ package DataSeam {
 
     part def BedSourceDeclaration {
         doc /*
-        A bed source's declaration - its params, its hooks, its caveats and the
-        native cells it actually publishes. Data, not code.
+        A bed source's declaration - its params, its hooks and its caveats.
+        Data, not code.
         */
     }
 
@@ -781,7 +781,7 @@ package DataSeam {
         ground rather than the reference it is counted from.
 
         The datum rides onto the layer's provenance card beside the acquisition
-        instant and the native cell, since a bed the user is shown to refine is
+        instant, since a bed the user is shown to refine is
         a bed they may stitch another source onto, and that is the metadata the
         two have to be compared on.
 
@@ -1435,7 +1435,7 @@ package DataSeam {
     verify requirement OneSourceReadsOnOneStatedDatum by
         "tests/mesh/test_mesh_topology_and_bed.py::test_a_source_row_that_states_no_datum_is_not_a_bed";
     verify requirement OneSourceReadsOnOneStatedDatum by
-        "tests/mesh/test_mesh_topology_and_bed.py::test_the_bed_card_states_the_datum_and_the_native_cell_of_its_source";
+        "tests/mesh/test_mesh_topology_and_bed.py::test_the_bed_card_states_the_datum_and_the_acquisition_of_its_source";
     verify requirement OneSourceReadsOnOneStatedDatum by
         "tests/fetchers/test_emit_on_fetch_seam.py::test_input_layer_name_shape_and_purpose";
     verify requirement OneSourceReadsOnOneStatedDatum by

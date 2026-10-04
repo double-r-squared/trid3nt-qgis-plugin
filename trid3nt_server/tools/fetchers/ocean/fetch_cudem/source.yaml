@@ -57,16 +57,6 @@ payload_estimate:
   model: bbox_area
   mb_per_sq_deg: 400.0
   floor_mb: 0.5
-# The collection's own cell: 1/9 arc-second, about 3 m. resolution_m floors the
-# merge at the asked spacing and never invents a cell finer than the tile it read;
-# past the pixel budget the fetch refuses naming the spacing that fits.
-resolution_declarations:
-- param: resolution_m
-  unit: m
-  min_value: 3
-  native_hint: NCEI CUDEM 1/9 arc-second tiles, about 3 m
-  constraint_source: data
-  rationale: the published tile collection's own cell size; nothing here coarsens on its own behalf and nothing invents a cell finer than 1/9 arc-second
 coverage:
 -   data_class: bathymetry
     kind: measured

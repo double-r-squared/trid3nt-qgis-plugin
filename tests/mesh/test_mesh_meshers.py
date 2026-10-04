@@ -53,15 +53,67 @@ def test_the_roster_is_the_meshers_the_tree_carries():
     assert registered_meshers() == ("om2d", "reg_grid")
 
 
-def test_the_one_size_word_carries_the_declaration_a_gate_card_quotes():
-    """The 5 m floor and its reason are what a gate card quotes; the band
-    collapsed onto the ONE agnostic size word and its declaration came with it."""
-    meta = TOOL_REGISTRY["build_mesh"].metadata
-    spec = meta.resolution_spec_for("resolution_m")
-    assert spec is not None and spec.min_value == 5.0
-    assert spec.constraint_source == "solver" and spec.rationale
-    for dead in ("min_edge_length_m", "max_edge_length_m"):
-        assert meta.resolution_spec_for(dead) is None
+def test_no_resolution_declaration_survives_anywhere():
+    """Nothing refuses a resolution: no contract type, no source row, no template
+    and no mesher declares a range a resolution is held to."""
+    root = Path(__file__).resolve().parents[2]
+    words = ("Resolution" + "Spec", "resolution_" + "declarations",
+             "resolution_" + "specs", "EDGE_RESOLUTION_" + "SPECS")
+    found = [f"{path.relative_to(root)}: {word}"
+             for top in ("trid3nt_server", "contracts", "plugin")
+             for path in (root / top).rglob("*")
+             if path.suffix in (".py", ".yaml", ".json") and path.is_file()
+             for word in words if word in path.read_text(errors="ignore")]
+    assert not found, found
+
+
+def _bed(tmp_path: Path, cell_deg: float) -> Path:
+    import rasterio
+    from rasterio.transform import from_origin
+
+    tif = tmp_path / "bed.tif"
+    with rasterio.open(tif, "w", driver="GTiff", height=200, width=200, count=1,
+                       dtype="float32", crs="EPSG:4326",
+                       transform=from_origin(-80.01, 26.01, cell_deg,
+                                             cell_deg)) as dst:
+        dst.write(np.full((1, 200, 200), -5.0, dtype="float32"))
+    return tif
+
+
+def _lattice(tif: Path, **stated):
+    from trid3nt_server.tools.mesh.tool import MeshTool, mesh_op
+
+    recipe = MeshTool.build_mesh(
+        mesher="reg_grid", kind="structured_grid",
+        extent=(-80.0, 25.99, -79.99, 26.0),
+        ops=[mesh_op("set_bed", source=str(tif))], **stated)
+    return get_mesher("reg_grid").build(recipe)
+
+
+def test_a_mesh_with_no_stated_edge_takes_the_bed_s_cell(tmp_path):
+    """One arcsecond at 26 N is 27.8 m across and 30.9 m tall; the finer side
+    is the edge, and the mesh says where it came from."""
+    mesh = _lattice(_bed(tmp_path, 1 / 3600))
+    assert mesh.meta["resolution_m"] == pytest.approx(27.8, abs=0.1)
+    assert "the cell of set_bed source" in mesh.meta["edge_notes"][0]
+
+
+def test_an_edge_far_finer_than_the_data_runs_and_says_so(tmp_path):
+    mesh = _lattice(_bed(tmp_path, 1 / 3600), resolution_m=2.0)
+    assert mesh.meta["resolution_m"] == 2.0 and mesh.node_count > 250_000
+    assert mesh.has_bed
+    assert any("2 m edge is finer than the bed's" in note
+               for note in mesh.meta["bed_notes"])
+
+
+def test_no_edge_and_no_raster_is_asked_for_by_name():
+    from trid3nt_server.tools.mesh.tool import MeshTool
+
+    recipe = MeshTool.build_mesh(mesher="reg_grid", kind="structured_grid",
+                                 extent=(-80.0, 25.99, -79.99, 26.0))
+    with pytest.raises(MeshToolError) as excinfo:
+        get_mesher("reg_grid").build(recipe)
+    assert excinfo.value.error_code == "MESH_EDGE_UNSTATED"
 
 
 @pytest.mark.parametrize("mesher,expected", [

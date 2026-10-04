@@ -38,11 +38,13 @@ class SensitivityDecl:
     Rows are ``(quantity, class)`` - the name the run's own layer or chart carries,
     so a declaration stands on something a reader can open - and an unknown class
     name is refused where it is declared, because a label nobody can read is worse
-    than no label."""
+    than no label. ``lever`` is the granularity the reads depend on: the mesh edge,
+    or a module keyword such as a 3D deck's plane count."""
 
-    __slots__ = ("rows",)
+    __slots__ = ("rows", "lever")
 
-    def __init__(self, rows: Sequence[tuple[str, str]] = ()) -> None:
+    def __init__(self, rows: Sequence[tuple[str, str]] = (),
+                 lever: str = "mesh_resolution_m") -> None:
         out: list[tuple[str, str]] = []
         for row in rows:
             pair = tuple(row)
@@ -52,23 +54,13 @@ class SensitivityDecl:
                     f"class in {sorted(CLASSES)}.")
             out.append((str(pair[0]), str(pair[1])))
         self.rows = tuple(out)
+        self.lever = str(lever)
 
     def __bool__(self) -> bool:
         return bool(self.rows)
 
 
-def _lever(metadata: Any) -> str | None:
-    """The resolution PARAM this engine's published reads depend on, off the metadata.
-    Read off the declared ``ResolutionSpec``, never restated on the sensitivity
-    declaration: two names for one lever is a mirror waiting to disagree."""
-    for spec in getattr(metadata, "resolution_specs", ()) or ():
-        param = getattr(spec, "param", None)
-        if param:
-            return str(param)
-    return None
-
-
-def sensitivity_notes(decl: SensitivityDecl, metadata: Any,
+def sensitivity_notes(decl: SensitivityDecl,
                       published: Collection[str],
                       sheet: Sequence[Any],
                       fill: Mapping[str, Mapping[str, Any]] | None = None,
@@ -87,7 +79,7 @@ def sensitivity_notes(decl: SensitivityDecl, metadata: Any,
     if not present:
         return ()
 
-    lever = _lever(metadata)
+    lever = decl.lever
     row = next((r for r in sheet if getattr(r, "name", None) == lever), None)
     # BOTH halves are load-bearing: a lever declared optional on the USER door
     # carries a user basis on the row nobody supplied, so the SEATED VALUE is
@@ -114,8 +106,8 @@ def sensitivity_notes(decl: SensitivityDecl, metadata: Any,
         )
     return (
         f"RESOLUTION-LIMITED, TREAT AS A BOUND: {fields} sit in a class the mesh "
-        f"decides ({what}), and this run was solved{at} at the template's labeled "
-        f"default spacing rather than a resolution you chose. Refine with "
-        f"{lever or 'the resolution lever'} to test how far the answer moves; the "
+        f"decides ({what}), and this run was solved{at} at the spacing its own "
+        f"input data and deck set rather than a resolution you chose. Refine with "
+        f"{lever} to test how far the answer moves; the "
         "measured moves are all in the unsafe direction.",
     )

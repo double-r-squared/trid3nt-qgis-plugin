@@ -46,12 +46,10 @@ class PARAMS:
              "the period and the direction are charted at the node of the mesh "
              "it settles onto, so put it on the water you are asking about")
 
-    # The runtime's own granularity lever, restated ONLY for its default. What
-    # this question is about happens where the depth falls - the shoaling, then
-    # the breaking - so the edge has to resolve the slope of the bed between the
-    # offshore edge and the shore rather than the planform of the coast.
+    # The runtime's own granularity lever, with what THIS question's edge
+    # has to resolve.
     mesh_resolution_m = lever(
-        "mesh_resolution_m", default=30.0,
+        "mesh_resolution_m",
         desc="Target element edge length the water is triangulated at; the "
              "waves shoal and then break where the DEPTH falls, so what this "
              "has to resolve is the slope of the bed across the surf zone")

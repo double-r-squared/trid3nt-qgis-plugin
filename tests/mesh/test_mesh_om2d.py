@@ -257,7 +257,8 @@ def test_the_one_size_word_threads_as_the_librarys_own_edge_defaults(
     sent = _stub_om2d(monkeypatch, tmp_path)
     OM2D.build(_recipe(resolution_m=60.0))
     assert sent["config"]["min_edge_length_m"] == 60.0
-    assert sent["config"]["max_edge_length_m"] == 600.0
+    assert sent["config"]["max_edge_length_m"] == OM2D._unbounded_m(
+        sent["config"]["bbox"])
     assert sent["config"]["seed"] == OM2D._SEED
 
 

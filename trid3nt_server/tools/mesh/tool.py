@@ -22,7 +22,6 @@ from trid3nt_server.tools.mesh.artifact import (
     read_mesh_artifact_sidecar,
 )
 from trid3nt_server.tools.mesh.meshers import (
-    EDGE_RESOLUTION_SPECS,
     MeshOp,
     MeshToolError,
     get_mesher,
@@ -211,7 +210,6 @@ _METADATA = AtomicToolMetadata(
     name="build_mesh",
     ttl_class="live-no-cache",
     tier="general",
-    resolution_specs=EDGE_RESOLUTION_SPECS,
 )
 
 
@@ -246,7 +244,8 @@ async def build_mesh(
         extent: the POLYGON to mesh the interior of - what om2d takes, and what
             its edge is read as the shoreline of. A box is not a domain: fetch
             the coastline over it and the water it leaves is what is meshed.
-        resolution_m: the finest cell or triangle edge, in metres.
+        resolution_m: the finest cell or triangle edge, in metres. Omit for
+            the finest cell of the input rasters the recipe names (the bed's).
         ops: the ordered program, [{"fn": name, ...kwargs}], calling the mesh
             library's own functions plus set_bed and set_boundary_roles. Omit for
             the mesher's defaults; refine a built one with mesh_op.

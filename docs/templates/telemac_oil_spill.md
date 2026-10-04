@@ -6,7 +6,7 @@ An OIL SLICK released onto a body of surface water: floating particles plus the 
 
 |  |  |
 |---|---|
-| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 32 |
+| module | `telemac2d` - 376 keywords in its dictionary, of which this template states 30 |
 | solves | `trid3nt_server.workflows.telemac.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -30,7 +30,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `spill_duration_s` | scenario | s | 300.0 | Finite pulse injection window |
 | `oil_type` | question | - | light_crude | Which preset was spilled: light_crude \| diesel \| heavy_fuel - the module's own composition, density and viscosity. Crude runs as light_crude, gasoline and petrol as diesel, bunker as heavy_fuel |
 | `oil_release_step` | scenario | - | 600 | The solver step the floats are released at, compiled into the module's own release routine; it lets the flow field establish before the slick is put on it |
-| `mesh_resolution_m` | scenario | m | 14.0 | Target element edge or cell length the domain is resolved at. The granularity is the USER's lever: nothing derives an edge from a channel nobody surveyed, so the number the run meshes at is either yours or this labeled default |
+| `mesh_resolution_m` | scenario | m | optional | Target element edge or cell length the domain is resolved at. The granularity is the USER's lever and nothing refuses one: absent, the mesh resolves the finest data it stands on, and the card states the node count it comes to |
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `cores` | constant | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
 | `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |

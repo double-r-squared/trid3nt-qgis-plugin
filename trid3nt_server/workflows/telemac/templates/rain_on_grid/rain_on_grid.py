@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import sys
 
-from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.workflows.runtime import (
     Data,
@@ -256,30 +256,12 @@ OUTPUTS = [
 CAPTIONS = {"FLUX": "outlet hydrograph"}
 
 
-#: DECLARED mesh_resolution_m range. 5 m is the finest the catchment triangulator
-#: authors; below it a screening runoff field gains nothing the bed does not
-#: already blur. There is no fixed coarse ceiling here - ``mesh_max_edge_m`` is
-#: the hillslope end of the same band and is declared separately.
-_RES_SPEC = ResolutionSpec(
-    param="mesh_resolution_m",
-    unit="m",
-    min_value=5.0,
-    native_hint="USGS 3DEP bare-earth bed (10 m) + the NHDPlus HR channel network",
-    constraint_source="solver",
-    rationale=(
-        "finest triangle edge in the channel band; the hillslopes coarsen toward "
-        "mesh_max_edge_m under the declared gradation. Peak depth and flooded "
-        "extent are resolution-bound classes, so a coarse mesh reads both low"
-    ),
-)
-
 _METADATA = AtomicToolMetadata(
     name="telemac_rain_on_grid",
     ttl_class="live-no-cache",
     source_class="workflow_dispatch",
     engine="telemac",
     tier="template",
-    resolution_specs=(_RES_SPEC,),
 )
 
 

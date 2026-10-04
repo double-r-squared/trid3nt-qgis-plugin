@@ -162,14 +162,10 @@ def test_every_charted_variable_is_captioned():
                for p in template.OUTPUTS)
 
 
-def test_the_granularity_floor_is_the_step_this_deck_states():
-    """The deck states its own TIME STEP for both modules, so the finest edge it
-    may be asked for is the finest that step is stable at - not the mesh
-    builder's own floor."""
+def test_the_granularity_row_states_no_default_and_refuses_no_edge():
     resolution = next(p for p in _workflow().params
                       if p.name == "mesh_resolution_m")
-    assert resolution.default == 40.0
-    assert resolution.bounds[0] == 20.0
+    assert (resolution.default, resolution.bounds) == (None, None)
 
 
 def test_the_tide_reaches_the_rim_as_the_series_the_record_served():

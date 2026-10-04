@@ -47,18 +47,13 @@ def _spec(
     name: str = "fetch_dem",
     source_class: str = "3dep",
     layer_type: str = "raster",
-    native_hint: str | None = "3DEP 10 m",
     vertical_datum: str | None = None,
 ) -> SimpleNamespace:
     """A minimal stand-in carrying only the attributes the seam reads."""
-    res = ()
-    if native_hint is not None:
-        res = (SimpleNamespace(native_hint=native_hint),)
     return SimpleNamespace(
         name=name,
         source_class=source_class,
         output=SimpleNamespace(layer_type=layer_type),
-        resolution_declarations=res,
         vertical_datum=vertical_datum,
     )
 
@@ -97,13 +92,12 @@ def _unbind(tokens):
 
 def test_input_layer_name_shape_and_purpose():
     spec = _spec()
-    assert input_layer_name(spec, {}, None) == "Input: 3dep (3dep, 3DEP 10 m)"
+    assert input_layer_name(spec, {}, None) == "Input: 3dep (3dep)"
     # purpose contributes ONE word (label, not a pathway).
     assert input_layer_name(spec, {}, "mesh bed") == (
-        "Input: mesh bed (3dep, 3DEP 10 m)"
+        "Input: mesh bed (3dep)"
     )
-    # no native hint -> source only.
-    spec2 = _spec(native_hint=None, source_class="osm")
+    spec2 = _spec(source_class="osm")
     assert input_layer_name(spec2, {"variable": "waterways"}, None) == (
         "Input: waterways (osm)"
     )
@@ -111,7 +105,7 @@ def test_input_layer_name_shape_and_purpose():
     # bed the user judges is a bed they may stitch another source onto.
     bed = _spec(source_class="3dep", vertical_datum="NAVD88 (metres, positive up)")
     assert input_layer_name(bed, {}, "mesh bed") == (
-        "Input: mesh bed (3dep, 3DEP 10 m, datum NAVD88 (metres, positive up))"
+        "Input: mesh bed (3dep, datum NAVD88 (metres, positive up))"
     )
 
 
@@ -148,7 +142,7 @@ async def test_raster_input_surfaced_via_worker_thread(monkeypatch):
     assert row.role == "context"
     assert row.layer_type == "raster"
     assert published == [_DEM_STYLE]
-    assert row.name == "Input: mesh bed (3dep, 3DEP 10 m)"
+    assert row.name == "Input: mesh bed (3dep)"
     assert row.layer_id.startswith("input-3dep-")
 
 
@@ -164,7 +158,7 @@ async def test_vector_input_surfaced_on_loop():
     try:
         maybe_emit_input_on_fetch(
             _spec(name="fetch_river_geometry", source_class="osm",
-                  layer_type="vector", native_hint=None),
+                  layer_type="vector"),
             {}, _vector_layer(), visualize=None, purpose="river geometry",
         )
         # let the fire-and-forget task run.

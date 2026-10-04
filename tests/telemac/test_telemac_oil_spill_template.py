@@ -45,7 +45,6 @@ def test_registered_on_the_model_surface():
     md = _workflow().metadata
     assert md.engine == "telemac"
     assert md.tier == "template"
-    assert {r.param for r in (md.resolution_specs or ())} == {"mesh_resolution_m"}
 
 
 def test_the_domain_is_the_class_it_needs_and_a_supplied_polygon_still_wins():

@@ -33,13 +33,15 @@ BOX_CORES: int = os.cpu_count() or 1
 #: The declared levers, in the order a card reads them. Each one is a value the
 #: skeleton or the mesh front reads, never a value a question asks about.
 LEVERS: tuple[Param, ...] = (
-    Param(name="mesh_resolution_m", door=doors.SCENARIO, default=14.0,
-          bounds=(3.0, 5000.0), units="m", consequence="numerical",
-          user_lever=True,
+    Param(name="mesh_resolution_m", door=doors.SCENARIO, optional=True,
+          type=float, units="m", consequence="numerical", user_lever=True,
+          derived_when_absent=(
+              "the finest edge is the finest cell of the input data the mesh "
+              "is built over - the bed raster's own cell"),
           desc="Target element edge or cell length the domain is resolved at. "
-               "The granularity is the USER's lever: nothing derives an "
-               "edge from a channel nobody surveyed, so the number the run "
-               "meshes at is either yours or this labeled default"),
+               "The granularity is the USER's lever and nothing refuses one: "
+               "absent, the mesh resolves the finest data it stands on, and "
+               "the card states the node count it comes to"),
     Param(name="event_time", door=doors.QUESTION, optional=True,
           consequence="scenario",
           derived_when_absent=(

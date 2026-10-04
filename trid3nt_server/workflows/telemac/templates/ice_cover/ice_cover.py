@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import sys
 
-from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
@@ -239,35 +239,12 @@ CAPTIONS = {"DYNCOVC": "ice cover fraction", "DYNCOVT": "ice cover thickness",
            "observe": "a water temperature"}
 
 
-#: DECLARED mesh_resolution_m range. The solver floor is the finest edge the mesh
-#: builder authors regardless of ask; below it a screening run gains nothing.
-#: There is no fixed coarse ceiling - the node budget coarsens a long domain
-#: WITHIN this declaration, and the effective edge stays >= 2 cells across the
-#: channel.
-_RES_SPEC = ResolutionSpec(
-    param="mesh_resolution_m",
-    unit="m",
-    min_value=3.0,
-    native_hint="USACE eHydro channel soundings over 3DEP terrain; edge sized "
-                "from the domain's width",
-    constraint_source="solver",
-    rationale=(
-        "explicit target edge length; 3 m is the absolute finest the builder "
-        "authors, a long domain is further coarsened under the mesh node budget "
-        "(self-labeled); no fixed coarse ceiling. The heat lost through the "
-        "surface is divided by the local depth and border ice grows from the "
-        "bank, so the DEPTH and the EDGE the mesh resolves are what move the "
-        "ice"
-    ),
-)
-
 _METADATA = AtomicToolMetadata(
     name="telemac_ice_cover",
     ttl_class="live-no-cache",
     source_class="workflow_dispatch",
     engine="telemac",
     tier="template",
-    resolution_specs=(_RES_SPEC,),
 )
 
 

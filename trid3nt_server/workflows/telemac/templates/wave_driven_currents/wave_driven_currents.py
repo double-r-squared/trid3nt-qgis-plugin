@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import sys
 
-from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
@@ -234,34 +234,12 @@ CAPTIONS = {"M": "current speed", "U": "current along x", "V": "current along y"
             "level": "the tide the open edge holds, over the run's window"}
 
 
-#: DECLARED mesh_resolution_m range. The floor is NOT the mesh builder's: this
-#: deck states its own time step, and a step stable at a 20 m edge diverges at
-#: a finer one, so twenty metres is where this question's stated clock stops
-#: being honest.
-_RES_SPEC = ResolutionSpec(
-    param="mesh_resolution_m",
-    unit="m",
-    min_value=20.0,
-    native_hint="edge sized from the water's own width; the bed's own cell is "
-                "the matched source's, stated on its row",
-    constraint_source="solver",
-    rationale=(
-        "explicit target edge length; 20 m is the finest edge the TIME STEP "
-        "this deck states for BOTH its modules stays stable at, and a long "
-        "window is further coarsened under the mesh node budget "
-        "(self-labeled). The current is driven across the surf zone, so a "
-        "coarse edge averages the breaking band away and with it the gradient "
-        "that forces the current"
-    ),
-)
-
 _METADATA = AtomicToolMetadata(
     name="tomawac_wave_driven_currents",
     ttl_class="live-no-cache",
     source_class="workflow_dispatch",
     engine="telemac",
     tier="template",
-    resolution_specs=(_RES_SPEC,),
 )
 
 

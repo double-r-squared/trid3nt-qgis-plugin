@@ -28,7 +28,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 |---|---|---|---|---|
 | `wave_height_m` | scenario | m | 1.0 | Incident wave height H0 on the designated liquid boundary; Kd is measured against it, so it sets the scale of every narrated height |
 | `reflection_coef` | scenario | - | 0.5 | The declared structure's reflection coefficient: 1 fully reflecting (a vertical quay), 0 fully absorbing (a rubble slope). Every other solid face is the absorbing shore |
-| `mesh_resolution_m` | scenario | m | 8.0 | Finest triangle edge, used at the shoreline and around the structure. THE granularity lever: a phase-resolving solve needs several nodes per WAVELENGTH and Kd peaks inside a diffraction fringe, so a coarse mesh reads the peaks low |
+| `mesh_resolution_m` | scenario | m | optional | Finest triangle edge, used at the shoreline and around the structure. THE granularity lever: a phase-resolving solve needs several nodes per WAVELENGTH and Kd peaks inside a diffraction fringe, so a coarse mesh reads the peaks low |
 | `mesh_grade` | constant | - | 0.2 | Mesh gradation: how fast the edge may grow from the structure band out to the open approach |
 | `barrier_width_m` | scenario | m | 20.0 | The width the mapped structure centreline is cut at; a survey maps a mound as a line and a line removes no water from the domain |
 | `transect_length_m` | scenario | m | 1500.0 | The whole length of the transect the agitation is read along: a straight line through the structure's centroid along the incident wave direction, half of it on the exposed side and half in the lee |

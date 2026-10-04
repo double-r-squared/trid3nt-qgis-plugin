@@ -76,7 +76,7 @@ class Workflow:
 
     def __init__(self, *, metadata: Any, params: Any,
                  template: Any, data: Any = (),
-                 sensitivity: Sequence[tuple[str, str]] = (),
+                 sensitivity: Sequence[tuple[str, str]] | SensitivityDecl = (),
                  coerce: Sequence[Callable[[dict], Mapping[str, Any]]] = (),
                  accepts: Accepts | None = None,
                  levers: Sequence[str] = ()) -> None:
@@ -103,7 +103,8 @@ class Workflow:
         self.captions = dict(getattr(template, "CAPTIONS", {}) or {})
         #: Which published reads sit in a resolution-sensitive class. The skeleton
         #: turns this into the run's honesty label; see ``resolution.py``.
-        self.sensitivity = SensitivityDecl(sensitivity)
+        self.sensitivity = (sensitivity if isinstance(sensitivity, SensitivityDecl)
+                            else SensitivityDecl(sensitivity))
         self.coercions = tuple(coerce)
         self.error_prefix = str(getattr(metadata, "engine", "") or "workflow").upper()
         self.check()
@@ -168,7 +169,7 @@ class Workflow:
         check reports - it never retracts a solved run."""
         params = getattr(run, "params", None)
         sheet = params.rows() if params is not None else ()
-        return sensitivity_notes(self.sensitivity, self.metadata,
+        return sensitivity_notes(self.sensitivity,
                                  self._published(run), sheet,
                                  fill=self._fill(run),
                                  mesh_size_m=self._mesh_size_m(run))
@@ -426,7 +427,7 @@ def register_workflow(
     metadata: Any,
     template: Any,
     *,
-    sensitivity: Sequence[tuple[str, str]] = (),
+    sensitivity: Sequence[tuple[str, str]] | SensitivityDecl = (),
     coerce: Sequence[Callable[[dict], Mapping[str, Any]]] = (),
     levers: Sequence[str] | None = None,
     **register_kwargs: Any,

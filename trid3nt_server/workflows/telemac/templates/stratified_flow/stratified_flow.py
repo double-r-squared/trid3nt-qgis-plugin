@@ -10,12 +10,13 @@ from __future__ import annotations
 
 import sys
 
-from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.workflows.runtime import (
     Data,
     register_workflow,
 )
+from trid3nt_server.workflows.runtime.resolution import SensitivityDecl
 from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.telemac.authoring.accepted_mesh import (
@@ -185,27 +186,12 @@ OUTPUTS = [
 CAPTIONS = {"T1": "water temperature", "level": "a water level"}
 
 
-_TELEMAC3D_RES_SPEC = ResolutionSpec(
-    param="NUMBER_OF_HORIZONTAL_LEVELS",
-    unit="planes",
-    min_value=5.0,
-    native_hint="the thermocline the run declares, which the grid plan must hold",
-    constraint_source="solver",
-    rationale=(
-        "the VERTICAL degree of freedom, which is the one a 2D model has none of, "
-        "and the module's own keyword rather than a lever beside it. Too few "
-        "planes for the declared thermocline over this domain's deepest column is "
-        "a refusal naming the count that would work, not a coarser answer"
-    ),
-)
-
 _TELEMAC3D_METADATA = AtomicToolMetadata(
     name="telemac3d_stratified_flow",
     ttl_class="live-no-cache",
     source_class="workflow_dispatch",
     engine="telemac",
     tier="template",
-    resolution_specs=(_TELEMAC3D_RES_SPEC,),
 )
 
 
@@ -230,8 +216,9 @@ telemac3d_stratified_flow = register_workflow(
     # The temperature the column publishes is read ACROSS the thermocline, the
     # steepest gradient in the domain, and the planes are what resolve it; the
     # velocity that shears over the same planes is read inside that gradient.
-    sensitivity=(("water_temperature", "gradient"),
-                 ("velocity_u", "gradient")),
+    sensitivity=SensitivityDecl((("water_temperature", "gradient"),
+                                 ("velocity_u", "gradient")),
+                                lever="NUMBER_OF_HORIZONTAL_LEVELS"),
     coerce=(
         point_arg("seed", tool="telemac3d_stratified_flow",
                   prompt="Click on the body of water this run solves over",

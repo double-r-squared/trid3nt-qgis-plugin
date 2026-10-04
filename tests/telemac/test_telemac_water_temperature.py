@@ -119,12 +119,9 @@ def test_no_keyword_twin_and_no_domain_twin_is_declared_here():
     assert {"event_time", "cores"} <= seated - own
 
 
-def test_the_granularity_row_is_restated_only_for_its_own_default():
-    """The runtime's 14 m spends the compute budget on a planform a surface heat
-    budget does not read, so this question states its own number and keeps the
-    lever's bounds."""
+def test_the_granularity_row_states_no_default_and_refuses_no_edge():
     resolution = next(p for p in _workflow().params if p.name == "mesh_resolution_m")
-    assert (resolution.default, resolution.bounds) == (20.0, (3.0, 5000.0))
+    assert (resolution.default, resolution.bounds) == (None, None)
 
 
 # -- the deck the template states ---------------------------------------------- #

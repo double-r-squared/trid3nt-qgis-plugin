@@ -188,7 +188,6 @@ def test_the_bed_resolution_lever_is_resolution_m_from_the_spec_to_the_merge(
     spec = load_spec_from_path(Path(
         "trid3nt_server/tools/fetchers/ocean/fetch_bluetopo/source.yaml"))
     assert "resolution_m" in spec.params
-    assert [d.param for d in spec.resolution_declarations] == ["resolution_m"]
 
     passed: dict = {}
     monkeypatch.setattr(bt, "assert_navd88_tile", lambda _p: "NAVD88")

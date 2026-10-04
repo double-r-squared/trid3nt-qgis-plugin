@@ -54,15 +54,6 @@ payload_estimate:
   model: bbox_area
   mb_per_sq_deg: 4.0
   floor_mb: 0.5
-# The model's own cell: 15 arc-second, about 450 m at the equator. resolution_m
-# floors the merge and never invents a finer cell than the tile it read.
-resolution_declarations:
-- param: resolution_m
-  unit: m
-  min_value: 450
-  native_hint: ETOPO 2022 15 arc-second, about 450 m
-  constraint_source: data
-  rationale: the published model's own cell size; this is a global relief model and no ask makes it finer than 15 arc-seconds
 coverage:
 -   data_class: bathymetry
     kind: modelled

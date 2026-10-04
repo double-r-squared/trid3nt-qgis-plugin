@@ -6,7 +6,7 @@ The 3D VERTICAL STRUCTURE of a body of water a 2D depth-averaged model cannot re
 
 |  |  |
 |---|---|
-| module | `telemac3d` - 355 keywords in its dictionary, of which this template states 27 |
+| module | `telemac3d` - 355 keywords in its dictionary, of which this template states 26 |
 | solves | `trid3nt_server.workflows.telemac.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -28,7 +28,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `warm_temp_c` | scenario | C | 25.0 | Epilimnion (warm surface layer) temperature the column OPENS at. The run exchanges no heat with the atmosphere, so what happens to this difference is the whole answer |
 | `cold_temp_c` | scenario | C | 15.0 | Hypolimnion (cold bottom layer) temperature; the initial top-to-bottom difference is what the run either keeps or mixes away |
 | `thermocline_depth_m` | scenario | m | 8.0 | Depth of the thermocline below the free surface. The vertical grid is planned to HOLD it and REFUSES when no admissible sigma stretch over the domain's deepest column can |
-| `mesh_resolution_m` | scenario | m | 120.0 | Target triangle edge the water body's interior is meshed at. The horizontal spends its budget on COVERING the body rather than on detail; the 3D node count is this mesh's nodes times the planes the deck states |
+| `mesh_resolution_m` | scenario | m | optional | Target triangle edge the water body's interior is meshed at. The horizontal spends its budget on COVERING the body rather than on detail; the 3D node count is this mesh's nodes times the planes the deck states |
 | `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `cores` | constant | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
 | `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |

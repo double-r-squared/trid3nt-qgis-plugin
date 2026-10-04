@@ -128,21 +128,23 @@ def test_the_one_size_word_is_the_uniform_base_a_basin_is_meshed_at(
     OM2D.build(_recipe(resolution_m=resolution_m))
     config = sent["config"]
     assert config["min_edge_length_m"] == pytest.approx(resolution_m)
-    assert config["max_edge_length_m"] == pytest.approx(resolution_m * 10.0)
+    assert config["max_edge_length_m"] == OM2D._unbounded_m(config["bbox"])
     assert config["pre_ops"] == []
 
 
-def test_no_size_word_declared_keeps_the_meshers_own_visible_default(
+def test_no_size_word_and_no_raster_asks_for_the_edge_by_name(
         monkeypatch, tmp_path):
-    sent = _stub_om2d(monkeypatch, tmp_path)
-    OM2D.build(_recipe(resolution_m=None))
-    assert sent["config"]["min_edge_length_m"] == pytest.approx(
-        OM2D._DEFAULT_RESOLUTION_M)
-    assert sent["config"]["max_edge_length_m"] == pytest.approx(
-        OM2D._DEFAULT_RESOLUTION_M * OM2D._MAX_EL_FACTOR)
+    """The library requires a finest edge; with none stated and no input data
+    to read one off, the mesh says which word it needs."""
+    from trid3nt_server.tools.mesh.meshers import MeshToolError
+
+    _stub_om2d(monkeypatch, tmp_path)
+    with pytest.raises(MeshToolError) as excinfo:
+        OM2D.build(_recipe(resolution_m=None))
+    assert excinfo.value.error_code == "MESH_EDGE_UNSTATED"
 
 
-def test_a_ceiling_an_op_states_is_never_overridden_by_the_multiple(
+def test_a_ceiling_an_op_states_is_never_overridden(
         monkeypatch, tmp_path):
     """The threading rule fills what an entry left unstated, and nothing else."""
     sent = _stub_om2d(monkeypatch, tmp_path)
@@ -152,7 +154,8 @@ def test_a_ceiling_an_op_states_is_never_overridden_by_the_multiple(
         mesh_op("distance_sizing_from_line_function", line_file=str(lines),
                 max_edge_length=250.0)]))
     assert sent["config"]["pre_ops"][0]["kwargs"]["max_edge_length"] == 250.0
-    assert sent["config"]["max_edge_length_m"] == pytest.approx(1000.0)
+    assert sent["config"]["max_edge_length_m"] == OM2D._unbounded_m(
+        sent["config"]["bbox"])
 
 
 def test_the_layer_a_chained_row_produced_enters_as_the_geometry_it_carries(

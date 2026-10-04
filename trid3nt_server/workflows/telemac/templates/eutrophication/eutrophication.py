@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import sys
 
-from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.workflows.runtime import (
     Data, register_workflow,
@@ -217,33 +217,12 @@ CAPTIONS = {"T1": "phyto biomass", "T2": "phosphate", "T4": "nitrate",
             "observe": "a water temperature"}
 
 
-#: DECLARED mesh_resolution_m range. The solver floor is the finest edge the mesh
-#: builder authors regardless of ask; below it a screening run gains nothing.
-#: There is no fixed coarse ceiling - the node budget coarsens a long domain
-#: WITHIN this declaration, and the effective edge stays >= 2 cells across the
-#: channel.
-_RES_SPEC = ResolutionSpec(
-    param="mesh_resolution_m",
-    unit="m",
-    min_value=3.0,
-    native_hint="USACE eHydro channel soundings over Copernicus GLO-30 terrain; "
-                "edge sized from the domain's width",
-    constraint_source="solver",
-    rationale=(
-        "explicit target edge length; 3 m is the absolute finest the builder "
-        "authors, a long domain is further coarsened under the mesh node budget "
-        "(self-labeled); no fixed coarse ceiling. The edge also sets the CFL "
-        "step, and this question is watched over days rather than hours"
-    ),
-)
-
 _METADATA = AtomicToolMetadata(
     name="telemac_eutrophication",
     ttl_class="live-no-cache",
     source_class="workflow_dispatch",
     engine="telemac",
     tier="template",
-    resolution_specs=(_RES_SPEC,),
 )
 
 #: The title the card carries when the run is held for review.

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import sys
 
-from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.instant import event_time
@@ -194,32 +194,12 @@ CAPTIONS = {"HM0": "significant wave height", "TPD": "peak wave period",
             "spectrum": "wave energy by frequency at the station"}
 
 
-#: DECLARED mesh_resolution_m range. The solver floor is the finest edge the mesh
-#: builder authors regardless of ask; there is no fixed coarse ceiling - the node
-#: budget coarsens a long coastal window WITHIN this declaration.
-_RES_SPEC = ResolutionSpec(
-    param="mesh_resolution_m",
-    unit="m",
-    min_value=3.0,
-    native_hint="edge sized from the water's own width; the bed's own cell is "
-                "the matched source's, stated on its row",
-    constraint_source="solver",
-    rationale=(
-        "explicit target edge length; 3 m is the absolute finest the builder "
-        "authors and a long window is further coarsened under the mesh node "
-        "budget (self-labeled). A wave shoals and then breaks over the SLOPE of "
-        "the bed, so the surf zone is only as wide as the elements that resolve "
-        "it - a coarse edge averages the bar away and moves the breaking line"
-    ),
-)
-
 _METADATA = AtomicToolMetadata(
     name="tomawac_nearshore_waves",
     ttl_class="live-no-cache",
     source_class="workflow_dispatch",
     engine="telemac",
     tier="template",
-    resolution_specs=(_RES_SPEC,),
 )
 
 

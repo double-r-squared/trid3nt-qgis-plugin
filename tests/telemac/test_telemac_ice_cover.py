@@ -129,9 +129,9 @@ def test_the_only_params_are_the_questions_own_inputs():
         "seed", "station", "cover_threshold", "mesh_resolution_m"}
 
 
-def test_the_granularity_row_is_restated_only_for_its_own_default():
+def test_the_granularity_row_states_no_default_and_refuses_no_edge():
     resolution = next(p for p in _workflow().params if p.name == "mesh_resolution_m")
-    assert (resolution.default, resolution.bounds) == (20.0, (3.0, 5000.0))
+    assert (resolution.default, resolution.bounds) == (None, None)
 
 
 # -- the deck the template states ---------------------------------------------- #

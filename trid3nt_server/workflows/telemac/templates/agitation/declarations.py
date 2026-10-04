@@ -56,12 +56,10 @@ class PARAMS:
              "(a vertical quay), 0 fully absorbing (a rubble slope). Every other "
              "solid face is the absorbing shore")
 
-    # -- the domain (the granularity lever) --------------------------------- #
-    # The runtime's own granularity lever, restated for the default and the floor
-    # a phase-resolving solve needs: a harbour is read at the shoreline and
-    # around the structure, an order finer than an open-water domain.
+    # The runtime's own granularity lever, with what THIS question's edge
+    # has to resolve.
     mesh_resolution_m = lever(
-        "mesh_resolution_m", default=8.0, bounds=(2.0, 500.0),
+        "mesh_resolution_m",
         desc="Finest triangle edge, used at the shoreline and around the "
              "structure. THE granularity lever: a phase-resolving solve needs "
              "several nodes per WAVELENGTH and Kd peaks inside a diffraction "

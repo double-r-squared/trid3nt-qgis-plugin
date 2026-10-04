@@ -18,7 +18,6 @@ __all__ = [
     "POST",
     "PRE",
     "BoundOp",
-    "EDGE_RESOLUTION_SPECS",
     "Mesh",
     "MeshOp",
     "MeshToolError",
@@ -53,30 +52,6 @@ class MeshToolError(RuntimeError):
         super().__init__(message)
         self.error_code = error_code
         self.escalation = dict(escalation) if escalation else None
-
-
-def _edge_resolution_specs() -> tuple[Any, ...]:
-    """The DECLARED range ``resolution_m`` is bounded by.
-
-    A floor and no ceiling; a gate card quotes what this states."""
-    from trid3nt_contracts.tool_registry import ResolutionSpec
-
-    return (
-        ResolutionSpec(
-            param="resolution_m", unit="m", min_value=5.0,
-            native_hint="3DEP 10 m (fetch_dem) terrain native",
-            constraint_source="solver",
-            rationale=(
-                "the one agnostic size word: the finest cell or triangle edge. "
-                "Below ~5 m the seed cloud reliably trips HEC's <= 8-sides-per-"
-                "cell acceptance (AOI-dependent, enforced by a typed build "
-                "error) and over-refines a TIN; no fixed coarse ceiling "
-                "(gradation + AOI govern, and the coarsest background edge "
-                "defaults to 10x this)")),
-    )
-
-
-EDGE_RESOLUTION_SPECS = _edge_resolution_specs()
 
 
 def nearest_names(name: str, known: Iterable[str]) -> str:

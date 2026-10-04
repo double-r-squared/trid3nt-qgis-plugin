@@ -44,12 +44,10 @@ class PARAMS:
              "deck: no keyword names a standard, and the oxygen profile carries "
              "it as a reference line")
 
-    # The runtime's own granularity lever, restated ONLY for its default: this
-    # question is domain-scale chemistry over a long window rather than a local
-    # feature at one instant, and the runtime's 14 m quarters the time step for
-    # nothing it can resolve. Bounds and meaning are the lever's.
+    # The runtime's own granularity lever, with what THIS question's edge
+    # has to resolve.
     mesh_resolution_m = lever(
-        "mesh_resolution_m", default=25.0,
+        "mesh_resolution_m",
         desc="Target element edge length the domain is triangulated at; it also "
              "sets the CFL time step, so it is what decides whether a long "
              "window finishes")

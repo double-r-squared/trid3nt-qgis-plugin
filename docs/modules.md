@@ -8,12 +8,12 @@ One wrapper per TELEMAC module. A wrapper is the module's own dictionary, read a
 
 | module | keywords | composites | reads |
 |---|---|---|---|
-| `artemis` | 118 | `incident_wave` | `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
-| `gaia` | 148 | `bed`, `dredging`, `suspension` | `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
-| `khione` | 133 | - | `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
-| `telemac2d` | 376 | `atmosphere`, `boundaries`, `coupling`, `friction`, `infiltration`, `oil`, `rain`, `rating`, `runoff`, `sources`, `storm`, `time_origin`, `tracer_names`, `wind` | `drogues`, `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
-| `telemac3d` | 355 | `atmosphere`, `column`, `coupling`, `vertical_grid`, `wind` | `column`, `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
-| `tomawac` | 223 | - | `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series`, `spectrum` |
+| `artemis` | 118 | `incident_wave` | `field`, `profile`, `series` |
+| `gaia` | 148 | `bed`, `dredging`, `suspension` | `field`, `profile`, `series` |
+| `khione` | 133 | - | `field`, `profile`, `series` |
+| `telemac2d` | 376 | `atmosphere`, `boundaries`, `coupling`, `infiltration`, `oil`, `rating`, `sources`, `storm`, `tracer_names` | `drogues`, `field`, `profile`, `series` |
+| `telemac3d` | 355 | `atmosphere`, `column`, `coupling`, `vertical_grid` | `column`, `field`, `profile`, `series` |
+| `tomawac` | 223 | - | `field`, `profile`, `series`, `spectrum` |
 | `waqtel` | 91 | `degradation` | - |
 
 A COMPOSITE is one value standing for a keyword group, so the group cannot half-arrive. A READ is a primitive over what the module wrote.

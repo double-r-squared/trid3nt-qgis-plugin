@@ -53,13 +53,10 @@ class PARAMS:
              "series. A reporting threshold, not a physical constant: half the "
              "surface by default")
 
-    # The runtime's own granularity lever, restated ONLY for its default: a
-    # surface heat budget is divided by the local depth and watched over days,
-    # and the edge also sets the CFL step, so the runtime's 14 m spends the
-    # whole compute budget resolving a planform this question reads only at its
-    # banks. Bounds and meaning are the lever's.
+    # The runtime's own granularity lever, with what THIS question's edge
+    # has to resolve.
     mesh_resolution_m = lever(
-        "mesh_resolution_m", default=20.0,
+        "mesh_resolution_m",
         desc="Target element edge length the domain is triangulated at; the "
              "budget that makes the ice is divided by the local DEPTH, and the "
              "border ice grows from the BANK, so what this has to resolve is "

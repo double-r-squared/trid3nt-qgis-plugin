@@ -46,12 +46,10 @@ class PARAMS:
              "and the wave height are charted at the node of the mesh it "
              "settles onto, so put it in the surf zone you are asking about")
 
-    # The runtime's own granularity lever, restated ONLY for its default and its
-    # floor. The current is driven by the GRADIENT of the radiation stress
-    # across the surf zone, so the edge has to resolve that band; the floor is
-    # the finest edge this deck's own stated time step stays stable at.
+    # The runtime's own granularity lever, with what THIS question's edge
+    # has to resolve.
     mesh_resolution_m = lever(
-        "mesh_resolution_m", default=40.0, bounds=(20.0, 5000.0),
+        "mesh_resolution_m",
         desc="Target element edge length the water is triangulated at; the "
              "longshore current is driven across the surf zone, so what this "
              "has to resolve is the width of the breaking band")

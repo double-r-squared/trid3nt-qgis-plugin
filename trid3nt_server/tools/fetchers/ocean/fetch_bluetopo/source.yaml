@@ -63,17 +63,6 @@ payload_estimate:
   model: bbox_area
   mb_per_sq_deg: 400.0
   floor_mb: 0.5
-# The tile scheme's own Resolution tiers, read live from the published
-# GeoPackage: 2 m, 4 m, 8 m and 16 m, finer cells in shallower and more
-# navigationally relevant water. The gate card quotes this beside a consuming
-# solver's declared range.
-resolution_declarations:
-- param: resolution_m
-  unit: m
-  min_value: 2
-  native_hint: BlueTopo multi-resolution UTM tiles - 2 m / 4 m / 8 m / 16 m tiers, finer in shallow water
-  constraint_source: data
-  rationale: the published tile scheme's own Resolution tiers; resolution_m floors the merge at the asked cell size and never invents a cell finer than the tile it read, and nothing coarsens the merge that the caller did not ask for
 coverage:
 -   data_class: bathymetry
     kind: measured

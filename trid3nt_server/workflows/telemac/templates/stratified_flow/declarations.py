@@ -50,12 +50,10 @@ class PARAMS:
              "is planned to HOLD it and REFUSES when no admissible sigma stretch "
              "over the domain's deepest column can")
 
-    # -- how finely the water body is resolved ------------------------------- #
-    # The runtime's own lever, restated ONLY for its default: 14 m over a lake is
-    # a mesh nothing this question asks needs, because a vertical-structure
-    # question is resolution-bound in the VERTICAL.
+    # The runtime's own granularity lever, with what THIS question's edge
+    # has to resolve.
     mesh_resolution_m = lever(
-        "mesh_resolution_m", default=120.0, bounds=(20.0, 5000.0),
+        "mesh_resolution_m",
         desc="Target triangle edge the water body's interior is meshed at. The "
              "horizontal spends its budget on COVERING the body rather than on "
              "detail; the 3D node count is this mesh's nodes times the planes "

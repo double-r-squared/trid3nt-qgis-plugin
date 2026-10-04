@@ -25,18 +25,10 @@ def _short_hash(text: str) -> str:
     return hashlib.sha1(text.encode("utf-8")).hexdigest()[:12]
 
 
-def _resolution_label(spec: SourceSpec) -> str | None:
-    """A human resolution string for the provenance name (first native hint)."""
-    for decl in spec.resolution_declarations:
-        if decl.native_hint:
-            return decl.native_hint
-    return None
-
-
 def input_layer_name(
     spec: SourceSpec, params: dict[str, Any], purpose: str | None
 ) -> str:
-    """Build ``Input: <what> (<source>[, <resolution>][, <datum>])``, where ``<what>``
+    """Build ``Input: <what> (<source>[, <datum>])``, where ``<what>``
     is the caller's ``purpose`` word, else the resolved ``variable`` / ``product``
     param, else the source class. A declared VERTICAL DATUM always rides here."""
     variable = params.get("variable") or params.get("product") or spec.source_class
@@ -45,9 +37,6 @@ def input_layer_name(
     else:
         what = str(variable).replace("_", " ")
     parts = [spec.source_class]
-    res = _resolution_label(spec)
-    if res:
-        parts.append(res)
     if spec.vertical_datum:
         parts.append(f"datum {spec.vertical_datum}")
     return f"Input: {what} ({', '.join(parts)})"

@@ -423,7 +423,7 @@ def test_the_note_reads_the_same_from_a_layer_and_from_a_dict():
     assert fetch_notes({"notes": []}) == []
 
 
-def test_the_bed_card_states_the_datum_and_the_native_cell_of_its_source():
+def test_the_bed_card_states_the_datum_and_the_acquisition_of_its_source():
     """A bed the user is shown to refine is a bed they may stitch another source
     onto, and what the two are compared on is the metadata of the rows."""
     card = P._provenance("fetch_cudem",
@@ -431,7 +431,6 @@ def test_the_bed_card_states_the_datum_and_the_native_cell_of_its_source():
                           "reference_time": "2019-06-01T00:00:00Z"})
     assert "datum NAVD88" in card
     assert "acquired 2019-06-01T00:00:00Z" in card
-    assert "native NCEI CUDEM 1/9 arc-second" in card
 
 
 def test_a_source_row_that_states_no_datum_is_not_a_bed():

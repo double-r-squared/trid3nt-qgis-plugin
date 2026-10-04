@@ -191,8 +191,9 @@ package MeshSeam {
         vocabulary is never a param of the generalization, so a bed and a
         boundary role are entries in ``ops`` and nothing here.
 
-        ``extent`` and ``resolution_m`` are optional because the mesher's own
-        visible default answers for an ask that never states one; a template's
+        ``extent`` and ``resolution_m`` are optional: an unstated edge is the
+        finest cell of the rasters the ops name, and an unstated extent is the
+        mesher's own visible default; a template's
         recipe states either as the plain name of the run input it is read off,
         and the run reads it before the mesh is keyed.
 
@@ -252,7 +253,8 @@ package MeshSeam {
         doc /*
         What ACTUALLY painted the bed, carried back on the mesh so the journal
         and the artifact can both say it: the source that served, its datum,
-        when it was measured and its native cell. A reader downstream tells
+        when it was measured, and - read off the staged raster - whether its
+        cell is coarser than the mesh's edge. A reader downstream tells
         coarse global relief from surveyed topobathy by this and nothing else.
 
         ``bed_notes`` are the sentences the bed's fetch stated, a SUBSTITUTION

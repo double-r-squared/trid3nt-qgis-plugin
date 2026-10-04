@@ -76,14 +76,6 @@ payload_estimate:
   mb_per_sq_deg: 12.0
   floor_mb: 0.05
   ceil_mb: 60.0
-resolution_declarations:
-- param: px_per_deg
-  unit: px/deg
-  min_value: 60.0
-  native_hint: NCEI Great Lakes bathymetry is gridded at 3 arc-seconds (~90 m); 1800 px/deg is ~62 m
-  constraint_source: data
-  rationale: the service resamples to whatever lattice is requested, so the density is bounded by the
-    3 arc-second grid under the AOI rather than by the service
 coverage:
 -   data_class: bathymetry
     kind: measured

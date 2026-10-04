@@ -126,7 +126,8 @@ async def gate_mesh_build(session: MeshSession, *, tool_name: str,
 
     async def card() -> GateCard:
         presentation = await present_mesh(session)
-        lines = render_probe_lines(presentation.get("probes") or {})
+        lines = [*render_probe_lines(presentation.get("probes") or {}),
+                 *(session.mesh.meta.get("edge_notes") or [])]
         lines.append(
             f"the recipe has {len(session.recipe.ops)} op(s), numbered below; "
             "refine it further with mesh_op")

@@ -81,13 +81,6 @@ payload_estimate:
   floor_mb: 0.05
   ceil_mb: 0.5
 
-resolution_declarations:
-- param: resolution_m
-  unit: m
-  min_value: 1
-  native_hint: the DEM's own native grid - 3DEP 1-10 m US lidar, Copernicus GLO-30 30 m global
-  constraint_source: data
-  rationale: the D8 trace runs in the DEM's cells, so the delineation is only as fine as the elevation grid under it
 
 coverage:
 -   data_class: hydrography

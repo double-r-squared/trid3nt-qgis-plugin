@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sys
 
-from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.workflows.runtime import (
     Data,
@@ -187,24 +187,6 @@ CAPTIONS = {"T1": "dissolved micropollutant", "discharge": "a streamflow",
             "level": "a water level"}
 
 
-#: DECLARED mesh_resolution_m range. The solver floor is the finest edge the mesh
-#: builder authors regardless of ask; below it a screening run gains nothing.
-#: There is no fixed coarse ceiling - the node budget coarsens a large domain
-#: WITHIN this declaration, and the effective edge stays >= 2 cells across it.
-_RES_SPEC = ResolutionSpec(
-    param="mesh_resolution_m",
-    unit="m",
-    min_value=3.0,
-    native_hint="USACE eHydro channel soundings over Copernicus GLO-30 terrain; "
-                "edge sized from the domain's width",
-    constraint_source="solver",
-    rationale=(
-        "explicit target edge length; 3 m is the absolute finest the builder "
-        "authors, a large domain is further coarsened under the mesh node budget "
-        "(self-labeled); no fixed coarse ceiling"
-    ),
-)
-
 #: The mesh gate this template stops at is the STANDARD one - the mesh step opens
 #: a session, presents the built domain as an editable layer with its probes, and
 #: takes every edit action the ``om2d`` mesher registers - so this template
@@ -215,7 +197,6 @@ _METADATA = AtomicToolMetadata(
     source_class="workflow_dispatch",
     engine="telemac",
     tier="template",
-    resolution_specs=(_RES_SPEC,),
 )
 
 

@@ -26,16 +26,9 @@ class _Row:
         self.name, self.basis = name, basis
 
 
-class _Spec:
-    param = "target_resolution_m"
-
-
-class _Meta:
-    resolution_specs = (_Spec(),)
-
-
 _DECL = SensitivityDecl((("water_depth", "extent"),
-                         ("inundation_depth", "peak")))
+                         ("inundation_depth", "peak")),
+                        lever="target_resolution_m")
 
 
 def test_a_declaration_refuses_a_class_nobody_can_read() -> None:
@@ -66,13 +59,12 @@ def test_a_default_spacing_run_is_labeled_a_bound() -> None:
     workflow, rows = _resolved_rows(location="Eel River near Scotia, California")
 
     row = next(r for r in rows if r.name == _LEVER)
-    assert row.basis == "default_demo" and row.value is not None, (
-        "the edge is always an explicit value; nobody supplied one, so the "
-        "labeled default fills it and its BASIS is what separates a run the user "
-        "refined from one left where the template put it")
+    assert row.value is None, (
+        "nobody supplied an edge, so none is seated: the mesh takes the finest "
+        "cell of the data it is built over")
 
     notes = sensitivity_notes(
-        workflow.sensitivity, workflow.metadata, {_QUANTITY}, rows,
+        workflow.sensitivity, {_QUANTITY}, rows,
         mesh_size_m=250.0)
     assert len(notes) == 1, "one mesh is one fact, not one note per quantity"
     note = notes[0]
@@ -91,7 +83,7 @@ def test_a_refined_run_says_refined_is_not_converged() -> None:
     assert row.basis == "user" and row.value == 25.0
 
     notes = sensitivity_notes(
-        workflow.sensitivity, workflow.metadata, {_QUANTITY}, rows,
+        workflow.sensitivity, {_QUANTITY}, rows,
         mesh_size_m=25.0)
     assert len(notes) == 1
     assert notes[0].startswith("RESOLUTION-SENSITIVE:")
@@ -106,15 +98,15 @@ def test_a_granularity_stated_as_a_keyword_is_read_off_the_fill() -> None:
     from trid3nt_server.tools import TOOL_REGISTRY
 
     workflow = TOOL_REGISTRY["telemac3d_stratified_flow"].fn.workflow
-    lever = workflow.metadata.resolution_specs[0].param
+    lever = workflow.sensitivity.lever
+    assert lever == "NUMBER_OF_HORIZONTAL_LEVELS"
     published = {"water_temperature"}
     rows = asyncio.run(resolve_params(workflow.params, {})).rows()
 
-    bound = sensitivity_notes(workflow.sensitivity, workflow.metadata, published,
+    bound = sensitivity_notes(workflow.sensitivity, published,
                               rows, fill={lever: {"value": 6, "from": "template: STEERING"}})
     assert bound[0].startswith("RESOLUTION-LIMITED, TREAT AS A BOUND:")
-    refined = sensitivity_notes(workflow.sensitivity, workflow.metadata,
-                                published, rows,
+    refined = sensitivity_notes(workflow.sensitivity, published, rows,
                                 fill={lever: {"value": 12, "from": "user"}})
     assert refined[0].startswith("RESOLUTION-SENSITIVE:")
 
@@ -122,15 +114,15 @@ def test_a_granularity_stated_as_a_keyword_is_read_off_the_fill() -> None:
 def test_a_quantity_the_run_did_not_publish_is_not_labeled() -> None:
     """A note about a product that is not there points at nothing."""
     notes = sensitivity_notes(
-        _DECL, _Meta(), {"water_depth"},
+        _DECL, {"water_depth"},
         [_Row("target_resolution_m", "derived")], mesh_size_m=250.0)
     assert "inundation_depth" not in notes[0]
     assert "water_depth" in notes[0]
 
 
 def test_no_declaration_and_nothing_published_are_both_no_note() -> None:
-    assert sensitivity_notes(SensitivityDecl(), _Meta(), {"water_depth"}, []) == ()
-    assert sensitivity_notes(_DECL, _Meta(), set(), []) == ()
+    assert sensitivity_notes(SensitivityDecl(), {"water_depth"}, []) == ()
+    assert sensitivity_notes(_DECL, set(), []) == ()
 
 
 @pytest.mark.parametrize("template,quantity,cls", [

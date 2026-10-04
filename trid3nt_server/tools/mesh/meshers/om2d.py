@@ -6,6 +6,7 @@ the ask, shells the box, and reads back the one neutral mesh."""
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import logging
 import math
@@ -16,7 +17,7 @@ from typing import Any, Mapping
 
 from trid3nt_contracts import new_ulid
 
-from trid3nt_server.tools.mesh.inputs import op_geometry
+from trid3nt_server.tools.mesh.inputs import finest_edge, op_geometry
 from trid3nt_server.tools.mesh.meshers import (
     POST,
     PRE,
@@ -48,14 +49,8 @@ _CONTAINER_TIMEOUT_S = 2400
 _SEED = 0
 _MAX_ITER = 40
 
-#: The one size word, when an ask declares none.
-_DEFAULT_RESOLUTION_M = 40.0
-
-#: What the coarsest edge defaults to, as a MULTIPLE of the finest. A fixed metre
-#: ceiling turns a coarse resolution into a refusal about a number the caller
-#: never wrote; the multiple moves with the resolution. Any op may state its own
-#: ``max_edge_length`` instead.
-_MAX_EL_FACTOR = 10.0
+#: Metres per degree of latitude, for the extent's own span.
+_M_PER_DEG = 111_320.0
 
 #: How far an element's apex may sit off the line of its longest side, as a
 #: fraction of that side, before the three nodes are ONE LINE. Such an element has
@@ -146,10 +141,12 @@ _DEFAULT_OPS = (
 def build(recipe: Any) -> Mesh:
     """Mesh the water side of the shoreline, or the interior of a supplied polygon."""
     ops = bind_ops(OM2D, recipe.ops)
-    resolution_m = float(recipe.resolution_m or _DEFAULT_RESOLUTION_M)
     rundir = _rundir()
     notes: list[str] = []
     domain = _domain(recipe.extent, rundir)
+    resolution_m, edge_note = finest_edge(recipe.resolution_m, recipe.ops,
+                                          domain.bbox)
+    notes.extend([edge_note] if edge_note else [])
 
     pre = [op for op in ops if op.phase == PRE]
     post = [op for op in ops if op.phase == POST]
@@ -164,7 +161,7 @@ def build(recipe: Any) -> Mesh:
         "open_runs_geojson": (None if domain.open_runs_name is None
                               else f"/data/{domain.open_runs_name}"),
         "min_edge_length_m": resolution_m,
-        "max_edge_length_m": _MAX_EL_FACTOR * resolution_m,
+        "max_edge_length_m": _unbounded_m(domain.bbox),
         "seed": _SEED,
         "max_iter": _MAX_ITER,
         "pre_ops": [_staged(op, rundir, index, resolution_m, notes)
@@ -175,13 +172,26 @@ def build(recipe: Any) -> Mesh:
     (rundir / "om2d_config.json").write_text(json.dumps(config))
     _run_op(rundir, "build", "om2d_config.json", "om2d_mesh.npz")
 
-    mesh, stats = _read_built(rundir, domain, resolution_m, ops)
+    mesh, stats = _read_built(rundir, domain, resolution_m, ops,
+                              stated=recipe.resolution_m not in (None, ""))
     mesh = _apply_tail(mesh, post[split:], rundir, resolution_m, notes)
-    return _emitted(mesh, rundir, domain, stats, notes)
+    mesh = _emitted(mesh, rundir, domain, stats, notes)
+    return (dataclasses.replace(mesh, meta={**dict(mesh.meta),
+                                            "edge_notes": [edge_note]})
+            if edge_note else mesh)
+
+
+def _unbounded_m(bbox: tuple[float, float, float, float]) -> float:
+    """The extent's own diagonal, in metres: no edge inside it can be longer, so
+    a coarsest edge here bounds nothing - the library's own default."""
+    lon0, lat0, lon1, lat1 = (float(v) for v in bbox)
+    across = (lon1 - lon0) * _M_PER_DEG * math.cos(math.radians(0.5 * (lat0 + lat1)))
+    return round(math.hypot(across, (lat1 - lat0) * _M_PER_DEG), 1)
 
 
 def _read_built(rundir: Path, domain: "_Domain", resolution_m: float,
-                ops: tuple[BoundOp, ...]) -> tuple[Mesh, Mapping[str, Any]]:
+                ops: tuple[BoundOp, ...], *, stated: bool
+                ) -> tuple[Mesh, Mapping[str, Any]]:
     """The container's arrays as the neutral mesh, cleaned once and projected."""
     import numpy as np
 
@@ -198,6 +208,7 @@ def _read_built(rundir: Path, domain: "_Domain", resolution_m: float,
         points=points, cells=cells, crs_authid=f"EPSG:{int(utm_epsg)}",
         meta={
             "utm_epsg": int(utm_epsg),
+            "resolution_m": resolution_m,
             "lonlat": lonlat,
             "lonlat_bbox": (float(lonlat[:, 0].min()), float(lonlat[:, 1].min()),
                             float(lonlat[:, 0].max()), float(lonlat[:, 1].max())),
@@ -214,7 +225,7 @@ def _read_built(rundir: Path, domain: "_Domain", resolution_m: float,
                 "provenance": {
                     "mesher_library": stats.get("engine", "oceanmesh (unreported)"),
                     "resolution_m": resolution_m,
-                    "max_el_m": _MAX_EL_FACTOR * resolution_m,
+                    "max_el_m": _unbounded_m(domain.bbox),
                     "seed": _SEED,
                     "sizing_source": _sizing_source(stats, domain),
                     "domain_source": domain.source,
@@ -223,7 +234,7 @@ def _read_built(rundir: Path, domain: "_Domain", resolution_m: float,
             },
             "synthetic_inputs": [
                 {"param": "resolution_m", "value": resolution_m, "units": "m",
-                 "basis": "user"},
+                 "basis": "user" if stated else "derived"},
                 {"param": "mesh_domain",
                  "value": f"{points.shape[0]} nodes / {cells.shape[0]} elements",
                  "basis": "derived",
@@ -237,8 +248,6 @@ def _apply_tail(mesh: Mesh, tail: list[BoundOp], rundir: Path,
     """The ops declared after the first primitive, in their declared order.
 
     OUR primitives run here, on the host, against the real callable."""
-    import dataclasses
-
     results = dict(mesh.meta.get("op_results") or {})
     for index, op in enumerate(tail):
         if op.origin == "primitives":
@@ -262,8 +271,6 @@ def _apply_tail(mesh: Mesh, tail: list[BoundOp], rundir: Path,
 def _run_tail_op(mesh: Mesh, op: BoundOp, rundir: Path, index: int,
                  resolution_m: float, notes: list[str]) -> tuple[Mesh, Any]:
     """One library op over the mesh as it now stands -> the mesh and its result."""
-    import dataclasses
-
     import numpy as np
 
     lonlat = np.asarray(mesh.meta["lonlat"], dtype=float)
@@ -278,7 +285,7 @@ def _run_tail_op(mesh: Mesh, op: BoundOp, rundir: Path, index: int,
         "mesh_npz": f"/data/{npz_name}",
         "out_stem": stem,
         "min_edge_length_m": resolution_m,
-        "max_edge_length_m": _MAX_EL_FACTOR * resolution_m,
+        "max_edge_length_m": _unbounded_m(mesh.meta["lonlat_bbox"]),
         "ops": [_staged(op, rundir, index, resolution_m, notes)]}))
     _run_op(rundir, "post", config_name, f"{stem}.json")
     report = json.loads((rundir / f"{stem}.json").read_text())
@@ -752,8 +759,6 @@ def _emitted(mesh: Mesh, rundir: Path, domain: _Domain,
 
     Every named stretch and every count here is read off this mesh's own nodes
     and cells; what an engine needs written out of them is that engine's."""
-    import dataclasses
-
     from trid3nt_server.tools.mesh.shared.nodes import boundary_contours
 
     roles = {role: list(nodes) for role, nodes

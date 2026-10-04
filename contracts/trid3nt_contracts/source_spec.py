@@ -14,7 +14,7 @@ from pydantic import Field, model_validator
 
 from .common import GraceModel
 from .coverage import PER_RECORD, Coverage
-from .tool_registry import ResolutionSpec, TTLClass
+from .tool_registry import TTLClass
 
 __all__ = [
     "SourceShape",
@@ -601,11 +601,6 @@ class SourceSpec(GraceModel):
     # the caveats or the docstring is for a reader, and no filter can read it. A
     # source with no row here is never matched; it stays model-callable.
     coverage: list[Coverage] = Field(default_factory=list)
-
-    # A source's NATIVE cell and tier facts live here, beside the source, so a
-    # gate card can quote them next to a solver's declared range. Default () is a
-    # source with no granularity-bearing param, which is the common case.
-    resolution_declarations: tuple[ResolutionSpec, ...] = Field(default=())
 
     # The vertical reference this source's elevations are counted from. STATED
     # from the dataset's own documentation, never inferred from the bytes: a

@@ -6,6 +6,7 @@ primitives ride along, so a lattice that wants a bed says ``set_bed``."""
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Any
 
 import numpy as np
@@ -20,9 +21,6 @@ from trid3nt_server.tools.mesh.meshers import (
 )
 
 __all__ = ["REG_GRID", "build"]
-
-#: The cell size an ask that declares none gets, in metres.
-_DEFAULT_RESOLUTION_M = 100.0
 
 
 def build(recipe: Any) -> Mesh:
@@ -42,9 +40,14 @@ def build(recipe: Any) -> Mesh:
             "with mesher='om2d', or pass the polygon's bounding box.",
             escalation={"tool": "build_mesh",
                         "overrides": {"mesher": "om2d", "extent": extent}})
-    mesh = _lattice(regular_grid_from_bbox(
-        tuple(float(v) for v in extent),
-        float(recipe.resolution_m or _DEFAULT_RESOLUTION_M)))
+    from trid3nt_server.tools.mesh.inputs import finest_edge
+
+    box = tuple(float(v) for v in extent)
+    edge, note = finest_edge(recipe.resolution_m, recipe.ops, box)
+    mesh = _lattice(regular_grid_from_bbox(box, edge))
+    if note:
+        mesh = dataclasses.replace(mesh, meta={**dict(mesh.meta),
+                                               "edge_notes": [note]})
     return _with_ops(mesh, recipe)
 
 

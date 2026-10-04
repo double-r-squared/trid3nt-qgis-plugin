@@ -136,18 +136,17 @@ _OWN_PARAMS = {"seed", "warm_temp_c", "cold_temp_c", "thermocline_depth_m",
                "mesh_resolution_m"}
 
 
-def test_the_template_declares_only_its_own_question_and_one_redefaulted_lever():
+def test_the_template_declares_only_its_own_question_and_one_restated_lever():
     """A keyword twin, a domain twin and a lever are each declared once elsewhere.
-    The one lever restated here is restated for its DEFAULT alone."""
+    The one lever restated here carries no default: the edge is the data's."""
     from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
 
     workflow = _workflow()
     declared = {p.name for p in workflow.params}
     assert declared == _OWN_PARAMS | set(LEVER_NAMES)
     rows = {p.name: p for p in workflow.params}
-    # 14 m over a lake is a mesh this question has no use for: the template's own
-    # row wins and keeps the lever's name.
-    assert rows["mesh_resolution_m"].default == 120.0
+    edge = rows["mesh_resolution_m"]
+    assert (edge.default, edge.bounds, edge.optional) == (None, None, True)
 
 
 @pytest.mark.parametrize("gone", ["location", "bbox", "mesh_min_edge_m",

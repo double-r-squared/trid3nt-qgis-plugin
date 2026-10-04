@@ -121,13 +121,10 @@ class PARAMS:
              "compiled off in the installed 9.0.0 build, so the correction is "
              "applied to the CN field before it is written")
 
-    # -- the granularity band ----------------------------------------------- #
-    # The runtime declares mesh_resolution_m for every template; a catchment
-    # triangulates a BAND rather than one edge, so this row states the band's
-    # fine end at the default a hillslope basin is screened at and the row below
-    # states its coarse end.
+    # The runtime's own granularity lever, with what THIS question's edge
+    # has to resolve.
     mesh_resolution_m = lever(
-        "mesh_resolution_m", default=40.0, bounds=(5.0, 500.0),
+        "mesh_resolution_m",
         desc="Finest triangle edge, reached where the mesh refines toward the "
              "channel network. THE granularity lever: peak depth and flooded "
              "extent are resolution-bound classes and a coarse mesh reads both "

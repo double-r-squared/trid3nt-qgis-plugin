@@ -36,8 +36,6 @@ def test_registered_on_the_model_surface():
     assert md.cacheable is False
     assert md.ttl_class == "live-no-cache"
     assert md.source_class == "workflow_dispatch"
-    specs = {r.param for r in (md.resolution_specs or ())}
-    assert specs == {"mesh_resolution_m"}
 
 
 def _rows():

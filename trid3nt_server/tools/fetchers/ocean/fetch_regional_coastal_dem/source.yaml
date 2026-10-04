@@ -56,16 +56,6 @@ payload_estimate:
   model: bbox_area
   mb_per_sq_deg: 3000.0
   floor_mb: 0.5
-# The collections' own cell: the CoNED integrations publish at 1 m. resolution_m
-# floors the merge at the asked spacing, which is what keeps a wide AOI at this
-# cell from building a grid past the pixel budget.
-resolution_declarations:
-- param: resolution_m
-  unit: m
-  min_value: 1
-  native_hint: NCEI regional integrated topo-bathy DEMs, 1 m where a CoNED integration exists
-  constraint_source: data
-  rationale: the published collections' own cell size; a 1 m bed over a wide AOI runs past the pixel budget, and the request refuses naming the spacing that fits rather than coarsening
 coverage:
 -   data_class: bathymetry
     kind: measured

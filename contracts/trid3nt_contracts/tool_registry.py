@@ -19,8 +19,6 @@ __all__ = [
     "TTLClass",
     "TTL_CLASSES",
     "EngineTier",
-    "ResolutionConstraintSource",
-    "ResolutionSpec",
     "AtomicToolMetadata",
     "GateKind",
     "GateSpec",
@@ -66,122 +64,6 @@ TTL_CLASSES: tuple[str, ...] = (
 #: - ``internal`` - excluded from BOTH the pool and the index, with no door to
 #:   expand it: reachable only by an in-process call from another tool.
 EngineTier = Literal["general", "door", "template", "catalog", "internal"]
-
-
-#: WHO owns a resolution bound. ``"solver"`` - a MODEL constraint, living with
-#: the template. ``"data"`` - a DATA-native fact, living with the fetcher. A gate
-#: card COMPOSES both layers rather than picking one.
-ResolutionConstraintSource = Literal["solver", "data"]
-
-
-class ResolutionSpec(GraceModel):
-    """A DECLARED valid-resolution range for one granularity-bearing param.
-    Silent coercion to an undeclared resolution is BANNED: an out-of-range ask
-    is quoted the declared range, typed or gated, never silently snapped."""
-
-    #: The tool argument this constrains. Specs are matched to params by name.
-    param: str = Field(min_length=1)
-    #: The value unit - ``"m"``, ``"px"`` for a pixel cap, ``"arcsec"`` for a
-    #: lat/long-native tier.
-    unit: str = "m"
-    #: The FINEST and COARSEST declared values, INCLUSIVE. ``None`` on a side
-    #: declares that side UNBOUNDED. At least one bound, or ``options``, must be
-    #: present.
-    min_value: float | None = None
-    max_value: float | None = None
-    #: A human string for the data-native or default resolution, quoted beside
-    #: the range. ``None`` when there is no meaningful native.
-    native_hint: str | None = None
-    #: A DISCRETE valid-value set, mutually exclusive with the min/max window,
-    #: for a tool that supports only specific cells.
-    options: tuple[float, ...] | None = None
-    #: A discretization step within a continuous window. Informational.
-    step: float | None = None
-    constraint_source: ResolutionConstraintSource
-    #: WHY these are the bounds, from evidence - a solve time, an accepted
-    #: window, a source's native cell. REQUIRED, so a later reader can check the
-    #: bound is real rather than a guess.
-    rationale: str = Field(min_length=1)
-
-    @model_validator(mode="after")
-    def _validate_bounds(self) -> ResolutionSpec:
-        """A spec declares a continuous window XOR a discrete option set.
-        Unbounded is legitimate ONLY when the ``rationale`` says so, so an empty
-        spec cannot masquerade as a forgotten one. With both bounds, ``min <= max``.
-        """
-        has_window = self.min_value is not None or self.max_value is not None
-        has_options = bool(self.options)
-        if has_window and has_options:
-            raise ValueError(
-                "ResolutionSpec: declare a continuous min/max window OR a discrete "
-                "options set, not both."
-            )
-        if (
-            self.min_value is not None
-            and self.max_value is not None
-            and self.min_value > self.max_value
-        ):
-            raise ValueError(
-                f"ResolutionSpec: min_value {self.min_value} > max_value "
-                f"{self.max_value} for param {self.param!r}."
-            )
-        if not has_window and not has_options and "unbounded" not in self.rationale.lower():
-            raise ValueError(
-                "ResolutionSpec: no min/max and no options declares an UNBOUNDED range; "
-                "the rationale must say so (contain 'unbounded') so it cannot be "
-                "confused with a forgotten declaration."
-            )
-        return self
-
-    def contains(self, value: float) -> bool:
-        """True when ``value`` is inside the declared range (inclusive) / option set."""
-        if self.options is not None:
-            return any(abs(value - o) <= 1e-9 for o in self.options)
-        if self.min_value is not None and value < self.min_value:
-            return False
-        if self.max_value is not None and value > self.max_value:
-            return False
-        return True
-
-    def range_phrase(self) -> str:
-        """Human phrase for the supported range, e.g. ``"20-200 m"`` / ``">=10 m"``."""
-        if self.options is not None:
-            return f"one of {', '.join(f'{o:g}' for o in self.options)} {self.unit}"
-        lo, hi = self.min_value, self.max_value
-        if lo is not None and hi is not None:
-            return f"{lo:g}-{hi:g} {self.unit}"
-        if lo is not None:
-            return f">={lo:g} {self.unit}"
-        if hi is not None:
-            return f"<={hi:g} {self.unit}"
-        return f"unbounded ({self.unit})"
-
-    def docstring_line(self) -> str:
-        """One line for the tool docstring, front-loading the RANGE so a request
-        routes to a valid value, then the constraint owner and native hint."""
-        owner = "mesh/solver" if self.constraint_source == "solver" else "data-native"
-        native = f"; data native {self.native_hint}" if self.native_hint else ""
-        return (
-            f"{self.param}: supported {self.range_phrase()} ({owner}){native}. "
-            f"Out-of-range asks are quoted the range (typed/gated), never silently "
-            f"snapped."
-        )
-
-    def quote_back(self, requested: float, *, measured: str | None = None) -> str:
-        """The card text for an out-of-range request: the value asked for, the
-        supported range and its owner, the data-native hint, and the measured
-        cost when there is one - both layers of truth in ONE card."""
-        owner = "mesh/solver" if self.constraint_source == "solver" else "data-native"
-        parts = [
-            f"{requested:g} {self.unit} requested; this tool supports "
-            f"{self.range_phrase()} ({owner})"
-        ]
-        if self.native_hint:
-            parts.append(f"data native {self.native_hint}")
-        if measured:
-            parts.append(measured)
-        parts.append(f"pick a {self.param} in range")
-        return "; ".join(parts) + "."
 
 
 class AtomicToolMetadata(GraceModel):
@@ -310,28 +192,6 @@ class AtomicToolMetadata(GraceModel):
             "from retrieval visibility."
         ),
     )
-
-    # A tool with a granularity-bearing param declares the resolutions it can
-    # ACTUALLY run, so the user picks from reality and an out-of-range ask is
-    # quoted the range rather than silently snapped. This declaration is the
-    # SINGLE source the docstring, the gate card and the registry sweep all read.
-    # Default () = no resolution-class param.
-    resolution_specs: tuple[ResolutionSpec, ...] = Field(
-        default=(),
-        description=(
-            "Declared valid-resolution ranges, one ResolutionSpec per "
-            "granularity-bearing parameter. Read by the docstring, the "
-            "payload/input-review gate card, and the registry sweep test that FAILS "
-            "when a future resolution-class param ships without a declaration."
-        ),
-    )
-
-    def resolution_spec_for(self, param: str) -> ResolutionSpec | None:
-        """The declared :class:`ResolutionSpec` for ``param``, or ``None``."""
-        for spec in self.resolution_specs:
-            if spec.param == param:
-                return spec
-        return None
 
     # A consequential run or a heavy fetch DECLARES its confirm gate here, so
     # membership is read from METADATA rather than from a hand-wired name set.

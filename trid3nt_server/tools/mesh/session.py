@@ -177,7 +177,8 @@ class MeshSession:
             style={"kind": "reference", "geometry": "line"}, role="primary",
             bbox=_lonlat_bbox(mesh), crs_authid=mesh.crs_authid,
             synthetic_inputs=_synthetic_inputs(mesh),
-            notes=list(mesh.meta.get("bed_notes") or []))
+            notes=[*(mesh.meta.get("edge_notes") or []),
+                   *(mesh.meta.get("bed_notes") or [])])
 
     def accept(self) -> MeshArtifact:
         """Freeze the current mesh as a case artifact -> the :class:`MeshArtifact`.

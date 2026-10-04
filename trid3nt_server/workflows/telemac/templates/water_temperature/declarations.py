@@ -42,13 +42,10 @@ class PARAMS:
              "Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, "
              "'lat,lon' or a point layer. Geocode a place name first")
 
-    # The runtime's own granularity lever, restated ONLY for its default: a
-    # surface heat budget is a domain-scale answer watched over a week, and the
-    # edge also sets the CFL step, so the runtime's 14 m spends the whole compute
-    # budget resolving a planform this question does not read. Bounds and meaning
-    # are the lever's.
+    # The runtime's own granularity lever, with what THIS question's edge
+    # has to resolve.
     mesh_resolution_m = lever(
-        "mesh_resolution_m", default=20.0,
+        "mesh_resolution_m",
         desc="Target element edge length the domain is triangulated at; a "
              "surface heat budget is divided by the local DEPTH, so what this "
              "has to resolve is how deep the water is rather than its planform")

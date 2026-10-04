@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import sys
 
-from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.workflows.runtime import (
     Data,
@@ -215,30 +215,12 @@ class STEERING(T2D):
 CAPTIONS = {"discharge": "a streamflow", "level": "a water level"}
 
 
-#: DECLARED mesh_resolution_m range. The solver floor is the finest edge the mesh
-#: builder authors regardless of ask; below it a screening run gains nothing.
-_RES_SPEC = ResolutionSpec(
-    param="mesh_resolution_m",
-    unit="m",
-    min_value=3.0,
-    native_hint="USACE eHydro channel soundings over 3DEP terrain; edge sized "
-                "from the domain's own geometry",
-    constraint_source="solver",
-    rationale=(
-        "explicit target edge length; 3 m is the absolute finest the builder "
-        "authors, a long channel is further coarsened under the mesh node budget "
-        "(self-labeled); the dredged volume is summed over the nodes inside the "
-        "field, so a fairway a few cells wide reads it coarsely"
-    ),
-)
-
 _METADATA = AtomicToolMetadata(
     name="telemac_channel_dredging",
     ttl_class="live-no-cache",
     source_class="workflow_dispatch",
     engine="telemac",
     tier="template",
-    resolution_specs=(_RES_SPEC,),
 )
 
 

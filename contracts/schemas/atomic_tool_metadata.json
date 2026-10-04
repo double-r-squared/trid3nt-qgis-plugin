@@ -125,105 +125,6 @@
       ],
       "title": "LeverSpec",
       "type": "object"
-    },
-    "ResolutionSpec": {
-      "additionalProperties": false,
-      "description": "A DECLARED valid-resolution range for one granularity-bearing param.\nSilent coercion to an undeclared resolution is BANNED: an out-of-range ask\nis quoted the declared range, typed or gated, never silently snapped.",
-      "properties": {
-        "constraint_source": {
-          "enum": [
-            "solver",
-            "data"
-          ],
-          "title": "Constraint Source",
-          "type": "string"
-        },
-        "max_value": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Max Value"
-        },
-        "min_value": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Min Value"
-        },
-        "native_hint": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Native Hint"
-        },
-        "options": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "number"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Options"
-        },
-        "param": {
-          "minLength": 1,
-          "title": "Param",
-          "type": "string"
-        },
-        "rationale": {
-          "minLength": 1,
-          "title": "Rationale",
-          "type": "string"
-        },
-        "step": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Step"
-        },
-        "unit": {
-          "default": "m",
-          "title": "Unit",
-          "type": "string"
-        }
-      },
-      "required": [
-        "param",
-        "constraint_source",
-        "rationale"
-      ],
-      "title": "ResolutionSpec",
-      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -307,15 +208,6 @@
       "description": "MCP annotation: readOnlyHint. True when the tool has no side effects and does not mutate any external state (object storage, the QGIS project, the persisted store). Defaults to True - the safe assumption for fetchers and compute tools. Set to False for publish_layer, run_solver, and any other tool that writes.",
       "title": "Read Only Hint",
       "type": "boolean"
-    },
-    "resolution_specs": {
-      "default": [],
-      "description": "Declared valid-resolution ranges, one ResolutionSpec per granularity-bearing parameter. Read by the docstring, the payload/input-review gate card, and the registry sweep test that FAILS when a future resolution-class param ships without a declaration.",
-      "items": {
-        "$ref": "#/$defs/ResolutionSpec"
-      },
-      "title": "Resolution Specs",
-      "type": "array"
     },
     "source_class": {
       "anyOf": [
