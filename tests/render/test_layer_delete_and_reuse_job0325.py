@@ -32,8 +32,6 @@ from trid3nt_contracts.execution import LayerURI
 from tests._fakes import MockMCPClient
 
 
-
-
 class MockWebSocket:
     """Collects every envelope ``send`` would have written to the wire."""
 
@@ -129,8 +127,6 @@ def _fresh_case_with_layers(case_id: str) -> CaseSummary:
     )
 
 
-
-
 def test_layer_delete_removes_from_emitter_and_emits_session_state(
     _persistence_bound: Persistence,
 ) -> None:
@@ -158,94 +154,6 @@ def test_layer_delete_removes_from_emitter_and_emits_session_state(
     ]
     assert "flood-01" not in final_ids
     assert "dem-01" in final_ids
-
-
-def test_layer_delete_reinlines_surviving_vectors_before_emit(
-    _persistence_bound: Persistence,
-) -> None:
-    """A delete must NOT transiently drop sibling vector layers.
-
-    Every surviving vector layer is re-inlined BEFORE the emit, so the emitted state
-    carries inline geometry for each - the client never fetches the store directly."""
-    case_id = new_ulid()
-    asyncio.run(_persistence_bound.upsert_case(_fresh_case_with_layers(case_id)))
-
-    ws = MockWebSocket()
-    state = SessionState(session_id=new_ulid())
-
-    async def _sink(text: str) -> None:
-        await ws.send(text)
-
-    state.emitter = PipelineEmitter(
-        session_id=state.session_id,
-        sink=_sink,
-        chat_history=state.chat_history,
-    )
-    # Three vector layers loaded directly into the accumulator (the persisted
-    # ProjectLayerSummary dict shape, like _fresh_case_with_layers). We bypass
-    # add_loaded_layer's inline read so we can control which payloads are
-    # present on THIS socket: vec-keep-A is pre-inlined, vec-keep-B is NOT
-    # (its payload is "missing" on this socket), vec-del will be deleted.
-    def _vec_summary(layer_id: str, name: str, uri: str) -> dict:
-        return {
-            "layer_id": layer_id,
-            "name": name,
-            "layer_type": "vector",
-            "uri": uri,
-            "visible": True,
-            "role": "input",
-            "temporal": False,
-        }
-
-    state.emitter.reset_loaded_layers(
-        [
-            _vec_summary("vec-keep-A", "Boundaries A", "s3://bucket/a.geojson"),
-            _vec_summary("vec-keep-B", "Boundaries B", "s3://bucket/b.geojson"),
-            _vec_summary("vec-del", "Boundaries Del", "s3://bucket/del.geojson"),
-        ]
-    )
-    # Only vec-keep-A has its inline payload on this socket.
-    state.emitter._inline_geojson_by_layer_id["vec-keep-A"] = {
-        "type": "FeatureCollection",
-        "features": [],
-    }
-
-    # Monkeypatch the emitter's reinline to populate the MISSING survivor
-    # (vec-keep-B) — mirrors the real re-read repopulating the side-table.
-    async def _fake_reinline() -> int:
-        emitter = state.emitter
-        added = 0
-        for layer in emitter.loaded_layers:
-            if layer.layer_type != "vector":
-                continue
-            if layer.layer_id in emitter._inline_geojson_by_layer_id:
-                continue
-            emitter._inline_geojson_by_layer_id[layer.layer_id] = {
-                "type": "FeatureCollection",
-                "features": [],
-            }
-            added += 1
-        return added
-
-    state.emitter.reinline_vector_layers = _fake_reinline  # type: ignore[assignment]
-    state.active_case_id = case_id
-    ws.sent.clear()
-
-    asyncio.run(_handle_layer_delete(ws, state, {"layer_id": "vec-del"}))
-
-    sess = [e for e in ws.sent if e["type"] == "session-state"]
-    assert sess, "expected a session-state emission after delete"
-    survivors = sess[-1]["payload"]["loaded_layers"]
-    survivor_ids = {layer["layer_id"] for layer in survivors}
-    assert survivor_ids == {"vec-keep-A", "vec-keep-B"}
-    # EVERY surviving vector layer ships with renderable inline_geojson —
-    # including vec-keep-B, whose payload was missing until the re-inline.
-    for layer in survivors:
-        if layer["layer_type"] == "vector":
-            assert "inline_geojson" in layer, (
-                f"surviving vector {layer['layer_id']} shipped without "
-                "inline_geojson"
-            )
 
 
 def test_layer_delete_persists_authoritatively_no_resurrection(
@@ -355,8 +263,6 @@ def test_delete_case_loaded_layer_replace_not_union(
     assert [d.get("layer_id") for d in fetched.loaded_layer_summaries] == [
         "flood-01"
     ]
-
-
 
 
 def test_present_note_lists_handle_and_uri() -> None:

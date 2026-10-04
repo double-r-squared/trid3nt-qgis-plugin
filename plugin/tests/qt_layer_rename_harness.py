@@ -32,7 +32,7 @@ def _session_state(name: str) -> dict:
     return {"loaded_layers": [{
         "layer_id": _LAYER_ID, "name": name, "layer_type": "vector",
         "uri": "s3://trid3nt-runs/case/point.geojson", "visible": True,
-        "role": "input", "inline_geojson": _POINT}]}
+        "role": "input"}]}
 
 
 def _on_the_map():
@@ -52,7 +52,17 @@ def main() -> None:
     _APP.initQgis()
     from plugin.net.trid3nt_client import parse_layer_events
     from plugin.plugin_settings import PluginSettings
+    from plugin.render import layers
     from plugin.render.layers import LayerMaterializer
+
+    # The row carries only its store uri, as every vector row does; the store is
+    # stood in for by a local file the same QGIS ogr provider opens.
+    import json
+    import tempfile
+
+    with tempfile.NamedTemporaryFile("w", suffix=".geojson", delete=False) as f:
+        json.dump(_POINT, f)
+    layers.s3_to_vsis3 = lambda uri: f.name if uri.startswith("s3://") else None
 
     materializer = LayerMaterializer(PluginSettings())
     materializer.set_case(_CASE, "rename proof")

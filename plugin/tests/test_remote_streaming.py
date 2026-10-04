@@ -144,26 +144,6 @@ class TestStreamedStagedLabels(unittest.TestCase):
         )
         self.assertTrue(any("streamed via /vsis3" in n for n in notes), notes)
 
-    def test_inline_geojson_note_is_labeled_staged(self):
-        notes = self.m.materialize(
-            [
-                _event(
-                    self.layers,
-                    {
-                        "layer_id": "01INLINEGEOJSONAAAAAAAAAAA",
-                        "name": "Merged points",
-                        "layer_type": "vector",
-                        "uri": "",
-                        "inline_geojson": {"type": "FeatureCollection", "features": []},
-                    },
-                )
-            ]
-        )
-        self.assertTrue(
-            any("staged to session temp" in n for n in notes), notes
-        )
-        self.m.cleanup_session()
-
 
 class TestMeshStagingFallback(unittest.TestCase):
     def setUp(self):

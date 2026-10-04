@@ -198,19 +198,6 @@ async def _handle_layer_delete(
     ]
     state.emitter.reset_loaded_layers(survivors)
 
-    # Re-inline surviving vectors BEFORE the emit, so a delete never transiently
-    # drops sibling vector layers: only ids already in the inline side-table get
-    # an inline payload, and a vector layer with none cannot render. The call is
-    # idempotent, so a full side-table makes this a cheap no-op.
-    try:
-        await state.emitter.reinline_vector_layers()
-    except Exception:  # noqa: BLE001 -- re-inline is best-effort
-        logger.warning(
-            "layer-delete vector re-inline failed session=%s case=%s",
-            state.session_id,
-            target_case,
-        )
-
     # Emit the refreshed session state: the client replaces rather than
     # reconciles, so the now-absent layer disappears, and the fan-out is
     # session-scoped, so every connection converges on the new list.

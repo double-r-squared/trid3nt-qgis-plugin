@@ -129,14 +129,12 @@ def build_ws_url(base_url: str, token: Optional[str] = None) -> str:
 
 @dataclass
 class LayerEvent:
-    """One row of ``session-state.loaded_layers`` (ProjectLayerSummary +
-    the additive ``inline_geojson`` the local agent merges in)."""
+    """One row of ``session-state.loaded_layers`` (a ProjectLayerSummary)."""
 
     layer_id: str
     name: str
     layer_type: str  # "raster" | "vector" | ...
     uri: str
-    inline_geojson: Optional[dict] = None
     opacity: Optional[float] = None
     visible: bool = True
     legend: Optional[dict] = None
@@ -166,9 +164,6 @@ def parse_layer_events(session_state_payload: dict) -> list[LayerEvent]:
         uri = row.get("uri")
         if not isinstance(layer_id, str) or not layer_id:
             continue
-        inline = row.get("inline_geojson")
-        if not isinstance(inline, dict):
-            inline = None
         dropped: list = []
         raw_opacity = row.get("opacity")
         opacity = raw_opacity if formatting.is_finite_number(raw_opacity) else None
@@ -187,7 +182,6 @@ def parse_layer_events(session_state_payload: dict) -> list[LayerEvent]:
                 name=str(row.get("name") or layer_id),
                 layer_type=str(row.get("layer_type") or "raster"),
                 uri=uri if isinstance(uri, str) else "",
-                inline_geojson=inline,
                 opacity=opacity,
                 visible=bool(row.get("visible", True)),
                 legend=legend,

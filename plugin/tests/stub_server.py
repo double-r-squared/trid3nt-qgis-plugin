@@ -84,7 +84,7 @@ RASTER_LAYER_ROW: dict[str, Any] = {
     },
 }
 
-# A vector row with the additive inline_geojson merge (shape).
+# A vector row carrying a >64 KiB note, so the frame takes the 64-bit length.
 VECTOR_LAYER_ROW: dict[str, Any] = {
     "layer_id": "01STUBVECTORAAAAAAAAAAAAAA",
     "name": "Buildings",
@@ -93,25 +93,10 @@ VECTOR_LAYER_ROW: dict[str, Any] = {
     "visible": True,
     "role": "context",
     "temporal": False,
-    "inline_geojson": {
-        "type": "FeatureCollection",
-        "features": [
-            {
-                "type": "Feature",
-                "geometry": {
-                    "type": "Polygon",
-                    "coordinates": [
-                        [[-82.55, 35.59], [-82.55, 35.60], [-82.54, 35.60], [-82.54, 35.59], [-82.55, 35.59]]
-                    ],
-                },
-                "properties": {"height_m": 12.5, "pad": "x" * 70000},
-            }
-        ],
-    },
+    "notes": ["x" * 70000],
 }
 
-# An s3-only vector row (no inline geojson) -- exercises the MinIO translation
-# path client-side.
+# A second s3 vector row -- exercises the MinIO translation path client-side.
 S3_VECTOR_LAYER_ROW: dict[str, Any] = {
     "layer_id": "01STUBS3VECTORAAAAAAAAAAAA",
     "name": "Rivers",
@@ -762,7 +747,7 @@ class StubAgentServer:
                     },
                     case_id=case_id,
                 )
-                # The >64 KiB inline_geojson pad forces the 64-bit-length
+                # The >64 KiB vector note forces the 64-bit-length
                 # frame path in the client's frame decoder.
                 await send(
                     "session-state",

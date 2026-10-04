@@ -211,7 +211,6 @@ _EMITTER_API_NAMES = frozenset(
         "add_loaded_layer",
         "update_progress",
         "start_pipeline",
-        "reinline_vector_layers",
     }
 )
 

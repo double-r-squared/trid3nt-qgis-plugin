@@ -33,17 +33,6 @@ async def _replay_active_case_layers(state: SessionState) -> None:
         # after a socket blip reuses the original extent with no re-open.
         _cache_case_bbox_from_session_state(state, session_state)
         state.emitter.reset_loaded_layers(session_state.loaded_layers)
-        # Repopulate the inline-vector side-table so the replayed session state
-        # carries renderable vectors; a client never fetches object-store uris
-        # itself.
-        try:
-            await state.emitter.reinline_vector_layers()
-        except Exception:  # noqa: BLE001 -- re-inline is best-effort
-            logger.warning(
-                "session-resume vector re-inline failed session=%s case=%s",
-                state.session_id,
-                case_id,
-            )
         # Seed the emitter's chat mirror from the SAME state already fetched
         # above, never a second read, so a bare reconnect re-renders the chat
         # too and not only the layers. Best-effort.

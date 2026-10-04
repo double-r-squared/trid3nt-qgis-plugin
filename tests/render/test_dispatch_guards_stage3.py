@@ -241,8 +241,7 @@ def _stub_fetch_tool():
 
     def _fn(bbox, **_kw) -> LayerURI:
         _FETCHES.append({"bbox": bbox})
-        # Raster-shaped so the emitter keeps the layer without attempting a
-        # vector densify read.
+        # Raster-shaped, so the emitter keeps the layer as a plain row.
         return LayerURI(
             layer_id=f"buildings-{len(_FETCHES)}",
             name="Building Footprints",

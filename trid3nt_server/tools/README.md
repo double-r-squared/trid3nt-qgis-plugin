@@ -16,7 +16,6 @@ the cache shim are the two seams they all pass through.
 | `tool_arg_normalizer.py` | Call-site kwargs cleanup, so an invented argument does not fail a call the tool could still take. |
 | `tool_query_corpus.yaml` | The routing phrasings tool retrieval scores an ask against. |
 | `_uri_util.py` | The layer-uri query-strip helper, shared by the tools that read a published layer's object. |
-| `vector_tiles.py` | The dense-vector seam: simplify, cap and round a FeatureCollection before it is attached to the inline-GeoJSON emit path. |
 
 ## Subfolders
 

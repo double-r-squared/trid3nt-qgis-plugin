@@ -162,18 +162,14 @@ async def test_vector_input_surfaced_on_loop():
     tokens = _bind(emitter, dispatched="model_dye_release_scenario",
                    loop=asyncio.get_running_loop())
     try:
-        with patch(
-            "trid3nt_server.render.pipeline_emitter._read_vector_uri_as_geojson",
-            return_value={"type": "FeatureCollection", "features": []},
-        ):
-            maybe_emit_input_on_fetch(
-                _spec(name="fetch_river_geometry", source_class="osm",
-                      layer_type="vector", native_hint=None),
-                {}, _vector_layer(), visualize=None, purpose="river geometry",
-            )
-            # let the fire-and-forget task run.
-            await asyncio.sleep(0)
-            await asyncio.sleep(0)
+        maybe_emit_input_on_fetch(
+            _spec(name="fetch_river_geometry", source_class="osm",
+                  layer_type="vector", native_hint=None),
+            {}, _vector_layer(), visualize=None, purpose="river geometry",
+        )
+        # let the fire-and-forget task run.
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
     finally:
         _unbind(tokens)
 

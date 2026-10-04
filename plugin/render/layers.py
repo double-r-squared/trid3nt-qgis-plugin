@@ -6,7 +6,6 @@ preset is a BIRTH default: an adopted layer is never repainted."""
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import shutil
@@ -726,23 +725,10 @@ class LayerMaterializer:
             layer, event, f"raster '{event.name}' added ({'; '.join(notes)})")
 
     def _add_vector(self, event: LayerEvent) -> str:
-        if event.inline_geojson is not None:
-            path = os.path.join(
-                self._ensure_temp_dir(),
-                f"{_safe_filename(event.name)}_{event.layer_id[:8]}.geojson",
-            )
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(event.inline_geojson, f)
-            layer = QgsVectorLayer(path, event.name, "ogr")
-            if not layer.isValid():
-                return f"vector '{event.name}': GeoJSON did not load -- skipped"
-            return self._add_to_group(
-                layer, event, self._vector_note(
-                    layer, event, "staged to session temp, inline GeoJSON"))
-
+        """A vector read in place from the store through ``/vsis3``."""
         path = s3_to_vsis3(event.uri or "")
         if path is None:
-            return f"vector '{event.name}': no inline GeoJSON and non-s3 uri -- skipped"
+            return f"vector '{event.name}': not an s3:// uri ({event.uri}) -- skipped"
         layer = QgsVectorLayer(path, event.name, "ogr")
         if not layer.isValid():
             return f"vector '{event.name}': stream failed ({path}) -- skipped"

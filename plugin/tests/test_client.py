@@ -113,7 +113,7 @@ class TestPureHelpers(unittest.TestCase):
         self.assertEqual(raster.legend["colormap"], "viridis")
         self.assertEqual(raster.legend["vmin"], 600.0)
         self.assertEqual(vector.layer_type, "vector")
-        self.assertEqual(vector.inline_geojson["type"], "FeatureCollection")
+        self.assertEqual(vector.uri, VECTOR_LAYER_ROW["uri"])
         # Defensive: junk payloads
         self.assertEqual(tc.parse_layer_events({}), [])
         self.assertEqual(tc.parse_layer_events({"loaded_layers": "junk"}), [])
@@ -348,9 +348,9 @@ class TestCaseAndChat(StubServerTestCase):
         self.assertEqual(pipeline_events[0].data["steps"][0].tool_name, "fetch_elevation")
         self.assertEqual(pipeline_events[-1].data["steps"][0].state, "complete")
 
-        # Layer events: s3 COG raster + inline-geojson vector + s3-only vector.
-        # The inline pad is >64 KiB so this round trip also proves the 64-bit
-        # frame-length decode path.
+        # Layer events: s3 COG raster + two s3 vectors. The first vector's note
+        # is >64 KiB so this round trip also proves the 64-bit frame-length
+        # decode path.
         layer_events = [e for e in events if e.kind == "session-state"][-1].data["layers"]
         by_id = {le.layer_id: le for le in layer_events}
         raster = by_id[RASTER_LAYER_ROW["layer_id"]]
@@ -358,10 +358,9 @@ class TestCaseAndChat(StubServerTestCase):
         self.assertEqual(raster.legend["kind"], "continuous")
         vector = by_id[VECTOR_LAYER_ROW["layer_id"]]
         self.assertEqual(
-            len(vector.inline_geojson["features"][0]["properties"]["pad"]), 70000
+            len(vector.raw["notes"][0]), 70000
         )
         s3vec = by_id[S3_VECTOR_LAYER_ROW["layer_id"]]
-        self.assertIsNone(s3vec.inline_geojson)
         self.assertEqual(
             tc.s3_to_vsis3(s3vec.uri), "/vsis3/trid3nt-runs/vectors/rivers.geojson"
         )

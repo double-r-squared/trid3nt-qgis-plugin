@@ -134,12 +134,6 @@ async def _sync_case_context(
         # which is what feeds the reuse short-circuits and the per-turn note.
         _cache_case_bbox_from_session_state(state, session_state)
         state.emitter.reset_loaded_layers(session_state.loaded_layers)
-        # Repopulate the inline-vector side-table, so this connection's next
-        # session-state emission carries renderable vectors. Best-effort.
-        try:
-            await state.emitter.reinline_vector_layers()
-        except Exception:  # noqa: BLE001
-            logger.warning("case-context-sync vector re-inline failed")
         # Seed the URI registry from the persisted Case layers, so handle
         # indirection works for layers produced in PRIOR sessions of this Case:
         # the history was just cleared, and the registry is the only place the
@@ -253,18 +247,6 @@ async def _emit_case_open(
         await _seed_registry_for_case(
             state, case_id, session_state.loaded_layers
         )
-        # A persisted VECTOR layer carries no inline geometry, since the
-        # side-table is in-memory, so the payload above rehydrated entries a
-        # client cannot render. Re-inline from the artifact and emit one
-        # follow-up session state so the vectors repaint.
-        try:
-            _reinlined = await state.emitter.reinline_vector_layers()
-            if _reinlined:
-                await state.emitter.emit_session_state()
-        except Exception:  # noqa: BLE001 -- rehydration is best-effort
-            logger.exception(
-                "case-open vector re-inline failed case=%s", case_id
-            )
 
     # Rehydrate the conversation from THIS Case's persisted messages, so a
     # follow-up turn in a reopened Case sees prior work instead of recomputing

@@ -56,12 +56,7 @@ async def test_publish_input_layer_forces_role_input_and_no_bbox():
         role="primary",
         bbox=(-1.0, -1.0, 1.0, 1.0),
     )
-    # Stub the (vector) inline-read so add_loaded_layer does not hit S3.
-    with patch(
-        "trid3nt_server.render.pipeline_emitter._read_vector_uri_as_geojson",
-        return_value={"type": "FeatureCollection", "features": []},
-    ):
-        ok = await publish_input_layer(emitter, layer)
+    ok = await publish_input_layer(emitter, layer)
 
     assert ok is True
     assert len(emitter._loaded_layers) == 1

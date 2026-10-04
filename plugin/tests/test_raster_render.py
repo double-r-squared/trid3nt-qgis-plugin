@@ -391,7 +391,6 @@ def _event(layers, row_or_fields):
         name=row.get("name") or row["layer_id"],
         layer_type=row.get("layer_type", "raster"),
         uri=row.get("uri", ""),
-        inline_geojson=row.get("inline_geojson"),
         opacity=row.get("opacity"),
         visible=row.get("visible", True),
         legend=row.get("legend"),

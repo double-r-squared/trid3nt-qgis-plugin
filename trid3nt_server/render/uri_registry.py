@@ -379,7 +379,7 @@ class SessionUriRegistry:
                 self._records[layer_id].summary.update(
                     {k: node[k] for k in _SUMMARY if node.get(k) is not None})
             for key, value in list(node.items())[:_WALK_MAX_ITEMS]:
-                if key in {"inline_geojson", "features", "geometry", "chat_history"}:
+                if key in {"features", "geometry", "chat_history"}:
                     continue  # huge / URI-free subtrees
                 self._walk(value, tool_name, depth + 1, seen)
             return

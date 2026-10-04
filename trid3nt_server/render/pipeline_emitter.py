@@ -316,208 +316,6 @@ def _elapsed_ms(started_at: datetime | None, completed_at: datetime | None) -> i
     return int(round(delta))
 
 
-def _fgb_bytes_to_geojson(fgb_bytes: bytes) -> dict[str, Any] | None:
-    """Convert FlatGeobuf bytes to a GeoJSON FeatureCollection dict.
-
-    ``None`` when the read fails; the output is always EPSG:4326.
-    """
-    import os
-    import tempfile
-    try:
-        import geopandas as gpd  # type: ignore[import-not-found]
-    except ImportError as exc:
-        logger.warning("_fgb_bytes_to_geojson: geopandas missing: %s", exc)
-        return None
-    tmp_path: str | None = None
-    try:
-        try:
-            with tempfile.NamedTemporaryFile(
-                suffix=".fgb", delete=False, prefix="trid3nt_inline_"
-            ) as f:
-                f.write(fgb_bytes)
-                tmp_path = f.name
-            gdf = gpd.read_file(tmp_path, engine="pyogrio")
-        finally:
-            if tmp_path is not None:
-                try:
-                    os.unlink(tmp_path)
-                except OSError:
-                    pass
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("_fgb_bytes_to_geojson: read failed: %s", exc)
-        return None
-    if gdf is None or len(gdf) == 0:
-        return {"type": "FeatureCollection", "features": []}
-    try:
-        gdf = gdf[gdf.geometry.notna()]
-    except Exception:  # noqa: BLE001
-        pass
-    try:
-        if gdf.crs is None:
-            gdf = gdf.set_crs("EPSG:4326")
-        elif str(gdf.crs).upper() not in {"EPSG:4326", "WGS84"}:
-            gdf = gdf.to_crs("EPSG:4326")
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("_fgb_bytes_to_geojson: CRS reproj failed: %s", exc)
-    try:
-        import json
-        return json.loads(gdf.to_json())
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("_fgb_bytes_to_geojson: GeoJSON dump failed: %s", exc)
-        return None
-
-
-async def _read_vector_uri_as_geojson(uri: str) -> dict[str, Any] | None:
-    """Read a vector layer uri and return it as a GeoJSON dict.
-    ``.fgb``, ``.json`` and ``.geojson`` only; ``None`` on any failure. The read
-    and the densify both run in a worker thread, never on the asyncio loop.
-    """
-    # s3:// reads go through the ONE object-store seam;
-    # everything else is a local path read via fsspec.
-    if "://" in uri:
-        key = uri.split("://", 1)[1].split("/", 1)[-1]
-    else:
-        key = uri
-    ext = key.rsplit(".", 1)[-1].lower() if "." in key else ""
-
-    # A session resume re-reads and re-densifies the SAME content-addressed
-    # artifact per active-case vector layer, and even off-loop that repeated
-    # simplify of tens of thousands of features saturates the box. The cached
-    # value IS what the off-loop path would recompute, so a repeat read is an
-    # O(1) hit with no repeat GET and no repeat simplify.
-    cache_key = _densified_cache_key(uri)
-    cached = _DENSIFIED_FC_CACHE_BY_URI.get(cache_key)
-    if cached is not None:
-        return cached
-
-    def _read_and_parse() -> dict[str, Any] | None:
-        try:
-            if uri.startswith("s3://"):
-                from trid3nt_server.workflows.solver.solver import _read_object_bytes
-
-                data = _read_object_bytes(uri)
-            else:
-                # Local path (test / dev convenience).
-                import fsspec  # type: ignore[import-not-found]
-                with fsspec.open(uri, "rb") as f:
-                    data = f.read()
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "_read_vector_uri_as_geojson: object read failed uri=%s: %s", uri, exc,
-            )
-            return None
-        if ext == "fgb":
-            obj = _fgb_bytes_to_geojson(data)
-        elif ext in {"json", "geojson"}:
-            try:
-                import json
-                obj = json.loads(data)
-                if not isinstance(obj, dict) or obj.get("type") != "FeatureCollection":
-                    logger.warning(
-                        "_read_vector_uri_as_geojson: not a FeatureCollection uri=%s", uri,
-                    )
-                    return None
-            except Exception as exc:  # noqa: BLE001
-                logger.warning(
-                    "_read_vector_uri_as_geojson: JSON parse failed uri=%s: %s", uri, exc,
-                )
-                return None
-        else:
-            logger.warning(
-                "_read_vector_uri_as_geojson: unsupported extension '%s' for uri=%s",
-                ext, uri,
-            )
-            return None
-        # The densify is CPU-heavy - a topology-preserving simplify plus a
-        # feature cap over thousands of footprints - and MUST run here in the
-        # executor thread, never back on the asyncio loop after the executor
-        # returns: on the loop it blocks the WS keepalive.
-        return _densify_off_loop(obj, uri)
-
-    result = await asyncio.to_thread(_read_and_parse)
-    if result is not None:
-        # ONLY a successful read is cached: a transient object-store failure must
-        # be retried, never pinned.
-        _store_densified_fc(cache_key, result)
-    return result
-
-
-def _densify_off_loop(geojson_obj: Any, uri: str) -> Any:
-    """Densify a just-read FeatureCollection and stamp the URI-keyed side-table.
-    Runs INSIDE the worker thread, never on the asyncio loop. A densify failure
-    falls through to the undensified FC: a render always beats a tag.
-    """
-    if not (isinstance(geojson_obj, dict)
-            and geojson_obj.get("type") == "FeatureCollection"):
-        return geojson_obj
-    try:
-        from trid3nt_server.tools.vector_tiles import densify_if_needed
-
-        geojson_obj, _density_meta = densify_if_needed(geojson_obj, layer_id=uri)
-        if _density_meta is not None:
-            # FIFO-evict past the cap so this module-global side-table cannot grow
-            # without limit in an always-on process; a dict preserves insertion
-            # order, so the head is the oldest entry.
-            if uri in _LAST_DENSITY_META_BY_URI:
-                del _LAST_DENSITY_META_BY_URI[uri]
-            _LAST_DENSITY_META_BY_URI[uri] = _density_meta
-            while len(_LAST_DENSITY_META_BY_URI) > _MAX_DENSITY_META_ENTRIES:
-                _LAST_DENSITY_META_BY_URI.pop(
-                    next(iter(_LAST_DENSITY_META_BY_URI))
-                )
-    except Exception as exc:  # noqa: BLE001 -- never block a vector render
-        logger.warning(
-            "_read_vector_uri_as_geojson: densify failed uri=%s: %s", uri, exc,
-        )
-    return geojson_obj
-
-
-#: The most-recent dense-vector ``DensifyMeta`` keyed by the vector artifact URI,
-#: stashed here because the reader is a module function and the per-emitter table
-#: is keyed by layer_id. Module scope is safe: the uri is content-addressed, so
-#: two sessions reading the same artifact compute identical meta. FIFO-bounded at
-#: the write site.
-_MAX_DENSITY_META_ENTRIES: int = 256
-_LAST_DENSITY_META_BY_URI: dict[str, Any] = {}
-
-
-#: Cache of the DENSIFIED FeatureCollection, keyed by the content-addressed uri
-#: folded with the densify params. The cached value is already capped to
-#: MAX_INLINE_FEATURES, so an entry is bounded in size, and the map is FIFO-
-#: bounded like the meta table above. Only the event loop reads or writes it -
-#: the worker thread never touches it - so no cross-thread locking is needed.
-_MAX_DENSIFIED_FC_CACHE_ENTRIES: int = 32
-_DENSIFIED_FC_CACHE_BY_URI: dict[str, dict[str, Any]] = {}
-
-
-def _densified_cache_key(uri: str) -> str:
-    """Cache key for the densified output of one vector uri.
-    The densify params are folded in, so a config change invalidates stale
-    entries instead of serving a differently-simplified FeatureCollection.
-    """
-    try:
-        from trid3nt_server.tools.vector_tiles import (
-            DENSE_VECTOR_THRESHOLD,
-            MAX_INLINE_FEATURES,
-        )
-
-        return f"{uri}|t={DENSE_VECTOR_THRESHOLD}|c={MAX_INLINE_FEATURES}"
-    except Exception:  # noqa: BLE001 -- never let key-building block a read
-        return uri
-
-
-def _store_densified_fc(key: str, fc: dict[str, Any]) -> None:
-    """Store a densified FC in the bounded FIFO cache; the oldest is evicted.
-
-    A refreshed key is re-inserted at the tail, so recency survives the eviction.
-    """
-    if key in _DENSIFIED_FC_CACHE_BY_URI:
-        del _DENSIFIED_FC_CACHE_BY_URI[key]
-    _DENSIFIED_FC_CACHE_BY_URI[key] = fc
-    while len(_DENSIFIED_FC_CACHE_BY_URI) > _MAX_DENSIFIED_FC_CACHE_ENTRIES:
-        _DENSIFIED_FC_CACHE_BY_URI.pop(next(iter(_DENSIFIED_FC_CACHE_BY_URI)))
-
-
 def summary_of(layer: LayerURI) -> ProjectLayerSummary:
     """THE mint: one client-bound ``LayerURI`` as the row a case and a session
     both carry. A layer reaches a case through this function whether a turn
@@ -703,18 +501,6 @@ class PipelineEmitter:
         #: every seeded z_index so a later append cannot collide with one.
         self._next_z: int = 0
 
-        #: Inline GeoJSON side-table for vector layers.
-        #: Keyed by ``layer_id``; merged into ``loaded_layers`` wire payload
-        #: in ``emit_session_state`` as additive ``inline_geojson`` field.
-        #: Preserves ``ProjectLayerSummary`` extra="forbid" strictness.
-        self._inline_geojson_by_layer_id: dict[str, dict[str, Any]] = {}
-
-        #: Dense-vector density tags keyed by ``layer_id``. A vector layer that
-        #: crossed the threshold and was simplified rides its meta out on the
-        #: wire, so the client can state the degradation rather than hide it.
-        #: Same lifecycle as the inline side-table above.
-        self._density_meta_by_layer_id: dict[str, Any] = {}
-
         #: Terminal summary of the most recent dispatched step. Carries the
         #: AUTHORITATIVE ``started_at``/``duration_ms``, so a persisted card
         #: records exactly the duration the live card displayed and no second
@@ -846,10 +632,6 @@ class PipelineEmitter:
             self._loaded_layers = []
             # A flush (new Case) restarts the stacking counter.
             self._next_z = 0
-            # flush inline side-table alongside loaded_layers.
-            self._inline_geojson_by_layer_id.clear()
-            # flush the dense-vector density tags too.
-            self._density_meta_by_layer_id.clear()
             return
         seeded: list[ProjectLayerSummary] = []
         for layer_dict in layers:
@@ -868,15 +650,6 @@ class PipelineEmitter:
         # z_index at all leaves the counter at 0.
         _seeded_z = [s.z_index for s in seeded if s.z_index is not None]
         self._next_z = (max(_seeded_z) + 1) if _seeded_z else 0
-        # keep only inline entries that match a still-loaded layer.
-        active_ids = {layer.layer_id for layer in seeded}
-        self._inline_geojson_by_layer_id = {
-            k: v for k, v in self._inline_geojson_by_layer_id.items() if k in active_ids
-        }
-        # prune density tags to the still-loaded layers too.
-        self._density_meta_by_layer_id = {
-            k: v for k, v in self._density_meta_by_layer_id.items() if k in active_ids
-        }
 
     def merge_loaded_layers_from(self, other: "PipelineEmitter") -> int:
         """Union ``other``'s in-memory loaded layers into THIS emitter.
@@ -906,47 +679,8 @@ class PipelineEmitter:
             self._loaded_layers.append(new_layer)
             existing_keys.add(key)
             existing_ids.add(new_layer.layer_id)
-            ig = other._inline_geojson_by_layer_id.get(layer.layer_id)
-            if ig is not None:
-                self._inline_geojson_by_layer_id[new_layer.layer_id] = ig
-            dm = other._density_meta_by_layer_id.get(layer.layer_id)
-            if dm is not None:
-                self._density_meta_by_layer_id[new_layer.layer_id] = dm
             merged += 1
         return merged
-
-    async def reinline_vector_layers(self) -> int:
-        """Rebuild the inline-GeoJSON side-table for persisted vector layers.
-        The side-table is in-memory only, so a reopened Case seeds its layers
-        without payloads. Best-effort per layer; returns how many were re-inlined.
-        """
-        count = 0
-        for layer in self._loaded_layers:
-            if layer.layer_type != "vector":
-                continue
-            if layer.layer_id in self._inline_geojson_by_layer_id:
-                continue
-            uri = layer.uri or ""
-            if not uri:
-                continue
-            try:
-                geojson_obj = await _read_vector_uri_as_geojson(uri)
-            except Exception:  # noqa: BLE001 -- per-layer best-effort
-                logger.warning(
-                    "reinline_vector_layers: read failed layer_id=%s uri=%s",
-                    layer.layer_id,
-                    uri,
-                )
-                continue
-            if geojson_obj is not None:
-                self._inline_geojson_by_layer_id[layer.layer_id] = geojson_obj
-                # Lift any density tag from the uri-keyed stash into the
-                # layer_id-keyed map, so a re-inlined layer is stamped too.
-                _meta = _LAST_DENSITY_META_BY_URI.get(uri)
-                if _meta is not None:
-                    self._density_meta_by_layer_id[layer.layer_id] = _meta
-                count += 1
-        return count
 
     def current_snapshot(self) -> PipelineSnapshot | None:
         """The current ``PipelineSnapshot``, or ``None`` when none is running.
@@ -1285,12 +1019,6 @@ class PipelineEmitter:
         for i, existing in enumerate(self._loaded_layers):
             if (existing.uri, existing.dataset_group) == (summary.uri,
                                                           summary.dataset_group):
-                # Drop the SUPERSEDED layer_id's side tables (inline GeoJSON /
-                # density meta) so a merge cannot leave an orphan keyed on the
-                # old id. No-op for raster flood layers (no inline GeoJSON).
-                if existing.layer_id != summary.layer_id:
-                    self._inline_geojson_by_layer_id.pop(existing.layer_id, None)
-                    self._density_meta_by_layer_id.pop(existing.layer_id, None)
                 # REUSE the superseded layer's slot so a re-publish (a styled
                 # row superseding a styleless one) keeps its stacking position
                 # instead of jumping to the top. Falls back to a fresh slot only
@@ -1308,34 +1036,6 @@ class PipelineEmitter:
             # top of the stack (highest z_index) is the most-recently-added.
             summary.z_index = self._alloc_z()
             self._loaded_layers.append(summary)
-        # Vector inline-GeoJSON. Best-effort; failure is non-fatal.
-        # Logs loudly so the audit can grep for "inlined GeoJSON layer_id=...".
-        if layer.layer_type == "vector":
-            try:
-                geojson_obj = await _read_vector_uri_as_geojson(layer.uri)
-            except Exception as exc:  # noqa: BLE001
-                logger.warning(
-                    "add_loaded_layer: inline GeoJSON conversion failed for "
-                    "layer_id=%s uri=%s; falling back to URI-only delivery: %s",
-                    layer.layer_id, layer.uri, exc,
-                )
-                self._inline_geojson_by_layer_id.pop(layer.layer_id, None)
-            else:
-                if geojson_obj is not None:
-                    self._inline_geojson_by_layer_id[layer.layer_id] = geojson_obj
-                    feat_count = len(geojson_obj.get("features") or [])
-                    logger.info(
-                        "add_loaded_layer: inlined GeoJSON layer_id=%s features=%d",
-                        layer.layer_id, feat_count,
-                    )
-                    # lift any dense-vector density tag (keyed by uri in the
-                    # module stash) into the per-emitter map (keyed by layer_id)
-                    # so the wire layer carries the honest simplified/capped tag.
-                    _meta = _LAST_DENSITY_META_BY_URI.get(layer.uri)
-                    if _meta is not None:
-                        self._density_meta_by_layer_id[layer.layer_id] = _meta
-                    else:
-                        self._density_meta_by_layer_id.pop(layer.layer_id, None)
         await self.emit_session_state()
         # Emit zoom-to map-command when the LayerURI carries a bbox.
         if layer.bbox is not None:
@@ -1346,30 +1046,12 @@ class PipelineEmitter:
 
     async def emit_session_state(self) -> None:
         """Emit a full ``session-state`` envelope.
-        A vector layer holding an inline GeoJSON entry carries it out on the wire
-        as an additive field over the strict schema.
+        A vector row carries only its store uri: the dock streams it from there.
         """
         snap = self.current_snapshot()
-        # Build loaded_layers dump with inline_geojson merged in.
-        loaded_dump_with_inline: list[dict[str, Any]] = []
-        for _layer in self._loaded_layers:
-            _d = _layer.model_dump(mode="json")
-            _inline = self._inline_geojson_by_layer_id.get(_layer.layer_id)
-            if _inline is not None:
-                _d["inline_geojson"] = _inline
-            # stamp the dense-vector density tag (additive, like
-            # inline_geojson) so the client can surface "simplified for
-            # performance" honestly. Best-effort; a malformed meta is skipped.
-            _meta = self._density_meta_by_layer_id.get(_layer.layer_id)
-            if _meta is not None:
-                try:
-                    _d.update(_meta.as_wire_tag())
-                except Exception:  # noqa: BLE001
-                    pass
-            loaded_dump_with_inline.append(_d)
         payload = SessionStatePayload(
             chat_history=list(self._chat_history),
-            loaded_layers=loaded_dump_with_inline,
+            loaded_layers=[l.model_dump(mode="json") for l in self._loaded_layers],
             pipeline_history=list(self._pipeline_history),
             current_pipeline=(snap.model_dump(mode="json") if snap is not None else None),
             map_view=self._map_view,
@@ -1586,7 +1268,7 @@ class PipelineEmitter:
             # "running" (the stuck-card bug). route through the single
             # emission seam first. The seam drops (returns None) a renderable
             # raster carrying a raw gs:// uri (the publish-failure degraded path)
-            # so it never paints a broken layer row; vector inline-GeoJSON
+            # so it never paints a broken layer row; vector
             # LayerURIs and WMS-URL rasters pass untouched. The tool
             # result is unaffected -- a dropped layer is still narrated honestly
             # and the retry loop can act.
