@@ -57,12 +57,19 @@ def _inherited(params: dict[str, Any]) -> dict[str, Any]:
 
 
 def _readable(params: dict[str, Any]) -> dict[str, Any]:
-    """``params`` with every case layer named by its id swapped for its store
-    uri: the session opens a layer by that uri, never by an id it may not hold."""
+    """``params`` with every case layer named by its id, a multi-layer list
+    included, swapped for its store uri: the session opens a layer by that uri,
+    never by an id it may not hold."""
     from trid3nt_server.render.uri_registry import lookup_uri_for_handle
 
-    return {key: (lookup_uri_for_handle(value) or value) if isinstance(value, str)
-            else value for key, value in params.items()}
+    def readable(value: Any) -> Any:
+        if isinstance(value, str):
+            return lookup_uri_for_handle(value) or value
+        if isinstance(value, list):
+            return [readable(item) for item in value]
+        return value
+
+    return {key: readable(value) for key, value in params.items()}
 
 
 def _case_layer(algorithm: str, output: dict[str, Any], **fields: Any) -> QgisLayerURI:

@@ -173,6 +173,13 @@ def _capped_copy(root: str) -> None:
         })
         assert out["status"] == "ok" and out["result"]["feature_count"] == 50, (named, out)
     print("[processing] a capped painted layer reaches QGIS as its full source: 50 of 50")
+    merged = run_processing_request({
+        "request_id": "01HARNESSPROCESSINGFULLCC", "kind": "algorithm",
+        "algorithm": "native:mergevectorlayers",
+        "params": {"LAYERS": ["Survey", "ehydro-survey-1"], "CRS": "EPSG:4326"},
+    })
+    assert merged["status"] == "ok" and merged["result"]["feature_count"] == 100, merged
+    print("[processing] a painted layer named in a list reaches QGIS as its full source")
 
     painted.removeCustomProperty("trid3nt/source_uri")
     refused = run_processing_request({

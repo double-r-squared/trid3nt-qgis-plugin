@@ -250,13 +250,15 @@ async def test_a_case_layer_rides_the_wire_as_its_store_uri(
     token = activate_registry(registry)
     try:
         await run_qgis_algorithm("gdal:gridinversedistance", {
-            "INPUT": out.layer_id, "Z_FIELD": "z", "MASK": "dem-1"})
+            "INPUT": out.layer_id, "Z_FIELD": "z", "MASK": "dem-1",
+            "LAYERS": [out.layer_id, "dem-1", "EPSG:4326"]})
     finally:
         deactivate_registry(token)
     await reply
     sent = emitter.sent[-1][1].params
     assert sent["INPUT"] == out.uri and out.uri.startswith("s3://")
     assert sent["MASK"] == "s3://bucket/dem.tif" and sent["Z_FIELD"] == "z"
+    assert sent["LAYERS"] == [out.uri, "s3://bucket/dem.tif", "EPSG:4326"]
 
 
 @pytest.mark.asyncio

@@ -118,6 +118,8 @@ class TestProcessingInQgis(unittest.TestCase):
         self.assertIn("[processing] reproject -> IDW over the case layer", proc.stdout)
         self.assertIn("[processing] a capped painted layer reaches QGIS as its full source",
                       proc.stdout)
+        self.assertIn("[processing] a painted layer named in a list reaches QGIS as its full source",
+                      proc.stdout)
         self.assertIn("[processing] a painted layer with no full source is refused by name",
                       proc.stdout)
         self.assertIn("[processing] a case layer the store does not hold is refused by name",
@@ -182,3 +184,10 @@ def test_a_painted_layer_with_no_full_source_is_refused_by_name():
     painted = _Layer("pts_7", "Soundings", agent_id="ehydro-1")
     with pytest.raises(ValueError, match="case layer 'Soundings' has no full source"):
         _layer_named(_Project(painted), "Soundings")
+
+
+def test_a_layer_named_in_a_list_param_is_resolved_like_a_single_one(monkeypatch):
+    from plugin.render import processing
+
+    monkeypatch.setattr(processing, "_layer_named", lambda project, value: f"<{value}>")
+    assert processing._resolved(None, ["Survey", ["dem-1"], 3]) == ["<Survey>", ["<dem-1>"], 3]

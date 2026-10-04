@@ -65,10 +65,7 @@ def run_algorithm(algorithm: str, params: dict) -> Dict[str, Any]:
             "the Processing reference lists it (native:slope, gdal:contour, ...)"
         )
     project = QgsProject.instance()
-    resolved = {
-        key: _layer_named(project, value) if isinstance(value, str) else value
-        for key, value in params.items()
-    }
+    resolved = {key: _resolved(project, value) for key, value in params.items()}
     written = [p for p in alg.parameterDefinitions() if p.isDestination()]
     destinations = [p.name() for p in written]
     for p in written:
@@ -136,6 +133,16 @@ def _gdal_config_in_environ():
     finally:
         for key in added:
             os.environ.pop(key, None)
+
+
+def _resolved(project: Any, value: Any) -> Any:
+    """A param with every layer it names resolved, a multi-layer list included:
+    QGIS would otherwise resolve a listed name to the painted copy."""
+    if isinstance(value, str):
+        return _layer_named(project, value)
+    if isinstance(value, list):
+        return [_resolved(project, item) for item in value]
+    return value
 
 
 def _layer_named(project: Any, value: str) -> Any:
