@@ -171,7 +171,7 @@ def run(argv: list[str] | None = None) -> int:
         logger.info("--startup-only: tool registry verified; exiting without serving")
         return 0
 
-    from .server import run_server
+    from .server.protocol.loop import run_server
 
     try:
         asyncio.run(run_server())
