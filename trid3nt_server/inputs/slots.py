@@ -35,7 +35,8 @@ from .line import line
 from .observation import observation
 from .wave import wave
 
-__all__ = ["SLOTS", "Slot", "ask_on_canvas", "ingest_slot", "needs_of",
+__all__ = ["SLOTS", "Slot", "ask_on_canvas", "draw_on_canvas", "ingest_slot",
+           "needs_of",
            "role_of"]
 
 logger = logging.getLogger("trid3nt_server.inputs.slots")
@@ -138,6 +139,18 @@ async def ask_on_canvas(role: str, *, tool: str, param: str,
     slot = SLOTS.get(str(role))
     if slot is None or slot.draw is None:
         return None
+    geometry, purpose, prompt = slot.draw
+    drawn = await draw_on_canvas(geometry, tool=tool, param=param,
+                                 prompt=prompt, purpose=purpose,
+                                 input_mode=input_mode)
+    return None if drawn is None else ingest_slot(role, drawn, label=param)
+
+
+async def draw_on_canvas(geometry: str, *, tool: str, param: str, prompt: str,
+                         purpose: str | None = None,
+                         input_mode: Any = None) -> Any:
+    """The one canvas ask: the drawn value as it came, or ``None`` - outside a
+    live ``user_gated`` session, or when nothing was drawn."""
     from trid3nt_server.inputs.gate.input_review import resolve_input_gate_mode
     from trid3nt_server.render.pipeline_emitter import current_emitter
 
@@ -146,12 +159,10 @@ async def ask_on_canvas(role: str, *, tool: str, param: str,
         return None
     from trid3nt_server.inputs.gate.draw_input import gate_draw_input
 
-    geometry, purpose, prompt = slot.draw
     outcome = await gate_draw_input(tool_name=tool, param=param,
                                     geometry=geometry, purpose=purpose,
                                     prompt=prompt)
     if not outcome.drawn:
-        logger.info("%s: the %s slot was not drawn (%s)", tool, role,
-                    outcome.reason)
+        logger.info("%s: %s was not drawn (%s)", tool, param, outcome.reason)
         return None
-    return ingest_slot(role, outcome.value, label=param)
+    return outcome.value

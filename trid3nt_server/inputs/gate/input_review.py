@@ -310,10 +310,6 @@ async def gate_input_review(
             param_sheet=card.param_sheet, tool_args=card.tool_args,
         )
         warning_id = envelope.warning_id
-        loop = asyncio.get_running_loop()
-        fut: asyncio.Future = loop.create_future()
-        _PENDING_CONFIRMATIONS.register(emitter.session_id, warning_id, fut)
-        await emitter.send_envelope("tool-payload-warning", envelope)
         logger.info(
             "input-review gate emitted session=%s tool=%s warning_id=%s "
             "round=%d/%d entries=%d",
@@ -321,7 +317,10 @@ async def gate_input_review(
             len(cur_entries),
         )
         try:
-            decision = await asyncio.wait_for(fut, timeout=float(ttl_seconds))
+            decision = await _PENDING_CONFIRMATIONS.park(
+                emitter.session_id, warning_id,
+                lambda: emitter.send_envelope("tool-payload-warning", envelope),
+                ttl_seconds)
         except asyncio.TimeoutError:
             logger.warning(
                 "input-review gate timeout session=%s tool=%s warning_id=%s",
@@ -333,8 +332,6 @@ async def gate_input_review(
                 "not run", mode="user_gated", rounds_used=round_idx,
                 cancel_code="timeout",
             )
-        finally:
-            _PENDING_CONFIRMATIONS.pop(warning_id, None)
 
         if decision.decision == "proceed":
             logger.info(

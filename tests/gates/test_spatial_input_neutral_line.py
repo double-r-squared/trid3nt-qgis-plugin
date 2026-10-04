@@ -13,9 +13,9 @@ from typing import Any
 import pytest
 
 from trid3nt_server.inputs.gate.cards.spatial_input import _spatial_response_to_result
-from trid3nt_server.inputs.gate.spatial_input import (
+from trid3nt_server.inputs.gate.spatial_roles import (
     SpatialInputParseError,
-    parse_spatial_input_features,
+    parse_drawn_roles,
     split_features_by_role,
 )
 from trid3nt_contracts.common import new_ulid
@@ -49,7 +49,7 @@ def test_split_features_by_role_buckets_line_role():
 
 
 def test_parse_neutral_line_produces_line_coords():
-    parsed = parse_spatial_input_features(_line_fc())
+    parsed = parse_drawn_roles(_line_fc())
     assert parsed.line_coords == [[-85.31, 35.04], [-85.30, 35.05], [-85.29, 35.06]]
     assert parsed.n_lines == 1
     assert parsed.aoi_bbox is None
@@ -59,7 +59,7 @@ def test_parse_line_too_short_raises_typed():
     feat = _line_feature()
     feat["geometry"]["coordinates"] = [[-85.31, 35.04]]  # only 1 position
     with pytest.raises(SpatialInputParseError) as ei:
-        parse_spatial_input_features(
+        parse_drawn_roles(
             {"type": "FeatureCollection", "features": [feat]}
         )
     assert ei.value.error_code == "SPATIAL_INPUT_LINE_TOO_SHORT"
@@ -69,7 +69,7 @@ def test_parse_line_not_linestring_raises_typed():
     feat = _line_feature()
     feat["geometry"] = {"type": "Point", "coordinates": [-85.3, 35.05]}
     with pytest.raises(SpatialInputParseError) as ei:
-        parse_spatial_input_features(
+        parse_drawn_roles(
             {"type": "FeatureCollection", "features": [feat]}
         )
     assert ei.value.error_code == "SPATIAL_INPUT_LINE_NOT_LINESTRING"
@@ -87,7 +87,7 @@ def test_line_and_aoi_coexist():
             ],
         },
     }
-    parsed = parse_spatial_input_features(
+    parsed = parse_drawn_roles(
         {"type": "FeatureCollection", "features": [aoi, _line_feature()]}
     )
     assert parsed.aoi_bbox is not None

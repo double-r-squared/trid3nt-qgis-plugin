@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from trid3nt_contracts.ws import SpatialInputRequestPayload
 
-from ..spatial_input import SpatialInputParseError, parse_spatial_input_features
+from ..spatial_roles import SpatialInputParseError, parse_drawn_roles
 
 logger = logging.getLogger("trid3nt_server.inputs.gate.cards.spatial_input")
 
@@ -127,7 +127,7 @@ def _spatial_response_to_result(
                 ),
             }
         try:
-            parsed = parse_spatial_input_features(response.features)
+            parsed = parse_drawn_roles(response.features)
         except SpatialInputParseError as exc:
             # Honesty floor: a malformed drawn FeatureCollection degrades to a
             # TYPED error result, never a silent success.
@@ -142,7 +142,7 @@ def _spatial_response_to_result(
         result: dict[str, Any] = {
             "status": "ok",
             "geometry_type": "vector_draw",
-            "n_aoi": len(parsed.aoi_features),
+            "n_aoi": len(parsed.aoi_clip_features),
             "n_lines": parsed.n_lines,
             "points": parsed.points,
         }

@@ -26,10 +26,10 @@ from trid3nt_server.server import (
 )
 from trid3nt_server.inputs.gate.pending import _PENDING_SPATIAL_INPUTS
 
-from trid3nt_server.inputs.gate.spatial_input import (
-    ParsedSpatialInput,
+from trid3nt_server.inputs.gate.spatial_roles import (
+    DrawnRoles,
     SpatialInputParseError,
-    parse_spatial_input_features,
+    parse_drawn_roles,
     split_features_by_role,
 )
 from trid3nt_contracts.common import new_ulid
@@ -110,8 +110,8 @@ def test_split_features_by_role_buckets_all_roles():
 
 
 def test_parse_full_drawn_fc_produces_engine_inputs():
-    parsed = parse_spatial_input_features(_full_drawn_fc())
-    assert isinstance(parsed, ParsedSpatialInput)
+    parsed = parse_drawn_roles(_full_drawn_fc())
+    assert isinstance(parsed, DrawnRoles)
     # the neutral section line rides through as bare vertices.
     assert parsed.n_lines == 1
     assert parsed.line_coords == [[-85.305, 35.045], [-85.305, 35.055]]
@@ -130,13 +130,13 @@ def test_parse_full_drawn_fc_produces_engine_inputs():
 
 def test_not_a_feature_collection_raises():
     with pytest.raises(SpatialInputParseError) as ei:
-        parse_spatial_input_features({"type": "Polygon", "coordinates": []})
+        parse_drawn_roles({"type": "Polygon", "coordinates": []})
     assert ei.value.error_code == "SPATIAL_INPUT_NOT_FEATURECOLLECTION"
 
 
 def test_features_not_a_list_raises():
     with pytest.raises(SpatialInputParseError) as ei:
-        parse_spatial_input_features({"type": "FeatureCollection", "features": {}})
+        parse_drawn_roles({"type": "FeatureCollection", "features": {}})
     assert ei.value.error_code == "SPATIAL_INPUT_NO_FEATURES"
 
 
@@ -144,7 +144,7 @@ def test_unknown_role_raises():
     feat = _line_feature()
     feat["properties"]["role"] = "river"  # not a canonical role
     with pytest.raises(SpatialInputParseError) as ei:
-        parse_spatial_input_features(
+        parse_drawn_roles(
             {"type": "FeatureCollection", "features": [feat]}
         )
     assert ei.value.error_code == "SPATIAL_INPUT_BAD_ROLE"
@@ -154,7 +154,7 @@ def test_point_wrong_geometry_raises():
     feat = _point_feature()
     feat["geometry"] = {"type": "LineString", "coordinates": [[1, 2], [3, 4]]}
     with pytest.raises(SpatialInputParseError) as ei:
-        parse_spatial_input_features(
+        parse_drawn_roles(
             {"type": "FeatureCollection", "features": [feat]}
         )
     assert ei.value.error_code == "SPATIAL_INPUT_POINT_NOT_POINT"

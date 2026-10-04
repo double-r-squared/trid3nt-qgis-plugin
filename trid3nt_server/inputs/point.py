@@ -353,29 +353,14 @@ def point_arg(param: str, *, tool: str, prompt: str, code: str = _CODE
     The ask happens only in a live ``user_gated`` session and only when nothing
     came on the wire; a decline leaves the slot empty for the template to place."""
     async def _coerce(args: Mapping[str, Any]) -> dict[str, Any]:
+        from trid3nt_server.inputs.slots import draw_on_canvas
+
         value = args.get(param)
-        if value is None and _gated(args.get("input_mode")):
-            value = await _pick(tool, param, prompt)
+        if value is None:
+            value = await draw_on_canvas("point", tool=tool, param=param,
+                                         prompt=prompt,
+                                         input_mode=args.get("input_mode"))
         return {param: await point(value, label=param, code=code)}
 
     _coerce.__name__ = f"point:{param}"
     return _coerce
-
-
-def _gated(input_mode: Any) -> bool:
-    from trid3nt_server.render.pipeline_emitter import current_emitter
-    from trid3nt_server.inputs.gate.input_review import resolve_input_gate_mode
-
-    return (resolve_input_gate_mode(input_mode) == "user_gated"
-            and current_emitter() is not None)
-
-
-async def _pick(tool: str, param: str, prompt: str) -> Point | None:
-    from trid3nt_server.inputs.gate.draw_input import gate_draw_input
-
-    outcome = await gate_draw_input(tool_name=tool, param=param, geometry="point",
-                                    prompt=prompt)
-    if not outcome.drawn:
-        logger.info("%s: %s not picked (%s)", tool, param, outcome.reason)
-        return None
-    return outcome.value

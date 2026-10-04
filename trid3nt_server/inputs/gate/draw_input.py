@@ -85,15 +85,14 @@ async def gate_draw_input(
 
     from trid3nt_server.inputs.gate.pending import _PENDING_SPATIAL_INPUTS
 
-    loop = asyncio.get_running_loop()
-    fut: asyncio.Future = loop.create_future()
-    _PENDING_SPATIAL_INPUTS.register(emitter.session_id, request_id, fut)
+    logger.info("draw gate emitted session=%s tool=%s param=%s geometry=%s "
+                "request_id=%s", emitter.session_id, tool_name, param, geometry,
+                request_id)
     try:
-        await emitter.send_envelope("spatial-input-request", payload)
-        logger.info("draw gate emitted session=%s tool=%s param=%s geometry=%s "
-                    "request_id=%s", emitter.session_id, tool_name, param, geometry,
-                    request_id)
-        response = await asyncio.wait_for(fut, timeout=float(ttl_seconds))
+        response = await _PENDING_SPATIAL_INPUTS.park(
+            emitter.session_id, request_id,
+            lambda: emitter.send_envelope("spatial-input-request", payload),
+            ttl_seconds)
     except asyncio.TimeoutError:
         logger.warning("draw gate timeout session=%s tool=%s param=%s request_id=%s",
                        emitter.session_id, tool_name, param, request_id)
@@ -104,8 +103,6 @@ async def gate_draw_input(
         logger.warning("draw gate failed session=%s tool=%s param=%s request_id=%s",
                        emitter.session_id, tool_name, param, request_id, exc_info=True)
         return DrawOutcome(reason=f"the drawn geometry could not be used: {exc}")
-    finally:
-        _PENDING_SPATIAL_INPUTS.pop(request_id, None)
 
     if response.cancelled:
         return DrawOutcome(reason="the drawing was cancelled")
@@ -144,14 +141,15 @@ async def _value_from(response: Any, geometry: str) -> Any:
         return lonlat_bbox(coords[:4] if len(coords) >= 4 else None,
                            label="the rectangle")
 
-    from trid3nt_server.inputs.gate.spatial_input import parse_spatial_input_features
+    from trid3nt_server.inputs.gate.spatial_roles import parse_drawn_roles
 
     if not isinstance(response.features, dict):
         return None
-    parsed = parse_spatial_input_features(response.features)
+    parsed = parse_drawn_roles(response.features)
     if geometry == "polyline":
         return polyline_coords(parsed.line_coords or None, label="the line")
-    return polygon_ring(_first_ring(parsed.aoi_features) or None, label="the polygon")
+    return polygon_ring(_first_ring(parsed.aoi_clip_features) or None,
+                        label="the polygon")
 
 
 def _first_ring(features: list[dict[str, Any]]) -> list[list[float]]:

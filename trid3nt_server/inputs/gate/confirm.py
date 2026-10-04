@@ -19,6 +19,7 @@ from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.inputs.gate.cards import _build_spatial_input_request_payload, _gate_memory_key, _get_hard_cap_mb, _get_warning_threshold_mb, _resolve_payload_estimator, _spatial_response_to_result
 from trid3nt_server.inputs.gate.cards.estimate import call_provider
 from trid3nt_server.inputs.gate.pending import _PENDING_CONFIRMATIONS, _PENDING_SPATIAL_INPUTS
+from trid3nt_server.inputs.gate.spatial_input_tool import SPATIAL_INPUT_SENTINEL_KEY
 from trid3nt_server.server.config import _env_float
 from trid3nt_server.inputs.gate.errors import GateConfirmationTimeoutError, SpatialInputInvalidResponseError
 from trid3nt_server.server.session.state import SessionState
@@ -152,13 +153,6 @@ async def _gate_on_confirm(
         # the caller's write site is reached). It stays unset on every fail-open
         # early return above, where no gate was emitted.
         _warning_id_out["warning_id"] = warning_id
-    loop = asyncio.get_running_loop()
-    fut: asyncio.Future = loop.create_future()
-    _PENDING_CONFIRMATIONS.register(state.session_id, warning_id, fut)
-
-    await _session_safe_send(websocket, state.session_id,
-        _new_envelope("tool-payload-warning", state.session_id, envelope)
-    )
     logger.info(
         "confirm gate emitted session=%s tool=%s warning_id=%s kind=%s",
         state.session_id,
@@ -169,9 +163,12 @@ async def _gate_on_confirm(
 
     wait_s = _gate_wait_timeout(CODE_EXEC_CONFIRM_TIMEOUT_SECONDS)
     try:
-        decision_payload: PayloadConfirmationEnvelopePayload = await asyncio.wait_for(
-            fut, timeout=wait_s
-        )
+        decision_payload: PayloadConfirmationEnvelopePayload = (
+            await _PENDING_CONFIRMATIONS.park(
+                state.session_id, warning_id,
+                lambda: _session_safe_send(websocket, state.session_id, _new_envelope(
+                    "tool-payload-warning", state.session_id, envelope)),
+                wait_s))
     except asyncio.TimeoutError:
         logger.warning(
             "confirm gate timeout session=%s tool=%s warning_id=%s",
@@ -192,8 +189,6 @@ async def _gate_on_confirm(
         raise GateConfirmationTimeoutError(
             "parameter-confirmation card", tool_name, wait_s
         ) from None
-    finally:
-        _PENDING_CONFIRMATIONS.pop(warning_id, None)
 
     logger.info(
         "confirm decision session=%s tool=%s warning_id=%s decision=%s",
@@ -418,14 +413,6 @@ async def _maybe_gate_on_payload_warning(
     }
     state.payload_warning_audit_log.append(audit_entry)
 
-    # Create the future the inbound handler will complete.
-    loop = asyncio.get_running_loop()
-    fut: asyncio.Future = loop.create_future()
-    _PENDING_CONFIRMATIONS.register(state.session_id, warning_id, fut)
-
-    await _session_safe_send(websocket, state.session_id,
-        _new_envelope("tool-payload-warning", state.session_id, warning_payload)
-    )
     logger.info(
         "payload-warning emitted session=%s tool=%s warning_id=%s estimated_mb=%.2f over_hard_cap=%s",
         state.session_id,
@@ -439,9 +426,12 @@ async def _maybe_gate_on_payload_warning(
     # with an asyncio timeout so the dispatch coroutine doesn't hang forever).
     wait_s = _gate_wait_timeout(warning_payload.ttl_seconds)
     try:
-        decision_payload: PayloadConfirmationEnvelopePayload = await asyncio.wait_for(
-            fut, timeout=wait_s
-        )
+        decision_payload: PayloadConfirmationEnvelopePayload = (
+            await _PENDING_CONFIRMATIONS.park(
+                state.session_id, warning_id,
+                lambda: _session_safe_send(websocket, state.session_id, _new_envelope(
+                    "tool-payload-warning", state.session_id, warning_payload)),
+                wait_s))
     except asyncio.TimeoutError:
         audit_entry["decision"] = "timeout"
         logger.warning(
@@ -461,8 +451,6 @@ async def _maybe_gate_on_payload_warning(
         raise GateConfirmationTimeoutError(
             "payload-size warning card", tool_name, wait_s
         ) from None
-    finally:
-        _PENDING_CONFIRMATIONS.pop(warning_id, None)
 
     audit_entry["decision"] = decision_payload.decision
     audit_entry["decided_at"] = now_utc().isoformat()
@@ -528,15 +516,6 @@ async def _gate_on_code_exec(
         rationale=rationale[:512] if isinstance(rationale, str) else None,
     )
 
-    # Create the future the inbound ``tool-payload-confirmation`` handler completes
-    # (keyed on code_exec_id == warning_id). Same seam as the payload-warning gate.
-    loop = asyncio.get_running_loop()
-    fut: asyncio.Future = loop.create_future()
-    _PENDING_CONFIRMATIONS.register(state.session_id, code_exec_id, fut)
-
-    await _session_safe_send(websocket, state.session_id,
-        _new_envelope("code-exec-request", state.session_id, request_payload)
-    )
     logger.info(
         "code-exec-request emitted session=%s code_exec_id=%s code_len=%d",
         state.session_id,
@@ -549,9 +528,12 @@ async def _gate_on_code_exec(
     # error so the turn COMPLETES instead of hanging on it.
     approval_timeout_s = _code_exec_approval_timeout_s()
     try:
-        decision_payload: PayloadConfirmationEnvelopePayload = await asyncio.wait_for(
-            fut, timeout=approval_timeout_s
-        )
+        decision_payload: PayloadConfirmationEnvelopePayload = (
+            await _PENDING_CONFIRMATIONS.park(
+                state.session_id, code_exec_id,
+                lambda: _session_safe_send(websocket, state.session_id, _new_envelope(
+                    "code-exec-request", state.session_id, request_payload)),
+                approval_timeout_s))
     except asyncio.TimeoutError:
         logger.warning(
             "code-exec confirm gate timeout session=%s code_exec_id=%s "
@@ -574,10 +556,6 @@ async def _gate_on_code_exec(
         raise GateConfirmationTimeoutError(
             "code-approval card", f"run_pyqgis {code_exec_id}", approval_timeout_s
         ) from None
-    finally:
-        # Runs on approve, deny, timeout, AND CancelledError (session close /
-        # turn cancel) -- the registry never leaks a dead future.
-        _PENDING_CONFIRMATIONS.pop(code_exec_id, None)
 
     logger.info(
         "code-exec confirm decision session=%s code_exec_id=%s decision=%s",
@@ -647,10 +625,6 @@ async def _inject_secret_ref(
 # while the websocket pause/resume lives here, where the live socket and the
 # session future registry are reachable.
 
-# Sentinel result the ``request_spatial_input`` catalog tool returns; the turn
-# loop detects it and replaces it with the real drawn-geometry result.
-SPATIAL_INPUT_SENTINEL_KEY = "_request_spatial_input"
-
 async def _emit_spatial_input_and_wait(
     websocket: ServerConnection,
     state: SessionState,
@@ -659,15 +633,6 @@ async def _emit_spatial_input_and_wait(
     """Emit a ``spatial-input-request`` and await ``spatial-input-response``.
 
     ``None`` on timeout, and the caller turns that into a typed "nothing drawn"."""
-    loop = asyncio.get_running_loop()
-    fut: asyncio.Future = loop.create_future()
-    # Session-scoped, so a reply arriving on a sibling connection after a
-    # double-mount or a reconnect still resolves it.
-    _PENDING_SPATIAL_INPUTS.register(state.session_id, payload.request_id, fut)
-
-    await _session_safe_send(websocket, state.session_id,
-        _new_envelope("spatial-input-request", state.session_id, payload)
-    )
     logger.info(
         "spatial-input-request emitted session=%s mode=%s request_id=%s",
         state.session_id,
@@ -676,9 +641,13 @@ async def _emit_spatial_input_and_wait(
     )
 
     try:
-        response: SpatialInputResponsePayload = await asyncio.wait_for(
-            fut, timeout=_gate_wait_timeout(payload.default_timeout_seconds)
-        )
+        # Session-scoped, so a reply arriving on a sibling connection after a
+        # double-mount or a reconnect still resolves it.
+        response: SpatialInputResponsePayload = await _PENDING_SPATIAL_INPUTS.park(
+            state.session_id, payload.request_id,
+            lambda: _session_safe_send(websocket, state.session_id, _new_envelope(
+                "spatial-input-request", state.session_id, payload)),
+            _gate_wait_timeout(payload.default_timeout_seconds))
     except asyncio.TimeoutError:
         logger.info(
             "spatial-input-request timeout session=%s request_id=%s; "
@@ -699,8 +668,6 @@ async def _emit_spatial_input_and_wait(
             payload.request_id,
         )
         raise
-    finally:
-        _PENDING_SPATIAL_INPUTS.pop(payload.request_id, None)
 
     logger.info(
         "spatial-input-response received session=%s request_id=%s "

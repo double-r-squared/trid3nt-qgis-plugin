@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 logger = logging.getLogger("trid3nt_server.inputs.gate.pending")
 
@@ -54,6 +54,20 @@ class PendingReplies(dict[str, tuple[str, asyncio.Future]]):
             return False
         fut.set_result(value)
         return True
+
+    async def park(self, session_id: str, key: str,
+                   send: Callable[[], Awaitable[Any]], timeout_s: float) -> Any:
+        """Register the reply, send the card, and wait for the answer.
+
+        ``asyncio.TimeoutError`` when nobody answers; the entry never outlives
+        the wait, whichever way it ends."""
+        fut: asyncio.Future = asyncio.get_running_loop().create_future()
+        self.register(session_id, key, fut)
+        try:
+            await send()
+            return await asyncio.wait_for(fut, timeout=float(timeout_s))
+        finally:
+            self.pop(key, None)
 
     def fail(self, session_id: str, key: str, exc: BaseException) -> bool:
         fut = self._claim(session_id, key)

@@ -11,7 +11,6 @@ import json
 
 import pytest
 
-from trid3nt_server.inputs import point as point_mod
 from trid3nt_server.inputs.point import (
     Point,
     PointOutsideDomainError,
@@ -93,10 +92,12 @@ def test_a_value_of_no_readable_shape_refuses_under_the_callers_code(bad):
 # -- the pick-or-wire coercion ---------------------------------------------------- #
 
 def test_the_coercion_reads_the_wire_value_and_never_asks_in_auto(monkeypatch):
+    from trid3nt_server.inputs.gate import draw_input
+
     async def _never(**_kw):
         raise AssertionError("auto mode asks nobody")
 
-    monkeypatch.setattr(point_mod, "_pick", _never)
+    monkeypatch.setattr(draw_input, "gate_draw_input", _never)
     coerce = point_arg("release", tool="t", prompt="click")
     out = asyncio.run(coerce({"release": [-114.31, 42.58], "input_mode": "auto"}))
     assert out == {"release": Point(-114.31, 42.58)}
