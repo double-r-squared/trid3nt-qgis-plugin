@@ -7,7 +7,7 @@ from trid3nt_contracts import now_utc
 from trid3nt_server.inputs.extent import bbox_equivalent
 from trid3nt_server.server.session.persistence_ref import get_persistence
 from trid3nt_server.server.session.state import SessionState
-from trid3nt_server.server.spatial import _coerce_bbox4
+from trid3nt_server.inputs.extent import as_bbox
 from typing import Any
 
 logger = logging.getLogger("trid3nt_server.server")
@@ -25,7 +25,7 @@ async def pin_case_aoi_from_solve(
     # The in-session anchor is set before the durable write and independently of
     # it: the write is debounced at the same extent and may fail, and neither is a
     # reason for the rest of the turn to read a stale area.
-    coerced = _coerce_bbox4(bbox)
+    coerced = as_bbox(bbox)
     if coerced is None or not case_id:
         return
     state.case_bbox = list(coerced)

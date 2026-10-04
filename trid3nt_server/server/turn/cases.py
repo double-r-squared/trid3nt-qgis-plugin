@@ -11,7 +11,7 @@ from trid3nt_server.server.dispatch.emitter import _ensure_emitter
 from trid3nt_server.server.session.case_state import _AUTONAMED_CASES, _SESSION_CASE_LIST_HASH, _cache_case_bbox_from_session_state, _case_list_digest, _derive_case_title, _persist_session_active_case, _seed_registry_for_case, _touch_session_record
 from trid3nt_server.server.session.persistence_ref import get_persistence
 from trid3nt_server.server.session.state import SessionState
-from trid3nt_server.server.spatial import _coerce_bbox4
+from trid3nt_server.inputs.extent import as_bbox
 from trid3nt_server.server.turn.live_turn import _rebind_live_turns
 from trid3nt_server.server.turn.wire import _new_envelope, _send_error
 from websockets.asyncio.server import ServerConnection
@@ -296,7 +296,7 @@ async def _handle_case_command(
         # value is dropped rather than crashing, and when present it persists on
         # the Case and seeds the in-session anchor, so the FIRST turn reuses the
         # user's extent instead of re-geocoding.
-        create_bbox = _coerce_bbox4((cmd.args or {}).get("bbox"))
+        create_bbox = as_bbox((cmd.args or {}).get("bbox"))
         now = now_utc()
         case = CaseSummary(
             case_id=new_case_id,
@@ -455,7 +455,7 @@ async def _handle_case_command(
         has_bbox_key = "bbox" in raw_args
         raw_bbox = raw_args.get("bbox")
         clear = has_bbox_key and (raw_bbox is None or raw_bbox == [])
-        bbox = None if clear else _coerce_bbox4(raw_bbox)
+        bbox = None if clear else as_bbox(raw_bbox)
         if not clear and bbox is None:
             await _send_error(
                 websocket,

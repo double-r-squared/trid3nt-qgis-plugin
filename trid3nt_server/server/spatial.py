@@ -1,34 +1,13 @@
-"""Bbox / AOI helpers: coercion and zoom-to dedupe, never touching session state."""
+"""Zoom-to helpers: the bbox the camera snaps to and the dedupe against this turn."""
 
 from __future__ import annotations
 
 import logging
-import math
 from typing import Any
 
+from trid3nt_server.inputs.extent import as_bbox
+
 logger = logging.getLogger("trid3nt_server.server")
-
-
-def _is_finite_bbox4(bbox: Any) -> bool:
-    """True iff ``bbox`` is a 4-tuple or list of finite real numbers, so a
-    None, wrong-length or non-finite bbox never lands a bad zoom-to."""
-    if not isinstance(bbox, (tuple, list)) or len(bbox) != 4:
-        return False
-    for v in bbox:
-        if isinstance(v, bool) or not isinstance(v, (int, float)):
-            return False
-        if not math.isfinite(float(v)):
-            return False
-    return True
-
-
-def _coerce_bbox4(value: Any) -> tuple[float, float, float, float] | None:
-    """Coerce ``value`` into a finite 4-float bbox tuple, else ``None``; a
-    string, a wrong length or a non-finite value is rejected so a bad extent
-    never becomes a pinned AOI or a forced fetch bbox."""
-    if not _is_finite_bbox4(value):
-        return None
-    return (float(value[0]), float(value[1]), float(value[2]), float(value[3]))
 
 
 def _aoi_zoom_to_bbox(
@@ -42,10 +21,7 @@ def _aoi_zoom_to_bbox(
     # geocoding, and the map must still move to where the work is.
     if not isinstance(result, dict):
         return None
-    raw = result.get("bbox")
-    if not _is_finite_bbox4(raw):
-        raw = result.get("aoi_bbox")
-    aoi = _coerce_bbox4(raw)
+    aoi = as_bbox(result.get("bbox")) or as_bbox(result.get("aoi_bbox"))
     if aoi is None:
         return None
     last = _last_zoom_to_bbox(current_turn_map_commands)

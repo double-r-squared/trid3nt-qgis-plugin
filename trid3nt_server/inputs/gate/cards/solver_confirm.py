@@ -76,11 +76,11 @@ async def _build_fetch_resolution_envelope(
     )
     from types import SimpleNamespace
 
-    from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
+    from trid3nt_server.inputs.extent import as_bbox
     from trid3nt_server.tools.fetchers._fetch_common import bbox_pixel_dims
 
-    coerced = coerce_bbox_value(params.get("bbox"))
-    if coerced is None or len(coerced) != 4:
+    coerced = as_bbox(params.get("bbox"))
+    if coerced is None:
         # No usable bbox: let the fetcher raise its own typed params error.
         raise ValueError(f"{tool_name} gate: bbox missing/invalid")
     bbox = (float(coerced[0]), float(coerced[1]),

@@ -12,47 +12,32 @@ from typing import Any
 
 import pytest
 
+from trid3nt_server.inputs.extent import as_bbox
 from trid3nt_server.tools.tool_arg_normalizer import (
-    coerce_bbox_value,
     normalize_args,
     parse_forcing_string,
     snake_case,
 )
 
 
-# coerce_bbox_value — a bbox double-encoded as a JSON string arrives with
+# as_bbox - a bbox double-encoded as a JSON string arrives with
 # LITERAL surrounding quote chars (observed live: fetch_fault_sources' first
 # call failed with `"\"-122.5,37.5,-121.5,38.5\""` -> "bbox must be [min_lon...]").
 # The coercer must peel the wrapping quotes before parsing.
 
 
-def test_coerce_bbox_value_strips_wrapping_double_quotes() -> None:
-    assert coerce_bbox_value('"-122.5,37.5,-121.5,38.5"') == [
-        -122.5,
-        37.5,
-        -121.5,
-        38.5,
-    ]
+def test_as_bbox_strips_wrapping_double_quotes() -> None:
+    assert as_bbox('"-122.5,37.5,-121.5,38.5"') == (-122.5, 37.5, -121.5, 38.5)
 
 
-def test_coerce_bbox_value_strips_quotes_then_brackets() -> None:
-    assert coerce_bbox_value("'[-122.5, 37.5, -121.5, 38.5]'") == [
-        -122.5,
-        37.5,
-        -121.5,
-        38.5,
-    ]
+def test_as_bbox_strips_quotes_then_brackets() -> None:
+    assert as_bbox("'[-122.5, 37.5, -121.5, 38.5]'") == (-122.5, 37.5, -121.5, 38.5)
 
 
-def test_coerce_bbox_value_plain_forms_unaffected() -> None:
-    assert coerce_bbox_value("-122.5,37.5,-121.5,38.5") == [
-        -122.5,
-        37.5,
-        -121.5,
-        38.5,
-    ]
-    assert coerce_bbox_value([1, 2, 3, 4]) == [1.0, 2.0, 3.0, 4.0]
-    assert coerce_bbox_value("garbage") is None
+def test_as_bbox_plain_forms_unaffected() -> None:
+    assert as_bbox("-122.5,37.5,-121.5,38.5") == (-122.5, 37.5, -121.5, 38.5)
+    assert as_bbox([1, 2, 3, 4]) == (1.0, 2.0, 3.0, 4.0)
+    assert as_bbox("garbage") is None
 
 
 def test_parse_forcing_string_atlas14_year_only() -> None:

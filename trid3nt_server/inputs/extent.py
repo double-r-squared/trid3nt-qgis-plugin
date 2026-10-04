@@ -11,6 +11,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
+import numbers
+import re
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
@@ -18,7 +21,7 @@ from .user_input import PlaceNameError, UserInputError, lonlat_bbox
 
 from .geometry import flatten_geometries, read_geometry_doc
 
-__all__ = ["Extent", "bbox_equivalent", "bbox_overlaps", "extent"]
+__all__ = ["Extent", "as_bbox", "bbox_equivalent", "bbox_overlaps", "extent"]
 
 _CODE = "EXTENT_INVALID"
 _LAYER_SCHEMES = ("s3://", "gs://", "file://", "/", "./")
@@ -42,8 +45,8 @@ _SAME_EXTENT_DEG = 1e-6
 def bbox_equivalent(a: Any, b: Any, *, tol: float = _SAME_EXTENT_DEG) -> bool:
     """Whether two boxes name the same extent. Either side may be an ``Extent``,
     four numbers, or nothing at all; nothing is equivalent to nothing."""
-    left = _as_bbox(a)
-    right = _as_bbox(b)
+    left = as_bbox(a)
+    right = as_bbox(b)
     if left is None or right is None:
         return False
     return all(abs(x - y) <= tol for x, y in zip(left, right))
@@ -54,22 +57,39 @@ def bbox_overlaps(a: Any, b: Any) -> bool:
     be an ``Extent``, four numbers, or nothing at all."""
     from shapely.geometry import box
 
-    left = _as_bbox(a)
-    right = _as_bbox(b)
+    left = as_bbox(a)
+    right = as_bbox(b)
     if left is None or right is None:
         return False
     return box(*left).intersects(box(*right))
 
 
-def _as_bbox(value: Any) -> tuple[float, float, float, float] | None:
-    """Four floats out of an ``Extent`` or any 4-sequence, else ``None``."""
+def as_bbox(value: Any) -> tuple[float, float, float, float] | None:
+    """Four finite floats from an ``Extent``, four numbers, or a string of four
+    comma/space-separated numbers; else ``None``, so the caller's own check speaks."""
     if isinstance(value, Extent):
         return value.bbox
+    if isinstance(value, str):
+        value = _text_numbers(value)
     if not isinstance(value, Sequence) or isinstance(value, str) or len(value) != 4:
         return None
+    if any(isinstance(v, bool) or not isinstance(v, numbers.Real) for v in value):
+        return None
+    bbox = tuple(float(v) for v in value)
+    return bbox if all(math.isfinite(v) for v in bbox) else None  # type: ignore[return-value]
+
+
+def _text_numbers(text: str) -> list[float] | None:
+    # A bbox double-encoded as a JSON string arrives with literal quote layers.
+    s = text.strip()
+    for _ in range(2):
+        if len(s) >= 2 and s[0] in "\"'" and s[-1] == s[0]:
+            s = s[1:-1].strip()
+    if s[:1] in "[(" and s[-1:] in "])":
+        s = s[1:-1]
     try:
-        return tuple(float(v) for v in value)  # type: ignore[return-value]
-    except (TypeError, ValueError):
+        return [float(p) for p in re.split(r"[,\s]+", s.strip()) if p]
+    except ValueError:
         return None
 
 

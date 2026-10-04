@@ -13,7 +13,7 @@ where its results go.
 | `config.py` | Environment-knob readers, each a pure `env -> value` read taken live. |
 | `errors.py` | The typed dispatch error taxonomy - an `error_code` and a `retryable` flag per type. |
 | `processing.py` | The session request seam: a `processing-request` emitted for the user's QGIS session, the bounded wait, and the typed refusals for no session, no answer and an error answer. |
-| `spatial.py` | Bbox and AOI helpers. |
+| `spatial.py` | The zoom-to helpers: the bbox the camera snaps to for a result, deduped against this turn. |
 
 ## Subfolders
 

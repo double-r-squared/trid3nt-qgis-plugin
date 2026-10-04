@@ -21,7 +21,8 @@ from trid3nt_server.server.dispatch.results import _run_to_completion_shielded
 from trid3nt_server.server.errors import CodeExecConfirmationCancelledError, GateConfirmationTimeoutError, PayloadWarningCancelledError, SolverConfirmationCancelledError, ToolNotFoundError, UserDeclinedError
 from trid3nt_server.server.session.case_state import _persist_case_layer_handles, _persist_case_loaded_layers, _turn_case_bbox, _turn_case_id
 from trid3nt_server.server.session.state import SessionState
-from trid3nt_server.server.spatial import _is_finite_bbox4, _last_zoom_to_bbox
+from trid3nt_server.inputs.extent import as_bbox
+from trid3nt_server.server.spatial import _last_zoom_to_bbox
 from trid3nt_server.server.turn.wire import _emit_turn_complete, _send_error
 from typing import Any, Awaitable, Callable
 from websockets.asyncio.server import ServerConnection
@@ -652,7 +653,7 @@ async def _invoke_tool_via_emitter(
     # zoom-to, so a re-entry that replays the newest one snaps to the floored
     # AOI. Guarded on a finite extent and deduped against the last accumulated
     # zoom-to, so a repeat dispatch does not double-append.
-    if isinstance(result, LayerURI) and _is_finite_bbox4(result.bbox):
+    if isinstance(result, LayerURI) and as_bbox(result.bbox) is not None:
         _floored_bbox = list(result.bbox)
         if _last_zoom_to_bbox(state.current_turn_map_commands) != _floored_bbox:
             state.current_turn_map_commands.append(
@@ -667,7 +668,7 @@ async def _invoke_tool_via_emitter(
         not isinstance(entry, _ReuseEntry)
         and hasattr(entry.fn, "workflow")
         and isinstance(result, LayerURI)
-        and _is_finite_bbox4(result.bbox)
+        and as_bbox(result.bbox) is not None
     ):
         try:
             await pin_case_aoi_from_solve(

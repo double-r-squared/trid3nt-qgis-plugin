@@ -13,7 +13,7 @@ from typing import Any
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
-from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.inputs.extent import as_bbox
 from trid3nt_server.workflows.runtime.accepts import Accepts
 from trid3nt_server.workflows.runtime.data import tool
 from trid3nt_server.tools.mesh.artifact import (
@@ -266,11 +266,11 @@ async def build_mesh(
             "TRID3NT_CACHE_BUCKET must be set to stage a built mesh into the case.")
 
     if extent is None:
-        extent = coerce_bbox_value(bbox) if bbox is not None else None
+        extent = as_bbox(bbox) if bbox is not None else None
         if extent is None and location:
             geo = await asyncio.to_thread(
                 TOOL_REGISTRY["geocode_location"].fn, query=location)
-            extent = coerce_bbox_value(getattr(geo, "bbox", None) or geo["bbox"])
+            extent = as_bbox(getattr(geo, "bbox", None) or geo["bbox"])
         if isinstance(extent, (tuple, list)):
             extent = tuple(float(v) for v in extent)
 

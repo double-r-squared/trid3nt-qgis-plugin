@@ -16,9 +16,9 @@ from trid3nt_server import server
 from trid3nt_server import tools as agent_tools
 from trid3nt_server.server import (
     SessionState,
-    _is_finite_bbox4,
     _last_zoom_to_bbox,
 )
+from trid3nt_server.inputs.extent import as_bbox
 from trid3nt_server.tools import RegisteredTool
 from trid3nt_server.render.uri_registry import reset_uri_registries_for_tests
 from trid3nt_contracts.common import new_ulid
@@ -224,8 +224,8 @@ def test_absent_layeruri_bbox_not_appended(_stub_composer: str) -> None:
         ([True, False, 1, 2], False),  # bools are not coords
     ],
 )
-def test_is_finite_bbox4(bbox, expected) -> None:
-    assert _is_finite_bbox4(bbox) is expected
+def test_as_bbox_takes_four_finite_numbers(bbox, expected) -> None:
+    assert (as_bbox(bbox) is not None) is expected
 
 
 def test_last_zoom_to_bbox_walks_newest_first() -> None:

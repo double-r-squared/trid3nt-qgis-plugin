@@ -27,7 +27,8 @@ from trid3nt_server.server.dispatch.persist import _TURN_NARRATION_BY_TASK, _TUR
 from trid3nt_server.server.dispatch.results import _maybe_emit_chart
 from trid3nt_server.server.session.case_state import _turn_case_bbox, _turn_case_id
 from trid3nt_server.server.session.state import SessionState
-from trid3nt_server.server.spatial import _aoi_zoom_to_bbox, _coerce_bbox4
+from trid3nt_server.inputs.extent import as_bbox
+from trid3nt_server.server.spatial import _aoi_zoom_to_bbox
 from trid3nt_server.server.turn.cases import _emit_case_list, _maybe_autoname_case
 from trid3nt_server.server.turn.engine import _CONTINUATION_NUDGE, _asks_for_data_or_analysis, _geocode_drift_note, _maybe_emit_tool_candidates, _session_routing_mode, _union_pinned_tool
 from trid3nt_server.server.turn.wire import _emit_turn_complete, _new_envelope, _send_agent_abort, _send_error, _send_loop_exhausted, _session_safe_send
@@ -991,7 +992,7 @@ async def _stream_model_reply(
                 # Kill-switch: TRID3NT_GEOCODE_DRIFT_WARN=0.
                 if call.name == "geocode_location":
                     if dispatch_error is None and isinstance(result, dict):
-                        _gc_bbox = _coerce_bbox4(result.get("bbox"))
+                        _gc_bbox = as_bbox(result.get("bbox"))
                         if _gc_bbox is not None:
                             _turn_geocode_bbox = list(_gc_bbox)
                 elif (

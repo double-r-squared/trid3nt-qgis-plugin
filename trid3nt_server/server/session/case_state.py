@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import hashlib
-import math
 import logging
 from trid3nt_server.model.credentials.auth_handshake import LOCAL_SINGLE_USER_ID
-from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.inputs.extent import as_bbox
 from trid3nt_server.render.uri_registry import get_uri_registry
 from trid3nt_server.server.session.persistence_ref import get_persistence
 from trid3nt_server.server.session.state import SessionState, _SESSION_ACTIVE_CASE, _set_session_active_case
@@ -269,10 +268,9 @@ def _set_active_aoi_from_payload(state: SessionState, raw: Any) -> None:
             )
         state.active_aoi_bbox = None
         return
-    coerced = coerce_bbox_value(raw)
+    coerced = as_bbox(raw)
     if (
         coerced is None
-        or not all(math.isfinite(v) for v in coerced)
         or not (coerced[0] < coerced[2] and coerced[1] < coerced[3])
     ):
         logger.warning(
@@ -281,7 +279,7 @@ def _set_active_aoi_from_payload(state: SessionState, raw: Any) -> None:
             state.session_id,
         )
         return
-    state.active_aoi_bbox = coerced
+    state.active_aoi_bbox = list(coerced)
     logger.info(
         "active-aoi set session=%s bbox=%s", state.session_id, coerced
     )
@@ -299,10 +297,9 @@ def _set_drawn_geometry_from_payload(state: SessionState, raw: Any) -> None:
             raw, state.session_id,
         )
         return
-    coerced = coerce_bbox_value(raw.get("bbox"))
+    coerced = as_bbox(raw.get("bbox"))
     if (
         coerced is None
-        or not all(math.isfinite(v) for v in coerced)
         or not (coerced[0] < coerced[2] and coerced[1] < coerced[3])
     ):
         logger.warning(

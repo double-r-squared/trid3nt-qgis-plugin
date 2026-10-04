@@ -15,11 +15,12 @@ import typing
 from collections.abc import Callable
 from typing import Any
 
+from trid3nt_server.inputs.extent import as_bbox
+
 logger = logging.getLogger("trid3nt_server.tools.tool_arg_normalizer")
 
 __all__ = [
     "autofill_missing_bbox",
-    "coerce_bbox_value",
     "fuzzy_correct_enum_args",
     "normalize_args",
     "parse_forcing_string",
@@ -456,42 +457,6 @@ def snake_case(name: str) -> str:
     return _CAMEL_RE.sub("_", name).lower()
 
 
-def coerce_bbox_value(value: Any) -> list[float] | None:
-    """A bbox as ``[min_lon, min_lat, max_lon, max_lat]``, from a 4-element sequence
-    or a string of 4 comma/space-separated numbers. ``None`` when unrecognizable, so
-    the caller leaves the value alone and the tool's own validator speaks."""
-    if isinstance(value, (list, tuple)):
-        if len(value) != 4:
-            return None
-        try:
-            return [float(v) for v in value]
-        except (TypeError, ValueError):
-            return None
-    if not isinstance(value, str):
-        return None
-    s = value.strip()
-    # A bbox double-encoded as a JSON string arrives with LITERAL quote chars, e.g.
-    # ``'"-122.5,37.5,-121.5,38.5"'``. Peel up to two matching quote layers so
-    # '"\'...\'"' also normalizes.
-    for _ in range(2):
-        if len(s) >= 2 and s[0] in "\"'" and s[-1] == s[0]:
-            s = s[1:-1].strip()
-        else:
-            break
-    # Strip one layer of surrounding brackets/parens, then split on commas
-    # and/or whitespace. ``re.split`` on ``[,\s]+`` handles "a,b,c,d",
-    # "a, b, c, d", and "a b c d" uniformly.
-    if s[:1] in "[(" and s[-1:] in "])":
-        s = s[1:-1]
-    parts = [p for p in re.split(r"[,\s]+", s.strip()) if p]
-    if len(parts) != 4:
-        return None
-    try:
-        return [float(p) for p in parts]
-    except ValueError:
-        return None
-
-
 def parse_forcing_string(s: str) -> dict[str, int]:
     """Parse a free-text design storm into ``{return_period_years,
     duration_hours}``; either key may be absent. An unrecognizable string yields an
@@ -546,18 +511,12 @@ _BBOX_AUTOFILL_PARAMS: frozenset[str] = frozenset({"bbox", "aoi_bbox"})
 
 def _valid_aoi(candidate: Any) -> list[float] | None:
     """Coerce + sanity-check an AOI candidate to a finite, ordered bbox."""
-    import math
-
     if candidate is None:
         return None
-    coerced = coerce_bbox_value(candidate)
-    if coerced is None:
+    coerced = as_bbox(candidate)
+    if coerced is None or not (coerced[0] < coerced[2] and coerced[1] < coerced[3]):
         return None
-    if not all(math.isfinite(v) for v in coerced):
-        return None
-    if not (coerced[0] < coerced[2] and coerced[1] < coerced[3]):
-        return None
-    return coerced
+    return list(coerced)
 
 
 def autofill_missing_bbox(
@@ -837,7 +796,7 @@ def normalize_args(
         and len(out["bbox"]) == 4
         and all(isinstance(v, (int, float)) for v in out["bbox"])
     ):
-        coerced = coerce_bbox_value(out["bbox"])
+        coerced = as_bbox(out["bbox"])
         if coerced is not None:
             logger.info(
                 "tool_arg_normalizer[%s]: coerced bbox %r -> %s",
@@ -845,7 +804,7 @@ def normalize_args(
                 out["bbox"],
                 coerced,
             )
-            out["bbox"] = coerced
+            out["bbox"] = list(coerced)
 
     out = fuzzy_correct_enum_args(tool_name, out, fn)
 
