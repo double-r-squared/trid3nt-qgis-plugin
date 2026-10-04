@@ -94,10 +94,9 @@ class PARAMS:
 
 
 DOC = dict(
-    summary="MAINTENANCE DREDGING of a navigation channel: how much comes out, "
-            "and what the bed does.",
+    summary="MAINTENANCE DREDGING of a navigation channel: what the bed does.",
     routing=(
-        "THE tool for \"dredge this channel and tell me the volume\" - a "
+        "THE tool for \"dredge this channel and show me the bed\" - a "
         "maintenance dredge of a fairway or berth pocket held at a design "
         "depth, the spoil placed in a disposal area. TELEMAC-2D coupled with "
         "GAIA, the dredger driven by NESTOR so what it moves is in the bed's "
@@ -105,7 +104,7 @@ DOC = dict(
         "its bed is the published USACE survey where one covers it, terrain "
         "elsewhere. DURATION, MORPHOLOGICAL FACTOR, CLASSES SEDIMENT "
         "DIAMETERS and LAYERS INITIAL THICKNESS are the deck's own, set by "
-        "name. Returns the bed evolution and the dredged and dumped volumes; "
+        "name. Returns the bed evolution - the cut and the spoil ground; "
         "supply `seed_point` and the two areas as polygons."
     ),
     not_for=(

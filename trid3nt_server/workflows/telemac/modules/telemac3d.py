@@ -262,28 +262,6 @@ def _condi_thermocline(depth_m: float, warm_c: float, cold_c: float,
             + "      ENDDO\n" + _CONDI_TAIL)
 
 
-def Wind(*, speed_mps: Any, from_deg: Any) -> Mapping[str, Any]:  # noqa: N802
-    """A steady wind, stated the way weather states one: where it blows FROM."""
-    return MappingProxyType({"speed_mps": speed_mps, "from_deg": from_deg})
-
-
-def _wind(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-    """A from-direction -> the velocity components the engine reads.
-
-    Meteorological FROM, engine TOWARD, in the mesh's own frame."""
-    import math
-
-    if not value["speed_mps"]:
-        # A wind of no speed is not a wind. Stating one would put the whole wind
-        # block in the deck for a run nobody asked a wind about.
-        return ({}, {})
-    speed = float(value["speed_mps"])
-    theta = math.radians(float(value["from_deg"]))
-    return ({"WIND": True,
-             "WIND_VELOCITY_ALONG_X": -speed * math.sin(theta),
-             "WIND_VELOCITY_ALONG_Y": -speed * math.cos(theta)}, {})
-
-
 T3D = Module("telemac3d")
 T3D.MODULE_OUTPUT = MODULE_OUTPUT
 #: The hydrodynamic clock is one keyword: the window itself.
@@ -296,8 +274,8 @@ T3D.ARMS = MappingProxyType({
 T3D.composites(reads={
     "vertical_grid": ("levels", "settled", "thermocline_depth_m"),
     "column": ("levels", "settled", "thermocline_depth_m", "warm_c", "cold_c"),
-    "wind": ("speed_mps", "from_deg"), "atmosphere": ATMOSPHERE_READS},
-               vertical_grid=_vertical_grid, column=_column, wind=_wind,
+    "atmosphere": ATMOSPHERE_READS},
+               vertical_grid=_vertical_grid, column=_column,
                atmosphere=expand_atmosphere,
                coupling=couples(water_column=True))
 T3D.reads(**PRIMITIVES, column=read_column)

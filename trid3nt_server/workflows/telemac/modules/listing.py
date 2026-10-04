@@ -16,90 +16,7 @@ __all__ = [
     "boundary_flux",
     "continuity_rel_error",
     "engine_demand",
-    "final_balance",
-    "gaia_mass_balance",
-    "nestor_volumes",
 ]
-
-#: GAIA prints its closure once per class under this heading, in kg. The block is
-#: cut at the end-of-run marker so a run that printed intermediate balances is
-#: read at its FINAL one.
-_GAIA_HEADING = "FINAL MASS-BALANCE OF SEDIMENTS"
-_GAIA_BLOCK_END = r"END OF TIME LOOP|CORRECT END OF RUN"
-#: The listing label -> the metric name, and how many places it survives at.
-_GAIA_FIELDS: tuple[tuple[str, str, int], ...] = (
-    ("CUMULATED DEPOSITION", "sediment_deposited_mass_kg", 4),
-    ("CUMULATED EROSION", "sediment_eroded_mass_kg", 4),
-    ("CUMULATED BED EVOLUTIONS", "sediment_net_bed_mass_kg", 6),
-    ("CUMULATED LOST MASS", "sediment_mass_lost_kg", 8),
-)
-
-
-#: What NESTOR reports per action, in its own words: the label it prints the
-#: figure under -> the metric name. Every line it writes opens with ``?>``. The
-#: criterion dig reports the volume of the LAST maintenance period and resets its
-#: own sum at the next one, so the run's figure is the SUM over what it printed.
-#: The timed dump's own line reports the volume the action was GIVEN rather than
-#: one the run measured, and is not read.
-_NESTOR_FIELDS: tuple[tuple[str, str], ...] = (
-    (r"dug volume\s*\[m\^3\]", "dug_volume_m3"),
-    (r"dumped vol\s*\[m\^3\]", "dumped_volume_m3"),
-    (r"relocated volume\s*\[m\*\*3\]", "relocated_volume_m3"),
-    (r"removed volume\s*\[m\*\*3\]", "removed_volume_m3"),
-)
-#: NESTOR marks every line it writes, from its own initialisation banner onward,
-#: so the marker's absence means the deck armed no dredge at all.
-_NESTOR_MARK = "?>"
-#: An action prints this when it ACTIVATES and its volume line only when a pass
-#: FINISHES, so the two together say whether a pass ran and whether it completed.
-#: The activation line carries the action type the deck named it by.
-_NESTOR_START = re.compile(r"\?>\s*(?:re)?start action\s*:\s*(\S+)")
-#: The instant an activation happened, on the bed's own clock. The nominal start
-#: prints under the same words behind ``nominal``, which the space class excludes.
-_NESTOR_START_TIME = re.compile(r"\?>\s+start time\s*\[s\]\s*:\s*([-+\d.EeDd]+)")
-
-
-def nestor_volumes(listing_text: str) -> dict[str, Any]:
-    """What the dredge moved, off the lines NESTOR printed into the listing.
-
-    A figure the run never printed is absent; each is the sum over the actions
-    and the maintenance periods that reported it. ``dredge_report`` states what
-    the engine's own lines say the dredge did, so a run that moved the bed
-    without printing a volume says why rather than answering nothing."""
-    text = listing_text or ""
-    out: dict[str, Any] = {}
-    for pattern, name in _NESTOR_FIELDS:
-        found = re.findall(r"\?>\s*" + pattern + r"\s*:\s*([-+\d.EeDd]+)", text)
-        values = []
-        for raw in found:
-            try:
-                values.append(float(raw.replace("D", "E").replace("d", "e")))
-            except ValueError:
-                continue
-        if values:
-            out[name] = round(sum(values), 6) + 0.0
-    if _NESTOR_MARK not in text:
-        return out
-    out["dredge_report"] = _dredge_report(text, finished=bool(out))
-    return out
-
-
-def _dredge_report(listing_text: str, *, finished: bool) -> str:
-    """Why the dredge's volumes read as they do, in the engine's own terms."""
-    if finished:
-        return ("the volumes are the engine's own report lines, summed over the "
-                "passes that finished inside the run's clock")
-    started = _NESTOR_START.findall(listing_text)
-    if not started:
-        return ("no dredging pass began inside the run's clock, so the engine "
-                "printed no volume: the schedule starts later than the run "
-                "reaches on the bed's clock")
-    when = [float(raw.replace("D", "E").replace("d", "e"))
-            for raw in _NESTOR_START_TIME.findall(listing_text)]
-    at = f" at {when[-1]:g} s" if when else ""
-    return (f"a {started[-1]} pass started{at} and had not cut to grade when the "
-            "run's clock ended; the engine prints a volume only for a pass that "
-            "finishes, so the bed moved with no volume to state it")
 
 
 #: How LECDON asks for a keyword it will not start without. The engine names the
@@ -129,35 +46,6 @@ def engine_demand(listing_text: str) -> str | None:
             break
         block.append(line.strip())
     return "; ".join(block) or None
-
-
-def gaia_mass_balance(listing_text: str) -> dict[str, Any]:
-    """GAIA's own closure out of the solver listing - deposited/eroded/net/lost kg.
-
-    The authoritative masses; a field the listing did not print is absent."""
-    # ZERO HAS NO SIGN, and the sign is fixed HERE so no consumer has to know: a
-    # residual the listing prints as a tiny negative rounds to ``-0.0``, which
-    # survives ``max(value, 0.0)`` unchanged and would reach the reader as a
-    # negative deposited mass beside a map showing deposition. Adding 0.0
-    # collapses the negative zero onto the positive one; a genuinely negative
-    # mass is untouched.
-    start = re.search(_GAIA_HEADING, listing_text or "")
-    if start is None:
-        return {}
-    block = (listing_text or "")[start.end():]
-    end = re.search(_GAIA_BLOCK_END, block)
-    if end is not None:
-        block = block[:end.start()]
-    out: dict[str, Any] = {}
-    for label, name, places in _GAIA_FIELDS:
-        found = re.search(re.escape(label) + r"\s*=\s*([-\d.Ee+]+)", block)
-        if found is None:
-            continue
-        try:
-            out[name] = round(float(found.group(1)), places) + 0.0
-        except ValueError:
-            continue
-    return out
 
 
 #: TELEMAC-2D closes its water-volume balance once per listing period. The block
@@ -221,44 +109,3 @@ def boundary_flux(listing_text: str, *, boundary: int
     return times, flows
 
 
-#: The engine closes its whole run once, under this heading, in m3: what it
-#: began and ended with, what crossed the liquid boundaries (entering positive),
-#: what the source terms added, and what it lost. The SCS-CN runoff routine
-#: prints the gross rainfall it accumulated in metres, so the depth that fell is
-#: the engine's own figure rather than a re-derivation from the deck.
-_FINAL_HEAD = r"FINAL BALANCE OF WATER VOLUME"
-_FINAL_FIELDS: tuple[tuple[str, str], ...] = (
-    (r"INITIAL VOLUME\s*:\s*([-+\d.Ee]+)", "initial_volume_m3"),
-    (r"FINAL VOLUME\s*:\s*([-+\d.Ee]+)", "final_volume_m3"),
-    (r"VOLUME THAT ENTERED THE DOMAIN\s*:\s*([-+\d.Ee]+)", "boundary_volume_m3"),
-    (r"VOLUME ADDED BY SOURCE TERM\s*:\s*([-+\d.Ee]+)", "source_volume_m3"),
-    (r"TOTAL VOLUME LOST\s*:\s*([-+\d.Ee]+)", "lost_volume_m3"),
-)
-_ACCUMULATED_RAIN = r"ACCUMULATED RAINFALL\s*:\s*([-+\d.Ee]+)\s*M\b"
-
-
-def final_balance(listing_text: str) -> dict[str, Any]:
-    """The engine's whole-run water balance, off the final block it printed.
-
-    A figure the listing did not print is absent; the accumulated rainfall depth
-    rides beside them when the runoff routine printed one."""
-    text = listing_text or ""
-    out: dict[str, Any] = {}
-    start = re.search(_FINAL_HEAD, text)
-    if start is not None:
-        block = text[start.end():]
-        for pattern, name in _FINAL_FIELDS:
-            found = re.search(pattern, block)
-            if found is None:
-                continue
-            try:
-                out[name] = float(found.group(1))
-            except ValueError:
-                continue
-    rain = re.findall(_ACCUMULATED_RAIN, text)
-    if rain:
-        try:
-            out["rain_depth_m"] = float(rain[-1])
-        except ValueError:
-            pass
-    return out

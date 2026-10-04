@@ -119,7 +119,7 @@ def test_the_deck_is_calm_and_states_no_wind_keyword_at_all():
     from trid3nt_server.workflows.telemac.modules.sheet import fill
 
     asserted = _module().STEERING.ASSERTED
-    assert asserted["wind"]["speed_mps"] == 0.0
+    assert not {"WIND", "WIND_VELOCITY_ALONG_X", "WIND_VELOCITY_ALONG_Y"} & set(asserted)
     produced = {"settled": {"title": "basin", "time_step_s": 1.0,
                             "level_m": 100.0, "max_depth_m": 40.0}}
     sheet = fill(_module().STEERING, produced=produced,

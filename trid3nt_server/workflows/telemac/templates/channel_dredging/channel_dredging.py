@@ -21,7 +21,7 @@ from trid3nt_server.workflows.telemac.modules import (
     T2D,
     )
 from trid3nt_server.workflows.telemac.modules.gaia import Dig, Dredging, RESULT_FILENAME
-from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries, TimeOrigin
+from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
 from trid3nt_server.workflows.telemac.templates.channel_dredging.declarations import (
     ACCEPTS, DOC, PARAMS,
 )
@@ -64,11 +64,6 @@ _BED_STOCK_M = 5.0
 #: the dredge is written against the same six numbers.
 _TIME_ORIGIN = [2000, 1, 1, 0, 0, 0]
 
-#: The terrain cell the banks are painted from. 3DEP is PINNED, not preferred: a
-#: DSM (Copernicus GLO-30 carries canopy) puts the bank on the tree tops, and its
-#: EGM2008 zero is not the NAVD88 the surveys and the gauges are measured on.
-_TERRAIN_RESOLUTION_M = 10
-
 #: Which reference surface every action reads its levels from: the profile file
 #: this run authors, which carries the water surface the channel opens at. The
 #: alternatives the engine offers - a ZRL variable on the geometry, a level a
@@ -90,7 +85,7 @@ class DATA:
     #: centerline the reach producer measured, or the one the port draws over a
     #: fairway nobody mapped a channel through.
     line = Data.supplied(geometry="polyline")
-    #: THE MEASUREMENT, and the whole reason a dredged volume is worth reading:
+    #: THE MEASUREMENT, and the whole reason a dredged cut is worth reading:
     #: a surface DEM measures the water top, so a fairway painted from one is
     #: centimetres deep and the cut to grade is summed over nothing. The
     #: STRICTER class - the maintained prism, not the water around it - is what
@@ -156,8 +151,7 @@ class STEERING(T2D):
     IMPLICITATION_FOR_VELOCITY = 0.6
 
     # The engine accounts for its own water volume and prints one flux per liquid
-    # boundary; the sediment side of the same closure is GAIA's, and the dredge's
-    # own volumes are printed into the same listing.
+    # boundary; the sediment side of the same closure is GAIA's.
     MASS_BALANCE = True
 
     # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own
@@ -172,10 +166,11 @@ class STEERING(T2D):
     # hydraulics is ten hours of bed, which is a readable maintenance interval.
     DURATION = 3600.0
 
-    #: The clock every dredging action is dated against. NESTOR reads absolute
-    #: dates and differences them against THIS origin, so the deck states it
-    #: rather than inheriting the dictionary's own.
-    time_origin = TimeOrigin(at=_TIME_ORIGIN)
+    # The clock every dredging action is dated against. NESTOR reads absolute
+    # dates and differences them against THIS origin, so the deck states it
+    # rather than inheriting the dictionary's own.
+    ORIGINAL_DATE_OF_TIME = _TIME_ORIGIN[:3]
+    ORIGINAL_HOUR_OF_TIME = _TIME_ORIGIN[3:]
 
     #: No tracer: a dredge is a question about the bed, so every liquid boundary
     #: carries the measured flowrate and stage and nothing else. The walk is the

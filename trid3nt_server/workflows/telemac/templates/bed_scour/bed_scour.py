@@ -25,10 +25,8 @@ from trid3nt_server.workflows.telemac.modules import (
 from trid3nt_server.workflows.telemac.modules.gaia import RESULT_FILENAME
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Boundaries,
-    Rain,
     Sources,
     TracerNames,
-    Wind,
 )
 from trid3nt_server.workflows.telemac.templates.bed_scour.declarations import (
     ACCEPTS, DOC, GRADATION_PRESETS, PARAMS,
@@ -192,14 +190,6 @@ class STEERING(T2D):
                          # The listing's own sediment balance is what the net bed
                          # mass is read off.
                          MASS_BALANCE=True)]
-
-    #: CALM AND DRY: this question asks what the CARRIER FLOW does to the bed, so
-    #: this deck states no surface stress and no distributed rain - a zero speed
-    #: and an absent rate each write nothing at all. A user who wants either
-    #: states SPEED AND DIRECTION OF WIND or RAIN OR EVAPORATION IN MM PER DAY
-    #: by name; the term each value needs is armed by the ingestion.
-    wind = Wind(speed_mps=0.0, from_deg=0.0)
-    rain = Rain(mm_per_day=None, tracers=1)
 
 
 #: What this question PLACES: the marker's domain-wide history as the chart.

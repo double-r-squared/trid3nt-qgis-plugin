@@ -167,14 +167,11 @@ def test_the_deleted_release_params_are_refused():
 
 
 def test_a_calm_dry_deck_states_no_wind_and_no_rain_at_all():
-    """A zero speed and an absent rate write NOTHING: the settling this question
-    reads is the current's, and a caller who wants either sets the keyword."""
-    from trid3nt_server.workflows.telemac.modules import T2D
-
-    for name in ("wind", "rain"):
-        slots, _files = T2D.COMPOSITES[name].expand(
-            template.STEERING.ASSERTED[name])
-        assert slots == {}, name
+    """A calm, dry deck states no wind and no rain keyword at all: a user who
+    wants either sets the keyword by its own name."""
+    asserted = set(template.STEERING.ASSERTED)
+    assert not {"WIND", "SPEED_AND_DIRECTION_OF_WIND", "RAIN_OR_EVAPORATION",
+                 "RAIN_OR_EVAPORATION_IN_MM_PER_DAY"} & asserted
 
 
 def test_the_slots_reach_the_wire_as_arguments():

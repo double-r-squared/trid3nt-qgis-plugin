@@ -148,38 +148,6 @@ def _spatial_response_to_result(
         }
         if parsed.aoi_bbox is not None:
             result["aoi_bbox"] = list(parsed.aoi_bbox)
-        # Generalized drawn roles -- surfaced so the LLM can pass them
-        # to whichever engine composer accepts them (breach_point, TELEMAC
-        # refine_region sizing, breaklines, boundaries).
-        if parsed.breach_points:
-            # Interior levee/dam-breach source(s): pass the FIRST straight to
-            # a solver's breach_point param (drawn value PREFERRED over a
-            # plain tuple arg when a breach was drawn).
-            result["breach_points"] = [list(p) for p in parsed.breach_points]
-            result["breach_point"] = list(parsed.breach_points[0])
-        if parsed.refine_regions:
-            # Per-region mesh sizing polygons: {polygon, target_size_m, bbox}.
-            result["refine_regions"] = [
-                {
-                    "polygon": r["polygon"],
-                    "target_size_m": r["target_size_m"],
-                    "bbox": list(r["bbox"]),
-                }
-                for r in parsed.refine_regions
-            ]
-            result["n_refine_regions"] = len(parsed.refine_regions)
-        if parsed.breaklines:
-            result["breaklines"] = [
-                [list(pt) for pt in ln] for ln in parsed.breaklines
-            ]
-        if parsed.boundary_lines:
-            result["boundary_lines"] = [
-                {
-                    "coords": [list(pt) for pt in b["coords"]],
-                    "boundary_type": b["boundary_type"],
-                }
-                for b in parsed.boundary_lines
-            ]
         if parsed.line_coords is not None:
             # A NEUTRAL drawn elevation/section line (purpose="line"): surface the
             # plain LineString vertices so the LLM can pass them straight to

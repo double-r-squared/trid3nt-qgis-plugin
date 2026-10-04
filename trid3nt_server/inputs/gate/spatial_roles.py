@@ -1,4 +1,4 @@
-"""Shared drawn-geometry ROLE vocabulary and parser for the mesh authoring layer.
+"""Shared drawn-geometry ROLE vocabulary and parser for the canvas cards.
 
 A pure structural translator: no I/O, no asyncio, no geometry library. A malformed
 ``FeatureCollection`` raises rather than degrading to a silent success.
@@ -34,39 +34,10 @@ class SpatialRoleError(ValueError):
 SpatialInputParseError = SpatialRoleError
 
 
-# Local, so this module carries no contracts dependency at import time.
-_VALID_BOUNDARY_TYPES = frozenset({"inflow", "outflow"})
-
-#: The canonical role vocabulary every engine shares, read off
-#: ``properties.role`` on each drawn ``Feature``:
-#:   * ``breakline``     -- a LineString that CONSTRAINS mesh edges (a ridge, a
-#:                          channel bank); a tin/quadtree mesher forces edges
-#:                          along it.
-#:   * ``breach``        -- a Point interior levee/dam-breach source, riding the
-#:                          drawn-POINT role and consumed as a ``breach_point``
-#:                          param; a drawn value is PREFERRED over a plain tuple
-#:                          arg when both are present.
-#:   * ``refine_region`` -- a Polygon over which the mesh refines to a finer
-#:                          target size (``properties.target_size_m``), consumed
-#:                          worker-side by the mesher's sizing fields.
-#:   * ``aoi_clip``      -- a Polygon that CLIPS the run domain, masking cells
-#:                          outside it.
-#:   * ``boundary``      -- a LineString open-boundary segment, typed by
-#:                          ``properties.boundary_type``.
-#:   * ``point``         -- a generic Point (an ignition source, a probe).
-#:   * ``line``          -- a NEUTRAL elevation/section LineString with NO mesh
-#:                          semantics.
-CANONICAL_ROLES = frozenset(
-    {
-        "breakline",
-        "breach",
-        "refine_region",
-        "aoi_clip",
-        "boundary",
-        "point",
-        "line",
-    }
-)
+#: The canonical role vocabulary, read off ``properties.role`` on each drawn
+#: ``Feature``: ``aoi_clip`` a Polygon that clips the run domain, ``point`` a
+#: generic Point, ``line`` a neutral LineString with no mesh semantics.
+CANONICAL_ROLES = frozenset({"aoi_clip", "point", "line"})
 
 #: Wire roles accepted as aliases for a canonical role.
 ROLE_ALIASES = {"aoi": "aoi_clip"}
@@ -81,16 +52,10 @@ class DrawnRoles:
 
     Every field defaults empty, so an engine reads only the roles it consumes."""
 
-    breaklines: list[list[list[float]]] = field(default_factory=list)
-    breach_points: list[list[float]] = field(default_factory=list)
-    #: ``[{"polygon": Feature, "target_size_m": float|None, "bbox": (..4..)}]``
-    refine_regions: list[dict[str, Any]] = field(default_factory=list)
     #: The raw clip polygons, both role spellings merged.
     aoi_clip_features: list[dict[str, Any]] = field(default_factory=list)
     #: Union extent of the clip polygons, or ``None``.
     aoi_bbox: tuple[float, float, float, float] | None = None
-    #: ``[{"coords": [[lon,lat],...], "boundary_type": inflow|outflow|None}]``
-    boundary_lines: list[dict[str, Any]] = field(default_factory=list)
     points: list[list[float]] = field(default_factory=list)
     #: The FIRST neutral ``line`` feature's vertices, or ``None``.
     line_coords: list[list[float]] | None = None
@@ -236,66 +201,6 @@ def _point_positions(
     return out
 
 
-def _refine_regions(feats: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Parse ``refine_region`` polygons into ``{polygon, target_size_m, bbox}``.
-
-    ``target_size_m`` is ``None`` when unset, and the consumer then applies its
-    own default refinement; a non-positive one raises."""
-    out: list[dict[str, Any]] = []
-    for idx, feat in enumerate(feats):
-        geom = feat.get("geometry")
-        if not isinstance(geom, dict) or geom.get("type") not in (
-            "Polygon",
-            "MultiPolygon",
-        ):
-            raise SpatialRoleError(
-                "SPATIAL_INPUT_REFINE_NOT_POLYGON",
-                f"refine_region[{idx}] geometry must be a Polygon/MultiPolygon "
-                f"(got {geom.get('type') if isinstance(geom, dict) else geom!r})",
-            )
-        bbox = geometry_bbox(geom)
-        if bbox is None:
-            raise SpatialRoleError(
-                "SPATIAL_INPUT_REFINE_BAD_GEOMETRY",
-                f"refine_region[{idx}].geometry has no valid coordinates",
-            )
-        props = feat.get("properties") or {}
-        # ``mesh_size_m`` is an accepted wire alias for ``target_size_m``.
-        raw_size = props.get("target_size_m", props.get("mesh_size_m"))
-        target_size_m: float | None = None
-        if raw_size is not None:
-            if not isinstance(raw_size, (int, float)) or not raw_size > 0:
-                raise SpatialRoleError(
-                    "SPATIAL_INPUT_REFINE_BAD_SIZE",
-                    f"refine_region[{idx}].properties.target_size_m must be a "
-                    f"positive number, got {raw_size!r}",
-                )
-            target_size_m = float(raw_size)
-        out.append(
-            {"polygon": feat, "target_size_m": target_size_m, "bbox": bbox}
-        )
-    return out
-
-
-def _boundary_lines(feats: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Parse ``boundary`` LineStrings into ``{coords, boundary_type}``.
-
-    ``boundary_type`` is ``None`` when unset; an unknown one raises."""
-    coords_list = _linestring_coords(feats, role_label="boundary")
-    out: list[dict[str, Any]] = []
-    for idx, (feat, coords) in enumerate(zip(feats, coords_list)):
-        props = feat.get("properties") or {}
-        btype = props.get("boundary_type")
-        if btype is not None and btype not in _VALID_BOUNDARY_TYPES:
-            raise SpatialRoleError(
-                "SPATIAL_INPUT_BAD_BOUNDARY_TYPE",
-                f"boundary[{idx}].properties.boundary_type must be one of "
-                f"{sorted(_VALID_BOUNDARY_TYPES)}, got {btype!r}",
-            )
-        out.append({"coords": coords, "boundary_type": btype})
-    return out
-
-
 def _aoi_bbox(
     aoi_feats: list[dict[str, Any]],
 ) -> tuple[float, float, float, float] | None:
@@ -340,12 +245,8 @@ def parse_drawn_roles(fc: dict[str, Any]) -> DrawnRoles:
     line_lists = _linestring_coords(buckets["line"], role_label="line")
 
     return DrawnRoles(
-        breaklines=_linestring_coords(buckets["breakline"], role_label="breakline"),
-        breach_points=_point_positions(buckets["breach"], role_label="breach"),
-        refine_regions=_refine_regions(buckets["refine_region"]),
         aoi_clip_features=aoi_feats,
         aoi_bbox=_aoi_bbox(aoi_feats),
-        boundary_lines=_boundary_lines(buckets["boundary"]),
         points=_point_positions(buckets["point"], role_label="point"),
         line_coords=line_lists[0] if line_lists else None,
         n_lines=len(line_lists),

@@ -168,15 +168,11 @@ def test_the_ex_release_params_are_gone_from_the_declared_wire():
 
 
 def test_a_calm_dry_deck_writes_no_wind_and_no_rain_at_all():
-    """This question asks what the CURRENT does with the slick: a zero speed and
-    an absent rate state nothing, so the keywords are the user's to set by
-    name rather than a zero the deck put in front of them."""
-    slots, _ = template.STEERING.COMPOSITES["wind"].expand(
-        template.STEERING.wind)
-    assert slots == {}
-    slots, _ = template.STEERING.COMPOSITES["rain"].expand(
-        template.STEERING.rain)
-    assert slots == {}
+    """A calm, dry deck states no wind and no rain keyword at all: a user who
+    wants either sets the keyword by its own name."""
+    asserted = set(template.STEERING.ASSERTED)
+    assert not {"WIND", "SPEED_AND_DIRECTION_OF_WIND", "RAIN_OR_EVAPORATION",
+                 "RAIN_OR_EVAPORATION_IN_MM_PER_DAY"} & asserted
 
 
 def test_the_slots_reach_the_wire_as_arguments():

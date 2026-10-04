@@ -26,10 +26,8 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
     DROGUES_FILENAME,
     Boundaries,
     Oil,
-    Rain,
     Sources,
     TracerNames,
-    Wind,
 )
 from trid3nt_server.workflows.telemac.templates.oil_spill.declarations import (
     ACCEPTS, DOC, OIL_PRESETS, PARAMS,
@@ -181,14 +179,6 @@ class STEERING(T2D):
     # one write every 60 is about 86 positions along each track, which draws the
     # drift without writing a file the reader cannot scrub.
     PRINTOUT_PERIOD_FOR_DROGUES = 60
-
-    #: CALM AND DRY: this question asks what the CURRENT does with the slick, so
-    #: this deck states no surface stress and no distributed rain and the drift
-    #: is the flow's alone - a zero speed and an absent rate each write nothing
-    #: at all. A user who wants a wind states SPEED AND DIRECTION OF WIND by
-    #: name; the term it needs is armed by the ingestion.
-    wind = Wind(speed_mps=0.0, from_deg=0.0)
-    rain = Rain(mm_per_day=None, tracers=1)
 
 
 #: What this question PLACES: the dissolved fraction's domain-wide history as

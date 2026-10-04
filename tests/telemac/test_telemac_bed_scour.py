@@ -148,13 +148,11 @@ def test_the_spill_window_is_the_questions_own_input_and_stays_a_param():
 
 
 def test_a_calm_dry_deck_writes_no_wind_and_no_rain_keyword():
-    """This question asks what the carrier flow does to the bed. A zero speed and
-    an absent rate each expand to nothing, so neither block reaches the deck and
-    a user who wants one sets the keyword by its own name."""
-    for name in ("wind", "rain"):
-        slots, _files = T2D.COMPOSITES[name].expand(
-            _MODULE.STEERING.ASSERTED[name])
-        assert not slots, name
+    """A calm, dry deck states no wind and no rain keyword at all: a user who
+    wants either sets the keyword by its own name."""
+    asserted = set(_MODULE.STEERING.ASSERTED)
+    assert not {"WIND", "SPEED_AND_DIRECTION_OF_WIND", "RAIN_OR_EVAPORATION",
+                 "RAIN_OR_EVAPORATION_IN_MM_PER_DAY"} & asserted
 
 
 def test_the_boundary_values_read_the_measured_walk_and_the_open_channel_step():

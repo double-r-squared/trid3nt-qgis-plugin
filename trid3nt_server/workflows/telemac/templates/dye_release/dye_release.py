@@ -23,10 +23,8 @@ from trid3nt_server.workflows.telemac.modules import (
 )
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Boundaries,
-    Rain,
     Sources,
     TracerNames,
-    Wind,
 )
 from trid3nt_server.workflows.telemac.templates.dye_release.declarations import (
     ACCEPTS, DECAY_PRESETS, DOC, PARAMS,
@@ -161,12 +159,6 @@ class STEERING(T2D):
     #: saturating the water.
     sources = Sources(window_s="spill_duration_s")
 
-    #: CALM AND DRY: this question asks what the CURRENT does with the slug, so
-    #: this deck states no surface stress and no distributed rain and the answer
-    #: is the flow's alone - a zero speed and an absent rate each write nothing
-    #: at all. A run that continues nothing states its own initial conditions.
-    wind = Wind(speed_mps=0.0, from_deg=0.0)
-    rain = Rain(mm_per_day=None, tracers=1)
     #: First-order degradation on the same tracer - no new tracer - when a
     #: decaying substance was named; nothing otherwise. This deck states no
     #: die-off of its own: the substance word picks its narrated preset.

@@ -42,15 +42,9 @@ __all__ = [
     "SelafinReadError",
     "SolveNonFinite",
     "Solved",
-    "mesh_area_m2",
-    "wetted_fraction",
     "column",
     "drogues",
-    "extent",
     "field",
-    "mass_balance",
-    "max_over_time",
-    "mesh",
     "profile",
     "read_selafin",
     "reference_line",
@@ -274,33 +268,12 @@ def series(name: str, at: Any = None, *, plane: int | None = None,
     return Primitive("series", variable=name, at=at, plane=plane, module=module)
 
 
-def max_over_time(name: str, *, plane: int | None = None,
-                  module: str | None = None) -> Primitive:
-    """A variable's envelope: the maximum every node reached, and when."""
-    return Primitive("max_over_time", variable=name, plane=plane, module=module)
-
-
 def profile(name: str, along: Any, t: Any = -1, *, within_m: Any = None,
             plane: int | None = None, module: str | None = None) -> Primitive:
     """A variable along a line at an instant: the mean per station of the nodes
     within ``within_m`` of the line, or of the whole domain when none is stated."""
     return Primitive("profile", variable=name, along=along, within=within_m, t=t,
                      plane=plane, module=module)
-
-
-def extent(*, module: str | None = None) -> Primitive:
-    """The solved domain, and how much of it held water at the end."""
-    return Primitive("extent", module=module)
-
-
-def mesh(*, module: str | None = None) -> Primitive:
-    """The mesh the run solved on: its counts and its measured edge."""
-    return Primitive("mesh", module=module)
-
-
-def mass_balance(*, module: str | None = None) -> Primitive:
-    """The engine's own closure, off the listing it printed."""
-    return Primitive("mass_balance", module=module)
 
 
 def drogues() -> Primitive:
@@ -341,6 +314,13 @@ def reference_line(value: Any, *, label: str) -> Any:
 
 
 # -- the read of each, off a solved run ------------------------------------- #
+
+#: The depth an element has to hold to count as wet. TELEMAC's own tidal-flat
+#: treatment leaves films thinner than this on a drying bar, and counting them as
+#: conveyance is what would make the heuristic agree with the domain by
+#: construction.
+_WET_TOL_M = 0.02
+
 
 class Solved:
     """One solved run's files, each opened once: the module's result, the listing.
@@ -1029,139 +1009,6 @@ def _printout_point(primitive: Primitive, solved: Solved,
                                                      lat[row[1]] - lat[node])))
 
 
-def read_max_over_time(primitive: Primitive, solved: Solved) -> Field:
-    """``max_over_time(name)``: the maximum every node reached, and when."""
-    import numpy as np
-
-    name, units, values = solved.frames(primitive.variable, primitive.plane)
-    times = np.asarray(solved.result["times"], dtype="float64")
-    row, edge = solved.style(primitive.variable), solved.has_edge(primitive.variable)
-    wet = solved.mask_for(primitive.variable, values)
-    measures = _envelope(primitive.variable, times, values, row, edge, wet,
-                         injected=solved.injected(primitive.variable))
-    # The envelope is over the instants each node HELD WATER: a node's peak taken
-    # from the frames it was dry in is a reading of nothing.
-    drawn = _drawn(values, wet)
-    envelope = np.where(np.isfinite(drawn).any(axis=0),
-                        np.nanmax(np.where(np.isfinite(drawn), drawn, -np.inf),
-                                  axis=0), np.nan)
-    ever = np.isfinite(envelope)
-    # The extreme and the field: one pit can set the maximum while the field the
-    # run produced sits orders of magnitude below it, so the 99th percentile of
-    # the envelope rides beside the maximum.
-    measures["p99"] = float(np.percentile(envelope[ever], 99))
-    return Field(name=name, units=units,
-                 values=np.where(ever, envelope, 0.0), wet=ever,
-                 plane=solved.plane_label(primitive.plane),
-                 floor=_floor(edge, values, row, wet),
-                 measures=measures)
-
-
-#: The depth an element has to hold to count as wet. TELEMAC's own tidal-flat
-#: treatment leaves films thinner than this on a drying bar, and counting them as
-#: conveyance is what would make the heuristic agree with the domain by
-#: construction.
-_WET_TOL_M = 0.02
-
-
-def mesh_area_m2(mesh: Mapping[str, Any]) -> float:
-    """The area the elements of a read result cover, in the mesh's own metres."""
-    import numpy as np
-
-    ikle = np.asarray(mesh["ikle"], dtype=int)
-    x, y = np.asarray(mesh["x"]), np.asarray(mesh["y"])
-    if ikle.size == 0:
-        return 0.0
-    a, b, c = ikle[:, 0], ikle[:, 1], ikle[:, 2]
-    return float((0.5 * np.abs((x[b] - x[a]) * (y[c] - y[a])
-                               - (x[c] - x[a]) * (y[b] - y[a]))).sum())
-
-
-def wetted_fraction(mesh: Mapping[str, Any], *, wet_tol_m: float = _WET_TOL_M
-                    ) -> dict[str, Any]:
-    """How much of the solved domain still held water at the final frame.
-
-    By element, a HEURISTIC; ``mesh`` is the record the postprocess ALREADY read."""
-    # The reach domain is the mapped ACTIVE CHANNEL, which at bankfull includes
-    # the gravel bars a low flow leaves dry: TELEMAC wets and dries them natively,
-    # so a low-flow run is correct and its conveyance width is still narrower than
-    # the domain it solved on. Nothing about the result says so, and a reader
-    # looking at a ribbon inside a wider mesh has no number to read it against.
-    import numpy as np
-
-    # SELAFIN pads a variable name to 32 chars with its unit trailing ('WATER
-    # DEPTH     M'), so an exact-key lookup never matches a real result.
-    picked = next((v for v in mesh["varnames"]
-                   if v.strip().upper().startswith("WATER DEPTH")), None)
-    depth = mesh["data"].get(picked) if picked is not None else None
-    ikle = np.asarray(mesh["ikle"], dtype=int)
-    if depth is None or np.asarray(depth).size == 0 or ikle.size == 0:
-        return {}
-    x, y = np.asarray(mesh["x"]), np.asarray(mesh["y"])
-    a, b, c = ikle[:, 0], ikle[:, 1], ikle[:, 2]
-    area = 0.5 * np.abs((x[b] - x[a]) * (y[c] - y[a])
-                        - (x[c] - x[a]) * (y[b] - y[a]))
-    final = np.asarray(depth)[-1]
-    wet = area[final[ikle].mean(axis=1) > float(wet_tol_m)]
-    total = mesh_area_m2(mesh)
-    if total <= 0.0:
-        return {}
-    return {"mesh_area_m2": total, "wet_area_m2": float(wet.sum()),
-            "wetted_fraction": round(float(wet.sum()) / total, 4),
-            "wet_tol_m": float(wet_tol_m)}
-
-
-def read_extent(primitive: Primitive, solved: Solved) -> Read:
-    """``extent()``: the domain's lon/lat bounds, its area, its wetted fraction."""
-    lon, lat = solved.lonlat
-    return Read(measures={
-        "bbox": [float(lon.min()), float(lat.min()), float(lon.max()), float(lat.max())],
-        "area_km2": round(mesh_area_m2(solved.result) / 1.0e6, 4),
-        **wetted_fraction(solved.result)})
-
-
-def read_mesh(primitive: Primitive, solved: Solved) -> Read:
-    """``mesh()``: the mesh the run solved on - its counts and its measured edge."""
-    return Read(measures={
-        "nodes": int(solved.result["npoin2"]),
-        "elements": int(solved.result["nelem2"]),
-        "planes": int(solved.result.get("nplan", 1)),
-        "epsg": solved.utm_epsg,
-        "size_m": solved.run.get("mesh_size_m"),
-        "resolution_label": solved.run.get("mesh_resolution_label")})
-
-
-def read_mass_balance(primitive: Primitive, solved: Solved) -> Read:
-    """``mass_balance()``: the closure the engine printed in its own listing.
-
-    The water balance carries the final block's volumes, outflow-positive
-    across the liquid boundaries like the flux series, and where the runoff
-    routine printed the rainfall it accumulated, the volume that fell on the
-    meshed domain and the fraction of it that left. The sediment balance carries
-    the per-class closure and, where a dredge ran, the volumes it moved."""
-    from .listing import (
-        continuity_rel_error, final_balance, gaia_mass_balance, nestor_volumes,
-    )
-
-    if solved.body.MODULE == "gaia":
-        # The dredge's own figures ride here because they close the same bed: a
-        # run that armed no dredge printed none and carries none.
-        return Read(measures={**gaia_mass_balance(solved.listing),
-                              **nestor_volumes(solved.listing)})
-    measures: dict[str, Any] = {
-        "continuity_rel_error": continuity_rel_error(solved.listing)}
-    final = final_balance(solved.listing)
-    if "boundary_volume_m3" in final:
-        final["outflow_volume_m3"] = -final.pop("boundary_volume_m3") + 0.0
-    if "rain_depth_m" in final:
-        final["rain_volume_m3"] = round(
-            final["rain_depth_m"] * mesh_area_m2(solved.result), 3)
-        if final.get("outflow_volume_m3") is not None and final["rain_volume_m3"] > 0.0:
-            final["runoff_coefficient"] = round(
-                final["outflow_volume_m3"] / final["rain_volume_m3"], 6)
-    return Read(measures={**measures, **final})
-
-
 #: How many stations a profile is binned into along its line.
 _PROFILE_STATIONS = 60
 
@@ -1385,9 +1232,7 @@ def read_drogues(primitive: Primitive, solved: Solved) -> Track:
 
 #: The primitive set, as every wrapper binds it: the reader of each, by kind.
 PRIMITIVES: Mapping[str, Any] = {
-    "field": read_field, "series": read_series, "max_over_time": read_max_over_time,
-    "profile": read_profile, "extent": read_extent, "mesh": read_mesh,
-    "mass_balance": read_mass_balance,
+    "field": read_field, "series": read_series, "profile": read_profile,
 }
 
 

@@ -25,10 +25,8 @@ from trid3nt_server.workflows.telemac.modules import (
 from trid3nt_server.workflows.telemac.modules.gaia import RESULT_FILENAME
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Boundaries,
-    Rain,
     Sources,
     TracerNames,
-    Wind,
 )
 from trid3nt_server.workflows.telemac.templates.sediment_plume.declarations import (
     ACCEPTS, DOC, PARAMS,
@@ -186,13 +184,6 @@ class STEERING(T2D):
         # GAIA's own sediment closure, beside the water volume the carrier
         # accounts for: the net bed mass the run settles at is a line of it.
         MASS_BALANCE=True)]
-
-    #: CALM AND DRY: this question asks what the CURRENT does with the injected
-    #: class, so this deck states no surface stress and no distributed rain and
-    #: the settling is the flow's alone - a zero speed and an absent rate each
-    #: write nothing at all.
-    wind = Wind(speed_mps=0.0, from_deg=0.0)
-    rain = Rain(mm_per_day=None, tracers=2)
 
 
 #: What this question PLACES: the suspended class's domain-wide history as the

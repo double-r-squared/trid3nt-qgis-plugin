@@ -23,7 +23,7 @@ from trid3nt_server.workflows.runtime import (
 )
 from trid3nt_server.tools.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.telemac.modules import T2D, WAC, series
-from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries, Wind
+from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
 from trid3nt_server.workflows.telemac.modules.tomawac import RESULT_FILENAME
 from trid3nt_server.workflows.telemac.templates.wave_driven_currents.declarations import (
     ACCEPTS,
@@ -154,11 +154,6 @@ class STEERING(T2D):
     #: liquid boundary carries the measured tide and nothing else. The walk is
     #: the mesh's own.
     boundaries = Boundaries(tracers=[])
-
-    #: CALM: the question is what the WAVES drive, so this deck states no
-    #: surface stress of its own - a current with a wind in it would be two
-    #: answers added together and reported as one.
-    wind = Wind(speed_mps=0.0, from_deg=0.0)
 
     #: THE WAVE FIELD, solved on this mesh and handed back as a momentum source.
     #: TOMAWAC appends no row to this deck's results - it writes its own file -

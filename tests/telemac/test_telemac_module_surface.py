@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.workflows.telemac.modules.telemac2d import Wind
+from trid3nt_server.workflows.telemac.modules.telemac2d import Storm
 from trid3nt_server.workflows.telemac.modules import (
     Sheet,
     SheetIncomplete,
@@ -175,16 +175,21 @@ def test_a_multi_select_keyword_is_one_value_the_engine_splits_itself():
 
 # -- refusals at fill --------------------------------------------------------- #
 
+#: The settle record a storm reads its horizon off.
+_SETTLED = {"settled": {"until_s": 600.0}}
+
+
 def test_a_body_is_static_and_no_fill_changes_what_it_asserts():
     """A body reads no resolved value: its assertions are fixed when the module
     is imported, so two fills of the same body start from the same statement."""
     class RIVER(T2D):
         SOLVER = 1
-        wind = Wind(speed_mps="wind_mps", from_deg=0.0)
+        storm = Storm(mm_per_day="storm_mm_per_day", hours=None)
 
     before = dict(RIVER.ASSERTED)
-    fill(RIVER, params={"wind_mps": 6.0})
-    fill(RIVER, params={"wind_mps": 9.0}, SOLVER=3)
+    fill(RIVER, params={"storm_mm_per_day": 6.0}, produced=_SETTLED)
+    fill(RIVER, params={"storm_mm_per_day": 9.0}, produced=_SETTLED,
+         SOLVER=3)
     assert dict(RIVER.ASSERTED) == before
 
 
@@ -465,25 +470,6 @@ def test_a_tracer_array_that_does_not_divide_across_the_sources_refuses():
              "window_s": None, "until_s": 600.0})
 
 
-def test_a_wind_from_the_north_reaches_the_engines_own_speed_and_direction_pair():
-    """telemac2d carries SPEED AND DIRECTION OF WIND, so the composite hands it
-    the pair it was given; only the FROM-bearing rotation onto the keyword's own
-    trigonometric convention is ours, and it is this keyword's ingestion."""
-    from trid3nt_server.workflows.telemac.modules.telemac2d import Wind
-
-    slots, _ = T2D.COMPOSITES["wind"].expand(Wind(speed_mps=4.0, from_deg=0.0))
-    # WIND arms what the value's presence implies; WHICH of the engine's three
-    # wind options reads it is not this composite's to say, and the one a
-    # constant speed and direction are read under is the dictionary's own.
-    assert slots["WIND"] is True and "OPTION_FOR_WIND" not in slots
-    speed, direction = slots["SPEED_AND_DIRECTION_OF_WIND"]
-    # A wind FROM the north blows TOWARD 270 deg in the keyword's own reckoning.
-    assert speed == 4.0 and round(direction, 9) == 270.0
-    assert "COEFFICIENT_OF_WIND_INFLUENCE" not in slots
-    east, _ = T2D.COMPOSITES["wind"].expand(Wind(speed_mps=4.0, from_deg=270.0))
-    assert round(east["SPEED_AND_DIRECTION_OF_WIND"][1], 9) == 0.0
-
-
 def test_a_rate_stated_by_name_arms_the_term_that_reads_it():
     """The engine reads the rate only with the term switched on, so the switch
     is the value's own ingestion rather than a second thing a caller has to
@@ -512,42 +498,22 @@ def test_a_continuation_names_the_file_and_nothing_else():
     assert "PREVIOUS_COMPUTATION_FILE" not in fill(T2D).filled
 
 
-def test_a_curve_number_field_names_no_model_and_the_template_does():
-    """The field is the SCS model's input, and four rainfall-runoff models read
-    the same rain: which one runs is rain_on_grid's assertion, not the
-    composite's."""
-    from trid3nt_server.workflows.telemac.modules.telemac2d import Runoff
-    from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
-        STEERING,
-    )
-
-    slots, _ = T2D.COMPOSITES["runoff"].expand(
-        Runoff(node_xy=[(0.0, 0.0)], cn2=[74.0],
-               antecedent_moisture=2, initial_abstraction=1))
-    assert "RAINFALL_RUNOFF_MODEL" not in slots
-    assert STEERING.ASSERTED["RAINFALL_RUNOFF_MODEL"] == 1
-
-
 def test_rain_carries_one_value_per_tracer():
     """DAMOCLES requires a rainwater concentration per tracer, and rainwater
     carries none of them - which is the array a hand-written deck gets wrong the
     moment a coupling adds a tracer behind the dye."""
-    from trid3nt_server.workflows.telemac.modules.telemac2d import Rain
-
-    slots, _ = T2D.COMPOSITES["rain"].expand(Rain(mm_per_day=3.5, tracers=4))
+    slots, _ = T2D.COMPOSITES["storm"].expand(
+        Storm(mm_per_day=3.5, hours=None, tracers=4))
     assert slots["VALUES_OF_TRACERS_IN_THE_RAIN"] == [0.0, 0.0, 0.0, 0.0]
-    assert "DURATION_OF_RAIN_OR_EVAPORATION_IN_HOURS" not in slots
-    windowed, _ = T2D.COMPOSITES["rain"].expand(
-        Rain(mm_per_day=156.72, tracers=0, hours=24.0))
-    assert windowed["DURATION_OF_RAIN_OR_EVAPORATION_IN_HOURS"] == 24.0
+    dry, _ = T2D.COMPOSITES["storm"].expand(Storm(mm_per_day=3.5, hours=None))
     # A run with no tracers states no rainwater concentrations at all: an empty
     # list is a keyword with nothing after it, not the absence of one.
-    assert "VALUES_OF_TRACERS_IN_THE_RAIN" not in windowed
+    assert "VALUES_OF_TRACERS_IN_THE_RAIN" not in dry
 
 
 def test_a_value_of_none_states_nothing_and_the_engine_default_stands():
     class QUIET(T2D):
-        wind = None
+        storm = None
         FRICTION_COEFFICIENT = None
         DURATION = 600.0
 
@@ -1273,7 +1239,7 @@ async def _answer(emitter: _Emitter, *replies) -> None:
 
 class _CARD(T2D):
     DURATION = 600.0
-    wind = Wind(speed_mps="wind_mps", from_deg=0.0)
+    storm = Storm(mm_per_day="storm_mm_per_day", hours=None)
 
 
 def _card_run(monkeypatch, *replies, spent=(), input_mode=None, seat=None):
@@ -1289,7 +1255,7 @@ def _card_run(monkeypatch, *replies, spent=(), input_mode=None, seat=None):
         answering = asyncio.create_task(_answer(emitter, *replies))
         try:
             return await fill_sheet(
-                steering=_CARD, produced={}, params={"wind_mps": 6.0},
+                steering=_CARD, produced=_SETTLED, params={"storm_mm_per_day": 6.0},
                 workflow="probe", title="", keywords={}, input_mode=input_mode,
                 spent=spent, seat=seat)
         finally:
@@ -1301,12 +1267,12 @@ def _card_run(monkeypatch, *replies, spent=(), input_mode=None, seat=None):
 def test_a_template_param_edited_on_the_card_lands_and_the_card_redraws(
         monkeypatch):
     sheet, emitter = _card_run(
-        monkeypatch, ("narrow_scope", {"wind_mps": 9.0}),
+        monkeypatch, ("narrow_scope", {"storm_mm_per_day": 9.0}),
         ("proceed", None))
-    assert dict(sheet.resolved())["SPEED AND DIRECTION OF WIND"][0] == 9.0
+    assert dict(sheet.resolved())["RAIN OR EVAPORATION IN MM PER DAY"] == 9.0
     drawn = [{row.name: row.value for row in card.param_sheet.rows}
              for card in emitter.sent]
-    assert [card["wind_mps"] for card in drawn] == [6.0, 9.0]
+    assert [card["storm_mm_per_day"] for card in drawn] == [6.0, 9.0]
 
 
 def test_a_param_edited_on_the_card_reaches_the_chart_reference(monkeypatch):
@@ -1320,15 +1286,15 @@ def test_a_param_edited_on_the_card_reaches_the_chart_reference(monkeypatch):
     from trid3nt_server.workflows.telemac.workflow import _seat_on
 
     class _P:
-        wind_mps = Param(desc="The wind the run is forced with.", default=6.0,
+        storm_mm_per_day = Param(desc="The storm rate the run is forced with.", default=6.0,
                          bounds=(0.0, 60.0))
 
     env = SimpleNamespace(params=asyncio.run(resolve_params(_P, {})),
-                          run={"wind_mps": 6.0})
-    _card_run(monkeypatch, ("narrow_scope", {"wind_mps": 9.0}),
+                          run={"storm_mm_per_day": 6.0})
+    _card_run(monkeypatch, ("narrow_scope", {"storm_mm_per_day": 9.0}),
               ("proceed", None), seat=_seat_on(env))
-    assert env.run == {"wind_mps": 9.0}
-    assert env.params.row("wind_mps").basis == "user"
+    assert env.run == {"storm_mm_per_day": 9.0}
+    assert env.params.row("storm_mm_per_day").basis == "user"
 
 
 def test_a_keyword_edited_on_the_card_lands(monkeypatch):
@@ -1345,9 +1311,9 @@ def test_a_name_that_is_no_input_of_the_run_refuses_by_name(monkeypatch):
 
 def test_a_param_another_stage_reads_refuses_by_name(monkeypatch):
     with pytest.raises(SlotRefused) as caught:
-        _card_run(monkeypatch, ("narrow_scope", {"wind_mps": 9.0}),
-                  spent=("wind_mps",))
-    assert "State wind_mps on the run instead" in str(caught.value)
+        _card_run(monkeypatch, ("narrow_scope", {"storm_mm_per_day": 9.0}),
+                  spent=("storm_mm_per_day",))
+    assert "State storm_mm_per_day on the run instead" in str(caught.value)
 
 
 def test_an_unstated_mode_with_no_session_refuses_and_fills_nothing(monkeypatch):
@@ -1359,8 +1325,8 @@ def test_an_unstated_mode_with_no_session_refuses_and_fills_nothing(monkeypatch)
 
     monkeypatch.setattr(pe, "current_emitter", lambda: None)
     with pytest.raises(TelemacError) as caught:
-        asyncio.run(fill_sheet(steering=_CARD, produced={},
-                               params={"wind_mps": 6.0}, workflow="probe",
+        asyncio.run(fill_sheet(steering=_CARD, produced=_SETTLED,
+                               params={"storm_mm_per_day": 6.0}, workflow="probe",
                                title="", keywords={}, input_mode=None))
     assert caught.value.error_code == "NO_SESSION"
     assert "input_mode='auto'" in str(caught.value)

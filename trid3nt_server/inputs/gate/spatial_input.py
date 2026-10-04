@@ -36,10 +36,6 @@ class ParsedSpatialInput:
     points: list[list[float]] = field(default_factory=list)
     line_coords: list[list[float]] | None = None
     n_lines: int = 0
-    breach_points: list[list[float]] = field(default_factory=list)
-    refine_regions: list[dict[str, Any]] = field(default_factory=list)
-    breaklines: list[list[list[float]]] = field(default_factory=list)
-    boundary_lines: list[dict[str, Any]] = field(default_factory=list)
 
 
 def parse_spatial_input_features(fc: dict[str, Any]) -> ParsedSpatialInput:
@@ -54,8 +50,4 @@ def parse_spatial_input_features(fc: dict[str, Any]) -> ParsedSpatialInput:
         points=roles.points,
         line_coords=roles.line_coords,
         n_lines=roles.n_lines,
-        breach_points=roles.breach_points,
-        refine_regions=roles.refine_regions,
-        breaklines=roles.breaklines,
-        boundary_lines=roles.boundary_lines,
     )

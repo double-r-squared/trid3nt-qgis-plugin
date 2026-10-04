@@ -27,7 +27,6 @@ from trid3nt_server.workflows.telemac.modules.telemac3d import (
     T3D,
     Column,
     VerticalGrid,
-    Wind,
 )
 from trid3nt_server.workflows.telemac.templates.stratified_flow.declarations import (
     DOC,
@@ -174,11 +173,6 @@ class STEERING(T3D):
     #: condition hook because no keyword carries a non-uniform tracer field.
     column = Column(thermocline_depth_m="thermocline_depth_m",
                     warm_c="warm_temp_c", cold_c="cold_temp_c")
-    #: CALM: the half of the pair in which the thermocline persists, and what
-    #: this question is asked from. A zero speed writes no wind keyword at all,
-    #: so the deck states none; the wind that mixes the column is TELEMAC-3D's
-    #: own WIND plus WIND VELOCITY ALONG X / Y, set by those names.
-    wind = Wind(speed_mps=0.0, from_deg=270.0)
 
 
 #: What this question PLACES: the column at the deepest node as the chart, the

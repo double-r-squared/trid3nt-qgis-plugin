@@ -19,10 +19,8 @@ from .coupling import couples
 from .module import Module, Output
 from .outputs import PRIMITIVES, read_drogues
 
-__all__ = ["T2D", "Atmosphere", "Boundaries", "Friction",
-           "Infiltration", "MODULE_OUTPUT", "Oil", "Rain", "Storm",
-           "Rating", "Runoff", "Sources", "TimeOrigin",
-           "TracerNames", "Wind", "SOURCES_FILENAME"]
+__all__ = ["T2D", "Atmosphere", "Boundaries", "Infiltration", "MODULE_OUTPUT",
+           "Oil", "Storm", "Rating", "Sources", "TracerNames", "SOURCES_FILENAME"]
 
 #: A signed component reads about zero, so its ramp diverges there and the
 #: legend is ranged symmetrically; a depth-like field is floored where it stops
@@ -150,14 +148,6 @@ def _tracer_names(value: Mapping[str, Any]
     return ({"NAMES_OF_TRACERS": names}, {})
 
 
-def Wind(*, speed_mps: Any, from_deg: Any,  # noqa: N802 - a value constructor
-         drag: Any = None) -> Mapping[str, Any]:
-    """SPEED AND DIRECTION OF WIND's own pair, the direction as weather states
-    one: the COMPASS bearing the wind blows FROM."""
-    return MappingProxyType({"speed_mps": speed_mps, "from_deg": from_deg,
-                             "drag": drag})
-
-
 def Oil(*, presets: Any, named: Any,  # noqa: N802
         release_step: Any) -> Mapping[str, Any]:
     """The oil module riding on top of the tracer solve: which preset, released
@@ -199,29 +189,6 @@ def _series(discharges: Sequence[float], tracers: Sequence[float],
     return "\n".join(rows) + "\n"
 
 
-def _wind(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-    """The wind -> the pair the module already carries, and the term it arms."""
-    if not value["speed_mps"]:
-        # A wind of no speed is not a wind. Stating one would put the whole wind
-        # block in the deck for a run nobody asked a wind about.
-        return ({}, {})
-    return ({"WIND": True,
-             "SPEED_AND_DIRECTION_OF_WIND": [float(value["speed_mps"]),
-                                             _engine_bearing(value["from_deg"])],
-             **({} if value.get("drag") is None else
-                {"COEFFICIENT_OF_WIND_INFLUENCE": float(value["drag"])})}, {})
-
-
-def _engine_bearing(from_deg: Any) -> float:
-    """A compass bearing the wind blows FROM -> the direction the keyword takes.
-
-    The dictionary states its own convention at the keyword: degrees 0 to 360
-    with 0 at y = 0, x = +infinity, counted the way an angle is - so it is the
-    direction the wind blows TOWARD, from +x, while weather names the quarter it
-    comes from, from north, the other way round."""
-    return float(270.0 - float(from_deg)) % 360.0
-
-
 def _oil(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     """The oil module: its steering file, its per-run Fortran, and the files the
     floats are written to and from."""
@@ -239,50 +206,6 @@ def _oil(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]
             {OIL_STEERING_FILENAME: steering_text(name, presets[name]),
              f"{USER_FORTRAN_DIR}/oil_flot.f": release_routine(
                  int(value["release_step"]), float(x), float(y))})
-
-
-def _rain(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-    """Distributed rain or evaporation, sized to the run's own tracer count.
-
-    Signed; with tracers present DAMOCLES demands one rainwater value each."""
-    if value["mm_per_day"] is None:
-        # No rate was resolved, so this run states no rain at all.
-        return ({}, {})
-    tracers = int(value["tracers"])
-    return ({"RAIN_OR_EVAPORATION": True,
-             "RAIN_OR_EVAPORATION_IN_MM_PER_DAY": float(value["mm_per_day"]),
-             # A run with no tracers states no rainwater concentrations. An
-             # EMPTY list is not that statement - it is a keyword with nothing
-             # after it, which DAMOCLES reads as the next line's business.
-             **({} if not tracers else
-                {"VALUES_OF_TRACERS_IN_THE_RAIN": [0.0] * tracers}),
-             **({} if value.get("hours") is None else
-                {"DURATION_OF_RAIN_OR_EVAPORATION_IN_HOURS": float(value["hours"])})},
-            {})
-
-
-def TimeOrigin(*, at: Any) -> Mapping[str, Any]:  # noqa: N802
-    """The absolute instant this run's clock starts at, or nothing at all.
-
-    A module reading DATES rather than sim seconds maps them through this."""
-    return MappingProxyType({"at": at})
-
-
-def _time_origin(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
-                                                    Mapping[str, Any]]:
-    """The origin -> the date and hour keywords, or no keyword at all."""
-    if not value["at"]:
-        return ({}, {})
-    year, month, day, hour, minute, second = value["at"]
-    return ({"ORIGINAL_DATE_OF_TIME": [int(year), int(month), int(day)],
-             "ORIGINAL_HOUR_OF_TIME": [int(hour), int(minute), int(second)]}, {})
-
-
-def Rain(*, mm_per_day: Any, tracers: Any, hours: Any = None  # noqa: N802
-         ) -> Mapping[str, Any]:
-    """Rain or evaporation at every wet node, independent of any hydrograph."""
-    return MappingProxyType({"mm_per_day": mm_per_day, "tracers": tracers,
-                             "hours": hours})
 
 
 #: WHAT A PRESCRIBED LIST IS READ IN, by the thing the .cli quad prescribes. The
@@ -420,14 +343,6 @@ def _tracer_note(per_tracer: Sequence[Any]) -> None:
         "water and is not substituted for it.")
 
 
-def Runoff(*, node_xy: Any, cn2: Any, antecedent_moisture: Any,  # noqa: N802
-           initial_abstraction: Any) -> Mapping[str, Any]:
-    """The engine's own SCS curve-number infiltration, per mesh node."""
-    return MappingProxyType({"node_xy": node_xy, "cn2": cn2,
-                             "antecedent_moisture": antecedent_moisture,
-                             "initial_abstraction": initial_abstraction})
-
-
 def _runoff(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                                                Mapping[str, Any]]:
     """The curve-number field -> the runoff keywords and the scatter they name.
@@ -524,14 +439,6 @@ def _infiltration(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
     friction, friction_files = _friction({
         "manning_per_node": [float(row[1]) for row in rows]})
     return ({**runoff, **friction}, {**runoff_files, **friction_files})
-
-
-def Friction(*, manning_per_node: Any) -> Mapping[str, Any]:  # noqa: N802
-    """Distributed bottom friction: the roughness at each node, as its zone.
-
-    The LAW the zones are read under is the deck's own LAW OF BOTTOM FRICTION;
-    this file's roughness column is Manning n, so a deck naming it states 4."""
-    return MappingProxyType({"manning_per_node": manning_per_node})
 
 
 def _friction(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
@@ -713,23 +620,18 @@ T2D.ARMS = MappingProxyType({
     "RAIN_OR_EVAPORATION_IN_MM_PER_DAY": "RAIN_OR_EVAPORATION"})
 T2D.composites(reads={
     "sources": ("window_s", "settled", "q", "tracers"),
-    "wind": ("speed_mps", "from_deg", "drag"), "atmosphere": ATMOSPHERE_READS,
+    "atmosphere": ATMOSPHERE_READS,
     "oil": ("named", "at", "release_step"),
-    "rain": ("mm_per_day", "tracers", "hours"),
     "boundaries": ("measured", "tracers"),
-    "runoff": ("node_xy", "cn2", "initial_abstraction"),
-    "friction": ("manning_per_node",),
     "infiltration": ("mesh", "landcover", "uniform_cn", "steep_slope_correction",
                      "initial_abstraction"),
     "rating": ("measured",),
     "storm": ("mm_per_day", "hours", "settled", "series", "record", "tracers"),
-    "time_origin": ("at",), "tracer_names": ("named_by",)},
-               sources=_sources, wind=_wind,
-               atmosphere=expand_atmosphere,
-               oil=_oil, rain=_rain, coupling=couples(water_column=False),
-               boundaries=_boundaries, runoff=_runoff, friction=_friction,
-               infiltration=_infiltration, rating=_rating, storm=_storm,
-               time_origin=_time_origin, tracer_names=_tracer_names)
+    "tracer_names": ("named_by",)},
+               sources=_sources, atmosphere=expand_atmosphere,
+               oil=_oil, coupling=couples(water_column=False),
+               boundaries=_boundaries, infiltration=_infiltration,
+               rating=_rating, storm=_storm, tracer_names=_tracer_names)
 T2D.reads(**PRIMITIVES, drogues=read_drogues)
 #: A settled release point is where the one source enters, in the mesh's own
 #: metres; a measured sample is what the one declared tracer opens at.

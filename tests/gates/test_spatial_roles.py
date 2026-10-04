@@ -3,7 +3,7 @@
 Covers the generalized role parser in ``trid3nt_server.inputs.gate.spatial_roles`` --
 the canonical DOMAIN stage every engine consumes. The adapter surface over it is
 covered by ``test_spatial_input_gate.py`` / ``test_spatial_input_neutral_line.py``;
-here we exercise the mesh roles + the alias + the honesty floor.
+here we exercise the roles + the alias + the honesty floor.
 """
 from __future__ import annotations
 
@@ -30,73 +30,15 @@ def _feat(role, geom_type, coords, **props):
 
 
 def test_canonical_vocabulary_is_the_declared_roles() -> None:
-    assert CANONICAL_ROLES == frozenset(
-        {
-            "breakline",
-            "breach",
-            "refine_region",
-            "aoi_clip",
-            "boundary",
-            "point",
-            "line",
-        }
-    )
+    assert CANONICAL_ROLES == frozenset({"aoi_clip", "point", "line"})
     assert ROLE_ALIASES == {"aoi": "aoi_clip"}
 
 
-def test_breach_point_role_parses_to_lonlat() -> None:
-    roles = parse_drawn_roles(_fc(_feat("breach", "Point", [-95.1, 29.7])))
-    assert roles.breach_points == [[-95.1, 29.7]]
-
-
-def test_refine_region_reads_target_size_and_bbox() -> None:
-    poly = [[[-95.2, 29.6], [-95.0, 29.6], [-95.0, 29.8], [-95.2, 29.8], [-95.2, 29.6]]]
-    roles = parse_drawn_roles(
-        _fc(_feat("refine_region", "Polygon", poly, target_size_m=25.0))
-    )
-    assert len(roles.refine_regions) == 1
-    r = roles.refine_regions[0]
-    assert r["target_size_m"] == 25.0
-    assert r["bbox"] == (-95.2, 29.6, -95.0, 29.8)
-
-
-def test_refine_region_size_optional_defaults_none() -> None:
-    poly = [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]
-    roles = parse_drawn_roles(_fc(_feat("refine_region", "Polygon", poly)))
-    assert roles.refine_regions[0]["target_size_m"] is None
-
-
-def test_refine_region_rejects_nonpositive_size() -> None:
-    poly = [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]
-    with pytest.raises(SpatialRoleError) as exc:
-        parse_drawn_roles(_fc(_feat("refine_region", "Polygon", poly, target_size_m=-5)))
-    assert exc.value.error_code == "SPATIAL_INPUT_REFINE_BAD_SIZE"
-
-
-def test_breakline_role_parses_vertices() -> None:
-    roles = parse_drawn_roles(
-        _fc(_feat("breakline", "LineString", [[-95.1, 29.7], [-95.0, 29.72]]))
-    )
-    assert roles.breaklines == [[[-95.1, 29.7], [-95.0, 29.72]]]
-
-
-def test_boundary_role_reads_type() -> None:
-    roles = parse_drawn_roles(
-        _fc(
-            _feat("boundary", "LineString", [[0, 0], [1, 1]], boundary_type="inflow"),
-            _feat("boundary", "LineString", [[2, 2], [3, 3]]),
-        )
-    )
-    assert roles.boundary_lines[0]["boundary_type"] == "inflow"
-    assert roles.boundary_lines[1]["boundary_type"] is None
-
-
-def test_boundary_rejects_unknown_type() -> None:
-    with pytest.raises(SpatialRoleError) as exc:
-        parse_drawn_roles(
-            _fc(_feat("boundary", "LineString", [[0, 0], [1, 1]], boundary_type="side"))
-        )
-    assert exc.value.error_code == "SPATIAL_INPUT_BAD_BOUNDARY_TYPE"
+def test_a_plan_era_role_is_refused_by_name() -> None:
+    for gone in ("breach", "refine_region", "breakline", "boundary"):
+        with pytest.raises(SpatialRoleError) as exc:
+            parse_drawn_roles(_fc(_feat(gone, "Point", [0, 0])))
+        assert exc.value.error_code == "SPATIAL_INPUT_BAD_ROLE"
 
 
 def test_legacy_aoi_alias_maps_to_aoi_clip() -> None:
@@ -118,23 +60,21 @@ def test_unknown_role_raises_honestly() -> None:
     assert exc.value.error_code == "SPATIAL_INPUT_BAD_ROLE"
 
 
-def test_breach_wrong_geometry_raises() -> None:
+def test_point_wrong_geometry_raises() -> None:
     with pytest.raises(SpatialRoleError) as exc:
-        parse_drawn_roles(_fc(_feat("breach", "LineString", [[0, 0], [1, 1]])))
-    assert exc.value.error_code == "SPATIAL_INPUT_BREACH_NOT_POINT"
+        parse_drawn_roles(_fc(_feat("point", "LineString", [[0, 0], [1, 1]])))
+    assert exc.value.error_code == "SPATIAL_INPUT_POINT_NOT_POINT"
 
 
 def test_mixed_roles_coexist() -> None:
     poly = [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]
     roles = parse_drawn_roles(
         _fc(
-            _feat("breakline", "LineString", [[0, 0], [0, 1]]),
-            _feat("breach", "Point", [0.5, 0.5]),
-            _feat("refine_region", "Polygon", poly, target_size_m=10.0),
+            _feat("line", "LineString", [[0, 0], [0, 1]]),
+            _feat("point", "Point", [0.5, 0.5]),
             _feat("aoi_clip", "Polygon", poly),
         )
     )
-    assert roles.breaklines == [[[0, 0], [0, 1]]]
-    assert roles.breach_points == [[0.5, 0.5]]
-    assert len(roles.refine_regions) == 1
+    assert roles.line_coords == [[0, 0], [0, 1]]
+    assert roles.points == [[0.5, 0.5]]
     assert roles.aoi_bbox == (0, 0, 1, 1)

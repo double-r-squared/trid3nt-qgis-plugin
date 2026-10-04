@@ -13,7 +13,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.telemac.modules import T2D, field, max_over_time, series
+from trid3nt_server.workflows.telemac.modules import T2D, field, series
 from trid3nt_server.workflows.telemac.modules.module import Output
 from trid3nt_server.workflows.telemac.modules.outputs import (
     OutputEmpty,
@@ -74,12 +74,6 @@ def test_a_field_at_an_instant_is_measured_over_the_same_nodes(filmed):
     # what the number is about
     assert list(read.values)[-1] == 45.0
     assert list(read.wet) == [True] * _WET_NODES + [False]
-
-
-def test_the_envelope_reads_each_node_over_the_instants_it_held_water(filmed):
-    read = T2D.READS["max_over_time"](max_over_time("T1"), filmed)
-    assert read.measures["max"] == 12.0
-    assert read.measures["p99"] == pytest.approx(12.0, abs=0.1)
 
 
 def test_the_temporal_layers_legend_is_ranged_over_the_same_nodes(filmed):
