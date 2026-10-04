@@ -80,21 +80,13 @@ _STAGE_ORDER: tuple[str, ...] = (
 def _stage_label_for_tool(tool_name: str) -> str:
     """The coarse analysis-flow stage for ONE tool name, by name prefix;
     anything unrecognized falls back to ``"tool-selection"``."""
-    if tool_name.startswith(
-        ("fetch_", "geocode_", "discover_", "catalog_", "search_")
-    ):
+    if tool_name.startswith(("fetch_", "geocode_", "search_")):
         return "acquisition"
-    if tool_name.startswith(
-        ("clip_", "merge_", "fill_", "cut_", "import_", "digitize_", "extract_")
-    ):
+    if tool_name.startswith(("merge_", "fill_")):
         return "preprocessing"
-    if tool_name.startswith(
-        ("publish_", "generate_", "export_", "zoom", "compose_", "chart", "plot")
-    ):
+    if tool_name.startswith("generate_"):
         return "visualization"
-    if tool_name.startswith(
-        ("compute_", "run_", "model_", "spatial_", "query_", "analyze_", "aggregate_")
-    ):
+    if tool_name.startswith("run_"):
         return "analysis"
     return "tool-selection"
 

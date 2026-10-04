@@ -149,59 +149,23 @@ async def _session_safe_send(
 async def _send_loop_exhausted(
     websocket: "ServerConnection",
     session_id: str,
+    reason_code: str = "MAX_ITERATIONS_REACHED",
+    message: str | None = None,
 ) -> None:
-    """Emit the ``loop_exhausted`` envelope when the multi-turn loop hits its
-    iteration cap without terminating naturally. Its own type, distinct from a
-    generic error, so a client can tell a long tool chain from a model failure."""
+    """Emit the ``loop_exhausted`` envelope: the iteration cap by default, or a
+    per-turn guard's own code and message. Its own type, distinct from a generic
+    error, so a client can tell a stopped tool chain from a model failure."""
     # ``retryable=False``: the agent already consumed its turns, so the user
     # rephrases or narrows scope. Best-effort - a wire failure is logged, never
     # raised, so the terminal chunk still fires.
     import json as _json
 
-    try:
-        payload = {
-            "status": "loop_exhausted",
-            "error_code": "MAX_ITERATIONS_REACHED",
-            "message": (
-                f"Agent reached max iteration limit ({MAX_TURN_ITERATIONS}) "
-                "before completing the request. "
-                "Try rephrasing your request with a narrower scope."
-            ),
-            "retryable": False,
-        }
-        await _session_safe_send(
-            websocket,
-            session_id,
-            _json.dumps(
-                {
-                    "type": "loop_exhausted",
-                    "session_id": session_id,
-                    "payload": payload,
-                }
-            ),
+    if message is None:
+        message = (
+            f"Agent reached max iteration limit ({MAX_TURN_ITERATIONS}) "
+            "before completing the request. "
+            "Try rephrasing your request with a narrower scope."
         )
-        logger.info(
-            "loop_exhausted envelope sent session=%s max_iter=%d",
-            session_id,
-            MAX_TURN_ITERATIONS,
-        )
-    except Exception:  # noqa: BLE001 -- observability; never break the reply path
-        logger.exception(
-            "loop_exhausted envelope send failed session=%s", session_id
-        )
-
-
-async def _send_agent_abort(
-    websocket: "ServerConnection",
-    session_id: str,
-    reason_code: str,
-    message: str,
-) -> None:
-    """Emit the runaway-agent abort envelope when a per-turn guard fires; it
-    reuses the loop-exhausted type but carries the guard's own code and an
-    honest message stating exactly why the turn stopped."""
-    import json as _json
-
     try:
         await _session_safe_send(
             websocket,
@@ -219,12 +183,14 @@ async def _send_agent_abort(
                 }
             ),
         )
-        logger.warning(
-            "agent-abort session=%s reason=%s", session_id, reason_code
+        logger.info(
+            "loop_exhausted envelope sent session=%s reason=%s",
+            session_id,
+            reason_code,
         )
     except Exception:  # noqa: BLE001 -- observability; never break the reply path
         logger.exception(
-            "agent-abort envelope send failed session=%s reason=%s",
+            "loop_exhausted envelope send failed session=%s reason=%s",
             session_id,
             reason_code,
         )

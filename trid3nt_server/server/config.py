@@ -25,33 +25,14 @@ def _tool_retrieval_k() -> int:
         return DEFAULT_K
 
 
-# The default decision window (seconds) the payload and solver-confirm gates
-# share; the code-exec gate has its own below.
-CODE_EXEC_CONFIRM_TIMEOUT_SECONDS: int = int(
-    os.environ.get("TRID3NT_CODE_EXEC_CONFIRM_TIMEOUT", "300")
-)
-
-# The code-exec gate (``run_pyqgis``) has its OWN bounded approval window that
-# applies in every lane. When no confirmation answers the card in time the gate
-# raises the typed ``CodeExecApprovalTimeoutError``, so the model narrates
-# honestly and the turn COMPLETES. Read LIVE, not as an import-time snapshot.
-CODE_EXEC_APPROVAL_TIMEOUT_DEFAULT_S: float = 180.0
-
-
-def _code_exec_approval_timeout_s() -> float:
-    """Effective approval-wait window for the code-exec confirm gate
-    (``TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S``, default 180s); a malformed or
-    non-positive value takes the default, never an unbounded or zero wait."""
-    raw = os.environ.get("TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S")
-    if raw is None:
-        return CODE_EXEC_APPROVAL_TIMEOUT_DEFAULT_S
+def _env_float(name: str, default: float, *, positive: bool = True) -> float:
+    """A float env knob read LIVE: unset, malformed or - when ``positive`` - a
+    non-positive value takes ``default``, never an unbounded or zero wait."""
     try:
-        value = float(raw)
-    except (TypeError, ValueError):
-        return CODE_EXEC_APPROVAL_TIMEOUT_DEFAULT_S
-    if value <= 0:
-        return CODE_EXEC_APPROVAL_TIMEOUT_DEFAULT_S
-    return value
+        value = float(os.environ[name])
+    except (KeyError, TypeError, ValueError):
+        return default
+    return default if positive and value <= 0 else value
 
 
 def _env_flag(name: str, default: bool = True) -> bool:
@@ -73,25 +54,11 @@ def _ambiguity_margin_threshold() -> float:
     # channel beats a consistent rank-2 by only ~1.6% relative, while a genuine
     # cross-channel tie lands well under ~1%. The 0.01 default therefore fires
     # only on real channel disagreement, not on a consistently ordered ranking.
-    raw = os.environ.get("TRID3NT_AMBIGUITY_MARGIN")
-    if raw is None:
-        return 0.01
-    try:
-        value = float(raw)
-    except (TypeError, ValueError):
-        return 0.01
-    return max(0.0, value)
+    return max(0.0, _env_float("TRID3NT_AMBIGUITY_MARGIN", 0.01, positive=False))
 
 
 def _tool_choice_timeout_s() -> float:
     """Bounded wait for a ``tool-choice`` reply to the tool-candidates card
     (``TRID3NT_TOOL_CHOICE_TIMEOUT_S``, default 45); an unanswered picker
     degrades to autonomous routing rather than hanging the turn."""
-    raw = os.environ.get("TRID3NT_TOOL_CHOICE_TIMEOUT_S")
-    if raw is None:
-        return 45.0
-    try:
-        value = float(raw)
-    except (TypeError, ValueError):
-        return 45.0
-    return value if value > 0 else 45.0
+    return _env_float("TRID3NT_TOOL_CHOICE_TIMEOUT_S", 45.0)

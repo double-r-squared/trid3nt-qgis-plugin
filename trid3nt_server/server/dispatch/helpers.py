@@ -92,9 +92,6 @@ def _tool_search_tool_names() -> frozenset[str]:
     except Exception:  # noqa: BLE001 -- module shape drift must not break dispatch
         logger.debug("discovery-expand: search_tools metadata lookup failed",
                      exc_info=True)
-    for _legacy in ("discover_dataset",):
-        if _legacy in TOOL_REGISTRY:
-            names.add(_legacy)
     return frozenset(names)
 
 

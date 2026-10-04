@@ -19,7 +19,7 @@ from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.inputs.gate.cards import _build_spatial_input_request_payload, _gate_memory_key, _get_hard_cap_mb, _get_warning_threshold_mb, _resolve_payload_estimator, _spatial_response_to_result
 from trid3nt_server.inputs.gate.cards.estimate import call_provider
 from trid3nt_server.inputs.gate.pending import _PENDING_CONFIRMATIONS, _PENDING_SPATIAL_INPUTS
-from trid3nt_server.server.config import CODE_EXEC_CONFIRM_TIMEOUT_SECONDS, _code_exec_approval_timeout_s
+from trid3nt_server.server.config import _env_float
 from trid3nt_server.server.errors import GateConfirmationTimeoutError, SpatialInputInvalidResponseError
 from trid3nt_server.server.session.state import SessionState
 from trid3nt_server.server.turn.wire import _new_envelope, _send_error, _session_safe_send
@@ -27,6 +27,18 @@ from typing import Any
 from websockets.asyncio.server import ServerConnection
 
 logger = logging.getLogger("trid3nt_server.server")
+
+# The decision window (seconds) the payload and solver-confirm gates share.
+CODE_EXEC_CONFIRM_TIMEOUT_SECONDS: int = int(
+    os.environ.get("TRID3NT_CODE_EXEC_CONFIRM_TIMEOUT", "300")
+)
+
+
+def _code_exec_approval_timeout_s() -> float:
+    """The code-exec gate's own approval window in every lane
+    (``TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S``, default 180); an unanswered card
+    raises ``CodeExecApprovalTimeoutError`` so the turn completes honestly."""
+    return _env_float("TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S", 180.0)
 
 # Confirm-gate membership is DERIVED from tool metadata: a tool declares a
 # ``GateSpec`` on its ``AtomicToolMetadata`` and that PRESENCE is the one

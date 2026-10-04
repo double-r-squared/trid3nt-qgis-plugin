@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.case import CaseCommandEnvelopePayload, CaseListEnvelopePayload, CaseOpenEnvelopePayload, CaseSessionState, CaseSummary
 from trid3nt_server.model.adapters.adapter import REHYDRATE_HISTORY_CAP, rehydrate_history_from_case
@@ -262,6 +263,29 @@ async def _emit_case_open(
         len(state.chat_history),
     )
 
+async def _mint_case(
+    p: Any, state: SessionState, title: str, bbox: Any = None
+) -> str:
+    """Persist a fresh active Case owned by the session's user and make it this
+    connection's active, synced Case; an upsert failure raises to the caller."""
+    # The owner stamp is what lists the Case for its creator; Cases are durable,
+    # so no TTL stamp. Synced: the connection's context IS the new Case's.
+    now = now_utc()
+    case = CaseSummary(
+        case_id=new_ulid(),
+        title=title,
+        created_at=now,
+        updated_at=now,
+        status="active",
+        bbox=list(bbox) if bbox is not None else None,
+    )
+    await p.upsert_case(case, owner_user_id=state.authenticated_user_id)
+    state.active_case_id = case.case_id
+    state.case_context_synced_to = case.case_id
+    await _touch_session_record(state, case_id=case.case_id)
+    return case.case_id
+
+
 async def _handle_case_command(
     websocket: ServerConnection,
     state: SessionState,
@@ -286,8 +310,7 @@ async def _handle_case_command(
     command = cmd.command
 
     if command == "create":
-        # Generate a fresh ULID and persist. ``args.title`` is an optional hint.
-        new_case_id = new_ulid()
+        # ``args.title`` is an optional hint.
         title = (cmd.args or {}).get("title") or "Untitled Case"
         if not isinstance(title, str) or not title.strip():
             title = "Untitled Case"
@@ -297,22 +320,8 @@ async def _handle_case_command(
         # the Case and seeds the in-session anchor, so the FIRST turn reuses the
         # user's extent instead of re-geocoding.
         create_bbox = as_bbox((cmd.args or {}).get("bbox"))
-        now = now_utc()
-        case = CaseSummary(
-            case_id=new_case_id,
-            title=title.strip(),
-            created_at=now,
-            updated_at=now,
-            status="active",
-            bbox=list(create_bbox) if create_bbox is not None else None,
-        )
         try:
-            # Stamp the creator as owner, so the Case is visible to them in the
-            # listing. Cases are durable: no TTL stamp.
-            await p.upsert_case(
-                case,
-                owner_user_id=state.authenticated_user_id,
-            )
+            new_case_id = await _mint_case(p, state, title.strip(), create_bbox)
         except Exception as exc:  # noqa: BLE001
             logger.exception("case-command(create) upsert failed: %s", exc)
             await _send_error(
@@ -322,7 +331,6 @@ async def _handle_case_command(
                 f"case create failed: {exc}",
             )
             return
-        state.active_case_id = new_case_id
         # A fresh Case must NOT inherit the previous Case's AOI anchor, so the
         # reset happens BEFORE the conditional seed: a bbox-less create starts
         # with no anchor and the first prompt geocodes its own place name.
@@ -331,12 +339,9 @@ async def _handle_case_command(
         # returns the user's pre-set extent.
         if create_bbox is not None:
             state.case_bbox = list(create_bbox)
-        # This connection is now synced to the new Case.
-        state.case_context_synced_to = new_case_id
         # A fresh Case gets a fresh model context. REBIND, never clear.
         state.chat_history = []
         state.turn_count = 0
-        await _touch_session_record(state, case_id=new_case_id)  # session heartbeat
         # Emit case-open with the empty session state for the fresh Case.
         payload = CaseOpenEnvelopePayload(
             session_state=await p.get_session_state(new_case_id)
@@ -598,35 +603,16 @@ async def _auto_create_case_from_root(
     if p is None:
         return None
     title = _derive_case_title(prompt) or "Untitled Case"
-    now = now_utc()
-    case = CaseSummary(
-        case_id=new_ulid(),
-        title=title,
-        created_at=now,
-        updated_at=now,
-        status="active",
-    )
     try:
-        # Stamp the creator as owner so the auto-created Case is visible to
-        # them via ``list_cases_for_user``. Cases are durable -- no TTL stamp.
-        await p.upsert_case(
-            case,
-            owner_user_id=state.authenticated_user_id,
-        )
+        case_id = await _mint_case(p, state, title)
     except Exception:  # noqa: BLE001 -- fall back to the stateless path
         logger.exception(
             "auto-create-case upsert failed session=%s", state.session_id
         )
         return None
-    state.active_case_id = case.case_id
-    # This connection's in-memory context IS the new Case's context (the
-    # triggering message is its first turn) -- mark synced so the next
-    # dispatch skips the _sync_case_context reset.
-    state.case_context_synced_to = case.case_id
     # The creating prompt already named the Case -- skip the
     # first-turn rename probe (it would be a wasted get_case round-trip).
-    _AUTONAMED_CASES.add(case.case_id)
-    await _touch_session_record(state, case_id=case.case_id)  # session heartbeat
+    _AUTONAMED_CASES.add(case_id)
     # Fresh Case starts with zero layers -- flush the per-connection
     # accumulator (replace-not-reconcile server-side; mirrors
     # ``case-command(create)``).
@@ -636,10 +622,10 @@ async def _auto_create_case_from_root(
     logger.info(
         "auto-created case from root session=%s case=%s title=%r",
         state.session_id,
-        case.case_id,
+        case_id,
         title,
     )
-    return case.case_id
+    return case_id
 
 async def _emit_auto_case_open(
     websocket: ServerConnection,

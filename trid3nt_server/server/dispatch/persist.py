@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import weakref
 import logging
 from datetime import datetime
@@ -210,10 +211,11 @@ async def _persist_tool_card(
     function_response: Any = None,
     io_is_error: bool = False,
     message_id: str | None = None,
+    extra_content: dict[str, Any] | None = None,
 ) -> None:
     """Persist one replayable tool-card row for the active Case, on a complete
     or failed dispatch; a cancelled dispatch persists nothing. Best-effort and
-    never raises."""
+    never raises; ``extra_content`` rides the JSON twin only."""
     # Storage shape is ``CaseChatMessage(role="tool")`` in the same collection
     # as user and agent turns, so replay interleaves the stream by created_at
     # with no extra query; the typed ``tool_card`` is the integration path and
@@ -276,6 +278,8 @@ async def _persist_tool_card(
         # (they live on the typed record), so a single dump matches the wire
         # shape for non-contract consumers without a separate merge.
         content = record.model_dump_json()
+        if extra_content:
+            content = json.dumps({**json.loads(content), **extra_content})
         await _persist_chat_turn(
             state,
             role="tool",
@@ -304,81 +308,28 @@ async def _persist_terminal_failure_card(
     """Persist a FAILED tool-card row for a terminal turn failure that did not
     flow through the dispatch path's own failed-card persist, so a reconnect
     never replays a card stuck ``running``. Best-effort, never raises."""
-    # Honesty floor: this writes ONLY on a real terminal failure. The record
-    # contract carries no error code, so the code and message ride the row
-    # content and the label. Identity and timing prefer the emitter's last tool
-    # step, falling back to a synthetic model-generation card.
-    import json
+    # The record contract carries no error code, so the code and message ride
+    # the JSON twin and the label. The card is the emitter's last tool step when
+    # there is one, else a synthetic model-generation card.
+    target_case = case_id if case_id is not None else _turn_case_id(state)
+    if not target_case:
+        return
+    step = state.emitter.last_tool_step if state.emitter is not None else None
+    if step is not None and step.tool_name:
+        tool_name, label = step.tool_name, step.name or step.tool_name
+    else:
+        tool_name, label = "model_generate", "llm_generation"
+    await _persist_tool_card(
+        state,
+        tool_name=tool_name,
+        label=f"{label} - {error_code}",
+        card_state="failed",
+        started_at_fallback=now_utc(),
+        duration_ms_fallback=0,
+        case_id=target_case,
+        extra_content={"error_code": error_code, "message": message},
+    )
 
-    try:
-        target_case = case_id if case_id is not None else _turn_case_id(state)
-        if not target_case:
-            return
-        emitter_step = (
-            state.emitter.last_tool_step if state.emitter is not None else None
-        )
-        # Identify the failing operation: the last live tool step when there is
-        # one, else the model-generation step. Timing mirrors the live card so
-        # the replayed failed card lands where the running one was, and the
-        # captured child substeps ride along when the failing operation IS that
-        # tool step; a pure model-stream failure has no children.
-        _children: list | None = None
-        if emitter_step is not None and emitter_step.tool_name:
-            tool_name = emitter_step.tool_name
-            label = emitter_step.name or emitter_step.tool_name
-            started_at = emitter_step.started_at or now_utc()
-            duration_ms = emitter_step.duration_ms
-            emitter_children = (
-                state.emitter.last_tool_children
-                if state.emitter is not None
-                else None
-            )
-            if emitter_children:
-                _children = list(emitter_children)
-        else:
-            tool_name = "model_generate"
-            label = "llm_generation"
-            started_at = now_utc()
-            duration_ms = 0
-        record = ToolCardRecord(
-            tool_name=tool_name,
-            state="failed",
-            started_at=started_at,
-            duration_ms=duration_ms,
-            # Surface the failure reason in the human-facing label so the
-            # replayed card explains WHY it failed.
-            label=f"{label} — {error_code}",
-            children=_children,
-        )
-        # The JSON twin carries the typed record plus the error_code and message
-        # the record contract cannot hold, so a non-contract replay consumer
-        # still sees the failure reason.
-        content_payload = json.loads(record.model_dump_json())
-        content_payload["error_code"] = error_code
-        content_payload["message"] = message
-        await _persist_chat_turn(
-            state,
-            role="tool",
-            content=json.dumps(content_payload),
-            pipeline_id=state.current_turn_pipeline_id,
-            tool_card=record,
-            layer_emissions=[],
-            case_id=target_case,
-        )
-        logger.info(
-            "terminal-failure card persisted session=%s case=%s tool=%s code=%s",
-            state.session_id,
-            target_case,
-            tool_name,
-            error_code,
-        )
-    except Exception:  # noqa: BLE001 -- replay material, never the happy path
-        logger.exception(
-            "terminal-failure card persist failed session=%s case=%s code=%s",
-            state.session_id,
-            case_id if case_id is not None else _turn_case_id(state),
-            error_code,
-        )
 
 async def _persist_chart_record(state: SessionState, payload: dict) -> None:
     """Append a ``SessionChartRecord`` to the session document, keyed by the

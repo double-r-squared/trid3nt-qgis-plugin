@@ -10,13 +10,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from typing import TYPE_CHECKING
 
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.processing_contracts import ProcessingRequestPayload
 
 from trid3nt_server.inputs.gate.pending import _PENDING_PROCESSING
+from trid3nt_server.server.config import _env_float
 
 if TYPE_CHECKING:
     from trid3nt_contracts.processing_contracts import ProcessingResponsePayload
@@ -31,19 +31,11 @@ __all__ = [
     "run_in_session",
 ]
 
-#: Wall clock a session run may take before the tool call resolves as a timeout.
-#: An algorithm over a large raster runs for minutes; the cap keeps a turn from
-#: hanging on a session that never answers.
-_DEFAULT_TIMEOUT_S = 600.0
-
-
 def _timeout_s() -> float:
-    raw = os.environ.get("TRID3NT_SESSION_PROCESSING_TIMEOUT_S")
-    try:
-        value = float(raw) if raw is not None else _DEFAULT_TIMEOUT_S
-    except (TypeError, ValueError):
-        return _DEFAULT_TIMEOUT_S
-    return value if value > 0 else _DEFAULT_TIMEOUT_S
+    """Wall clock a session run may take before the call resolves as a timeout
+    (``TRID3NT_SESSION_PROCESSING_TIMEOUT_S``, default 600): an algorithm over a
+    large raster runs for minutes, and the cap keeps a turn from hanging."""
+    return _env_float("TRID3NT_SESSION_PROCESSING_TIMEOUT_S", 600.0)
 
 
 class SessionProcessingError(RuntimeError):

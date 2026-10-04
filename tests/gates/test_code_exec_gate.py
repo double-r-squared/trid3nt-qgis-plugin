@@ -110,12 +110,12 @@ async def test_a_cancelled_wait_drops_its_entry() -> None:
 
 def test_approval_window_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S", raising=False)
-    assert config._code_exec_approval_timeout_s() == 180.0
+    assert confirm._code_exec_approval_timeout_s() == 180.0
     monkeypatch.setenv("TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S", "42.5")
-    assert config._code_exec_approval_timeout_s() == 42.5
+    assert confirm._code_exec_approval_timeout_s() == 42.5
     for bad in ("abc", "0", "-5"):
         monkeypatch.setenv("TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S", bad)
-        assert config._code_exec_approval_timeout_s() == 180.0
+        assert confirm._code_exec_approval_timeout_s() == 180.0
 
 
 def test_dispatch_strips_a_model_supplied_approval() -> None:

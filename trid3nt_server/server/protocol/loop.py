@@ -30,7 +30,7 @@ from trid3nt_server.server.session.state import SessionState, _ROOT_STREAM_KEY
 from trid3nt_server.server.turn.cases import _handle_case_command
 from trid3nt_server.server.turn.engine import _handle_max_turns_reached, _prepare_user_turn
 from trid3nt_server.server.turn.live_turn import _any_live_turn, _find_live_turn, _rebind_live_turns, _register_live_turn
-from trid3nt_server.server.turn.stream import _dispatch_model_turn_and_persist
+from trid3nt_server.server.turn.stream import _dispatch_model_turn_and_persist, _effective_model_id
 from trid3nt_server.server.turn.wire import _heartbeat_loop, _new_envelope, _send_error
 from websockets.asyncio.server import ServerConnection, serve
 from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
@@ -630,19 +630,10 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     # Bind-host override so the agent is reachable off the loopback interface;
     # the default stays loopback-only.
     host = os.environ.get("TRID3NT_AGENT_HOST", host)
-    from trid3nt_server.model.adapters.model_selection import (
-        model_provider as _active_model_provider,
-    )
+    from trid3nt_server.model.adapters.model_selection import model_provider
 
-    _active_provider = _active_model_provider()
-    if _active_provider == "openai":
-        from trid3nt_server.model.adapters import openai_adapter as _active_oa
-        _active_model = _active_oa.openai_model(None)
-    elif _active_provider == "anthropic":
-        from trid3nt_server.model.adapters import anthropic_adapter as _active_aa
-        _active_model = _active_aa.anthropic_model(None)
-    else:
-        _active_model = _active_provider
+    _active_provider = model_provider()
+    _active_model = _effective_model_id(None)
     settings = ModelSettings(model=_active_model)
     logger.info(
         "starting agent server host=%s port=%d provider=%s model=%s",

@@ -31,12 +31,29 @@ from trid3nt_server.inputs.extent import as_bbox
 from trid3nt_server.server.spatial import _aoi_zoom_to_bbox
 from trid3nt_server.server.turn.cases import _emit_case_list, _maybe_autoname_case
 from trid3nt_server.server.turn.engine import _CONTINUATION_NUDGE, _asks_for_data_or_analysis, _geocode_drift_note, _maybe_emit_tool_candidates, _session_routing_mode, _union_pinned_tool
-from trid3nt_server.server.turn.wire import _emit_turn_complete, _new_envelope, _send_agent_abort, _send_error, _send_loop_exhausted, _session_safe_send
+from trid3nt_server.server.turn.wire import _emit_turn_complete, _new_envelope, _send_error, _send_loop_exhausted, _session_safe_send
 from typing import Any
 from websockets.asyncio.server import ServerConnection
 from websockets.exceptions import ConnectionClosed
 
 logger = logging.getLogger("trid3nt_server.server")
+
+def _effective_model_id(requested: str | None) -> str:
+    """The model id a turn runs on: the active provider adapter's resolution of
+    ``requested``, else the selection or, with none, the provider name."""
+    from trid3nt_server.model.adapters.model_selection import model_provider
+
+    provider = model_provider()
+    if provider == "openai":
+        from trid3nt_server.model.adapters.openai_adapter import openai_model
+
+        return openai_model(requested)
+    if provider == "anthropic":
+        from trid3nt_server.model.adapters.anthropic_adapter import anthropic_model
+
+        return anthropic_model(requested)
+    return requested or provider
+
 
 async def _stream_model_reply(
     websocket: ServerConnection,
@@ -144,16 +161,10 @@ async def _stream_model_reply(
     from trid3nt_server.model.adapters.model_selection import model_provider as _model_provider
 
     _provider = _model_provider()
-    # Resolve the EFFECTIVE model serving this turn, not the possibly-None
-    # explicit selection, so a default-model turn's log line carries the real
-    # model instead of collapsing into the unknown bucket. Best-effort: a
-    # resolution error falls back to the raw selection.
+    # The EFFECTIVE model, so a default-model turn's log line names the real
+    # model; a log tag only, so a resolution error falls back to the selection.
     try:
-        if _provider == "openai":
-            from trid3nt_server.model.adapters import openai_adapter as _oa  # noqa: WPS433
-            _effective_model = _oa.openai_model(model_id)
-        else:
-            _effective_model = model_id
+        _effective_model = _effective_model_id(model_id)
     except Exception:  # noqa: BLE001 -- a log tag only, never fatal
         _effective_model = model_id
     # No model client is built here -- the provider adapters ignore ``client``.
@@ -1253,7 +1264,7 @@ async def _stream_model_reply(
         # abort.
         if _agent_abort is not None:
             _abort_code, _abort_msg = _agent_abort
-            await _send_agent_abort(
+            await _send_loop_exhausted(
                 websocket, state.session_id, _abort_code, _abort_msg
             )
             # A runaway loop exits mid tool-dispatch with no trailing narration,
