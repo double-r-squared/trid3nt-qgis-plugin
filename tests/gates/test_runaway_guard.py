@@ -28,6 +28,14 @@ from trid3nt_server.model.guards.runaway_guard import (
 
 
 
+
+def _inflight_turn_count() -> int:
+    from trid3nt_server.server.turn.live_turn import _SESSION_LIVE_TURNS
+
+    return sum(not live.task.done()
+               for bucket in _SESSION_LIVE_TURNS.values() for live in bucket.values())
+
+
 def test_abort_messages_are_honest_and_distinct():
     for code in (ABORT_STEP_CAP, ABORT_WALL_CLOCK, ABORT_LOOP_WATCHDOG):
         msg = abort_message(code)
@@ -169,7 +177,7 @@ async def test_wall_clock_guard_aborts_a_slow_turn(monkeypatch, fake_llm):
     assert dispatched == 1
     assert ABORT_WALL_CLOCK in _abort_codes(sock)
     # Busy released -- the loop is free, the process did not crash.
-    assert agent_server.inflight_turn_count() == 0
+    assert _inflight_turn_count() == 0
 
 
 @pytest.mark.asyncio
@@ -206,7 +214,7 @@ async def test_step_cap_guard_aborts_a_varied_runaway(monkeypatch, fake_llm):
     # Stopped at the (tightened) step cap, not before, not infinitely.
     assert dispatched == 3
     assert ABORT_STEP_CAP in _abort_codes(sock)
-    assert agent_server.inflight_turn_count() == 0
+    assert _inflight_turn_count() == 0
 
 
 @pytest.mark.asyncio
@@ -246,7 +254,7 @@ async def test_normal_turn_not_aborted_by_guards(monkeypatch):
         if "agent-message-chunk" in m
     )
     assert "All done." in text
-    assert agent_server.inflight_turn_count() == 0
+    assert _inflight_turn_count() == 0
 
 
 @pytest.mark.asyncio

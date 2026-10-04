@@ -18,6 +18,14 @@ from trid3nt_server.model.adapters.model_selection import ModelSettings
 from trid3nt_server.model.adapters.adapter import TextDeltaEvent
 
 
+
+def _inflight_turn_count() -> int:
+    from trid3nt_server.server.turn.live_turn import _SESSION_LIVE_TURNS
+
+    return sum(not live.task.done()
+               for bucket in _SESSION_LIVE_TURNS.values() for live in bucket.values())
+
+
 def _hung_call_error() -> TimeoutError:
     """What a bounded provider client raises once its read timeout fires."""
     return TimeoutError("read timeout on the provider endpoint")
@@ -80,7 +88,7 @@ async def test_failed_model_call_clears_busy_and_surfaces_error():
     raising = _make_raising_stream(_hung_call_error())
 
     # Sanity precondition: no live turn before this one.
-    assert agent_server.inflight_turn_count() == 0
+    assert _inflight_turn_count() == 0
 
     with patch.object(agent_server, "stream_events_with_contents", raising), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
@@ -95,7 +103,7 @@ async def test_failed_model_call_clears_busy_and_surfaces_error():
             state.session_id, "_test_turn", task, None
         )
         # While running, the detached turn is in flight.
-        assert agent_server.inflight_turn_count() >= 1
+        assert _inflight_turn_count() >= 1
 
         await task  # _stream_model_reply swallows the error internally
         # Let the task's done-callback (_drop) run so the registry empties.
@@ -116,7 +124,7 @@ async def test_failed_model_call_clears_busy_and_surfaces_error():
 
     # (b) THE LOAD-BEARING ASSERT: the failed model call did NOT pin the turn.
     assert task.done()
-    assert agent_server.inflight_turn_count() == 0, (
+    assert _inflight_turn_count() == 0, (
         "detached turn entry NOT cleared after a failed model call "
         "(the live-down wedge)"
     )
@@ -160,7 +168,7 @@ async def test_normal_turn_path_unaffected():
     # No error envelope on the happy path.
     assert not any('"error_code": "LLM_UNAVAILABLE"' in m for m in sock.sent)
     # Turn registry cleared after a normal turn too.
-    assert agent_server.inflight_turn_count() == 0
+    assert _inflight_turn_count() == 0
 
 
 @pytest.mark.asyncio
@@ -213,4 +221,4 @@ async def test_solve_tool_path_unaffected_by_model_bound():
 
     assert dispatched == ["geocode_location"]
     # The tool turn ran to a clean terminal: the live-turn registry clears.
-    assert agent_server.inflight_turn_count() == 0
+    assert _inflight_turn_count() == 0

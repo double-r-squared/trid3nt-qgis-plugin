@@ -267,7 +267,7 @@ async def _handle_case_command(
     state: SessionState,
     cmd: CaseCommandEnvelopePayload,
 ) -> None:
-    """Dispatch one Case lifecycle command - create, select, rename, archive or
+    """Dispatch one Case lifecycle command - create, select, rename, set-bbox or
     delete - persisting it and emitting the resulting open or list. A failure
     surfaces as an error envelope; none of these is a confirmation trigger."""
     # The client confirms a delete with the user before sending it, and the
@@ -372,39 +372,6 @@ async def _handle_case_command(
             )
             return
         await _emit_case_open(websocket, state, cmd.case_id)
-        return
-
-    if command == "deselect":
-        # The client navigated OUT of the active Case to the Cases root.
-        # Without this command the session-scoped active Case silently kept
-        # pointing at the last-opened Case: prompts sent from the root view
-        # skipped auto-create and dispatched INTO the stale Case, and
-        # re-selecting that same Case looked like a no-op. Clears the
-        # binding + this connection's LLM context so the next root prompt
-        # auto-creates a fresh Case. Does NOT touch any in-flight turn -- its
-        # persistence follows the turn pin, not this binding.
-        prev = state.active_case_id
-        state.active_case_id = None
-        state.case_context_synced_to = None
-        # Clear the cached Case AOI, so a root prompt - which auto-creates a
-        # FRESH Case - does not reuse the just-exited Case's extent.
-        state.case_bbox = None
-        # REBIND, never clear.
-        state.chat_history = []
-        state.turn_count = 0
-        if state.emitter is not None:
-            state.emitter.reset_loaded_layers([])
-        # No active Case means no resolvable handles from the just-exited Case
-        # either.
-        get_uri_registry(state.session_id).clear()
-        # Clear the persisted pointer too, so a reconnect after a restart does
-        # NOT re-seed the just-exited Case.
-        await _persist_session_active_case(state, None)
-        logger.info(
-            "case-command deselect session=%s prev_case=%s",
-            state.session_id,
-            prev,
-        )
         return
 
     if command == "rename":
@@ -533,34 +500,6 @@ async def _handle_case_command(
             state.session_id,
             cmd.case_id,
             new_bbox,
-        )
-        return
-
-    if command == "archive":
-        if not cmd.case_id:
-            await _send_error(
-                websocket,
-                state.session_id,
-                "INTERNAL_ERROR",
-                "case-command(archive) requires case_id",
-            )
-            return
-        try:
-            await p.archive_case(cmd.case_id)
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("case-command(archive) failed: %s", exc)
-            await _send_error(
-                websocket,
-                state.session_id,
-                "INTERNAL_ERROR",
-                f"case archive failed: {exc}",
-            )
-            return
-        await _emit_case_list(websocket, state, force=True)
-        logger.info(
-            "case-command archive session=%s case=%s",
-            state.session_id,
-            cmd.case_id,
         )
         return
 

@@ -371,13 +371,12 @@ async def _prepare_user_turn(
     text: str,
     *,
     client_case_id: str | None = None,
-) -> tuple[str, dict] | None:
-    """Pre-dispatch sequence for one user message, returning the parsed
-    directive or ``None`` for the model path; it runs BEFORE the turn task is
-    created, so the turn observes the final Case context."""
+) -> None:
+    """Pre-dispatch sequence for one user message; it runs BEFORE the turn task
+    is created, so the turn observes the final Case context."""
     # The order is load-bearing: rebind the active-Case pointer to the client's
     # stamp, sync this connection to that Case, auto-create a Case for a
-    # non-directive prompt that has none, pin the turn, persist the user row,
+    # prompt that has none, pin the turn, persist the user row,
     # and only then emit the open for an auto-created Case.
     # The client's stamped Case is the authority for this turn, rebound before
     # anything reads the pointer, so the whole turn - context sync, AOI, every
@@ -396,9 +395,8 @@ async def _prepare_user_turn(
         state.case_context_synced_to = _CASE_SYNC_NEVER
         await _persist_session_active_case(state, client_case_id)
     await _sync_case_context(websocket, state)
-    directive = _parse_invoke_directive(text)
     auto_case_id: str | None = None
-    if directive is None and state.active_case_id is None:
+    if state.active_case_id is None:
         auto_case_id = await _auto_create_case_from_root(
             websocket, state, text
         )
@@ -409,28 +407,4 @@ async def _prepare_user_turn(
     await _persist_chat_turn(state, role="user", content=text)
     if auto_case_id is not None:
         await _emit_auto_case_open(websocket, state, auto_case_id)
-    return directive
 
-def _parse_invoke_directive(text: str) -> tuple[str, dict] | None:
-    """Parse an ``/invoke <tool_name> <json-params>`` directive into its tool
-    and params, else ``None``. The directive shape is a debug surface and
-    deliberately not part of the wire protocol."""
-    if not text.startswith("/invoke "):
-        return None
-    rest = text[len("/invoke ") :].strip()
-    # Split on first whitespace: "<tool_name> <json>"
-    parts = rest.split(None, 1)
-    if not parts:
-        return None
-    tool_name = parts[0]
-    if len(parts) == 1:
-        return tool_name, {}
-    import json as _json
-
-    try:
-        params = _json.loads(parts[1])
-        if not isinstance(params, dict):
-            return None
-    except Exception:  # noqa: BLE001
-        return None
-    return tool_name, params

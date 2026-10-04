@@ -15,8 +15,6 @@ from trid3nt_server.model.guards.circuit_breaker import ToolCircuitBreaker
 if TYPE_CHECKING:
     import asyncio
 
-    from trid3nt_contracts.ws import PipelineStep
-
     from trid3nt_server.render.pipeline_emitter import PipelineEmitter
 
 logger = logging.getLogger("trid3nt_server.server")
@@ -59,7 +57,6 @@ class SessionState:
     session_id: str
     chat_history: list[dict] = field(default_factory=list)
     current_pipeline_id: str | None = None
-    current_pipeline_steps: list[PipelineStep] = field(default_factory=list)
     # In-flight turns keyed by STREAM: a case id, or the root key. Only a
     # re-prompt in the SAME stream cancels that stream's turn; turns in other
     # Cases keep running. Their persistence follows the turn's Case pin and
@@ -99,11 +96,6 @@ class SessionState:
     # back to the TRID3NT_MODE env default (see _session_routing_mode). Governs
     # tool-selection VISIBILITY only -- consent gates are never mode-dependent.
     routing_mode: str | None = None
-    # The armed bench block config, set only by the bench harness. ``None`` is
-    # normal operation and the dispatch guard is then a single identity check;
-    # armed, the dispatch site blocks a wrong or block-tier pick before the tool
-    # function runs.
-    bench_block_config: Any = None
     # Per-turn layer + map-command emission accumulators. Reset at
     # the start of every dispatch (model stream or /invoke tool). The
     # CaseChatMessage write at turn close reads from these so a Case replay
@@ -155,10 +147,6 @@ class SessionState:
     # it, so a once-visible tool never leaves mid-task. It grows within a
     # session and a new session starts fresh.
     visible_tools: set[str] = field(default_factory=set)
-    # Per-session provider-side prompt-cache handle, reported through the
-    # cache-status envelope. Every live path caches through its own in-request
-    # breakpoints, so no handle is tracked and this stays ``None``.
-    model_cache_ref: str | None = None
     # Per-session circuit breaker, tripped by consecutive per-tool failures and
     # enforcing a cooldown. The stream checks it before every dispatch and
     # records the outcome after; a tripped breaker raises, and the result

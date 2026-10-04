@@ -14,20 +14,19 @@ from trid3nt_contracts.ws import CancelPayload, ErrorPayload, LayerResponsePaylo
 from trid3nt_server.model.adapters.model_selection import ModelSettings
 from trid3nt_server.inputs.gate.pending import _resolve_pending_confirmation
 from trid3nt_server.main import MAX_TURNS_PER_SESSION
-from trid3nt_server.server.dispatch.emitter import _assert_sync_offload_safe, _dispatch_tool_and_persist, _ensure_emitter
+from trid3nt_server.server.dispatch.emitter import _assert_sync_offload_safe, _ensure_emitter
 from trid3nt_server.server.interactions import _resolve_pending_tool_choice
 from trid3nt_server.server.processing import _resolve_pending_processing
 from trid3nt_server.tools.fetchers._router.executors.qgis_provider import resolve_pending_layer
 from trid3nt_server.server.protocol.auth import _handle_auth_token, _handle_session_resume, reject_auth_handshake
 from trid3nt_server.server.protocol.connections import _deregister_session_connection, session_connection_count
-from trid3nt_server.server.protocol.handlers import _BG_TASKS, _drain_bg_tasks, _handle_dev_tool_invoke, _handle_layer_delete, _handle_secret_add
+from trid3nt_server.server.protocol.handlers import _BG_TASKS, _drain_bg_tasks, _handle_dev_tool_invoke, _handle_secret_add
 from trid3nt_server.server.session.case_state import _clear_case_list_hash, _set_active_aoi_from_payload, _set_drawn_geometry_from_payload
-from trid3nt_server.server.session.persistence_ref import init_persistence_from_env
 from trid3nt_server.server.session.state import SessionState, _ROOT_STREAM_KEY
 from trid3nt_server.server.spatial import _fail_pending_spatial_input, _resolve_pending_spatial_input
 from trid3nt_server.server.turn.cases import _handle_case_command
 from trid3nt_server.server.turn.engine import _handle_max_turns_reached, _prepare_user_turn
-from trid3nt_server.server.turn.live_turn import _SESSION_LIVE_TURNS, _any_live_turn, _find_live_turn, _rebind_live_turns, _register_live_turn
+from trid3nt_server.server.turn.live_turn import _any_live_turn, _find_live_turn, _rebind_live_turns, _register_live_turn
 from trid3nt_server.server.turn.stream import _dispatch_model_turn_and_persist
 from trid3nt_server.server.turn.wire import _heartbeat_loop, _new_envelope, _send_error
 from websockets.asyncio.server import ServerConnection, serve
@@ -35,19 +34,6 @@ from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
 
 logger = logging.getLogger("trid3nt_server.server")
 
-def inflight_turn_count() -> int:
-    """Number of in-flight turns detached from a possibly dead connection: a
-    long solver turn survives a socket drop, so this counts turns still running
-    with zero sockets open. A done task awaits its self-removing callback."""
-    total = 0
-    for bucket in _SESSION_LIVE_TURNS.values():
-        for live in bucket.values():
-            try:
-                if not live.task.done():
-                    total += 1
-            except Exception:  # noqa: BLE001 -- defensive; never break health
-                continue
-    return total
 
 def _make_handler(settings: ModelSettings):
     """Build the per-connection coroutine, closing over the resolved settings."""
@@ -194,9 +180,8 @@ def _make_handler(settings: ModelSettings):
                         state.current_turn_map_commands = []
                         # The pre-dispatch sequence runs BEFORE the turn task
                         # starts, so chat and layer attribution land on the right,
-                        # possibly brand-new, Case. It returns the parsed
-                        # directive; None streams through the model instead.
-                        directive = await _prepare_user_turn(
+                        # possibly brand-new, Case.
+                        await _prepare_user_turn(
                             websocket, state, um.text, client_case_id=um.case_id
                         )
                         # Stream-scoped cancellation: only a re-prompt in the
@@ -249,24 +234,16 @@ def _make_handler(settings: ModelSettings):
                                 )
                             state.selected_model = _effective_model
                         _turn_model_id = state.selected_model
-                        if directive is not None:
-                            tool_name, params = directive
-                            task = asyncio.create_task(
-                                _dispatch_tool_and_persist(
-                                    websocket, state, tool_name, params, um.text
-                                )
+                        task = asyncio.create_task(
+                            _dispatch_model_turn_and_persist(
+                                websocket,
+                                state,
+                                settings,
+                                um.text,
+                                model_id=_turn_model_id,
+                                show_thinking=bool(um.show_thinking),
                             )
-                        else:
-                            task = asyncio.create_task(
-                                _dispatch_model_turn_and_persist(
-                                    websocket,
-                                    state,
-                                    settings,
-                                    um.text,
-                                    model_id=_turn_model_id,
-                                    show_thinking=bool(um.show_thinking),
-                                )
-                            )
+                        )
                         state.inflight_tasks[turn_key] = task
                         # Register this turn in the module registry NOW, not only
                         # on disconnect, with a self-removing callback: a later
@@ -298,16 +275,6 @@ def _make_handler(settings: ModelSettings):
                             payload_dict
                         )
                         await _handle_case_command(websocket, state, cmd)
-
-                    elif msg_type == "layer-delete":
-                        # Per-layer delete: drops the layer from the live
-                        # accumulator, emits a fresh session state, and persists
-                        # the survivors AUTHORITATIVELY - a union merge would
-                        # resurrect the deleted layer. Payload is loosely shaped
-                        # and read inline.
-                        await _handle_layer_delete(
-                            websocket, state, payload_dict
-                        )
 
                     elif msg_type == "secret-add":
                         # Credential push: the plugin brokers a key VALUE over
@@ -563,49 +530,6 @@ def _make_handler(settings: ModelSettings):
                             bool(payload_dict.get("free_text")),
                         )
 
-                    elif msg_type == "session-config":
-                        # Per-session settings, currently the routing-visibility
-                        # mode, read defensively off the raw dict; an unknown
-                        # field is ignored for forward-compatibility.
-                        if isinstance(payload_dict, dict):
-                            _cfg_mode = payload_dict.get("mode")
-                            if isinstance(_cfg_mode, str) and _cfg_mode.strip().lower() in (
-                                "auto",
-                                "ask",
-                            ):
-                                state.routing_mode = _cfg_mode.strip().lower()
-                                logger.info(
-                                    "session-config: routing mode=%s session=%s",
-                                    state.routing_mode,
-                                    state.session_id,
-                                )
-                            elif _cfg_mode is not None:
-                                logger.warning(
-                                    "session-config: unknown mode %r ignored "
-                                    "session=%s",
-                                    _cfg_mode,
-                                    state.session_id,
-                                )
-                            # Arms or disarms the bench tool-block config:
-                            # absent leaves it untouched, a dict arms, null
-                            # disarms. A normal client never sends this key.
-                            if "bench_tool_block" in payload_dict:
-                                from trid3nt_server.model.guards.tool_gating import parse_bench_block_config
-
-                                _bench_cfg = parse_bench_block_config(payload_dict)
-                                state.bench_block_config = _bench_cfg
-                                logger.info(
-                                    "session-config: bench_tool_block %s "
-                                    "session=%s (allow=%d always=%d block=%d)",
-                                    "armed" if _bench_cfg else "disarmed",
-                                    state.session_id,
-                                    len(_bench_cfg.allow) if _bench_cfg else 0,
-                                    len(_bench_cfg.always_allowed) if _bench_cfg else 0,
-                                    len(_bench_cfg.block_at_invocation)
-                                    if _bench_cfg
-                                    else 0,
-                                )
-
                     else:
                         await _send_error(
                             websocket,
@@ -723,10 +647,6 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     # disabled, and an abort at startup when an armed tool's body would touch the
     # loop-bound emitter from a worker thread.
     _assert_sync_offload_safe()
-    try:
-        await init_persistence_from_env()
-    except Exception as exc:  # noqa: BLE001 -- startup must not abort on persistence issues
-        logger.warning("Persistence init failed (continuing without MCP): %s", exc)
 
     # Warm the tool-retrieval index off-loop at startup rather than lazily on the
     # first search: a COLD index fails open to the full registry, which is

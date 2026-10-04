@@ -20,7 +20,6 @@ from trid3nt_server.model.guards.circuit_breaker import CircuitBreakerError
 # _stream_model_reply -- deferred to break the server<->gates load cycle.
 from trid3nt_server.model.guards.context_budget import ContextWindowExceededError, FABRICATION_CAVEAT, build_context_window_abort_note, looks_like_fabricated_action_claim
 from trid3nt_server.model.guards.runaway_guard import ABORT_STEP_CAP, ABORT_WALL_CLOCK, LoopWatchdog, abort_message, max_turn_seconds, step_cap_for_model
-from trid3nt_server.model.guards.tool_gating import BenchBlockedError
 from trid3nt_server.server.config import _env_flag, _tool_retrieval_k
 from trid3nt_server.server.dispatch.emitter import _invoke_tool_via_emitter
 from trid3nt_server.server.dispatch.helpers import _DELIVERABLE_COMPLETE_DIRECTIVE, _DISCOVERY_EXPAND_CAP, _EMPTY_COMPLETION_NUDGE, _EMPTY_COMPLETION_RETRY_CAP, _POST_DELIVERABLE_WRAPUP_ROUNDS, _default_declarable_registry, _dispatch_made_progress, _gate_expander_tool_names, _is_terminal_composer, _tool_names_from_search_result
@@ -31,7 +30,7 @@ from trid3nt_server.server.session.state import SessionState
 from trid3nt_server.server.spatial import _aoi_zoom_to_bbox, _coerce_bbox4
 from trid3nt_server.server.turn.cases import _emit_case_list, _maybe_autoname_case
 from trid3nt_server.server.turn.engine import _CONTINUATION_NUDGE, _asks_for_data_or_analysis, _geocode_drift_note, _maybe_emit_tool_candidates, _session_routing_mode, _union_pinned_tool
-from trid3nt_server.server.turn.wire import _emit_cache_status, _emit_turn_complete, _new_envelope, _send_agent_abort, _send_error, _send_loop_exhausted, _session_safe_send
+from trid3nt_server.server.turn.wire import _emit_turn_complete, _new_envelope, _send_agent_abort, _send_error, _send_loop_exhausted, _session_safe_send
 from typing import Any
 from websockets.asyncio.server import ServerConnection
 from websockets.exceptions import ConnectionClosed
@@ -129,7 +128,6 @@ async def _stream_model_reply(
         tool_name="model_generate",
         state="running",
     )
-    state.current_pipeline_steps = [thinking_step]
     await _session_safe_send(websocket, state.session_id,
         _new_envelope(
             "pipeline-state",
@@ -333,12 +331,6 @@ async def _stream_model_reply(
         )
     tool_decls = build_tool_declarations(_retrieval_registry)
 
-    # Prompt caching is the adapter's own concern (its provider's own
-    # breakpoints); there is no separate cached-content fast-path, so this is always
-    # ``None``. The field is retained for the ``cache-status`` envelope payload
-    # (``_emit_cache_status``) which reports cache-hit metrics.
-    state.model_cache_ref = None
-
     # Seed the multi-turn contents list with chat history + this user_text.
     # The entry-captured list -- a mid-stream case switch rebinds
     # state.chat_history, never mutates this one.
@@ -439,7 +431,6 @@ async def _stream_model_reply(
     # when a WRONG-pick block fired this round, so the turn ends after the
     # round's function-responses are on the wire (see the check after the
     # per-call loop). Unarmed sessions never touch it.
-    _bench_wrong_pick_end = False
 
     # Discovery expands the gate: tool names the tool-search tool
     # (search_tools) returned THIS turn that were unioned into the visible gate
@@ -599,8 +590,7 @@ async def _stream_model_reply(
                 elif isinstance(event, UsageMetadataEvent):
                     # The model surfaces aggregate usage on the terminal chunk. Cache the event
                     # so the post-turn block can pipe cached_content_token_count into
-                    # the tool-call line and emit a single cache-status envelope for the
-                    # live cache hit-rate UI.
+                    # the tool-call line.
                     last_usage = event
                     # PER-TURN: sum the
                     # reported counts across the turn's model rounds. A round
@@ -656,13 +646,6 @@ async def _stream_model_reply(
                         after_tokens=event.after_tokens,
                     )
                     _compaction_step_id = None
-
-            # Emit a cache-status envelope so the UI can render the cache
-            # hit-rate live. Best-effort -- a serialization failure logs but
-            # does not break the turn (the envelope is observability, not
-            # part of the agent loop's correctness contract).
-            if last_usage is not None:
-                await _emit_cache_status(websocket, state, last_usage)
 
             # Turn ended.  If the model emitted no function_calls this turn, it
             # is finished -- either narrated the answer or had nothing more to
@@ -1058,23 +1041,10 @@ async def _stream_model_reply(
                     # arg-shape errors) are model-side faults the model can self-correct and
                     # retry -- they must NOT trip a breaker that would then block the
                     # corrected-args retry. CircuitBreakerError is excluded entirely (the
-                    # breaker already fired; do not increment again). BenchBlockedError is
-                    # likewise excluded: a bench block is a harness artifact, not a tool
-                    # fault, and must never penalize the tool's breaker.
-                    if not isinstance(exc, (CircuitBreakerError, BenchBlockedError)):
+                    # breaker already fired; do not increment again).
+                    if not isinstance(exc, CircuitBreakerError):
                         state.circuit_breaker.record_failure(call.name, exc)
                     dispatch_error = exc
-                    # BENCH pre-dispatch block hook: a WRONG-pick block ends the turn (the
-                    # model must not get to pick again; the bench grades the wrong pick and
-                    # moves on). A correct-block does NOT end the turn here (the bench ends
-                    # it client-side after grading CORRECT_BLOCKED). Latched; the break
-                    # happens once this round's calls are all recorded so the blocked
-                    # tool's function-response still reaches the wire.
-                    if (
-                        isinstance(exc, BenchBlockedError)
-                        and exc.blocked_class == "wrong_pick"
-                    ):
-                        _bench_wrong_pick_end = True
                     # A failed / circuit-broken call is the CIRCUIT BREAKER's territory (it
                     # delivers CIRCUIT_BREAKER_TRIPPED so the model adapts and the turn
                     # continues). Mark the round so the watchdog does NOT also count it --
@@ -1251,19 +1221,6 @@ async def _stream_model_reply(
                     pipeline_id,
                     state.session_id,
                 )
-
-            # BENCH pre-dispatch block hook: a WRONG-pick block this round ends the
-            # turn. The blocked tool's typed function-response is already on the
-            # wire above; break to the clean post-loop finalize so a turn-complete
-            # is emitted and the bench grades the wrong pick and advances (a clean
-            # conclusion, not an _agent_abort runaway).
-            if _bench_wrong_pick_end:
-                logger.info(
-                    "bench-block: wrong-pick -> ending turn session=%s iter=%d",
-                    state.session_id,
-                    iterations,
-                )
-                break
 
             # Loop watchdog, post-dispatch record: the round counts toward
             # the no-progress streak ONLY when it had calls, did NOT produce a real
@@ -1481,7 +1438,6 @@ async def _stream_model_reply(
             tool_name="model_generate",
             state="complete",
         )
-        state.current_pipeline_steps = [thinking_step]
         await _session_safe_send(websocket, state.session_id,
             _new_envelope(
                 "pipeline-state",
@@ -1515,7 +1471,6 @@ async def _stream_model_reply(
             tool_name="model_generate",
             state="cancelled",
         )
-        state.current_pipeline_steps = [cancelled_step]
         try:
             await websocket.send(
                 _new_envelope(

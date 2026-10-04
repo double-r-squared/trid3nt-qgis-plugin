@@ -94,8 +94,6 @@ def _persistence_bound():
         set_persistence(saved)
 
 
-
-
 def test_turn_case_bbox_none_before_any_case() -> None:
     """A fresh session with no active Case has no AOI anchor -> None."""
     state = SessionState(session_id=new_ulid())
@@ -123,29 +121,6 @@ def test_turn_case_bbox_returns_cached_bbox_after_case_select(
     assert _turn_case_bbox(state) == list(_CASE_AOI)
 
 
-def test_turn_case_bbox_cleared_on_deselect(
-    _persistence_bound: Persistence,
-) -> None:
-    """Deselecting the Case (return to root) clears the cached AOI anchor."""
-    case = _fresh_case_summary()
-    asyncio.run(_persistence_bound.upsert_case(case))
-
-    ws = MockWebSocket()
-    state = SessionState(session_id=new_ulid())
-    asyncio.run(_emit_case_open(ws, state, case.case_id))
-    assert _turn_case_bbox(state) == list(_CASE_AOI)
-
-    # Deselect: a root prompt auto-creates a FRESH Case, so the just-exited
-    # Case's extent must NOT linger as the AOI anchor.
-    asyncio.run(
-        server._handle_case_command(
-            ws, state, CaseCommandEnvelopePayload(command="deselect")
-        )
-    )
-    assert state.case_bbox is None
-    assert _turn_case_bbox(state) is None
-
-
 def test_turn_case_bbox_none_when_id_present_but_no_cache() -> None:
     """A pinned case id with no cached bbox still yields None (no stale guess).
 
@@ -156,8 +131,6 @@ def test_turn_case_bbox_none_when_id_present_but_no_cache() -> None:
     state.active_case_id = new_ulid()  # a case is active...
     state.case_bbox = None  # ...but its bbox was never cached
     assert _turn_case_bbox(state) is None
-
-
 
 
 def test_layers_present_note_includes_layers_and_aoi() -> None:
@@ -219,7 +192,6 @@ def test_per_turn_injection_shape_appends_case_state_user_turn() -> None:
     assert injected[-1]["role"] == "user"
     assert injected[-1]["text"].startswith("[Case state]")
     assert "flood-depth-A" in injected[-1]["text"]
-
 
 
 _FETCHES: list[dict] = []

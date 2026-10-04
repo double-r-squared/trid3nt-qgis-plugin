@@ -18,8 +18,6 @@ from trid3nt_contracts.case import CaseSessionState, CaseSummary
 from trid3nt_contracts.common import new_ulid, now_utc
 
 
-
-
 class FakeWS:
     """Minimal WS stand-in with a ``close`` the JOB B reaper can call."""
 
@@ -151,84 +149,6 @@ def _clean_registries():
         server._SESSION_CASE_LIST_HASH.update(saved_case_list_hash)
 
 
-
-
-@pytest.mark.skip(reason="JOB B eager reaping DISABLED 2026-06-22: dual-socket-unsafe - reaped the legitimate sibling socket and killed in-flight turns with 4408; re-enable only dual-socket-aware + in-flight-safe. See server._reap_prior_session_connections note.")
-@pytest.mark.asyncio
-async def test_second_resume_closes_prior_socket_not_itself() -> None:
-    """A 2nd session-resume from a NEW socket of the same session closes the
-    PRIOR socket - and NEVER the resuming socket itself (the active tab)."""
-    session_id = new_ulid()
-
-    ws1 = FakeWS()
-    state1 = server.SessionState(session_id=session_id)
-    state1.emitter = _make_emitter(ws1, session_id)
-    await server._handle_session_resume(ws1, state1)
-
-    # First socket is registered, alive, never closed.
-    assert ws1 in server._SESSION_WS_CONNECTIONS[session_id]
-    assert ws1.closed is False
-    assert server.session_connection_count(session_id) == 1
-
-    # A NEW socket of the SAME session resumes (navigate-out/back replacement).
-    ws2 = FakeWS()
-    state2 = server.SessionState(session_id=session_id)
-    state2.emitter = _make_emitter(ws2, session_id)
-    await server._handle_session_resume(ws2, state2)
-
-    # The prior socket was proactively closed; the resuming socket survives.
-    assert ws1.closed is True
-    assert ws1.close_calls[0][0] == server.SESSION_SUPERSEDED_CLOSE_CODE
-    assert ws2.closed is False, "the resuming socket's OWN live socket is NEVER closed"
-    # Registry now holds only the live socket (prior pruned), count stays low.
-    assert server._SESSION_WS_CONNECTIONS[session_id] == {ws2}
-    assert server.session_connection_count(session_id) == 1
-
-
-@pytest.mark.skip(reason="JOB B eager reaping DISABLED 2026-06-22: dual-socket-unsafe - reaped the legitimate sibling socket and killed in-flight turns with 4408; re-enable only dual-socket-aware + in-flight-safe. See server._reap_prior_session_connections note.")
-@pytest.mark.asyncio
-async def test_connections_do_not_pile_up_across_many_reconnects() -> None:
-    """Simulate ~10 navigate-out/back cycles: ``_SESSION_WS_CONNECTIONS`` does
-    NOT grow unbounded - each fresh resume reaps the prior socket, so the live
-    count stays at 1 (not ~20)."""
-    session_id = new_ulid()
-    sockets: list[FakeWS] = []
-    for _ in range(10):
-        ws = FakeWS()
-        st = server.SessionState(session_id=session_id)
-        st.emitter = _make_emitter(ws, session_id)
-        await server._handle_session_resume(ws, st)
-        sockets.append(ws)
-
-    # Only the LAST socket is live; every prior one was reaped.
-    assert server.session_connection_count(session_id) == 1
-    assert server._SESSION_WS_CONNECTIONS[session_id] == {sockets[-1]}
-    assert all(ws.closed for ws in sockets[:-1])
-    assert sockets[-1].closed is False
-
-
-@pytest.mark.skip(reason="JOB B eager reaping DISABLED 2026-06-22: dual-socket-unsafe - reaped the legitimate sibling socket and killed in-flight turns with 4408; re-enable only dual-socket-aware + in-flight-safe. See server._reap_prior_session_connections note.")
-@pytest.mark.asyncio
-async def test_reap_is_best_effort_when_prior_close_raises() -> None:
-    """A prior socket that raises on close (already closing) is still dropped
-    from the registry - the reap never wedges and the resume completes."""
-    session_id = new_ulid()
-
-    ws1 = _RaisingCloseWS()
-    state1 = server.SessionState(session_id=session_id)
-    state1.emitter = _make_emitter(ws1, session_id)
-    await server._handle_session_resume(ws1, state1)
-
-    ws2 = FakeWS()
-    state2 = server.SessionState(session_id=session_id)
-    state2.emitter = _make_emitter(ws2, session_id)
-    await server._handle_session_resume(ws2, state2)  # must not raise
-
-    assert ws1.close_calls, "close was attempted on the raising prior socket"
-    assert server._SESSION_WS_CONNECTIONS[session_id] == {ws2}
-    assert server.session_connection_count(session_id) == 1
-
-
 @pytest.mark.asyncio
 async def test_different_sessions_are_not_cross_reaped() -> None:
     """A resume on session B never touches session A's sockets."""
@@ -260,8 +180,6 @@ def test_deregister_prunes_empty_session_bucket() -> None:
     server._deregister_session_connection(session_id, ws)
     assert session_id not in server._SESSION_WS_CONNECTIONS
     assert server.session_connection_count(session_id) == 0
-
-
 
 
 @pytest.mark.asyncio

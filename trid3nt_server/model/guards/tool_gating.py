@@ -8,7 +8,6 @@ from __future__ import annotations
 import logging
 import os
 import re
-from dataclasses import dataclass, field
 from typing import Any
 
 from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
@@ -24,12 +23,6 @@ __all__ = [
     "gating_widen_threshold",
     "should_widen_for_poor_fit",
     # BENCH pre-dispatch block hook
-    "BENCH_BLOCKED_WRONG_PICK",
-    "BENCH_BLOCKED_CORRECT",
-    "BenchBlockConfig",
-    "BenchBlockedError",
-    "parse_bench_block_config",
-    "bench_block_decision",
 ]
 
 logger = logging.getLogger("trid3nt_server.model.guards.tool_gating")
@@ -174,100 +167,3 @@ def should_widen_for_poor_fit(
         return False
 
 
-# BENCH PRE-DISPATCH BLOCK HOOK: a session-scoped, bench-only gate that decides
-# -- BEFORE the tool fn is invoked -- whether a model-picked tool should be
-# EXECUTED, BLOCKED as a wrong pick, or BLOCKED as a deliberately-not-executed
-# correct pick. Blocking server-side and pre-dispatch is what makes it airtight:
-# a client-side cancel lets the blocked tool briefly START before it lands.
-# Armed only in bench mode via the session-config path; absent (the field is
-# None) is normal operation with ZERO dispatch overhead.
-
-#: Typed function-response error_code for a NON-MEMBER (wrong) tool pick that
-#: was blocked without executing. The routing_sweep grader reads this off the
-#: tool-io function_response and lands SELECTED_WRONG_BLOCKED / FALSE_POSITIVE.
-BENCH_BLOCKED_WRONG_PICK = "BENCH_BLOCKED_WRONG_PICK"
-#: Typed function-response error_code for a CORRECT (member) tool pick in the
-#: block_at_invocation tier: validated but deliberately not executed. Grades
-#: CORRECT_BLOCKED client-side.
-BENCH_BLOCKED_CORRECT = "BENCH_BLOCKED_CORRECT"
-
-
-@dataclass(frozen=True)
-class BenchBlockConfig:
-    """The armed bench block config: the three tool-name sets ride together."""
-
-    #: The record's ACCEPTABLE picks. A tool outside all three sets is a WRONG
-    #: pick.
-    allow: frozenset[str] = field(default_factory=frozenset)
-    #: The routing MECHANISM tools, which ride THROUGH and execute normally so
-    #: the model can discover its way to the pick.
-    always_allowed: frozenset[str] = field(default_factory=frozenset)
-    #: Member picks that must be validated but NOT executed.
-    block_at_invocation: frozenset[str] = field(default_factory=frozenset)
-
-
-class BenchBlockedError(RuntimeError):
-    """Raised (bench mode only) to block a tool at dispatch without executing.
-
-    ``retryable=False`` -- a deliberate terminal outcome, never a transient
-    fault; ``blocked_class`` is what the caller ends the turn on."""
-
-    retryable = False
-
-    def __init__(self, blocked_class: str, tool_name: str) -> None:
-        self.blocked_class = blocked_class
-        self.tool_name = tool_name
-        # An INSTANCE attribute, not a class one: the tool-result summarizer
-        # harvests it into the function response the grader reads.
-        self.error_code = (
-            BENCH_BLOCKED_WRONG_PICK
-            if blocked_class == "wrong_pick"
-            else BENCH_BLOCKED_CORRECT
-        )
-        super().__init__(
-            f"bench block ({blocked_class}) for tool {tool_name!r}: not executed"
-        )
-
-
-def _name_frozenset(value: Any) -> frozenset[str]:
-    """Coerce a raw JSON list/sequence of names into a clean frozenset[str]."""
-    if not isinstance(value, (list, tuple, set, frozenset)):
-        return frozenset()
-    return frozenset(n for n in value if isinstance(n, str) and n)
-
-
-def parse_bench_block_config(payload: dict) -> BenchBlockConfig | None:
-    """Parse a bench block config off a raw ``session-config`` payload dict.
-
-    ``None`` when the key is absent, which is NOT a disarm -- the caller leaves
-    whatever is armed alone; never raises, a malformed shape gives empty sets."""
-    if not isinstance(payload, dict):
-        return None
-    # Read off the raw dict defensively, so this stays forward-compatible with
-    # the typed contract the framework lane owns.
-    raw = payload.get("bench_tool_block")
-    if not isinstance(raw, dict):
-        return None
-    return BenchBlockConfig(
-        allow=_name_frozenset(raw.get("allow")),
-        always_allowed=_name_frozenset(raw.get("always_allowed")),
-        block_at_invocation=_name_frozenset(raw.get("block_at_invocation")),
-    )
-
-
-def bench_block_decision(cfg: Any, tool_name: str) -> str | None:
-    """The pre-dispatch fate of ``tool_name``: execute, wrong_pick, correct_blocked.
-
-    ``None`` executes normally; never raises, so a non-config ``cfg`` executes."""
-    if not isinstance(cfg, BenchBlockConfig):
-        return None
-    if tool_name in cfg.always_allowed:
-        return None
-    # ``block_at_invocation`` defines the block tier and is authoritative for a
-    # correct-block, so it is tested before allow-membership: a tool in that set
-    # is a member by construction.
-    if tool_name in cfg.block_at_invocation:
-        return "correct_blocked"
-    if tool_name not in cfg.allow:
-        return "wrong_pick"
-    return None

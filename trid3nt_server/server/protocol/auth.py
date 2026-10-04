@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from trid3nt_contracts.auth import AuthTokenEnvelope
 from trid3nt_server.model.credentials.auth_handshake import LOCAL_SINGLE_USER_ID, build_auth_ack, derive_advertised_endpoints, verify_access_token
 from trid3nt_server.server.dispatch.emitter import _ensure_emitter
-from trid3nt_server.server.protocol.connections import _reap_prior_session_connections, _register_session_connection
+from trid3nt_server.server.protocol.connections import _register_session_connection
 from trid3nt_server.server.session.case_state import _bind_session_identity, _persist_session_active_case, _reload_session_active_case, _replay_active_case_layers, _touch_session_record
 from trid3nt_server.server.session.state import SessionState, _CASE_SYNC_NEVER
 from trid3nt_server.server.turn.cases import _emit_case_list
@@ -87,11 +87,9 @@ async def _handle_session_resume(
     can render its Case rail. ``client_case_id`` is the AUTHORITY: a differing
     stamp re-binds the server pointer BEFORE the layer replay."""
     _ensure_emitter(websocket, state)
-    # Record THIS socket as a live connection of the session, then reap any
-    # prior socket of the same session; the keeper is excluded by identity, so
-    # the active client's own socket is never closed.
+    # Record THIS socket as a live connection of the session. A prior socket of
+    # the same session stays open: two sockets legitimately share one session.
     _register_session_connection(state.session_id, websocket)
-    await _reap_prior_session_connections(state.session_id, keeper=websocket)
     # A keepalive resume is any resume AFTER the first on THIS connection. The
     # verdict is captured before the latch flips, because a fresh SessionState
     # is built per connection.

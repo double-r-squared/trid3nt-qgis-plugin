@@ -30,8 +30,6 @@ from trid3nt_contracts.case import CaseChatMessage, CaseSummary
 from trid3nt_contracts.common import new_ulid
 
 
-
-
 def _fresh_case(title: str = "Hurricane Ian — Fort Myers flood scenario") -> CaseSummary:
     return CaseSummary(
         case_id=new_ulid(),
@@ -53,8 +51,6 @@ def _fresh_chat(case_id: str, role: str, content: str, *, when: datetime) -> Cas
         content=content,
         created_at=when,
     )
-
-
 
 
 def test_file_mcp_round_trip_case(tmp_path: Path) -> None:
@@ -139,8 +135,6 @@ def test_file_mcp_archive_then_delete(tmp_path: Path) -> None:
     assert fetched is not None and fetched.status == "deleted"
 
 
-
-
 def test_file_mcp_chat_round_trip(tmp_path: Path) -> None:
     """Append chat messages; get_session_state hydrates in order."""
     p = Persistence(FileMCPClient(base_dir=tmp_path))
@@ -168,8 +162,6 @@ def test_file_mcp_chat_round_trip(tmp_path: Path) -> None:
         "ack",
         "second turn",
     ]
-
-
 
 
 def test_file_mcp_atomic_writes_survive_partial_tmp(tmp_path: Path) -> None:
@@ -232,8 +224,6 @@ def test_file_mcp_delete_one_removes_the_document(tmp_path: Path) -> None:
     assert again["deletedCount"] == 0          # deleting nothing is not an error
 
 
-
-
 def test_is_dev_persistence_enabled_default_on_when_unset(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -258,19 +248,15 @@ def test_is_dev_persistence_enabled_on_when_explicitly_enabled(
     assert is_dev_persistence_enabled() is True
 
 
-
-
 def test_maybe_bind_dev_persistence_engages_file_fallback(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """``main._maybe_bind_dev_persistence`` binds a FilePersistence singleton.
 
-    With no MCP env vars and no prior binding it engages the file substrate, and the
-    follow-on ``init_persistence_from_env`` preserves it."""
+    With no MCP env vars and no prior binding it engages the file substrate."""
     from trid3nt_server.main import _maybe_bind_dev_persistence
     from trid3nt_server.server import (
         get_persistence,
-        init_persistence_from_env,
         set_persistence,
     )
 
@@ -285,11 +271,6 @@ def test_maybe_bind_dev_persistence_engages_file_fallback(
         _maybe_bind_dev_persistence()
         p = get_persistence()
         assert p is not None
-
-        # init_persistence_from_env must NOT clobber the pre-bound singleton.
-        result = asyncio.run(init_persistence_from_env())
-        assert result is p
-        assert get_persistence() is p
 
         # Smoke check: a Case round-trip through the bound singleton lands a
         # JSON file in the override dir.
@@ -333,8 +314,6 @@ def test_make_file_persistence_default_dir(monkeypatch: pytest.MonkeyPatch) -> N
         case = _fresh_case()
         asyncio.run(p.upsert_case(case))
         assert (Path(td) / DEFAULT_DATABASE / f"{CASES_COLLECTION}.json").exists()
-
-
 
 
 def test_layer_b_migration_renames_legacy_db_dir(tmp_path: Path) -> None:

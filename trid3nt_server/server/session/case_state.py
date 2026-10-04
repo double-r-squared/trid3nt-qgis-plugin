@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import math
 import logging
-from trid3nt_contracts import now_utc
 from trid3nt_server.model.credentials.auth_handshake import LOCAL_SINGLE_USER_ID
 from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.render.uri_registry import get_uri_registry
@@ -343,67 +342,3 @@ async def _persist_case_loaded_layers(
         "case-layer-persist case=%s layers=%d", target_case, len(summaries)
     )
 
-async def _delete_case_loaded_layer(
-    state: SessionState, layer_id: str, *, case_id: str | None = None
-) -> None:
-    """Persist a layer deletion AUTHORITATIVELY, removing the layer from both
-    the persisted summaries and their projection, so it cannot resurrect on the
-    next turn or a reopen. Best-effort; a tombstoned Case is skipped."""
-    # It deliberately bypasses the sync path above, which UNIONs the emitter
-    # view with the persisted summaries and would re-add the deleted layer.
-    target_case = case_id if case_id is not None else _turn_case_id(state)
-    p = get_persistence()
-    if p is None or not target_case:
-        return
-    try:
-        case = await p.get_case(target_case)
-    except Exception:  # noqa: BLE001
-        logger.exception(
-            "layer-delete-persist: get_case failed case=%s", target_case
-        )
-        return
-    if case is None:
-        logger.debug(
-            "layer-delete-persist: case=%s missing; skipping", target_case
-        )
-        return
-
-    surviving_summaries: list[dict] = [
-        dict(d)
-        for d in case.loaded_layer_summaries
-        if isinstance(d, dict) and d.get("layer_id") != layer_id
-    ]
-    surviving_ids: list[str] = [
-        d.get("layer_id")
-        for d in surviving_summaries
-        if isinstance(d.get("layer_id"), str)
-    ]
-
-    # Nothing referenced this layer_id in the persisted set -- no write needed.
-    if (
-        case.loaded_layer_summaries == surviving_summaries
-        and case.layer_summary == surviving_ids
-    ):
-        return
-
-    updated = case.model_copy(
-        update={
-            "loaded_layer_summaries": surviving_summaries,
-            "layer_summary": surviving_ids,
-            "updated_at": now_utc(),
-        }
-    )
-    try:
-        await p.upsert_case(updated)
-        logger.debug(
-            "layer-delete-persist case=%s layer=%s remaining=%d",
-            target_case,
-            layer_id,
-            len(surviving_ids),
-        )
-    except Exception:  # noqa: BLE001
-        logger.exception(
-            "layer-delete-persist: upsert failed case=%s layer=%s",
-            target_case,
-            layer_id,
-        )

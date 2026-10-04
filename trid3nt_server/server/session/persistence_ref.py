@@ -25,11 +25,3 @@ def set_persistence(p: Persistence | None) -> None:
     global _PERSISTENCE
     _PERSISTENCE = p
 
-async def init_persistence_from_env() -> Persistence | None:
-    """Resolve the ``Persistence`` singleton for the running server, preserving
-    whatever the startup path already bound rather than clearing it."""
-    if get_persistence() is not None:
-        logger.info("Persistence singleton already bound; retained")
-        return get_persistence()
-    logger.info("Persistence singleton remains unbound (no backend configured)")
-    return None

@@ -53,8 +53,6 @@ def _case_docs(p: Persistence) -> list[dict]:
     return list(mcp._store.get(CASES_COLLECTION, {}).values())
 
 
-
-
 def test_root_prompt_creates_named_active_case_before_turn(
     _persistence_bound: Persistence,
 ) -> None:
@@ -249,8 +247,6 @@ def test_root_prompt_rehydration_failure_still_emits_nonnull_case_open(
     assert ss["case"]["case_id"] == state.active_case_id
 
 
-
-
 def test_existing_case_path_unchanged(
     _persistence_bound: Persistence,
 ) -> None:
@@ -273,21 +269,6 @@ def test_existing_case_path_unchanged(
         _persistence_bound.get_session_state(case.case_id)
     )
     assert [m.content for m in session_state.chat_history] == [PROMPT]
-
-
-def test_invoke_directive_stays_stateless(
-    _persistence_bound: Persistence,
-) -> None:
-    """``/invoke`` operator-debug directives from root do NOT mint a Case."""
-    ws = MockWebSocket()
-    state = _fresh_state()
-    directive = asyncio.run(
-        _prepare_user_turn(ws, state, '/invoke geocode_location {"query": "x"}')
-    )
-    assert directive == ("geocode_location", {"query": "x"})
-    assert state.active_case_id is None
-    assert ws.sent == []
-    assert _case_docs(_persistence_bound) == []
 
 
 def test_no_persistence_stays_stateless() -> None:
@@ -321,8 +302,6 @@ def test_upsert_failure_falls_back_to_stateless(
     assert directive is None
     assert state.active_case_id is None
     assert ws.sent == []
-
-
 
 
 def test_integration_two_root_prompts_one_case(

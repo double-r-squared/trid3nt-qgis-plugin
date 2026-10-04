@@ -124,8 +124,6 @@ async def _wait_for_card(sock: _FakeSocket, timeout: float = 2.0) -> dict:
     )
 
 
-
-
 @pytest.mark.asyncio
 async def test_ask_mode_emits_card_and_choice_pins_tool(_scripted, monkeypatch):
     monkeypatch.setenv("TRID3NT_MODE", "ask")  # env-default ask mode
@@ -186,8 +184,6 @@ async def test_ambiguity_margin_zero_disables_auto_asks(_scripted, monkeypatch):
     assert _candidate_envelopes(sock) == []
 
 
-
-
 @pytest.mark.asyncio
 async def test_timeout_proceeds_autonomously_with_note(_scripted, monkeypatch):
     """An unanswered card must NEVER hang: bounded timeout, note, autonomy."""
@@ -223,8 +219,6 @@ async def test_free_text_reply_feeds_back_as_clarification(
     ), texts
 
 
-
-
 def test_resolve_rejects_wrong_session_and_unknown_id():
     loop = asyncio.new_event_loop()
     try:
@@ -253,11 +247,3 @@ def test_resolve_rejects_wrong_session_and_unknown_id():
         loop.close()
 
 
-def test_session_config_sets_routing_mode_defensively():
-    """The session-config seam accepts loose dicts; bad modes are ignored."""
-    state = agent_server.SessionState(session_id=new_ulid())
-    assert agent_server._session_routing_mode(state) == "auto"
-    state.routing_mode = "ask"
-    assert agent_server._session_routing_mode(state) == "ask"
-    state.routing_mode = "bogus"  # unknown -> env default
-    assert agent_server._session_routing_mode(state) == "auto"

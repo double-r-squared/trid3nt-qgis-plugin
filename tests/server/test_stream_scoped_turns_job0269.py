@@ -50,67 +50,6 @@ async def _create_case(ws, state, title) -> str:
     return case_id
 
 
-
-
-@pytest.mark.asyncio
-async def test_deselect_clears_active_case(file_persistence) -> None:
-    ws = FakeWS()
-    state = server.SessionState(session_id=new_ulid())
-    case_a = await _create_case(ws, state, "Case A")
-    assert state.active_case_id == case_a
-
-    cmd = CaseCommandEnvelopePayload(command="deselect")
-    await server._handle_case_command(ws, state, cmd)
-
-    assert state.active_case_id is None
-    assert state.case_context_synced_to is None
-    assert state.chat_history == []
-
-
-@pytest.mark.asyncio
-async def test_root_prompt_after_deselect_autocreates_fresh_case(
-    file_persistence,
-) -> None:
-    """The exact live failure: with a Case open, navigate out, prompt from
-    root — the prompt must land in a NEW auto-created Case, not the old one."""
-    ws = FakeWS()
-    state = server.SessionState(session_id=new_ulid())
-    case_a = await _create_case(ws, state, "Flood Case")
-
-    # Without deselect (pre-fix) this turn would have dispatched into case_a.
-    cmd = CaseCommandEnvelopePayload(command="deselect")
-    await server._handle_case_command(ws, state, cmd)
-
-    directive = await server._prepare_user_turn(
-        ws, state, "Fetch a DEM for Asheville and compute a hillshade"
-    )
-    assert directive is None
-    new_case = state.active_case_id
-    assert new_case and new_case != case_a, "root prompt must auto-create"
-    assert state.current_turn_case_id == new_case
-
-    chat_a = (await file_persistence.get_session_state(case_a)).chat_history
-    chat_new = (await file_persistence.get_session_state(new_case)).chat_history
-    assert chat_a == [], "old Case must not receive the root prompt"
-    assert [m.role for m in chat_new] == ["user"]
-
-
-@pytest.mark.asyncio
-async def test_reselect_after_deselect_reopens_case(file_persistence) -> None:
-    ws = FakeWS()
-    state = server.SessionState(session_id=new_ulid())
-    case_a = await _create_case(ws, state, "Case A")
-    await server._handle_case_command(
-        ws, state, CaseCommandEnvelopePayload(command="deselect")
-    )
-    await server._handle_case_command(
-        ws, state, CaseCommandEnvelopePayload(command="select", case_id=case_a)
-    )
-    assert state.active_case_id == case_a
-
-
-
-
 def _gated_stream(release: asyncio.Event, narration: str):
     async def stream(websocket, st, settings, user_text, model_id=None, **_kwargs):
         st.current_turn_narration = []
@@ -119,49 +58,6 @@ def _gated_stream(release: asyncio.Event, narration: str):
         st.chat_history.append({"role": "user", "text": user_text})
 
     return stream
-
-
-@pytest.mark.asyncio
-async def test_cross_case_turn_survives_new_root_prompt(
-    file_persistence, monkeypatch
-) -> None:
-    """A turn running in Case A must KEEP RUNNING when the user deselects,
-    prompts from root (auto-create Case B), and that new turn dispatches."""
-    ws = FakeWS()
-    state = server.SessionState(session_id=new_ulid())
-    case_a = await _create_case(ws, state, "Case A")
-
-    release = asyncio.Event()
-    monkeypatch.setattr(
-        server, "_stream_model_reply", _gated_stream(release, "solving A")
-    )
-
-    await server._prepare_user_turn(ws, state, "model the flood in A")
-    key_a = state.current_turn_case_id or server._ROOT_STREAM_KEY
-    task_a = asyncio.create_task(
-        server._dispatch_model_turn_and_persist(ws, state, None, "model the flood in A", "off")
-    )
-    state.inflight_tasks[key_a] = task_a
-    await asyncio.sleep(0.05)
-
-    # User navigates out + prompts from root → fresh Case key, NO collision.
-    await server._handle_case_command(
-        ws, state, CaseCommandEnvelopePayload(command="deselect")
-    )
-    await server._prepare_user_turn(ws, state, "hillshade for Asheville")
-    key_b = state.current_turn_case_id or server._ROOT_STREAM_KEY
-    assert key_b != key_a
-
-    prior = state.inflight_tasks.get(key_b)
-    assert prior is None, "fresh auto-created Case must have no prior turn"
-    assert not task_a.cancelled() and not task_a.done(), (
-        "Case A's turn must still be running after the cross-Case prompt"
-    )
-
-    release.set()
-    await task_a
-    chat_a = (await file_persistence.get_session_state(case_a)).chat_history
-    assert ("agent", "solving A") in [(m.role, m.content) for m in chat_a]
 
 
 @pytest.mark.asyncio
@@ -195,57 +91,3 @@ async def test_same_case_reprompt_replaces_turn(file_persistence, monkeypatch) -
         await task1
 
 
-@pytest.mark.asyncio
-async def test_concurrent_turns_keep_narration_isolated(
-    file_persistence, monkeypatch
-) -> None:
-    """Turn A's persisted narration is A's own text while B runs concurrently.
-
-    The per-task registration seam is what isolates the wrapper's finally-join, and
-    each fake registers the way the real stream does."""
-    ws = FakeWS()
-    state = server.SessionState(session_id=new_ulid())
-    case_a = await _create_case(ws, state, "Case A")
-
-    release_a = asyncio.Event()
-
-    async def stream_a(websocket, st, settings, user_text, model_id=None, **_kwargs):
-        st.current_turn_narration = []
-        narr = st.current_turn_narration
-        task = asyncio.current_task()
-        if task is not None:
-            server._TURN_NARRATION_BY_TASK[task] = narr
-        narr.append("narration A")
-        await release_a.wait()
-
-    monkeypatch.setattr(server, "_stream_model_reply", stream_a)
-    await server._prepare_user_turn(ws, state, "turn A")
-    task_a = asyncio.create_task(
-        server._dispatch_model_turn_and_persist(ws, state, None, "turn A", "off")
-    )
-    await asyncio.sleep(0.05)
-
-    # Turn B (different Case) re-points the narration field mid-A.
-    await server._handle_case_command(
-        ws, state, CaseCommandEnvelopePayload(command="deselect")
-    )
-
-    async def stream_b(websocket, st, settings, user_text, model_id=None, **_kwargs):
-        st.current_turn_narration = []
-        st.current_turn_narration.append("narration B")
-
-    monkeypatch.setattr(server, "_stream_model_reply", stream_b)
-    await server._prepare_user_turn(ws, state, "turn B")
-    await server._dispatch_model_turn_and_persist(ws, state, None, "turn B", "off")
-    case_b = state.active_case_id
-    assert case_b and case_b != case_a
-
-    release_a.set()
-    await task_a
-
-    chat_a = (await file_persistence.get_session_state(case_a)).chat_history
-    chat_b = (await file_persistence.get_session_state(case_b)).chat_history
-    agent_a = [m.content for m in chat_a if m.role == "agent"]
-    agent_b = [m.content for m in chat_b if m.role == "agent"]
-    assert agent_a == ["narration A"], f"A must keep its own narration: {agent_a}"
-    assert agent_b == ["narration B"], f"B must keep its own narration: {agent_b}"

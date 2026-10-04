@@ -15,7 +15,6 @@ from trid3nt_server.render.pipeline_emitter import PipelineEmitter, bind_turn_ca
 from trid3nt_server.render.uri_registry import activate_registry, deactivate_registry, get_uri_registry
 # The gate engine (trid3nt_server.inputs.gate.confirm) is imported function-locally in
 # _invoke_tool_via_emitter -- deferred to break the server<->gates load cycle.
-from trid3nt_server.model.guards.tool_gating import BenchBlockedError
 from trid3nt_server.server.config import _env_flag
 from trid3nt_server.server.dispatch.aoi import pin_case_aoi_from_solve
 from trid3nt_server.server.dispatch.persist import _VALID_ERROR_CODES, _persist_chart_record, _persist_chat_turn, _persist_tool_card
@@ -400,33 +399,6 @@ async def _invoke_tool_via_emitter(
         # between turns -- the _send_error side-channel is not needed here.
         raise ToolNotFoundError(tool_name, list(TOOL_REGISTRY))
     entry = TOOL_REGISTRY[tool_name]
-
-    # BENCH PRE-DISPATCH BLOCK HOOK, armed only by the bench harness. When
-    # armed it decides the tool's fate BEFORE any gate or fetch runs: a
-    # non-member pick is blocked outright, while a member pick in the block tier
-    # runs the same arg normalizer a real dispatch would, so the block is graded
-    # on canonicalized args. Both raise THROUGH the emitter, so the tool still
-    # surfaces as a failed step and ``entry.fn`` is never reached.
-    if state.bench_block_config is not None:
-        from trid3nt_server.model.guards.tool_gating import BenchBlockedError, bench_block_decision
-
-        _bench_class = bench_block_decision(state.bench_block_config, tool_name)
-        if _bench_class is not None:
-            if _bench_class == "correct_blocked":
-                # Arg validation before the block (the fn is still NOT invoked).
-                normalize_args(tool_name, params, entry.fn)
-
-            async def _bench_blocked_invoke() -> Any:
-                raise BenchBlockedError(_bench_class, tool_name)
-
-            # Mint the pipeline step (tool shows as 'fired'), then fail it via
-            # the raise -- which propagates out to the dispatch loop's typed-
-            # error path exactly like any tool exception.
-            return await state.emitter.emit_tool_call(
-                name=entry.metadata.name,
-                tool_name=tool_name,
-                invoke=_bench_blocked_invoke,
-            )
 
     # Snapshot the ORIGINAL call args NOW, before normalization, gating,
     # URI-resolve and secret-inject rewrite ``params``: the early input-only

@@ -1,4 +1,4 @@
-"""Inbound non-turn envelope handlers: dev-invoke, secret-add, layer-delete + bg-task drain."""
+"""Inbound non-turn envelope handlers: dev-invoke, secret-add + bg-task drain."""
 
 from __future__ import annotations
 
@@ -9,12 +9,10 @@ from trid3nt_contracts.secrets import SecretAddEnvelopePayload
 from trid3nt_server.model.credentials.resolver import set_session_credential
 from trid3nt_server.server.dispatch.emitter import _dispatch_tool_and_persist, _ensure_emitter
 from trid3nt_server.server.dispatch.results import _reconstruct_run_signature
-from trid3nt_server.server.session.case_state import _delete_case_loaded_layer, _turn_case_id
 from trid3nt_server.server.session.state import SessionState, _ROOT_STREAM_KEY
 from trid3nt_server.server.turn.engine import _prepare_user_turn
 from trid3nt_server.server.turn.live_turn import _find_live_turn, _rebind_live_turns, _register_live_turn
 from trid3nt_server.server.turn.wire import _send_error
-from typing import Any
 from websockets.asyncio.server import ServerConnection
 
 logger = logging.getLogger("trid3nt_server.server")
@@ -140,7 +138,6 @@ async def _handle_dev_tool_invoke(
     _register_live_turn(state.session_id, turn_key, task, state.emitter)
 
 
-
 async def _handle_secret_add(
     websocket: ServerConnection,
     state: SessionState,
@@ -159,57 +156,3 @@ async def _handle_secret_add(
         return
     set_session_credential(state.session_id, envelope.provider, envelope.key_value)
 
-async def _handle_layer_delete(
-    websocket: ServerConnection,
-    state: SessionState,
-    payload_dict: Any,
-) -> None:
-    """Process a ``layer-delete`` envelope: drop the layer from the live
-    accumulator, emit a refreshed session state, and persist the survivors
-    authoritatively. A missing ``layer_id`` is a typed params error."""
-    layer_id: str | None = None
-    if isinstance(payload_dict, dict):
-        lid = payload_dict.get("layer_id")
-        if isinstance(lid, str) and lid:
-            layer_id = lid
-    if not layer_id:
-        await _send_error(
-            websocket,
-            state.session_id,
-            "TOOL_PARAMS_INVALID",
-            "layer-delete requires a non-empty string layer_id.",
-        )
-        return
-
-    # Pin the target Case the same way every persistence site does so a
-    # mid-turn Case switch never mis-aims the delete.
-    target_case = _turn_case_id(state)
-
-    _ensure_emitter(websocket, state)
-    if state.emitter is None:  # pragma: no cover -- _ensure_emitter always binds
-        return
-
-    # Drop the layer from the live accumulator. reset_loaded_layers also
-    # prunes the inline-GeoJSON side-table to the surviving ids.
-    survivors: list[dict] = [
-        layer.model_dump(mode="json")
-        for layer in state.emitter.loaded_layers
-        if layer.layer_id != layer_id
-    ]
-    state.emitter.reset_loaded_layers(survivors)
-
-    # Emit the refreshed session state: the client replaces rather than
-    # reconciles, so the now-absent layer disappears, and the fan-out is
-    # session-scoped, so every connection converges on the new list.
-    await state.emitter.emit_session_state()
-
-    # Persist authoritatively (replace, not the union merge -- see helper).
-    await _delete_case_loaded_layer(state, layer_id, case_id=target_case)
-
-    logger.info(
-        "layer-delete session=%s case=%s layer=%s survivors=%d",
-        state.session_id,
-        target_case,
-        layer_id,
-        len(survivors),
-    )

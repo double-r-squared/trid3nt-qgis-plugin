@@ -58,8 +58,6 @@ def _fresh_state(session_id: str | None = None) -> SessionState:
     return SessionState(session_id=session_id or new_ulid())
 
 
-
-
 def test_case_create_emits_case_open_and_case_list(_persistence_bound: Persistence) -> None:
     """``case-command(create)`` upserts the Case, sets active context, emits
     ``case-open`` (empty session_state) then ``case-list`` updated."""
@@ -267,23 +265,6 @@ def test_case_rename_updates_title_and_refreshes_case_list(
     assert "Renamed case" in titles
 
 
-def test_case_archive_soft_archives_and_refreshes_case_list(
-    _persistence_bound: Persistence,
-) -> None:
-    """``case-command(archive)`` flips status to ``archived`` and emits case-list."""
-    case = _fresh_case_summary()
-    asyncio.run(_persistence_bound.upsert_case(case))
-    ws = MockWebSocket()
-    state = _fresh_state()
-    cmd = CaseCommandEnvelopePayload(command="archive", case_id=case.case_id)
-    asyncio.run(_handle_case_command(ws, state, cmd))
-
-    fetched = asyncio.run(_persistence_bound.get_case(case.case_id))
-    assert fetched is not None
-    assert fetched.status == "archived"
-    assert any(env["type"] == "case-list" for env in ws.sent)
-
-
 def test_case_delete_soft_deletes_and_clears_active_case(
     _persistence_bound: Persistence,
 ) -> None:
@@ -479,8 +460,6 @@ def test_active_case_id_set_after_create_and_select(
     assert state.active_case_id == first_active
 
 
-
-
 def test_persist_chat_turn_writes_when_active_case_set(
     _persistence_bound: Persistence,
 ) -> None:
@@ -520,8 +499,6 @@ def test_persist_chat_turn_noop_when_no_active_case(
         if n == "insert-one" and a.get("collection") == CHAT_COLLECTION
     ]
     assert chat_inserts == []
-
-
 
 
 def test_integration_e2e_case_flow(_persistence_bound: Persistence) -> None:

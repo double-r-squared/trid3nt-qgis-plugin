@@ -19,7 +19,6 @@ from trid3nt_server.server.protocol.connections import _SESSION_WS_CONNECTIONS
 if TYPE_CHECKING:
     from websockets.asyncio.server import ServerConnection
 
-    from trid3nt_server.model.adapters.adapter import UsageMetadataEvent
     from trid3nt_server.server.session.state import SessionState
 
 logger = logging.getLogger("trid3nt_server.server")
@@ -275,35 +274,3 @@ async def _emit_turn_complete(
         )
 
 
-async def _emit_cache_status(
-    websocket: "ServerConnection",
-    state: "SessionState",
-    usage: "UsageMetadataEvent",
-) -> None:
-    """Emit a ``cache-status`` envelope once per model stream, after the usage
-    event lands. Deliberately raw JSON: an observability surface, not a wire
-    contract, and a failure here never breaks the agent loop."""
-    import json as _json
-
-    try:
-        payload = {
-            "cache_hit": bool(usage.cache_hit),
-            "cached_tokens": int(usage.cached_content_token_count or 0),
-            "total_tokens": int(usage.total_token_count or 0),
-            "prompt_tokens": usage.prompt_token_count,
-            "candidates_tokens": usage.candidates_token_count,
-            "model_cache_ref": state.model_cache_ref,
-        }
-        await _session_safe_send(websocket, state.session_id,
-            _json.dumps(
-                {
-                    "type": "cache-status",
-                    "session_id": state.session_id,
-                    "payload": payload,
-                }
-            )
-        )
-    except Exception:  # noqa: BLE001 -- observability, never bubble up
-        logger.exception(
-            "cache-status emission failed session=%s", state.session_id
-        )
