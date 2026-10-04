@@ -1150,7 +1150,7 @@ async def test_mint_dispatch_and_sim_cards_emits_two_cards(
 ) -> None:
     """``mint_dispatch_and_sim_cards`` mints a complete Dispatch tool card + a
     running compute card bound to the handle's jobId."""
-    from trid3nt_server.render.pipeline_emitter import mint_dispatch_and_sim_cards
+    from trid3nt_server.workflows.solver.solve_progress import mint_dispatch_and_sim_cards
 
     handle = type(
         "H",
@@ -1183,11 +1183,12 @@ async def test_mint_cards_name_the_case_not_the_shared_solver_id(
     solver id cannot name the card without labelling every sibling after one leg.
     """
     from trid3nt_server.render import pipeline_emitter as pe
+    from trid3nt_server.workflows.solver import solve_progress
 
     handle = type("H", (), {"workflows_execution_id": "j", "workflow_name": "local-docker"})()
     token = pe._DISPATCHED_TOOL.set("telemac_do_sag")
     try:
-        await pe.mint_dispatch_and_sim_cards(
+        await solve_progress.mint_dispatch_and_sim_cards(
             emitter=emitter, solver="telemac", handle=handle
         )
     finally:
@@ -1205,7 +1206,7 @@ async def test_a_compute_card_carries_the_engine_and_the_module_that_ran(
 ) -> None:
     """The card is titled by the run's identity, which is the engine and the
     module of it that ran; the plain tool card beside it is a run of nothing."""
-    from trid3nt_server.render.pipeline_emitter import mint_dispatch_and_sim_cards
+    from trid3nt_server.workflows.solver.solve_progress import mint_dispatch_and_sim_cards
 
     handle = type("H", (), {"workflows_execution_id": "j",
                             "workflow_name": "local-docker"})()
@@ -1223,7 +1224,7 @@ async def test_a_compute_card_carries_the_engine_and_the_module_that_ran(
 async def test_mint_dispatch_and_sim_cards_none_emitter_is_noop() -> None:
     """``emitter is None`` (direct/smoke call) returns ``None`` and emits
     nothing — the two cards are an observability affordance, never required."""
-    from trid3nt_server.render.pipeline_emitter import mint_dispatch_and_sim_cards
+    from trid3nt_server.workflows.solver.solve_progress import mint_dispatch_and_sim_cards
 
     handle = type("H", (), {"workflows_execution_id": "j", "solver": "sfincs"})()
     sim_id = await mint_dispatch_and_sim_cards(
@@ -1238,7 +1239,7 @@ async def test_route_sim_terminal_marks_complete_and_failed(
 ) -> None:
     """``route_sim_terminal`` drives the compute card green on a complete
     RunResult and red on a non-complete one (carrying its error_code)."""
-    from trid3nt_server.render.pipeline_emitter import route_sim_terminal
+    from trid3nt_server.workflows.solver.solve_progress import route_sim_terminal
 
     # complete -> green
     sink_ok = _CapturingSink()
@@ -1290,7 +1291,7 @@ class TestCompactionCard:
         Batch job bound to a local compaction pass), tool_name
         "context:compact", state running, labeled COMPACTING_LABEL."""
         from trid3nt_server.model.guards.context_budget import COMPACTING_LABEL
-        from trid3nt_server.render.pipeline_emitter import mint_compaction_card
+        from trid3nt_server.server.turn.compaction import mint_compaction_card
 
         step_id = await mint_compaction_card(emitter=emitter)
         assert step_id is not None
@@ -1310,7 +1311,7 @@ class TestCompactionCard:
         self, emitter: PipelineEmitter, sink: _CapturingSink
     ) -> None:
         from trid3nt_server.model.guards.context_budget import compaction_complete_label
-        from trid3nt_server.render.pipeline_emitter import (
+        from trid3nt_server.server.turn.compaction import (
             complete_compaction_card,
             mint_compaction_card,
         )
@@ -1330,7 +1331,7 @@ class TestCompactionCard:
 
     @pytest.mark.asyncio
     async def test_mint_compaction_card_none_emitter_is_noop(self) -> None:
-        from trid3nt_server.render.pipeline_emitter import mint_compaction_card
+        from trid3nt_server.server.turn.compaction import mint_compaction_card
 
         assert await mint_compaction_card(emitter=None) is None
 
@@ -1340,7 +1341,7 @@ class TestCompactionCard:
     ) -> None:
         """No mint (or a failed mint) -> ``step_id`` is None -> the terminal
         call must never raise and must emit nothing."""
-        from trid3nt_server.render.pipeline_emitter import complete_compaction_card
+        from trid3nt_server.server.turn.compaction import complete_compaction_card
 
         n_before = len(sink.frames)
         await complete_compaction_card(

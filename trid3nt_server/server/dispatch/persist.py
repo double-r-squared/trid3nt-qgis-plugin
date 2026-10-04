@@ -349,7 +349,6 @@ async def _persist_chart_record(state: SessionState, payload: dict) -> None:
             ChartEmissionPayload,
             SessionChartRecord,
         )
-        from trid3nt_server.store.cases import DEFAULT_DATABASE, SESSIONS_COLLECTION
 
         # Charts are turn-scoped emissions -- key them by the Case
         # that OWNS the turn, not whatever Case is visible at write time.
@@ -359,17 +358,7 @@ async def _persist_chart_record(state: SessionState, payload: dict) -> None:
             payload=ChartEmissionPayload.model_validate(payload),
             emitted_at=now_utc(),
         )
-        body = record.model_dump(mode="json")
-        await persistence._store.call_tool(  # noqa: SLF001 -- telemetry-writer pattern
-            "update-one",
-            {
-                "database": DEFAULT_DATABASE,
-                "collection": SESSIONS_COLLECTION,
-                "filter": {"_id": doc_id},
-                "update": {"$push": {"charts": body}},
-                "upsert": True,
-            },
-        )
+        await persistence.append_chart(doc_id, record)
         logger.info(
             "chart persisted session=%s doc_id=%s chart_id=%s",
             state.session_id,

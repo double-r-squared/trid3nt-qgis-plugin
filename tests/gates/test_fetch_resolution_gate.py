@@ -217,7 +217,7 @@ async def test_cancel_fails_closed() -> None:
 @pytest.mark.asyncio
 async def test_timeout_fails_closed(monkeypatch) -> None:
     from trid3nt_server import server
-    from trid3nt_server.server.errors import GateConfirmationTimeoutError
+    from trid3nt_server.inputs.gate.errors import GateConfirmationTimeoutError
 
     monkeypatch.setattr(server, "CODE_EXEC_CONFIRM_TIMEOUT_SECONDS", 0)
     # No client answers the card: the local-lane gate would wait 24h, so the

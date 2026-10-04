@@ -449,6 +449,20 @@ class Persistence:
             },
         )
 
+    async def append_chart(self, doc_id: str, record: Any) -> None:
+        """Push one ``SessionChartRecord`` onto the session document's ``charts``
+        array, creating the document when it does not exist yet."""
+        await self._store.call_tool(
+            "update-one",
+            {
+                "database": self._db,
+                "collection": SESSIONS_COLLECTION,
+                "filter": {"_id": doc_id},
+                "update": {"$push": {"charts": record.model_dump(mode="json")}},
+                "upsert": True,
+            },
+        )
+
     async def touch_session(
         self,
         session_id: str,

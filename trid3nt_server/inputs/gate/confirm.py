@@ -20,7 +20,7 @@ from trid3nt_server.inputs.gate.cards import _build_spatial_input_request_payloa
 from trid3nt_server.inputs.gate.cards.estimate import call_provider
 from trid3nt_server.inputs.gate.pending import _PENDING_CONFIRMATIONS, _PENDING_SPATIAL_INPUTS
 from trid3nt_server.server.config import _env_float
-from trid3nt_server.server.errors import GateConfirmationTimeoutError, SpatialInputInvalidResponseError
+from trid3nt_server.inputs.gate.errors import GateConfirmationTimeoutError, SpatialInputInvalidResponseError
 from trid3nt_server.server.session.state import SessionState
 from trid3nt_server.server.turn.wire import _new_envelope, _send_error, _session_safe_send
 from typing import Any

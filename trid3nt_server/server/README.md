@@ -11,7 +11,7 @@ where its results go.
 | --- | --- |
 | `__init__.py` | The core's door; the subpackages below hold the working parts. |
 | `config.py` | Environment-knob readers, each a pure `env -> value` read taken live. |
-| `errors.py` | The typed dispatch error taxonomy - an `error_code` and a `retryable` flag per type. |
+| `errors.py` | `ToolNotFoundError`, the dispatch path's refusal of a name nothing registered. |
 | `processing.py` | The session request seam: a `processing-request` emitted for the user's QGIS session, the bounded wait, and the typed refusals for no session, no answer and an error answer. |
 | `spatial.py` | The zoom-to helpers: the bbox the camera snaps to for a result, deduped against this turn. |
 
@@ -22,4 +22,4 @@ where its results go.
 | `dispatch/` | One tool call end to end: the AOI it runs over, the emitter it publishes through, how its results are summarized, persisted and reused. |
 | `protocol/` | The wire: authentication, the connection registry, the message handlers, the HTTP door (the library and the data routes) and the accept loop. |
 | `session/` | What one connection holds - the case it is on, its persistence handle, its mutable state. |
-| `turn/` | The turn engine: the model stream, the wire envelopes it produces, and the case bookkeeping around it. |
+| `turn/` | The turn engine: the model stream, its compaction card, the wire envelopes it produces, and the case bookkeeping around it. |

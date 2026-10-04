@@ -13,7 +13,8 @@ from trid3nt_server.model.adapters.adapter import CompactionCompleteEvent, Compa
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.render.charts import is_chart_emission_result
 from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
-from trid3nt_server.render.pipeline_emitter import bind_turn_case, complete_compaction_card, mint_compaction_card
+from trid3nt_server.render.pipeline_emitter import bind_turn_case
+from trid3nt_server.server.turn.compaction import complete_compaction_card, mint_compaction_card
 from trid3nt_server.render.uri_registry import get_uri_registry
 from trid3nt_server.model.guards.circuit_breaker import CircuitBreakerError
 # The gate engine (trid3nt_server.inputs.gate.confirm) is imported function-locally in

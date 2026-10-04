@@ -21,7 +21,7 @@ from trid3nt_server.inputs.gate.pending import (
 )
 from trid3nt_server.main import MAX_TURNS_PER_SESSION
 from trid3nt_server.server.dispatch.emitter import _assert_sync_offload_safe, _ensure_emitter
-from trid3nt_server.server.errors import SpatialInputInvalidResponseError
+from trid3nt_server.inputs.gate.errors import SpatialInputInvalidResponseError
 from trid3nt_server.server.protocol.auth import _handle_auth_token, _handle_session_resume, reject_auth_handshake
 from trid3nt_server.server.protocol.connections import _deregister_session_connection, session_connection_count
 from trid3nt_server.server.protocol.handlers import _BG_TASKS, _drain_bg_tasks, _handle_dev_tool_invoke, _handle_secret_add

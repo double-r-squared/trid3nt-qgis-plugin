@@ -12,7 +12,7 @@ import json
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server.render.pipeline_emitter import route_sim_terminal
+from trid3nt_server.workflows.solver.solve_progress import route_sim_terminal
 from trid3nt_server.store.cases import make_file_persistence
 from trid3nt_contracts.case import CaseCommandEnvelopePayload
 from trid3nt_contracts.common import new_ulid
@@ -392,7 +392,7 @@ class _FakeHandle:
 
 @pytest.mark.asyncio
 async def test_mint_persists_dispatch_and_running_sim(file_persistence) -> None:
-    from trid3nt_server.render.pipeline_emitter import mint_dispatch_and_sim_cards
+    from trid3nt_server.workflows.solver.solve_progress import mint_dispatch_and_sim_cards
 
     ws = FakeWS()
     state = server.SessionState(session_id=new_ulid())
@@ -418,7 +418,7 @@ async def test_bare_resume_ships_dispatch_and_running_sim(file_persistence) -> N
     """A bare session-resume (NOT a case-open) ships BOTH the dispatch card and
     the running sim card in the resume session-state's ``chat_history`` so the
     reconnecting client can surface them with no manual refresh."""
-    from trid3nt_server.render.pipeline_emitter import mint_dispatch_and_sim_cards
+    from trid3nt_server.workflows.solver.solve_progress import mint_dispatch_and_sim_cards
 
     ws1 = FakeWS()
     state1 = server.SessionState(session_id=new_ulid())
