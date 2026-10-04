@@ -199,7 +199,10 @@ def test_snotel_no_stations_raises():
     spec = _spec("fetch_snotel_snow")
     raw = {"bbox": [-80.0, 25.0, -79.0, 26.0]}  # Florida: no SNOTEL
     params = router.validate_params(spec, raw)
-    with patch.object(cr, "_get", lambda s, p: _snotel_catalog()):
+    def offline(_spec, _plan):
+        return _snotel_catalog()
+
+    with patch.object(cr, "_get", offline), patch.object(http_json, "_get", offline):
         with pytest.raises(Exception) as exc:
             cr.execute(spec, params)
     assert exc.value.error_code == "SNOTEL_NO_STATIONS"
