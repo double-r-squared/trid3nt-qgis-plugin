@@ -14,4 +14,3 @@ anything; a pause on a person's input is the input gate's job.
 | `circuit_breaker.py` | The per-session breaker over consecutive UPSTREAM tool failures. |
 | `context_budget.py` | Per-model window discovery and the client-side history management it drives. |
 | `runaway_guard.py` | Step cap, wall clock and loop watchdog, OR'd into one abort. |
-| `tool_gating.py` | Per-turn top-k tool gating, on the local provider path only. |

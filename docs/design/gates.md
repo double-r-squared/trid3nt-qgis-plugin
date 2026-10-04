@@ -9,7 +9,7 @@ context-budget, and actionability classification.
 - `cards/` -- the user-decision gate cards: `estimate`, `payload_warning`,
   `solver_confirm`, `spatial_input`. Each card is a DECLARED gate whose pure
   estimate/pin providers are owned by the engine.
-- `tool_gating.py`, `pending.py` -- visible-tool gating + pending-decision
+- `pending.py` -- the pending-decision
   registry.
 - `runaway_guard.py`, `circuit_breaker.py` -- loop-runaway + repeated-failure
   guards.

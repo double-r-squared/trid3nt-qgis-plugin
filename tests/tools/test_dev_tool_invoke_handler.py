@@ -136,9 +136,7 @@ async def test_valid_invoke_drives_shared_emission_pipeline() -> None:
 async def test_offload_rule_respected_on_run_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Arm the staged off-load; the probe's compute_ name matches the subset
-    # predicate, so its sync body must run OFF the loop thread.
-    monkeypatch.setattr(server, "_SYNC_OFFLOAD_MODE", "subset")
+    # Every sync body runs OFF the loop thread.
     loop_ident = threading.current_thread().ident
     captured: dict = {}
 

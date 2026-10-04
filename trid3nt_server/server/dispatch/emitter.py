@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import logging
 from dataclasses import dataclass
 from trid3nt_contracts import new_ulid, now_utc
@@ -122,84 +121,9 @@ def _running_emitter_step_id(emitter: Any, tool_name: str) -> str | None:
 # call to a worker thread is SAFE because tool bodies are EMIT-FREE: every
 # loop-bound emitter call lives in the surrounding wrapper, which stays on the
 # loop. ``asyncio.to_thread`` propagates the contextvars Context, so a stray
-# emit WOULD still resolve its ContextVar - hence the armed-only
-# ``_assert_sync_offload_safe`` guard refuses to arm when a candidate tool's
-# source so much as references the emitter API.
-#
-# ``TRID3NT_SYNC_TOOL_OFFLOAD`` selects the mode with no code change:
-#   ""/"off"             -> disabled; sync tools stay on the loop.
-#   "subset"             -> off-load only the pure compute_* family.
-#   "global"/"all"/"on"  -> off-load every sync tool body.
-_SYNC_OFFLOAD_MODE = os.environ.get("TRID3NT_SYNC_TOOL_OFFLOAD", "off").strip().lower()
-
-_SYNC_OFFLOAD_GLOBAL_VALUES = frozenset({"global", "all", "on", "1", "true", "yes"})
-
-#: The subset mode's cohort: the pure-compute family, which takes no emitter and
-#: does CPU-bound GDAL or numpy work.
-_SYNC_OFFLOAD_SUBSET_PREFIXES = ("compute_",)
-
-#: ALWAYS off-loaded whatever the env mode says: a hand-audited, TIGHT set of
-#: sync tools whose bodies do multi-second synchronous work - tile merge,
-#: reproject, WarpedVRT or COG materialize, a large download plus xarray or
-#: netCDF compute, a dense-index build, a staged container run - on the asyncio
-#: loop, stalling the WS data-heartbeat past the client's reconnect deadline.
-#: Every entry was confirmed EMIT-FREE, and ``_assert_sync_offload_safe``
-#: re-validates that for this set even when the env mode is off, so a future
-#: emitting tool can never be added silently. This is NOT "off-load
-#: everything": the light vector and scalar fetchers, and every non-fetch sync
-#: tool, stay on the loop.
-_ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
-    {
-        # tile mosaic / windowed warp-read plus COG materialize
-        "fetch_cudem",
-        "fetch_regional_coastal_dem",
-        "fetch_etopo",
-        "fetch_bluetopo",
-        "fetch_dem",
-        "fetch_3dep_extra",
-        "fetch_landcover",
-        "fetch_population",
-        "fetch_hrsl_population",
-        "fetch_gcn250_curve_numbers",
-        "fetch_statsgo_soils",
-        # blocking retrieve plus xarray open, compute and COG write
-        "fetch_era5_reanalysis",
-        "fetch_gridmet",
-        "fetch_hrrr_forecast",
-        "fetch_hrrr_smoke",
-        "fetch_mrms_qpe",
-        # per-frame tile stitch, reproject and COG-write loop, one chain per scan
-        "fetch_satellite_imagery",
-        # up to 144 archive frames in ONE sync call, each a ~54 MB netCDF
-        # download plus reproject and COG write
-        "fetch_goes_abi",
-        "fetch_gtsm_tide_surge",
-        # STAC raster readers: sign, windowed /vsicurl warp-read, COG write
-        "fetch_naip",
-        # multi-granule netCDF download plus in-AOI group filter and raster write
-        "fetch_glm_lightning",
-        # record fetchers: a windowed Zarr stream, and a multi-MB entity download
-        "fetch_aorc_precip",
-        "fetch_lter_records",
-        # STAC sign plus windowed warp-read and COG / FlatGeobuf write
-        "fetch_sentinel2_truecolor",
-        "fetch_sentinel1_sar",
-        "fetch_landsat_imagery",
-        "fetch_modis_lst",
-        "fetch_copernicus_dem",
-        "fetch_chirps_precipitation",
-        "fetch_ghsl_population",
-        "fetch_jrc_global_surface_water",
-        "fetch_soilgrids",
-        "fetch_esri_landcover_10m",
-        # the sibling DEM fetch over the whole window, then a D8 condition and
-        # trace over up to 16 million cells, in one sync call
-        "fetch_watershed",
-        # a delegate that owns its own socket: up to six survey ZIPs downloaded
-        # and read out of their geodatabases in one call
-        "fetch_ehydro_surveys",
-    }
-)
+# emit WOULD still resolve its ContextVar - hence every sync tool body runs
+# off-loop and ``_assert_sync_offload_safe`` refuses to start when one of them
+# so much as references the emitter API.
 
 #: Loop-bound emitter API names. A sync tool whose CODE - comments and string
 #: literals excluded - references any of these, or any ``emit_*`` attribute, is
@@ -247,39 +171,10 @@ def _source_references_emitter(src: str) -> bool:
                 return True
         return False
 
-def _should_offload_sync_tool(tool_name: str) -> bool:
-    """Return True when ``tool_name``'s sync body should run through
-    ``asyncio.to_thread``: the always-offload set unconditionally, then whatever
-    the env mode selects."""
-    if tool_name in _ALWAYS_OFFLOAD_SYNC_TOOLS:
-        return True
-    mode = _SYNC_OFFLOAD_MODE
-    if mode in _SYNC_OFFLOAD_GLOBAL_VALUES:
-        return True
-    if mode == "subset":
-        return tool_name.startswith(_SYNC_OFFLOAD_SUBSET_PREFIXES)
-    return False
-
 def _assert_sync_offload_safe() -> None:
-    """ARMED-ONLY startup gate: refuse to start when a sync tool that would be
-    off-loaded references the loop-bound emitter API, since a worker thread must
-    never touch the event loop."""
-    # The always-offload set runs off-loop even in ``off`` mode, so its emit-free
-    # invariant is validated whenever that set is non-empty; with an empty set and
-    # a disabled mode there is nothing to scan and the source sweep is skipped.
-    armed = (
-        _SYNC_OFFLOAD_MODE in _SYNC_OFFLOAD_GLOBAL_VALUES
-        or _SYNC_OFFLOAD_MODE == "subset"
-    )
-    # The always-offload set off-loads regardless of the env mode, so its
-    # emit-free invariant must be validated even when the env mode is "off".
-    if not armed and not _ALWAYS_OFFLOAD_SYNC_TOOLS:
-        logger.info(
-            "sync-tool off-load DISABLED (TRID3NT_SYNC_TOOL_OFFLOAD=%r)",
-            _SYNC_OFFLOAD_MODE,
-        )
-        return
-    import inspect  # local: only imported when the off-load is armed
+    """Startup gate: refuse to start when a sync tool, which runs in a worker
+    thread, references the loop-bound emitter API."""
+    import inspect
 
     offenders: list[str] = []
     uninspectable: list[str] = []
@@ -287,8 +182,6 @@ def _assert_sync_offload_safe() -> None:
     for name, reg in TOOL_REGISTRY.items():
         fn = getattr(reg, "fn", None)
         if fn is None or asyncio.iscoroutinefunction(fn):
-            continue
-        if not _should_offload_sync_tool(name):
             continue
         n_candidates += 1
         try:
@@ -300,24 +193,19 @@ def _assert_sync_offload_safe() -> None:
             offenders.append(name)
     if offenders:
         raise RuntimeError(
-            "TRID3NT_SYNC_TOOL_OFFLOAD is armed (mode=%r) but these sync tools "
-            "reference the loop-bound emitter API and are UNSAFE to off-load: "
-            "%s. Refusing to start."
-            % (_SYNC_OFFLOAD_MODE, ", ".join(sorted(offenders)))
+            "these sync tools reference the loop-bound emitter API and are "
+            "UNSAFE to run off-loop: %s. Refusing to start."
+            % ", ".join(sorted(offenders))
         )
     if uninspectable:
         logger.warning(
-            "sync-tool off-load armed (mode=%r): %d candidate tool(s) could not "
-            "be source-inspected for the emit-free check: %s",
-            _SYNC_OFFLOAD_MODE,
+            "sync-tool off-load: %d tool(s) could not be source-inspected for "
+            "the emit-free check: %s",
             len(uninspectable),
             ", ".join(sorted(uninspectable)),
         )
     logger.info(
-        "sync-tool off-load ARMED (mode=%r): %d candidate sync tool(s) "
-        "verified emit-free",
-        _SYNC_OFFLOAD_MODE,
-        n_candidates,
+        "sync-tool off-load: %d sync tool(s) verified emit-free", n_candidates,
     )
 
 @dataclass
@@ -658,15 +546,13 @@ async def _invoke_tool_via_emitter(
         # Emit the input-only frame BEFORE the tool body runs, so the input and
         # its running placeholder land while the tool is still executing.
         await _emit_early_input_frame()
-        # When the off-load is armed for this tool, run the SYNCHRONOUS body in
-        # a worker thread so a slow tool cannot stall the WS keepalive; the emit
+        # A SYNCHRONOUS body runs in a worker thread so a slow tool cannot stall the WS keepalive; the emit
         # machinery stays on the loop. A reuse short-circuit returns an
         # already-produced layer synchronously and is not covered by the startup
         # emit-free scan, so it is excluded. A tool mis-classified as sync
         # returns a coroutine from the thread, awaited back on the loop.
         if (
             not isinstance(entry, _ReuseEntry)
-            and _should_offload_sync_tool(tool_name)
             and not asyncio.iscoroutinefunction(entry.fn)
         ):
             out = await asyncio.to_thread(entry.fn, **params)

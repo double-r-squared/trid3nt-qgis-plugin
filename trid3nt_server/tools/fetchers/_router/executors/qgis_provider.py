@@ -179,7 +179,7 @@ def ask_session_for_layer(payload: LayerRequestPayload) -> LayerResponsePayload:
         raise SessionUnavailableError(
             f"{payload.name} needs an answer from the QGIS session, which this tool "
             "cannot wait for on the event loop; it runs off-loop "
-            "(TRID3NT_SYNC_TOOL_OFFLOAD)"
+            "as every sync tool body does"
         )
     if payload.key in _PENDING_LAYER:
         raise SessionUnavailableError(

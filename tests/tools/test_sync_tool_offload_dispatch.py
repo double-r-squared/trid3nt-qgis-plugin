@@ -58,24 +58,9 @@ def _register_probe():
 
 
 @pytest.mark.asyncio
-async def test_dark_default_runs_on_loop_thread(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(server, "_SYNC_OFFLOAD_MODE", "off")
-    loop_thread_ident = threading.current_thread().ident
-    result = await server._invoke_tool_via_emitter(
-        FakeWS(), server.SessionState(session_id=new_ulid()), _PROBE_NAME, {"echo": 1}
-    )
-    assert result["echo"] == 1
-    # Dark default: the body ran inline on the event-loop thread.
-    assert result["ran_on_thread_ident"] == loop_thread_ident
-
-
-@pytest.mark.asyncio
 async def test_subset_offloads_to_worker_thread(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(server, "_SYNC_OFFLOAD_MODE", "subset")
     loop_thread_ident = threading.current_thread().ident
     result = await server._invoke_tool_via_emitter(
         FakeWS(), server.SessionState(session_id=new_ulid()), _PROBE_NAME, {"echo": 2}
@@ -87,17 +72,3 @@ async def test_subset_offloads_to_worker_thread(
     assert result["ran_on_main"] is False
 
 
-@pytest.mark.asyncio
-async def test_global_offloads_non_compute_tool(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # Under global mode even a non-compute_ name off-loads. Re-register the probe
-    # under a fetch_-style name to prove the predicate is mode-driven, not just
-    # the compute_ prefix.
-    monkeypatch.setattr(server, "_SYNC_OFFLOAD_MODE", "global")
-    loop_thread_ident = threading.current_thread().ident
-    result = await server._invoke_tool_via_emitter(
-        FakeWS(), server.SessionState(session_id=new_ulid()), _PROBE_NAME, {"echo": 3}
-    )
-    assert result["echo"] == 3
-    assert result["ran_on_thread_ident"] != loop_thread_ident

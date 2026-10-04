@@ -189,9 +189,3 @@ async def test_enforce_visible_set_is_monotonic_across_turns(fake_llm):
     assert real[0] in set(regs[0])
 
 
-def test_fetch_glm_lightning_always_offloaded():
-    from trid3nt_server import server as agent_server
-
-    assert "fetch_glm_lightning" in agent_server._ALWAYS_OFFLOAD_SYNC_TOOLS
-    # And the predicate off-loads it even in dark off mode.
-    assert agent_server._should_offload_sync_tool("fetch_glm_lightning") is True
