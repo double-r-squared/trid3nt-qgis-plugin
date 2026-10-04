@@ -97,9 +97,14 @@ async def _one_tick(**kw) -> dict:
     emitter = _Emitter()
     task = asyncio.create_task(solve_progress.drive_live_solve_progress(
         emitter=emitter, **kw))
-    while not emitter.sent:
-        await asyncio.sleep(0)
-    task.cancel()
+    async def _first() -> None:
+        while not emitter.sent:
+            await asyncio.sleep(0)
+
+    try:
+        await asyncio.wait_for(_first(), timeout=2.0)
+    finally:
+        task.cancel()
     await asyncio.gather(task, return_exceptions=True)
     return emitter.sent[0]
 
