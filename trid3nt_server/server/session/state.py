@@ -97,7 +97,7 @@ class SessionState:
     # tool-selection VISIBILITY only -- consent gates are never mode-dependent.
     routing_mode: str | None = None
     # Per-turn layer + map-command emission accumulators. Reset at
-    # the start of every dispatch (model stream or /invoke tool). The
+    # the start of every dispatch (model stream or !run tool). The
     # CaseChatMessage write at turn close reads from these so a Case replay
     # can re-bind layers via the same emission sequence.
     current_turn_layer_ids: list[str] = field(default_factory=list)

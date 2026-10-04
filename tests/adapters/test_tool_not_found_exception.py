@@ -264,7 +264,7 @@ async def test_multi_turn_loop_tool_not_found_feeds_error_to_the_model(fake_llm)
     )
 
 
-# Test 5: /invoke directive surface (_dispatch_tool_and_persist) catches
+# Test 5: !run surface (_dispatch_tool_and_persist) catches
 # ToolNotFoundError and emits a structured error envelope
 
 
@@ -279,7 +279,7 @@ async def test_dispatch_tool_and_persist_catches_tool_not_found():
 
     # Drive the directive surface directly with an unregistered tool name.
     await _dispatch_tool_and_persist(
-        sock, state, "totally_fake_tool_xyz", {}, "/invoke totally_fake_tool_xyz {}"
+        sock, state, "totally_fake_tool_xyz", {}, "!run totally_fake_tool_xyz {}"
     )
 
     # The wire must carry an ``error`` envelope with the typed shape.
@@ -311,7 +311,7 @@ async def test_dispatch_tool_and_persist_does_not_raise_unhandled():
     # Should complete without raising.
     try:
         await _dispatch_tool_and_persist(
-            sock, state, "ghost_tool_name", {}, "/invoke ghost_tool_name {}"
+            sock, state, "ghost_tool_name", {}, "!run ghost_tool_name {}"
         )
     except ToolNotFoundError:
         pytest.fail(

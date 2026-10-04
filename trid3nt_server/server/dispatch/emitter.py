@@ -712,7 +712,7 @@ async def _emit_value_on_card(
     """Put a returned VALUE on the dispatch card's ``tool-io`` frame, the frame
     a model-issued call fills from its summary. A layer reaches the map on its
     own, so a layer result emits nothing here."""
-    # The directive path has no model loop to fill the completion frame, so
+    # The !run path has no model loop to fill the completion frame, so
     # without this a ``!run`` of a value-returning tool finishes its card with
     # the value nowhere on the wire.
     if result is None or _is_layer_result(result) or state.emitter is None:
@@ -738,7 +738,7 @@ async def _dispatch_tool_and_persist(
     """Invoke a tool, then persist the agent's reply to the active Case; the
     persisted content is a readable summary of the result. NOTHING MAY ESCAPE
     THIS FRAME: every failure leaves as a structured error envelope."""
-    # This is the directive path, dispatched as a bare task with no awaiter, so
+    # This is the !run path, dispatched as a bare task with no awaiter, so
     # anything that escapes becomes an unretrieved-task log line while the client
     # receives nothing at all. The named catches cover the routing failures; the
     # broad catch routes every other typed tool exception by the tool's OWN code
@@ -758,7 +758,7 @@ async def _dispatch_tool_and_persist(
             raise
         except ToolNotFoundError as exc:
             logger.info(
-                "/invoke directive references unregistered tool "
+                "!run references unregistered tool "
                 "session=%s tool=%s",
                 state.session_id,
                 tool_name,
@@ -775,7 +775,7 @@ async def _dispatch_tool_and_persist(
             # wire's error list, so it goes out verbatim and is never logged as
             # a fault.
             logger.info(
-                "/invoke directive declined at a gate card session=%s tool=%s "
+                "!run declined at a gate card session=%s tool=%s "
                 "code=%s",
                 state.session_id,
                 tool_name,
@@ -805,7 +805,7 @@ async def _dispatch_tool_and_persist(
             else:
                 wire_code, message = "INTERNAL_ERROR", f"[{tool_code}] {exc}"
             logger.exception(
-                "/invoke directive tool raised session=%s tool=%s code=%s",
+                "!run tool raised session=%s tool=%s code=%s",
                 state.session_id,
                 tool_name,
                 tool_code,
@@ -826,7 +826,7 @@ async def _dispatch_tool_and_persist(
                 pipeline_id=state.current_turn_pipeline_id,
                 case_id=turn_case_id,
             )
-        # End-of-turn idle signal on the directive path too. Best-effort.
+        # End-of-turn idle signal on the !run path too. Best-effort.
         await _emit_turn_complete(
             websocket, state, pipeline_id=state.current_turn_pipeline_id
         )

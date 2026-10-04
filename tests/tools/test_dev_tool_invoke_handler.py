@@ -1,7 +1,7 @@
 """``!run`` direct tool invocation: the server handler's own contract.
 
 ``_handle_dev_tool_invoke`` runs the named registry closure OUTSIDE the LLM loop
-through the same dispatch seam a ``/invoke`` directive uses. Pinned: wire-shape
+through the same dispatch seam the model stream uses. Pinned: wire-shape
 validation, the shared TOOL_NOT_FOUND envelope, the shared emission pipeline and
 the off-load rule, and the payload-warning gate composing before dispatch."""
 

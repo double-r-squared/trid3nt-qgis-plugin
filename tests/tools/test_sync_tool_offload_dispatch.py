@@ -1,12 +1,11 @@
 """Sync-tool off-load, on the DISPATCH path.
 
-``_invoke_tool_via_emitter`` runs a SYNC tool body on the event-loop thread under
-the dark default and off-loads it to a worker thread when the mode is armed for
-that tool, returning the identical result either way. Output integrity across the
-off-load is what makes arming the env flag a verified change rather than a blind one."""
+``_invoke_tool_via_emitter`` runs every SYNC tool body in a worker thread with no
+environment set, and returns the result the body produced."""
 
 from __future__ import annotations
 
+import os
 import threading
 
 import pytest
@@ -26,7 +25,6 @@ class FakeWS:
         self.sent.append(text)
 
 
-#: name starts with compute_ so the Stage-1 subset predicate matches it.
 _PROBE_NAME = "compute_offload_probe"
 
 
@@ -58,9 +56,11 @@ def _register_probe():
 
 
 @pytest.mark.asyncio
-async def test_subset_offloads_to_worker_thread(
+async def test_sync_body_runs_off_loop_with_no_env_set(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    for key in [k for k in os.environ if "OFFLOAD" in k]:
+        monkeypatch.delenv(key)
     loop_thread_ident = threading.current_thread().ident
     result = await server._invoke_tool_via_emitter(
         FakeWS(), server.SessionState(session_id=new_ulid()), _PROBE_NAME, {"echo": 2}
