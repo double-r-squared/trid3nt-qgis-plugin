@@ -15,7 +15,7 @@ from typing import Any
 
 from aiohttp import web
 
-logger = logging.getLogger("trid3nt_server.server.protocol.doors")
+logger = logging.getLogger("trid3nt_server.server.protocol.http")
 
 DEFAULT_HTTP_PORT = 8766
 

@@ -34,7 +34,7 @@ flowchart LR
     frameLever["VerticalFrame<br/>trid3nt_server/workflows/runtime/levers.py"]
     freeSurfaceReader["FreeSurfaceReader<br/>trid3nt_server/inputs/observation.py"]
     gaugeDeclaration["SourceCoverage<br/>trid3nt_server/tools/fetchers/hydrology/fetch_usgs_nwis_gauges/source.yaml"]
-    keyedSourceCatalog["KeyedSourceCatalog<br/>trid3nt_server/server/protocol/doors/settings.py"]
+    keyedSourceCatalog["KeyedSourceCatalog<br/>trid3nt_server/server/protocol/http/settings.py"]
     keysForm["KeysForm<br/>plugin/ui/settings_dialog.py"]
     lakeDeclaration["BedSourceDeclaration<br/>trid3nt_server/tools/fetchers/ocean/fetch_greatlakes_bathymetry/source.yaml"]
     lakeLevelDeclaration["BedSourceDeclaration<br/>trid3nt_server/tools/fetchers/ocean/fetch_greatlakes_water_level/source.yaml"]

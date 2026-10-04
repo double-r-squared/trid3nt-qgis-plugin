@@ -672,7 +672,7 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     # Best-effort mount of the HTTP doors.
     http_server = None
     try:
-        from trid3nt_server.server.protocol.doors import serve_doors
+        from trid3nt_server.server.protocol.http import serve_doors
 
         http_server = await serve_doors(host=host)
     except Exception:  # noqa: BLE001 -- discovery surface, never blocks WS

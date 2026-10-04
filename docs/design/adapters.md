@@ -44,7 +44,7 @@ shape both provider APIs take.
 `server/turn/stream.py` drives these via the shared `adapter.py` surface. The
 pluggable-LLM story (cloud API or local model) is a provider swap behind this
 seam. Provider model-discovery folded into `model_discovery.py`: the
-`protocol/doors/settings` route handlers and `model/guards/context_budget` import it
+`protocol/http/settings` route handlers and `model/guards/context_budget` import it
 instead of defining provider logic themselves.
 
 ## Context budget

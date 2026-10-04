@@ -12,7 +12,7 @@ import pytest
 
 from door_client import drive
 
-from trid3nt_server.server.protocol.doors import layers
+from trid3nt_server.server.protocol.http import layers
 from trid3nt_server.tools.derive.probe_point.probe_point import (
     ProbePointCaseNotFoundError,
     ProbePointInputError,

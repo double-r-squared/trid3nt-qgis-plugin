@@ -13,7 +13,7 @@ from typing import Any
 
 from aiohttp import web
 
-from trid3nt_server.server.protocol.doors.transport import failure, json_reply
+from trid3nt_server.server.protocol.http.transport import failure, json_reply
 
 #: module prefix -> the subsystem a tool listed under it belongs to. First match
 #: wins, so the order is the specificity order; ``tier="template"`` is read off

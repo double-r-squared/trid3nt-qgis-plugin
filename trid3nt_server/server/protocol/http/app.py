@@ -10,11 +10,11 @@ import logging
 
 from aiohttp import web
 
-from trid3nt_server.server.protocol.doors import (
+from trid3nt_server.server.protocol.http import (
     cases, layers, library, settings, transport,
 )
 
-logger = logging.getLogger("trid3nt_server.server.protocol.doors")
+logger = logging.getLogger("trid3nt_server.server.protocol.http")
 
 #: The doors, in the order their routes are registered.
 _DOORS = (library, cases, layers, settings)

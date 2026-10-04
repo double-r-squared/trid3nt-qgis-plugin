@@ -28,7 +28,7 @@ def drive(method: str, path: str, body: bytes | None = None,
     """One request through the whole app - middlewares, router and handler."""
     from aiohttp.test_utils import TestClient, TestServer
 
-    from trid3nt_server.server.protocol.doors import build_app
+    from trid3nt_server.server.protocol.http import build_app
 
     async def run() -> Answer:
         client = TestClient(TestServer(build_app()))
@@ -51,7 +51,7 @@ def drive_raw(raw: bytes) -> Answer:
     draining what the request promised does not stall the test."""
     from aiohttp import web
 
-    from trid3nt_server.server.protocol.doors import build_app
+    from trid3nt_server.server.protocol.http import build_app
 
     async def run() -> Answer:
         runner = web.AppRunner(build_app(), access_log=None,

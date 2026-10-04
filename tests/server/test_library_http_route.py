@@ -11,7 +11,7 @@ import pytest
 
 from door_client import drive
 
-from trid3nt_server.server.protocol.doors import library as door
+from trid3nt_server.server.protocol.http import library as door
 
 
 def _get(path: str) -> tuple:

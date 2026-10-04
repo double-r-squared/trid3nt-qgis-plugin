@@ -15,7 +15,7 @@ import json
 
 from aiohttp import web
 
-from trid3nt_server.server.protocol.doors.transport import (
+from trid3nt_server.server.protocol.http.transport import (
     HttpError, failure, json_reply, raw_reply,
 )
 

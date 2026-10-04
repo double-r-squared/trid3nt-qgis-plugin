@@ -14,7 +14,7 @@ flowchart LR
     connectGate["ConnectGate<br/>trid3nt_server/server/protocol/auth.py"]
     connectionLoop["ConnectionLoop<br/>trid3nt_server/server/protocol/loop.py"]
     keywordLookup["KeywordLookup<br/>trid3nt_server/workflows/telemac/modules/describe.py"]
-    libraryListing["LibraryListing<br/>trid3nt_server/server/protocol/doors/library.py"]
+    libraryListing["LibraryListing<br/>trid3nt_server/server/protocol/http/library.py"]
     libraryPanel["LibraryPanel<br/>plugin/ui/library_window.py"]
     mintedToken["ConnectGate<br/>trid3nt_server/model/credentials/auth_handshake.py"]
     providerOpener["ProviderOpener<br/>plugin/render/layer_request.py"]
