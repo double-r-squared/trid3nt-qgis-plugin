@@ -30,7 +30,7 @@ surface the turn engine drives regardless of backend.
   `anthropic_max_input_tokens`, and their pure parsers), each returning `None`
   rather than a guess when the provider states nothing. The provider nouns
   (`openrouter.ai`, Ollama, `model_provider() == "openai"`) that used to sit in
-  the settings door + `gates/context_budget` are quarantined here.
+  the settings door + `model/guards/context_budget` are quarantined here.
 - `scripted_adapter.py` -- deterministic test double.
 
 ## Composition
@@ -44,13 +44,13 @@ shape both provider APIs take.
 `server/turn/stream.py` drives these via the shared `adapter.py` surface. The
 pluggable-LLM story (cloud API or local model) is a provider swap behind this
 seam. Provider model-discovery folded into `model_discovery.py`: the
-`protocol/doors/settings` route handlers and `gates/context_budget` import it
+`protocol/doors/settings` route handlers and `model/guards/context_budget` import it
 instead of defining provider logic themselves.
 
 ## Context budget
 
 The context window is a PER-MODEL FACT DISCOVERED AT RUNTIME, never hardcoded.
-`gates/context_budget.discover_context_window` resolves it per
+`model/guards/context_budget.discover_context_window` resolves it per
 `(provider, model)` through the resolvers above, then an operator pin, then a
 conservative default with a warning; `ContextWindow.source` records which.
 
