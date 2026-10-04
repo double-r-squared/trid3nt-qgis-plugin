@@ -44,7 +44,7 @@ def _maybe_bind_dev_persistence() -> None:
         resolve_persistence_backend,
         _default_dev_persistence_dir,
     )
-    from .server import get_persistence, set_persistence
+    from .server.session.persistence_ref import get_persistence, set_persistence
 
     log = logging.getLogger("trid3nt_server.main")
     if not is_dev_persistence_enabled():
