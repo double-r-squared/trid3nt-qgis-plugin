@@ -102,23 +102,3 @@ by an older build under a different ULID, not by this daemon.
 
 **Fix**: check the owner ULID the cases carry in the persistence store against the
 `auth-ack ... user_id=...` line in `logs/agent.log`.
-
----
-
-## `:8766` stats / catalog datetime serialization warnings
-
-**Symptom**: `logs/agent.log` fills with
-`WARNING trid3nt_server.telemetry shadow telemetry mongo write failed` +
-`TypeError: Object of type datetime is not JSON serializable` (hundreds of occurrences), and
-the shadow-selection (recall@K) telemetry that the `:8766` routing-quality/stats endpoints
-read never accumulates.
-
-**Root cause**: the shadow tool-retrieval telemetry document carries a raw Python `datetime`.
-The cloud persistence backends accept that type; the local **FilePersistence** store is plain
-`json.dump`, which cannot serialize it, so every shadow write fails.
-
-**Fix / status**: benign but noisy -- telemetry is fail-open by design (never raises into the
-turn), and per-tool-call telemetry still lands in `TRID3NT_TELEMETRY_PATH`. The real fix
-(isoformat-encode datetimes before the FilePersistence write) is an open item under the local
-telemetry track (roadmap track 3). Until then, treat the WARNING as known noise and use the
-JSONL telemetry file for stats.

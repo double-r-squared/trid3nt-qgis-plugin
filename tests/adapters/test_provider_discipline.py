@@ -8,6 +8,7 @@ the turn honestly. Auth and bad-request errors fail fast. Offline."""
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -225,7 +226,7 @@ def _settings() -> ModelSettings:
 
 
 @pytest.mark.asyncio
-async def test_exhaustion_ends_turn_with_honest_narration_and_error_class():
+async def test_exhaustion_ends_turn_with_honest_narration_and_error_class(caplog):
     """Exhaustion gives the user a typed, provider-NAMED narration.
 
     The per-turn record carries ``error_class="upstream_provider"``, so the turn is
@@ -237,22 +238,16 @@ async def test_exhaustion_ends_turn_with_honest_narration_and_error_class():
         )
         yield  # pragma: no cover -- makes this an async generator
 
-    turn_records: list[dict] = []
-
-    def _capture_turn(**kw):
-        turn_records.append(kw)
-        return kw
-
     persisted: list[dict] = []
 
     async def _capture_persist(_state, **kw):
         persisted.append(kw)
 
+    caplog.set_level(logging.INFO, logger="trid3nt_server.server")
     sock = _FakeSocket()
     state = agent_server.SessionState(session_id=new_ulid())
     with patch.object(agent_server, "stream_events_with_contents", _dead_provider), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]), \
-         patch.object(agent_server, "emit_turn_telemetry", _capture_turn), \
          patch.object(agent_server, "_persist_chat_turn", side_effect=_capture_persist), \
          patch.object(agent_server, "_persist_terminal_failure_card", new=AsyncMock()) as card:
         await agent_server._stream_model_reply(
@@ -283,6 +278,8 @@ async def test_exhaustion_ends_turn_with_honest_narration_and_error_class():
     assert card.await_count == 1
     assert card.await_args.kwargs["error_code"] == "UPSTREAM_PROVIDER_UNAVAILABLE"
 
-    # (5) Turn telemetry: upstream_provider -- NEVER internal.
+    # (5) The turn line: upstream_provider -- NEVER internal.
+    turn_records = [json.loads(r.getMessage()[len("turn "):])
+                    for r in caplog.records if r.getMessage().startswith("turn {")]
     assert len(turn_records) == 1
     assert turn_records[0]["error_class"] == "upstream_provider"

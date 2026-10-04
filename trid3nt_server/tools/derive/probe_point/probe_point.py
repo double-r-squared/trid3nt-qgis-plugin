@@ -95,12 +95,9 @@ async def layers_from_case(
 ) -> tuple[list[dict[str, Any]], list[float] | None, str, Any]:
     """``(layer dicts, case bbox, case title, case doc)`` for ``case_id``, read
     from the Case doc's persisted ``loaded_layer_summaries``."""
-    from trid3nt_server.telemetry import get_persistence
+    from trid3nt_server.server.session.persistence_ref import get_persistence
 
-    try:
-        persistence = get_persistence()
-    except Exception:  # noqa: BLE001
-        persistence = None
+    persistence = get_persistence()
     if persistence is None:
         raise not_found_cls(
             f"cannot look up case {case_id!r}: the persistence backend is not "

@@ -85,7 +85,7 @@ you. The full reference is [docs/site/configuration.md](docs/site/configuration.
 | Service | URL | Notes |
 |---|---|---|
 | Agent WS | ws://localhost:8765 | what the plugin connects to |
-| Agent HTTP | http://localhost:8766 | tool catalog + telemetry |
+| Agent HTTP | http://localhost:8766 | library, cases, layers, settings |
 | MinIO API | http://localhost:9000 | S3-compatible object storage |
 | Ollama | http://localhost:11434 | optional local LLM |
 

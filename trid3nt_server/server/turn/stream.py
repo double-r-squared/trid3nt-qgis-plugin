@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
-from trid3nt_contracts import new_ulid, now_utc
+from trid3nt_contracts import new_ulid
 from trid3nt_contracts.ws import AgentMessageChunkPayload, AgentThinkingChunkPayload, PipelineStatePayload, PipelineStep
 from trid3nt_contracts.message import Message
 from trid3nt_server.adapters.model_selection import ModelSettings
@@ -31,7 +32,6 @@ from trid3nt_server.server.spatial import _aoi_zoom_to_bbox, _coerce_bbox4
 from trid3nt_server.server.turn.cases import _emit_case_list, _maybe_autoname_case
 from trid3nt_server.server.turn.engine import _CONTINUATION_NUDGE, _asks_for_data_or_analysis, _geocode_drift_note, _maybe_emit_tool_candidates, _session_routing_mode, _union_pinned_tool
 from trid3nt_server.server.turn.wire import _emit_cache_status, _emit_turn_complete, _new_envelope, _send_agent_abort, _send_error, _send_loop_exhausted, _session_safe_send
-from trid3nt_server.telemetry import compute_args_hash, emit_shadow_selection_event, emit_tool_call_event, emit_turn_telemetry
 from typing import Any
 from websockets.asyncio.server import ServerConnection
 from websockets.exceptions import ConnectionClosed
@@ -146,7 +146,7 @@ async def _stream_model_reply(
 
     _provider = _model_provider()
     # Resolve the EFFECTIVE model serving this turn, not the possibly-None
-    # explicit selection, so a default-model turn's telemetry carries the real
+    # explicit selection, so a default-model turn's log line carries the real
     # model instead of collapsing into the unknown bucket. Best-effort: a
     # resolution error falls back to the raw selection.
     try:
@@ -155,7 +155,7 @@ async def _stream_model_reply(
             _effective_model = _oa.openai_model(model_id)
         else:
             _effective_model = model_id
-    except Exception:  # noqa: BLE001 -- telemetry tag only, never fatal
+    except Exception:  # noqa: BLE001 -- a log tag only, never fatal
         _effective_model = model_id
     # No model client is built here -- the provider adapters ignore ``client``.
     client = None
@@ -188,23 +188,6 @@ async def _stream_model_reply(
         if not _visible:
             # FAIL-OPEN: an empty result must never trim the catalog.
             raise ValueError("retrieve_visible_tools returned empty")
-        # Selection telemetry (fire-and-forget, never-raise) -- feeds the
-        # recall@k dashboard.
-        try:
-            emit_shadow_selection_event(
-                session_id=state.session_id,
-                turn_id=pipeline_id,
-                user_text=user_text,
-                visible_tools=_visible,
-                mode="enforce",
-                k=_retrieval_k,
-                full_registry_size=len(TOOL_REGISTRY),
-                model_id=_effective_model,
-            )
-        except Exception:  # noqa: BLE001 -- telemetry must never break dispatch
-            logger.warning(
-                "tool-retrieval: selection emit failed", exc_info=True
-            )
         # UNION the visible set into the Case's monotonic visible set FIRST
         # (so it never shrinks across turns), then subset the registry to the
         # CORE_FLOOR + accrued snapshot intersected with the registry (real,
@@ -466,7 +449,7 @@ async def _stream_model_reply(
     _discovery_expanded: set[str] = set()
     _tool_decls_dirty = False
 
-    # PER-TURN TELEMETRY accumulators: token counts SUM the adapter's
+    # PER-TURN accumulators: token counts SUM the adapter's
     # per-round UsageMetadataEvents across the whole turn; a provider that
     # reports no usage leaves them None (tolerated, never fabricated).
     # _turn_error_class is stamped by the exception handlers below and
@@ -616,10 +599,10 @@ async def _stream_model_reply(
                 elif isinstance(event, UsageMetadataEvent):
                     # The model surfaces aggregate usage on the terminal chunk. Cache the event
                     # so the post-turn block can pipe cached_content_token_count into
-                    # per-tool telemetry and emit a single cache-status envelope for the
+                    # the tool-call line and emit a single cache-status envelope for the
                     # live cache hit-rate UI.
                     last_usage = event
-                    # PER-TURN TELEMETRY: sum the
+                    # PER-TURN: sum the
                     # reported counts across the turn's model rounds. A round
                     # that reports None for a figure leaves that accumulator
                     # untouched (null stays null when NO round reports it --
@@ -843,7 +826,7 @@ async def _stream_model_reply(
             # (the bare-geocode backstop compares the turn's full set).
             _turn_tools_dispatched.update(c.name for c in turn_function_calls)
 
-            # Loop watchdog: compute THIS round's (tool, args_hash)
+            # Loop watchdog: compute THIS round's (tool, canonical args)
             # signature now, but feed it to the watchdog AFTER dispatch together
             # with a PROGRESS witness. A no-progress runaway -- the SAME tool+args
             # (or identical round signature) N rounds in a row that keeps returning
@@ -854,7 +837,8 @@ async def _stream_model_reply(
             # failing tool. Recording after dispatch (vs before) costs at most ONE
             # extra identical round before the trip, still far under the step cap.
             _round_sig = [
-                (c.name, compute_args_hash(c.args)) for c in turn_function_calls
+                (c.name, json.dumps(c.args or {}, sort_keys=True, default=str))
+                for c in turn_function_calls
             ]
             # Per-round progress witness, OR'd across the round's calls. Seeded
             # True only if EVERY call ends up failing / short-circuited (the
@@ -1213,66 +1197,38 @@ async def _stream_model_reply(
                             exc_info=True,
                         )
 
-                # Fire-and-forget telemetry for this LLM-initiated function_call.
-                # Non-blocking -- emit_tool_call_event wraps the write in
-                # asyncio.ensure_future so no await is needed; a write failure logs at
-                # WARNING and never raises. A workflow that swallowed its own exception
-                # and returned a failed/partial envelope raises NO dispatch_error, but
-                # summarize_tool_result stamps status="error" (honesty floor) -- derive
-                # the telemetry success flag and error_code from that summary so a
-                # returned-failure is recorded as a FAILURE in telemetry/routing, not a
-                # silent success. A genuinely-raised exception still wins and keeps its
-                # own code.
-                _tel_error_code: str | None = None
-                _tel_success = dispatch_error is None
+                # ONE structured line per tool call. A workflow that swallowed its
+                # own exception returns a failed envelope and raises nothing, so
+                # success and error_code are read off the summary's honesty-floor
+                # status as well; a raised exception keeps its own code.
+                _call_error_code: str | None = None
+                _call_success = dispatch_error is None
                 if dispatch_error is not None:
-                    _tel_error_code = str(
+                    _call_error_code = str(
                         getattr(dispatch_error, "error_code", None)
                         or type(dispatch_error).__name__.upper()
                     )
                 elif isinstance(summary, dict) and summary.get("status") == "error":
-                    _tel_success = False
+                    _call_success = False
                     _summary_code = summary.get("error_code")
-                    _tel_error_code = (
+                    _call_error_code = (
                         str(_summary_code) if _summary_code is not None else None
                     )
-                # The adapter surfaces ``UsageMetadataEvent`` at the end of each
-                # model stream; ``last_usage`` carries the most recent observation.
-                # Pipe ``cached_content_token_count`` through so the telemetry
-                # record reflects the prompt-cache discount.
-                _tel_cached_tokens = (
-                    last_usage.cached_content_token_count
-                    if last_usage is not None
-                    else None
-                )
-                # Derive result_usable at the SAME chokepoint, reusing the honesty-floor
-                # signal already stamped on summary (NO_RENDERABLE_LAYER / failure-
-                # tagged modeled envelope). A layer-producing tool that returned
-                # status="ok" with an empty layers list is success=True but
-                # result_usable=False. routed_ok stays None here -- the supersession
-                # heuristic is a same-session ADJACENT-chain signal only computable at
-                # aggregation time (trid3nt_server.telemetry._aggregate_records).
-                _tel_result_usable = classify_result_usable(
-                    call.name, result, summary
-                )
-                await emit_tool_call_event(
-                    session_id=state.session_id,
-                    ts=now_utc().isoformat(),
-                    tool_name=call.name,
-                    source="llm",
-                    args_hash=compute_args_hash(call.args),
-                    success=_tel_success,
-                    latency_ms=_tool_latency_ms,
-                    error_code=_tel_error_code,
-                    cached_content_token_count=_tel_cached_tokens,
-                    result_usable=_tel_result_usable,
-                    model_id=_effective_model,
-                    # turn_id = the per-user-message dispatch (pipeline) id: the
-                    # recall@k join key against this turn's shadow-selection row.
-                    turn_id=pipeline_id,
-                )
-                # PER-TURN TELEMETRY: one dispatched tool call counted at the
-                # same chokepoint the per-tool record is emitted from.
+                logger.info("tool_call %s", json.dumps({
+                    "session_id": state.session_id,
+                    "turn_id": pipeline_id,
+                    "tool_name": call.name,
+                    "model_id": _effective_model,
+                    "success": _call_success,
+                    "error_code": _call_error_code,
+                    "latency_ms": _tool_latency_ms,
+                    "cached_content_token_count": (
+                        last_usage.cached_content_token_count
+                        if last_usage is not None else None),
+                    "result_usable": classify_result_usable(
+                        call.name, result, summary),
+                }, default=str))
+                # One dispatched tool call, counted where its line is written.
                 _turn_tool_dispatch_count += 1
                 contents.append(
                     Message.call(call.name, call.args, call.call_id)
@@ -1669,8 +1625,8 @@ async def _stream_model_reply(
         # failure with backoff and exhausted its budget -- this turn ends with
         # an HONEST provider-unavailable narration (typed, provider NAMED,
         # verbatim detail), never a silent empty turn and never recorded as an
-        # internal error (error_class="upstream_provider" on the per-turn
-        # telemetry record). The wire error_code stays the contract-valid
+        # internal error (error_class="upstream_provider" on the turn
+        # line). The wire error_code stays the contract-valid
         # LLM_UNAVAILABLE (retryable) -- the closed ErrorCode Literal is a
         # contracts surface this lane may not widen -- while the free-form
         # failure-card code carries the DISTINCT UPSTREAM_PROVIDER_UNAVAILABLE.
@@ -1746,7 +1702,7 @@ async def _stream_model_reply(
             retryable=True,
         )
     except Exception as exc:  # noqa: BLE001 -- surface as LLM_UNAVAILABLE
-        # PER-TURN TELEMETRY: a NON-transient provider rejection (auth / bad
+        # PER-TURN: a NON-transient provider rejection (auth / bad
         # request) classifies as ``provider_request`` (fail-fast, its own
         # class); anything else is honestly ``internal``. Upstream transients
         # that escaped the retry seam classify ``upstream_provider``.
@@ -1781,33 +1737,26 @@ async def _stream_model_reply(
                 case_id=_turn_case_id(state),
             )
     finally:
-        # PER-TURN TELEMETRY: exactly ONE record per turn, every outcome
-        # (clean / abort / cancel / provider failure). emit_turn_telemetry is
-        # fire-and-forget + never raises, but the whole call is still wrapped
-        # so a telemetry fault can never mask the turn's own outcome (including
-        # a propagating CancelledError).
+        # ONE structured line per turn, every outcome (clean / abort / cancel /
+        # provider failure); a fault writing it never masks the turn's own.
         try:
-            _turn_wall_ms = (
-                asyncio.get_running_loop().time() - started_at
-            ) * 1000.0
-            emit_turn_telemetry(
-                turn_id=pipeline_id,
-                session_id=state.session_id,
-                case_id=_turn_case_id(state),
-                model_id=_effective_model,
-                provider=_provider,
-                prompt_tokens=_turn_prompt_tokens,
-                completion_tokens=_turn_completion_tokens,
-                reasoning_tokens=_turn_reasoning_tokens,
-                turn_wall_ms=_turn_wall_ms,
-                tool_dispatch_count=_turn_tool_dispatch_count,
-                error_class=_turn_error_class,
-            )
-        except Exception:  # noqa: BLE001 -- telemetry never breaks the turn
-            logger.warning(
-                "per-turn telemetry emit failed session=%s", state.session_id,
-                exc_info=True,
-            )
+            logger.info("turn %s", json.dumps({
+                "turn_id": pipeline_id,
+                "session_id": state.session_id,
+                "case_id": _turn_case_id(state),
+                "model_id": _effective_model,
+                "provider": _provider,
+                "prompt_tokens": _turn_prompt_tokens,
+                "completion_tokens": _turn_completion_tokens,
+                "reasoning_tokens": _turn_reasoning_tokens,
+                "turn_wall_ms": round((asyncio.get_running_loop().time()
+                                       - started_at) * 1000.0, 1),
+                "tool_dispatch_count": _turn_tool_dispatch_count,
+                "error_class": _turn_error_class,
+            }, default=str))
+        except Exception:  # noqa: BLE001 -- the line never breaks the turn
+            logger.warning("turn line failed session=%s", state.session_id,
+                           exc_info=True)
 
 
 

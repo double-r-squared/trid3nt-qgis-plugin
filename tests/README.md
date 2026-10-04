@@ -23,7 +23,7 @@ join the run as the sixth slice.
 | `runtime/` | the declarative runtime, its engine-neutral slots and levers, the run journal | 12 | 318 |
 | `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 10 | 109 |
 | `search/` | dataset and tool retrieval, the OGC adapter | 16 | 221 |
-| `server/` | the HTTP and WS routes, the fetch short-circuit and the Case AOI, persistence, telemetry | 29 | 488 |
+| `server/` | the HTTP and WS routes, the fetch short-circuit and the Case AOI, persistence | 29 | 488 |
 | `solver/` | the executor, the run reads, the engine-room posture, the import graph that keeps it engine-free | 7 | 48 |
 | `telemac/` | the TELEMAC templates, the module surface, what each module writes and the primitives that read it, the listing reads, authoring | 50 | 950 |
 | `tools/` | the registry, the arg normalizer, the tool cache | 13 | 367 |

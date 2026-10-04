@@ -11,13 +11,13 @@ import logging
 from aiohttp import web
 
 from trid3nt_server.server.protocol.doors import (
-    cases, layers, library, settings, telemetry, transport,
+    cases, layers, library, settings, transport,
 )
 
 logger = logging.getLogger("trid3nt_server.server.protocol.doors")
 
 #: The doors, in the order their routes are registered.
-_DOORS = (library, cases, layers, settings, telemetry)
+_DOORS = (library, cases, layers, settings)
 
 
 def build_app() -> web.Application:

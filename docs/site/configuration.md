@@ -65,7 +65,7 @@ The variables below are the complete shipped file, grouped by concern.
 | Variable | Shipped value | What it does |
 |----------|---------------|--------------|
 | `TRID3NT_AGENT_HOST` | `0.0.0.0` | Bind host for the WS (`:8765`) and HTTP (`:8766`) listeners. `0.0.0.0` makes the agent LAN-reachable; `start_agent.sh` defaults it if unset. Ports are overridable via `TRID3NT_AGENT_PORT` (default 8765) and `TRID3NT_AGENT_HTTP_PORT` (default 8766) -- not set in the shipped file. |
-| `TRID3NT_DEV_PERSISTENCE_DIR` | `<repo>/data/persistence` | Directory for the FilePersistence JSON store (all collections: cases, layers, users, telemetry shadow...). Keeping it inside the repo keeps state out of `~/.trid3nt`. |
+| `TRID3NT_DEV_PERSISTENCE_DIR` | `<repo>/data/persistence` | Directory for the FilePersistence JSON store (all collections: cases, layers, users...). Keeping it inside the repo keeps state out of `~/.trid3nt`. |
 
 ## Remote daemon access (tailnet)
 
@@ -151,12 +151,11 @@ QGIS profile when the daemon's MinIO uses different ones.
 |----------|---------------|--------------|
 | `TRID3NT_TOOL_RETRIEVAL_K` | `8` | Top-K for `retrieve_visible_tools` (code default 25). K=8 is the benchmarked local setting -- see [Models](models.md#tool-retrieval-top-k). |
 
-## Loop hygiene and telemetry
+## Loop hygiene
 
 | Variable | Shipped value | What it does |
 |----------|---------------|--------------|
 | `TRID3NT_SYNC_TOOL_OFFLOAD` | `global` | Off-loads synchronous tool bodies from the asyncio loop to a thread: `off` (default; only a hand-audited always-offload set of proven-pathological heavy fetchers is off-loaded), `subset` (also the pure `compute_*`/`clip_*` families), `global` (every sync tool body). Armed locally on 2026-07-06 after an abandoned sweep prompt's heavy fetch chain (USACE NSI + river geometry) ran ON the loop and starved new WS handshakes; global mode was proven safe on cloud first. |
-| `TRID3NT_TELEMETRY_PATH` | `<repo>/data/telemetry/tool_calls.jsonl` | Output path for per-tool-call telemetry JSONL (the local fallback writer; default is under `/tmp`, which does not survive reboots). Feeds the local stats work (roadmap track 3). |
 
 ## Not in the file, but related
 

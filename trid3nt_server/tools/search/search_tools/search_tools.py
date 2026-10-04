@@ -6,7 +6,6 @@ the load in that degraded mode. Fusion is rank-aware, so no normalization."""
 
 from __future__ import annotations
 
-import asyncio
 import difflib
 import functools
 import hashlib
@@ -15,7 +14,6 @@ import math
 import os
 import re
 import threading
-import time
 from pathlib import Path
 from typing import Any
 
@@ -40,9 +38,6 @@ __all__ = [
     "_LEX_REINFORCE_GATE_GENERAL",
     "SearchToolsError",
     "CorpusFormatError",
-    "_get_cooccurrence_index",
-    "_reset_cooccurrence_cache_for_tests",
-    "CooccurrenceIndex",
 ]
 
 logger = logging.getLogger("trid3nt_server.tools.search.search_tools.search_tools")
@@ -81,39 +76,6 @@ class CorpusFormatError(SearchToolsError):
 
 _INDEX_LOCK = threading.Lock()
 _INDEX: "_DiscoverIndex | None" = None
-
-
-# Co-occurrence index state.
-#
-# Rebuilt from the tool-call telemetry JSONL sink on a ~5-minute cadence, so the
-# RRF boost tracks recent behaviour without re-reading the file on every call.
-# Telemetry is JSONL-ONLY. When the sink is empty or unreadable the index is EMPTY
-# and this fourth channel silently drops out; the three-channel ranking still works.
-
-
-_COOCCURRENCE_LOCK = threading.Lock()
-_COOCCURRENCE_INDEX: "CooccurrenceIndex | None" = None
-_COOCCURRENCE_REFRESH_SECONDS: float = 5 * 60.0  # 5-minute refresh window
-
-
-class CooccurrenceIndex:
-    """Per-tool dispatch and co-occurrence counts over the sampled telemetry
-    window. ``cooccurrence`` is SYMMETRIC - ``[A][B] == [B][A]`` - and counts
-    sessions that dispatched both; ``built_at`` is monotonic, for the refresh."""
-
-    __slots__ = ("call_counts", "cooccurrence", "built_at", "session_count")
-
-    def __init__(
-        self,
-        call_counts: dict[str, int],
-        cooccurrence: dict[str, dict[str, int]],
-        built_at: float,
-        session_count: int,
-    ) -> None:
-        self.call_counts = call_counts
-        self.cooccurrence = cooccurrence
-        self.built_at = built_at
-        self.session_count = session_count
 
 
 class _DiscoverIndex:
@@ -574,180 +536,6 @@ def _reset_index_for_tests() -> None:
 
 
 
-# Sampling caps: the last 30 sessions OR the last 1000 calls, whichever is
-# smaller. Both guard against runaway growth as the telemetry sink ages.
-_COOCC_SESSION_CAP: int = 30
-_COOCC_CALL_CAP: int = 1000
-
-
-async def _fetch_recent_telemetry_docs(
-    *,
-    call_cap: int = _COOCC_CALL_CAP,
-) -> list[dict[str, Any]]:
-    """The most recent ``call_cap`` tool-call rows, NEWEST FIRST and with shadow
-    rows excluded. Any error returns an empty list, which the caller reads as "no
-    telemetry yet". The read runs in a thread so a large sink never blocks."""
-    try:
-        from trid3nt_server.telemetry import load_tool_call_records
-    except Exception:  # noqa: BLE001
-        return []
-
-    try:
-        docs = await asyncio.to_thread(load_tool_call_records, limit=call_cap)
-    except Exception as exc:  # noqa: BLE001
-        logger.debug("co-occurrence: telemetry read failed (%s)", exc)
-        return []
-
-    if not isinstance(docs, list):
-        return []
-    # The reader already caps; enforced again here so a change there cannot
-    # silently widen the window this channel samples.
-    return [d for d in docs if isinstance(d, dict)][:call_cap]
-
-
-def _build_cooccurrence_from_docs(
-    docs: list[dict[str, Any]],
-    *,
-    session_cap: int = _COOCC_SESSION_CAP,
-) -> CooccurrenceIndex:
-    """The per-tool dispatch and pairwise co-occurrence map over the most recent
-    ``session_cap`` sessions. Pair counting is PER-SESSION, not per-call: calling
-    one tool three times in a session is still one co-occurrence with each other."""
-    seen_sessions: list[str] = []
-    seen_set: set[str] = set()
-    by_session: dict[str, list[str]] = {}
-
-    for d in docs:
-        sid = d.get("session_id")
-        tool = d.get("tool_name")
-        if not isinstance(sid, str) or not isinstance(tool, str):
-            continue
-        if sid not in seen_set:
-            if len(seen_sessions) >= session_cap:
-                continue
-            seen_set.add(sid)
-            seen_sessions.append(sid)
-            by_session[sid] = []
-        by_session[sid].append(tool)
-
-    call_counts: dict[str, int] = {}
-    cooccurrence: dict[str, dict[str, int]] = {}
-    for sid in seen_sessions:
-        tools_in_session = by_session.get(sid, [])
-        for t in tools_in_session:
-            call_counts[t] = call_counts.get(t, 0) + 1
-        # Distinct tools only: the pair count is per-session.
-        unique = sorted(set(tools_in_session))
-        for i, a in enumerate(unique):
-            row_a = cooccurrence.setdefault(a, {})
-            for b in unique[i + 1 :]:
-                row_b = cooccurrence.setdefault(b, {})
-                row_a[b] = row_a.get(b, 0) + 1
-                row_b[a] = row_b.get(a, 0) + 1
-
-    return CooccurrenceIndex(
-        call_counts=call_counts,
-        cooccurrence=cooccurrence,
-        built_at=time.monotonic(),
-        session_count=len(seen_sessions),
-    )
-
-
-async def _refresh_cooccurrence_index() -> CooccurrenceIndex | None:
-    """Rebuild the co-occurrence index from the telemetry sink. Possibly EMPTY,
-    which yields no boost and leaves the three-channel ranking standing; a read
-    fault reaches here as an empty doc list, never as an exception."""
-    docs = await _fetch_recent_telemetry_docs()
-    return _build_cooccurrence_from_docs(docs)
-
-
-async def _get_cooccurrence_index() -> CooccurrenceIndex | None:
-    """The cached co-occurrence index, refreshed once past the refresh window.
-    The pointer swap is lock-guarded but the REBUILD is not, so a slow read never
-    blocks another caller - they see the stale-but-usable index until the swap."""
-    global _COOCCURRENCE_INDEX
-    now = time.monotonic()
-    with _COOCCURRENCE_LOCK:
-        cached = _COOCCURRENCE_INDEX
-    if cached is not None and (now - cached.built_at) < _COOCCURRENCE_REFRESH_SECONDS:
-        return cached
-    new_index = await _refresh_cooccurrence_index()
-    if new_index is None:
-        # Keep the stale entry rather than nuking the cache: the three-channel
-        # ranking works either way, and a stale index preserves a prior boost.
-        return cached
-    with _COOCCURRENCE_LOCK:
-        _COOCCURRENCE_INDEX = new_index
-    return new_index
-
-
-def _reset_cooccurrence_cache_for_tests() -> None:
-    """Clear the co-occurrence cache.  ONLY for tests."""
-    global _COOCCURRENCE_INDEX
-    with _COOCCURRENCE_LOCK:
-        _COOCCURRENCE_INDEX = None
-
-
-def _name_matches_query(name: str, q_content_tokens: list[str]) -> bool:
-    """True iff the query's content tokens reference this tool name, by substring
-    or a crude suffix stem - the same test the name-substring ranker applies."""
-    if not q_content_tokens:
-        return False
-    name_low = name.lower()
-    for t in q_content_tokens:
-        if t in name_low:
-            return True
-        stem = t
-        for suf in ("ing", "ed", "s"):
-            if stem.endswith(suf) and len(stem) > len(suf) + 2:
-                stem = stem[: -len(suf)]
-                break
-        if stem != t and stem in name_low:
-            return True
-    return False
-
-
-def _build_cooccurrence_ranking(
-    tool_names: list[str],
-    q_content_tokens: list[str],
-    cooc_index: CooccurrenceIndex,
-) -> list[int]:
-    """Rank tool indices by co-occurrence and call-frequency signal, descending,
-    with ties broken on original name order so the ranking is deterministic. A
-    candidate scoring zero is OMITTED: no signal means no contribution to RRF."""
-    if not cooc_index.call_counts and not cooc_index.cooccurrence:
-        return []
-
-    # Set of tools whose names the user explicitly referenced in the query.
-    query_named: list[str] = [
-        n for n in tool_names if _name_matches_query(n, q_content_tokens)
-    ]
-
-    scores: list[tuple[int, float, int]] = []  # (score, index, tiebreak-orig-index)
-    for i, name in enumerate(tool_names):
-        score = 0.0
-        # A candidate the query itself names is boosted by its own historical
-        # dispatch frequency.
-        if name in query_named:
-            score += float(cooc_index.call_counts.get(name, 0))
-        # And a candidate that co-occurs with a query-named tool is boosted by
-        # how often the two were dispatched together.
-        for qn in query_named:
-            if qn == name:
-                continue
-            row = cooc_index.cooccurrence.get(qn, {})
-            if name in row:
-                score += float(row[name])
-        if score > 0.0:
-            scores.append((i, score, i))
-
-    # Sort by score DESC; stable on index to give a reproducible tiebreak.
-    scores.sort(key=lambda triple: (-triple[1], triple[2]))
-    return [i for i, _, _ in scores]
-
-
-
-
 def _reciprocal_rank_fusion(
     rankings: list[list[int]],
     *,
@@ -1022,31 +810,12 @@ async def search_tools(
         scored_names.sort(key=lambda pair: pair[0], reverse=True)
         name_substr_ranking = [i for _, i in scored_names]
 
-    # The fourth channel: when telemetry is available, a tool that frequently
-    # co-occurs with a tool the query explicitly names is boosted. Cache-backed, so
-    # calls inside the refresh window do no I/O, and it falls through silently to an
-    # empty ranking on any error.
-    cooc_ranking: list[int] = []
-    try:
-        cooc_index = await _get_cooccurrence_index()
-    except Exception as exc:  # noqa: BLE001 -- telemetry-channel failure is non-fatal
-        logger.debug("co-occurrence index fetch failed (%s)", exc)
-        cooc_index = None
-    if cooc_index is not None:
-        try:
-            cooc_ranking = _build_cooccurrence_ranking(
-                index.tool_names, q_content_tokens, cooc_index
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.debug("co-occurrence ranking failed (%s)", exc)
-            cooc_ranking = []
-
     # Fuse. If no channel produced a ranking, fall back to a substring
     # match over tool names so the routing still produces *something* (better
     # than empty).
     rankings = [
         r
-        for r in (bm25_ranking, dense_ranking, name_substr_ranking, cooc_ranking)
+        for r in (bm25_ranking, dense_ranking, name_substr_ranking)
         if r
     ]
     if not rankings:

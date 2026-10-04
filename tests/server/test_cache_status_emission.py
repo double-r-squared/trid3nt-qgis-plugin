@@ -1,24 +1,19 @@
-"""``cache-status`` emission and the cached-token telemetry field.
+"""``cache-status`` emission and the cache-hit flag.
 
 ``_emit_cache_status`` serializes the expected shape to the socket sink, and a
 failing send logs rather than propagating - an observability surface must not
-break the agent loop. ``emit_tool_call_event`` writes the cached-token count and
-``UsageMetadataEvent`` sets ``cache_hit`` from it."""
+break the agent loop. ``UsageMetadataEvent`` sets ``cache_hit`` from the
+cached-token count."""
 
 from __future__ import annotations
 
-import asyncio
 import json
-import os
-import tempfile
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from trid3nt_server.adapters.adapter import UsageMetadataEvent
 from trid3nt_server.server import SessionState, _emit_cache_status
-from trid3nt_server.telemetry import compute_args_hash, emit_tool_call_event
 
 
 @pytest.mark.asyncio
@@ -71,40 +66,6 @@ async def test_cache_status_failure_does_not_raise() -> None:
 
     # MUST NOT raise — observability is best-effort.
     await _emit_cache_status(ws, state, usage)
-
-
-@pytest.mark.asyncio
-async def test_telemetry_records_cached_tokens() -> None:
-    """``emit_tool_call_event`` round-trips ``cached_content_token_count``."""
-    with tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False) as tf:
-        path = tf.name
-    try:
-        with patch.dict(os.environ, {"TRID3NT_TELEMETRY_PATH": path}):
-            await emit_tool_call_event(
-                session_id="SESSION_X",
-                ts="2026-06-09T00:00:00Z",
-                tool_name="fetch_dem",
-                source="llm",
-                args_hash=compute_args_hash({"bbox": [0, 0, 1, 1]}),
-                success=True,
-                latency_ms=12.3,
-                error_code=None,
-                cached_content_token_count=9_876,
-            )
-            # Drain the fire-and-forget write before the patch context exits.
-            # The write is dispatched via an executor — a yielding sleep(0) is
-            # not enough; a real-time sleep is required so the executor thread
-            # finishes flushing to disk.
-            await asyncio.sleep(0.2)
-        # Read the JSONL line.
-        with open(path, encoding="utf-8") as fh:
-            line = fh.readline()
-        record = json.loads(line)
-        assert record["cached_content_token_count"] == 9_876
-        assert record["tool_name"] == "fetch_dem"
-        assert record["success"] is True
-    finally:
-        os.unlink(path)
 
 
 def test_usage_metadata_event_cache_hit_flag_true() -> None:

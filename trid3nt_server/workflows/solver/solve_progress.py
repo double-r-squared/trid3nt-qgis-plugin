@@ -34,22 +34,23 @@ async def drive_live_solve_progress(
     cancellation-safe, and ``emitter=None`` is a no-op."""
     if emitter is None:
         return
-    from trid3nt_server.telemetry import build_live_solve_progress
-
     loop = asyncio.get_running_loop()
     started = loop.time()
     try:
         while True:
             elapsed = max(0.0, loop.time() - started)
-            payload = build_live_solve_progress(
-                run_id=run_id,
-                solver=solver,
-                grid_resolution_m=grid_resolution_m,
-                active_cell_count=active_cell_count,
-                vcpus=vcpus,
-                elapsed_seconds=elapsed,
-                eta_seconds=eta_seconds,
-            )
+            payload = {
+                "run_id": run_id,
+                "solver": solver,
+                "grid_resolution_m": (float(grid_resolution_m)
+                                      if grid_resolution_m is not None else None),
+                "active_cell_count": (int(active_cell_count)
+                                      if active_cell_count is not None else None),
+                "vcpus": int(vcpus) if vcpus is not None else None,
+                "elapsed_seconds": float(elapsed),
+                "eta_seconds": (float(eta_seconds)
+                                if eta_seconds is not None else None),
+            }
             try:
                 await emitter.emit_solve_progress(payload)
             except Exception as exc:  # noqa: BLE001 -- UX hint, never fatal

@@ -156,21 +156,6 @@ def run(argv: list[str] | None = None) -> int:
 
     logger.info("routing prompt built: %d chars", len(system_prompt()))
 
-    # Retention: prune tool-call telemetry segments beyond the last
-    # TRID3NT_TELEMETRY_KEEP (default 3). Best-effort; never blocks boot.
-    try:
-        from . import telemetry as _telemetry
-
-        _removed = _telemetry.cleanup_telemetry_segments()
-        if _removed:
-            logger.info(
-                "telemetry retention: removed %d stale segment(s): %s",
-                len(_removed),
-                _removed,
-            )
-    except Exception:  # noqa: BLE001 -- retention must never block boot
-        logger.warning("telemetry retention cleanup failed", exc_info=True)
-
     # Bind the file-backed Persistence singleton (the default backend).
     # ``server.init_persistence_from_env`` (called inside ``run_server``)
     # preserves a pre-bound singleton, so this binding survives startup.

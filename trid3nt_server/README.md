@@ -14,7 +14,6 @@ on one machine against one user; the only wire shapes it speaks are
 | `__main__.py` | `python -m trid3nt_server` - the way the daemon is started. |
 | `main.py` | The `trid3nt-server` console script: importing `trid3nt_server.tools` is what populates the registry. |
 | `errors.py` | `DeclarativeError` - the base every typed failure carries its `error_code` on, below both the input layer and the declarative library. |
-| `telemetry.py` | The JSONL sink: one line per tool call, turn, shadow selection and solve completion. |
 
 ## Subfolders
 

@@ -1,6 +1,6 @@
 """``probe_point``, the point read over every raster on a case.
 
-No network and no store: persistence is a fake monkeypatched onto the telemetry
+No network and no store: persistence is a fake monkeypatched onto the store
 seam the layer read goes through. Layers are tiny local GeoTIFFs referenced from
 synthetic loaded-layer summaries, so the rasterio reads are real over throwaway
 files rather than mocked."""
@@ -73,9 +73,9 @@ def _install_case(monkeypatch, layers, case_id="case-1", bbox=None, title="Test 
         bbox=bbox,
         loaded_layer_summaries=layers,
     )
-    import trid3nt_server.telemetry as telemetry
+    import trid3nt_server.server.session.persistence_ref as persistence_ref
 
-    monkeypatch.setattr(telemetry, "get_persistence", lambda: FakePersistence(case))
+    monkeypatch.setattr(persistence_ref, "get_persistence", lambda: FakePersistence(case))
     return case
 
 
@@ -256,9 +256,9 @@ async def test_case_not_found_typed_error(monkeypatch, tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_persistence_unavailable_typed_error(monkeypatch) -> None:
-    import trid3nt_server.telemetry as telemetry
+    import trid3nt_server.server.session.persistence_ref as persistence_ref
 
-    monkeypatch.setattr(telemetry, "get_persistence", lambda: None)
+    monkeypatch.setattr(persistence_ref, "get_persistence", lambda: None)
     with pytest.raises(ProbePointCaseNotFoundError):
         await probe_point(point=(_PT_LON, _PT_LAT), case_id="case-1")
 

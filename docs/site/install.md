@@ -277,7 +277,7 @@ enable **TRID3NT** in the Plugin Manager if it is not already.
 | Port | Service | Notes |
 |------|---------|-------|
 | 8765 | Agent WebSocket | chat protocol (`TRID3NT_AGENT_PORT`) |
-| 8766 | Agent HTTP | tool catalog + stats endpoints, QGIS plugin repository (`TRID3NT_AGENT_HTTP_PORT`) |
+| 8766 | Agent HTTP | tool catalog, library, cases, layers, QGIS plugin repository (`TRID3NT_AGENT_HTTP_PORT`) |
 | 9000 | MinIO S3 API | `AWS_ENDPOINT_URL` target; console on 9001 |
 | 11434 | Ollama | OpenAI-compatible endpoint at `/v1` |
 
@@ -288,7 +288,6 @@ enable **TRID3NT** in the Plugin Manager if it is not already.
 - `data/minio/` -- MinIO object storage
 - `data/persistence/` -- agent FilePersistence store (cases, layers)
 - `data/runs/` -- solver rundirs mounted into containers (`TRID3NT_RUNS_DIR`)
-- `data/telemetry/` -- tool-call telemetry JSONL
 - `logs/`, `run/` -- service logs and PID files
 - `run/plugin-repo-cache/` -- the built `trid3nt.zip` served at `/plugins/trid3nt.zip`, cached until the daemon's git HEAD moves (`TRID3NT_PLUGIN_REPO_CACHE_DIR`)
 

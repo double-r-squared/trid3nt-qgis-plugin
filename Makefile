@@ -133,7 +133,7 @@ status:
 	  if curl -sf http://127.0.0.1:9000/minio/health/live > /dev/null 2>&1; \
 	  then echo "OK"; else echo "FAIL"; fi
 	@printf "agent  (8766): " && \
-	  if curl -sf http://127.0.0.1:8766/api/telemetry/summary > /dev/null 2>&1; \
+	  if curl -sf http://127.0.0.1:8766/api/tool-catalog > /dev/null 2>&1; \
 	  then echo "OK"; else echo "FAIL"; fi
 	@printf "ollama (11434): " && \
 	  if curl -sf http://127.0.0.1:11434/api/tags > /dev/null 2>&1; \
