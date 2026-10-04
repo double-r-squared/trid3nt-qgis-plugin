@@ -21,7 +21,6 @@ from ..errors import (
     router_upstream_error,
 )
 from ..hooks import resolve_hook
-from ..shape_classifier import classify_response
 from ..transport import TransportError, get_client, get_once, is_staged_uri
 from .vector_fgb import build_where, features_to_fgb_bytes, resolve_endpoints
 
@@ -169,12 +168,13 @@ def _verbatim_upstream(spec: SourceSpec, url: str, exc: Exception) -> RouterErro
         return router_upstream_error(spec.error_code_prefix, f"read failed url={url}: {exc}")
     try:
         body, _status = get_once(get_client(), url)
-        verdict = classify_response(body.decode("utf-8", "replace"))
+        parsed = json.loads(body.decode("utf-8", "replace"))
     except (TransportError, Exception):  # noqa: BLE001 -- the driver's text stands
         return router_upstream_error(spec.error_code_prefix, f"read failed url={url}: {exc}")
-    if verdict.kind == "error_envelope":
+    # ArcGIS answers a failed query 200 with an ``{"error": ...}`` envelope.
+    if isinstance(parsed, dict) and "error" in parsed:
         return router_upstream_error(
-            spec.error_code_prefix, f"error envelope url={url}: {verdict.error_message}"
+            spec.error_code_prefix, f"error envelope url={url}: {parsed['error']}"
         )
     return router_upstream_error(spec.error_code_prefix, f"read failed url={url}: {exc}")
 

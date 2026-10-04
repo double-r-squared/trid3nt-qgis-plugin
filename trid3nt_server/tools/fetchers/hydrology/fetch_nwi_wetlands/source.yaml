@@ -18,6 +18,8 @@ params:
     required: true
     quantize: round_6dp
 ingest:
+  # Not the QGIS arcgisfeatureserver provider: it asks for EVERY object id at open
+  # (where=1=1, returnIdsOnly), which this nationwide join layer never answers.
   access: ogr
   ogr:
     driver: ESRIJSON

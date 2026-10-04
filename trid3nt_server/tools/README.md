@@ -37,7 +37,6 @@ the cache shim are the two seams they all pass through.
 | `fetchers/_router/registration.py` | Promotion: a spec becomes a registered tool with a synthesized signature and schema. |
 | `fetchers/_router/emit_on_fetch.py` | Surfacing a fetched INPUT as a `role=context` layer through the emission seam. |
 | `fetchers/_router/errors.py` | The router's typed-error hierarchy over the shared fetch bases. |
-| `fetchers/_router/shape_classifier.py` | The one classifier for what shape a response came back in. |
 | `fetchers/_router/executors/` | How a request is actually run: HTTP JSON, raster COG, vector FlatGeobuf, zipped vector, station timeseries, library delegates, animation frames. |
 | `fetchers/_router/hooks/` | The hook contract (`RequestPlan`, `register_hook`, `resolve_hook`) and the modules SEVERAL specs share; the loader walks both this folder and the co-located `hooks.py` files. |
 | `fetchers/<group>/<spec>/hooks.py` | One spec's own `build_request` / `parse_response` overrides - what the spec cannot declare, beside the spec, registered by the tree walk. |
