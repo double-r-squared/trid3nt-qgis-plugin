@@ -278,9 +278,3 @@ from trid3nt_server.tools.mesh.tool import build_mesh as _build_mesh  # noqa: E4
 # mesh_op: append, alter or remove one call on the recipe of the mesh open at the
 # gate, then regenerate. The whole of the mesh-refinement loop.
 from trid3nt_server.tools.mesh.op_tool import mesh_op as _mesh_op  # noqa: E402,F401 - mesh domain primitive (tier=general)
-
-
-# COPY-ME authoring template. Importing it is always safe: its @register_tool call
-# is gated behind TRID3NT_ENABLE_EXAMPLE_TOOL, so by default the module is
-# imported-but-inert and never pollutes the production catalog.
-from . import _example_tool_template  # noqa: E402,F401 - INERT unless TRID3NT_ENABLE_EXAMPLE_TOOL is set
