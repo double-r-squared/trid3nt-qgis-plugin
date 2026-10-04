@@ -49,22 +49,6 @@ _TOOL_DISCIPLINE_SYSTEM = (
     "result, passed verbatim. If a fetch returns no data, say so and stop."
 )
 
-# Logged once per process if the session model id looks like a Bedrock id.
-_BEDROCK_ID_WARN_DONE = False
-
-
-_BEDROCK_ID_PATTERNS = (
-    "anthropic.",
-    "us.anthropic",
-    "us.amazon",
-    "us.deepseek",
-    ":0",
-)
-
-
-def _looks_like_bedrock_id(model_id: str) -> bool:
-    return any(p in model_id for p in _BEDROCK_ID_PATTERNS)
-
 
 def openai_base_url() -> str:
     """Return TRID3NT_OPENAI_BASE_URL; raise clearly if unset."""
@@ -113,23 +97,9 @@ def openai_model(session_model: str | None = None) -> str:
     """Resolve the OpenAI model name to send.
     A per-turn session selection wins over ``TRID3NT_OPENAI_MODEL``; with
     neither configured this raises rather than guessing a model."""
-    global _BEDROCK_ID_WARN_DONE
-    configured = os.environ.get("TRID3NT_OPENAI_MODEL", "").strip()
-    # A Bedrock-shaped session id (stale client localStorage) names no model
-    # this endpoint serves: it is ignored with a one-shot warning and the env
-    # default is used instead.
     if session_model:
-        if _looks_like_bedrock_id(session_model):
-            if not _BEDROCK_ID_WARN_DONE:
-                logger.warning(
-                    "openai_adapter: session model %r looks like a Bedrock id; "
-                    "ignoring it for the OpenAI path. Set TRID3NT_OPENAI_MODEL "
-                    "to the local/OpenAI model name (e.g. llama3.2:3b).",
-                    session_model,
-                )
-                _BEDROCK_ID_WARN_DONE = True
-        else:
-            return session_model
+        return session_model
+    configured = os.environ.get("TRID3NT_OPENAI_MODEL", "").strip()
     if configured:
         return configured
     raise RuntimeError(

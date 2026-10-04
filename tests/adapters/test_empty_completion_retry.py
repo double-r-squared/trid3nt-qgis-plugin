@@ -188,14 +188,14 @@ def test_normal_text_answer_no_spurious_retry(monkeypatch):
 
 
 def test_non_openai_provider_never_retries(monkeypatch):
-    # Two empty rounds queued, but the bedrock path must break on the FIRST one.
+    # Two empty rounds queued, but the anthropic path must break on the FIRST one.
     rounds = [_empty_round(), _empty_round()]
     user_texts, model_calls, dispatch_log, _sock = _drive(
-        "bedrock", rounds, monkeypatch
+        "anthropic", rounds, monkeypatch
     )
 
     assert len(model_calls) == 1, (
-        "bedrock (production narration) must break on an empty round, not retry"
+        "anthropic must break on an empty round, not retry"
     )
     assert _nudge_seen(user_texts) == 0
     assert dispatch_log == []

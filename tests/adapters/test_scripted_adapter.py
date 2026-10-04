@@ -2,7 +2,7 @@
 #
 # The scripted adapter is the zero-cost deterministic LLM stand-in
 # (MODEL_PROVIDER=scripted): it replays a canned transcript of tool calls so the
-# full agent loop + tool dispatch + WS + web can be E2E-tested without Bedrock
+# full agent loop + tool dispatch + WS + web can be E2E-tested without model
 # spend. These cover provider selection, transcript resolution precedence, turn
 # indexing, the emitted StreamEvent shape, and -- the load-bearing one -- that
 # the outer dispatch (stream_events_with_contents) routes to the scripted path
@@ -137,7 +137,7 @@ def test_stream_scripted_exhausted_emits_terminal_text_no_loop():
 def test_dispatch_routes_to_scripted_with_no_client(monkeypatch):
     """stream_events_with_contents must yield the scripted
     tool call when MODEL_PROVIDER=scripted -- proving the adapter.py seam routes
-    BEFORE the Vertex/Bedrock client path (zero cost, no GCP/AWS creds)."""
+    BEFORE any provider client path (zero cost, no key)."""
     monkeypatch.setenv("MODEL_PROVIDER", "scripted")
     sa.set_script([{"text": "Running SWAN.", "tool_call": {"name": "swan_wave_field",
                                                             "args": {"bbox": [-85.55, 29.85, -85.3, 30.05]}}}])

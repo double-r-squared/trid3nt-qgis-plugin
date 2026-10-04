@@ -360,7 +360,6 @@ async def _resolve_window_tokens(
     # URL is OpenRouter, else Ollama's native ``/api/show`` runtime ``num_ctx``,
     # then a ``-<N>k`` name suffix.
     # anthropic: the Models API ``max_input_tokens`` field.
-    # bedrock: the maintained table, because Bedrock publishes no runtime fact.
     if provider == "openai":
         if model_discovery.is_openrouter_base_url(base_url):
             tokens = await model_discovery.openrouter_context_length(
@@ -906,8 +905,8 @@ def plan_turn(
         )
     # The reply has to FIT IN THE SAME WINDOW as the prompt, so the budget must
     # reserve exactly what THIS request is allowed to generate. Defaults to the
-    # OpenAI-path cap; the Anthropic and Bedrock adapters pass their own
-    # ``max_tokens``, which are far larger -- reserving the wrong one would let
+    # OpenAI-path cap; the Anthropic adapter passes its own
+    # ``max_tokens``, which is far larger -- reserving the wrong one would let
     # a long reply overflow a prompt we had declared safe.
     reserve = output_reserve if output_reserve is not None else reserve_output_tokens()
     budget = max(window.tokens - reserve - safety_tokens(), 256)

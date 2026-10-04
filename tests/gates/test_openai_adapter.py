@@ -534,8 +534,7 @@ class TestStreamOpenai:
 
 
 class TestOpenaiModelPrecedence:
-    """Per-turn session model overrides the TRID3NT_OPENAI_MODEL default;
-    Bedrock-shaped session ids are ignored (fall back to the env default)."""
+    """Per-turn session model overrides the TRID3NT_OPENAI_MODEL default."""
 
     def test_session_model_overrides_env_default(self, monkeypatch):
         from trid3nt_server.model.adapters.openai_adapter import openai_model
@@ -549,14 +548,6 @@ class TestOpenaiModelPrecedence:
         monkeypatch.setenv("TRID3NT_OPENAI_MODEL", "qwen3:8b-16k")
         assert openai_model(None) == "qwen3:8b-16k"
 
-    def test_bedrock_shaped_session_id_falls_back_to_env(self, monkeypatch):
-        from trid3nt_server.model.adapters.openai_adapter import openai_model
-
-        monkeypatch.setenv("TRID3NT_OPENAI_MODEL", "qwen3:8b-16k")
-        assert (
-            openai_model("us.anthropic.claude-sonnet-4-6") == "qwen3:8b-16k"
-        )
-
     def test_session_model_works_with_no_env_default(self, monkeypatch):
         from trid3nt_server.model.adapters.openai_adapter import openai_model
 
@@ -569,13 +560,6 @@ class TestOpenaiModelPrecedence:
         monkeypatch.delenv("TRID3NT_OPENAI_MODEL", raising=False)
         with pytest.raises(RuntimeError):
             openai_model(None)
-
-    def test_bedrock_shaped_session_id_with_no_env_raises(self, monkeypatch):
-        from trid3nt_server.model.adapters.openai_adapter import openai_model
-
-        monkeypatch.delenv("TRID3NT_OPENAI_MODEL", raising=False)
-        with pytest.raises(RuntimeError):
-            openai_model("us.amazon.nova-pro-v1:0")
 
 
 # 5. Context-budget wiring inside stream_openai (proactive
