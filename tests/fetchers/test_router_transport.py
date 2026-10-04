@@ -324,3 +324,35 @@ def test_direct_window_truncation_maps_to_upstream_retryable(range_server):
     with pytest.raises(RouterUpstreamError) as ei:
         raster_cog.fetch_source_array(spec, {"bbox": [-105.0, 40.0, -104.0, 41.0]})
     assert ei.value.retryable is True
+
+
+def _flaky_client(statuses: list[int], body: bytes, calls: list[str]):
+    import httpx
+
+    def handler(request):
+        calls.append(request.method)
+        status = statuses.pop(0) if statuses else 200
+        return httpx.Response(status, content=body if status == 200 else b"provider says down",
+                              headers={"content-type": "application/json"})
+
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+def test_post_bytes_503_is_retried_by_the_one_policy(monkeypatch):
+    from trid3nt_server.tools.fetchers._router.transport import client as transport_client
+    slept: list[int] = []
+    monkeypatch.setattr(transport_client, "_sleep_backoff", lambda a, _h: slept.append(a))
+    calls: list[str] = []
+    body, _ct, _url = transport.post_bytes(
+        _flaky_client([503], b'{"ok": 1}', calls), "http://upstream.test/q", json_body={"q": 1})
+    assert body == b'{"ok": 1}' and calls == ["POST", "POST"] and slept == [0]
+
+
+def test_post_bytes_exhaustion_carries_the_provider_body(monkeypatch):
+    from trid3nt_server.tools.fetchers._router.transport import client as transport_client
+    monkeypatch.setattr(transport_client, "_sleep_backoff", lambda a, _h: None)
+    calls: list[str] = []
+    with pytest.raises(TransportUpstreamError) as ei:
+        transport.post_bytes(_flaky_client([503] * 99, b"", calls), "http://upstream.test/q")
+    assert ei.value.status == 503 and "provider says down" in str(ei.value)
+    assert len(calls) == transport_client.MAX_RETRIES + 1

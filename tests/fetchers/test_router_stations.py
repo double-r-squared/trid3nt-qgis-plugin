@@ -313,3 +313,43 @@ def test_the_temperature_product_asks_at_its_own_cadence_and_on_no_datum(monkeyp
     asked.clear()
     st._fetch_station_series(spec, station, {**params, "product": "water_level"})
     assert asked["interval"] == "h" and asked["datum"] == "MLLW"
+
+
+def _station_client(monkeypatch, statuses: list[int], calls: list[int]):
+    import httpx
+
+    from trid3nt_server.tools.fetchers._router.executors import station_timeseries
+    from trid3nt_server.tools.fetchers._router.transport import client as transport_client
+
+    def handler(request):
+        calls.append(1)
+        status = statuses.pop(0) if statuses else 200
+        if status != 200:
+            return httpx.Response(status, content=b"catalog is down for maintenance")
+        return httpx.Response(200, json={"stations": [{"id": "1", "name": "a", "lat": 42.0, "lng": -82.0}]})
+
+    monkeypatch.setattr(transport_client, "_sleep_backoff", lambda a, _h: None)
+    monkeypatch.setattr(station_timeseries, "get_client",
+                        lambda: httpx.Client(transport=httpx.MockTransport(handler)))
+    return station_timeseries
+
+
+def test_a_station_catalog_503_is_retried_by_the_transport(monkeypatch):
+    calls: list[int] = []
+    st = _station_client(monkeypatch, [503], calls)
+    spec = load_spec_from_path(_FETCHERS / "ocean/fetch_greatlakes_water_level/source.yaml")
+    st._discover_stations(spec, (-83.0, 41.0, -81.0, 43.0))
+    assert len(calls) == 2
+
+
+def test_a_lasting_station_catalog_failure_is_upstream_with_the_provider_message(monkeypatch):
+    from trid3nt_server.render.pipeline_emitter import PipelineEmitter
+    from trid3nt_server.tools.fetchers._router.errors import RouterUpstreamError
+    calls: list[int] = []
+    st = _station_client(monkeypatch, [503] * 99, calls)
+    spec = load_spec_from_path(_FETCHERS / "ocean/fetch_greatlakes_water_level/source.yaml")
+    with pytest.raises(RouterUpstreamError) as ei:
+        st._discover_stations(spec, (-83.0, 41.0, -81.0, 43.0))
+    code, message = PipelineEmitter._classify_exception(None, ei.value)
+    assert code == "UPSTREAM_API_ERROR" and "catalog is down for maintenance" in message
+    assert len(calls) > 1

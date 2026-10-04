@@ -238,3 +238,39 @@ def test_every_corpus_entry_meets_query_floor():
     corpus = _load_corpus()
     thin = {t: len(q) for t, q in corpus.items() if len(q) < 5}
     assert not thin, f"corpus entries below the 5-query recall floor: {thin}"
+
+
+def _three_channel_index():
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    class _Bm25:
+        def get_scores(self, _tokens):
+            return [0.5, 1.0, 0.0]
+
+    return SimpleNamespace(
+        tool_names=["alpha_x", "beta_y", "gamma_z"], bm25=_Bm25(),
+        dense_matrix=np.eye(3, dtype="float32"),
+        dense_encode_fn=lambda _texts: np.array([[1.0, 0.0, 0.5]], dtype="float32"),
+        backend_name="hashed", descriptions=["a", "b", "c"],
+        synthetic_queries=[[], [], []])
+
+
+def test_the_one_ranking_fuses_every_channel_and_lifts_the_lexical_champion():
+    """Fused alone, alpha (BM25 second, dense first) edges beta (BM25 first, dense
+    last); the champion's one bonus puts beta first, and gamma, ranked by the dense
+    channel only, is still in the list."""
+    fused = trmod.ranked_docs("zzz", _three_channel_index())
+    assert [doc for doc, _ in fused] == [1, 0, 2]
+
+
+@pytest.mark.asyncio
+async def test_search_tools_orders_its_results_by_the_one_ranking(monkeypatch):
+    index = _three_channel_index()
+    monkeypatch.setattr(dd, "_get_index", lambda: index)
+    out = await dd.search_tools("zzz", top_k=3)
+    assert [r["tool_name"] for r in out["results"]] == ["beta_y", "alpha_x", "gamma_z"]
+    monkeypatch.setattr(trmod, "ranked_docs", lambda _q, _i: [(2, 0.3), (0, 0.2), (1, 0.1)])
+    out = await dd.search_tools("zzz", top_k=3)
+    assert [r["tool_name"] for r in out["results"]] == ["gamma_z", "alpha_x", "beta_y"]

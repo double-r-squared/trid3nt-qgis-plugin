@@ -211,6 +211,14 @@ def test_wqp_characteristic_alias_resolves() -> None:
     assert p2["characteristic"] == "Arsenic"  # canonical passes through verbatim
 
 
+@pytest.mark.parametrize("name", ["fetch_usgs_water_quality", "fetch_nhdplus_nldi_navigate"])
+def test_the_dataretrieval_services_route_through_their_library_delegate(name):
+    from trid3nt_server.tools.fetchers._router import router
+    spec = _SPECS[name]
+    assert spec.hooks is not None and spec.hooks.delegate and spec.hooks.delegate_validate
+    assert router.select_executor(spec).__module__.endswith("executors.library_delegate")
+
+
 @pytest.mark.parametrize(
     "params",
     [

@@ -261,3 +261,39 @@ def test_the_bed_ladder_at_port_huron_lists_nonna_by_its_cell(row):
 def test_the_source_is_found_through_its_class(class_routes_to_the_match):
     """A covered fetcher carries no corpus: its class is the door."""
     class_routes_to_the_match("bathymetry", "fetch_chs_nonna")
+
+
+def _wcs_client(monkeypatch, statuses: list[int], calls: list[int]):
+    import httpx
+
+    from trid3nt_server.tools.fetchers._router.transport import client as transport_client
+
+    def handler(request):
+        calls.append(1)
+        status = statuses.pop(0) if statuses else 200
+        if status != 200:
+            return httpx.Response(status, content=b"GeoServer is restarting")
+        return httpx.Response(200, content=_REACH_TIFF, headers={"content-type": "image/tiff"})
+
+    monkeypatch.setattr(transport_client, "_sleep_backoff", lambda a, _h: None)
+    monkeypatch.setattr(nonna, "get_client",
+                        lambda: httpx.Client(transport=httpx.MockTransport(handler)))
+
+
+def test_a_wcs_503_is_retried_by_the_transport(spec, monkeypatch):
+    calls: list[int] = []
+    _wcs_client(monkeypatch, [503], calls)
+    nonna.read(spec, {"bbox": list(REACH), "resolution_m": 10.0}, timeout_s=180.0)
+    assert len(calls) == 2
+
+
+def test_a_lasting_wcs_failure_is_upstream_with_the_provider_message(spec, monkeypatch):
+    from trid3nt_server.render.pipeline_emitter import PipelineEmitter
+    from trid3nt_server.tools.fetchers._router.errors import RouterUpstreamError
+    calls: list[int] = []
+    _wcs_client(monkeypatch, [503] * 99, calls)
+    with pytest.raises(RouterUpstreamError) as ei:
+        nonna.read(spec, {"bbox": list(REACH), "resolution_m": 10.0}, timeout_s=180.0)
+    code, message = PipelineEmitter._classify_exception(None, ei.value)
+    assert code == "UPSTREAM_API_ERROR" and "GeoServer is restarting" in message
+    assert len(calls) > 1
