@@ -108,8 +108,11 @@ def test_hooks_registered():
     dict(bbox=[-100, 20, -80, 35], variable="2m_temperature", start_date="2019-01-01", end_date="2020-06-01"),
 ])
 def test_era5_validate_input_error(era5_spec, params):
+    """The params model refuses the bbox, the hook the variable and the dates."""
+    from trid3nt_server.tools.fetchers._router import router
+
     with pytest.raises(Exception) as ei:
-        hooks.HOOK_REGISTRY["era5.validate"](era5_spec, params)
+        hooks.HOOK_REGISTRY["era5.validate"](era5_spec, router.validate_params(era5_spec, params))
     assert ei.value.error_code == "ERA5_INPUT_ERROR"
     assert ei.value.retryable is False
 
@@ -120,8 +123,11 @@ def test_era5_validate_input_error(era5_spec, params):
     dict(bbox=[-70, 10, -60, 20], output="water_level", start_date="xx", end_date="2017-09-11"),
 ])
 def test_gtsm_validate_input_error(gtsm_spec, params):
+    """The params model refuses the bbox and the output, the hook the dates."""
+    from trid3nt_server.tools.fetchers._router import router
+
     with pytest.raises(Exception) as ei:
-        hooks.HOOK_REGISTRY["gtsm.validate"](gtsm_spec, params)
+        hooks.HOOK_REGISTRY["gtsm.validate"](gtsm_spec, router.validate_params(gtsm_spec, params))
     assert ei.value.error_code == "GTSM_INPUT_ERROR"
     assert ei.value.retryable is False
 

@@ -79,7 +79,9 @@ _CONUS_BBOX: tuple[float, float, float, float] = (-124.77, 25.05, -67.06, 49.40)
 
 
 def synthesize_metadata(spec: SourceSpec) -> AtomicToolMetadata:
-    """Synthesize ``AtomicToolMetadata`` from the spec."""
+    """Synthesize ``AtomicToolMetadata`` from the spec. An ``internal_only`` spec (an
+    absorbed seam resolved in-process) is tier="internal": registry-resolvable but
+    off both the declarable pool and the search index."""
     return AtomicToolMetadata(
         name=spec.name,
         ttl_class=spec.cache.ttl_class,
@@ -87,6 +89,7 @@ def synthesize_metadata(spec: SourceSpec) -> AtomicToolMetadata:
         supports_global_query=spec.supports_global_query,
         payload_mb_estimator_name="estimate_payload_mb",
         open_world_hint=True,
+        tier="internal" if spec.internal_only else "general",
         # data-native resolution declarations ride from the spec onto the
         # metadata so the gate card can quote them (two-layer truth: data facts here).
         resolution_specs=spec.resolution_declarations,
@@ -191,7 +194,8 @@ def _apply_gates(spec: SourceSpec, params: dict[str, Any]) -> None:
         w, s, e, n = bbox
         if e < cw or w > ce or n < cs or s > cn:
             raise router_input_error(
-                spec.error_code_prefix, f"bbox {bbox} does not intersect CONUS {envelope}", bsfx
+                spec.error_code_prefix, f"bbox {bbox} does not intersect the envelope {envelope} this "
+                f"source's CONUS-only gate declares", bsfx
             )
     if g.max_bbox_deg2 is not None:
         area_deg2 = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])

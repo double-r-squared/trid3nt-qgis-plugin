@@ -35,9 +35,12 @@ ingest:
   delegate:
     library: pfdf
     timeout_s: 120.0
+gates:
+  # 3DEP is US-only: CONUS plus AK, HI and the territories; the live TNM query is the authoritative check.
+  conus_only: true
+  conus_bbox: [-180.0, 13.0, -65.0, 72.0]
 hooks:
   delegate: pfdf_3dep.read
-  delegate_validate: pfdf_3dep.validate
 normalize:
   crs: EPSG:4326
   units: meters

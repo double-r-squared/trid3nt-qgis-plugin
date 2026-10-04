@@ -59,6 +59,10 @@ ingest:
         - 10m_u_wind
         - 10m_v_wind
         probe: 10m_u_wind
+gates:
+  # the HRRR grid covers CONUS only.
+  conus_only: true
+  conus_bbox: [-134.0, 21.0, -60.0, 53.0]
 hooks:
   delegate: hrrr.read
   delegate_validate: hrrr.validate

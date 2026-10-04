@@ -21,7 +21,7 @@ from trid3nt_server.tools.fetchers._router.errors import (
     RouterInputError,
     RouterUpstreamError,
 )
-from trid3nt_server.tools.fetchers._router.executors import library_delegate, raster_cog
+from trid3nt_server.tools.fetchers._router.executors import raster_cog
 from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
 
 SPEC = load_spec_from_path(
@@ -65,7 +65,7 @@ def test_3dep_promoted_as_library_delegate_spec():
     assert entry.metadata.ttl_class == "static-30d"
     assert entry.metadata.cacheable is True
     assert SPEC.hooks.delegate == "pfdf_3dep.read"
-    assert SPEC.hooks.delegate_validate == "pfdf_3dep.validate"
+    assert SPEC.gates.conus_only is True
     assert router.select_executor(SPEC).__module__.endswith("raster_cog")
 
 
@@ -109,14 +109,13 @@ def test_3dep_rejects_bad_max_tiles():
 
 
 def test_3dep_rejects_outside_us_bbox():
-    europe = _vp(bbox=[10.0, 45.0, 11.0, 46.0])
     with pytest.raises(RouterInputError) as ei:
-        library_delegate.pre_validate(SPEC, europe)
-    assert "US" in str(ei.value)
+        _vp(bbox=[10.0, 45.0, 11.0, 46.0])
+    assert "envelope" in str(ei.value)
 
 
-def test_3dep_us_bbox_passes_validate():
-    library_delegate.pre_validate(SPEC, _vp(bbox=list(_FORT_MYERS)))
+def test_3dep_us_bbox_passes_the_gate():
+    _vp(bbox=list(_FORT_MYERS))
 
 
 

@@ -2,7 +2,7 @@
 
 pfdf ships maintained readers for the USGS TNM 3DEP DEM and the STATSGO soils COG
 collection, each owning discovery and the socket. A hook returns ``(array_float32,
-transform, crs)``, and its companion validate hook is the pre-cache coverage gate."""
+transform, crs)``; the coverage envelope is each spec's own gate."""
 
 from __future__ import annotations
 
@@ -14,22 +14,7 @@ from trid3nt_contracts.source_spec import SourceSpec
 from ..errors import router_empty_error, router_input_error, router_upstream_error
 from . import register_hook
 
-__all__ = [
-    "validate_statsgo",
-    "read_statsgo",
-    "validate_3dep",
-    "read_3dep",
-]
-
-#: STATSGO CONUS envelope: STATSGO does not cover Alaska, Hawaii or the territories.
-#: Kept here rather than on the router's ``conus_only`` gate so the envelope is this
-#: source's own.
-_STATSGO_CONUS: tuple[float, float, float, float] = (-125.0, 24.0, -66.5, 49.5)
-
-#: 3DEP US envelope: CONUS plus AK, HI and the territories. The live TNM query is the
-#: authoritative coverage check; this is the loose gate before it.
-_3DEP_US: tuple[float, float, float, float] = (-180.0, 13.0, -65.0, 72.0)
-
+__all__ = ["read_statsgo", "read_3dep"]
 
 def _raster_to_array(spec: SourceSpec, raster: Any) -> tuple[Any, Any, Any]:
     """pfdf ``Raster`` -> ``(float32 array, affine, crs)`` with nodata masked to NaN."""
@@ -47,25 +32,6 @@ def _raster_to_array(spec: SourceSpec, raster: Any) -> tuple[Any, Any, Any]:
     return arr, raster.affine, raster.crs
 
 
-
-
-@register_hook("pfdf_statsgo.validate")
-def validate_statsgo(spec: SourceSpec, params: dict[str, Any]) -> None:
-    """Pre-cache CONUS gate; the field itself is router-enum-validated."""
-    sc = spec.error_code_prefix
-    sfx = spec.input_error_suffix
-    bbox = params.get("bbox")
-    if not bbox or len(bbox) != 4:
-        raise router_input_error(sc, f"bbox must be (min_lon,min_lat,max_lon,max_lat); got {bbox!r}", sfx)
-    min_lon, min_lat, max_lon, max_lat = (float(v) for v in bbox)
-    if max_lon < _STATSGO_CONUS[0] or min_lon > _STATSGO_CONUS[2] or \
-       max_lat < _STATSGO_CONUS[1] or min_lat > _STATSGO_CONUS[3]:
-        raise router_input_error(
-            sc,
-            f"bbox {tuple(bbox)} does not intersect STATSGO CONUS envelope "
-            f"{_STATSGO_CONUS}; STATSGO does not cover Alaska / Hawaii / territories",
-            sfx,
-        )
 
 
 @register_hook("pfdf_statsgo.read")
@@ -98,26 +64,6 @@ def read_statsgo(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) 
     return arr, affine, crs
 
 
-
-
-@register_hook("pfdf_3dep.validate")
-def validate_3dep(spec: SourceSpec, params: dict[str, Any]) -> None:
-    """Pre-cache US-envelope gate: 3DEP is US-only. The router's shared validator
-    already ran finite, range and degenerate checks, so this adds only the envelope
-    intersection, kept here rather than approximated by a shared gate."""
-    sc = spec.error_code_prefix
-    sfx = spec.input_error_suffix
-    bbox = params.get("bbox")
-    if not bbox or len(bbox) != 4:
-        raise router_input_error(sc, f"bbox must be (min_lon,min_lat,max_lon,max_lat); got {bbox!r}", sfx)
-    min_lon, min_lat, max_lon, max_lat = (float(v) for v in bbox)
-    if max_lon < _3DEP_US[0] or min_lon > _3DEP_US[2] or \
-       max_lat < _3DEP_US[1] or min_lat > _3DEP_US[3]:
-        raise router_input_error(
-            sc,
-            f"bbox {tuple(bbox)} does not intersect US envelope {_3DEP_US}; 3DEP is US-only",
-            sfx,
-        )
 
 
 @register_hook("pfdf_3dep.read")

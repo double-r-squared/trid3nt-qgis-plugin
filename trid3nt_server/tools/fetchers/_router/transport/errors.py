@@ -6,8 +6,6 @@ retryability, so status and body stay structured all the way to the raise site."
 
 from __future__ import annotations
 
-from ..shape_classifier import classify_response
-
 __all__ = [
     "TransportError",
     "TransportNotFound",
@@ -62,19 +60,12 @@ def classify_status(status: int, body: str | None, url: str) -> TransportError:
     a ``NoSuchKey`` body to not-found, 401/403 or ``AccessDenied`` to auth, 429/5xx
     to retryable upstream, anything else >= 400 to upstream."""
     snippet = (body or "")[:2000]
-    verdict = classify_response(body) if body else None
-    s3_code = (
-        verdict.error_code
-        if verdict is not None and verdict.error_source == "s3_xml"
-        else None
-    )
-    code_hint = snippet
-    if status == 404 or s3_code == "NoSuchKey" or "NoSuchKey" in code_hint:
+    if status == 404 or "NoSuchKey" in snippet:
         return TransportNotFound(
             f"object not found (HTTP {status}) url={url}: {snippet[:400]!r}",
             status=status, body=body,
         )
-    if status in (401, 403) or s3_code == "AccessDenied" or "AccessDenied" in code_hint:
+    if status in (401, 403) or "AccessDenied" in snippet:
         return TransportAuthError(
             f"access denied (HTTP {status}) url={url}: {snippet[:400]!r}",
             status=status, body=body,

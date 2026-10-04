@@ -74,7 +74,6 @@ _ERA5_MAX_DATE_RANGE_DAYS = 366
 
 
 _GTSM_DATASET = "sis-water-level-change-timeseries-cmip6"
-_GTSM_ALLOWED_OUTPUTS: frozenset[str] = frozenset({"water_level", "surge_only"})
 _GTSM_OUTPUT_TO_CDS_VARIABLE: dict[str, str] = {
     "water_level": "total_water_level",
     "surge_only": "storm_surge_residual",
@@ -158,25 +157,6 @@ def _cds_retrieve_with_timeout(
     raise router_upstream_error(sc, f"CDS retrieve failed: {msg[:200]}")
 
 
-def _validate_bbox(sc: str, bbox: Any, suffix: str) -> tuple[float, float, float, float]:
-    """Shared CDS bbox gate."""
-    if not isinstance(bbox, (tuple, list)) or len(bbox) != 4:
-        raise router_input_error(sc, f"bbox must be (west, south, east, north); got {bbox!r}", suffix)
-    try:
-        west, south, east, north = (float(v) for v in bbox)
-    except (TypeError, ValueError):
-        raise router_input_error(sc, f"bbox must be 4 floats; got {bbox!r}", suffix)
-    if not all(math.isfinite(v) for v in (west, south, east, north)):
-        raise router_input_error(sc, f"bbox contains non-finite values: {bbox!r}", suffix)
-    if not (-180.0 <= west <= 180.0 and -180.0 <= east <= 180.0):
-        raise router_input_error(sc, f"bbox lon values out of [-180, 180]: {bbox!r}", suffix)
-    if not (-90.0 <= south <= 90.0 and -90.0 <= north <= 90.0):
-        raise router_input_error(sc, f"bbox lat values out of [-90, 90]: {bbox!r}", suffix)
-    if west >= east or south >= north:
-        raise router_input_error(sc, f"bbox is degenerate (min must be < max on both axes): {bbox!r}", suffix)
-    return (west, south, east, north)
-
-
 def _parse_iso(sc: str, s: Any, field: str, suffix: str) -> _dt.date:
     if not isinstance(s, str):
         raise router_input_error(sc, f"{field} must be ISO-8601 YYYY-MM-DD; got {s!r}", suffix)
@@ -190,10 +170,10 @@ def _parse_iso(sc: str, s: Any, field: str, suffix: str) -> _dt.date:
 
 @register_hook("era5.validate")
 def era5_validate(spec: SourceSpec, params: dict[str, Any]) -> None:
-    """Pre-cache ERA5 input gate: bbox, variable and date range."""
+    """Pre-cache ERA5 input gate: variable and date range (the bbox is the params
+    model's)."""
     sc = spec.error_code_prefix
     sfx = spec.input_error_suffix
-    _validate_bbox(sc, params.get("bbox"), sfx)
     variable = params.get("variable")
     if not isinstance(variable, str) or variable not in _ERA5_ALLOWED_VARIABLES:
         raise router_input_error(
@@ -374,13 +354,10 @@ def era5_read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> 
 
 @register_hook("gtsm.validate")
 def gtsm_validate(spec: SourceSpec, params: dict[str, Any]) -> None:
-    """Pre-cache GTSM input gate: bbox, output and date range."""
+    """Pre-cache GTSM input gate: the date range (the bbox and the output enum are
+    the params model's)."""
     sc = spec.error_code_prefix
     sfx = spec.input_error_suffix
-    _validate_bbox(sc, params.get("bbox"), sfx)
-    output = params.get("output", "water_level")
-    if not isinstance(output, str) or output not in _GTSM_ALLOWED_OUTPUTS:
-        raise router_input_error(sc, f"unsupported GTSM output {output!r}; allowed: {sorted(_GTSM_ALLOWED_OUTPUTS)}", sfx)
     d0 = _parse_iso(sc, params.get("start_date"), "start_date", sfx)
     d1 = _parse_iso(sc, params.get("end_date"), "end_date", sfx)
     if d0 > d1:

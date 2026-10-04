@@ -21,7 +21,7 @@ from trid3nt_server.tools.fetchers._router.errors import (
     RouterInputError,
     RouterUpstreamError,
 )
-from trid3nt_server.tools.fetchers._router.executors import library_delegate, raster_cog
+from trid3nt_server.tools.fetchers._router.executors import raster_cog
 from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
 
 STATSGO_SPEC = load_spec_from_path(
@@ -63,7 +63,7 @@ def test_statsgo_promoted_as_library_delegate_spec():
     assert entry.metadata.ttl_class == "static-30d"
     assert entry.metadata.cacheable is True
     assert STATSGO_SPEC.hooks.delegate == "pfdf_statsgo.read"
-    assert STATSGO_SPEC.hooks.delegate_validate == "pfdf_statsgo.validate"
+    assert STATSGO_SPEC.gates.conus_only is True
     # Raster delegate routes through raster_cog (its fetch_source_array calls the hook).
     assert router.select_executor(STATSGO_SPEC).__module__.endswith("raster_cog")
 
@@ -93,14 +93,13 @@ def test_statsgo_rejects_unknown_field():
 
 
 def test_statsgo_rejects_outside_conus_bbox():
-    ak = _vp(bbox=[-150.0, 60.0, -149.0, 61.0], field="KFFACT")
     with pytest.raises(RouterInputError) as ei:
-        library_delegate.pre_validate(STATSGO_SPEC, ak)
-    assert "CONUS" in str(ei.value)
+        _vp(bbox=[-150.0, 60.0, -149.0, 61.0], field="KFFACT")
+    assert "envelope" in str(ei.value)
 
 
-def test_statsgo_conus_bbox_passes_validate():
-    library_delegate.pre_validate(STATSGO_SPEC, _vp(bbox=list(_KANSAS), field="KFFACT"))
+def test_statsgo_conus_bbox_passes_the_gate():
+    _vp(bbox=list(_KANSAS), field="KFFACT")
 
 
 

@@ -69,10 +69,9 @@ def test_docstring_verbatim_nonempty():
 
 
 
-def test_validate_conus_gate_rejects_non_conus():
-    p = _vp(SPEC_FC, bbox=[10.0, 40.0, 11.0, 41.0], variable="2m_temperature")
+def test_the_conus_gate_rejects_non_conus():
     with pytest.raises(RouterInputError) as ei:
-        H.validate_inputs(SPEC_FC, p)
+        _vp(SPEC_FC, bbox=[10.0, 40.0, 11.0, 41.0], variable="2m_temperature")
     assert ei.value.error_code == "HRRR_FORECAST_INPUT_ERROR"
 
 

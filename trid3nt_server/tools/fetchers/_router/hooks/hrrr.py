@@ -8,8 +8,8 @@ clip and synthesis -- and ``delegate_resolve`` walks back to the newest cycle.""
 # Zarr body. The per-source difference (the variable to level/s3_var table, the
 # forecast-only derived wind speed, the smoke-only fill mask) is declared in
 # ``ingest.hrrr`` and read here. The HRRR-grid physical facts -- the LCC proj4, the
-# CONUS envelope, the 18/48 h horizons, the 6 h cycle backstop -- are the same for
-# both mirrors, so they stay module constants.
+# 18/48 h horizons, the 6 h cycle backstop -- are the same for both mirrors, so they
+# stay module constants; the CONUS envelope is each spec's declared gate.
 
 from __future__ import annotations
 
@@ -29,17 +29,13 @@ logger = logging.getLogger(
 
 __all__ = ["resolve_cycle", "read_slice", "validate_inputs"]
 
-# HRRR LCC projection, CONUS envelope and horizons: the same physical grid for HRRR
+# HRRR LCC projection and horizons: the same physical grid for HRRR
 # and HRRR-Smoke, kept module-level rather than in ingest so both specs read one
 # source of truth for the grid facts.
 _HRRR_PROJ4 = (
     "+proj=lcc +lat_1=38.5 +lat_2=38.5 +lat_0=38.5 +lon_0=-97.5 "
     "+x_0=0 +y_0=0 +R=6371229 +units=m +no_defs"
 )
-_CONUS_LON_MIN = -134.0
-_CONUS_LON_MAX = -60.0
-_CONUS_LAT_MIN = 21.0
-_CONUS_LAT_MAX = 53.0
 _MAX_FORECAST_HOUR_STANDARD = 18
 _MAX_FORECAST_HOUR_EXTENDED = 48
 _EXTENDED_CYCLES = {0, 6, 12, 18}
@@ -111,24 +107,11 @@ def _zarr_paths(cycle_date: _dt.date, cycle_hour: int, level: str, s3_var: str) 
 
 @register_hook("hrrr.validate")
 def validate_inputs(spec: SourceSpec, params: dict[str, Any]) -> None:
-    """The two input gates the declarative surface cannot express: the
-    bbox-entirely-outside-CONUS refusal, and the forecast_hour-versus-cycle-horizon
-    ceiling, which is cross-param with the resolved-or-now cycle hour."""
+    """The one input gate the declarative surface cannot express: the
+    forecast_hour-versus-cycle-horizon ceiling, which is cross-param with the
+    resolved-or-now cycle hour."""
     sc = spec.error_code_prefix
     sfx = spec.input_error_suffix
-    bbox = params.get("bbox")
-    if not bbox or len(bbox) != 4:
-        raise router_input_error(sc, f"bbox must be (west, south, east, north); got {bbox!r}", sfx)
-    west, south, east, north = (float(v) for v in bbox)
-    if (east < _CONUS_LON_MIN or west > _CONUS_LON_MAX
-            or north < _CONUS_LAT_MIN or south > _CONUS_LAT_MAX):
-        raise router_input_error(
-            sc,
-            f"bbox={tuple(bbox)} lies outside HRRR CONUS coverage "
-            f"(~{_CONUS_LON_MIN}..{_CONUS_LON_MAX} lon, {_CONUS_LAT_MIN}..{_CONUS_LAT_MAX} lat). "
-            f"HRRR is CONUS-only; supports_global_query=False.",
-            sfx,
-        )
     forecast_hour = int(params.get("forecast_hour", 1))
     cycle_hour = _target_cycle(spec, params).hour
     max_h = _MAX_FORECAST_HOUR_EXTENDED if cycle_hour in _EXTENDED_CYCLES else _MAX_FORECAST_HOUR_STANDARD

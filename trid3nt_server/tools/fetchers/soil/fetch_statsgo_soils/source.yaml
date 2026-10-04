@@ -25,9 +25,12 @@ ingest:
   delegate:
     library: pfdf
     timeout_s: 60.0
+gates:
+  # STATSGO does not cover Alaska, Hawaii or the territories.
+  conus_only: true
+  conus_bbox: [-125.0, 24.0, -66.5, 49.5]
 hooks:
   delegate: pfdf_statsgo.read
-  delegate_validate: pfdf_statsgo.validate
 normalize:
   crs: EPSG:4326
   units_by_param:

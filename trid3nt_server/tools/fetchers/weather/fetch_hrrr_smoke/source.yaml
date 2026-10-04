@@ -48,6 +48,10 @@ ingest:
         level: entire_atmosphere_single_layer
         s3_var: AOTK
     fill_value: -9999.0
+gates:
+  # the HRRR grid covers CONUS only.
+  conus_only: true
+  conus_bbox: [-134.0, 21.0, -60.0, 53.0]
 hooks:
   delegate: hrrr.read
   delegate_validate: hrrr.validate

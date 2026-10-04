@@ -189,8 +189,6 @@ def register_spec(spec: SourceSpec) -> str:
     """Register the spec-driven surface as THE tool under ``spec.name`` and return
     that name. Idempotent: a second registration of a present name only re-records
     the spec."""
-    from trid3nt_contracts.tool_registry import AtomicToolMetadata
-
     from trid3nt_server import tools as _tools
 
     _validate_hooks(spec)
@@ -212,25 +210,7 @@ def register_spec(spec: SourceSpec) -> str:
     _promoted.__signature__ = sig  # type: ignore[attr-defined]
     _promoted.__annotations__ = dict(annotations)
 
-    # An ``internal_only`` spec (an absorbed seam resolved in-process, e.g.
-    # fetch_copernicus_dem <- fetch_dem) registers tier="internal": registry-
-    # resolvable but off BOTH the declarable pool and the search index.
-    tier = "internal" if spec.internal_only else "general"
-    metadata = AtomicToolMetadata(
-        name=name,
-        ttl_class=spec.cache.ttl_class,
-        source_class=spec.source_class,
-        supports_global_query=spec.supports_global_query,
-        payload_mb_estimator_name="estimate_payload_mb",
-        open_world_hint=True,
-        tier=tier,
-        # DATA-native resolution declarations ride from the spec onto the
-        # metadata so the gate card can quote them (two-layer truth: data facts here).
-        resolution_specs=spec.resolution_declarations,
-        # The declared confirm gate: a heavy fetcher's resolution gate rides onto the
-        # metadata, so the server gate engine reads membership here.
-        gate_spec=router._gate_spec_for_source(spec),
-    )
+    metadata = router.synthesize_metadata(spec)
     _tools.register_tool(metadata)(_promoted)
     _SPEC_REGISTRY[name] = spec
     logger.info(
