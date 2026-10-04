@@ -10,7 +10,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from trid3nt_server.gates.circuit_breaker import ToolCircuitBreaker
+from trid3nt_server.model.guards.circuit_breaker import ToolCircuitBreaker
 
 if TYPE_CHECKING:
     import asyncio

@@ -13,7 +13,7 @@ from typing import Any
 
 from aiohttp import web
 
-from trid3nt_server.adapters import model_discovery
+from trid3nt_server.model.adapters import model_discovery
 from trid3nt_server.server.protocol.doors.transport import (
     HttpError, failure, json_reply, raw_reply,
 )
@@ -23,7 +23,7 @@ def build_credential_catalog() -> dict[str, Any]:
     """The ``/api/tool-catalog`` payload: every tool whose source row declares a
     credential, with that credential's own facts verbatim off the row, so the
     keys form has one row per credential and no table of its own."""
-    from trid3nt_server.credentials.resolver import credential_for_tool
+    from trid3nt_server.model.credentials.resolver import credential_for_tool
     from trid3nt_server.tools import TOOL_REGISTRY
 
     tools: list[dict[str, Any]] = []

@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.adapters.adapter import (
+from trid3nt_server.model.adapters.adapter import (
     _parameter_schema,
     _tool_schema,
     build_tool_declarations,

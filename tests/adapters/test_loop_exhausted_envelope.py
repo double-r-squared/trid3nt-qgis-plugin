@@ -14,8 +14,8 @@ from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.adapters.model_selection import ModelSettings
-from trid3nt_server.adapters.adapter import (
+from trid3nt_server.model.adapters.model_selection import ModelSettings
+from trid3nt_server.model.adapters.adapter import (
     MAX_TURN_ITERATIONS,
 )
 from trid3nt_server.server import _send_loop_exhausted, SessionState

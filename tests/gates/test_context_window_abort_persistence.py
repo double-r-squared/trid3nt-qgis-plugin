@@ -13,10 +13,10 @@ import logging
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server.adapters.model_selection import ModelSettings
-from trid3nt_server.adapters.adapter import TextDeltaEvent, FunctionCallEvent
+from trid3nt_server.model.adapters.model_selection import ModelSettings
+from trid3nt_server.model.adapters.adapter import TextDeltaEvent, FunctionCallEvent
 from trid3nt_server import tools as agent_tools
-from trid3nt_server.gates.context_budget import (
+from trid3nt_server.model.guards.context_budget import (
     CONTEXT_WINDOW_ABORT_NOTE,
     ContextWindowExceededError,
     FABRICATION_CAVEAT,

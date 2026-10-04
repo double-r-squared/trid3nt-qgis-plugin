@@ -16,10 +16,10 @@ import pytest
 
 import trid3nt_server.main as agent_main
 from trid3nt_server import server as agent_server
-from trid3nt_server.adapters.model_selection import ModelSettings
-from trid3nt_server.adapters.adapter import TextDeltaEvent
+from trid3nt_server.model.adapters.model_selection import ModelSettings
+from trid3nt_server.model.adapters.adapter import TextDeltaEvent
 from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
-from trid3nt_server.gates.tool_gating import (
+from trid3nt_server.model.guards.tool_gating import (
     TOOL_GATING_TOPK_DEFAULT,
     gate_tool_registry,
     gating_topk,
@@ -256,7 +256,7 @@ async def test_openai_provider_gate_disabled_by_env(monkeypatch):
 async def test_scripted_provider_turn_is_never_gated(monkeypatch):
     # bedrock/scripted/vertex paths byte-unchanged: full registry always.
     monkeypatch.setenv("MODEL_PROVIDER", "scripted")
-    from trid3nt_server.adapters.scripted_adapter import set_script
+    from trid3nt_server.model.adapters.scripted_adapter import set_script
 
     set_script([{"text": "ok"}])
     try:
@@ -309,7 +309,7 @@ def test_default_declarations_include_templates_directly():
     """Door dissolution: every tier=template engine template is in the
     DEFAULT declarable registry and is built into declarations directly -- no
     engine door, no gate expansion. No tier=door tool survives."""
-    from trid3nt_server.adapters.adapter import build_tool_declarations
+    from trid3nt_server.model.adapters.adapter import build_tool_declarations
 
     templates = _template_names()
     assert templates, "expected registered tier=template engine templates"

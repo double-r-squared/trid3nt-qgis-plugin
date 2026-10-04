@@ -14,7 +14,7 @@ from trid3nt_contracts.gate_spec import GateSpec
 from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload, PayloadWarningEnvelopePayload
 from trid3nt_contracts.processing_contracts import CodeExecRequestPayload
 from trid3nt_contracts.ws import SpatialInputResponsePayload
-from trid3nt_server.credentials.resolver import MissingCredentialError, credential_for_tool, resolve_credential
+from trid3nt_server.model.credentials.resolver import MissingCredentialError, credential_for_tool, resolve_credential
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.gates.cards import _build_spatial_input_request_payload, _gate_memory_key, _get_hard_cap_mb, _get_warning_threshold_mb, _resolve_payload_estimator, _spatial_response_to_result
 from trid3nt_server.gates.cards.estimate import call_provider

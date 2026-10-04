@@ -27,7 +27,7 @@ from .adapter import (
     UsageMetadataEvent,
     provider_backoff_wait,
 )
-from trid3nt_server.gates.context_budget import (
+from trid3nt_server.model.guards.context_budget import (
     ContextWindowExceededError,
     discover_context_window,
     estimate_tokens,
@@ -38,7 +38,7 @@ from trid3nt_server.gates.context_budget import (
     plan_turn,
 )
 
-logger = logging.getLogger("trid3nt_server.adapters.openai_adapter")
+logger = logging.getLogger("trid3nt_server.model.adapters.openai_adapter")
 
 #: Tool-discipline line appended to EVERY openai-path system prompt: a small
 #: local model that fetches zero events must not follow up with a publish_layer

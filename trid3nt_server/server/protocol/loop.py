@@ -11,7 +11,7 @@ from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
 from trid3nt_contracts.processing_contracts import ProcessingResponsePayload
 from trid3nt_contracts.secrets import SecretAddEnvelopePayload
 from trid3nt_contracts.ws import CancelPayload, ErrorPayload, LayerResponsePayload, SessionResumePayload, SpatialInputResponsePayload, UserMessagePayload
-from trid3nt_server.adapters.model_selection import ModelSettings, load_settings
+from trid3nt_server.model.adapters.model_selection import ModelSettings, load_settings
 from trid3nt_server.gates.pending import _resolve_pending_confirmation
 from trid3nt_server.main import MAX_TURNS_PER_SESSION
 from trid3nt_server.server.dispatch.emitter import _assert_sync_offload_safe, _dispatch_tool_and_persist, _ensure_emitter
@@ -233,7 +233,7 @@ def _make_handler(settings: ModelSettings):
                         # default with a logged notice, so the turn runs rather
                         # than crashing.
                         if um.model_id is not None:
-                            from trid3nt_server.adapters.model_selection import (
+                            from trid3nt_server.model.adapters.model_selection import (
                                 resolve_selected_model as _resolve_selected_model,
                             )
 
@@ -590,7 +590,7 @@ def _make_handler(settings: ModelSettings):
                             # absent leaves it untouched, a dict arms, null
                             # disarms. A normal client never sends this key.
                             if "bench_tool_block" in payload_dict:
-                                from trid3nt_server.gates.tool_gating import parse_bench_block_config
+                                from trid3nt_server.model.guards.tool_gating import parse_bench_block_config
 
                                 _bench_cfg = parse_bench_block_config(payload_dict)
                                 state.bench_block_config = _bench_cfg
@@ -701,13 +701,13 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     settings = load_settings()
     # Log the ACTUAL active provider and its real model, never the settings
     # default, which the scripted and replay paths alone fall back to.
-    from trid3nt_server.adapters.model_selection import (
+    from trid3nt_server.model.adapters.model_selection import (
         model_provider as _active_model_provider,
     )
 
     _active_provider = _active_model_provider()
     if _active_provider == "openai":
-        from trid3nt_server.adapters import openai_adapter as _active_oa
+        from trid3nt_server.model.adapters import openai_adapter as _active_oa
         _active_model = _active_oa.openai_model(None)
     else:
         _active_model = settings.model

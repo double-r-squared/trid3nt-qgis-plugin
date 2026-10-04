@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from trid3nt_contracts.message import Message, Part, ToolCall, ToolDeclaration, ToolResponse
 
-from trid3nt_server.adapters import model_discovery
-from trid3nt_server.gates.context_budget import (
+from trid3nt_server.model.adapters import model_discovery
+from trid3nt_server.model.guards.context_budget import (
     CONTEXT_WINDOW_FALLBACK_DEFAULT,
     ContextWindow,
     WINDOW_SOURCE_ANTHROPIC_MODELS,
@@ -389,7 +389,7 @@ def test_plan_turn_reserves_the_callers_own_output_cap():
 async def test_anthropic_consults_the_exact_token_counter_only_when_marginal():
     """The provider's own counter beats our heuristic, but costs a round trip --
     so it is consulted only once the cheap estimate nears the window."""
-    from trid3nt_server.adapters import anthropic_adapter
+    from trid3nt_server.model.adapters import anthropic_adapter
 
     counter = AsyncMock(return_value=123_456)
     small = [user_content("hi"), model_content("hello")]
@@ -418,7 +418,7 @@ async def test_anthropic_consults_the_exact_token_counter_only_when_marginal():
 
 @pytest.mark.asyncio
 async def test_anthropic_exact_counter_returns_the_provider_number():
-    from trid3nt_server.adapters import anthropic_adapter
+    from trid3nt_server.model.adapters import anthropic_adapter
 
     class _Count:
         input_tokens = 187_432
@@ -457,7 +457,7 @@ def test_anthropic_cache_prefix_is_byte_identical_across_a_trim():
     """Trimming rewrites ONLY the conversation. The cacheable prefix renders
     tools -> system -> messages, so the breakpoints on the last tool and the
     system block cannot move when messages shrink."""
-    from trid3nt_server.adapters.anthropic_adapter import _build_message_kwargs
+    from trid3nt_server.model.adapters.anthropic_adapter import _build_message_kwargs
 
     system = "You are TRID3NT." + " spec" * 500
     decls = _decls()

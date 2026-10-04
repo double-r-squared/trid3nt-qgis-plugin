@@ -14,7 +14,7 @@ import pytest
 from trid3nt_contracts.auth import AdvertisedEndpoints, AuthAckEnvelope
 from trid3nt_contracts.common import new_ulid
 
-from trid3nt_server.credentials.auth_handshake import (
+from trid3nt_server.model.credentials.auth_handshake import (
     ADVERTISED_DATA_PORT,
     ADVERTISED_HTTP_PORT_DEFAULT,
     LOCAL_SINGLE_USER_ID,

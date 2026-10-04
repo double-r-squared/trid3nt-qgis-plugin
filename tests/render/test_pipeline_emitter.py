@@ -1500,7 +1500,7 @@ class TestCompactionCard:
         """The running card is role="tool" (NEVER "compute" -- there is no
         Batch job bound to a local compaction pass), tool_name
         "context:compact", state running, labeled COMPACTING_LABEL."""
-        from trid3nt_server.gates.context_budget import COMPACTING_LABEL
+        from trid3nt_server.model.guards.context_budget import COMPACTING_LABEL
         from trid3nt_server.render.pipeline_emitter import mint_compaction_card
 
         step_id = await mint_compaction_card(emitter=emitter)
@@ -1520,7 +1520,7 @@ class TestCompactionCard:
     async def test_complete_compaction_card_renames_and_completes(
         self, emitter: PipelineEmitter, sink: _CapturingSink
     ) -> None:
-        from trid3nt_server.gates.context_budget import compaction_complete_label
+        from trid3nt_server.model.guards.context_budget import compaction_complete_label
         from trid3nt_server.render.pipeline_emitter import (
             complete_compaction_card,
             mint_compaction_card,
@@ -1564,7 +1564,7 @@ class TestCompactionCard:
         emitter.rename_step("does-not-exist", name="whatever")
 
     def test_compaction_complete_label_rounds_and_floors_at_1k(self) -> None:
-        from trid3nt_server.gates.context_budget import compaction_complete_label
+        from trid3nt_server.model.guards.context_budget import compaction_complete_label
 
         assert compaction_complete_label(12800, 3900) == "Conversation compacted (13k -> 4k tokens)"
         assert compaction_complete_label(400, 100) == "Conversation compacted (1k -> 1k tokens)"

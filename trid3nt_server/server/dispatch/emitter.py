@@ -15,7 +15,7 @@ from trid3nt_server.render.pipeline_emitter import PipelineEmitter, bind_turn_ca
 from trid3nt_server.render.uri_registry import activate_registry, deactivate_registry, get_uri_registry
 # The gate engine (trid3nt_server.gates.confirm) is imported function-locally in
 # _invoke_tool_via_emitter -- deferred to break the server<->gates load cycle.
-from trid3nt_server.gates.tool_gating import BenchBlockedError
+from trid3nt_server.model.guards.tool_gating import BenchBlockedError
 from trid3nt_server.server.config import _env_flag
 from trid3nt_server.server.dispatch.aoi import pin_case_aoi_from_solve
 from trid3nt_server.server.dispatch.persist import _VALID_ERROR_CODES, _persist_chart_record, _persist_chat_turn, _persist_tool_card
@@ -409,7 +409,7 @@ async def _invoke_tool_via_emitter(
     # on canonicalized args. Both raise THROUGH the emitter, so the tool still
     # surfaces as a failed step and ``entry.fn`` is never reached.
     if state.bench_block_config is not None:
-        from trid3nt_server.gates.tool_gating import BenchBlockedError, bench_block_decision
+        from trid3nt_server.model.guards.tool_gating import BenchBlockedError, bench_block_decision
 
         _bench_class = bench_block_decision(state.bench_block_config, tool_name)
         if _bench_class is not None:

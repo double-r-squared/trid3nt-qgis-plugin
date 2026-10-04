@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.adapters.adapter import build_layers_present_note
+from trid3nt_server.model.adapters.adapter import build_layers_present_note
 from trid3nt_server.render.uri_registry import (
     get_uri_registry,
     reset_uri_registries_for_tests,

@@ -44,7 +44,7 @@ one reached dynamically. Treat as candidates, not verdicts.
 | `coverage_summary` | method | trid3nt_server/fallbacks/walker.py:141 | 6 |
 | `uri_for_short` | method | trid3nt_server/render/uri_registry.py:278 | 6 |
 | `read_stdout_optional` | method | trid3nt_server/workflows/solver/diagnostics/_common.py:228 | 6 |
-| `tripped` | method | trid3nt_server/gates/runaway_guard.py:190 | 5 |
+| `tripped` | method | trid3nt_server/model/guards/runaway_guard.py:190 | 5 |
 | `_ctg_tile_bounds` | function | trid3nt_server/tools/fetchers/_router/executors/raster_cog.py:940 | 5 |
 | `with_value` | method | trid3nt_server/workflows/runtime/params.py:216 | 5 |
 | `current_chart_id` | method | plugin/ui/charts_window.py:285 | 4 |

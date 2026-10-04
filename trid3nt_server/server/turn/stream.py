@@ -8,19 +8,19 @@ import logging
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.ws import AgentMessageChunkPayload, AgentThinkingChunkPayload, PipelineStatePayload, PipelineStep
 from trid3nt_contracts.message import Message
-from trid3nt_server.adapters.model_selection import ModelSettings
-from trid3nt_server.adapters.adapter import CompactionCompleteEvent, CompactionStartEvent, FunctionCallEvent, MAX_TURN_ITERATIONS, TextDeltaEvent, ThinkingDeltaEvent, UpstreamProviderError, UsageMetadataEvent, build_contents_from_history, build_layers_present_note, build_tool_declarations, classify_provider_error_class, classify_result_usable, stream_events_with_contents, summarize_tool_result, system_prompt
+from trid3nt_server.model.adapters.model_selection import ModelSettings
+from trid3nt_server.model.adapters.adapter import CompactionCompleteEvent, CompactionStartEvent, FunctionCallEvent, MAX_TURN_ITERATIONS, TextDeltaEvent, ThinkingDeltaEvent, UpstreamProviderError, UsageMetadataEvent, build_contents_from_history, build_layers_present_note, build_tool_declarations, classify_provider_error_class, classify_result_usable, stream_events_with_contents, summarize_tool_result, system_prompt
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.render.charts import is_chart_emission_result
 from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
 from trid3nt_server.render.pipeline_emitter import bind_turn_case, complete_compaction_card, mint_compaction_card
 from trid3nt_server.render.uri_registry import get_uri_registry
-from trid3nt_server.gates.circuit_breaker import CircuitBreakerError
+from trid3nt_server.model.guards.circuit_breaker import CircuitBreakerError
 # The gate engine (trid3nt_server.gates.confirm) is imported function-locally in
 # _stream_model_reply -- deferred to break the server<->gates load cycle.
-from trid3nt_server.gates.context_budget import ContextWindowExceededError, FABRICATION_CAVEAT, build_context_window_abort_note, looks_like_fabricated_action_claim
-from trid3nt_server.gates.runaway_guard import ABORT_STEP_CAP, ABORT_WALL_CLOCK, LoopWatchdog, abort_message, max_turn_seconds, step_cap_for_model
-from trid3nt_server.gates.tool_gating import BenchBlockedError
+from trid3nt_server.model.guards.context_budget import ContextWindowExceededError, FABRICATION_CAVEAT, build_context_window_abort_note, looks_like_fabricated_action_claim
+from trid3nt_server.model.guards.runaway_guard import ABORT_STEP_CAP, ABORT_WALL_CLOCK, LoopWatchdog, abort_message, max_turn_seconds, step_cap_for_model
+from trid3nt_server.model.guards.tool_gating import BenchBlockedError
 from trid3nt_server.server.config import _env_flag, _tool_retrieval_k
 from trid3nt_server.server.dispatch.emitter import _invoke_tool_via_emitter
 from trid3nt_server.server.dispatch.helpers import _DELIVERABLE_COMPLETE_DIRECTIVE, _DISCOVERY_EXPAND_CAP, _EMPTY_COMPLETION_NUDGE, _EMPTY_COMPLETION_RETRY_CAP, _POST_DELIVERABLE_WRAPUP_ROUNDS, _default_declarable_registry, _dispatch_made_progress, _gate_expander_tool_names, _is_terminal_composer, _tool_names_from_search_result
@@ -142,7 +142,7 @@ async def _stream_model_reply(
     # (openai / anthropic / scripted) opens its own client at the boundary and
     # ignores ``client``. Provider resolved once here and reused by the cache
     # guard below.
-    from trid3nt_server.adapters.model_selection import model_provider as _model_provider
+    from trid3nt_server.model.adapters.model_selection import model_provider as _model_provider
 
     _provider = _model_provider()
     # Resolve the EFFECTIVE model serving this turn, not the possibly-None
@@ -151,7 +151,7 @@ async def _stream_model_reply(
     # resolution error falls back to the raw selection.
     try:
         if _provider == "openai":
-            from trid3nt_server.adapters import openai_adapter as _oa  # noqa: WPS433
+            from trid3nt_server.model.adapters import openai_adapter as _oa  # noqa: WPS433
             _effective_model = _oa.openai_model(model_id)
         else:
             _effective_model = model_id
@@ -242,7 +242,7 @@ async def _stream_model_reply(
     # cold index / empty ranking / any fault.
     if _provider == "openai":
         try:
-            from trid3nt_server.gates.tool_gating import (
+            from trid3nt_server.model.guards.tool_gating import (
                 WIDEN_K,
                 gate_tool_registry,
                 gating_topk,

@@ -14,7 +14,7 @@ from typing import Any
 
 from .adapter import FunctionCallEvent, StreamEvent, TextDeltaEvent, UsageMetadataEvent
 
-logger = logging.getLogger("trid3nt_server.adapters.scripted_adapter")
+logger = logging.getLogger("trid3nt_server.model.adapters.scripted_adapter")
 
 __all__ = [
     "model_provider_is_scripted",

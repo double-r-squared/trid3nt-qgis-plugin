@@ -14,8 +14,8 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server import server as agent_server
-from trid3nt_server.adapters.model_selection import ModelSettings
-from trid3nt_server.adapters.scripted_adapter import set_script
+from trid3nt_server.model.adapters.model_selection import ModelSettings
+from trid3nt_server.model.adapters.scripted_adapter import set_script
 from trid3nt_contracts import new_ulid
 
 
@@ -40,8 +40,8 @@ async def test_openai_usage_carries_reasoning_tokens_when_reported():
     fabricated)."""
     from unittest.mock import AsyncMock, MagicMock
 
-    from trid3nt_server.adapters.adapter import UsageMetadataEvent
-    from trid3nt_server.adapters.openai_adapter import _stream_one_round
+    from trid3nt_server.model.adapters.adapter import UsageMetadataEvent
+    from trid3nt_server.model.adapters.openai_adapter import _stream_one_round
 
     def _usage_chunk(details):
         return _Namespace(

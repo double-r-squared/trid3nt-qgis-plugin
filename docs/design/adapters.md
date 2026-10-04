@@ -1,6 +1,6 @@
 # adapters/ -- LLM provider adapters
 
-`trid3nt_server/adapters/` is the ONLY place
+`trid3nt_server/model/adapters/` is the ONLY place
 provider nouns appear. It presents one contents/declarations/system-prompt
 surface the turn engine drives regardless of backend.
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-from trid3nt_server.adapters.adapter import build_tool_section, system_prompt
+from trid3nt_server.model.adapters.adapter import build_tool_section, system_prompt
 
 SYSTEM_PROMPT = system_prompt()
 

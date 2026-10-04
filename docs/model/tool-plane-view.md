@@ -16,7 +16,7 @@ flowchart LR
     keywordLookup["KeywordLookup<br/>trid3nt_server/workflows/telemac/modules/describe.py"]
     libraryListing["LibraryListing<br/>trid3nt_server/server/protocol/doors/library.py"]
     libraryPanel["LibraryPanel<br/>plugin/ui/library_window.py"]
-    mintedToken["ConnectGate<br/>trid3nt_server/credentials/auth_handshake.py"]
+    mintedToken["ConnectGate<br/>trid3nt_server/model/credentials/auth_handshake.py"]
     providerOpener["ProviderOpener<br/>plugin/render/layer_request.py"]
     runPyqgis["SessionCodeTool<br/>trid3nt_server/tools/derive/run_pyqgis/run_pyqgis.py"]
     runQgisAlgorithm["SessionAlgorithmTool<br/>trid3nt_server/tools/derive/run_qgis_algorithm/run_qgis_algorithm.py"]

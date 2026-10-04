@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.adapters.adapter import summarize_tool_result
+from trid3nt_server.model.adapters.adapter import summarize_tool_result
 
 
 def _layer(notes: list[str]) -> LayerURI:

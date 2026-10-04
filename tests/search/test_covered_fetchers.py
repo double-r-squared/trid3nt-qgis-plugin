@@ -149,7 +149,7 @@ async def test_every_overlay_tool_is_still_reached_by_its_own_phrasings(registry
 
 
 def test_the_model_is_given_the_match_with_the_vocabulary_on_it(registry):
-    from trid3nt_server.adapters.adapter import build_tool_declarations
+    from trid3nt_server.model.adapters.adapter import build_tool_declarations
 
     decls = {d.name: d for d in build_tool_declarations(dict(registry))}
     assert FIND_SOURCES in decls

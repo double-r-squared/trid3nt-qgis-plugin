@@ -15,9 +15,9 @@ from typing import Any
 
 from trid3nt_contracts.message import Message, Part, ToolResponse
 
-from trid3nt_server.adapters.model_discovery import _ollama_root
+from trid3nt_server.model.adapters.model_discovery import _ollama_root
 
-logger = logging.getLogger("trid3nt_server.gates.context_budget")
+logger = logging.getLogger("trid3nt_server.model.guards.context_budget")
 
 # Config (env-overridable, read at call time)
 
@@ -354,7 +354,7 @@ async def _resolve_window_tokens(
     """Per-provider discovery ladder -> ``(tokens, source)``, or None.
 
     Each branch asks the provider for its OWN metadata and gives up honestly."""
-    from trid3nt_server.adapters import model_discovery
+    from trid3nt_server.model.adapters import model_discovery
 
     # openai-compatible: OpenRouter's ``/models.context_length`` when the base
     # URL is OpenRouter, else Ollama's native ``/api/show`` runtime ``num_ctx``,

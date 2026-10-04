@@ -27,7 +27,7 @@ from .adapter import (
     provider_backoff_wait,
     provider_retries,
 )
-from trid3nt_server.gates.context_budget import (
+from trid3nt_server.model.guards.context_budget import (
     ContextWindowExceededError,
     discover_context_window,
     estimate_tokens,
@@ -37,7 +37,7 @@ from trid3nt_server.gates.context_budget import (
     plan_turn,
 )
 
-logger = logging.getLogger("trid3nt_server.adapters.anthropic_adapter")
+logger = logging.getLogger("trid3nt_server.model.adapters.anthropic_adapter")
 
 #: Default model id. Exact string -- this family carries no date suffix.
 ANTHROPIC_DEFAULT_MODEL = "claude-sonnet-5"

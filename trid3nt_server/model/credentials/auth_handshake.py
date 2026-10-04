@@ -18,7 +18,7 @@ from trid3nt_contracts.auth import (
     AuthAckEnvelope,
 )
 
-logger = logging.getLogger("trid3nt_server.credentials.auth_handshake")
+logger = logging.getLogger("trid3nt_server.model.credentials.auth_handshake")
 
 
 #: Object-store (MinIO) port the daemon co-hosts. Fixed on the local stack;

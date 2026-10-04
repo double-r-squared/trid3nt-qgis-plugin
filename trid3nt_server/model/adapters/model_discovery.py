@@ -11,7 +11,7 @@ import logging
 import os
 from typing import Any
 
-logger = logging.getLogger("trid3nt_server.adapters.model_discovery")
+logger = logging.getLogger("trid3nt_server.model.adapters.model_discovery")
 
 
 def _local_models_route_enabled() -> bool:
@@ -439,7 +439,7 @@ def apply_provider_config(raw_body: bytes) -> bytes:
     # A same-name model must re-discover its num_ctx (the provider/num_ctx
     # switch invalidates the process-lifetime cache).
     try:
-        from trid3nt_server.gates.context_budget import reset_num_ctx_cache
+        from trid3nt_server.model.guards.context_budget import reset_num_ctx_cache
 
         reset_num_ctx_cache()
     except Exception:  # noqa: BLE001 -- cache reset is best-effort, never fatal

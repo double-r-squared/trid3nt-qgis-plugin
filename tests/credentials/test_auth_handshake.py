@@ -1,4 +1,4 @@
-"""``trid3nt_server.credentials.auth_handshake``: one token, one user, always on.
+"""``trid3nt_server.model.credentials.auth_handshake``: one token, one user, always on.
 
 The daemon mints its access token into the config file at first start, every
 connection must present that token, and a verified connection is scoped to the
@@ -14,7 +14,7 @@ import pytest
 from trid3nt_contracts.auth import AuthAckEnvelope, AuthTokenEnvelope
 from trid3nt_contracts.common import new_ulid
 
-from trid3nt_server.credentials.auth_handshake import (
+from trid3nt_server.model.credentials.auth_handshake import (
     LOCAL_SINGLE_USER_ID,
     access_token_path,
     build_auth_ack,

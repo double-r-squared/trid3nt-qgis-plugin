@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from trid3nt_server.adapters import model_selection as ms
+from trid3nt_server.model.adapters import model_selection as ms
 
 
 def test_resolve_none_is_silent_default(monkeypatch):

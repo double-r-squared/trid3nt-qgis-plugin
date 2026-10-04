@@ -451,7 +451,7 @@ async def _notify_live_sessions(case_id: str) -> None:
     repaint sooner than the next reopen would."""
     try:
         from trid3nt_server import server as _server
-        from trid3nt_server.credentials.auth_handshake import LOCAL_SINGLE_USER_ID
+        from trid3nt_server.model.credentials.auth_handshake import LOCAL_SINGLE_USER_ID
         from trid3nt_contracts.case import CaseListEnvelopePayload
 
         session_ids = [

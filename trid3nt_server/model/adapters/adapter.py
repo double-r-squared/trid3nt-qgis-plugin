@@ -18,7 +18,7 @@ from typing import Any, Literal, get_args, get_origin, get_type_hints, Union
 
 from trid3nt_contracts.message import Message, Part, ToolCall, ToolDeclaration, ToolResponse
 
-logger = logging.getLogger("trid3nt_server.adapters.adapter")
+logger = logging.getLogger("trid3nt_server.model.adapters.adapter")
 
 #: The code a modeled envelope with no layers carries when its failure marker
 #: names none of its own.
@@ -1439,7 +1439,7 @@ def summarize_tool_result(
     # corrected args, pick another tool, or narrate the failure honestly;
     # ``MAX_TURN_ITERATIONS`` caps a runaway retry either way.
     if error is not None:
-        from trid3nt_server.gates.actionability import classify_actionability
+        from trid3nt_server.model.guards.actionability import classify_actionability
 
         # A gate card the user declined is NOT a tool failure. It comes back as
         # its own status carrying which card was declined and what it asked, so

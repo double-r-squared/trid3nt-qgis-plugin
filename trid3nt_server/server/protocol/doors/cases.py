@@ -30,7 +30,7 @@ async def build_case_list_payload() -> dict[str, Any]:
     """Assemble the case-list payload newest-first, through the same
     persistence call the WS path makes; unbound persistence raises, so the route
     answers an honest 503 rather than a fabricated empty list."""
-    from trid3nt_server.credentials.auth_handshake import LOCAL_SINGLE_USER_ID
+    from trid3nt_server.model.credentials.auth_handshake import LOCAL_SINGLE_USER_ID
     from trid3nt_server.server import get_persistence
 
     persistence = get_persistence()

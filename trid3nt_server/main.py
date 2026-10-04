@@ -152,7 +152,7 @@ def run(argv: list[str] | None = None) -> int:
 
     # The routing prompt names the tools THIS registry holds, so it is built here,
     # once the registry is complete, rather than at first turn.
-    from .adapters.adapter import system_prompt
+    from .model.adapters.adapter import system_prompt
 
     logger.info("routing prompt built: %d chars", len(system_prompt()))
 
@@ -163,7 +163,7 @@ def run(argv: list[str] | None = None) -> int:
 
     # The access token is the connect gate, so it must exist before the socket
     # does. Minted into the config file on a first start and printed once there.
-    from .credentials.auth_handshake import ensure_access_token
+    from .model.credentials.auth_handshake import ensure_access_token
 
     ensure_access_token()
 

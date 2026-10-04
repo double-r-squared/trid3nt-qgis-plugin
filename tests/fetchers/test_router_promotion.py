@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.adapters.adapter import build_tool_declarations
+from trid3nt_server.model.adapters.adapter import build_tool_declarations
 from trid3nt_server.tools.fetchers._router.errors import (
     RouterInputError,
     bbox_error_suffix,

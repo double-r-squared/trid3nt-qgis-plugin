@@ -10,7 +10,7 @@ import os
 import time
 from dataclasses import dataclass, field
 
-logger = logging.getLogger("trid3nt_server.gates.circuit_breaker")
+logger = logging.getLogger("trid3nt_server.model.guards.circuit_breaker")
 
 
 _DEFAULT_THRESHOLD = 3

@@ -19,10 +19,9 @@ on one machine against one user; the only wire shapes it speaks are
 
 | subfolder | what lives there |
 | --- | --- |
-| `adapters/` | The LLM provider adapters, behind one shared IR. |
-| `credentials/` | The connect handshake, and the resolver over the credential each source row declares. |
 | `render/` | The format set a product reaches the map in - a COG raster, a GeoJSON vector, an MDAL mesh, a chart payload - and everything it passes through on the way. |
-| `gates/` | The agent-loop gates - confirm, review, draw, budget, runaway. |
+| `gates/` | The input gates - confirm, review, draw. |
+| `model/` | The model connection: provider adapters, credentials, and the guards over a model turn. |
 | `inputs/` | Every input into the system as a typed value: a Point, an Extent and a Shape, each with one ingestion from every form a user hands it in, and the user's own file adopted as a layer. |
 | `server/` | The daemon core: connection loop, turn engine, dispatch, session state. |
 | `store/` | What the daemon keeps: the object store, the case documents, and the sweep over the cache. |

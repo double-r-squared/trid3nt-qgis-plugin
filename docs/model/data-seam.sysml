@@ -337,7 +337,7 @@ package DataSeam {
 
     part credentialResolver : CredentialResolver {
         doc /*
-        code: trid3nt_server/credentials/resolver.py
+        code: trid3nt_server/model/credentials/resolver.py
         */
         port credentialIn : CredentialIn;
         port keyedCatalogOut : KeyedCatalogOut;

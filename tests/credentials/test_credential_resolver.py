@@ -11,7 +11,7 @@ import asyncio
 
 import pytest
 
-from trid3nt_server.credentials import resolver
+from trid3nt_server.model.credentials import resolver
 from trid3nt_contracts.secrets import SecretAddEnvelopePayload
 
 

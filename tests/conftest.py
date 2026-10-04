@@ -100,7 +100,7 @@ def _reset_fake_llm_harness():
     Prevents an installed fake-turn source (``fake_llm``) from leaking across
     tests. Cheap no-op when the harness was never installed.
     """
-    from trid3nt_server.adapters import scripted_adapter as _sa
+    from trid3nt_server.model.adapters import scripted_adapter as _sa
 
     _sa.reset_harness()
     yield
@@ -113,7 +113,7 @@ def fake_llm(monkeypatch: pytest.MonkeyPatch):
 
     Pins ``MODEL_PROVIDER=scripted`` so the REAL server dispatch routes to the
     scripted adapter, and returns a handle over the fake turns and recorded calls."""
-    from trid3nt_server.adapters import scripted_adapter as sa
+    from trid3nt_server.model.adapters import scripted_adapter as sa
 
     monkeypatch.setenv("MODEL_PROVIDER", "scripted")
     sa.reset_harness()

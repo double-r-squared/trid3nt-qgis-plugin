@@ -10,7 +10,7 @@ import asyncio
 
 import pytest
 
-from trid3nt_server.adapters.adapter import classify_result_usable, summarize_tool_result
+from trid3nt_server.model.adapters.adapter import classify_result_usable, summarize_tool_result
 from trid3nt_server.workflows.solver import solve_progress
 from trid3nt_contracts.ws import SolveProgressPayload
 

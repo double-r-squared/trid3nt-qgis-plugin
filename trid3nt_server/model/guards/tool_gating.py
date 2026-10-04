@@ -32,7 +32,7 @@ __all__ = [
     "bench_block_decision",
 ]
 
-logger = logging.getLogger("trid3nt_server.gates.tool_gating")
+logger = logging.getLogger("trid3nt_server.model.guards.tool_gating")
 
 #: Default top-k for the openai-provider tool gate.
 TOOL_GATING_TOPK_DEFAULT = 24

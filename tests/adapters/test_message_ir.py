@@ -16,16 +16,16 @@ from pathlib import Path
 
 from trid3nt_contracts.message import Message, Part, ToolCall, ToolDeclaration, ToolResponse
 
-from trid3nt_server.adapters.adapter import (
+from trid3nt_server.model.adapters.adapter import (
     _decode_parts_blob,
     build_contents_from_history,
     encode_parts_blob,
 )
-from trid3nt_server.adapters.anthropic_adapter import (
+from trid3nt_server.model.adapters.anthropic_adapter import (
     contents_to_anthropic_messages,
     tool_declarations_to_anthropic_tools,
 )
-from trid3nt_server.adapters.openai_adapter import (
+from trid3nt_server.model.adapters.openai_adapter import (
     contents_to_openai_messages,
     tool_declarations_to_openai_tools,
 )
@@ -126,10 +126,10 @@ def test_no_provider_sdk_is_imported_for_the_ir() -> None:
         "    return _real(name, *a, **k)\n"
         "builtins.__import__ = _guard\n"
         "from trid3nt_contracts.message import Message\n"
-        "import trid3nt_server.adapters.adapter\n"
-        "import trid3nt_server.adapters.openai_adapter\n"
-        "import trid3nt_server.adapters.anthropic_adapter\n"
-        "import trid3nt_server.gates.context_budget\n"
+        "import trid3nt_server.model.adapters.adapter\n"
+        "import trid3nt_server.model.adapters.openai_adapter\n"
+        "import trid3nt_server.model.adapters.anthropic_adapter\n"
+        "import trid3nt_server.model.guards.context_budget\n"
         "assert Message.call('t', {}, 'c').parts[0].call.name == 't'\n"
         "print('clean')\n"
     )

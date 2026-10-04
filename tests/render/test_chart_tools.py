@@ -264,7 +264,7 @@ class TestChartEmissionDiscriminator:
 
 class TestSummarizeChartEmission:
     def test_spec_stripped_for_chart(self):
-        from trid3nt_server.adapters.adapter import summarize_tool_result
+        from trid3nt_server.model.adapters.adapter import summarize_tool_result
 
         payload = generate_chart(vega_lite_spec=_bar_spec(), title="t", caption="cap",
                                  records=[{"label": "a", "count": 1}, {"label": "b", "count": 2}])
@@ -282,7 +282,7 @@ class TestSummarizeChartEmission:
         assert res["chart_type"] == "bar"
 
     def test_ordinary_dict_preserved(self):
-        from trid3nt_server.adapters.adapter import summarize_tool_result
+        from trid3nt_server.model.adapters.adapter import summarize_tool_result
 
         ordinary = {"columns": ["count"], "rows": [[9]], "row_count": 1, "count": 9}
         summary = summarize_tool_result("probe_point", ordinary)

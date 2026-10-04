@@ -13,8 +13,8 @@ from dataclasses import dataclass, field
 import pytest
 from unittest.mock import patch
 
-from trid3nt_server.adapters.model_selection import ModelSettings
-from trid3nt_server.adapters.adapter import (
+from trid3nt_server.model.adapters.model_selection import ModelSettings
+from trid3nt_server.model.adapters.adapter import (
     FunctionCallEvent,
     TextDeltaEvent,
 )

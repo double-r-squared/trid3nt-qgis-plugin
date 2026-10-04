@@ -23,7 +23,7 @@ flowchart LR
     contextRow["ContextRow<br/>trid3nt_server/workflows/runtime/data.py"]
     copernicusDeclaration["BedSourceDeclaration<br/>trid3nt_server/tools/fetchers/terrain/fetch_copernicus_dem/source.yaml"]
     coverageContract["SourceCoverage<br/>contracts/trid3nt_contracts/coverage.py"]
-    credentialResolver["CredentialResolver<br/>trid3nt_server/credentials/resolver.py"]
+    credentialResolver["CredentialResolver<br/>trid3nt_server/model/credentials/resolver.py"]
     credentialStore["CredentialStore<br/>plugin/net/auth_broker.py"]
     cudemDeclaration["BedSourceDeclaration<br/>trid3nt_server/tools/fetchers/ocean/fetch_cudem/source.yaml"]
     domainSlot["DomainSlot<br/>trid3nt_server/inputs/domain.py"]

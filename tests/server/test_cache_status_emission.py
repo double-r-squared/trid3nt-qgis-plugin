@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from trid3nt_server.adapters.adapter import UsageMetadataEvent
+from trid3nt_server.model.adapters.adapter import UsageMetadataEvent
 from trid3nt_server.server import SessionState, _emit_cache_status
 
 

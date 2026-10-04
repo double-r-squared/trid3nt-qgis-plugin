@@ -15,7 +15,7 @@ from typing import Final
 
 from trid3nt_contracts.source_spec import CredentialSpec
 
-logger = logging.getLogger("trid3nt_server.credentials.resolver")
+logger = logging.getLogger("trid3nt_server.model.credentials.resolver")
 
 __all__ = [
     "MissingCredentialError",

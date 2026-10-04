@@ -11,7 +11,7 @@ them: [`trid3nt_server/README.md`](../../trid3nt_server/README.md) maps the
 package, and each subpackage carries its own README (the daemon core is
 [`trid3nt_server/server/README.md`](../../trid3nt_server/server/README.md), the
 providers are
-[`trid3nt_server/adapters/README.md`](../../trid3nt_server/adapters/README.md)).
+[`trid3nt_server/model/adapters/README.md`](../../trid3nt_server/model/adapters/README.md)).
 
 ## The provider seam
 

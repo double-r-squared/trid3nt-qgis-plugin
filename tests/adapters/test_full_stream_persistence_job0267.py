@@ -562,8 +562,8 @@ async def test_e2e_full_turn_replays_complete_stream(
 
 
 
-from trid3nt_server.adapters.model_selection import ModelSettings
-from trid3nt_server.adapters.adapter import (  # noqa: E402
+from trid3nt_server.model.adapters.model_selection import ModelSettings
+from trid3nt_server.model.adapters.adapter import (  # noqa: E402
     FunctionCallEvent,
     TextDeltaEvent,
 )

@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.gates.runaway_guard import (
+from trid3nt_server.model.guards.runaway_guard import (
     ABORT_LOOP_WATCHDOG,
     ABORT_STEP_CAP,
     ABORT_WALL_CLOCK,
@@ -124,7 +124,7 @@ def _abort_codes(sock: _FakeSocket) -> list[str]:
 
 
 def _settings():
-    from trid3nt_server.adapters.model_selection import ModelSettings
+    from trid3nt_server.model.adapters.model_selection import ModelSettings
 
     return ModelSettings(
         model="gemini-2.5-pro"
@@ -214,7 +214,7 @@ async def test_normal_turn_not_aborted_by_guards(monkeypatch):
     """A normal short turn (one tool, then narrate) is NOT touched by any guard."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
-    from trid3nt_server.adapters.adapter import FunctionCallEvent, TextDeltaEvent
+    from trid3nt_server.model.adapters.adapter import FunctionCallEvent, TextDeltaEvent
     from trid3nt_contracts import new_ulid
 
     # Turn 1: one function call; turn 2: narrate + end.

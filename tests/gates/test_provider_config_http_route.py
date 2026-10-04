@@ -14,8 +14,8 @@ import pytest
 
 from door_client import drive
 
-from trid3nt_server.adapters import model_discovery
-from trid3nt_server.gates import context_budget
+from trid3nt_server.model.adapters import model_discovery
+from trid3nt_server.model.guards import context_budget
 
 _PROVIDER_ENV = (
     "MODEL_PROVIDER",

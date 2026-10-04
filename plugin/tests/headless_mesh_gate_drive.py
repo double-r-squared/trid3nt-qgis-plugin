@@ -13,7 +13,7 @@ import time
 
 sys.path.insert(0, "/home/nate/Documents/trid3nt-local")
 from plugin.net.trid3nt_client import AgentClient
-from trid3nt_server.credentials.auth_handshake import configured_access_token  # noqa: E402
+from trid3nt_server.model.credentials.auth_handshake import configured_access_token  # noqa: E402
 
 STUB = bool(os.environ.get("E2E_STUB"))
 URL = os.environ.get("E2E_URL", "ws://127.0.0.1:8765")

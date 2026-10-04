@@ -36,7 +36,7 @@ from trid3nt_contracts.ws import (
     ToolIoPayload,
 )
 
-from trid3nt_server.gates.context_budget import COMPACTING_LABEL, compaction_complete_label
+from trid3nt_server.model.guards.context_budget import COMPACTING_LABEL, compaction_complete_label
 from .layer_uri_emit import emit_layer_uri, publish_for_emission
 
 __all__ = [

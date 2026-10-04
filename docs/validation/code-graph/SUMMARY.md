@@ -102,7 +102,7 @@ venvs/agent/bin/python dev/instruments/code_graph.py
 
 ## Package-level edge matrix (cross-package import edges)
 
-| from \ to | contracts | plugin | scripts | tests | trid3nt_contracts | trid3nt_server | trid3nt_server.__main__ | trid3nt_server.adapters | trid3nt_server.credentials | trid3nt_server.errors | trid3nt_server.fallbacks | trid3nt_server.gates | trid3nt_server.inputs | trid3nt_server.main | trid3nt_server.persistence | trid3nt_server.plugin_repo | trid3nt_server.render | trid3nt_server.retention | trid3nt_server.server | trid3nt_server.storage | trid3nt_server.telemetry | trid3nt_server.tools | trid3nt_server.workflows | workers |
+| from \ to | contracts | plugin | scripts | tests | trid3nt_contracts | trid3nt_server | trid3nt_server.__main__ | trid3nt_server.model.adapters | trid3nt_server.model.credentials | trid3nt_server.errors | trid3nt_server.fallbacks | trid3nt_server.gates | trid3nt_server.inputs | trid3nt_server.main | trid3nt_server.persistence | trid3nt_server.plugin_repo | trid3nt_server.render | trid3nt_server.retention | trid3nt_server.server | trid3nt_server.storage | trid3nt_server.telemetry | trid3nt_server.tools | trid3nt_server.workflows | workers |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | contracts | . | . | . | . | 48 | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | plugin | . | . | . | . | . | . | . | . | 3 | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . |
@@ -111,8 +111,8 @@ venvs/agent/bin/python dev/instruments/code_graph.py
 | trid3nt_contracts | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | trid3nt_server | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | trid3nt_server.__main__ | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . | . | . |
-| trid3nt_server.adapters | . | . | . | . | 4 | . | . | . | . | . | . | 4 | . | . | . | . | . | . | . | . | . | 2 | . | . |
-| trid3nt_server.credentials | . | . | . | . | 2 | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | . |
+| trid3nt_server.model.adapters | . | . | . | . | 4 | . | . | . | . | . | . | 4 | . | . | . | . | . | . | . | . | . | 2 | . | . |
+| trid3nt_server.model.credentials | . | . | . | . | 2 | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | . |
 | trid3nt_server.errors | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | trid3nt_server.fallbacks | . | . | . | . | 1 | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . | 1 | . | 1 | . | . |
 | trid3nt_server.gates | . | . | . | . | 19 | . | . | 1 | 1 | . | . | . | 2 | . | . | . | 3 | . | 7 | . | . | 7 | . | . |

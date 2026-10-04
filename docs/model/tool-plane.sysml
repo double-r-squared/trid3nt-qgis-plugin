@@ -307,7 +307,7 @@ package ToolPlane {
 
     part mintedToken : ConnectGate {
         doc /*
-        code: trid3nt_server/credentials/auth_handshake.py
+        code: trid3nt_server/model/credentials/auth_handshake.py
         */
     }
 

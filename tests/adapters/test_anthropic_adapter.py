@@ -17,8 +17,8 @@ from trid3nt_contracts.message import Message, Part, ToolCall, ToolDeclaration, 
 
 import anthropic
 
-from trid3nt_server.adapters import anthropic_adapter as aa
-from trid3nt_server.adapters.adapter import (
+from trid3nt_server.model.adapters import anthropic_adapter as aa
+from trid3nt_server.model.adapters.adapter import (
     FunctionCallEvent,
     TextDeltaEvent,
     UpstreamProviderError,
@@ -390,7 +390,7 @@ def test_error_class_telemetry():
 
 @pytest.mark.asyncio
 async def test_dispatch_routes_to_anthropic(monkeypatch):
-    from trid3nt_server.adapters import adapter as ad
+    from trid3nt_server.model.adapters import adapter as ad
 
     monkeypatch.setenv("MODEL_PROVIDER", "anthropic")
     _install_client(monkeypatch, lambda _n: _FakeStream([_text_event("routed")], _final_message()))
@@ -404,7 +404,7 @@ async def test_dispatch_routes_to_anthropic(monkeypatch):
 
 
 def test_selected_model_passes_through_on_anthropic(monkeypatch):
-    from trid3nt_server.adapters import model_selection as ms
+    from trid3nt_server.model.adapters import model_selection as ms
 
     monkeypatch.setenv("MODEL_PROVIDER", "anthropic")
     assert ms.resolve_selected_model("claude-opus-5") == ("claude-opus-5", None)

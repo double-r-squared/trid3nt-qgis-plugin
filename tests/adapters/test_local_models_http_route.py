@@ -11,7 +11,7 @@ import json
 
 from door_client import drive
 
-from trid3nt_server.adapters import model_discovery
+from trid3nt_server.model.adapters import model_discovery
 
 
 def _status(out) -> int:

@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.adapters.model_selection import ModelSettings
+from trid3nt_server.model.adapters.model_selection import ModelSettings
 from trid3nt_contracts import new_ulid
 
 

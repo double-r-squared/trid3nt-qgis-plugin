@@ -12,14 +12,14 @@ from typing import TYPE_CHECKING, Any
 from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.ws import Envelope, ErrorPayload
 
-from trid3nt_server.adapters.adapter import MAX_TURN_ITERATIONS
+from trid3nt_server.model.adapters.adapter import MAX_TURN_ITERATIONS
 from trid3nt_server.render.pipeline_emitter import current_turn_case
 from trid3nt_server.server.protocol.connections import _SESSION_WS_CONNECTIONS
 
 if TYPE_CHECKING:
     from websockets.asyncio.server import ServerConnection
 
-    from trid3nt_server.adapters.adapter import UsageMetadataEvent
+    from trid3nt_server.model.adapters.adapter import UsageMetadataEvent
     from trid3nt_server.server.session.state import SessionState
 
 logger = logging.getLogger("trid3nt_server.server")

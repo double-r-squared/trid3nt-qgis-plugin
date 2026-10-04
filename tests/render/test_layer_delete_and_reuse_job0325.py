@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 
 from trid3nt_server import server as server_mod
-from trid3nt_server.adapters.adapter import build_layers_present_note
+from trid3nt_server.model.adapters.adapter import build_layers_present_note
 from trid3nt_server.store.cases import Persistence
 from trid3nt_server.render.pipeline_emitter import PipelineEmitter
 from trid3nt_server.server import (

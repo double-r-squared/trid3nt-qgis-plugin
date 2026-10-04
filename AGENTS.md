@@ -20,8 +20,9 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
   the presets and the restyle seam), `workflows/` (the declarative `runtime/`, the
   `solver/` executor, and the engine package `telemac/`), `gates/` (GateSpec
   engine + cards + pending
-  registries), `adapters/` (LLM providers - the ONLY place provider
-  nouns appear), `server/` (session/ turn/ dispatch/ protocol/),
+  registries), `model/` (`adapters/` the LLM providers - the ONLY
+  place provider nouns appear - with `credentials/` and the turn
+  `guards/`), `server/` (session/ turn/ dispatch/ protocol/),
   `store/` (`objects.py` the object store's one client and the bucket
   names, `cases.py` the case documents, `sweep.py` the cache sweep).
 - `workers/` - the telemac solver worker plus the mesh and qgis

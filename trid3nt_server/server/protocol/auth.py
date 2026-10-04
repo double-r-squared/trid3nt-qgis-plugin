@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from pydantic import ValidationError
 from trid3nt_contracts.auth import AuthTokenEnvelope
-from trid3nt_server.credentials.auth_handshake import LOCAL_SINGLE_USER_ID, build_auth_ack, derive_advertised_endpoints, verify_access_token
+from trid3nt_server.model.credentials.auth_handshake import LOCAL_SINGLE_USER_ID, build_auth_ack, derive_advertised_endpoints, verify_access_token
 from trid3nt_server.server.dispatch.emitter import _ensure_emitter
 from trid3nt_server.server.protocol.connections import _reap_prior_session_connections, _register_session_connection
 from trid3nt_server.server.session.case_state import _bind_session_identity, _persist_session_active_case, _reload_session_active_case, _replay_active_case_layers, _touch_session_record

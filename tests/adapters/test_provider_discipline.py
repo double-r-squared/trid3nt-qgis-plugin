@@ -15,8 +15,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from trid3nt_server import server as agent_server
-from trid3nt_server.adapters.model_selection import ModelSettings
-from trid3nt_server.adapters.adapter import (
+from trid3nt_server.model.adapters.model_selection import ModelSettings
+from trid3nt_server.model.adapters.adapter import (
     UpstreamProviderError,
     classify_provider_error_class,
     provider_backoff_wait,
@@ -64,7 +64,7 @@ class TestOpenAIProviderDiscipline:
     async def test_transient_retry_then_success(self, monkeypatch):
         """transient -> retry -> success (the happy retry path)."""
         import openai
-        import trid3nt_server.adapters.openai_adapter as oa
+        import trid3nt_server.model.adapters.openai_adapter as oa
 
         monkeypatch.setattr(oa.asyncio, "sleep", AsyncMock())
         exc = openai.APIStatusError(
@@ -83,7 +83,7 @@ class TestOpenAIProviderDiscipline:
         """Exhaustion -> UpstreamProviderError (typed, provider named,
         VERBATIM provider detail, honest attempt count)."""
         import openai
-        import trid3nt_server.adapters.openai_adapter as oa
+        import trid3nt_server.model.adapters.openai_adapter as oa
 
         monkeypatch.setenv("TRID3NT_PROVIDER_RETRIES", "1")
         monkeypatch.setenv("TRID3NT_OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
@@ -108,7 +108,7 @@ class TestOpenAIProviderDiscipline:
     async def test_retry_after_header_honored(self, monkeypatch):
         """A 429 with Retry-After waits exactly that long (mock clock)."""
         import openai
-        import trid3nt_server.adapters.openai_adapter as oa
+        import trid3nt_server.model.adapters.openai_adapter as oa
 
         waits: list[float] = []
 
@@ -131,7 +131,7 @@ class TestOpenAIProviderDiscipline:
     async def test_backoff_schedule_used_without_retry_after(self, monkeypatch):
         """No Retry-After -> the exponential schedule drives the waits."""
         import openai
-        import trid3nt_server.adapters.openai_adapter as oa
+        import trid3nt_server.model.adapters.openai_adapter as oa
 
         monkeypatch.setenv("TRID3NT_PROVIDER_RETRIES", "2")
         monkeypatch.setenv("TRID3NT_PROVIDER_BACKOFF_S", "2")
@@ -154,7 +154,7 @@ class TestOpenAIProviderDiscipline:
     async def test_connection_error_is_transient(self, monkeypatch):
         """A connection drop / timeout retries (upstream, not internal)."""
         import openai
-        import trid3nt_server.adapters.openai_adapter as oa
+        import trid3nt_server.model.adapters.openai_adapter as oa
 
         monkeypatch.setattr(oa.asyncio, "sleep", AsyncMock())
         exc = openai.APIConnectionError(request=self._req())
@@ -168,7 +168,7 @@ class TestOpenAIProviderDiscipline:
     async def test_non_transient_fails_fast_unchanged(self, monkeypatch):
         """Auth / bad-request errors propagate unchanged with ZERO retries."""
         import openai
-        import trid3nt_server.adapters.openai_adapter as oa
+        import trid3nt_server.model.adapters.openai_adapter as oa
 
         monkeypatch.setattr(oa.asyncio, "sleep", AsyncMock())
         exc = openai.AuthenticationError(
