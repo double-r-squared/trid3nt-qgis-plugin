@@ -91,3 +91,25 @@ def test_two_entries_of_one_op_survive_the_trip_in_order():
     assert sizing[-1]["kwargs"]["rate"] == 0.05
     rebuilt = recipe_from_plan_value(ask)
     assert [op.fn for op in rebuilt.ops] == [op.fn for op in declared.ops]
+
+
+def _every_template_workflow():
+    import pkgutil
+
+    import trid3nt_server.workflows.telemac.templates as templates
+
+    for found in pkgutil.iter_modules(templates.__path__):
+        if found.ispkg:
+            module = importlib.import_module(
+                f"{templates.__name__}.{found.name}.{found.name}")
+            yield found.name, next(
+                value.workflow for value in vars(module).values()
+                if hasattr(getattr(value, "workflow", None), "params"))
+
+
+@pytest.mark.parametrize("name,workflow", list(_every_template_workflow()))
+def test_no_template_restates_the_edge_with_a_default_or_a_range(name, workflow):
+    """Nothing refuses a resolution: unstated, the edge is the input data's own
+    cell, so a restatement carries a description and nothing else."""
+    rows = [p for p in workflow.params if p.name == "mesh_resolution_m"]
+    assert [(p.default, p.bounds) for p in rows] == [(None, None)], name

@@ -262,6 +262,13 @@ def test_the_one_size_word_threads_as_the_librarys_own_edge_defaults(
     assert sent["config"]["seed"] == OM2D._SEED
 
 
+def test_the_coarsest_edge_is_the_extent_s_own_diagonal():
+    """A degree square on the equator is 111.32 km a side, so its diagonal is
+    157.43 km and no edge inside the extent can reach it."""
+    assert OM2D._unbounded_m((0.0, -0.5, 1.0, 0.5)) == pytest.approx(
+        157_430.8, abs=0.5)
+
+
 def test_the_domain_polygon_is_the_only_thing_the_box_is_cut_from(
         monkeypatch, tmp_path):
     """One path: the polygon. The mesher mounts no shoreline substrate of its own,
