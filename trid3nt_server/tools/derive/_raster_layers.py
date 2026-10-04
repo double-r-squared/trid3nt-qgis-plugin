@@ -34,7 +34,6 @@ class RasterLayerURI(LayerURI):
     sources: list[str] = []
     coverage: list[tuple[str, float]] = []
     unmeasured_fraction: float = 0.0
-    notes: list[str] = []
 
 
 def case_layer(value: Any, role: str) -> Any:
