@@ -1,9 +1,8 @@
-"""``fetch_buildings``: the sidecar-writing Overpass fold.
+"""``fetch_buildings``: the Overpass footprints through the library delegate.
 
-The offline surfaces: spec identity, the query build, the features-and-tags parse
-(ways to polygons, relations to multipolygons, slim properties, tag capture,
-intersects rather than clip, junk dropped), the sidecar sibling-key derivation,
-the typed empty answer and param validation. The live parity is a separate drive."""
+The offline surfaces: spec identity, the features parse (ways to polygons,
+relations to multipolygons, slim properties, intersects rather than clip, junk
+dropped), the typed empty and param validation. The live parity is a separate drive."""
 
 from __future__ import annotations
 
@@ -19,7 +18,6 @@ from shapely.geometry import Point, Polygon
 
 from trid3nt_server.tools.fetchers._router import router
 from trid3nt_server.tools.fetchers._router.errors import RouterEmptyError, RouterInputError
-from trid3nt_server.tools.fetchers._router.executors import overpass_sidecar
 from trid3nt_server.tools.fetchers._router.executors.vector_fgb import features_to_fgb_bytes
 from trid3nt_server.tools.fetchers.socioeconomic.fetch_buildings import hooks as BH
 from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
@@ -87,13 +85,12 @@ def test_spec_identity():
     assert SPEC.output.emit_bbox is False
     assert SPEC.hooks.delegate == "buildings.features"
     assert SPEC.ingest["delegate"] == {"library": "osmnx", "timeout_s": 180}
-    assert SPEC.ingest["sidecar_write"] == {"ext": "tags.json"}
     assert SPEC.cache.ttl_class == "static-30d"
     assert SPEC.docstring and "footprint" in SPEC.docstring.lower()
 
 
-def test_executor_is_overpass_sidecar():
-    assert router.select_executor(SPEC).__module__.endswith("executors.overpass_sidecar")
+def test_executor_is_library_delegate():
+    assert router.select_executor(SPEC).__module__.endswith("executors.library_delegate")
 
 
 def test_promoted_signature_matches_twin():
@@ -105,9 +102,9 @@ def test_promoted_signature_matches_twin():
 
 
 
-def test_features_keeps_areal_footprints_slim_and_captures_the_tag_bag(monkeypatch):
+def test_features_keeps_areal_footprints_slim(monkeypatch):
     _serve(monkeypatch, _ROWS)
-    features, tags = BH.features(SPEC, _vp(bbox=list(_AOI)), timeout_s=1)
+    features = BH.features(SPEC, _vp(bbox=list(_AOI)), timeout_s=1)
     assert len(features) == 2                       # the node is not a footprint
     assert {f["geometry"]["type"] for f in features} <= {"Polygon", "MultiPolygon"}
     assert {f["properties"]["osm_id"] for f in features} == {111, 222}
@@ -115,21 +112,18 @@ def test_features_keeps_areal_footprints_slim_and_captures_the_tag_bag(monkeypat
     for f in features:
         assert set(f["properties"]) == {"osm_id", "osm_type", "fid"}
     assert {f["properties"]["fid"] for f in features} == {"w111", "r222"}
-    # FULL tag bag captured for the sidecar, keyed by fid.
-    assert tags["w111"] == {"building": "yes", "name": "Block A"}
-    assert tags["r222"] == {"building": "commercial"}
 
 
 def test_a_relation_keeps_its_courtyard(monkeypatch):
     _serve(monkeypatch, _ROWS)
-    features, _ = BH.features(SPEC, _vp(bbox=list(_AOI)), timeout_s=1)
+    features = BH.features(SPEC, _vp(bbox=list(_AOI)), timeout_s=1)
     courtyard = next(f for f in features if f["properties"]["osm_id"] == 222)
     assert len(courtyard["geometry"]["coordinates"]) == 2     # an outer ring and a hole
 
 
 def test_features_serializes_to_slim_fgb(monkeypatch):
     _serve(monkeypatch, _ROWS)
-    features, _ = BH.features(SPEC, _vp(bbox=list(_AOI)), timeout_s=1)
+    features = BH.features(SPEC, _vp(bbox=list(_AOI)), timeout_s=1)
     gdf = _to_gdf(features_to_fgb_bytes(features, SPEC, _vp(bbox=list(_AOI))))
     assert len(gdf) == 2
     assert set(gdf.columns) == {"osm_id", "osm_type", "fid", "geometry"}
@@ -138,22 +132,8 @@ def test_features_serializes_to_slim_fgb(monkeypatch):
 def test_empty_features_raise_buildings_empty(monkeypatch):
     _serve(monkeypatch, [])
     with pytest.raises(RouterEmptyError) as ei:
-        overpass_sidecar.execute(SPEC, _vp(bbox=list(_AOI)))
+        router.select_executor(SPEC)(SPEC, _vp(bbox=list(_AOI)))
     assert ei.value.error_code == "BUILDINGS_EMPTY"
-
-
-
-
-def test_sidecar_uri_is_sibling_of_fgb():
-    from trid3nt_server.tools.cache import cache_path, compute_cache_key
-    from trid3nt_server.tools.fetchers._router.spec import record_shape
-    params = _vp(bbox=list(_AOI), source="osm")
-    key = compute_cache_key(SPEC.source_class, params, SPEC.cache.ttl_class,
-                            record_shape=record_shape(SPEC))
-    fgb = cache_path(SPEC.source_class, SPEC.cache.ttl_class, key, "fgb")
-    side = overpass_sidecar.sidecar_uri(SPEC, params, "tags.json")
-    assert side.endswith(fgb.replace(".fgb", ".tags.json"))
-    assert "/static-30d/buildings/" in side
 
 
 

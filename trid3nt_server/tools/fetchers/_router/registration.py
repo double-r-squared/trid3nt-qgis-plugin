@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import inspect
 import logging
-import os
 import sys
 import types
 from pathlib import Path
@@ -31,29 +30,10 @@ __all__ = [
     "register_specs_from_tree",
     "registered_spec_names",
     "clear_specs_for_tests",
-    "catalog_arm",
-    "CATALOG_ARM_ENV",
-    "spec_card",
-    "search_spec_cards",
 ]
 
 #: twin_name -> SourceSpec for every promoted spec-driven tool (diagnostics/tests).
 _SPEC_REGISTRY: dict[str, SourceSpec] = {}
-
-#: Catalog-surfacing experiment flag.
-#: UNSET (default) -> the spec-served sources register tier="general" (ambient).
-#: "1" (card-carried), "2" (discovery-expands-declaration) or "3" -> they register
-#: tier="catalog": EXCLUDED from the default declarable pool but KEPT in the search
-#: index. The flag is read at import so each arm runs in its OWN process with a
-#: clean pool; DEFAULT behaviour is unchanged when it is unset.
-CATALOG_ARM_ENV = "TRID3NT_CATALOG_ARM"
-
-
-def catalog_arm() -> str | None:
-    """The active catalog-surfacing arm ("1" / "2" / "3") or None when unset/invalid."""
-    val = os.environ.get(CATALOG_ARM_ENV, "").strip()
-    return val if val in ("1", "2", "3") else None
-
 
 def promoted_signature(spec: SourceSpec) -> tuple[inspect.Signature, dict[str, Any]]:
     """Synthesize the promoted tool's signature and annotations from ``spec.params``:
@@ -234,16 +214,8 @@ def register_spec(spec: SourceSpec) -> str:
 
     # An ``internal_only`` spec (an absorbed seam resolved in-process, e.g.
     # fetch_copernicus_dem <- fetch_dem) registers tier="internal": registry-
-    # resolvable but off BOTH the declarable pool and the search index, regardless
-    # of any catalog arm. Otherwise the catalog-surfacing experiment tier applies:
-    # under an arm flag the spec-served sources register tier="catalog" (excluded
-    # from the default declarable pool, kept in the search index) instead of the
-    # default tier="general". Unset -> "general", so the DEFAULT daemon surface is
-    # unchanged.
-    if spec.internal_only:
-        tier = "internal"
-    else:
-        tier = "catalog" if catalog_arm() else "general"
+    # resolvable but off BOTH the declarable pool and the search index.
+    tier = "internal" if spec.internal_only else "general"
     metadata = AtomicToolMetadata(
         name=name,
         ttl_class=spec.cache.ttl_class,
@@ -292,57 +264,6 @@ def get_spec(name: str) -> SourceSpec | None:
     The in-process seam for a consumer that needs a source's raw bytes without the
     cache and publish round trip: resolve, validate params, run the executor."""
     return _SPEC_REGISTRY.get(name)
-
-
-def _param_schema_entry(pspec: Any) -> dict[str, Any]:
-    """The typed param schema for one spec param (card projection, Design 1)."""
-    entry: dict[str, Any] = {"type": pspec.type, "required": bool(pspec.required)}
-    if pspec.default is not None:
-        entry["default"] = pspec.default
-    if getattr(pspec, "values", None):
-        entry["values"] = list(pspec.values)
-    if getattr(pspec, "min", None) is not None:
-        entry["min"] = pspec.min
-    if getattr(pspec, "max", None) is not None:
-        entry["max"] = pspec.max
-    return entry
-
-
-def spec_card(spec: SourceSpec, relevance_score: float | None = None) -> dict[str, Any]:
-    """Project a ``SourceSpec`` into a catalog CARD carrying the FULL untruncated
-    docstring (never clipped at the provider tool-description limit), the typed param
-    schema, and the honesty context of gates, caveats and fallback."""
-    card: dict[str, Any] = {
-        "name": spec.name,
-        "source_class": spec.source_class,
-        "docstring": _synthesize_doc(spec),
-        "params": {pn: _param_schema_entry(ps) for pn, ps in spec.params.items()},
-        "gates": spec.gates.model_dump(mode="json") if spec.gates is not None else {},
-        "caveats": list(spec.caveats),
-        "endpoint_fallback": list(spec.endpoint_fallback),
-    }
-    if relevance_score is not None:
-        card["relevance_score"] = float(relevance_score)
-    return card
-
-
-def search_spec_cards(topic: str, k: int = 10) -> list[dict[str, Any]]:
-    """Rank spec-served source CARDS for a free-text topic through the same retrieval
-    index discovery uses, keeping only spec-served sources. Returns ``[]`` on a cold
-    index, for the caller to fail open on."""
-    from trid3nt_server.tools.search.tool_retrieval import (
-        MAX_K,
-        retrieve_ranked_tools,
-    )
-
-    cards: list[dict[str, Any]] = []
-    for name, score in retrieve_ranked_tools(topic, MAX_K):
-        spec = _SPEC_REGISTRY.get(name)
-        if spec is not None:
-            cards.append(spec_card(spec, score))
-        if len(cards) >= k:
-            break
-    return cards
 
 
 def clear_specs_for_tests() -> None:

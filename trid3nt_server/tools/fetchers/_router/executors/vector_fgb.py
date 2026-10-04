@@ -68,23 +68,16 @@ def build_where(spec: SourceSpec, params: dict[str, Any]) -> str:
 # output-column projection, rename and normalization with no source hardcode.
 # Rule fields:
 #   from            source property key, or a dotted path into the raw row when the
-#                   field map hands the whole row over (case-insensitive when
-#                   column_map_ci). A literal key wins over the path walk, so a
-#                   source property whose own name carries a dot still resolves.
-#   kind            passthrough(default) | int | float | str | lookup | date_iso
-#                   | epoch_ms_iso
+#                   field map hands the whole row over. A literal key wins over the
+#                   path walk, so a source property whose own name carries a dot
+#                   still resolves.
+#   kind            passthrough(default) | int | float | str | lookup | epoch_ms_iso
 #   null_below      numeric: value <= this -> None (the -999 SVI sentinel)
-#   on_error        null(default) | skip_feature (drop the whole feature)
-#   key_from        lookup: an already-computed out_col to key the table on
 #   table           lookup: {key -> label}
 #   default         value when the source key is absent / lookup miss
 #   default_template  lookup miss: str formatted with {key} (drought "D{key}")
 # When column_map is present the executor emits EXACTLY the mapped columns (a
-# projection), then derived_columns / json_coerce / geometry_filter layer on top.
-
-
-class _SkipFeature(Exception):
-    """Internal sentinel: a column_map rule with on_error=skip_feature failed."""
+# projection), then json_coerce / geometry_filter layer on top.
 
 
 #: Absent source field, distinct from a present null (which stays null).
@@ -92,9 +85,6 @@ _MISSING = object()
 
 
 def _read_field(src_props: dict[str, Any], key: Any) -> Any:
-    """The raw value at a rule's ``from``, or ``_MISSING``. A literal key wins over the
-    dotted walk, so a property NAMED with dots resolves before a path of the same
-    spelling is tried."""
     if key is None:
         return _MISSING
     if key in src_props:
@@ -106,60 +96,16 @@ def _read_field(src_props: dict[str, Any], key: Any) -> Any:
     return _MISSING
 
 
-def _num(raw: Any) -> float:
-    return float(raw)
-
-
-def _norm_env(v: Any, kind: str) -> float | None:
-    """Sentinel normalizer for an environmental indicator: ``<= -999`` or non-finite
-    yields None, percentile and fraction clamp to their range and reject an
-    out-of-tolerance sentinel, and raw passes any finite non-sentinel float."""
-    if v is None:
-        return None
-    try:
-        f = float(v)
-    except (TypeError, ValueError):
-        return None
-    if not math.isfinite(f) or f <= -999.0:
-        return None
-    if kind == "raw":
-        return f
-    hi = 100.0 if kind == "percentile" else 1.0
-    if f < -0.001 or f > hi + 0.001:
-        return None
-    return max(0.0, min(hi, f))
-
-
-def _resolve_column(
-    rule: dict[str, Any], src_props: dict[str, Any], out_row: dict[str, Any],
-    params: dict[str, Any] | None = None,
-) -> Any:
+def _resolve_column(rule: dict[str, Any], src_props: dict[str, Any]) -> Any:
     kind = rule.get("kind", "passthrough")
-    on_error = rule.get("on_error", "null")
-
-    # A param-echo column: the column value IS the validated request param.
-    if kind == "param":
-        return (params or {}).get(rule.get("param"))
-    # from_param: the SOURCE field is chosen by a request param through a map
-    # (the source field is looked up by a request param); resolve then fall
-    # through to the declared kind over that field.
-    if "from_param" in rule:
-        fp = rule.get("from_param") or {}
-        field = (fp.get("map") or {}).get((params or {}).get(fp.get("param")))
-        rule = {**rule, "from": field}
-    if kind in ("percentile", "fraction", "raw"):
-        found = _read_field(src_props, rule.get("from"))
-        return _norm_env(rule.get("default") if found is _MISSING else found, kind)
+    found = _read_field(src_props, rule.get("from"))
+    raw = rule.get("default") if found is _MISSING else found
 
     if kind == "lookup":
         table = rule.get("table") or {}
-        if "key_from" in rule:
-            key = out_row.get(rule["key_from"])
-        else:
-            found = _read_field(src_props, rule.get("from"))
-            key = None if found is _MISSING else found
-        if key is None:
+        if found is _MISSING or found is None:
             return rule.get("default")
+        key = found
         # YAML int-keyed tables load as int keys; coerce the lookup key to int
         # when the table is int-keyed so a float/str code still resolves.
         if table and all(isinstance(k, int) for k in table):
@@ -172,12 +118,6 @@ def _resolve_column(
         if "default_template" in rule:
             return str(rule["default_template"]).format(key=key)
         return rule.get("default")
-
-    found = _read_field(src_props, rule.get("from"))
-    raw = rule.get("default") if found is _MISSING else found
-
-    if kind == "passthrough":
-        return raw
     if kind == "str":
         if raw is None:
             return None
@@ -196,31 +136,12 @@ def _resolve_column(
                 ms / 1000.0, tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         except (OverflowError, OSError, ValueError):
             return None
-    if kind == "date_iso":
-        # A date arrives typed where the driver read the service's own field type
-        # and as epoch milliseconds where it did not; both are the same day.
-        if isinstance(raw, (_dt.datetime, _dt.date)):
-            return (raw.date() if isinstance(raw, _dt.datetime) else raw).isoformat()
-        if isinstance(raw, (int, float)) and not isinstance(raw, bool):
-            try:
-                return _dt.datetime.fromtimestamp(raw / 1000.0, tz=_dt.timezone.utc).date().isoformat()
-            except (OverflowError, OSError, ValueError):
-                return rule.get("default", "")
-        return rule.get("default", "")
     if kind in ("int", "float"):
-        if raw is None:
-            if on_error == "skip_feature":
-                raise _SkipFeature
-            return None
         try:
-            f = _num(raw)
+            f = float(raw)
         except (TypeError, ValueError):
-            if on_error == "skip_feature":
-                raise _SkipFeature
             return None
         if not math.isfinite(f):
-            if on_error == "skip_feature":
-                raise _SkipFeature
             return None
         null_below = rule.get("null_below")
         if null_below is not None and f <= null_below:
@@ -229,8 +150,6 @@ def _resolve_column(
             try:
                 return int(raw)
             except (TypeError, ValueError):
-                if on_error == "skip_feature":
-                    raise _SkipFeature
                 return None
         return f
     return raw
@@ -254,37 +173,26 @@ def apply_column_map(
     features: list[dict[str, Any]], spec: SourceSpec, params: dict[str, Any] | None = None
 ) -> list[dict[str, Any]]:
     """Project each feature's props to the declared ``ingest.column_map`` columns."""
-    ingest = spec.ingest or {}
     cmap = _resolve_column_map(spec, params)
     if not cmap:
         return features
-    ci = bool(ingest.get("column_map_ci"))
-    out: list[dict[str, Any]] = []
-    for feat in features:
-        if not isinstance(feat, dict):
-            continue
-        raw_props = dict(feat.get("properties") or {})
-        src = {str(k).lower(): v for k, v in raw_props.items()} if ci else raw_props
-        row: dict[str, Any] = {}
-        try:
-            for out_col, rule in cmap.items():
-                r = dict(rule)
-                if ci and "from" in r:
-                    r["from"] = str(r["from"]).lower()
-                row[str(out_col)] = _resolve_column(r, src, row, params)
-        except _SkipFeature:
-            continue
-        out.append({"type": "Feature", "geometry": feat.get("geometry"), "properties": row})
-    return out
+    return [
+        {
+            "type": "Feature",
+            "geometry": feat.get("geometry"),
+            "properties": {
+                str(out_col): _resolve_column(dict(rule), dict(feat.get("properties") or {}))
+                for out_col, rule in cmap.items()
+            },
+        }
+        for feat in features
+        if isinstance(feat, dict)
+    ]
 
 
-# Declarative ingest transforms: derived and constant columns, nested-property to
-# JSON coercion, and the Point/finite-geometry filter. All three are opt-in
-# ``ingest.*`` directives; a spec declaring none of them is untouched.
-
-
-def _derived_column_names(spec: SourceSpec) -> list[str]:
-    return [str(c) for c in ((spec.ingest or {}).get("derived_columns") or {})]
+# Declarative ingest transforms: nested-property to JSON coercion and the
+# Point/finite-geometry filter. Both are opt-in ``ingest.*`` directives; a spec
+# declaring neither is untouched.
 
 
 def _passes_geometry_filter(geom: Any, gf: dict[str, Any]) -> bool:
@@ -309,39 +217,18 @@ def _passes_geometry_filter(geom: Any, gf: dict[str, Any]) -> bool:
     return True
 
 
-def _resolve_derived(dc_spec: dict[str, Any], spec: SourceSpec, params: dict[str, Any] | None) -> Any:
-    """Resolve one derived-column value from its descriptor: ``const`` is a literal,
-    ``param`` echoes a request param, and ``routing`` reads a field out of
-    ``ingest.routing`` keyed by a request param's value."""
-    src = dc_spec.get("source")
-    if src == "const":
-        return dc_spec.get("value")
-    if src == "param":
-        return (params or {}).get(dc_spec.get("param"))
-    if src == "routing":
-        routing = (spec.ingest or {}).get("routing") or {}
-        key = (params or {}).get(dc_spec.get("key_param"))
-        entry = routing.get(key) if isinstance(routing, dict) else None
-        if isinstance(entry, dict):
-            return entry.get(dc_spec.get("field"))
-    return None
-
-
 def apply_ingest_transforms(
     features: list[dict[str, Any]],
     spec: SourceSpec,
     params: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """Apply declarative ``geometry_filter`` / ``json_coerce_nested`` /
-    ``derived_columns`` to raw features (no-op when none are declared)."""
+    """Apply the column map, then declarative ``geometry_filter`` /
+    ``json_coerce_nested`` to raw features (no-op when none are declared)."""
     ingest = spec.ingest or {}
-    # Column-map projection (rename/normalize) runs FIRST so geometry_filter /
-    # json_coerce / derived_columns see the normalized output props.
     features = apply_column_map(features, spec, params)
     gf = ingest.get("geometry_filter")
     json_coerce = bool(ingest.get("json_coerce_nested"))
-    derived = ingest.get("derived_columns") or {}
-    if not (gf or json_coerce or derived):
+    if not (gf or json_coerce):
         return features
     out: list[dict[str, Any]] = []
     for feat in features:
@@ -355,8 +242,6 @@ def apply_ingest_transforms(
             for k, v in list(props.items()):
                 if isinstance(v, (dict, list)):
                     props[k] = json.dumps(v)
-        for col, dc_spec in derived.items():
-            props[str(col)] = _resolve_derived(dc_spec, spec, params)
         out.append({"type": "Feature", "geometry": geom, "properties": props})
     return out
 
@@ -364,9 +249,7 @@ def apply_ingest_transforms(
 def _out_columns(
     spec: SourceSpec, features: list[dict[str, Any]], params: dict[str, Any] | None = None
 ) -> list[str]:
-    """Resolve the output property columns, spec-declared or feature-derived. Derived
-    names are always appended, so an honest-empty header-only FGB still carries
-    them."""
+    """Resolve the output property columns, spec-declared or feature-derived."""
     ingest = spec.ingest or {}
     cmap = _resolve_column_map(spec, params)
     declared = ingest.get("properties")
@@ -382,9 +265,6 @@ def _out_columns(
             for k in (feat.get("properties") or {}).keys():
                 if k not in cols:
                     cols.append(str(k))
-    for dc in _derived_column_names(spec):
-        if dc not in cols:
-            cols.append(dc)
     return cols
 
 
@@ -395,7 +275,7 @@ def features_to_fgb_bytes(
 ) -> bytes:
     """Serialize GeoJSON features to FlatGeobuf bytes, applying the declarative ingest
     transforms first. Always emits a valid FGB: an empty feature list yields a
-    header-only FGB carrying the declared and derived schema, so readers still parse."""
+    header-only FGB carrying the declared schema, so readers still parse."""
     try:
         import geopandas as gpd
         import pandas as pd

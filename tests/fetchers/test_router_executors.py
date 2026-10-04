@@ -521,45 +521,19 @@ def test_column_map_rename_and_null_sentinel():
     assert out[1]["properties"]["score"] is None                # -999 sentinel -> null
 
 
-def test_column_map_lookup_and_skip_feature():
+def test_column_map_lookup():
     spec = _wave2_spec(ingest={"column_map": {
-        "dm": {"from": "dm", "kind": "int", "default": 0, "on_error": "skip_feature"},
-        "label": {"from": "dm", "kind": "lookup", "key_from": "dm",
+        "dm": {"from": "dm", "kind": "int"},
+        "label": {"from": "dm", "kind": "lookup",
                   "table": {0: "D0", 2: "D2 Severe"}, "default_template": "D{key}"},
     }})
     feats = [
         {"type": "Feature", "geometry": None, "properties": {"dm": 2}},
         {"type": "Feature", "geometry": None, "properties": {"dm": 7}},     # miss -> template
-        {"type": "Feature", "geometry": None, "properties": {"dm": None}},  # bad int -> skip
     ]
     out = vector_fgb.apply_column_map(feats, spec)
-    assert len(out) == 2                                        # third feature skipped
     assert out[0]["properties"] == {"dm": 2, "label": "D2 Severe"}
     assert out[1]["properties"] == {"dm": 7, "label": "D7"}
-
-
-def test_column_map_date_iso_and_ci():
-    spec = _wave2_spec(ingest={"column_map_ci": True, "column_map": {
-        "valid_date": {"from": "ddate", "kind": "date_iso", "default": ""},
-        "ftype": {"from": "FType", "kind": "int"},
-    }})
-    feats = [{"type": "Feature", "geometry": None,
-              "properties": {"DDATE": 1659398400000, "FTYPE": "390"}}]
-    out = vector_fgb.apply_column_map(feats, spec)
-    assert out[0]["properties"]["valid_date"] == "2022-08-02"   # epoch-ms -> ISO
-    assert out[0]["properties"]["ftype"] == 390                 # case-insensitive match
-
-
-def test_column_map_date_iso_takes_a_typed_date():
-    """A driver that read the service's own field type hands back a datetime."""
-    import datetime as dt
-
-    spec = _wave2_spec(ingest={"column_map": {
-        "valid_date": {"from": "ddate", "kind": "date_iso", "default": ""}}})
-    feats = [{"type": "Feature", "geometry": None,
-              "properties": {"ddate": dt.datetime(2022, 8, 2, 0, 0, tzinfo=dt.timezone.utc)}}]
-    out = vector_fgb.apply_column_map(feats, spec)
-    assert out[0]["properties"]["valid_date"] == "2022-08-02"
 
 
 def test_resolve_endpoints_select_and_endpoint_fallback():
