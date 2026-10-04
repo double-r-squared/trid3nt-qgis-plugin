@@ -187,7 +187,7 @@ def test_the_question_is_read_where_the_user_put_the_monitoring_point():
 
 
 def test_the_declared_params_resolve():
-    from trid3nt_server.workflows.runtime import resolve_params
+    from seated import resolve_params
 
     workflow = _template().telemac_micropollutant_release.workflow
     asyncio.run(resolve_params(workflow.params, {}))

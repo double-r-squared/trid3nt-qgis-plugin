@@ -1315,7 +1315,7 @@ def test_a_param_edited_on_the_card_reaches_the_chart_reference(monkeypatch):
     import asyncio
     from types import SimpleNamespace
 
-    from trid3nt_server.workflows.runtime import resolve_params
+    from seated import resolve_params
     from trid3nt_server.workflows.runtime.params import Param
     from trid3nt_server.workflows.telemac.workflow import _seat_on
 

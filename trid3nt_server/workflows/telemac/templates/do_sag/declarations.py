@@ -11,7 +11,7 @@ __all__ = ["ACCEPTS", "DOC", "PARAMS"]
 #: triangulation is the whole of what this question can be handed as a mesh; the
 #: discharge enters the water at a POINT, which is the one release geometry the
 #: sag pipeline has been run against.
-ACCEPTS = Accepts(mesh=("unstructured_tri",), release=("point",))
+ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
 
 class PARAMS:

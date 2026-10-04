@@ -105,7 +105,7 @@ def test_the_second_run_reuses_the_kept_mesh_and_says_which(built, tmp_path):
 def _run_recipe(monkeypatch, bed: str, friction: float) -> dict:
     """The recipe the run hands its mesh stage, off a fill stating ``friction``."""
     from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.runtime import resolve_params
+    from seated import resolve_params
     from trid3nt_server.inputs.fill import Fill, production
 
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow

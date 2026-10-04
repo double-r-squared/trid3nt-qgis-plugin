@@ -243,19 +243,6 @@ def test_the_proven_mesh_rows_are_what_the_templates_declare():
     assert accepts_for(_AGITATION).kinds("mesh") == ("unstructured_tri",)
 
 
-def test_a_release_is_accepted_only_where_the_reach_family_wrote_the_row():
-    """PER-ROLE ABSENCE IS A REFUSAL. The reach family releases a substance at a
-    point and says so; nothing is released into a harbour agitation field, so that
-    template has no release row and refuses one by not naming it."""
-    assert _RIVER_DYE.accepts("release", "point") is True
-    assert _DO_SAG.accepts("release", "point") is True
-    assert accepts_for(_AGITATION).kinds("release") is None
-    assert accepts_for(_AGITATION).accepts("release", "point") is False
-    # A mesh row is no licence for a release, and a kind outside the row is not a
-    # member of it either.
-    assert _RIVER_DYE.accepts("release", "polygon") is False
-
-
 def test_an_accept_set_naming_nothing_refuses_where_it_is_written():
     """An EMPTY declaration is authored nonsense, not a stricter absence: it
     explodes at import rather than at a door nobody would reach."""

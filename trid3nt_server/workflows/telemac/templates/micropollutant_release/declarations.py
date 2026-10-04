@@ -11,7 +11,7 @@ __all__ = ["ACCEPTS", "DOC", "PARAMS"]
 #: a triangulation is the whole of what the domain can be handed as a mesh. The
 #: substance enters the water at a POINT, which is the one release geometry this
 #: pipeline has been run against.
-ACCEPTS = Accepts(mesh=("unstructured_tri",), release=("point",))
+ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
 
 class PARAMS:

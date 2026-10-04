@@ -1,8 +1,7 @@
 """An INSTANT: the moment a run is about, from whatever the wire sent.
 
 A date, a datetime, a trailing-Z timestamp and nothing at all all enter through
-``instant``; ``day`` narrows one to the calendar day a daily record is asked
-over. Which cycle, sample or forecast a run reads is physically consequential,
+``instant``. Which cycle, sample or forecast a run reads is physically consequential,
 so a value that does not parse REFUSES by name rather than reading the latest.
 """
 
@@ -13,7 +12,7 @@ from typing import Any, Mapping
 
 from trid3nt_server.workflows.runtime import WireArgsError
 
-__all__ = ["day", "event_time", "instant"]
+__all__ = ["event_time", "instant"]
 
 
 def instant(value: Any, *, label: str = "event_time",
@@ -38,17 +37,6 @@ def instant(value: Any, *, label: str = "event_time",
     if moment.tzinfo is None:
         moment = moment.replace(tzinfo=dt.timezone.utc)
     return moment.astimezone(dt.timezone.utc).isoformat()
-
-
-def day(value: Any, *, label: str = "event_time",
-        code: str = "EVENT_TIME_INVALID") -> str:
-    """The calendar DAY a daily record is read over, as ``YYYY-MM-DD``.
-
-    Nothing asked for is TODAY in UTC; anything unparseable refuses typed."""
-    stated = instant(value, label=label, code=code)
-    if stated is None:
-        return dt.datetime.now(dt.timezone.utc).date().isoformat()
-    return stated[:10]
 
 
 def event_time(*, label: str = "event_time",

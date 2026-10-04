@@ -13,12 +13,8 @@ import pytest
 
 from trid3nt_server.inputs.user_input import (
     UserInputError,
-    bbox,
-    bearing,
-    bearing_deg,
     lonlat_bbox,
     lonlat_point,
-    point,
     polygon_ring,
     polyline_coords,
 )
@@ -55,21 +51,6 @@ def test_a_refusal_carries_the_callers_own_error_code():
     with pytest.raises(UserInputError) as exc:
         lonlat_point("nonsense", code="TELEMAC_PARAMS_INVALID")
     assert exc.value.error_code == "TELEMAC_PARAMS_INVALID"
-
-
-# --- bearings WRAP, they do not clamp ---------------------------------------- #
-@pytest.mark.parametrize("given,expected", [
-    (370, 10.0), (-90, 270.0), (0, 0.0), (359.5, 359.5), (720, 0.0), (-450, 270.0),
-])
-def test_a_bearing_wraps_rather_than_clamping(given, expected):
-    """A bearing is cyclic, so 370 is 10 and -90 is 270 - clamping either one to a
-    declared bound would turn a legal direction into a DIFFERENT legal direction."""
-    assert bearing_deg(given) == pytest.approx(expected)
-
-
-def test_a_non_numeric_bearing_refuses():
-    with pytest.raises(UserInputError, match="degrees"):
-        bearing_deg("north-ish")
 
 
 # --- polylines --------------------------------------------------------------- #
@@ -130,26 +111,6 @@ def test_a_bbox_reads_from_a_comma_string_too():
 def test_a_malformed_bbox_refuses(bad):
     with pytest.raises(UserInputError):
         lonlat_bbox(bad, label="the extent")
-
-
-# --- the coercion factories: the WIRE route into the same normalizers --------- #
-def test_the_point_coercion_reads_one_wire_field():
-    assert point("outfall_coords")({"outfall_coords": ["-124.1", "40.5"]}) == {
-        "outfall_coords": (-124.1, 40.5)}
-
-
-def test_the_bbox_coercion_orders_what_the_wire_sent():
-    assert bbox("extent")({"extent": [-84.9, 29.8, -85.02, 29.69]}) == {
-        "extent": (-85.02, 29.69, -84.9, 29.8)}
-
-
-def test_the_bearing_coercion_wraps_what_the_wire_sent():
-    assert bearing("wind_dir_deg")({"wind_dir_deg": 370}) == {"wind_dir_deg": 10.0}
-
-
-def test_a_coercion_labels_its_refusal_with_the_param_it_reads():
-    with pytest.raises(UserInputError, match="outfall_coords"):
-        point("outfall_coords")({"outfall_coords": "somewhere"})
 
 
 # --- ONE SEAM: the drawn route and the typed route agree ---------------------- #

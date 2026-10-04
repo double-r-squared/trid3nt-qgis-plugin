@@ -15,7 +15,6 @@ from .errors import PlanValidationError
 __all__ = [
     "Door",
     "Param",
-    "ParamValues",
     "ResolvedParam",
     "ResolvedParams",
     "doors",
@@ -230,39 +229,9 @@ class ResolvedParams:
     def rows(self) -> tuple[ResolvedParam, ...]:
         return tuple(self._rows.values())
 
-    def values_view(self) -> "ParamValues":
-        """The concrete-value view, for code that runs WITH the sheet, not on it."""
-        return ParamValues(self._rows)
-
     def replacing(self, rows: dict[str, ResolvedParam]) -> "ResolvedParams":
         """A new sheet with these rows overlaid - the sheet itself stays frozen."""
         return ResolvedParams({**self._rows, **rows})
-
-
-class ParamValues:
-    """Concrete-value view of a resolved sheet: ``v.name`` IS the value.
-    A separate type from :class:`ResolvedParams` so a declaration-time read can
-    never silently collapse into an early-bound value."""
-
-    __slots__ = ("_rows",)
-
-    def __init__(self, rows: dict[str, ResolvedParam]) -> None:
-        self._rows = dict(rows)
-
-    def __getattr__(self, name: str) -> Any:
-        rows = object.__getattribute__(self, "_rows")
-        if name not in rows:
-            raise AttributeError(
-                f"param {name!r} is not declared (declared: {sorted(rows)})"
-            )
-        return rows[name].value
-
-    def __contains__(self, name: str) -> bool:
-        return name in self._rows
-
-    def get(self, name: str, default: Any = None) -> Any:
-        row = self._rows.get(name)
-        return default if row is None else row.value
 
 
 def wire_value(value: Any) -> Any:

@@ -309,15 +309,6 @@ def _small(value: Any) -> Any:
     return str(value)
 
 
-def run_solved(run_id: str) -> str | None:
-    """The file the named run's solve wrote, off its own record; ``None`` when
-    the journal has no line for it or the line names none."""
-    for record in reversed(read_records()):
-        if str(record.get("run_id") or "") == str(run_id):
-            return record.get("solved") or None
-    return None
-
-
 def run_outputs(run_id: str) -> list[dict[str, Any]]:
     """The layers the named run published, off its own record; ``[]`` when the
     journal has no line for it. The record is APPEND-ONLY, so the last line for

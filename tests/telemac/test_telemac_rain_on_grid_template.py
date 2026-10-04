@@ -29,7 +29,6 @@ def test_registered_on_the_model_surface():
     from trid3nt_server.tools import TOOL_REGISTRY
 
     assert "telemac_rain_on_grid" in TOOL_REGISTRY
-    assert telemac_rain_on_grid.parked is None
 
     md = telemac_rain_on_grid.workflow.metadata
     assert md.engine == "telemac"

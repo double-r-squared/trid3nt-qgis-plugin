@@ -37,12 +37,6 @@ EXPECTED_TEMPLATES = {
     "tomawac_wave_driven_currents",
 }
 
-#: Templates that are DECLARED but off the model surface, name -> the module
-#: attribute that carries the declaration. Pinned for the same reason the
-#: registered set is: parking is a stated condition with a reason, and a template
-#: that drifts INTO or OUT OF it silently is the drift this file exists to catch.
-PARKED_TEMPLATES: dict[str, str] = {}
-
 # The 10 deleted engine-door concierge tools.
 DELETED_DOORS = {
     "run_sfincs",
@@ -90,20 +84,6 @@ def test_all_templates_registered_and_callable():
         entry = reg[name]
         assert callable(entry.fn), f"{name} is not callable"
         assert getattr(entry.metadata, "engine", None), f"{name} missing engine tag"
-
-
-def test_parked_templates_are_declared_off_the_surface_with_a_reason():
-    """A parked template is READ from its declaration, never inferred from what a
-    session happened to import: the module is in the tree's import list, the
-    declaration validates, ``parked`` names the reason, and the tool is absent."""
-    import importlib
-
-    reg = _full_registry()
-    for name, module_path in PARKED_TEMPLATES.items():
-        fn = getattr(importlib.import_module(module_path), name)
-        assert fn.parked, f"{name} is pinned parked but declares no reason"
-        assert fn.workflow.plan.name == name
-        assert name not in reg, f"{name} is pinned parked but registers a tool"
 
 
 @pytest.fixture(scope="module")

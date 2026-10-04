@@ -6,18 +6,14 @@ vocabularies cannot drift; a malformed value REFUSES typed, under ``code``.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 from trid3nt_server.errors import DeclarativeError
 
 __all__ = [
     "PlaceNameError",
     "UserInputError",
-    "bearing",
-    "bearing_deg",
-    "bbox",
     "lonlat_bbox",
-    "point",
     "polygon_ring",
     "polyline_coords",
     "polyline_set",
@@ -206,45 +202,3 @@ def lonlat_bbox(value: Any, *, label: str = "extent",
     if not (_on_earth(west, south) and _on_earth(east, north)):
         raise _refuse(f"{label} {tuple(nums)} is off the earth.", code)
     return (min(west, east), min(south, north), max(west, east), max(south, north))
-
-
-def bearing_deg(value: Any, *, label: str = "bearing",
-                code: str = _DEFAULT_CODE) -> float | None:
-    """A compass bearing, WRAPPED to [0, 360).
-    Cyclic, so 370 is 10 and -90 is 270; wrapping before the door is what lets a
-    param still declare ``bounds=(0, 360)`` and have them mean something."""
-    if value is None:
-        return None
-    try:
-        return float(value) % 360.0
-    except (TypeError, ValueError):
-        raise _refuse(f"{label} {value!r} is not a number of degrees.", code) from None
-
-
-# -- coercion factories: the WIRE route into the same normalizers ---------- #
-
-def _coercion(param: str, normalize: Callable[..., Any], label: str | None,
-              code: str) -> Callable[[Mapping[str, Any]], dict[str, Any]]:
-    def _coerce(args: Mapping[str, Any]) -> dict[str, Any]:
-        return {param: normalize(args.get(param), label=label or param, code=code)}
-
-    _coerce.__name__ = f"{normalize.__name__}:{param}"
-    return _coerce
-
-
-def point(param: str, *, label: str | None = None,
-          code: str = _DEFAULT_CODE) -> Callable[[Mapping[str, Any]], dict[str, Any]]:
-    """A coercion reading one wire field into a clean ``(lon, lat)``."""
-    return _coercion(param, lonlat_point, label, code)
-
-
-def bbox(param: str, *, label: str | None = None,
-         code: str = _DEFAULT_CODE) -> Callable[[Mapping[str, Any]], dict[str, Any]]:
-    """A coercion reading one wire field into an ordered lon/lat bounding box."""
-    return _coercion(param, lonlat_bbox, label, code)
-
-
-def bearing(param: str, *, label: str | None = None,
-            code: str = _DEFAULT_CODE) -> Callable[[Mapping[str, Any]], dict[str, Any]]:
-    """A coercion wrapping one wire field to a compass bearing in [0, 360)."""
-    return _coercion(param, bearing_deg, label, code)

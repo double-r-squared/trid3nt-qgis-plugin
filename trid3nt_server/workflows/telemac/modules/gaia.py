@@ -17,8 +17,8 @@ from .module import Module, Output, SlotRefused
 from .outputs import PRIMITIVES
 
 __all__ = ["GAIA", "GRAIN_UM_MAX", "GRAIN_UM_MIN", "MODULE_OUTPUT",
-           "STEERING_FILENAME", "RESULT_FILENAME", "Backfill", "Bed", "Dig",
-           "Dredging", "Dump", "SaveWaterLevel", "Suspension"]
+           "STEERING_FILENAME", "RESULT_FILENAME", "Bed", "Dig", "Dredging",
+           "Suspension"]
 
 #: What the module WRITES, by the mnemonic VARIABLES FOR GRAPHIC PRINTOUTS
 #: spells: the result-file name, the unit and how it draws. The BED ITSELF is
@@ -153,32 +153,6 @@ def Dig(*, field: Any, start: Any, end: Any, volume: Any = None,  # noqa: N802
             "repeat": repeat, "min_volume": min_volume,
             "min_volume_radius": min_volume_radius, "level": level,
             "dump": dump, "dump_rate": dump_rate}
-
-
-def Dump(*, field: Any, start: Any, end: Any, volume: Any,  # noqa: N802
-         grain_class: Any) -> Mapping[str, Any]:
-    """``volume`` of material put into ``field`` between the two times.
-
-    ``grain_class`` is one fraction per sediment class, summing to one; the
-    engine refuses a RATE on a timed dump, which is the dig action's own keyword."""
-    return {"type": "Dump_by_time", "field": field, "start": start, "end": end,
-            "volume": volume, "grain_class": list(grain_class)}
-
-
-def Backfill(*, field: Any, start: Any, end: Any,  # noqa: N802
-             crit_depth: Any, level: Any, grain_class: Any) -> Mapping[str, Any]:
-    """``field`` filled back up to ``crit_depth`` under the reference level."""
-    return {"type": "Backfill_to_level", "field": field, "start": start,
-            "end": end, "crit_depth": crit_depth, "level": level,
-            "grain_class": list(grain_class)}
-
-
-def SaveWaterLevel(*, start: Any, level: Any) -> Mapping[str, Any]:  # noqa: N802
-    """The free surface at ``start``, saved into ``level`` for a later action.
-
-    ``level`` is WATERLVL1..WATERLVL3, and an action reading one refuses unless
-    a save wrote it earlier in the file."""
-    return {"type": "Save_water_level", "start": start, "level": level}
 
 
 def _dredging(value: Mapping[str, Any], *, run: Mapping[str, Any]

@@ -34,7 +34,6 @@ def test_registered_on_the_model_surface():
     from trid3nt_server.tools import TOOL_REGISTRY
 
     assert _TOOL in TOOL_REGISTRY
-    assert getattr(template, _TOOL).parked is None
 
     md = _workflow().metadata
     assert md.engine == "telemac"

@@ -34,7 +34,7 @@ DECAY_PRESETS: dict[str, dict[str, float]] = {
 #: lattice is refused at the door rather than trusted into a run that assumes
 #: edges. The release enters the water at a POINT - the one release geometry this
 #: plume pipeline has been run against.
-ACCEPTS = Accepts(mesh=("unstructured_tri",), release=("point",))
+ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
 
 class PARAMS:

@@ -19,7 +19,7 @@ GRADATION_PRESETS: dict[str, list[list[float]]] = {
 
 #: What a mobile-bed run can be HANDED. The bed evolves on the same triangulation
 #: the hydrodynamics runs on, so a lattice is refused at the door.
-ACCEPTS = Accepts(mesh=("unstructured_tri",), release=("point",))
+ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
 
 class PARAMS:

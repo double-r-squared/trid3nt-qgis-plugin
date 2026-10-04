@@ -13,7 +13,7 @@ import pytest
 
 import trid3nt_server
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.runtime import resolve_params
+from seated import resolve_params
 from trid3nt_server.inputs.fill import (REJECTED, Fill, fill,
                                                    production)
 from trid3nt_server.workflows.telemac.modules import T2D

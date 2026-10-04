@@ -16,7 +16,6 @@ __all__ = [
     "StepFailedError",
     "SuppliedCoverageError",
     "SuppliedGeometryError",
-    "WorkflowParkedError",
 ]
 
 
@@ -87,11 +86,3 @@ class StepFailedError(DeclarativeError):
         super().__init__(message, error_code=error_code)
         self.step = step
         self.cause = cause
-
-
-class WorkflowParkedError(DeclarativeError):
-    """A template that is DECLARED but off the model surface was invoked.
-    Parking is a state the declaration carries: the declaration still checks at import,
-    the tool is simply never registered, and this refusal names the reason."""
-
-    error_code = "TEMPLATE_PARKED"

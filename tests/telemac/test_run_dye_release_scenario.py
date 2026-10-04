@@ -32,7 +32,7 @@ def _norm(**kw):
 
 def _resolve(**supplied):
     """The sheet this invocation resolves, over every row the template declares."""
-    from trid3nt_server.workflows.runtime import resolve_params
+    from seated import resolve_params
 
     return asyncio.run(resolve_params(_workflow().params, dict(supplied)))
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import math
 
-__all__ = ["critical_point", "do_profile"]
+__all__ = ["do_profile"]
 
 #: Seconds in a day: the rate constants are stated per day and the travel time
 #: down a reach is in seconds.
@@ -45,28 +45,3 @@ def do_profile(distance_m: list[float], velocity_mps: float,
         deficit_out.append(here)
         oxygen_out.append(saturation - here)
     return oxygen_out, deficit_out
-
-
-def critical_point(velocity_mps: float, saturation_mgl: float, bod0_mgl: float,
-                   deficit0_mgl: float, k1_per_day: float, k2_per_day: float
-                   ) -> dict[str, float]:
-    """Where the deficit is deepest: travel time, distance downstream, minimum DO.
-
-    ``tc = 1/(k2-k1) ln[(k2/k1)(1 - D0(k2-k1)/(k1 L0))]``; ``Dc = (k1/k2) L0
-    e^{-k1 tc}``; ``min DO = Cs - Dc``."""
-    k1 = float(k1_per_day)
-    k2 = float(k2_per_day)
-    saturation = float(saturation_mgl)
-    load = float(bod0_mgl)
-    deficit = float(deficit0_mgl)
-    if load <= 0.0:
-        return dict(tc_day=0.0, xc_m=0.0, min_do_mgl=saturation - deficit,
-                    max_deficit_mgl=deficit)
-    if abs(k2 - k1) < 1e-9:
-        tc_day = max(1.0 / k1 * (1.0 - deficit / load), 0.0)
-    else:
-        argument = (k2 / k1) * (1.0 - deficit * (k2 - k1) / (k1 * load))
-        tc_day = max(math.log(argument) / (k2 - k1), 0.0) if argument > 0.0 else 0.0
-    critical = (k1 / k2) * load * math.exp(-k1 * tc_day) if k2 > 0.0 else 0.0
-    return dict(tc_day=tc_day, xc_m=float(velocity_mps) * tc_day * _DAY_S,
-                min_do_mgl=saturation - critical, max_deficit_mgl=critical)

@@ -20,8 +20,7 @@ from . import journal
 from .accepts import Accepts
 from .data import DataDecl, data_rows
 from .domain import bind_domain, reset_domain
-from .errors import (DeclarativeError, GateRefusedError, WorkflowParkedError,
-                     said)
+from .errors import DeclarativeError, GateRefusedError, said
 from .levers import with_levers
 from .params import Param, ResolvedParams, doors, param_rows
 from .resolution import SensitivityDecl, sensitivity_notes
@@ -427,11 +426,9 @@ def register_workflow(
     metadata: Any,
     template: Any,
     *,
-    parked: str | None = None,
     sensitivity: Sequence[tuple[str, str]] = (),
     coerce: Sequence[Callable[[dict], Mapping[str, Any]]] = (),
     levers: Sequence[str] | None = None,
-    extra_args: Sequence[tuple[str, Any]] = (),
     **register_kwargs: Any,
 ) -> Callable[..., Any]:
     """Generate and register the tool for a declared workflow.
@@ -439,9 +436,6 @@ def register_workflow(
     are read off its own names, and the workflow class reads the rest. The
     signature is synthesized from the declared params, so the model-facing schema
     comes from the same declaration the run resolves."""
-    # ``parked="<reason>"`` builds and validates the declaration as always, then
-    # leaves the MODEL SURFACE: the tool is never registered and the generated
-    # function refuses typed, so membership never depends on import order.
     from trid3nt_server.tools import register_tool
 
     params = param_rows(getattr(template, "PARAMS"))
@@ -458,18 +452,12 @@ def register_workflow(
     params = workflow.params
 
     async def _run(**wire: Any) -> Any:
-        if parked:
-            raise WorkflowParkedError(
-                f"{workflow.name} is parked and cannot be run: {parked}")
         return await workflow.run(wire)
 
     _run.__name__ = workflow.name
     _run.__qualname__ = workflow.name
     _run.__module__ = getattr(template, "__name__", __name__)
-    #: The reason this template is off the model surface, or ``None``. Read by the
-    #: roster checks, which ask the declaration rather than the import order.
-    _run.parked = parked  # type: ignore[attr-defined]
-    sig, annotations = _wire_signature(params, extra_args, workflow.data)
+    sig, annotations = _wire_signature(params, workflow.data)
     _run.__signature__ = sig  # type: ignore[attr-defined]
     _run.__annotations__ = dict(annotations)
     _run.workflow = workflow  # type: ignore[attr-defined]
@@ -494,8 +482,6 @@ def register_workflow(
     register_kwargs.setdefault("read_only_hint", False)
     register_kwargs.setdefault("open_world_hint", False)
     register_kwargs.setdefault("destructive_hint", False)
-    if parked:
-        return _run
     register_kwargs.setdefault("idempotent_hint", False)
     return register_tool(metadata, **register_kwargs)(_run)
 
@@ -528,7 +514,7 @@ def _wire_params(params: Sequence[Param]) -> tuple[Param, ...]:
                  if prm.wire and prm.door != doors.CONSTANT)
 
 
-def _wire_signature(params: Sequence[Param], extra: Sequence[tuple[str, Any]],
+def _wire_signature(params: Sequence[Param],
                     data: Sequence[DataDecl] = ()) -> tuple[inspect.Signature, dict]:
     """The generated tool's signature: declared params, context slots, aliases, controls.
     Every argument is keyword-with-default, and a ``**`` absorber keeps an unknown
@@ -547,7 +533,6 @@ def _wire_signature(params: Sequence[Param], extra: Sequence[tuple[str, Any]],
     # of what the argument accepts.
     entries += [(decl.name, decl.wire_annotation, None) for decl in data
                 if decl.fills_from_user]
-    entries += [(name, ann, None) for name, ann in extra]
     entries += list(_CONTROLS)
     seen: set[str] = set()
     sig_params: list[inspect.Parameter] = []

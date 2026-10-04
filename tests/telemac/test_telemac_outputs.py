@@ -434,7 +434,7 @@ def test_publish_outputs_reads_once_and_publishes_each(monkeypatch, solved):
 def _run_of(workflow: Any) -> Any:
     from types import SimpleNamespace
 
-    from trid3nt_server.workflows.runtime import resolve_params
+    from seated import resolve_params
 
     params = asyncio.run(resolve_params(workflow.params,
                                         {"location": "X", "mesh_resolution_m": 9.0}))

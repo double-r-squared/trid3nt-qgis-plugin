@@ -21,17 +21,7 @@ from .params import (
     wire_value,
 )
 
-__all__ = ["merge_provenance", "provenance_entries", "resolve_params", "seat_param"]
-
-
-async def resolve_params(declared: Any,
-                         supplied: Mapping[str, Any]) -> ResolvedParams:
-    """Every declared param seated off ``supplied`` -> the resolved sheet.
-    ``supplied`` is NEVER ambient - no case-store lookup."""
-    declared = param_rows(declared)
-    refuse_duplicate_params(declared)
-    return ResolvedParams({param.name: seat_param(param, supplied.get(param.name))
-                           for param in declared})
+__all__ = ["merge_provenance", "provenance_entries", "seat_param"]
 
 
 def seat_param(param: Param, value: Any) -> ResolvedParam:

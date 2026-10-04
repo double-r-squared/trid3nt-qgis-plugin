@@ -34,8 +34,8 @@ from trid3nt_server.workflows.runtime import (
     merge_provenance,
     provenance_entries,
     render_docstring,
-    resolve_params,
 )
+from seated import resolve_params
 
 _HERE = "tests.runtime.test_declarative_library"
 
@@ -618,8 +618,6 @@ async def test_a_concrete_read_is_value_of_and_nothing_watches_it():
     assert p.row("base").value == 1.0
     assert p.values_dict()["base"] == 1.0
     assert [r.name for r in p.rows()] == ["base", "pt"]
-    assert p.values_view().base == 1.0
-    assert p.values_view().get("base") == 1.0
 
 
 # --- the chart PAYLOAD is the surface, not the node's return dict ------------ #

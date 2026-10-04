@@ -101,7 +101,7 @@ async def test_a_filled_check_hook_reaches_the_result_as_a_note(monkeypatch):
 
 
 # --- (3) the registration factory synthesizes the wire ---------------------- #
-def test_the_generated_signature_is_the_declaration_plus_aliases_and_controls():
+def test_the_generated_signature_is_the_declaration_plus_controls():
     from trid3nt_server.workflows.runtime.workflow import _wire_signature
 
     params = (
@@ -114,8 +114,8 @@ def test_the_generated_signature_is_the_declaration_plus_aliases_and_controls():
         Param("solver_dt_s", door=doors.CONSTANT, default=1.0, bounds=(0.1, 60.0),
               desc="non-question numerics the model is never asked for"),
     )
-    sig, annotations = _wire_signature(params, (("alias", str | None),))
-    assert list(sig.parameters) == ["location", "depth_m", "armed", "alias",
+    sig, annotations = _wire_signature(params)
+    assert list(sig.parameters) == ["location", "depth_m", "armed",
                                     "input_mode", "restart_clean", "keywords",
                                     "picks", "_extra_ignored"]
     assert annotations["depth_m"] == (float | None)      # bounded -> float
@@ -123,7 +123,7 @@ def test_the_generated_signature_is_the_declaration_plus_aliases_and_controls():
     assert annotations["location"] == (str | None)       # inferred
     assert sig.parameters["restart_clean"].default is False
     assert all(sig.parameters[n].default is None
-               for n in ("location", "depth_m", "armed", "alias", "input_mode",
+               for n in ("location", "depth_m", "armed", "input_mode",
                          "keywords"))
     assert sig.parameters["_extra_ignored"].kind is inspect.Parameter.VAR_KEYWORD
 
@@ -163,7 +163,7 @@ def test_a_constant_supplied_off_the_model_wire_still_reaches_the_sheet():
     import asyncio
 
     from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.runtime.resolver import resolve_params
+    from seated import resolve_params
 
     wf = TOOL_REGISTRY["telemac_do_sag"].fn.workflow
     from trid3nt_server.inputs.fill import ACCEPTED, Fill, fill

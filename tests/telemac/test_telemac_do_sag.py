@@ -12,10 +12,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.telemac.helpers.oxygen_sag import (
-    critical_point,
-    do_profile,
-)
+from trid3nt_server.workflows.telemac.helpers.oxygen_sag import do_profile
 from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
 from trid3nt_server.workflows.telemac.workflow import stated
 from trid3nt_server.workflows.telemac.modules.outputs import (
@@ -44,12 +41,14 @@ def test_waqtel_o2_reproduces_streeter_phelps():
     D0 = p["Cs"] - p["up_do"]
     sp, _ = do_profile(list(x), U, p["Cs"], p["L0"], D0, p["k1_day"], p["k2_day"])
     sp = np.asarray(sp)
-    crit = critical_point(U, p["Cs"], p["L0"], D0, p["k1_day"], p["k2_day"])
+    dense = np.linspace(0.0, float(x.max()), 20001)
+    sag, _ = do_profile(list(dense), U, p["Cs"], p["L0"], D0, p["k1_day"], p["k2_day"])
+    sag = np.asarray(sag)
     i = int(o2.argmin())
     # sag minimum matches the analytic sag minimum
-    assert abs(o2[i] - crit["min_do_mgl"]) < 0.05
+    assert abs(o2[i] - sag.min()) < 0.05
     # sag LOCATION matches within one mesh cell-ish (< 1% of the reach)
-    assert abs(x[i] - crit["xc_m"]) < 0.01 * p["L"]
+    assert abs(x[i] - dense[sag.argmin()]) < 0.01 * p["L"]
     # whole-profile agreement (numerical diffusion only)
     assert np.sqrt(np.mean((o2 - sp) ** 2)) < 0.05
     # and the modeled sag violates the 5 mg/L standard (the permit answer)
@@ -70,7 +69,7 @@ def _template():
 
 
 def _resolve(**supplied):
-    from trid3nt_server.workflows.runtime import resolve_params
+    from seated import resolve_params
 
     return asyncio.run(resolve_params(_workflow().params, dict(supplied)))
 

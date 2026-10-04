@@ -25,7 +25,7 @@ TELEMAC_TEMPLATES: tuple[tuple[str, str], ...] = (
 def _resolve_bare(tool_name: str, location: str):
     """The door-1 sheet a BARE ``{"location": ...}`` invocation resolves to."""
     from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.runtime.resolver import resolve_params
+    from seated import resolve_params
 
     workflow = TOOL_REGISTRY[tool_name].fn.workflow
     supplied, err = asyncio.run(_normalized(workflow, {"location": location}))
@@ -61,7 +61,7 @@ def test_unsupplied_cores_provenance_row_is_not_user(tool_name: str,
 def test_a_supplied_count_still_reads_as_the_users() -> None:
     """The abstention is about ABSENCE only: a sent count is still door=user."""
     from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.runtime.resolver import resolve_params
+    from seated import resolve_params
 
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
     supplied, err = asyncio.run(_normalized(workflow, 

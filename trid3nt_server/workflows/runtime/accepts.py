@@ -30,9 +30,8 @@ class Accepts:
 
     roles: Mapping[str, tuple[str, ...]]
 
-    def __init__(self, *, mesh: tuple[MeshKind, ...] | None = None,
-                 release: tuple[str, ...] | None = None) -> None:
-        declared = {"mesh": mesh, "release": release}
+    def __init__(self, *, mesh: tuple[MeshKind, ...] | None = None) -> None:
+        declared = {"mesh": mesh}
         blank = sorted(role for role, kinds in declared.items()
                        if kinds is not None and not kinds)
         if blank:

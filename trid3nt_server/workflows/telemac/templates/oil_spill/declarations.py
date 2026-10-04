@@ -34,7 +34,7 @@ OIL_PRESETS: dict[str, dict[str, Any]] = {
 #: release enters the water at a POINT - floats released in shallow margins or
 #: against a wall are dropped by the module, so the point is snapped for
 #: clearance before it is compiled into the release routine.
-ACCEPTS = Accepts(mesh=("unstructured_tri",), release=("point",))
+ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
 
 class PARAMS:

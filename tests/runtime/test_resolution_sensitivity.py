@@ -13,7 +13,7 @@ import asyncio
 
 import pytest
 
-from trid3nt_server.workflows.runtime.resolver import resolve_params
+from seated import resolve_params
 from trid3nt_server.workflows.runtime.resolution import (
     CLASSES,
     SensitivityDecl,

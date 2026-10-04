@@ -17,7 +17,7 @@ SEDIMENT_CONCENTRATION_MGL = 100.0
 
 #: What a suspended-plume run can be HANDED. The settling class rides the same
 #: triangulation the hydrodynamics runs on, so a lattice is refused at the door.
-ACCEPTS = Accepts(mesh=("unstructured_tri",), release=("point",))
+ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
 
 class PARAMS:
