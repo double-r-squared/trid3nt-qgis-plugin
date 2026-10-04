@@ -240,7 +240,7 @@ def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[
     refusal."""
     import dataretrieval.nwis as nwis
 
-    from ..._router.executors.dataretrieval_delegate import retrieve
+    from ..._router.hooks.dataretrieval import retrieve
 
     sc = spec.error_code_prefix
     sel = _selector_kwargs(params.get("state_code"), params.get("bbox"))

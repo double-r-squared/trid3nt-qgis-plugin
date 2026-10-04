@@ -222,14 +222,11 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
     # materialised row is a layer - and one executor answers both.
     if (spec.ingest or {}).get("access") == qgis_provider.ACCESS:
         return qgis_provider.execute
-    # A spec-declared library delegation wins over the shape dispatch. Two forms:
-    #  - GENERIC library_delegate: a spec names ``hooks.delegate`` (a
-    #    registered hook that calls a maintained library owning discovery+socket and
-    #    returns arrays/frames). A raster spec routes through raster_cog (its
-    #    fetch_source_array calls the delegate for the array); a vector spec routes
-    #    through the generic library_delegate.execute (features -> FGB).
-    #  - LEGACY dataretrieval: ``ingest.delegate.library == 'dataretrieval'``
-    #    with a service dispatch, kept on its own module.
+    # A spec-declared library delegation (``hooks.delegate``, a registered hook that
+    # calls a maintained library owning discovery and the socket) wins over the
+    # shape dispatch. A raster spec routes through raster_cog, whose
+    # fetch_source_array calls the delegate for the array; a vector spec routes
+    # through library_delegate.execute (features -> FGB).
     #
     # Record-return path: a ``shape: record`` source produces a bare JSON dict, not a
     # LayerURI. It wins over every layer executor below: its build_request hook is the
@@ -242,9 +239,6 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
             return raster_cog.execute
         from .executors import library_delegate
         return library_delegate.execute
-    if (spec.ingest or {}).get("delegate"):
-        from .executors import dataretrieval_delegate
-        return dataretrieval_delegate.execute
     # A vector row published through a GDAL driver (an ArcGIS query URL, an OGC
     # API - Features collection, a shapefile inside a remote ZIP) reads through
     # the vector_ogr executor: the library owns the socket, the paging and the
@@ -482,17 +476,11 @@ def route(
     if spec.shape == "animation_frames":
         from .executors import animation_frames
         return animation_frames.execute(spec, params, metadata)
-    # A delegated spec's source-specific INPUT validation (wqp bbox-required, nldi
-    # seed/comid mutual-exclusion + CONUS + comid gate) runs BEFORE read_through, so
-    # a bad request raises pre-cache and pre-network. No-op otherwise.
+    # A delegated spec's source-specific INPUT gate (hooks.delegate_validate) runs
+    # BEFORE read_through, so a bad request raises pre-cache and pre-network.
     if spec.hooks is not None and spec.hooks.delegate:
-        # generic library delegate: run the source-specific pre-cache
-        # input gate (hooks.delegate_validate) before read_through. No-op when unset.
         from .executors import library_delegate
         library_delegate.pre_validate(spec, params)
-    elif (spec.ingest or {}).get("delegate"):
-        from .executors import dataretrieval_delegate
-        dataretrieval_delegate.pre_validate(spec, params)
     # Socketed pre-cache-key delegate resolve: the HRRR-Zarr s3fs cycle
     # walk resolves the published cycle BEFORE read_through so the resolved cycle
     # merges into params and enters the cache key (a cycle=None request would else

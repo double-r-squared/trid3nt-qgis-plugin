@@ -32,6 +32,7 @@ from ..errors import (
     router_input_error,
     router_upstream_error,
 )
+from ..transport import READ_POLICY
 from .raster_cog import array_to_cog_bytes
 
 logger = logging.getLogger(
@@ -40,23 +41,13 @@ logger = logging.getLogger(
 
 __all__ = ["execute", "stac_to_mosaic", "fetch_source_array"]
 
-#: The read policy for every asset in this family. The retry half replaces
-#: odc-stac's own default (10 tries at 0.5 s on GDAL's hard-coded code set) with
-#: the explicit codes the transport retries on. The range half is what the
-#: coalescing transport opener did for free: without it a windowed read of a
-#: large COG issues one request per block, and a high-resolution window costs
-#: thousands of round trips instead of a few merged ones.
+#: The transport's read policy, which replaces odc-stac's own default (10 tries at
+#: 0.5 s on GDAL's hard-coded code set). A netrc-gated catalog answers the first
+#: read with a redirect chain that ends in a per-user signed URL, and the login
+#: cookie has to survive it: one writable path for both ends carries it, inert for
+#: a catalog that needs no login.
 _READ_PATH = {
-    "GDAL_HTTP_MAX_RETRY": 5,
-    "GDAL_HTTP_RETRY_DELAY": 1,
-    "GDAL_HTTP_RETRY_CODES": "429,500,502,503,504",
-    "GDAL_HTTP_MULTIRANGE": "YES",
-    "GDAL_HTTP_MERGE_CONSECUTIVE_RANGES": "YES",
-    "VSI_CACHE": "TRUE",
-    # A netrc-gated catalog answers the first read with a redirect chain that ends
-    # in a per-user signed URL, and the login cookie has to survive it. One
-    # writable path for both ends is what carries it; it is inert for a catalog
-    # that needs no login.
+    **READ_POLICY,
     "GDAL_HTTP_COOKIEFILE": os.path.join(tempfile.gettempdir(), "trid3nt_gdal_cookies"),
     "GDAL_HTTP_COOKIEJAR": os.path.join(tempfile.gettempdir(), "trid3nt_gdal_cookies"),
 }

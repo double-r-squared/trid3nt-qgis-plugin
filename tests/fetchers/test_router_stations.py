@@ -296,25 +296,11 @@ def test_the_temperature_product_asks_at_its_own_cadence_and_on_no_datum(monkeyp
 
     asked = {}
 
-    class _Resp:
-        def raise_for_status(self):
-            return None
+    def _get_bytes(client, url, params=None, headers=None):
+        asked.update(params or {})
+        return b'{"data": [{"t": "2024-01-15 00:00", "v": "3.2"}]}', "application/json", url
 
-        def json(self):
-            return {"data": [{"t": "2024-01-15 00:00", "v": "3.2"}]}
-
-    class _Client:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *exc):
-            return False
-
-        def get(self, url, params=None, headers=None):
-            asked.update(params or {})
-            return _Resp()
-
-    monkeypatch.setattr("httpx.Client", lambda **kw: _Client())
+    monkeypatch.setattr(st, "get_bytes", _get_bytes)
     spec = _coops_spec()
     station = {"station_id": "9014070", "station_name": "ALGONAC",
                "lon": -82.5267, "lat": 42.6211}

@@ -13,7 +13,6 @@ __all__ = [
     "TransportNotFound",
     "TransportAuthError",
     "TransportUpstreamError",
-    "TransportTruncatedError",
     "classify_status",
 ]
 
@@ -53,14 +52,6 @@ class TransportAuthError(TransportError):
 
 class TransportUpstreamError(TransportError):
     """429 / 5xx / timeout / connection failure -- retryable upstream error."""
-
-    def __init__(self, message: str, *, status: int | None = None, body: str | None = None):
-        super().__init__(message, status=status, body=body, retryable=True)
-
-
-class TransportTruncatedError(TransportError):
-    """A range fetch returned fewer bytes than requested. A short read is a typed,
-    retryable upstream error, never a silently accepted partial block."""
 
     def __init__(self, message: str, *, status: int | None = None, body: str | None = None):
         super().__init__(message, status=status, body=body, retryable=True)

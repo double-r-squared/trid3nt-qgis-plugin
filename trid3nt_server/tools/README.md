@@ -42,4 +42,4 @@ the cache shim are the two seams they all pass through.
 | `fetchers/_router/hooks/` | The hook contract (`RequestPlan`, `register_hook`, `resolve_hook`) and the modules SEVERAL specs share; the loader walks both this folder and the co-located `hooks.py` files. |
 | `fetchers/<group>/<spec>/hooks.py` | One spec's own `build_request` / `parse_response` overrides - what the spec cannot declare, beside the spec, registered by the tree walk. |
 | `fetchers/_router/transforms/` | Post-fetch shaping: the tiled mosaic - a bbox split over the tile size, each tile through the executor, merged first-non-nodata. |
-| `fetchers/_router/transport/` | The HTTP client, opener, staged and range-read file access, zip-object reads, and their errors. |
+| `fetchers/_router/transport/` | The one retry authority: the pooled HTTP client, the GDAL read policy every remote raster opens under, staged-object resolution, zip-object reads, and their typed errors. |

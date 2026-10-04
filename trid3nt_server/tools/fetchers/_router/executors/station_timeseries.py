@@ -9,15 +9,15 @@ from __future__ import annotations
 import csv
 import datetime as _dt
 import io
+import json
 import logging
-import os
-import tempfile
 from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
 
 from ..errors import router_empty_error, router_upstream_error
-from ..transport import is_staged_uri
+from ..transport import get_bytes, get_client, is_staged_uri
+from .vector_fgb import features_to_fgb_bytes
 
 logger = logging.getLogger(
     "trid3nt_server.tools.fetchers._router.executors.station_timeseries"
@@ -60,6 +60,37 @@ _COLUMNS = [
 ]
 
 
+def _points_to_fgb(records: list[dict[str, Any]], rows: list[dict[str, Any]],
+                   spec: SourceSpec) -> bytes:
+    """One Point feature per station, its row as the properties, through the one
+    vector serializer."""
+    return features_to_fgb_bytes(
+        [{"type": "Feature",
+          "geometry": {"type": "Point", "coordinates": [rec["lon"], rec["lat"]]},
+          "properties": row} for rec, row in zip(records, rows)],
+        spec,
+    )
+
+
+def _get_json(spec: SourceSpec, url: str, params: dict[str, Any]) -> Any:
+    """GET a JSON body through the transport's retry authority."""
+    body, _ct, _url = get_bytes(get_client(), url, params=params,
+                                headers={"User-Agent": spec.auth.user_agent})
+    return json.loads(body)
+
+
+def _format_request(template: dict[str, Any], fmt: dict[str, Any]) -> dict[str, Any]:
+    """Each templated request value formatted over ``fmt``; a value that does not
+    format passes through as declared."""
+    req: dict[str, Any] = {}
+    for k, v in template.items():
+        try:
+            req[k] = v.format(**fmt) if isinstance(v, str) else v
+        except (KeyError, IndexError, ValueError):
+            req[k] = v
+    return req
+
+
 def stations_to_point_fgb(
     records: list[dict[str, Any]],
     spec: SourceSpec,
@@ -71,17 +102,9 @@ def stations_to_point_fgb(
     ``time_series_csv``. An all-empty set raises ``*_EMPTY``, never a header-only FGB."""
     import numpy as np
 
-    try:
-        import geopandas as gpd
-        import pandas as pd
-        from shapely.geometry import Point
-    except ImportError as exc:  # pragma: no cover
-        raise router_upstream_error(spec.error_code_prefix, f"geopandas/shapely unavailable: {exc}")
-
     datum = spec.normalize.datum or "MLLW"
     time_norm = ((spec.ingest or {}).get("per_station") or {}).get("time_normalize")
     rows_out: list[dict[str, Any]] = []
-    geoms: list[Any] = []
     for rec in records:
         series = rec.get("rows") or []
         if not series:
@@ -112,7 +135,6 @@ def stations_to_point_fgb(
             "wl_mean_m": float(np.nanmean(values)),
             "time_series_csv": ts_csv,
         })
-        geoms.append(Point(rec["lon"], rec["lat"]))
 
     if not rows_out:
         raise router_empty_error(
@@ -121,43 +143,16 @@ def stations_to_point_fgb(
             spec.empty_error_suffix,
         )
 
-    df = pd.DataFrame(rows_out)
-    gdf = gpd.GeoDataFrame(df, geometry=geoms, crs=spec.normalize.crs)
-
-    tmp_fgb: str | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            suffix=".fgb", delete=False, prefix="trid3nt_router_sta_"
-        ) as f:
-            tmp_fgb = f.name
-        try:
-            gdf.to_file(tmp_fgb, driver="FlatGeobuf", engine="pyogrio")
-        except Exception as exc:  # noqa: BLE001
-            raise router_upstream_error(
-                spec.error_code_prefix, f"FlatGeobuf write failed: {exc}"
-            )
-        with open(tmp_fgb, "rb") as f:
-            fgb_bytes = f.read()
-        logger.info(
-            "router.station_timeseries: FlatGeobuf = %d bytes (%d station(s), source=%s)",
-            len(fgb_bytes), len(rows_out), spec.source_class,
-        )
-        return fgb_bytes
-    finally:
-        if tmp_fgb is not None:
-            try:
-                os.unlink(tmp_fgb)
-            except OSError:
-                pass
+    return _points_to_fgb(rows_out, rows_out, spec)
 
 
 # Catalog discover + per-station loop (network). Tests monkeypatch this.
 
 
 def _guard_not_staged(spec: SourceSpec, url: str) -> None:
-    """Refuse a staged ``s3://`` uri before it reaches httpx: this executor talks a REST
-    API and cannot resolve an object-store bucket and key, so the scheme raises a typed
-    error rather than an opaque httpx failure."""
+    """Refuse a staged ``s3://`` uri before it reaches the transport: this executor
+    talks a REST API and cannot resolve an object-store bucket and key, so the scheme
+    raises a typed error rather than an opaque client failure."""
     if is_staged_uri(url):
         raise router_upstream_error(
             spec.error_code_prefix,
@@ -167,8 +162,6 @@ def _guard_not_staged(spec: SourceSpec, url: str) -> None:
 
 def _discover_stations(spec: SourceSpec, bbox: tuple[float, float, float, float]) -> list[dict[str, Any]]:
     """Fetch the station catalog and bbox-filter it. Network."""
-    import httpx
-
     ingest = spec.ingest or {}
     cat = ingest.get("station_catalog", {})
     lat_key = cat.get("lat_key", "lat")
@@ -180,11 +173,7 @@ def _discover_stations(spec: SourceSpec, bbox: tuple[float, float, float, float]
     url = endpoint.url or endpoint.url_template or ""
     _guard_not_staged(spec, url)
     try:
-        with httpx.Client(timeout=60.0, follow_redirects=True) as client:
-            resp = client.get(url, params=dict(endpoint.query or {}),
-                              headers={"User-Agent": spec.auth.user_agent})
-        resp.raise_for_status()
-        body = resp.json()
+        body = _get_json(spec, url, dict(endpoint.query or {}))
     except Exception as exc:  # noqa: BLE001
         raise router_upstream_error(spec.error_code_prefix, f"station catalog fetch failed: {exc}")
     stations = body.get(rows_key, []) if isinstance(body, dict) else []
@@ -204,8 +193,6 @@ def _discover_stations(spec: SourceSpec, bbox: tuple[float, float, float, float]
 
 def _fetch_station_series(spec: SourceSpec, station: dict[str, Any], params: dict[str, Any]) -> list[dict[str, Any]]:
     """Fetch one station's time series. Network. Returns ``[]`` on failure/empty."""
-    import httpx
-
     ingest = spec.ingest or {}
     per = ingest.get("per_station", {})
     endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
@@ -225,17 +212,8 @@ def _fetch_station_series(spec: SourceSpec, station: dict[str, Any], params: dic
     # CO-OPS datagetter's required YYYYMMDD (a raw str would raise on %Y).
     fmt = {"id": station["station_id"], "product": product,
            "start": _as_date(params.get("start_date")), "end": _as_date(params.get("end_date"))}
-    req = {}
-    for k, v in req_tmpl.items():
-        try:
-            req[k] = v.format(**fmt) if isinstance(v, str) else v
-        except (KeyError, IndexError, ValueError):
-            req[k] = v
     try:
-        with httpx.Client(timeout=60.0, follow_redirects=True) as client:
-            resp = client.get(url, params=req, headers={"User-Agent": spec.auth.user_agent})
-        resp.raise_for_status()
-        body = resp.json()
+        body = _get_json(spec, url, _format_request(req_tmpl, fmt))
     except Exception:  # noqa: BLE001 -- one bad station never aborts the bbox
         return []
     rows_keys = per.get("rows_key", ["data", "predictions"])
@@ -415,8 +393,6 @@ def _fetch_station_snapshot(
 ) -> dict[str, Any] | None:
     """Fetch + select one station's snapshot. Network. ``None`` on failure/empty
     (one bad station never aborts the bbox)."""
-    import httpx
-
     ingest = spec.ingest or {}
     per = ingest.get("per_station", {})
     snap = per.get("snapshot", {})
@@ -425,21 +401,13 @@ def _fetch_station_snapshot(
     endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
     url = endpoint.url_template or endpoint.url or ""
     _guard_not_staged(spec, url)
-    req: dict[str, Any] = {}
     fmt = {"id": station["station_id"], "product": product, "start": d0, "end": d1}
-    for k, v in dict(per.get("request", {})).items():
-        try:
-            req[k] = v.format(**fmt) if isinstance(v, str) else v
-        except (KeyError, IndexError, ValueError):
-            req[k] = v
+    req = _format_request(dict(per.get("request", {})), fmt)
     # product-conditional extra request params (predictions -> interval=MAX_SLACK).
     for k, v in (snap.get("request_by_product", {}).get(product) or {}).items():
         req[k] = v
     try:
-        with httpx.Client(timeout=60.0, follow_redirects=True) as client:
-            resp = client.get(url, params=req, headers={"User-Agent": spec.auth.user_agent})
-        resp.raise_for_status()
-        body = resp.json()
+        body = _get_json(spec, url, req)
     except Exception:  # noqa: BLE001 -- one bad station never aborts the bbox
         return None
     if not isinstance(body, dict) or "error" in body:
@@ -466,13 +434,6 @@ def snapshots_to_point_fgb(
     """Serialize per-station snapshot records to point-FGB bytes: one Point per station
     carrying the declared ``snapshot.columns``. An empty record set raises the typed
     ``*_EMPTY``, never a header-only FGB."""
-    try:
-        import geopandas as gpd
-        import pandas as pd
-        from shapely.geometry import Point
-    except ImportError as exc:  # pragma: no cover
-        raise router_upstream_error(spec.error_code_prefix, f"geopandas/shapely unavailable: {exc}")
-
     if not records:
         raise router_empty_error(
             spec.error_code_prefix,
@@ -482,33 +443,7 @@ def snapshots_to_point_fgb(
 
     snap = ((spec.ingest or {}).get("per_station") or {}).get("snapshot") or {}
     cols = [str(c) for c in (snap.get("columns") or list(records[0].keys()))]
-    rows_out = [{c: rec.get(c) for c in cols} for rec in records]
-    geoms = [Point(rec["lon"], rec["lat"]) for rec in records]
-    gdf = gpd.GeoDataFrame(pd.DataFrame(rows_out), geometry=geoms, crs=spec.normalize.crs)
-
-    tmp_fgb: str | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            suffix=".fgb", delete=False, prefix="trid3nt_router_snap_"
-        ) as f:
-            tmp_fgb = f.name
-        try:
-            gdf.to_file(tmp_fgb, driver="FlatGeobuf", engine="pyogrio")
-        except Exception as exc:  # noqa: BLE001
-            raise router_upstream_error(spec.error_code_prefix, f"FlatGeobuf write failed: {exc}")
-        with open(tmp_fgb, "rb") as f:
-            fgb_bytes = f.read()
-        logger.info(
-            "router.station_timeseries[snapshot]: FlatGeobuf = %d bytes (%d station(s), source=%s)",
-            len(fgb_bytes), len(rows_out), spec.source_class,
-        )
-        return fgb_bytes
-    finally:
-        if tmp_fgb is not None:
-            try:
-                os.unlink(tmp_fgb)
-            except OSError:
-                pass
+    return _points_to_fgb(records, [{c: rec.get(c) for c in cols} for rec in records], spec)
 
 
 def execute_snapshot(spec: SourceSpec, params: dict[str, Any]) -> bytes:

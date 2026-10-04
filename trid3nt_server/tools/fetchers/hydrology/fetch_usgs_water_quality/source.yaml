@@ -66,10 +66,12 @@ params:
       fecal_coliform: Fecal Coliform
 gates:
   max_bbox_deg2: 100.0
+hooks:
+  delegate: wqp.features
+  delegate_validate: wqp.validate
 ingest:
   delegate:
     library: dataretrieval
-    service: wqp_water_quality
   properties:
   - site_id
   - site_name

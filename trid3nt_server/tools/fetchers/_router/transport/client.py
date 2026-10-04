@@ -12,7 +12,7 @@ import logging
 import random
 import threading
 import time
-from typing import Callable, TypeVar
+from typing import Any, Callable, TypeVar
 
 import httpx
 
@@ -23,7 +23,7 @@ logger = logging.getLogger(
 )
 
 __all__ = [
-    "get_client", "range_get", "get_bytes", "get_once", "post_bytes", "head",
+    "get_client", "get_bytes", "get_once", "post_bytes",
     "retried", "MAX_RETRIES", "RETRYABLE_STATUS",
 ]
 
@@ -104,34 +104,31 @@ def retried(call: Callable[[], T], *, transient: Callable[[Exception], bool],
             _sleep_backoff(attempt, getattr(exc, "retry_after", None))
 
 
-def head(client: httpx.Client, url: str) -> httpx.Response:
-    """HEAD with the retry authority (retry 429/5xx/timeout). Raises typed on
-    exhaustion; a non-retryable 4xx is returned to the caller to classify."""
-    last_exc: Exception | None = None
-    for attempt in range(MAX_RETRIES + 1):
+def _send(client: httpx.Client, method: str, url: str, **kw: Any) -> httpx.Response:
+    """One request under :func:`retried`: a network failure or a 429/5xx answer is
+    another attempt, and exhaustion raises the provider's status and body verbatim.
+    Any other answer, 4xx included, comes back for the caller to classify."""
+    def call() -> httpx.Response:
         try:
-            resp = client.head(url)
+            resp = client.request(method, url, **kw)
         except (httpx.TimeoutException, httpx.TransportError) as exc:
-            last_exc = exc
-            logger.warning("transport.head network error url=%s attempt=%d: %s",
-                           url, attempt, exc)
-            if attempt < MAX_RETRIES:
-                _sleep_backoff(attempt, None)
-                continue
-            raise TransportUpstreamError(
-                f"HEAD network failure url={url}: {exc}") from exc
+            raise TransportUpstreamError(f"{method} network failure url={url}: {exc}") from exc
         if resp.status_code in RETRYABLE_STATUS:
-            logger.warning("transport.head HTTP %d url=%s attempt=%d",
-                           resp.status_code, url, attempt)
-            if attempt < MAX_RETRIES:
-                _sleep_backoff(attempt, resp.headers.get("retry-after"))
-                continue
-            raise TransportUpstreamError(
-                f"HEAD exhausted retries at HTTP {resp.status_code} url={url}",
-                status=resp.status_code, body=None)
+            err = TransportUpstreamError(
+                f"{method} exhausted retries at HTTP {resp.status_code} url={url}: "
+                f"{resp.text[:400]!r}", status=resp.status_code, body=resp.text)
+            err.retry_after = resp.headers.get("retry-after")  # type: ignore[attr-defined]
+            raise err
         return resp
-    assert last_exc is not None
-    raise TransportUpstreamError(f"HEAD failed url={url}: {last_exc}") from last_exc
+
+    return retried(call, transient=lambda e: isinstance(e, TransportUpstreamError),
+                   label=f"{method} {url}")
+
+
+def _body(resp: httpx.Response, url: str) -> tuple[bytes, str, str]:
+    if resp.status_code >= 400:
+        raise classify_status(resp.status_code, resp.text, url)
+    return resp.content, resp.headers.get("content-type", ""), str(resp.url)
 
 
 def get_bytes(
@@ -139,35 +136,8 @@ def get_bytes(
     params: dict[str, Any] | None = None,
 ) -> tuple[bytes, str, str]:
     """GET a whole object; return ``(body, content_type, final_url)``. Redirects are
-    followed. 429/5xx/timeout/connection retry with backoff; any other 4xx classifies
-    to a typed transport error immediately, and exhaustion surfaces verbatim."""
-    last_exc: Exception | None = None
-    for attempt in range(MAX_RETRIES + 1):
-        try:
-            resp = client.get(url, headers=headers, params=params)
-        except (httpx.TimeoutException, httpx.TransportError) as exc:
-            last_exc = exc
-            logger.warning("transport.get_bytes network error url=%s attempt=%d: %s",
-                           url, attempt, exc)
-            if attempt < MAX_RETRIES:
-                _sleep_backoff(attempt, None)
-                continue
-            raise TransportUpstreamError(
-                f"GET network failure url={url}: {exc}") from exc
-        if resp.status_code in RETRYABLE_STATUS:
-            logger.warning("transport.get_bytes HTTP %d url=%s attempt=%d body=%r",
-                           resp.status_code, url, attempt, resp.text[:400])
-            if attempt < MAX_RETRIES:
-                _sleep_backoff(attempt, resp.headers.get("retry-after"))
-                continue
-            raise TransportUpstreamError(
-                f"GET exhausted retries at HTTP {resp.status_code} url={url}: {resp.text[:400]!r}",
-                status=resp.status_code, body=resp.text)
-        if resp.status_code >= 400:
-            raise classify_status(resp.status_code, resp.text, url)
-        return resp.content, resp.headers.get("content-type", ""), str(resp.url)
-    assert last_exc is not None
-    raise TransportUpstreamError(f"GET failed url={url}: {last_exc}") from last_exc
+    followed; any 4xx classifies to a typed transport error at once."""
+    return _body(_send(client, "GET", url, headers=headers, params=params), url)
 
 
 def get_once(client: httpx.Client, url: str, *, headers: dict[str, str] | None = None
@@ -191,68 +161,5 @@ def post_bytes(
     """POST a body and return ``(body, content_type, final_url)``: ``json_body`` sends
     JSON, ``data`` sends form-encoded. Retried like a GET, on the assumption every
     routed endpoint is a pure query with no side effect; a 4xx classifies at once."""
-    last_exc: Exception | None = None
-    for attempt in range(MAX_RETRIES + 1):
-        try:
-            resp = client.post(url, headers=headers, params=params, json=json_body, data=data)
-        except (httpx.TimeoutException, httpx.TransportError) as exc:
-            last_exc = exc
-            logger.warning("transport.post_bytes network error url=%s attempt=%d: %s",
-                           url, attempt, exc)
-            if attempt < MAX_RETRIES:
-                _sleep_backoff(attempt, None)
-                continue
-            raise TransportUpstreamError(
-                f"POST network failure url={url}: {exc}") from exc
-        if resp.status_code in RETRYABLE_STATUS:
-            logger.warning("transport.post_bytes HTTP %d url=%s attempt=%d body=%r",
-                           resp.status_code, url, attempt, resp.text[:400])
-            if attempt < MAX_RETRIES:
-                _sleep_backoff(attempt, resp.headers.get("retry-after"))
-                continue
-            raise TransportUpstreamError(
-                f"POST exhausted retries at HTTP {resp.status_code} url={url}: {resp.text[:400]!r}",
-                status=resp.status_code, body=resp.text)
-        if resp.status_code >= 400:
-            raise classify_status(resp.status_code, resp.text, url)
-        return resp.content, resp.headers.get("content-type", ""), str(resp.url)
-    assert last_exc is not None
-    raise TransportUpstreamError(f"POST failed url={url}: {last_exc}") from last_exc
-
-
-def range_get(client: httpx.Client, url: str, lo: int, hi: int) -> bytes:
-    """GET ``bytes=lo-hi`` and return the body bytes. 429/5xx/timeout/connection retry
-    with backoff; any other 4xx classifies to a typed transport error with no retry,
-    and exhaustion surfaces the verbatim upstream status and body."""
-    headers = {"Range": f"bytes={lo}-{hi}"}
-    last_exc: Exception | None = None
-    for attempt in range(MAX_RETRIES + 1):
-        try:
-            resp = client.get(url, headers=headers)
-        except (httpx.TimeoutException, httpx.TransportError) as exc:
-            last_exc = exc
-            logger.warning("transport.range_get network error url=%s bytes=%d-%d "
-                           "attempt=%d: %s", url, lo, hi, attempt, exc)
-            if attempt < MAX_RETRIES:
-                _sleep_backoff(attempt, None)
-                continue
-            raise TransportUpstreamError(
-                f"range GET network failure bytes={lo}-{hi} url={url}: {exc}"
-            ) from exc
-        if resp.status_code in RETRYABLE_STATUS:
-            logger.warning("transport.range_get HTTP %d url=%s bytes=%d-%d attempt=%d "
-                           "body=%r", resp.status_code, url, lo, hi, attempt,
-                           resp.text[:400])
-            if attempt < MAX_RETRIES:
-                _sleep_backoff(attempt, resp.headers.get("retry-after"))
-                continue
-            raise TransportUpstreamError(
-                f"range GET exhausted retries at HTTP {resp.status_code} "
-                f"bytes={lo}-{hi} url={url}: {resp.text[:400]!r}",
-                status=resp.status_code, body=resp.text)
-        if resp.status_code >= 400:
-            raise classify_status(resp.status_code, resp.text, url)
-        return resp.content
-    assert last_exc is not None
-    raise TransportUpstreamError(
-        f"range GET failed bytes={lo}-{hi} url={url}: {last_exc}") from last_exc
+    return _body(_send(client, "POST", url, headers=headers, params=params,
+                       json=json_body, data=data), url)

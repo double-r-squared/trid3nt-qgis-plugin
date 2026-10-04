@@ -19,11 +19,9 @@ import rasterio.transform as rtransform
 
 from trid3nt_server.tools.fetchers._router import transport
 from trid3nt_server.tools.fetchers._router.transport import (
-    CoalescedRangeFile,
     TransportAuthError,
     TransportError,
     TransportNotFound,
-    TransportTruncatedError,
     TransportUpstreamError,
     client as transport_client,
 )
@@ -146,6 +144,8 @@ def range_server():
 def _fast_backoff(monkeypatch):
     """Neutralize real sleeps so retry tests stay sub-second."""
     monkeypatch.setattr(transport_client.time, "sleep", lambda *_a, **_k: None)
+    monkeypatch.setitem(transport.READ_POLICY, "GDAL_HTTP_MAX_RETRY", "1")
+    monkeypatch.setitem(transport.READ_POLICY, "GDAL_HTTP_RETRY_DELAY", "0")
 
 
 
@@ -162,95 +162,56 @@ def test_windowed_read_pixel_identical(range_server):
     assert np.array_equal(np.nan_to_num(got), np.nan_to_num(want))
 
 
-def test_preflight_sizes_via_head(range_server):
-    c = transport.get_client()
-    size = transport.preflight(range_server.url, c)
-    assert size == len(range_server.payload)
-    assert range_server.head_count >= 1
-
-
-def test_preflight_404_typed_not_found(range_server):
+def test_open_404_typed_not_found_with_the_body(range_server):
     range_server.force_status = 404
     range_server.force_body = b"<Error><Code>NoSuchKey</Code></Error>"
-    c = transport.get_client()
     with pytest.raises(TransportNotFound) as ei:
-        transport.preflight(range_server.url, c)
+        with transport.open_windowed_cog(range_server.url):
+            pass
     assert ei.value.status == 404
     assert "NoSuchKey" in (ei.value.body or "")
     assert ei.value.retryable is False
 
 
-def test_preflight_403_typed_auth(range_server):
+def test_open_403_typed_auth_with_the_body(range_server):
     range_server.force_status = 403
     range_server.force_body = b"<Error><Code>AccessDenied</Code></Error>"
-    c = transport.get_client()
     with pytest.raises(TransportAuthError) as ei:
-        transport.preflight(range_server.url, c)
+        with transport.open_windowed_cog(range_server.url):
+            pass
     assert ei.value.status == 403
     assert "AccessDenied" in (ei.value.body or "")
     assert ei.value.retryable is False
 
 
-
-
-def test_adjacent_blocks_merge_single_get(range_server):
-    c = transport.get_client()
-    size = transport.preflight(range_server.url, c)
-    f = CoalescedRangeFile(range_server.url, c, size, block=64 * 1024)
-    f.seek(0)
-    f.read(200 * 1024)  # spans 4 adjacent 64 KiB blocks -> one merged GET
-    assert f.requests_made == 1
-    assert f.parallel_batches == 0
-
-
-def test_nonadjacent_runs_fetch_in_parallel(range_server):
-    c = transport.get_client()
-    size = transport.preflight(range_server.url, c)
-    block = 64 * 1024
-    f = CoalescedRangeFile(range_server.url, c, size, block=block)
-    # Pre-populate block 1 so blocks 0 and 2 are non-adjacent missing runs.
-    f.blocks[1] = b"\x00" * block
-    before = range_server.get_count
-    f.seek(0)
-    f.read(3 * block)  # touches blocks 0,1,2 -> two runs fetched in parallel
-    assert f.parallel_batches == 1
-    assert f.requests_made == 2
-    assert range_server.get_count - before == 2
-
-
-
-
-def test_range_get_404_typed(range_server):
+def test_get_bytes_404_typed(range_server):
     range_server.force_status = 404
     range_server.force_body = b"<Error><Code>NoSuchKey</Code></Error>"
-    c = transport.get_client()
     with pytest.raises(TransportNotFound):
-        transport.range_get(c, range_server.url, 0, 10)
+        transport.get_bytes(transport.get_client(), range_server.url)
 
 
-def test_range_get_403_typed(range_server):
+def test_get_bytes_403_typed(range_server):
     range_server.force_status = 403
     range_server.force_body = b"<Error><Code>AccessDenied</Code></Error>"
-    c = transport.get_client()
     with pytest.raises(TransportAuthError):
-        transport.range_get(c, range_server.url, 0, 10)
+        transport.get_bytes(transport.get_client(), range_server.url)
 
 
 def test_429_retried_then_succeeds(range_server):
     range_server.fail_first_n = 2  # two 429s, then serve
-    c = transport.get_client()
-    data = transport.range_get(c, range_server.url, 0, 1023)
-    assert len(data) == 1024
+    body, _ct, _url = transport.get_bytes(transport.get_client(), range_server.url)
+    assert body == range_server.payload
     assert range_server.get_count >= 3  # 2 failed + 1 success
 
 
 def test_429_exhausts_to_typed_upstream(range_server):
     range_server.fail_first_n = 999  # always 429
-    c = transport.get_client()
     with pytest.raises(TransportUpstreamError) as ei:
-        transport.range_get(c, range_server.url, 0, 1023)
+        transport.get_bytes(transport.get_client(), range_server.url)
     assert ei.value.status == 429
     assert ei.value.retryable is True
+    assert "SlowDown" in (ei.value.body or "")
 
 
 def test_get_once_reads_a_500_body_without_spending_a_retry(range_server):
@@ -268,8 +229,7 @@ def test_retry_after_header_honored(range_server, monkeypatch):
     range_server.retry_after = "2"
     seen: list[float] = []
     monkeypatch.setattr(transport_client.time, "sleep", lambda d: seen.append(d))
-    c = transport.get_client()
-    transport.range_get(c, range_server.url, 0, 511)
+    transport.get_bytes(transport.get_client(), range_server.url)
     assert seen and seen[0] == pytest.approx(2.0, abs=0.01)
 
 
@@ -291,33 +251,6 @@ def test_retried_waits_the_retry_after_a_library_429_carries(monkeypatch):
     assert seen == [7.0]
 
 
-
-
-def test_mid_read_disconnect_bridges_typed_error(range_server):
-    # A short-body read makes the completeness assertion fire INSIDE the GDAL C
-    # read frame; the opener bridge must re-raise the typed transport error rather
-    # than let the opaque RasterioIOError escape.
-    range_server.short_by = 16
-    with pytest.raises(TransportError) as ei:
-        with transport.open_windowed_cog(range_server.url) as src:
-            src.read(1)
-    assert isinstance(ei.value, TransportTruncatedError)
-    assert ei.value.retryable is True
-
-
-def test_block_completeness_assertion(range_server):
-    # The completeness gate lives in the fetch primitive (raises); the GDAL-facing
-    # readinto records rather than raises (unguarded-callback safety), so assert on
-    # the primitive AND on the recorded error a short read leaves behind.
-    range_server.short_by = 8
-    c = transport.get_client()
-    size = transport.preflight(range_server.url, c)
-    f = CoalescedRangeFile(range_server.url, c, size, block=64 * 1024)
-    with pytest.raises(TransportTruncatedError):
-        f._fetch_span(0, 64 * 1024 - 1)
-    g = CoalescedRangeFile(range_server.url, c, size, block=64 * 1024)
-    assert g.readinto(bytearray(64 * 1024)) == 0
-    assert isinstance(g._error, TransportTruncatedError)
 
 
 # Migration edge matrix: raster_cog.direct_window through the transport maps to
@@ -384,10 +317,10 @@ def test_direct_window_429_maps_to_upstream_retryable(range_server):
 
 
 def test_direct_window_truncation_maps_to_upstream_retryable(range_server):
+    """A short range body under bytes the window needs fails the read, never a
+    silently partial layer."""
     range_server.short_by = 16
     spec = _direct_window_spec(range_server.url)
     with pytest.raises(RouterUpstreamError) as ei:
-        raster_cog.fetch_source_array(spec, {"bbox": [-104.9, 40.1, -104.8, 40.2]})
+        raster_cog.fetch_source_array(spec, {"bbox": [-105.0, 40.0, -104.0, 41.0]})
     assert ei.value.retryable is True
-
-

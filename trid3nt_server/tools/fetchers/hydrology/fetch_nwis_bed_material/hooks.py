@@ -103,7 +103,7 @@ def _stations(spec: SourceSpec, params: dict[str, Any]) -> dict[str, dict[str, A
     """Site id -> location + the datums the Station record states for it."""
     import dataretrieval.wqp as wqp
 
-    from ..._router.executors.dataretrieval_delegate import retrieve
+    from ..._router.hooks.dataretrieval import retrieve
 
     df, _ = retrieve(
         spec, wqp.what_sites, input_on_400=False,
@@ -147,7 +147,7 @@ def _samples(spec: SourceSpec, params: dict[str, Any]) -> tuple[dict[tuple[str, 
     unrecognized size-class text) - never folded silently into the count."""
     import dataretrieval.wqp as wqp
 
-    from ..._router.executors.dataretrieval_delegate import retrieve
+    from ..._router.hooks.dataretrieval import retrieve
 
     window: dict[str, str] = {}
     if params.get("start_date"):

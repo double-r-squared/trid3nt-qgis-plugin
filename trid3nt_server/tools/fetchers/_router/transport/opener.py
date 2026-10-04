@@ -1,96 +1,69 @@
-"""Pre-flight probe and the windowed-COG open context manager.
+"""The GDAL read policy and the windowed-COG open over ``/vsicurl/``.
 
-``open_windowed_cog`` pre-flights the object with a HEAD for its size and an early
-typed error, opens the dataset through the coalescing transport, and bridges the
-GDAL C-frame exception swallow so the real status survives to the caller."""
+GDAL's own HTTP client reads every remote raster: it merges adjacent ranges, caches
+blocks and retries the transport's code set. The upstream STATUS survives on the
+error; the body GDAL discards is recovered by one un-retried range GET."""
 
 from __future__ import annotations
 
 import logging
+import re
 from contextlib import contextmanager
 from typing import Iterator
 
-import httpx
-
-from .client import get_client, head
+from .client import RETRYABLE_STATUS, get_client, get_once
 from .errors import TransportError, TransportUpstreamError, classify_status
-from .range_file import TransportOpener
 
 logger = logging.getLogger(
     "trid3nt_server.tools.fetchers._router.transport.opener"
 )
 
-__all__ = ["preflight", "open_windowed_cog"]
+__all__ = ["READ_POLICY", "MAX_PARALLEL", "open_windowed_cog"]
+
+#: The read policy for every GDAL remote read. Without the range half a windowed
+#: read of a large COG issues one request per block, and a high-resolution window
+#: costs thousands of round trips instead of a few merged ones.
+READ_POLICY: dict[str, str] = {
+    "GDAL_HTTP_MAX_RETRY": "5",
+    "GDAL_HTTP_RETRY_DELAY": "1",
+    "GDAL_HTTP_RETRY_CODES": ",".join(str(c) for c in sorted(RETRYABLE_STATUS)),
+    "GDAL_HTTP_MULTIRANGE": "YES",
+    "GDAL_HTTP_MERGE_CONSECUTIVE_RANGES": "YES",
+    "GDAL_DISABLE_READDIR_ON_OPEN": "EMPTY_DIR",
+    "VSI_CACHE": "TRUE",
+}
+
+#: How many member objects one mosaic read opens at once.
+MAX_PARALLEL = 8
+
+_HTTP_STATUS = re.compile(r"HTTP response code: (\d{3})")
 
 
-def _recover_error_body(client: httpx.Client, url: str, status: int) -> str | None:
-    """Recover the verbatim S3 XML error body a HEAD omits, via a 1-byte GET."""
+def _typed(url: str, exc: Exception) -> TransportError:
+    """GDAL's error as the transport's typed one, with the provider's body read back
+    by a single range GET, since GDAL keeps the status and drops the body."""
+    m = _HTTP_STATUS.search(str(exc))
+    if m is None:
+        return TransportUpstreamError(f"remote raster open/read failed url={url}: {exc}")
+    status = int(m.group(1))
     try:
-        r = client.get(url, headers={"Range": "bytes=0-0"})
-    except (httpx.TimeoutException, httpx.TransportError):
-        return None
-    return r.text if r.status_code >= 400 else None
-
-
-def _size_from_range(client: httpx.Client, url: str) -> int:
-    """Size an object whose HEAD omits Content-Length, via a Content-Range GET."""
-    r = client.get(url, headers={"Range": "bytes=0-0"})
-    if r.status_code >= 400:
-        raise classify_status(r.status_code, r.text, url)
-    cr = r.headers.get("content-range", "")
-    if "/" in cr:
-        total = cr.rsplit("/", 1)[-1].strip()
-        if total.isdigit():
-            return int(total)
-    cl = r.headers.get("content-length")
-    if cl and cl.isdigit():
-        return int(cl)
-    raise TransportUpstreamError(f"could not determine object size url={url}")
-
-
-def preflight(url: str, client: httpx.Client) -> int:
-    """HEAD the object; return its byte size or raise a typed early error, with the
-    verbatim body recovered by a tiny range GET because an S3 HEAD carries none.
-    A 403/405 falls back to a range-GET size probe before the error stands."""
-    resp = head(client, url)
-    if resp.status_code >= 400:
-        if resp.status_code in (403, 405):
-            try:
-                return _size_from_range(client, url)
-            except TransportError:
-                pass  # range GET confirmed the failure -> classify the HEAD error
-        body = _recover_error_body(client, url, resp.status_code)
-        raise classify_status(resp.status_code, body, url)
-    cl = resp.headers.get("content-length")
-    if cl and cl.isdigit():
-        return int(cl)
-    return _size_from_range(client, url)
+        body, _ = get_once(get_client(), url, headers={"Range": "bytes=0-0"})
+        text = body.decode("utf-8", "replace")
+    except TransportError:
+        text = None
+    return classify_status(status, text, url)
 
 
 @contextmanager
 def open_windowed_cog(url: str) -> Iterator:
-    """Open a remote COG for windowed reads, yielding an open rasterio dataset. Any
-    failure re-raises the transport's recorded typed error in place of the opaque
-    ``RasterioIOError``; a pre-flight error raises before GDAL is invoked."""
+    """Open a remote COG through ``/vsicurl/`` under :data:`READ_POLICY`, yielding the
+    rasterio dataset. A GDAL failure in the open or in the caller's reads raises the
+    typed transport error in place of the opaque ``RasterioIOError``."""
     import rasterio
+    from rasterio.errors import RasterioError
 
-    client = get_client()
-    size = preflight(url, client)  # typed early error; GDAL not yet involved
-    opener = TransportOpener(url, client, size)
     try:
-        with rasterio.open(url, opener=opener) as src:
+        with rasterio.Env(**READ_POLICY), rasterio.open(f"/vsicurl/{url}") as src:
             yield src
-            # The caller's reads ran inside this block. A mid-read transport error
-            # is recorded (not raised) to avoid the unguarded-callback abort, so
-            # surface it here even when GDAL swallowed it into a partial read.
-            recorded = opener.recorded_error()
-            if recorded is not None:
-                raise recorded
-    except TransportError:
-        raise
-    except Exception as exc:  # noqa: BLE001 -- GDAL swallowed the real cause
-        recorded = opener.recorded_error()
-        if recorded is not None:
-            raise recorded from exc
-        raise TransportUpstreamError(
-            f"remote raster open/read failed url={url}: {exc}") from exc
+    except RasterioError as exc:
+        raise _typed(url, exc) from exc

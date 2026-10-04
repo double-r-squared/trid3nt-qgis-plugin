@@ -806,7 +806,7 @@ def test_a_wqp_result_keeps_the_unit_its_own_column_names():
     and a reading with no unit is one no slot can convert."""
     import pandas as pd
 
-    from trid3nt_server.tools.fetchers._router.executors.dataretrieval_delegate import (
+    from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_water_quality.hooks import (
         _latest_results_by_site,
     )
 

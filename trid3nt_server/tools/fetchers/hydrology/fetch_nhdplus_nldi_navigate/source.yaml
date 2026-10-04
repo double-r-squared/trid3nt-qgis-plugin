@@ -35,10 +35,12 @@ params:
     default: 50.0
     min: 0.0
     max: 1000.0
+hooks:
+  delegate: nldi.features
+  delegate_validate: nldi.validate
 ingest:
   delegate:
     library: dataretrieval
-    service: nldi_navigate
   properties:
   - nhdplus_comid
 normalize:

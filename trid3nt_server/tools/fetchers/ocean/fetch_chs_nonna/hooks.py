@@ -16,6 +16,7 @@ from ..._fetch_common import bbox_pixel_dims, enforce_pixel_budget
 from ..._router import hooks as _hooks
 from ..._router.errors import (
     router_empty_error, router_input_error, router_upstream_error)
+from ..._router.transport import TransportError, get_bytes, get_client
 
 __all__ = ["validate", "read"]
 
@@ -62,7 +63,6 @@ def read(spec: SourceSpec, params: dict[str, Any], *,
     import rasterio
     from pyproj import Transformer
 
-    from ..._router.transport.ogc_adapter import OGCAdapterError, fetch_ogc_layer
 
     wcs = (spec.ingest or {}).get("wcs", {})
     bbox = _bbox(spec, params)
@@ -75,27 +75,33 @@ def read(spec: SourceSpec, params: dict[str, Any], *,
     west, south = into_native(bbox[0], bbox[1])
     east, north = into_native(bbox[2], bbox[3])
 
-    endpoint = spec.endpoints["data"]
+    # WCS 1.0.0 is the dialect probed against this service: the later versions
+    # rename every parameter and carry GeoServer projection-mapping bugs.
+    query = {
+        "service": "WCS", "version": str(wcs.get("version", "1.0.0")),
+        "request": "GetCoverage", "Coverage": str(wcs["coverage"]), "CRS": native,
+        "BBOX": f"{west},{south},{east},{north}",
+        "WIDTH": str(width_px), "HEIGHT": str(height_px),
+        "FORMAT": str(wcs.get("image_format", "GeoTIFF")),
+        "RESPONSE_CRS": spec.normalize.crs,
+    }
     try:
-        resp = fetch_ogc_layer(
-            url=str(endpoint.url), layer_name=str(wcs["coverage"]),
-            bbox=(west, south, east, north), crs=native,
-            image_format=str(wcs.get("image_format", "GeoTIFF")),
-            version=str(wcs.get("version", "1.0.0")),
-            width_px=width_px, height_px=height_px, timeout_s=timeout_s,
-            user_agent=spec.auth.user_agent,
-            extra_params={"RESPONSE_CRS": spec.normalize.crs})
-    except OGCAdapterError as exc:
+        body, content_type, _url = get_bytes(
+            get_client(), str(spec.endpoints["data"].url), params=query,
+            headers={"User-Agent": spec.auth.user_agent})
+    except TransportError as exc:
         raise router_upstream_error(
             spec.error_code_prefix,
             f"CHS NONNA WCS GetCoverage failed for bbox={bbox}: {exc}")
-    if "tiff" not in (resp.content_type or "").lower():
+    # A logical WCS error (bad coverage name, projection-mapping bug) answers
+    # HTTP 200 with an XML exception body, which this refuses verbatim.
+    if "tiff" not in (content_type or "").lower():
         raise router_upstream_error(
             spec.error_code_prefix,
-            f"CHS NONNA WCS answered content-type={resp.content_type!r} for "
-            f"bbox={bbox}; body preview: {resp.content[:200]!r}")
+            f"CHS NONNA WCS answered content-type={content_type!r} for "
+            f"bbox={bbox}; body preview: {body[:400]!r}")
 
-    with rasterio.io.MemoryFile(resp.content) as mem, mem.open() as src:
+    with rasterio.io.MemoryFile(body) as mem, mem.open() as src:
         arr = src.read(1).astype("float32")
         transform = src.transform
         crs = src.crs

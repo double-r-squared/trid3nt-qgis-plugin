@@ -23,7 +23,6 @@ from trid3nt_server.tools.fetchers._router.errors import (
     RouterEmptyError, RouterInputError)
 from trid3nt_server.tools.fetchers._router.spec import (
     SpecLoadError, compose_specs_from_tree, load_spec, served_frames)
-from trid3nt_server.tools.fetchers._router.transport import ogc_adapter
 from trid3nt_server.tools.fetchers.ocean.fetch_chs_nonna import hooks as nonna
 from trid3nt_server.tools.search.match import Need, match
 
@@ -106,14 +105,6 @@ _UNSURVEYED_TIFF = base64.b64decode("".join((
     "AAAAAAAAAAAAAAAAAAA=")))
 
 
-class _Recorded:
-    """One recorded GetCoverage answer, in the adapter's own response shape."""
-
-    def __init__(self, body: bytes) -> None:
-        self.content = body
-        self.content_type = "image/tiff"
-
-
 @pytest.fixture(scope="module")
 def spec():
     return compose_specs_from_tree()["fetch_chs_nonna"]
@@ -130,11 +121,11 @@ def answered(monkeypatch):
     def serve(body: bytes) -> dict:
         asked: dict = {}
 
-        def fake(**kwargs):
-            asked.update(kwargs)
-            return _Recorded(body)
+        def fake(client, url, *, params=None, headers=None):
+            asked.update(params or {})
+            return body, "image/tiff", url
 
-        monkeypatch.setattr(ogc_adapter, "fetch_ogc_layer", fake)
+        monkeypatch.setattr(nonna, "get_bytes", fake)
         return asked
 
     return serve
@@ -187,11 +178,11 @@ def test_the_request_goes_out_on_the_mosaics_own_frame(spec, answered):
     for back on 4326."""
     asked = answered(_REACH_TIFF)
     nonna.read(spec, {"bbox": list(REACH), "resolution_m": 10.0}, timeout_s=180.0)
-    assert asked["crs"] == "EPSG:3857"
-    assert asked["extra_params"] == {"RESPONSE_CRS": "EPSG:4326"}
-    assert asked["layer_name"] == "nonna:NONNA 10 Coverage"
+    assert asked["CRS"] == "EPSG:3857"
+    assert asked["RESPONSE_CRS"] == "EPSG:4326"
+    assert asked["Coverage"] == "nonna:NONNA 10 Coverage"
     assert asked["version"] == "1.0.0"
-    west, south, east, north = asked["bbox"]
+    west, south, east, north = (float(v) for v in asked["BBOX"].split(","))
     assert (round(west), round(south)) == (-9176066, 5305885)
     assert (round(east), round(north)) == (-9174730, 5307407)
 
@@ -199,7 +190,7 @@ def test_the_request_goes_out_on_the_mosaics_own_frame(spec, answered):
 def test_the_asked_spacing_is_the_lattice_the_request_is_sized_to(spec, answered):
     asked = answered(_REACH_TIFF)
     nonna.read(spec, {"bbox": list(REACH), "resolution_m": 10.0}, timeout_s=180.0)
-    assert (asked["width_px"], asked["height_px"]) == (98, 111)
+    assert (asked["WIDTH"], asked["HEIGHT"]) == ("98", "111")
 
 
 def test_the_excerpt_reads_as_an_elevation_under_water_not_a_depth(spec, answered):
