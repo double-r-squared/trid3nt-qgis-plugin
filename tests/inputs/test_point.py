@@ -126,6 +126,22 @@ def test_the_coercion_asks_the_canvas_only_when_gated_live_and_empty(monkeypatch
     assert len(asked) == 1
 
 
+def test_a_point_and_a_drawn_slot_ask_through_the_one_canvas_ask(monkeypatch):
+    from trid3nt_server.inputs import slots
+
+    asked: list[tuple[str, str]] = []
+
+    async def _draw(geometry, *, tool, param, **_kw):
+        asked.append((geometry, param))
+        return None
+
+    monkeypatch.setattr(slots, "draw_on_canvas", _draw)
+    coerce = point_arg("release", tool="t", prompt="click")
+    assert asyncio.run(coerce({"input_mode": "user_gated"})) == {"release": None}
+    assert asyncio.run(slots.ask_on_canvas("domain", tool="t", param="domain")) is None
+    assert asked == [("point", "release"), ("polygon", "domain")]
+
+
 def test_a_declined_pick_leaves_the_slot_empty(monkeypatch):
     from trid3nt_server.render import pipeline_emitter
     from trid3nt_server.inputs.gate import draw_input
