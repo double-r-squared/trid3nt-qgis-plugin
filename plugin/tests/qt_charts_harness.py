@@ -3,7 +3,8 @@
 Run as a SUBPROCESS by its wrapper, which needs ``qgis.PyQt`` and matplotlib and
 skips honestly when absent. No agent, no network. Covers the hazard-curve render,
 de-dupe, paging, clear on case switch, junk rows skipped, click-inspect and
-locate-on-map, and the dock wiring that keeps charts out of the message list."""
+locate-on-map, the dock wiring that keeps charts out of the message list, and
+the Settings entries that open the charts and library windows."""
 
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from qgis.PyQt.QtCore import QCoreApplication  # noqa: E402
-from qgis.PyQt.QtWidgets import QApplication, QLabel  # noqa: E402
+from qgis.PyQt.QtWidgets import QApplication, QLabel, QToolButton  # noqa: E402
 
 # Never touch the real QGIS profile's QSettings from this harness.
 QCoreApplication.setOrganizationName("trid3nt-charts-harness")
@@ -25,6 +26,7 @@ app = QApplication([])
 from plugin.ui import charts  # noqa: E402
 from plugin.ui.charts_window import ChartsWindow  # noqa: E402
 from plugin.ui.dock import Trid3ntDock  # noqa: E402
+from plugin.ui.settings_dialog import SettingsDialog  # noqa: E402
 
 #: A headless UI proof is TRANSIENT, like every other packet: it lands under
 #: `run/proof/plugin/`, which git does not carry and the packet renderer sweeps
@@ -269,7 +271,6 @@ pump()
 
 # No window and no charts until the first chart arrives.
 assert dock._charts_window is None
-assert dock.charts_btn.text() == "Charts (0)"
 
 before = dock.messages_layout.count()
 dock._on_event("chart", HAZARD_CHART)
@@ -277,8 +278,6 @@ pump()
 assert dock._charts_window is not None, "chart did not lazily build the window"
 assert dock._charts_window.count == 1
 assert dock._charts_window.current_chart_id() == HAZARD_CHART["chart_id"]
-# The chat button now shows the count + the new-chart flag.
-assert dock.charts_btn.text() == "Charts (1) *", dock.charts_btn.text()
 after = dock.messages_layout.count()
 # Exactly one new chat widget: the pending assistant entry carrying the
 # single pointer note -- never a chart widget in the message list.
@@ -294,11 +293,13 @@ canvas_type = type(dock._charts_window._canvas)
 canvases = dock.messages_host.findChildren(canvas_type)
 assert not canvases, "a chart canvas leaked into the chat message list"
 
-# The "Charts (N)" button raises the window + clears the flag.
-dock._show_charts_window()
+# Settings' display-charts entry raises the window.
+dock._charts_window.setVisible(False)
+SettingsDialog.exec = lambda dlg: dlg.charts_entry_btn.click()
+dock._open_settings()
 pump()
-assert dock._charts_window.isVisible()
-assert dock.charts_btn.text() == "Charts (1)", dock.charts_btn.text()
+assert dock._charts_window.isVisible(), "display charts did not open the window"
+print("SETTINGS-CHARTS-OK")
 
 # A live RE-emit of the same chart adds no second note and no growth.
 before = dock.messages_layout.count()
@@ -307,10 +308,24 @@ pump()
 assert dock._charts_window.count == 1
 assert dock.messages_layout.count() == before
 
-# Case-switch clear path (_clear_messages) empties the window + resets button.
+# Case-switch clear path (_clear_messages) empties the window.
 dock._clear_messages()
 pump()
 assert dock._charts_window.count == 0
-assert dock.charts_btn.text() == "Charts (0)", dock.charts_btn.text()
+
+# Settings' search-library entry opens the library window.
+assert dock._library_window is None
+SettingsDialog.exec = lambda dlg: dlg.library_entry_btn.click()
+dock._open_settings()
+pump()
+assert dock._library_window is not None and dock._library_window.isVisible(), (
+    "search library did not open the library window")
+print("SETTINGS-LIBRARY-OK")
+
+# The header carries neither: only Settings opens the two views.
+header = [b.text() for b in dock.findChildren(QToolButton)]
+assert not any(t.startswith(("Charts", "Library")) for t in header), header
+assert not hasattr(dock, "charts_btn") and not hasattr(dock, "library_btn")
+print("HEADER-UNCROWDED-OK")
 
 print("CHARTS-OK")

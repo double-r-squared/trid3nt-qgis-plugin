@@ -106,13 +106,11 @@ class SettingsDialog(QDialog):
         on_disconnect=None,
         on_connect=None,
         connected: bool = False,
+        on_charts=None,
+        on_library=None,
     ):
         super().__init__(parent)
         self._settings = settings
-        # Connect and disconnect both live HERE rather than on the header row,
-        # each enabled only in the state where it applies.
-        self._on_disconnect = on_disconnect
-        self._on_connect = on_connect
         # Keep-alive refs for the live model-list fetch tasks, initialised
         # BEFORE _reload_model_choices runs below.
         self._model_list_tasks: List["_ModelListTask"] = []
@@ -206,7 +204,8 @@ class SettingsDialog(QDialog):
         )
         form.addRow("Tool selection", self.tool_choice_combo)
 
-        # ONE toggle button whose text and action depend on the connection
+        # Connect and disconnect live HERE rather than on the header row: ONE
+        # toggle button whose text and action depend on the connection
         # state at build time. Either way it closes the dialog WITHOUT saving:
         # this is an action, not a settings edit, so it must not also push
         # provider config.
@@ -215,13 +214,28 @@ class SettingsDialog(QDialog):
             self.conn_toggle_btn.setText("Disconnect from agent")
             self.conn_toggle_btn.setToolTip("End the current agent connection")
             self.conn_toggle_btn.setEnabled(on_disconnect is not None)
-            self.conn_toggle_btn.clicked.connect(self._disconnect_and_close)
+            self.conn_toggle_btn.clicked.connect(
+                lambda: self._act_and_close(on_disconnect))
         else:
             self.conn_toggle_btn.setText("Connect to agent")
             self.conn_toggle_btn.setToolTip("Start the agent connection")
             self.conn_toggle_btn.setEnabled(on_connect is not None)
-            self.conn_toggle_btn.clicked.connect(self._connect_and_close)
+            self.conn_toggle_btn.clicked.connect(
+                lambda: self._act_and_close(on_connect))
         form.addRow("Connection", self.conn_toggle_btn)
+
+        # The dock's views open from here so its header stays uncrowded; each
+        # entry is an action and closes the dialog WITHOUT saving.
+        self.charts_entry_btn = QPushButton("Display charts")
+        self.charts_entry_btn.setEnabled(on_charts is not None)
+        self.charts_entry_btn.clicked.connect(lambda: self._act_and_close(on_charts))
+        self.library_entry_btn = QPushButton("Search library")
+        self.library_entry_btn.setEnabled(on_library is not None)
+        self.library_entry_btn.clicked.connect(lambda: self._act_and_close(on_library))
+        views_row = QHBoxLayout()
+        views_row.addWidget(self.charts_entry_btn)
+        views_row.addWidget(self.library_entry_btn)
+        form.addRow("Views", views_row)
 
         # The data-source keys. One row per CREDENTIAL the daemon's rows
         # declare, not per source: two sources served by one account share one
@@ -327,18 +341,11 @@ class SettingsDialog(QDialog):
                 except Exception:  # noqa: BLE001 -- stored either way
                     pass
 
-    def _disconnect_and_close(self) -> None:
-        """Run the dock's disconnect path, then close WITHOUT saving: this is
-        an action, not a settings edit."""
-        if self._on_disconnect is not None:
-            self._on_disconnect()
-        self.reject()
-
-    def _connect_and_close(self) -> None:
-        """Run the dock's connect path, then close WITHOUT saving: this is an
-        action, not a settings edit."""
-        if self._on_connect is not None:
-            self._on_connect()
+    def _act_and_close(self, action) -> None:
+        """Run one of the dock's actions, then close WITHOUT saving: an action
+        is not a settings edit."""
+        if action is not None:
+            action()
         self.reject()
 
     def _resolve_http_base(self) -> str:

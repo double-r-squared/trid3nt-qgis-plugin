@@ -182,13 +182,6 @@ check(
     window.current_chart_id() == OQ_CHART_ID,
     str(window.current_chart_id()),
 )
-# The chat button reflects the count (the window is invited open by the
-# button, not force-shown on case open).
-check(
-    "chat button reads Charts (N)",
-    dock.charts_btn.text() == f"Charts ({window.count})",
-    dock.charts_btn.text(),
-)
 
 s = window.last_render_summary or {}
 print(f"[proof] render summary: {s}", flush=True)
@@ -235,8 +228,8 @@ pump(3)
 check("other case bound", dock._case_id == OTHER_CASE, str(dock._case_id))
 check(
     "charts window cleared on switch to chart-less case",
-    dock._charts_window.count == 0 and dock.charts_btn.text() == "Charts (0)",
-    f"count={dock._charts_window.count} button={dock.charts_btn.text()}",
+    dock._charts_window.count == 0,
+    f"count={dock._charts_window.count}",
 )
 
 

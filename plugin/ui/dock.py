@@ -230,10 +230,8 @@ class Trid3ntDock(QDockWidget):
         # order, never a server field. Reset on every user turn and case switch.
         self._tool_picker_turn_step = 0
         # Charts get their OWN bottom-docked window, never an in-chat panel,
-        # built LAZILY so a chart-less session never spawns a bottom dock. The
-        # chat keeps only the count button ``_charts_count`` labels.
+        # built LAZILY so a chart-less session never spawns a bottom dock.
         self._charts_window: Optional[ChartsWindow] = None
-        self._charts_count = 0
         # The Library is a sibling bottom window, built LAZILY on its first
         # open. It is read-only and case-independent: a case switch leaves it
         # exactly as it is.
@@ -350,21 +348,6 @@ class Trid3ntDock(QDockWidget):
             "region (e.g. where GeoClaw refines its mesh). Cleared on send.",
             checkable=True)
 
-        # The count button that SHOWS the
-        # bottom charts window. It stays in the chat dock; charts themselves
-        # never render inline here. Click raises (creates lazily) the window;
-        # a new chart increments the count + subtly flags the button.
-        self.charts_btn = _tool_button(
-            "Charts (0)", self._show_charts_window,
-            "Show the charts window (bottom of the app)")
-
-        # The Library: every registered tool under its subsystem and every data
-        # row under its class, with the name a direct !run takes one click from
-        # the clipboard.
-        self.library_btn = _tool_button(
-            "Library", self._show_library_window,
-            "Browse and search the tools and data rows you can run")
-
         # Clearing the AOI is MULTIPLEXED into the Set-AOI tool: while it is
         # active, BACKSPACE or DELETE clears the current AOI through a canvas
         # eventFilter installed only for the duration.
@@ -375,7 +358,7 @@ class Trid3ntDock(QDockWidget):
         self.settings_btn = _tool_button(
             "\u2699",  # gear glyph (cog); icon-only look
             self._open_settings,
-            "Settings (connect / disconnect live here)")
+            "Settings (connect, charts and the library live here)")
         outer.addLayout(button_row)
 
         line = QFrame()
@@ -504,11 +487,9 @@ class Trid3ntDock(QDockWidget):
         self._probe_panel.setVisible(False)
         self.probe_result_label.setText("")
         # The charts window SURVIVES the switch -- the bottom dock stays put;
-        # only its list and the count button reset.
+        # only its list resets.
         if self._charts_window is not None:
             self._charts_window.clear()
-        self._charts_count = 0
-        self._set_charts_button()
         while self.messages_layout.count() > 1:
             item = self.messages_layout.takeAt(0)
             widget = item.widget()
@@ -1089,6 +1070,8 @@ class Trid3ntDock(QDockWidget):
             on_disconnect=self.disconnect_agent,
             on_connect=self.connect_agent,
             connected=self.bridge.running,
+            on_charts=self._show_charts_window,
+            on_library=self._show_library_window,
         )
         dlg.exec()
         # The AOI toggles live only in Settings, and
@@ -1643,12 +1626,10 @@ class Trid3ntDock(QDockWidget):
 
     def _on_chart(self, data: dict) -> None:
         """A live mid-turn chart lands in the bottom-docked ChartsWindow, never
-        a chat widget. The chat gets the incremented "Charts (N)" button and one
-        pointer note, so the turn's narrative says where the chart went."""
+        a chat widget. The chat gets one pointer note, so the turn's narrative
+        says where the chart went."""
         window = self._ensure_charts_window()
         if window.add_chart(data):
-            self._charts_count = window.count
-            self._set_charts_button(flag=True)
             title = data.get("title") or "chart"
             self._ensure_pending().add_note(
                 f"Chart added to the charts window: {title}"
@@ -1710,18 +1691,12 @@ class Trid3ntDock(QDockWidget):
                 # layer, which pushes the conversation far up on a real case.
                 # Errors stay visible.
                 self._ensure_pending().add_layer_notes(notes)
-        # Rebuild the charts window's list from the
-        # case's persisted SessionChartRecords (per-case durability). A
-        # chart-less case leaves the (possibly-existing) window empty and the
-        # button at "Charts (0)"; a chart-carrying case builds the window
-        # lazily but does NOT force it visible (the button invites it open).
+        # Rebuild the charts window's list from the case's persisted chart
+        # records. A chart-less case leaves the (possibly-existing) window
+        # empty; a chart-carrying case builds the window lazily but does NOT
+        # force it visible (Settings' display-charts entry opens it).
         if info.charts or self._charts_window is not None:
-            window = self._ensure_charts_window()
-            window.set_charts(info.charts)
-            self._charts_count = window.count
-        else:
-            self._charts_count = 0
-        self._set_charts_button()
+            self._ensure_charts_window().set_charts(info.charts)
         if self.settings.auto_basemap:
             note = ensure_basemap(self.settings.basemap_preset)
             if note:
@@ -1804,15 +1779,14 @@ class Trid3ntDock(QDockWidget):
         return self._charts_window
 
     def _show_charts_window(self) -> None:
-        """The chat "Charts (N)" button: create-if-needed + raise the bottom
-        window, clearing the new-chart flag (the count stays)."""
+        """Settings' display-charts entry: create-if-needed + raise the bottom
+        window."""
         window = self._ensure_charts_window()
         window.setVisible(True)
         try:
             window.raise_()
         except Exception:  # noqa: BLE001 -- headless
             pass
-        self._set_charts_button(flag=False)
 
     # -- library window -------------------------------------------------------- #
 
@@ -1832,7 +1806,7 @@ class Trid3ntDock(QDockWidget):
         return self._library_window
 
     def _show_library_window(self) -> None:
-        """The chat "Library" button: create-if-needed, raise, and fetch the
+        """Settings' search-library entry: create-if-needed, raise, and fetch the
         listing on the first open -- the listing is static for the life of the
         daemon, so a second open re-shows what is already there."""
         window = self._ensure_library_window()
@@ -1860,13 +1834,6 @@ class Trid3ntDock(QDockWidget):
         task.errored.connect(window.set_status)
         self._library_tasks.append(task)  # keep-alive
         task.start()
-
-    def _set_charts_button(self, flag: bool = False) -> None:
-        """Repaint the "Charts (N)" button: the count, plus a subtle "*" flag
-        when a new chart arrived while the window was not being looked at
-        (cleared when the user opens/raises the window)."""
-        star = " *" if flag else ""
-        self.charts_btn.setText(f"Charts ({self._charts_count}){star}")
 
     def _locate_layer_on_map(self, source_uri: str) -> None:
         """Pan and flash the canvas to the layer a chart was computed from.

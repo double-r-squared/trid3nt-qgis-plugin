@@ -274,6 +274,10 @@ class TestChartsWindow(unittest.TestCase):
             f"charts harness failed:\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}",
         )
         self.assertIn("CHARTS-OK", proc.stdout)
+        # Settings' display-charts and search-library entries open the views,
+        # and the dock's header carries neither.
+        for marker in ("SETTINGS-CHARTS-OK", "SETTINGS-LIBRARY-OK", "HEADER-UNCROWDED-OK"):
+            self.assertIn(marker, proc.stdout)
 
 
 if __name__ == "__main__":
