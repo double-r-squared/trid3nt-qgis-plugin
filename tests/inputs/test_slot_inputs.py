@@ -314,3 +314,11 @@ def test_each_slot_module_imports_first_in_a_fresh_interpreter(module):
     ran = subprocess.run([sys.executable, "-c", f"import {module}"],
                          capture_output=True, text=True, timeout=240)
     assert ran.returncode == 0, ran.stderr[-2000:]
+
+
+@pytest.mark.parametrize("role", ["bed", "level", "discharge", "observe"])
+def test_a_slot_that_takes_a_number_states_one_on_the_wire(role):
+    from trid3nt_server.workflows.runtime.data import DataDecl
+
+    assert DataDecl(role).wire_annotation == (str | float | None)
+    assert DataDecl("domain").wire_annotation != (str | float | None)
