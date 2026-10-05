@@ -26,6 +26,9 @@ class TestShowThinkingSettings(unittest.TestCase):
             def setValue(self, key, value):
                 self.store[key] = value
 
+            def remove(self, key):
+                self.store.pop(key, None)
+
         FakeQSettings.store = stored or {}
         qtcore = types.ModuleType("qgis.PyQt.QtCore")
         qtcore.QSettings = FakeQSettings
@@ -70,6 +73,9 @@ class TestShowThinkingSettings(unittest.TestCase):
             def setValue(self, key, value):
                 self.store[key] = value
 
+            def remove(self, key):
+                self.store.pop(key, None)
+
         FakeQSettings.store = {}
         qtcore = types.ModuleType("qgis.PyQt.QtCore")
         qtcore.QSettings = FakeQSettings
@@ -111,6 +117,9 @@ class TestAutoBasemapSettings(unittest.TestCase):
 
             def setValue(self, key, value):
                 self.store[key] = value
+
+            def remove(self, key):
+                self.store.pop(key, None)
 
         FakeQSettings.store = stored or {}
         qtcore = types.ModuleType("qgis.PyQt.QtCore")
@@ -156,6 +165,9 @@ class TestAutoBasemapSettings(unittest.TestCase):
             def setValue(self, key, value):
                 self.store[key] = value
 
+            def remove(self, key):
+                self.store.pop(key, None)
+
         FakeQSettings.store = {}
         qtcore = types.ModuleType("qgis.PyQt.QtCore")
         qtcore.QSettings = FakeQSettings
@@ -182,8 +194,8 @@ class TestAutoBasemapSettings(unittest.TestCase):
 
 
 class TestProviderModelSettings(unittest.TestCase):
-    """OpenRouter model-extensibility: provider / model_id
-    / openrouter_api_key round-trip through QSettings -- same FakeQSettings
+    """OpenRouter model-extensibility: provider / model_id round-trip through
+    QSettings, and no key is ever kept there -- same FakeQSettings
     idiom as TestShowThinkingSettings / TestAutoBasemapSettings above."""
 
     def _make_settings(self, stored: dict = None):
@@ -198,6 +210,9 @@ class TestProviderModelSettings(unittest.TestCase):
 
             def setValue(self, key, value):
                 self.store[key] = value
+
+            def remove(self, key):
+                self.store.pop(key, None)
 
         FakeQSettings.store = stored or {}
         qtcore = types.ModuleType("qgis.PyQt.QtCore")
@@ -252,13 +267,7 @@ class TestProviderModelSettings(unittest.TestCase):
             "meta-llama/llama-3.3-70b-instruct",
         )
 
-    def test_api_key_default_is_empty(self):
-        s, _ = self._make_settings()
-        self.assertEqual(s.openrouter_api_key, "")
-
-    def test_api_key_round_trip(self):
-        s, store = self._make_settings()
-        s.openrouter_api_key = "sk-or-v1-SECRET"
-        self.assertEqual(store.store.get("trid3nt/openrouter_api_key"), "sk-or-v1-SECRET")
-        s2, _ = self._make_settings({"trid3nt/openrouter_api_key": "sk-or-v1-SECRET"})
-        self.assertEqual(s2.openrouter_api_key, "sk-or-v1-SECRET")
+    def test_no_key_lives_in_qsettings(self):
+        s, store = self._make_settings({"trid3nt/openrouter_api_key": "sk-or-v1-SECRET"})
+        self.assertNotIn("trid3nt/openrouter_api_key", store.store)
+        self.assertFalse(hasattr(s, "openrouter_api_key"))

@@ -1,9 +1,10 @@
-"""Qt harness: the settings dialog's save payload and its live model-list fetch.
+"""Qt harness: the settings dialog's save payload, model list and key entry.
 
 Runs offscreen under the ``qgis.PyQt`` interpreter against a recording
-``http.server`` stub for the two agent routes. The construction-time fetch
-repopulates the model combo from the stub's ids and the off-thread POST carries
-the preset plus the persisted key and model. The api key is NEVER printed."""
+``http.server`` stub for the agent routes. The construction-time fetch
+repopulates the model combo from the stub's ids, the off-thread POST carries the
+preset and model but never a key, and the ONE key entry stores its key in the
+credential store and pushes it over ``secret-add``. The key is NEVER printed."""
 
 from __future__ import annotations
 
@@ -16,9 +17,13 @@ import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from qgis.PyQt.QtWidgets import QApplication  # noqa: E402
+from qgis.PyQt.QtWidgets import QApplication, QLineEdit, QWidget  # noqa: E402
 
-from plugin.ui.settings_dialog import PROVIDER_PRESETS, SettingsDialog  # noqa: E402
+from plugin.ui.settings_dialog import (  # noqa: E402
+    LANGUAGE_MODEL_CREDENTIAL,
+    PROVIDER_PRESETS,
+    SettingsDialog,
+)
 from plugin.plugin_settings import PluginSettings  # noqa: E402
 
 _API_KEY = "sk-or-HARNESS-SECRET"
@@ -51,6 +56,10 @@ class _Stub(http.server.BaseHTTPRequestHandler):
         self._json(200, {"ok": True, "model": "m", "base_url_host": "openrouter.ai"})
 
     def do_GET(self):  # noqa: N802
+        if self.path == "/api/tool-catalog":
+            self._json(200, {"tools": [{"name": "fetch_airnow_air_quality", "credential": {
+                "name": "airnow", "label": "EPA AirNow", "env_var": "X"}}]})
+            return
         if self.path != "/api/local-models":
             self._json(404, {"error": "not found"})
             return
@@ -76,6 +85,40 @@ def _wait(app, predicate, timeout=15.0):
     return False
 
 
+class _Broker:
+    """The credential store's stand-in: names and values in memory."""
+
+    def __init__(self):
+        self.stored: dict = {}
+
+    def stored_names(self):
+        return frozenset(self.stored)
+
+    def remember(self, name, value):
+        self.stored[name] = value
+        return True
+
+
+class _Bridge:
+    running = True
+
+    def __init__(self):
+        self.pushed: list = []
+
+    def push_secret(self, name, value):
+        self.pushed.append((name, value))
+
+
+class _Dock(QWidget):
+    def __init__(self, base):
+        super().__init__()
+        self.bridge = _Bridge()
+        self._base = base
+
+    def _effective_http_base(self):
+        return self._base
+
+
 def main() -> int:
     app = QApplication(sys.argv)
 
@@ -93,10 +136,11 @@ def main() -> int:
     settings = PluginSettings()
     settings.export_api = base
     settings.provider = "openrouter-free"
-    settings.openrouter_api_key = _API_KEY
     settings.model_id = "meta-llama/llama-3.3-70b-instruct:free"
 
-    dlg = SettingsDialog(settings, None)
+    dock = _Dock(base)
+    dlg = SettingsDialog(settings, dock)
+    dlg._broker = _Broker()
 
     # 1) The construction-time live fetch must repopulate the combo with the
     #    stub's DISTINCT free ids.
@@ -114,8 +158,33 @@ def main() -> int:
         return 1
     print("MODEL_REPOPULATE_OK")
 
-    # 2) Save -> off-thread POST with the preset payload shape.
+    # 2) ONE key entry replaces the list of asked-for keys: it names the
+    #    language model first, gains the daemon's declared credentials, and the
+    #    dialog carries no other key field.
+    if not _wait(app, lambda: dlg.key_for_combo.count() == 2):
+        print("KEY_ENTRY_FAIL choices", dlg.key_for_combo.count())
+        return 1
+    choices = [dlg.key_for_combo.itemData(i) for i in range(dlg.key_for_combo.count())]
+    secret_fields = [e for e in dlg.findChildren(QLineEdit)
+                     if e.echoMode() == QLineEdit.EchoMode.Password]
+    if (choices != [LANGUAGE_MODEL_CREDENTIAL, "airnow"]
+            or secret_fields != [dlg.token_edit, dlg.key_edit]
+            or hasattr(dlg, "provider_key_edit") or hasattr(dlg, "keys_group")
+            or hasattr(settings, "openrouter_api_key")):
+        print("KEY_ENTRY_FAIL", choices, len(secret_fields))
+        return 1
+    print("ONE_KEY_ENTRY_OK")
+    dlg.key_for_combo.setCurrentIndex(0)
+    dlg.key_edit.setText(_API_KEY)
+
+    # 3) Save -> off-thread POST with the preset payload shape, and the key to
+    #    the store and over secret-add.
     dlg.accept()
+    if (dlg._broker.stored != {LANGUAGE_MODEL_CREDENTIAL: _API_KEY}
+            or dock.bridge.pushed != [(LANGUAGE_MODEL_CREDENTIAL, _API_KEY)]):
+        print("KEY_SAVE_FAIL", sorted(dlg._broker.stored), len(dock.bridge.pushed))
+        return 1
+    print("KEY_SAVE_OK")
     if not _wait(app, lambda: _Stub.last_post_payload is not None):
         print("SAVE_PAYLOAD_FAIL none")
         return 1
@@ -123,7 +192,6 @@ def main() -> int:
     preset = PROVIDER_PRESETS["openrouter-free"]
     expected = {
         "base_url": preset["base_url"],
-        "api_key": _API_KEY,
         "model": "meta-llama/llama-3.3-70b-instruct:free",
         "num_ctx": preset["num_ctx"],
     }

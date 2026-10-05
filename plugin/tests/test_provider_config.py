@@ -211,6 +211,8 @@ class TestDockProviderConfigWiring(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, msg=f"harness failed:\n{out}\n{err}")
         self.assertIn("SAVE_PAYLOAD_OK", out, msg=out)
         self.assertIn("MODEL_REPOPULATE_OK", out, msg=out)
+        self.assertIn("ONE_KEY_ENTRY_OK", out, msg=out)
+        self.assertIn("KEY_SAVE_OK", out, msg=out)
         # SECURITY: the api key must never be printed by the harness.
         self.assertNotIn("sk-or-HARNESS-SECRET", out)
 

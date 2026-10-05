@@ -1,23 +1,21 @@
-"""TRID3NT settings dialog, the provider preset table, and the data-source keys.
+"""TRID3NT settings dialog, the provider preset table, and the one key entry.
 
 APPLY-ON-SAVE: nothing a field carries takes effect until Save, where every
-field copies into ``settings`` in one place. A data-source key is the one
-exception to that store: it goes to QgsAuthManager, never to QSettings."""
+field copies into ``settings`` in one place. A key is the one exception to that
+store: it goes to QgsAuthManager, never to QSettings."""
 from __future__ import annotations
 
 from typing import List, Optional
 
+from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
-    QGroupBox,
     QHBoxLayout,
-    QLabel,
     QLineEdit,
-    QPlainTextEdit,
     QPushButton,
     QWidget,
 )
@@ -28,12 +26,13 @@ from ..net.tasks import _KeyedSourcesTask, _ModelListTask, _ProviderConfigTask
 
 
 
+#: The ``secret-add`` credential name of the language model's own key; every
+#: other name is one a data-source row declares.
+LANGUAGE_MODEL_CREDENTIAL = "llm"
 
-# Static provider preset table: label -> the agent-process ENV that provider
-# needs (base_url and the key-env NAME), a curated model shortlist, and the
-# num_ctx the agent should set so the context-clip guard does not false-trip.
-# The plugin CANNOT inject the agent's env, so naming the env vars here is
-# what makes the "restart to apply" note honest rather than hand-wavy.
+# Static provider preset table: label -> the provider's base_url, a curated
+# model shortlist, and the num_ctx the agent should set so the context-clip
+# guard does not false-trip.
 #
 # ``models`` is a shortlist only -- the model combo is EDITABLE, so any id the
 # provider serves is typeable. The agent is tool-heavy and many free models
@@ -42,7 +41,6 @@ from ..net.tasks import _KeyedSourcesTask, _ModelListTask, _ProviderConfigTask
 PROVIDER_PRESETS: dict = {
     "local-ollama": {
         "base_url": "http://127.0.0.1:11434/v1",
-        "key_env": "",  # not needed for a local ollama seam
         "num_ctx": "24576",
         "models": [
             "qwen3:8b-24k",
@@ -52,7 +50,6 @@ PROVIDER_PRESETS: dict = {
     },
     "openrouter-free": {
         "base_url": "https://openrouter.ai/api/v1",
-        "key_env": "OPENROUTER_API_KEY",
         "num_ctx": "32768",
         "models": [
             "meta-llama/llama-3.3-70b-instruct:free",
@@ -62,7 +59,6 @@ PROVIDER_PRESETS: dict = {
     },
     "openrouter-paid": {
         "base_url": "https://openrouter.ai/api/v1",
-        "key_env": "OPENROUTER_API_KEY",
         "num_ctx": "65536",
         "models": [
             "deepseek/deepseek-chat",
@@ -73,7 +69,6 @@ PROVIDER_PRESETS: dict = {
     },
     "openai": {
         "base_url": "https://api.openai.com/v1",
-        "key_env": "OPENAI_API_KEY",
         "num_ctx": "128000",
         "models": [
             "gpt-4o-mini",
@@ -82,7 +77,6 @@ PROVIDER_PRESETS: dict = {
     },
     "groq": {
         "base_url": "https://api.groq.com/openai/v1",
-        "key_env": "GROQ_API_KEY",
         "num_ctx": "32768",
         "models": [
             "llama-3.3-70b-versatile",
@@ -93,7 +87,7 @@ PROVIDER_PRESETS: dict = {
 
 
 class SettingsDialog(QDialog):
-    """The server URL and token, the basemap, the model controls and the keys.
+    """The server URL and token, the basemap, the model controls and the key.
 
     Nothing applies until Save: every field, line edits and checkboxes alike,
     copies into ``settings`` in ``accept()``, and a typed key goes to
@@ -114,10 +108,7 @@ class SettingsDialog(QDialog):
         # Keep-alive refs for the live model-list fetch tasks, initialised
         # BEFORE _reload_model_choices runs below.
         self._model_list_tasks: List["_ModelListTask"] = []
-        # The keys form's rows come from the daemon; until they land the group
-        # shows why it is empty rather than an empty box.
         self._keys_task: Optional["_KeyedSourcesTask"] = None
-        self._key_edits: dict = {}
         self._broker = AuthBroker()
         self.setWindowTitle("TRID3NT settings")
         form = QFormLayout(self)
@@ -156,25 +147,14 @@ class SettingsDialog(QDialog):
         basemap_row.addWidget(self.auto_basemap_checkbox, 1)
         form.addRow("Basemap", basemap_row)
 
-        # Only the MODEL rides the user-message live. Provider and api key are
-        # agent-process env the plugin cannot inject, so those two persist here
-        # and take effect when the agent restarts.
+        # Only the MODEL rides the user-message live; the provider is pushed
+        # to the agent on Save.
         self.provider_combo = QComboBox()
         for preset_label in PROVIDER_PRESETS:
             self.provider_combo.addItem(preset_label)
         p_idx = self.provider_combo.findText(settings.provider)
         self.provider_combo.setCurrentIndex(p_idx if p_idx >= 0 else 0)
         form.addRow("Provider", self.provider_combo)
-
-        # SECRET: password echo, NEVER logged, and never sent over the
-        # websocket -- there is no per-message carrier, and a live key must not
-        # leak onto the wire.
-        self.provider_key_edit = QLineEdit(settings.openrouter_api_key)
-        self.provider_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        self.provider_key_edit.setPlaceholderText(
-            "provider API key (OpenRouter / OpenAI / Groq)"
-        )
-        form.addRow("Provider API key", self.provider_key_edit)
 
         # EDITABLE combo, so any model id is typeable. Empty text means the
         # agent's own env default, and a model switch applies on the NEXT
@@ -237,15 +217,19 @@ class SettingsDialog(QDialog):
         views_row.addWidget(self.library_entry_btn)
         form.addRow("Views", views_row)
 
-        # The data-source keys. One row per CREDENTIAL the daemon's rows
-        # declare, not per source: two sources served by one account share one
-        # row and one entered key.
-        self.keys_group = QGroupBox("Keys (data sources)")
-        self.keys_form = QFormLayout(self.keys_group)
-        self.keys_status = QLabel("Reading the sources that need a key...")
-        self.keys_status.setWordWrap(True)
-        self.keys_form.addRow(self.keys_status)
-        form.addRow(self.keys_group)
+        # ONE key entry over QgsAuthManager. The combo states which credential
+        # the key is for: the language model's, or one a data-source row
+        # declares. A stored key is reported as stored and NEVER read back.
+        self.key_for_combo = QComboBox()
+        self.key_for_combo.addItem("language model", LANGUAGE_MODEL_CREDENTIAL)
+        self.key_edit = QLineEdit()
+        self.key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.key_for_combo.currentIndexChanged.connect(self._show_key_state)
+        self._show_key_state()
+        key_row = QHBoxLayout()
+        key_row.addWidget(self.key_for_combo)
+        key_row.addWidget(self.key_edit, 1)
+        form.addRow("Keys", key_row)
         self._load_keyed_sources()
 
         self._form = form
@@ -264,19 +248,18 @@ class SettingsDialog(QDialog):
         # The tool-selection mode rides the next user-message; no restart and
         # no push.
         self._settings.tool_choice_mode = self.tool_choice_combo.currentText()
-        # Provider, key and model persist, then the live config is PUSHED to
-        # the agent, so a provider or key switch applies on the next message
-        # with no restart.
+        # Provider and model persist, then the live config is PUSHED to the
+        # agent, so a provider switch applies on the next message with no
+        # restart.
         self._settings.provider = self.provider_combo.currentText()
-        self._settings.openrouter_api_key = self.provider_key_edit.text()
         self._settings.model_id = self.model_combo.currentText()
         self._push_provider_config()
-        self._save_keys()
+        self._save_key()
         super().accept()
 
     def _load_keyed_sources(self) -> None:
-        """Fetch the credentials the daemon's rows declare, off-thread so
-        a dead agent never freezes the dialog."""
+        """Add the credentials the daemon's rows declare to the entry's
+        choices, off-thread so a dead agent never freezes the dialog."""
         task = _KeyedSourcesTask(self._resolve_http_base(), self)
         self._keys_task = task
         task.finished.connect(self._on_keyed_sources)
@@ -284,62 +267,42 @@ class SettingsDialog(QDialog):
         task.start()
 
     def _on_keyed_sources(self, rows: list) -> None:
-        """Build one masked row per credential. A stored key is reported as
-        stored and NEVER read back into the field."""
         try:
-            stored = self._broker.stored_names()
-            if not rows:
-                self.keys_status.setText("No data source here needs a key.")
-                return
-            self.keys_status.setVisible(False)
             for row in rows:
-                edit = QLineEdit()
-                edit.setEchoMode(QLineEdit.EchoMode.Password)
-                edit.setPlaceholderText(
-                    "stored - type to replace" if row["name"] in stored
-                    else f"not set ({row['env_var']})"
-                )
-                self._key_edits[row["name"]] = edit
-                cell = QHBoxLayout()
-                cell.addWidget(edit, 1)
+                self.key_for_combo.addItem(row["label"], row["name"])
+                hint = f"the agent also reads {row['env_var']}"
                 if row["signup_url"]:
-                    link = QLabel(
-                        f'<a href="{row["signup_url"]}">get a key</a>'
-                    )
-                    link.setOpenExternalLinks(True)
-                    cell.addWidget(link)
-                self.keys_form.addRow(row["label"], cell)
+                    hint += f"; a key is issued at {row['signup_url']}"
+                self.key_for_combo.setItemData(
+                    self.key_for_combo.count() - 1, hint, Qt.ItemDataRole.ToolTipRole)
         except RuntimeError:
-            # The dialog closed mid-fetch; nothing to build.
-            return
+            return  # the dialog closed mid-fetch
 
     def _on_keyed_sources_errored(self, message: str) -> None:
         try:
-            self.keys_status.setText(
-                f"Could not read which sources need a key: {message}"
-            )
+            self.key_for_combo.setToolTip(
+                f"Data-source keys are not listed: {message}")
         except RuntimeError:
             return
 
-    def _save_keys(self) -> None:
-        """Store each typed key in QgsAuthManager and push it to the agent.
+    def _show_key_state(self, *_args) -> None:
+        stored = self.key_for_combo.currentData() in self._broker.stored_names()
+        self.key_edit.setPlaceholderText(
+            "stored - type to replace" if stored else "not set")
 
-        An untouched field changes nothing, so a stored key survives a Save that
-        did not mean to replace it. SECURITY: the value goes to the auth manager
-        and the ``secret-add`` envelope only - never to QSettings, never logged."""
-        dock = self.parent()
-        push = getattr(getattr(dock, "bridge", None), "push_secret", None)
-        for name, edit in self._key_edits.items():
-            value = edit.text()
-            if not value:
-                continue
-            self._broker.remember(name, value)
-            edit.clear()
-            if callable(push):
-                try:
-                    push(name, value)
-                except Exception:  # noqa: BLE001 -- stored either way
-                    pass
+    def _save_key(self) -> None:
+        """Store a typed key in QgsAuthManager and push it to the agent now;
+        every later connect pushes it again. An empty field changes nothing.
+        SECURITY: the value goes to the auth manager and ``secret-add`` only."""
+        value = self.key_edit.text().strip()
+        if not value:
+            return
+        name = self.key_for_combo.currentData()
+        self._broker.remember(name, value)
+        self.key_edit.clear()
+        bridge = getattr(self.parent(), "bridge", None)
+        if bridge is not None and bridge.running:
+            bridge.push_secret(name, value)
 
     def _act_and_close(self, action) -> None:
         """Run one of the dock's actions, then close WITHOUT saving: an action
@@ -360,12 +323,10 @@ class SettingsDialog(QDialog):
 
     def _push_provider_config(self) -> None:
         """POST the persisted provider config OFF-THREAD, so a dead agent
-        never freezes Save. SECURITY: the api key rides the body and is NEVER
-        logged."""
+        never freezes Save. The key never rides it: keys go over ``secret-add``."""
         preset = PROVIDER_PRESETS.get(self._settings.provider) or {}
         payload = {
             "base_url": preset.get("base_url", ""),
-            "api_key": self._settings.openrouter_api_key,
             "model": self._settings.model_id,
             "num_ctx": preset.get("num_ctx", ""),
         }

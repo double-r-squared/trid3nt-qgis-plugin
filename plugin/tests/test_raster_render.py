@@ -36,6 +36,9 @@ def _import_layers():
         def setValue(self, key, value):
             pass
 
+        def remove(self, key):
+            pass
+
     class _FakeQDateTime:
         """Just enough of QDateTime for the declared-instant parse + compare."""
 

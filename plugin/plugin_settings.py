@@ -1,8 +1,8 @@
 """Plugin settings -- QSettings-backed, one namespace.
 
 A value either rides the wire per turn (model id, thinking, tool-choice mode) or
-is agent-process ENV the plugin cannot inject: provider and its API key persist
-here and take effect only when the agent restarts."""
+is pushed to the agent on Save (provider). No key is ever stored here: keys live
+in QgsAuthManager."""
 
 from __future__ import annotations
 
@@ -34,6 +34,8 @@ class PluginSettings:
 
     def __init__(self) -> None:
         self._qs = QSettings()
+        # A key never lives in QSettings, so one stored under this group goes.
+        self._qs.remove(f"{GROUP}/openrouter_api_key")
 
     # -- raw accessors -------------------------------------------------------- #
 
@@ -197,17 +199,6 @@ class PluginSettings:
     @model_id.setter
     def model_id(self, value: str) -> None:
         self._set("model_id", value.strip())
-
-    @property
-    def openrouter_api_key(self) -> str:
-        """The provider API key. NEVER logged and never sent over the
-        websocket: no per-message carrier exists, and a live key on the wire
-        would be a security hole."""
-        return self._get("openrouter_api_key", "")
-
-    @openrouter_api_key.setter
-    def openrouter_api_key(self, value: str) -> None:
-        self._set("openrouter_api_key", value.strip())
 
     # -- derived --------------------------------------------------------------- #
 

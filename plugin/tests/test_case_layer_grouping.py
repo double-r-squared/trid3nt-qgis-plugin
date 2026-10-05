@@ -48,6 +48,9 @@ class TestCaseGroupClearing(unittest.TestCase):
             def setValue(self, key, value):
                 pass
 
+            def remove(self, key):
+                pass
+
         class _FakeQDateTime:
             @staticmethod
             def fromString(text, fmt=None):

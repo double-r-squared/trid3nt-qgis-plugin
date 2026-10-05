@@ -24,6 +24,7 @@ __all__ = [
     "SecretsListEnvelopePayload",
     "SecretAddEnvelopePayload",
     "SecretRevokeEnvelopePayload",
+    "LANGUAGE_MODEL_CREDENTIAL",
     "SECRET_PAYLOADS",
     "SECRET_CLIENT_TO_AGENT_PAYLOADS",
     "SECRET_AGENT_TO_CLIENT_PAYLOADS",
@@ -59,6 +60,11 @@ class SecretRecord(GraceModel):
     is_active: bool = True
 
 
+
+
+#: The credential name a ``secret-add`` carries for the language model's own
+#: key. Every other name is one a row declares.
+LANGUAGE_MODEL_CREDENTIAL = "llm"
 
 
 class SecretsListEnvelopePayload(GraceModel):

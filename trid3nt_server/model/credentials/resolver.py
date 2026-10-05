@@ -13,6 +13,7 @@ import os
 import threading
 from typing import Final
 
+from trid3nt_contracts.secrets import LANGUAGE_MODEL_CREDENTIAL
 from trid3nt_contracts.source_spec import CredentialSpec
 
 logger = logging.getLogger("trid3nt_server.model.credentials.resolver")
@@ -81,13 +82,18 @@ def keyed_credentials() -> dict[str, CredentialSpec]:
 
 
 def set_session_credential(session_id: str, provider_id: str, value: str) -> None:
-    """Store a raw key value pushed over the ``secret-add`` seam.
-    The value NEVER appears in a log line, and a blank argument is ignored so a
-    malformed push cannot create a ghost cache entry."""
+    """Hold a raw key value pushed over the ``secret-add`` seam, in memory only.
+    The language model's key goes to the process env its adapter reads per call;
+    a blank argument is ignored so a malformed push cannot create a ghost entry."""
     if not session_id or not provider_id or not value:
         return
-    with _LOCK:
-        _SESSION_CREDENTIALS.setdefault(session_id, {})[provider_id] = value
+    if provider_id == LANGUAGE_MODEL_CREDENTIAL:
+        # The plugin re-pushes on every connect, so a daemon restart that
+        # empties the env loses nothing.
+        os.environ["TRID3NT_OPENAI_API_KEY"] = value
+    else:
+        with _LOCK:
+            _SESSION_CREDENTIALS.setdefault(session_id, {})[provider_id] = value
     logger.info(
         "credential cached session=%s credential=%s (value hidden)",
         session_id,

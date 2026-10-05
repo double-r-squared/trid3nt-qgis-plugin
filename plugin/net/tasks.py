@@ -134,8 +134,8 @@ class _LibrarySearchTask(QObject):
 class _KeyedSourcesTask(QObject):
     """GET /api/tool-catalog, reduced to the credentials its rows declare.
 
-    The keys form has no table of its own, so it cannot render until this
-    lands; an error is surfaced rather than silently leaving an empty form."""
+    The key entry offers these names beside the language model's; an error is
+    surfaced on the entry rather than silently leaving the names out."""
 
     finished = pyqtSignal(list)  # list[{name, label, signup_url, env_var}]
     errored = pyqtSignal(str)    # honest message

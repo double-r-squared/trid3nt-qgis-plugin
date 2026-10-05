@@ -1341,7 +1341,7 @@ class Trid3ntDock(QDockWidget):
         gate are different problems and only the sender can tell them apart."""
         self._note(
             f"Could not apply the provider config live ({message}) -- "
-            "restart the agent to apply the new provider/key.",
+            "restart the agent to apply the new provider.",
             error=True,
         )
 

@@ -126,3 +126,38 @@ def test_handle_secret_add_writes_session_cache():
     assert resolver.resolve_credential(state.session_id, "fetch_firms_active_fire") == "pushed-key"
     # Success path emits no reply (no secrets-list, no vault write).
     assert ws.sent == []
+
+
+def test_language_model_key_reaches_the_env_and_nothing_else(tmp_path, monkeypatch, caplog):
+    """A pushed key lives in process memory only: no file under the daemon's
+    home or working directory and no log line ever carries it."""
+    import logging
+
+    from trid3nt_server.server import SessionState, _handle_secret_add
+    from trid3nt_contracts.common import new_ulid
+    from trid3nt_contracts.secrets import LANGUAGE_MODEL_CREDENTIAL
+
+    sentinel_llm = "SENTINEL-llm-7f3a9c"
+    sentinel_source = "SENTINEL-source-2b8e1d"
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("TRID3NT_OPENAI_API_KEY", raising=False)
+    caplog.set_level(logging.DEBUG)
+
+    ws = _NullWebSocket()
+    state = SessionState(session_id=new_ulid())
+    for provider, value in ((LANGUAGE_MODEL_CREDENTIAL, sentinel_llm), ("firms", sentinel_source)):
+        env = SecretAddEnvelopePayload(provider=provider, key_value=value, case_id=None)
+        asyncio.run(_handle_secret_add(ws, state, env))
+
+    import os
+
+    assert os.environ["TRID3NT_OPENAI_API_KEY"] == sentinel_llm
+    assert resolver.resolve_credential(state.session_id, "fetch_firms_active_fire") == sentinel_source
+    assert LANGUAGE_MODEL_CREDENTIAL not in resolver.session_provider_ids(state.session_id)
+    assert ws.sent == []
+    for sentinel in (sentinel_llm, sentinel_source):
+        assert sentinel not in caplog.text
+        for path in tmp_path.rglob("*"):
+            if path.is_file():
+                assert sentinel.encode() not in path.read_bytes(), path

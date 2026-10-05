@@ -1,8 +1,8 @@
 """QgsAuthManager credential broker (plugin side).
 
-QgsAuthManager is the credential HOME; the keys form writes into it, and key
-values move to the daemon over ``secret-add``, one envelope per credential, and
-are NEVER logged. A provider row's key never leaves here at all - its stored
+QgsAuthManager is the credential HOME; the settings key entry writes into it,
+and every connect moves each key to the daemon over ``secret-add``, one envelope
+per credential, NEVER logged. A provider row's key never leaves here at all - its stored
 config id rides the datasource uri as ``authcfg=``. With no master password, or
 no QGIS, every call is a no-op rather than a raise."""
 
@@ -166,7 +166,7 @@ class AuthBroker:
         return pushed
 
     def remember(self, provider_id: str, key_value: str) -> bool:
-        """Store a key the keys form took, so the next connect re-pushes it."""
+        """Store a key the key entry took, so every connect re-pushes it."""
         try:
             return self._store.remember(provider_id, key_value)
         except Exception:  # noqa: BLE001
@@ -182,7 +182,7 @@ class AuthBroker:
             return None
 
     def stored_names(self) -> frozenset:
-        """Which credentials have a key stored. Names ONLY: the form shows that
+        """Which credentials have a key stored. Names ONLY: the entry shows that
         a key is present without ever reading the value back."""
         try:
             return self._store.names()

@@ -1,8 +1,9 @@
-"""The keys form's two halves: the rows it reads, and the store it writes.
+"""The key entry's halves: the names it offers, the store it writes, the push.
 
-The rows come off the daemon's tool catalog, reduced to one entry per
+The names come off the daemon's tool catalog, reduced to one entry per
 credential NAME with no key material; the store is QgsAuthManager, which the
-broker reaches by name and answers for by config id, never by value.
+broker reaches by name and answers for by config id, never by value; and every
+connect, a reconnect included, pushes each stored key over ``secret-add``.
 """
 
 from __future__ import annotations
@@ -186,6 +187,37 @@ class TestBrokerOverAFakeAuthManager(unittest.TestCase):
         self.broker.remember("airnow", "NEW")
         self.assertEqual(len(self.am.configs), 1)
         self.assertEqual(self.store.providers(), {"airnow": "NEW"})
+
+    def test_a_reconnect_pushes_the_stored_key_again(self):
+        """A daemon restart empties its memory; the next connect refills it."""
+        import time
+
+        from stub_server import STUB_TOKEN, StubAgentServer
+
+        self.broker.remember("llm", "SENTINEL-reconnect-key")
+        server = StubAgentServer()
+        server.start()
+        self.addCleanup(server.stop)
+        client = tc.AgentClient(server.url, token=STUB_TOKEN)
+        self.addCleanup(client.close)
+        client.credential_broker = self.broker
+        client.connect()
+        client.create_case("re-push")
+        client.send_chat("drop-connection")
+        deadline = time.monotonic() + 10.0
+        while client.connected and time.monotonic() < deadline:
+            try:
+                client.next_event(timeout=1.0)
+            except tc.ConnectionClosed:
+                break
+        client.reconnect()
+        deadline = time.monotonic() + 10.0
+        while len(server.secret_adds) < 2 and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertEqual(server.connection_count, 2)
+        self.assertEqual(
+            [(p["provider"], p["key_value"]) for p in server.secret_adds],
+            [("llm", "SENTINEL-reconnect-key")] * 2)
 
 
 if __name__ == "__main__":
