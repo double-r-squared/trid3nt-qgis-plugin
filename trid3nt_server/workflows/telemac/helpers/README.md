@@ -1,8 +1,10 @@
 # `workflows/telemac/helpers/` - the pure physics and numerics
 
-The relations a declaration or the assembler derives a number from and nothing
+The relations several TELEMAC templates' runs derive a number from and nothing
 else: no fetch, no geometry, no file, no failure of its own. Each is a function
-none of the composites, the typed inputs or the DATA rows express.
+none of the composites, the typed inputs or the DATA rows express. Code one
+template uses lives in that template's package; code a second engine uses moves
+to `workflows/shared/`.
 
 ## Files
 
