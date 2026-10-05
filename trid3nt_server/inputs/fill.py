@@ -519,10 +519,8 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any,
     coercion = dict(decl.coercion)
     if "near" in coercion:
         coercion["near"] = await _seed(env, decl)
-    stated = str(coercion.pop("measures", "") or "")
-    coercion.pop("opens", None)
     coercion.update(_what_the_run_calls_it(
-        env, decl, stated, _asked_of(decl, coercion.get("near"))))
+        env, decl, _asked_of(decl, coercion.get("near"))))
     coercion.update(_the_window_it_is_cut_from(decl))
     coercion.update(await _on_the_run_s_frame(env, decl, value))
     coercion.update(_what_the_record_reports(env, decl, row))
@@ -569,7 +567,7 @@ def _the_window_it_is_cut_from(decl: DataDecl) -> dict[str, Any]:
     return {"extent": tuple(float(v) for v in dom.bbox)}
 
 
-def _what_the_run_calls_it(env: _Env, decl: DataDecl, stated: str,
+def _what_the_run_calls_it(env: _Env, decl: DataDecl,
                            observed: str) -> dict[str, Any]:
     """The UNIT this slot converts to and the NOUN the run says it in.
 
@@ -587,7 +585,7 @@ def _what_the_run_calls_it(env: _Env, decl: DataDecl, stated: str,
             else env.slot_units.get(decl.role))
     if unit:
         told["to_units"] = unit
-    caption = env.captions.get(decl.name) or stated
+    caption = env.captions.get(decl.name)
     if caption:
         told["caption"] = str(caption)
     return told
@@ -639,7 +637,7 @@ def _what_the_record_reports(env: _Env, decl: DataDecl,
 
     told["quantity"] = (quantity_class(row.data_class) if row is not None
                         else RATE if decl.role == DISCHARGE else STATE)
-    if decl.coercion.get("at") is None and env.params is not None:
+    if env.params is not None:
         told["at"] = env.params.value_of("event_time")
     return told
 
