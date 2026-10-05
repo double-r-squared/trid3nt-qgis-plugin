@@ -5,9 +5,9 @@ door, the engine file, its diagnostics parser and the engine's typed failures: t
 what they hold - `modules/` the wrappers, the module inputs their keywords are
 read out of, the tables of what each writes and the primitive set that reads it,
 `templates/` one package per question, `authoring/` the run directory the box receives, `helpers/` the
-pure physics a declaration derives a number from. A template package is the
-recipe (`<name>.py`), its declarations (`declarations.py`) and its routing
-phrasings (`corpus.yaml`); everything else it uses is the door's or the trees'.
+pure physics more than one template's run derives a number from. A template
+package is ONE file of what is passed in (`<name>.py`) and its routing phrasings
+(`corpus.yaml`); everything else it uses is the door's or the trees'.
 
 A template writes no plan. It declares a STEERING body of the module's own raw
 keywords, the data chain it consumes, the mesh recipe it triangulates on and the

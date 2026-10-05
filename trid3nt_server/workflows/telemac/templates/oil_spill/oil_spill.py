@@ -1,99 +1,106 @@
-"""Engine template ``telemac_oil_spill`` - an oil slick on the water it is spilled onto.
-
-TELEMAC-2D shallow water over the domain this run solves on - a river reach
-walked from the release point, a harbour the user draws, a polygon they own -
-with the engine's own oil-spill module riding on the solve: the module tracks
-floating particles and the tracer carries what dissolved."""
+"""Engine template ``telemac_oil_spill`` - an oil slick on the water it is spilled onto."""
 
 from __future__ import annotations
 
 import sys
 
-from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from typing import Any
 
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.workflows.runtime import (
-    Data,
-    register_workflow,
+    Data, register_workflow, Accepts, Param, doors,
 )
-from trid3nt_server.inputs import point_arg
+from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.instant import event_time
-from trid3nt_server.workflows.telemac.modules import (
-    T2D,
-    series,
-)
+from trid3nt_server.workflows.telemac.modules import T2D, series
 from trid3nt_server.workflows.telemac.modules.outputs import drogues
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
-    DROGUES_FILENAME,
-    Boundaries,
-    Oil,
-    Sources,
-    TracerNames,
-)
-from trid3nt_server.workflows.telemac.templates.oil_spill.declarations import (
-    ACCEPTS, DOC, OIL_PRESETS, PARAMS,
+    DROGUES_FILENAME, Boundaries, Oil, Sources, TracerNames,
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
-           "telemac_oil_spill"]
+__all__ = ["ACCEPTS", "CAPTIONS", "DATA", "DOC", "OIL_PRESETS", "OUTPUTS",
+           "PARAMS", "STEERING", "telemac_oil_spill"]
 
-#: WHERE the substance enters the water: the point the user clicked, else that
-#: fraction along the domain's own centerline. The workflow settles it onto a
-#: node of the accepted mesh before the sheet reads it back.
+
+OIL_PRESETS: dict[str, dict[str, Any]] = {
+    "light_crude": dict(
+        compo=[(0.5, 645.0), (0.3, 830.0)],
+        hap=[(0.2, 673.0, 0.018, 1.0e-5, 5.0e-5)],
+        rho=850.0, eta=1.0e-5, voldev=20.0, tamb=288.0, etal=1),
+    "diesel": dict(
+        compo=[(0.6, 560.0), (0.25, 700.0)],
+        hap=[(0.15, 610.0, 0.005, 1.0e-5, 8.0e-5)],
+        rho=840.0, eta=4.0e-6, voldev=10.0, tamb=288.0, etal=1),
+    "heavy_fuel": dict(
+        compo=[(0.75, 900.0), (0.2, 1050.0)],
+        hap=[(0.05, 800.0, 0.001, 5.0e-6, 1.0e-5)],
+        rho=960.0, eta=5.0e-4, voldev=30.0, tamb=288.0, etal=1),
+}
+
+ACCEPTS = Accepts(mesh=("unstructured_tri",))
+
+
+class PARAMS:
+    release = Param(
+        door=doors.USER, optional=True, user_lever=True,
+        consequence="scenario", type=Point,
+        derived_when_absent=(
+            "the release sits at spill_fraction along the domain the mesh was "
+            "built over; the slick's drift is measured from there"),
+        desc="Where the oil enters the water, as a Point: the pick's "
+             "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
+             "point layer. Geocode a place name first. Its name becomes the "
+             "tracer's name, "
+             "and on a river with no domain supplied it is also the seed the "
+             "reach is walked downstream from")
+
+    spill_fraction = Param(
+        door=doors.SCENARIO, default=0.25, bounds=(0.05, 0.9),
+        consequence="scenario",
+        desc="Along-domain release position, 0=inflow..1=outflow; the source "
+             "must sit strictly INSIDE the domain, never on a boundary")
+    spill_duration_s = Param(
+        door=doors.SCENARIO, default=300.0,
+        bounds=(1.0, 86400.0), units="s", consequence="scenario",
+        desc="Finite pulse injection window")
+
+    oil_type = Param(
+        door=doors.QUESTION, default="light_crude", consequence="scenario",
+        desc="Which preset was spilled: light_crude | diesel | heavy_fuel - the "
+             "module's own composition, density and viscosity. Crude runs as "
+             "light_crude, gasoline and petrol as diesel, bunker as heavy_fuel")
+
+    oil_release_step = Param(
+        door=doors.SCENARIO, default=600, bounds=(1.0, 1.0e6), type=int,
+        consequence="scenario",
+        desc="The solver step the floats are released at, compiled into the "
+             "module's own release routine; it lets the flow field establish "
+             "before the slick is put on it")
+
+
 _RELEASE = Placed("source", point="release", fraction="spill_fraction",
                   label="Release point")
 
-#: The files the run directory holds beside the deck's own statements. The
-#: restart is the engine's full state at its last instant in double precision,
-#: which is what a continuation reads; the results file is a picture of the run.
 _RESULT = "r2d_domain.slf"
 _RESTART = "restart_domain.slf"
 
-#: How far the reach producer walks downstream from the release point when this
-#: question has to find its own domain. A user who wants another stretch supplies
-#: the domain polygon, which supersedes the producer.
 _REACH_LENGTH_KM = 6.0
 
-#: The roughness this deck is solved at, and the law it is read under: Strickler,
-#: the coefficient an unsurveyed channel is screened at. ONE number, stated once,
-#: because the outflow stage is derived as a normal depth AT this roughness and a
-#: stage derived at one number under a deck written at another is a level the run
-#: never sits at. A user who knows the channel sets the keyword by name.
+# Strickler; the outflow stage is derived at this same roughness
 _FRICTION_LAW = 3
 _FRICTION_COEFFICIENT = 33.0
 
 
 class DATA:
-    """The three slots this run stands on, and the flow that fills its inflow."""
-
-    # A release named up front also names which stretch to model: the reach is
-    # walked downstream from it. A domain the user supplies supersedes this.
     domain = Data.need("hydrography", at="release",
                        span_km=_REACH_LENGTH_KM)
-    # THE BED, as the CLASS it is rather than the source it comes from: the
-    # measurement where something measured it, the terrain under the rest. Which
-    # survey or which DEM reaches this domain is the match's to answer off their
-    # rows, and the merge between the two classes is the runtime's one
-    # rule.
     bed = Data.need("bathymetry")
-    # THE FLOW the inflow run prescribes, as a CLASS: which record reports a
-    # discharge over this domain is the match's, and the window it reports is
-    # opened at the moment the run opens at. A number stated on this row stands
-    # over any record, and the unit it is read in is the unit of the keyword
-    # the slot fills.
     discharge = Data.need("discharge series")
-    # THE LEVEL the water stands at, which the run opens flat at and the outflow
-    # holds. A reach whose measured ends do not FALL has no uniform-flow depth to
-    # derive, and a closed body never had one. An ELEVATION on the datum the bed
-    # is painted on: a gauge reports a height above its OWN zero, so the record
-    # carries that zero's elevation and the offset row puts it on the run's
-    # frame.
     level = Data.need("water level series").optional()
 
 
 class STEERING(T2D):
-    """The deck: a body of water, a slick on it, and the fraction that dissolved."""
-
     GEOMETRY_FILE = "domain.slf"
     BOUNDARY_CONDITIONS_FILE = "domain.cli"
     RESULTS_FILE = _RESULT
@@ -102,8 +109,6 @@ class STEERING(T2D):
     LAW_OF_BOTTOM_FRICTION = _FRICTION_LAW
     FRICTION_COEFFICIENT = _FRICTION_COEFFICIENT
 
-    # The advection of momentum and depth, and the SUPG the domain is stable
-    # under. The tracer advects under the engine's own scheme and diffusivity.
     TYPE_OF_ADVECTION = [1, 5]
     SUPG_OPTION = [0, 0]
     MASS_LUMPING_ON_H = 1.0
@@ -114,82 +119,42 @@ class STEERING(T2D):
     IMPLICITATION_FOR_DEPTH = 0.6
     IMPLICITATION_FOR_VELOCITY = 0.6
 
-    # The engine accounts for its own water volume and prints one flux per liquid
-    # boundary. That is the only honest check that the level prescribed at a
-    # boundary reached it: a server-side integration of the depth and velocity
-    # fields reads near zero at a prescribed-depth face, where the boundary values
-    # are clamped after the flux was computed.
     MASS_BALANCE = True
 
-    #: The engine's own last instant, in the double precision a continuation
-    #: reads. This run couples nothing, so it can write it.
     RESTART_FILE = _RESTART
+    # double precision, which a continuation reads
     PREVIOUS_COMPUTATION_FILE_FORMAT = "SERAFIND"
 
-    # HOW LONG the question is asked over, in SECONDS. One hour is the window a
-    # slick needs to leave the release point and spread far enough for its drift
-    # to be measured against the flow; shorter and the floats are still bunched
-    # at the source. A user who wants a longer horizon sets the keyword by its
-    # own name.
     DURATION = 3600.0
 
-    # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own
-    # default is every step, so an unwritten period is a frame per step: at
-    # the 14 m default edge the CFL step is 0.7 s, and the 3600 s DURATION
-    # above is about 5,140 of them - one frame every 100 steps is 51 frames
-    # of the slick. A user who wants another cadence sets the keyword by its
-    # own name.
+    # in solver steps, not seconds
     GRAPHIC_PRINTOUT_PERIOD = 100
 
     NUMBER_OF_TRACERS = 1
-    #: The tracer is called what the user called the release point, when a
-    #: picked or named point came; the template's own name stands otherwise.
     tracer_names = TracerNames(names=["OIL             MG/L"])
     INITIAL_VALUES_OF_TRACERS = [0.0]
 
-    #: The carrier's own boundary values, in the order the engine numbers its
-    #: liquid boundaries: the walk the mesh measured, the flow the inflow run
-    #: carries and the level the outflow run holds. ONE tracer, so every liquid
-    #: boundary carries one clean value.
     boundaries = Boundaries(tracers=[0.0])
 
-    #: HOW MUCH enters, and at what concentration: a point discharge small
-    #: against the carrier flow, at the concentration the dissolved-oil series
-    #: is read against. What an oil question states is where the slick goes
-    #: and which oil it is, so neither number is asked for.
     WATER_DISCHARGE_OF_SOURCES = [8.0]
     VALUES_OF_THE_TRACERS_AT_THE_SOURCES = [100.0]
-    #: The dissolved fraction, released as a FINITE pulse at the same point the
-    #: floats are compiled to enter at.
     sources = Sources(window_s="spill_duration_s")
 
-    #: The module itself: the preset the deck carries under the name the ask
-    #: chose, and the per-run source the settled point is compiled into.
     oil = Oil(presets=OIL_PRESETS, named="oil_type",
               release_step="oil_release_step")
 
-    # HOW MANY floats the module tracks. The slick is drawn from their
-    # positions alone, so the count is the resolution of the picture: a hundred
-    # over a domain this question walks is a readable drift cloud, and a coarser
-    # count draws a coarser slick.
     MAXIMUM_NUMBER_OF_DROGUES = 100
 
-    # HOW OFTEN their positions are written, in SOLVER STEPS like the graphic
-    # period above and sized the same way: 5,140 steps of the stated DURATION at
-    # one write every 60 is about 86 positions along each track, which draws the
-    # drift without writing a file the reader cannot scrub.
+    # in solver steps, not seconds
     PRINTOUT_PERIOD_FOR_DROGUES = 60
 
 
-#: What this question PLACES: the dissolved fraction's domain-wide history as
-#: the chart, and the floats' track, which is no field on the mesh at all.
 OUTPUTS = [
     series("T1").chart(),
     drogues().layer(),
 ]
 CAPTIONS = {"T1": "dissolved oil concentration", "drogues": "oil slick track",
             "discharge": "a streamflow", "level": "a water-surface elevation"}
-
 
 _METADATA = AtomicToolMetadata(
     name="telemac_oil_spill",
@@ -199,22 +164,53 @@ _METADATA = AtomicToolMetadata(
     tier="template",
 )
 
-
-#: The engine files this run has to write for it to have solved
-#: anything; unstated, the deck's own RESULTS FILE is the one.
 RESULTS = (_RESULT, _RESTART, DROGUES_FILENAME)
 
-#: The title the card carries when the run is held for review.
 REVIEW_TITLE = "Review the oil spill scenario"
 
+DOC = dict(
+    summary="An OIL SLICK released onto a body of surface water: floating particles plus the dissolved fraction.",
+    routing=(
+        "THE tool for \"an oil spill - where does the slick go\": a barge, "
+        "pipeline, terminal or vessel release of crude, diesel, gasoline or "
+        "heavy fuel onto water. TELEMAC-2D over a reach walked from the "
+        "release, a harbour or lake you draw, or a polygon you supply, with the "
+        "engine's oil-spill module on the solve: the floats draw the slick and "
+        "the dissolved fraction advects as a tracer. Give "
+        "`release` as a pick or a pair, or supply `domain`. Source: "
+        "ABSCISSAE/ORDINATES/DISCHARGE/TRACER. Deck: DURATION 3600 s, "
+        "MAXIMUM NUMBER OF DROGUES 100, PRINTOUT PERIOD FOR DROGUES 60, "
+        "no WIND, no RAIN."
+    ),
+    not_for=(
+        "a conservative dye or contaminant plume with no slick "
+        "(`telemac_dye_release`); bed SCOUR (`telemac_bed_scour`); a "
+        "SUSPENDED sediment plume (`telemac_sediment_plume`); "
+        "dissolved-oxygen sag (`telemac_do_sag`). Weathering, evaporation and "
+        "beaching are the module's own, uncalibrated here"
+    ),
+    params=PARAMS,
+    controls=(
+        ("input_mode",
+         '"user_gated" presents the filled sheet for review/edit before the solve '
+         'and WAITS; "auto" (session default) proceeds with every assumption '
+         "labeled. Not a physical value."),
+        ("restart_clean",
+         "True builds the mesh again even where one built from the same domain, "
+         "bed, resolution and mesher is kept; unset, such a kept mesh is reused. "
+         "Not a physical value."),
+    ),
+    returns=(
+        "On success the run's record (a `LayerURI`): every variable its "
+        "module wrote, styled on one mesh layer, animated where it varies, "
+        "plus the dissolved-oil series charted and the slick track from the "
+        "floats. On failure a dict with `status=\"error\"` + `error_code`."
+    ),
+)
 
 telemac_oil_spill = register_workflow(
     TelemacWorkflow, _METADATA,
     sys.modules[__name__],
-    # The dissolved concentration is the canonical peak class: a concentration
-    # peak lives inside one element. The slick TRACK is where the drogues the
-    # current carried ended up, a local-feature location that moves with the
-    # element resolving that current.
     sensitivity=(("dissolved_oil_concentration", "peak"),
                  ("oil_slick_track", "location")),
     coerce=(

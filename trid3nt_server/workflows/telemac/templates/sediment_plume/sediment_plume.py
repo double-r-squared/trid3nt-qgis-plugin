@@ -1,103 +1,83 @@
-"""Engine template ``telemac_sediment_plume`` - a settling plume in a body of water.
-
-TELEMAC-2D coupled with GAIA over the domain this run solves on - a river reach
-walked from the release point, a harbour or lake the user draws, a polygon they
-own - with ONE settling class over a bed with NO stock at all, so nothing erodes
-and only what was injected can deposit."""
+"""Engine template ``telemac_sediment_plume`` - a settling plume in a body of water."""
 
 from __future__ import annotations
 
 import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
-
 from trid3nt_server.workflows.runtime import (
-    Data,
-    register_workflow,
+    Data, register_workflow, Accepts, Param, doors,
 )
-from trid3nt_server.inputs import point_arg
+from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.instant import event_time
-from trid3nt_server.workflows.telemac.modules import (
-    GAIA,
-    T2D,
-    series,
-)
+from trid3nt_server.workflows.telemac.modules import GAIA, T2D, series
 from trid3nt_server.workflows.telemac.modules.gaia import RESULT_FILENAME
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
-    Boundaries,
-    Sources,
-    TracerNames,
-)
-from trid3nt_server.workflows.telemac.templates.sediment_plume.declarations import (
-    ACCEPTS, DOC, PARAMS,
-    SEDIMENT_CONCENTRATION_MGL, SOURCE_Q_M3S,
+    Boundaries, Sources, TracerNames,
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
+__all__ = ["ACCEPTS", "CAPTIONS", "DATA", "DOC", "OUTPUTS", "PARAMS",
+           "SEDIMENT_CONCENTRATION_MGL", "SOURCE_Q_M3S", "STEERING",
            "telemac_sediment_plume"]
 
-#: WHERE the substance enters the water: the point the user clicked, else that
-#: fraction along the domain's own centerline. The workflow settles it onto a
-#: node of the accepted mesh before the sheet reads it back.
+
+SOURCE_Q_M3S = 8.0
+SEDIMENT_CONCENTRATION_MGL = 100.0
+
+ACCEPTS = Accepts(mesh=("unstructured_tri",))
+
+
+class PARAMS:
+    release = Param(
+        door=doors.USER, optional=True, user_lever=True,
+        consequence="scenario", type=Point,
+        derived_when_absent=(
+            "the release sits at spill_fraction along the domain the mesh was "
+            "built over; the plume's travel is measured from there"),
+        desc="Where the sediment enters the water, as a Point: the pick's "
+             "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
+             "point layer. Geocode a place name first. Its name becomes the "
+             "marker's name, "
+             "and on a river with no domain supplied it is also the seed the "
+             "reach is walked downstream from")
+
+    spill_fraction = Param(
+        door=doors.SCENARIO, default=0.25, bounds=(0.05, 0.9),
+        consequence="scenario",
+        desc="Along-domain release position, 0=inflow..1=outflow; the source "
+             "must sit strictly INSIDE the domain, never on a boundary")
+    spill_duration_s = Param(
+        door=doors.SCENARIO, default=300.0,
+        bounds=(1.0, 86400.0), units="s", consequence="scenario",
+        desc="Finite pulse injection window")
+
+
 _RELEASE = Placed("source", point="release", fraction="spill_fraction",
                   label="Release point")
 
-#: The names the run directory holds this run's files under, stated once on the
-#: deck: GAIA reads the hydrodynamic geometry and boundary file by name, and the
-#: workflow reads the same three statements off the body rather than a restatement.
 _GEOMETRY = "domain.slf"
 _BOUNDARY = "domain.cli"
 _RESULT = "r2d_domain.slf"
 
-#: How far the reach producer walks downstream from the release point when this
-#: question has to find its own domain. A user who wants another stretch supplies
-#: the domain polygon, which supersedes the producer.
 _REACH_LENGTH_KM = 6.0
 
-#: The roughness this deck is solved at, and the law it is read under: Strickler,
-#: the coefficient an unsurveyed channel is screened at. ONE number, stated once,
-#: because the outflow stage is derived as a normal depth AT this roughness and a
-#: stage derived at one number under a deck written at another is a level the run
-#: never sits at. A user who knows the channel sets the keyword by name.
+# Strickler; the outflow stage is derived at this same roughness
 _FRICTION_LAW = 3
 _FRICTION_COEFFICIENT = 33.0
 
 
 class DATA:
-    """The slots this run stands on - the domain and the bed composed over it -
-    and the one reading its inflow run opens on."""
-
-    # A release named up front also names which stretch to model: the reach is
-    # walked downstream from it. A domain the user supplies supersedes this.
     domain = Data.need("hydrography", at="release",
                        span_km=_REACH_LENGTH_KM)
-    # THE BED, as the CLASS it is rather than the source it comes from: the
-    # measurement where something measured it, the terrain under the rest. Which
-    # survey or which DEM reaches this domain is the match's to answer off their
-    # rows, and the merge between the two classes is the runtime's one
-    # rule. A domain with no federal navigation project has no published
-    # survey, and the sheet says so rather than refusing.
     bed = Data.need("bathymetry")
-    # The carrier flow the inflow run prescribes, as a CLASS: which record
-    # reports a discharge over this domain is the match's, and the window it
-    # reports is opened at the moment the run opens at. A number stated on this
-    # row stands over any record, so the flow is the slot's and no param twins
-    # it.
     discharge = Data.need("discharge series").context(
         "the National Water Model published no streamflow over this domain "
         "at that cycle")
-    # THE LEVEL the water stands at, which the run opens flat at and the outflow
-    # holds. A reach whose measured ends do not FALL has no uniform-flow depth to
-    # derive, and a closed body never had one. An ELEVATION on the datum the bed
-    # is painted on - a gauge publishes its height above its own zero, which is a
-    # different surface, so no source is named here and the number is stated.
     level = Data.need("water level series").optional()
 
 
 class STEERING(T2D):
-    """The deck: a body of water, and ONE settling class released into it."""
-
     GEOMETRY_FILE = _GEOMETRY
     BOUNDARY_CONDITIONS_FILE = _BOUNDARY
     RESULTS_FILE = _RESULT
@@ -106,8 +86,6 @@ class STEERING(T2D):
     LAW_OF_BOTTOM_FRICTION = _FRICTION_LAW
     FRICTION_COEFFICIENT = _FRICTION_COEFFICIENT
 
-    # The advection of momentum and depth, and the SUPG the domain is stable
-    # under. The tracer advects under the engine's own scheme and diffusivity.
     TYPE_OF_ADVECTION = [1, 5]
     SUPG_OPTION = [0, 0]
     MASS_LUMPING_ON_H = 1.0
@@ -118,81 +96,36 @@ class STEERING(T2D):
     IMPLICITATION_FOR_DEPTH = 0.6
     IMPLICITATION_FOR_VELOCITY = 0.6
 
-    # The engine accounts for its own water volume and prints one flux per liquid
-    # boundary. That is the only honest check that the level prescribed at a
-    # boundary reached it: a server-side integration of the depth and velocity
-    # fields reads near zero at a prescribed-depth face, where the boundary values
-    # are clamped after the flux was computed.
     MASS_BALANCE = True
 
-    # HOW LONG the question is asked over, in SECONDS. One hour is what a finite
-    # pulse of a settling class needs to advect clear of the source, spread and
-    # drop the coarse end of itself onto the bed; shorter and nothing has landed
-    # yet. A user who wants a longer horizon sets the keyword by its own name.
     DURATION = 3600.0
 
-    # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own default
-    # is every step, so an unwritten period is a frame per step: at the 14 m
-    # default edge the CFL step is 0.7 s, and the 3600 s DURATION above is about
-    # 5,140 of them - one frame every 100 steps is 51 frames of the plume. A user
-    # who wants another cadence sets the keyword by its own name.
+    # in solver steps, not seconds
     GRAPHIC_PRINTOUT_PERIOD = 100
 
     NUMBER_OF_TRACERS = 1
-    #: The marker is called what the user called the release point, when a
-    #: picked or named point came; the template's own name stands otherwise.
     tracer_names = TracerNames(names=["MARKER          MG/L"])
     INITIAL_VALUES_OF_TRACERS = [0.0]
 
-    #: TWO values on every liquid boundary - the carrier's own tracer and the
-    #: suspended class behind it - or the solver refuses for want of values.
     boundaries = Boundaries(tracers=[0.0, 0.0])
 
-    #: HOW MUCH enters, and at what concentration: the deck's own fixed source
-    #: strength, small against the carrier flow so the pulse is a marker and
-    #: not a flood - the question's own input is the spill WINDOW below.
     WATER_DISCHARGE_OF_SOURCES = [SOURCE_Q_M3S]
     VALUES_OF_THE_TRACERS_AT_THE_SOURCES = [SEDIMENT_CONCENTRATION_MGL]
-    #: A FINITE pulse, so the slug advects away and dilutes instead of
-    #: saturating the water.
     sources = Sources(window_s="spill_duration_s")
 
-    #: The settling class itself, over a bed the composite lays at zero initial
-    #: thickness: nothing erodes and only the injected pulse can deposit. The
-    #: source concentration is the same fixed number VALUES OF THE TRACERS AT
-    #: THE SOURCES states above, restated here because GAIA reads its own
-    #: keyword for it.
     coupling = [GAIA.suspended(
         geometry=_GEOMETRY, boundary=_BOUNDARY,
         concentration_mgl=SEDIMENT_CONCENTRATION_MGL,
-        # ONE class, 30 um fine silt in the keyword's own metres - the class
-        # this question is asked of, a fraction that travels as a plume at the
-        # currents a release reach carries rather than settling where it
-        # enters. GAIA is a COUPLED body and the keywords floor reaches only
-        # the carrier's own dictionary, so nothing on the call can state a
-        # class the composite does not.
         CLASSES_SEDIMENT_DIAMETERS=[3.0e-5],
-        # Zyserman-Fredsoe, of the suspension formulae GAIA offers. It is a
-        # reference concentration the deck reads for its settling class, which
-        # is non-cohesive at this diameter, so the deck states no CLASSES TYPE
-        # OF SEDIMENT to say otherwise.
         SUSPENSION_TRANSPORT_FORMULA_FOR_ALL_SANDS=3,
-        # The character-of-the-flow scheme a PULSE advected over a bed with no
-        # stock needs; the dictionary's own upwind pair is for a resident
-        # concentration field.
         SCHEME_FOR_ADVECTION_OF_SUSPENDED_SEDIMENTS=[1],
-        # GAIA's own sediment closure, beside the water volume the carrier
-        # accounts for: the net bed mass the run settles at is a line of it.
         MASS_BALANCE=True)]
 
 
-#: What this question PLACES: the suspended class's domain-wide history as the
-#: chart.
 OUTPUTS = [
     series("T2").chart(),
 ]
 CAPTIONS = {"T2": "suspended sediment concentration", "discharge": "a streamflow"}
-
 
 _METADATA = AtomicToolMetadata(
     name="telemac_sediment_plume",
@@ -202,22 +135,52 @@ _METADATA = AtomicToolMetadata(
     tier="template",
 )
 
-
-#: The engine files this run has to write for it to have solved
-#: anything; unstated, the deck's own RESULTS FILE is the one.
 RESULTS = (_RESULT, RESULT_FILENAME)
 
-#: The title the card carries when the run is held for review.
 REVIEW_TITLE = "Review the sediment-plume scenario"
 
+DOC = dict(
+    summary="A SUSPENDED SEDIMENT plume in a body of water: it settles and deposits on the bed.",
+    routing=(
+        "THE tool for \"sediment / silt / a turbidity plume released into the "
+        "water, where does it settle out\" - a slurry spill, a construction or "
+        "dredging discharge, an upstream sediment supply. TELEMAC-2D + GAIA "
+        "over a reach walked from the release, a lake or harbour drawn on the "
+        "canvas, or a supplied polygon: ONE settling class over a bed with NO "
+        "stock, so nothing erodes and only what was injected deposits. Give "
+        "`release` as a pick or a pair, or supply `domain`. Deck: "
+        "DURATION 3600 s, CLASSES SEDIMENT DIAMETERS 1.0e-4 m, SUSPENSION "
+        "TRANSPORT FORMULA FOR ALL SANDS 3, SCHEME FOR ADVECTION OF SUSPENDED "
+        "SEDIMENTS 1, no WIND and no RAIN OR EVAPORATION - set each by its "
+        "keyword name."
+    ),
+    not_for=(
+        "bed SCOUR or an erodible bed (`telemac_bed_scour`); a conservative dye "
+        "or contaminant plume (`telemac_dye_release`); an OIL slick "
+        "(`telemac_oil_spill`); dissolved-oxygen sag (`telemac_do_sag`)"
+    ),
+    params=PARAMS,
+    controls=(
+        ("input_mode",
+         '"user_gated" presents the filled sheet for review/edit before the solve '
+         'and WAITS; "auto" (session default) proceeds with every assumption '
+         "labeled. Not a physical value."),
+        ("restart_clean",
+         "True builds the mesh again even where one built from the same domain, "
+         "bed, resolution and mesher is kept; unset, such a kept mesh is reused. "
+         "Not a physical value."),
+    ),
+    returns=(
+        "On success the run's record (a `LayerURI`): every variable its "
+        "modules wrote, styled on one mesh layer, animated where it varies, "
+        "the bed evolution among them, plus the suspended-sediment series "
+        "charted. On failure a dict with `status=\"error\"` + `error_code`."
+    ),
+)
 
 telemac_sediment_plume = register_workflow(
     TelemacWorkflow, _METADATA,
     sys.modules[__name__],
-    # The suspended concentration is the canonical peak class: a concentration
-    # peak lives inside one element, and the bed the plume leaves behind is a
-    # peak over the same elements. How far the plume reached moves with the mesh
-    # too, but no product of this run is a reach, so nothing is labeled for it.
     sensitivity=(("suspended_sediment_concentration", "peak"),
                  ("cumul_bed_evol", "peak")),
     coerce=(

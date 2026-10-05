@@ -21,11 +21,11 @@ NUTRIENT ENRICHMENT in a body of water: algal growth, nutrient drawdown and the 
 | `observe` | matched on a need for water quality sample | the water quality sample this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of water quality sample. | - |
 | `level` | matched on a need for water level series | the water level series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of water level series. | - |
 
-## The params
+## The inputs
 
 The values the template declares. `desc` is what the model reads when it fills one.
 
-| param | comes from | units | default | desc |
+| input | comes from | units | default | desc |
 |---|---|---|---|---|
 | `seed` | user | - | optional | Where on the channel the modelled stretch STARTS, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. The stretch walked downstream of it is the water one pass is measured over; supply the domain polygon instead and this is not read |
 | `station` | user | - | optional | Where to watch the biomass and the oxygen over time, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer (geocode a place name first). The profiles are all longitudinal and do not move with it |

@@ -127,7 +127,7 @@ def test_the_inflow_flow_is_the_discharge_slots_value_and_not_a_param():
     row states the CLASS it needs rather than the source that reports it."""
     from trid3nt_server.workflows.runtime import data_rows, param_rows
     from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import DATA
-    from trid3nt_server.workflows.telemac.templates.dye_release.declarations import (
+    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
         PARAMS,
     )
 
@@ -148,7 +148,7 @@ def test_the_params_are_the_questions_own_and_the_deck_states_the_keywords():
     slots describe the water, and the runtime declares the granularity, the
     moment and the box."""
     from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
-    from trid3nt_server.workflows.telemac.templates.dye_release.declarations import (
+    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
         PARAMS,
     )
     from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (

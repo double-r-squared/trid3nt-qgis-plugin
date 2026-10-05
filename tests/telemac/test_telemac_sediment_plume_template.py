@@ -13,7 +13,6 @@ import pytest
 from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
 from trid3nt_server.workflows.telemac.workflow import stated
 from trid3nt_server.workflows.telemac.templates.sediment_plume import (
-    declarations,
     sediment_plume as template,
 )
 
@@ -125,7 +124,7 @@ def test_the_settling_class_is_keywords_on_gaias_own_body():
     assert body["SCHEME_FOR_ADVECTION_OF_SUSPENDED_SEDIMENTS"] == [1]
     assert body["MASS_BALANCE"] is True
     assert (body["suspension"]["concentration_mgl"]
-            == declarations.SEDIMENT_CONCENTRATION_MGL)
+            == template.SEDIMENT_CONCENTRATION_MGL)
 
 
 def test_the_deck_states_the_four_source_keywords_by_name():
@@ -134,9 +133,9 @@ def test_the_deck_states_the_four_source_keywords_by_name():
     asserted = template.STEERING.ASSERTED
     assert "ABSCISSAE_OF_SOURCES" not in asserted
     assert "ORDINATES_OF_SOURCES" not in asserted
-    assert asserted["WATER_DISCHARGE_OF_SOURCES"] == [declarations.SOURCE_Q_M3S]
+    assert asserted["WATER_DISCHARGE_OF_SOURCES"] == [template.SOURCE_Q_M3S]
     assert asserted["VALUES_OF_THE_TRACERS_AT_THE_SOURCES"] == [
-        declarations.SEDIMENT_CONCENTRATION_MGL]
+        template.SEDIMENT_CONCENTRATION_MGL]
 
 
 def test_the_sources_composite_writes_the_sources_file():
@@ -199,12 +198,11 @@ def test_every_published_read_carries_its_caption():
     assert set(template.CAPTIONS) == {"T2", "discharge"}
 
 
-def test_the_package_holds_the_template_its_declarations_and_its_corpus():
-    """A template package carries no function of its own: the mass relation the
-    deposited fraction is held against lives in the shared helpers."""
+def test_the_package_holds_the_template_and_its_corpus():
+    """A template package is its one template file and its corpus."""
     from pathlib import Path
 
     package = Path(template.__file__).parent
     assert sorted(p.name for p in package.glob("*.py")) == [
-        "__init__.py", "declarations.py", "sediment_plume.py"]
+        "__init__.py", "sediment_plume.py"]
     assert (package / "corpus.yaml").is_file()

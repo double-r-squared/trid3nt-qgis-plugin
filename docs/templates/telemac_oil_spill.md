@@ -19,11 +19,11 @@ An OIL SLICK released onto a body of surface water: floating particles plus the 
 | `discharge` | matched on a need for discharge series | the discharge series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of discharge series. | - |
 | `level` | matched on a need for water level series | the water level series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of water level series. | - |
 
-## The params
+## The inputs
 
 The values the template declares. `desc` is what the model reads when it fills one.
 
-| param | comes from | units | default | desc |
+| input | comes from | units | default | desc |
 |---|---|---|---|---|
 | `release` | user | - | optional | Where the oil enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. Its name becomes the tracer's name, and on a river with no domain supplied it is also the seed the reach is walked downstream from |
 | `spill_fraction` | scenario | - | 0.25 | Along-domain release position, 0=inflow..1=outflow; the source must sit strictly INSIDE the domain, never on a boundary |

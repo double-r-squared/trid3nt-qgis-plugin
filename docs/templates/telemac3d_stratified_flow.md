@@ -18,11 +18,11 @@ The 3D VERTICAL STRUCTURE of a body of water a 2D depth-averaged model cannot re
 | `bed` | matched on a need for bathymetry | what the domain's nodes carry for elevation: a DEM, a bathymetry or survey raster, a layer of soundings, or a depth in metres below the free surface; unfilled, the run matches a source of bathymetry. | - |
 | `level` | matched on a need for water level series | the water level series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of water level series. | - |
 
-## The params
+## The inputs
 
 The values the template declares. `desc` is what the model reads when it fills one.
 
-| param | comes from | units | default | desc |
+| input | comes from | units | default | desc |
 |---|---|---|---|---|
 | `seed` | user | - | optional | A point ON or beside the body of water this question is about, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer (geocode a place name first). The mapped outline that point names becomes the domain; a domain supplied directly supersedes it, and a body nobody mapped is drawn |
 | `warm_temp_c` | scenario | C | 25.0 | Epilimnion (warm surface layer) temperature the column OPENS at. The run exchanges no heat with the atmosphere, so what happens to this difference is the whole answer |

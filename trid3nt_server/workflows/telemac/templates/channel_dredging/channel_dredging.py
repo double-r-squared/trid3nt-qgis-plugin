@@ -1,125 +1,129 @@
-"""Engine template ``telemac_channel_dredging`` - a maintenance dredge of a channel.
-
-TELEMAC-2D coupled with GAIA, the dredger driven by NESTOR on the sediment deck:
-how much material comes out of the fairway to hold it at grade, where the spoil
-goes, and what the bed does around both."""
+"""Engine template ``telemac_channel_dredging`` - a maintenance dredge of a channel."""
 
 from __future__ import annotations
 
 import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
-
 from trid3nt_server.workflows.runtime import (
-    Data,
-    register_workflow,
+    Data, register_workflow, Accepts, Param, doors,
 )
-from trid3nt_server.inputs import point_arg
+from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.instant import event_time
-from trid3nt_server.workflows.telemac.modules import (
-    GAIA,
-    T2D,
-    )
-from trid3nt_server.workflows.telemac.modules.gaia import Dig, Dredging, RESULT_FILENAME
+from trid3nt_server.workflows.telemac.modules import GAIA, T2D
+from trid3nt_server.workflows.telemac.modules.gaia import (
+    Dig, Dredging, RESULT_FILENAME,
+)
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
-from trid3nt_server.workflows.telemac.templates.channel_dredging.declarations import (
-    ACCEPTS, DOC, PARAMS,
-)
-from trid3nt_server.workflows.telemac.workflow import (
-    Measured, TelemacWorkflow,
-)
+from trid3nt_server.workflows.telemac.workflow import Measured, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DATA", "PARAMS", "STEERING",
+__all__ = ["ACCEPTS", "CAPTIONS", "DATA", "DOC", "PARAMS", "STEERING",
            "telemac_channel_dredging"]
 
 
-#: The names the run directory holds this run's files under - the deck's own
-#: GEOMETRY / BOUNDARY CONDITIONS / RESULTS statements, which the workflow reads
-#: back off the deck rather than being told them twice.
+ACCEPTS = Accepts(mesh=("unstructured_tri",))
+
+
+class PARAMS:
+    seed_point = Param(
+        door=doors.QUESTION, optional=True, consequence="aoi", type=Point,
+        derived_when_absent=(
+            "nothing: the dredge's reference surface is a band of cross-"
+            "sections stationed down the channel from this point, so a run "
+            "without one refuses by naming it"),
+        desc="A point ON the channel the dredge works in, as the pick's "
+             "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a "
+             "point layer. Geocode a place name first; the channel is fetched "
+             "downstream of it and the levels every dredging action reads are "
+             "stationed along the centerline that comes back with it")
+
+    design_depth_m = Param(
+        door=doors.SCENARIO, default=3.0, bounds=(0.1, 40.0), units="m",
+        user_lever=True, consequence="scenario",
+        desc="Depth the fairway is dredged TO, under the reference water "
+             "surface the run opens at - the design draught plus its overdepth")
+    trigger_depth_m = Param(
+        door=doors.SCENARIO, default=3.0, bounds=(0.1, 40.0), units="m",
+        user_lever=True, consequence="scenario",
+        desc="Depth at which a node is dredged: the bed is worked wherever it "
+             "sits shallower than this under the reference surface. Equal to "
+             "design_depth_m keeps the channel exactly at grade; SMALLER than "
+             "it lets the channel shoal before the dredger returns, and a "
+             "trigger DEEPER than the grade would mark a node for a cut that "
+             "is above its own bed")
+
+    dredge_start_s = Param(
+        door=doors.SCENARIO, default=0.0, bounds=(0.0, 6048000.0), units="s",
+        consequence="scenario",
+        desc="When the first dredging pass begins, in seconds of the BED's own "
+             "clock - the run's morphological time, DURATION x MORPHOLOGICAL "
+             "FACTOR")
+    dredge_end_s = Param(
+        door=doors.SCENARIO, default=3000.0, bounds=(1.0, 6048000.0), units="s",
+        consequence="scenario",
+        desc="When the campaign stops, on the same bed clock: no further pass "
+             "begins after it, and a pass already cutting runs on until it "
+             "reaches grade")
+    dredge_repeat_s = Param(
+        door=doors.SCENARIO, default=1800.0, bounds=(1.0, 6048000.0), units="s",
+        consequence="scenario",
+        desc="Maintenance interval on the bed clock: how long after a pass "
+             "starts the next one begins, if the channel has shoaled past "
+             "trigger_depth_m again")
+
+    dig_rate_m_per_s = Param(
+        door=doors.SCENARIO, default=0.002, bounds=(1.0e-6, 1.0), units="m/s",
+        user_lever=True, consequence="scenario",
+        desc="How fast the dredger lowers the bed, as metres of bed per second "
+             "of SOLVER time at a working node - the plant's capacity, not a "
+             "physical rate. A pass reports its volume only once it has reached "
+             "grade, so this and the cut it has to make are what decide whether "
+             "the run sees a completed pass at all")
+    dump_rate_m_per_s = Param(
+        door=doors.SCENARIO, default=0.002, bounds=(1.0e-6, 1.0), units="m/s",
+        user_lever=True, consequence="scenario",
+        desc="How fast the spoil is laid into the dump area, as metres of bed "
+             "per second of solver time at a receiving node; a pass is not "
+             "finished until its spoil is placed")
+    min_volume_m3 = Param(
+        door=doors.SCENARIO, default=0.0, bounds=(0.0, 1.0e7), units="m^3",
+        consequence="scenario",
+        desc="Least volume worth moving around a node before it is dredged at "
+             "all; 0 works every node past the trigger")
+
+
 _GEOMETRY = "channel.slf"
 _BOUNDARY = "channel.cli"
 _RESULT = "r2d_channel.slf"
 
-#: How much channel the reach producer walks from the seed when this question has
-#: to find its own domain. A port that keeps another stretch at grade supplies the
-#: fairway polygon, which supersedes the producer.
 _REACH_LENGTH_KM = 2.0
 
-#: The roughness this deck is solved at, and the law it is read under. ONE number,
-#: stated once, because the outflow stage is derived as a normal depth AT this
-#: roughness and a stage derived at one number under a deck written at another is
-#: a level the run never sits at - and it is the level every dredged depth is
-#: measured down from. A user who knows the channel sets the keyword by name.
+# Strickler; the outflow stage is derived at this same roughness
 _FRICTION_LAW = 3
 _FRICTION_COEFFICIENT = 33.0
 
-#: The erodible sediment stock under the fairway, in metres. ONE number, stated
-#: once: the deck lays it into the bed as the layer the dredger cuts from, and
-#: the authoring step measures the cut the grade asks for against the same stock
-#: and refuses by name before the run dispatches.
 _BED_STOCK_M = 5.0
 
-#: The calendar instant this run's clock starts at. NESTOR dates every action
-#: absolutely and differences it against this origin, so the deck states it and
-#: the dredge is written against the same six numbers.
+# NESTOR dates every action against this origin
 _TIME_ORIGIN = [2000, 1, 1, 0, 0, 0]
 
-#: Which reference surface every action reads its levels from: the profile file
-#: this run authors, which carries the water surface the channel opens at. The
-#: alternatives the engine offers - a ZRL variable on the geometry, a level a
-#: Save_water_level action captured - are not what this question measures a
-#: design depth against.
+# levels read off the authored profile file, the opening water surface
 _REFERENCE_LEVEL = "SECTIONS"
 
 
 class DATA:
-    """The slots this run stands on - the water, its bed, the flow through it -
-    and the two areas the dredge works on, which this template names no source for."""
-
-    #: THE CHANNEL. A seed on the water names a stretch of river and the match
-    #: ranks the reach producer and the waterbody producer over it in turn; a
-    #: fairway the port supplies supersedes it.
     domain = Data.need("hydrography", at="seed_point",
                        span_km=_REACH_LENGTH_KM)
-    #: THE LINE the dredge's reference profiles are stationed along: the
-    #: centerline the reach producer measured, or the one the port draws over a
-    #: fairway nobody mapped a channel through.
     line = Data.supplied(geometry="polyline")
-    #: THE MEASUREMENT, and the whole reason a dredged cut is worth reading:
-    #: a surface DEM measures the water top, so a fairway painted from one is
-    #: centimetres deep and the cut to grade is summed over nothing. The
-    #: STRICTER class - the maintained prism, not the water around it - is what
-    #: this question asks; a channel with no federal navigation project has no
-    #: published survey, and the terrain stands in for it.
     bed = Data.need("channel survey")
-    #: The flow that shoals the fairway and carries what the dredger disturbs:
-    #: ONE reading off the nearest reporting site, or the number stated on this
-    #: row, which stands over any record. What the open channel opened on is
-    #: said once, on its own journal note.
     discharge = Data.need("discharge series").context(
         "the National Water Model published no streamflow over this domain "
         "at that cycle")
-    #: WHERE the dredger works, and where the spoil goes. Two SLOTS: the channel
-    #: a port keeps at grade and the disposal ground it is licensed to use are
-    #: both administrative areas, and no dataset knows either - they are drawn,
-    #: or handed over as the port's own layers.
     dredge_area = Data.supplied(geometry="polygon")
     dump_area = Data.supplied(geometry="polygon")
-    # THE LEVEL the water stands at, which the run opens flat at and the outflow
-    # holds. A reach whose measured ends do not FALL has no uniform-flow depth to
-    # derive, and a closed body never had one. An ELEVATION on the datum the bed
-    # is painted on - a gauge publishes its height above its own zero, which is a
-    # different surface, so no source is named here and the number is stated.
     level = Data.need("water level series").optional()
 
 
-#: The two areas and the reference surface, measured against the SETTLED run:
-#: the surface every design depth is read from is the water surface the run
-#: opens at, laid out as cross-sections along the line the domain producer
-#: measured, stationed downstream from the end its inflow names. The cut the
-#: grade asks for is measured against the stock before the run dispatches: the
-#: engine only refuses a dredger with nothing left to cut part-way through its
-#: first pass.
 _DREDGE = Measured(
     "dredge", kind="dredge",
     reads={"areas": {"dredge_area": "dredge_area", "dump_area": "dump_area"},
@@ -128,8 +132,6 @@ _DREDGE = Measured(
 
 
 class STEERING(T2D):
-    """The deck: a channel over a mobile bed, with a dredger working in it."""
-
     GEOMETRY_FILE = _GEOMETRY
     BOUNDARY_CONDITIONS_FILE = _BOUNDARY
     RESULTS_FILE = _RESULT
@@ -138,8 +140,6 @@ class STEERING(T2D):
     LAW_OF_BOTTOM_FRICTION = _FRICTION_LAW
     FRICTION_COEFFICIENT = _FRICTION_COEFFICIENT
 
-    # The advection of momentum and depth, and the SUPG the channel is stable
-    # under.
     TYPE_OF_ADVECTION = [1, 5]
     SUPG_OPTION = [0, 0]
     MASS_LUMPING_ON_H = 1.0
@@ -150,51 +150,24 @@ class STEERING(T2D):
     IMPLICITATION_FOR_DEPTH = 0.6
     IMPLICITATION_FOR_VELOCITY = 0.6
 
-    # The engine accounts for its own water volume and prints one flux per liquid
-    # boundary; the sediment side of the same closure is GAIA's.
     MASS_BALANCE = True
 
-    # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own
-    # default is every step, so an unwritten period is a frame per step: at the
-    # 14 m default edge the CFL step is 0.7 s, and the window stated below is
-    # about 5,140 of them - one frame every 100 steps is 51 frames of the
-    # campaign. A user who wants another cadence sets the keyword by its own name.
+    # in solver steps, not seconds
     GRAPHIC_PRINTOUT_PERIOD = 100
 
-    # THE HYDRAULIC WINDOW, in seconds. The campaign is read on the BED's own
-    # clock - this duration times the morphological factor below - so an hour of
-    # hydraulics is ten hours of bed, which is a readable maintenance interval.
+    # hydraulic seconds; the bed clock is this times the morphological factor
     DURATION = 3600.0
 
-    # The clock every dredging action is dated against. NESTOR reads absolute
-    # dates and differences them against THIS origin, so the deck states it
-    # rather than inheriting the dictionary's own.
     ORIGINAL_DATE_OF_TIME = _TIME_ORIGIN[:3]
     ORIGINAL_HOUR_OF_TIME = _TIME_ORIGIN[3:]
 
-    #: No tracer: a dredge is a question about the bed, so every liquid boundary
-    #: carries the measured flowrate and stage and nothing else. The walk is the
-    #: mesh's own; the two values are the open channel's.
     boundaries = Boundaries(tracers=[])
 
-    #: The bed the dredger cuts into, and the dredger itself. One class, bedload
-    #: on, a real stock: the material the criterion dig takes out of the fairway
-    #: and the rate dump lays into the spoil ground both go through GAIA's own
-    #: per-class mass evolution, which is what its bed evolution and its sediment
-    #: balance are computed from.
     coupling = [GAIA.bed(
         geometry=_GEOMETRY, boundary=_BOUNDARY,
-        # GAIA's own sediment closure, beside the water volume the carrier
-        # accounts for: what the dredger moves is printed in it.
         MASS_BALANCE=True,
-        # ONE class, 200 um medium sand in the keyword's own metres: the size a
-        # maintained fairway shoals with, and the size the bedload formula below
-        # is calibrated over.
         CLASSES_SEDIMENT_DIAMETERS=[2.0e-4],
-        # The erodible stock, deeper than any cut this question makes, so the
-        # dredged volume is never limited by the material under the fairway.
         LAYERS_INITIAL_THICKNESS=[_BED_STOCK_M],
-        # What makes a short hydraulic window produce a readable bed change.
         MORPHOLOGICAL_FACTOR=10.0,
         dredging=Dredging(
             measured="dredge",
@@ -211,9 +184,7 @@ class STEERING(T2D):
             origin=_TIME_ORIGIN))]
 
 
-#: The two measured rows' nouns, read on the run journal.
 CAPTIONS = {"discharge": "a streamflow", "level": "a water level"}
-
 
 _METADATA = AtomicToolMetadata(
     name="telemac_channel_dredging",
@@ -223,23 +194,53 @@ _METADATA = AtomicToolMetadata(
     tier="template",
 )
 
-
-#: The two areas and the reference surface, measured against the SETTLED
-#: run: the surface every design depth is read from is the water surface
-#: the run opens at, laid out as cross-sections along the line the domain
-#: producer measured, stationed downstream from the end its inflow names.
 RESULTS = (_RESULT, RESULT_FILENAME)
 
-#: The title the card carries when the run is held for review.
 REVIEW_TITLE = "Review the dredge, the bed and the mesh"
 
+DOC = dict(
+    summary="MAINTENANCE DREDGING of a navigation channel: what the bed does.",
+    routing=(
+        "THE tool for \"dredge this channel and show me the bed\" - a "
+        "maintenance dredge of a fairway or berth pocket held at a design "
+        "depth, the spoil placed in a disposal area. TELEMAC-2D coupled with "
+        "GAIA, the dredger driven by NESTOR so what it moves is in the bed's "
+        "mass balance. The channel is fetched downstream of a point on it; "
+        "its bed is the published USACE survey where one covers it, terrain "
+        "elsewhere. DURATION, MORPHOLOGICAL FACTOR, CLASSES SEDIMENT "
+        "DIAMETERS and LAYERS INITIAL THICKNESS are the deck's own, set by "
+        "name. Returns the bed evolution - the cut and the spoil ground; "
+        "supply `seed_point` and the two areas as polygons."
+    ),
+    not_for=(
+        "a bed that scours and re-deposits on its own, with no dredger "
+        "(`telemac_bed_scour`); a SUSPENDED plume settling onto an inert bed "
+        "(`telemac_sediment_plume`); a dye or contaminant plume "
+        "(`telemac_dye_release`); an OIL slick (`telemac_oil_spill`)"
+    ),
+    params=PARAMS,
+    controls=(
+        ("input_mode",
+         '"user_gated" presents the filled sheet for review/edit before the solve '
+         'and WAITS; "auto" (session default) proceeds with every assumption '
+         "labeled. Not a physical value."),
+        ("restart_clean",
+         "True builds the mesh again even where one built from the same domain, "
+         "bed, resolution and mesher is kept; unset, such a kept mesh is reused. "
+         "Not a physical value."),
+    ),
+    returns=(
+        "On success the run's record (a `LayerURI`): every variable its "
+        "modules wrote, styled on one mesh layer, animated where it varies, "
+        "the bed evolution in metres among them (deposition positive, the "
+        "dredged cut negative), and no read the template placed. On failure "
+        "a dict with `status=\"error\"` + `error_code`."
+    ),
+)
 
 telemac_channel_dredging = register_workflow(
     TelemacWorkflow, _METADATA,
     sys.modules[__name__],
-    # The bed change inside a narrow fairway lives in single elements, so a
-    # coarse mesh reads it low. The dredged VOLUME is an integral over those
-    # nodes - a converged class - and this run publishes no volume anyway.
     sensitivity=(("cumul_bed_evol", "peak"),),
     coerce=(
         point_arg("seed_point", tool="telemac_channel_dredging",

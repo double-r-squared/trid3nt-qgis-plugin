@@ -21,11 +21,11 @@ ICE COVER under a cold snap: when water freezes over, and how thick.
 | `weather` | matched on a need for weather forcing | the weather forcing this run reads, as a uri or a layer name; unfilled, the run matches a source of weather forcing. | - |
 | `observe` | matched on a need for water quality sample | the water quality sample this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of water quality sample. | - |
 
-## The params
+## The inputs
 
 The values the template declares. `desc` is what the model reads when it fills one.
 
-| param | comes from | units | default | desc |
+| input | comes from | units | default | desc |
 |---|---|---|---|---|
 | `seed` | user | - | optional | Where on the water the modelled stretch STARTS, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. It seeds the reach the domain is cut from; supply the domain polygon - a lake, a pond, a reservoir - instead and this is not read |
 | `station` | user | - | optional | Where the ice cover and its thickness are read over time, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer. Geocode a place name first |

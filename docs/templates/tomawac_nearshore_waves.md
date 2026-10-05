@@ -21,11 +21,11 @@ NEARSHORE WAVES: what the offshore swell becomes at the shore - how high, how lo
 | `level` | matched on a need for water level series | the water level series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of water level series. | - |
 | `mesh` | supplied by the caller | a mesh layer you supply, as a uri or a layer name; absent is legal and the run reports it. | - |
 
-## The params
+## The inputs
 
 The values the template declares. `desc` is what the model reads when it fills one.
 
-| param | comes from | units | default | desc |
+| input | comes from | units | default | desc |
 |---|---|---|---|---|
 | `seed` | user | - | optional | Where OFFSHORE the incoming sea state is measured, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. The nearest buoy to it is the record the open boundary is forced at, so put it on the water the swell arrives across |
 | `station` | user | - | - | Where INSHORE the waves are read over time, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. The height, the period and the direction are charted at the node of the mesh it settles onto, so put it on the water you are asking about |

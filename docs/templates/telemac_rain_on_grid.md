@@ -20,11 +20,11 @@ How much RUNOFF a storm produces from the catchment a point drains, as an outlet
 | `landcover` | matched on a need for land cover | the land cover this run reads, as a uri or a layer name; unfilled, the run matches a source of land cover. | - |
 | `rain` | matched on a need for precipitation series | the precipitation series this run reads, as a uri or a layer name; unfilled, the run matches a source of precipitation series. | - |
 
-## The params
+## The inputs
 
 The values the template declares. `desc` is what the model reads when it fills one.
 
-| param | comes from | units | default | desc |
+| input | comes from | units | default | desc |
 |---|---|---|---|---|
 | `pour_point` | user | - | - | The catchment OUTLET, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer (geocode a place name first) - the point the runoff drains to. It decides which basin is modelled at all, so it is asked for (picked on the canvas or passed explicitly) and NEVER invented. It is snapped onto the traced channel, so a click beside the stream still delineates its basin |
 | `rain_series_mm` | user | mm | optional | A MEASURED storm, as hourly GROSS millimetres in the order the record reported them - what fetch_aorc_precip returns over this catchment under `precip_mm` for any CONUS window since 1979. It is the true intensity structure, which is what resolves the hydrograph SHAPE; a record that stops inside the simulated window stops in the run too, so the recession limb appears. State event_time instead to have the run look the record up over its own window |

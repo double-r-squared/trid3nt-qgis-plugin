@@ -175,7 +175,7 @@ def test_the_model_surface_takes_a_body_of_water_and_never_a_place():
 def test_the_routing_text_is_about_a_body_of_water():
     """The question class is the vertical structure of WATER; naming a reach or a
     lake alone is what the domain wave took out."""
-    from trid3nt_server.workflows.telemac.templates.stratified_flow.declarations import (
+    from trid3nt_server.workflows.telemac.templates.stratified_flow.stratified_flow import (
         DOC,
     )
 
@@ -186,7 +186,7 @@ def test_the_routing_text_is_about_a_body_of_water():
         assert word in routing.lower()
 
 
-def test_the_package_holds_the_template_its_declarations_and_its_corpus():
+def test_the_package_holds_the_template_and_its_corpus():
     """A template package carries no module of its own: what was a clip and a gauge
     reader are a slot's ingestion and a fetcher row now."""
     from pathlib import Path
@@ -194,4 +194,4 @@ def test_the_package_holds_the_template_its_declarations_and_its_corpus():
     package = Path(_module().__file__).parent
     assert sorted(p.name for p in package.iterdir()
                   if p.is_file() and not p.name.startswith(".")) == [
-        "__init__.py", "corpus.yaml", "declarations.py", "stratified_flow.py"]
+        "__init__.py", "corpus.yaml", "stratified_flow.py"]

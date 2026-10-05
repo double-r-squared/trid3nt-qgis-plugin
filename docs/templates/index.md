@@ -2,7 +2,7 @@
 
 # Templates
 
-15 registered templates, one per question. A template declares raw engine keywords over a module wrapper; `fill` sets the params and `run` solves it. The wrappers are in [`../modules.md`](../modules.md).
+15 registered templates, one per question. A template declares raw engine keywords over a module wrapper; `fill` sets the inputs and `run` solves it. The wrappers are in [`../modules.md`](../modules.md).
 
 ## [`artemis_harbor_agitation`](artemis_harbor_agitation.md)
 

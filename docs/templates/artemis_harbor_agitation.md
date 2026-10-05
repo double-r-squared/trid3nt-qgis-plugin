@@ -20,11 +20,11 @@ The WAVE AGITATION (Kd = Hs/H0) a declared structure leaves inside a harbour, ma
 | `structure` | supplied by the caller | a polyline layer you supply, as a uri or a layer name; required - the template names no source for it. | - |
 | `mesh` | supplied by the caller | a mesh layer you supply, as a uri or a layer name; absent is legal and the run reports it. | - |
 
-## The params
+## The inputs
 
 The values the template declares. `desc` is what the model reads when it fills one.
 
-| param | comes from | units | default | desc |
+| input | comes from | units | default | desc |
 |---|---|---|---|---|
 | `wave_height_m` | scenario | m | 1.0 | Incident wave height H0 on the designated liquid boundary; Kd is measured against it, so it sets the scale of every narrated height |
 | `reflection_coef` | scenario | - | 0.5 | The declared structure's reflection coefficient: 1 fully reflecting (a vertical quay), 0 fully absorbing (a rubble slope). Every other solid face is the absorbing shore |

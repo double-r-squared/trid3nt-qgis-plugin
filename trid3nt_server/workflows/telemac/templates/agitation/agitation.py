@@ -1,89 +1,101 @@
-"""Engine template ``artemis_harbor_agitation`` - does the structure shelter the water.
-
-ARTEMIS is the phase-RESOLVING elliptic mild-slope solver, so the answer is a
-steady-state agitation coefficient Kd = Hs/H0 in which diffraction fringes and
-standing waves are visible rather than averaged away."""
+"""Engine template ``artemis_harbor_agitation`` - does the structure shelter the water."""
 
 from __future__ import annotations
 
 import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
-
 from trid3nt_server.workflows.runtime import (
-    Data,
-    register_workflow,
+    Data, register_workflow, Accepts, Param, doors, lever,
 )
 from trid3nt_server.tools.mesh.tool import mesh_op, tool
-from trid3nt_server.workflows.telemac.authoring.accepted_mesh import HARBOUR_GEOMETRY
+from trid3nt_server.workflows.telemac.authoring.accepted_mesh import (
+    HARBOUR_GEOMETRY,
+)
 from trid3nt_server.workflows.telemac.modules.outputs import profile
 from trid3nt_server.workflows.telemac.modules.artemis import (
-    ART,
-    BOUNDARY_FILENAME,
-    IncidentWave,
+    ART, BOUNDARY_FILENAME, IncidentWave,
 )
-from trid3nt_server.workflows.telemac.templates.agitation.declarations import (
-    ACCEPTS,
-    DOC,
-    PARAMS,
-)
-from trid3nt_server.workflows.telemac.workflow import (
-    Measured, TelemacWorkflow,
-)
+from trid3nt_server.workflows.telemac.workflow import Measured, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DATA", "MESH", "OUTPUTS", "PARAMS", "STEERING",
-           "artemis_harbor_agitation"]
+__all__ = ["ACCEPTS", "CAPTIONS", "DATA", "DEFAULT_BARRIER_WIDTH_M",
+           "DEFAULT_GRADE", "DEFAULT_OPEN_DEPTH_M", "DOC", "MESH", "OUTPUTS",
+           "PARAMS", "STEERING", "artemis_harbor_agitation"]
 
 
-#: What the run directory holds the run's files under - the deck's own GEOMETRY /
-#: RESULTS statements. The boundary file is the incident wave's and is named by
-#: the composite that writes it.
+ACCEPTS = Accepts(mesh=("unstructured_tri",))
+
+DEFAULT_GRADE: float = 0.2
+
+# a mapped centreline bounds no area, so the mesher cuts it at this width
+DEFAULT_BARRIER_WIDTH_M: float = 20.0
+
+# every boundary stretch at least this deep opens
+DEFAULT_OPEN_DEPTH_M: float = -12.0
+
+
+class PARAMS:
+    wave_height_m = Param(
+        door=doors.SCENARIO, default=1.0, bounds=(0.01, 10.0),
+        units="m", consequence="physics",
+        desc="Incident wave height H0 on the designated liquid boundary; Kd is "
+             "measured against it, so it sets the scale of every narrated height")
+    reflection_coef = Param(
+        door=doors.SCENARIO, default=0.5, bounds=(0.0, 1.0),
+        consequence="physics",
+        desc="The declared structure's reflection coefficient: 1 fully reflecting "
+             "(a vertical quay), 0 fully absorbing (a rubble slope). Every other "
+             "solid face is the absorbing shore")
+
+    mesh_resolution_m = lever(
+        "mesh_resolution_m",
+        desc="Finest triangle edge, used at the shoreline and around the "
+             "structure. THE granularity lever: a phase-resolving solve needs "
+             "several nodes per WAVELENGTH and Kd peaks inside a diffraction "
+             "fringe, so a coarse mesh reads the peaks low")
+    mesh_grade = Param(
+        door=doors.CONSTANT, default=DEFAULT_GRADE, bounds=(0.05, 0.5),
+        consequence="numerical",
+        desc="Mesh gradation: how fast the edge may grow from the structure band "
+             "out to the open approach")
+    barrier_width_m = Param(
+        door=doors.SCENARIO, default=DEFAULT_BARRIER_WIDTH_M,
+        bounds=(1.0, 200.0), units="m", consequence="numerical",
+        desc="The width the mapped structure centreline is cut at; a survey maps "
+             "a mound as a line and a line removes no water from the domain")
+    transect_length_m = Param(
+        door=doors.SCENARIO, default=1500.0, bounds=(100.0, 20000.0),
+        units="m", consequence="scenario",
+        desc="The whole length of the transect the agitation is read along: a "
+             "straight line through the structure's centroid along the incident "
+             "wave direction, half of it on the exposed side and half in the lee")
+    open_depth_threshold_m = Param(
+        door=doors.SCENARIO, default=DEFAULT_OPEN_DEPTH_M,
+        bounds=(-200.0, -1.0), units="m", consequence="physics",
+        desc="How deep a boundary stretch must reach for it to be designated the "
+             "OPEN edge the incident wave enters through; every stretch that "
+             "reaches it opens")
+    cores = lever("cores")
+
+
 _RESULT = "res_agitation.slf"
 _STEERING_FILE = "art_agitation.cas"
 
 
 class DATA:
-    """What the run consumes from the world: the water, its bed, the structure.
-
-    A harbour basin is the WATER a coastline leaves inside the window the
-    question is asked in, so the domain is CUT rather than fetched whole; a user
-    who already holds the basin's outline supplies it and the cut never runs.
-    The transect is laid through whatever structure the run is handed."""
-
-    #: The window the sheltering question is asked in. Drawn on the canvas, so a
-    #: caller who supplies the basin outline below is never asked to draw one.
     extent = Data.supplied(geometry="rectangle")
-    #: THE DOMAIN, asked for as the LAND-WATER EDGE: the class it is rather than
-    #: the source it comes from, and the feature of that class this question
-    #: reads - a coastline, whose land is on the LEFT of the way's direction.
-    #: A line is not a domain, so the slot cuts the window above with it and the
-    #: water that leaves is what the mesh is built over; a basin the user
-    #: outlines supersedes the cut.
     domain = Data.need("hydrography", kind="coastline", geometry="polyline")
-    #: ONE bed: the class it is defined over rather than the source it comes
-    #: from - the measurement where something sounded it, the terrain everywhere
-    #: else. Supply a survey raster, a layer of soundings or a depth in metres
-    #: and that is the bed instead.
     bed = Data.need("bathymetry")
     structure = Data.supplied(geometry="polyline")
-    #: The domain as a MESH, when the caller has one already. Unfilled, MESH
-    #: below is what the wave is solved on.
     mesh = Data.supplied(geometry="mesh").optional()
 
 
-#: The structure as a water-removing FOOTPRINT, before the mesh: the domain is
-#: the water the structure is subtracted FROM and a centreline bounds no area to
-#: subtract.
 _FOOTPRINT = Measured(
     "footprint", kind="footprint",
     reads={"value": "structure", "width_m": "barrier_width_m"},
     asked={"asked": "the structure this question asks about",
            "code": "ARTEMIS_STRUCTURE_INVALID"})
 
-#: What the accepted harbour mesh measures. The wave the settle stamps onto the
-#: boundary file is the wave the deck is solved at, so its period and its
-#: direction are read off the deck; the width is the one the footprint above was
-#: cut at, because what the mesher removed is what the deck calls solid.
 _HARBOUR = Measured(
     "settled", kind="harbour",
     reads={"structure": "structure",
@@ -97,41 +109,22 @@ _HARBOUR = Measured(
 
 
 class STEERING(ART):
-    """The deck: a monochromatic wave in through the open edge, and what it leaves."""
     GEOMETRY_FILE = HARBOUR_GEOMETRY
     BOUNDARY_CONDITIONS_FILE = BOUNDARY_FILENAME
     RESULTS_FILE = _RESULT
 
-    # The still water level the harbour is solved at is the dictionary's own zero,
-    # so what this states is that the level is CONSTANT rather than what it is.
     INITIAL_CONDITIONS = "CONSTANT ELEVATION"
-    # An elliptic solve over tens of thousands of nodes does not converge inside
-    # the dictionary's own iteration ceiling for a domain this size.
+    # an elliptic solve this size outruns the dictionary iteration ceiling
     MAXIMUM_NUMBER_OF_ITERATIONS_FOR_SOLVER = 4000
 
-    # The swell a harbour of refuge is asked about: an eight-second period, long
-    # enough to diffract around the structure and short enough that the basin is
-    # many wavelengths across.
     WAVE_PERIOD = 8.0
-    # Where it runs TO, counted in the trigonometric sense from +x, so 90 is a
-    # wave travelling north; the transect is read along the same bearing.
+    # trigonometric from +x, so 90 travels north; the transect is read along it
     DIRECTION_OF_WAVE_PROPAGATION = 90.0
 
-    #: The forcing, which ARTEMIS reads out of the BOUNDARY CONDITIONS FILE and
-    #: not out of the deck: the designated liquid stretch carries the incident
-    #: height, the structure's own faces reflect, and every other face absorbs.
     incident_wave = IncidentWave(measured="settled", height_m="wave_height_m",
                                  reflection_coef="reflection_coef")
 
 
-#: The MESH RECIPE, frozen at declaration and building nothing at import. The
-#: domain polygon's own edge IS the shoreline the sizing function measures, so
-#: the recipe hands the mesher that polygon and nothing restates where the water
-#: is. The structure is punched out of it with its outline locked in FIRST, and
-#: the shoreline sizing is built over the domain that leaves - so the band around
-#: the cut is graded rather than a discontinuity the triangulator has to absorb.
-#: The domain's own rim is sized between the two, which is where the one op that
-#: measures it belongs: after the sizing, before the gradation that grades it in.
 MESH = tool.build_mesh(
     mesher="om2d",
     kind="unstructured_tri",
@@ -140,13 +133,6 @@ MESH = tool.build_mesh(
     ops=[
         mesh_op("set_obstacle", geometry="footprint"),
         mesh_op("feature_sizing_function"),
-        # THE RIM IS THE ASK'S TO SIZE. Nothing else sizes it: a sizing function
-        # measures the water's own shape - the feature width, the distance to a
-        # line, the wavelength over a depth - and out in the open approach every
-        # one of those is coarse, so an undeclared rim comes back an order of
-        # magnitude past the size word and the band behind it triangulates into
-        # slivers. That rim is the boundary a solver forces its open condition
-        # on. No edge is stated, so it is locked at the recipe's own size word.
         mesh_op("set_rim_size"),
         mesh_op("enforce_mesh_gradation", gradation="mesh_grade"),
         mesh_op("delete_boundary_faces"),
@@ -154,20 +140,11 @@ MESH = tool.build_mesh(
         mesh_op("make_mesh_boundaries_traversable"),
         mesh_op("fix_mesh", delete_unused=True),
         mesh_op("set_bed", source="bed"),
-        # EVERY stretch the library reads as ocean at this depth opens. A harbour
-        # has more than one mouth, and picking one of them would number a
-        # multi-mouth domain as single-mouth.
         mesh_op("identify_ocean_boundary_sections",
                 depth_threshold="open_depth_threshold_m"),
     ],
 )
 
-
-#: THE LINE the agitation is read along: through the structure's centroid, along
-#: the wave the deck states it is travelling, from the exposed side into the lee.
-#: A propagation direction is what the keyword carries, so the line is laid in
-#: the same trigonometric convention. Measured off the structure rather than
-#: produced, because the water's own centerline runs nowhere near this read.
 _TRANSECT = Measured(
     "transect", kind="transect",
     reads={"value": "structure",
@@ -175,15 +152,10 @@ _TRANSECT = Measured(
            "length_m": "transect_length_m"},
     asked={"convention": "trig", "code": "ARTEMIS_STRUCTURE_INVALID"})
 
-#: What this question PLACES: the agitation coefficient along the transect the
-#: user drew through the structure. The profile keeps the nodes within one
-#: finest mesh edge of the line - the band the structure's own nodes were laid
-#: at - so the read is the line's and not a mean over the whole basin's width.
 OUTPUTS = [
     profile("KD", along="transect", within_m="mesh_resolution_m").chart(),
 ]
 CAPTIONS = {"KD": "agitation coefficient"}
-
 
 _ARTEMIS_METADATA = AtomicToolMetadata(
     name="artemis_harbor_agitation",
@@ -193,32 +165,86 @@ _ARTEMIS_METADATA = AtomicToolMetadata(
     tier="template",
 )
 
-
-#: WHAT the mesh is built over, and the DATA slot a caller may hand a built
-#: mesh in instead of the recipe. Filled, that mesh is adopted whole.
 MESH_ON = "domain"
 SUPPLIED_MESH = "mesh"
 
-#: The engine files this run has to write for it to have solved
-#: anything; unstated, the deck's own RESULTS FILE is the one.
 RESULTS = (_RESULT,)
 
-#: What the run directory calls the deck, and where the staged files live.
 STEERING_FILE = _STEERING_FILE
 PREFIX = "artemis"
 
-#: The title the card carries when the run is held for review.
 REVIEW_TITLE = "Review the incident wave, the structure and the mesh"
 
+DOC = dict(
+    summary="The WAVE AGITATION (Kd = Hs/H0) a declared structure leaves inside a "
+            "harbour, marina or sheltered basin.",
+    routing=(
+        "THE tool for \"does this breakwater shelter the berths\", \"how much does "
+        "swell amplify inside this harbour\", \"wave agitation / tranquility in the "
+        "basin\". ARTEMIS phase-RESOLVING elliptic mild-slope (Berkhoff) over a "
+        "mesh cut from the real shoreline, the structure punched out and the "
+        "seaward stretches open: fringes and standing waves are the answer, not "
+        "an average. Wave: `WAVE PERIOD` 8 s, `DIRECTION OF WAVE PROPAGATION` 90 "
+        "deg (trig from +x) - set either by name. THE STRUCTURE IS THE "
+        "QUESTION and is REQUIRED: `structure=` a breakwater layer "
+        "(`fetch_osm_features`) or a drawn line. Give `domain=` the water as "
+        "an outline or a polygon layer, or `extent=` a rectangle the "
+        "coastline cuts into water."
+    ),
+    not_for=(
+        "the offshore SEA STATE or fetch-limited wind-wave growth; free-field "
+        "agitation with no structure; coastal storm-tide flooding; a "
+        "tracer released into a river channel"
+    ),
+    params=PARAMS,
+    controls=(
+        ("extent",
+         "NOT needed when `domain=` is filled - this is the other way to say "
+         "where the water is. A rectangle over the harbour as a LAYER (a uri or "
+         "a file, not four numbers): the mapped coastline divides it and the "
+         "water it leaves IS the domain. A box a coastline way crosses without "
+         "closing divides nothing and refuses by name rather than meshing a "
+         "shape nobody cut."),
+        ("domain",
+         "A harbour approach, a marina basin, or any water a structure shelters. "
+         "Its own edge is the SHORELINE the mesh is sized against, so a rough "
+         "outline is enough; unfilled, the extent above is cut instead."),
+        ("bed",
+         "That producer is the measured bathymetry under the domain - the "
+         "surveyed sea floor the wave refracts over, matched to this water and "
+         "laid rung by rung. Hand it your own survey raster, a layer of "
+         "soundings, or a depth in metres for a basin nobody has sounded."),
+        ("structure",
+         "REQUIRED. The barrier the question is about, as a polyline LAYER (the "
+         "uri or handle from fetch_osm_features feature='breakwaters', or any line layer the user "
+         "has) or a drawn/typed line as [[lon, lat], ...]. Producer-less BY "
+         "DESIGN - this tool will never go and find a structure you did not name. "
+         "It is cut out of the water domain at `barrier_width_m` and its faces "
+         "reflect `reflection_coef` of the incident energy."),
+        ("input_mode",
+         '"user_gated" presents the resolved incident wave, the structure and the '
+         'authored mesh for review/edit before the solve and WAITS; "auto" '
+         "(session default) proceeds with every assumption labeled. Not a "
+         "physical value."),
+        ("restart_clean",
+         "True builds the mesh again even where one built from the same domain, "
+         "bed, resolution and mesher is kept; unset, such a kept mesh is reused. "
+         "Not a physical value."),
+    ),
+    returns=(
+        "On success the run's record (a `LayerURI`): every variable its "
+        "module wrote, styled on one mesh layer, animated where it varies, "
+        "the derived agitation coefficient Kd = Hs/H0 among them, plus the "
+        "Kd profile through the structure charted. The Kd field peaks on a "
+        "standing wave against the domain's own open boundary as often as "
+        "inside the harbour, so read the transect chart and the field "
+        "behind the structure. On failure a dict with `status=\"error\"` + "
+        "`error_code`."
+    ),
+)
 
 artemis_harbor_agitation = register_workflow(
     TelemacWorkflow, _ARTEMIS_METADATA, sys.modules[__name__],
-    # A harbour is settled by the wave that enters it, and the stages that do it
-    # read no runtime lever: no dated source, no frame a level is counted from,
-    # and the mesh size is this question's own param.
     levers=(),
-    # A phase-RESOLVING solve is the most mesh-dependent of the family: the
-    # published coefficient peaks inside a diffraction fringe the coarse mesh
-    # averages away.
     sensitivity=(("agitation_coefficient", "peak"),),
 )

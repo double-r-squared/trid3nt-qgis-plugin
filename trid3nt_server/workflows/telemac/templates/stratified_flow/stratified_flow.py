@@ -1,190 +1,133 @@
-"""Engine template ``telemac3d_stratified_flow`` - what a 2D model cannot see.
-
-TELEMAC-3D over sigma layers with active-tracer baroclinic coupling, over the
-body of water this run solves on: a lake, a reservoir, a pond, a quarry pit, an
-outline drawn on the canvas. The run has NO surface heat exchange, so a falling
-surface temperature is the warm layer MIXING DOWNWARD. The domain is CLOSED: it
-names no liquid boundary."""
+"""Engine template ``telemac3d_stratified_flow`` - what a 2D model cannot see."""
 
 from __future__ import annotations
 
 import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
-
 from trid3nt_server.workflows.runtime import (
-    Data,
-    register_workflow,
+    Data, register_workflow, Param, doors, lever,
 )
 from trid3nt_server.workflows.runtime.resolution import SensitivityDecl
-from trid3nt_server.inputs import point_arg
+from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.telemac.authoring.accepted_mesh import (
-    BASIN_BOUNDARY,
-    BASIN_GEOMETRY,
+    BASIN_BOUNDARY, BASIN_GEOMETRY,
 )
 from trid3nt_server.workflows.telemac.modules import column
 from trid3nt_server.workflows.telemac.modules.telemac3d import (
-    T3D,
-    Column,
-    VerticalGrid,
-)
-from trid3nt_server.workflows.telemac.templates.stratified_flow.declarations import (
-    DOC,
-    PARAMS,
+    T3D, Column, VerticalGrid,
 )
 from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
+__all__ = ["CAPTIONS", "DATA", "DOC", "OUTPUTS", "PARAMS", "STEERING",
            "telemac3d_stratified_flow"]
 
 
-#: What the run directory holds the run's files under - the deck's own 3D and 2D
-#: RESULT FILE statements. The 3D file is the answer; the 2D file is the depth
-#: average the question exists to refuse, written because the engine's own
-#: printouts read it.
+class PARAMS:
+    seed = Param(
+        door=doors.USER, optional=True, user_lever=True,
+        consequence="scenario", type=Point,
+        derived_when_absent=(
+            "the domain polygon supplied on the call is the body of water the "
+            "run solves over"),
+        desc="A point ON or beside the body of water this question is about, "
+             "as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) "
+             "pair, 'lat,lon' or a point layer (geocode a place name first). "
+             "The mapped "
+             "outline that point names becomes the domain; a domain supplied "
+             "directly supersedes it, and a body nobody mapped is drawn")
+
+    warm_temp_c = Param(
+        door=doors.SCENARIO, default=25.0, bounds=(-2.0, 40.0),
+        units="C", consequence="physics",
+        desc="Epilimnion (warm surface layer) temperature the column OPENS at. "
+             "The run exchanges no heat with the atmosphere, so what happens to "
+             "this difference is the whole answer")
+    cold_temp_c = Param(
+        door=doors.SCENARIO, default=15.0, bounds=(-2.0, 40.0),
+        units="C", consequence="physics",
+        desc="Hypolimnion (cold bottom layer) temperature; the initial "
+             "top-to-bottom difference is what the run either keeps or mixes away")
+    thermocline_depth_m = Param(
+        door=doors.SCENARIO, default=8.0,
+        bounds=(0.5, 200.0), units="m", consequence="physics",
+        desc="Depth of the thermocline below the free surface. The vertical grid "
+             "is planned to HOLD it and REFUSES when no admissible sigma stretch "
+             "over the domain's deepest column can")
+
+    mesh_resolution_m = lever(
+        "mesh_resolution_m",
+        desc="Target triangle edge the water body's interior is meshed at. The "
+             "horizontal spends its budget on COVERING the body rather than on "
+             "detail; the 3D node count is this mesh's nodes times the planes "
+             "the deck states")
+
+
 _RESULT_3D = "res3d_basin.slf"
 _RESULT_2D = "res2d_basin.slf"
 
-#: How often the solver prints a listing, in its own steps. The dictionary's own
-#: value is 1, which prints every step of a run whose answer is its settled state.
+# in solver steps, not seconds
 _LISTING_PERIOD = 100
 
+
 class DATA:
-    """The three slots this run stands on: the body of water, its bed, and the
-    level its free surface opens at.
-
-    Every row is superseded by what the caller hands in, so the same declaration
-    solves a charted Great Lake and a pond nobody has ever mapped."""
-
-    # DRAWN, picked, or the caller's own layer. A body of water is a closed
-    # polygon whether a fetcher maps it or nobody ever has, so the match here
-    # is a PREFERENCE: where the seed names or points at a mapped body, its
-    # outline is the domain, and anything the caller supplies supersedes it.
-    # The feature is the WATERBODY by name, so a reach mapped at the same seed
-    # never stands in for the body this question stratifies.
     domain = Data.need("hydrography", at="seed")
-    # THE BED, as the CLASS it is rather than the source it comes from: the
-    # measurement where something measured it, the terrain under the rest. A
-    # bed is TOPOBATHY and the coastal composites do not reach the Great Lakes
-    # at all, so this slot is answered by the survey the lakes are charted on;
-    # anywhere else it is a survey raster, a layer of soundings, or the depth
-    # in metres the water body holds.
     bed = Data.need("bathymetry")
-    # THE LEVEL the free surface opens at, over the day the run is about: ONE
-    # measured value off the nearest gauge that watched this water, read on the
-    # SAME datum the charted bed above is counted from. ABSENT is legal - a pond
-    # has no gauge, and a bed stated as a depth is counted from the free surface
-    # itself, so the column opens at the bed's own zero and the sheet says so.
     level = Data.need("water level series").context(
         "no water-level gauge published a reading over this domain that day; "
         "the free surface opens at the zero the bed is counted from")
 
 
 class STEERING(T3D):
-    """The deck: a prescribed column, the planes that hold it, and no wind."""
     GEOMETRY_FILE = BASIN_GEOMETRY
     BOUNDARY_CONDITIONS_FILE = BASIN_BOUNDARY
     RD_RESULT_FILE = _RESULT_3D
     ED_RESULT_FILE = _RESULT_2D
 
-    # HOW LONG the column is watched, in SECONDS. The answer is the column's
-    # SETTLED state rather than an event, so the window is "long enough": five
-    # hours is what a basin-scale column takes to either hold its difference or
-    # mix it away. A user who wants another horizon sets the keyword by its own
-    # name.
     DURATION = 18000.0
-    # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own
-    # default is every step, so an unwritten period is a frame per step: at
-    # the 120 m default edge the CFL step is 1 s, and the 18000 s DURATION
-    # above is about 18,000 of them - one frame every 360 steps is 50 frames
-    # of the column. A user who wants another cadence sets the keyword by its
-    # own name.
+    # in solver steps, not seconds
     GRAPHIC_PRINTOUT_PERIOD = 360
     LISTING_PRINTOUT_PERIOD = _LISTING_PERIOD
     MASS_BALANCE = True
 
-    # HOW MANY SIGMA PLANES the column is carried on - the VERTICAL degree of
-    # freedom a 2D model has none of, and so what resolves this answer. Thirteen
-    # holds a metres-thick thermocline over a lake-deep column under the surface
-    # zooming the grid plans, at this mesh's nodes times thirteen; too few for
-    # the declared thermocline is a refusal naming the count that would work,
-    # never a coarser answer. A user who wants a finer column sets the keyword
-    # by its own name.
     NUMBER_OF_HORIZONTAL_LEVELS = 13
-    # The dictionary's own default here is YES, and a non-hydrostatic solve of a
-    # basin-scale column buys nothing the hydrostatic one does not already show.
+    # the dictionary's own default is YES
     NON_HYDROSTATIC_VERSION = False
 
-    # THE FREE SURFACE the run opens at: flat, and at the level the gauge
-    # OBSERVED. The dictionary's own zero is the chart datum, which is where a
-    # charted bed is counted from - water left there has none on its rim at all.
+    # flat at the gauge-observed level; the dictionary's zero is chart datum
     INITIAL_CONDITIONS = "CONSTANT ELEVATION"
-    # The ONE pair that cannot be left to the dictionary, measured both ways:
-    # LECDON stops on "THE LAW OF BOTTOM FRICTION 5 IS ASKED / GIVE THE
-    # CORRESPONDING FRICTION COEFFICIENT" when only the law is defaulted, and on
-    # "NO FRICTION LAW IS PRESCRIBED!" when only the coefficient is written. It
-    # reads the two jointly and takes neither half from the dictionary once the
-    # other exists. Both values ARE the dictionary's own; what the engine demands
-    # is that they be written.
+    # LECDON stops unless the law and its coefficient are stated together
     LAW_OF_BOTTOM_FRICTION = 5
     FRICTION_COEFFICIENT_FOR_THE_BOTTOM = 0.01
 
-    # The diffusivities a screening column is stable under. The dictionary's own
-    # 1e-6 is molecular; water at these scales is not solved at molecular
-    # viscosity, and the tracer pair has no default at all.
+    # the dictionary's 1e-6 is molecular; the tracer pair has no default
     COEFFICIENT_FOR_HORIZONTAL_DIFFUSION_OF_VELOCITIES = 1.0e-4
     COEFFICIENT_FOR_VERTICAL_DIFFUSION_OF_VELOCITIES = 1.0e-4
     COEFFICIENT_FOR_HORIZONTAL_DIFFUSION_OF_TRACERS = [1.0e-4]
     COEFFICIENT_FOR_VERTICAL_DIFFUSION_OF_TRACERS = [1.0e-4]
 
-    # THE TRACER IS THE PHYSICS: temperature drives the density and the density
-    # drives the flow. The engine finds the temperature by the first sixteen
-    # characters of its name; the unit rides in the next sixteen, as the
-    # dictionary spells a tracer name, and is what the result file carries. The
-    # initial values keyword is mandatory even where the Fortran hook overrides
-    # it - the solver stops asking for it by name.
+    # the engine finds the temperature by the first sixteen characters
     NUMBER_OF_TRACERS = 1
     NAMES_OF_TRACERS = ["TEMPERATURE     DEGC"]
     INITIAL_VALUES_OF_TRACERS = [0.0]
     DENSITY_LAW = 1
     AVERAGE_WATER_DENSITY = 1000.0
 
-    # HOW THE TEMPERATURE IS CARRIED, and the ceiling that carriage runs under.
-    # The dictionary gives the 3D tracer scheme no default, so an unstated deck
-    # advects the temperature by whatever the VELOCITIES are advected by (5, MURD
-    # PSI), which stops a baroclinic solve at its first tracer step. 13 is the
-    # NERD family the telemac2d dictionary defaults this same keyword to and the
-    # only one monotone across a thermocline.
+    # no 3D default; MURD PSI stops a baroclinic solve, NERD is monotone
     SCHEME_FOR_ADVECTION_OF_TRACERS = [13]
-    # AND UNDER WHICH OPTION. The dictionary's own default here is 4, implicit,
-    # and murd3d_pos answers to 1 and 2 only - an unstated deck loops "UNKNOWN
-    # OPTION IN MURD3D_POS: 4 / OPTION 1 TAKEN INSTEAD" and stops on the explicit
-    # option's own iteration ceiling. 2 is the predictor-corrector, which the
-    # dictionary's own help calls the faster of the two where there are no tidal
-    # flats; a closed body has none.
+    # the dictionary's 4 is unknown to murd3d_pos, which answers to 1 and 2
     SCHEME_OPTION_FOR_ADVECTION_OF_TRACERS = [2]
 
-    #: The sigma grid that can HOLD the declared thermocline over this domain's
-    #: own deepest column, or the refusal that says how many planes would. The
-    #: plane count is READ off the keyword above, so a run the user states
-    #: another one on is planned on the column it is actually solved over.
     vertical_grid = VerticalGrid(thermocline_depth_m="thermocline_depth_m")
-    #: The column the run OPENS with, written into the engine's own initial-
-    #: condition hook because no keyword carries a non-uniform tracer field.
     column = Column(thermocline_depth_m="thermocline_depth_m",
                     warm_c="warm_temp_c", cold_c="cold_temp_c")
 
 
-#: What this question PLACES: the column at the deepest node as the chart, the
-#: prescribed initial column drawn beside what survived. The run exchanges no
-#: heat with the atmosphere, so the two curves enclose the same heat and a
-#: surface that fell is the warm layer mixed downward.
 OUTPUTS = [
     column("T1").chart(reference=column("T1", t=0)),
 ]
 CAPTIONS = {"T1": "water temperature", "level": "a water level"}
-
 
 _TELEMAC3D_METADATA = AtomicToolMetadata(
     name="telemac3d_stratified_flow",
@@ -194,28 +137,60 @@ _TELEMAC3D_METADATA = AtomicToolMetadata(
     tier="template",
 )
 
-
-#: The two files the run has to write. Stated rather than read off the deck
-#: because a 3D deck names them 3D RESULT FILE and 2D RESULT FILE, and what
-#: the workflow reads back is the single RESULTS FILE a 2D deck states.
 RESULTS = (_RESULT_3D, _RESULT_2D)
 
-#: A 3D SELAFIN is no mesh format MDAL opens: the module writes the 2D
-#: result over the same mesh, and a plane of a 3D field is drawn onto it.
 DISPLAY_FILE = _RESULT_2D
 
-#: What the run directory calls the deck, and where the staged files live.
 PREFIX = "telemac3d"
 
-#: The title the card carries when the run is held for review.
 REVIEW_TITLE = "Review the prescribed column, the deck and the mesh"
 
+DOC = dict(
+    summary="The 3D VERTICAL STRUCTURE of a body of water a 2D depth-averaged "
+            "model cannot resolve.",
+    routing=(
+        "THE tool for \"does this lake stratify or turn over\", \"thermal "
+        "stratification / thermocline\", \"wind-driven vertical "
+        "circulation\". TELEMAC-3D baroclinic coupling over sigma layers on a "
+        "CLOSED body of water - a lake, a reservoir, a pond, a pit - naming no "
+        "liquid boundary. ONE run gives both the temperature difference that "
+        "SURVIVES and the opposed surface / bottom velocities a stated wind "
+        "drives. `seed` names or points at the body and finds its mapped "
+        "outline; `domain` takes a polygon, `bed` a survey raster, soundings "
+        "or a depth in metres. Deck: DURATION 18000 s, NUMBER OF HORIZONTAL "
+        "LEVELS 13, calm; set each by its keyword name."
+    ),
+    not_for=(
+        "a 2D depth-averaged plume or transport question; inundation "
+        "DEPTH; coastal storm-tide flooding; harbour wave agitation "
+        "(`artemis_harbor_agitation`); a salinity intrusion up an estuary, "
+        "which needs a tidal liquid boundary a closed body has none of"
+    ),
+    params=PARAMS,
+    controls=(
+        ("input_mode",
+         '"user_gated" presents the resolved column, the deck it is solved '
+         'under and the authored mesh for review/edit before the solve and '
+         'WAITS; "auto" (session default) proceeds with every assumption '
+         "labeled. Not a physical value."),
+        ("restart_clean",
+         "True builds the mesh again even where one built from the same domain, "
+         "bed, resolution and mesher is kept; unset, such a kept mesh is reused. "
+         "Not a physical value."),
+    ),
+    returns=(
+        "On success the run's record (a `LayerURI`): every variable its "
+        "module wrote, styled on one mesh layer, animated where it varies, "
+        "plus the temperature column at the deepest node charted against "
+        "the prescribed initial column. The run exchanges NO heat with the "
+        "atmosphere, so a falling surface temperature is downward MIXING "
+        "and never the water cooling - narrate it that way. On failure a "
+        "dict with `status=\"error\"` + `error_code`."
+    ),
+)
 
 telemac3d_stratified_flow = register_workflow(
     TelemacWorkflow, _TELEMAC3D_METADATA, sys.modules[__name__],
-    # The temperature the column publishes is read ACROSS the thermocline, the
-    # steepest gradient in the domain, and the planes are what resolve it; the
-    # velocity that shears over the same planes is read inside that gradient.
     sensitivity=SensitivityDecl((("water_temperature", "gradient"),
                                  ("velocity_u", "gradient")),
                                 lever="NUMBER_OF_HORIZONTAL_LEVELS"),

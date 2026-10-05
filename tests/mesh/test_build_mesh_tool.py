@@ -32,8 +32,8 @@ from trid3nt_server.tools.mesh.tool import (
     resolve_mesh,
     tool,
 )
-from trid3nt_server.workflows.telemac.templates.do_sag.declarations import ACCEPTS as _DO_SAG
-from trid3nt_server.workflows.telemac.templates.dye_release.declarations import (
+from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import ACCEPTS as _DO_SAG
+from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
     ACCEPTS as _RIVER_DYE,
 )
 
@@ -218,7 +218,7 @@ def test_nothing_supplied_declared_or_discovered_refuses():
 # The declared contract is ROLE-KEYED: membership per role, checked at the door.
 #
 # The contract is a standalone Accepts declaration in the template's own
-# declarations.py, reached here the way every door reaches it - off the registry
+# file, reached here the way every door reaches it - off the registry
 # by tool name - rather than restated. The MESH block states what the DEFAULT
 # BUILD produces and is not consulted here.
 def _tri_artifact(**over) -> MeshArtifact:

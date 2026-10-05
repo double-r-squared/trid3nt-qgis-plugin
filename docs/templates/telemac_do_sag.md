@@ -20,11 +20,11 @@ DISSOLVED-OXYGEN SAG below a discharge (US TMDL / permit question).
 | `discharge` | matched on a need for discharge series | the discharge series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of discharge series. | - |
 | `level` | matched on a need for water level series | the water level series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of water level series. | - |
 
-## The params
+## The inputs
 
 The values the template declares. `desc` is what the model reads when it fills one.
 
-| param | comes from | units | default | desc |
+| input | comes from | units | default | desc |
 |---|---|---|---|---|
 | `outfall_coords` | user | - | optional | Where the discharge enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. On a river with no domain supplied it is also the seed the reach is walked downstream from |
 | `do_standard_mgl` | scenario | mg/L | 5.0 | The DO water-quality standard the sag is judged against; 5 is a common warm-water aquatic-life criterion |

@@ -1,102 +1,96 @@
-"""Engine template ``telemac_bed_scour`` - a mobile bed under moving water.
-
-TELEMAC-2D coupled with GAIA over the domain this run solves on - a river reach
-walked from the release point, an estuary the user draws, a polygon they own:
-where the bed scours and re-deposits, and whether a graded mixture SORTS as it
-goes."""
+"""Engine template ``telemac_bed_scour`` - a mobile bed under moving water."""
 
 from __future__ import annotations
 
 import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
-
 from trid3nt_server.workflows.runtime import (
-    Data,
-    register_workflow,
+    Data, register_workflow, Accepts, Param, doors,
 )
-from trid3nt_server.inputs import point_arg
+from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.instant import event_time
-from trid3nt_server.workflows.telemac.modules import (
-    GAIA,
-    T2D,
-    series,
-)
+from trid3nt_server.workflows.telemac.modules import GAIA, T2D, series
 from trid3nt_server.workflows.telemac.modules.gaia import RESULT_FILENAME
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
-    Boundaries,
-    Sources,
-    TracerNames,
-)
-from trid3nt_server.workflows.telemac.templates.bed_scour.declarations import (
-    ACCEPTS, DOC, GRADATION_PRESETS, PARAMS,
+    Boundaries, Sources, TracerNames,
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
-           "telemac_bed_scour"]
+__all__ = ["ACCEPTS", "CAPTIONS", "DATA", "DOC", "GRADATION_PRESETS",
+           "OUTPUTS", "PARAMS", "STEERING", "telemac_bed_scour"]
 
-#: WHERE the substance enters the water: the point the user clicked, else that
-#: fraction along the domain's own centerline. The workflow settles it onto a
-#: node of the accepted mesh before the sheet reads it back.
+
+GRADATION_PRESETS: dict[str, list[list[float]]] = {
+    "graded_sand": [[100.0, 0.34], [400.0, 0.33], [1000.0, 0.33]],
+    "poorly_sorted": [[80.0, 0.4], [300.0, 0.3], [1200.0, 0.3]],
+    "sand_gravel_bimodal": [[200.0, 0.5], [1800.0, 0.5]],
+    "fine_coarse_sand": [[120.0, 0.5], [800.0, 0.5]],
+}
+
+ACCEPTS = Accepts(mesh=("unstructured_tri",))
+
+
+class PARAMS:
+    release = Param(
+        door=doors.USER, optional=True, user_lever=True,
+        consequence="scenario", type=Point,
+        derived_when_absent=(
+            "the marker sits at spill_fraction along the domain the mesh was "
+            "built over"),
+        desc="Where the marker enters the water, as a Point: the pick's "
+             "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
+             "point layer. Geocode a place name first. Its name becomes the "
+             "marker's name, "
+             "and on a river with no domain supplied it is also the seed the "
+             "reach is walked downstream from")
+
+    spill_fraction = Param(
+        door=doors.SCENARIO, default=0.25, bounds=(0.05, 0.9),
+        consequence="scenario",
+        desc="Along-domain release position, 0=inflow..1=outflow; the source "
+             "must sit strictly INSIDE the domain, never on a boundary")
+    spill_duration_s = Param(
+        door=doors.SCENARIO, default=300.0,
+        bounds=(1.0, 86400.0), units="s", consequence="scenario",
+        desc="Finite pulse injection window")
+
+    sediment_gradation = Param(
+        door=doors.USER, optional=True, consequence="scenario",
+        type=list | str,
+        derived_when_absent=(
+            "the bed is ONE class at the CLASSES SEDIMENT DIAMETERS the deck "
+            "states, which is uniform by construction and cannot sort"),
+        desc="Multi-class GRADED sediment: a preset name (graded_sand | "
+             "poorly_sorted | sand_gravel_bimodal | fine_coarse_sand) or a list "
+             "of [d50_um, fraction] pairs; a mixture sorts under a hiding factor")
+
+
 _RELEASE = Placed("source", point="release", fraction="spill_fraction",
                   label="Release point")
 
-#: The names the run directory holds this run's files under - the deck's own
-#: GEOMETRY / BOUNDARY CONDITIONS / RESULTS statements, which the workflow reads
-#: back off the deck rather than being told them twice. GAIA reads the same
-#: geometry and boundary files, so it is handed them by name.
 _GEOMETRY = "domain.slf"
 _BOUNDARY = "domain.cli"
 _RESULT = "r2d_domain.slf"
 
-#: How far the reach producer walks downstream from the release point when this
-#: question has to find its own domain. A user who wants another stretch supplies
-#: the domain polygon, which supersedes the producer.
 _REACH_LENGTH_KM = 6.0
 
-#: The roughness this deck is solved at, and the law it is read under: Strickler,
-#: the coefficient an unsurveyed channel is screened at. ONE number, stated once,
-#: because the outflow stage is derived as a normal depth AT this roughness and a
-#: stage derived at one number under a deck written at another is a level the run
-#: never sits at. A user who knows the channel sets the keyword by name.
+# Strickler; the outflow stage is derived at this same roughness
 _FRICTION_LAW = 3
 _FRICTION_COEFFICIENT = 33.0
 
 
 class DATA:
-    """The three slots this run stands on, and the flow that fills its inflow."""
-
-    # A marker named up front also names which stretch to model: the reach is
-    # walked downstream from it. A domain the user supplies supersedes this.
     domain = Data.need("hydrography", at="release",
                        span_km=_REACH_LENGTH_KM)
-    # THE BED, as the CLASS it is rather than the source it comes from: the
-    # measurement where something measured it, the terrain under the rest. Which
-    # survey or which DEM reaches this domain is the match's to answer off their
-    # rows, and the merge between the two classes is the runtime's one
-    # rule. A domain with no federal navigation project has no published
-    # survey, and the sheet says so rather than refusing.
     bed = Data.need("bathymetry")
-    # The carrier flow the inflow run prescribes, as a CLASS: which record
-    # reports a discharge over this domain is the match's, and the window it
-    # reports is opened at the moment the run opens at. A number stated on this
-    # row stands over any record, so the flow is the slot's and no param twins
-    # it.
     discharge = Data.need("discharge series").context(
         "the National Water Model published no streamflow over this domain "
         "at that cycle")
-    # THE LEVEL the water stands at, which the run opens flat at and the outflow
-    # holds. A reach whose measured ends do not FALL has no uniform-flow depth to
-    # derive, and a closed body never had one. An ELEVATION on the datum the bed
-    # is painted on - a gauge publishes its height above its own zero, which is a
-    # different surface, so no source is named here and the number is stated.
     level = Data.need("water level series").optional()
 
 
 class STEERING(T2D):
-    """The deck: moving water, a marker tracer in it, and a BED that moves under it."""
-
     GEOMETRY_FILE = _GEOMETRY
     BOUNDARY_CONDITIONS_FILE = _BOUNDARY
     RESULTS_FILE = _RESULT
@@ -105,8 +99,6 @@ class STEERING(T2D):
     LAW_OF_BOTTOM_FRICTION = _FRICTION_LAW
     FRICTION_COEFFICIENT = _FRICTION_COEFFICIENT
 
-    # The advection of momentum and depth, and the SUPG the domain is stable
-    # under. The tracer advects under the engine's own scheme and diffusivity.
     TYPE_OF_ADVECTION = [1, 5]
     SUPG_OPTION = [0, 0]
     MASS_LUMPING_ON_H = 1.0
@@ -117,87 +109,38 @@ class STEERING(T2D):
     IMPLICITATION_FOR_DEPTH = 0.6
     IMPLICITATION_FOR_VELOCITY = 0.6
 
-    # The engine accounts for its own water volume and prints one flux per liquid
-    # boundary. That is the only honest check that the level prescribed at a
-    # boundary reached it: a server-side integration of the depth and velocity
-    # fields reads near zero at a prescribed-depth face, where the boundary values
-    # are clamped after the flux was computed.
     MASS_BALANCE = True
 
-    # HOW LONG the question is asked over, in SECONDS. A mobile bed reads
-    # through the MORPHOLOGICAL FACTOR stated below, so this hour of hydraulics
-    # is ten hours of bed - long enough for a scour hole to cut and its material
-    # to re-deposit downstream. A user who wants another window sets the keyword
-    # by its own name.
+    # times the morphological factor, this hour is ten hours of bed
     DURATION = 3600.0
 
-    # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own
-    # default is every step, so an unwritten period is a frame per step: at
-    # the 14 m default edge the CFL step is 0.7 s, and the 3600 s DURATION
-    # above is about 5,140 of them - one frame every 100 steps is 51 frames
-    # of bed change. A user who wants another cadence sets the keyword by its
-    # own name.
+    # in solver steps, not seconds
     GRAPHIC_PRINTOUT_PERIOD = 100
 
     NUMBER_OF_TRACERS = 1
-    #: The marker is called what the user called the release point, when a
-    #: picked or named point came; the template's own name stands otherwise.
     tracer_names = TracerNames(names=["MARKER          MG/L"])
     INITIAL_VALUES_OF_TRACERS = [0.0]
 
-    #: The carrier's own boundary values, in the order the engine numbers its
-    #: liquid boundaries: the walk the mesh measured, the flow the inflow run
-    #: carries and the level the outflow run holds. The bed is GAIA's; the
-    #: carrier still runs ONE tracer, so every liquid boundary carries one
-    #: clean-water value.
     boundaries = Boundaries(tracers=[0.0])
 
-    #: HOW MUCH enters, small against the carrier flow this deck opens on.
     WATER_DISCHARGE_OF_SOURCES = [8.0]
-    #: The concentration the deposited fraction downstream is measured against;
-    #: the bed change itself does not scale with this number.
+    # the deposited fraction is read against this; the bed change is not
     VALUES_OF_THE_TRACERS_AT_THE_SOURCES = [100.0]
-    #: A FINITE pulse, so the marker advects and passes instead of holding the
-    #: whole domain at a steady concentration.
     sources = Sources(window_s="spill_duration_s")
 
-    #: The bed itself: bedload on, one class or a mixture, a real stock to scour
-    #: into. What the dictionary has no keyword for is the GRADATION - a named
-    #: mixture or the pairs one is written as - and its class table is expanded
-    #: LAST, so a mixture wins over the single class stated beside it.
     coupling = [GAIA.bed(geometry=_GEOMETRY, boundary=_BOUNDARY,
                          gradation="sediment_gradation", presets=GRADATION_PRESETS,
-                         # 100 um very fine sand, in the metres the keyword
-                         # reads: the finest class the bed-load formulae treat
-                         # as sand (silt below about 63 um is cohesive and they
-                         # are not written for it), so a scour answer stands on
-                         # a bed that moves; the whole bed where no gradation
-                         # is given, and one number across the mesh until a
-                         # bed-material field fills the class fractions.
                          CLASSES_SEDIMENT_DIAMETERS=[1.0e-4],
-                         # Five metres of erodible stock, deeper than any cut
-                         # this question makes, so the answer is never
-                         # stock-limited.
                          LAYERS_INITIAL_THICKNESS=[5.0],
-                         # The classes of a MIXTURE shelter each other, and 1 is
-                         # the engine's own Egiazaroff hiding factor; a single
-                         # class hides behind nothing and never reads it.
                          HIDING_FACTOR_FORMULA=1,
-                         # What makes a short window produce a readable bed
-                         # change: bed evolution is amplified ten times against
-                         # the hydraulic clock.
                          MORPHOLOGICAL_FACTOR=10.0,
-                         # The listing's own sediment balance is what the net bed
-                         # mass is read off.
                          MASS_BALANCE=True)]
 
 
-#: What this question PLACES: the marker's domain-wide history as the chart.
 OUTPUTS = [
     series("T1").chart(),
 ]
 CAPTIONS = {"T1": "marker concentration", "discharge": "a streamflow"}
-
 
 _METADATA = AtomicToolMetadata(
     name="telemac_bed_scour",
@@ -207,20 +150,54 @@ _METADATA = AtomicToolMetadata(
     tier="template",
 )
 
-
-#: The engine files this run has to write for it to have solved
-#: anything; unstated, the deck's own RESULTS FILE is the one.
 RESULTS = (_RESULT, RESULT_FILENAME)
 
-#: The title the card carries when the run is held for review.
 REVIEW_TITLE = "Review the mobile-bed scenario"
 
+DOC = dict(
+    summary="Bed SCOUR and DEPOSITION: a mobile bed under moving water.",
+    routing=(
+        "THE tool for \"where does the bed scour and where does it re-deposit\" - "
+        "erodible-bed morphodynamics below a dam, weir or bridge, bedload "
+        "under a flood, and how a GRADED mixture sorts and armors. "
+        "TELEMAC-2D + GAIA over a reach walked from the release point, an "
+        "estuary you draw, or a polygon you supply, its bed painted from a "
+        "published channel survey where one covers it. Deck opinions, by "
+        "keyword: DURATION 3600 s, MORPHOLOGICAL FACTOR 10, CLASSES SEDIMENT "
+        "DIAMETERS 2e-4 m, LAYERS INITIAL THICKNESS 5 m, BED-LOAD TRANSPORT "
+        "FORMULA FOR ALL SANDS 1. Give `release`, or supply `domain`."
+    ),
+    not_for=(
+        "a SUSPENDED plume settling onto an inert bed "
+        "(`telemac_sediment_plume`); a conservative dye or contaminant plume "
+        "(`telemac_dye_release`); an OIL slick (`telemac_oil_spill`); a "
+        "maintenance DREDGE (`telemac_channel_dredging`); dissolved-oxygen sag "
+        "(`telemac_do_sag`); rainfall-runoff flood depth "
+        "(`telemac_rain_on_grid`)"
+    ),
+    params=PARAMS,
+    controls=(
+        ("input_mode",
+         '"user_gated" presents the filled sheet for review/edit before the solve '
+         'and WAITS; "auto" (session default) proceeds with every assumption '
+         "labeled. Not a physical value."),
+        ("restart_clean",
+         "True builds the mesh again even where one built from the same domain, "
+         "bed, resolution and mesher is kept; unset, such a kept mesh is reused. "
+         "Not a physical value."),
+    ),
+    returns=(
+        "On success the run's record (a `LayerURI`): every variable its "
+        "modules wrote, styled on one mesh layer, animated where it varies, "
+        "the bed evolution in metres among them (deposition positive, scour "
+        "negative), plus the marker series charted. On failure a dict with "
+        "`status=\"error\"` + `error_code`."
+    ),
+)
 
 telemac_bed_scour = register_workflow(
     TelemacWorkflow, _METADATA,
     sys.modules[__name__],
-    # Scour and deposition both live inside single elements of the published bed
-    # change, so a coarse mesh reads both ends of it low.
     sensitivity=(("cumul_bed_evol", "peak"),),
     coerce=(
         point_arg("release", tool="telemac_bed_scour",

@@ -13,7 +13,7 @@ import pytest
 from trid3nt_server.tools.mesh.shared.nodes import reproject_nodes_to_utm
 from trid3nt_server.workflows.telemac.modules import T2D
 from trid3nt_server.workflows.telemac.modules.telemac2d import Infiltration, _huang
-from trid3nt_server.workflows.telemac.templates.rain_on_grid.declarations import (
+from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
     LANDCOVER_CN_MANNING,
     LANDCOVER_UNMAPPED,
 )

@@ -1,13 +1,13 @@
-# `workflows/telemac/templates/` - one package per question
-
-A template is the recipe (`<name>.py`), its declarations (`declarations.py`) and
-its routing phrasings (`corpus.yaml`), and NOTHING else - no helper module, no
-function of its own. The recipe is VALUES: a STEERING body of the module's own
-raw keywords restated whole, the DATA rows it consumes - the DOMAIN it solves
-over, the BED every node carries, whatever else this question reads - the
-OUTPUTS it PLACES, the reads that need a place the user gives, with the CAPTIONS
-that name them, and the door it hands them to; the declarations carry every
-value only this question asks.
+A template is ONE file (`<name>.py`) and its routing phrasings (`corpus.yaml`),
+and NOTHING else - no helper module, no function of its own - except where code
+that is not input has exactly one consumer, which lives beside it. The file is
+VALUES, the whole of what is passed in: the params it declares, a STEERING body
+of the module's own raw keywords restated whole, the DATA rows it consumes - the
+DOMAIN it solves over, the BED every node carries, whatever else this question
+reads - the OUTPUTS it PLACES, the reads that need a place the user gives, with
+the CAPTIONS that name them, and the door it hands them to. A comment stays only
+where a passed value would otherwise be unclear: an unusual unit, a value whose
+reason its name does not carry.
 
 A template states NO MESH RECIPE either, unless the question cannot be asked
 over the one the workflow builds from those slots: `rain_on_grid` triangulates a
@@ -40,7 +40,7 @@ a hyetograph against a constant rate.
 | `oil_spill/` | `telemac_oil_spill` - an oil slick on a reach: the floats' track beside the dissolved fraction; the oil presets are the template's values. |
 | `bed_scour/` | `telemac_bed_scour` - a mobile bed under a reach: the bed evolution off GAIA's own result, the bed over time and a marker beside them; the gradation presets are the template's values. |
 | `channel_dredging/` | `telemac_channel_dredging` - a maintenance dredge of a navigation channel: the fairway held at a design depth under the surface the run opens at, the spoil laid into a disposal area, and the dredged and dumped volumes read off the engine's own report lines. The water it solves over is the domain slot, its bed the published USACE survey merged over the terrain, and its reference profiles are laid along the domain's own centerline. |
-| `sediment_plume/` | `telemac_sediment_plume` - one settling class over a bed with no stock, so only what was injected deposits; the water it solves over is the domain slot, its bed the survey merged over the terrain, and the deposited fraction is held against the shared release-mass relation in `../helpers/released_mass.py`. |
+| `sediment_plume/` | `telemac_sediment_plume` - one settling class over a bed with no stock, so only what was injected deposits; the water it solves over is the domain slot and its bed the survey merged over the terrain. |
 | `do_sag/` | `telemac_do_sag` - an outfall's BOD load to the dissolved-oxygen profile downstream, drawn against the Streeter-Phelps closed form in `streeter_phelps.py` and the standard. The water it solves over is the domain slot walked downstream from the outfall, its bed the published survey merged over the terrain, and the profile is read along the domain's own centerline. |
 | `water_temperature/` | `telemac_water_temperature` - how warm a body of water gets under a week of real weather: the WAQTEL heat budget over the hourly RAWS record the `Atmosphere` composite carries onto the deck, and the temperature series where the ask places it. |
 | `ice_cover/` | `telemac_ice_cover` - when a body of water freezes over and how the cover grows: the KHIONE heat budget over the hourly airport record the `Atmosphere` composite carries onto the deck, the frazil it makes, the border ice that grows in from the banks, and the cover fraction and thickness where the ask places them. |

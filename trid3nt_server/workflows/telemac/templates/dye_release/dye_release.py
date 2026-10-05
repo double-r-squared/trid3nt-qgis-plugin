@@ -1,96 +1,101 @@
-"""Engine template ``telemac_dye_release`` - a conservative plume through a body of water.
-
-TELEMAC-2D shallow water over the domain this run solves on - a river reach
-walked from the release point, a lake the user draws, a polygon they own: how far
-a dye, tracer or contaminant spill travels and what its peak concentration is."""
+"""Engine template ``telemac_dye_release`` - a conservative plume through a body of water."""
 
 from __future__ import annotations
 
 import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
-
 from trid3nt_server.workflows.runtime import (
-    Data,
-    register_workflow,
+    Data, register_workflow, Accepts, Param, doors,
 )
-from trid3nt_server.inputs import point_arg
+from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.instant import event_time
-from trid3nt_server.workflows.telemac.modules import (
-    T2D,
-    WAQTEL,
-    series,
-)
+from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, series
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
-    Boundaries,
-    Sources,
-    TracerNames,
-)
-from trid3nt_server.workflows.telemac.templates.dye_release.declarations import (
-    ACCEPTS, DECAY_PRESETS, DOC, PARAMS,
+    Boundaries, Sources, TracerNames,
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
-           "telemac_dye_release"]
+__all__ = ["ACCEPTS", "CAPTIONS", "DATA", "DECAY_PRESETS", "DOC", "OUTPUTS",
+           "PARAMS", "STEERING", "telemac_dye_release"]
 
-#: WHERE the substance enters the water: the point the user clicked, else that
-#: fraction along the domain's own centerline. The workflow settles it onto a
-#: node of the accepted mesh before the sheet reads it back.
+
+DECAY_PRESETS: dict[str, dict[str, float]] = {
+    "sewage": {"law": 1, "coef": 2.0},
+    "e. coli": {"law": 1, "coef": 2.0},
+    "e.coli": {"law": 1, "coef": 2.0},
+    "e coli": {"law": 1, "coef": 2.0},
+    "ecoli": {"law": 1, "coef": 2.0},
+    "coliform": {"law": 1, "coef": 2.0},
+    "coli": {"law": 1, "coef": 2.0},
+    "bacteria": {"law": 1, "coef": 2.0},
+    "bacterial": {"law": 1, "coef": 2.0},
+    "effluent": {"law": 1, "coef": 2.0},
+    "wastewater": {"law": 1, "coef": 2.0},
+    "die-off": {"law": 1, "coef": 2.0},
+    "decaying": {"law": 2, "coef": 0.35},
+    "half-life": {"law": 2, "coef": 0.35},
+}
+
+ACCEPTS = Accepts(mesh=("unstructured_tri",))
+
+
+class PARAMS:
+    release = Param(
+        door=doors.USER, optional=True, user_lever=True,
+        consequence="scenario", type=Point,
+        derived_when_absent=(
+            "the release sits at spill_fraction along the domain the mesh was "
+            "built over; the travelled distance is measured from there"),
+        desc="Where the substance enters the water, as a Point: the pick's "
+             "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
+             "point layer. Geocode a place name first. Its name becomes the "
+             "tracer's name, "
+             "and on a river with no domain supplied it is also the seed the "
+             "reach is walked downstream from")
+
+    spill_fraction = Param(
+        door=doors.SCENARIO, default=0.25, bounds=(0.05, 0.9),
+        consequence="scenario",
+        desc="Along-domain release position, 0=inflow..1=outflow; the source "
+             "must sit strictly INSIDE the domain, never on a boundary")
+    spill_duration_s = Param(
+        door=doors.SCENARIO, default=300.0,
+        bounds=(1.0, 86400.0), units="s", consequence="scenario",
+        desc="Finite pulse injection window")
+
+    decaying_substance = Param(
+        door=doors.QUESTION, optional=True, consequence="scenario",
+        derived_when_absent=(
+            "the tracer is CONSERVATIVE - it dilutes and advects and nothing "
+            "removes it"),
+        desc="Name a substance whose tracer DECAYS - sewage | E. coli | coliform "
+             "| bacteria | effluent | wastewater - and its narrated literature "
+             "die-off is applied as a first-order sink on the plume")
+
+
 _RELEASE = Placed("source", point="release", fraction="spill_fraction",
                   label="Release point", continues=True)
 
-#: The files the run directory holds beside the deck's own statements. The
-#: restart is the engine's full state at its last instant in double precision,
-#: which is what a continuation reads; the results file is a picture of the run.
 _RESULT = "r2d_domain.slf"
 _RESTART = "restart_domain.slf"
 
-#: How far the reach producer walks downstream from the release point when this
-#: question has to find its own domain. A user who wants another stretch supplies
-#: the domain polygon, which supersedes the producer.
 _REACH_LENGTH_KM = 6.0
 
-#: The roughness this deck is solved at, and the law it is read under: Strickler,
-#: the coefficient an unsurveyed channel is screened at. ONE number, stated once,
-#: because the outflow stage is derived as a normal depth AT this roughness and a
-#: stage derived at one number under a deck written at another is a level the run
-#: never sits at. A user who knows the channel sets the keyword by name.
+# Strickler; the outflow stage is derived at this same roughness
 _FRICTION_LAW = 3
 _FRICTION_COEFFICIENT = 33.0
 
 
 class DATA:
-    """The three slots this run stands on, and the flow that fills its inflow."""
-
-    # A release named up front also names which stretch to model: the reach is
-    # walked downstream from it. A domain the user supplies supersedes this.
     domain = Data.need("hydrography", at="release",
                        span_km=_REACH_LENGTH_KM)
-    # THE BED, as the CLASS it is rather than the source it comes from: the
-    # measurement where something measured it, the terrain under the rest. Which
-    # survey or which DEM reaches this domain is the match's to answer off their
-    # rows, and the merge between the two classes is the runtime's one
-    # rule.
     bed = Data.need("bathymetry")
-    # THE FLOW the inflow run prescribes, as a CLASS: which record reports a
-    # discharge over this domain is the match's, and the window it reports is
-    # opened at the moment the run opens at. A number stated on this row stands
-    # over any record, and the unit it is read in is the unit of the keyword
-    # the slot fills.
     discharge = Data.need("discharge series").optional()
-    # THE LEVEL the water stands at, which the run opens flat at and the outflow
-    # holds. A reach whose measured ends do not FALL has no uniform-flow depth to
-    # derive, and a closed body never had one. An ELEVATION on the datum the bed
-    # is painted on: a gauge reports a height above its OWN zero, so the record
-    # carries that zero's elevation and the offset row puts it on the run's
-    # frame.
     level = Data.need("water level series").optional()
 
 
 class STEERING(T2D):
-    """The deck: a body of water, and ONE conservative tracer released into it."""
-
     GEOMETRY_FILE = "domain.slf"
     BOUNDARY_CONDITIONS_FILE = "domain.cli"
     RESULTS_FILE = _RESULT
@@ -99,8 +104,6 @@ class STEERING(T2D):
     LAW_OF_BOTTOM_FRICTION = _FRICTION_LAW
     FRICTION_COEFFICIENT = _FRICTION_COEFFICIENT
 
-    # The advection of momentum and depth, and the SUPG the domain is stable
-    # under. The tracer advects under the engine's own scheme and diffusivity.
     TYPE_OF_ADVECTION = [1, 5]
     SUPG_OPTION = [0, 0]
     MASS_LUMPING_ON_H = 1.0
@@ -111,73 +114,35 @@ class STEERING(T2D):
     IMPLICITATION_FOR_DEPTH = 0.6
     IMPLICITATION_FOR_VELOCITY = 0.6
 
-    # The engine accounts for its own water volume and prints one flux per liquid
-    # boundary. That is the only honest check that the level prescribed at a
-    # boundary reached it: a server-side integration of the depth and velocity
-    # fields reads near zero at a prescribed-depth face, where the boundary values
-    # are clamped after the flux was computed.
     MASS_BALANCE = True
 
-    #: The engine's own last instant, in the double precision a continuation
-    #: reads. An uncoupled run is the only one that can be continued, so it is
-    #: the only one asked to write this.
     RESTART_FILE = _RESTART
 
-    # HOW LONG the question is asked over, in SECONDS. One hour is the window a
-    # finite pulse needs to advect clear of the source and dilute into a plume
-    # whose reach can be measured; shorter and the slug is still at the outfall.
-    # A user who wants a longer horizon sets the keyword by its own name.
     DURATION = 3600.0
 
-    # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own default
-    # is every step, so an unwritten period is a frame per step: at the 14 m
-    # default edge the CFL step is 0.7 s, and the 3600 s DURATION above is about
-    # 5,140 of them - one frame every 100 steps is 51 frames of plume. A user
-    # who wants another cadence sets the keyword by its own name.
+    # in solver steps, not seconds
     GRAPHIC_PRINTOUT_PERIOD = 100
 
     NUMBER_OF_TRACERS = 1
-    #: The tracer is called what the user called the release point, when a
-    #: picked or named point came; the template's own name stands otherwise.
     tracer_names = TracerNames(names=["DYE             MG/L"])
     INITIAL_VALUES_OF_TRACERS = [0.0]
 
-    #: The carrier's own boundary values, in the order the engine numbers its
-    #: liquid boundaries: the walk the mesh measured, the flow the inflow run
-    #: carries and the level the outflow run holds. ONE tracer, so every liquid
-    #: boundary carries one clean value - the arity of that list is what moves
-    #: when the question does.
     boundaries = Boundaries(tracers=[0.0])
 
-    #: HOW MUCH enters, and at what concentration: a point discharge small
-    #: against the carrier flow, carrying a marker the dilution downstream is
-    #: read as a fraction of. A dye question asks WHERE the slug goes and for
-    #: how long it is released, never for either of these numbers.
     WATER_DISCHARGE_OF_SOURCES = [8.0]
     VALUES_OF_THE_TRACERS_AT_THE_SOURCES = [100.0]
-    #: A FINITE pulse, so the slug advects away and dilutes instead of
-    #: saturating the water.
     sources = Sources(window_s="spill_duration_s")
 
-    #: First-order degradation on the same tracer - no new tracer - when a
-    #: decaying substance was named; nothing otherwise. This deck states no
-    #: die-off of its own: the substance word picks its narrated preset.
     coupling = [WAQTEL.degradation(substance="decaying_substance",
                                    presets=DECAY_PRESETS)]
 
 
-#: What this question PLACES: the tracer's domain-wide history as the chart.
 OUTPUTS = [
     series("T1").chart(),
 ]
 CAPTIONS = {"T1": "dye concentration", "discharge": "a streamflow",
             "level": "a water-surface elevation"}
 
-
-#: The mesh gate this template stops at is the STANDARD one - the mesh step opens
-#: a session, presents the built domain as an editable layer with its probes, and
-#: takes every edit action the ``om2d`` mesher registers - so this template
-#: declares no solver gate of its own.
 _METADATA = AtomicToolMetadata(
     name="telemac_dye_release",
     ttl_class="live-no-cache",
@@ -186,22 +151,52 @@ _METADATA = AtomicToolMetadata(
     tier="template",
 )
 
-
-#: The engine files this run has to write for it to have solved
-#: anything; unstated, the deck's own RESULTS FILE is the one.
 RESULTS = (_RESULT, _RESTART)
 
-#: The title the card carries when the run is held for review.
 REVIEW_TITLE = "Review the tracer-release scenario"
 
+DOC = dict(
+    summary="A DYE / TRACER / CONTAMINANT plume released into a body of surface water and carried by its flow.",
+    routing=(
+        "THE tool for \"a spill in the water - how far does it travel, how "
+        "concentrated\": a dye / contaminant / pollutant / chemical plume carried "
+        "by the current, sewage or E.coli effluent DECAYING as it goes (name it "
+        "in `decaying_substance`). TELEMAC-2D over a reach walked from the "
+        "release, a lake drawn on the canvas, or a supplied polygon: a finite "
+        "pulse is carried by the flow and dilutes. Give `release` as a pick or a "
+        "pair, or supply `domain`. Source: ABSCISSAE/ORDINATES/DISCHARGE/TRACER "
+        "keywords. Deck: DURATION 3600 s, no WIND, no RAIN."
+    ),
+    not_for=(
+        "an OIL slick (`telemac_oil_spill`); bed SCOUR, deposition, grain "
+        "sorting (`telemac_bed_scour`); a SUSPENDED sediment plume settling "
+        "onto the bed (`telemac_sediment_plume`); dissolved-oxygen sag "
+        "(`telemac_do_sag`); rainfall-runoff flood depth "
+        "(`telemac_rain_on_grid`). Groundwater plumes, dam-break and tsunami "
+        "run-up are not modeled here"
+    ),
+    params=PARAMS,
+    controls=(
+        ("input_mode",
+         '"user_gated" presents the resolved scenario sheet for review/edit and asks '
+         'for the release point on the canvas before the solve, and WAITS; "auto" '
+         "(session default) proceeds with every assumption labeled. Not a physical value."),
+        ("restart_clean",
+         "True builds the mesh again even where one built from the same domain, "
+         "bed, resolution and mesher is kept; unset, such a kept mesh is reused. "
+         "Not a physical value."),
+    ),
+    returns=(
+        "On success the run's record (a `LayerURI`): every variable its "
+        "modules wrote, styled on one mesh layer, animated where it varies, "
+        "plus the dye series charted. On failure a dict with "
+        "`status=\"error\"` + `error_code`."
+    ),
+)
 
 telemac_dye_release = register_workflow(
     TelemacWorkflow, _METADATA,
     sys.modules[__name__],
-    # The dye concentration is the canonical peak class: measured 6x LOW on the
-    # coarse mesh, because a concentration peak lives inside one element. How far
-    # the plume reached is a front location that moves with the mesh too, but no
-    # product of this run is a reach, so nothing here is labeled for it.
     sensitivity=(("dye_concentration", "peak"),),
     coerce=(
         point_arg("release", tool="telemac_dye_release",

@@ -1,124 +1,87 @@
-"""Engine template ``telemac_water_temperature`` - how warm a body of water gets.
-
-TELEMAC-2D coupled with WAQTEL THERMIC over the domain the run is given: the full
-surface heat budget - shortwave in, longwave out, evaporation and sensible heat -
-driven by the hourly weather record over the run's own window. The water opens
-at a MEASURED temperature and carries that value in at every face that feeds it."""
+"""Engine template ``telemac_water_temperature`` - how warm a body of water gets."""
 
 from __future__ import annotations
 
 import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
-
-from trid3nt_server.inputs import point_arg
+from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.runtime import (
-    Data,
-    register_workflow,
+    Data, register_workflow, Accepts, Param, doors, lever,
 )
 from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, series
-from trid3nt_server.workflows.telemac.modules.telemac2d import Atmosphere, Boundaries
-from trid3nt_server.workflows.telemac.templates.water_temperature.declarations import (
-    ACCEPTS, DOC, PARAMS, )
-from trid3nt_server.workflows.telemac.workflow import (
-    Placed, TelemacWorkflow,
+from trid3nt_server.workflows.telemac.modules.telemac2d import (
+    Atmosphere, Boundaries,
 )
+from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
-           "telemac_water_temperature"]
+__all__ = ["ACCEPTS", "CAPTIONS", "DATA", "DOC", "OUTPUTS", "PARAMS",
+           "STEERING", "telemac_water_temperature"]
 
 
-#: The roughness this deck is solved at, and the law it is read under: Strickler,
-#: the coefficient an unsurveyed channel is screened at. ONE number, stated once,
-#: because the outflow stage is derived as a normal depth AT this roughness and a
-#: stage derived at one number under a deck written at another is a level the run
-#: never sits at. A user who knows the channel sets the keyword by name.
+ACCEPTS = Accepts(mesh=("unstructured_tri",))
+
+
+class PARAMS:
+    seed = Param(
+        door=doors.USER, optional=True, consequence="aoi", type=Point,
+        derived_when_absent=(
+            "nothing is fetched and the domain is the polygon the caller "
+            "supplied or drew"),
+        desc="Where on the channel the modelled stretch STARTS, as a Point: the "
+             "pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', "
+             "a point layer. Geocode a place name first. It seeds the reach "
+             "the domain is cut from; supply the domain polygon - a lake, a "
+             "pond, a harbour - instead and this is not read")
+    station = Param(
+        door=doors.USER, optional=True, consequence="scenario",
+        user_lever=True, type=Point,
+        derived_when_absent=(
+            "the series is read at the point 98% of the way down the modelled "
+            "domain, which is the water that has been exposed to the weather "
+            "longest"),
+        desc="Where the temperature series and its diurnal range are read, as a "
+             "Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, "
+             "'lat,lon' or a point layer. Geocode a place name first")
+
+    mesh_resolution_m = lever(
+        "mesh_resolution_m",
+        desc="Target element edge length the domain is triangulated at; a "
+             "surface heat budget is divided by the local DEPTH, so what this "
+             "has to resolve is how deep the water is rather than its planform")
+
+
+# Strickler; the outflow stage is derived at this same roughness
 _FRICTION_LAW = 3
 _FRICTION_COEFFICIENT = 33.0
 
-#: How far the reach producer walks downstream from the seed when this question
-#: has to find its own domain. A user who wants another stretch - or another body
-#: of water entirely - supplies the domain polygon, which supersedes the producer.
 _REACH_LENGTH_KM = 12.0
 
-#: How far down the domain the temperature series is read when the ask places no
-#: point. The water furthest from where it entered has been under the weather
-#: longest, which is the water the question is about; the fraction holds the node
-#: off the outflow face, where the boundary condition is what it carries.
+# the far end, which has been under the weather longest
 _STATION_FRAC = 0.98
 
-#: WHERE the series is read: the point the user clicked, else that fraction
-#: along the domain's own centerline. The workflow settles it onto a node of the
-#: accepted mesh, so the chart is a node the run solved on.
 _STATION = Placed("station", point="station", fraction=_STATION_FRAC,
                   label="Temperature station")
 
 
 class DATA:
-    """The slots this run stands on - the water, the bed under it and what it
-    opens at - beside the flow that fills its inflow and the week of weather the
-    heat budget is driven by."""
-
-    # THE DOMAIN, as the CLASS it is: a polygon the caller supplies or draws
-    # supersedes this; unfilled, the water the SEED STANDS ON is matched from
-    # the mapped hydrography. A stretch of channel arrives cut to length with
-    # its two end transects, which is where the inflow and the outflow are
-    # prescribed; a closed body arrives as one outline, states no run and its
-    # whole edge is wall.
     domain = Data.need("hydrography", at="seed",
                        span_km=_REACH_LENGTH_KM)
 
-    # THE BED, as the CLASS it is rather than the source it comes from: the
-    # measurement where something measured it, the terrain under the rest. Which
-    # survey or which DEM reaches this domain is the match's to answer off their
-    # rows, and the merge between the two classes is the runtime's one
-    # rule. A domain with no federal navigation project has no published
-    # survey, and the sheet says so rather than refusing.
     bed = Data.need("bathymetry")
 
-    # THE FLOW the inflow run prescribes, as a CLASS: which record reports a
-    # discharge over this domain is the match's, and the window it reports is
-    # opened at the moment the run opens at. A number stated on this row stands
-    # over any record, so the flow is the slot's and no param twins it.
     discharge = Data.need("discharge series").context(
         "the National Water Model published no streamflow over this "
         "domain at that cycle")
-    # THE LEVEL the water stands at, which the run opens flat at and the outflow
-    # holds. A reach whose measured ends do not FALL has no uniform-flow depth to
-    # derive, and a closed body never had one. An ELEVATION on the datum the bed
-    # is painted on - a gauge publishes its height above its own zero, which is a
-    # different surface, so no source is named here and the number is stated.
     level = Data.need("water level series").optional()
 
-    # THE WEATHER the budget reads. The RAWS network is the one hourly record the
-    # registry reaches without an account that carries SOLAR RADIATION beside the
-    # air temperature, the humidity and the wind, and the shortwave term is what
-    # drives a diurnal water temperature. The network sits on ridges and in
-    # clearings tens of kilometres from the water, and how far out a station may
-    # stand is the fetcher's own declared radius. The record is asked for over
-    # the window the run opens at and its own DURATION closes, so the hours the
-    # budget reads are the hours it is solved over; which station is taken, the
-    # unit carriage and the run's own clock are the Atmosphere slot's ingestion.
-    # A table of weather has no extent, so it is not checked against the domain
-    # and is read by the composite rather than on the way in.
     weather = Data.need("weather forcing")
-    # WHAT THE WATER OPENS AT, measured. ONE reading off the sample site nearest
-    # the point the series is read at, in the unit the deck's own tracer text
-    # carries, with that site, its distance and the sample date on the run
-    # journal. The run spends days on water that entered at a face carrying
-    # this value, so it is load-bearing: nothing sampled near this domain
-    # REFUSES rather than opening at a guessed temperature, and a number
-    # supplied here stands over the record. The window CLOSES at the run's own
-    # moment, the way the discharge's does: a run dated last winter opens at
-    # what the water carried then.
     observe = Data.need("water quality sample", of="TEMPERATURE",
                         at="station")
 
 
 class STEERING(T2D):
-    """The deck: a body of water under a week of weather, and the heat budget over it."""
-
     GEOMETRY_FILE = "domain.slf"
     BOUNDARY_CONDITIONS_FILE = "domain.cli"
     RESULTS_FILE = "r2d_domain.slf"
@@ -127,9 +90,6 @@ class STEERING(T2D):
     LAW_OF_BOTTOM_FRICTION = _FRICTION_LAW
     FRICTION_COEFFICIENT = _FRICTION_COEFFICIENT
 
-    # The advection of momentum and depth, and the SUPG the domain is stable
-    # under. The temperature advects under the engine's own scheme and
-    # diffusivity.
     TYPE_OF_ADVECTION = [1, 5]
     SUPG_OPTION = [0, 0]
     MASS_LUMPING_ON_H = 1.0
@@ -140,71 +100,32 @@ class STEERING(T2D):
     IMPLICITATION_FOR_DEPTH = 0.6
     IMPLICITATION_FOR_VELOCITY = 0.6
 
-    # The engine accounts for its own water volume and prints one flux per liquid
-    # boundary. That is the only honest check that the level prescribed at a
-    # boundary reached it: a server-side integration of the depth and velocity
-    # fields reads near zero at a prescribed-depth face, where the boundary values
-    # are clamped after the flux was computed.
     MASS_BALANCE = True
 
-    # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own
-    # default is every step, so an unwritten period is a frame per step: at
-    # the 20 m default edge the CFL step is 1 s, and the week stated below
-    # is about 604,800 of them - one frame every 12,000 steps is 50 frames
-    # of the week. A user who wants another cadence sets the keyword by its
-    # own name.
+    # in solver steps, not seconds
     GRAPHIC_PRINTOUT_PERIOD = 12000
 
-    # SEVEN DAYS. A DIURNAL RANGE is a difference between a day and its own
-    # night, so the window has to hold whole days and enough of them that the
-    # warmest is not the first; the RAWS network keeps a fortnight, which is
-    # the ceiling the weather window can drive.
     DURATION = 604800.0
 
-    #: The deck declares the temperature tracer ITSELF, so the water opens at
-    #: a measured temperature and carries it in at every face that feeds it. The
-    #: thermic process matches that name and attaches its budget to this tracer
-    #: rather than appending a second one, and the unit written here is the unit
-    #: the result carries - and the unit a row that OBSERVES this variable reads
-    #: its record in, so it names the scale rather than the dimension.
+    # the thermic process attaches its budget to this tracer by name
     NUMBER_OF_TRACERS = 1
     NAMES_OF_TRACERS = ["TEMPERATURE     DEGC"]
 
-    #: The water arriving at a feeding face is the same water the sample site
-    #: measured: the domain warms because of what happens OVER it, so the inflow
-    #: carries the opening temperature rather than a second number.
     boundaries = Boundaries(tracers="INITIAL_VALUES_OF_TRACERS")
 
-    #: The weather over the whole domain, as the one table the engine
-    #: interpolates every column of between the same two rows. The nearest RAWS
-    #: station whose record can drive the run end to end is the one taken. Cloud
-    #: cover and atmospheric pressure are not in what that network reports, so
-    #: neither column is written and the engine reads its own CLOUD COVER and
-    #: VALUE OF ATMOSPHERIC PRESSURE, both of which the card shows. The engine
-    #: stops at an instant outside the table, so the file is written for the
-    #: DURATION this deck states rather than for a second number beside it, and
-    #: its t = 0 is the moment the run opens at rather than the record's own
-    #: first sample.
     atmosphere = Atmosphere(observed="weather", at="station",
                             duration_s="DURATION",
                             event_time="event_time")
 
-    #: The heat budget, on the engine's own calibration constants: this question
-    #: asks what the published exchange gives under real weather, so the run
-    #: states no keyword of its own and the review can see every one standing at
-    #: its default.
     coupling = [WAQTEL.thermal()]
 
 
-#: What this question PLACES: the temperature over time at the point the ask
-#: gave, as the chart, and on the map as the station that carries it.
 OUTPUTS = [
     series("T1", at="station").chart(),
     series("T1", at="station").station(),
 ]
 CAPTIONS = {"T1": "water temperature", "discharge": "a streamflow",
             "level": "a water-surface elevation", "observe": "a water temperature"}
-
 
 _METADATA = AtomicToolMetadata(
     name="telemac_water_temperature",
@@ -214,16 +135,51 @@ _METADATA = AtomicToolMetadata(
     tier="template",
 )
 
-
-#: The title the card carries when the run is held for review.
 REVIEW_TITLE = "Review the water, the week of weather, and what it opens at"
 
+DOC = dict(
+    summary="WATER TEMPERATURE over a body of water under a week of real weather.",
+    routing=(
+        "THE tool for \"how warm does this water get this week\", \"water "
+        "temperature under the heat wave\", \"too warm for salmon / trout\", "
+        "\"diurnal temperature swing in the water\". WAQTEL THERMIC on "
+        "TELEMAC-2D over the domain it is given - a drawn pond, a picked lake, "
+        "or the reach the seed stands on: the surface heat budget under the "
+        "hourly RAWS record over the run's window. Produces the TEMPERATURE "
+        "field, animated, and the series at a point. Deck opinions, by "
+        "keyword: DURATION (seven days), GRAPHIC PRINTOUT PERIOD, LAW OF "
+        "BOTTOM FRICTION, FRICTION COEFFICIENT. Supply the domain or `seed` a "
+        "point, and `event_time` - the moment the week opens at."
+    ),
+    not_for=(
+        "dissolved oxygen below a discharge (`telemac_do_sag`); a dye or "
+        "contaminant plume (`telemac_dye_release`); stratification over depth "
+        "(`telemac3d_stratified_flow`); air temperature or a forecast, which "
+        "the weather fetchers answer"
+    ),
+    params=PARAMS,
+    controls=(
+        ("input_mode",
+         '"user_gated" presents the resolved discharge, the weather station and '
+         'the opening water temperature for review/edit before the solve and '
+         'WAITS; "auto" (session default) proceeds with every assumption '
+         "labeled. Not a physical value."),
+        ("restart_clean",
+         "True builds the mesh again even where one built from the same domain, "
+         "bed, resolution and mesher is kept; unset, such a kept mesh is reused. "
+         "Not a physical value."),
+    ),
+    returns=(
+        "On success the run's record (a `LayerURI`): every variable its "
+        "modules wrote, styled on one mesh layer, animated where it varies, "
+        "plus the temperature series charted at the station. On failure a "
+        "dict with `status=\"error\"` + `error_code`."
+    ),
+)
 
 telemac_water_temperature = register_workflow(
     TelemacWorkflow, _METADATA,
     sys.modules[__name__],
-    # The warm end of the published temperature sits in the thinnest water there
-    # is, and a coarse element averages that extreme away.
     sensitivity=(("water_temperature", "peak"),),
     coerce=(
         point_arg("seed", tool="telemac_water_temperature",

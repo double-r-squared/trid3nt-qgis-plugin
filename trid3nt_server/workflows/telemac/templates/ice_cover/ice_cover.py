@@ -1,141 +1,103 @@
-"""Engine template ``telemac_ice_cover`` - when a body of water freezes over.
-
-TELEMAC-2D coupled with KHIONE over the domain the run is given: the surface
-heat budget under the hourly weather record, the frazil the cooling water makes,
-the border ice that grows in from the banks and the cover that thickens over it.
-The water opens at a MEASURED temperature and the air, the dew point, the cloud
-and the wind are the record's."""
+"""Engine template ``telemac_ice_cover`` - when a body of water freezes over."""
 
 from __future__ import annotations
 
 import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
-
-from trid3nt_server.inputs import point_arg
+from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.runtime import (
-    Data,
-    register_workflow,
+    Data, register_workflow, Accepts, Param, doors, lever,
 )
 from trid3nt_server.workflows.telemac.modules import KHIONE, T2D, series
 from trid3nt_server.workflows.telemac.modules.khione import RESULT_FILENAME
 from trid3nt_server.workflows.telemac.modules.outputs import reference_line
-from trid3nt_server.workflows.telemac.modules.telemac2d import Atmosphere, Boundaries
-from trid3nt_server.workflows.telemac.templates.ice_cover.declarations import (
-    ACCEPTS, DOC, PARAMS,
+from trid3nt_server.workflows.telemac.modules.telemac2d import (
+    Atmosphere, Boundaries,
 )
-from trid3nt_server.workflows.telemac.workflow import (
-    Placed, TelemacWorkflow,
-)
+from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DATA", "ICE_THICKNESS", "OUTPUTS", "PARAMS",
-           "STEERING", "telemac_ice_cover"]
+__all__ = ["ACCEPTS", "CAPTIONS", "DATA", "DOC", "ICE_THICKNESS", "OUTPUTS",
+           "PARAMS", "STEERING", "telemac_ice_cover"]
 
-#: THE FIELD THIS QUESTION IS ABOUT, named once: the engine's TOTAL ice
-#: thickness - the solid border ice that grows in from the banks and the dynamic
-#: cover over it, together. The chart plots it and the picture paints it, so
-#: the two cannot be about different ice.
+
+ACCEPTS = Accepts(mesh=("unstructured_tri",))
+
+
+class PARAMS:
+    seed = Param(
+        door=doors.USER, optional=True, consequence="aoi", type=Point,
+        derived_when_absent=(
+            "nothing is fetched and the domain is the polygon the caller "
+            "supplied or drew"),
+        desc="Where on the water the modelled stretch STARTS, as a Point: the "
+             "pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', "
+             "a point layer. Geocode a place name first. It seeds the reach the "
+             "domain is cut from; supply the domain polygon - a lake, a pond, a "
+             "reservoir - instead and this is not read")
+    station = Param(
+        door=doors.USER, optional=True, consequence="scenario",
+        user_lever=True, type=Point,
+        derived_when_absent=(
+            "the series is read at the point 98% of the way down the modelled "
+            "domain, which is the water that has been under the cold longest"),
+        desc="Where the ice cover and its thickness are read over time, as a "
+             "Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, "
+             "'lat,lon' or a point layer. Geocode a place name first")
+    cover_threshold = Param(
+        door=doors.QUESTION, optional=True, default=0.5,
+        consequence="scenario", user_lever=True, type=float,
+        desc="Fraction of the surface under ice, 0 to 1, that counts as frozen "
+             "over - the cover chart draws it as a reference line beside the "
+             "series. A reporting threshold, not a physical constant: half the "
+             "surface by default")
+
+    mesh_resolution_m = lever(
+        "mesh_resolution_m",
+        desc="Target element edge length the domain is triangulated at; the "
+             "budget that makes the ice is divided by the local DEPTH, and the "
+             "border ice grows from the BANK, so what this has to resolve is "
+             "how deep the water is and where its edge runs")
+
+
+# total thickness: the border ice and the dynamic cover over it
 ICE_THICKNESS = "COV_THT"
 
-
-#: The roughness this deck is solved at, and the law it is read under: Strickler,
-#: the coefficient an unsurveyed channel is screened at. ONE number, stated once,
-#: because the outflow stage is derived as a normal depth AT this roughness and a
-#: stage derived at one number under a deck written at another is a level the run
-#: never sits at. A user who knows the channel sets the keyword by name.
+# Strickler; the outflow stage is derived at this same roughness
 _FRICTION_LAW = 3
 _FRICTION_COEFFICIENT = 33.0
 
-#: How far the reach producer walks downstream from the seed when this question
-#: has to find its own domain. A user who wants another stretch - or another body
-#: of water entirely - supplies the domain polygon, which supersedes the producer.
 _REACH_LENGTH_KM = 12.0
 
-#: How far down the domain the cover series is read when the ask places no
-#: point. The water furthest from where it entered has been losing heat to the
-#: air longest, which is the water that freezes first; the fraction holds the
-#: node off the outflow face, where the boundary condition is what it carries.
+# the far end, which has lost heat to the air longest
 _STATION_FRAC = 0.98
 
-#: WHERE the series is read: the point the user clicked, else that fraction
-#: along the domain's own centerline. The workflow settles it onto a node of the
-#: accepted mesh, so the chart is a node the run solved on.
 _STATION = Placed("station", point="station", fraction=_STATION_FRAC,
                   label="Ice station")
 
-#: The tracers KHIONE appends to this host under the switches the ice deck below
-#: states, in the order it appends them: the water temperature, the frazil it
-#: suspends, and the two the dynamic cover carries. The boundary list is written
-#: one value per tracer per liquid boundary, so this deck can only state the
-#: inflow water if it states all four.
+# one value per KHIONE tracer, in the order it appends them
 _INFLOW_ICE = [0.0, 0.0, 0.0]
 
 
 class DATA:
-    """The slots this run stands on - the water, the bed under it and what it
-    opens at - beside the flow that fills its inflow and the days of weather the
-    heat budget is driven by."""
-
-    # THE DOMAIN, as the CLASS it is: a polygon the caller supplies or draws
-    # supersedes this; unfilled, the water the SEED STANDS ON is matched from
-    # the mapped hydrography. A stretch of channel arrives cut to length with
-    # its two end transects, which is where the inflow and the outflow are
-    # prescribed; a closed body arrives as one outline, states no run and its
-    # whole edge is wall.
     domain = Data.need("hydrography", at="seed",
                        span_km=_REACH_LENGTH_KM)
 
-    # THE BED, as the CLASS it is rather than the source it comes from: the
-    # measurement where something measured it, the terrain under the rest. Which
-    # survey or which DEM reaches this domain is the match's to answer off their
-    # rows, and the merge between the two classes is the runtime's one
-    # rule. A terrain surface measures the water TOP, so where no survey reaches
-    # it the modelled water is shallower than the real water - and a heat
-    # budget divided by too small a depth cools that water too fast.
     bed = Data.need("bathymetry")
 
-    # THE FLOW the inflow run prescribes, as a CLASS: which record reports a
-    # discharge over this domain is the match's, and the window it reports is
-    # opened at the moment the run opens at. A number stated on this row stands
-    # over any record, so the flow is the slot's and no param twins it.
     discharge = Data.need("discharge series").context(
         "the National Water Model published no streamflow over this "
         "domain at that cycle")
-    # THE LEVEL the water stands at, which the run opens flat at and the outflow
-    # holds. A reach whose measured ends do not FALL has no uniform-flow depth to
-    # derive, and a closed body never had one. An ELEVATION on the datum the bed
-    # is painted on - a gauge publishes its height above its own zero, which is a
-    # different surface, so no source is named here and the number is stated.
     level = Data.need("water level series").optional()
 
-    # THE WEATHER the budget reads. The ice module takes the air temperature, the
-    # DEW POINT, the cloud and the wind out of this one file and computes its own
-    # shortwave from the cloud and the local longitude, so the airport network -
-    # which measures a dew point and codes a sky cover, and which sits where
-    # people and water are rather than on a ridge - is the record that fits it.
-    # The record is asked for over the window the run opens at and its own
-    # DURATION closes, so the hours the budget reads are the hours it is solved
-    # over. Which station is taken, the unit carriage and the run's own clock
-    # are the Atmosphere slot's ingestion. A table of weather has no extent, so
-    # it is not checked against the domain and is read by the composite rather
-    # than on the way in.
     weather = Data.need("weather forcing")
-    # WHAT THE WATER OPENS AT, measured. ONE reading off the sample site nearest
-    # the point the series is read at, in the unit KHIONE's own temperature
-    # tracer carries, with that site, its distance and the sample date on the
-    # run journal. How much heat the water has to lose before it makes any ice
-    # at all is this number, so it is load-bearing. A number supplied here
-    # stands over the record, and where the portal sampled nothing in the
-    # window the sheet says so and the value is the caller's.
     observe = Data.need("water quality sample", of="TEMPERATURE",
                         at="station").context(
         "no sample near this domain in this window; the stated value stands")
 
 
 class STEERING(T2D):
-    """The deck: a body of water under a cold snap, and the ice module over it."""
-
     GEOMETRY_FILE = "domain.slf"
     BOUNDARY_CONDITIONS_FILE = "domain.cli"
     RESULTS_FILE = "r2d_domain.slf"
@@ -144,9 +106,6 @@ class STEERING(T2D):
     LAW_OF_BOTTOM_FRICTION = _FRICTION_LAW
     FRICTION_COEFFICIENT = _FRICTION_COEFFICIENT
 
-    # The advection of momentum and depth, and the SUPG the domain is stable
-    # under. Every tracer on this run is the ice module's, and it advects them
-    # under its own scheme and diffusivity.
     TYPE_OF_ADVECTION = [1, 5]
     SUPG_OPTION = [0, 0]
     MASS_LUMPING_ON_H = 1.0
@@ -157,78 +116,29 @@ class STEERING(T2D):
     IMPLICITATION_FOR_DEPTH = 0.6
     IMPLICITATION_FOR_VELOCITY = 0.6
 
-    # The engine accounts for its own water volume and prints one flux per liquid
-    # boundary. That is the only honest check that the level prescribed at a
-    # boundary reached it: a server-side integration of the depth and velocity
-    # fields reads near zero at a prescribed-depth face, where the boundary values
-    # are clamped after the flux was computed.
     MASS_BALANCE = True
 
-    # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own
-    # default is every step, so an unwritten period is a frame per step: at
-    # the 20 m default edge the CFL step is 1 s, and the week stated below
-    # is about 604,800 of them - one frame every 12,000 steps is 50 frames
-    # of the week. A user who wants another cadence sets the keyword by its
-    # own name, on this deck and on the ice deck's own period below.
+    # in solver steps, not seconds
     GRAPHIC_PRINTOUT_PERIOD = 12000
 
-    # SEVEN DAYS. A cover forms over nights of sustained heat loss and thickens
-    # over the days between them, so the window has to hold whole days and
-    # enough of them that the first freezing night is not the last instant.
     DURATION = 604800.0
 
-    #: The water arriving at a feeding face is the OPEN water above the reach:
-    #: it carries the temperature the sample site measured and no ice at all -
-    #: no frazil in suspension, no cover on it. One entry per appended tracer,
-    #: in the order the ice deck below appends them; the temperature is the
-    #: record's whole window where a station on this water measured one, and
-    #: the one reading where none did.
     boundaries = Boundaries(tracers=["observe", *_INFLOW_ICE])
 
-    #: The weather over the whole domain, as the one table the engine
-    #: interpolates every column of between the same two rows. The nearest
-    #: station whose record can drive the run end to end is the one taken, and
-    #: what is written into it is what the readers of this run read. The engine
-    #: stops at an instant outside the table, so the file is written for the
-    #: DURATION this deck states rather than for a second number beside it, and
-    #: its t = 0 is the moment the run opens at rather than the record's own
-    #: first sample.
     atmosphere = Atmosphere(observed="weather", at="station",
                             duration_s="DURATION",
                             event_time="event_time")
 
-    #: The ice. Five statements, and every other constant the module carries -
-    #: the heat budget itself, the frazil class count and its seeding, the
-    #: critical velocity and temperature border ice forms under, the cover's own
-    #: friction - stands at the engine's published default where the review can
-    #: see it.
     coupling = [KHIONE.ice(
         geometry=GEOMETRY_FILE, boundary=BOUNDARY_CONDITIONS_FILE,
-        # The budget reads the atmospheric file rather than a constant sky: at
-        # the engine's own 0 nothing in the weather reaches the water and no
-        # run driven by a record could ever freeze.
         ATMOSPHERE_WATER_EXCHANGE_MODEL=1,
-        # The cover this question is about: the keyword that allocates the cover
-        # fraction and its thickness and lets them grow, drift and thicken.
         DYNAMIC_ICE_COVER=True,
-        # What turns the frazil the budget makes into that cover. At the
-        # engine's own 0 the suspended ice never builds a surface and the cover
-        # stays where it started.
         MODEL_FOR_MASS_EXCHANGE_BETWEEN_FRAZIL_AND_ICE_COVER=1,
-        # A cover on a river starts at the BANKS, where the water is slow and
-        # shallow, and grows inward; without this the run can only make ice
-        # where the frazil deposits.
         BORDER_ICE_COVER=True,
-        # The ice result is written on the host's own cadence, so the two files
-        # carry the same instants and a series read off either is the same clock.
         GRAPHIC_PRINTOUT_PERIOD=GRAPHIC_PRINTOUT_PERIOD,
         LISTING_PRINTOUT_PERIOD=LISTING_PRINTOUT_PERIOD)]
 
 
-#: What this question PLACES: the cover and how thick it got over time at the
-#: point the ask gave, off the ice module's own result. Everything else the two
-#: modules wrote - the heat fluxes, the frazil, the ice type - is published
-#: because their tables row it, not because this template asked.
 OUTPUTS = [
     series("DYNCOVC", at="station", module="khione").chart(
         reference=reference_line("cover_threshold", label="cover threshold")),
@@ -238,7 +148,6 @@ CAPTIONS = {"DYNCOVC": "ice cover fraction", "DYNCOVT": "ice cover thickness",
            "discharge": "a streamflow", "level": "a water-surface elevation",
            "observe": "a water temperature"}
 
-
 _METADATA = AtomicToolMetadata(
     name="telemac_ice_cover",
     ttl_class="live-no-cache",
@@ -247,23 +156,57 @@ _METADATA = AtomicToolMetadata(
     tier="template",
 )
 
-
-#: WHAT THE RUN HAS TO WRITE: the host's file and the ice module's own
-#: beside it. Every ice read is taken off the second one, so a run that
-#: published only the host's would come back with the ice it made left in
-#: the box.
 RESULTS = (STEERING.RESULTS_FILE, RESULT_FILENAME)
 
-#: The title the card carries when the run is held for review.
 REVIEW_TITLE = "Review the water, the cold snap, and what it opens at"
 
+DOC = dict(
+    summary="ICE COVER under a cold snap: when water freezes over, and how "
+            "thick.",
+    routing=(
+        "THE tool for \"when does this water freeze over\", \"how thick does "
+        "the ice get\", \"frazil and border ice\". KHIONE on "
+        "TELEMAC-2D over the domain it is given, drawn or matched at `seed`: "
+        "the heat budget under the hourly airport record over the run's "
+        "window, the frazil it makes, and the cover that grows from it. "
+        "Produces cover fraction and thickness, animated and charted. "
+        "Deck opinions, by keyword: DURATION (seven days), GRAPHIC "
+        "PRINTOUT PERIOD, LAW OF BOTTOM FRICTION, FRICTION COEFFICIENT; on the "
+        "ice deck ATMOSPHERE-WATER EXCHANGE MODEL, DYNAMIC ICE COVER, MODEL FOR "
+        "MASS EXCHANGE BETWEEN FRAZIL AND ICE COVER, BORDER ICE COVER. Supply "
+        "the domain or `seed`, and `event_time`, the moment the snap opens "
+        "at."
+    ),
+    not_for=(
+        "how warm the water gets with no ice in the question "
+        "(`telemac_water_temperature`); snow or ice on LAND; air temperature "
+        "or a forecast, which the weather fetchers answer"
+    ),
+    params=PARAMS,
+    controls=(
+        ("input_mode",
+         '"user_gated" presents the resolved discharge, the weather station and '
+         'the opening water temperature for review/edit before the solve and '
+         'WAITS; "auto" (session default) proceeds with every assumption '
+         "labeled. Not a physical value."),
+        ("restart_clean",
+         "True builds the mesh again even where one built from the same domain, "
+         "bed, resolution and mesher is kept; unset, such a kept mesh is reused. "
+         "Not a physical value."),
+    ),
+    returns=(
+        "On success the run's record (a `LayerURI`): every variable its "
+        "modules wrote, styled on one mesh layer, animated where it varies, "
+        "plus the cover and thickness series charted at the station. Water "
+        "that makes no ice at all charts zero thickness and zero cover, "
+        "which is what that place did in that week. On failure a dict with "
+        "`status=\"error\"` + `error_code`."
+    ),
+)
 
 telemac_ice_cover = register_workflow(
     TelemacWorkflow, _METADATA,
     sys.modules[__name__],
-    # The thickest ice on the published cover sits where the water is thinnest
-    # and slowest - against the bank, in the shallows - and a coarse element
-    # averages that water in with the channel it is beside.
     sensitivity=(("ice_cover_thickness", "peak"),),
     coerce=(
         point_arg("seed", tool="telemac_ice_cover",

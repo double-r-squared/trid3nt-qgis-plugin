@@ -22,11 +22,11 @@ MAINTENANCE DREDGING of a navigation channel: what the bed does.
 | `dump_area` | supplied by the caller | a polygon layer you supply, as a uri or a layer name; required - the template names no source for it. | - |
 | `level` | matched on a need for water level series | the water level series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of water level series. | - |
 
-## The params
+## The inputs
 
 The values the template declares. `desc` is what the model reads when it fills one.
 
-| param | comes from | units | default | desc |
+| input | comes from | units | default | desc |
 |---|---|---|---|---|
 | `seed_point` | question | - | optional | A point ON the channel the dredge works in, as the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer. Geocode a place name first; the channel is fetched downstream of it and the levels every dredging action reads are stationed along the centerline that comes back with it |
 | `design_depth_m` | scenario | m | 3.0 | Depth the fairway is dredged TO, under the reference water surface the run opens at - the design draught plus its overdepth |

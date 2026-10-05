@@ -1,114 +1,85 @@
-"""Engine template ``telemac_do_sag`` - the dissolved-oxygen sag below a discharge.
-
-TELEMAC-2D coupled with WAQTEL O2 over the channel this run solves on - a reach
-walked downstream from the outfall, or a polygon the user supplies: where DO
-bottoms out below a continuous discharge, against the standard the water is held
-to and the closed form the process reduces to."""
+"""Engine template ``telemac_do_sag`` - the dissolved-oxygen sag below a discharge."""
 
 from __future__ import annotations
 
 import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
-
 from trid3nt_server.workflows.runtime import (
-    Data,
-    register_workflow,
+    Data, register_workflow, Accepts, Param, doors,
 )
-from trid3nt_server.inputs import point_arg
+from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL
 from trid3nt_server.workflows.telemac.modules.outputs import profile
-from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries, Sources
-from trid3nt_server.workflows.telemac.templates.do_sag import streeter_phelps
-from trid3nt_server.workflows.telemac.templates.do_sag.declarations import (
-    ACCEPTS, DOC, PARAMS, )
-from trid3nt_server.workflows.telemac.workflow import (
-    Placed, TelemacWorkflow,
+from trid3nt_server.workflows.telemac.modules.telemac2d import (
+    Boundaries, Sources,
 )
+from trid3nt_server.workflows.telemac.templates.do_sag import streeter_phelps
+from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DATA", "OUTPUTS", "PARAMS", "STEERING",
-           "telemac_do_sag"]
+__all__ = ["ACCEPTS", "CAPTIONS", "DATA", "DOC", "OUTPUTS", "PARAMS",
+           "STEERING", "telemac_do_sag"]
 
-#: The file the run directory holds this run's picture under. The deck's own
-#: RESULTS statement names it, so nothing here restates it.
+
+ACCEPTS = Accepts(mesh=("unstructured_tri",))
+
+
+class PARAMS:
+    outfall_coords = Param(
+        door=doors.USER, optional=True, consequence="scenario",
+        user_lever=True, type=Point,
+        derived_when_absent=(
+            "with a domain supplied the outfall sits near the top of its "
+            "centerline and the sag distance is measured downstream from there; "
+            "with no domain either, the run refuses rather than inventing where "
+            "a permitted discharge is"),
+        desc="Where the discharge enters the water, as a Point: the pick's "
+             "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
+             "point layer. Geocode a place name first. On a river with no domain "
+             "supplied it is also the seed the reach is walked downstream from")
+
+    do_standard_mgl = Param(
+        door=doors.SCENARIO, default=5.0, bounds=(0.0, 15.0),
+        units="mg/L", consequence="scenario",
+        desc="The DO water-quality standard the sag is judged against; 5 is a "
+             "common warm-water aquatic-life criterion")
+
+
 _RESULT = "r2d_domain.slf"
 
-#: How far the reach producer walks downstream from the outfall when this
-#: question has to find its own domain. A sag critical point is often several km
-#: below the discharge, so the stretch has to outrun it; a user who wants another
-#: one supplies the domain polygon, which supersedes the producer.
 _REACH_LENGTH_KM = 12.0
 
-#: How far down the domain's own centerline the outfall sits when no point was
-#: placed. It is what holds the source node off the inflow face rather than on
-#: it, where it would compete with the boundary condition for the same node.
+# holds the source node off the inflow face when no outfall is placed
 _OUTFALL_FRAC = 0.02
 
-#: WHERE the outfall enters the water: the point the user clicked, else that
-#: fraction along the domain's own centerline. The workflow settles it onto a
-#: node of the accepted mesh before the sheet reads it back.
 _OUTFALL = Placed("source", point="outfall_coords", fraction=_OUTFALL_FRAC,
                   label="Outfall")
 
-#: The roughness this deck is solved at, and the law it is read under: Strickler,
-#: the coefficient an unsurveyed channel is screened at. ONE number, stated once,
-#: because the outflow stage is derived as a normal depth AT this roughness and a
-#: stage derived at one number under a deck written at another is a level the run
-#: never sits at. A user who knows the channel sets the keyword by name.
+# Strickler; the outflow stage is derived at this same roughness
 _FRICTION_LAW = 3
 _FRICTION_COEFFICIENT = 33.0
 
-#: THE KINETICS the sag develops under, and the saturation the deficit is
-#: measured against. ONE set of numbers, because the closed form drawn beside
-#: the solved profile grades nothing unless it is computed at the rates the run
-#: was solved at. The deoxygenation rate a documented shallow stream carries, a
-#: reaeration rate three times it, and the freshwater saturation the
-#: Elmore-Hayes relation gives at 20 C - the standard Streeter-Phelps condition
-#: this question is asked under. WAQTEL is a COUPLED body and the keywords floor
-#: reaches only the carrier's own dictionary, so these are the deck's fixed
-#: opinion until a coupled module's keywords have a surface of their own.
+# one set of kinetics: the closed-form overlay grades nothing at other rates
 _WATER_TEMPERATURE_C = 20.0
 _K1_PER_DAY = 0.3
 _K2_PER_DAY = 0.9
+# saturation at 20 C
 _SATURATION_MGL = 9.022
 
 
 class DATA:
-    """The domain this run solves on, its bed, and the flow that fills its inflow."""
-
-    # The outfall names which stretch to model: the reach is walked DOWNSTREAM
-    # from it, so the sag develops inside the domain rather than past its end. A
-    # domain the user supplies supersedes this.
     domain = Data.need("hydrography", at="outfall_coords",
                        span_km=_REACH_LENGTH_KM)
-    # THE LINE the oxygen is read down. The reach producer measured a centerline
-    # and it fills this; a lake is asked for the line the question is about.
     line = Data.supplied(geometry="polyline")
-    # THE BED, as the CLASS it is rather than the source it comes from: the
-    # measurement where something measured it, the terrain under the rest. Which
-    # survey or which DEM reaches this domain is the match's to answer off their
-    # rows, and the merge between the two classes is the runtime's one
-    # rule.
     bed = Data.need("bathymetry")
-    # The flow the inflow run prescribes. A number stated on this row stands
-    # over any record, so the flow is the slot's and no param twins it. ONE
-    # reading off whatever reports nearest the water, because the dilution the
-    # whole sag rests on is a number and not a layer.
     discharge = Data.need("discharge series").context(
         "the National Water Model published no streamflow over this domain "
         "at that cycle")
-    # THE LEVEL the water stands at, which the run opens flat at and the outflow
-    # holds. A reach whose measured ends do not FALL has no uniform-flow depth to
-    # derive, and a closed body never had one. An ELEVATION on the datum the bed
-    # is painted on - a gauge publishes its height above its own zero, which is a
-    # different surface, so no source is named here and the number is stated.
     level = Data.need("water level series").optional()
 
 
 class STEERING(T2D):
-    """The deck: a channel, an OUTFALL, and the four tracers the O2 process runs."""
-
     GEOMETRY_FILE = "domain.slf"
     BOUNDARY_CONDITIONS_FILE = "domain.cli"
     RESULTS_FILE = _RESULT
@@ -117,8 +88,6 @@ class STEERING(T2D):
     LAW_OF_BOTTOM_FRICTION = _FRICTION_LAW
     FRICTION_COEFFICIENT = _FRICTION_COEFFICIENT
 
-    # The advection of momentum and depth, and the SUPG the channel is stable
-    # under. The tracer advects under the engine's own scheme and diffusivity.
     TYPE_OF_ADVECTION = [1, 5]
     SUPG_OPTION = [0, 0]
     MASS_LUMPING_ON_H = 1.0
@@ -129,59 +98,25 @@ class STEERING(T2D):
     IMPLICITATION_FOR_DEPTH = 0.6
     IMPLICITATION_FOR_VELOCITY = 0.6
 
-    # The engine accounts for its own water volume and prints one flux per liquid
-    # boundary. That is the only honest check that the level prescribed at a
-    # boundary reached it: a server-side integration of the depth and velocity
-    # fields reads near zero at a prescribed-depth face, where the boundary values
-    # are clamped after the flux was computed.
     MASS_BALANCE = True
 
-    # HOW OFTEN the result is written, in SOLVER STEPS. The engine's own
-    # default is every step, so an unwritten period is a frame per step: at
-    # the 14 m default edge the CFL step is 0.7 s, and the window stated
-    # below is about 246,900 of them - one frame every 5,000 steps is 49
-    # frames of the sag. A user who wants another cadence sets the keyword
-    # by its own name.
+    # in solver steps, not seconds
     GRAPHIC_PRINTOUT_PERIOD = 5000
 
-    # TWO DAYS. A sag is a STEADY-STATE answer, so the window has to cover
-    # several travel times through the reach and stand against 1/k1; a
-    # shorter one reports a sag that has not developed yet.
+    # two days: several travel times, and long against 1/k1
     DURATION = 172800.0
 
-    # The carrier declares ONE tracer; WAQTEL's O2 process appends DISSOLVED O2,
-    # ORGANIC LOAD and NH4 LOAD behind it, which is why every array sized to the
-    # tracer count below carries four values. The reach OPENS clean: no organic
-    # load, and oxygen at saturation, so the deficit the profile carries is the
-    # outfall's own and not a state the run was started in.
+    # WAQTEL O2 appends O2, ORGANIC LOAD, NH4 LOAD: tracer arrays carry four
     NUMBER_OF_TRACERS = 1
     NAMES_OF_TRACERS = ["DYE             MG/L"]
     INITIAL_VALUES_OF_TRACERS = [0.0, _SATURATION_MGL, 0.0, 0.0]
 
-    #: CLEAN WATER at every liquid boundary: no organic load, its own oxygen. The
-    #: load enters at the source, so which boundary the engine numbers first
-    #: cannot decide the sag. The walk is the mesh's own; the flow the inflow
-    #: carries and the level the outflow holds are the open channel's.
     boundaries = Boundaries(tracers=[0.0, _SATURATION_MGL, 0.0, 0.0])
 
-    #: HOW MUCH the outfall discharges, and at what concentration: the
-    #: discharge, then every tracer of the one source in the order NAMES OF
-    #: TRACERS declares them - DYE, then the three WAQTEL O2 tracers behind it.
-    #: A secondary-treated municipal effluent arrives oxygen-poor and heavily
-    #: loaded, which is the initial deficit the sag starts from; it is what the
-    #: deck is read against, not a number this question asks for.
     WATER_DISCHARGE_OF_SOURCES = [1.0]
     VALUES_OF_THE_TRACERS_AT_THE_SOURCES = [0.0, 2.0, 250.0, 0.0]
-    #: A PERMITTED discharge does not pulse: held flat across the whole run so
-    #: the water reaches the steady-state sag the question is asked about.
     sources = Sources()
 
-    #: Deoxygenation balanced by surface reaeration, and nothing else: the
-    #: modelled curve is the closed form the question is asked against, so this
-    #: run states FRESH water, a CONSTANT reaeration rate (formula 0, the one the
-    #: closed form holds under) and zeroes the three sources the closed form has
-    #: no term for - nitrification, benthic demand, and photosynthesis less
-    #: respiration.
     coupling = [WAQTEL.o2(
         WATER_TEMPERATURE=_WATER_TEMPERATURE_C, WATER_SALINITY=0.0,
         CONSTANT_OF_DEGRADATION_OF_ORGANIC_LOAD_K1=_K1_PER_DAY,
@@ -191,17 +126,12 @@ class STEERING(T2D):
         BENTHIC_DEMAND=0.0, PHOTOSYNTHESIS_P=0.0, VEGETAL_RESPIRATION_R=0.0)]
 
 
-#: What this question PLACES: the oxygen down the channel as the chart, with the
-#: closed form and the standard drawn beside it. The line is the LINE SLOT's:
-#: the centerline the domain's producer measured, or the one a user draws when
-#: the body it is asked of has none.
 OUTPUTS = [profile("T2", along="line").chart(
     reference=streeter_phelps.overlay(saturation_mgl=_SATURATION_MGL,
                                       k1_per_day=_K1_PER_DAY,
                                       k2_per_day=_K2_PER_DAY))]
 CAPTIONS = {"T2": "dissolved oxygen", "discharge": "a streamflow",
            "level": "a water level"}
-
 
 _METADATA = AtomicToolMetadata(
     name="telemac_do_sag",
@@ -211,17 +141,50 @@ _METADATA = AtomicToolMetadata(
     tier="template",
 )
 
-
-#: The title the card carries when the run is held for review.
 REVIEW_TITLE = "Review the outfall and the water it discharges to"
 
+DOC = dict(
+    summary="DISSOLVED-OXYGEN SAG below a discharge (US TMDL / permit question).",
+    routing=(
+        "THE tool for \"where does dissolved oxygen bottom out below this discharge\", "
+        "\"will the DO sag violate the standard\", \"Streeter-Phelps oxygen sag\", \"BOD "
+        "loading downstream of a WWTP / outfall\". TELEMAC-2D + WAQTEL O2 over a reach "
+        "walked downstream from the outfall, or a polygon you supply: clean water in "
+        "at the inflow, CBOD decaying and reaeration recovering downstream of the "
+        "DISCHARGE. Produces the along-channel oxygen profile against the closed "
+        "form. Deck opinions, by keyword: CONSTANT OF DEGRADATION OF ORGANIC LOAD K1, "
+        "K2 REAERATION COEFFICIENT, O2 SATURATION DENSITY OF WATER (CS), WATER "
+        "TEMPERATURE, DURATION, and the outfall's own discharge and load. Give "
+        "`outfall_coords` or `domain`."
+    ),
+    not_for=(
+        "a conservative dye/tracer plume that only dilutes "
+        "(`telemac_dye_release`); rainfall-runoff flood depth "
+        "(`telemac_rain_on_grid`); a closed body with no through-flow, which "
+        "has no sag"
+    ),
+    params=PARAMS,
+    controls=(
+        ("input_mode",
+         '"user_gated" presents the resolved carrier discharge and bed source for '
+         'review/edit before the solve and WAITS; "auto" (session default) proceeds '
+         "with every assumption labeled. Not a physical value."),
+        ("restart_clean",
+         "True builds the mesh again even where one built from the same domain, "
+         "bed, resolution and mesher is kept; unset, such a kept mesh is reused. "
+         "Not a physical value."),
+    ),
+    returns=(
+        "On success the run's record (a `LayerURI`): every variable its "
+        "modules wrote, styled on one mesh layer, animated where it varies, "
+        "plus the oxygen profile on its Streeter-Phelps curve. On failure a "
+        "dict with `status=\"error\"` + `error_code`."
+    ),
+)
 
 telemac_do_sag = register_workflow(
     TelemacWorkflow, _METADATA,
     sys.modules[__name__],
-    # WHERE the sag sits on the published profile is a local-feature LOCATION and
-    # moves with the element that resolves it. The DO minimum itself is a
-    # saturated maximum - a converged class - so the profile carries one label.
     sensitivity=(("dissolved_oxygen", "location"),),
     coerce=(
         point_arg("outfall_coords", tool="telemac_do_sag",
