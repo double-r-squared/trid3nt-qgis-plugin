@@ -197,7 +197,7 @@ docstring: |-
         ``replacement_value`` (added by this tool) for real HAZUS
         occupancy + structure values rather than a class-default
         fallback. This is the **preferred** structure-exposure substrate --
-        prefer NSI where the coverage row reaches and fall back to
+        prefer NSI where the row reaches and fall back to
         ``fetch_buildings`` elsewhere.
       - Complementary to ``fetch_hrsl_population`` (population grid),
         ``fetch_administrative_boundaries`` (admin polygons for zonal

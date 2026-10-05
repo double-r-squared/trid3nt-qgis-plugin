@@ -74,7 +74,7 @@ class DATA:
     # THE BED, as the CLASS it is rather than the source it comes from: the
     # measurement where something measured it, the terrain under the rest. Which
     # survey or which DEM reaches this domain is the match's to answer off their
-    # coverage rows, and the merge between the two classes is the runtime's one
+    # rows, and the merge between the two classes is the runtime's one
     # rule. A domain with no federal navigation project has no published
     # survey, and the sheet says so rather than refusing.
     bed = Data.need("bathymetry")

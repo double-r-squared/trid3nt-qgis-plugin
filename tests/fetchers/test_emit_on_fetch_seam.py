@@ -1,7 +1,7 @@
 """The emit-on-fetch router seam.
 
 The in-composer hook fires after a successful layer build: a renderable
-declaration emits a context row carrying the spec preset, on both the
+declaration emits a context row carrying the row preset, on both the
 worker-thread and the on-loop paths; a record source, a probe fetch and a repeat
 uri each suppress; a failure never raises; and a DIRECT dispatch is skipped."""
 
@@ -58,7 +58,7 @@ def _spec(
     )
 
 
-#: What the DEM spec declares about how its raster draws.
+#: What the DEM row declares about how its raster draws.
 _DEM_STYLE = {"kind": "continuous", "ramp": "gray", "units": "m"}
 
 
@@ -113,7 +113,7 @@ def test_input_layer_name_shape_and_purpose():
 async def test_raster_input_surfaced_via_worker_thread(monkeypatch):
     """A raster fetched by an OFF-LOADED sync fetcher (no running loop in that
     thread) is driven back onto the emitter's bound loop and surfaced as a
-    role=context input under the spec's OWN declared style row."""
+    role=context input under the row's OWN declared style row."""
     import asyncio
 
     emitter = _emitter()
@@ -220,7 +220,7 @@ async def test_direct_dispatch_is_skipped():
     import asyncio
 
     emitter = _emitter()
-    tokens = _bind(emitter, dispatched="fetch_dem",  # == spec.name -> direct
+    tokens = _bind(emitter, dispatched="fetch_dem",  # == row.name -> direct
                    loop=asyncio.get_running_loop())
     try:
         with patch(_PUBLISH_LAYER_TARGET, side_effect=lambda **k: "s3://x"):

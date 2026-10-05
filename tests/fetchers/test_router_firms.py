@@ -3,7 +3,7 @@
 The map key rides IN the url path. Covered: missing-key parity through credential
 resolution, the area-endpoint url build for both the rolling and dated forms, the
 auth split on a 200 carrying an error body as well as on a non-2xx, the CSV to
-point parse with its retained schema, the honest empty answer and the spec flags."""
+point parse with its retained schema, the honest empty answer and the row flags."""
 
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ def _read(fgb: bytes):
 
 
 def test_spec_identity(spec):
-    """SPEC-IDENTITY: the flags pinned against the twin's AtomicToolMetadata."""
+    """ROW-IDENTITY: the flags pinned against the twin's AtomicToolMetadata."""
     assert spec.name == "fetch_firms_active_fire"
     assert spec.shape == "vector-fgb"
     assert spec.error_code_prefix == "FIRMS"

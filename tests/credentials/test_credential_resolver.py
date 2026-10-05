@@ -1,4 +1,4 @@
-"""The runtime credential resolver over the credential each source row declares.
+"""The runtime credential resolver over the credential each row declares.
 
 Resolution order (the session cache over the row's env var, a public tool
 resolving to None), the session-cache lifecycle with blank inputs ignored, the

@@ -401,7 +401,7 @@ async def test_landcover_small_bbox_native_resolution_no_gate() -> None:
 
 
 # 14-17) fetch_landcover auto-coarsen (state-scale no-hard-fail / native-metadata /
-# continent-scale ceiling / pixel-budget) FOLDED to the spec-driven surface.
+# continent-scale ceiling / pixel-budget) FOLDED to the row-driven surface.
 # The tool's auto-coarsen moved to the router pre_resolve hook + the gates.max_bbox_km2
 # ceiling; those twin-internal tests (which patched the deleted _fetch_nlcd_landcover_bytes
 # and read the dict return) migrated to tests/fetchers/test_router_landcover.py

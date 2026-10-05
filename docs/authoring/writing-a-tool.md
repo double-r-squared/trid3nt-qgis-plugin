@@ -8,7 +8,7 @@ already answered by one of those or by the user's QGIS session.
 1. **The QGIS test.** If a QGIS algorithm answers the question, there is no
    tool of ours: the model runs it in the user's session through
    `run_qgis_algorithm`, and a composed analysis through `run_pyqgis`.
-2. **A fetcher is a spec row, not code.** Data from a source is DECLARED as a
+2. **A fetcher is a row, not code.** Data from a source is DECLARED as a
    `source.yaml` beside a `corpus.yaml` under `trid3nt_server/tools/fetchers/`;
    the router promotes the row into a registered tool. See
    `trid3nt_server/tools/README.md`.

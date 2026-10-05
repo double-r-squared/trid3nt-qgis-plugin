@@ -70,7 +70,7 @@ class DATA:
     # THE BED, as the CLASS it is rather than the source it comes from: the
     # measurement where something measured it, the terrain under the rest. Which
     # survey or which DEM reaches this domain is the match's to answer off their
-    # coverage rows, and the merge between the two classes is the runtime's one
+    # rows, and the merge between the two classes is the runtime's one
     # rule.
     bed = Data.need("bathymetry")
     # THE FLOW the inflow run prescribes, as a CLASS: which record reports a

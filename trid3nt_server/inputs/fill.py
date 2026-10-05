@@ -125,7 +125,7 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
         if measured is not None:
             return measured
     if producer is None and decl.data_class:
-        # A SLOT THAT STATES A NEED: the match reads every fetcher's coverage row
+        # A SLOT THAT STATES A NEED: the match reads every fetcher's row
         # and the runtime declares the row it picked, so the pick earns a
         # journal line like any other producer.
         return await _matched(env, decl)
@@ -163,7 +163,7 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
         return await _context(env, decl, label)
     value = await _produced(env, producer, label)
     return await _ingested(env, decl, value,
-                           _coverage_row(producer.runner, decl.data_class))
+                           _fetcher_row(producer.runner, decl.data_class))
 
 
 async def _matched(env: _Env, decl: DataDecl) -> Any:
@@ -302,7 +302,7 @@ def _spec_of(fetcher: str) -> Any:
     return get_spec(fetcher)
 
 
-def _coverage_row(fetcher: str, data_class: str, kind: str = "") -> Any:
+def _fetcher_row(fetcher: str, data_class: str, kind: str = "") -> Any:
     """The row THIS source states about THIS class, or ``None``.
 
     A source serving two classes states one row each, and the row a slot reads
@@ -318,14 +318,14 @@ def _coverage_row(fetcher: str, data_class: str, kind: str = "") -> Any:
 
 
 def _matched_row(choice: SourceChoice, fetcher: str) -> Any:
-    """THE COVERAGE ROW the match produced, or ``None`` where it picked nothing.
+    """THE ROW the match produced, or ``None`` where it picked nothing.
 
     The ranked row names it by both facts a source can serve twice under - the
     class the slot asked for and the kind the row was ranked on - so what a slot
     is told about the record is the statement of the row that answered it."""
     kind = next((row.kind for row in choice.rows
                  if row.fetcher == fetcher and not row.excluded), "")
-    return _coverage_row(fetcher, choice.need, kind) if fetcher else None
+    return _fetcher_row(fetcher, choice.need, kind) if fetcher else None
 
 
 def _mesh_m(env: _Env) -> float | None:
@@ -427,7 +427,7 @@ def _pick(env: _Env, decl: DataDecl, data_class: str) -> str:
             f"the run picks {named!r} for the {decl.name!r} slot and it states "
             "no coverage at all: a source the match never weighs cannot be "
             "picked out of its list.")
-    return named if _coverage_row(named, data_class) is not None else ""
+    return named if _fetcher_row(named, data_class) is not None else ""
 
 
 def _closes(opens: Any, window_s: float | None) -> str | None:
@@ -721,7 +721,7 @@ async def _context(env: _Env, decl: DataDecl, label: str) -> Any:
         # its slot finds nothing usable in - sites that report another
         # characteristic, a survey with no soundings - held nothing for this run
         # either, and a context row says so rather than refusing.
-        ingested = await _ingested(env, decl, value, _coverage_row(
+        ingested = await _ingested(env, decl, value, _fetcher_row(
             decl.producer.runner, decl.data_class))
     except asyncio.CancelledError:
         raise

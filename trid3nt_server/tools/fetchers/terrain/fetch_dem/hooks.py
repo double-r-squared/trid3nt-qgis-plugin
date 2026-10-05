@@ -17,7 +17,7 @@ carry the DEM behaviour the declarative surface cannot express."""
 # ``envelope`` is the only naming override seam, because the router's own layer builder
 # hardcodes ``{source_class}-{variable}``.
 #
-# The ``source="copernicus"`` leg is NOT here: it is the spec's cross-sibling dispatch,
+# The ``source="copernicus"`` leg is NOT here: it is the row's cross-sibling dispatch,
 # served verbatim from its sibling before this pipeline runs. The ``Dem*Error`` classes
 # live HERE, carrying PINNED codes that survive the delegate wrapper's passthrough.
 
@@ -114,7 +114,7 @@ _DEM_PRIMARY_TIMEOUT_ENV = "TRID3NT_DEM_PRIMARY_TIMEOUT_S"
 _DEM_PRIMARY_TIMEOUT_DEFAULT_S = 90.0
 
 #: ``source`` spellings that PIN USGS 3DEP (no cross-source fallback). Copernicus
-#: spellings are dispatched away pre-flight by the spec's ``dispatch`` block, so
+#: spellings are dispatched away pre-flight by the row's ``dispatch`` block, so
 #: they never reach these hooks; anything NOT in this set (incl. "auto", the
 #: default, and any unrecognized spelling) is the 3DEP-primary AUTO path.
 _DEM_SOURCE_3DEP_PIN_ALIASES = frozenset(
@@ -373,7 +373,7 @@ def validate_dem(spec: SourceSpec, params: dict[str, Any]) -> None:
 @register_hook("dem_3dep.read")
 def read_dem(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> tuple[Any, Any, Any]:
     """Read a 3DEP DEM and return ``(array, transform, crs)``. The DEM watchdog owns its
-    own env-tunable budget; the spec's delegate timeout is a nominal outer bound."""
+    own env-tunable budget; the row's delegate timeout is a nominal outer bound."""
 
     # Gating on a SERVICE failure is SOURCE-CONDITIONAL: partial coverage propagates, a
     # data signal rather than a fallback trigger; a pinned source raises a plain

@@ -1,6 +1,6 @@
 """Emit-on-fetch: surface a fetched INPUT as a ``role="context"`` layer.
 
-A spec's render declaration is the switch -- there is no boolean -- so a source
+A row's render declaration is the switch -- there is no boolean -- so a source
 returning a renderable LayerURI is published by reference when ``route()`` runs
 inside a composer. Best-effort, and a uri is surfaced once per session."""
 
@@ -84,7 +84,7 @@ def maybe_emit_input_on_fetch(
     fetcher's own direct dispatch, output is renderable, and the uri is new."""
     try:
         # visualize=False is the per-CALL suppression, for a PROBE fetch of otherwise
-        # visualizable data (an AOI candidate scan); the spec itself carries no flag.
+        # visualizable data (an AOI candidate scan); the row itself carries no flag.
         if visualize is False:
             return
         from trid3nt_server.render.pipeline_emitter import (

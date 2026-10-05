@@ -8,7 +8,7 @@ the programme states rather than against any assumption about the grid."""
 # the collection is NAVD88 and a tile stating a tidal datum is refused rather than
 # merged, because a silent cross-datum merge is the substitution the
 # correct-data-class law exists to prevent. A tile stating no vertical CS at all
-# is accepted on the collection's own NAVD88 statement, which is the coverage row.
+# is accepted on the collection's own NAVD88 statement, which is the row.
 
 from __future__ import annotations
 

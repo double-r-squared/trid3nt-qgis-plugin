@@ -24,7 +24,7 @@ from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_nwis_gauges import (
 @pytest.fixture(scope="module")
 def spec():
     s = registration.get_spec("fetch_usgs_nwis_gauges")
-    assert s is not None, "fetch_usgs_nwis_gauges must be spec-served"
+    assert s is not None, "fetch_usgs_nwis_gauges must be row-served"
     return s
 
 
@@ -126,7 +126,7 @@ def test_the_window_read_publishes_the_stage_series_beside_the_discharge(spec, n
 
 
 def test_the_temperature_code_is_read_into_its_own_column(spec, nwis_calls):
-    """The third coverage row is asked by the parameter code NWIS answers to,
+    """The third row is asked by the parameter code NWIS answers to,
     and the reading lands in the column that row names rather than in the
     discharge one it is not measured in."""
     nwis_calls["iv_df"] = _iv_frame([("01646500", 3, {"00010": 18.4})])

@@ -154,7 +154,7 @@ def test_registry_contains_job_0039_subset_after_eager_import():
         "fetch_buildings",
         "fetch_population",
         "geocode_location",
-        # Spec-driven surfaces:
+        # Row-driven surfaces:
         "fetch_landcover",
         "fetch_river_geometry",
         "lookup_precip_return_period",
@@ -371,7 +371,7 @@ def test_geocode_user_gated_labels_pending_confirm(monkeypatch):
 from trid3nt_server.tools.fetchers.climate.lookup_precip_return_period.lookup_precip_return_period import (  # noqa: E402 — after main test surface
     lookup_precip_return_period,
 )
-# fetch_landcover FOLDED to a spec-driven surface: the twin + its
+# fetch_landcover FOLDED to a row-driven surface: the twin + its
 # twin-internal tests (_fetch_nlcd_landcover_bytes / _landcover_bytes_to_cog /
 # _fix_nlcd_background_transparency / _clip_raster_bytes_to_bbox / cache-version
 # salt / overview generation) DELETED with the twin. Their value moved to
@@ -381,7 +381,7 @@ from trid3nt_server.tools.fetchers.climate.lookup_precip_return_period.lookup_pr
 
 
 def test_fetch_landcover_is_registered_with_static_30d():
-    """Registration assertion: fetch_landcover (spec-driven) keeps its metadata."""
+    """Registration assertion: fetch_landcover (row-driven) keeps its metadata."""
     entry = TOOL_REGISTRY["fetch_landcover"]
     assert entry.metadata.ttl_class == "static-30d"
     assert entry.metadata.source_class == "landcover"

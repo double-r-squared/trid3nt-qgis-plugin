@@ -20,7 +20,7 @@ no transport, cache or gate -- MINIMAL, REGISTERED under a validated name, TESTE
 # best-effort results back in, every feature surviving.
 #
 # Envelope mode adds the post-emit point: ``envelope(spec, params, layer, data)`` is
-# the LAST hook the router calls, computing the extra business fields for the spec's
+# the LAST hook the router calls, computing the extra business fields for the row's
 # ``output.result_model`` subclass over the assembled layer and the produced bytes.
 # It is pure, and the router drops the honesty-floor-owned ``uri`` and ``layer_type``
 # keys from its return, so a hook can only enrich.
@@ -90,8 +90,8 @@ class FramePlan:
     #: -- for a frame addressed by something other than its timestamp.
     fetch_context: dict[str, Any] = field(default_factory=dict)
     #: OPTIONAL per-frame style row override, for a source whose frames carry distinct
-    #: presets a single spec-level style row cannot express. None falls back to the
-    #: spec's own row.
+    #: presets a single row-level style row cannot express. None falls back to the
+    #: row's own row.
     style: dict | None = None
 
 
@@ -116,7 +116,7 @@ class FrameDegraded(Exception):
 
 
 class HookResolutionError(ValueError):
-    """A spec referenced a ``hooks.*`` name absent from :data:`HOOK_REGISTRY`."""
+    """A row referenced a ``hooks.*`` name absent from :data:`HOOK_REGISTRY`."""
 
 
 #: name -> pure callable. Filled by :func:`register_hook` at hook-module import.
@@ -125,7 +125,7 @@ HOOK_REGISTRY: dict[str, Callable[..., Any]] = {}
 
 def register_hook(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Register a pure hook under ``name``, shaped ``<source_key>.<point>``. A
-    duplicate name is a defect -- two hooks would answer one spec reference -- so it
+    duplicate name is a defect -- two hooks would answer one row reference -- so it
     raises rather than silently last-wins."""
 
     def _wrap(fn: Callable[..., Any]) -> Callable[..., Any]:
@@ -153,8 +153,8 @@ def has_hook(name: str) -> bool:
 
 
 # Hook modules register themselves at import, and BOTH homes are WALKED rather
-# than listed: a spec's own ``fetchers/<group>/<spec>/hooks.py``, and the modules
-# beside this one, which are the hooks SEVERAL specs share. Co-location gives a
+# than listed: a row's own ``fetchers/<group>/<spec>/hooks.py``, and the modules
+# beside this one, which are the hooks SEVERAL rows share. Co-location gives a
 # fetcher package the contract ``source.yaml`` and ``corpus.yaml`` already have --
 # adding, moving or removing one edits no shared file.
 

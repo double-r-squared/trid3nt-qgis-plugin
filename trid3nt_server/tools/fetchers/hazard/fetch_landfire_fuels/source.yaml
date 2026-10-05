@@ -133,7 +133,7 @@ docstring: |-
     ``fetch_raws_weather`` for meteorological inputs.
   **Parameters:**
   - ``bbox`` (tuple[float, float, float, float]): ``(min_lon, min_lat,
-    max_lon, max_lat)`` in EPSG:4326. Required (see the coverage row).
+    max_lon, max_lat)`` in EPSG:4326. Required (see the row).
     Example: ``(-112.0, 34.5, -111.0, 35.5)`` (north-central Arizona).
   - ``layer`` (str, default ``"fbfm40"``): one of ``"fbfm40"`` (Scott and
     Burgan 40; integer codes 101-204 + 91/92/93/98/99 special classes),

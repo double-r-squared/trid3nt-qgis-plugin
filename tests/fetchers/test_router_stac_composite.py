@@ -2,7 +2,7 @@
 
 One composite path serves several bands under a joint stretch behind a quality
 mask, a colormapped single band, or a raw passthrough. Offline these cover the
-spec identity, the area and combination gates, and the render's value behaviour
+row identity, the area and combination gates, and the render's value behaviour
 over LOCAL synthetic COGs wrapped in real catalog items."""
 
 from __future__ import annotations

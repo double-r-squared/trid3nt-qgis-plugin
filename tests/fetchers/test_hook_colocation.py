@@ -1,9 +1,9 @@
-"""The hook loader's tree walk: every spec's hooks resolve, from the right module.
+"""The hook loader's tree walk: every row's hooks resolve, from the right module.
 
-A fetcher package is self-contained - its spec, corpus and hooks all found by a
+A fetcher package is self-contained - its row, corpus and hooks all found by a
 walk - so adding, moving or removing one edits no shared file. A hook module
-lives beside the ONE spec that names it, and stays in the shared directory only
-when SEVERAL specs name it."""
+lives beside the ONE row that names it, and stays in the shared directory only
+when SEVERAL rows name it."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ _FETCHERS_PKG = _HOOKS_PKG.rsplit(".", 2)[0]
 
 
 def _declared(spec) -> dict[str, str]:
-    """The spec's hook point -> registered name, however it is declared."""
+    """The row's hook point -> registered name, however it is declared."""
     named = {}
     if spec.hooks is not None:
         named |= {p: v for p, v in spec.hooks.model_dump().items()
@@ -49,7 +49,7 @@ def _hook_module_files() -> list[Path]:
 
 
 def _readers(module: str) -> set[str]:
-    """Everything that reads this hook module: specs that name it, modules that import it."""
+    """Everything that reads this hook module: rows that name it, modules that import it."""
     stem = module.rsplit(".", 1)[-1]
     readers = set(_USERS[module])
     if module.startswith(f"{_HOOKS_PKG}."):
@@ -86,7 +86,7 @@ def test_a_single_spec_hook_module_sits_beside_that_spec(spec_name: str) -> None
                 f"{_HOOKS_PKG}/, not at {module}")
             continue
         assert module == f"{_package_of(spec_name)}.hooks", (
-            f"{spec_name}.{point} -> {name} resolves from {module}; the only spec "
+            f"{spec_name}.{point} -> {name} resolves from {module}; the only row "
             f"that names it is {spec_name}, so it belongs beside it")
 
 

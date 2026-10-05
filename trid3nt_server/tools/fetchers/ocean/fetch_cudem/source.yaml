@@ -84,7 +84,7 @@ caveats:
   bed ladder is what lays a coarser source under the part this one does not reach.
 - A tile stating a TIDAL vertical datum raises CUDEM_DATUM_MISMATCH rather than merging
   two zeros as one surface. A tile stating no vertical CS carries the collection's own
-  NAVD88, which is what the coverage row states.
+  NAVD88, which is what the row states.
 docstring: |-
   Fetch NOAA NCEI CUDEM 1/9 arc-second nearshore topo-bathymetry for a bbox.
 

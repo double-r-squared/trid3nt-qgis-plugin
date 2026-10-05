@@ -1,7 +1,7 @@
 """THE LIBRARY over HTTP: the listing, the search, and the route table itself.
 
 Offline against the live registries: every registered tool reaches the listing
-under a subsystem, every coverage row reaches it under its own class and kind
+under a subsystem, every row reaches it under its own class and kind
 with its fetcher beside it, the search answers off the same BM25 corpus the
 model routes on, and the dispatcher's 404/405/OPTIONS arms hold."""
 
@@ -61,7 +61,7 @@ def test_subsystems_are_named_and_ordered(listing):
     assert "other" not in names
 
 
-def test_every_coverage_row_is_listed_under_its_own_class_and_kind(listing):
+def test_every_row_is_listed_under_its_own_class_and_kind(listing):
     """No row without a class, and the fetcher is named beside it."""
     from trid3nt_server.tools.search.match import sources_with_coverage
 

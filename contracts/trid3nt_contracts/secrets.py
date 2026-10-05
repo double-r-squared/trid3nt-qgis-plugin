@@ -3,7 +3,7 @@
 WIRE ISOLATION is the whole point: ``secret-add`` is the ONLY envelope that
 ever carries a raw key value, and it is transient - cached for the session and
 cleared before any log or persistence path. Everything else carries an opaque
-vault reference. A key is scoped by the credential NAME its source row declares,
+vault reference. A key is scoped by the credential NAME its row declares,
 so the rows are the closed set and this module restates none of them.
 """
 
@@ -40,7 +40,7 @@ class SecretRecord(GraceModel):
     schema_version: Literal["v1"] = "v1"
 
     secret_id: ULIDStr
-    #: The credential name a source row declares in its ``auth.credential``
+    #: The credential name a row declares in its ``auth.credential``
     #: block. The rows are the closed set, so nothing is restated here.
     provider: str = Field(min_length=1, max_length=120)
     #: ``None`` makes the record user-level, a cross-Case default; set, it
@@ -80,7 +80,7 @@ class SecretAddEnvelopePayload(GraceModel):
     MESSAGE_TYPE: ClassVar[str] = "secret-add"
 
     envelope_type: Literal["secret-add"] = "secret-add"
-    #: The credential name the key is stored under: the name the source rows
+    #: The credential name the key is stored under: the name the rows
     #: that need this key state, so one push serves every row naming it.
     provider: str = Field(min_length=1, max_length=120)
     #: ``None`` for a user-level secret rather than a Case-scoped one.

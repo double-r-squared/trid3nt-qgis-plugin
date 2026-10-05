@@ -2,7 +2,7 @@
 
 The mosaic is windowed in ITS OWN projection - bounds transformed, densified and
 padded - then read through the coalescing transport, reprojected to degrees and
-scaled from fixed point to physical units. Offline: the spec identity, the enum
+scaled from fixed point to physical units. Offline: the row identity, the enum
 and area gates, the url templating, the per-property scale, the honesty paths."""
 
 from __future__ import annotations

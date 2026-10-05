@@ -1,4 +1,4 @@
-"""Generic data-router engine: a declared source spec becomes a fetch tool.
+"""Generic data-router engine: a declared row becomes a fetch tool.
 
 A helper package, not a tool. Importing it is side-effect-free -- it walks no
 tree and registers nothing; a caller triggers registration explicitly through

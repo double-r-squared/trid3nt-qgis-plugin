@@ -1,6 +1,6 @@
 """``fetch_buildings``: the Overpass footprints through the library delegate.
 
-The offline surfaces: spec identity, the features parse (ways to polygons,
+The offline surfaces: row identity, the features parse (ways to polygons,
 relations to multipolygons, slim properties, intersects rather than clip, junk
 dropped), the typed empty and param validation. The live parity is a separate drive."""
 

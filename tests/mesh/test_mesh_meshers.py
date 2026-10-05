@@ -54,7 +54,7 @@ def test_the_roster_is_the_meshers_the_tree_carries():
 
 
 def test_no_resolution_declaration_survives_anywhere():
-    """Nothing refuses a resolution: no contract type, no source row, no template
+    """Nothing refuses a resolution: no contract type, no row, no template
     and no mesher declares a range a resolution is held to."""
     root = Path(__file__).resolve().parents[2]
     words = ("Resolution" + "Spec", "resolution_" + "declarations",

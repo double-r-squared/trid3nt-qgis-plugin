@@ -1,6 +1,6 @@
 """Offline tests for the tier-3 hook contract, with no live calls.
 
-Covers the registry - resolve, duplicate and spec-load validation - each source's
+Covers the registry - resolve, duplicate and row-load validation - each source's
 request build and its bespoke input validation, each parse's field extraction with
 its honest-empty and too-large typed errors, and the JSON executor end to end
 across a multi-request join and paging, with the transport monkeypatched."""

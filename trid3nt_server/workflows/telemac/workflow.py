@@ -552,7 +552,7 @@ def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
     is OPEN, then the rest.
 
     The rest is the whole module, folded under advanced with its engine default."""
-    rows = _source_rows() + _coverage_rows() + [_slot_row(name, row)
+    rows = _fetcher_rows() + _fetcher_rows() + [_slot_row(name, row)
                                                for name, row
                                                in sheet.filled.items()]
     rows += _coupled_rows(sheet)
@@ -572,7 +572,7 @@ def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
                    sorted(rest, key=lambda slot: _group(slot))]
 
 
-def _source_rows() -> list[ParamSheetRow]:
+def _fetcher_rows() -> list[ParamSheetRow]:
     """One row per DATA slot the match filled: the ranked list, pick highlighted.
 
     The card renders the list the model was given, so the two cannot describe
@@ -586,12 +586,12 @@ def _source_rows() -> list[ParamSheetRow]:
              f"{choice.need}.",
         door="scenario", basis="derived", origin="producer", editable=False,
         source_badge=(f"{len(choice.rows)} sources weighed"
-                      if choice.tie else "matched on the coverage rows"),
+                      if choice.tie else "matched on the rows"),
         note=choice.sentence, choices=choice, group="Sources")
         for choice in run_choices()]
 
 
-def _coverage_rows() -> list[ParamSheetRow]:
+def _fetcher_rows() -> list[ParamSheetRow]:
     """WHAT THE CUT COVERS, over the water and over the land, one row each.
 
     The share of this domain measured by nothing is a number a person weighs

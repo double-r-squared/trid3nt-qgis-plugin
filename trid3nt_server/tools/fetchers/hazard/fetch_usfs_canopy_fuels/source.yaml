@@ -118,7 +118,7 @@ docstring: |-
         use ``fetch_mtbs_burn_severity``.
   Parameters:
       bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
-          Required (``supports_global_query=False``; see the coverage row).
+          Required (``supports_global_query=False``; see the row).
           Example for San Diego fire country:
           ``(-117.5, 32.5, -117.0, 33.0)``.
       layer: Which canopy-fuel layer to fetch:
@@ -157,7 +157,7 @@ docstring: |-
       ``USFSCanopyFuelsUpstreamError``: LANDFIRE ImageServer network failure,
           HTTP non-200, JSON error envelope, or non-TIFF body; retryable.
       ``USFSCanopyFuelsEmptyError``: all-nodata raster -- outside LANDFIRE
-          coverage (see the coverage row); non-retryable.
+          coverage (see the row); non-retryable.
 
   Cache: ``static-30d``. LANDFIRE LF2022 is a static product;
   the 30-day window is well inside the publication cadence. Cache key:

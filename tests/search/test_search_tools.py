@@ -73,7 +73,7 @@ def _run_top_k(query: str, k: int = 5) -> list[str]:
         ("weather alerts", "fetch_nws_alerts_conus"),
         ("show flood zones", "fetch_fema_nfhl_zones"),
         ("national wetlands inventory polygons", "fetch_nwi_wetlands"),
-        # A fetcher with a coverage row is not ranked by phrase at all: an
+        # A fetcher with a row is not ranked by phrase at all: an
         # elevation question routes to the match, which names the source.
         ("elevation data for this place", "find_sources"),
         # Door dissolution: a template is an ordinary retrieval-pool

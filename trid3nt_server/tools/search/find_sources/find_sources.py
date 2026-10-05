@@ -43,7 +43,7 @@ _AROUND_POINT = 0.001
 
 
 #: The name the registry and the dispatch gate know this tool by. The gate
-#: EXPANDS on it: a fetcher with a coverage row is not described to the model,
+#: EXPANDS on it: a fetcher with a row is not described to the model,
 #: so the sources this names are how its schema reaches the turn.
 FIND_SOURCES = "find_sources"
 

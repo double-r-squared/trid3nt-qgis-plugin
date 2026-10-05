@@ -14,7 +14,7 @@ from typing import Callable, Dict, Optional, Protocol
 logger = logging.getLogger("trid3nt.auth_broker")
 
 # Name prefix for the plugin's own QgsAuthManager entries. The credential name
-# a source row declares is appended, so one entry maps 1:1 to one credential.
+# a row declares is appended, so one entry maps 1:1 to one credential.
 _NAME_PREFIX = "trid3nt-cred:"
 
 

@@ -6,7 +6,7 @@
 # (waterway_type), and a vocabulary word here resolves to exactly one param
 # value, so a coastline row here would either collide with it (one row per
 # data class and kind) or force the channel/drainage distinction to collapse.
-# roads/pois/breakwaters state no coverage row: none is one of the classes a
+# roads/pois/breakwaters state no row: none is one of the classes a
 # slot asks for, so nothing here would find them by class either.
 schema_version: v1
 name: fetch_osm_features
@@ -120,7 +120,7 @@ caveats:
   it is); pois reduces any element to its representative point and refuses a
   zero-match ask by name rather than an empty-success layer."
 - "model-callable, not matched: roads/pois/breakwaters are not classes a slot
-  asks for, so they carry no coverage row (coastline does and is the row above)"
+  asks for, so they carry no row (coastline does and is the row above)"
 docstring: |-
   OpenStreetMap features via Overpass -- one interpreter, four feature classes.
 

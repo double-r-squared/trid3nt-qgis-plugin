@@ -233,7 +233,7 @@ def test_a_window_in_no_stated_unit_refuses_rather_than_reading_the_slot_s() -> 
     assert caught.value.error_code == "OBSERVATION_UNIT_UNSTATED"
 
 
-def test_the_coverage_row_s_column_unit_is_what_a_bare_record_is_read_in() -> None:
+def test_the_row_s_column_unit_is_what_a_bare_record_is_read_in() -> None:
     station = {"type": "Feature",
                "geometry": {"type": "Point", "coordinates": [-122.68, 45.51]},
                "properties": {"site_id": "14211720", "discharge_cfs": 2000.0,
@@ -328,7 +328,7 @@ def test_a_sample_two_cadences_ahead_is_refused() -> None:
 def test_the_gauge_row_says_which_column_carries_a_temperature() -> None:
     """A gauge record and a sample-portal record differ in shape, and the ROW is
     what the ingestion reads either one through: the columns and their units
-    come off the coverage row of whichever source answered, never off its name.
+    come off the row of whichever source answered, never off its name.
     The gauge carries no per-feature unit column, so the row's is the unit."""
     from trid3nt_server.tools.fetchers._router import registration
     import trid3nt_server.main as main

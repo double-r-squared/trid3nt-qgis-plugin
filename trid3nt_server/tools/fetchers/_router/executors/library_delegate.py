@@ -22,7 +22,7 @@ logger = logging.getLogger(
 
 __all__ = ["invoke", "pre_validate", "resolve", "execute"]
 
-#: Default declared timeout (seconds) when a spec omits ``ingest.delegate.timeout_s``.
+#: Default declared timeout (seconds) when a row omits ``ingest.delegate.timeout_s``.
 _DEFAULT_TIMEOUT_S = 60.0
 
 
@@ -84,7 +84,7 @@ def invoke(spec: SourceSpec, params: dict[str, Any]) -> Any:
     library-owned, and backstops an unmapped library exception verbatim."""
     if spec.hooks is None or not spec.hooks.delegate:
         raise router_upstream_error(
-            spec.error_code_prefix, "library_delegate: spec declares no hooks.delegate"
+            spec.error_code_prefix, "library_delegate: row declares no hooks.delegate"
         )
     cfg = _delegate_cfg(spec)
     library = str(cfg.get("library", "unknown"))
@@ -116,7 +116,7 @@ def invoke(spec: SourceSpec, params: dict[str, Any]) -> Any:
 
 def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
     """VECTOR delegate: call the hook for features and serialize to FGB bytes. A raster
-    spec does NOT route here -- it reaches :func:`invoke` for its array through the
+    row does NOT route here -- it reaches :func:`invoke` for its array through the
     raster executor, so the shared COG writer serializes that result."""
     features = invoke(spec, params)
     return features_to_fgb_bytes(features, spec, params)

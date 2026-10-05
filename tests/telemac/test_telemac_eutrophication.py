@@ -448,7 +448,7 @@ def test_the_runtime_levers_are_seated_and_no_keyword_twin_is_declared():
 
 
 def test_the_carrier_flow_is_one_reading_the_open_channel_step_can_read():
-    """The discharge the inflow prescribes is whichever source's coverage row
+    """The discharge the inflow prescribes is whichever source's row
     matches this domain, read as ONE value - the step that opens the channel
     refuses a record nobody chose a site from - and its absence is legal."""
     row = {r.name: r for r in _plan().data}["discharge"]

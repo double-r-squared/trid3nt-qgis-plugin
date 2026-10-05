@@ -110,7 +110,7 @@ def _default_declarable_registry() -> dict[str, Any]:
 
 def _gate_expander_tool_names() -> frozenset[str]:
     """The gate-expanders: calling one widens the turn's visible gate with the
-    tool names its result names. A fetcher with a coverage row is never
+    tool names its result names. A fetcher with a row is never
     described to the model, so the match is an expander beside the tool search:
     the sources it names are how that fetcher's schema reaches the turn."""
     from trid3nt_server.tools.search.find_sources.find_sources import FIND_SOURCES

@@ -1,8 +1,8 @@
 """Router typed-error hierarchy over the shared ``_fetch_common`` bases.
 
-A spec-driven source raises a per-source ``error_code`` -- ``<PREFIX>_UPSTREAM_ERROR``
+A row-driven source raises a per-source ``error_code`` -- ``<PREFIX>_UPSTREAM_ERROR``
 / ``<PREFIX>_INPUT_ERROR`` / ``<PREFIX>_EMPTY`` -- stamped at raise time from the
-spec, so no source needs a Python error class of its own."""
+row, so no source needs a Python error class of its own."""
 
 from __future__ import annotations
 
@@ -109,7 +109,7 @@ def router_not_available_error(code_prefix: str, message: str) -> RouterNotAvail
 
 def bbox_error_suffix(spec: Any) -> str:
     """The input-error suffix for a bbox-class failure (gate or malformed bbox):
-    the bbox param's ``error_suffix`` when it pins one, else the spec-level
+    the bbox param's ``error_suffix`` when it pins one, else the row-level
     ``input_error_suffix``. Duck-typed over SourceSpec to stay import-cycle free."""
     for pspec in getattr(spec, "params", {}).values():
         if getattr(pspec, "type", None) == "bbox" and getattr(pspec, "error_suffix", None):

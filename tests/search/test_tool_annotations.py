@@ -169,7 +169,7 @@ def test_session_tool_annotations():
 
 
 def test_fetch_tool_annotations():
-    """A spec-driven fetch tool: read-only + open-world + idempotent (cached)."""
+    """A row-driven fetch tool: read-only + open-world + idempotent (cached)."""
     snapshot = _registry_snapshot()
     assert "fetch_buildings" in snapshot, "fetch_buildings not registered"
     meta = snapshot["fetch_buildings"]

@@ -13,7 +13,7 @@ owns search, signing, the grid and the fuse; this module owns the band math."""
 # backoff is exponential-with-jitter rather than the server's ``Retry-After``.
 #
 # SOURCE NODATA is the source's own where the asset header publishes one. Where it
-# does not, the spec's declared sentinel stands in, so a fill value never blends into
+# does not, the row's declared sentinel stands in, so a fill value never blends into
 # a resampling kernel; the loader has no channel for that, so it rides in on a reader
 # (see ``_driver_with_src_nodata``).
 
@@ -176,7 +176,7 @@ def _datetime_window(stac: dict, params: dict[str, Any]) -> str | None:
 
 def _search(spec: SourceSpec, params: dict[str, Any], collection: str,
             dt_range: str | None) -> list[Any]:
-    """Search the catalog with the spec's declared query; typed empty on no items."""
+    """Search the catalog with the row's declared query; typed empty on no items."""
     stac = (spec.ingest or {}).get("stac", {})
     sel = stac.get("select") or {}
     query: dict[str, Any] = {}
@@ -262,7 +262,7 @@ def _rank_item(sel: dict, items: list[Any], bbox: tuple) -> Any:
 
 def _select_items(spec: SourceSpec, params: dict[str, Any], items: list[Any],
                   asset_key: str) -> list[Any]:
-    """Narrow the search result to the scenes the spec's select mode asks for:
+    """Narrow the search result to the scenes the row's select mode asks for:
     ``mosaic`` keeps every item, ``latest`` the most recent, ``coverage`` ranks AOI
     coverage then recency over scenes carrying the asset, ``best`` the rank ladder."""
     stac = (spec.ingest or {}).get("stac", {})
@@ -334,7 +334,7 @@ def _geobox(spec: SourceSpec, params: dict[str, Any], items: list[Any],
                       "EPSG:4326"), default_resampling
 
     # The density may be a REQUEST param: the lattice a consumer samples against
-    # is the consumer's fact, so it travels from the caller and the spec default
+    # is the consumer's fact, so it travels from the caller and the row default
     # is only what applies when nobody said.
     px_per_deg = params.get("px_per_deg")
     if px_per_deg is None:
@@ -390,7 +390,7 @@ def _driver_with_src_nodata(nodata: float) -> Any:
     the loader resolves nodata from the asset header alone and the load API has no
     channel for a value the header omits."""
 
-    # A source that publishes no header nodata still HAS one, declared on the spec row,
+    # A source that publishes no header nodata still HAS one, declared on the row,
     # and excluding it from the resampling kernel is the difference between a class
     # boundary and a blend of a class code with a fill value.
     from dataclasses import replace
@@ -420,7 +420,7 @@ def _load(spec: SourceSpec, items: list[Any], bands: list[str], geobox: Any,
           src_nodata: float | None = None) -> dict[str, Any]:
     """``{band: 2D array}`` fused first-valid over ``items`` in the supplied order. A
     source failure arrives as the library's own exception carrying the verbatim
-    upstream status, and is restamped with the spec's code rather than swallowed."""
+    upstream status, and is restamped with the row's code rather than swallowed."""
     import odc.stac
 
     _configure_read_path()
@@ -509,7 +509,7 @@ def _source_colormap(spec: SourceSpec, items: list[Any], asset: str) -> dict | N
 
 def stac_to_mosaic(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, str, dict | None]:
     """uint8 first-valid mosaic ``(array, transform, crs, colormap|None)``. The palette
-    is the source's own where the spec declares passthrough, else the spec's pure
+    is the source's own where the row declares passthrough, else the row's pure
     colormap hook."""
     import numpy as np
 
@@ -548,7 +548,7 @@ def stac_to_mosaic(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, 
 
 
 def fetch_source_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
-    """``(array, transform, crs)`` for the spec's render (the tiled-mosaic seam)."""
+    """``(array, transform, crs)`` for the row's render (the tiled-mosaic seam)."""
     render = str((spec.ingest or {}).get("render", "float"))
     if render == "mosaic":
         arr, transform, crs, _cmap = stac_to_mosaic(spec, params)

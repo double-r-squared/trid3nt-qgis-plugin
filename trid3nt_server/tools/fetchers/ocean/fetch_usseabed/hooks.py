@@ -28,7 +28,7 @@ PACKAGE_URL = "https://cmgds.marine.usgs.gov/usseabed/package.php"
 _MEMBER_SUFFIX = "us9_ext.csv"
 
 #: Raw-column -> emitted-column, the record's own values, renamed with the
-#: unit the coverage row states.
+#: unit the row states.
 _COLUMN_MAP = {
     "waterdepth": "waterdepth_m",
     "gravel": "gravel_pct",

@@ -1,8 +1,8 @@
 """Offline tests for the router's source-spec loader.
 
-A well-formed spec loads for each pilot shape, and a malformed one - a missing
+A well-formed row loads for each pilot shape, and a malformed one - a missing
 required key, a shape and output mismatch, a join over a non-vector shape -
-raises the typed load error. A spec that omits its phrasings picks them up from
+raises the typed load error. A row that omits its phrasings picks them up from
 the sibling corpus, and a tree compose keys by name and SKIPS a malformed member. The
 statements that shape a record are in its cache key, so a changed vocabulary or a
 corrected provider row misses the artifact cached under the old one."""
@@ -139,7 +139,7 @@ def test_load_spec_rejects_non_mapping():
 
 # the declared style row: the preset family is closed at registration
 #
-# A row naming a shape nothing can draw must fail HERE, where a spec is loaded,
+# A row naming a shape nothing can draw must fail HERE, where a row is loaded,
 # and not at paint time - a layer that reaches the canvas with no renderer is a
 # blank the reader has to diagnose.
 
@@ -232,7 +232,7 @@ def test_compose_specs_from_tree_skips_malformed(tmp_path):
     bad_dir.mkdir(parents=True)
     (bad_dir / "source.yaml").write_text("name: broken\nshape: not-a-shape\n")
     composed = compose_specs_from_tree(tmp_path)
-    # The malformed spec is skipped; the good one survives.
+    # The malformed row is skipped; the good one survives.
     assert "fetch_demo_vector" in composed
     assert "broken" not in composed
 
@@ -253,7 +253,7 @@ def _coverage(**over) -> dict:
     return row
 
 
-def test_a_coverage_row_loads_onto_the_spec():
+def test_a_row_loads_onto_its_declaration():
     spec = load_spec({**raster_spec(), "coverage": [_coverage()]})
     assert len(spec.coverage) == 1
     row = spec.coverage[0]
@@ -281,7 +281,7 @@ def test_a_column_the_row_states_no_unit_for_is_refused():
                    "coverage": [_coverage(value_column="depth")]})
 
 
-def test_a_coverage_row_naming_a_class_outside_the_vocabulary_is_refused():
+def test_a_row_naming_a_class_outside_the_vocabulary_is_refused():
     with pytest.raises(SpecLoadError):
         load_spec({**raster_spec(), "coverage": [_coverage(data_class="lidar")]})
 
@@ -320,7 +320,7 @@ def test_a_spec_states_no_coverage_by_default():
     assert load_spec(raster_spec()).coverage == []
 
 
-def test_a_source_takes_its_layer_s_datum_from_the_coverage_row_that_states_one():
+def test_a_source_takes_its_layer_s_datum_from_the_row_that_states_one():
     spec = load_spec({**raster_spec(), "coverage": [_coverage(datum="NAVD88")]})
     assert spec.vertical_datum == "NAVD88"
 
@@ -342,7 +342,7 @@ def test_a_row_stating_a_served_frame_or_the_record_loads(stated):
         == stated
 
 
-def test_a_datum_stated_on_the_source_row_is_never_overwritten():
+def test_a_datum_stated_on_the_row_is_never_overwritten():
     spec = load_spec({**raster_spec(), "vertical_datum": "EGM2008",
                       "coverage": [_coverage(datum="NAVD88")]})
     assert spec.vertical_datum == "EGM2008"
@@ -365,7 +365,7 @@ def test_a_row_stating_its_extent_in_one_sentence_loads():
 
 
 def test_a_rowed_source_is_never_the_internal_tier():
-    """A coverage row makes a source pickable by the match, and a picked source
+    """A row makes a source pickable by the match, and a picked source
     is handed to the model - which the internal tier exists to prevent."""
     with pytest.raises(SpecLoadError, match="internal"):
         load_spec({**raster_spec(), "internal_only": True,

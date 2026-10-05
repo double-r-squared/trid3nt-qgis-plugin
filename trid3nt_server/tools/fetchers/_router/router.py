@@ -1,6 +1,6 @@
 """The router engine.
 
-One engine: resolve spec, validate params, apply gates, dispatch by shape, read
+One engine: resolve row, validate params, apply gates, dispatch by shape, read
 through the cache, emit a LayerURI. An executor is a pure ``(spec, params) -> bytes``
 closure; the router owns everything around it and binds the four shared seams."""
 
@@ -79,7 +79,7 @@ _CONUS_BBOX: tuple[float, float, float, float] = (-124.77, 25.05, -67.06, 49.40)
 
 
 def synthesize_metadata(spec: SourceSpec) -> AtomicToolMetadata:
-    """Synthesize ``AtomicToolMetadata`` from the spec. An ``internal_only`` spec (an
+    """Synthesize ``AtomicToolMetadata`` from the row. An ``internal_only`` row (an
     absorbed seam resolved in-process) is tier="internal": registry-resolvable but
     off both the declarable pool and the search index."""
     return AtomicToolMetadata(
@@ -97,7 +97,7 @@ def synthesize_metadata(spec: SourceSpec) -> AtomicToolMetadata:
 
 
 def synthesize_payload_estimator(spec: SourceSpec) -> Callable[..., float]:
-    """Synthesize ``estimate_payload_mb(**args) -> float`` from the spec, for the
+    """Synthesize ``estimate_payload_mb(**args) -> float`` from the row, for the
     payload-warning seam that warns over 25 MB and blocks over 250 MB."""
     pe = spec.payload_estimate
 
@@ -164,7 +164,7 @@ def synthesize_payload_estimator(spec: SourceSpec) -> Callable[..., float]:
 
 
 def validate_params(spec: SourceSpec, raw: dict[str, Any]) -> dict[str, Any]:
-    """The request's params through the spec's own model, then the spec's gates,
+    """The request's params through the row's own model, then the row's gates,
     as the quantized dict BOTH the executor and the cache key are built from. Any
     bad input raises a source-stamped :class:`RouterInputError` before any network
     call."""
@@ -216,17 +216,17 @@ def _apply_gates(spec: SourceSpec, params: dict[str, Any]) -> None:
 
 
 def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], bytes]:
-    """Return the ``(spec, params) -> bytes`` closure for the spec's shape/transform."""
+    """Return the ``(spec, params) -> bytes`` closure for the row's shape/transform."""
     # Borrowed-provider path: a row the session's QGIS opens through its own data
     # provider dispatches by ACCESS, ahead of the shape ladder, because the two
     # modes land on different shapes - an opened overlay is a record, a
     # materialised row is a layer - and one executor answers both.
     if (spec.ingest or {}).get("access") == qgis_provider.ACCESS:
         return qgis_provider.execute
-    # A spec-declared library delegation (``hooks.delegate``, a registered hook that
+    # A row-declared library delegation (``hooks.delegate``, a registered hook that
     # calls a maintained library owning discovery and the socket) wins over the
-    # shape dispatch. A raster spec routes through raster_cog, whose
-    # fetch_source_array calls the delegate for the array; a vector spec routes
+    # shape dispatch. A raster row routes through raster_cog, whose
+    # fetch_source_array calls the delegate for the array; a vector row routes
     # through library_delegate.execute (features -> FGB).
     #
     # Record-return path: a ``shape: record`` source produces a bare JSON dict, not a
@@ -247,7 +247,7 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
     if (spec.ingest or {}).get("access") == "ogr":
         from .executors import vector_ogr
         return vector_ogr.execute
-    # Chained-resolution path: a spec that declares an offset-paging
+    # Chained-resolution path: a row that declares an offset-paging
     # (next_page) or per-item detail-enrichment (enrich_plan) hook routes to the
     # chained_resolution executor (resolve-then-fetch + bounded enrichment over the
     # shared transport). The pure name->id resolve phase (resolve_build only) still
@@ -257,20 +257,20 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
             or (spec.ingest or {}).get("enrich"):
         from .executors import chained_resolution
         return chained_resolution.execute
-    # The HTTP fetch path: a spec that names a build_request hook, or one that
+    # The HTTP fetch path: a row that names a build_request hook, or one that
     # declares ``ingest.access: http_json`` and states its request and body as a
     # field map instead. The executor's two switches pick between them per call.
     if (spec.hooks is not None and spec.hooks.build_request) \
             or (spec.ingest or {}).get("access") == "http_json":
         from .executors import http_json
         return http_json.execute
-    # No in-tree spec declares a join block, so a spec that does arrived with an
+    # No in-tree row declares a join block, so a row that does arrived with an
     # extension whose transform module is not present. Refuse rather than fall through
     # to the geometry-only vector read, which would silently drop the values leg.
     if spec.join is not None:
         raise router_not_available_error(
             spec.error_code_prefix,
-            "this spec declares a join block but _router/transforms/join.py is not "
+            "this row declares a join block but _router/transforms/join.py is not "
             "in the tree; restore it with the extension that supplies it",
         )
     if spec.shape == "raster-cog":
@@ -358,7 +358,7 @@ def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> Layer
     # emit_bbox=false suppresses the LayerURI.bbox stamp entirely.
     if not spec.output.emit_bbox:
         bbox = None
-    # Per-variable LayerURI.units (full fidelity): a JOIN spec carries the units
+    # Per-variable LayerURI.units (full fidelity): a JOIN row carries the units
     # on the resolved variable (census: usd / years / percent / count), matching
     # A non-JOIN source keeps the single normalize.units stamp. Resolution can only
     # fail on an invalid variable, which the executor rejected before this point.
@@ -390,7 +390,7 @@ def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> Layer
         role=role,
         units=units,
         bbox=bbox,
-        # What the SOURCE ROW states its elevations are counted from, carried on
+        # What the ROW states its elevations are counted from, carried on
         # the layer it produced so a consumer reads the row it was handed. A
         # source whose data states its own zero per feature is stamped off its
         # records once they are written.
@@ -406,11 +406,11 @@ def try_dispatch(spec: SourceSpec, raw_params: dict[str, Any]) -> Any:
     return the named sibling tool's result verbatim -- its own cache prefix, layer_id
     and name -- else the ``_NO_DISPATCH`` sentinel."""
 
-    # The seam is deliberately narrow: ONE spec-declared target per condition, no
+    # The seam is deliberately narrow: ONE row-declared target per condition, no
     # chains (a target that itself dispatches is refused, so the result is always
     # exactly one sibling's verbatim output), and evaluation on RAW params before
     # validate / gate / cache / fetch. Only the ``pass_args``-mapped params are
-    # forwarded, and nothing is re-cached under this spec.
+    # forwarded, and nothing is re-cached under this row.
     if not spec.dispatch:
         return _NO_DISPATCH
     from trid3nt_server.tools import TOOL_REGISTRY
@@ -450,7 +450,7 @@ def route(
     """The engine: validate, gate, dispatch, cache, emit. Returns a LayerURI, a record
     dict for a ``shape: record`` source, or an ordered ``list[LayerURI]`` for a
     ``shape: animation_frames`` source."""
-    # Emit-on-fetch control kwargs: router-level, so EVERY spec inherits
+    # Emit-on-fetch control kwargs: router-level, so EVERY row inherits
     # them via the promoted signature's ``**_extra_ignored`` absorber. Popped here
     # so they never reach validation / the cache key -- ``visualize=False`` (probe
     # fetch) suppresses the in-composer input surfacing; ``purpose`` contributes one
@@ -477,7 +477,7 @@ def route(
     if spec.shape == "animation_frames":
         from .executors import animation_frames
         return animation_frames.execute(spec, params, metadata)
-    # A delegated spec's source-specific INPUT gate (hooks.delegate_validate) runs
+    # A delegated row's source-specific INPUT gate (hooks.delegate_validate) runs
     # BEFORE read_through, so a bad request raises pre-cache and pre-network.
     if spec.hooks is not None and spec.hooks.delegate:
         from .executors import library_delegate
@@ -485,13 +485,13 @@ def route(
     # Socketed pre-cache-key delegate resolve: the HRRR-Zarr s3fs cycle
     # walk resolves the published cycle BEFORE read_through so the resolved cycle
     # merges into params and enters the cache key (a cycle=None request would else
-    # compute a non-deterministic key). No-op unless the spec declares it.
+    # compute a non-deterministic key). No-op unless the row declares it.
     if spec.hooks is not None and spec.hooks.delegate_resolve:
         from .executors import library_delegate
         params = {**params, **library_delegate.resolve(spec, params)}
     # Chained-resolution PHASE R: resolve a name -> id BEFORE read_through
     # so the resolved id enters the cache key (a name query and its id query collapse
-    # to one entry). Does the round-1 I/O; no-op unless the spec declares resolve_build.
+    # to one entry). Does the round-1 I/O; no-op unless the row declares resolve_build.
     if spec.hooks is not None and spec.hooks.resolve_build:
         from .executors import chained_resolution
         params = chained_resolution.pre_resolve(spec, params)
@@ -499,7 +499,7 @@ def route(
     # value resolved over the shared HTTP transport (the LANCE MCDWD year->doy dir-walk
     # for a date=None latest request) names a pure-ish pre_resolve hook. Runs BEFORE
     # read_through so the resolved value enters the cache key (a non-deterministic key
-    # otherwise forever serves the first-cached day). No-op unless the spec declares it.
+    # otherwise forever serves the first-cached day). No-op unless the row declares it.
     if spec.hooks is not None and spec.hooks.pre_resolve:
         from .hooks import resolve_hook
         params = {**params, **resolve_hook(spec.hooks.pre_resolve)(spec, params)}
@@ -520,7 +520,7 @@ def route(
         assert result.data is not None, "record source is cacheable; data must be set"
         return json.loads(result.data.decode("utf-8"))
 
-    # Fetch-time provenance channel: a spec that declares
+    # Fetch-time provenance channel: a row that declares
     # output.provenance rides a recorder through read_through so the delegate's
     # record_provenance() is persisted as a sidecar (fresh) and replayed from it
     # (cache hit); the recorded dict reaches the envelope hook below. No-op
@@ -540,7 +540,7 @@ def route(
     # note (fetch_fault_sources' honesty gate: a zero-fault AOI is NEVER given a
     # layer). When the produced vector FGB is feature-empty the named hook returns
     # the record dict, which route() returns INSTEAD of the LayerURI. No-op unless
-    # the spec declares it (a non-empty fetch always takes the LayerURI path below).
+    # the row declares it (a non-empty fetch always takes the LayerURI path below).
     vbe = spec.output.variant_by_emptiness
     if vbe is not None and result.data is not None and _fgb_feature_count(result.data) == 0:
         from .hooks import resolve_hook
@@ -612,7 +612,7 @@ def _apply_envelope(
     data: bytes | None,
     provenance: dict[str, Any] | None = None,
 ) -> LayerURI:
-    """Build the spec's ``output.result_model`` subclass via the pure envelope hook,
+    """Build the row's ``output.result_model`` subclass via the pure envelope hook,
     which computes extra business fields over the produced bytes with no I/O. The
     identity keys ``uri`` and ``layer_type`` are stripped, so a hook only enriches."""
 
@@ -638,7 +638,7 @@ def _apply_envelope(
     cls = LAYER_RESULT_MODELS.get(model_name) if model_name else None
     if cls is None:
         # No declared subclass: overlay the (non-protected) extra onto the base
-        # LayerURI so a name/units override still lands (defensive; a spec that
+        # LayerURI so a name/units override still lands (defensive; a row that
         # declares envelope also declares result_model, validated at load).
         base_fields = set(type(layer).model_fields)
         safe = {k: v for k, v in extra.items() if k in base_fields}

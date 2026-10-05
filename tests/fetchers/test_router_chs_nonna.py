@@ -157,12 +157,12 @@ def test_the_row_states_the_products_own_posting_and_its_one_value_column(row):
 def test_the_layer_is_stamped_in_the_unit_the_row_publishes(spec):
     assert spec.normalize.units == "meters"
     assert spec.normalize.quantity == "elevation"
-    # The datum is stated once, on the row, and the spec adopts it from there.
+    # The datum is stated once, on the row, and the row adopts it from there.
     assert spec.vertical_datum == "lwd_igld85"
 
 
 def test_a_row_stating_its_zero_as_prose_never_loads(spec, tmp_path):
-    """The loader's rowed rule, seeded on this spec: a datum no offset can be
+    """The loader's rowed rule, seeded on this row: a datum no offset can be
     asked in is a surface nothing can bring another onto."""
     raw = yaml.safe_load(
         (_spec._fetchers_root() / "ocean" / "fetch_chs_nonna"

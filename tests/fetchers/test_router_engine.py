@@ -3,7 +3,7 @@
 ``validate_params`` refuses a missing required param, a bad enum, a bad bbox, an
 out-of-gate region and an over-ceiling date range, all typed and without network.
 The synthesized metadata and payload estimators match their models, ``route``
-writes the right cache path and hits on the second call, and a spec promotes."""
+writes the right cache path and hits on the second call, and a row promotes."""
 
 from __future__ import annotations
 
@@ -224,9 +224,9 @@ def test_route_vector_source_class_in_uri(fake_s3, monkeypatch):
 
 @pytest.fixture()
 def registered_spec():
-    """PROMOTE a spec-driven tool under its real name; restore registry after.
+    """PROMOTE a row-driven tool under its real name; restore registry after.
 
-    Post-fold: registration promotes the spec to a tier="general" tool UNDER the
+    Post-fold: registration promotes the row to a tier="general" tool UNDER the
     twin name (no env toggle, no ``__spec`` alias). Yields ``(spec, name)``.
     """
     saved = dict(TOOL_REGISTRY)
@@ -249,7 +249,7 @@ def registered_spec():
 
 
 def test_promoted_tool_registered_under_twin_name_general(registered_spec):
-    """The spec is registered UNDER its real name at tier=general (default pool)."""
+    """The row is registered UNDER its real name at tier=general (default pool)."""
     spec, name = registered_spec
     assert name == "fetch_demo_raster"
     assert name in TOOL_REGISTRY
@@ -261,7 +261,7 @@ def test_promoted_tool_registered_under_twin_name_general(registered_spec):
 
 
 def test_promoted_signature_synthesized_from_spec(registered_spec):
-    """The promoted callable exposes the spec's params (names + required set)."""
+    """The promoted callable exposes the row's params (names + required set)."""
     import inspect
 
     spec, name = registered_spec
@@ -270,7 +270,7 @@ def test_promoted_signature_synthesized_from_spec(registered_spec):
     # every declared param is present; the twin's **_extra_ignored absorber too.
     assert {"bbox", "variable", "start_date", "end_date"} <= set(kinds)
     assert kinds["_extra_ignored"].kind is inspect.Parameter.VAR_KEYWORD
-    # all four are required (no default) in the demo spec.
+    # all four are required (no default) in the demo row.
     for pn in ("bbox", "variable", "start_date", "end_date"):
         assert kinds[pn].default is inspect.Parameter.empty
 
@@ -285,7 +285,7 @@ def test_promoted_tool_in_default_pool(registered_spec):
 
 
 def test_promoted_tool_carries_a_docstring(registered_spec):
-    """A docstring is always present (spec.docstring when set, else synthesized)."""
+    """A docstring is always present (row.docstring when set, else synthesized)."""
     spec, name = registered_spec
     doc = TOOL_REGISTRY[name].fn.__doc__
     assert doc and "fetch_demo_raster" in doc

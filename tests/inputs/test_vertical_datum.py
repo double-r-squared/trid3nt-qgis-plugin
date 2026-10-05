@@ -2,7 +2,7 @@
 
 Covered: two sources on one datum, a source that states none refusing by name,
 two that state different ones refusing with both spelled out, a single source,
-a LAYER stating its own zero against a source NAME reading its spec row, and the
+a LAYER stating its own zero against a source NAME reading its row, and the
 caller's own error family stamped onto the refusal, and WHERE an offset row
 is asked - on the owing source's own footprint, nearest the question's seed."""
 
@@ -54,9 +54,9 @@ def test_the_callers_error_family_is_stamped(
     assert caught.value.error_code == "TELEMAC3D_DATUMS_DIFFER"
 
 
-def test_a_layer_states_its_own_datum_and_a_name_reads_its_source_row(
+def test_a_layer_states_its_own_datum_and_a_name_reads_its_row(
         monkeypatch: pytest.MonkeyPatch) -> None:
-    """A survey carries a local project datum nothing in its spec row knows, so
+    """A survey carries a local project datum nothing in its row knows, so
     what the caller holds is what is read; a bare name still reads the row."""
     from trid3nt_contracts.execution import LayerURI
     from trid3nt_server.inputs.vertical_datum import datum_of

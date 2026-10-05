@@ -50,7 +50,7 @@ _MAX_LOCATION_PAGES = 12
 
 #: The listing's URL, and the CODE a call names: RISE spells a location's own
 #: station code in the trailing parenthetical of its name, and that code is the
-#: id a coverage row carries - a location stating none cannot be addressed by
+#: id a row carries - a location stating none cannot be addressed by
 #: code and is not on the list.
 _LOCATION_LISTING = "https://data.usbr.gov/rise/api/location"
 _CODE = re.compile(r"\(([^()]+)\)\s*$")

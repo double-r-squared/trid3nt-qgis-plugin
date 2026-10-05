@@ -223,7 +223,7 @@ class SettingsDialog(QDialog):
             self.conn_toggle_btn.clicked.connect(self._connect_and_close)
         form.addRow("Connection", self.conn_toggle_btn)
 
-        # The data-source keys. One row per CREDENTIAL the daemon's source rows
+        # The data-source keys. One row per CREDENTIAL the daemon's rows
         # declare, not per source: two sources served by one account share one
         # row and one entered key.
         self.keys_group = QGroupBox("Keys (data sources)")
@@ -261,7 +261,7 @@ class SettingsDialog(QDialog):
         super().accept()
 
     def _load_keyed_sources(self) -> None:
-        """Fetch the credentials the daemon's source rows declare, off-thread so
+        """Fetch the credentials the daemon's rows declare, off-thread so
         a dead agent never freezes the dialog."""
         task = _KeyedSourcesTask(self._resolve_http_base(), self)
         self._keys_task = task

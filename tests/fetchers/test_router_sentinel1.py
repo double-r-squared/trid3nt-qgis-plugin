@@ -2,7 +2,7 @@
 
 A coverage-fraction-then-recency scene select behind an asset-presence pre-filter,
 and a decibel transform whose sentinel nodata is the existing serialize directive.
-OFFLINE these cover the spec identity, the area, polarization and collection
+OFFLINE these cover the row identity, the area, polarization and collection
 gates, the collection-alias normalization and the nodata round trip."""
 
 from __future__ import annotations

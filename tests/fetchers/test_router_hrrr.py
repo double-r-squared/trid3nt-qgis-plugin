@@ -1,7 +1,7 @@
 """The two forecast sources through the router's library-delegate raster mode.
 
 The live data path is proven by a separate parity harness; here the socket is
-mocked for a hermetic run. The offline surfaces: spec identity, the validate
+mocked for a hermetic run. The offline surfaces: row identity, the validate
 region and horizon gates, the resolve's cycle walk with its not-available
 backstop, the read hook's array shaping, the layer stamps and the payload estimate."""
 

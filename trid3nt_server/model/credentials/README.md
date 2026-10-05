@@ -11,4 +11,4 @@ key a source needs is the SOURCE's own statement, on its row.
 | --- | --- |
 | `__init__.py` | The handshake and the resolver, as one surface. |
 | `auth_handshake.py` | The access token the daemon mints, the gate that verifies it, and the one session identity it binds. |
-| `resolver.py` | The runtime resolver over the credential each source row declares: the in-memory session cache first, the row's env var behind it, and the refusal when neither holds one. |
+| `resolver.py` | The runtime resolver over the credential each row declares: the in-memory session cache first, the row's env var behind it, and the refusal when neither holds one. |

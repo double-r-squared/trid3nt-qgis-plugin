@@ -35,7 +35,7 @@ __all__ = [
 # cell, its coverage over this domain, its window, its datum - and a NAMED
 # fetcher is a question frozen against one source that may hold nothing here. So
 # a runtime row states a need and the match reads those facts off every
-# fetcher's own coverage row. Search is how a MODEL finds a tool to call; a slot
+# fetcher's own row. Search is how a MODEL finds a tool to call; a slot
 # is filled from declarations.
 
 class _CoversAOI:
@@ -101,7 +101,7 @@ def shapes_of(data_class: str) -> frozenset[str]:
     """The artifact CLASSES one data class arrives in, off the sources that
     measure it.
 
-    Never restated: which shapes a class is published in is the coverage rows'
+    Never restated: which shapes a class is published in is the rows'
     own statement, so a source added in a new shape widens what a slot of that
     class accepts without a second list moving."""
     from trid3nt_server.tools.fetchers._router.registration import _SPEC_REGISTRY
@@ -194,7 +194,7 @@ class DataDecl:
     #: template in its own words about what is not there.
     absent_note: str = ""
     #: THE NEED this slot states instead of naming a producer: one class of the
-    #: coarse vocabulary, which the match filters every fetcher's coverage row
+    #: coarse vocabulary, which the match filters every fetcher's row
     #: against. The place, the window and the frame are the RUN's and are read
     #: off it, so a question states none of them.
     data_class: str = ""
@@ -212,7 +212,7 @@ class DataDecl:
     kind: str = ""
     #: HOW FAR this question's domain reaches, in kilometres: the one opinion a
     #: question has about its own extent. Generic, because every source calls it
-    #: something else - the coverage row's ``ask`` block maps it to the param
+    #: something else - the row's ``ask`` block maps it to the param
     #: the source states it in.
     span_km: float | None = None
     #: The point a nearest-site query ranks against, the one thing a row tells
@@ -253,7 +253,7 @@ class DataDecl:
         if self.data_class and self.data_class not in DATA_CLASSES:
             raise PlanValidationError(
                 f"Data {self.name!r} states need={self.data_class!r}, which is "
-                f"not one of the classes a coverage row is written in "
+                f"not one of the classes a row is written in "
                 f"({', '.join(DATA_CLASSES)}).")
         if self.observes and not self.data_class:
             raise PlanValidationError(
@@ -444,7 +444,7 @@ class DataDecl:
         imply it - a basin from a pour point, the water inside a drawn box -
         and it wins over what the seed carries;
         ``span_km`` is how far the question reaches,
-        which the answering source's coverage row maps to its own param.
+        which the answering source's row maps to its own param.
         ``geometry`` is the SHAPE this row is read as - a class measured in more
         than one shape has sources publishing each, and a step that cuts a box
         with a line cannot be handed a polygon."""

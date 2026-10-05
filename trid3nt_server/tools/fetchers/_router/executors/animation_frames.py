@@ -73,9 +73,9 @@ def execute(
                 name=frame.name,
                 layer_type=spec.output.layer_type,
                 uri=result.uri,
-                # A frame MAY override the spec-level preset (the archive
+                # A frame MAY override the row-level preset (the archive
                 # source's per-band goes_rgb_animation vs goes_fire_hotspots_rgba);
-                # None falls back to the spec preset (no-op for single-preset sources).
+                # None falls back to the row preset (no-op for single-preset sources).
                 style=frame.style or spec.output.style,
                 role=spec.output.role,
                 units=spec.normalize.units,

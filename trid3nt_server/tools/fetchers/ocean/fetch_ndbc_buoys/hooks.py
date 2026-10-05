@@ -45,7 +45,7 @@ _REALTIME_DAYS = 45
 #: WHAT THIS FETCH PUBLISHES, by NDBC's own column name: the height, the period
 #: and the direction of the sea state. The other stdmet columns (the wind, the
 #: pressure, the air and water temperature) are a meteorological record this
-#: source states no coverage row for and does not carry.
+#: source states no row for and does not carry.
 _PUBLISHED = (
     ("WVHT", "wave_height_m", "wave_height_series_csv"),
     ("DPD", "peak_period_s", "peak_period_series_csv"),

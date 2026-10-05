@@ -9,7 +9,7 @@ clip and synthesis -- and ``delegate_resolve`` walks back to the newest cycle.""
 # forecast-only derived wind speed, the smoke-only fill mask) is declared in
 # ``ingest.hrrr`` and read here. The HRRR-grid physical facts -- the LCC proj4, the
 # 18/48 h horizons, the 6 h cycle backstop -- are the same for both mirrors, so they
-# stay module constants; the CONUS envelope is each spec's declared gate.
+# stay module constants; the CONUS envelope is each row's declared gate.
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ logger = logging.getLogger(
 __all__ = ["resolve_cycle", "read_slice", "validate_inputs"]
 
 # HRRR LCC projection and horizons: the same physical grid for HRRR
-# and HRRR-Smoke, kept module-level rather than in ingest so both specs read one
+# and HRRR-Smoke, kept module-level rather than in ingest so both rows read one
 # source of truth for the grid facts.
 _HRRR_PROJ4 = (
     "+proj=lcc +lat_1=38.5 +lat_2=38.5 +lat_0=38.5 +lon_0=-97.5 "

@@ -5,7 +5,7 @@ things it does not own ride here: the mirror chain, since it holds ONE url, and 
 refusal it returns AS DATA when a non-OK body parses as JSON."""
 
 # MIRRORS. OSMnx wants the API BASE and appends ``/interpreter`` itself, while a
-# source row names the interpreter URL its callers would use, so the suffix comes off
+# row names the interpreter URL its callers would use, so the suffix comes off
 # here; the chain is set, call, catch, next, restore.
 #
 # MEASURED AND ACCEPTED for this family: on a 429 or a 504 OSMnx pauses a hardcoded

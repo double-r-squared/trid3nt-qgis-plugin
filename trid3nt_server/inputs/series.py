@@ -1,6 +1,6 @@
 """THE ALIGNMENT: one measured record moved onto the clock a reader asks it on.
 
-A series carries its own instants, its own unit and - off the coverage row that
+A series carries its own instants, its own unit and - off the row that
 fetched it - its own QUANTITY CLASS, and those three decide every move that may
 be made on it: a rate is conserved, a state interpolates, a class label goes to
 its nearest neighbour. A hole wider than the bound refuses rather than being

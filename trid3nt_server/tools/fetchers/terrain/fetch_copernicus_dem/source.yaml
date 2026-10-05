@@ -1,6 +1,6 @@
 # The Copernicus GLO-30 global 30 m DEM over the Planetary Computer STAC catalog
 # (first-valid mosaic, metres, -9999 nodata). A SOURCE: it states a terrain
-# coverage row, so the match may pick it and the gate hands the model its schema
+# row, so the match may pick it and the gate hands the model its schema
 # on that pick - which is why it carries no corpus and is never ranked by phrase.
 # fetch_dem(source="copernicus"), _hydrology_common, model_debris_flow and
 # compute_sediment_yield also resolve it in-process via TOOL_REGISTRY.
@@ -101,5 +101,5 @@ docstring: |-
   single-band float32 Cloud-Optimized GeoTIFF in metres on the EGM2008 geoid.
 
   ``px_per_deg=3600`` returns the SOURCE pixels rather than a resample of them.
-  Its coverage row says where it reaches and how it compares with the finer
+  Its row says where it reaches and how it compares with the finer
   alternatives; ``fetch_dem(source="copernicus")`` resolves this same reader.

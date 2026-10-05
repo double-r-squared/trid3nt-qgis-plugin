@@ -33,7 +33,7 @@ package DataSeam {
 
     part def KeyedSourceDeclaration {
         doc /*
-        A source row that needs a key. It states WHICH key, by name, beside the
+        A row that needs a key. It states WHICH key, by name, beside the
         endpoints it needs the key for - so nothing downstream keeps a table of
         which source needs what.
         */
@@ -41,7 +41,7 @@ package DataSeam {
 
     part def CredentialResolver {
         doc /*
-        The one reader of a source row's credential. It resolves a key for a
+        The one reader of a row's credential. It resolves a key for a
         keyed tool - the session's pushed key first, the row's own env var
         behind it - and refuses by name when neither holds one, because a keyed
         call with no key cannot succeed and a refusal that names the credential
@@ -67,7 +67,7 @@ package DataSeam {
 
     part def KeysForm {
         doc /*
-        One masked row per credential the source rows declare, not per source,
+        One masked row per credential the rows declare, not per source,
         so two sources served by one account are one row and one entered key.
         The chat is never a key path.
         */
@@ -91,7 +91,7 @@ package DataSeam {
 
     part def FetcherRouter {
         doc /*
-        The door a data ask enters: one source row, validated, gated,
+        The door a data ask enters: one row, validated, gated,
         dispatched, cached and emitted.
         */
     }
@@ -102,7 +102,7 @@ package DataSeam {
         row's catalog coordinates - which collection, which asset, at which
         cell, signed how, rendered how - and returns the window. It knows
         nothing about the DATA: the vertical datum, the resolution and the style
-        stay on the source row, because a library that fetches bytes cannot say
+        stay on the row, because a library that fetches bytes cannot say
         what they are referenced to.
         */
     }
@@ -118,7 +118,7 @@ package DataSeam {
     part def BedPainter {
         doc /*
         The op that puts a source's elevations onto a mesh's nodes: it asks the
-        source row for its datum before it fetches, journals what actually
+        row for its datum before it fetches, journals what actually
         painted, and refuses a bed that came back on two vertical references.
         */
     }
@@ -234,7 +234,7 @@ package DataSeam {
 
     interface def CatalogReadDeclaration {
         doc /*
-        What a source row tells a catalog reader. Every key is a coordinate INTO
+        What a row tells a catalog reader. Every key is a coordinate INTO
         a catalog, never a claim about the pixels: the reader can find the asset
         and put it on a grid, and it still cannot say which datum the numbers
         are on. That is why a bed source published through a catalog states its
@@ -481,7 +481,7 @@ package DataSeam {
 
     part def SourceMatch {
         doc /*
-        The one function that reads a need against every coverage row: class and
+        The one function that reads a need against every row: class and
         place hard, the window hard for a series and a sort key for a surface,
         the datum flagged. Pure over declarations; the caller probes.
         */
@@ -762,7 +762,7 @@ package DataSeam {
 
     requirement def OneSourceReadsOnOneStatedDatum {
         doc /*
-        Every bed source states its VERTICAL DATUM on its own source row, taken
+        Every bed source states its VERTICAL DATUM on its own row, taken
         from the dataset's own documentation and never inferred from the bytes
         - a raster carries numbers, and what they are counted from is not among
         them. A row that cannot state one carries none, and a row carrying none
@@ -785,11 +785,11 @@ package DataSeam {
         a bed they may stitch another source onto, and that is the metadata the
         two have to be compared on.
 
-        THE ROW STATES A FRAME NAME. The zero on a coverage row is one of the
+        THE ROW STATES A FRAME NAME. The zero on a row is one of the
         names the offset service converts between, the per-record word where
         each feature carries its own, or nothing at all. It is what an offset
         is asked in, so prose - "each Great Lake's own Low Water Datum" - names
-        a surface nothing can bring another onto and the spec loader refuses it
+        a surface nothing can bring another onto and the row loader refuses it
         naming the row. The vocabulary is read off the offset fetch's own
         params, because a second list of frame names would drift from the one
         service that has to answer for them. What a SUPPLIED layer says is not
@@ -906,7 +906,7 @@ package DataSeam {
         measurement to every reader downstream.
 
         The zero is the one the RECORD states. A source whose every feature
-        carries its own says so on its coverage row in the per-record form
+        carries its own says so on its row in the per-record form
         rather than stating nothing, and what is aligned states the zero the
         rows state - a refusal that read the holder instead would say a survey
         states no datum while its every row states one. A stated zero is asked
@@ -956,7 +956,7 @@ package DataSeam {
 
     requirement def ASourceStatesWhatItCovers {
         doc /*
-        A fetcher's coverage row is its ONLY statement of coverage: the class of
+        A fetcher's row is its ONLY statement of coverage: the class of
         thing it measures, the place it reaches as a coarse polygon or a station
         set or "read from the service", the time its records span, the cell it
         publishes at, the zero its elevations are counted from, and the unit of
@@ -981,7 +981,7 @@ package DataSeam {
         did not choose. A gauge that reports a measured series and a predicted
         one of the same class carries a row for each, and each row carries the
         request values it is fetched under, because the row is what the match
-        weighed and a spec default answers for whichever row it was written
+        weighed and a row default answers for whichever row it was written
         around. A request value written as a NEED ATTRIBUTE rather than a
         literal is the row mapping one of the need's own generic facts - how far
         the question reaches, the place it is asked at - onto the param this
@@ -1040,7 +1040,7 @@ package DataSeam {
         no unit under refuses rather than reading the record in whatever its
         source published. How far the question's domain REACHES is the one
         opinion a row still states about its own extent, and it states it
-        generically: the answering source's coverage row maps it onto the param
+        generically: the answering source's row maps it onto the param
         that source calls it by, and a row that states none leaves the param off
         the call so the source's own default answers.
 
@@ -1138,7 +1138,7 @@ package DataSeam {
         nobody measured.
 
         A record is read in the unit it was MEASURED in, off its source's
-        coverage row where the record carries no unit column of its own; a
+        row where the record carries no unit column of its own; a
         record that states none refuses rather than being read in the unit the
         slot wanted. And a gauge publishes a HEIGHT above its own zero, which is
         a different surface from the one a bed is painted on: the run reaches
@@ -1158,7 +1158,7 @@ package DataSeam {
         survey-boundary polygons carrying a horizontal projection and no
         vertical datum field at all, with the soundings behind per-survey bulk
         archives on another host. A LADDER RUNG has to state its datum on the
-        source row, before it fetches, so it cannot be one - and what the
+        row, before it fetches, so it cannot be one - and what the
         methodology leaves under it is BlueTopo alone, which is not a
         degradation path either. The navigable class therefore has no ladder and
         refuses, naming the stopped primary.
@@ -1377,7 +1377,7 @@ package DataSeam {
     verify requirement ACatalogReaderCarriesNoProvenance by
         "tests/fetchers/test_router_stac_raster.py::test_mosaic_fuse_is_first_valid_in_search_order";
     verify requirement ACatalogReaderCarriesNoProvenance by
-        "tests/fetchers/test_bathymetry_data_seam.py::test_every_bed_capable_source_row_states_its_vertical_datum";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_every_bed_capable_row_states_its_vertical_datum";
 
     verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
         "tests/telemac/test_telemac_run_identity.py::test_what_the_cut_covers_is_on_the_card_before_the_solve";
@@ -1408,7 +1408,7 @@ package DataSeam {
     verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
         "tests/telemac/test_open_water_domains.py::test_the_thermocline_is_stated_below_the_water_top_not_the_datum";
     verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
-        "tests/inputs/test_vertical_datum.py::test_a_layer_states_its_own_datum_and_a_name_reads_its_source_row";
+        "tests/inputs/test_vertical_datum.py::test_a_layer_states_its_own_datum_and_a_name_reads_its_row";
 
     satisfy requirement BedSourceStatesItsDatum by blueTopoSource;
     satisfy requirement BedSourceStatesItsDatum by blueTopoDeclaration;
@@ -1429,11 +1429,11 @@ package DataSeam {
     satisfy requirement OneSourceReadsOnOneStatedDatum by regionalCoastalDemDeclaration;
     satisfy requirement OneSourceReadsOnOneStatedDatum by blueTopoDeclaration;
     verify requirement OneSourceReadsOnOneStatedDatum by
-        "tests/fetchers/test_bathymetry_data_seam.py::test_every_bed_capable_source_row_states_its_vertical_datum";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_every_bed_capable_row_states_its_vertical_datum";
     verify requirement OneSourceReadsOnOneStatedDatum by
         "tests/fetchers/test_bathymetry_data_seam.py::test_the_lake_row_pins_one_product_of_the_mixed_mosaic";
     verify requirement OneSourceReadsOnOneStatedDatum by
-        "tests/mesh/test_mesh_topology_and_bed.py::test_a_source_row_that_states_no_datum_is_not_a_bed";
+        "tests/mesh/test_mesh_topology_and_bed.py::test_a_row_that_states_no_datum_is_not_a_bed";
     verify requirement OneSourceReadsOnOneStatedDatum by
         "tests/mesh/test_mesh_topology_and_bed.py::test_the_bed_card_states_the_datum_and_the_acquisition_of_its_source";
     verify requirement OneSourceReadsOnOneStatedDatum by
@@ -1447,23 +1447,23 @@ package DataSeam {
     satisfy requirement ASourceStatesWhatItCovers by gaugeDeclaration;
     satisfy requirement ASourceStatesWhatItCovers by lakeDeclaration;
     verify requirement ASourceStatesWhatItCovers by
-        "tests/fetchers/test_coverage_rows.py::test_every_spec_loads_and_its_rows_validate";
+        "tests/fetchers/test_rows.py::test_every_spec_loads_and_its_rows_validate";
     verify requirement ASourceStatesWhatItCovers by
-        "tests/fetchers/test_coverage_rows.py::test_a_source_with_no_row_says_it_is_model_callable";
+        "tests/fetchers/test_rows.py::test_a_source_with_no_row_says_it_is_model_callable";
     verify requirement ASourceStatesWhatItCovers by
-        "tests/fetchers/test_coverage_rows.py::test_a_station_row_lists_its_stations";
+        "tests/fetchers/test_rows.py::test_a_station_row_lists_its_stations";
     verify requirement ASourceStatesWhatItCovers by
-        "tests/fetchers/test_coverage_rows.py::test_the_tide_gauge_states_the_record_and_the_prediction_apart";
+        "tests/fetchers/test_rows.py::test_the_tide_gauge_states_the_record_and_the_prediction_apart";
     verify requirement ASourceStatesWhatItCovers by
-        "tests/fetchers/test_coverage_rows.py::test_the_nearest_station_is_what_a_listed_set_is_measured_from";
+        "tests/fetchers/test_rows.py::test_the_nearest_station_is_what_a_listed_set_is_measured_from";
     verify requirement ASourceStatesWhatItCovers by
-        "tests/fetchers/test_coverage_rows.py::test_every_series_source_states_the_unit_of_its_value_columns";
+        "tests/fetchers/test_rows.py::test_every_series_source_states_the_unit_of_its_value_columns";
     verify requirement ASourceStatesWhatItCovers by
-        "tests/fetchers/test_coverage_rows.py::test_the_gauge_network_states_each_column_on_its_own_row";
+        "tests/fetchers/test_rows.py::test_the_gauge_network_states_each_column_on_its_own_row";
     verify requirement ASourceStatesWhatItCovers by
-        "tests/fetchers/test_coverage_rows.py::test_a_lake_row_covers_its_lake_and_not_the_open_coast";
+        "tests/fetchers/test_rows.py::test_a_lake_row_covers_its_lake_and_not_the_open_coast";
     verify requirement ASourceStatesWhatItCovers by
-        "tests/fetchers/test_router_spec_loader.py::test_a_coverage_row_naming_a_class_outside_the_vocabulary_is_refused";
+        "tests/fetchers/test_router_spec_loader.py::test_a_row_naming_a_class_outside_the_vocabulary_is_refused";
     verify requirement ASourceStatesWhatItCovers by
         "tests/fetchers/test_router_spec_loader.py::test_a_spec_states_no_coverage_by_default";
 
@@ -1560,7 +1560,7 @@ package DataSeam {
     verify requirement ASeriesIsAlignedToTheRunsEventTime by
         "tests/inputs/test_observation.py::test_a_window_in_no_stated_unit_refuses_rather_than_reading_the_slot_s";
     verify requirement ASeriesIsAlignedToTheRunsEventTime by
-        "tests/inputs/test_observation.py::test_the_coverage_row_s_column_unit_is_what_a_bare_record_is_read_in";
+        "tests/inputs/test_observation.py::test_the_row_s_column_unit_is_what_a_bare_record_is_read_in";
     verify requirement ASeriesIsAlignedToTheRunsEventTime by
         "tests/inputs/test_observation.py::test_a_gage_height_reaches_the_run_s_frame_over_the_gauge_s_own_zero";
     verify requirement ASeriesIsAlignedToTheRunsEventTime by

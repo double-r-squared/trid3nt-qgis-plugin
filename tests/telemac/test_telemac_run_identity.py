@@ -134,20 +134,20 @@ def test_what_the_cut_covers_is_on_the_card_before_the_solve():
     they meet the fill, not discovered on the journal after the run."""
     from trid3nt_server.workflows.runtime.journal import (
         bind_coverage, cut_coverage, drain_coverage)
-    from trid3nt_server.workflows.telemac.workflow import _coverage_rows
+    from trid3nt_server.workflows.telemac.workflow import _fetcher_rows
 
     token = bind_coverage()
     try:
         cut_coverage("Over the WATER the bed is measured by fetch_gebco 70.0%, "
                      "and 30.0% of it is measured by nothing.")
-        rows = _coverage_rows()
+        rows = _fetcher_rows()
     finally:
         drain_coverage(token)
     assert [row.name for row in rows] == ["coverage 1"]
     assert "30.0%" in rows[0].value and not rows[0].editable
 
 
-def test_a_run_that_cut_nothing_states_no_coverage_row():
-    from trid3nt_server.workflows.telemac.workflow import _coverage_rows
+def test_a_run_that_cut_nothing_states_no_row():
+    from trid3nt_server.workflows.telemac.workflow import _fetcher_rows
 
-    assert _coverage_rows() == []
+    assert _fetcher_rows() == []

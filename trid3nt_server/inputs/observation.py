@@ -352,7 +352,7 @@ def _series(props: Mapping[str, Any], series_field: str, units: Any,
             "OBSERVATION_UNIT_UNSTATED",
             f"{label} reports a window in no stated unit and this slot reads "
             f"{to_units!r}. The unit of a record's value column is stated on "
-            "the source's coverage row.")
+            "the source's row.")
     _covers_the_run(rows, at, window_s, label)
     try:
         found = Series.from_samples(rows, units=str(units), at=at)

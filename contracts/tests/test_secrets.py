@@ -189,7 +189,7 @@ def test_envelope_type_literal_validation() -> None:
 
 
 def test_provider_is_the_row_stated_credential_name() -> None:
-    """``provider`` is the credential NAME a source row declares, not a closed
+    """``provider`` is the credential NAME a row declares, not a closed
     vocabulary here: a name the rows state validates, an empty one does not."""
     for name in ("firms", "ecmwf_cds", "openaq", "airnow"):
         assert _record(provider=name).provider == name

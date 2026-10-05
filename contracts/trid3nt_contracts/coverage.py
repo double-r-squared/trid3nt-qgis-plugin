@@ -1,6 +1,6 @@
 """What a data source COVERS, and the ranked list a slot's match produces.
 
-A coverage row is a fetcher's only statement of what it holds: the class of
+A row is a fetcher's only statement of what it holds: the class of
 thing it measures, where, over what time, at what cell, counted from what zero,
 and the unit of each value column it publishes. A slot states a NEED of the same
 vocabulary and the match reads the two; nothing here knows about a template.
@@ -297,8 +297,8 @@ class Coverage(GraceModel):
     units: dict[str, str] = Field(default_factory=dict)
     #: The request values this ROW is fetched under, by param name - what makes
     #: the source answer with THIS row rather than another it also serves. The
-    #: probe passes them, because the row is what was matched and a spec default
-    #: answers for whichever row the spec was written around. A value written
+    #: probe passes them, because the row is what was matched and a row default
+    #: answers for whichever row the row was written around. A value written
     #: ``need:<attribute>`` is not a literal: it maps one of the need's own
     #: generic attributes - ``span_km``, how far the question reaches, or
     #: ``seed_point``, the place it is asked at - onto the param THIS source

@@ -431,7 +431,7 @@ def test_asset_suffix_matches_a_numbered_key(tmp_path):
     assert int(arr_out.max()) == 1
 
 
-# The honesty floor: a read failure is the spec's typed error, carrying what
+# The honesty floor: a read failure is the row's typed error, carrying what
 # the library said.
 
 

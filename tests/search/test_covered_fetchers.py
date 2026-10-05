@@ -1,4 +1,4 @@
-"""How a fetcher with a coverage row reaches the model: the match, not a phrase.
+"""How a fetcher with a row reaches the model: the match, not a phrase.
 
 A covered fetcher leaves the retrieval index, so no phrasing ranks it; the
 model asks ``find_sources`` for a class at a place and the survivors it names
@@ -43,7 +43,7 @@ def test_the_survivors_it_names_are_what_the_gate_expands_on(registry):
 
 def test_every_covered_source_is_a_registered_fetcher(registry):
     covered = covered_sources()
-    assert covered, "no source states a coverage row"
+    assert covered, "no source states a row"
     assert not sorted(covered - set(registry))
 
 
@@ -81,7 +81,7 @@ def test_a_covered_fetcher_leaves_the_index_and_an_overlay_one_stays(index):
     assert not indexed & covered_sources()
     for overlay in ("fetch_naip", "fetch_opera_dswx", "fetch_nhd_waterbodies"):
         assert overlay in indexed, (
-            f"{overlay} states no coverage row and stays description-routed")
+            f"{overlay} states no row and stays description-routed")
     assert FIND_SOURCES in indexed
 
 
@@ -128,7 +128,7 @@ async def test_every_class_phrasing_routes_to_the_match(index):
 @pytest.mark.asyncio
 async def test_every_overlay_tool_is_still_reached_by_its_own_phrasings(registry,
                                                                         index):
-    """A fetcher with no coverage row is routed by description, so its own
+    """A fetcher with no row is routed by description, so its own
     corpus must still surface it: the class corpora never crowd it out."""
     import trid3nt_server.tools.search.search_tools.search_tools as dd
 
@@ -161,7 +161,7 @@ def test_the_model_is_given_the_match_with_the_vocabulary_on_it(registry):
 
 def test_no_covered_fetcher_stands_on_the_always_visible_floor(registry):
     """The floor is for tools needed on MOST turns whatever the place. A source
-    with a coverage row is found where its row reaches the ground, so declaring
+    with a row is found where its row reaches the ground, so declaring
     it every turn is the very claim the match exists to stop making."""
     from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
 

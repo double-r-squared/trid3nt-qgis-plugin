@@ -360,7 +360,7 @@ def _build_index(
     registry_snapshot: dict[str, Any] | None = None,
 ) -> _DiscoverIndex:
     """The BM25 + dense index over the registry and the composed corpus. ONE
-    document per tool feeds both channels; a spec-driven tool indexes exactly like a
+    document per tool feeds both channels; a row-driven tool indexes exactly like a
     hand-written one, with no special case."""
     from trid3nt_contracts.coverage import DATA_CLASSES
     from trid3nt_server.tools.search.find_sources.find_sources import FIND_SOURCES
@@ -368,7 +368,7 @@ def _build_index(
 
     snapshot = registry_snapshot if registry_snapshot is not None else dict(TOOL_REGISTRY)
     corpus = _load_corpus(corpus_path)
-    # A fetcher with a COVERAGE ROW is found rather than ranked: which source
+    # A fetcher with a ROW is found rather than ranked: which source
     # measures a class at a place is decided on the row's extent, window and
     # cell, which no phrasing can weigh. It leaves the index, the class
     # phrasings route to find_sources instead, and the survivors it names enter

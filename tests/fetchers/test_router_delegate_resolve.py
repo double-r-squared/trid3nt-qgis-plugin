@@ -2,7 +2,7 @@
 
 It runs after the type gate and the delegate validate and BEFORE the cache read,
 and MERGES its dict return into the params so a resolved cycle enters the cache
-key. Pinned: the no-op for a spec that omits it, the merge giving distinct keys,
+key. Pinned: the no-op for a row that omits it, the merge giving distinct keys,
 the typed upstream backstop on an unmapped library error, and the pairing gate."""
 
 from __future__ import annotations

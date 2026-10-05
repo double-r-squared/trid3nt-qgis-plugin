@@ -1,6 +1,6 @@
 """The declarative field map: what a build/parse hook pair states in Python.
 
-A spec states its request template, its body decode, its paging style and its keyed
+A row states its request template, its body decode, its paging style and its keyed
 detail join under ``ingest``; the executors read them wherever no hook is named. The
 vocabulary is the station_timeseries one generalized from a station loop to a row list."""
 

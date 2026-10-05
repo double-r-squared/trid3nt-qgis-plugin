@@ -1,4 +1,4 @@
-"""``fetch_dem`` as a spec-driven library-delegate router source.
+"""``fetch_dem`` as a row-driven library-delegate router source.
 
 The gated-fallback contract's pins carry over onto the router seams: the network
 step is the monkeypatchable array fetch returning array, transform and CRS, and

@@ -1,4 +1,4 @@
-"""The coverage rows, read off the specs that carry them.
+"""The rows, read off the rows that carry them.
 
 A row is a source's ONLY statement of coverage, so this pins what each one
 declares rather than what its prose says."""
@@ -16,7 +16,7 @@ from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
 
 _ROOT = Path(__file__).resolve().parents[2] / "trid3nt_server" / "tools" / "fetchers"
 
-#: Every fetcher spec in the tree - the sweep reads what each one declares
+#: Every fetcher row in the tree - the sweep reads what each one declares
 #: rather than a hand-kept list that goes stale the moment a source lands.
 SPECS = sorted(_ROOT.glob("*/*/source.yaml"))
 

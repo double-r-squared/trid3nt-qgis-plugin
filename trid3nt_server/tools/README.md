@@ -1,7 +1,7 @@
 # `tools/` - the atomic-tool surface
 
 Every tool the model can call is registered here at import time. A tool is one
-of two kinds: a fetcher produces data from outside - a declared source spec the
+of two kinds: a fetcher produces data from outside - a declared row the
 router executes - and a derive tool ingests data and outputs data - a function.
 Search and the meta tools stand beside them as infrastructure. The registry and
 the cache shim are the two seams they all pass through.
@@ -32,13 +32,13 @@ the cache shim are the two seams they all pass through.
 | `fetchers/_fetch_common.py` | The typed fetch errors and bbox helpers every fetcher shares. |
 | `fetchers/_public_s3.py` | Anonymous access to public AWS S3 buckets, independent of the caller's credentials. |
 | `fetchers/us_states.py` | US state and NWS area-code resolution, shared by the alert fetchers. |
-| `fetchers/_router/router.py` | The router engine: a declared spec plus the ask to a request, a response and a typed layer. |
+| `fetchers/_router/router.py` | The router engine: a declared row plus the ask to a request, a response and a typed layer. |
 | `fetchers/_router/spec.py` | The source-spec loader - schema validation, co-located corpus pickup, tree walk. |
-| `fetchers/_router/registration.py` | Promotion: a spec becomes a registered tool with a synthesized signature and schema. |
+| `fetchers/_router/registration.py` | Promotion: a row becomes a registered tool with a synthesized signature and schema. |
 | `fetchers/_router/emit_on_fetch.py` | Surfacing a fetched INPUT as a `role=context` layer through the emission seam. |
 | `fetchers/_router/errors.py` | The router's typed-error hierarchy over the shared fetch bases. |
 | `fetchers/_router/executors/` | How a request is actually run: HTTP JSON, raster COG, vector FlatGeobuf, zipped vector, station timeseries, library delegates, animation frames. |
-| `fetchers/_router/hooks/` | The hook contract (`RequestPlan`, `register_hook`, `resolve_hook`) and the modules SEVERAL specs share; the loader walks both this folder and the co-located `hooks.py` files. |
-| `fetchers/<group>/<spec>/hooks.py` | One spec's own `build_request` / `parse_response` overrides - what the spec cannot declare, beside the spec, registered by the tree walk. |
+| `fetchers/_router/hooks/` | The hook contract (`RequestPlan`, `register_hook`, `resolve_hook`) and the modules SEVERAL rows share; the loader walks both this folder and the co-located `hooks.py` files. |
+| `fetchers/<group>/<spec>/hooks.py` | One row's own `build_request` / `parse_response` overrides - what the row cannot declare, beside the row, registered by the tree walk. |
 | `fetchers/_router/transforms/` | Post-fetch shaping: the tiled mosaic - a bbox split over the tile size, each tile through the executor, merged first-non-nodata. |
 | `fetchers/_router/transport/` | The one retry authority: the pooled HTTP client, the GDAL read policy every remote raster opens under, staged-object resolution, zip-object reads, and their typed errors. |

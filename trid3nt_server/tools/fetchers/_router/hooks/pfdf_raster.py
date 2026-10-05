@@ -2,7 +2,7 @@
 
 pfdf ships maintained readers for the USGS TNM 3DEP DEM and the STATSGO soils COG
 collection, each owning discovery and the socket. A hook returns ``(array_float32,
-transform, crs)``; the coverage envelope is each spec's own gate."""
+transform, crs)``; the coverage envelope is each row's own gate."""
 
 from __future__ import annotations
 

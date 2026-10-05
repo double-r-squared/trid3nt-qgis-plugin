@@ -1,6 +1,6 @@
 """Shared checks for the fetchers slice.
 
-A fetcher with a coverage row is FOUND, never ranked by phrase: it carries no
+A fetcher with a row is FOUND, never ranked by phrase: it carries no
 corpus of its own, so what a test of its retrieval asserts is that its CLASS's
 phrasings reach ``find_sources`` and that the source stands under that class.
 """
@@ -27,7 +27,7 @@ def class_routes_to_the_match():
     def check(data_class: str, fetcher: str) -> None:
         dd._get_index()
         assert fetcher in covered_sources(), (
-            f"{fetcher} states no coverage row, so no class finds it")
+            f"{fetcher} states no row, so no class finds it")
         queries = corpus.get(data_class)
         assert queries, f"the class {data_class!r} carries no phrasings"
         missed = [q for q in queries

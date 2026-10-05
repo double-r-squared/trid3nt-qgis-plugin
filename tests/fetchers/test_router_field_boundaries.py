@@ -1,7 +1,7 @@
 """``fetch_field_boundaries``: the GeoParquet-pushdown vector delegate.
 
 The live row-group pushdown read is proven by a separate parity harness. The
-offline surfaces here are spec identity, the pure dataset selection - automatic,
+offline surfaces here are row identity, the pure dataset selection - automatic,
 explicit, no coverage and an unknown key - and the payload estimate."""
 
 from __future__ import annotations

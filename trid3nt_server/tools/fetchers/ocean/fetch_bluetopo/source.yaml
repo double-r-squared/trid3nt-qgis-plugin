@@ -127,7 +127,7 @@ docstring: |-
       - A seamless land-plus-sea surface in one raster - use ``fetch_cudem``,
         whose 1/9 arc-second tiles carry the land beside the sea floor.
       - Outside navigationally significant US water: this tool refuses
-        (see the coverage row).
+        (see the row).
 
   **Parameters:**
       bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326, inside the

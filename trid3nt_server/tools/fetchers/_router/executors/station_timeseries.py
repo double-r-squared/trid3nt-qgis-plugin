@@ -462,7 +462,7 @@ def execute_snapshot(spec: SourceSpec, params: dict[str, Any]) -> bytes:
 def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
     """Discover and fetch stations, then serialize to point-FGB bytes.
     ``ingest.per_station.emit == "snapshot"`` selects the one-row-per-station path;
-    every other spec takes the rollup and inline ``time_series_csv`` path."""
+    every other row takes the rollup and inline ``time_series_csv`` path."""
     if ((spec.ingest or {}).get("per_station") or {}).get("emit") == "snapshot":
         return execute_snapshot(spec, params)
     records = fetch_station_records(spec, params)

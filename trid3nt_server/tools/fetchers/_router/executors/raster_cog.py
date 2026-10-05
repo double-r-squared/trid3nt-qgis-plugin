@@ -1060,7 +1060,7 @@ def _imageserver_size(bbox: tuple[float, float, float, float], ingest: dict[str,
     # ``px_per_deg`` is a fixed pixel density per DEGREE on both axes -- an angular
     # grid, so the cell is not square away from the equator -- and is what a caller
     # declares to reproduce a sample lattice exactly rather than a metric cell; a
-    # request param of the same name overrides the spec default. Otherwise the metric
+    # request param of the same name overrides the row default. Otherwise the metric
     # sizing applies: m/degree at the bbox midpoint latitude over ``native_cell_m``.
     px_min = int(ingest.get("px_min", 16))
     px_max = int(ingest.get("px_max", 4096))
@@ -1124,7 +1124,7 @@ def _imageserver_export_bytes(spec: SourceSpec, params: dict[str, Any]) -> bytes
     img = ingest.get("imageserver", {})
     bbox = tuple(params["bbox"])
 
-    # The service is either FIXED on the spec (one mosaic, no choice to offer) or
+    # The service is either FIXED on the row (one mosaic, no choice to offer) or
     # resolved from a request param (the layer -> ImageServer map).
     service = img.get("service")
     svc_param = None
@@ -1145,7 +1145,7 @@ def _imageserver_export_bytes(spec: SourceSpec, params: dict[str, Any]) -> bytes
     url = f"{base}/{service}/ImageServer/exportImage"
 
     # A caller may declare the sample lattice itself (px_per_deg / max_px_per_side);
-    # a request value overrides the spec default so one spec serves callers whose
+    # a request value overrides the row default so one row serves callers whose
     # grids differ, without either of them re-implementing the request.
     sizing = dict(img)
     for knob, key in (("px_per_deg", "px_per_deg"), ("max_px_per_side", "px_max")):

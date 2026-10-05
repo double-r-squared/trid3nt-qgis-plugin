@@ -1,6 +1,6 @@
 """The slots the match fills: the bed's one row, and a run's series.
 
-Offline. The coverage rows are values and the fetchers are stubs, so what is
+Offline. The rows are values and the fetchers are stubs, so what is
 proved is the RULE - the ONE row the match ranked first, a wet hole refused at
 the fill naming the steps that compose a bed over it, and the next survivor when
 the top one held nothing."""
@@ -115,11 +115,11 @@ class _Params:
 
 @pytest.fixture
 def world(monkeypatch):
-    """A bound domain, the stub coverage rows, and a record of what was called."""
+    """A bound domain, the stub rows, and a record of what was called."""
     called: list[tuple[str, dict]] = []
 
     async def _runner(runner, kwargs, label):
-        # A source publishes the SHAPE its spec states, suffix and all: what a
+        # A source publishes the SHAPE its row states, suffix and all: what a
         # reader may open a URI as is read off that suffix and nothing else.
         called.append((runner, dict(kwargs)))
         ext = "geojson" if getattr(SPECS.get(runner), "output", None) and \
@@ -296,7 +296,7 @@ def test_a_need_and_a_producer_on_one_row_is_refused_at_declaration():
 
 def test_a_gauge_serving_two_classes_fills_each_slot_from_its_own_row(world,
                                                                      monkeypatch):
-    """One source, two coverage rows: the discharge slot reads the flow columns
+    """One source, two rows: the discharge slot reads the flow columns
     and the level slot reads the stage columns, off the row of the class each
     one asked for."""
     gauge = _Spec([coverage("discharge series", series=True, latest=None,
@@ -318,7 +318,7 @@ def test_a_gauge_serving_two_classes_fills_each_slot_from_its_own_row(world,
     env = _env()
     level = _row(Data.need("water level series"), "level")
     told = fill._what_the_record_reports(
-        env, level, fill._coverage_row("fetch_gauges",
+        env, level, fill._fetcher_row("fetch_gauges",
                                               "water level series"))
     assert told["field"] == "gage_height_ft"
     assert told["series_field"] == "stage_series_csv"
@@ -329,7 +329,7 @@ def test_a_gauge_serving_two_classes_fills_each_slot_from_its_own_row(world,
                                     "gauge_datum_ft": "ft"}
     discharge = _row(Data.need("discharge series"), "discharge")
     flow = fill._what_the_record_reports(
-        env, discharge, fill._coverage_row("fetch_gauges",
+        env, discharge, fill._fetcher_row("fetch_gauges",
                                                   "discharge series"))
     assert flow["field"] == "discharge_cfs"
     assert flow["series_field"] == "time_series_csv"
@@ -370,7 +370,7 @@ def test_one_column_name_in_two_units_is_read_off_the_row_that_was_matched(
 
     level = told(_row(Data.need("water level series"), "level"),
                  "water level series")
-    # the MEASURED row, not the first row of the class the spec states.
+    # the MEASURED row, not the first row of the class the row states.
     assert level["field"] == "water_level"
     assert level["column_units"]["time_series_csv"] == "m"
     observed = told(_row(Data.need("water quality sample", of="TEMPERATURE"),
@@ -380,7 +380,7 @@ def test_one_column_name_in_two_units_is_read_off_the_row_that_was_matched(
 
 
 def _reach_source(monkeypatch):
-    """A hydrography source called by a seed and a distance, whose coverage row
+    """A hydrography source called by a seed and a distance, whose row
     maps the question's generic span onto its own param."""
     from trid3nt_server.tools.fetchers._router import registration
 

@@ -1,4 +1,4 @@
-"""``fetch_storm_tracks`` as a library-delegate vector spec.
+"""``fetch_storm_tracks`` as a library-delegate vector row.
 
 Offline hook tests plus end-to-end drives through the promoted registry closure
 with the network seam monkeypatched and the cache faked. Proves the mode gates and

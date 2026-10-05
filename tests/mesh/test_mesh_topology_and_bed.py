@@ -433,7 +433,7 @@ def test_the_bed_card_states_the_datum_and_the_acquisition_of_its_source():
     assert "acquired 2019-06-01T00:00:00Z" in card
 
 
-def test_a_source_row_that_states_no_datum_is_not_a_bed():
+def test_a_row_that_states_no_datum_is_not_a_bed():
     with pytest.raises(MeshToolError) as excinfo:
         P._refuse_undated_source("fetch_nhd_waterbodies")
     assert excinfo.value.error_code == "MESH_BED_DATUM_UNSTATED"

@@ -25,7 +25,7 @@ def _import_tools_registry() -> int:
     the number of registered tools; an empty registry is a packaging fault.
     """
     from . import tools  # noqa: F401 -- side-effect: registers atomic tools
-    # Coded tools register only when their module is imported; the spec-driven
+    # Coded tools register only when their module is imported; the row-driven
     # fetchers are promoted by the router's tree walk and need no import here.
     from .tools.fetchers.climate.lookup_precip_return_period import lookup_precip_return_period  # noqa: F401
     from .tools.fetchers.socioeconomic.geocode_location import geocode_location  # noqa: F401

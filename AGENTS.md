@@ -2,7 +2,7 @@
 
 You are working in the TRID3NT repo: a QGIS plugin + local agent daemon
 for AI-driven geospatial modeling - a framework whose extension points
-(specs, contracts, seams) are how capability is added. Read this, then
+(rows, contracts, seams) are how capability is added. Read this, then
 docs/CONVENTIONS.md, then the docs/design/ page for any feature you
 touch, BEFORE writing code. Inherit the structure; do not improvise.
 
@@ -10,7 +10,7 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
 
 - `trid3nt_server/` - the framework package, by feature:
   `tools/` (the atomic-tool registry; a tool is one of two kinds -
-  `fetch` produces data from outside through a declared source spec
+  `fetch` produces data from outside through a declared row
   the router executes, `derive` ingests data and outputs data - with
   `search`, `display` and `meta` beside them as infrastructure, and
   `mesh` the one mesh front, which knows no engine),
@@ -44,7 +44,7 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
   (the live drive lane), `testing/` (the live-run harness and the
   canaries), `staging/` and `local/`. `docs/` - the manual, the directory
   maps, the model, the design pages and the generated template pages.
-  The repo carries the SYSTEM; the reading material - specs, proposals,
+  The repo carries the SYSTEM; the reading material - rows, proposals,
   recipes, research and the three ledgers - sits in gitignored
   `docs/local/`, backed up and off the remote, and the rulings record -
   what was decided and why - is kept outside the repo entirely.

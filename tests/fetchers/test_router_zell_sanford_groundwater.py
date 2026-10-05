@@ -1,9 +1,9 @@
 """The three staged-dataset groundwater fetchers.
 
 Depth to water and transmissivity are the published rasters; saturated thickness is
-DERIVED from the release's own transmissivity and conductivity. Offline: the specs'
+DERIVED from the release's own transmissivity and conductivity. Offline: the rows'
 identity, the staged-uri resolution with its config-error-versus-EMPTY split, the
-envelope read off the real grid, and the honest encodings the spec CLAIMS."""
+envelope read off the real grid, and the honest encodings the row CLAIMS."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ from trid3nt_server.tools.fetchers._router.transport import staged as _staged
 _BBOX = [-93.70, 41.86, -93.20, 42.21]
 _STAGED_PREFIX = "s3://trid3nt-cache/staged/zell_sanford_groundwater/"
 
-#: All three specs are the same shape over the same grid, so every structural
+#: All three rows are the same shape over the same grid, so every structural
 #: test runs against all three.
 _NAMES = [
     "fetch_water_table_depth", "fetch_aquifer_thickness",
@@ -168,7 +168,7 @@ def test_every_layer_name_says_modelled(spec):
 
 
 def test_the_router_stamps_the_declared_layer_name(specs):
-    """The spec field is inert unless emission reads it."""
+    """The row field is inert unless emission reads it."""
     layer = router.build_layer_uri(
         specs["fetch_aquifer_thickness"], {"bbox": _BBOX}, "s3://b/k.tif"
     )
@@ -177,7 +177,7 @@ def test_the_router_stamps_the_declared_layer_name(specs):
 
 
 def test_a_spec_without_a_display_name_keeps_the_router_default():
-    """The field is additive: every prior spec must stamp exactly what it did."""
+    """The field is additive: every prior row must stamp exactly what it did."""
     from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 
     tree = compose_specs_from_tree()
@@ -197,7 +197,7 @@ def test_endpoint_is_a_staged_object(spec):
     url = spec.endpoints["data"].url
     assert url.startswith(_STAGED_PREFIX)
     assert url.endswith(".tif")
-    # Single object per spec: no url_by_param indirection to get wrong.
+    # Single object per row: no url_by_param indirection to get wrong.
     assert "url_by_param" not in spec.ingest
 
 
@@ -400,8 +400,8 @@ def test_transmissivity_caveats_state_the_west_east_contrast(specs):
 
 
 def test_transmissivity_units_and_quantity_are_its_own(specs):
-    """The whole reason this got its own spec: quantity/units must never be
-    borrowed from the thickness spec (a m2/day value stamped as metres of
+    """The whole reason this got its own row: quantity/units must never be
+    borrowed from the thickness row (a m2/day value stamped as metres of
     saturated thickness would be a fabricated layer)."""
     t = specs["fetch_aquifer_transmissivity"]
     assert t.normalize.units == "m2/day"

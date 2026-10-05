@@ -170,7 +170,7 @@ def clear_registry_for_tests() -> None:
 # at first use. The block is EXPLICIT (no pkgutil walk), sorted, and grouped by
 # subpackage; regenerate it when adding a tool module.
 #
-# Almost every fetcher is SPEC-DRIVEN - a co-located source.yaml plus its hooks,
+# Almost every fetcher is ROW-DRIVEN - a co-located source.yaml plus its hooks,
 # registered by the tree walk below - so adding a source is adding a YAML, not an
 # import line here. Only a fetcher with a hand-written module appears in this
 # block.
@@ -183,7 +183,7 @@ from .fetchers.climate.lookup_precip_return_period import lookup_precip_return_p
 # -- fetchers/socioeconomic --
 from .fetchers.socioeconomic.geocode_location import geocode_location  # noqa: E402,F401
 
-# -- fetchers/_router: the walk over fetchers/**/source.yaml. Each promoted spec
+# -- fetchers/_router: the walk over fetchers/**/source.yaml. Each promoted row
 # registers under its own tool name at tier="general", the default retrieval pool.
 from .fetchers._router.registration import register_specs_from_tree as _register_router_specs  # noqa: E402,F401
 
@@ -213,7 +213,7 @@ from trid3nt_server.workflows.solver import solver  # noqa: E402,F401
 # -- discovery (dataset/tool retrieval) --
 from .search.search_tools import search_tools  # noqa: E402,F401
 # find_sources: the model's face on the match, and the door a fetcher with a
-# coverage row is reached through - a class and a place, never a description.
+# row is reached through - a class and a place, never a description.
 from .search.find_sources import find_sources  # noqa: E402,F401
 # describe_keywords: the READ over the TELEMAC module catalogs - the only way the
 # keyword surface is reached, since no docstring budget carries it.

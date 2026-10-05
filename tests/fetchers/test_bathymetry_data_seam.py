@@ -180,7 +180,7 @@ def test_the_envelope_states_the_datum_in_provenance() -> None:
 def test_the_bed_resolution_lever_is_resolution_m_from_the_spec_to_the_merge(
     monkeypatch: pytest.MonkeyPatch, tile_scheme: Path
 ) -> None:
-    """One lever name across the raster fetchers: what the spec declares is what the
+    """One lever name across the raster fetchers: what the row declares is what the
     rung edge hands over and what the hook passes into the composite."""
     numpy = pytest.importorskip("numpy")
     from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
@@ -236,9 +236,9 @@ def _bed_capable_rows() -> dict:
             if spec.normalize.quantity == "elevation"}
 
 
-def test_every_bed_capable_source_row_states_its_vertical_datum() -> None:
+def test_every_bed_capable_row_states_its_vertical_datum() -> None:
     rows = _bed_capable_rows()
-    assert rows, "no elevation source rows found"
+    assert rows, "no elevation rows found"
     unstated = sorted(name for name, spec in rows.items()
                       if not spec.vertical_datum)
     assert not unstated, (

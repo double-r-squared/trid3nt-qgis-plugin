@@ -2,7 +2,7 @@
 
 One ``source.yaml`` per data source, beside that source's own folder. It is the
 shape the router loader AND the parity harness both validate against, so the
-two cannot drift. INDISTINGUISHABILITY is the bar: a spec-driven source flows
+two cannot drift. INDISTINGUISHABILITY is the bar: a row-driven source flows
 through the identical pipeline and surfaces identically to a coded one.
 """
 
@@ -66,7 +66,7 @@ def _validate_style_row(name: str, row: Any, *, where: str = "output.style") -> 
 
 
 
-#: The ingestion shape that selects the base executor. A HYBRID spec declares a
+#: The ingestion shape that selects the base executor. A HYBRID row declares a
 #: base shape PLUS a transform block that wraps that executor - a raster source
 #: with a mosaic, a vector source with a fan-out.
 SourceShape = Literal[
@@ -170,7 +170,7 @@ class ParamSpec(GraceModel):
     min_date: str | None = None              # static ISO lower coverage bound
     max_future_days: int | None = None       # end <= today + N (future ceiling)
     #: Per-param input-error suffix override, for a source that stamps a
-    #: different suffix per param. Default (None) = the spec-level suffix.
+    #: different suffix per param. Default (None) = the row-level suffix.
     error_suffix: str | None = None
     #: Force this None-default param OPTIONAL in the promoted input schema. A
     #: None default alone is marked required-in-schema, which is right for a
@@ -206,7 +206,7 @@ class GateSpec(GraceModel):
 
 
 class NormalizeSpec(GraceModel):
-    """Normalization stamps - what makes a spec-driven layer indistinguishable."""
+    """Normalization stamps - what makes a row-driven layer indistinguishable."""
 
     crs: str = "EPSG:4326"
     units: str | None = None
@@ -383,7 +383,7 @@ class HookSpec(GraceModel):
     #: is recorded, never silently dropped.
     enrich_plan: str | None = None
 
-    #: PHASE E. ``(spec, params, features, results: dict[str, DetailResult])
+    #: PHASE E. ``(row, params, features, results: dict[str, DetailResult])
     #: -> list[dict]``. Folds the fetched detail - each result carrying a body OR
     #: a typed error - back into the features. EVERY input feature survives: one
     #: whose refs failed keeps its row with null detail.
@@ -400,14 +400,14 @@ class HookSpec(GraceModel):
     #: ``output.result_model``, declared together.
     envelope: str | None = None
 
-    #: LIBRARY-DELEGATE call. ``(spec, params, *, timeout_s: float)
+    #: LIBRARY-DELEGATE call. ``(row, params, *, timeout_s: float)
     #: -> features | (array, transform, crs)``. The ONE sanctioned impurity: a
     #: source whose maintained LIBRARY owns both discovery and the socket calls
     #: that library here, while params, gates, stamps, cache, publish and typed
     #: errors stay router-owned. The declared timeout is passed in, the call is
     #: marked library-owned in telemetry, and any library exception the hook did
-    #: not itself map becomes a retryable upstream error. A vector spec returns
-    #: features; a raster spec returns ``(array, transform, crs)``.
+    #: not itself map becomes a retryable upstream error. A vector row returns
+    #: features; a raster row returns ``(array, transform, crs)``.
     delegate: str | None = None
 
     #: LIBRARY-DELEGATE pre-cache input validation. ``(spec, params) -> None``.
@@ -476,11 +476,11 @@ class HookSpec(GraceModel):
 
 
 class DispatchSpec(GraceModel):
-    """A spec-declared, SINGLE-TARGET pre-flight dispatch to a sibling tool.
+    """A row-declared, SINGLE-TARGET pre-flight dispatch to a sibling tool.
     One declared param value serves the request from a NAMED sibling, returning
     that tool's result VERBATIM - its cache prefix, its ids, no double fetch."""
 
-    # The no-composition rule governs the DECLARATIVE surface: what a spec states
+    # The no-composition rule governs the DECLARATIVE surface: what a row states
     # is one source, and this is the only field on it that names a sibling. A
     # delegate hook may still reach a sibling tool when that sibling OWNS a
     # ladder the caller would otherwise have to restate - its source order, its
@@ -490,7 +490,7 @@ class DispatchSpec(GraceModel):
     #
     # The seam here is DELIBERATELY NARROW:
     #   - ONE target per condition: ``to`` is a single string, never a list.
-    #   - SPEC-DECLARED only: ``to`` and ``equals_any`` are literals, never
+    #   - ROW-DECLARED only: ``to`` and ``equals_any`` are literals, never
     #     hook-computed.
     #   - NO CHAINS: a dispatched target must not itself declare a dispatch, so
     #     the returned result is always exactly one sibling's verbatim output.
@@ -535,7 +535,7 @@ class SourceSpec(GraceModel):
 
     #: Explicit error-code prefix token. ``source_class`` is the CACHE prefix and
     #: some sources stamp their error codes from a different token; one field
-    #: cannot carry both, so a spec that needs them to differ sets this. Default
+    #: cannot carry both, so a row that needs them to differ sets this. Default
     #: (unset) = ``source_class.upper()``.
     error_prefix: str | None = None
 
@@ -585,7 +585,7 @@ class SourceSpec(GraceModel):
     # --- caveats and the same-data endpoint chain ---
     caveats: list[str] = Field(default_factory=list)
     #: SAME-DATA ENDPOINT MIRRORS ONLY, in order. Every entry names a KEY in this
-    #: spec's own ``endpoints`` block - an alternate service publishing the SAME
+    #: row's own ``endpoints`` block - an alternate service publishing the SAME
     #: dataset, which the loudness floor lets walk silently. Registration REFUSES
     #: an entry naming no such key: endpoint resolution indexes ``endpoints`` and
     #: never the tool registry, so a sibling TOOL name here is a promise no code
@@ -606,7 +606,7 @@ class SourceSpec(GraceModel):
     # from the dataset's own documentation, never inferred from the bytes: a
     # guess would be indistinguishable from a fact to every reader downstream.
     # A source that cannot state ONE datum carries none, and a consumer refuses
-    # on that rather than assuming zero. A source whose COVERAGE rows already
+    # on that rather than assuming zero. A source whose Rows already
     # state one zero takes it from there rather than restating it.
     vertical_datum: str | None = None
 
@@ -622,7 +622,7 @@ class SourceSpec(GraceModel):
     @property
     def error_code_prefix(self) -> str:
         """The token ``error_code`` is stamped from: ``error_prefix`` when the
-        spec pins one, else ``source_class`` upper-cased."""
+        row pins one, else ``source_class`` upper-cased."""
         return self.error_prefix or self.source_class.upper()
 
     @model_validator(mode="after")
@@ -637,15 +637,15 @@ class SourceSpec(GraceModel):
                         if seen.count((name, kind)) > 1})
         if twice:
             raise ValueError(
-                f"{self.name} carries more than one coverage row of "
+                f"{self.name} carries more than one row of "
                 f"{', '.join(twice)}: one row per data class and kind")
         return self
 
     @model_validator(mode="after")
     def _adopt_the_coverage_datum(self) -> "SourceSpec":
-        """The zero a layer carries is the one its coverage row states.
+        """The zero a layer carries is the one its row states.
 
-        One fact, one statement: a source that says NAVD88 on its coverage row
+        One fact, one statement: a source that says NAVD88 on its row
         says it to the match and to every consumer of the layer it publishes."""
         if self.vertical_datum is None:
             # A zero the RECORD carries per feature is not one word for the

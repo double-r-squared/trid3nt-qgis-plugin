@@ -24,7 +24,7 @@ def spec():
 
 
 def _params(**over):
-    """Params as the router hands them to a hook: spec defaults already resolved."""
+    """Params as the router hands them to a hook: row defaults already resolved."""
     return {"bbox": list(_REACH_BBOX), "start_time": "2026-09-01",
             "end_time": "2026-09-02", "search_radius_km": 60.0, **over}
 

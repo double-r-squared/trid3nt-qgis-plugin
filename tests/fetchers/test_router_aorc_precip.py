@@ -1,7 +1,7 @@
 """``fetch_aorc_precip``: the hyetograph record through the router.
 
 Offline: a synthetic dataset stands in for the archive year store at its open
-seam, and the in-memory cache injector holds the record. Covered: the spec
+seam, and the in-memory cache injector holds the record. Covered: the row
 shape, the pure-record path, the AOI-mean hyetograph math, the coverage gates
 and the empty-window gate."""
 

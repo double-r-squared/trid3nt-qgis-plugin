@@ -41,7 +41,7 @@ class DatumError(RuntimeError):
 def datum_of(source: Any) -> str:
     """What ONE source states its elevations are counted from, or "".
 
-    A layer states its own - the survey's project datum, the spec row's zero
+    A layer states its own - the survey's project datum, the row's zero
     carried onto what it produced - and a bare source NAME is looked up on the
     row that declares it."""
     stated = (source.get("vertical_datum") if isinstance(source, Mapping)
@@ -54,7 +54,7 @@ def datum_of(source: Any) -> str:
 def record_datum(source: Any) -> str:
     """The zero a fetched RECORD is counted from, or "".
 
-    A layer states its own where the source row states one; a record whose
+    A layer states its own where the row states one; a record whose
     readings each carry their site's zero states it per feature instead, and it
     is the record's only where every feature that names one names the SAME one -
     two zeros in one record is two records and no single shift reads them."""
@@ -91,7 +91,7 @@ def one_datum(*sources: Any, code_prefix: str = "") -> str:
             f"{code_prefix}DATUM_UNSTATED",
             f"{', '.join(missing)} states no vertical datum, so a water level "
             "and a bed elevation cannot be placed on one axis. State the datum "
-            "on the source row from the dataset's own documentation.")
+            "on the row from the dataset's own documentation.")
     distinct = sorted(set(stated.values()))
     common = one_frame(distinct)
     if common is None:

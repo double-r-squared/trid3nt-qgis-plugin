@@ -2,7 +2,7 @@
 
 The engine owns the transport, the paging LOOP and the FGB serialize. Two switches
 pick the source-specific steps -- the ``build_request`` / ``parse_response`` hooks
-when the spec names them, else the ``ingest.request`` / ``ingest.body`` field map."""
+when the row names them, else the ``ingest.request`` / ``ingest.body`` field map."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ __all__ = ["execute", "fetch_bodies"]
 
 
 def _plans(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan]:
-    """The request plans: the build hook when the spec names one, else the declared
+    """The request plans: the build hook when the row names one, else the declared
     ``ingest.request`` over the resolved endpoint chain."""
     if spec.hooks is not None and spec.hooks.build_request:
         return resolve_hook(spec.hooks.build_request)(spec, params)
@@ -35,7 +35,7 @@ def _plans(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan]:
 
 
 def _features(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]) -> list[dict[str, Any]]:
-    """The decoded features: the parse hook when the spec names one, else the declared
+    """The decoded features: the parse hook when the row names one, else the declared
     ``ingest.body`` -- decode, walk to the row list, build the geometry, and hand the
     raw row to the column map the serializer already applies."""
     if spec.hooks is not None and spec.hooks.parse_response:

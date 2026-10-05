@@ -1,6 +1,6 @@
 """``fetch_river_geometry``: the OSM waterway network in an AOI.
 
-The spec-driven surface: the PURE hooks - class-vocabulary resolution, the tag the
+The row-driven surface: the PURE hooks - class-vocabulary resolution, the tag the
 library is asked for, the AOI clip and the honest empty - the area guardrail, and
 the end-to-end layer with a stable cache key. Offline, over frames shaped as the
 library returns them plus an in-memory cache injector."""

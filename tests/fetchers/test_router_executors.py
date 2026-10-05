@@ -611,7 +611,7 @@ def test_serialize_directive_fills_and_stamps_nodata(monkeypatch):
 
 
 def test_serialize_absent_is_nan_nodata_passthrough(monkeypatch):
-    """No serialize block -> NaN-nodata passthrough (every prior float spec)."""
+    """No serialize block -> NaN-nodata passthrough (every prior float row)."""
     arr = np.array([[1.0, np.nan]], dtype="float32")
     tf = rtransform.from_bounds(0, 0, 2, 1, 2, 1)
     monkeypatch.setattr(raster_cog, "fetch_source_array", lambda s, p: (arr, tf, "EPSG:4326"))

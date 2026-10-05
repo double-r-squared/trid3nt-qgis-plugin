@@ -26,7 +26,7 @@ Three things are not operations and stay:
   frame, an upload onto the store's lon/lat frame. Each is the slot's own
   coercion, never a row a template writes.
 - A FETCH reading its source onto the asked window and spacing. The kernel a
-  source row states is how that source's pixels are read; a grid past the pixel
+  row states is how that source's pixels are read; a grid past the pixel
   budget refuses naming the spacing to re-ask at.
 - A MODULE'S CAPABILITY - the mesh's own operations, engine keywords, engine
   actions, forcing composites and outputs - stated by the person or the model
@@ -50,7 +50,7 @@ NAME is its slot (`inputs/slots.py`), and a row is filled one of four ways:
 
 `.need` names a CLASS of the coverage vocabulary, never a fetcher; `geometry=`
 is which SHAPE of that class is asked for, a filter on the match, never a
-conversion. The match (`tools/search/match.py`) filters the coverage rows on
+conversion. The match (`tools/search/match.py`) filters the rows on
 class and place, holds a series source to the run's window, ranks on the cell
 against the mesh, on recency and on the native datum, and calls the survivors
 in rank order. The window comes off `event_time` and the frame off the vertical

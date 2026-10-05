@@ -34,7 +34,7 @@ ingest:
   per_station:
     # SNAPSHOT: one representative row per station (the observed /
     # _parse_predictions), NOT the rollup + time_series_csv path (coops-tides).
-    # Strict no-op for every timeseries spec (no `emit` key -> rollup path).
+    # Strict no-op for every timeseries row (no `emit` key -> rollup path).
     emit: snapshot
     snapshot:
       # Named selector = the audit's HYBRID hook (velocity-sign flood/ebb/slack

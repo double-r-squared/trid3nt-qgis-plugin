@@ -28,7 +28,7 @@ __all__ = ["DetailResult", "pre_resolve", "execute", "fetch_detail_set"]
 #: ``next_page`` hook; this only guards a pathological non-terminating response).
 _MAX_PAGES = 200
 
-#: Default global cap on distinct detail fetches when a spec omits
+#: Default global cap on distinct detail fetches when a row omits
 #: ``ingest.chained.max_detail_fetches`` (generous; per-pass caps live in enrich_plan).
 _DEFAULT_MAX_DETAIL_FETCHES = 3000
 
@@ -80,7 +80,7 @@ def pre_resolve(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
 def _fetch_main(spec: SourceSpec, params: dict[str, Any]) -> list[bytes]:
     """Fetch the round-1 body/bodies. With no ``next_page`` hook this is the http_json
     fetch verbatim -- the declared pagination block included -- so paging has one home
-    whichever executor the spec's enrichment routes it to."""
+    whichever executor the row's enrichment routes it to."""
     if not (spec.hooks and spec.hooks.next_page):
         return fetch_bodies(spec, params)
     bodies = [_get(spec, plan) for plan in _plans(spec, params)]
@@ -142,7 +142,7 @@ def fetch_detail_set(
 
 
 def _enrich(spec: SourceSpec, params: dict[str, Any], features: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """The detail pass: the enrich hook pair when the spec names one, else the declared
+    """The detail pass: the enrich hook pair when the row names one, else the declared
     ``ingest.enrich`` keyed join. Either way the router owns the deduped, bounded,
     best-effort fetch between them."""
     if spec.hooks is not None and spec.hooks.enrich_plan:

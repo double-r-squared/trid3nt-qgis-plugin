@@ -1,8 +1,8 @@
 """``fetch_groundwater_recharge``: the first STAGED-DATASET fetcher.
 
 The served objects are COGs this repo built from two published releases, and the
-spec names them by bucket and key, so the transport resolves the host from the
-active endpoint. Offline: the spec identity, the staged-uri resolution and its two
+row names them by bucket and key, so the transport resolves the host from the
+active endpoint. Offline: the row identity, the staged-uri resolution and its two
 refusals, the region gate, the nodata honesty gate, and the per-source split."""
 
 from __future__ import annotations
@@ -301,7 +301,7 @@ def test_configured_endpoint_with_404_raises_typed_config_error_not_empty(spec, 
 
 def test_key_west_is_inside_the_specs_own_conus_envelope(spec):
     """Key West (24.55N) is south of the generic gridmet gate (25.05) but north
-    of the Reitz grid's real southern edge (24.0625) -- the spec's own
+    of the Reitz grid's real southern edge (24.0625) -- the row's own
     conus_bbox must not false-refuse it."""
     key_west_bbox = [-81.85, 24.53, -81.75, 24.60]
     router._apply_gates(spec, {"bbox": key_west_bbox})  # must not raise

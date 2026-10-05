@@ -39,7 +39,7 @@ __all__ = [
 # `require` param is present + non-None in the validated params; the surviving
 # clauses are AND-joined. Absent/none-declared -> falls back to a literal
 # `where` param else "1=1". A voltage floor, a year range and a period filter are
-# all spec data this way, with no source hardcode.
+# all row data this way, with no source hardcode.
 
 
 def build_where(spec: SourceSpec, params: dict[str, Any]) -> str:
@@ -191,7 +191,7 @@ def apply_column_map(
 
 
 # Declarative ingest transforms: nested-property to JSON coercion and the
-# Point/finite-geometry filter. Both are opt-in ``ingest.*`` directives; a spec
+# Point/finite-geometry filter. Both are opt-in ``ingest.*`` directives; a row
 # declaring neither is untouched.
 
 
@@ -249,7 +249,7 @@ def apply_ingest_transforms(
 def _out_columns(
     spec: SourceSpec, features: list[dict[str, Any]], params: dict[str, Any] | None = None
 ) -> list[str]:
-    """Resolve the output property columns, spec-declared or feature-derived."""
+    """Resolve the output property columns, row-declared or feature-derived."""
     ingest = spec.ingest or {}
     cmap = _resolve_column_map(spec, params)
     declared = ingest.get("properties")
@@ -363,7 +363,7 @@ def resolve_endpoints(spec: SourceSpec, params: dict[str, Any]) -> list[Any]:
     by_enum = ingest.get("endpoint_by_param")
     if isinstance(by_enum, dict):
         # Per-enum sub-layer routing (usace_levees ``layer`` -> FeatureServer
-        # sub-layer endpoint). No-op for every prior spec (none declare it).
+        # sub-layer endpoint). No-op for every prior row (none declare it).
         pval = params.get(by_enum.get("param"))
         primary = endpoints.get((by_enum.get("map") or {}).get(pval))
     elif isinstance(sel, dict):

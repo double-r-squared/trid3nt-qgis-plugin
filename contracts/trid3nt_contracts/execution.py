@@ -203,7 +203,7 @@ class LayerURI(GraceModel):
     #: The ZERO this layer's elevations are counted from, as its own source
     #: states it. Two surfaces are on one axis only when this agrees, so a
     #: consumer that places one over another reads it HERE - on the layer it was
-    #: handed - rather than looking the producer's spec up by name. ``None`` is
+    #: handed - rather than looking the producer's row up by name. ``None`` is
     #: the layer saying nothing, which is never the same as NAVD88.
     vertical_datum: str | None = None
     #: The shift the SOURCE publishes about its own zero: ``datum_offset_m``
@@ -422,7 +422,7 @@ class LivingAtlasLayerURI(LayerURI):
     provenance: dict[str, Any] = Field(default_factory=dict)
 
 
-#: name -> subclass. A spec's ``output.result_model`` resolves here; a name
+#: name -> subclass. A row's ``output.result_model`` resolves here; a name
 #: absent from this table is a registration error, not a fallback.
 LAYER_RESULT_MODELS: dict[str, type[LayerURI]] = {
     "HighWaterMarksLayerURI": HighWaterMarksLayerURI,

@@ -1,4 +1,4 @@
-"""Promotion registration: a ``source.yaml`` spec becomes THE tool under its name.
+"""Promotion registration: a ``source.yaml`` row becomes THE tool under its name.
 
 Every consumer surface is built from the declaration: the docstring carried verbatim,
 the signature synthesized from ``spec.params``, the callable seam a router closure,
@@ -32,7 +32,7 @@ __all__ = [
     "clear_specs_for_tests",
 ]
 
-#: twin_name -> SourceSpec for every promoted spec-driven tool (diagnostics/tests).
+#: twin_name -> SourceSpec for every promoted row-driven tool (diagnostics/tests).
 _SPEC_REGISTRY: dict[str, SourceSpec] = {}
 
 def promoted_signature(spec: SourceSpec) -> tuple[inspect.Signature, dict[str, Any]]:
@@ -67,11 +67,11 @@ def promoted_signature(spec: SourceSpec) -> tuple[inspect.Signature, dict[str, A
 
 
 def _synthesize_doc(spec: SourceSpec) -> str:
-    """The promoted tool's docstring: the spec's own when it carries one, else a
+    """The promoted tool's docstring: the row's own when it carries one, else a
     surface derived from its caveats and corpus phrasings."""
     if spec.docstring:
         return spec.docstring
-    lines = [f"{spec.name} (spec-driven, source_class={spec.source_class})."]
+    lines = [f"{spec.name} (row-driven, source_class={spec.source_class})."]
     if spec.caveats:
         lines.append("Caveats: " + " ".join(spec.caveats))
     if spec.corpus:
@@ -91,7 +91,7 @@ def _estimator_module(spec: SourceSpec) -> str:
 
 
 def _validate_hooks(spec: SourceSpec) -> None:
-    """Assert every ``hooks.*`` name the spec declares resolves at load. The hook
+    """Assert every ``hooks.*`` name the row declares resolves at load. The hook
     contract is a name-string reference, so a typo or a deleted hook must fail
     LOUDLY at registration rather than silently at first call."""
     from .hooks import HookResolutionError, has_hook
@@ -103,28 +103,28 @@ def _validate_hooks(spec: SourceSpec) -> None:
             name = getattr(spec.hooks, point)
             if name and not has_hook(name):
                 raise HookResolutionError(
-                    f"spec {spec.name!r} references unknown hook {point}={name!r}"
+                    f"row {spec.name!r} references unknown hook {point}={name!r}"
                 )
 
-    # endpoint_fallback: every entry must name a key in this spec's OWN endpoints.
+    # endpoint_fallback: every entry must name a key in this row's OWN endpoints.
     # ``resolve_endpoints`` indexes ``spec.endpoints``, never the tool registry, so
-    # an entry naming a sibling TOOL silently resolves to nothing while the spec
+    # an entry naming a sibling TOOL silently resolves to nothing while the row
     # card advertises it to the model as a fallback this source has. A promise no
     # code path can keep fails at load instead of shipping as catalog text.
     for fb in spec.endpoint_fallback:
         if fb not in spec.endpoints:
             raise ValueError(
-                f"spec {spec.name!r} declares endpoint_fallback {fb!r}, which names "
-                f"no endpoint of this spec (has: {sorted(spec.endpoints)}). "
+                f"row {spec.name!r} declares endpoint_fallback {fb!r}, which names "
+                f"no endpoint of this row (has: {sorted(spec.endpoints)}). "
                 "endpoint_fallback is SAME-DATA mirrors of this source only; a "
-                "CROSS-DATASET alternative is a source row of its own."
+                "CROSS-DATASET alternative is a row of its own."
             )
 
     # variant_by_emptiness: the emptiness-switch hook name must resolve.
     vbe = spec.output.variant_by_emptiness
     if vbe and not has_hook(vbe):
         raise HookResolutionError(
-            f"spec {spec.name!r} references unknown variant_by_emptiness hook {vbe!r}"
+            f"row {spec.name!r} references unknown variant_by_emptiness hook {vbe!r}"
         )
 
     # record shape: a record source MUST declare hooks.record (the router
@@ -138,11 +138,11 @@ def _validate_hooks(spec: SourceSpec) -> None:
         )
         if not record_hook and not executor_shapes_it:
             raise HookResolutionError(
-                f"spec {spec.name!r}: output.layer_type=record requires hooks.record"
+                f"row {spec.name!r}: output.layer_type=record requires hooks.record"
             )
     if spec.hooks is not None and spec.hooks.delegate_resolve and not spec.hooks.delegate:
         raise HookResolutionError(
-            f"spec {spec.name!r}: hooks.delegate_resolve requires hooks.delegate"
+            f"row {spec.name!r}: hooks.delegate_resolve requires hooks.delegate"
         )
 
     # animation_frames shape: a frames-list source MUST declare both
@@ -153,11 +153,11 @@ def _validate_hooks(spec: SourceSpec) -> None:
         fb = spec.hooks.frame_bytes if spec.hooks is not None else None
         if not (fp and fb):
             raise HookResolutionError(
-                f"spec {spec.name!r}: shape=animation_frames requires "
+                f"row {spec.name!r}: shape=animation_frames requires "
                 f"hooks.frames_plan + hooks.frame_bytes"
             )
 
-    # result_model: if the spec names a LayerURI-subclass result model
+    # result_model: if the row names a LayerURI-subclass result model
     # it must resolve, and it pairs with an envelope hook (each is meaningless
     # without the other). Fail LOUD per-spec at load, never silently at first call.
     from trid3nt_contracts.execution import LAYER_RESULT_MODELS
@@ -166,29 +166,29 @@ def _validate_hooks(spec: SourceSpec) -> None:
     envelope = spec.hooks.envelope if spec.hooks is not None else None
     if result_model and result_model not in LAYER_RESULT_MODELS:
         raise HookResolutionError(
-            f"spec {spec.name!r} names unknown result_model {result_model!r}; "
+            f"row {spec.name!r} names unknown result_model {result_model!r}; "
             f"known: {sorted(LAYER_RESULT_MODELS)}"
         )
     if bool(result_model) != bool(envelope):
         raise HookResolutionError(
-            f"spec {spec.name!r}: output.result_model and hooks.envelope must be "
+            f"row {spec.name!r}: output.result_model and hooks.envelope must be "
             f"declared together (got result_model={result_model!r}, envelope={envelope!r})"
         )
 
     # provenance channel: the fetch-time provenance is delivered to the
-    # envelope hook, so a spec that declares output.provenance MUST declare an
+    # envelope hook, so a row that declares output.provenance MUST declare an
     # envelope hook to consume it (else the recorded dict has nowhere to land).
     if spec.output.provenance and not envelope:
         raise HookResolutionError(
-            f"spec {spec.name!r}: output.provenance requires hooks.envelope "
+            f"row {spec.name!r}: output.provenance requires hooks.envelope "
             "(the provenance dict is delivered to the envelope hook)"
         )
 
 
 def register_spec(spec: SourceSpec) -> str:
-    """Register the spec-driven surface as THE tool under ``spec.name`` and return
+    """Register the row-driven surface as THE tool under ``spec.name`` and return
     that name. Idempotent: a second registration of a present name only re-records
-    the spec."""
+    the row."""
     from trid3nt_server import tools as _tools
 
     _validate_hooks(spec)
@@ -214,7 +214,7 @@ def register_spec(spec: SourceSpec) -> str:
     _tools.register_tool(metadata)(_promoted)
     _SPEC_REGISTRY[name] = spec
     logger.info(
-        "router.registration: promoted spec-driven tool %s (source_class=%s)",
+        "router.registration: promoted row-driven tool %s (source_class=%s)",
         name,
         spec.source_class,
     )
@@ -222,31 +222,31 @@ def register_spec(spec: SourceSpec) -> str:
 
 
 def register_specs_from_tree(root: Path | None = None) -> list[str]:
-    """Walk ``fetchers/**/source.yaml``, promote each spec, and return the registered
-    names. A spec that fails to register -- an unresolved hook name, say -- is logged
+    """Walk ``fetchers/**/source.yaml``, promote each row, and return the registered
+    names. A row that fails to register -- an unresolved hook name, say -- is logged
     and skipped, so one broken co-located file never takes down startup."""
     registered: list[str] = []
     for spec in compose_specs_from_tree(root).values():
         try:
             registered.append(register_spec(spec))
-        except Exception:  # noqa: BLE001 -- one bad spec must not brick the daemon
-            logger.error("router.registration: failed to register spec %r", spec.name, exc_info=True)
+        except Exception:  # noqa: BLE001 -- one bad row must not brick the daemon
+            logger.error("router.registration: failed to register row %r", spec.name, exc_info=True)
     return registered
 
 
 def registered_spec_names() -> set[str]:
-    """The names now served by a promoted spec-driven tool."""
+    """The names now served by a promoted row-driven tool."""
     return set(_SPEC_REGISTRY)
 
 
 def get_spec(name: str) -> SourceSpec | None:
-    """The promoted ``SourceSpec`` for ``name``, or None when it is not spec-served.
+    """The promoted ``SourceSpec`` for ``name``, or None when it is not row-served.
     The in-process seam for a consumer that needs a source's raw bytes without the
     cache and publish round trip: resolve, validate params, run the executor."""
     return _SPEC_REGISTRY.get(name)
 
 
 def clear_specs_for_tests() -> None:
-    """Drop all recorded specs (tests only). Does NOT unregister the tools from
+    """Drop all recorded rows (tests only). Does NOT unregister the tools from
     TOOL_REGISTRY -- pair with ``clear_registry_for_tests`` when needed."""
     _SPEC_REGISTRY.clear()

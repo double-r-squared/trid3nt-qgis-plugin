@@ -1,7 +1,7 @@
 """The NOAA CO-OPS water-level station listing, read once for the rows over it.
 
 CO-OPS publishes its whole water-level network as one metadata document, which
-is the bounded listing a coverage row's station set needs; the row's own rings
+is the bounded listing a row's station set needs; the row's own rings
 clip that listing to the part of the network the row is drawn over, so the ocean
 coastline and the Great Lakes read the same document.
 """

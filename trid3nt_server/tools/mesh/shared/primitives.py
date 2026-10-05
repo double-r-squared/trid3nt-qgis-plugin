@@ -340,7 +340,7 @@ def _bed_raster(source: Any, bbox: tuple[float, float, float, float]
     return op_raster(source), f"bed raster supplied directly: {name}", []
 
 
-def _source_row(name: str) -> Any:
+def _fetcher_row(name: str) -> Any:
     """The declaration behind a registered fetcher, or None where none is served."""
     from trid3nt_server.tools.fetchers._router.registration import get_spec
 
@@ -348,16 +348,16 @@ def _source_row(name: str) -> Any:
 
 
 def _refuse_undated_source(name: str) -> None:
-    """A SOURCE ROW states its vertical datum, or it is not a bed.
+    """A ROW states its vertical datum, or it is not a bed.
 
     The bytes cannot be asked: only the dataset's own row states it."""
-    spec = _source_row(name)
+    spec = _fetcher_row(name)
     if spec is not None and not spec.vertical_datum:
         raise MeshToolError(
             "MESH_BED_DATUM_UNSTATED",
             f"{name} states no vertical datum, so what its elevations are "
             "counted from is unknown and the bed it would paint cannot be read "
-            "against anything. State the datum on the source row from the "
+            "against anything. State the datum on the row from the "
             "dataset's own documentation, or name a source that does.")
 
 
@@ -373,7 +373,7 @@ def _provenance(name: str, layer: Any) -> str:
 
 
 def _datum(name: str) -> str | None:
-    spec = _source_row(name)
+    spec = _fetcher_row(name)
     return f"datum {spec.vertical_datum}" if spec is not None \
         and spec.vertical_datum else None
 

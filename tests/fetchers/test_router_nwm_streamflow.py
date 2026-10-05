@@ -1,4 +1,4 @@
-"""``fetch_noaa_nwm_streamflow`` as a library-delegate vector spec.
+"""``fetch_noaa_nwm_streamflow`` as a library-delegate vector row.
 
 A MULTI-SOURCE COMPOSITE: a streamflow lookup is JOINed by feature id onto
 per-reach geometry sampled from the navigation service. Offline hook tests plus

@@ -15,5 +15,5 @@ connection holds, and the guards that bound what one model turn may do.
 | subfolder | what lives there |
 | --- | --- |
 | `adapters/` | The LLM provider adapters, behind one shared IR. |
-| `credentials/` | The connect handshake, and the resolver over the credential each source row declares. |
+| `credentials/` | The connect handshake, and the resolver over the credential each row declares. |
 | `guards/` | The guards over a model turn - the circuit breaker, the runaway guard, the context budget, tool gating and the error classifier they share. |

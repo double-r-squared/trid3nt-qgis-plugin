@@ -1,8 +1,8 @@
 """The SETTINGS door: the models a client can pick, the provider switch, and
-the credentials the source rows declare.
+the credentials the rows declare.
 
 The model routes answer only while the local provider is active; the catalog
-route is the keys form's one reader, so it carries the credential a source row
+route is the keys form's one reader, so it carries the credential a row
 declares and nothing else - a name, a label, a signup url and the env var the
 daemon falls back to, never key material."""
 
@@ -20,7 +20,7 @@ from trid3nt_server.server.protocol.http.transport import (
 
 
 def build_credential_catalog() -> dict[str, Any]:
-    """The ``/api/tool-catalog`` payload: every tool whose source row declares a
+    """The ``/api/tool-catalog`` payload: every tool whose row declares a
     credential, with that credential's own facts verbatim off the row, so the
     keys form has one row per credential and no table of its own."""
     from trid3nt_server.model.credentials.resolver import credential_for_tool

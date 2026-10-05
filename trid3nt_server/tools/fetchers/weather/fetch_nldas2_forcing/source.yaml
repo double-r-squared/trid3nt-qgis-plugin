@@ -1,7 +1,7 @@
 # NASA NLDAS-2 hourly land-surface forcing, read through pynldas2 on the pure-record path.
 #
 # The time-series service is behind Earthdata Login: an unauthenticated request answers
-# 200 with the sign-in PAGE, which a parser reads as garbage. The spec therefore REFUSES
+# 200 with the sign-in PAGE, which a parser reads as garbage. The row therefore REFUSES
 # BY NAME until ~/.netrc carries a machine entry for urs.earthdata.nasa.gov, the same
 # interactive account step fetch_opera_dswx names.
 schema_version: v1

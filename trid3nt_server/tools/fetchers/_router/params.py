@@ -1,4 +1,4 @@
-"""One pydantic model per source, built at spec load, over ``spec.params``.
+"""One pydantic model per source, built at row load, over ``spec.params``.
 
 The model is the ONE place a param type is stated: its Python annotation, which
 the promoted tool's signature and its inputSchema are synthesized from, and its
@@ -21,9 +21,9 @@ from .errors import router_input_error, router_not_available_error
 
 __all__ = ["annotation_for", "params_model", "validated"]
 
-#: id(spec) -> the model built for it, alongside the spec itself so the id stays
-#: live. A spec object is immutable once loaded, so its model is built once with
-#: it and a re-loaded spec gets its own.
+#: id(row) -> the model built for it, alongside the row itself so the id stays
+#: live. A row object is immutable once loaded, so its model is built once with
+#: it and a re-loaded row gets its own.
 _MODELS: dict[int, tuple[SourceSpec, type[BaseModel]]] = {}
 
 #: param type -> the schema-compatible Python annotation. Every string-ish type
@@ -84,7 +84,7 @@ def _range_checked(sc: str, pname: str, pspec: Any, value: float, sfx: str) -> N
 def _coerce(spec: SourceSpec, pname: str, pspec: Any, value: Any) -> Any:
     """One declared param onto the value the executor and the cache key share."""
     sc = spec.error_code_prefix
-    # Per-param input-error suffix: the param's override else the spec default
+    # Per-param input-error suffix: the param's override else the row default
     # (INPUT_ERROR, INPUT_INVALID, bbox->BBOX_INVALID / year->YEAR_INVALID).
     sfx = pspec.error_suffix or spec.input_error_suffix
     ptype = pspec.type
@@ -250,7 +250,7 @@ def _coerce(spec: SourceSpec, pname: str, pspec: Any, value: Any) -> Any:
         return compact
 
     # str: alias-or-passthrough (wqp characteristic). Lower/strip onto the table,
-    # else verbatim; a no-op when the spec declares no aliases.
+    # else verbatim; a no-op when the row declares no aliases.
     text = str(value)
     if pspec.aliases:
         return pspec.aliases.get(text.strip().lower(), text.strip())
@@ -323,7 +323,7 @@ def _date_gates(spec: SourceSpec, out: dict[str, Any]) -> None:
 
 
 def params_model(spec: SourceSpec) -> type[BaseModel]:
-    """The spec's own params model, built once and kept beside it."""
+    """The row's own params model, built once and kept beside it."""
     held = _MODELS.get(id(spec))
     if held is not None:
         return held[1]
@@ -348,7 +348,7 @@ def params_model(spec: SourceSpec) -> type[BaseModel]:
 
 
 def validated(spec: SourceSpec, raw: dict[str, Any]) -> dict[str, Any]:
-    """The request's params through the spec's model, as the quantized dict the
+    """The request's params through the row's model, as the quantized dict the
     executor and the cache key share."""
     asked = _presence(spec, raw)
     return params_model(spec)(**asked).model_dump(exclude_none=True)

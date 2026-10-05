@@ -111,7 +111,7 @@ _SPECS = compose_specs_from_tree()
 
 @pytest.mark.parametrize("name", sorted(PROMOTED))
 def test_pilot_registered_as_general_tool(name: str) -> None:
-    """The twin name resolves to a promoted spec-driven tool in the default pool."""
+    """The twin name resolves to a promoted row-driven tool in the default pool."""
     entry = TOOL_REGISTRY.get(name)
     assert entry is not None, f"{name} not registered (promotion did not fire)"
     # tier=general -> in every default-pool producer (none filter it out).
@@ -145,11 +145,11 @@ def test_pilot_declaration_schema_matches_twin(name: str) -> None:
 
 @pytest.mark.parametrize("name", sorted(PROMOTED))
 def test_pilot_docstring_is_twin_verbatim(name: str) -> None:
-    """The promoted tool carries the spec docstring (== twin, drives the index)."""
+    """The promoted tool carries the row docstring (== twin, drives the index)."""
     entry = TOOL_REGISTRY[name]
     spec = _SPECS[name]
     assert spec.docstring, f"{name} source.yaml lost its docstring"
-    # The promoted callable's __doc__ IS the spec docstring verbatim (the sole
+    # The promoted callable's __doc__ IS the row docstring verbatim (the sole
     # source of the declaration description + the retrieval-index document).
     assert entry.fn.__doc__ == spec.docstring
 
@@ -159,7 +159,7 @@ def test_pilot_degenerate_bbox_raises_twin_typed_error(name: str) -> None:
     """A degenerate bbox raises the twin-identical typed input error, pre-network.
 
     Validation runs before any endpoint call, and the router stamps the exact code -
-    its prefix from the spec, its suffix from the bbox param."""
+    its prefix from the row, its suffix from the bbox param."""
     entry = TOOL_REGISTRY[name]
     spec = _SPECS[name]
     # NLDI has no bbox param (seed_point/comid selector); its degenerate-bbox case

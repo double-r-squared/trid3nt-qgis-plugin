@@ -2,7 +2,7 @@
 
 Covers the post-emit hook contract - the registration pairing of the hook with
 its result model, the honesty-floor protected-key strip and the strict no-op for
-a spec that declares neither - and one fold end to end: the event resolve, the
+a row that declares neither - and one fold end to end: the event resolve, the
 query scope with its outside gate, the clip and empty delegate, and the read back."""
 
 from __future__ import annotations
@@ -101,7 +101,7 @@ def test_hwm_spec_declares_envelope_and_result_model():
 def test_envelope_is_strict_no_op_for_priors():
     """Only the folds that declare BOTH an envelope hook and a result model do anything.
 
-    Every other spec leaves both unset, and the seam is a no-op for it."""
+    Every other row leaves both unset, and the seam is a no-op for it."""
     envelope_folds = {
         "fetch_high_water_marks", "fetch_fault_sources",
         "fetch_landcover", "fetch_flood_extent_observation",

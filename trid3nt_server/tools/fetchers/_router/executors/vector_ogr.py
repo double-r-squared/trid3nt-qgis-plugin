@@ -2,7 +2,7 @@
 
 One access mode over three source shapes: an ArcGIS query URL, an OGC API - Features
 collection, or a vector member inside a remote ZIP. The driver owns the socket, the
-paging and the decode; this module owns the spec vocabulary."""
+paging and the decode; this module owns the row vocabulary."""
 
 from __future__ import annotations
 

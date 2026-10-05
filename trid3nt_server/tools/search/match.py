@@ -60,7 +60,7 @@ class Need:
     frame: str | None = None
     #: WHAT OF THE CLASS the slot asks for, "" where any of it will do: the
     #: published variable an observation is a measurement of, the feature a map
-    #: is read for. A source states its own word for it on its coverage row, so
+    #: is read for. A source states its own word for it on its row, so
     #: a source with no word for this one publishes something else and is
     #: excluded.
     of: str = ""
@@ -99,7 +99,7 @@ LOOSEN_DATUM = "datum"
 
 
 def sources_with_coverage() -> list[tuple[str, Coverage]]:
-    """Every coverage row every registered fetcher states, by source name.
+    """Every row every registered fetcher states, by source name.
 
     ONE PAIR PER ROW: a source serving two classes is two candidates, and each
     is filtered on the class it actually serves. A source with no row is never
@@ -113,7 +113,7 @@ def sources_with_coverage() -> list[tuple[str, Coverage]]:
 
 
 def covered_sources() -> frozenset[str]:
-    """The fetchers a coverage row speaks for: the ones the match can reach.
+    """The fetchers a row speaks for: the ones the match can reach.
 
     A covered fetcher is found by asking the world for a class rather than by
     reading its description, so this set is what discovery routes THROUGH
@@ -166,7 +166,7 @@ def _named_first(need: Need, survivors: Sequence[SourceOption],
         raise PlanValidationError(
             f"the run picks {need.pick!r} for the {need.slot!r} slot and it is "
             "not a survivor of the match: "
-            + (excluded or f"no coverage row on it serves {need.data_class}")
+            + (excluded or f"no row on it serves {need.data_class}")
             + ". Pick a source the list carries, or state the value.")
     return [named] + [row for row in survivors if row.fetcher != need.pick]
 
@@ -187,7 +187,7 @@ def dropped_from(choice: SourceChoice, fetcher: str, why: str) -> SourceChoice:
 
 #: What the probe can supply a source off the run itself: the domain's box, its
 #: seed, and the window. Anything else a source requires is askable only where
-#: its own coverage row says what to pass - the row's ask block, or, for the
+#: its own row says what to pass - the row's ask block, or, for the
 #: station a source is called by name, the stations the row lists.
 _ASKABLE = frozenset({"bbox", "seed_point", "start_date", "end_date",
                       "valid_time"})
@@ -249,7 +249,7 @@ def _unaskable(name: str, coverage: Coverage, need: Need) -> str:
     needs = [param for param in _required(name) if param not in asked]
     if not needs:
         return ""
-    return (f"asks to be called by {', '.join(needs)} and its coverage row "
+    return (f"asks to be called by {', '.join(needs)} and its row "
             "says nothing to pass for it")
 
 
@@ -365,7 +365,7 @@ def _moved(stamp: str, step: dt.timedelta, cut: int | None) -> str:
     return (moment + step).isoformat()[:cut]
 
 
-#: How a coverage row's ask block names one of the NEED's own attributes rather
+#: How a row's ask block names one of the NEED's own attributes rather
 #: than a literal value. The question states its reach once, generically; the
 #: row that knows both names maps it onto the param this source states it in.
 _FROM_NEED = "need:"
@@ -388,7 +388,7 @@ def ask_for(choice: SourceChoice, base: Mapping[str, Any], lon: float | None,
     """What the PICKED source is called with: the run's own facts, plus what the
     matched ROW says it takes.
 
-    The row, not the spec's default, is what the match weighed, so the values
+    The row, not the row's default, is what the match weighed, so the values
     that make the source answer with that row travel with it; a source called by
     a station name is given the nearest station the row lists, and a row that
     maps a param to one of the need's generic attributes is given that."""

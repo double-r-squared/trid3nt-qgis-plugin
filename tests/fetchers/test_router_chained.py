@@ -32,7 +32,7 @@ def _spec(name: str) -> SourceSpec:
 
 
 def _run(name: str, raw: dict, url_map) -> gpd.GeoDataFrame:
-    """Route the spec end-to-end with _get serving canned bytes by URL substring."""
+    """Route the row end-to-end with _get serving canned bytes by URL substring."""
     spec = _spec(name)
 
     def fake_get(_spec, plan):
@@ -301,7 +301,7 @@ import gzip as _gzip
 
 
 def _run_http(name: str, raw: dict, url_map) -> gpd.GeoDataFrame:
-    """Route an http_json + resolve-phase spec, serving canned bytes by URL substring."""
+    """Route an http_json + resolve-phase row, serving canned bytes by URL substring."""
     spec = _spec(name)
 
     def fake_get(_spec, plan):

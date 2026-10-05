@@ -124,7 +124,7 @@ dependencies = [
     "scipy==1.15.3",
     # xarray: 6 direct importers - gridded fetch decode, the COG write path.
     "xarray==2026.4.0",
-    # The libraries below own a protocol family, so a fetch spec names WHAT to
+    # The libraries below own a protocol family, so a fetch row names WHAT to
     # fetch and the library holds HOW.
     # odc-stac loads a STAC item set onto an odc-geo GeoBox; odc-geo is the
     # geometry/CRS math the two share. Its reader is rasterio's GDAL, NOT the

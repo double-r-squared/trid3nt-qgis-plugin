@@ -1,6 +1,6 @@
 """The MODEL-FACING description surface names only tools that exist.
 
-A docstring, a spec ``docstring`` or ``caveats`` line and a corpus query are all
+A docstring, a row ``docstring`` or ``caveats`` line and a corpus query are all
 indexed as routing signal, so a dead engine name advertises a capability the
 product does not have. The retired-family list is the ONE lock: a docstring is
 full of ordinary identifiers that share a first segment with a real tool name."""
@@ -63,7 +63,7 @@ def _spec_yaml_paths() -> list[Path]:
 
 @pytest.mark.parametrize("path", _spec_yaml_paths(), ids=lambda p: p.parent.name)
 def test_no_spec_description_names_a_retired_engine(path: Path) -> None:
-    """``docstring`` is the declaration description; ``caveats`` ride the spec
+    """``docstring`` is the declaration description; ``caveats`` ride the row
     card, which is the model's only honesty view of a source."""
     spec = yaml.safe_load(path.read_text()) or {}
     surface = "\n".join(

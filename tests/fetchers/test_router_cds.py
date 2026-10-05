@@ -90,7 +90,7 @@ def test_both_cds_specs_load_and_register():
     from trid3nt_server.tools import TOOL_REGISTRY
 
     for name in ("fetch_era5_reanalysis", "fetch_gtsm_tide_surge"):
-        assert name in TOOL_REGISTRY, f"{name} not registered (spec fold)"
+        assert name in TOOL_REGISTRY, f"{name} not registered (row fold)"
 
 
 def test_hooks_registered():

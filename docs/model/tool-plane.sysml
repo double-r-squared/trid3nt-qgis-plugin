@@ -135,7 +135,7 @@ package ToolPlane {
     part def LibraryListing {
         doc /*
         The listing over the two registries: every registered tool under the
-        subsystem it belongs to, every source row under its class and kind. It
+        subsystem it belongs to, every row under its class and kind. It
         states metadata the tool or the row already carries and computes no
         fact of its own.
         */
@@ -515,13 +515,13 @@ package ToolPlane {
         Every registered tool is listed once under one subsystem - a tool under
         no known module prefix is listed as other rather than dropped, so the
         listing can never be quietly shorter than the registry - and every
-        source row is listed under the class and kind the row itself declares.
+        row is listed under the class and kind the row itself declares.
         Every fact beside a name is metadata the tool or the row already
         carries; the listing measures nothing and concludes nothing.
 
         One ask reaches both facets. The tools are ranked by the same corpus the
         model routes on, so the person and the model are answered off one
-        shortlist. A source row carries no corpus phrasing and is reached only
+        shortlist. A row carries no corpus phrasing and is reached only
         through the data classes the ask names, and it carries no score, because
         a number beside a row would read as a measurement of the row.
 
@@ -627,7 +627,7 @@ package ToolPlane {
     verify requirement TheLibraryStatesOnlyWhatTheRegistriesCarry by
         "tests/server/test_library_http_route.py::test_every_registered_tool_is_listed_once";
     verify requirement TheLibraryStatesOnlyWhatTheRegistriesCarry by
-        "tests/server/test_library_http_route.py::test_every_coverage_row_is_listed_under_its_own_class_and_kind";
+        "tests/server/test_library_http_route.py::test_every_row_is_listed_under_its_own_class_and_kind";
     verify requirement TheLibraryStatesOnlyWhatTheRegistriesCarry by
         "tests/server/test_library_http_route.py::test_a_data_row_carries_its_cell_window_and_datum";
     verify requirement TheLibraryStatesOnlyWhatTheRegistriesCarry by

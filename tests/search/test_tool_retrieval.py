@@ -206,7 +206,7 @@ def test_every_registered_tool_has_corpus_queries():
     # Engine templates ARE required to have corpus queries -- their co-located
     # workflows/<engine>/<template>/corpus.yaml is walked into the composed
     # corpus. tier=internal (never model-facing) carries no corpus, and neither
-    # does a fetcher with a coverage row: its phrasings are its CLASS's, which
+    # does a fetcher with a row: its phrasings are its CLASS's, which
     # route to find_sources, and it is never ranked by phrase at all.
     missing = sorted(_full_registry_names() - _pool_hidden_names()
                      - covered_sources() - set(corpus))

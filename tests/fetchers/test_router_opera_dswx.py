@@ -1,6 +1,6 @@
 """``fetch_opera_dswx``: the surface-water-extent products.
 
-The bucket is login-gated, so these pin the spec identity, the param surface and the
+The bucket is login-gated, so these pin the row identity, the param surface and the
 REFUSAL that names the credential file and the host it is wanted for."""
 
 from __future__ import annotations

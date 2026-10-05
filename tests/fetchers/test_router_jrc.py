@@ -2,7 +2,7 @@
 
 A continuous-value mosaic with per-band nodata and a PURE per-band colormap hook
 baked into the palette. Offline over local synthetic COGs wrapped in real catalog
-items: the spec identity and flags, the band and area gates, the palette bake and
+items: the row identity and flags, the band and area gates, the palette bake and
 first-valid mosaic, and the all-nodata and no-item honesty paths."""
 
 from __future__ import annotations
