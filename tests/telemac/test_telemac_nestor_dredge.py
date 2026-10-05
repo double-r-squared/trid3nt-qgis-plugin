@@ -13,7 +13,8 @@ import pytest
 
 from trid3nt_server.workflows.telemac.authoring.nestor import NestorRefused
 from trid3nt_server.workflows.telemac.modules import GAIA, fill
-from trid3nt_server.workflows.telemac.modules.gaia import Dig, Dredging
+from trid3nt_server.workflows.telemac.modules.gaia import (
+    Backfill, Dig, Dredging, Dump, SaveWaterLevel)
 from trid3nt_server.workflows.telemac.modules.module import SlotRefused
 
 #: The run's own clock, which every action is dated against; the profiles are
@@ -100,6 +101,24 @@ def test_a_dig_states_a_volume_or_a_rate_and_never_both():
         Dig(field=_area("fairway"), start=0.0, end=600.0)
     with pytest.raises(SlotRefused, match="volume OR a rate"):
         Dig(field=_area("fairway"), start=0.0, end=600.0, volume=1.0, rate=1.0)
+
+
+def test_the_other_action_types_state_only_what_their_own_reader_reads():
+    """Each type demands its own fields and no others - a timed dump is refused a
+    rate by the reader itself, so the value carries none to state."""
+    text = _sheet(
+        SaveWaterLevel(start=0.0, level="WATERLVL1"),
+        Dump(field=_area("spoil"), start=60.0, end=600.0, volume=250.0,
+             grain_class=[1.0]),
+        Backfill(field=_area("scour hole"), start=600.0, end=1200.0,
+                 crit_depth=2.0, level="WATERLVL1", grain_class=[1.0]),
+    ).files["nestor_actions.dat"]
+    assert "ActionType = Save_water_level" in text
+    assert "ActionType = Dump_by_time" in text
+    assert "ActionType = Backfill_to_level" in text
+    assert "DumpVolume = 250.000000" in text
+    assert text.count("GrainClass = 1.000000") == 2
+    assert "DumpRate" not in text
 
 
 def test_a_field_named_twice_refuses_before_the_reader_does():
