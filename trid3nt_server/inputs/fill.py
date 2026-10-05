@@ -25,7 +25,7 @@ from trid3nt_server.tools.search.match import (
     Need, ask_for, base_ask, dropped_from, instant, match, sources_with_coverage)
 
 from ..workflows.runtime.data import (
-    BED, DISCHARGE, DOMAIN, EXTENT, LEVEL, LINE, OBSERVE, WAVE, CoversAOI,
+    BED, DISCHARGE, DOMAIN, EXTENT, LEVEL, LINE, CoversAOI,
     DataDecl, Producer)
 from ..workflows.runtime.domain import Domain, bind_domain, current_domain
 from ..workflows.runtime.errors import (DeclarativeError, PlanValidationError, StepFailedError,
@@ -554,13 +554,6 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any,
     return ingested
 
 
-#: The slots filled from a RECORD somebody measured - the four whose value is a
-#: reading rather than a geometry or a surface. What a row of one OBSERVES is a
-#: published variable and is read in that variable's unit; on any other slot
-#: ``of`` names the FEATURE the source publishes and no unit is owed.
-_READS_A_RECORD = (OBSERVE, LEVEL, DISCHARGE, WAVE)
-
-
 def _the_window_it_is_cut_from(decl: DataDecl) -> dict[str, Any]:
     """The BOX a domain slot cuts a land-water edge against, where the run has one.
 
@@ -590,7 +583,7 @@ def _what_the_run_calls_it(env: _Env, decl: DataDecl, stated: str,
     in."""
     told: dict[str, Any] = {}
     unit = (_observed_unit(env, decl, observed)
-            if observed and decl.role in _READS_A_RECORD
+            if observed and decl.slot.record
             else env.slot_units.get(decl.role))
     if unit:
         told["to_units"] = unit
@@ -631,7 +624,7 @@ def _what_the_record_reports(env: _Env, decl: DataDecl,
     never in the unit the slot wanted. The moment the run opens at and how long
     it covers are the run's, so the series is placed on the run's clock and a
     record that stops early refuses."""
-    if decl.role not in _READS_A_RECORD:
+    if not decl.slot.record:
         return {}
     told: dict[str, Any] = {"window_s": env.window_s}
     if row is not None:

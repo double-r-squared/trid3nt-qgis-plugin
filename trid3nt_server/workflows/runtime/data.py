@@ -285,6 +285,13 @@ class DataDecl:
 
         return role_of(self.name)
 
+    @property
+    def slot(self) -> Any:
+        """The facts of the slot this row is; a plain row's are all empty."""
+        from trid3nt_server.inputs.slots import SLOTS, Slot
+
+        return SLOTS.get(self.role) or Slot()
+
     def __post_init__(self) -> None:
         if self.name and not self.name.isidentifier():
             raise PlanValidationError(f"Data name {self.name!r} is not an identifier.")
@@ -361,14 +368,9 @@ class DataDecl:
         """This slot's declared type on the generated tool's signature.
         Always a string: the declared shape rides along as :class:`SuppliedGeometry`
         metadata rather than narrowing the type."""
-        if self.role in (OBSERVE, LEVEL, DISCHARGE):
-            # A reading is a record to read it off, or the number itself: a user
-            # who knows what the water opens at states it and it stands.
-            return str | float | None
-        if self.role == BED:
-            # A bed is a surface, a survey, OR a depth in metres: a schema that
-            # advertised only a layer name would refuse the pond the user can
-            # describe in one number.
+        if self.slot.number:
+            # A schema that advertised only a layer name would refuse the level
+            # a user knows or the pond they can describe in one number.
             return str | float | None
         if self.geometry is None:
             return str | None
@@ -390,7 +392,7 @@ class DataDecl:
                     "depth in metres below the free surface"
                     + ("; unfilled, the template's own producer supplies it."
                        if self.producer is not None else self._unfilled))
-        if self.role in (OBSERVE, LEVEL, DISCHARGE):
+        if self.slot.record and self.slot.number:
             return (f"the {self.data_class or 'value'} this run opens on: a "
                     "layer of sites that report it, or the number itself"
                     + ("; unfilled, the template's own producer looks for one."

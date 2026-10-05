@@ -57,6 +57,13 @@ class Slot:
     #: the prompt. ``None`` is never asked for - a bed is a survey or a number,
     #: not a shape to draw.
     draw: tuple[str, str, str] | None = None
+    #: The value is READ OFF A RECORD somebody measured, so what its row
+    #: observes is a published variable and is read in that variable's unit;
+    #: on any other slot ``of`` names the feature a source publishes.
+    record: bool = False
+    #: The caller may state the value as the NUMBER itself - the level the
+    #: water opens at, the depth of a pond - rather than a layer to read it off.
+    number: bool = False
 
 
 #: THE RESERVED NAMES. A row named one of these plays that role; every other row
@@ -66,14 +73,18 @@ SLOTS: Mapping[str, Slot] = MappingProxyType({
                  draw=("polygon", "domain",
                        "Draw the outline of the water body this run solves over")),
     BED: Slot(ingest=bed,
-              classes=frozenset({"bathymetry", "terrain", "channel survey"})),
+              classes=frozenset({"bathymetry", "terrain", "channel survey"}),
+              number=True),
     # The level and the discharge ARE observations: they are their own names so
     # a workflow can tell which row is which, and they read the same afterwards.
-    LEVEL: Slot(ingest=observation, classes=frozenset({"water level series"})),
-    DISCHARGE: Slot(ingest=observation, classes=frozenset({"discharge series"})),
+    LEVEL: Slot(ingest=observation, classes=frozenset({"water level series"}),
+                record=True, number=True),
+    DISCHARGE: Slot(ingest=observation, classes=frozenset({"discharge series"}),
+                    record=True, number=True),
     OBSERVE: Slot(ingest=observation,
                   classes=frozenset({"water quality sample", "bed material",
-                                     "groundwater level"})),
+                                     "groundwater level"}),
+                  record=True, number=True),
     LINE: Slot(ingest=line,
                draw=("polyline", "line",
                      "Draw the line this reading is measured along")),
@@ -86,7 +97,7 @@ SLOTS: Mapping[str, Slot] = MappingProxyType({
     # A sea state is a record of several columns too, but every one of them
     # becomes a keyword the deck states, so the turn from the record's words to
     # the engine's is this slot's ingestion.
-    WAVE: Slot(ingest=wave, classes=frozenset({"wave series"})),
+    WAVE: Slot(ingest=wave, classes=frozenset({"wave series"}), record=True),
 })
 
 
