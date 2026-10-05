@@ -139,3 +139,59 @@ def test_a_stated_value_the_rule_refuses_opens_the_card(layers) -> None:
 def test_cancel_on_the_card_launches_nothing(layers) -> None:
     _emitter, launched = asyncio.run(_run({}, layers, ("cancel", None)))
     assert isinstance(launched, RunInputsDeclinedError)
+
+
+def _bang_run(monkeypatch, layers, *answers) -> tuple[list, list]:
+    """``!run probe`` through the server's dispatch: the calls the tool saw and
+    the frames the socket carried."""
+    from trid3nt_contracts.common import new_ulid
+    from trid3nt_contracts.tool_registry import AtomicToolMetadata
+    from trid3nt_server.server import SessionState, _dispatch_tool_and_persist
+    from trid3nt_server.server.dispatch.emitter import _ensure_emitter
+    from trid3nt_server.tools import TOOL_REGISTRY, RegisteredTool
+
+    calls: list = []
+
+    def probe(mesher: Literal["om2d", "reg_grid"] = "reg_grid") -> dict:
+        calls.append({"mesher": mesher})
+        return {"mesher": mesher}
+
+    monkeypatch.setitem(TOOL_REGISTRY, "run_card_probe", RegisteredTool(
+        metadata=AtomicToolMetadata(name="run_card_probe",
+                                    ttl_class="live-no-cache", cacheable=False),
+        fn=probe, module=__name__))
+
+    class _Socket:
+        def __init__(self) -> None:
+            self.sent: list = []
+
+        async def send(self, text: str) -> None:
+            self.sent.append(json.loads(text))
+
+    async def drive() -> list:
+        socket, state = _Socket(), SessionState(session_id=new_ulid())
+        _ensure_emitter(socket, state)
+        seen: set = set()
+
+        async def answer() -> None:
+            for decision, revised in answers:
+                await _answer(decision, revised, seen)
+
+        task = asyncio.ensure_future(answer())
+        await asyncio.wait_for(_dispatch_tool_and_persist(
+            socket, state, "run_card_probe", {}, "!run run_card_probe"), 10)
+        await task
+        return socket.sent
+
+    return calls, asyncio.run(drive())
+
+
+def test_a_bang_run_launches_only_through_the_card(monkeypatch, layers) -> None:
+    calls, _sent = _bang_run(monkeypatch, layers,
+                             ("narrow_scope", {"mesher": "om2d"}),
+                             ("proceed", None))
+    assert calls == [{"mesher": "om2d"}]
+    calls, sent = _bang_run(monkeypatch, layers, ("cancel", None))
+    assert calls == []
+    assert [m["payload"]["error_code"] for m in sent
+            if m.get("type") == "error"] == ["USER_INPUT_CANCELLED"]
