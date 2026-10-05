@@ -15,6 +15,7 @@ logger = logging.getLogger("trid3nt_server.workflows.telemac.modules.listing")
 __all__ = [
     "boundary_flux",
     "continuity_rel_error",
+    "worst_closure",
     "engine_demand",
     "final_balance",
     "gaia_mass_balance",
@@ -182,6 +183,28 @@ def continuity_rel_error(listing_text: str) -> float | None:
         return float(found[-1][1])
     except ValueError:
         return None
+
+
+#: Every closure the engine prints as a relative error, in its own words: the
+#: water volume per period and cumulated, each tracer's balance, and GAIA's
+#: sediment mass against the active layer, the total and the cumulated run.
+_CLOSURE = re.compile(
+    r"^\s*((?:CUMULATED )?RELATIVE ERROR[^\n]*?)\s*[:=]\s*"
+    r"([-+]?\d+(?:\.\d*)?(?:[EeDd][-+]?\d+)?)\s*$", re.MULTILINE)
+
+
+def worst_closure(listing_text: str) -> dict[str, Any] | None:
+    """The worst relative closure the engine printed over the whole run - water,
+    tracer or sediment - with the engine's own line naming which and when."""
+    worst: dict[str, Any] | None = None
+    for phrase, raw in _CLOSURE.findall(listing_text or ""):
+        try:
+            value = float(raw.replace("D", "E").replace("d", "e"))
+        except ValueError:
+            continue
+        if worst is None or abs(value) > abs(worst["relative_error"]):
+            worst = {"relative_error": value, "line": " ".join(phrase.split())}
+    return worst
 
 
 def boundary_flux(listing_text: str, *, boundary: int

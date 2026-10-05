@@ -242,3 +242,14 @@ def test_write_local_completion_records_the_engine_field(_reset_solver_seams):
     # extra is folded whole, and the envelope's own fields still win.
     assert payload["scenario"] == "tsunami"
     assert payload["status"] == "ok"
+
+
+def test_telemac_reports_the_worst_closure_over_water_tracer_and_sediment():
+    """Every relative-error line the listing printed is read, and the worst one
+    is reported by the engine's own words - here GAIA's sediment mass, larger
+    than the last water-volume figure."""
+    env = _run("telemac_balances", _TELEMAC_OK_RID)
+    assert env["mass_balance_pct"] == pytest.approx(0.17, abs=1e-9)
+    worst = env["engine_specific"]["listing_worst_closure"]
+    assert worst == {"relative_error": -0.0017,
+                     "line": "RELATIVE ERROR TO TOTAL INITIAL MASS"}

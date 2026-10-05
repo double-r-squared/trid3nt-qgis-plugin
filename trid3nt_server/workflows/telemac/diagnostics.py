@@ -14,14 +14,15 @@ from trid3nt_server.workflows.solver.diagnostics._common import (
     RunArtifacts,
 )
 
-from .modules.listing import continuity_rel_error
+from .modules.listing import worst_closure
 
 __all__ = ["parse_telemac"]
 
 def _listing_mass_balance_pct(text: str) -> float | None:
-    """The run's own volume closure off the listing, as an absolute percent."""
-    closure = continuity_rel_error(text)
-    return None if closure is None else round(abs(closure) * 100.0, 6)
+    """The worst closure the listing printed - water, tracer or sediment - as an
+    absolute percent."""
+    worst = worst_closure(text)
+    return None if worst is None else round(abs(worst["relative_error"]) * 100.0, 6)
 
 
 def _completion_or_metrics(
@@ -80,7 +81,7 @@ def parse_telemac(art: RunArtifacts, status: str) -> EngineDiagnostics:
     )
     if listing_text is not None and listing_mass_balance_pct is None:
         notes.append(
-            "the listing carried no RELATIVE ERROR IN VOLUME line "
+            "the listing carried no RELATIVE ERROR line "
             "(a crashed / truncated listing); mass_balance_pct left null."
         )
 
@@ -111,6 +112,8 @@ def parse_telemac(art: RunArtifacts, status: str) -> EngineDiagnostics:
         "nelem": nelem,
         "wall_s": wall_s,
         "listing_mass_balance_pct": listing_mass_balance_pct,
+        "listing_worst_closure": (worst_closure(listing_text)
+                                  if listing_text is not None else None),
     }
 
     return EngineDiagnostics(
