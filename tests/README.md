@@ -20,7 +20,7 @@ join the run as the sixth slice.
 | `mesh/` | the meshers, the mesh gate, topology, the bed over the one source it takes, the runs that prescribe a role and the shoreline the domain's own edge is | 8 | 245 |
 | `model/` | the SysML model conformance check | 1 | 19 |
 | `plugin/` | the plugin seams the server suite reads offline, by `ast` | 1 | 3 |
-| `runtime/` | the declarative runtime, its engine-neutral slots and levers, the run journal | 12 | 318 |
+| `runtime/` | the template runtime, its engine-neutral slots and levers, the run journal | 12 | 318 |
 | `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 10 | 109 |
 | `search/` | dataset and tool retrieval, the OGC adapter | 16 | 221 |
 | `server/` | the HTTP and WS routes, the fetch short-circuit and the Case AOI, persistence | 29 | 488 |
