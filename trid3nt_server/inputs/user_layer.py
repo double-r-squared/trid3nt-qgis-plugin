@@ -93,58 +93,6 @@ class UnreadableLayerError(ImportLayerError):
     error_code = "UNREADABLE_LAYER"
 
 
-# S3 helpers. boto3 honors AWS_ENDPOINT_URL, so MinIO works unchanged.
-
-
-def _split_s3_uri(uri: str) -> tuple[str, str]:
-    rest = uri[len("s3://") :]
-    bucket, _, key = rest.partition("/")
-    return bucket, key
-
-
-def _s3_client():
-    """The ONE object-store client (bound or lazily built), never a second one."""
-    from trid3nt_server.store import objects as storage
-
-    return storage.client()
-
-
-def _head_object_size(s3_uri: str) -> int:
-    """Return the object's byte size. Raises ``ObjectNotFoundError`` if it does
-    not exist. SYNC (boto3); callers wrap in ``asyncio.to_thread``."""
-    from botocore.exceptions import ClientError
-
-    bucket, key = _split_s3_uri(s3_uri)
-    s3 = _s3_client()
-    try:
-        resp = s3.head_object(Bucket=bucket, Key=key)
-    except ClientError as exc:
-        code = exc.response.get("Error", {}).get("Code", "")
-        if code in ("404", "NoSuchKey", "NotFound"):
-            raise ObjectNotFoundError(f"no such object: {s3_uri}") from exc
-        raise ImportLayerError(
-            f"could not inspect {s3_uri}: {exc}", error_code="OBJECT_HEAD_FAILED"
-        ) from exc
-    return int(resp.get("ContentLength") or 0)
-
-
-def _get_object_bytes(s3_uri: str) -> bytes:
-    """Read an object fully into memory. Caller must have already validated it
-    exists and is within ``MAX_INGEST_BYTES``. SYNC; wrap in
-    ``asyncio.to_thread``."""
-    bucket, key = _split_s3_uri(s3_uri)
-    s3 = _s3_client()
-    return s3.get_object(Bucket=bucket, Key=key)["Body"].read()
-
-
-def _put_object_bytes(
-    s3_uri: str, data: bytes, *, content_type: str = "application/octet-stream"
-) -> None:
-    bucket, key = _split_s3_uri(s3_uri)
-    s3 = _s3_client()
-    s3.put_object(Bucket=bucket, Key=key, Body=data, ContentType=content_type)
-
-
 def _sanitize_filename(filename: str) -> str:
     """Strip any path components and control chars; keep the extension.
 
@@ -170,11 +118,15 @@ def upload_layer_file(filename: str, data: bytes) -> str:
         )
     if not data:
         raise ImportLayerInputError("upload body is empty")
-    bucket = os.environ.get("TRID3NT_CACHE_BUCKET") or _default_cache_bucket()
+    from trid3nt_server.store import objects as storage
+    from trid3nt_server.tools.cache import CACHE_BUCKET
+
+    bucket = os.environ.get("TRID3NT_CACHE_BUCKET") or CACHE_BUCKET
     safe_name = _sanitize_filename(filename)
     key = f"{USER_UPLOAD_PREFIX}/{new_ulid()}/{safe_name}"
     s3_uri = f"s3://{bucket}/{key}"
-    _put_object_bytes(s3_uri, data)
+    storage.client().put_object(Bucket=bucket, Key=key, Body=data,
+                                ContentType="application/octet-stream")
     logger.info(
         "user_layer: staged upload filename=%s bytes=%d -> %s",
         filename,
@@ -182,13 +134,6 @@ def upload_layer_file(filename: str, data: bytes) -> str:
         s3_uri,
     )
     return s3_uri
-
-
-def _default_cache_bucket() -> str:
-    from trid3nt_server.tools.cache import CACHE_BUCKET
-
-    return CACHE_BUCKET
-
 
 
 _VECTOR_READ_EXTS = (".geojson", ".json", ".fgb", ".gpkg", ".shp")
@@ -299,9 +244,9 @@ async def _ingest_vector(
     runs_bucket = storage.runs_bucket()
     fgb_key = f"case-data/{case_id}/{layer_id}.fgb"
     fgb_uri = f"s3://{runs_bucket}/{fgb_key}"
-    await asyncio.to_thread(
-        _put_object_bytes, fgb_uri, fgb_bytes, content_type="application/octet-stream"
-    )
+    await asyncio.to_thread(lambda: storage.client().put_object(
+        Bucket=runs_bucket, Key=fgb_key, Body=fgb_bytes,
+        ContentType="application/octet-stream"))
 
     layer = LayerURI(layer_id=layer_id, name=name, layer_type="vector",
                      uri=fgb_uri, role="input", origin="user")
@@ -512,7 +457,16 @@ async def ingest_user_layer(
     # conversion, or publish work.
     await _require_case_exists(case_id.strip())
 
-    size = await asyncio.to_thread(_head_object_size, s3_uri)
+    from trid3nt_server.store import objects as storage
+    from trid3nt_server.tools.cache import read_object_bytes_s3
+
+    try:
+        size = await asyncio.to_thread(storage.object_size, s3_uri)
+    except storage.ObjectMissingError as exc:
+        raise ObjectNotFoundError(str(exc)) from exc
+    except storage.StorageError as exc:
+        raise ImportLayerError(
+            str(exc), error_code="OBJECT_HEAD_FAILED") from exc
     if size > MAX_INGEST_BYTES:
         raise ObjectTooLargeError(
             f"{s3_uri} is {size} bytes, exceeds the {MAX_INGEST_BYTES}-byte cap"
@@ -520,7 +474,7 @@ async def ingest_user_layer(
     if size <= 0:
         raise ObjectNotFoundError(f"{s3_uri} is empty or unreadable")
 
-    raw_bytes = await asyncio.to_thread(_get_object_bytes, s3_uri)
+    raw_bytes = await asyncio.to_thread(read_object_bytes_s3, s3_uri)
 
     layer_id = f"user-{new_ulid()}"
     if kind == _VECTOR_KIND:

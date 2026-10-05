@@ -14,8 +14,9 @@ import os
 from pathlib import Path
 from typing import Any
 
-__all__ = ["StorageError", "client", "local_runs_bucket", "runs_bucket",
-           "set_client", "set_runs_bucket", "split_object_uri"]
+__all__ = ["ObjectMissingError", "StorageError", "client", "local_runs_bucket",
+           "object_size", "runs_bucket", "set_client", "set_runs_bucket",
+           "split_object_uri"]
 
 
 class StorageError(RuntimeError):
@@ -25,6 +26,12 @@ class StorageError(RuntimeError):
     re-emits verbatim rather than re-deriving one."""
 
     error_code: str = "STORAGE_UNAVAILABLE"
+
+
+class ObjectMissingError(StorageError):
+    """No object stands at the URI."""
+
+    error_code = "OBJECT_NOT_FOUND"
 
 
 _CLIENT: Any | None = None
@@ -128,3 +135,21 @@ def split_object_uri(uri: str) -> tuple[str, str, str]:
             raise StorageError(f"malformed s3:// URI: {uri!r}")
         return "s3", bucket, key
     raise StorageError(f"unsupported object URI scheme: {uri!r} (expected s3://)")
+
+
+def object_size(uri: str) -> int:
+    """The byte size of the ``s3://`` object at ``uri``, without reading it.
+
+    A missing object refuses as :class:`ObjectMissingError`; any other failure
+    to inspect it is a plain :class:`StorageError`."""
+    from botocore.exceptions import ClientError
+
+    _scheme, bucket, key = split_object_uri(uri)
+    try:
+        head = client().head_object(Bucket=bucket, Key=key)
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code", "") in (
+                "404", "NoSuchKey", "NotFound"):
+            raise ObjectMissingError(f"no such object: {uri}") from exc
+        raise StorageError(f"could not inspect {uri}: {exc}") from exc
+    return int(head.get("ContentLength") or 0)

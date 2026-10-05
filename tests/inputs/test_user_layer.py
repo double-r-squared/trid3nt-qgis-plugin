@@ -8,11 +8,14 @@ asked."""
 
 from __future__ import annotations
 
+import io
 import json
 
 import pytest
+from botocore.exceptions import ClientError
 
 from trid3nt_server import server
+from trid3nt_server.store import objects as storage
 from trid3nt_server.store.cases import Persistence
 import trid3nt_server.inputs.user_layer as iul
 from trid3nt_contracts.case import CaseSummary
@@ -133,18 +136,30 @@ def fake_persistence(monkeypatch):
     return fake
 
 
-def _mock_s3_object(monkeypatch, data: bytes):
-    monkeypatch.setattr(iul, "_head_object_size", lambda uri: len(data))
-    monkeypatch.setattr(iul, "_get_object_bytes", lambda uri: data)
-    puts: list[tuple[str, bytes]] = []
-    monkeypatch.setattr(
-        iul,
-        "_put_object_bytes",
-        lambda uri, body, content_type="application/octet-stream": puts.append(
-            (uri, body)
-        ),
-    )
-    return puts
+class _Store:
+    """The object store as the one client sees it: one object, and every PUT."""
+
+    def __init__(self, data: bytes | None, size: int | None = None) -> None:
+        self.data, self.size = data, size
+        self.puts: list[tuple[str, bytes]] = []
+
+    def head_object(self, Bucket, Key):
+        if self.data is None:
+            raise ClientError({"Error": {"Code": "404"}}, "HeadObject")
+        return {"ContentLength": len(self.data) if self.size is None
+                else self.size}
+
+    def get_object(self, Bucket, Key):
+        return {"Body": io.BytesIO(self.data)}
+
+    def put_object(self, Bucket, Key, Body, ContentType):
+        self.puts.append((f"s3://{Bucket}/{Key}", Body))
+
+
+def _mock_s3_object(monkeypatch, data: bytes | None, size: int | None = None):
+    store = _Store(data, size)
+    monkeypatch.setattr(storage, "_CLIENT", store)
+    return store.puts
 
 
 
@@ -277,9 +292,7 @@ async def test_ingest_bad_kind_rejected(fake_persistence):
 async def test_ingest_object_too_large_rejected(monkeypatch, fake_persistence):
     case_id = new_ulid()
     fake_persistence._cases[case_id] = _case(case_id)
-    monkeypatch.setattr(
-        iul, "_head_object_size", lambda uri: iul.MAX_INGEST_BYTES + 1
-    )
+    _mock_s3_object(monkeypatch, b"x", size=iul.MAX_INGEST_BYTES + 1)
     with pytest.raises(iul.ObjectTooLargeError):
         await iul.ingest_user_layer(
             case_id=case_id,
@@ -293,11 +306,7 @@ async def test_ingest_object_too_large_rejected(monkeypatch, fake_persistence):
 async def test_ingest_missing_object_rejected(monkeypatch, fake_persistence):
     case_id = new_ulid()
     fake_persistence._cases[case_id] = _case(case_id)
-
-    def _missing(uri):
-        raise iul.ObjectNotFoundError(f"no such object: {uri}")
-
-    monkeypatch.setattr(iul, "_head_object_size", _missing)
+    _mock_s3_object(monkeypatch, None)
     with pytest.raises(iul.ObjectNotFoundError):
         await iul.ingest_user_layer(
             case_id=case_id,
@@ -398,3 +407,14 @@ async def test_the_aoi_pins_to_the_pushed_layer(monkeypatch, fake_persistence):
     assert result["status"] == "ok"
     assert result["aoi_pinned"] is True
     assert list(fake_persistence._cases[case_id].bbox) == pytest.approx(result["bbox"])
+
+
+def test_an_upload_is_staged_under_the_cache_bucket(monkeypatch):
+    monkeypatch.delenv("TRID3NT_CACHE_BUCKET", raising=False)
+    puts = _mock_s3_object(monkeypatch, b"")
+    uri = iul.upload_layer_file("../a b.geojson", b"{}")
+    from trid3nt_server.tools.cache import CACHE_BUCKET
+
+    assert uri.startswith(f"s3://{CACHE_BUCKET}/{iul.USER_UPLOAD_PREFIX}/")
+    assert uri.endswith("/a_b.geojson")
+    assert puts == [(uri, b"{}")]
