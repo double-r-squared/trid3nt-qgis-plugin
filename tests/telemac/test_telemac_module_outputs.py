@@ -7,7 +7,6 @@ which layer - and which rows never reach a template at all."""
 
 from __future__ import annotations
 
-import ast
 import asyncio
 from pathlib import Path
 from typing import Any
@@ -27,31 +26,6 @@ from trid3nt_server.workflows.telemac.modules import (
 )
 from trid3nt_server.workflows.telemac.modules.outputs import Solved, series
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
-
-TEMPLATES = (Path(__file__).resolve().parents[2] / "trid3nt_server" / "workflows"
-             / "telemac" / "templates")
-
-#: What a module says about itself and a template may not restate.
-_MODULES_OWN = ("VARIABLES_FOR_GRAPHIC_PRINTOUTS",
-                "VARIABLES_FOR_3D_GRAPHIC_PRINTOUTS",
-                "VARIABLES_FOR_2D_GRAPHIC_PRINTOUTS")
-
-
-def _recipes() -> list[Path]:
-    return sorted(p / f"{p.name}.py" for p in TEMPLATES.iterdir()
-                  if p.is_dir() and (p / f"{p.name}.py").is_file())
-
-
-def test_no_template_states_a_style_or_a_printout_list():
-    """A template asks the question; it does not choose what is shown. The
-    printout list and the style of every variable are the module's own."""
-    named = []
-    for recipe in _recipes():
-        for node in ast.walk(ast.parse(recipe.read_text(encoding="utf-8"))):
-            if isinstance(node, ast.Name) and (node.id in _MODULES_OWN
-                                               or node.id.endswith("_STYLE")):
-                named.append(f"{recipe.name}:{node.lineno} {node.id}")
-    assert named == []
 
 
 def test_the_printouts_keyword_is_the_table_and_the_run_s_own_tracers():

@@ -47,22 +47,3 @@ def test_case_select_sets_active_case() -> None:
     case_id = new_ulid()
     asyncio.run(_emit_case_open(_FakeWS(), state, case_id))
     assert state.active_case_id == case_id
-
-
-def test_create_branch_source_clears_context() -> None:
-    """Source-level pin for the create path (full handler needs Persistence;
-    the reset lines are asserted structurally so a refactor that drops them
-    fails loudly)."""
-    import inspect
-
-    import trid3nt_server.server as server_mod
-
-    src = inspect.getsource(server_mod._handle_case_command)
-    create_idx = src.index('if command == "create"')
-    select_idx = src.index('if command == "select"')
-    create_block = src[create_idx:select_idx]
-    # The reset REBINDS (never .clear()) — an in-flight turn holds
-    # the old list via its stream-entry capture and must keep it intact.
-    assert "state.chat_history = []" in create_block
-    assert "state.chat_history.clear()" not in create_block
-    assert "state.turn_count = 0" in create_block

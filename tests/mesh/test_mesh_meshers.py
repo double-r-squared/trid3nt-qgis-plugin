@@ -29,7 +29,6 @@ from trid3nt_server.tools.mesh.meshers import (
 from trid3nt_server.tools.mesh.shared.nodes import MeshNodeError, read_2dm_mesh
 
 
-
 def _artifact(**over) -> MeshArtifact:
     base = dict(
         mesh_id="01ABC", name="Coweeta catchment", mode="om2d",
@@ -51,20 +50,6 @@ def test_build_mesh_registered_and_the_standalone_builder_is_gone():
 
 def test_the_roster_is_the_meshers_the_tree_carries():
     assert registered_meshers() == ("om2d", "reg_grid")
-
-
-def test_no_resolution_declaration_survives_anywhere():
-    """Nothing refuses a resolution: no contract type, no row, no template
-    and no mesher declares a range a resolution is held to."""
-    root = Path(__file__).resolve().parents[2]
-    words = ("Resolution" + "Spec", "resolution_" + "declarations",
-             "resolution_" + "specs", "EDGE_RESOLUTION_" + "SPECS")
-    found = [f"{path.relative_to(root)}: {word}"
-             for top in ("trid3nt_server", "contracts", "plugin")
-             for path in (root / top).rglob("*")
-             if path.suffix in (".py", ".yaml", ".json") and path.is_file()
-             for word in words if word in path.read_text(errors="ignore")]
-    assert not found, found
 
 
 def _bed(tmp_path: Path, cell_deg: float) -> Path:
@@ -233,5 +218,3 @@ def test_mesh_artifact_json_roundtrip():
     back = MeshArtifact.from_json(art.to_json())
     assert back.mesh_id == art.mesh_id
     assert back.bbox == art.bbox  # tuple restored from JSON list
-
-

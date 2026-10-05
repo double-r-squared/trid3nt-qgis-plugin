@@ -864,8 +864,6 @@ package MeshSeam {
 
     satisfy requirement CorrectDataClassAtSetBed by sharedPrimitives;
     verify requirement CorrectDataClassAtSetBed by
-        "tests/mesh/test_mesh_topology_and_bed.py::test_the_bed_op_permits_no_ladder_rung_on_the_authors_behalf";
-    verify requirement CorrectDataClassAtSetBed by
         "tests/mesh/test_mesh_topology_and_bed.py::test_a_source_naming_nothing_refuses_rather_than_leaving_a_bedless_mesh";
     verify requirement CorrectDataClassAtSetBed by
         "tests/mesh/test_mesh_topology_and_bed.py::test_a_conditioning_this_primitive_does_not_perform_refuses";

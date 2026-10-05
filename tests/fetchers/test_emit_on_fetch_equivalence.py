@@ -2,31 +2,16 @@
 
 No network. Two halves reproduce the old coverage between them: each composer
 declares a ``purpose`` word on the router fetch that feeds a formerly
-hand-surfaced input, verified by inspecting the source; and the seam maps that
-word to the SAME context row the helper emitted. Input by input, none lost."""
+hand-surfaced input; and the seam maps that word to the SAME context row the
+helper emitted. Input by input, none lost."""
 
 from __future__ import annotations
 
-import pathlib
-import re
 from types import SimpleNamespace
 
 from trid3nt_server.tools.fetchers._router.emit_on_fetch import (
     input_layer_name,
 )
-
-_SERVER = pathlib.Path(__file__).resolve().parents[2] / "trid3nt_server"
-#: The trees a composer or a mesher lives in.
-_SWEPT = (_SERVER / "workflows", _SERVER / "tools" / "mesh")
-
-
-def _tree(rel: pathlib.PurePath) -> str:
-    """The swept tree a module lives in, else its top-level folder."""
-    for path in _SWEPT:
-        swept = path.relative_to(_SERVER)
-        if rel.parts[:len(swept.parts)] == swept.parts:
-            return str(swept)
-    return rel.parts[0]
 
 
 def test_a_matched_row_is_asked_under_its_own_name():
@@ -63,41 +48,3 @@ def test_purpose_words_map_to_input_names_the_helpers_used():
         # the composer word wins over the resolved variable/product param.
         name2 = input_layer_name(_fake_spec("nlcd"), {"variable": "dem"}, word)
         assert name2.startswith(f"Input: {word} ("), name2
-
-
-def test_deleted_surface_helpers_are_gone():
-    """Every per-family input-surfacing helper is gone; the seam is the only path.
-
-    The bed-bathymetry exemption was real while it rode a COG sampled inside the
-    container, which the router never saw; that fetch is declared now."""
-    gone = [
-        "_surface_landlab_dem_input",
-        "_surface_watershed_mesh_inputs",
-        "_surface_landcover_input",
-        "_surface_river_geometry_input",
-        "_surface_bed_bathymetry_input",
-    ]
-    joined = "\n".join(
-        p.read_text("utf-8")
-        for tree in _SWEPT for p in tree.rglob("*.py")
-        if "__pycache__" not in p.parts
-    )
-    for name in gone:
-        assert f"def {name}" not in joined, f"{name} should be deleted (seam covers it)"
-
-
-def test_the_sweep_reaches_every_tree_a_composing_tool_is_defined_in():
-    """A composer's tree left out of the sweep is a sweep that passes while
-    reading nothing: every tree a registered tool is defined in, outside the
-    fetch side (tools) and the card tool (inputs), is swept."""
-    import inspect
-
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    trees = {
-        _tree(pathlib.Path(inspect.getsourcefile(inspect.unwrap(t.fn))).resolve()
-              .relative_to(_SERVER))
-        for t in TOOL_REGISTRY.values()
-    } - {"tools", "inputs"}
-    assert "tools/mesh" in trees
-    assert not trees - {str(p.relative_to(_SERVER)) for p in _SWEPT}, sorted(trees)

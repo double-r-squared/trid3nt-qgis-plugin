@@ -73,24 +73,6 @@ def test_the_mesher_owns_the_domain_primitives_the_library_has_no_word_for():
         assert (space.origin, space.phase) == ("om2d", PRE)
 
 
-def test_the_rim_primitive_is_the_driver_def_under_its_own_name():
-    """No alias: the op name IS the ``def`` the box calls, and the box knows it."""
-    from trid3nt_server.workflows.solver.image_script import scripts_dir
-
-    source = (scripts_dir("mesh") / "om2d.py").read_text()
-    assert "def set_rim_size(build: _Build, edge_length_m" in source
-    assert '"set_rim_size": set_rim_size' in source
-
-
-def test_the_rim_band_is_a_visible_kwarg_with_a_labeled_default():
-    """The tolerance the rim is held to is the ask's word, not a hidden constant."""
-    from trid3nt_server.workflows.solver.image_script import scripts_dir
-
-    source = (scripts_dir("mesh") / "om2d.py").read_text()
-    assert "tolerance: float = 2.0" in source
-    assert "_RIM_TOLERANCE" not in source
-
-
 def test_the_boxs_own_typed_refusal_reaches_the_caller_with_its_escalation(
         tmp_path, monkeypatch):
     """A domain refusal is only knowable where the library is.

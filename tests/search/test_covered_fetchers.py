@@ -86,20 +86,11 @@ def test_a_covered_fetcher_leaves_the_index_and_an_overlay_one_stays(index):
 
 
 def test_nothing_of_ours_grids_soundings(registry, index):
-    """Soundings are gridded by QGIS's IDW through run_qgis_algorithm: no tool,
-    index entry or line of the server names a grid of our own."""
-    from pathlib import Path
-
-    import trid3nt_server
-
+    """Soundings are gridded by QGIS's IDW through run_qgis_algorithm: no tool
+    or index entry is a grid of our own."""
     gone = "survey_" + "surface"
     assert gone not in registry
     assert gone not in set(index.tool_names)
-    root = Path(trid3nt_server.__file__).parent
-    naming = [str(path.relative_to(root)) for path in root.rglob("*")
-              if path.suffix in {".py", ".yaml", ".json"}
-              and gone in path.read_text(errors="replace")]
-    assert naming == []
 
 
 def test_each_class_is_its_own_document_under_the_match(index):

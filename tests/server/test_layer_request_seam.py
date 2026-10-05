@@ -5,13 +5,11 @@ is owner-checked so a sibling session cannot resolve another's request."""
 from __future__ import annotations
 
 import asyncio
-import inspect
 
 import pytest
 from pydantic import ValidationError
 
 from trid3nt_contracts.ws import LayerResponsePayload
-from trid3nt_server.server.protocol import loop as loop_module
 from trid3nt_server.inputs.gate.pending import _PENDING_LAYER
 
 
@@ -43,13 +41,6 @@ def test_an_unknown_key_is_refused_rather_than_invented() -> None:
     assert _PENDING_LAYER.resolve(
         "session-1", "no-such-row", LayerResponsePayload(key="no-such-row")
     ) is False
-
-
-def test_the_connection_loop_dispatches_the_answer() -> None:
-    src = inspect.getsource(loop_module)
-    assert 'elif msg_type == "layer-response":' in src
-    assert "_PENDING_LAYER.resolve(state.session_id, layer.key, layer)" in src
-    assert loop_module._PENDING_LAYER is _PENDING_LAYER
 
 
 def test_a_malformed_answer_has_the_message_the_branch_reports() -> None:

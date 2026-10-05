@@ -539,8 +539,6 @@ package ToolPlane {
     verify requirement ConsequentialCodeIsUserGated by
         "tests/derive/test_session_tools.py::test_run_pyqgis_refuses_without_the_card";
     verify requirement ConsequentialCodeIsUserGated by
-        "tests/gates/test_code_exec_gate.py::test_dispatch_strips_a_model_supplied_approval";
-    verify requirement ConsequentialCodeIsUserGated by
         "tests/gates/test_code_exec_gate.py::test_approve_injects_confirmed_and_the_card_carries_the_code";
     verify requirement ConsequentialCodeIsUserGated by
         "tests/gates/test_code_exec_gate.py::test_cancel_blocks_dispatch_and_leaks_nothing";

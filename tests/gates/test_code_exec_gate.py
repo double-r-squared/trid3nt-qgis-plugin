@@ -1,14 +1,12 @@
 """The code-exec approval gate in front of ``run_pyqgis``: fail-closed.
 
-The dispatch site strips a model-supplied approval before the gate; the gate
-emits the card with the verbatim code, injects the approval only on a
+The gate emits the card with the verbatim code, injects the approval only on a
 ``proceed`` reply, refuses a cancel, and a card nobody answers expires into a
 typed error with its pending entry dropped."""
 
 from __future__ import annotations
 
 import asyncio
-import inspect
 import json
 
 import pytest
@@ -19,7 +17,6 @@ from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
 from trid3nt_server.inputs.gate import confirm
 from trid3nt_server.inputs.gate.pending import _PENDING_CONFIRMATIONS
 from trid3nt_server.server import config
-from trid3nt_server.server.dispatch import emitter as dispatch
 from trid3nt_server.inputs.gate.errors import CodeExecConfirmationCancelledError, GateConfirmationTimeoutError
 
 
@@ -116,10 +113,3 @@ def test_approval_window_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
     for bad in ("abc", "0", "-5"):
         monkeypatch.setenv("TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S", bad)
         assert confirm._code_exec_approval_timeout_s() == 180.0
-
-
-def test_dispatch_strips_a_model_supplied_approval() -> None:
-    src = inspect.getsource(dispatch._invoke_tool_via_emitter)
-    assert 'if tool_name == "run_pyqgis":' in src
-    assert 'params.pop("confirmed", None)' in src
-    assert 'params.pop("code_exec_id", None)' in src

@@ -359,33 +359,11 @@ def test_a_source_naming_nothing_refuses_rather_than_leaving_a_bedless_mesh():
     assert excinfo.value.error_code == "MESH_BED_UNRESOLVED"
 
 
-def test_the_bed_op_permits_no_ladder_rung_on_the_authors_behalf(tmp_path):
-    """Which substitutions a bed tolerates is the DATA row's declaration.
-
-    A rung this op permitted would be a cross-dataset bed nobody wrote down, and
-    the fetch would descend to it without the recipe ever saying so.
-    """
-    import inspect
-
-    source = inspect.getsource(P._bed_raster)
-    assert "fallback=" not in source
-    assert 'TOOL_REGISTRY[name].fn(bbox=bbox, target_crs="EPSG:4326")' in source
-
-
-def test_the_substitution_the_fetch_narrated_rides_under_one_name(tmp_path):
-    """One datum, one name: the note the bed's fetch attached is what the
-    authoring reads as ``bed_notes``, all the way from the op to the
-    provenance."""
+def test_a_bed_from_a_direct_raster_carries_no_substitution_note(tmp_path):
+    """A direct raster substitutes nothing, so the bed carries no ``bed_notes``."""
     raster = _bed_raster(tmp_path)
     bedded = P.set_bed(_lonlat_mesh(), source=str(raster))
-    assert "bed_notes" not in bedded.meta  # a direct raster substitutes nothing
-
-    import inspect
-
-    from trid3nt_server.tools.mesh import session as S
-
-    assert "bed_notes" in inspect.getsource(S.MeshSession.accept)
-    assert 'mesh.meta.get("bed_notes")' in inspect.getsource(S.MeshSession)
+    assert "bed_notes" not in bedded.meta
 
 
 def test_the_journal_names_the_rung_that_ACTUALLY_painted_the_bed(tmp_path):

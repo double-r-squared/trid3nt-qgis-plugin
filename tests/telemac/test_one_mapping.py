@@ -7,11 +7,9 @@ one nothing of the run is called is refused there, by name."""
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 
 import pytest
 
-import trid3nt_server
 from trid3nt_server.tools import TOOL_REGISTRY
 from seated import resolve_params
 from trid3nt_server.inputs.fill import (REJECTED, Fill, fill,
@@ -101,15 +99,6 @@ def test_a_measurement_reads_a_template_input_by_name():
     assert read == {"areas": {"dredge_area": "the fairway",
                               "dump_area": "the dump site"},
                     "grade_depth_m": 7.5}
-
-
-def test_no_placeholder_read_is_left_in_the_server():
-    root = Path(trid3nt_server.__file__).parent
-    left = [f"{path.relative_to(root)}: {word}"
-            for path in sorted(root.rglob("*.py"))
-            for word in ("Ref(", "ParamRef", "DataRef")
-            if word in path.read_text(encoding="utf-8")]
-    assert left == []
 
 
 def test_every_template_names_only_what_its_run_is_called():

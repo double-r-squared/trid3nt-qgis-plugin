@@ -91,8 +91,7 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
    never half-wired.
 7. New tools/templates complete the registry checklist: registration
    import, catalog-surfacing pins, `EXPECTED_TEMPLATES` (the pinned set
-   lives in `tests/search/test_door_dissolution.py`, and
-   `tests/tools/test_template_hygiene.py` reads the same set), co-located
+   lives in `tests/search/test_door_dissolution.py`), co-located
    corpus.yaml, retrieval top-8 check.
 8. Emission belongs to the framework, not the workflow. Workflows hold
    orchestration and judgment; plumbing belongs to the framework.

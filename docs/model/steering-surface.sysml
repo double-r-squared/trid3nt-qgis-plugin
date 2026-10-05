@@ -1093,8 +1093,6 @@ package SteeringSurface {
     verify requirement TheRunHoldsOneMapping by
         "tests/telemac/test_one_mapping.py::test_a_measurement_reads_a_template_input_by_name";
     verify requirement TheRunHoldsOneMapping by
-        "tests/telemac/test_one_mapping.py::test_no_placeholder_read_is_left_in_the_server";
-    verify requirement TheRunHoldsOneMapping by
         "tests/telemac/test_one_mapping.py::test_every_template_names_only_what_its_run_is_called";
     verify requirement TheRunHoldsOneMapping by
         "tests/telemac/test_one_mapping.py::test_a_row_only_a_composite_reads_is_in_the_mapping_after_the_fill";
@@ -1441,8 +1439,6 @@ package SteeringSurface {
     satisfy requirement OutputsAreTheModules by sheet;
     satisfy requirement OutputsAreTheModules by serializer;
     satisfy requirement OutputsAreTheModules by engineWorkflow;
-    verify requirement OutputsAreTheModules by
-        "tests/telemac/test_telemac_module_outputs.py::test_no_template_states_a_style_or_a_printout_list";
     verify requirement OutputsAreTheModules by
         "tests/telemac/test_telemac_module_outputs.py::test_the_printouts_keyword_is_the_table_and_the_run_s_own_tracers";
     verify requirement OutputsAreTheModules by

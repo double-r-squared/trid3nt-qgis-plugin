@@ -30,25 +30,3 @@ def test_local_timeout_is_finite(monkeypatch):
     value = server._gate_wait_timeout(300)
     assert value == float(server._LOCAL_GATE_TIMEOUT_SECONDS)
     assert value < float("inf")
-
-
-def test_every_gate_wait_site_uses_the_seam():
-    """Source-level guard: no gate ``asyncio.wait_for`` bypasses the seam.
-
-    Every user-decision gate wraps its timeout in ``_gate_wait_timeout`` except the
-    code-exec gate, which waits on its own bounded approval timeout."""
-    import inspect
-
-    from trid3nt_server.inputs.gate import confirm as _gates_confirm
-
-    src = inspect.getsource(_gates_confirm)
-    for bare in (
-        "timeout=warning_payload.ttl_seconds",
-        "timeout=CODE_EXEC_CONFIRM_TIMEOUT_SECONDS",
-        "timeout=payload.default_timeout_seconds",
-    ):
-        assert bare not in src, f"gate wait bypasses _gate_wait_timeout: {bare}"
-    assert src.count("_gate_wait_timeout(") >= 4  # def + 3 call sites
-    # The code-exec carve-out: its wait is the bounded approval window, live-read.
-    assert "approval_timeout_s))" in src
-    assert "_code_exec_approval_timeout_s()" in src

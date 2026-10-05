@@ -7,7 +7,6 @@ engine. That the ENGINE accepts what is written here is proved by a solve.
 
 from __future__ import annotations
 
-import ast
 from pathlib import Path
 
 import numpy as np
@@ -17,14 +16,6 @@ from trid3nt_server.tools.mesh.meshers import MeshToolError
 from trid3nt_server.workflows.telemac.authoring import selafin_io as IO
 from trid3nt_server.workflows.telemac.modules import outputs as R
 
-#: Every module on this side that reaches a solved result. None may run a
-#: container to do it: the image solves and does nothing else.
-_READERS = (
-    "trid3nt_server/workflows/telemac/authoring/selafin_io.py",
-    "trid3nt_server/workflows/telemac/modules/outputs.py",
-    "trid3nt_server/workflows/telemac/authoring/opening.py",
-    "trid3nt_server/workflows/telemac/authoring/release_point.py",
-)
 
 _REPO = Path(__file__).resolve().parents[2]
 
@@ -102,49 +93,6 @@ def test_a_pair_that_cannot_be_written_refuses_by_name(tmp_path):
                               bed=np.zeros(4), roles={"inflow": [0, 3]})
     assert ei.value.error_code == "MESH_PAIR_WRITE_FAILED"
     assert "mesh.slf" in str(ei.value) and "mesh.cli" in str(ei.value)
-
-
-def test_no_reader_on_this_side_parses_the_format():
-    """One reader of the format's fields, and it is the library's, not ours.
-
-    The byte layout is the engine's to know. A second parser was wrong about it
-    twice - it refused a truncated result the engine reads, and it glued the
-    record's unit onto every variable name - so every consumer reaches the
-    fields through ``read_selafin`` and nothing else opens them.
-    """
-    server = _REPO / "trid3nt_server"
-    opens_format, hand_rolls = set(), set()
-    for module in sorted(server.rglob("*.py")):
-        text = module.read_text()
-        tree = ast.parse(text)
-        imported = set()
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                imported.update(alias.name.split(".")[0] for alias in node.names)
-            elif isinstance(node, ast.ImportFrom):
-                imported.add((node.module or "").split(".")[0])
-        rel = module.relative_to(_REPO).as_posix()
-        if "serafin" in imported:
-            opens_format.add(rel)
-        if "struct" in imported and "selafin" in text.lower():
-            hand_rolls.add(rel)
-
-    assert opens_format == {"trid3nt_server/workflows/telemac/authoring/selafin_io.py"}
-    assert not hand_rolls
-
-
-@pytest.mark.parametrize("module", _READERS)
-def test_no_reader_on_this_side_starts_a_container(module):
-    """The engine image solves; a read that wakes one costs a container per file."""
-    tree = ast.parse((_REPO / module).read_text())
-    imported = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            imported.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom):
-            imported.add(node.module or "")
-    assert not {name for name in imported if "image_script" in name}
-    assert "docker" not in (_REPO / module).read_text()
 
 
 #: A square ring of sixteen nodes with the middle square left out, so the walk

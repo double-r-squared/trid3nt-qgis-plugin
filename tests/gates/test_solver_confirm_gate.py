@@ -2,13 +2,12 @@
 
 The gate builds its card from the pure extraction and emits it as a
 ``tool-payload-warning``; approve injects ``confirmed=True`` while cancel and
-timeout fail closed with a typed error and NO dispatch; an LLM-supplied
-``confirmed`` is STRIPPED; extraction failure falls through to the param error."""
+timeout fail closed with a typed error and NO dispatch;
+extraction failure falls through to the param error."""
 
 from __future__ import annotations
 
 import asyncio
-import inspect
 import json
 
 import pytest
@@ -42,19 +41,6 @@ class _FakeState:
         # user-message dispatch); tests construct it here since ``_FakeState``
         # is a minimal stand-in.
         self.gate_decisions_this_turn: dict = {}
-
-
-def test_dispatch_source_contains_strip_and_gate() -> None:
-    """Source-level: the dispatch site resolves the tool's ``GateSpec`` and strips an
-    LLM-supplied ``confirmed`` before gating, so a refactor that drops the strip line
-    fails loudly rather than quietly."""
-    import trid3nt_server.server as server_mod
-
-    src = inspect.getsource(server_mod._invoke_tool_via_emitter)
-    assert "_gate_spec_for(" in src
-    assert 'kind == "solver"' in src
-    assert 'params.pop("confirmed", None)' in src
-    assert "SolverConfirmationCancelledError" in src
 
 
 def test_session_tools_in_hot_set() -> None:
@@ -210,21 +196,6 @@ async def test_gate_turn_memory_new_turn_gates_again() -> None:
     await approver_2
     assert should_run_2 is True
     assert sum(1 for e in ws.sent if e.get("type") == "tool-payload-warning") == 2
-
-
-def test_gate_decisions_this_turn_reset_at_new_dispatch() -> None:
-    """Source-level: the per-turn reset site clears ``gate_decisions_this_turn``.
-
-    It is the same site that clears the prompted-tools set, so a decision cannot leak
-    across turns."""
-    import inspect
-
-    import trid3nt_server.server as server_mod
-
-    from trid3nt_server.server.turn import stream as _stream_mod
-
-    src = inspect.getsource(_stream_mod)
-    assert "state.gate_decisions_this_turn = {}" in src
 
 
 def test_gate_memory_key_bboxless_tool_uses_full_args() -> None:

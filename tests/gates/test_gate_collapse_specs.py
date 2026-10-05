@@ -1,12 +1,10 @@
 """The confirm gates are built from tool METADATA, not hand-wired name sets.
 
-The registry-DERIVED membership views match what the tree declares, the name-set
-literals are gone from the core (an absence guard), and each spec's declared
-estimate and pin providers import and are the right shape. Every template stops
-at the standard mesh gate, so the solver lane is EMPTY and that is asserted."""
+The registry-DERIVED membership views match what the tree declares, and each
+spec's declared estimate and pin providers import and are the right shape.
+Every template stops at the standard mesh gate, so the solver lane is EMPTY and
+that is asserted."""
 from __future__ import annotations
-
-import inspect
 
 import pytest
 
@@ -50,17 +48,6 @@ def test_derived_views_match_historical_sets() -> None:
 
 
 # --- absence guard: the hand-wired literals are gone --- #
-
-def test_hand_wired_name_set_literals_are_deleted() -> None:
-    src = inspect.getsource(_core)
-    assert "SOLVER_CONFIRM_TOOLS: set[str] = {" not in src
-    assert "FETCH_CONFIRM_TOOLS: set[str] = {" not in src
-    # the seven per-engine locals + the per-engine card-building if/elif chain
-    # are gone: the old orchestrator function name is replaced by the generic
-    # engine + a thin compat shim.
-    assert "async def _gate_on_confirm(" in src
-    assert "swmm_autoscale: Any = None" not in src
-    assert "flood_grid_autoscale: Any = None" not in src
 
 
 # --- providers import and are the right shape --- #

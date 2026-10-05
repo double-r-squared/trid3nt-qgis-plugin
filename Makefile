@@ -33,7 +33,7 @@ test-spatial:       ; $(PYTEST) tests/derive tests/render tests/mesh
 test-engines:       ; $(PYTEST) tests/telemac tests/runtime tests/solver tests/search
 test-server:        ; $(PYTEST) tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts
 test-model-surface: ; $(PYTEST) tests/adapters tests/tools
-test-packages:      ; $(PYTEST) contracts/tests plugin/tests tests/plugin
+test-packages:      ; $(PYTEST) contracts/tests plugin/tests
 
 test: test-fetchers test-spatial test-engines test-server test-model-surface test-packages
 

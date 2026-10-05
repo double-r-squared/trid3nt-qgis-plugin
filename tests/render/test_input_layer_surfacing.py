@@ -1,9 +1,9 @@
-"""Input-layer surfacing: the primitives, the one worker case, and the sweep.
+"""Input-layer surfacing: the primitives and the one worker case.
 
 A router-fetched renderable input surfaces through the emit-on-fetch seam, so
 what is pinned here is what the seam does NOT own: the emission primitives it
 rides, which force the role, are best-effort and honour the guardrail; the
-in-worker bathymetry; and a sweep against a new hand-written call. All I/O mocked."""
+in-worker bathymetry. All I/O mocked."""
 
 from __future__ import annotations
 
@@ -262,115 +262,3 @@ async def test_publish_raster_input_cog_none_emitter_or_uri_noop():
             _emitter(), cog_uri="", layer_id="i", name="n",
         ) is False
     assert called["n"] == 0
-
-
-
-# (SWEEP) single-path guard.
-#
-# After the S2 collapse the emit-on-fetch router seam (route() ->
-# maybe_emit_input_on_fetch) is the ONLY way a router-FETCHED renderable input
-# surfaces as a role=context "Input:" row. No composer may re-introduce a
-# per-family ``_surface_*input*`` helper or a hand-written
-# publish_input_layer / publish_raster_input_cog call for router-fetched data.
-#
-# What legitimately REMAINS (and is allow-listed below, each with its reason) is
-# emission the seam does NOT cover:
-#   * MESH previews          - the generated mesh is not a router fetch.
-#   * RESULT / derived COGs   - a solver's own secondary output layer.
-#   * IN-WORKER COGs          - bathymetry sampled inside the solver container,
-#                               which never touches route(). No TELEMAC domain
-#                               is in this class: every bed the family solves
-#                               on is a declared router fetch and the seam
-#                               surfaces it.
-#   * BARE-OSM fetches        - agitation's breakwaters bypass the router (an
-#                               S3 loose end).
-#
-# A NEW input-emission site fails this test: route the fetch through the seam
-# (its render declaration surfaces it for free) or, if it is genuinely one of
-# the exempt classes above, add it here WITH a reason.
-import pathlib  # noqa: E402
-import re  # noqa: E402
-
-_SERVER_DIR = pathlib.Path(__file__).resolve().parents[2] / "trid3nt_server"
-# The trees a COMPOSER lives in. `render/` is the seam's own home and defines
-# what this sweep counts, so sweeping it would count the definition site.
-_SWEPT = ("workflows", "inputs", "tools/mesh")
-
-# relpath (from trid3nt_server/) -> (n_input_emission_calls, reason). Sum is the
-# only input-emission the tree is allowed to keep post-collapse.
-_ALLOWLISTED_INPUT_EMISSION: dict[str, tuple[int, str]] = {
-    "tools/mesh/gate.py": (1, "the mesh under construction, presented at the gate as an editable MDAL layer - an AUTHORED domain, not a router fetch, so no emit-on-fetch seam can cover it; one home for every mesher's presentation"),
-    "inputs/point.py": (1, "the Point context-layer publisher - a resolved PARAM (picked, typed or derived), not a router fetch, so no emit-on-fetch seam can cover it; one home for every Point slot"),
-}
-
-# NONE survive. The last bespoke input-surfacing helper rode an in-worker bed COG
-# the router seam could not cover; the reach family's bed is a declared fetch now,
-# so the helper and its COG are both gone and the seam is the only path.
-_ALLOWLISTED_SURFACE_HELPERS: set[str] = set()
-
-# Immediate paren only (a real call ``name(...``); a prose mention like
-# "publish_input_layer (never raises)" has a space and must NOT count.
-_EMISSION_CALL = re.compile(r"\b(publish_input_layer|publish_raster_input_cog)\(")
-_SURFACE_DEF = re.compile(r"^\s*(?:async\s+)?def\s+(_surface_\w*input\w*)\s*\(", re.M)
-
-
-def _iter_workflow_py() -> list[pathlib.Path]:
-    return [p for tree in _SWEPT for p in (_SERVER_DIR / tree).rglob("*.py")
-            if "__pycache__" not in p.parts]
-
-
-def test_the_sweep_covers_every_tree_it_names_and_every_site_it_allows():
-    """A swept tree that moved, or an allowed site outside every swept tree, is a
-    sweep that passes while reading nothing."""
-    for tree in _SWEPT:
-        assert list((_SERVER_DIR / tree).rglob("*.py")), f"{tree}/ holds no module"
-    swept = {str(p.relative_to(_SERVER_DIR)) for p in _iter_workflow_py()}
-    unswept = sorted(set(_ALLOWLISTED_INPUT_EMISSION) - swept)
-    assert not unswept, f"allowed sites no swept tree reaches: {unswept}"
-
-
-def test_sweep_no_surface_input_helpers_except_worker_cog():
-    """No per-family ``_surface_*input*`` helper may be (re)introduced -- the seam
-    surfaces fetched inputs. The sole exception is the in-worker bed-COG helper."""
-    offenders: list[str] = []
-    for path in _iter_workflow_py():
-        for name in _SURFACE_DEF.findall(path.read_text(encoding="utf-8")):
-            if name not in _ALLOWLISTED_SURFACE_HELPERS:
-                offenders.append(f"{path.relative_to(_SERVER_DIR)}::{name}")
-    assert not offenders, (
-        "router-fetched inputs surface via the emit-on-fetch seam; "
-        "delete these hand-written _surface_*input* helpers:\n  "
-        + "\n  ".join(offenders)
-    )
-
-
-def test_sweep_input_emission_calls_match_allowlist():
-    """Every hand-written input-emission CALL in a composer must be allow-listed.
-
-    A new site either routes its fetch through the seam or is listed here with a
-    reason."""
-    found: dict[str, int] = {}
-    for path in _iter_workflow_py():
-        n = 0
-        for line in path.read_text(encoding="utf-8").splitlines():
-            stripped = line.lstrip()
-            if stripped.startswith(("import ", "from ", "#")):
-                continue
-            n += len(_EMISSION_CALL.findall(line))
-        if n:
-            found[str(path.relative_to(_SERVER_DIR))] = n
-
-    expected = {rel: cnt for rel, (cnt, _reason) in _ALLOWLISTED_INPUT_EMISSION.items()}
-    unexpected = {
-        rel: cnt for rel, cnt in found.items()
-        if rel not in expected or cnt != expected[rel]
-    }
-    missing = {
-        rel: cnt for rel, cnt in expected.items()
-        if found.get(rel, 0) != cnt
-    }
-    assert not unexpected and not missing, (
-        "input-emission call sites drifted from the allow-list.\n"
-        f"unexpected/changed (route through the seam or allow-list w/ reason): {unexpected}\n"
-        f"allow-listed but not found (update the allow-list): {missing}"
-    )

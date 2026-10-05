@@ -1,13 +1,10 @@
 """An invented-physics demo default cannot be born or run.
 
-Three layers: the SCHEMA refuses a demo-default synthetic input with no
-``consequence`` tag while loading a pre-existing record tolerantly; a STATIC LINT
-requires an explicit ``consequence=`` at every construction site naming a demo
-default; the review gate REFUSES a physics one and lets the rest proceed."""
+Two layers: the SCHEMA refuses a demo-default synthetic input with no
+``consequence`` tag while loading a pre-existing record tolerantly; the review gate REFUSES a physics one and lets the
+rest proceed."""
 
 from __future__ import annotations
-
-import pathlib
 
 import pytest
 
@@ -17,8 +14,6 @@ from trid3nt_server.inputs.gate.input_review import (
     physics_refusal_reason,
 )
 from trid3nt_server.render import pipeline_emitter as pe
-
-_SERVER_ROOT = pathlib.Path(__file__).resolve().parents[2] / "trid3nt_server"
 
 
 def test_schema_demo_without_consequence_cannot_construct() -> None:
@@ -52,41 +47,6 @@ def test_schema_tolerant_history_read_backfills_scenario() -> None:
     }
     lyr = LayerURI.model_validate(env, context={"tolerant_history": True})
     assert lyr.synthetic_inputs[0].consequence == "scenario"
-
-
-def _synthetic_input_blocks(src: str):
-    """Yield (line, block) for every balanced ``SyntheticInput(...)`` call."""
-    i = 0
-    while True:
-        m = src.find("SyntheticInput(", i)
-        if m < 0:
-            return
-        depth = 0
-        k = src.find("(", m)
-        while k < len(src):
-            if src[k] == "(":
-                depth += 1
-            elif src[k] == ")":
-                depth -= 1
-                if depth == 0:
-                    break
-            k += 1
-        yield src[:m].count("\n") + 1, src[m:k + 1]
-        i = k + 1
-
-
-def test_lint_every_default_demo_site_carries_consequence() -> None:
-    offenders = []
-    for p in sorted(_SERVER_ROOT.rglob("*.py")):
-        src = p.read_text()
-        for line, block in _synthetic_input_blocks(src):
-            if "default_demo" in block and "consequence=" not in block:
-                offenders.append(f"{p.relative_to(_SERVER_ROOT.parent)}:{line}")
-    assert not offenders, (
-        "SyntheticInput sites naming default_demo without a consequence= tag "
-        "(law 9 -- classify physics|scenario|numerical|aoi):\n  "
-        + "\n  ".join(offenders)
-    )
 
 
 def _demo_entry(consequence: str) -> SyntheticInput:

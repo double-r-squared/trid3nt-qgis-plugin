@@ -1135,8 +1135,6 @@ package SolveSeam {
     satisfy requirement ExecutorKnowsNoEngine by supervisor;
     satisfy requirement ExecutorKnowsNoEngine by launcherArm;
     verify requirement ExecutorKnowsNoEngine by
-        "tests/solver/test_executor_import_graph.py::test_the_executor_imports_no_engine";
-    verify requirement ExecutorKnowsNoEngine by
         "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
 
     satisfy requirement WorkersNeverImportServer by workerEntrypoint;
@@ -1148,8 +1146,6 @@ package SolveSeam {
     satisfy requirement NoSecondParserOfTheFormat by runReader;
     satisfy requirement NoSecondParserOfTheFormat by opening;
     satisfy requirement NoSecondParserOfTheFormat by initialState;
-    verify requirement NoSecondParserOfTheFormat by
-        "tests/telemac/test_telemac_result_reader.py::test_no_reader_on_this_side_parses_the_format";
     verify requirement NoSecondParserOfTheFormat by
         "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
 
