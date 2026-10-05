@@ -10,15 +10,15 @@ from trid3nt_server.workflows.runtime import (
 )
 from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.instant import event_time
-from trid3nt_server.workflows.telemac.modules import GAIA, T2D
+from trid3nt_server.workflows.telemac.modules import GAIA, T2D, mass_balance
 from trid3nt_server.workflows.telemac.modules.gaia import (
     Dig, Dredging, RESULT_FILENAME,
 )
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
 from trid3nt_server.workflows.telemac.workflow import Measured, TelemacWorkflow
 
-__all__ = ["ACCEPTS", "CAPTIONS", "DATA", "DOC", "PARAMS", "STEERING",
-           "telemac_channel_dredging"]
+__all__ = ["ACCEPTS", "CAPTIONS", "DATA", "DOC", "OUTPUTS", "PARAMS",
+           "STEERING", "telemac_channel_dredging"]
 
 
 ACCEPTS = Accepts(mesh=("unstructured_tri",))
@@ -184,7 +184,9 @@ class STEERING(T2D):
             origin=_TIME_ORIGIN))]
 
 
-CAPTIONS = {"discharge": "a streamflow", "level": "a water level"}
+OUTPUTS = [mass_balance(module="gaia").note()]
+CAPTIONS = {"discharge": "a streamflow", "level": "a water level",
+            "mass_balance": "the sediment closure and the dredged and dumped volumes"}
 
 _METADATA = AtomicToolMetadata(
     name="telemac_channel_dredging",
@@ -199,9 +201,10 @@ RESULTS = (_RESULT, RESULT_FILENAME)
 REVIEW_TITLE = "Review the dredge, the bed and the mesh"
 
 DOC = dict(
-    summary="MAINTENANCE DREDGING of a navigation channel: what the bed does.",
+    summary="MAINTENANCE DREDGING of a navigation channel: how much comes out, "
+            "and what the bed does.",
     routing=(
-        "THE tool for \"dredge this channel and show me the bed\" - a "
+        "THE tool for \"dredge this channel and tell me the volume\" - a "
         "maintenance dredge of a fairway or berth pocket held at a design "
         "depth, the spoil placed in a disposal area. TELEMAC-2D coupled with "
         "GAIA, the dredger driven by NESTOR so what it moves is in the bed's "
@@ -209,7 +212,7 @@ DOC = dict(
         "its bed is the published USACE survey where one covers it, terrain "
         "elsewhere. DURATION, MORPHOLOGICAL FACTOR, CLASSES SEDIMENT "
         "DIAMETERS and LAYERS INITIAL THICKNESS are the deck's own, set by "
-        "name. Returns the bed evolution - the cut and the spoil ground; "
+        "name. Returns the bed evolution and the dredged and dumped volumes; "
         "supply `seed_point` and the two areas as polygons."
     ),
     not_for=(

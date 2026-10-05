@@ -13,7 +13,11 @@ from .module import Composite, Module, Output, Slot, SlotRefused, load_module_in
 from .outputs import (
     Primitive,
     column,
+    extent,
     field,
+    mass_balance,
+    max_over_time,
+    mesh,
     series,
     spectrum,
 )
@@ -29,8 +33,8 @@ from .waqtel import WAQTEL
 __all__ = [
     "ART", "Composite", "Filled", "GAIA", "KHIONE", "Module", "Output",
     "Primitive", "Sheet", "SheetIncomplete", "Slot", "SlotRefused", "T2D", "T3D",
-    "WAC", "WAQTEL", "WRAPPERS", "column", "field", "fill",
-    "load_module_input", "run", "series",
+    "WAC", "WAQTEL", "WRAPPERS", "column", "extent", "field", "fill",
+    "load_module_input", "mass_balance", "max_over_time", "mesh", "run", "series",
     "spectrum", "wrapper_for",
 ]
 

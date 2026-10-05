@@ -10,14 +10,19 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+import numpy as np
 import pytest
 
 from trid3nt_server.render import presets
 from trid3nt_server.render.formats import Published
-from trid3nt_server.workflows.telemac.modules.outputs import Frames, Series
+from trid3nt_server.workflows.telemac.modules.outputs import Field, Frames, Series
 from trid3nt_server.workflows.telemac.modules import (
     T2D,
+    extent,
     field,
+    mass_balance,
+    max_over_time,
+    mesh,
     series,
 )
 from trid3nt_server.workflows.telemac.modules.outputs import (
@@ -128,6 +133,45 @@ def test_a_variable_the_result_does_not_carry_refuses(solved):
         solved.variable("S")
 
 
+def test_the_envelope_is_the_peak_every_node_reached_and_when(tabled):
+    read = T2D.READS["max_over_time"](max_over_time("T1"), tabled)
+    assert isinstance(read, Field)
+    assert list(read.values) == [10.0, 80.0, 5.0, 50.0, 60.0]
+    assert read.measures["max"] == 80.0
+    assert read.measures["t_max"] == 60.0
+    # the tracer's visible edge: five percent of its own peak
+    assert read.floor == pytest.approx(4.0)
+    assert read.measures["active_frames"] == 2
+    assert read.units == "mg/L" and read.name == "DYE"
+
+
+def test_an_envelope_is_delivered_as_a_dataset_group_beside_the_results(tabled,
+                                                                       _store):
+    """A field the result file carries no group for is written beside it as the
+    SMS ASCII dataset MDAL loads onto the mesh it was measured over, with the
+    nodes below its floor written as nothing."""
+    from trid3nt_server.workflows.telemac.modules.outputs import deliver
+
+    primitive = max_over_time("T1").layer(style={"kind": "continuous",
+                                                 "ramp": "reds"})
+    read = T2D.READS["max_over_time"](primitive, tabled)
+    item = deliver(primitive, read, tabled, caption="dye concentration",
+                   name="reach", where="the Wabash")
+    mesh_product = item.product
+    assert mesh_product.file == "r2d.slf"
+    assert mesh_product.datasets == ("dye_concentration.dat",)
+    assert mesh_product.group == "Dye concentration"
+    assert mesh_product.epsg == 32610 and mesh_product.t is None
+    # ranged FROM the floor: below it the field is not drawn at all, so the
+    # ramp starts where it starts being visible
+    assert mesh_product.floor == pytest.approx(4.0)
+    assert mesh_product.value_range == (4.0, 80.0)
+    written = _store.store["RID/dye_concentration.dat"].decode()
+    assert written.startswith('DATASET\nOBJTYPE "mesh2d"\nBEGSCL\nND 5\nNC 4\n')
+    assert 'NAME "Dye concentration"' in written
+    assert written.strip().splitlines()[-6:] == ["10", "80", "5", "50", "60", "ENDDS"]
+
+
 def test_a_node_below_the_read_s_floor_is_written_as_nothing(tabled, _store):
     """Where a tracer is below its own visible edge the dataset carries nothing,
     so the basemap shows through rather than the ramp's palest colour."""
@@ -235,8 +279,8 @@ def test_a_tracer_that_is_zero_everywhere_refuses(monkeypatch, telemac_result):
         "trid3nt_server.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
     with pytest.raises(OutputEmpty, match="zero at every node"):
-        T2D.READS["field"](
-            field("T1"),
+        T2D.READS["max_over_time"](
+            max_over_time("T1"),
             _solved({"module": "telemac2d", "module_output": _table()}))
 
 
@@ -269,10 +313,28 @@ def test_a_trace_substance_is_drawn_against_its_own_range(monkeypatch,
     monkeypatch.setattr(
         "trid3nt_server.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
-    read = T2D.READS["field"](
-        field("T1"),
+    read = T2D.READS["max_over_time"](
+        max_over_time("T1"),
         _solved({"module": "telemac2d", "module_output": _table()}))
     assert read.measures["max"] == pytest.approx(5e-4)
+    assert read.measures["active_frames"] == 1
+
+
+def test_the_extent_and_the_mesh_are_measures_off_the_result_and_the_run(solved):
+    box = T2D.READS["extent"](extent(), solved).measures
+    assert box["bbox"][0] < box["bbox"][2] and box["bbox"][1] < box["bbox"][3]
+    assert box["wetted_fraction"] == pytest.approx(1.0)
+    facts = T2D.READS["mesh"](mesh(), solved).measures
+    assert facts["nodes"] == 5 and facts["elements"] == 4 and facts["planes"] == 1
+    assert facts["size_m"] == 7.5
+
+
+def test_the_mass_balance_is_the_engine_s_own_closure(monkeypatch, solved):
+    monkeypatch.setattr(
+        "trid3nt_server.workflows.solver.solver.download_result",
+        lambda run_id, basename, error_code=None: _listing(monkeypatch))
+    read = T2D.READS["mass_balance"](mass_balance(), solved)
+    assert read.measures["continuity_rel_error"] == pytest.approx(-1.2e-7)
 
 
 def _listing(monkeypatch) -> str:
@@ -286,8 +348,8 @@ def _listing(monkeypatch) -> str:
 
 
 def test_a_primitive_is_a_value_and_its_key_is_the_read_it_comes_from():
-    listed = field("T1").layer(style={"kind": "continuous"})
-    assert listed.publish == "layer" and listed.key == field("T1")
+    listed = max_over_time("T1").layer(style={"kind": "continuous"})
+    assert listed.publish == "layer" and listed.key == max_over_time("T1")
     assert field("T1", t="every").animate().key == field("T1", t="every")
 
 
@@ -310,7 +372,7 @@ def test_a_published_variable_with_no_caption_refuses_at_import():
     with pytest.raises(PlanValidationError, match="no caption"):
         _replanned(workflow, CAPTIONS={})
     with pytest.raises(PlanValidationError, match="no .layer"):
-        _replanned(workflow, OUTPUTS=[field("T1")])
+        _replanned(workflow, OUTPUTS=[max_over_time("T1")])
 
 
 def _replanned(workflow: Any, **over: Any) -> Any:
@@ -343,7 +405,7 @@ def test_publish_outputs_reads_once_and_publishes_each(monkeypatch, solved):
     result = asyncio.run(door.publish_outputs(
         run=run,
         outputs=[field("T1", t="every").animate(),
-                 field("T1").layer(style={"kind": "continuous"}),
+                 max_over_time("T1").layer(style={"kind": "continuous"}),
                  series("T1").chart()],
         captions={"T1": "dye concentration"},
         params={"location": "the Wabash"}))
@@ -360,13 +422,73 @@ def test_publish_outputs_reads_once_and_publishes_each(monkeypatch, solved):
     # the group the module wrote beside it.
     assert listed[0].product.frames == 4
     assert listed[0].product.group == "DYE"
-    assert listed[1].product.datasets == ("dye_concentration-t180.dat",)
+    assert listed[1].product.datasets == ("dye_concentration.dat",)
     assert listed[1].style == {"kind": "continuous"}
     assert (seen["run_id"], seen["engine"], seen["name"]) == (
         "RID", "telemac", "reach")
     # The return is the run's own record, not one of the layers it published.
     assert result.layer_id == "telemac-RID" and result.quantity is None
     assert result.uri.endswith("/RID/r2d.slf")
+
+
+def test_every_restored_output_can_be_asked_for_on_a_run_and_publishes(
+        monkeypatch, solved):
+    """The envelope publishes as a layer; the domain, the mesh and the engine's
+    closure publish what they measured as notes on the run's record."""
+    from trid3nt_contracts.execution import LayerURI
+
+    from trid3nt_server.workflows.runtime.journal import bind_notes, drain_notes
+    from trid3nt_server.workflows.telemac import workflow as door
+
+    seen: dict[str, Any] = {}
+
+    async def _publish(**kwargs):
+        seen.update(kwargs)
+        return Published(layers=(LayerURI(
+            layer_id="L", name="n", layer_type="mesh", uri="s3://runs/RID/x.dat",
+            quantity="dye_concentration"),))
+
+    monkeypatch.setattr(door, "publish", _publish)
+    monkeypatch.setattr(
+        "trid3nt_server.workflows.solver.solver.download_result",
+        lambda run_id, basename, error_code=None: _listing(monkeypatch))
+    token = bind_notes()
+    asyncio.run(door.publish_outputs(
+        run={**solved.run, "module": "telemac2d"},
+        outputs=[max_over_time("T1").layer(style={"kind": "continuous"}),
+                 extent().note(), mesh().note(), mass_balance().note()],
+        captions={"T1": "peak dye", "extent": "the solved domain",
+                  "mesh": "the solved mesh", "mass_balance": "the water balance"},
+        params={}))
+    notes = drain_notes(token)
+    assert [d.caption for d in seen["items"]][-1] == "peak dye"
+    assert seen["items"][-1].product.datasets == ("peak_dye.dat",)
+    said = {note.split(":")[0]: note for note in notes}
+    assert "wetted_fraction = 1.0" in said["the solved domain"]
+    assert "mesh_area_m2" in said["the solved domain"]
+    assert "nodes = 5" in said["the solved mesh"]
+    assert "continuity_rel_error = -1.2e-07" in said["the water balance"]
+
+
+def test_the_sediment_closure_carries_the_dredge_s_volumes():
+    """On GAIA the closure is the sediment block, and where a dredge ran the
+    volumes NESTOR printed ride beside it."""
+    from types import SimpleNamespace
+
+    from trid3nt_server.workflows.telemac.modules import GAIA
+
+    listing = "\n".join((
+        "FINAL MASS-BALANCE OF SEDIMENTS",
+        " CUMULATED DEPOSITION = 12.5",
+        "CORRECT END OF RUN",
+        " ?>        dug volume  [m^3]  :    1200.5",
+        " ?>        dumped vol  [m^3]  :    1100.0"))
+    read = GAIA.READS["mass_balance"](
+        mass_balance(module="gaia"),
+        SimpleNamespace(body=GAIA, listing=listing))
+    assert read.measures["sediment_deposited_mass_kg"] == 12.5
+    assert read.measures["dug_volume_m3"] == 1200.5
+    assert read.measures["dumped_volume_m3"] == 1100.0
 
 
 def _run_of(workflow: Any) -> Any:
@@ -722,6 +844,38 @@ def test_a_printed_token_needs_a_point_and_a_run_that_placed_its_boundaries(
         T2D.READS["series"](series("FLUX", at=(0.0, 0.0)), solved)
 
 
+def test_the_water_balance_carries_the_final_block_and_the_rain_that_fell(catchment):
+    """The volumes are the engine's own, outflow-positive across the boundaries
+    like the flux series; the rain volume is the accumulated depth the runoff
+    routine printed over the meshed area, and the coefficient their ratio."""
+    from trid3nt_server.workflows.telemac.modules.outputs import mesh_area_m2
+
+    read = T2D.READS["mass_balance"](mass_balance(), catchment)
+    area = mesh_area_m2(catchment.result)
+    assert read.measures["continuity_rel_error"] == pytest.approx(-1.2e-7)
+    assert read.measures["outflow_volume_m3"] == 1200.0
+    assert read.measures["source_volume_m3"] == 1300.0
+    assert read.measures["rain_depth_m"] == pytest.approx(0.1)
+    assert read.measures["rain_volume_m3"] == pytest.approx(0.1 * area, abs=1e-3)
+    assert read.measures["runoff_coefficient"] == pytest.approx(1200.0 / (0.1 * area),
+                                                                 abs=1e-6)
+    assert "boundary_volume_m3" not in read.measures
+
+
+def test_the_envelope_carries_its_p99_beside_its_maximum_and_the_extent_its_area(
+        solved):
+    """One pit can set the maximum while the field sits far below it, so the
+    99th percentile of the envelope rides beside it."""
+    from trid3nt_server.workflows.telemac.modules.outputs import mesh_area_m2
+
+    read = T2D.READS["max_over_time"](max_over_time("T1"), solved)
+    assert read.measures["max"] == 80.0
+    assert read.measures["p99"] == pytest.approx(np.percentile([10, 80, 5, 50, 60], 99))
+    assert read.measures["truncated"] is False
+    box = T2D.READS["extent"](extent(), solved).measures
+    assert box["area_km2"] == pytest.approx(mesh_area_m2(solved.result) / 1.0e6)
+
+
 def test_a_series_at_a_point_carries_the_station_it_was_read_at(solved):
     from trid3nt_server.inputs import Point
 
@@ -871,6 +1025,16 @@ def test_a_3d_read_stands_on_the_plane_s_own_nodes(basin):
     frames = T3D.READS["field"](field("T1", t="every"), basin)
     assert frames.measures["travel_m"] is not None
     assert T3D.READS["field"](field("T1", t=-1), basin).measures["nodes"] == 3
+
+
+def test_a_tracer_everywhere_above_its_edge_is_drawn_and_ranged_whole(basin):
+    """A temperature is a tracer with no absent region: nothing is cut at a
+    visible edge, so the layer ranges over the field rather than from zero."""
+    from trid3nt_server.workflows.telemac.modules import T3D
+
+    surface = T3D.READS["field"](field("T1", t=-1), basin)
+    assert surface.floor is None
+    assert T3D.READS["max_over_time"](max_over_time("T1"), basin).floor is None
 
 
 def test_a_2d_field_names_no_plane(solved):

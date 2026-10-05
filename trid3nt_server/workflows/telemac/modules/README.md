@@ -76,7 +76,8 @@ engine itself makes on the first sixteen characters of the name.
 
 A wrapper's READS are the PRIMITIVE SET over that output, named from the
 module's own variables: `field(name, t)`, `series(name, at)`,
-`profile(name, along, t)`, plus the reads past the set a module carries for itself -
+`max_over_time(name)`, `profile(name, along, t)`, `extent()`, `mesh()`,
+`mass_balance()`, plus the reads past the set a module carries for itself -
 TELEMAC-2D's `drogues()`, the particle track it writes, and TELEMAC-3D's
 `column(name, at, t)`, a variable down the planes its result stacks. A field of
 a 3D result reads one plane (`plane=`, bottom first; unstated, the surface) and
@@ -110,8 +111,8 @@ reader that knows a question.
 | `__init__.py` | The door: the wrappers, the two acts, and the primitive set. |
 | `module.py` | What a slot, a wrapper, a composite and an output row ARE, the loader that makes a wrapper out of `module_input/<module>.json`, and the generation of a module's printouts keyword from its own table. |
 | `sheet.py` | The sheet - filled slots with their provenance, the files a composite named, the slots still open, the coupled bodies it couples, the tracers its result carries, every variable it publishes, the result files it keeps past the one it is read from and the user code every one of its decks compiles - and `fill` / `run`. |
-| `outputs.py` | The primitive set - `field`, `series`, `profile` - and `drogues` and `column`, with the read of each off a solved run through `read_selafin`, the daemon's own SELAFIN reader (`authoring/selafin_io.py`): the engine image solves and does nothing else, and a result that cannot be opened refuses as `TELEMAC_RESULT_READ_FAILED` naming the file rather than falling back to it. `deliver` puts each read into the format the template publishes it in. |
-| `listing.py` | What a solved run's own listing says, read on the server: the engine's demand, the water-volume closure the run ended on, and the flux across a liquid boundary. |
+| `outputs.py` | The primitive set - `field`, `series`, `max_over_time`, `profile`, `extent`, `mesh`, `mass_balance` - and `drogues` and `column`, with the read of each off a solved run through `read_selafin`, the daemon's own SELAFIN reader (`authoring/selafin_io.py`): the engine image solves and does nothing else, and a result that cannot be opened refuses as `TELEMAC_RESULT_READ_FAILED` naming the file rather than falling back to it. `deliver` puts each read into the format the template publishes it in; a read published with `.note()` is said on the run's record in the figures it measured. |
+| `listing.py` | What a solved run's own listing says, read on the server: the engine's demand, GAIA's closure and the dredge's volumes, the water-volume closure per period and whole, and the flux across a liquid boundary. |
 | `coupling.py` | The `coupling` composite both hydrodynamic carriers register: the three keywords a carrier states about a coupled body, that body's own slots handed to its steering file, and the refusal a carrier that solves no water column gives the keywords a module has only under a three-dimensional host. |
 | `telemac2d.py` | The TELEMAC-2D wrapper: the releases, wind, rain, atmosphere, oil, friction, runoff, infiltration (the curve-number and roughness surface read off the land cover at the fill), rating, hyetograph, time-origin and coupling groups, the module's output table with the tracer row and the flux it prints rather than writes, and the drogues track it writes. |
 | `telemac3d.py` | The TELEMAC-3D wrapper: the vertical grid keyword pair and its refusal, the water column a run is initialized from, the wind, the atmosphere it reads the same file for as TELEMAC-2D does, and the output table its 3D printouts keyword is written from. |

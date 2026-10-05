@@ -127,8 +127,16 @@ def test_a_dredge_releases_nothing_so_it_prescribes_no_tracer():
 def test_the_two_measured_rows_carry_their_noun_on_the_journal():
     """CAPTIONS carries the sentence for the two DATA rows the run journal opens
     on, keyed by the row's own name."""
-    assert channel_dredging.CAPTIONS == {"discharge": "a streamflow",
-                                         "level": "a water level"}
+    captions = channel_dredging.CAPTIONS
+    assert (captions["discharge"], captions["level"]) == ("a streamflow",
+                                                          "a water level")
+
+
+def test_the_dredged_and_dumped_volumes_are_published_as_a_note():
+    (closure,) = channel_dredging.OUTPUTS
+    assert (closure.kind, closure.module, closure.publish) == (
+        "mass_balance", "gaia", "note")
+    assert "dredged and dumped volumes" in channel_dredging.CAPTIONS["mass_balance"]
 
 
 def test_the_corpus_key_is_the_registered_name():

@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import math
 
+import pytest
 
 from trid3nt_server.workflows.telemac.modules import listing as R
+from trid3nt_server.workflows.telemac.modules.outputs import wetted_fraction
 
 #: The in-image listing shape - the block GAIA prints once its run closes.
 _LISTING = """
@@ -31,6 +33,28 @@ CORRECT END OF RUN
 #: What the run PUT IN: 8 m3/s of 100 mg/L over a 300 s window, in kilograms.
 #: The deposit fraction is measured against this rather than an assumed load.
 _INJECTED = 240.0
+
+
+def test_the_closure_is_read_from_the_final_block_only():
+    """An intermediate balance before it and a stray line after it are not it."""
+    balance = R.gaia_mass_balance(_LISTING)
+    assert balance["sediment_deposited_mass_kg"] == 394.4448
+    assert balance["sediment_eroded_mass_kg"] == 334.4448
+    assert balance["sediment_net_bed_mass_kg"] == 60.0
+    # a loss below a microgram rounds to zero kg, which is what closure means
+    assert balance["sediment_mass_lost_kg"] == 0.0
+
+
+def test_a_listing_with_no_closure_reports_nothing():
+    assert R.gaia_mass_balance("CORRECT END OF RUN") == {}
+
+
+def test_a_residual_that_rounds_to_negative_zero_reads_as_zero():
+    """``max(-0.0, 0.0)`` is ``-0.0``, so a signed zero reaching a consumer is a
+    negative deposited mass narrated beside a map showing deposition."""
+    listing = _LISTING.replace("60.00000", "-0.1E-12")
+    net = R.gaia_mass_balance(listing)["sediment_net_bed_mass_kg"]
+    assert net == 0.0 and math.copysign(1.0, net) == 1.0
 
 
 def _balance(t_s: float, *fluxes: float, error: str = "0.1E-14") -> str:
@@ -103,6 +127,21 @@ _FINAL = """
 """
 
 
+def test_the_final_balance_is_the_engines_own_closure_of_the_whole_run():
+    out = R.final_balance(_FINAL)
+    assert out == {"initial_volume_m3": 0.0, "final_volume_m3": 1226447.0,
+                   "boundary_volume_m3": -1564079.0, "source_volume_m3": 2790526.0,
+                   "lost_volume_m3": pytest.approx(-1.699664e-08),
+                   "rain_depth_m": pytest.approx(0.15672)}
+
+
+def test_a_listing_without_the_final_block_states_no_volume():
+    assert R.final_balance(_balance(900.0, -1.0)) == {}
+    # the rain depth rides on its own: a run cut short still accumulated it
+    assert R.final_balance("  RUNOFF_SCS_CN : ACCUMULATED RAINFALL :    0.25 M\n") == {
+        "rain_depth_m": 0.25}
+
+
 def test_the_engines_own_volume_closure_is_the_last_one_it_printed():
     listing = _balance(900.0, -1.0, error="0.4E-03") + \
         _balance(1800.0, -1.0, error="0.9E-03")
@@ -127,6 +166,33 @@ def _mesh(depths):
             "ikle": np.array([[0, 1, 2], [3, 4, 5]]),
             "varnames": [_DEPTH_VAR],
             "data": {_DEPTH_VAR: np.array([[0.0] * 6, list(depths)])}}
+
+
+def test_the_wetted_fraction_is_area_weighted_off_the_final_frame():
+    """The small wet triangle is a quarter of the domain, not half of it.
+
+    And the LAST frame decides it: frame zero is bone dry above, so a reader
+    taking the first record would call this run empty.
+    """
+    got = wetted_fraction(_mesh([1.0, 1.0, 1.0, 0.0, 0.0, 0.0]))
+    assert got["mesh_area_m2"] == pytest.approx(200.0)
+    assert got["wet_area_m2"] == pytest.approx(50.0)
+    assert got["wetted_fraction"] == pytest.approx(0.25)
+
+
+def test_a_film_thinner_than_the_tolerance_is_not_conveyance():
+    """A drying bar keeps a film; counting it wet makes the number say nothing."""
+    assert wetted_fraction(_mesh([0.001] * 6))["wetted_fraction"] == 0.0
+    assert wetted_fraction(_mesh([1.0] * 6))["wetted_fraction"] == 1.0
+
+
+def test_a_result_with_no_depth_measures_nothing():
+    import numpy as np
+
+    assert wetted_fraction({
+        "x": np.zeros(3), "y": np.zeros(3), "ikle": np.array([[0, 1, 2]]),
+        "varnames": ["DYE"],
+        "data": {"DYE": np.zeros((1, 3))}}) == {}
 
 
 #: How LECDON asks, verbatim from the image's own lecdon_telemac3d.F: the phrase

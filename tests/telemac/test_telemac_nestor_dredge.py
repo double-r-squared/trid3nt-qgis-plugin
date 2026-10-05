@@ -178,6 +178,26 @@ def test_the_carrier_deck_has_no_dredge_of_its_own():
                                     origin=_ORIGIN))
 
 
+def test_the_volumes_are_read_off_the_engine_s_own_report_lines():
+    """The criterion dig reports the volume of the LAST maintenance period and
+    resets its own sum at the next, so the run's figure is the sum over them."""
+    from trid3nt_server.workflows.telemac.modules.listing import nestor_volumes
+
+    listing = "\n".join((
+        " ?>        dug volume  [m^3]  :    1200.5",
+        " ?>        dumped vol  [m^3]  :    1100.0",
+        " ?>        dug volume  [m^3]  :    800.25",
+        " ?>        dumped vol  [m^3]  :    700.0",
+        " ?>   relocated volume [m**3] :    100.0",
+    ))
+    read = nestor_volumes(listing)
+    assert {k: v for k, v in read.items() if k != "dredge_report"} == {
+        "dug_volume_m3": 2000.75, "dumped_volume_m3": 1800.0,
+        "relocated_volume_m3": 100.0}
+    assert "summed over the passes that finished" in read["dredge_report"]
+    assert nestor_volumes("") == {}
+
+
 #: The engine's own activation line, verbatim: it prints this when an action
 #: STARTS and its volume line only when a pass finishes.
 _STARTED = "\n".join((
@@ -187,6 +207,29 @@ _STARTED = "\n".join((
     " ?>          start time  [s]  :    82800.000000000000",
     " ?>          FieldDig         : 101_dredge_area",
 ))
+
+
+def test_a_pass_that_did_not_finish_is_stated_rather_than_left_null():
+    """TimeEnd stops the next pass, not the one cutting, so a pass that has not
+    reached grade when the clock runs out prints no volume at all."""
+    from trid3nt_server.workflows.telemac.modules.listing import nestor_volumes
+
+    read = nestor_volumes(_STARTED)
+    assert "dug_volume_m3" not in read and "dumped_volume_m3" not in read
+    assert read["dredge_report"] == (
+        "a Dig_by_criterion pass started at 82800 s and had not cut to grade "
+        "when the run's clock ended; the engine prints a volume only for a pass "
+        "that finishes, so the bed moved with no volume to state it")
+
+
+def test_a_dredge_that_never_began_is_told_apart_from_one_that_did_not_finish():
+    """NESTOR marks its initialisation banner too, so a run that armed a dredge
+    whose schedule the clock never reached is not read as a run without one."""
+    from trid3nt_server.workflows.telemac.modules.listing import nestor_volumes
+
+    banner = " ?>       Each info line is marked with the Lable"
+    assert nestor_volumes(banner)["dredge_report"].startswith(
+        "no dredging pass began inside the run's clock")
 
 
 #: An L in lon/lat: the notch is the quadrant its bounding box holds and its

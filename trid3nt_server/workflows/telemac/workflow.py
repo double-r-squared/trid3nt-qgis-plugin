@@ -389,12 +389,16 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
                        solved[primitive.module or str(run["module"])],
                        caption=caption, name=name, where=where)
 
+    for primitive in outputs:
+        if primitive.publish == "note":
+            _note(captions.get(primitive.variable or primitive.kind,
+                               primitive.kind), reads[primitive.key])
     items = await asyncio.to_thread(
         lambda: [_delivered(primitive, reads[primitive.key].name.strip().lower())
                  for primitive in table if reads[primitive.key] is not None]
         + [_delivered(primitive, captions.get(primitive.variable or primitive.kind,
                                               primitive.kind))
-           for primitive in outputs])
+           for primitive in outputs if primitive.publish != "note"])
     published = await publish(run_id=str(run["run_id"]), engine="telemac",
                               name=name, items=items)
 
@@ -407,6 +411,14 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
                 run["run_id"], len(published.layers), len(published.charts))
     return await asyncio.to_thread(_record, _solved(str(run["module"])),
                                    name=name)
+
+
+def _note(caption: str, read: Any) -> None:
+    """A measured read, said on the run's record in the figures it measured."""
+    from trid3nt_server.workflows.runtime.journal import journal_note
+
+    figures = "; ".join(f"{name} = {value}" for name, value in read.measures.items())
+    journal_note(f"{caption}: {figures or 'the run measured nothing for it'}")
 
 
 def _record(solved: Solved, *, name: str) -> LayerURI:
@@ -1323,8 +1335,8 @@ class TelemacWorkflow(Workflow):
             if primitive.publish is None:
                 raise PlanValidationError(
                     f"OUTPUTS lists {primitive.kind}({primitive.variable!r}) with "
-                    "no .layer(), .chart() or .animate(); a listed primitive is "
-                    "published.")
+                    "no .layer(), .chart(), .animate() or .note(); a listed "
+                    "primitive is published.")
             named = primitive.variable or primitive.kind
             if named not in captions:
                 raise PlanValidationError(
