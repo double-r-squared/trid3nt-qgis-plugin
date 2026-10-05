@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.telemac.helpers.oxygen_sag import do_profile
+from trid3nt_server.workflows.telemac.templates.do_sag.streeter_phelps import do_profile
 from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
 from trid3nt_server.workflows.telemac.workflow import stated
 from trid3nt_server.workflows.telemac.modules.outputs import (

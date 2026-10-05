@@ -1,4 +1,4 @@
-"""Unit tests for the pure oxygen-sag relation in ``helpers/``.
+"""Unit tests for the Streeter-Phelps closed form in the do_sag package.
 
 Covered: the profile as a genuine sag and the ``k1 == k2`` limit."""
 
@@ -7,7 +7,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.telemac.helpers.oxygen_sag import do_profile
+from trid3nt_server.workflows.telemac.templates.do_sag.streeter_phelps import do_profile
 
 
 def test_the_profile_is_a_genuine_sag() -> None:

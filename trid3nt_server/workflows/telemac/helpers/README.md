@@ -9,6 +9,5 @@ none of the composites, the typed inputs or the DATA rows express.
 | file | what it is |
 | --- | --- |
 | `__init__.py` | The door. Consumers import the module they mean. |
-| `oxygen_sag.py` | The Streeter-Phelps closed form: dissolved oxygen and its deficit down a uniform reach, and where that deficit is deepest. |
 | `time_step.py` | The CFL step a mesh is solved at, coupled to the edge the accepted mesh was measured at, and the wall-clock estimate that bounds a solve's wait. |
 | `uniform_flow.py` | The depth a measured section conveys a flow at - one derivation, read as a reach's outflow stage and as a catchment outlet's whole Z(Q) curve. |
