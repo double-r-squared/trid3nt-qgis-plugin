@@ -17,7 +17,7 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
   `render/` (the FORMAT SET a product reaches the map in - a COG
   raster, a GeoJSON vector, an MDAL mesh with the dataset files beside
   it, a chart payload - the one emission seam, the publish mechanism,
-  the presets and the restyle seam), `workflows/` (the declarative `runtime/`, the
+  the presets and the restyle seam), `workflows/` (the template `runtime/`, the
   `solver/` executor, and the engine package `telemac/`), `inputs/` (the
   typed inputs and their ingestions, the slots, `fill.py`, and `gate/`
   - the input review, draw, confirm, cards and pending registries),
