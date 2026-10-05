@@ -352,7 +352,7 @@ package ToolPlane {
 
     part keywordLookup : KeywordLookup {
         doc /*
-        code: trid3nt_server/workflows/telemac/modules/describe.py
+        code: trid3nt_server/tools/search/describe_keywords/describe_keywords.py
         */
     }
 
@@ -619,6 +619,10 @@ package ToolPlane {
         "tests/search/test_describe_keywords.py::test_a_module_with_no_catalog_refuses_naming_the_ones_there_are";
     verify requirement ASurfaceTooLargeToCarryIsReached by
         "tests/search/test_describe_keywords.py::test_every_corpus_phrasing_surfaces_the_tool_model_free";
+    verify requirement ASurfaceTooLargeToCarryIsReached by
+        "tests/search/test_describe_keywords.py::test_describing_a_keyword_of_every_carried_module_returns_its_entry";
+    verify requirement ASurfaceTooLargeToCarryIsReached by
+        "tests/search/test_describe_keywords.py::test_an_unknown_keyword_is_refused_with_the_nearest_spellings";
 
     satisfy requirement TheLibraryStatesOnlyWhatTheRegistriesCarry by libraryListing;
     satisfy requirement TheLibraryStatesOnlyWhatTheRegistriesCarry by libraryPanel;

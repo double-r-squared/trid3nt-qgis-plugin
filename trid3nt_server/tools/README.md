@@ -23,7 +23,7 @@ the cache shim are the two seams they all pass through.
 | `derive/` | The simulation-automation tools - domain geometry, observation pairing and skill, the analytic overlays, point reads, restyle - one folder per tool, flat, plus the shared GDAL, geometry, hydrology and chart cores; and the two session tools (`run_qgis_algorithm`, `run_pyqgis`), each a request the plugin runs in the user's QGIS session. A derive tool takes a layer and never fetches. |
 | `fetchers/` | Data fetchers, one folder per phenomenon measured (`climate`, `hazard`, `hydrology`, `imagery`, `ocean`, `socioeconomic`, `soil`, `terrain`, `weather`), plus the shared helpers at its root and `_router/`. See below. |
 | `mesh/` | The one mesh front, which knows no engine: router, meshers, session, gate, artifact. An engine's template calls it; what an engine needs written out of a mesh is that engine's. Has its own map. |
-| `search/` | Tool discovery: `search_tools` retrieval and the `tool_retrieval` ranking the gate reads. |
+| `search/` | The library's asks: `search_tools` (which tool), `find_sources` (which source here), `describe_keywords` (what a carried module's dictionary says), and the `tool_retrieval` ranking the gate reads. |
 
 ## `fetchers/` - the router and its shared root
 

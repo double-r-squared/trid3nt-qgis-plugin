@@ -1,4 +1,4 @@
-"""``describe_keywords``: the read over the module catalogs.
+"""``describe_keywords``: the read over any carried module's dictionary.
 
 The keyword surface is larger than any docstring budget, so what is checked is
 that a question in WORDS reaches the keyword that answers it, that the answer
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.telemac.modules.describe import (
+from trid3nt_server.tools.search.describe_keywords.describe_keywords import (
     DescribeKeywordsError,
     describe_keywords,
 )
@@ -90,6 +90,55 @@ def test_a_module_with_no_catalog_refuses_naming_the_ones_there_are():
     assert "telemac2d" in str(caught.value)
 
 
+def _carried() -> list[str]:
+    from trid3nt_server.workflows.telemac.modules.module import module_input_dir
+
+    return sorted(p.stem for p in module_input_dir().glob("*.json"))
+
+
+def test_an_empty_module_lists_every_carried_dictionary():
+    listed = {row["module"]: row["keyword_count"]
+              for row in describe_keywords()["modules"]}
+    assert sorted(listed) == _carried()
+    assert {"telemac2d", "telemac3d", "khione", "tomawac", "gaia",
+            "artemis", "waqtel"} <= set(listed)
+    assert all(count > 0 for count in listed.values())
+
+
+def test_describing_a_keyword_of_every_carried_module_returns_its_entry():
+    """Each carried module's FIRST dictionary keyword, asked by its exact
+    name, comes back as that dictionary's own entry - no module is special."""
+    from trid3nt_server.workflows.telemac.modules.module import load_module_input
+
+    for module in _carried():
+        slot = next(iter(load_module_input(module).values()))
+        answer = describe_keywords(module=module, keyword=slot.keyword.lower())
+        assert answer["module"] == module
+        assert answer["entry"]["keyword"] == slot.keyword
+        assert answer["entry"]["help"] == slot.desc
+        assert answer["entry"]["type"] == slot.type
+
+
+def test_a_keyword_is_reached_by_its_identifier_too():
+    answer = describe_keywords(
+        module="khione", keyword="NUMBER_OF_CLASSES_FOR_SUSPENDED_FRAZIL_ICE")
+    assert answer["entry"]["keyword"] == "NUMBER OF CLASSES FOR SUSPENDED FRAZIL ICE"
+
+
+def test_a_keyword_the_dictionary_spells_with_a_trailing_space_is_still_reached():
+    answer = describe_keywords(
+        module="khione", keyword="THERMAL CONDUCTIVITY BETWEEN WATER AND FRAZIL")
+    assert answer["entry"]["keyword"].strip() == (
+        "THERMAL CONDUCTIVITY BETWEEN WATER AND FRAZIL")
+
+
+def test_an_unknown_keyword_is_refused_with_the_nearest_spellings():
+    with pytest.raises(DescribeKeywordsError) as caught:
+        describe_keywords(module="telemac2d", keyword="LAW OF BOTOM FRICTION")
+    assert caught.value.error_code == "UNKNOWN_KEYWORD"
+    assert "LAW OF BOTTOM FRICTION" in str(caught.value)
+
+
 def test_the_tool_is_registered_read_only_and_reaches_the_retrieval_pool():
     import trid3nt_server.main as main
 
@@ -108,7 +157,8 @@ def test_every_corpus_phrasing_surfaces_the_tool_model_free():
     import yaml
 
     import trid3nt_server.main as main
-    from trid3nt_server.workflows.telemac.modules.describe import __file__ as here
+    from trid3nt_server.tools.search.describe_keywords.describe_keywords import (
+        __file__ as here)
     from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
 
     main._import_tools_registry()

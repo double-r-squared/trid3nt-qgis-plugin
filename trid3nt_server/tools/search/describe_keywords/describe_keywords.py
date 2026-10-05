@@ -1,19 +1,21 @@
-"""``describe_keywords``: the READ over a module's keyword dictionary.
+"""``describe_keywords``: the READ over any carried module's keyword dictionary.
 
-Nothing here decides anything and nothing here runs. What a caller does with a
-keyword it learns is state it on a fill, through the ``keywords={NAME: value}``
-floor every template's wire carries."""
+Engine-neutral: a module is whatever dictionary the system carries, named by its
+file. Nothing here decides anything and nothing here runs. What a caller does
+with a keyword it learns is state it on a fill, through the
+``keywords={NAME: value}`` floor every template's wire carries."""
 
 from __future__ import annotations
 
+import difflib
 import re
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
-
-from .module import module_input_dir, load_module_input
+from trid3nt_server.workflows.telemac.modules.module import (
+    load_module_input, module_input_dir)
 
 __all__ = ["DescribeKeywordsError", "describe_keywords"]
 
@@ -32,7 +34,7 @@ _WEIGHTS: Mapping[str, int] = {"keyword": 6, "mnemo": 4, "rubrique": 3, "help": 
 
 
 class DescribeKeywordsError(RuntimeError):
-    """The dictionary cannot answer: ``UNKNOWN_MODULE`` is the only code."""
+    """The dictionary cannot answer: ``UNKNOWN_MODULE`` or ``UNKNOWN_KEYWORD``."""
 
     error_code: str
     retryable: bool = False
@@ -44,6 +46,14 @@ class DescribeKeywordsError(RuntimeError):
 
 def _exposed() -> list[str]:
     return sorted(path.stem for path in module_input_dir().glob("*.json"))
+
+
+def _nearest(asked: str, known: Iterable[str]) -> str:
+    """The closest spellings of ``asked`` among ``known``, for a refusal."""
+    known = list(known)
+    close = difflib.get_close_matches(asked, known, n=3, cutoff=0.5)
+    return ("nearest: " + ", ".join(close)) if close else (
+        "none is close")
 
 
 def _words(text: str) -> list[str]:
@@ -98,35 +108,49 @@ def _row(slot: Any) -> dict[str, Any]:
     destructive_hint=False,
     idempotent_hint=True,
 )
-def describe_keywords(module: str = "telemac2d", query: str = "",
+def describe_keywords(module: str = "", keyword: str = "", query: str = "",
                       limit: int = 12) -> dict[str, Any]:
-    """Look up TELEMAC steering keywords: what governs friction, turbulence, output.
+    """Read a simulation module's own keyword DICTIONARY: one keyword's entry, or the keywords a question reaches.
 
-    Use it when a run must state what the template's own params do not name - a
-    friction law, a turbulence model, a printout period, an advection scheme.
-    Set what you learn on the call:
-    `keywords={"LAW OF BOTTOM FRICTION": 4}` on any telemac template. Do NOT use
-    it to run anything, and do NOT use it to pick a template.
+    For what a template's inputs do not name - a friction law, a turbulence
+    model, an ice process, a wave spectrum - in ANY carried module (telemac2d,
+    telemac3d, khione, tomawac, gaia, artemis, waqtel, ...). State what you
+    learn on the call: `keywords={"LAW OF BOTTOM FRICTION": 4}`. Never runs
+    anything; never picks a template.
 
     Args:
-        module: telemac2d (default), telemac3d, artemis, waqtel, gaia, tomawac.
-        query: What you want, in words ("bottom friction", "turbulence model"),
-            matched against keyword names, sections and help. EMPTY returns the
-            module's section index.
+        module: The dictionary to read; EMPTY lists the carried modules.
+        keyword: One keyword's exact name or identifier -> its entry; an
+            unknown one is refused with the nearest spellings.
+        query: Words ("bottom friction", "frazil ice") matched against names,
+            sections and help; with no keyword or query, the section index.
         limit: How many matches, at most 50.
 
-    Returns:
-        ``{module, query, keyword_count, match_count, matches}``, each match a
-        rubrique holding its keywords - keyword, help, type, choices,
-        engine_default, level, is_file - best first. An unknown module raises.
+    Returns ``{module, entry}`` for a keyword, else ``{module, matches}``, the
+    matches grouped by rubrique, best first.
     """
+    carried = _exposed()
     name = str(module or "").strip().lower()
-    if name not in _exposed():
+    if not name:
+        return {"modules": [{"module": m, "keyword_count": len(load_module_input(m))}
+                            for m in carried]}
+    if name not in carried:
         raise DescribeKeywordsError(
             "UNKNOWN_MODULE",
-            f"there is no keyword dictionary for {module!r}; the exposed modules are "
-            f"{', '.join(_exposed())}.")
+            f"there is no keyword dictionary for {module!r} ({_nearest(name, carried)}); "
+            f"the carried modules are {', '.join(carried)}.")
     dictionary = load_module_input(name)
+    asked = str(keyword or "").strip()
+    if asked:
+        by_spelling = {spelling.strip().upper(): slot for ident, slot in dictionary.items()
+                       for spelling in (slot.keyword, ident)}
+        slot = by_spelling.get(asked.upper())
+        if slot is None:
+            raise DescribeKeywordsError(
+                "UNKNOWN_KEYWORD",
+                f"{name} has no keyword {asked!r} "
+                f"({_nearest(asked.upper(), [s.keyword for s in dictionary.values()])}).")
+        return {"module": name, "keyword_count": len(dictionary), "entry": _row(slot)}
     if not str(query or "").strip():
         sections: dict[str, int] = {}
         for slot in dictionary.values():
@@ -135,7 +159,7 @@ def describe_keywords(module: str = "telemac2d", query: str = "",
         return {"module": name, "keyword_count": len(dictionary),
                 "sections": [{"rubrique": head, "keywords": count}
                              for head, count in sorted(sections.items())],
-                "modules": _exposed()}
+                "modules": carried}
 
     phrase = " ".join(_words(query))
     wanted = {w for w in _words(query) if w not in _GLUE}

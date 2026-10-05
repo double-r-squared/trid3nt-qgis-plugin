@@ -7,3 +7,6 @@ describe_keywords:
 - what keyword do i set so the solver writes results more often
 - find the artemis keyword for the incident wave period
 - list the telemac3d steering keywords about the vertical mesh
+- which khione keyword governs frazil ice
+- describe the tomawac dictionary entry for wind generation
+- what does the gaia keyword for bed porosity mean

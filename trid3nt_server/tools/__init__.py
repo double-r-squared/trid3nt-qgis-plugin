@@ -215,9 +215,9 @@ from .search.search_tools import search_tools  # noqa: E402,F401
 # find_sources: the model's face on the match, and the door a fetcher with a
 # row is reached through - a class and a place, never a description.
 from .search.find_sources import find_sources  # noqa: E402,F401
-# describe_keywords: the READ over the TELEMAC module catalogs - the only way the
-# keyword surface is reached, since no docstring budget carries it.
-from trid3nt_server.workflows.telemac.modules.describe import describe_keywords  # noqa: E402,F401
+# describe_keywords: the READ over any carried module's dictionary - the only way
+# the keyword surface is reached, since no docstring budget carries it.
+from .search.describe_keywords.describe_keywords import describe_keywords  # noqa: E402,F401
 # The draw gate's tool face lives beside the gate; importing it registers the tool.
 from trid3nt_server.inputs.gate import spatial_input_tool  # noqa: E402,F401
 
