@@ -15,7 +15,7 @@ import pytest
 from trid3nt_server.inputs.observation import ObservationError
 from trid3nt_server.inputs.slots import SLOTS, ingest_slot
 from trid3nt_server.inputs.wave import wave
-from trid3nt_server.workflows.runtime.data import WAVE
+from trid3nt_server.inputs.slots import WAVE
 
 #: What the sea-state source states about its own columns: three readings and
 #: the window behind each, every one of them in the unit it is measured in.

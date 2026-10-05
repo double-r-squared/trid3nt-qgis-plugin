@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.runtime.data import BED, DOMAIN, EXTENT
+from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT
 
 
 def _declared():

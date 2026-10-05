@@ -10,11 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.runtime.data import (
-    BED,
-    DISCHARGE,
-    DOMAIN,
-)
+from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN
 from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
 from trid3nt_server.workflows.telemac.modules import T2D
 from trid3nt_server.workflows.telemac.workflow import stated

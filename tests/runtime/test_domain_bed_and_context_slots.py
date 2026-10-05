@@ -21,7 +21,7 @@ from trid3nt_server.workflows.runtime import (
     doors,
     tool,
 )
-from trid3nt_server.workflows.runtime.data import BED, DOMAIN
+from trid3nt_server.inputs.slots import BED, DOMAIN
 from trid3nt_server.workflows.runtime.levers import (
     LEVER_NAMES,
     LEVERS,
@@ -407,7 +407,7 @@ def test_every_elevation_slot_is_read_on_the_runs_own_vertical_frame():
     """One frame per run, stated once as a runtime lever: the bed is read on it
     and the level is read on it, and nothing else a run ingests is an elevation."""
     from trid3nt_server.inputs import fill
-    from trid3nt_server.workflows.runtime.data import BED, DISCHARGE, LEVEL
+    from trid3nt_server.inputs.slots import BED, DISCHARGE, LEVEL
 
     def _told(env, role, source=None):
         return asyncio.run(fill._on_the_run_s_frame(
@@ -429,7 +429,8 @@ def test_the_runtime_declares_the_offset_row_a_differing_source_owes(monkeypatch
     own footprint nearest the question's seed - and the row is journaled like any
     producer, with what the slot is told the value it produced."""
     from trid3nt_server.inputs import fill
-    from trid3nt_server.workflows.runtime.data import BED, Data
+    from trid3nt_server.workflows.runtime.data import Data
+    from trid3nt_server.inputs.slots import BED
 
     record = {"offset_m": -1.054, "from_frame": "NAVD88", "to_frame": "EGM2008",
               "source": "NOAA VDatum", "uncertainty_m": 0.165}
@@ -463,7 +464,8 @@ def test_an_offset_row_is_asked_where_the_source_measured_not_at_the_seed(
     """The seed falls on the half of the DEM that measured nothing, so the ask
     walks to the nearest point the source actually holds."""
     from trid3nt_server.inputs import fill
-    from trid3nt_server.workflows.runtime.data import BED, Data
+    from trid3nt_server.workflows.runtime.data import Data
+    from trid3nt_server.inputs.slots import BED
 
     asked: list[dict] = []
 
@@ -508,7 +510,7 @@ def _half_measured(tmp_path) -> str:
 
 def test_a_source_on_the_runs_own_frame_declares_no_offset_row(monkeypatch):
     from trid3nt_server.inputs import fill
-    from trid3nt_server.workflows.runtime.data import BED
+    from trid3nt_server.inputs.slots import BED
 
     async def _never(runner, kwargs, label):
         raise AssertionError("an offset row was declared for one frame")

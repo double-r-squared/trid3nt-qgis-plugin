@@ -13,7 +13,7 @@ import logging
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from importlib import import_module
-from typing import Any, Callable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
 from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.execution import LayerURI
@@ -25,7 +25,6 @@ from trid3nt_server.workflows.runtime import (
     RunResult,
     Workflow,
 )
-from trid3nt_server.inputs.fill import Fill
 from trid3nt_server.workflows.telemac.errors import TelemacError
 from trid3nt_server.workflows.telemac.modules import wrapper_for
 from trid3nt_server.workflows.telemac.modules.module import (SlotRefused, accept,
@@ -47,6 +46,9 @@ from trid3nt_server.workflows.telemac.modules.sheet import (
 from trid3nt_server.workflows.telemac.modules.sheet import fill as fill_slots
 from trid3nt_server.workflows.telemac.modules.sheet import fill_coupled
 from trid3nt_server.workflows.telemac.modules.sheet import run as run_sheet_
+
+if TYPE_CHECKING:
+    from trid3nt_server.inputs.fill import Fill
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.workflow")
 
@@ -891,7 +893,7 @@ class TelemacWorkflow(Workflow):
     def slot_units(self) -> Mapping[str, str]:
         """What the two series slots convert to: the unit of the PRESCRIBED list
         each one's value is written into, which the transform fixes."""
-        from trid3nt_server.workflows.runtime.data import DISCHARGE, LEVEL
+        from trid3nt_server.inputs.slots import DISCHARGE, LEVEL
 
         from .modules.telemac2d import PRESCRIBED_UNITS
 
@@ -933,7 +935,7 @@ class TelemacWorkflow(Workflow):
         """Refuse at import what this template cannot run on: a domain, one bed,
         the deck's own clock, a function for every measurement it asks for and
         a caption for every output it lists."""
-        from trid3nt_server.workflows.runtime.data import DISCHARGE
+        from trid3nt_server.inputs.slots import DISCHARGE
 
         slots = self._slots()
         self._clock()
@@ -946,7 +948,7 @@ class TelemacWorkflow(Workflow):
 
     def _slots(self) -> dict[str, str]:
         """The row this question declares for each role a stage reads."""
-        from trid3nt_server.workflows.runtime.data import BED, DOMAIN
+        from trid3nt_server.inputs.slots import BED, DOMAIN
 
         slots: dict[str, list[str]] = {}
         for row in self.data:
@@ -978,8 +980,7 @@ class TelemacWorkflow(Workflow):
         from trid3nt_server.render.pipeline_emitter import (begin_substeps,
                                                             current_emitter,
                                                             substep)
-        from trid3nt_server.workflows.runtime.data import (DISCHARGE, DOMAIN,
-                                                           LEVEL)
+        from trid3nt_server.inputs.slots import DISCHARGE, DOMAIN, LEVEL
         from trid3nt_server.inputs.fill import (_load, _produce, call,
                                                            production, read)
         from .authoring.mesh_files import telemac_mesh_files
@@ -1174,7 +1175,7 @@ class TelemacWorkflow(Workflow):
     def _mesh(self, domain: str, slots: Mapping[str, str]) -> Any:
         """The mesh this workflow asks for where the template declares none."""
         from trid3nt_server.tools.mesh.tool import mesh_op, tool
-        from trid3nt_server.workflows.runtime.data import BED
+        from trid3nt_server.inputs.slots import BED
 
         return tool.build_mesh(
             mesher=_MESHER, kind=_MESH_KIND, extent=domain,

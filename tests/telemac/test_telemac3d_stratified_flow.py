@@ -35,7 +35,7 @@ def test_the_data_rows_are_the_engine_neutral_slots_this_run_stands_on():
     no runs row - a lake IS a closed body, and the mesh takes its roles from the
     domain, which measures none."""
     from trid3nt_server.workflows.runtime import data_rows
-    from trid3nt_server.workflows.runtime.data import BED, DOMAIN, LEVEL
+    from trid3nt_server.inputs.slots import BED, DOMAIN, LEVEL
 
     rows = data_rows(_module().DATA)
     assert [d.name for d in rows] == ["domain", "bed", "level"]

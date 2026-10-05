@@ -224,7 +224,7 @@ def test_the_four_slots_are_the_world_this_run_stands_on():
     """One domain, one bed, both stated as the CLASS the match fills them from -
     no ladder, no producer, no separate runs row: the boundary runs ride on
     whichever source answers the domain."""
-    from trid3nt_server.workflows.runtime.data import BED, DOMAIN
+    from trid3nt_server.inputs.slots import BED, DOMAIN
 
     data = {decl.name: decl for decl in
             _template().telemac_micropollutant_release.workflow.data}
@@ -239,7 +239,7 @@ def test_the_four_slots_are_the_world_this_run_stands_on():
 def test_the_discharge_reaches_the_channel_as_ONE_reading_never_the_record():
     """The step that opens the channel refuses a record nobody chose a site
     from, so the flow is an OBSERVATION ranked against the domain's own point."""
-    from trid3nt_server.workflows.runtime.data import DISCHARGE
+    from trid3nt_server.inputs.slots import DISCHARGE
 
     data = {decl.name: decl for decl in
             _template().telemac_micropollutant_release.workflow.data}

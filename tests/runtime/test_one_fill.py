@@ -155,7 +155,7 @@ def test_a_card_edit_refills_through_the_modules_accept_rule(monkeypatch):
 
 
 def _place_registers_a_row(monkeypatch):
-    from trid3nt_server.workflows.runtime.data import DOMAIN
+    from trid3nt_server.inputs.slots import DOMAIN
 
     async def _produce(env, decl):
         if decl.role == DOMAIN:

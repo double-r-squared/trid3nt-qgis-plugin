@@ -10,36 +10,62 @@ drawn, supplied or matched.
 from __future__ import annotations
 
 import asyncio
+import importlib
 import inspect
 import logging
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Callable, Mapping
 
-from trid3nt_server.workflows.runtime.data import (
-    BED,
-    DISCHARGE,
-    DOMAIN,
-    EXTENT,
-    LEVEL,
-    LINE,
-    OBSERVE,
-    WAVE,
-    WEATHER,
-)
-
-from .bed import bed
-from .domain import domain, needs_beside
-from .extent import extent
-from .line import line
-from .observation import observation
-from .wave import wave
-
-__all__ = ["SLOTS", "Slot", "ask_on_canvas", "draw_on_canvas", "ingest_slot",
-           "needs_of",
-           "role_of"]
+__all__ = ["BED", "DISCHARGE", "DOMAIN", "EXTENT", "LEVEL", "LINE", "OBSERVE",
+           "SLOTS", "Slot", "WAVE", "WEATHER", "ask_on_canvas", "draw_on_canvas",
+           "ingest_slot", "needs_of", "role_of"]
 
 logger = logging.getLogger("trid3nt_server.inputs.slots")
+
+#: THE RESERVED ROW NAMES. A row's NAME is its slot: these are the names
+#: :data:`SLOTS` keys the role behaviour off.
+#: The two a solved run stands on are engine-neutral - the closed polygon the
+#: equations are solved over and the elevation every node of it carries - and a
+#: raster engine fills the same two with a grid, so no word here belongs to an
+#: engine. The named stretches of the edge are no row: they ride on the polygon
+#: the domain arrived as.
+DOMAIN = "domain"
+BED = "bed"
+
+#: The LINE a placed read is measured along. Not one of the three - a run solves
+#: without it - but a slot for the same reason: a producer's own centerline, a
+#: drawn polyline and a line layer all fill it and read the same afterwards.
+LINE = "line"
+
+#: The slot a run OPENS ON: one measured value read off whatever reports it near
+#: this domain, in the unit the keyword the role fills reads. Engine-neutral for
+#: the same reason the three above are - somebody measured something somewhere at
+#: some time.
+OBSERVE = "observe"
+
+#: The two observations a solve READS BY ROLE rather than by name: the elevation
+#: the water surface stands at, and the flow an inflow run carries. Both are
+#: observations and ingest as one; they are their own names because the workflow
+#: has to know which row is which to build the stages a body of water needs.
+LEVEL = "level"
+DISCHARGE = "discharge"
+
+#: The RECTANGLE a question is asked inside: the window a domain is cut out of,
+#: the grid a raster engine solves on. Not a domain - it has no shoreline - so it
+#: is its own name, and the canvas offers a box for it.
+EXTENT = "extent"
+
+#: The record of the air over the domain, read by the composite that puts it on
+#: the run's own clock. Nothing ingests it on the way in; the name is reserved so
+#: a row that carries weather is the row that composite reads.
+WEATHER = "weather"
+
+#: The sea state at the open edge: the same kind of thing as the weather over a
+#: domain - one record, several columns, measured somewhere near - so it is its
+#: own name too, and its ingestion turns those columns into the keywords a
+#: spectral deck forces its boundary at.
+WAVE = "wave"
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,9 +73,11 @@ class Slot:
     """One reserved row name: what reads its value, what it may ask the world
     for, and what the canvas offers when the user fills it by hand."""
 
-    #: The one function that takes every form this slot's value arrives in.
-    #: ``None`` where the value is read by whatever consumes it, not on the way in.
-    ingest: Callable[..., Any] | None = None
+    #: The inputs module whose same-named function takes every form this
+    #: slot's value arrives in; "" where the value is read by whatever consumes
+    #: it, not on the way in. Named rather than imported: the runtime reads
+    #: these facts while the ingestions are still importing it.
+    ingestion: str = ""
     #: The classes a row under this name may state a need of. Empty means the
     #: name states no need at all - a geometry is drawn, supplied or measured.
     classes: frozenset[str] = frozenset()
@@ -65,30 +93,40 @@ class Slot:
     #: water opens at, the depth of a pond - rather than a layer to read it off.
     number: bool = False
 
+    @property
+    def ingest(self) -> Callable[..., Any] | None:
+        """The ingestion function itself, or ``None``."""
+        if not self.ingestion:
+            return None
+        module = importlib.import_module(f"{__package__}.{self.ingestion}")
+        return getattr(module, self.ingestion)
+
 
 #: THE RESERVED NAMES. A row named one of these plays that role; every other row
 #: is a plain one, read by whatever declared it.
 SLOTS: Mapping[str, Slot] = MappingProxyType({
-    DOMAIN: Slot(ingest=domain, classes=frozenset({"hydrography"}),
+    DOMAIN: Slot(ingestion="domain", classes=frozenset({"hydrography"}),
                  draw=("polygon", "domain",
                        "Draw the outline of the water body this run solves over")),
-    BED: Slot(ingest=bed,
+    BED: Slot(ingestion="bed",
               classes=frozenset({"bathymetry", "terrain", "channel survey"}),
               number=True),
     # The level and the discharge ARE observations: they are their own names so
     # a workflow can tell which row is which, and they read the same afterwards.
-    LEVEL: Slot(ingest=observation, classes=frozenset({"water level series"}),
+    LEVEL: Slot(ingestion="observation",
+                classes=frozenset({"water level series"}),
                 record=True, number=True),
-    DISCHARGE: Slot(ingest=observation, classes=frozenset({"discharge series"}),
+    DISCHARGE: Slot(ingestion="observation",
+                    classes=frozenset({"discharge series"}),
                     record=True, number=True),
-    OBSERVE: Slot(ingest=observation,
+    OBSERVE: Slot(ingestion="observation",
                   classes=frozenset({"water quality sample", "bed material",
                                      "groundwater level"}),
                   record=True, number=True),
-    LINE: Slot(ingest=line,
+    LINE: Slot(ingestion="line",
                draw=("polyline", "line",
                      "Draw the line this reading is measured along")),
-    EXTENT: Slot(ingest=extent,
+    EXTENT: Slot(ingestion="extent",
                  draw=("rectangle", "",
                        "Draw the box this question is asked inside")),
     # A table of weather is read by the composite that expands it onto the run's
@@ -97,7 +135,7 @@ SLOTS: Mapping[str, Slot] = MappingProxyType({
     # A sea state is a record of several columns too, but every one of them
     # becomes a keyword the deck states, so the turn from the record's words to
     # the engine's is this slot's ingestion.
-    WAVE: Slot(ingest=wave, classes=frozenset({"wave series"}), record=True),
+    WAVE: Slot(ingestion="wave", classes=frozenset({"wave series"}), record=True),
 })
 
 
@@ -113,7 +151,11 @@ def needs_of(role: str, kind: str) -> tuple[tuple[str, str, str], ...]:
     Only the domain declares any, and only for the kinds that do not arrive
     closed. The runtime produces them through the match and hands each back
     under its own name; the slot states the need and never fetches."""
-    return needs_beside(kind) if str(role) == DOMAIN else ()
+    if str(role) != DOMAIN:
+        return ()
+    from .domain import needs_beside
+
+    return needs_beside(kind)
 
 
 def ingest_slot(role: str, value: Any, *, label: str = "",

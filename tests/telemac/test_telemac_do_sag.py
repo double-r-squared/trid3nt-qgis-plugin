@@ -86,7 +86,7 @@ def test_the_data_rows_are_the_engine_neutral_slots_this_run_stands_on():
     the line the domain's own producer measures beside it - no ladder, no
     fetcher named on a row."""
     from trid3nt_server.workflows.runtime import data_rows
-    from trid3nt_server.workflows.runtime.data import BED, DOMAIN, LINE
+    from trid3nt_server.inputs.slots import BED, DOMAIN, LINE
 
     rows = data_rows(_template().DATA)
     assert [d.name for d in rows] == ["domain", "line", "bed", "discharge",
@@ -109,7 +109,7 @@ def test_the_carrier_is_one_reading_ranked_against_the_domain():
     discharge slot: whichever record the match ranks nearest the water, with a
     stated number standing over any record."""
     from trid3nt_server.workflows.runtime import data_rows
-    from trid3nt_server.workflows.runtime.data import DISCHARGE
+    from trid3nt_server.inputs.slots import DISCHARGE
 
     carrier = {d.name: d for d in data_rows(_template().DATA)}["discharge"]
     assert carrier.role == DISCHARGE

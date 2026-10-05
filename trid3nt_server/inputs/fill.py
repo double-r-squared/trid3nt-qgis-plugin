@@ -24,9 +24,9 @@ from trid3nt_server.render.pipeline_emitter import current_emitter, substep
 from trid3nt_server.tools.search.match import (
     Need, ask_for, base_ask, dropped_from, instant, match, sources_with_coverage)
 
-from ..workflows.runtime.data import (
-    BED, DISCHARGE, DOMAIN, EXTENT, LEVEL, LINE, CoversAOI,
-    DataDecl, Producer)
+from ..workflows.runtime.data import CoversAOI, DataDecl, Producer
+
+from .slots import BED, DISCHARGE, DOMAIN, EXTENT, LEVEL, LINE
 from ..workflows.runtime.domain import Domain, bind_domain, current_domain
 from ..workflows.runtime.errors import (DeclarativeError, PlanValidationError, StepFailedError,
                      SuppliedCoverageError, said)

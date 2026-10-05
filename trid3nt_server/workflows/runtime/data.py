@@ -12,20 +12,13 @@ from typing import Annotated, Any, Mapping
 
 from trid3nt_contracts.coverage import DATA_CLASSES
 
+from trid3nt_server.inputs.slots import BED, DOMAIN, SLOTS, Slot, role_of
+
 from .errors import PlanValidationError, SuppliedGeometryError
 from .params import declarations, take_name
 
 __all__ = [
-    "BED",
-    "DISCHARGE",
-    "EXTENT",
-    "LEVEL",
-    "LINE",
-    "OBSERVE",
-    "WAVE",
-    "WEATHER",
     "CoversAOI",
-    "DOMAIN",
     "Data",
     "DataDecl",
     "Producer",
@@ -36,52 +29,6 @@ __all__ = [
     "shapes_of",
     "tool",
 ]
-
-#: THE RESERVED ROW NAMES. A row's NAME is its slot: these are the names
-#: :data:`trid3nt_server.inputs.slots.SLOTS` keys the role behaviour off, spelled
-#: here so the runtime can compare against them without importing the ingestions.
-#: The two a solved run stands on are engine-neutral - the closed polygon the
-#: equations are solved over and the elevation every node of it carries - and a
-#: raster engine fills the same two with a grid, so no word here belongs to an
-#: engine. The named stretches of the edge are no row: they ride on the polygon
-#: the domain arrived as.
-DOMAIN = "domain"
-BED = "bed"
-
-#: The LINE a placed read is measured along. Not one of the three - a run solves
-#: without it - but a slot for the same reason: a producer's own centerline, a
-#: drawn polyline and a line layer all fill it and read the same afterwards.
-LINE = "line"
-
-#: The slot a run OPENS ON: one measured value read off whatever reports it near
-#: this domain, in the unit the keyword the role fills reads. Engine-neutral for
-#: the same reason the three above are - somebody measured something somewhere at
-#: some time.
-OBSERVE = "observe"
-
-#: The two observations a solve READS BY ROLE rather than by name: the elevation
-#: the water surface stands at, and the flow an inflow run carries. Both are
-#: observations and ingest as one; they are their own names because the workflow
-#: has to know which row is which to build the stages a body of water needs.
-LEVEL = "level"
-DISCHARGE = "discharge"
-
-#: The RECTANGLE a question is asked inside: the window a domain is cut out of,
-#: the grid a raster engine solves on. Not a domain - it has no shoreline - so it
-#: is its own name, and the canvas offers a box for it.
-EXTENT = "extent"
-
-#: The record of the air over the domain, read by the composite that puts it on
-#: the run's own clock. Nothing ingests it on the way in; the name is reserved so
-#: a row that carries weather is the row that composite reads.
-WEATHER = "weather"
-
-#: The sea state at the open edge: the same kind of thing as the weather over a
-#: domain - one record, several columns, measured somewhere near - so it is its
-#: own name too, and its ingestion turns those columns into the keywords a
-#: spectral deck forces its boundary at.
-WAVE = "wave"
-
 
 # A ROW STATES THE CLASS IT NEEDS; IT NEVER NAMES A FETCHER. Text relevance
 # cannot judge the facts that decide whether a source can carry a solve - its
@@ -281,15 +228,11 @@ class DataDecl:
         THE ROW'S NAME IS ITS SLOT: a reserved name plays its role however it is
         filled - a drawing, the user's layer, or the match - and nothing
         downstream branches on which."""
-        from trid3nt_server.inputs.slots import role_of
-
         return role_of(self.name)
 
     @property
-    def slot(self) -> Any:
+    def slot(self) -> Slot:
         """The facts of the slot this row is; a plain row's are all empty."""
-        from trid3nt_server.inputs.slots import SLOTS, Slot
-
         return SLOTS.get(self.role) or Slot()
 
     def __post_init__(self) -> None:

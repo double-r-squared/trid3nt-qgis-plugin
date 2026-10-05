@@ -16,13 +16,7 @@ from trid3nt_server.workflows.telemac.authoring.selafin_io import (
 
 import pytest
 
-from trid3nt_server.workflows.runtime.data import (
-    BED,
-    DOMAIN,
-    EXTENT,
-    LEVEL,
-    WAVE,
-)
+from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT, LEVEL, WAVE
 from trid3nt_server.workflows.telemac.modules import WAC, fill
 from trid3nt_server.workflows.telemac.modules.tomawac import (
     RESULT_FILENAME,

@@ -19,9 +19,9 @@ from trid3nt_server.inputs.observation import (
     ObservationError,
     observation,
 )
-from trid3nt_server.inputs.slots import ingest_slot
 from trid3nt_server.inputs.user_input import UserInputError
-from trid3nt_server.workflows.runtime.data import Data, OBSERVE, tool
+from trid3nt_server.workflows.runtime.data import Data, tool
+from trid3nt_server.inputs.slots import OBSERVE, ingest_slot
 
 _POLYGON = {"type": "Polygon", "coordinates": [[
     [-122.70, 45.50], [-122.60, 45.50], [-122.60, 45.56], [-122.70, 45.56],

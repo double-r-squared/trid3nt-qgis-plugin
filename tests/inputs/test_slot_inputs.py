@@ -6,6 +6,9 @@ is that the typed value reads the same whichever form it came from.
 
 from __future__ import annotations
 
+import subprocess
+import sys
+
 import pytest
 
 from trid3nt_server.inputs import Point
@@ -16,10 +19,9 @@ from trid3nt_server.inputs.boundary import (
     roles_from_runs,
 )
 from trid3nt_server.inputs.domain import domain, domain_ring
-from trid3nt_server.inputs.slots import SLOTS, ingest_slot, role_of
 from trid3nt_server.inputs.user_input import UserInputError
-from trid3nt_server.workflows.runtime.data import (
-    BED, DOMAIN, EXTENT, LEVEL, LINE)
+from trid3nt_server.inputs.slots import (
+    BED, DOMAIN, EXTENT, LEVEL, LINE, SLOTS, ingest_slot, role_of)
 
 _RING = [[-123.0, 45.0], [-122.9, 45.0], [-122.9, 45.1], [-123.0, 45.1]]
 
@@ -303,3 +305,12 @@ def test_an_empty_artifact_and_an_absent_producer_refuse_DIFFERENTLY(tmp_path):
         domain(str(gauges))
     assert "1 geometries of kind Point" in str(wrong_shape.value)
     assert "producer RAN" not in str(wrong_shape.value)
+
+
+@pytest.mark.parametrize("module", ["trid3nt_server.inputs.slots",
+                                    "trid3nt_server.workflows.runtime.data",
+                                    "trid3nt_server.inputs.fill"])
+def test_each_slot_module_imports_first_in_a_fresh_interpreter(module):
+    ran = subprocess.run([sys.executable, "-c", f"import {module}"],
+                         capture_output=True, text=True, timeout=240)
+    assert ran.returncode == 0, ran.stderr[-2000:]

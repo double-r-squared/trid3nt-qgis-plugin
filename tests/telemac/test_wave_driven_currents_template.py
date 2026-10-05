@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_server.inputs.wave import Wave
-from trid3nt_server.workflows.runtime.data import BED, DOMAIN, EXTENT, LEVEL, WAVE
+from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT, LEVEL, WAVE
 from trid3nt_server.workflows.telemac.modules import T2D, WAC, fill
 from trid3nt_server.workflows.telemac.modules.module import SlotRefused
 from trid3nt_server.workflows.telemac.authoring.boundaries import (
