@@ -215,10 +215,9 @@ class DataDecl:
     #: something else - the coverage row's ``ask`` block maps it to the param
     #: the source states it in.
     span_km: float | None = None
-    #: What this slot's ingestion is told about the value it is handed - the
-    #: point a nearest-site query ranks against, the unit the keyword reads.
-    #: Declared on the row because only the row knows them; ``near`` is the
-    #: NAME of the run input the point is read off.
+    #: The point a nearest-site query ranks against, the one thing a row tells
+    #: its ingestion: ``near`` is the NAME of the run input the point is read
+    #: off. No conversion is declared here.
     coercion: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
 
     @property
