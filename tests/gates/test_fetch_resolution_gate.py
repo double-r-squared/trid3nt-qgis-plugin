@@ -276,6 +276,18 @@ def test_clamp_fetch_resolution_helper() -> None:
     assert server._clamp_fetch_resolution(5.0, 5.0) == 5.0
 
 
+def test_a_spacing_finer_than_the_source_serves_is_stated_as_the_one_used() -> None:
+    from trid3nt_server import server
+    from trid3nt_server.workflows.runtime.journal import bind_notes, drain_notes
+
+    token = bind_notes()
+    server._clamp_fetch_resolution(1.0, 5.0)
+    server._clamp_fetch_resolution(30.0, 5.0)
+    assert drain_notes(token) == [
+        "the fetch spacing asked, 1 m, is finer than the source serves over "
+        "this extent; 5 m is the spacing used."]
+
+
 # 10) Local-cloud fingerprint seam: the LOCAL build
 #     (TRID3NT_SOLVER_BACKEND=local-docker) must not surface the cloud
 #     "fetch (1 vCPU)" compute label on the confirm card -- it renders the

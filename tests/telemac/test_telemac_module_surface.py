@@ -1360,3 +1360,33 @@ def test_a_breach_growth_whose_fields_are_not_written_refuses_by_name():
              breach=Breach(line=[[0.0, 0.0], [0.001, 0.0]], width_m=18.0,
                            opens_at_s=0.0, duration_s=60.0, final_bed_m=5.0,
                            growth=3))
+
+
+# -- an impossible value refuses, an unusual one is used and noted ----------- #
+
+def test_a_negative_manning_is_refused_by_name_before_any_run():
+    from trid3nt_server.workflows.telemac.modules.telemac2d import Friction
+
+    with pytest.raises(SlotRefused, match="Manning n of -0.03 is impossible"):
+        fill(T2D, friction=Friction(manning_per_node=[0.03, -0.03]))
+
+
+def test_an_unusual_manning_is_used_as_stated_with_a_note():
+    from trid3nt_server.workflows.runtime.journal import bind_notes, drain_notes
+    from trid3nt_server.workflows.telemac.modules.telemac2d import Friction
+
+    token = bind_notes()
+    sheet = fill(T2D, friction=Friction(manning_per_node=[1.5, 0.03]))
+    notes = drain_notes(token)
+    assert "1 MANNING 0.030 NULL" in sheet.files["rog_friction.tbl"]
+    assert "2 MANNING 1.500 NULL" in sheet.files["rog_friction.tbl"]
+    assert notes == ["1 Manning n value(s), 1.5 among them, are outside the "
+                     "usual 0.005-1 range and are used as stated."]
+
+
+def test_a_curve_number_off_its_scale_is_refused_by_name():
+    from trid3nt_server.workflows.telemac.modules.telemac2d import Runoff
+
+    with pytest.raises(SlotRefused, match="curve number CN2 of 120 is impossible"):
+        fill(T2D, runoff=Runoff(node_xy=[(0.0, 0.0)], cn2=[120.0],
+                                antecedent_moisture=2, initial_abstraction=1))

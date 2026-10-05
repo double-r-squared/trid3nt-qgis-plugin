@@ -54,13 +54,21 @@ _FETCH_MAX_PX_BY_TOOL: dict[str, int] = {
 
 
 def _clamp_fetch_resolution(chosen_m: float, finest_allowed_m: float) -> float:
-    """Floor a user-chosen fetch resolution UP to the finest allowed cell size.
+    """The spacing a fetch runs at: the one asked, or the finest the source
+    serves over this extent where the one asked is finer, said on the record.
 
     Finer = SMALLER metres, so the px-grid bound is a LOWER bound on the rung;
     a coarser request than ``finest_allowed_m`` is honoured exactly."""
+    from trid3nt_server.workflows.runtime import journal_note
+
     # A request finer than the bound would materialize a grid past MAX_FETCH_PX
-    # on the long axis, so it is clamped up to the bound instead.
-    return max(float(chosen_m), float(finest_allowed_m))
+    # on the long axis, so it runs at the bound instead.
+    used = max(float(chosen_m), float(finest_allowed_m))
+    if used != float(chosen_m):
+        journal_note(
+            f"the fetch spacing asked, {float(chosen_m):g} m, is finer than the "
+            f"source serves over this extent; {used:g} m is the spacing used.")
+    return used
 
 
 async def _build_fetch_resolution_envelope(

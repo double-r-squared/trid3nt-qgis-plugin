@@ -16,7 +16,7 @@ from trid3nt_server.workflows.runtime.temporal import RATE, STATE, Series
 from ..authoring.atmosphere import (ATMOSPHERE_READS, Atmosphere,
                                      expand_atmosphere)
 from .coupling import couples
-from .module import Module, Output
+from .module import Module, Output, SlotRefused
 from .outputs import PRIMITIVES, read_drogues
 
 __all__ = ["T2D", "Atmosphere", "Boundaries", "Breach", "Friction", "Infiltration",
@@ -383,6 +383,40 @@ def Runoff(*, node_xy: Any, cn2: Any, antecedent_moisture: Any,  # noqa: N802
                              "initial_abstraction": initial_abstraction})
 
 
+#: The ranges a value is usually found in. A value outside one is possible and
+#: is used as stated, with a note saying so; only an impossible one refuses.
+_USUAL_CN = (1.0, 100.0)
+_USUAL_MANNING = (0.005, 1.0)
+
+
+def _checked(name: str, values: Any, *, above: float,
+             at_most: float | None = None,
+             usual: tuple[float, float]) -> Any:
+    """``values`` unchanged, refused by name where one is impossible and noted
+    where one is outside the range it is usually found in."""
+    import numpy as np
+
+    from trid3nt_server.workflows.runtime import journal_note
+
+    array = np.asarray(values, dtype=float)
+    impossible = ~np.isfinite(array) | (array <= above)
+    if at_most is not None:
+        impossible |= array > at_most
+    if impossible.any():
+        scale = (f"greater than {above:g}" if at_most is None
+                 else f"greater than {above:g} and at most {at_most:g}")
+        raise SlotRefused(
+            f"a {name} of {float(array[impossible][0]):g} is impossible - it is "
+            f"{scale} - so no run starts on it; state the {name} again.")
+    unusual = (array < usual[0]) | (array > usual[1])
+    if unusual.any():
+        journal_note(
+            f"{int(unusual.sum())} {name} value(s), {float(array[unusual][0]):g} "
+            f"among them, are outside the usual {usual[0]:g}-{usual[1]:g} range "
+            "and are used as stated.")
+    return array
+
+
 def _runoff(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                                                Mapping[str, Any]]:
     """The curve-number field -> the runoff keywords and the scatter they name.
@@ -391,7 +425,8 @@ def _runoff(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
     import numpy as np
 
     xy = np.asarray(value["node_xy"], dtype=float)
-    cn2 = np.clip(np.asarray(value["cn2"], dtype=float), 1.0, 100.0)
+    cn2 = _checked("curve number CN2", value["cn2"], above=0.0, at_most=100.0,
+                   usual=_USUAL_CN)
     if cn2.shape[0] != xy.shape[0]:
         raise ValueError(f"the curve-number field has {cn2.shape[0]} values and "
                          f"the mesh has {xy.shape[0]} nodes.")
@@ -493,8 +528,8 @@ def _friction(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
     Distinct values become zones; the laws file is TERMINATED or the scan runs on."""
     import numpy as np
 
-    values = np.round(np.clip(np.asarray(value["manning_per_node"], dtype=float),
-                              0.005, 1.0), 3)
+    values = np.round(_checked("Manning n", value["manning_per_node"], above=0.0,
+                               usual=_USUAL_MANNING), 3)
     unique = sorted({float(v) for v in values})
     zone_of = {v: i + 1 for i, v in enumerate(unique)}
     laws = ["* rain-on-grid distributed Manning (per land cover)",
