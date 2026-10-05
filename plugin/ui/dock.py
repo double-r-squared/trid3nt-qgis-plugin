@@ -1698,6 +1698,8 @@ class Trid3ntDock(QDockWidget):
         self._set_dot("connected")
         self._refresh_model_label()  # status text = active model, not case-id
         self._replay_chat_history(info.chat_messages)
+        self.input_edit.set_history(
+            [r["content"] for r in info.chat_messages if r.get("role") == "user"])
         # Layer restore rides the SAME gesture
         # as the chat replay above -- the by-URI materializer reads the store
         # directly (MinIO on this box or the tailnet peer).
@@ -2222,6 +2224,7 @@ class Trid3ntDock(QDockWidget):
         if not (self._case_id and self.bridge.running):
             self.status_label.setText("Not connected -- open Settings to connect")
             return
+        self.input_edit.remember(text)
         # !run direct tool invocation: PARSE-FIRST, before the chat
         # path. A ``!run`` prefix routes straight to the server as a structured
         # ``dev-tool-invoke``; anything else (including a message that merely

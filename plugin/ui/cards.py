@@ -11,7 +11,7 @@ import re
 from typing import Dict, List, Optional, Tuple
 
 from qgis.PyQt.QtCore import Qt, QTimer
-from qgis.PyQt.QtGui import QColor, QSyntaxHighlighter, QTextCharFormat
+from qgis.PyQt.QtGui import QColor, QSyntaxHighlighter, QTextCharFormat, QTextCursor
 from qgis.PyQt.QtWidgets import (
     QComboBox,
     QFrame,
@@ -295,8 +295,8 @@ class _RunPrefixHighlighter(QSyntaxHighlighter):
 
 class _ChatInput(QPlainTextEdit):
     """The composer input: a MULTI-LINE auto-growing field. ENTER sends;
-    SHIFT+ENTER and any Ctrl or Meta chord insert a newline. It grows to
-    ``_MAX_LINES`` and then scrolls."""
+    SHIFT+ENTER and any Ctrl or Meta chord insert a newline; UP and DOWN on an
+    empty box walk the case's sent messages. It grows to ``_MAX_LINES``."""
 
     _MIN_LINES = 1
     _MAX_LINES = 10
@@ -304,6 +304,10 @@ class _ChatInput(QPlainTextEdit):
     def __init__(self, send_callback, parent=None):
         super().__init__(parent)
         self._send_callback = send_callback
+        # The case's sent messages, oldest first, and the one on show while
+        # walking them; None means the box is not showing a recalled message.
+        self._history: list = []
+        self._recall: Optional[int] = None
         self.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -335,7 +339,42 @@ class _ChatInput(QPlainTextEdit):
                 return
             self._send_callback()
             return
+        if key in (Qt.Key.Key_Up, Qt.Key.Key_Down) and self._walk(key == Qt.Key.Key_Up):
+            return
         super().keyPressEvent(event)
+
+    def set_history(self, messages: list) -> None:
+        self._history = list(messages)
+        self._recall = None
+
+    def remember(self, text: str) -> None:
+        self._history.append(text)
+        self._recall = None
+
+    def _walk(self, back: bool) -> bool:
+        """Step through the history and report whether the key was consumed.
+        Only an empty box or an unedited recalled message walks; any other
+        text keeps the arrows for the cursor."""
+        text = self.toPlainText()
+        if self._recall is not None and text != self._history[self._recall]:
+            self._recall = None
+        if text and self._recall is None:
+            return False
+        if back:
+            if not self._history or self._recall == 0:
+                return bool(self._history)
+            self._recall = len(self._history) - 1 if self._recall is None else self._recall - 1
+        else:
+            if self._recall is None:
+                return False
+            self._recall += 1
+            if self._recall == len(self._history):
+                self._recall = None
+                self.clear()
+                return True
+        self.setPlainText(self._history[self._recall])
+        self.moveCursor(QTextCursor.MoveOperation.End)
+        return True
 
     def _adjust_height(self, *args) -> None:  # documentSizeChanged passes a QSizeF
         # Compute the field height FROM the document layout

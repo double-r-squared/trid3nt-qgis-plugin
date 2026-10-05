@@ -3,7 +3,8 @@
 The pure-python stub tests cannot see any of it, so the checks run in a
 SUBPROCESS under the interpreter with ``qgis.PyQt`` and skip honestly when
 absent. Covered: a wrapped bubble's full height, whitespace-only deltas leaving
-no bubble, the layer fold, the probe panel, gate-card ordering, and markdown."""
+no bubble, the layer fold, the probe panel, gate-card ordering, markdown, and
+the composer's per-case recall."""
 
 from __future__ import annotations
 
@@ -141,3 +142,36 @@ class TestDockUiBatch(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+@pytest.mark.qt_harness_shim
+class TestChatRecall(unittest.TestCase):
+    """Per-case chat recall in the composer, driven by real key presses."""
+
+    _proc: subprocess.CompletedProcess | None = None
+
+    @classmethod
+    def setUpClass(cls):
+        py = _qt_python()
+        if py is None:
+            return
+        harness = os.path.join(os.path.dirname(__file__), "qt_chat_recall_harness.py")
+        cls._proc = subprocess.run(
+            [py, "-u", harness], capture_output=True, timeout=180, text=True,
+            env={**os.environ, "QT_QPA_PLATFORM": "offscreen"})
+
+    def _stdout(self) -> str:
+        if self._proc is None:
+            self.skipTest("no interpreter with qgis.PyQt available")
+        self.assertEqual(self._proc.returncode, 0,
+                         f"stdout: {self._proc.stdout}\nstderr: {self._proc.stderr}")
+        return self._proc.stdout
+
+    def test_empty_up_recalls_and_down_returns(self):
+        self.assertIn("RECALL-WALK-OK", self._stdout())
+
+    def test_typed_box_keeps_cursor_arrows(self):
+        self.assertIn("CURSOR-ARROWS-OK", self._stdout())
+
+    def test_each_case_has_its_own_history(self):
+        self.assertIn("PER-CASE-OK", self._stdout())
