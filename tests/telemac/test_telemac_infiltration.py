@@ -155,3 +155,16 @@ def test_the_surface_names_no_runoff_model_and_the_template_does(surface):
     slots, _files = surface()
     assert "RAINFALL_RUNOFF_MODEL" not in slots
     assert STEERING.ASSERTED["RAINFALL_RUNOFF_MODEL"] == 1
+
+
+def test_the_land_cover_is_read_as_class_codes_never_blended(surface, monkeypatch):
+    """Land cover is CATEGORICAL: a node between two classes takes one of them,
+    never a code interpolated between them."""
+    import trid3nt_server.tools.mesh.shared.nodes as nodes_mod
+
+    kernels: list[str] = []
+    monkeypatch.setattr(nodes_mod, "sample_raster_at_nodes",
+                        lambda _path, lonlat, interp="nearest":
+                        kernels.append(interp) or np.array([41.0, 22.0, 7.0]))
+    surface()
+    assert kernels == ["nearest"]
