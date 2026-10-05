@@ -45,7 +45,7 @@ def _sample(value: float, unit: str) -> dict:
 def test_a_degc_record_is_read_against_a_degc_tracer() -> None:
     env = _env(TEMPERATURE="DEGC", H="m")
     told = fill._what_the_run_calls_it(
-        env, _row("observe", of="TEMPERATURE"), "", "TEMPERATURE")
+        env, _row("observe", of="TEMPERATURE"), "TEMPERATURE")
     assert told["to_units"] == "DEGC"
     # The record spells the same unit its own way, and the two are one unit.
     found = observation(_sample(9.5, "deg C"), to_units=told["to_units"],
@@ -56,7 +56,7 @@ def test_a_degc_record_is_read_against_a_degc_tracer() -> None:
 
 def test_a_fahrenheit_record_reaches_the_tracer_s_own_scale() -> None:
     told = fill._what_the_run_calls_it(
-        _env(TEMPERATURE="DEGC"), _row("observe", of="TEMPERATURE"), "",
+        _env(TEMPERATURE="DEGC"), _row("observe", of="TEMPERATURE"),
         "TEMPERATURE")
     found = observation(_sample(49.1, "degF"), to_units=told["to_units"])
     assert found.value == pytest.approx((49.1 - 32.0) / 1.8)
@@ -67,7 +67,7 @@ def test_a_variable_with_no_unit_anywhere_refuses_rather_than_reading_the_record
     env = _env(TEMPERATURE="", H="m")
     with pytest.raises(PlanValidationError) as raised:
         fill._what_the_run_calls_it(
-            env, _row("observe", of="TEMPERATURE"), "", "TEMPERATURE")
+            env, _row("observe", of="TEMPERATURE"), "TEMPERATURE")
     said = str(raised.value)
     assert "observes 'TEMPERATURE'" in said and "H" in said
 
@@ -79,7 +79,7 @@ def test_a_row_that_observes_nothing_published_is_read_by_its_role() -> None:
 
     row = dataclasses.replace(Data.need("water level series"), name="level")
     assert fill._what_the_run_calls_it(
-        env, row, "", "")["to_units"] == "m"
+        env, row, "")["to_units"] == "m"
 
 
 def test_the_row_states_no_unit_at_all() -> None:
