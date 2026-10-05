@@ -2,12 +2,15 @@
 
 It is the input review gate's own card: one row per open input, each dropdown
 listing exactly what that input's accept rule takes. A pick is accepted or
-refused by name on the redrawn card, and the card's proceed is the launch.
+refused by name on the redrawn card, and the card's proceed is the launch once
+the run is READY - nothing refused and nothing required missing; short of
+that the card is drawn again naming what the run waits on.
 """
 
 from __future__ import annotations
 
 import asyncio
+import inspect
 from typing import Any, Mapping, Sequence
 
 from trid3nt_contracts.common import SyntheticInput
@@ -69,18 +72,29 @@ async def review_run_inputs(tool_name: str, fn: Any, args: Mapping[str, Any], *,
     picked: dict[str, Any] = {}
     lists = {name: await asyncio.to_thread(offers, fn, name, layers)
              for name in rows}
+    signature = inspect.signature(fn).parameters
+
+    def blocked() -> str | None:
+        waits = [f"{name} (refused)" if name in refused else f"{name} (required)"
+                 for name in rows if name in refused or (
+                     name not in taken
+                     and signature[name].default is inspect.Parameter.empty)]
+        return ", ".join(waits) or None
 
     async def card() -> Any:
         from trid3nt_server.inputs.gate.input_review import GateCard
 
         drawn = [_row(name, picked.get(name, args.get(name)), lists[name],
                       refused.get(name)) for name in rows]
+        waits_on = blocked()
+        title = f"Supply the inputs of {tool_name}" + (
+            f" - Run waits on {waits_on}" if waits_on else "")
         return GateCard(
             lines=[f"{row.name} = {'' if row.value is None else row.value}"
                    + (f" (refused: {row.note})" if row.note else "")
                    for row in drawn],
             param_sheet=ParamSheet(workflow=tool_name, rows=drawn,
-                                   title=f"Supply the inputs of {tool_name}"))
+                                   title=title))
 
     async def revise(revised: Mapping[str, Any]) -> None:
         for name, value in revised.items():
@@ -99,8 +113,8 @@ async def review_run_inputs(tool_name: str, fn: Any, args: Mapping[str, Any], *,
         tool_name=tool_name, mode="user_gated",
         entries=[SyntheticInput(param=name, value=None, basis="user")
                  for name in rows],
-        params={}, present=card, apply_revision=revise, max_rounds=_ROUNDS,
-        emitter=emitter)
+        params={}, present=card, apply_revision=revise, blocked=blocked,
+        max_rounds=_ROUNDS, emitter=emitter)
     if outcome.proceed:
         return taken
     if outcome.cancel_code == "declined":

@@ -340,10 +340,11 @@ def resolve_param_sheet_edits(rows: list, edited: dict) -> dict:
 
 
 def param_sheet_summary(sheet: ParamSheetRequest, revised: dict) -> str:
-    """The folded chip line for an ANSWERED form card."""
+    """The folded chip line for an ANSWERED form card. It claims no launch: a
+    run short of ready is answered with the card drawn again, naming why."""
     if not revised:
-        return f"Inputs approved as resolved ({len(sheet.rows)} rows)"
-    return "Inputs approved with edits: " + ", ".join(sorted(revised))
+        return f"Run asked with the inputs as shown ({len(sheet.rows)} rows)"
+    return "Inputs sent with edits: " + ", ".join(sorted(revised))
 
 
 

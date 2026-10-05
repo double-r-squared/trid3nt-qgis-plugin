@@ -1,75 +1,63 @@
-# gates/ -- agent-loop safety and routing gates
+# gates -- the one card a person answers before a run
 
-`trid3nt_server/inputs/gate/` holds the agent-loop
-gates: user-decision cards, tool-gating/retrieval, runaway/circuit guards,
-context-budget, and actionability classification.
+`trid3nt_server/inputs/gate/` is where a turn waits on a person. Its files are
+listed in that folder's README; this page says how the one card works.
 
-## What lives here
+## One gate machine
 
-- `cards/` -- the user-decision gate cards: `estimate`, `payload_warning`,
-  `solver_confirm`, `spatial_input`. Each card is a DECLARED gate whose pure
-  estimate/pin providers are owned by the engine.
-- `pending.py` -- the pending-decision
-  registry.
-- `runaway_guard.py`, `circuit_breaker.py` -- loop-runaway + repeated-failure
-  guards.
-- `context_budget.py` -- token budget + compaction labels (also drives the
-  model-discovery `reset_num_ctx_cache` seam).
-- `input_review.py`, `actionability.py`, `spatial_input.py` -- input-review
-  gate + exception-actionability classifier (`{agent, user, operator}`).
-- `draw_input.py`, `spatial_roles.py` -- the DRAW gate that asks for one
-  declared param's geometry on the canvas, and the shared role vocabulary and
-  parser the mesh authoring layer reads a drawn `FeatureCollection` through.
-- `fallback.py` -- the ONE fallback gate: the loudness floor over the
-  pending-confirm spine, where a `synthetic` rung always pauses and its
-  labeled default is REFUSE.
+`gate_input_review` (`input_review.py`) presents, asks and accepts every
+user-gated thing. A caller with a thing of its own under review hands it three
+callbacks and nothing else:
 
-## Composition
+- `present` - the round's card: its lines and its sheet of rows.
+- `apply_revision` - a reply's edits taken as a change to that thing, after
+  which the card is drawn again.
+- `blocked` - what keeps a proceed from launching, in words; a proceed while it
+  answers anything launches nothing and the card is drawn again.
 
-`cards/*` import (deferred, function-local) from `data/`, `workflows/`, and
-`mesh/` to compute estimates -- absolute cross-package imports since these are
-now peer top-level packages. The GateSpec confirm engine + the shared gate-wait
-seam + the four user-decision emit-wait gate families (payload, code-exec,
-solver-confirm, spatial) live in `confirm.py`. The server callers import those functions
-function-locally to keep the `server <-> gates` package edge acyclic.
+The mode is the run's own: `auto` only when the call states
+`input_mode='auto'`, otherwise `user_gated`. Auto launches a ready run at once;
+user-gated parks the turn on the card, and with no live session to present on it
+refuses by name rather than runs.
+
+## The inputs card
+
+A direct run (`!run <tool>` or a model call) that leaves an input out, or states
+one its accept rule refuses, opens the inputs card (`cards/run_inputs.py`):
+
+- One row per open input. A row's dropdown lists EXACTLY what that input's
+  accept rule takes (`inputs/accept.py`): the case layers the input's own
+  ingestion accepts, shown by name and keyed by id; an enumerated input's own
+  values - `build_mesh`'s mesher lists the registered mesher roster; a typed
+  input is a text field.
+- A pick is a fill of that one input: it goes through the same accept rule and
+  the redrawn card shows it taken, or refused with the reason on its row.
+- READY is nothing refused and nothing required (no default) missing. Run on a
+  ready card is the launch. Run short of ready launches nothing: the card is
+  drawn again, its title ending `Run waits on <input> (refused|required)`.
+- Cancel launches nothing (`USER_INPUT_CANCELLED`); a card left unanswered past
+  its deadline expires as a timeout, never as a decline; six rounds without a
+  ready Run refuse the run unlaunched.
 
 ## The mesh on the gate
 
-There is no second gate machine. `mesh/gate.py` builds the round's
-CARD for the mesh under construction and hands it to `gate_input_review` like
-any other user-gated thing: under USER-GATED the built mesh is presented as an
-editable MDAL layer (through `render.publish_input_layer`) plus its numeric
-probes quoted as the card's lines, and its rows are the one size word, the
-numbered recipe ops (read-only - `mesh_op` is where an op is written), the
-revert and the path of a hand-edited layer to adopt. `proceed` accepts the mesh,
-`narrow_scope` applies the reply back onto the session and re-presents, `cancel`
-refuses the run. AUTO, and a headless call with no session to present on, builds
-inline: no card, no layer.
+`tools/mesh/gate.py` builds the round's card for a mesh under construction and
+hands it to the same gate: under user-gated the built mesh is presented as an
+editable layer with its numeric probes as the card's lines; its rows are the
+size word, the recipe ops (read-only - `mesh_op` writes one), the revert and a
+hand-edited layer to adopt. Proceed accepts the mesh, a revision rebuilds and
+re-presents, cancel refuses the run.
 
-Two general capabilities on the one gate make that possible, and neither names a
-mesh: `present` (a per-round `GateCard` - lines, sheet and envelope `tool_args` -
-from a caller that owns the thing under review) and `apply_revision` (a reply
-taken as a change to that thing, then another round). `ReviewOutcome.cancel_code`
-says which cancel it was, so a caller raises its own typed refusal.
+## Invariants
 
-## Invariants / extension points
-
-- Gates on tools are DECLARED (GateSpec metadata + pure providers), NEVER
-  hand-wired in server code.
-- A DECLINE IS NOT AN ERROR. A card answered with `cancel` raises a
-  `UserDeclinedError` carrying the gate's own wire code
-  (`PAYLOAD_WARNING_CANCELLED`, `CODE_EXEC_CANCELLED`,
-  `SOLVER_CONFIRMATION_CANCELLED`). Three seams read its `declined` marker: the
-  pipeline emitter marks the step CANCELLED rather than failed, the result
-  summarizer hands the model `status="declined"` naming the card and what it
-  asked, and the circuit breaker leaves the tool's retry budget alone.
-- A TIMEOUT IS NOT A DECLINE. A card nobody answers before its deadline raises
-  `GateConfirmationTimeoutError` at all three gates: `CONFIRMATION_TIMEOUT` on
-  the wire and on the model's result, the step marked FAILED rather than
-  cancelled, and a narration that says the card expired unanswered and never
-  that the user declined it.
-- INPUT_REQUIRED has two modes (AUTO labeled-defaults vs USER-GATED); the
-  model never invents physics for un-fetchable inputs.
-- ONE gate machine presents, asks and accepts every user-gated thing. A caller
-  with a thing of its own under review supplies a card and a revision handler;
-  a gate loop, a card contract or a tool surface of its own is a defect.
+- ONE gate machine. A card contract, a gate loop or a tool surface of a
+  caller's own is a defect.
+- A DECLINE IS NOT AN ERROR: a cancel raises a `UserDeclinedError` carrying the
+  card's own code; the step is marked cancelled, the model is told the card was
+  declined, and the tool's retry budget is untouched.
+- A TIMEOUT IS NOT A DECLINE: `CONFIRMATION_TIMEOUT`, the step failed, the
+  narration says the card expired unanswered.
+- The rule that validates an input is the rule that fills its dropdown; nothing
+  is listed per tool.
+- The model never invents physics for an input nothing measures: an auto run
+  carrying a demo default with no real source refuses.

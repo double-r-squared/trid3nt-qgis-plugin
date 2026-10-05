@@ -254,6 +254,7 @@ async def gate_input_review(
     param_sheet: "ParamSheet | None" = None,
     present: Callable[[], Awaitable[GateCard]] | None = None,
     apply_revision: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
+    blocked: Callable[[], str | None] | None = None,
     emitter: Any = None,
 ) -> ReviewOutcome:
     """Present what is under review before it runs, and ask.
@@ -261,7 +262,8 @@ async def gate_input_review(
     In ``auto`` the inputs proceed at once UNLESS a physics demo default is present;
     ``user_gated`` with no live session REFUSES by name. ``present``
     builds the round's card where the caller owns the thing being reviewed, and
-    ``apply_revision`` takes a reply as a change to that thing and re-presents.
+    ``apply_revision`` takes a reply as a change to that thing and re-presents;
+    ``blocked`` names what keeps a proceed from launching, and re-presents too.
     ``emitter`` is the session's, for a caller outside a tool's own dispatch."""
     resolved_mode = resolve_input_gate_mode(mode)
     physics_refusal = physics_refusal_reason(tool_name, entries)
@@ -335,6 +337,22 @@ async def gate_input_review(
                 cancel_code="timeout",
             )
 
+        waits_on = (blocked() if blocked is not None
+                    and decision.decision == "proceed" else None)
+        if waits_on:
+            # Ready is nothing refused and nothing required missing: a proceed
+            # short of it launches nothing and the card is drawn again.
+            logger.info(
+                "input-review gate proceed BLOCKED session=%s tool=%s on %s",
+                emitter.session_id, tool_name, waits_on)
+            if round_idx == max_rounds:
+                return ReviewOutcome(
+                    proceed=False, entries=cur_entries, params=cur_params,
+                    cancelled=True, cancel_reason=(
+                        f"{tool_name} did not run: it still waits on {waits_on}"),
+                    mode="user_gated", rounds_used=round_idx,
+                    cancel_code="not_approved")
+            continue
         if decision.decision == "proceed":
             logger.info(
                 "input-review gate proceed session=%s tool=%s round=%d",

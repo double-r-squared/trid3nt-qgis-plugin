@@ -22,4 +22,4 @@ user said.
 
 | subfolder | what lives there |
 | --- | --- |
-| `cards/` | One builder per card the client renders: estimate, payload warning, solver confirm, spatial input, and the inputs card a direct run opens for what its call left out or what refused - the input review's own card, each dropdown filled by the input's accept rule, its proceed the launch. |
+| `cards/` | One builder per card the client renders: estimate, payload warning, solver confirm, spatial input, and the inputs card a direct run opens for what its call left out or what refused - the input review's own card, each dropdown filled by the input's accept rule, its proceed the launch once nothing is refused and nothing required is missing. |

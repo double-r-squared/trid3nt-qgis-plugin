@@ -130,10 +130,57 @@ def test_a_pick_goes_through_the_accept_rule(layers) -> None:
 def test_a_stated_value_the_rule_refuses_opens_the_card(layers) -> None:
     emitter, _ = asyncio.run(_run(
         {"mesher": "om2d", "extent": "L-junk", "resolution_m": 1.0,
-         "input_mode": "auto"}, layers, ("proceed", None)))
+         "input_mode": "auto"}, layers, ("cancel", None)))
     rows = _rows(emitter)
     assert list(rows) == ["extent"]
     assert "extent does not take 'depth raster'" in rows["extent"].note
+
+
+def test_run_while_an_input_is_refused_launches_nothing_and_names_it(layers) -> None:
+    emitter, launched = asyncio.run(_run(
+        {"mesher": "om2d", "extent": "L-junk", "resolution_m": 1.0}, layers,
+        ("proceed", None), ("cancel", None)))
+    assert isinstance(launched, RunInputsDeclinedError)
+    assert len(emitter.sent) == 2, "the Run click did not redraw the card"
+    assert emitter.sent[-1].param_sheet.title.endswith(
+        "Run waits on extent (refused)")
+
+
+def test_run_after_the_refused_input_is_fixed_launches(layers) -> None:
+    emitter, launched = asyncio.run(_run(
+        {"mesher": "om2d", "extent": "L-junk", "resolution_m": 1.0}, layers,
+        ("proceed", None), ("narrow_scope", {"extent": "L-poly"}),
+        ("proceed", None)))
+    assert launched["extent"] == layers[0]["uri"]
+    assert "waits on" not in emitter.sent[-1].param_sheet.title
+
+
+def _needs_extent(extent: Any, mesher: Literal["om2d", "reg_grid"] = "reg_grid"
+                  ) -> None:
+    """A tool whose extent has no default: a run without one is not ready."""
+
+
+def test_run_with_a_required_input_missing_launches_nothing(layers) -> None:
+    async def run() -> tuple[_Emitter, Any]:
+        emitter, seen = _Emitter(), set()
+
+        async def drive() -> None:
+            for decision in ("proceed", "cancel"):
+                await _answer(decision, None, seen)
+
+        task = asyncio.ensure_future(drive())
+        try:
+            launched = await asyncio.wait_for(review_run_inputs(
+                "tool", _needs_extent, {}, layers=layers, emitter=emitter), 10)
+        except Exception as exc:  # noqa: BLE001 - the test reads the refusal
+            launched = exc
+        await task
+        return emitter, launched
+
+    emitter, launched = asyncio.run(run())
+    assert isinstance(launched, RunInputsDeclinedError)
+    assert emitter.sent[-1].param_sheet.title.endswith(
+        "Run waits on extent (required)")
 
 
 def test_cancel_on_the_card_launches_nothing(layers) -> None:
@@ -195,3 +242,18 @@ def test_a_bang_run_launches_only_through_the_card(monkeypatch, layers) -> None:
     assert calls == []
     assert [m["payload"]["error_code"] for m in sent
             if m.get("type") == "error"] == ["USER_INPUT_CANCELLED"]
+
+
+def test_build_mesh_lists_the_registered_meshers() -> None:
+    """The mesher dropdown is the mesher registry: every registered one, and a
+    name it does not hold is refused by the same rule."""
+    from trid3nt_server.inputs.accept import InputRefused, accept, offers
+    from trid3nt_server.tools.mesh.meshers import registered_meshers
+    from trid3nt_server.tools.mesh.tool import build_mesh
+
+    fn = getattr(build_mesh, "__wrapped__", build_mesh)
+    roster = registered_meshers()
+    assert len(roster) >= 2
+    assert [value for value, _label in offers(fn, "mesher", [])] == list(roster)
+    with pytest.raises(InputRefused):
+        accept(fn, "mesher", "tri")

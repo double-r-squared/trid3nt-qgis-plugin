@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
@@ -39,6 +39,10 @@ from trid3nt_server.tools.mesh.recipe import (
 # Importing a mesher REGISTERS it; the roster is this block and nothing else.
 from trid3nt_server.tools.mesh.meshers import om2d as _om2d  # noqa: F401,E402
 from trid3nt_server.tools.mesh.meshers import reg_grid as _reg_grid  # noqa: F401,E402
+
+#: The registered mesher roster as the type ``build_mesh`` reads its mesher by,
+#: so the input's accept rule and its dropdown are the registry itself.
+MesherName = Literal[registered_meshers()]
 
 __all__ = [
     "MeshOp",
@@ -221,7 +225,7 @@ _METADATA = AtomicToolMetadata(
     idempotent_hint=False,
 )
 async def build_mesh(
-    mesher: str = "reg_grid",
+    mesher: MesherName = "reg_grid",
     kind: str | None = None,
     location: str | None = None,
     bbox: tuple[float, float, float, float] | list[float] | str | None = None,
