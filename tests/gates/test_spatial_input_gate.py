@@ -391,3 +391,29 @@ def test_request_spatial_input_tool_rejects_bad_mode():
     assert SPATIAL_INPUT_SENTINEL_KEY not in out
 
 
+
+
+def test_a_drawing_of_mesh_constraints_and_a_breach_is_accepted_and_routed():
+    """Each drawn constraint comes back as the mesh_op call that imposes it, and
+    the breach line as the line the breach composite writes."""
+    ridge = [[-85.305, 35.045], [-85.300, 35.050]]
+    box = [[[-85.31, 35.04], [-85.29, 35.04], [-85.29, 35.06], [-85.31, 35.06],
+            [-85.31, 35.04]]]
+
+    def feat(role, kind, coords, **props):
+        return {"type": "Feature", "geometry": {"type": kind, "coordinates": coords},
+                "properties": {"role": role, **props}}
+
+    resp = SpatialInputResponsePayload.model_construct(
+        request_id=new_ulid(), geometry_type="vector_draw", coordinates=None,
+        features={"type": "FeatureCollection", "features": [
+            feat("breakline", "LineString", ridge),
+            feat("refine_region", "Polygon", box, target_size_m=20.0),
+            feat("boundary", "LineString", ridge, boundary_type="outflow"),
+            feat("breach", "LineString", ridge)]},
+        cancelled=False)
+    r = _spatial_response_to_result(resp)
+    assert r["status"] == "ok"
+    assert [op["fn"] for op in r["mesh_ops"]] == [
+        "set_obstacle", "set_region_size", "set_boundary_roles"]
+    assert r["breach_lines"] == [ridge]

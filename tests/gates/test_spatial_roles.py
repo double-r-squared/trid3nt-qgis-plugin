@@ -30,15 +30,59 @@ def _feat(role, geom_type, coords, **props):
 
 
 def test_canonical_vocabulary_is_the_declared_roles() -> None:
-    assert CANONICAL_ROLES == frozenset({"aoi_clip", "point", "line"})
+    assert CANONICAL_ROLES == frozenset({"aoi_clip", "point", "line", "breakline",
+                                         "refine_region", "boundary", "breach"})
     assert ROLE_ALIASES == {"aoi": "aoi_clip"}
 
 
-def test_a_plan_era_role_is_refused_by_name() -> None:
-    for gone in ("breach", "refine_region", "breakline", "boundary"):
-        with pytest.raises(SpatialRoleError) as exc:
-            parse_drawn_roles(_fc(_feat(gone, "Point", [0, 0])))
-        assert exc.value.error_code == "SPATIAL_INPUT_BAD_ROLE"
+_RIDGE = [[0.0, 0.0], [0.01, 0.0]]
+_BOX = [[[0, 0], [0.01, 0], [0.01, 0.01], [0, 0.01], [0, 0]]]
+
+
+def test_a_drawn_breakline_routes_to_the_mesher_s_line_constraint() -> None:
+    from trid3nt_server.tools.mesh.op_tool import drawn_ops
+
+    roles = parse_drawn_roles(_fc(_feat("breakline", "LineString", _RIDGE)))
+    assert drawn_ops(roles) == [{"fn": "set_obstacle", "kwargs": {
+        "geometry": {"type": "LineString", "coordinates": _RIDGE},
+        "constrain": True}}]
+
+
+def test_a_drawn_refine_region_routes_to_a_size_inside_the_polygon() -> None:
+    from trid3nt_server.tools.mesh.op_tool import drawn_ops
+
+    roles = parse_drawn_roles(_fc(_feat("refine_region", "Polygon", _BOX,
+                                        target_size_m=15.0)))
+    (op,) = drawn_ops(roles)
+    assert op["fn"] == "set_region_size"
+    assert op["kwargs"]["edge_length_m"] == 15.0
+    assert op["kwargs"]["geometry"]["type"] == "Polygon"
+    with pytest.raises(SpatialRoleError, match="positive"):
+        parse_drawn_roles(_fc(_feat("refine_region", "Polygon", _BOX,
+                                    target_size_m=-1)))
+
+
+def test_a_drawn_boundary_routes_to_a_typed_run_of_the_edge() -> None:
+    from trid3nt_server.inputs.boundary import boundary_runs
+    from trid3nt_server.tools.mesh.op_tool import drawn_ops
+
+    roles = parse_drawn_roles(_fc(_feat("boundary", "LineString", _RIDGE,
+                                        boundary_type="inflow")))
+    (op,) = drawn_ops(roles)
+    assert op["fn"] == "set_boundary_roles"
+    (run,) = boundary_runs(op["kwargs"]["runs"])
+    assert run.type == "inflow"
+    with pytest.raises(SpatialRoleError) as exc:
+        parse_drawn_roles(_fc(_feat("boundary", "LineString", _RIDGE)))
+    assert exc.value.error_code == "SPATIAL_INPUT_BAD_BOUNDARY_TYPE"
+
+
+def test_a_drawn_breach_is_a_line_on_the_crest() -> None:
+    roles = parse_drawn_roles(_fc(_feat("breach", "LineString", _RIDGE)))
+    assert roles.breach_lines == [_RIDGE]
+    with pytest.raises(SpatialRoleError) as exc:
+        parse_drawn_roles(_fc(_feat("breach", "Point", [0, 0])))
+    assert exc.value.error_code == "SPATIAL_INPUT_BREACH_NOT_LINESTRING"
 
 
 def test_legacy_aoi_alias_maps_to_aoi_clip() -> None:

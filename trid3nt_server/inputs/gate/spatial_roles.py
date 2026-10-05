@@ -36,8 +36,14 @@ SpatialInputParseError = SpatialRoleError
 
 #: The canonical role vocabulary, read off ``properties.role`` on each drawn
 #: ``Feature``: ``aoi_clip`` a Polygon that clips the run domain, ``point`` a
-#: generic Point, ``line`` a neutral LineString with no mesh semantics.
-CANONICAL_ROLES = frozenset({"aoi_clip", "point", "line"})
+#: generic Point, ``line`` a neutral LineString with no mesh semantics,
+#: ``breakline`` a LineString the mesh's edges follow, ``refine_region`` a
+#: Polygon the mesh is sized finer inside (``properties.target_size_m``),
+#: ``boundary`` a LineString stretch of the domain's edge typed by
+#: ``properties.boundary_type``, and ``breach`` a LineString along a dyke crest
+#: where the dyke fails.
+CANONICAL_ROLES = frozenset({"aoi_clip", "point", "line", "breakline",
+                             "refine_region", "boundary", "breach"})
 
 #: Wire roles accepted as aliases for a canonical role.
 ROLE_ALIASES = {"aoi": "aoi_clip"}
@@ -61,6 +67,12 @@ class DrawnRoles:
     line_coords: list[list[float]] | None = None
     #: How many neutral ``line`` features there were, the first one included.
     n_lines: int = 0
+    breaklines: list[list[list[float]]] = field(default_factory=list)
+    #: ``[{"polygon": Feature, "target_size_m": float|None, "bbox": (..4..)}]``
+    refine_regions: list[dict[str, Any]] = field(default_factory=list)
+    #: ``[{"coords": [[lon,lat],...], "boundary_type": one of OPEN_TYPES}]``
+    boundary_lines: list[dict[str, Any]] = field(default_factory=list)
+    breach_lines: list[list[list[float]]] = field(default_factory=list)
 
 
 def split_features_by_role(
@@ -201,6 +213,56 @@ def _point_positions(
     return out
 
 
+def _refine_regions(feats: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Parse ``refine_region`` polygons into ``{polygon, target_size_m, bbox}``.
+
+    ``target_size_m`` is ``None`` when unset; a non-positive one raises."""
+    out: list[dict[str, Any]] = []
+    for idx, feat in enumerate(feats):
+        geom = feat.get("geometry")
+        if not isinstance(geom, dict) or geom.get("type") not in (
+                "Polygon", "MultiPolygon"):
+            raise SpatialRoleError(
+                "SPATIAL_INPUT_REFINE_NOT_POLYGON",
+                f"refine_region[{idx}] geometry must be a Polygon/MultiPolygon "
+                f"(got {geom.get('type') if isinstance(geom, dict) else geom!r})")
+        bbox = geometry_bbox(geom)
+        if bbox is None:
+            raise SpatialRoleError(
+                "SPATIAL_INPUT_REFINE_BAD_GEOMETRY",
+                f"refine_region[{idx}].geometry has no valid coordinates")
+        raw_size = (feat.get("properties") or {}).get("target_size_m")
+        if raw_size is not None and (not isinstance(raw_size, (int, float))
+                                     or not raw_size > 0):
+            raise SpatialRoleError(
+                "SPATIAL_INPUT_REFINE_BAD_SIZE",
+                f"refine_region[{idx}].properties.target_size_m must be a "
+                f"positive number, got {raw_size!r}")
+        out.append({"polygon": feat, "bbox": bbox,
+                    "target_size_m": None if raw_size is None else float(raw_size)})
+    return out
+
+
+def _boundary_lines(feats: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Parse ``boundary`` LineStrings into ``{coords, boundary_type}``.
+
+    The type is required: an untyped stretch of the edge is wall, which a
+    drawing does not need to state."""
+    from trid3nt_server.inputs.boundary import OPEN_TYPES
+
+    out: list[dict[str, Any]] = []
+    lines = _linestring_coords(feats, role_label="boundary")
+    for idx, (feat, coords) in enumerate(zip(feats, lines)):
+        btype = (feat.get("properties") or {}).get("boundary_type")
+        if btype not in OPEN_TYPES:
+            raise SpatialRoleError(
+                "SPATIAL_INPUT_BAD_BOUNDARY_TYPE",
+                f"boundary[{idx}].properties.boundary_type must be one of "
+                f"{list(OPEN_TYPES)}, got {btype!r}")
+        out.append({"coords": coords, "boundary_type": btype})
+    return out
+
+
 def _aoi_bbox(
     aoi_feats: list[dict[str, Any]],
 ) -> tuple[float, float, float, float] | None:
@@ -250,4 +312,8 @@ def parse_drawn_roles(fc: dict[str, Any]) -> DrawnRoles:
         points=_point_positions(buckets["point"], role_label="point"),
         line_coords=line_lists[0] if line_lists else None,
         n_lines=len(line_lists),
+        breaklines=_linestring_coords(buckets["breakline"], role_label="breakline"),
+        refine_regions=_refine_regions(buckets["refine_region"]),
+        boundary_lines=_boundary_lines(buckets["boundary"]),
+        breach_lines=_linestring_coords(buckets["breach"], role_label="breach"),
     )

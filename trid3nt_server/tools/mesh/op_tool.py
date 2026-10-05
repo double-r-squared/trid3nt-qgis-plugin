@@ -19,7 +19,7 @@ from trid3nt_server.tools.mesh.meshers import (
     op_names,
 )
 
-__all__ = ["mesh_op"]
+__all__ = ["drawn_ops", "mesh_op"]
 
 _METADATA = AtomicToolMetadata(
     name="mesh_op",
@@ -88,3 +88,31 @@ def _entry(session: Any, fn: str | None, kwargs: dict[str, Any]) -> MeshOp:
             f"{session.mesher.name!r} mesh answers to are "
             f"{list(op_names(get_mesher(session.mesher.name)))}.")
     return MeshOp(fn=str(fn), kwargs=dict(kwargs))
+
+
+def drawn_ops(roles: Any) -> list[dict[str, Any]]:
+    """The mesh constraints a drawing states, as the ``mesh_op`` entries that
+    impose them: a breakline is locked into the mesh as a line its edges follow,
+    a refine region is a target edge written inside the polygon, and a drawn
+    boundary stretch is a typed run of the domain's edge."""
+    ops: list[dict[str, Any]] = []
+    for coords in roles.breaklines:
+        # A line punched from the domain has no area to remove, so what remains
+        # is its outline locked into the triangulation.
+        ops.append({"fn": "set_obstacle", "kwargs": {
+            "geometry": {"type": "LineString", "coordinates": coords},
+            "constrain": True}})
+    for region in roles.refine_regions:
+        ops.append({"fn": "set_region_size", "kwargs": {
+            "geometry": dict(region["polygon"]["geometry"]),
+            **({} if region["target_size_m"] is None
+               else {"edge_length_m": region["target_size_m"]})}})
+    if roles.boundary_lines:
+        ops.append({"fn": "set_boundary_roles", "kwargs": {"runs": {
+            "type": "FeatureCollection",
+            "features": [{"type": "Feature",
+                          "properties": {"type": line["boundary_type"]},
+                          "geometry": {"type": "LineString",
+                                       "coordinates": line["coords"]}}
+                         for line in roles.boundary_lines]}}})
+    return ops

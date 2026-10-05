@@ -159,6 +159,7 @@ def _spatial_response_to_result(
                 "type": "LineString",
                 "coordinates": [list(pt) for pt in parsed.line_coords],
             }
+        result.update(_drawn_constraints(parsed))
         return result
     return {
         "status": "error",
@@ -167,3 +168,21 @@ def _spatial_response_to_result(
             f"spatial-input-response had unknown geometry_type={gtype!r}."
         ),
     }
+
+
+def _drawn_constraints(parsed: Any) -> dict[str, Any]:
+    """What a drawing states beyond an area, a point or a section: the mesh
+    constraints as the ``mesh_op`` calls that impose them, and each breach line
+    for the TELEMAC-2D ``breach`` composite to write."""
+    from trid3nt_server.tools.mesh.op_tool import drawn_ops
+
+    out: dict[str, Any] = {}
+    ops = drawn_ops(parsed)
+    if ops:
+        # A refine region drawn without a size leaves edge_length_m for the
+        # person to state; set_region_size refuses an entry without one.
+        out["mesh_ops"] = ops
+    if parsed.breach_lines:
+        out["breach_lines"] = [[list(pt) for pt in line]
+                               for line in parsed.breach_lines]
+    return out

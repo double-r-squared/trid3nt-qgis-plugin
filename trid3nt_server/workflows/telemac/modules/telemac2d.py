@@ -19,7 +19,7 @@ from .coupling import couples
 from .module import Module, Output
 from .outputs import PRIMITIVES, read_drogues
 
-__all__ = ["T2D", "Atmosphere", "Boundaries", "Friction", "Infiltration",
+__all__ = ["T2D", "Atmosphere", "Boundaries", "Breach", "Friction", "Infiltration",
            "MODULE_OUTPUT", "Oil", "Storm", "Rating", "Runoff", "Sources",
            "TracerNames", "Wind", "SOURCES_FILENAME"]
 
@@ -526,6 +526,46 @@ def _manning_zones(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
     return ({"LAW_OF_BOTTOM_FRICTION": 4, **slots}, files)
 
 
+def Breach(*, line: Any, width_m: Any, opens_at_s: Any, duration_s: Any,  # noqa: N802
+           final_bed_m: Any, growth: Any, initial_width_m: Any = None
+           ) -> Mapping[str, Any]:
+    """A dyke breach along a drawn ``line`` of lon/lat on the crest: opened at
+    ``opens_at_s``, lowered to ``final_bed_m`` over ``duration_s``, across a band
+    ``width_m`` wide, growing laterally by the engine's own option ``growth``."""
+    return MappingProxyType({"line": line, "width_m": width_m,
+                             "opens_at_s": opens_at_s, "duration_s": duration_s,
+                             "final_bed_m": final_bed_m, "growth": growth,
+                             "initial_width_m": initial_width_m})
+
+
+def _breach(value: Any, *, run: Mapping[str, Any]
+            ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    """One breach or several -> the breaches data file in the mesh's metres.
+
+    The line is drawn in lon/lat and the engine reads the mesh's own frame, so
+    it is projected into the settled mesh's zone."""
+    from pyproj import Transformer
+
+    from ..authoring.breaches import BREACHES_FILENAME, text
+
+    epsg = (run.get("settled") or {}).get("utm_epsg")
+    if epsg is None:
+        raise ValueError("a breach is placed in the mesh's own metres and this "
+                         "run has settled no mesh to project its line into.")
+    to_mesh = Transformer.from_crs(4326, int(epsg), always_xy=True)
+    breaches = [value] if isinstance(value, Mapping) else list(value)
+    widths = [b.get("initial_width_m") is not None for b in breaches]
+    if any(widths) and not all(widths):
+        raise ValueError("the engine reads an initial width for every breach or "
+                         "for none; state one on each breach or on none.")
+    placed = [{**dict(b), "line_xy": [to_mesh.transform(float(lon), float(lat))
+                                      for lon, lat in b["line"]]}
+              for b in breaches]
+    return ({"BREACHES_DATA_FILE": BREACHES_FILENAME,
+             **({"INITIAL_WIDTHS_OF_BREACHES": True} if all(widths) else {})},
+            {BREACHES_FILENAME: text(placed, initial_widths=all(widths))})
+
+
 def Rating(*, measured: Any) -> Mapping[str, Any]:  # noqa: N802
     """One boundary's stage-discharge curve, and which boundary reads it.
 
@@ -686,6 +726,7 @@ T2D.composites(reads={
     "wind": ("speed_mps", "from_deg", "drag"), "atmosphere": ATMOSPHERE_READS,
     "oil": ("named", "at", "release_step"),
     "boundaries": ("measured", "tracers"),
+    "breach": ("line",),
     "runoff": ("node_xy", "cn2", "initial_abstraction"),
     "friction": ("manning_per_node",),
     "infiltration": ("mesh", "landcover", "uniform_cn", "steep_slope_correction",
@@ -693,7 +734,7 @@ T2D.composites(reads={
     "rating": ("measured",),
     "storm": ("mm_per_day", "hours", "settled", "series", "record", "tracers"),
     "tracer_names": ("named_by",)},
-               sources=_sources, wind=_wind, atmosphere=expand_atmosphere,
+               sources=_sources, wind=_wind, breach=_breach, atmosphere=expand_atmosphere,
                oil=_oil, coupling=couples(water_column=False),
                boundaries=_boundaries, runoff=_scs_runoff,
                friction=_manning_zones,

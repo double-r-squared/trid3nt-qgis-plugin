@@ -1329,3 +1329,34 @@ def test_a_roughness_field_writes_manning_zones_under_law_four():
     laws = sheet.files[written["FRICTION DATA FILE"]]
     assert "1 MANNING 0.030 NULL" in laws and "2 MANNING 0.050 NULL" in laws
     assert sheet.files[written["ZONES FILE"]].split() == ["1", "1", "2", "2", "3", "1"]
+
+
+def test_a_drawn_breach_line_is_written_into_the_breaches_data_file():
+    """The line is drawn in lon/lat on the crest and lands in the settled mesh's
+    metres, opened at its stated time with its width and its growth."""
+    from pyproj import Transformer
+
+    from trid3nt_server.workflows.telemac.modules.telemac2d import Breach
+
+    crest = [[-85.305, 35.045], [-85.300, 35.050]]
+    sheet = fill(T2D, produced={"settled": {"utm_epsg": 32616}},
+                 breach=Breach(line=crest, width_m=18.0, opens_at_s=500.0,
+                               duration_s=600.0, final_bed_m=5.0, growth=2))
+    written = dict(sheet.resolved())
+    assert written["BREACHES DATA FILE"] == "breaches.txt"
+    assert "INITIAL WIDTHS OF BREACHES" not in written
+    lines = sheet.files["breaches.txt"].splitlines()
+    values = [line for line in lines if not line.startswith("#")]
+    assert values[:7] == ["1", "18.000", "1", "500.000", "600.000", "2", "5.000"]
+    x, y = Transformer.from_crs(4326, 32616, always_xy=True).transform(*crest[0])
+    assert values[7] == "2" and values[8] == f"{x:.3f}\t{y:.3f}"
+
+
+def test_a_breach_growth_whose_fields_are_not_written_refuses_by_name():
+    from trid3nt_server.workflows.telemac.modules.telemac2d import Breach
+
+    with pytest.raises(Exception, match="lateral-growth option 3"):
+        fill(T2D, produced={"settled": {"utm_epsg": 32616}},
+             breach=Breach(line=[[0.0, 0.0], [0.001, 0.0]], width_m=18.0,
+                           opens_at_s=0.0, duration_s=60.0, final_bed_m=5.0,
+                           growth=3))
