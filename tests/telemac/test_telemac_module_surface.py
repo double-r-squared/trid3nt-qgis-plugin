@@ -1275,3 +1275,57 @@ def test_an_unstated_mode_with_no_session_refuses_and_fills_nothing(monkeypatch)
 def test_auto_launches_at_once_with_no_card(monkeypatch):
     sheet, emitter = _card_run(monkeypatch, input_mode="auto")
     assert emitter.sent == [] and dict(sheet.resolved())["DURATION"] == 600.0
+
+
+# -- the forcing composites a run states by name ---------------------------- #
+
+def test_a_wind_from_the_north_lands_on_the_engine_s_own_direction():
+    """Weather names the bearing a wind blows FROM, clockwise from north; the
+    keyword takes the direction it blows TOWARD, counted from +x."""
+    from trid3nt_server.workflows.telemac.modules.telemac2d import Wind
+
+    written = dict(fill(T2D, wind=Wind(speed_mps=4.0, from_deg=0.0,
+                                       drag=1.2e-6)).resolved())
+    assert written["WIND"] is True
+    assert written["SPEED AND DIRECTION OF WIND"] == [4.0, 270.0]
+    assert written["COEFFICIENT OF WIND INFLUENCE"] == 1.2e-6
+    from_west = dict(fill(T2D, wind=Wind(speed_mps=4.0, from_deg=270.0)).resolved())
+    assert from_west["SPEED AND DIRECTION OF WIND"] == [4.0, 0.0]
+
+
+def test_a_three_d_wind_is_its_velocity_components_and_they_arm_the_wind():
+    from trid3nt_server.workflows.telemac.modules import T3D
+    from trid3nt_server.workflows.telemac.modules.telemac3d import Wind
+
+    written = dict(fill(T3D, wind=Wind(speed_mps=5.0, from_deg=0.0)).resolved())
+    assert written["WIND"] is True
+    assert written["WIND VELOCITY ALONG X"] == pytest.approx(0.0, abs=1e-12)
+    assert written["WIND VELOCITY ALONG Y"] == pytest.approx(-5.0)
+    by_name = dict(fill(T3D, WIND_VELOCITY_ALONG_X=3.0).resolved())
+    assert by_name["WIND"] is True
+
+
+def test_a_curve_number_field_writes_the_scs_model_and_its_scatter():
+    from trid3nt_server.workflows.telemac.modules.telemac2d import Runoff
+
+    sheet = fill(T2D, runoff=Runoff(node_xy=[(0.0, 0.0), (10.0, 0.0)],
+                                    cn2=[74.0, 80.0], antecedent_moisture=2,
+                                    initial_abstraction=1))
+    written = dict(sheet.resolved())
+    assert written["RAINFALL-RUNOFF MODEL"] == 1
+    assert written["ANTECEDENT MOISTURE CONDITIONS"] == 2
+    assert written["OPTION FOR INITIAL ABSTRACTION RATIO"] == 1
+    scatter = sheet.files[written["FORMATTED DATA FILE 2"]]
+    assert scatter.splitlines()[1:] == ["0.000 0.000 74.000", "10.000 0.000 80.000"]
+
+
+def test_a_roughness_field_writes_manning_zones_under_law_four():
+    from trid3nt_server.workflows.telemac.modules.telemac2d import Friction
+
+    sheet = fill(T2D, friction=Friction(manning_per_node=[0.03, 0.05, 0.03]))
+    written = dict(sheet.resolved())
+    assert written["LAW OF BOTTOM FRICTION"] == 4
+    assert written["FRICTION DATA"] is True
+    laws = sheet.files[written["FRICTION DATA FILE"]]
+    assert "1 MANNING 0.030 NULL" in laws and "2 MANNING 0.050 NULL" in laws
+    assert sheet.files[written["ZONES FILE"]].split() == ["1", "1", "2", "2", "3", "1"]

@@ -22,7 +22,9 @@ keyword its input implies, the slots its value literally fills, the file it
 writes. It states nothing else. A choice among the alternatives the dictionary
 offers - which wind option, which restart format, which runoff model - is the
 TEMPLATE's assertion where the template needs a non-default, and the engine's own
-default by omission where it does not. Nor does an ARGUMENT re-name a keyword the
+default by omission where it does not; a value stated ON ITS OWN that only
+ONE alternative reads arms that one - a curve-number field the SCS runoff
+model, a Manning zone field friction law 4. Nor does an ARGUMENT re-name a keyword the
 dictionary carries: what the composite takes is what the dictionary LACKS - a
 file, a placement, a gradation, a series - and every keyword beside it stands on
 the body under its own name. The one argument that survives a keyword is a
