@@ -125,3 +125,18 @@ def test_the_slot_reserves_the_name_and_reads_the_class_the_buoys_publish():
     found = ingest_slot(WAVE, _fc(_buoy("44056", -75.71, 36.20)),
                         label="wave", column_units=_UNITS)
     assert found.height_m == pytest.approx(3.0)
+
+
+def test_the_wave_row_is_told_the_record_s_own_columns_and_the_run_s_window():
+    from types import SimpleNamespace
+
+    from trid3nt_server.inputs.fill import _what_the_record_reports
+    from trid3nt_server.workflows.runtime.data import DataDecl
+
+    row = SimpleNamespace(units=_UNITS, value_column="wave_height_m",
+                          series_column="wave_height_series_csv",
+                          above_column="", data_class="wave series")
+    told = _what_the_record_reports(SimpleNamespace(window_s=7200.0, params=None),
+                                    DataDecl(WAVE), row)
+    assert told["column_units"] == _UNITS
+    assert told["window_s"] == 7200.0
