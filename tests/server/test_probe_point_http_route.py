@@ -159,6 +159,6 @@ def test_probe_point_post_unexpected_error_500(monkeypatch):
 
 
 
-def test_probe_point_route_does_not_perturb_catalog():
-    out = _drive(_get("/api/tool-catalog"))
+def test_probe_point_route_does_not_perturb_the_library():
+    out = _drive(_get("/api/library"))
     assert _status(out) == 200

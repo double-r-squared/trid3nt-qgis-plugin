@@ -132,7 +132,7 @@ class _LibrarySearchTask(QObject):
 
 
 class _KeyedSourcesTask(QObject):
-    """GET /api/tool-catalog, reduced to the credentials its rows declare.
+    """GET /api/library, reduced to the credentials its keyed rows declare.
 
     The key entry offers these names beside the language model's; an error is
     surfaced on the entry rather than silently leaving the names out."""

@@ -286,5 +286,5 @@ def test_ingest_layer_file_oversized_413_before_read(monkeypatch):
 
 
 def test_ingest_layer_routes_do_not_perturb_catalog():
-    out = _drive(_get("/api/tool-catalog"))
+    out = _drive(_get("/api/library"))
     assert _status(out) == 200

@@ -1,10 +1,9 @@
 """THE LIBRARY: what is here to run, and what data there is to run it on.
 
-Two facets over two registries nobody else joins: every registered tool under
-the subsystem it belongs to, and every row under the class and kind
-the match sorts on. Both halves are sorted here, because the panel that reads
-them never re-sorts, and every fact is metadata the tool or the row already
-carries - the listing computes none of its own."""
+Every registered tool under the subsystem it belongs to, every row under the
+class and kind the match sorts on, and every credential a keyed row declares.
+All of it is sorted here, because the panels that read it never re-sort, and
+every fact is metadata the tool or the row already carries."""
 
 from __future__ import annotations
 
@@ -136,10 +135,21 @@ def _classes() -> list[dict[str, Any]]:
     ]
 
 
+def _credentials() -> list[dict[str, Any]]:
+    """Every credential a keyed row declares, once per name, with no key
+    material: the keys form's one source of names."""
+    from trid3nt_server.model.credentials.resolver import keyed_credentials
+
+    return [{"name": name, "label": cred.label, "signup_url": cred.signup_url,
+             "env_var": cred.env_var}
+            for name, cred in sorted(keyed_credentials().items())]
+
+
 def build_library_payload(*, use_cache: bool = True) -> dict[str, Any]:
     """The ``/api/library`` listing: every registered tool under its subsystem,
-    every row under its class and kind. Read-only, and cached for the
-    life of the process because both registries are filled at import."""
+    every row under its class and kind, every credential a row declares.
+    Read-only, and cached for the life of the process because the registries
+    are filled at import."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
     global _LIBRARY_CACHE
@@ -161,6 +171,7 @@ def build_library_payload(*, use_cache: bool = True) -> dict[str, Any]:
         "tool_count": len(TOOL_REGISTRY),
         "subsystems": [{"name": s, "tools": by_subsystem[s]} for s in ordered],
         "classes": _classes(),
+        "credentials": _credentials(),
     }
     if use_cache:
         _LIBRARY_CACHE = payload

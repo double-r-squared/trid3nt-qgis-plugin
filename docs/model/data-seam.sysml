@@ -345,7 +345,7 @@ package DataSeam {
 
     part keyedSourceCatalog : KeyedSourceCatalog {
         doc /*
-        code: trid3nt_server/server/protocol/http/settings.py
+        code: trid3nt_server/server/protocol/http/library.py
         */
         port keyedCatalogIn : KeyedCatalogIn;
         port credentialOut : CredentialOut;
@@ -1347,6 +1347,8 @@ package DataSeam {
     satisfy requirement AKeyedSourceStatesTheKeyItNeeds by keysForm;
     verify requirement AKeyedSourceStatesTheKeyItNeeds by
         "tests/credentials/test_credential_resolver.py::test_keyed_credentials_are_the_rows_that_declare_one";
+    verify requirement AKeyedSourceStatesTheKeyItNeeds by
+        "tests/server/test_library_http_route.py::test_every_declared_credential_is_listed_once_with_no_key_material";
     verify requirement AKeyedSourceStatesTheKeyItNeeds by
         "tests/credentials/test_credential_resolver.py::test_one_pushed_key_serves_every_row_naming_it";
     verify requirement AKeyedSourceStatesTheKeyItNeeds by

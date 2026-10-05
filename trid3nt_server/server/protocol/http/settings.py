@@ -1,15 +1,11 @@
-"""The SETTINGS door: the models a client can pick, the provider switch, and
-the credentials the rows declare.
+"""The SETTINGS door: the models a client can pick and the provider switch.
 
-The model routes answer only while the local provider is active; the catalog
-route is the keys form's one reader, so it carries the credential a row
-declares and nothing else - a name, a label, a signup url and the env var the
-daemon falls back to, never key material."""
+Both routes answer only while the local provider is active. The credentials the
+keys form offers ride the library listing, which already lists what is here."""
 
 from __future__ import annotations
 
 import asyncio
-from typing import Any
 
 from aiohttp import web
 
@@ -17,36 +13,6 @@ from trid3nt_server.model.adapters import model_discovery
 from trid3nt_server.server.protocol.http.transport import (
     HttpError, failure, json_reply, raw_reply,
 )
-
-
-def build_credential_catalog() -> dict[str, Any]:
-    """The ``/api/tool-catalog`` payload: every tool whose row declares a
-    credential, with that credential's own facts verbatim off the row, so the
-    keys form has one row per credential and no table of its own."""
-    from trid3nt_server.model.credentials.resolver import credential_for_tool
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    tools: list[dict[str, Any]] = []
-    for name in sorted(TOOL_REGISTRY.keys()):
-        credential = credential_for_tool(name)
-        if credential is None:
-            continue
-        tools.append({
-            "name": name,
-            "credential": {
-                "name": credential.name,
-                "label": credential.label,
-                "signup_url": credential.signup_url,
-                "env_var": credential.env_var,
-            },
-        })
-    return {"tools": tools}
-
-
-@failure("catalog build failed")
-async def _tool_catalog(_request: web.Request) -> web.Response:
-    """``GET /api/tool-catalog``: the credential every keyed source declares."""
-    return json_reply(build_credential_catalog())
 
 
 @failure("local models failed")
@@ -81,6 +47,5 @@ async def _provider_config(request: web.Request) -> web.Response:
 
 def add_routes(app: web.Application) -> None:
     """Register the settings door's routes on the door's one app."""
-    app.router.add_get("/api/tool-catalog", _tool_catalog, allow_head=False)
     app.router.add_get("/api/local-models", _local_models, allow_head=False)
     app.router.add_post("/api/provider-config", _provider_config)

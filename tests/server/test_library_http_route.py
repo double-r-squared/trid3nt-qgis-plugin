@@ -175,3 +175,21 @@ def test_a_route_fault_answers_that_route_s_one_message(monkeypatch):
     out = _drive(_get("/api/library"))
     assert _status(out) == 500
     assert _body_json(out) == {"error": "library listing failed"}
+
+
+def test_every_declared_credential_is_listed_once_with_no_key_material(listing):
+    """The keys form's names are the library's: one per credential a row
+    declares, carrying its label, signup url and env var and nothing else."""
+    from trid3nt_server.model.credentials.resolver import keyed_credentials
+
+    listed = listing["credentials"]
+    assert [c["name"] for c in listed] == sorted(keyed_credentials())
+    assert listed, "no keyed row declares a credential"
+    for row in listed:
+        assert set(row) == {"name", "label", "signup_url", "env_var"}
+        assert row["env_var"].startswith("TRID3NT_")
+
+
+def test_the_settings_door_no_longer_serves_a_second_catalog():
+    out = _drive(_get("/api/tool-catalog"))
+    assert _status(out) == 404

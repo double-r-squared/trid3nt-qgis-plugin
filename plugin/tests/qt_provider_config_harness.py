@@ -56,9 +56,9 @@ class _Stub(http.server.BaseHTTPRequestHandler):
         self._json(200, {"ok": True, "model": "m", "base_url_host": "openrouter.ai"})
 
     def do_GET(self):  # noqa: N802
-        if self.path == "/api/tool-catalog":
-            self._json(200, {"tools": [{"name": "fetch_airnow_air_quality", "credential": {
-                "name": "airnow", "label": "EPA AirNow", "env_var": "X"}}]})
+        if self.path == "/api/library":
+            self._json(200, {"credentials": [
+                {"name": "airnow", "label": "EPA AirNow", "env_var": "X"}]})
             return
         if self.path != "/api/local-models":
             self._json(404, {"error": "not found"})

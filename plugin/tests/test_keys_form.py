@@ -1,6 +1,6 @@
 """The key entry's halves: the names it offers, the store it writes, the push.
 
-The names come off the daemon's tool catalog, reduced to one entry per
+The names come off the daemon's library listing, reduced to one entry per
 credential NAME with no key material; the store is QgsAuthManager, which the
 broker reaches by name and answers for by config id, never by value; and every
 connect, a reconnect included, pushes each stored key over ``secret-add``.
@@ -21,39 +21,38 @@ sys.path.insert(0, os.path.dirname(__file__))
 from plugin.net import trid3nt_client as tc  # noqa: E402
 from plugin.net.auth_broker import AuthBroker  # noqa: E402
 
-#: A tool-catalog body in miniature: two rows sharing one credential, one row
-#: with its own, and a public row that declares none.
+#: A library body in miniature: its credentials list, one named twice, plus an
+#: entry that is not a credential at all.
 CATALOG_BODY = {
     "tool_count": 4,
-    "tools": [
-        {"name": "fetch_era5_reanalysis", "credential": {
-            "name": "ecmwf_cds", "label": "Copernicus Climate Data Store",
-            "signup_url": "https://cds.climate.copernicus.eu/how-to-api",
-            "env_var": "TRID3NT_COPERNICUS_CDS_API_KEY"}},
-        {"name": "fetch_gtsm_tide_surge", "credential": {
-            "name": "ecmwf_cds", "label": "Copernicus Climate Data Store",
-            "signup_url": "https://cds.climate.copernicus.eu/how-to-api",
-            "env_var": "TRID3NT_COPERNICUS_CDS_API_KEY"}},
-        {"name": "fetch_airnow_air_quality", "credential": {
-            "name": "airnow", "label": "EPA AirNow",
-            "signup_url": None, "env_var": "TRID3NT_AIRNOW_API_KEY"}},
-        {"name": "fetch_usgs_water_gauges", "credential": None},
+    "subsystems": [],
+    "classes": [],
+    "credentials": [
+        {"name": "ecmwf_cds", "label": "Copernicus Climate Data Store",
+         "signup_url": "https://cds.climate.copernicus.eu/how-to-api",
+         "env_var": "TRID3NT_COPERNICUS_CDS_API_KEY"},
+        {"name": "ecmwf_cds", "label": "Copernicus Climate Data Store",
+         "signup_url": "https://cds.climate.copernicus.eu/how-to-api",
+         "env_var": "TRID3NT_COPERNICUS_CDS_API_KEY"},
+        {"name": "airnow", "label": "EPA AirNow",
+         "signup_url": None, "env_var": "TRID3NT_AIRNOW_API_KEY"},
+        None,
     ],
 }
 
 
 class _CatalogStub(http.server.BaseHTTPRequestHandler):
-    """Mirrors the agent's ``GET /api/tool-catalog`` route in miniature."""
+    """Mirrors the agent's ``GET /api/library`` route in miniature."""
 
     status: int = 200
     body: dict = CATALOG_BODY
 
     def do_GET(self):  # noqa: N802
         raw = json.dumps(
-            self.body if self.path == "/api/tool-catalog"
+            self.body if self.path == "/api/library"
             else {"error": "not found"}
         ).encode("utf-8")
-        self.send_response(self.status if self.path == "/api/tool-catalog" else 404)
+        self.send_response(self.status if self.path == "/api/library" else 404)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(raw)))
         self.end_headers()
@@ -82,8 +81,9 @@ class TestFetchKeyedSources(unittest.TestCase):
         rows = tc.fetch_keyed_sources(self._start(), timeout=10)
         self.assertIsNone(rows[0]["signup_url"])
 
-    def test_a_catalog_with_no_keyed_row_is_empty(self):
-        body = {"tool_count": 1, "tools": [{"name": "fetch_dem"}]}
+    def test_a_library_with_no_keyed_row_is_empty(self):
+        body = {"tool_count": 1, "subsystems": [], "classes": [],
+                "credentials": []}
         self.assertEqual(tc.fetch_keyed_sources(self._start(body=body)), [])
 
     def test_unreachable_agent_raises_honest_error(self):

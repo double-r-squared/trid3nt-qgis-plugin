@@ -498,19 +498,19 @@ class KeyedSourcesRequestError(Exception):
 
 
 def fetch_keyed_sources(base_url: str, timeout: float = 8.0) -> list:
-    """``GET {base_url}/api/tool-catalog`` -> the credentials its rows declare.
+    """``GET {base_url}/api/library`` -> the credentials its keyed rows declare.
 
     One entry per credential NAME, so two sources served by one account appear
-    once; the tool catalog is the only reader of the rows, and it carries no key
-    material. Any fault RAISES so the form can say the agent is unreachable."""
-    url = f"{base_url.rstrip('/')}/api/tool-catalog"
+    once, and no key material. Any fault RAISES so the form can say the agent
+    is unreachable."""
+    url = f"{base_url.rstrip('/')}/api/library"
     request = urllib.request.Request(url, method="GET")
     try:
         with urllib.request.urlopen(request, timeout=timeout) as resp:
             raw = resp.read()
     except urllib.error.HTTPError as exc:
         raise KeyedSourcesRequestError(
-            f"tool catalog request failed (HTTP {exc.code})"
+            f"library request failed (HTTP {exc.code})"
         ) from exc
     except (urllib.error.URLError, OSError, TimeoutError) as exc:
         raise KeyedSourcesRequestError(
@@ -520,13 +520,12 @@ def fetch_keyed_sources(base_url: str, timeout: float = 8.0) -> list:
         payload = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise KeyedSourcesRequestError(
-            f"tool catalog returned non-JSON: {exc}"
+            f"library returned non-JSON: {exc}"
         ) from exc
     if not isinstance(payload, dict):
-        raise KeyedSourcesRequestError("tool catalog returned a non-object body")
+        raise KeyedSourcesRequestError("library returned a non-object body")
     by_name: dict = {}
-    for tool in payload.get("tools") or []:
-        credential = tool.get("credential") if isinstance(tool, dict) else None
+    for credential in payload.get("credentials") or []:
         if not isinstance(credential, dict):
             continue
         name = credential.get("name")

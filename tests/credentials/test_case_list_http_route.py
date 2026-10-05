@@ -118,6 +118,6 @@ def test_case_list_persistence_unbound_503(monkeypatch):
 
 
 
-def test_case_list_route_does_not_perturb_catalog():
-    out = _dispatch("/api/tool-catalog")
+def test_case_list_route_does_not_perturb_the_library():
+    out = _dispatch("/api/library")
     assert _status(out) == 200
