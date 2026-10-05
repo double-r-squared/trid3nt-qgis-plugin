@@ -27,35 +27,29 @@ The discipline for both (project norms):
 
 ## Pattern A - a new template on an existing engine
 
-A template is a DECLARATION, not a function: `PARAMS` and `DATA` class bodies
-plus a pure `plan(ops)` the interpreter walks
-(`docs/design/declarative-workflows.md` is the language reference). It reuses the
-engine's facade, its steps and its worker, and adds a new physics process. The
-seam list, from the TELEMAC templates:
+A template is VALUES over one engine module, not a function: `PARAMS` and `DATA`
+class bodies, the module's keywords, the mesh ask, the placed reads and the
+outputs (`docs/design/workflows.md`). It reuses the engine's facade, its module
+wrappers and its worker. A template declares no data operation: data that does
+not fit a slot is refused by name, naming the step that makes it fit. The seam
+list, from the TELEMAC templates:
 
 1. **The declarations** -- `workflows/<engine>/<template>/declarations.py`: the
-   `PARAMS` rows (each with its door, bounds, units and consequence tag) and the
-   model-facing `DOC`. Nothing here executes.
+   `PARAMS` rows (each with where its value may come from, bounds, units and
+   consequence tag) and the model-facing `DOC`. Nothing here executes.
 
 2. **The template** -- `workflows/<engine>/<template>/<template>.py`: the `DATA`
-   rows (every world-read declared, never performed in a step), the binding
-   blocks (`Physics`, `Forcing`, the `tool.build_mesh` ask), `plan(ops)`, the
-   `ANSWER` tuple, the chart builder, and the `register_workflow(...)` call.
-   Model it on `workflows/telemac/templates/rain_on_grid/rain_on_grid.py`.
+   rows (every world-read a class the match fills, or a slot the person fills),
+   the `tool.build_mesh` ask with its `mesh_op`s, the module's keywords stated by
+   their own names, the `Measured` placed reads, `OUTPUTS` and `CAPTIONS`, and
+   the `register_workflow(...)` call. Model it on
+   `workflows/telemac/templates/rain_on_grid/rain_on_grid.py`.
 
-3. **The process row** -- `workflows/<engine>/workflow.py`: a row in the facade's
-   `_PROCESSES` table saying what the declared process means end to end - which
-   deck step serializes it, which writer's signature the slots are checked
-   against, which solve dispatches it, which reader publishes it. A process the
-   facade does not know REFUSES at plan construction rather than solving into a
-   reader that cannot describe the result.
+3. **The module** -- `workflows/<engine>/modules/`: the wrapper over the
+   engine's own dictionary, its composites and its output table. A keyword the
+   module does not carry refuses by name.
 
-4. **The steps** -- `workflows/<engine>/steps/`: the deck writer and the product
-   reader the row names. A product raster declares the QUANTITY it computed and
-   carries a declared `style` row on its `LayerURI`; `trid3nt_server/render/presets.py`
-   resolves that row into one of the four preset kinds.
-
-5. **Discovery + wiring**:
+4. **Discovery + wiring**:
    - import the template in `trid3nt_server/tools/__init__.py` so its
      registration fires at startup;
    - add the routing phrasings to the template package's `corpus.yaml` and run
@@ -82,9 +76,9 @@ Each new engine adds, roughly in order:
    network and no defaults of its own. Copy the shape from `workers/telemac/`.
    The engine is dispatched with `run_solver` from the agent side.
 
-3. **A facade** at `workflows/<engine>/workflow.py`: the operations a template
-   composes (`acquire_domain`, `author`, `solve`, `read`) and the `_PROCESSES`
-   table behind them.
+3. **A facade** at `workflows/<engine>/workflow.py`: the `Workflow` subclass
+   that owns the stages a run of that engine walks - fill, write, solve, read,
+   publish - and the one engine file the executor is specialized by.
 
 4. **A postprocess** that reads the raw solver outputs and returns the headline
    `LayerURI` (raster COG or vector), plus the results-mesh entry when the engine
