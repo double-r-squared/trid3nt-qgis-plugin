@@ -22,6 +22,7 @@ __all__ = [
     "PayloadConfirmationEnvelopePayload",
     "GranularitySuggestion",
     "ParamDoor",
+    "ParamOption",
     "ParamSheet",
     "ParamSheetRow",
     "TimeScaleSuggestion",
@@ -231,6 +232,14 @@ class TimeScaleSuggestion(GraceModel):
 ParamDoor = Literal["user", "question", "derived", "scenario", "constant", "gate"]
 
 
+class ParamOption(GraceModel):
+    """One value an input would ACCEPT: what a pick sends back, and what the
+    dropdown shows. A case layer is sent by its id and shown by its name."""
+
+    value: str | int | float | bool
+    label: str = Field(min_length=1, max_length=200)
+
+
 class ParamSheetRow(GraceModel):
     """One row of the resolved param sheet a form card renders.
     Richer than a provenance line: an EDIT SURFACE needs the declaration too -
@@ -275,6 +284,10 @@ class ParamSheetRow(GraceModel):
     #: weighed, the one it picked and why. A card renders it with the pick
     #: highlighted; ``None`` on every row that is not a matched slot.
     choices: SourceChoice | None = None
+    #: EXACTLY the values this input would accept, as the dropdown lists them:
+    #: the case layers its own accept rule takes, or its enumerated choices.
+    #: ``None`` on a row whose value is typed rather than picked.
+    options: list[ParamOption] | None = None
 
     @model_validator(mode="after")
     def _validate_bounds(self) -> "ParamSheetRow":

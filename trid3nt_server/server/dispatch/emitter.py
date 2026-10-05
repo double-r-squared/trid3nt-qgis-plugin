@@ -18,6 +18,7 @@ from trid3nt_server.server.config import _env_flag
 from trid3nt_server.server.dispatch.aoi import pin_case_aoi_from_solve
 from trid3nt_server.server.dispatch.persist import _VALID_ERROR_CODES, _persist_chart_record, _persist_chat_turn, _persist_tool_card
 from trid3nt_server.server.dispatch.results import _run_to_completion_shielded
+from trid3nt_server.inputs.gate.cards.run_inputs import review_run_inputs
 from trid3nt_server.inputs.gate.errors import CodeExecConfirmationCancelledError, GateConfirmationTimeoutError, PayloadWarningCancelledError, SolverConfirmationCancelledError, UserDeclinedError
 from trid3nt_server.server.errors import ToolNotFoundError
 from trid3nt_server.server.session.case_state import _persist_case_layer_handles, _persist_case_loaded_layers, _turn_case_bbox, _turn_case_id
@@ -752,6 +753,14 @@ async def _dispatch_tool_and_persist(
     bind_turn_case(turn_case_id)  # envelope tagging
     try:
         try:
+            if tool_name in TOOL_REGISTRY:
+                # A direct run opens the one gate's card for the inputs its
+                # call left out or that refused; the card's proceed launches.
+                params = await review_run_inputs(
+                    tool_name, TOOL_REGISTRY[tool_name].fn, params,
+                    layers=[layer.model_dump(mode="json")
+                            for layer in state.emitter.loaded_layers],
+                    emitter=state.emitter)
             result = await _invoke_tool_via_emitter(
                 websocket, state, tool_name, params
             )

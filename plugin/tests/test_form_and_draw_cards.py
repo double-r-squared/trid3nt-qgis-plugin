@@ -147,6 +147,40 @@ class ParamSheetEditTests(unittest.TestCase):
                       gate.param_sheet_summary(sheet, {"water_temp_c": 24.0}))
 
 
+class PickedRowTests(unittest.TestCase):
+    """A row listing what its input accepts is a dropdown: a pick travels as
+    the value listed, and nothing off the list is ever sent."""
+
+    def setUp(self) -> None:
+        self.rows = gate.parse_param_sheet(_sheet_payload(rows=[
+            {"name": "extent", "door": "user", "basis": "user",
+             "options": [{"value": "L-poly", "label": "harbour outline"}]},
+            {"name": "mesher", "door": "user", "basis": "user",
+             "options": [{"value": "om2d", "label": "om2d"},
+                         {"value": "reg_grid", "label": "reg_grid"}]},
+            {"name": "bed", "door": "user", "basis": "user", "options": []},
+            {"name": "ops", "door": "user", "basis": "user"}])).rows
+
+    def test_a_row_carries_exactly_its_listed_values(self) -> None:
+        by_name = {r.name: r for r in self.rows}
+        self.assertEqual(by_name["extent"].options, [("L-poly", "harbour outline")])
+        self.assertEqual([v for v, _l in by_name["mesher"].options],
+                         ["om2d", "reg_grid"])
+        self.assertEqual(by_name["bed"].options, [])
+        self.assertIsNone(by_name["ops"].options)
+
+    def test_a_pick_travels_as_the_listed_value(self) -> None:
+        self.assertEqual(
+            gate.resolve_param_sheet_edits(self.rows, {
+                "extent": "L-poly", "mesher": "om2d", "bed": None}),
+            {"extent": "L-poly", "mesher": "om2d"})
+
+    def test_a_value_off_the_list_is_never_sent(self) -> None:
+        self.assertEqual(
+            gate.resolve_param_sheet_edits(self.rows, {"mesher": "tri",
+                                                       "extent": "L-junk"}), {})
+
+
 def _draw_request(mode: str, purpose: str = "aoi") -> gate.SpatialInputRequest:
     return gate.parse_spatial_input_request({
         "request_id": "01J000000000000000000000BB",

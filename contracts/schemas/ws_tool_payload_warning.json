@@ -94,6 +94,41 @@
       "title": "GranularitySuggestion",
       "type": "object"
     },
+    "ParamOption": {
+      "additionalProperties": false,
+      "description": "One value an input would ACCEPT: what a pick sends back, and what the\ndropdown shows. A case layer is sent by its id and shown by its name.",
+      "properties": {
+        "label": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "value",
+        "label"
+      ],
+      "title": "ParamOption",
+      "type": "object"
+    },
     "ParamSheet": {
       "additionalProperties": false,
       "description": "The resolved sheet a step reviewing its own inputs presents.\nRows arrive in RENDER order, owned by whoever owns the doors. A\nsubmit-with-edits IS the approval - the whole sheet was visible.",
@@ -225,6 +260,21 @@
           ],
           "default": null,
           "title": "Note"
+        },
+        "options": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ParamOption"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Options"
         },
         "origin": {
           "anyOf": [

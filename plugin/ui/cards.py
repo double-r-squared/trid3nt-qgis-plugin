@@ -2160,7 +2160,7 @@ class FormCard(QFrame):
         self._sheet = sheet
         self._on_decide = on_decide
         self._decided: Optional[str] = None
-        self._editors: Dict[str, QLineEdit] = {}
+        self._editors: Dict[str, QWidget] = {}
         self.setObjectName("formcard")  # scope the fill to the frame
         self.setStyleSheet(_FORM_CARD_STYLE)
         self.setFrameShape(QFrame.Shape.StyledPanel)
@@ -2244,12 +2244,9 @@ class FormCard(QFrame):
             name_lbl = _label(row.label, _GATE_BODY_STYLE, tip=row.desc)
             grid.addWidget(name_lbl, i, 0)
 
-            editor = QLineEdit(row.display())
+            editor = self._editor(row)
             editor.setEnabled(row.editable)
             editor.setToolTip(self._editor_tooltip(row))
-            if row.bounds is not None:
-                editor.setPlaceholderText(
-                    f"{row.bounds[0]:g} to {row.bounds[1]:g}")
             grid.addWidget(editor, i, 1)
             self._editors[row.name] = editor
 
@@ -2266,6 +2263,30 @@ class FormCard(QFrame):
         grid.setColumnStretch(1, 1)
         grid.setColumnStretch(2, 1)
         return holder
+
+    @staticmethod
+    def _editor(row: gate.ParamRow) -> QWidget:
+        """A dropdown of exactly what the row accepts, blank until picked; a
+        typed row's line edit otherwise."""
+        if row.options is None:
+            editor = QLineEdit(row.display())
+            if row.bounds is not None:
+                editor.setPlaceholderText(
+                    f"{row.bounds[0]:g} to {row.bounds[1]:g}")
+            return editor
+        combo = QComboBox()
+        combo.addItem("" if row.options else "nothing in this case is accepted",
+                      None)
+        for value, label in row.options:
+            combo.addItem(label, value)
+        at = combo.findData(row.value) if row.value is not None else -1
+        combo.setCurrentIndex(max(at, 0))
+        return combo
+
+    @staticmethod
+    def _picked(editor: QWidget) -> object:
+        return editor.currentData() if isinstance(editor, QComboBox) \
+            else editor.text()
 
     @staticmethod
     def _ranked(choice: gate.SourceChoiceRow) -> QLabel:
@@ -2307,7 +2328,7 @@ class FormCard(QFrame):
     def _edits(self) -> dict:
         return gate.resolve_param_sheet_edits(
             self._sheet.rows,
-            {name: editor.text() for name, editor in self._editors.items()},
+            {name: self._picked(editor) for name, editor in self._editors.items()},
         )
 
     def _submit(self) -> None:

@@ -254,13 +254,15 @@ async def gate_input_review(
     param_sheet: "ParamSheet | None" = None,
     present: Callable[[], Awaitable[GateCard]] | None = None,
     apply_revision: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
+    emitter: Any = None,
 ) -> ReviewOutcome:
     """Present what is under review before it runs, and ask.
 
     In ``auto`` the inputs proceed at once UNLESS a physics demo default is present;
     ``user_gated`` with no live session REFUSES by name. ``present``
     builds the round's card where the caller owns the thing being reviewed, and
-    ``apply_revision`` takes a reply as a change to that thing and re-presents."""
+    ``apply_revision`` takes a reply as a change to that thing and re-presents.
+    ``emitter`` is the session's, for a caller outside a tool's own dispatch."""
     resolved_mode = resolve_input_gate_mode(mode)
     physics_refusal = physics_refusal_reason(tool_name, entries)
     if resolved_mode == "auto":
@@ -282,7 +284,7 @@ async def gate_input_review(
     from trid3nt_server.render.pipeline_emitter import current_emitter
     from trid3nt_server.inputs.gate.pending import _PENDING_CONFIRMATIONS
 
-    emitter = current_emitter()
+    emitter = emitter or current_emitter()
     if emitter is None:
         logger.info("input-review gate REFUSE (user_gated, no session) tool=%s",
                     tool_name)

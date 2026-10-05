@@ -180,6 +180,9 @@ class ParamRow:
     # The ranked list behind a matched DATA slot. ``None`` on every row that is
     # not one, which is every keyword row.
     choices: Optional[SourceChoiceRow] = None
+    # EXACTLY what this input would accept, as ``(value, label)``: a pick sends
+    # the value back. ``None`` on a row whose value is typed.
+    options: Optional[list] = None
 
     @property
     def is_numeric(self) -> bool:
@@ -272,7 +275,17 @@ def _parse_param_row(raw: dict) -> Optional[ParamRow]:
         group=str(raw.get("group") or ""),
         note=raw.get("note") if isinstance(raw.get("note"), str) else None,
         choices=_parse_source_choice(raw.get("choices")),
+        options=_parse_options(raw.get("options")),
     )
+
+
+def _parse_options(raw: object) -> Optional[list]:
+    """The accepted values off the wire as ``(value, label)``; ``None`` where
+    the row lists none. An empty list is kept: nothing in the case is accepted."""
+    if not isinstance(raw, list):
+        return None
+    return [(o.get("value"), str(o.get("label") or o.get("value")))
+            for o in raw if isinstance(o, dict) and "value" in o]
 
 
 def _parse_source_choice(raw: object) -> Optional[SourceChoiceRow]:
@@ -307,6 +320,11 @@ def resolve_param_sheet_edits(rows: list, edited: dict) -> dict:
     for name, text in (edited or {}).items():
         row = by_name.get(name)
         if row is None or not row.editable:
+            continue
+        if row.options is not None:
+            # A PICK is one of the values the row lists, sent as listed.
+            if text != row.value and any(text == v for v, _l in row.options):
+                revised[name] = text
             continue
         text = "" if text is None else str(text).strip()
         if text == row.display().strip():

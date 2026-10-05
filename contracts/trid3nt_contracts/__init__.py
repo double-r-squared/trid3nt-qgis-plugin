@@ -62,7 +62,7 @@ from .processing_contracts import (
     ProcessingResponsePayload,
 )
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 SCHEMA_VERSION = "v1"
 
 __all__ = [
