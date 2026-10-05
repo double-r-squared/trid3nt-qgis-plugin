@@ -15,16 +15,9 @@ __all__ = [
     "DOC",
     "LANDCOVER_CN_MANNING",
     "LANDCOVER_UNMAPPED",
-    "NLCD_NATIVE_RESOLUTION_M",
     "PARAMS",
 ]
 
-
-#: NLCD's own grid. Land cover is a CATEGORICAL raster, so asking for any other
-#: spacing resamples class labels - which is the one resampling the temporal and
-#: spatial doctrine refuses outright. Declared as a constant rather than a knob
-#: because there is no honest value other than the product's native one.
-NLCD_NATIVE_RESOLUTION_M: int = 30
 
 #: The infiltration surface, per NLCD class: the curve number (AMC II, the mid
 #: hydrologic soil group) and the Manning n the rain-on-grid study of Godara,
