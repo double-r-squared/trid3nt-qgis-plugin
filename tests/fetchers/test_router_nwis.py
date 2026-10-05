@@ -393,7 +393,8 @@ async def test_a_lasting_upstream_failure_on_the_invoke_path_goes_out_as_upstrea
     monkeypatch.setattr(emitter, "_invoke_tool_via_emitter", _raise)
     sock = _Socket()
     await emitter._dispatch_tool_and_persist(sock, SessionState(session_id=new_ulid()),
-                                             "fetch_usgs_nwis_gauges", {}, "!run")
+                                             "fetch_usgs_nwis_gauges",
+                                             {"input_mode": "auto"}, "!run")
     [err] = [m["payload"] for m in sock.sent if m.get("type") == "error"]
     assert err["error_code"] == "UPSTREAM_API_ERROR" and err["retryable"] is True
     assert err["message"] == ("[NWIS_GAUGES_UPSTREAM_ERROR] NetworkError: "
