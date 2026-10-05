@@ -1,6 +1,6 @@
 """TELEMAC-2D's breaches data file, as content: one dyke breach per drawn line.
 
-The reader takes one value per line and skips a line opening with ``#``. A
+The reader takes one value per line, in a fixed order. A
 breach opened at a stated time (initiation option 1) states its opening moment
 and no control level; the lateral-growth options past 2 read extra lines this
 file does not write, so they refuse here rather than in the engine."""
@@ -27,7 +27,7 @@ class BreachRefused(ValueError):
 def text(breaches: Sequence[dict[str, Any]], *, initial_widths: bool) -> str:
     """The file for ``breaches``, each ``{line_xy, width_m, opens_at_s,
     duration_s, growth, final_bed_m, initial_width_m}`` in the mesh's metres."""
-    lines = ["# Number of breaches", str(len(breaches))]
+    lines = [str(len(breaches))]
     for n, breach in enumerate(breaches, start=1):
         growth = int(breach["growth"])
         if growth not in _GROWTH_OPTIONS:
@@ -43,19 +43,14 @@ def text(breaches: Sequence[dict[str, Any]], *, initial_widths: bool) -> str:
         if len(xy) < 2:
             raise BreachRefused(f"breach {n} carries {len(xy)} point(s); a "
                                 "breach is a line along the dyke crest.")
-        lines += [f"# Breach {n}", "# Width of the polygon defining the breach",
-                  f"{float(breach['width_m']):.3f}",
-                  "# Option for the breaching initiation", str(_AT_A_TIME),
-                  "# Breach opening moment", f"{float(breach['opens_at_s']):.3f}",
-                  "# Duration of the breaching process",
-                  f"{float(breach['duration_s']):.3f}",
-                  "# Option for lateral growth", str(growth),
-                  "# Final bottom altitude of the breach",
+        # In the reader's order: polygon width, initiation option, opening
+        # moment, duration, lateral-growth option, final bottom altitude, the
+        # initial width where the deck says widths are known, then the polyline.
+        lines += [f"{float(breach['width_m']):.3f}", str(_AT_A_TIME),
+                  f"{float(breach['opens_at_s']):.3f}",
+                  f"{float(breach['duration_s']):.3f}", str(growth),
                   f"{float(breach['final_bed_m']):.3f}"]
         if initial_widths:
-            lines += ["# Initial width of the breach",
-                      f"{float(breach['initial_width_m']):.3f}"]
-        lines += ["# Number of points of the polyline defining the breach",
-                  str(len(xy)), "# Description of the polyline",
-                  *(f"{x:.3f}\t{y:.3f}" for x, y in xy)]
+            lines.append(f"{float(breach['initial_width_m']):.3f}")
+        lines += [str(len(xy)), *(f"{x:.3f}\t{y:.3f}" for x, y in xy)]
     return "\n".join(lines) + "\n"

@@ -1305,12 +1305,13 @@ def test_a_three_d_wind_is_its_velocity_components_and_they_arm_the_wind():
     assert by_name["WIND"] is True
 
 
-def test_a_curve_number_field_writes_the_scs_model_and_its_scatter():
+def test_a_curve_number_field_writes_its_scatter_beside_the_model_stated_by_name():
     from trid3nt_server.workflows.telemac.modules.telemac2d import Runoff
 
-    sheet = fill(T2D, runoff=Runoff(node_xy=[(0.0, 0.0), (10.0, 0.0)],
-                                    cn2=[74.0, 80.0], antecedent_moisture=2,
-                                    initial_abstraction=1))
+    sheet = fill(T2D, RAINFALL_RUNOFF_MODEL=1,
+                 runoff=Runoff(node_xy=[(0.0, 0.0), (10.0, 0.0)],
+                               cn2=[74.0, 80.0], antecedent_moisture=2,
+                               initial_abstraction=1))
     written = dict(sheet.resolved())
     assert written["RAINFALL-RUNOFF MODEL"] == 1
     assert written["ANTECEDENT MOISTURE CONDITIONS"] == 2
@@ -1319,10 +1320,11 @@ def test_a_curve_number_field_writes_the_scs_model_and_its_scatter():
     assert scatter.splitlines()[1:] == ["0.000 0.000 74.000", "10.000 0.000 80.000"]
 
 
-def test_a_roughness_field_writes_manning_zones_under_law_four():
+def test_a_roughness_field_writes_manning_zones_read_under_law_four():
     from trid3nt_server.workflows.telemac.modules.telemac2d import Friction
 
-    sheet = fill(T2D, friction=Friction(manning_per_node=[0.03, 0.05, 0.03]))
+    sheet = fill(T2D, LAW_OF_BOTTOM_FRICTION=4,
+                 friction=Friction(manning_per_node=[0.03, 0.05, 0.03]))
     written = dict(sheet.resolved())
     assert written["LAW OF BOTTOM FRICTION"] == 4
     assert written["FRICTION DATA"] is True

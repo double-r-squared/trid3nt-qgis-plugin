@@ -1264,9 +1264,9 @@ package SteeringSurface {
     verify requirement CompositesSetOnlyPresence by
         "tests/telemac/test_telemac_module_surface.py::test_a_three_d_wind_is_its_velocity_components_and_they_arm_the_wind";
     verify requirement CompositesSetOnlyPresence by
-        "tests/telemac/test_telemac_module_surface.py::test_a_curve_number_field_writes_the_scs_model_and_its_scatter";
+        "tests/telemac/test_telemac_module_surface.py::test_a_curve_number_field_writes_its_scatter_beside_the_model_stated_by_name";
     verify requirement CompositesSetOnlyPresence by
-        "tests/telemac/test_telemac_module_surface.py::test_a_roughness_field_writes_manning_zones_under_law_four";
+        "tests/telemac/test_telemac_module_surface.py::test_a_roughness_field_writes_manning_zones_read_under_law_four";
     verify requirement CompositesSetOnlyPresence by
         "tests/telemac/test_telemac_module_surface.py::test_a_continuation_names_the_file_and_nothing_else";
     verify requirement CompositesSetOnlyPresence by

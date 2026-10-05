@@ -2,7 +2,7 @@
 
 # `telemac_channel_dredging`
 
-MAINTENANCE DREDGING of a navigation channel: what the bed does.
+MAINTENANCE DREDGING of a navigation channel: how much comes out, and what the bed does.
 
 |  |  |
 |---|---|

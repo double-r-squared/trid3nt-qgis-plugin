@@ -517,7 +517,10 @@ def _infiltration(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
 
 
 def Friction(*, manning_per_node: Any) -> Mapping[str, Any]:  # noqa: N802
-    """Distributed bottom friction: the roughness at each node, as its zone."""
+    """Distributed bottom friction: the roughness at each node, as its zone.
+
+    The LAW the zones are read under is the deck's own LAW OF BOTTOM FRICTION;
+    this file's roughness column is Manning n, so a deck naming it states 4."""
     return MappingProxyType({"manning_per_node": manning_per_node})
 
 
@@ -541,24 +544,6 @@ def _friction(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
              "ZONES_FILE": ZONES_FILENAME},
             {FRICTION_LAWS_FILENAME: "\n".join(laws) + "\n",
              ZONES_FILENAME: "\n".join(zones) + "\n"})
-
-
-def _scs_runoff(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
-                                                   Mapping[str, Any]]:
-    """A curve-number field stated on its own -> the one model that reads it.
-
-    Of the four rainfall-runoff models the dictionary offers, only the SCS
-    curve-number model (1) reads the scatter."""
-    slots, files = _runoff(value)
-    return ({"RAINFALL_RUNOFF_MODEL": 1, **slots}, files)
-
-
-def _manning_zones(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
-                                                      Mapping[str, Any]]:
-    """A roughness field stated on its own -> the one law that reads it: the
-    laws file's coefficient column is Manning n, which law 4 reads."""
-    slots, files = _friction(value)
-    return ({"LAW_OF_BOTTOM_FRICTION": 4, **slots}, files)
 
 
 def Breach(*, line: Any, width_m: Any, opens_at_s: Any, duration_s: Any,  # noqa: N802
@@ -771,8 +756,7 @@ T2D.composites(reads={
     "tracer_names": ("named_by",)},
                sources=_sources, wind=_wind, breach=_breach, atmosphere=expand_atmosphere,
                oil=_oil, coupling=couples(water_column=False),
-               boundaries=_boundaries, runoff=_scs_runoff,
-               friction=_manning_zones,
+               boundaries=_boundaries, runoff=_runoff, friction=_friction,
                infiltration=_infiltration,
                rating=_rating, storm=_storm, tracer_names=_tracer_names)
 T2D.reads(**PRIMITIVES, drogues=read_drogues)
