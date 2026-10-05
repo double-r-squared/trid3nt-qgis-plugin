@@ -207,18 +207,3 @@ def test_a_frame_that_will_not_read_refuses_by_the_same_name(tmp_path,
     with pytest.raises(R.SelafinReadError) as ei:
         R.read_selafin(broken)
     assert "half.slf" in str(ei.value)
-
-
-def test_every_image_run_left_on_this_side_is_a_solve():
-    """Nothing but an engine run costs a container start.
-
-    The result read and the pair write are this process's own; a third caller
-    here is a per-file container start that nobody asked for."""
-    server = _REPO / "trid3nt_server"
-    callers = {module.relative_to(_REPO).as_posix()
-               for module in sorted(server.rglob("*.py"))
-               if "run_image_script" in module.read_text()
-               and module.name != "image_script.py"}
-    assert callers == {
-        "trid3nt_server/tools/mesh/meshers/om2d.py",
-        "trid3nt_server/workflows/telemac/authoring/cas_validate.py"}

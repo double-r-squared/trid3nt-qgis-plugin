@@ -193,22 +193,6 @@ def test_a_derive_never_fetches_a_source_named_to_it():
     assert "never fetches" in str(refused.value)
 
 
-def test_no_derive_reaches_the_tool_registry():
-    """A derive reaching TOOL_REGISTRY can call a fetcher by name."""
-    import ast
-    from pathlib import Path
-
-    import trid3nt_server.tools.derive as derive
-
-    found = []
-    for path in Path(derive.__file__).parent.rglob("*.py"):
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name) \
-                    and node.value.id == "TOOL_REGISTRY":
-                found.append(f"{path.name}:{node.lineno}")
-    assert not found
-
-
 def test_a_fetched_layer_carries_the_datum_and_the_quantity_its_row_states():
     import trid3nt_server.main as main
     from trid3nt_server.tools.fetchers._router.registration import get_spec

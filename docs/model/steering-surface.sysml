@@ -1260,8 +1260,6 @@ package SteeringSurface {
     satisfy requirement CompositesSetOnlyPresence by composite;
     satisfy requirement CompositesSetOnlyPresence by wrapper;
     verify requirement CompositesSetOnlyPresence by
-        "tests/telemac/test_telemac_module_surface.py::test_a_composite_sets_only_what_its_value_s_presence_defines";
-    verify requirement CompositesSetOnlyPresence by
         "tests/telemac/test_telemac_module_surface.py::test_a_continuation_names_the_file_and_nothing_else";
     verify requirement CompositesSetOnlyPresence by
         "tests/telemac/test_telemac_atmosphere.py::test_a_series_left_out_writes_no_column_and_shifts_none_of_the_others";

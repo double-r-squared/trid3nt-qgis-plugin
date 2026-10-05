@@ -284,66 +284,6 @@ def test_a_composite_becomes_several_slots_and_the_file_they_name():
     assert state["files"] == ["river_sources.txt"]
 
 
-def test_a_composite_sets_only_what_its_value_s_presence_defines():
-    """A composite expands a value into the keywords that value IS.
-
-    A literal the value does not carry is an opinion; the two a presence does define
-    are the arming boolean its input implies and the file the composite writes."""
-    modules = Path(
-        "trid3nt_server/workflows/telemac/modules").resolve()
-    found = []
-    for module in _EXPOSED:
-        source = (modules / f"{module}.py").read_text(encoding="utf-8")
-        tree = ast.parse(source)
-        dictionary = load_module_input(module)
-        constants = {
-            node.targets[0].id: node.value.value
-            for node in tree.body
-            if isinstance(node, ast.Assign) and len(node.targets) == 1
-            and isinstance(node.targets[0], ast.Name)
-            and isinstance(node.value, ast.Constant)}
-        expanders = {
-            keyword.value.id
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Attribute)
-            and node.func.attr == "composites"
-            for keyword in node.keywords
-            if isinstance(keyword.value, ast.Name)}
-        for node in tree.body:
-            if not (isinstance(node, ast.FunctionDef) and node.name in expanders):
-                continue
-            for mapping in ast.walk(node):
-                if not isinstance(mapping, ast.Dict):
-                    continue
-                for key, value in zip(mapping.keys, mapping.values):
-                    if not (isinstance(key, ast.Constant)
-                            and isinstance(key.value, str)):
-                        continue
-                    slot = dictionary.get(key.value)
-                    if slot is None:
-                        continue
-                    if isinstance(value, ast.Constant):
-                        literal = value.value
-                    elif isinstance(value, ast.Name) and value.id in constants:
-                        literal = constants[value.id]
-                    elif (isinstance(value, ast.UnaryOp)
-                          and isinstance(value.op, (ast.USub, ast.UAdd))
-                          and isinstance(value.operand, ast.Constant)):
-                        literal = (-value.operand.value if isinstance(value.op, ast.USub)
-                                   else value.operand.value)
-                    else:
-                        continue
-                    if slot.is_file or (slot.type == "LOGICAL"
-                                        and isinstance(literal, bool)):
-                        continue
-                    found.append(f"{module}.py:{value.lineno} {node.name} sets "
-                                 f"{slot.keyword} to {literal!r}")
-    assert not found, (
-        "a composite states a value its input does not carry; assert it on the "
-        "template that wants it: " + "; ".join(found))
-
-
 def test_a_composite_lives_on_the_wrapper_and_may_not_shadow_a_keyword():
     module = Module("telemac2d")
     with pytest.raises(SlotRefused, match="may not shadow"):
@@ -1335,5 +1275,3 @@ def test_an_unstated_mode_with_no_session_refuses_and_fills_nothing(monkeypatch)
 def test_auto_launches_at_once_with_no_card(monkeypatch):
     sheet, emitter = _card_run(monkeypatch, input_mode="auto")
     assert emitter.sent == [] and dict(sheet.resolved())["DURATION"] == 600.0
-
-

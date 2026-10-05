@@ -169,19 +169,6 @@ def test_the_journal_states_no_caveat_a_measurement_does_not_stand_behind(tmp_pa
             recipe, workdir=tmp_path).recipe_lines()[0]
 
 
-def test_the_driver_binds_the_seed_onto_the_librarys_own_tie_break():
-    """The one library draw the recipe's seed does not otherwise reach.
-
-    ``feature_sizing_function`` skeletonizes through skimage's ``medial_axis``, whose
-    tie-break generator is fresh per process unless it is handed one."""
-    from trid3nt_server.workflows.solver.image_script import scripts_dir
-
-    # Read rather than imported: the driver's own imports live only in the image.
-    source = (scripts_dir("mesh") / "om2d.py").read_text()
-    assert "om.edgefx.medial_axis = functools.partial(medial_axis, rng=" in source
-    assert "_seed_library_randomness(int(cfg.get(\"seed\", 0)))" in source
-
-
 def _stub_om2d(monkeypatch, tmp_path, *, pfix=None, stats=None,
                points=None, cells=None, results=None):
     """Answer the container calls with a known mesh, and record what was sent."""

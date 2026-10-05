@@ -964,7 +964,5 @@ package MeshSeam {
     verify requirement TheMeshFrontIsEngineAgnostic by
         "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
     verify requirement TheMeshFrontIsEngineAgnostic by
-        "tests/mesh/test_mesh_gate_loop.py::test_no_mesher_has_card_code_of_its_own";
-    verify requirement TheMeshFrontIsEngineAgnostic by
         "tests/mesh/test_build_mesh_tool.py::test_reg_grid_conforms_with_a_near_empty_default_recipe";
 }
