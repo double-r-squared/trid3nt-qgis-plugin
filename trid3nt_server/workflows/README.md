@@ -1,9 +1,9 @@
-# `workflows/` - the declarative library and the engines
+# `workflows/` - the template runtime and the engines
 
 A workflow is a declaration: `PARAMS` and `DATA` class bodies over one engine
 module. A fill puts a value into each input, which accepts or rejects it; a
 READY fill launches on an explicit act, and the engine's run is straight-line
-code - write, solve, read. `runtime/` is the library and the machinery that runs it, `solver/` is the one executor, and each engine package holds the templates that
+code - write, solve, read. `runtime/` is the template bodies and the machinery that runs them, `solver/` is the one executor, and each engine package holds the templates that
 speak it and the one file that specializes the executor to it.
 
 ## Files
@@ -16,25 +16,25 @@ speak it and the one file that specializes the executor to it.
 
 | folder | what it is |
 | --- | --- |
-| `runtime/` | The declarative library - the declaration bodies, the fill, the skeleton and the run's records. See below. |
+| `runtime/` | The template runtime - the `PARAMS` and `DATA` bodies, the fill, the skeleton and the run's records. See below. |
 | `solver/` | The one executor, which knows no engine: `solver.py` (the box - launch, supervise, poll, dispatch-and-wait, download a result), `solve_progress.py` (the live cards of a solve - the Dispatch and Sim cards and the progress heartbeat on the Sim card), `code_provenance.py` (which code produced a run), `diagnostics/` (the one `read_run_diagnostics` dispatcher; each engine registers its own parser), `corpus.yaml` (routing phrasings). |
 | `telemac/` | The TELEMAC engine: the module wrappers, the templates over them, the code that fills a template, holds it for review and runs it, and the one engine file the executor is specialized by. Has its own map. |
 
-## `runtime/` - the declarative library
+## `runtime/` - the template runtime
 
 | file | what it is |
 | --- | --- |
-| `runtime/__init__.py` | The library's public surface, and the only import a template needs. |
+| `runtime/__init__.py` | The runtime's public surface, and the only import a template needs. |
 | `runtime/accepts.py` | `Accepts` - what a template takes when something is SUPPLIED to it, role by role. |
 | `runtime/data.py` | The `DATA` class body: one declared artifact per row, its producer or the CLASS it needs, the CONTEXT row whose absence continues the run, and the modifiers that ride the declaration. |
 | `runtime/docstring.py` | The registered tool's model-facing docstring, rendered from the declarations in two views (routing, full). |
 | `runtime/domain.py` | The `Domain` environment - the current spatial extent every spatial producer reads implicitly. |
-| `runtime/errors.py` | The library's typed errors, each carrying the code the emitter renders. |
+| `runtime/errors.py` | The runtime's typed errors, each carrying the code the emitter renders. |
 | `runtime/journal.py` | The run journal - one append-only JSONL line per completed run, plus the note channel a step writes into. |
 | `runtime/levers.py` | The levers the runtime declares ONCE - the mesh resolution, the event time, the compute class - so a template's `PARAMS` keeps only its question's own inputs. |
 | `runtime/params.py` | The `PARAMS` class body: one declared value per row, where its value may come from, its bounds and its consequence tag; plus the seated values a run reads by name. |
 | `runtime/resolution.py` | Resolution sensitivity: which of a run's published reads a coarse mesh gets wrong, and which way. |
 | `runtime/resolver.py` | The param seating: a stated value or the declared default, held to its bounds - a value outside them refuses by name - with a provenance row per seating. |
 | `runtime/run_products.py` | The run's persisted chart spec and metrics, written under its own prefix so the products outlive the turn that emitted them. |
-| `runtime/temporal.py` | The declared temporal transforms - `.resample(...)` and `.normalize(units=...)` - and the conversions behind them. |
+| `runtime/temporal.py` | `Series` - a measured record as the runtime holds it, frozen: instants on the run's own clock, values and a unit - the quantity classes, and the explicit unit table a record is read in, where a unit nobody listed refuses by name. |
 | `runtime/workflow.py` | The workflow SKELETON and the registration factory: fill, launch a READY fill, post, publish, and the synthesized tool signature. |
