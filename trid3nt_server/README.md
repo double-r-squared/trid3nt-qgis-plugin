@@ -13,7 +13,7 @@ on one machine against one user; the only wire shapes it speaks are
 | `__init__.py` | The package door and its version. |
 | `__main__.py` | `python -m trid3nt_server` - the way the daemon is started. |
 | `main.py` | The `trid3nt-server` console script: importing `trid3nt_server.tools` is what populates the registry. |
-| `errors.py` | `DeclarativeError` - the base every typed failure carries its `error_code` on, below both the input layer and the declarative library. |
+| `errors.py` | `DeclarativeError` - the base every typed failure carries its `error_code` on, below both the input layer and the template runtime. |
 
 ## Subfolders
 
@@ -25,4 +25,4 @@ on one machine against one user; the only wire shapes it speaks are
 | `server/` | The daemon core: connection loop, turn engine, dispatch, session state. |
 | `store/` | What the daemon keeps: the object store, the case documents, and the sweep over the cache. |
 | `tools/` | The registered tool surface: fetchers and derive tools, the mesh front, with search and meta beside them. |
-| `workflows/` | The declarative engine layer: the runtime, the executor, TELEMAC. |
+| `workflows/` | The engine layer: the template runtime, the executor, TELEMAC. |
