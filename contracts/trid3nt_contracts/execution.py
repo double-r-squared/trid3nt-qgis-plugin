@@ -1,8 +1,7 @@
-"""The solver-execution shapes: setup, handle, result, layer.
+"""The solver-execution shapes: handle, result, layer.
 
-``LayerURI`` aligns field-for-field with the ``load-layer`` map command and
-with ``ResultLayer``, so a produced layer reaches the map without translation;
-rasters are COG, vectors FlatGeobuf or GeoParquet. There is ONE handle type -
+``LayerURI`` aligns field-for-field with the ``load-layer`` map command, so a
+produced layer reaches the map without translation; rasters are COG, vectors FlatGeobuf or GeoParquet. There is ONE handle type -
 cancellation reads a first-class field on it rather than parsing a string.
 """
 
