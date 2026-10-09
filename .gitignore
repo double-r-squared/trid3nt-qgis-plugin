@@ -63,3 +63,5 @@ dev/
 
 # the reading material - decisions, proposals, recipes, ledgers - local, backed up, off the remote
 docs/local/
+.claude/
+symbology-style.db
