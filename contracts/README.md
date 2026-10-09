@@ -11,7 +11,6 @@ produces. Pydantic v2 throughout; every model subclasses `GraceModel`
 | Module | What |
 |---|---|
 | `common` | `GraceModel`, `ULIDStr`, `BBox`, `TimeRange`, the UTC-`Z` datetime alias, the fallback and input-provenance records |
-| `errors` | `ToolInputError` and the closed error-code and actionability vocabularies |
 | `ws` | The WebSocket envelope, every message payload, the map-command args, and the type -> payload routing registry |
 | `auth` | The two connect-handshake envelopes and the server-advertised sibling endpoints |
 | `user` | The `User` account record |
@@ -20,14 +19,11 @@ produces. Pydantic v2 throughout; every model subclasses `GraceModel`
 | `payload_warning` | The payload gate: the warning envelope, its confirmation, and the granularity, time-scale and param-sheet rows |
 | `chart_contracts` | The `chart-emission` envelope, its Vega-Lite structural check, and the persisted chart record |
 | `processing_contracts` | The session processing request/response pair and the code approval card |
-| `envelope` | `AssessmentEnvelope` and its supporting types, including the flood subtype |
-| `collections` | The persisted collection documents, the vector-index and TTL configs, and the catalog substrate |
-| `catalog` | `CatalogEntry` - one vetted public data source in the curated catalog |
+| `collections` | The persisted session document and its parts, and the sessions TTL config |
 | `source_spec` | `SourceSpec` - the declarative data-router source specification a `source.yaml` validates against |
 | `tool_registry` | `AtomicToolMetadata`, the TTL classes, the retrieval tiers, and the declared resolution ranges |
 | `gate_spec` | The declarative confirm gate a tool carries, and the levers its card offers |
-| `tool_metadata` | The required tool-docstring sections and the `tool_category` vocabulary |
-| `execution` | `ModelSetup`, `ExecutionHandle`, `RunResult`, `LayerURI`, `LegendKey`, and the `LayerURI` result-model subclasses |
+| `execution` | `ExecutionHandle`, `RunResult`, `LayerURI`, `LegendKey`, and the `LayerURI` result-model subclasses |
 | `publish_manifest` | The typed reader for a worker's `publish_manifest.json` |
 | `export_schemas` | Renders `contracts/schemas/` from the live models |
 
@@ -65,8 +61,7 @@ regenerated `contracts/schemas/`.
 ## Wire form
 
 `model.model_dump(mode="json")` is the canonical wire form. A document that
-aliases `_id` dumps with `model.model_dump(**MONGO_DUMP_KWARGS)`, which adds
-`by_alias=True`.
+aliases `_id` dumps with `model.model_dump(mode="json", by_alias=True)`.
 
 Datetimes serialize to ISO-8601 with a `Z` suffix. ULIDs are 26-character
 strings. A `bbox` is always `[minLon, minLat, maxLon, maxLat]` in EPSG:4326. A

@@ -10,19 +10,15 @@ from __future__ import annotations
 from . import (
     auth,
     case,
-    catalog,
     chart_contracts,
     collections,
     coverage,
-    envelope,
-    errors,
     execution,
     gate_spec,
     message,
     payload_warning,
     processing_contracts,
     secrets,
-    tool_metadata,
     tool_registry,
     ws,
 )
@@ -62,7 +58,7 @@ from .processing_contracts import (
     ProcessingResponsePayload,
 )
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 SCHEMA_VERSION = "v1"
 
 __all__ = [
@@ -71,11 +67,8 @@ __all__ = [
     # modules
     "auth",
     "ws",
-    "envelope",
-    "errors",
     "collections",
     "coverage",
-    "catalog",
     "case",
     "chart_contracts",
     "execution",
@@ -84,7 +77,6 @@ __all__ = [
     "payload_warning",
     "processing_contracts",
     "secrets",
-    "tool_metadata",
     "tool_registry",
     # the adapters' message IR
     "Message",

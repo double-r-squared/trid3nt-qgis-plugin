@@ -12,25 +12,16 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from . import catalog, collections, envelope, execution, message, tool_registry, ws
+from . import collections, execution, message, tool_registry, ws
 
 # (filename stem, model) for every top-level contract we export.
 _EXPORTS: list[tuple[str, type[BaseModel]]] = [
-    ("assessment_envelope", envelope.AssessmentEnvelope),
     # collections
-    ("project_document", collections.ProjectDocument),
-    ("run_document", collections.RunDocument),
-    ("article_document", collections.ArticleDocument),
     ("session_document", collections.SessionDocument),
-    # catalog substrate
-    ("catalog_entry_document", collections.CatalogEntryDocument),
-    ("catalog_audit_log_document", collections.CatalogAuditLogDocument),
     # Exported standalone as well as inside its parent, so a client mirroring
     # the step surface can type against it on its own.
     ("pipeline_step_summary", collections.PipelineStepSummary),
-    ("catalog_entry", catalog.CatalogEntry),
     # solver shapes
-    ("model_setup", execution.ModelSetup),
     ("execution_handle", execution.ExecutionHandle),
     ("run_result", execution.RunResult),
     ("layer_uri", execution.LayerURI),

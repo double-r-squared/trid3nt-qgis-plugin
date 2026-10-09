@@ -34,10 +34,6 @@ __all__ = [
     # agent -> client
     "AgentMessageChunkPayload",
     "AgentThinkingChunkPayload",
-    "ToolCallStartPayload",
-    "ToolCallProgressPayload",
-    "ToolCallCompletePayload",
-    "ToolCallFailedPayload",
     "PipelineStepState",
     "PipelineStep",
     "PipelineStatePayload",
@@ -60,11 +56,6 @@ __all__ = [
     "LayerMode",
     "LayerRequestPayload",
     "LayerResponsePayload",
-    # map-command args
-    "LoadLayerArgs",
-    "ZoomToArgs",
-    "SetTemporalConfigArgs",
-    "MapTemporal",
     # registry
     "CLIENT_TO_AGENT_PAYLOADS",
     "AGENT_TO_CLIENT_PAYLOADS",
@@ -340,53 +331,6 @@ class AgentThinkingChunkPayload(GraceModel):
     done: bool = False
 
 
-class ToolCallStartPayload(GraceModel):
-    """``tool-call-start``: a tool invocation has begun."""
-
-    MESSAGE_TYPE: ClassVar[str] = "tool-call-start"
-
-    call_id: ULIDStr
-    step_id: ULIDStr
-    tool_name: str
-    # An OPEN enum: a receiver must tolerate a category it does not know.
-    tool_category: str
-    params: dict = Field(default_factory=dict)  # sanitized
-
-
-class ToolCallProgressPayload(GraceModel):
-    """``tool-call-progress``: optional progress for an in-flight tool."""
-
-    MESSAGE_TYPE: ClassVar[str] = "tool-call-progress"
-
-    call_id: ULIDStr
-    percent: int | None = Field(default=None, ge=0, le=100)
-    status: str | None = None
-
-
-class ToolCallCompletePayload(GraceModel):
-    """``tool-call-complete``: a tool finished successfully.
-    ``metrics`` is tool-specific structured data - the numbers a narrative cites
-    live there. The full result body is referenced, never inlined."""
-
-    MESSAGE_TYPE: ClassVar[str] = "tool-call-complete"
-
-    call_id: ULIDStr
-    result_summary: str  # a human-readable one-liner
-    result_uri: str | None = None  # set when the result is a stored artifact
-    metrics: dict = Field(default_factory=dict)
-
-
-class ToolCallFailedPayload(GraceModel):
-    """``tool-call-failed``: a tool errored out."""
-
-    MESSAGE_TYPE: ClassVar[str] = "tool-call-failed"
-
-    call_id: ULIDStr
-    error_code: str  # an enum-like string; the set is open
-    message: str  # human-readable
-    retryable: bool = False
-
-
 # pipeline-state ------------------------------------------------------------ #
 
 # ``cancelled`` is a distinct terminal state, never folded into failed.
@@ -527,37 +471,6 @@ class ToolIoPayload(GraceModel):
 
 
 # map-command --------------------------------------------------------------- #
-
-
-class MapTemporal(GraceModel):
-    """Temporal block for ``load-layer`` args."""
-
-    start: UTCDatetime
-    end: UTCDatetime
-    step_seconds: int = Field(gt=0)
-
-
-class LoadLayerArgs(GraceModel):
-    """``load-layer`` args. Field-for-field alignable with ``LayerURI``."""
-
-    COMMAND: ClassVar[str] = "load-layer"
-
-    layer_id: str
-    temporal: MapTemporal | None = None
-
-
-class ZoomToArgs(GraceModel):
-    COMMAND: ClassVar[str] = "zoom-to"
-    bbox: BBox
-
-
-class SetTemporalConfigArgs(GraceModel):
-    COMMAND: ClassVar[str] = "set-temporal-config"
-    layer_id: str
-    start: UTCDatetime
-    end: UTCDatetime
-    step_seconds: int = Field(gt=0)
-    current: UTCDatetime | None = None
 
 
 # map-command command vocabulary (open enum).
@@ -810,10 +723,6 @@ CLIENT_TO_AGENT_PAYLOADS[
 AGENT_TO_CLIENT_PAYLOADS: dict[str, type[GraceModel]] = {
     AgentMessageChunkPayload.MESSAGE_TYPE: AgentMessageChunkPayload,
     AgentThinkingChunkPayload.MESSAGE_TYPE: AgentThinkingChunkPayload,
-    ToolCallStartPayload.MESSAGE_TYPE: ToolCallStartPayload,
-    ToolCallProgressPayload.MESSAGE_TYPE: ToolCallProgressPayload,
-    ToolCallCompletePayload.MESSAGE_TYPE: ToolCallCompletePayload,
-    ToolCallFailedPayload.MESSAGE_TYPE: ToolCallFailedPayload,
     PipelineStatePayload.MESSAGE_TYPE: PipelineStatePayload,
     SolveProgressPayload.MESSAGE_TYPE: SolveProgressPayload,
     ToolIoPayload.MESSAGE_TYPE: ToolIoPayload,
@@ -850,10 +759,4 @@ CLIENT_TO_AGENT_PAYLOADS.update(PROCESSING_CLIENT_TO_AGENT_PAYLOADS)
 ALL_PAYLOADS: dict[str, type[GraceModel]] = {
     **CLIENT_TO_AGENT_PAYLOADS,
     **AGENT_TO_CLIENT_PAYLOADS,
-}
-
-# map-command command -> args model
-MAP_COMMAND_ARGS: dict[str, type[GraceModel]] = {
-    LoadLayerArgs.COMMAND: LoadLayerArgs,
-    ZoomToArgs.COMMAND: ZoomToArgs,
 }

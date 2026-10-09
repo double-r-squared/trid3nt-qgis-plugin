@@ -223,7 +223,7 @@
     },
     "supports_global_query": {
       "default": false,
-      "description": "True if this tool accepts ``bbox=None`` to mean global/CONUS-wide query. Default False (safer - tools opt in). When False, calling with ``bbox=None`` must raise ``ToolInputError(code='BBOX_REQUIRED', retryable=False)`` BEFORE issuing any network call.",
+      "description": "True if this tool accepts ``bbox=None`` to mean global/CONUS-wide query. Default False (safer - tools opt in). When False, calling with ``bbox=None`` must raise ``a typed refusal (code='BBOX_REQUIRED', retryable=False)`` BEFORE issuing any network call.",
       "title": "Supports Global Query",
       "type": "boolean"
     },

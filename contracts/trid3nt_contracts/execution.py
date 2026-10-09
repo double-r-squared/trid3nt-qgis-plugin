@@ -15,7 +15,6 @@ from pydantic import Field
 from .common import GraceModel, SyntheticInput, ULIDStr, UTCDatetime
 
 __all__ = [
-    "ModelSetup",
     "ExecutionHandle",
     "RunResult",
     "LegendKey",
@@ -25,12 +24,9 @@ __all__ = [
     "FloodExtentObservationResult",
     "LandcoverResult",
     "DemLayerURI",
-    "TopobathyResult",
     "BlueTopoResult",
     "StormTracksLayerURI",
-    "GOESSatelliteLayerURI",
     "NWMStreamflowLayerURI",
-    "LivingAtlasLayerURI",
     "LAYER_RESULT_MODELS",
 ]
 
@@ -62,22 +58,6 @@ class LegendKey(GraceModel):
     #: map loads. ``None`` for a layer whose file already carries its colours:
     #: nothing may override the colours such a file already has.
     qml: str | None = None
-
-
-class ModelSetup(GraceModel):
-    """A staged, ready-to-run model. ``setup_uri`` points at the built
-    artifacts, and ``parameters`` is solver-specific staging metadata validated
-    at the engine layer rather than here."""
-
-    schema_version: Literal["v1"] = "v1"
-
-    setup_id: ULIDStr
-    solver: str
-    setup_uri: str  # the staged model inputs
-    grid_resolution_m: float = Field(gt=0.0)
-    bbox: tuple[float, float, float, float]
-    parameters: dict = Field(default_factory=dict)
-    created_at: UTCDatetime
 
 
 class ExecutionHandle(GraceModel):
@@ -315,31 +295,6 @@ class DemLayerURI(LayerURI):
     emitted layer id and name must be declared together with a result model."""
 
 
-class TopobathyResult(LayerURI):
-    """A merged coastal topo-bathymetry layer plus its FETCH-TIME provenance.
-    Every field reports what actually PAINTED the merge, never what was selected
-    for it: a tile can drop in between, and a selection-keyed claim would lie."""
-
-    # The provenance travels through the recorder channel, so it survives a
-    # cache hit that never re-runs the fetch. A cache object written before the
-    # channel yields no sidecar, and these declared DEFAULTS then hold.
-
-    #: True when a real below-waterline bed painted, from any bathymetric leg;
-    #: False on the land-only degrade.
-    bathymetry_present: bool = True
-    #: An honest warning when the surface degraded - bathymetry absent, a global
-    #: fallback bed, a missing land leg. ``None`` on the clean path, and NEVER a
-    #: fabricated success.
-    fallback_warning: str | None = None
-    #: How many tiles of each fine leg painted; 0 when that leg did not run.
-    cudem_tile_count: int = 0
-    regional_tile_count: int = 0
-    #: The MEASURED share each ladder rung's source painted, by rung name, so an
-    #: activation row reports measured paint rather than a footprint promise.
-    #: ``None`` when nothing measurable ran.
-    rung_coverage: dict[str, float] | None = None
-
-
 class BlueTopoResult(LayerURI):
     """A bathymetric surface layer plus its fetch-time provenance.
     Every field reports what the tile scheme said and what actually painted,
@@ -377,20 +332,6 @@ class StormTracksLayerURI(LayerURI):
     storm_names: list[str] = []
 
 
-class GOESSatelliteLayerURI(LayerURI):
-    """A single-band satellite imagery layer plus its scan provenance.
-    ``scan_time`` is UNRECOVERABLE from the produced file, so without the
-    recorder channel a cache hit would lose which scan served.
-    """
-
-
-    #: The canonical bird token that served, and the band emitted.
-    satellite: str = "goes-19"
-    band: str = "visible"
-    #: The chosen scan's ISO start time. ``None`` on a pre-channel cache object.
-    scan_time: str | None = None
-
-
 class NWMStreamflowLayerURI(LayerURI):
     """A point-streamflow layer plus the fetch-time provenance of a COMPOSITE.
     ``reference_time`` is unrecoverable from the produced file, so the recorder
@@ -407,21 +348,6 @@ class NWMStreamflowLayerURI(LayerURI):
     nldi_comids_discovered: int = 0
 
 
-class LivingAtlasLayerURI(LayerURI):
-    """A discovered third-party layer plus its CURATION label.
-    The label exists so community-curated content can never be mistaken for
-    authoritative content by a reader or a model.
-    """
-
-
-    curation: Literal["authoritative", "community"] = "community"
-    item_id: str = ""
-    #: "Image Service" | "Feature Service" | "Map Service".
-    service_type: str = ""
-    #: Item id, curation, service type and url, owner, source string.
-    provenance: dict[str, Any] = Field(default_factory=dict)
-
-
 #: name -> subclass. A row's ``output.result_model`` resolves here; a name
 #: absent from this table is a registration error, not a fallback.
 LAYER_RESULT_MODELS: dict[str, type[LayerURI]] = {
@@ -430,26 +356,7 @@ LAYER_RESULT_MODELS: dict[str, type[LayerURI]] = {
     "FloodExtentObservationResult": FloodExtentObservationResult,
     "LandcoverResult": LandcoverResult,
     "DemLayerURI": DemLayerURI,
-    "TopobathyResult": TopobathyResult,
     "BlueTopoResult": BlueTopoResult,
     "StormTracksLayerURI": StormTracksLayerURI,
-    "GOESSatelliteLayerURI": GOESSatelliteLayerURI,
     "NWMStreamflowLayerURI": NWMStreamflowLayerURI,
-    "LivingAtlasLayerURI": LivingAtlasLayerURI,
 }
-
-
-# ``ResultLayer`` mirrors ``LayerURI.legend`` but cannot import ``LegendKey`` at
-# module scope: this module imports the envelope one, so the reverse would be
-# circular. It therefore carries a STRING forward-ref, and the models that use
-# it are rebuilt here, where the envelope module is fully loaded. The envelope
-# embeds ``ResultLayer``, so it is rebuilt too. Idempotent.
-from . import envelope as _envelope  # noqa: E402  (deferred to break the import cycle)
-
-_envelope.ResultLayer.model_rebuild(
-    _types_namespace={**vars(_envelope), "LegendKey": LegendKey}
-)
-_envelope.AssessmentEnvelope.model_rebuild(
-    _types_namespace={**vars(_envelope), "LegendKey": LegendKey},
-    force=True,
-)

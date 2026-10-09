@@ -23,7 +23,6 @@ __all__ = [
     "SecretRecord",
     "SecretsListEnvelopePayload",
     "SecretAddEnvelopePayload",
-    "SecretRevokeEnvelopePayload",
     "LANGUAGE_MODEL_CREDENTIAL",
     "SECRET_PAYLOADS",
     "SECRET_CLIENT_TO_AGENT_PAYLOADS",
@@ -109,24 +108,9 @@ class SecretAddEnvelopePayload(GraceModel):
         ]
 
 
-class SecretRevokeEnvelopePayload(GraceModel):
-    """``secret-revoke``: client -> server, SOFT-revoke one secret.
-    The vault entry is not deleted, so the audit trail survives and the user can
-    un-revoke without re-entering the key; lookups filter revoked keys out.
-    """
-
-    MESSAGE_TYPE: ClassVar[str] = "secret-revoke"
-
-    envelope_type: Literal["secret-revoke"] = "secret-revoke"
-    secret_id: ULIDStr
-
-
-
-
 # Client -> server envelopes this module contributes.
 SECRET_CLIENT_TO_AGENT_PAYLOADS: dict[str, type[GraceModel]] = {
     SecretAddEnvelopePayload.MESSAGE_TYPE: SecretAddEnvelopePayload,
-    SecretRevokeEnvelopePayload.MESSAGE_TYPE: SecretRevokeEnvelopePayload,
 }
 
 # Server -> client envelopes this module contributes.

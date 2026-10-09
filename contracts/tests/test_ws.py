@@ -27,9 +27,6 @@ from trid3nt_contracts.processing_contracts import (
 ws.SecretAddEnvelopePayload = ws.SecretAddEnvelopePayload if hasattr(ws, "SecretAddEnvelopePayload") else __import__(
     "trid3nt_contracts.secrets", fromlist=["SecretAddEnvelopePayload"]
 ).SecretAddEnvelopePayload
-ws.SecretRevokeEnvelopePayload = ws.SecretRevokeEnvelopePayload if hasattr(ws, "SecretRevokeEnvelopePayload") else __import__(
-    "trid3nt_contracts.secrets", fromlist=["SecretRevokeEnvelopePayload"]
-).SecretRevokeEnvelopePayload
 ws.SecretsListEnvelopePayload = ws.SecretsListEnvelopePayload if hasattr(ws, "SecretsListEnvelopePayload") else __import__(
     "trid3nt_contracts.secrets", fromlist=["SecretsListEnvelopePayload"]
 ).SecretsListEnvelopePayload
@@ -336,49 +333,6 @@ def test_agent_message_chunk(session_id: str) -> None:
     _roundtrip_idempotent(_wrap(payload, session_id))
 
 
-def test_tool_call_start(session_id: str) -> None:
-    payload = ws.ToolCallStartPayload(
-        call_id=new_ulid(),
-        step_id=new_ulid(),
-        tool_name="run_storm_surge_flood",
-        tool_category="workflow",
-        params={"location": "Fort Myers, FL"},
-    )
-    _roundtrip_idempotent(_wrap(payload, session_id))
-
-
-def test_tool_call_progress(session_id: str) -> None:
-    payload = ws.ToolCallProgressPayload(call_id=new_ulid(), percent=42, status="running solver")
-    _roundtrip_idempotent(_wrap(payload, session_id))
-
-
-def test_tool_call_progress_percent_out_of_range_rejected() -> None:
-    with pytest.raises(ValidationError):
-        ws.ToolCallProgressPayload(call_id=new_ulid(), percent=200)
-
-
-def test_tool_call_complete_metrics_carried_as_dict(session_id: str) -> None:
-    payload = ws.ToolCallCompletePayload(
-        call_id=new_ulid(),
-        result_summary="Peak depth 3.2 m over 18 km^2",
-        result_uri="gs://trid3nt/runs/01HX/result.cog.tif",
-        metrics={"flooded_area_km2": 18.4, "max_depth_m": 3.2},
-    )
-    dumped = _roundtrip_idempotent(_wrap(payload, session_id))
-    # Invariant 1: numbers cited by the narrative live in `metrics`, not free text
-    assert "flooded_area_km2" in dumped["payload"]["metrics"]
-
-
-def test_tool_call_failed(session_id: str) -> None:
-    payload = ws.ToolCallFailedPayload(
-        call_id=new_ulid(),
-        error_code="DEM_SOURCE_UNAVAILABLE",
-        message="USGS 3DEP timed out",
-        retryable=True,
-    )
-    _roundtrip_idempotent(_wrap(payload, session_id))
-
-
 def test_pipeline_state_cancelled_is_distinct_terminal(session_id: str) -> None:
     """Invariant 8: cancelled must be a distinct PipelineStepState, not failed."""
     payload = ws.PipelineStatePayload(
@@ -601,36 +555,6 @@ def test_pipeline_step_substep_index_rejects_non_positive() -> None:
 # --- map-command and the per-command args models ---------------------------- #
 
 
-def test_map_command_load_layer_args_roundtrip(session_id: str) -> None:
-    args = ws.LoadLayerArgs(
-        layer_id="run-01HX-flood-depth",
-        temporal=ws.MapTemporal(
-            start="2026-06-05T00:00:00Z", end="2026-06-05T06:00:00Z", step_seconds=300
-        ),
-    )
-    payload = ws.MapCommandPayload(command="load-layer", args=args.model_dump(mode="json"))
-    dumped = _roundtrip_idempotent(_wrap(payload, session_id))
-    # The internal command discriminator survives the round-trip
-    assert dumped["payload"]["command"] == "load-layer"
-    # The args dict re-validates as LoadLayerArgs (the consumer's contract)
-    re_parsed = ws.LoadLayerArgs.model_validate(dumped["payload"]["args"])
-    assert re_parsed.layer_id == "run-01HX-flood-depth"
-
-
-def test_map_command_zoom_to_bbox_args(session_id: str) -> None:
-    args = ws.ZoomToArgs(bbox=(-82.5, 26.4, -81.7, 26.9))
-    payload = ws.MapCommandPayload(command="zoom-to", args=args.model_dump(mode="json"))
-    _roundtrip_idempotent(_wrap(payload, session_id))
-
-
-def test_map_command_args_registry_covers_every_command() -> None:
-    """The internal command vocabulary must match the registered args models."""
-    from typing import get_args as _get_args
-    declared = set(_get_args(ws.MapCommand))
-    registered = set(ws.MAP_COMMAND_ARGS.keys())
-    assert declared == registered, (declared, registered)
-
-
 # --- the rest of A.4 messages ---------------------------------------------- #
 
 
@@ -780,12 +704,10 @@ def test_secrets_payloads_registered_in_ws_dicts() -> None:
     They mirror the ``SECRET_*_PAYLOADS`` dicts the secrets module exposes, so a
     refactor that drops the wire-up fails here."""
     assert "secret-add" in ws.CLIENT_TO_AGENT_PAYLOADS
-    assert "secret-revoke" in ws.CLIENT_TO_AGENT_PAYLOADS
     assert "secrets-list" in ws.AGENT_TO_CLIENT_PAYLOADS
     # And in the aggregated registry the smoke factory test consumes
     for t in (
         "secret-add",
-        "secret-revoke",
         "secrets-list",
     ):
         assert t in ws.ALL_PAYLOADS, f"{t} missing from ws.ALL_PAYLOADS"
@@ -810,14 +732,6 @@ def test_every_a3_a4_a4b_payload_round_trips(session_id: str) -> None:
         "spatial-input-response": lambda: ws.SpatialInputResponsePayload(request_id=new_ulid(), cancelled=True),
         "agent-message-chunk": lambda: ws.AgentMessageChunkPayload(message_id=new_ulid(), delta="x"),
             "agent-thinking-chunk": lambda: ws.AgentThinkingChunkPayload(message_id=new_ulid(), delta="x"),
-        "tool-call-start": lambda: ws.ToolCallStartPayload(
-            call_id=new_ulid(), step_id=new_ulid(), tool_name="t", tool_category="workflow"
-        ),
-        "tool-call-progress": lambda: ws.ToolCallProgressPayload(call_id=new_ulid()),
-        "tool-call-complete": lambda: ws.ToolCallCompletePayload(call_id=new_ulid(), result_summary="ok"),
-        "tool-call-failed": lambda: ws.ToolCallFailedPayload(
-            call_id=new_ulid(), error_code="GENERIC", message="x"
-        ),
         "pipeline-state": lambda: ws.PipelineStatePayload(pipeline_id=new_ulid()),
         "map-command": lambda: ws.MapCommandPayload(command="zoom-to", args={}),
         "session-state": lambda: ws.SessionStatePayload(),
@@ -829,7 +743,6 @@ def test_every_a3_a4_a4b_payload_round_trips(session_id: str) -> None:
         "secret-add": lambda: ws.SecretAddEnvelopePayload(
             provider="firms", case_id=new_ulid(), key_value="x"
         ),
-        "secret-revoke": lambda: ws.SecretRevokeEnvelopePayload(secret_id=new_ulid()),
         "secrets-list": lambda: ws.SecretsListEnvelopePayload(),
         # — tool payload-warning envelopes
         "tool-payload-warning": lambda: ws.PayloadWarningEnvelopePayload(

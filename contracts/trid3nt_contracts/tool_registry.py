@@ -26,21 +26,6 @@ __all__ = [
 ]
 
 
-# Re-exported for callers that import them from here. The authoritative home
-# is the errors module; either path resolves the same objects.
-from .errors import (  # noqa: E402  (intentional: keep __all__ above the re-export)
-    TOOL_INPUT_ERROR_CODES,
-    ToolInputError,
-    ToolInputErrorCode,
-)
-
-__all__ += [
-    "ToolInputError",
-    "ToolInputErrorCode",
-    "TOOL_INPUT_ERROR_CODES",
-]
-
-
 #: The four TTL classes, one declared per atomic tool.
 TTLClass = Literal["static-30d", "semi-static-7d", "dynamic-1h", "live-no-cache"]
 
@@ -94,7 +79,7 @@ class AtomicToolMetadata(GraceModel):
         description=(
             "True if this tool accepts ``bbox=None`` to mean global/CONUS-wide "
             "query. Default False (safer - tools opt in). When False, calling "
-            "with ``bbox=None`` must raise ``ToolInputError(code='BBOX_REQUIRED', "
+            "with ``bbox=None`` must raise ``a typed refusal (code='BBOX_REQUIRED', "
             "retryable=False)`` BEFORE issuing any network call."
         ),
     )

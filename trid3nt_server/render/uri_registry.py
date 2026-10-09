@@ -359,7 +359,7 @@ class SessionUriRegistry:
     def _walk(self, node: Any, tool_name: str, depth: int, seen: set[int]) -> None:
         if depth > _WALK_MAX_DEPTH or node is None:
             return
-        # Pydantic models (LayerURI, AssessmentEnvelope, …) → dict.
+        # Pydantic models (LayerURI, …) → dict.
         if hasattr(node, "model_dump") and callable(node.model_dump):
             try:
                 node = node.model_dump(mode="json")

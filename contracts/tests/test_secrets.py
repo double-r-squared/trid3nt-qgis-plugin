@@ -18,7 +18,6 @@ from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.secrets import (
     SecretAddEnvelopePayload,
     SecretRecord,
-    SecretRevokeEnvelopePayload,
     SecretsListEnvelopePayload,
 )
 
@@ -117,26 +116,6 @@ def test_secret_add_envelope_roundtrip_idempotent() -> None:
 
 
 
-def test_secret_revoke_envelope_roundtrip_idempotent() -> None:
-    """The revoke envelope round-trips and rejects missing/empty secret_id."""
-    revoke = SecretRevokeEnvelopePayload(secret_id=new_ulid())
-    a = revoke.model_dump(mode="json")
-    text_a = json.dumps(a, sort_keys=True)
-    b = SecretRevokeEnvelopePayload.model_validate(json.loads(text_a)).model_dump(mode="json")
-    assert text_a == json.dumps(b, sort_keys=True)
-    assert a["envelope_type"] == "secret-revoke"
-    assert SecretRevokeEnvelopePayload.MESSAGE_TYPE == "secret-revoke"
-
-    # ULID validation rejects non-ULID strings
-    with pytest.raises(ValidationError):
-        SecretRevokeEnvelopePayload(secret_id="not-a-ulid")
-    # And empty string
-    with pytest.raises(ValidationError):
-        SecretRevokeEnvelopePayload(secret_id="")
-
-
-
-
 def test_secret_add_repr_redacts_key_value() -> None:
     """Default ``repr()`` MUST NOT echo the raw key value.
 
@@ -180,10 +159,6 @@ def test_envelope_type_literal_validation() -> None:
     with pytest.raises(ValidationError):
         SecretAddEnvelopePayload.model_validate(bad)
 
-    # SecretRevokeEnvelopePayload
-    bad = {"envelope_type": "secret-revocation", "secret_id": new_ulid()}
-    with pytest.raises(ValidationError):
-        SecretRevokeEnvelopePayload.model_validate(bad)
 
 
 
@@ -214,16 +189,11 @@ def test_secrets_payloads_exposed_via_module_registries() -> None:
 
     ``SECRET_CLIENT_TO_AGENT_PAYLOADS`` / ``SECRET_AGENT_TO_CLIENT_PAYLOADS`` /
     ``SECRET_PAYLOADS`` are what the ws routing dicts splat in."""
-    # Client -> agent (add, revoke)
+    # Client -> agent (add)
     assert "secret-add" in secrets.SECRET_CLIENT_TO_AGENT_PAYLOADS
-    assert "secret-revoke" in secrets.SECRET_CLIENT_TO_AGENT_PAYLOADS
     assert (
         secrets.SECRET_CLIENT_TO_AGENT_PAYLOADS["secret-add"]
         is SecretAddEnvelopePayload
-    )
-    assert (
-        secrets.SECRET_CLIENT_TO_AGENT_PAYLOADS["secret-revoke"]
-        is SecretRevokeEnvelopePayload
     )
 
     # Agent -> client (list)
@@ -234,7 +204,7 @@ def test_secrets_payloads_exposed_via_module_registries() -> None:
     )
 
     # Aggregated module-level registry
-    for t in ("secret-add", "secret-revoke", "secrets-list"):
+    for t in ("secret-add", "secrets-list"):
         assert t in secrets.SECRET_PAYLOADS, f"{t} missing from SECRET_PAYLOADS"
 
 

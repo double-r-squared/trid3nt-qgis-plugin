@@ -8,149 +8,30 @@ import pytest
 from pydantic import ValidationError
 
 from trid3nt_contracts.collections import (
-    ARTICLES_VECTOR_INDEX,
-    EMBEDDING_DIMENSIONS_DEFAULT,
-    EMBEDDING_MODEL_DEFAULT,
-    MONGO_DUMP_KWARGS,
-    RUNS_VECTOR_INDEX,
     SESSIONS_TTL,
-    VECTOR_INDEXES,
-    ArticleDocument,
     ChatMessage,
     MapView,
     PipelineSnapshot,
     PipelineStepSummary,
-    ProjectDocument,
     ProjectLayerSummary,
-    RunDocument,
     SessionDocument,
     ToolCallSummary,
-    UserSpatialInput,
 )
 from trid3nt_contracts.common import new_ulid
 
 
-def _project_doc() -> ProjectDocument:
-    return ProjectDocument(
-        id=new_ulid(),
-        session_id=new_ulid(),
-        qgs_uri="gs://trid3nt/projects/01HX/project_01HX.qgs",
-        name="Hurricane Ian / Fort Myers / SFINCS depth",
-        bbox=(-82.5, 26.4, -81.7, 26.9),
-        hazard_types=["flood"],
-        layers=[
-            ProjectLayerSummary(
-                layer_id="run-01HX-flood-depth",
-                name="Flood depth (m)",
-                layer_type="raster",
-                uri="gs://trid3nt/runs/01HX/depth.cog.tif",
-                visible=True,
-                role="primary",
-                temporal=True,
-            )
-        ],
-        created_at="2026-06-05T12:00:00Z",
-        updated_at="2026-06-05T12:30:00Z",
-    )
+_DUMP = {"mode": "json", "by_alias": True}
 
 
 def _doc_roundtrip_idempotent(doc) -> dict:
-    dumped_a = doc.model_dump(**MONGO_DUMP_KWARGS)
+    dumped_a = doc.model_dump(**_DUMP)
     text_a = json.dumps(dumped_a, sort_keys=True)
     cls = type(doc)
     doc_b = cls.model_validate(json.loads(text_a))
-    dumped_b = doc_b.model_dump(**MONGO_DUMP_KWARGS)
+    dumped_b = doc_b.model_dump(**_DUMP)
     text_b = json.dumps(dumped_b, sort_keys=True)
     assert text_a == text_b
     return dumped_a
-
-
-def test_project_doc_roundtrip_and_id_aliasing() -> None:
-    doc = _project_doc()
-    dumped = _doc_roundtrip_idempotent(doc)
-    # Mongo dump uses _id, not id
-    assert "_id" in dumped and "id" not in dumped
-
-
-def test_run_doc_status_supports_cancelled() -> None:
-    """Invariant 8: cancelled is a distinct terminal RunDocument.status."""
-    doc = RunDocument(
-        id=new_ulid(),
-        project_id=new_ulid(),
-        session_id=new_ulid(),
-        status="cancelled",
-        cancelled_at="2026-06-05T12:00:00Z",
-        cancellation_reason="user-requested",
-        run_type="modeled",
-        hazard_type="flood",
-        workflow_name="run_storm_surge_flood",
-        bbox=(-82.5, 26.4, -81.7, 26.9),
-        assessment=None,
-    )
-    _doc_roundtrip_idempotent(doc)
-
-
-def test_run_doc_has_no_cost_field() -> None:
-    """Invariant 9: no cost field on runs (D.7)."""
-    doc = RunDocument(
-        id=new_ulid(),
-        project_id=new_ulid(),
-        session_id=new_ulid(),
-        status="pending",
-        run_type="modeled",
-        hazard_type="flood",
-        workflow_name="run_storm_surge_flood",
-        bbox=(-82.5, 26.4, -81.7, 26.9),
-        assessment=None,
-    )
-    dumped = doc.model_dump(**MONGO_DUMP_KWARGS)
-    assert not any("cost" in k.lower() for k in dumped.keys())
-    # ... and the model refuses a cost field via extra=forbid
-    with pytest.raises(ValidationError):
-        RunDocument.model_validate({**dumped, "cost_usd": 4.20})
-
-
-def test_run_doc_with_user_spatial_input() -> None:
-    doc = RunDocument(
-        id=new_ulid(),
-        project_id=new_ulid(),
-        session_id=new_ulid(),
-        status="complete",
-        started_at="2026-06-05T12:00:00Z",
-        completed_at="2026-06-05T12:30:00Z",
-        run_type="modeled",
-        hazard_type="flood",
-        workflow_name="run_storm_surge_flood",
-        bbox=(-82.5, 26.4, -81.7, 26.9),
-        user_spatial_inputs=[
-            UserSpatialInput(
-                request_id=new_ulid(),
-                geometry_type="point",
-                coordinates=[-82.0, 26.5],
-                prompt_title="Pick the impact center",
-                submitted_at="2026-06-05T12:01:00Z",
-            )
-        ],
-    )
-    _doc_roundtrip_idempotent(doc)
-
-
-def test_article_doc_roundtrip() -> None:
-    doc = ArticleDocument(
-        id=new_ulid(),
-        url="https://example.com/ian-coverage",
-        url_hash="0" * 64,
-        title="Hurricane Ian roars ashore",
-        publisher="AP",
-        text="text",
-        text_length=4,
-        fetched_at="2026-06-05T12:00:00Z",
-        extraction_status="extracted",
-        extracted_event_ids=[new_ulid()],
-        last_processed_at="2026-06-05T12:05:00Z",
-        embedding_model=EMBEDDING_MODEL_DEFAULT,
-    )
-    _doc_roundtrip_idempotent(doc)
 
 
 def test_session_doc_with_pipeline_history_cancelled() -> None:
@@ -211,42 +92,6 @@ def test_session_doc_with_pipeline_history_cancelled() -> None:
 
 
 # --- Vector index + TTL configs (D.6, D.8) --------------------------------- #
-
-
-def test_vector_indexes_cover_runs_and_articles() -> None:
-    assert set(VECTOR_INDEXES.keys()) == {"runs", "articles"}
-    for spec in VECTOR_INDEXES.values():
-        assert spec["type"] == "vectorSearch"
-        # The default dim is the documented constant; the recall-vs-cost
-        # check comes before infra locks Atlas.
-        vector_field = next(f for f in spec["fields"] if f["type"] == "vector")
-        assert vector_field["numDimensions"] == EMBEDDING_DIMENSIONS_DEFAULT
-        assert vector_field["similarity"] == "cosine"
-        assert vector_field["path"] == "embedding"
-
-
-def test_embedding_dimension_default_is_768_oq7() -> None:
-    """SRS default (text-embedding-005, 768 dims)."""
-    assert EMBEDDING_DIMENSIONS_DEFAULT == 768
-    assert EMBEDDING_MODEL_DEFAULT == "text-embedding-005"
-
-
-def test_runs_vector_index_filter_paths_are_high_cardinality() -> None:
-    """The runs index filters on hazard_type and run_type — both denormalized
-    onto the document so the index doesn't have to traverse the embedded
-    AssessmentEnvelope."""
-    filter_paths = [
-        f["path"] for f in RUNS_VECTOR_INDEX["fields"] if f["type"] == "filter"
-    ]
-    assert "hazard_type" in filter_paths
-    assert "run_type" in filter_paths
-
-
-def test_articles_vector_index_filters_on_extraction_status() -> None:
-    filter_paths = [
-        f["path"] for f in ARTICLES_VECTOR_INDEX["fields"] if f["type"] == "filter"
-    ]
-    assert "extraction_status" in filter_paths
 
 
 def test_sessions_ttl_config() -> None:
