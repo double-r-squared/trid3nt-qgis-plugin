@@ -24,7 +24,7 @@ from pydantic import (
 from ulid import ULID
 
 __all__ = [
-    "GraceModel",
+    "ContractModel",
     "ULIDStr",
     "BBox",
     "Lon",
@@ -109,7 +109,7 @@ BBox = Annotated[tuple[float, float, float, float], AfterValidator(_validate_bbo
 
 
 
-class GraceModel(BaseModel):
+class ContractModel(BaseModel):
     """Canonical base for every contract model.
     ``extra="forbid"``: an unknown field is a DEFECT, never silently dropped, so
     forward-compatible growth goes through open Literals and additive fields.
@@ -124,7 +124,7 @@ class GraceModel(BaseModel):
 
 
 
-class TimeRange(GraceModel):
+class TimeRange(ContractModel):
     """A UTC start/end interval."""
 
     start: UTCDatetime
@@ -165,7 +165,7 @@ _TEMPORAL_MODE_ALIASES: dict[str, str] = {
 }
 
 
-class EngineRunArgsMixin(GraceModel):
+class EngineRunArgsMixin(ContractModel):
     """ADDITIVE, DEFAULT-OFF base for the per-engine ``*RunArgs`` models.
     Every field defaults to the behaviour before it existed, so a model that
     adopts the mixin and sets nothing serializes and behaves byte-identically.
@@ -234,7 +234,7 @@ InputConsequence = Literal["physics", "scenario", "numerical", "aoi"]
 _HISTORY_CONSEQUENCE_NOTE = "consequence backfilled=scenario (pre-law-9 record)"
 
 
-class SyntheticInput(GraceModel):
+class SyntheticInput(ContractModel):
     """One structured provenance entry for a physical model input.
     ADDITIVE and default-empty: an empty list means "no declared provenance",
     NEVER "all real".

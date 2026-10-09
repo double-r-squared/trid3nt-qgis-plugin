@@ -12,7 +12,7 @@ from typing import Any, ClassVar, Literal
 
 from pydantic import Field, field_validator, model_validator
 
-from .common import GraceModel, InputBasis, SyntheticInput, ULIDStr
+from .common import ContractModel, InputBasis, SyntheticInput, ULIDStr
 from .coverage import SourceChoice
 
 __all__ = [
@@ -51,7 +51,7 @@ HARD_CAP_MB_DEFAULT: float = 250.0
 PayloadWarningOption = Literal["proceed", "cancel", "narrow_scope"]
 
 
-class GranularitySuggestion(GraceModel):
+class GranularitySuggestion(ContractModel):
     """A pre-run GRANULARITY suggestion, optional on a payload warning.
     It makes resolution a USER LEVER rather than a silent auto-coarsen, showing
     the cost of resolution before the run. No number here is a price."""
@@ -143,7 +143,7 @@ class GranularitySuggestion(GraceModel):
         return value
 
 
-class TimeScaleSuggestion(GraceModel):
+class TimeScaleSuggestion(ContractModel):
     """A pre-run TIME-SCALE suggestion, optional on a payload warning.
     Cadence and window together fix the FRAME COUNT: too many balloon the
     payload, too few hide the motion. Absent when the cadence is fixed.
@@ -232,7 +232,7 @@ class TimeScaleSuggestion(GraceModel):
 ParamDoor = Literal["user", "question", "derived", "scenario", "constant", "gate"]
 
 
-class ParamOption(GraceModel):
+class ParamOption(ContractModel):
     """One value an input would ACCEPT: what a pick sends back, and what the
     dropdown shows. A case layer is sent by its id and shown by its name."""
 
@@ -240,7 +240,7 @@ class ParamOption(GraceModel):
     label: str = Field(min_length=1, max_length=200)
 
 
-class ParamSheetRow(GraceModel):
+class ParamSheetRow(ContractModel):
     """One row of the resolved param sheet a form card renders.
     Richer than a provenance line: an EDIT SURFACE needs the declaration too -
     what the value means, what it may become, and how loudly to warn."""
@@ -299,7 +299,7 @@ class ParamSheetRow(GraceModel):
         return self
 
 
-class ParamSheet(GraceModel):
+class ParamSheet(ContractModel):
     """The resolved sheet a step reviewing its own inputs presents.
     Rows arrive in RENDER order, owned by whoever owns the doors. A
     submit-with-edits IS the approval - the whole sheet was visible."""
@@ -317,7 +317,7 @@ class ParamSheet(GraceModel):
         return self
 
 
-class PayloadWarningEnvelopePayload(GraceModel):
+class PayloadWarningEnvelopePayload(ContractModel):
     """``tool-payload-warning``: the gate a heavy dispatch pauses on.
     Both numbers travel - the estimate AND the threshold it crossed - so why the
     gate fired is visible rather than narrated. No number here is a price."""
@@ -382,7 +382,7 @@ class PayloadWarningEnvelopePayload(GraceModel):
 PayloadConfirmationDecision = Literal["proceed", "cancel", "narrow_scope"]
 
 
-class PayloadConfirmationEnvelopePayload(GraceModel):
+class PayloadConfirmationEnvelopePayload(ContractModel):
     """``tool-payload-confirmation``: the reply that authorizes a paused gate.
     ``warning_id`` selects the paused dispatch; the decision then proceeds with
     the original or the revised args, or surfaces a cancellation.

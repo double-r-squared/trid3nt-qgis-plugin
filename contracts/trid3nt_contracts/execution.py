@@ -11,7 +11,7 @@ from typing import Any, Literal
 
 from pydantic import Field
 
-from .common import GraceModel, SyntheticInput, ULIDStr, UTCDatetime
+from .common import ContractModel, SyntheticInput, ULIDStr, UTCDatetime
 
 __all__ = [
     "ExecutionHandle",
@@ -30,7 +30,7 @@ __all__ = [
 ]
 
 
-class LegendKey(GraceModel):
+class LegendKey(ContractModel):
     """A layer's RESOLVED style: what the reader is looking at, and its scale.
     The colours and the range here are the SAME ones the render uses, because
     both come from this one resolution - there is no second range to drift.
@@ -59,7 +59,7 @@ class LegendKey(GraceModel):
     qml: str | None = None
 
 
-class ExecutionHandle(GraceModel):
+class ExecutionHandle(ContractModel):
     """A submitted execution, and the CANCELLATION contract.
     The execution identifier is a first-class field, so a cancel terminates by
     it instead of parsing one out of a string. One handle, every backend."""
@@ -82,7 +82,7 @@ class ExecutionHandle(GraceModel):
     submitted_at: UTCDatetime
 
 
-class RunResult(GraceModel):
+class RunResult(ContractModel):
     """The TERMINAL outcome of an execution.
     ``cancelled`` is a distinct status from ``failed``: a stopped run is a
     finished run, not a broken one."""
@@ -115,7 +115,7 @@ class RunResult(GraceModel):
     batch_compute_meta: dict | None = None
 
 
-class LayerURI(GraceModel):
+class LayerURI(ContractModel):
     """ONE produced output layer, aligned field-for-field with the
     ``load-layer`` map command so it reaches the map untranslated. The producer
     DECLARES a style; the publish path RESOLVES it into ``legend``."""

@@ -12,7 +12,7 @@ from typing import Any, Literal
 
 from pydantic import ConfigDict, Field, field_validator
 
-from .common import GraceModel, ULIDStr, UTCDatetime
+from .common import ContractModel, ULIDStr, UTCDatetime
 from .execution import LegendKey
 
 #: SCREAMING_SNAKE_CASE error-code pattern. The SET is open: a code is validated
@@ -36,7 +36,7 @@ __all__ = [
 ]
 
 
-class DocModel(GraceModel):
+class DocModel(ContractModel):
     """Base for collection documents that alias ``_id``.
     ``populate_by_name`` lets the id be set as either ``id`` or ``_id``, and
     dumped back to ``_id`` under ``by_alias``."""
@@ -50,7 +50,7 @@ class DocModel(GraceModel):
 
 
 
-class ProjectLayerSummary(GraceModel):
+class ProjectLayerSummary(ContractModel):
     """Denormalized layer entry on a project, and on session map state.
     One store, one scheme: ``uri`` is the layer's ONE reference. The remaining
     fields mirror the produced layer, so a client re-registers without a join.
@@ -113,7 +113,7 @@ class ProjectLayerSummary(GraceModel):
     tracer: int | None = None
 
 
-class ToolCallSummary(GraceModel):
+class ToolCallSummary(ContractModel):
     """A completed/failed/cancelled tool call recorded in chat history."""
 
     call_id: ULIDStr
@@ -126,7 +126,7 @@ class ToolCallSummary(GraceModel):
     completed_at: UTCDatetime | None = None
 
 
-class ChatMessage(GraceModel):
+class ChatMessage(ContractModel):
     """One chat turn. ``message_id`` matches the wire id for an agent turn."""
 
     message_id: ULIDStr
@@ -136,7 +136,7 @@ class ChatMessage(GraceModel):
     created_at: UTCDatetime
 
 
-class PipelineStepSummary(GraceModel):
+class PipelineStepSummary(ContractModel):
     """A step in a persisted pipeline snapshot, ``cancelled`` distinct from
     ``failed``. Every number here is measured, never an estimate, and no cost
     field appears.
@@ -189,7 +189,7 @@ class PipelineStepSummary(GraceModel):
         return value
 
 
-class PipelineSnapshot(GraceModel):
+class PipelineSnapshot(ContractModel):
     """A persisted pipeline run."""
 
     pipeline_id: ULIDStr
@@ -199,7 +199,7 @@ class PipelineSnapshot(GraceModel):
     steps: list[PipelineStepSummary] = Field(default_factory=list)
 
 
-class MapView(GraceModel):
+class MapView(ContractModel):
     """Current client map view."""
 
     center: tuple[float, float]  # [lon, lat]

@@ -14,7 +14,7 @@ from pydantic import Field
 
 from .common import (
     BBox,
-    GraceModel,
+    ContractModel,
     ULIDStr,
     UTCDatetime,
 )
@@ -43,7 +43,7 @@ __all__ = [
 CaseStatus = Literal["active", "archived", "deleted"]
 
 
-class CaseSummary(GraceModel):
+class CaseSummary(ContractModel):
     """Top-level Case record - the left-rail entity.
     Denormalized from the project document so a client renders the list without
     joining sessions or runs.
@@ -88,7 +88,7 @@ class CaseSummary(GraceModel):
 ToolCardState = Literal["running", "complete", "failed", "cancelled"]
 
 
-class PersistedSubStepRecord(GraceModel):
+class PersistedSubStepRecord(ContractModel):
     """Replayable record of ONE nested CHILD step under a tool card.
     Field names reuse the live step and card shapes VERBATIM, so a replay
     synthesizes a step straight off this record."""
@@ -123,7 +123,7 @@ class PersistedSubStepRecord(GraceModel):
     response_bytes: int | None = None
 
 
-class ToolCardRecord(GraceModel):
+class ToolCardRecord(ContractModel):
     """Replayable record of ONE tool dispatch inside a Case turn.
     The persisted twin of a live card - the minimal state to re-render it
     without replaying the pipeline. Every IO field is optional."""
@@ -158,7 +158,7 @@ class ToolCardRecord(GraceModel):
     children: list[PersistedSubStepRecord] | None = None
 
 
-class CaseChatMessage(GraceModel):
+class CaseChatMessage(ContractModel):
     """One persisted chat exchange in a Case session.
     It carries the per-turn layer and map-command emissions, so a re-open
     replays the FULL stream in arrival order and re-binds what the turn did."""
@@ -199,7 +199,7 @@ class CaseChatMessage(GraceModel):
     created_at: UTCDatetime
 
 
-class CaseSessionState(GraceModel):
+class CaseSessionState(ContractModel):
     """The rehydration envelope returned when a user opens a Case.
     Enough to reconstruct the whole session. The dict-typed fields mirror the
     live session-state payload, untyped here to keep this module acyclic."""
@@ -218,7 +218,7 @@ class CaseSessionState(GraceModel):
 
 
 
-class CaseListEnvelopePayload(GraceModel):
+class CaseListEnvelopePayload(ContractModel):
     """``case-list``: server -> client, every Case.
     Emitted on connect and re-emitted after any lifecycle command, so the
     left rail is never reconciled client-side.
@@ -230,7 +230,7 @@ class CaseListEnvelopePayload(GraceModel):
     cases: list[CaseSummary] = Field(default_factory=list)
 
 
-class CaseOpenEnvelopePayload(GraceModel):
+class CaseOpenEnvelopePayload(ContractModel):
     """``case-open``: server -> client, rehydrate the selected Case.
     ``session_state`` is ``None`` when the Case cannot be rehydrated - archived
     or deleted between the list and the select - and the client shows empty.
@@ -247,7 +247,7 @@ class CaseOpenEnvelopePayload(GraceModel):
 CaseCommand = Literal["create", "select", "rename", "delete", "set-bbox"]
 
 
-class CaseCommandEnvelopePayload(GraceModel):
+class CaseCommandEnvelopePayload(ContractModel):
     """``case-command``: client -> server, one Case lifecycle command.
     No cancellation field - cancellation rides its own message rather than
     becoming a lifecycle command.

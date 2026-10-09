@@ -149,7 +149,7 @@ def test_atomic_tool_metadata_json_roundtrip_idempotent() -> None:
 
 
 def test_atomic_tool_metadata_forbids_extra_fields() -> None:
-    """GraceModel sets ``extra='forbid'``; unknown fields are rejected."""
+    """ContractModel sets ``extra='forbid'``; unknown fields are rejected."""
     with pytest.raises(ValidationError):
         AtomicToolMetadata.model_validate(
             {
@@ -457,7 +457,7 @@ def test_engine_tier_json_roundtrip_idempotent_and_extra_forbid() -> None:
     assert meta_b.engine == "modflow"
     assert meta_b.tier == "template"
 
-    # extra="forbid" (via GraceModel) is unaffected by the two new fields.
+    # extra="forbid" (via ContractModel) is unaffected by the two new fields.
     with pytest.raises(ValidationError):
         AtomicToolMetadata.model_validate(
             {

@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from trid3nt_contracts.common import (
     BBox,
-    GraceModel,
+    ContractModel,
     TimeRange,
     ULIDStr,
     UTCDatetime,
@@ -19,7 +19,7 @@ from trid3nt_contracts.common import (
 )
 
 
-class _CommonHolder(GraceModel):
+class _CommonHolder(ContractModel):
     ulid_field: ULIDStr
     dt_field: UTCDatetime
     bbox_field: BBox
@@ -115,7 +115,7 @@ def test_bbox_out_of_range_rejected() -> None:
 
 
 def test_extra_fields_forbidden() -> None:
-    """GraceModel uses extra='forbid'; unknown keys are a defect."""
+    """ContractModel uses extra='forbid'; unknown keys are a defect."""
     with pytest.raises(ValidationError):
         _CommonHolder.model_validate(
             {

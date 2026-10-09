@@ -655,14 +655,7 @@ def _default_dev_persistence_dir() -> _Path:
     override = _os_for_file.environ.get(DEV_PERSISTENCE_DIR_ENV)
     if override:
         return _Path(override).expanduser()
-    # One-time rename migration: data kept under ``~/.grace2`` moves to
-    # ``~/.trid3nt`` when the new directory does not yet exist.
-    legacy_home = _Path.home() / ".grace2"
-    new_home = _Path.home() / ".trid3nt"
-    if legacy_home.is_dir() and not new_home.exists():
-        _os_for_file.rename(legacy_home, new_home)
-        logger.info("FilePersistence: migrated legacy dir %s -> %s", legacy_home, new_home)
-    return new_home / "dev_persistence"
+    return _Path.home() / ".trid3nt" / "dev_persistence"
 
 
 class FileMCPClient:
@@ -673,20 +666,6 @@ class FileMCPClient:
     def __init__(self, base_dir: _Path | None = None) -> None:
         self._base_dir = base_dir or _default_dev_persistence_dir()
         self._base_dir.mkdir(parents=True, exist_ok=True)
-        # One-time Layer-B rename migration: the default database subdir was
-        # ``grace2_dev`` before the rebrand (see DEFAULT_DATABASE). If the old
-        # subdir exists and the new one does not, rename it so existing
-        # cases/layers/chat survive with zero data movement.
-        _legacy_db_dir = self._base_dir / "grace2_dev"
-        _new_db_dir = self._base_dir / "trid3nt_dev"
-        if _legacy_db_dir.is_dir() and not _new_db_dir.exists():
-            _os_for_file.rename(_legacy_db_dir, _new_db_dir)
-            logger.info(
-                "FilePersistence: migrated legacy database dir %s -> %s",
-                _legacy_db_dir,
-                _new_db_dir,
-            )
-
 
     def _collection_path(self, database: str, collection: str) -> _Path:
         db_dir = self._base_dir / database

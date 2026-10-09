@@ -14,7 +14,7 @@ from typing import ClassVar, Literal
 from pydantic import Field
 
 from .common import (
-    GraceModel,
+    ContractModel,
     ULIDStr,
     UTCDatetime,
 )
@@ -31,7 +31,7 @@ __all__ = [
 
 
 
-class SecretRecord(GraceModel):
+class SecretRecord(ContractModel):
     """One secret reference. The raw key value is NEVER carried here.
     Usage is recorded as ``last_used_at`` and nothing more - no call count, no
     quota, no estimated cost.
@@ -66,7 +66,7 @@ class SecretRecord(GraceModel):
 LANGUAGE_MODEL_CREDENTIAL = "llm"
 
 
-class SecretsListEnvelopePayload(GraceModel):
+class SecretsListEnvelopePayload(ContractModel):
     """``secrets-list``: server -> client, the secret records.
     A raw key value NEVER appears here - only vault-reference-bearing records.
     """
@@ -77,7 +77,7 @@ class SecretsListEnvelopePayload(GraceModel):
     secrets: list[SecretRecord] = Field(default_factory=list)
 
 
-class SecretAddEnvelopePayload(GraceModel):
+class SecretAddEnvelopePayload(ContractModel):
     """``secret-add``: client -> server, the ONE envelope carrying a raw key.
     ``key_value`` is TRANSIENT - vaulted on receipt and cleared before any log
     or persistence path. The repr elision below is only a back-stop."""
@@ -109,17 +109,17 @@ class SecretAddEnvelopePayload(GraceModel):
 
 
 # Client -> server envelopes this module contributes.
-SECRET_CLIENT_TO_AGENT_PAYLOADS: dict[str, type[GraceModel]] = {
+SECRET_CLIENT_TO_AGENT_PAYLOADS: dict[str, type[ContractModel]] = {
     SecretAddEnvelopePayload.MESSAGE_TYPE: SecretAddEnvelopePayload,
 }
 
 # Server -> client envelopes this module contributes.
-SECRET_AGENT_TO_CLIENT_PAYLOADS: dict[str, type[GraceModel]] = {
+SECRET_AGENT_TO_CLIENT_PAYLOADS: dict[str, type[ContractModel]] = {
     SecretsListEnvelopePayload.MESSAGE_TYPE: SecretsListEnvelopePayload,
 }
 
 # Aggregate for downstream consumers that don't care about direction.
-SECRET_PAYLOADS: dict[str, type[GraceModel]] = {
+SECRET_PAYLOADS: dict[str, type[ContractModel]] = {
     **SECRET_CLIENT_TO_AGENT_PAYLOADS,
     **SECRET_AGENT_TO_CLIENT_PAYLOADS,
 }

@@ -99,7 +99,7 @@ async def test_first_call_to_real_non_hot_set_tool_dispatches(fake_llm) -> None:
         dispatch_log.append(name)
         result = {
             "layer_id": "cross-section-boulder",
-            "uri": "gs://grace2-tool-cache/cross_section/deadbeef1234.tif",
+            "uri": "gs://trid3nt-tool-cache/cross_section/deadbeef1234.tif",
             "ramp": "terrain",
         }
         # Mirror the real _invoke_tool_via_emitter: register the result's
@@ -114,7 +114,7 @@ async def test_first_call_to_real_non_hot_set_tool_dispatches(fake_llm) -> None:
         [
             _make_fake_chunk_with_function_call(
                 "compute_cross_section",
-                {"dem_uri": "gs://grace2-tool-cache/dem/boulder.tif", "ramp": "terrain"},
+                {"dem_uri": "gs://trid3nt-tool-cache/dem/boulder.tif", "ramp": "terrain"},
                 "call-relief",
             ),
             _make_fake_chunk_with_text("Computed the cross section for Boulder."),
@@ -148,7 +148,7 @@ async def test_layer_producing_tool_response_carries_handle_instruction(fake_llm
     async def _fake_invoke(_ws, state, name, args):
         result = {
             "layer_id": "cross-section-boulder",
-            "uri": "gs://grace2-tool-cache/cross_section/deadbeef1234.tif",
+            "uri": "gs://trid3nt-tool-cache/cross_section/deadbeef1234.tif",
             "ramp": "terrain",
         }
         agent_server.get_uri_registry(state.session_id).register_tool_result(
@@ -161,7 +161,7 @@ async def test_layer_producing_tool_response_carries_handle_instruction(fake_llm
         [
             _make_fake_chunk_with_function_call(
                 "compute_cross_section",
-                {"dem_uri": "gs://grace2-tool-cache/dem/boulder.tif", "ramp": "terrain"},
+                {"dem_uri": "gs://trid3nt-tool-cache/dem/boulder.tif", "ramp": "terrain"},
                 "call-relief",
             ),
             _make_fake_chunk_with_text("Done."),

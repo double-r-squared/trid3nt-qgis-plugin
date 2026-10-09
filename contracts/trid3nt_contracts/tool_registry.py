@@ -12,7 +12,7 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from .common import GraceModel
+from .common import ContractModel
 from .gate_spec import GateKind, GateSpec, LeverSpec
 
 __all__ = [
@@ -51,7 +51,7 @@ TTL_CLASSES: tuple[str, ...] = (
 EngineTier = Literal["general", "door", "template", "catalog", "internal"]
 
 
-class AtomicToolMetadata(GraceModel):
+class AtomicToolMetadata(ContractModel):
     """Cache-shim metadata for one atomic tool's registration.
     Registration is REFUSED when this is missing, incomplete, or fails the
     cross-field validator - so a misconfigured tool never reaches the wire.

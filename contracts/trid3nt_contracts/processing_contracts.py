@@ -13,7 +13,7 @@ from typing import Any, ClassVar, Literal
 
 from pydantic import Field, model_validator
 
-from .common import GraceModel, ULIDStr
+from .common import ContractModel, ULIDStr
 
 __all__ = [
     "CodeExecRequestPayload",
@@ -32,7 +32,7 @@ _CODE_CAP = 64 * 1024
 ProcessingKind = Literal["algorithm", "code"]
 
 
-class CodeExecRequestPayload(GraceModel):
+class CodeExecRequestPayload(ContractModel):
     """``code-exec-request``, emitted BEFORE a code request reaches the session.
     Approval returns on a payload-confirmation whose ``warning_id`` equals
     ``code_exec_id``; anything but ``proceed`` fails closed."""
@@ -49,7 +49,7 @@ class CodeExecRequestPayload(GraceModel):
     rationale: str | None = Field(default=None, max_length=512)
 
 
-class ProcessingRequestPayload(GraceModel):
+class ProcessingRequestPayload(ContractModel):
     """``processing-request``: one thing for the session to run, agent -> client.
     An ``algorithm`` request names a Processing algorithm id and its parameters
     (canvas layers by name); a ``code`` request carries the approved snippet."""
@@ -78,7 +78,7 @@ class ProcessingRequestPayload(GraceModel):
         return self
 
 
-class ProcessingResponsePayload(GraceModel):
+class ProcessingResponsePayload(ContractModel):
     """``processing-response``: what the session produced, client -> agent.
     ``status`` is the honest terminal outcome; ``result`` is the layer summary
     of an algorithm's output or the JSON-coerced ``result`` of a snippet."""
@@ -94,11 +94,11 @@ class ProcessingResponsePayload(GraceModel):
     stdout: str = Field(default="", max_length=16 * 1024)
 
 
-PROCESSING_AGENT_TO_CLIENT_PAYLOADS: dict[str, type[GraceModel]] = {
+PROCESSING_AGENT_TO_CLIENT_PAYLOADS: dict[str, type[ContractModel]] = {
     CodeExecRequestPayload.MESSAGE_TYPE: CodeExecRequestPayload,
     ProcessingRequestPayload.MESSAGE_TYPE: ProcessingRequestPayload,
 }
 
-PROCESSING_CLIENT_TO_AGENT_PAYLOADS: dict[str, type[GraceModel]] = {
+PROCESSING_CLIENT_TO_AGENT_PAYLOADS: dict[str, type[ContractModel]] = {
     ProcessingResponsePayload.MESSAGE_TYPE: ProcessingResponsePayload,
 }

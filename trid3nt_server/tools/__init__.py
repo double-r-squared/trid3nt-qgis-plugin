@@ -76,7 +76,7 @@ def register_tool(
         )
 
     # Decorator-level flags fold into a fresh metadata. ``model_copy(update=...)``
-    # re-runs the validators because ``GraceModel`` sets ``validate_assignment``,
+    # re-runs the validators because ``ContractModel`` sets ``validate_assignment``,
     # so a bad combination still fails fast at import time.
     overrides: dict[str, Any] = {}
     if supports_global_query is not None:

@@ -2,7 +2,7 @@
 
 One definition per shape, imported everywhere it is used, so the plugin, the
 daemon and the workers cannot disagree about what a message is. Every model
-subclasses `GraceModel`; ids are ULIDs. A shape here is the contract - a
+subclasses `ContractModel`; ids are ULIDs. A shape here is the contract - a
 consumer branches on its discriminator rather than on a string it recognised.
 
 ## Files

@@ -13,7 +13,7 @@ from pydantic import Field, field_validator
 
 from .common import (
     BBox,
-    GraceModel,
+    ContractModel,
     ULIDStr,
     UTCDatetime,
     _validate_bbox,  # shared EPSG:4326 ordering rules for aoi_bbox
@@ -64,10 +64,10 @@ __all__ = [
 
 
 
-PayloadT = TypeVar("PayloadT", bound=GraceModel)
+PayloadT = TypeVar("PayloadT", bound=ContractModel)
 
 
-class Envelope(GraceModel, Generic[PayloadT]):
+class Envelope(ContractModel, Generic[PayloadT]):
     """The shared message envelope.
     ``type`` is the kebab-case discriminator, set by whichever side serializes;
     ``id`` and ``ts`` default to a fresh ULID and now."""
@@ -133,7 +133,7 @@ ErrorCode = Literal[
 ToolChoiceMode = Literal["auto", "ask"]
 
 
-class DrawnGeometry(GraceModel):
+class DrawnGeometry(ContractModel):
     """A user-drawn geometry attached to a ``user-message``.
     A per-turn STRUCTURED knob, distinct from the analysis AOI, consumed as
     user-supplied. Only a rectangle is wired; the discriminator leaves room."""
@@ -155,7 +155,7 @@ class DrawnGeometry(GraceModel):
         return [float(v) for v in value]
 
 
-class UserMessagePayload(GraceModel):
+class UserMessagePayload(ContractModel):
     """``user-message``: one user-submitted turn."""
 
     MESSAGE_TYPE: ClassVar[str] = "user-message"
@@ -204,7 +204,7 @@ class UserMessagePayload(GraceModel):
         return [float(v) for v in value]
 
 
-class CancelPayload(GraceModel):
+class CancelPayload(ContractModel):
     """``cancel``: cancel the in-flight pipeline."""
 
     MESSAGE_TYPE: ClassVar[str] = "cancel"
@@ -212,7 +212,7 @@ class CancelPayload(GraceModel):
     reason: str | None = None
 
 
-class SessionResumePayload(GraceModel):
+class SessionResumePayload(ContractModel):
     """``session-resume``: resume the session the envelope names."""
 
     MESSAGE_TYPE: ClassVar[str] = "session-resume"
@@ -227,7 +227,7 @@ class SessionResumePayload(GraceModel):
 
 
 
-class SpatialInputResponsePayload(GraceModel):
+class SpatialInputResponsePayload(ContractModel):
     """``spatial-input-response``: the user picked a geometry, or cancelled.
     Three shapes on one payload: a point or bbox sets ``coordinates``, a draw
     sets a role-tagged ``features``, a cancellation sets neither. A point pick
@@ -309,7 +309,7 @@ def _validate_spatial_input_feature_collection(
 
 
 
-class AgentMessageChunkPayload(GraceModel):
+class AgentMessageChunkPayload(ContractModel):
     """``agent-message-chunk``: one streamed token group of an answer."""
 
     MESSAGE_TYPE: ClassVar[str] = "agent-message-chunk"
@@ -319,7 +319,7 @@ class AgentMessageChunkPayload(GraceModel):
     done: bool = False
 
 
-class AgentThinkingChunkPayload(GraceModel):
+class AgentThinkingChunkPayload(ContractModel):
     """``agent-thinking-chunk``: one streamed reasoning-channel token group.
     ``message_id`` is SHARED with the answer chunks of the same bubble, and an
     empty final frame closes the thinking stream for it."""
@@ -337,7 +337,7 @@ class AgentThinkingChunkPayload(GraceModel):
 PipelineStepState = Literal["pending", "running", "complete", "failed", "cancelled"]
 
 
-class PipelineStep(GraceModel):
+class PipelineStep(ContractModel):
     """One step in the pipeline snapshot.
     Every number here is deterministic - measured or mirrored from a control
     plane - and never a model's estimate.
@@ -384,7 +384,7 @@ class PipelineStep(GraceModel):
     substep_total: int | None = Field(default=None, ge=1)
 
 
-class PipelineStatePayload(GraceModel):
+class PipelineStatePayload(ContractModel):
     """``pipeline-state``: the FULL snapshot of the current pipeline.
     It REPLACES a client's pipeline view outright; there are no deltas to
     reconcile."""
@@ -398,7 +398,7 @@ class PipelineStatePayload(GraceModel):
 # solve-progress ------------------------------------------------------------ #
 
 
-class SolveProgressPayload(GraceModel):
+class SolveProgressPayload(ContractModel):
     """``solve-progress``: one LIVE telemetry tick during a long solver run.
     Every field is solver- or perf-model-sourced, and ``eta_seconds`` is ``None``
     when nothing can estimate it rather than a fabricated number."""
@@ -420,7 +420,7 @@ class SolveProgressPayload(GraceModel):
 # tool-io ------------------------------------------------------------------- #
 
 
-class ToolIoPayload(GraceModel):
+class ToolIoPayload(ContractModel):
     """``tool-io``: the RAW args and response for one dispatch, keyed by step.
     A pipeline step carries only label, state and timing; this sidecar makes the
     EXACT args and response visible, so a smoothed-over failure stays findable."""
@@ -480,7 +480,7 @@ MapCommand = Literal[
 ]
 
 
-class MapCommandPayload(GraceModel):
+class MapCommandPayload(ContractModel):
     """``map-command``: one umbrella message with a ``command`` discriminator.
     ``args`` stays a dict on the wire; a consumer validates it against the
     matching args model selected by ``command``."""
@@ -497,7 +497,7 @@ normal; ``max_turns_reached`` means no further tool call will be dispatched and
 a new session is required."""
 
 
-class SessionStatePayload(GraceModel):
+class SessionStatePayload(ContractModel):
     """``session-state``: everything a client needs to reconstruct a session.
     The nested fields are the JSON serialization of the collection models,
     carried as plain dicts here to keep this module acyclic.
@@ -513,7 +513,7 @@ class SessionStatePayload(GraceModel):
     status: SessionStateStatus = "active"
 
 
-class ErrorPayload(GraceModel):
+class ErrorPayload(ContractModel):
     """``error``: a global error, not tied to any one tool call."""
 
     MESSAGE_TYPE: ClassVar[str] = "error"
@@ -527,21 +527,21 @@ class ErrorPayload(GraceModel):
 # spatial-input-request ----------------------------------------------------- #
 
 
-class ReferenceLayer(GraceModel):
+class ReferenceLayer(ContractModel):
     """An optional helper layer shown only during a spatial-input request."""
 
     layer_id: str
     wms_url: str
 
 
-class SuggestedView(GraceModel):
+class SuggestedView(ContractModel):
     """Where the client zooms to make picking easier."""
 
     bbox: BBox
     zoom: float
 
 
-class SpatialInputRequestPayload(GraceModel):
+class SpatialInputRequestPayload(ContractModel):
     """``spatial-input-request``: the user is asked to pick a geometry.
     ``mode`` selects the affordance: a point returns one coordinate pair, a
     bbox returns four, and a draw returns a role-tagged ``FeatureCollection``.
@@ -583,7 +583,7 @@ class SpatialInputRequestPayload(GraceModel):
 ToolCandidatesReason = Literal["ambiguity", "ask_mode"]
 
 
-class ToolCandidate(GraceModel):
+class ToolCandidate(ContractModel):
     """One ranked tool candidate inside a ``tool-candidates`` request."""
 
     #: The registry tool name, echoed VERBATIM by the reply. The tool is
@@ -597,7 +597,7 @@ class ToolCandidate(GraceModel):
     score: float = 0.0
 
 
-class ToolCandidatesPayload(GraceModel):
+class ToolCandidatesPayload(ContractModel):
     """``tool-candidates``: agent -> client, the tool picker."""
 
 
@@ -618,7 +618,7 @@ class ToolCandidatesPayload(GraceModel):
     timeout_s: float = Field(default=60.0, gt=0)
 
 
-class ToolChoicePayload(GraceModel):
+class ToolChoicePayload(ContractModel):
     """``tool-choice``: client -> agent, the picker reply.
     One of three shapes: a ``tool_name`` pick echoed verbatim, ``free_text``
     guidance instead, or both ``None`` for let-the-agent-decide."""
@@ -647,7 +647,7 @@ class ToolChoicePayload(GraceModel):
 LayerMode = Literal["open", "materialise"]
 
 
-class LayerRequestPayload(GraceModel):
+class LayerRequestPayload(ContractModel):
     """``layer-request``: one provider layer for the session to open, agent ->
     client. The uri is the provider's OWN datasource string, already templated
     over the bbox and the row's ask; the session passes it through verbatim."""
@@ -681,7 +681,7 @@ class LayerRequestPayload(GraceModel):
     credential: str | None = Field(default=None, min_length=1, max_length=120)
 
 
-class LayerResponsePayload(GraceModel):
+class LayerResponsePayload(ContractModel):
     """``layer-response``: what the session did with it, client -> agent.
     ``uri`` is the staged store object a materialised row was uploaded to, and is
     unset for an opened overlay; ``error`` is the provider's own text."""
@@ -693,7 +693,7 @@ class LayerResponsePayload(GraceModel):
     error: str | None = Field(default=None, max_length=16 * 1024)
 
 
-CLIENT_TO_AGENT_PAYLOADS: dict[str, type[GraceModel]] = {
+CLIENT_TO_AGENT_PAYLOADS: dict[str, type[ContractModel]] = {
     UserMessagePayload.MESSAGE_TYPE: UserMessagePayload,
     CancelPayload.MESSAGE_TYPE: CancelPayload,
     SessionResumePayload.MESSAGE_TYPE: SessionResumePayload,
@@ -720,7 +720,7 @@ CLIENT_TO_AGENT_PAYLOADS[
     PayloadConfirmationEnvelopePayload.MESSAGE_TYPE
 ] = PayloadConfirmationEnvelopePayload
 
-AGENT_TO_CLIENT_PAYLOADS: dict[str, type[GraceModel]] = {
+AGENT_TO_CLIENT_PAYLOADS: dict[str, type[ContractModel]] = {
     AgentMessageChunkPayload.MESSAGE_TYPE: AgentMessageChunkPayload,
     AgentThinkingChunkPayload.MESSAGE_TYPE: AgentThinkingChunkPayload,
     PipelineStatePayload.MESSAGE_TYPE: PipelineStatePayload,
@@ -756,7 +756,7 @@ from .processing_contracts import (  # noqa: E402
 AGENT_TO_CLIENT_PAYLOADS.update(PROCESSING_AGENT_TO_CLIENT_PAYLOADS)
 CLIENT_TO_AGENT_PAYLOADS.update(PROCESSING_CLIENT_TO_AGENT_PAYLOADS)
 
-ALL_PAYLOADS: dict[str, type[GraceModel]] = {
+ALL_PAYLOADS: dict[str, type[ContractModel]] = {
     **CLIENT_TO_AGENT_PAYLOADS,
     **AGENT_TO_CLIENT_PAYLOADS,
 }

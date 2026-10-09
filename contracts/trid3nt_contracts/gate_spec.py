@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from .common import GraceModel
+from .common import ContractModel
 
 __all__ = ["GateKind", "GateSpec", "LeverSpec"]
 
@@ -22,7 +22,7 @@ __all__ = ["GateKind", "GateSpec", "LeverSpec"]
 GateKind = Literal["solver", "fetch"]
 
 
-class LeverSpec(GraceModel):
+class LeverSpec(ContractModel):
     """One user-overridable lever a confirm card offers.
     A DECLARATION only - the engine-specific pinning arithmetic stays in the
     tool's pin provider, so rendering and enforcement can be uniform."""
@@ -70,7 +70,7 @@ class LeverSpec(GraceModel):
         return self
 
 
-class GateSpec(GraceModel):
+class GateSpec(ContractModel):
     """A tool's DECLARED confirm gate.
     Presence of this on a tool's registration metadata is the ONE membership
     signal the gate engine reads - there is no name set to join."""

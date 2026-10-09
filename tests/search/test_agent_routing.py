@@ -102,7 +102,7 @@ async def test_stream_events_yields_text_delta_event(fake_llm):
     async for event in stream_events(
         None,
         "gemini-2.5-pro",
-        "What is GRACE?",
+        "What is TRID3NT?",
     ):
         events.append(event)
 

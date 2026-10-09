@@ -13,7 +13,7 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from .common import GraceModel
+from .common import ContractModel
 
 __all__ = [
     "DATA_CLASSES",
@@ -87,7 +87,7 @@ _KM_PER_DEGREE = 111.32
 PER_RECORD = "record"
 
 
-class CoveragePoint(GraceModel):
+class CoveragePoint(ContractModel):
     """One STATION a source holds a record at, in the source's own words.
 
     The id is what the source is called by to reach this station, so a probe can
@@ -100,7 +100,7 @@ class CoveragePoint(GraceModel):
     datum: str | None = None
 
 
-class CoverageExtent(GraceModel):
+class CoverageExtent(ContractModel):
     """WHERE a source holds anything, as coarsely as the source itself states it.
 
     ``rings`` are closed lon/lat outlines the place filter tests a point against;
@@ -242,7 +242,7 @@ PROVENANCE_KINDS = ("measured", "predicted", "modelled")
 ProvenanceKind = Literal["measured", "predicted", "modelled"]
 
 
-class CoverageWindow(GraceModel):
+class CoverageWindow(ContractModel):
     """WHEN a source holds anything.
 
     A SERIES source's window is hard: a run asking outside it has no record, and
@@ -262,7 +262,7 @@ class CoverageWindow(GraceModel):
     cadence: str = Field(default="", max_length=120)
 
 
-class Coverage(GraceModel):
+class Coverage(ContractModel):
     """One source's ONLY statement of what it covers.
 
     Stated from the dataset's own documentation, never inferred from a fetched
@@ -353,7 +353,7 @@ class Coverage(GraceModel):
         return self
 
 
-class SourceOption(GraceModel):
+class SourceOption(ContractModel):
     """One row of the ranked list: a source and the four facts it is picked on."""
 
     fetcher: str = Field(min_length=1)
@@ -371,7 +371,7 @@ class SourceOption(GraceModel):
     excluded: str = Field(default="", max_length=300)
 
 
-class SourceChoice(GraceModel):
+class SourceChoice(ContractModel):
     """THE RANKED LIST, one object in three views.
 
     The card renders it with the pick highlighted, the tool result carries it

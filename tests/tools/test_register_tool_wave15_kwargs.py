@@ -140,7 +140,7 @@ def test_register_tool_kwarg_override_preserves_already_set_metadata_field() -> 
 
 def test_register_tool_kwarg_override_runs_cross_field_validator() -> None:
     """The kwarg override goes through ``model_copy(update=...)`` which re-runs
-    the FR-DC-6 cross-field validator (because GraceModel sets
+    the FR-DC-6 cross-field validator (because ContractModel sets
     ``validate_assignment=True``). A bad combination still fails at import."""
     # Start with a legitimate cacheable=False / live-no-cache metadata.
     meta = AtomicToolMetadata(

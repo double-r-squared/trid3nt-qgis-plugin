@@ -124,7 +124,7 @@ def test_case_summary_no_cost_field_invariant_9() -> None:
 
 
 def test_case_summary_extra_forbid() -> None:
-    """GraceModel extra='forbid' — unknown fields fail validation, not silently dropped."""
+    """ContractModel extra='forbid' — unknown fields fail validation, not silently dropped."""
     with pytest.raises(ValidationError):
         CaseSummary.model_validate({
             "case_id": new_ulid(),

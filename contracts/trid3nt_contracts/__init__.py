@@ -1,6 +1,6 @@
 """The types that cross a package boundary - one definition, imported everywhere.
 
-Every model subclasses ``GraceModel`` (``extra="forbid"``, UTC-``Z`` datetimes)
+Every model subclasses ``ContractModel`` (``extra="forbid"``, UTC-``Z`` datetimes)
 and the canonical wire form is ``model_dump(mode="json")``; the ``_id``-aliased
 collection documents additionally take ``by_alias=True``.
 """
@@ -29,7 +29,7 @@ from .chart_contracts import (
 from .common import (
     BBox,
     EngineRunArgsMixin,
-    GraceModel,
+    ContractModel,
     InputBasis,
     Lat,
     Lon,
@@ -95,7 +95,7 @@ __all__ = [
     "ProcessingRequestPayload",
     "ProcessingResponsePayload",
     # common primitives
-    "GraceModel",
+    "ContractModel",
     "ULIDStr",
     "BBox",
     "Lon",

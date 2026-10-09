@@ -46,12 +46,12 @@ The variables below are the complete shipped file, grouped by concern.
 | Variable | Shipped value | What it does |
 |----------|---------------|--------------|
 | `TRID3NT_SOLVER_BACKEND` | `local-docker` | Dispatch substrate for `run_solver` (SFINCS, and the staged-manifest local specs for GeoClaw/SWAN/SWMM). `local-docker` stages deck inputs into `$TRID3NT_RUNS_DIR/<run_id>/` and launches the engine container detached; the generic local supervisor uploads outputs + writes `completion.json`. The cloud value is `aws-batch`. |
-| `TRID3NT_MODFLOW_LOCAL` | `1` | Gates MODFLOW's local-execution mode (run the `mf6` binary directly). **Independent of `TRID3NT_SOLVER_BACKEND`** -- MODFLOW checks this first; forgetting it makes the MODFLOW tools try the cloud path (`/opt/grace2/runs` errors). |
+| `TRID3NT_MODFLOW_LOCAL` | `1` | Gates MODFLOW's local-execution mode (run the `mf6` binary directly). **Independent of `TRID3NT_SOLVER_BACKEND`** -- MODFLOW checks this first; forgetting it makes the MODFLOW tools try the cloud path (`/opt/trid3nt/runs` errors). |
 | `TRID3NT_MF6_BIN` | `<repo>/bin/mf6` | Path to the MODFLOW 6.5.0 static binary installed by `scripts/fetch_binaries.sh`. |
 | `TRID3NT_SFINCS_IMAGE` | `deltares/sfincs-cpu:sfincs-v2.3.3` | SFINCS container image. The code default is `:latest`, which is not what `docker pull` fetched -- pin the tag you pulled. |
 | `TRID3NT_GEOCLAW_IMAGE` | `trid3nt-local/geoclaw:latest` | GeoClaw container image, built locally from `workers/geoclaw/Dockerfile` (compiled Clawpack 5.14 Fortran). |
 | `TRID3NT_SWAN_IMAGE` | `trid3nt-local/swan:latest` | SWAN container image, built locally from `workers/swan/Dockerfile`. |
-| `TRID3NT_RUNS_DIR` | `<repo>/data/runs` | Host rundir root for local solves; mounted into engine containers at `/data`. The code default `/opt/grace2/runs` does not exist on a dev box -- set it. |
+| `TRID3NT_RUNS_DIR` | `<repo>/data/runs` | Host rundir root for local solves; mounted into engine containers at `/data`. The code default `/opt/trid3nt/runs` does not exist on a dev box -- set it. |
 | `TRID3NT_OQ_BIN` | `<repo>/venvs/agent/bin/oq` | Path to the OpenQuake `oq` CLI (installed into the agent venv). First run needs a one-time `oq engine --upgrade-db`. |
 | `DOCKER_HOST` | _(unset)_ | Docker endpoint the agent dispatches containers to. Unset, `scripts/start_agent.sh` states the rootless socket (`unix://$XDG_RUNTIME_DIR/docker.sock`), which is where the locally built worker images live; set it yourself for a rootful daemon (`unix:///var/run/docker.sock`) or a remote engine. |
 

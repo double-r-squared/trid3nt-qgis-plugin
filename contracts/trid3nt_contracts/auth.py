@@ -12,7 +12,7 @@ from typing import ClassVar
 from pydantic import Field
 
 from .common import (
-    GraceModel,
+    ContractModel,
     ULIDStr,
 )
 
@@ -25,7 +25,7 @@ __all__ = [
 
 
 
-class AdvertisedEndpoints(GraceModel):
+class AdvertisedEndpoints(ContractModel):
     """Base URLs for the daemon's sibling services, ridden on the ``auth-ack``.
     Best-effort and wholly optional: a client that reads ``None`` falls back to
     its own configured defaults rather than failing the connect."""
@@ -41,7 +41,7 @@ class AdvertisedEndpoints(GraceModel):
 
 
 
-class AuthTokenEnvelope(GraceModel):
+class AuthTokenEnvelope(ContractModel):
     """``auth-token`` (client -> agent): the access token, sent before any
     other client envelope. It is the whole gate - an absent or empty token is
     refused, never a fallback into some lesser identity."""
@@ -56,7 +56,7 @@ class AuthTokenEnvelope(GraceModel):
 
 
 
-class AuthAckEnvelope(GraceModel):
+class AuthAckEnvelope(ContractModel):
     """``auth-ack`` (agent -> client): the session identity, sent exactly once
     per connect and only after the token verified. Every later envelope is
     implicitly scoped to this ``user_id``, and no cost, quota or spend field

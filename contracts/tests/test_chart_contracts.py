@@ -182,7 +182,7 @@ def test_chart_id_must_be_a_ulid() -> None:
 
 
 def test_payload_forbids_extra_fields() -> None:
-    """GraceModel extra='forbid' — an unknown field is a defect (no cost field
+    """ContractModel extra='forbid' — an unknown field is a defect (no cost field
     sneaking in, no untyped extension)."""
     with pytest.raises(ValidationError):
         _payload(estimated_cost_usd=1.23)  # type: ignore[call-arg]

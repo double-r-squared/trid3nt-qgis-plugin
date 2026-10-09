@@ -79,7 +79,7 @@ def _raster_layer(layer_id: str) -> dict:
         "layer_id": layer_id,
         "name": f"Flood depth {layer_id}",
         "layer_type": "raster",
-        "uri": f"s3://grace2-runs/{layer_id}/cog.tif",
+        "uri": f"s3://trid3nt-runs/{layer_id}/cog.tif",
         "visible": True,
         "role": "primary",
         "temporal": False,

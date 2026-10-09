@@ -15,7 +15,7 @@ from pydantic import ValidationError
 
 from trid3nt_contracts import ws
 from trid3nt_contracts.chart_contracts import ChartEmissionPayload
-from trid3nt_contracts.common import GraceModel, new_ulid
+from trid3nt_contracts.common import ContractModel, new_ulid
 from trid3nt_contracts.processing_contracts import (
     CodeExecRequestPayload,
     ProcessingRequestPayload,
@@ -32,7 +32,7 @@ ws.SecretsListEnvelopePayload = ws.SecretsListEnvelopePayload if hasattr(ws, "Se
 ).SecretsListEnvelopePayload
 
 
-def _wrap(payload: GraceModel, session_id: str) -> ws.Envelope:
+def _wrap(payload: ContractModel, session_id: str) -> ws.Envelope:
     msg_type = getattr(payload, "MESSAGE_TYPE")
     return ws.Envelope[type(payload)](
         type=msg_type,

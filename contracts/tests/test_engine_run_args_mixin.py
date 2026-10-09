@@ -74,6 +74,6 @@ def test_advanced_physics_accepts_dict_or_none() -> None:
 
 
 def test_mixin_forbids_extra_keys() -> None:
-    # Inherits GraceModel extra="forbid" - a stray key is a defect, not dropped.
+    # Inherits ContractModel extra="forbid" - a stray key is a defect, not dropped.
     with pytest.raises(ValidationError):
         Mixin(bogus_key=1)

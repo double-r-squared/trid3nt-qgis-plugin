@@ -13,10 +13,10 @@ from typing import Any, Literal
 
 from pydantic import Field
 
-from .common import GraceModel
+from .common import ContractModel
 
 
-class ToolCall(GraceModel):
+class ToolCall(ContractModel):
     """The model's decision to call one tool.
     ``id`` is the provider's per-call identifier; it is echoed back on the
     matching response, and is absent where a provider mints none."""
@@ -26,7 +26,7 @@ class ToolCall(GraceModel):
     id: str | None = None
 
 
-class ToolResponse(GraceModel):
+class ToolResponse(ContractModel):
     """The result of one dispatched tool call, paired to it by ``id``."""
 
     name: str
@@ -34,7 +34,7 @@ class ToolResponse(GraceModel):
     id: str | None = None
 
 
-class Part(GraceModel):
+class Part(ContractModel):
     """One element of a turn: text, a tool call, or a tool response.
     At most one of the three is set; a Part carrying none is dropped by the
     builders rather than sent to a provider."""
@@ -44,7 +44,7 @@ class Part(GraceModel):
     response: ToolResponse | None = None
 
 
-class Message(GraceModel):
+class Message(ContractModel):
     """One turn of the conversation.
     ``model`` is the assistant side; every other speaker, the dispatched tool
     results included, rides the ``user`` side, which is what both live provider
@@ -84,7 +84,7 @@ class Message(GraceModel):
 with warnings.catch_warnings():
     warnings.simplefilter("ignore", UserWarning)
 
-    class ToolDeclaration(GraceModel):
+    class ToolDeclaration(ContractModel):
         """One tool as the model sees it.
         ``schema`` is JSON Schema for the call arguments - an object schema with
         a ``properties`` map - which is the shape both provider APIs take."""

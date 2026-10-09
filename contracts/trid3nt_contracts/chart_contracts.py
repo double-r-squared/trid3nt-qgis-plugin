@@ -12,7 +12,7 @@ from typing import Any, ClassVar, Literal
 
 from pydantic import Field, field_validator
 
-from .common import GraceModel, ULIDStr, UTCDatetime
+from .common import ContractModel, ULIDStr, UTCDatetime
 
 __all__ = [
     "ChartEmissionPayload",
@@ -38,7 +38,7 @@ def is_structurally_valid_vega_lite_spec(spec: dict[str, Any]) -> bool:
 
 
 
-class ChartEmissionPayload(GraceModel):
+class ChartEmissionPayload(ContractModel):
     """``chart-emission``, emitted once a tool has computed a chart's data.
     Every number rendered is structured data inside ``vega_lite_spec``, computed
     deterministically - never prose a model wrote. No cost field anywhere.
@@ -77,7 +77,7 @@ class ChartEmissionPayload(GraceModel):
 
 
 
-class SessionChartRecord(GraceModel):
+class SessionChartRecord(ContractModel):
     """One persisted chart on a session document's append-only ``charts`` array.
     Append-only: a record is never mutated in place, and a re-render appends a
     new record rather than editing the old one.
@@ -95,6 +95,6 @@ class SessionChartRecord(GraceModel):
 
 
 
-CHART_AGENT_TO_CLIENT_PAYLOADS: dict[str, type[GraceModel]] = {
+CHART_AGENT_TO_CLIENT_PAYLOADS: dict[str, type[ContractModel]] = {
     ChartEmissionPayload.MESSAGE_TYPE: ChartEmissionPayload,
 }

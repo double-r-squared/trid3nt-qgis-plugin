@@ -3,14 +3,14 @@
 The types that cross a package boundary, defined once and imported everywhere:
 the WebSocket protocol, the persisted document schemas, the data-source and
 tool-registration declarations, and the result shapes an engine or a fetch
-produces. Pydantic v2 throughout; every model subclasses `GraceModel`
+produces. Pydantic v2 throughout; every model subclasses `ContractModel`
 (`extra="forbid"`, UTC-`Z` datetimes).
 
 ## Modules
 
 | Module | What |
 |---|---|
-| `common` | `GraceModel`, `ULIDStr`, `BBox`, `TimeRange`, the UTC-`Z` datetime alias, the fallback and input-provenance records |
+| `common` | `ContractModel`, `ULIDStr`, `BBox`, `TimeRange`, the UTC-`Z` datetime alias, the fallback and input-provenance records |
 | `ws` | The WebSocket envelope, every message payload, the map-command args, and the type -> payload routing registry |
 | `auth` | The two connect-handshake envelopes and the server-advertised sibling endpoints |
 | `user` | The `User` account record |

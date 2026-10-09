@@ -12,7 +12,7 @@ from typing import Any, Literal
 
 from pydantic import Field, model_validator
 
-from .common import GraceModel
+from .common import ContractModel
 from .coverage import PER_RECORD, Coverage
 from .tool_registry import TTLClass
 
@@ -108,7 +108,7 @@ PayloadModel = Literal["bbox_area", "per_station", "per_feature", "tiled"]
 
 
 
-class EndpointSpec(GraceModel):
+class EndpointSpec(ContractModel):
     """One named endpoint. Exactly one of ``url`` / ``url_template`` is the base;
     ``query`` carries the static params merged onto every request to it."""
 
@@ -123,7 +123,7 @@ class EndpointSpec(GraceModel):
         return self
 
 
-class CredentialSpec(GraceModel):
+class CredentialSpec(ContractModel):
     """The key a source needs, named where the source is declared.
 
     ``name`` is the scope a stored key lands under, so two rows served by ONE
@@ -140,7 +140,7 @@ class CredentialSpec(GraceModel):
     env_var: str = Field(min_length=1, max_length=200)
 
 
-class AuthSpec(GraceModel):
+class AuthSpec(ContractModel):
     """Auth mode, the shared User-Agent, and the key this source needs."""
 
     mode: AuthMode = "none"
@@ -150,7 +150,7 @@ class AuthSpec(GraceModel):
     user_agent: str = "trid3nt_default"
 
 
-class ParamSpec(GraceModel):
+class ParamSpec(ContractModel):
     """One request-param's validation contract, applied BEFORE any network call.
     ``quantize`` is a bbox directive: ``round_6dp``, or ``res_<m>`` to snap to a
     raster resolution."""
@@ -187,7 +187,7 @@ class ParamSpec(GraceModel):
     lowercase: bool = False
 
 
-class GateSpec(GraceModel):
+class GateSpec(ContractModel):
     """Pre-fetch gates."""
 
     conus_only: bool = False                 # bbox must intersect CONUS
@@ -205,7 +205,7 @@ class GateSpec(GraceModel):
     max_features: int | None = None          # vector only (paging cap)
 
 
-class NormalizeSpec(GraceModel):
+class NormalizeSpec(ContractModel):
     """Normalization stamps - what makes a row-driven layer indistinguishable."""
 
     crs: str = "EPSG:4326"
@@ -224,7 +224,7 @@ class NormalizeSpec(GraceModel):
     units_by_param: dict[str, Any] | None = None
 
 
-class OutputSpec(GraceModel):
+class OutputSpec(ContractModel):
     """The output surface."""
 
     #: ``record`` means the source returns a bare JSON dict, NOT a renderable
@@ -290,13 +290,13 @@ class OutputSpec(GraceModel):
     keep_null_geometry: bool = False
 
 
-class CacheSpec(GraceModel):
+class CacheSpec(ContractModel):
     """The cache TTL class."""
 
     ttl_class: TTLClass
 
 
-class PayloadEstimateSpec(GraceModel):
+class PayloadEstimateSpec(ContractModel):
     """Payload-MB estimator inputs; the estimator itself is synthesized from
     them. Every coefficient is optional - each ``model`` reads the ones it
     needs and ignores the rest."""
@@ -326,7 +326,7 @@ class PayloadEstimateSpec(GraceModel):
     tile_deg2: float | None = None
 
 
-class HookSpec(GraceModel):
+class HookSpec(ContractModel):
     """Named extension points for the ONE irreducible per-source step.
     Each names a REGISTERED PURE FUNCTION, ``<source_key>.<point>``, resolved at
     load. A hook only COMPUTES - transport, caching and gates stay router-owned.
@@ -475,7 +475,7 @@ class HookSpec(GraceModel):
     classify_status: str | None = None
 
 
-class DispatchSpec(GraceModel):
+class DispatchSpec(ContractModel):
     """A row-declared, SINGLE-TARGET pre-flight dispatch to a sibling tool.
     One declared param value serves the request from a NAMED sibling, returning
     that tool's result VERBATIM - its cache prefix, its ids, no double fetch."""
@@ -514,7 +514,7 @@ class DispatchSpec(GraceModel):
 
 
 
-class SourceSpec(GraceModel):
+class SourceSpec(ContractModel):
     """A single data source's router specification; ``name`` IS its registry key.
     ``ingest`` and ``join`` stay flexible dicts because they vary per shape;
     every other top-level key is strictly typed and an unknown one is a defect."""
