@@ -5,7 +5,7 @@ import configparser
 import pathlib
 import unittest
 
-META = pathlib.Path(__file__).resolve().parents[1] / "metadata.txt"
+META = pathlib.Path(__file__).resolve().parents[2] / "plugin" / "metadata.txt"
 
 
 class TestMetadataParses(unittest.TestCase):

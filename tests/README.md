@@ -3,14 +3,15 @@
 The tree mirrors the product by subsystem: a test file lives in the directory
 named for the package it asserts against, and a file whose subject is a dev
 tool lives in `tests/scripts/` rather than beside the product it drives.
-`plugin/tests/` and `contracts/tests/` stay inside their own distributions and
-join the run as the sixth slice.
+`tests/contracts/` and `tests/plugin/` assert the two distributions beside the
+rest and make up the sixth slice.
 
 | directory | subject | files | collected |
 |---|---|---:|---:|
 | `_fakes/` | shared doubles: the MCP client, the websocket, the case summary, the reach chain, the read-through injector | - | - |
 | `fixtures/` | data the tests read; no code | - | - |
 | `adapters/` | provider adapters, the message IR, the turn loop, the stream persistence | 22 | 289 |
+| `contracts/` | the typed wire and registry contracts, the schema mirror and its drift | 16 | 351 |
 | `credentials/` | credential resolution, the access-token gate and the connect handshake | 4 | 49 |
 | `derive/` | the derive tools, the two session tools | 3 | 53 |
 | `render/` | the emitter, the uri registry, publication, the format set, charts | 34 | 417 |
@@ -19,6 +20,7 @@ join the run as the sixth slice.
 | `inputs/` | the typed inputs: a Point, an Extent, a Shape, the domain with the companions its producer measured, the bed it reads as elevations on the run's own vertical frame, the boundary runs, the line a placed read follows and the observation a run opens on, each from every form it arrives in, the user-input normalizers under them, and a user's own file adopted as a layer | 19 | 291 |
 | `mesh/` | the meshers, the mesh gate, topology, the bed over the one source it takes, the runs that prescribe a role and the shoreline the domain's own edge is | 9 | 231 |
 | `model/` | the SysML model conformance check | 1 | 19 |
+| `plugin/` | the QGIS dock: the client, the Qt bridge, the cards, the render seams; the Qt-wiring subset runs in a subprocess harness | 39 | 398 |
 | `runtime/` | the template runtime, its engine-neutral slots and levers, the run journal | 13 | 176 |
 | `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 10 | 109 |
 | `search/` | dataset and tool retrieval, the OGC adapter | 13 | 187 |
@@ -35,8 +37,8 @@ join the run as the sixth slice.
 
 A directory carries a `conftest.py` only when a fixture lands in it: the root
 holds what crosses subsystems (`fake_s3`, `fake_llm`, `empty_registry`, and the
-two autouse resets), `telemac/` holds the container-boundary stubs, and nothing
-else has one.
+two autouse resets), `telemac/` holds the container-boundary stubs, `contracts/` holds the contract
+instance fixtures, and nothing else has one.
 
 ## Running it
 
@@ -47,7 +49,7 @@ Six slices by subsystem, each its own foreground invocation, from the repo root:
     make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                      1317
     make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts           1082
     make test-model-surface   # tests/adapters tests/tools                                                                   617
-    make test-packages        # contracts/tests plugin/tests                                                                 808
+    make test-packages        # tests/contracts tests/plugin                                                                  749
 
 The source-text guards - history markers, dead references, the package maps,
 the template pages, banner comments, import walls, wiring pins, retired names,
@@ -67,7 +69,7 @@ leaves nothing behind. The baseline is **all six slices, zero failures**.
 ## Standing exceptions
 
 A test tests a product behavior, never the harness. Ten harness classes in
-`plugin/tests/` break that rule and are named here rather than quietly
+`tests/plugin/` break that rule and are named here rather than quietly
 tolerated: Qt cannot be imported in-process alongside the server suite, so the
 product assertions live inside a `qt_*_harness.py` subprocess and the
 pytest-visible test asserts only that the harness exited 0 and printed its

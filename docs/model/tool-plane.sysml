@@ -604,7 +604,7 @@ package ToolPlane {
     verify requirement ADeriveToolNeverFetches by
         "tests/derive/test_probe_point.py::test_outside_bounds_is_honest_null";
     verify requirement ADeriveToolNeverFetches by
-        "plugin/tests/test_processing.py::test_a_layer_is_found_by_its_qgis_id_its_agent_id_or_its_canvas_name";
+        "tests/plugin/test_processing.py::test_a_layer_is_found_by_its_qgis_id_its_agent_id_or_its_canvas_name";
     verify requirement ADeriveToolNeverFetches by
         "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
 
@@ -637,7 +637,7 @@ package ToolPlane {
     verify requirement TheLibraryStatesOnlyWhatTheRegistriesCarry by
         "tests/server/test_library_http_route.py::test_a_class_the_ask_never_names_brings_no_rows";
     verify requirement TheLibraryStatesOnlyWhatTheRegistriesCarry by
-        "plugin/tests/test_library_panel.py::test_tools_keep_their_subsystem_and_wire_order";
+        "tests/plugin/test_library_panel.py::test_tools_keep_their_subsystem_and_wire_order";
     verify requirement TheLibraryStatesOnlyWhatTheRegistriesCarry by
-        "plugin/tests/test_library_panel.py::test_rows_sit_under_class_then_kind_with_their_fetcher_first";
+        "tests/plugin/test_library_panel.py::test_rows_sit_under_class_then_kind_with_their_fetcher_first";
 }

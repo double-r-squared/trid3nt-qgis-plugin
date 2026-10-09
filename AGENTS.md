@@ -31,7 +31,7 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
   rebuilt: absolute -f/context paths, provenance-check the new code is
   IN the image, smoke through the image - never through mounted source.
 - `contracts/` - typed wire + registry contracts, with their own suite
-  in `contracts/tests` (the `test-packages` slice) and their committed
+  in `tests/contracts` (the `test-packages` slice) and their committed
   JSON Schema mirror in `contracts/schemas` (regenerated, never
   hand-edited).
 - `plugin/` - the QGIS dock (installs as `trid3nt`). `tests/` - the

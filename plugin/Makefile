@@ -8,7 +8,7 @@
 #
 # The plugin package lives at THIS Makefile's own dir (plugin/); the shipped
 # archive re-roots it under trid3nt/ (the installed name) via a staging copy
-# and drops the co-located tests/, docs/, Makefile, README (+ caches). LICENSE
+# and drops the co-located docs/, Makefile, README (+ caches). LICENSE
 # is re-added INSIDE the plugin folder (plugins.qgis.org zip rule).
 
 PLUGIN_NAME = trid3nt
@@ -19,7 +19,7 @@ QGIS_PLUGIN_DIR = $(HOME)/.local/share/QGIS/QGIS3/profiles/default/python/plugin
 # stub server needs). Override: make test PYTHON=/path/to/python
 PYTHON ?= ../venvs/agent/bin/python
 
-_SHIP_EXCLUDES = --exclude '/tests' --exclude '/docs' --exclude '/Makefile' \
+_SHIP_EXCLUDES = --exclude '/docs' --exclude '/Makefile' \
                  --exclude '/README.md' --exclude '/LICENSE' --exclude '/dist' \
                  --exclude '__pycache__' --exclude '*.pyc' --exclude '.*'
 

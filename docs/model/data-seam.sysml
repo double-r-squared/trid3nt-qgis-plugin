@@ -1356,7 +1356,7 @@ package DataSeam {
     verify requirement AKeyedSourceStatesTheKeyItNeeds by
         "tests/fetchers/test_router_stations.py::test_keyed_missing_key_refuses_pre_network";
     verify requirement AKeyedSourceStatesTheKeyItNeeds by
-        "plugin/tests/test_keys_form.py::test_one_row_per_credential_not_per_source";
+        "tests/plugin/test_keys_form.py::test_one_row_per_credential_not_per_source";
 
     satisfy requirement AKeyedProviderRowsKeyNeverLeavesTheSession by borrowedProviderExecutor;
     satisfy requirement AKeyedProviderRowsKeyNeverLeavesTheSession by borrowedProviderSession;
@@ -1364,13 +1364,13 @@ package DataSeam {
     verify requirement AKeyedProviderRowsKeyNeverLeavesTheSession by
         "tests/fetchers/test_router_qgis_provider.py::test_a_keyed_row_carries_its_credential_NAME_and_no_key";
     verify requirement AKeyedProviderRowsKeyNeverLeavesTheSession by
-        "plugin/tests/test_layer_request.py::test_open_attaches_the_stored_config_id";
+        "tests/plugin/test_layer_request.py::test_open_attaches_the_stored_config_id";
     verify requirement AKeyedProviderRowsKeyNeverLeavesTheSession by
-        "plugin/tests/test_layer_request.py::test_materialise_attaches_the_stored_config_id";
+        "tests/plugin/test_layer_request.py::test_materialise_attaches_the_stored_config_id";
     verify requirement AKeyedProviderRowsKeyNeverLeavesTheSession by
-        "plugin/tests/test_layer_request.py::test_the_key_value_never_rides_the_uri";
+        "tests/plugin/test_layer_request.py::test_the_key_value_never_rides_the_uri";
     verify requirement AKeyedProviderRowsKeyNeverLeavesTheSession by
-        "plugin/tests/test_layer_request.py::test_no_stored_key_refuses_by_name_toward_the_form";
+        "tests/plugin/test_layer_request.py::test_no_stored_key_refuses_by_name_toward_the_form";
 
     satisfy requirement ACatalogReaderCarriesNoProvenance by stacRasterReader;
     satisfy requirement ACatalogReaderCarriesNoProvenance by copernicusDeclaration;

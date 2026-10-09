@@ -722,9 +722,9 @@ package RenderSeam {
     verify requirement UserChoiceBeatsPreset by
         "tests/render/test_restyle_surface.py::test_a_comparison_paints_every_layer_on_the_one_range";
     verify requirement UserChoiceBeatsPreset by
-        "plugin/tests/test_raster_render.py::test_a_case_reopen_adopts_its_own_layers_and_loads_no_style_over_them";
+        "tests/plugin/test_raster_render.py::test_a_case_reopen_adopts_its_own_layers_and_loads_no_style_over_them";
     verify requirement UserChoiceBeatsPreset by
-        "plugin/tests/test_raster_render.py::test_a_different_case_sweeps_the_group_it_did_not_open";
+        "tests/plugin/test_raster_render.py::test_a_different_case_sweeps_the_group_it_did_not_open";
 
     satisfy requirement AFailedStepNamesWhyItFailed by pipelineEmitter;
     verify requirement AFailedStepNamesWhyItFailed by
@@ -751,7 +751,7 @@ package RenderSeam {
     verify requirement EmissionIsAutomatic by
         "tests/render/test_restyle_surface.py::test_hiding_a_layer_nobody_published_refuses_rather_than_creating_one";
     verify requirement EmissionIsAutomatic by
-        "plugin/tests/test_raster_render.py::test_a_visibility_flip_on_a_row_already_seen_reaches_the_layer_tree";
+        "tests/plugin/test_raster_render.py::test_a_visibility_flip_on_a_row_already_seen_reaches_the_layer_tree";
 
     satisfy requirement TheModelIsHandedAHandleNotAUri by layerRecord;
     satisfy requirement TheModelIsHandedAHandleNotAUri by pipelineEmitter;
@@ -774,9 +774,9 @@ package RenderSeam {
     verify requirement StyleIsDeclaredOrKindDefault by
         "tests/fetchers/test_router_spec_loader.py::test_a_style_row_naming_a_geometry_outside_the_family_is_refused";
     verify requirement StyleIsDeclaredOrKindDefault by
-        "plugin/tests/test_raster_render.py::test_the_legends_qml_reaches_load_named_style";
+        "tests/plugin/test_raster_render.py::test_the_legends_qml_reaches_load_named_style";
     verify requirement StyleIsDeclaredOrKindDefault by
-        "plugin/tests/test_raster_render.py::test_a_vectors_declared_symbol_is_what_the_read_back_reports";
+        "tests/plugin/test_raster_render.py::test_a_vectors_declared_symbol_is_what_the_read_back_reports";
     verify requirement StyleIsDeclaredOrKindDefault by
         "tests/render/test_publish_layer_legend.py::test_a_vector_row_resolves_through_the_same_seam_without_reading_the_object";
     verify requirement StyleIsDeclaredOrKindDefault by

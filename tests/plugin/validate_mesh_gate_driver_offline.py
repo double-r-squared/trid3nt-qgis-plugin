@@ -18,7 +18,7 @@ env = dict(os.environ, E2E_STUB="1", E2E_URL=srv.url,
 out = subprocess.run(
     [sys.executable, os.path.join(HERE, "headless_mesh_gate_drive.py")],
     env=env, capture_output=True, text=True, timeout=60,
-    cwd=os.path.dirname(HERE))
+    cwd=os.path.join(HERE, "..", "..", "plugin"))
 print(out.stdout)
 if out.returncode != 0: print("STDERR:", out.stderr[-800:])
 ok = '"PASS": true' in out.stdout

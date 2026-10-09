@@ -5,7 +5,7 @@
 # synced there silently never reaches the user.
 #
 # The package lives at repo-root plugin/ but installs under the name trid3nt/
-# (its QGIS-loaded name); the co-located tests/, docs/, Makefile, README, and
+# (its QGIS-loaded name); the co-located docs/, Makefile, README, and
 # build output NEVER ship -- an explicit exclude list re-roots plugin/ -> the
 # profile's trid3nt/ carrying shipped code + LICENSE only.
 #
@@ -26,7 +26,7 @@ DST="$HOME/.local/share/QGIS/QGIS3/profiles/default/python/plugins/trid3nt/"
 # tests/, docs/, Makefile, README, and build output (LICENSE ships). Leading
 # '/' anchors each exclude to the transfer root (SRC).
 SHIP_EXCLUDES=(
-    --exclude '/tests' --exclude '/docs' --exclude '/Makefile'
+    --exclude '/docs' --exclude '/Makefile'
     --exclude '/README.md' --exclude '/dist'
     --exclude '__pycache__' --exclude '*.pyc'
     --exclude '.git*' --exclude '.pytest_cache'

@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from plugin import install_dependencies as inst  # noqa: E402
 
-PLUGIN_ROOT = Path(os.path.dirname(__file__)).resolve().parent
+PLUGIN_ROOT = Path(__file__).resolve().parents[2] / "plugin"
 
 
 class TestDependencySweep(unittest.TestCase):

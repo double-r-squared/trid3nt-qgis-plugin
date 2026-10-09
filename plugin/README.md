@@ -172,7 +172,7 @@ runs the full pure-Python test suite -- no QGIS installation is required for
 most of it. A small subset that exercises real Qt signal wiring runs in a
 subprocess against the system PyQt5 interpreter and skips honestly when one
 isn't available. `net/trid3nt_client.py` is the protocol surface, and
-`tests/` holds the coverage details.
+`tests/plugin/` holds the coverage details.
 
 Other Makefile targets local to this directory:
 
@@ -210,7 +210,6 @@ make clean     # remove build artifacts
 | `render/` | What arrives from the agent, turned into QGIS: layers, the point probe, message formatting, and a processing request run in this session. |
 | `case/` | The case's own canvas seams: the AOI, and pushing one of your layers up. |
 | `docs/` | The screenshots this page embeds. |
-| `tests/` | The plugin's own suite - pure-Python, with the Qt-wiring subset run in a subprocess. |
 
 ## License
 

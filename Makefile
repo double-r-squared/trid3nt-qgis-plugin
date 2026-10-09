@@ -33,7 +33,7 @@ test-spatial:       ; $(PYTEST) tests/derive tests/render tests/mesh
 test-engines:       ; $(PYTEST) tests/telemac tests/runtime tests/solver tests/search
 test-server:        ; $(PYTEST) tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts
 test-model-surface: ; $(PYTEST) tests/adapters tests/tools
-test-packages:      ; $(PYTEST) contracts/tests plugin/tests
+test-packages:      ; $(PYTEST) tests/contracts tests/plugin
 
 test: test-fetchers test-spatial test-engines test-server test-model-surface test-packages
 
@@ -85,7 +85,7 @@ down: stop
 plugin-zip:
 	@rm -rf $(REPO_ROOT)/dist/pluginzip && mkdir -p $(REPO_ROOT)/dist/pluginzip
 	@rsync -a --exclude '__pycache__' --exclude '*.pyc' --exclude '.*' \
-	  --exclude '/tests' --exclude '/docs' --exclude '/Makefile' \
+	  --exclude '/docs' --exclude '/Makefile' \
 	  --exclude '/README.md' --exclude '/LICENSE' --exclude '/dist' \
 	  $(REPO_ROOT)/plugin/ $(REPO_ROOT)/dist/pluginzip/trid3nt/
 	@cp $(REPO_ROOT)/plugin/LICENSE $(REPO_ROOT)/dist/pluginzip/trid3nt/LICENSE
