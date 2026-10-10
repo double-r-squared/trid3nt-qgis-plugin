@@ -132,7 +132,6 @@ class AtomicToolMetadata(ContractModel):
         ),
     )
 
-
     # Engine-door fields, orthogonal to cacheable / ttl_class; the convention that a door or template carries an engine slug is enforced elsewhere.
 
     engine: str | None = Field(

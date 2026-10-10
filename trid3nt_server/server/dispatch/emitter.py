@@ -274,8 +274,8 @@ async def _invoke_tool_via_emitter(
         raise ToolNotFoundError(tool_name, list(TOOL_REGISTRY))
     entry = TOOL_REGISTRY[tool_name]
 
-    # Snapshot the ORIGINAL call args NOW, before normalization, gating, URI-resolve and secret-
-    # inject rewrite ``params``: the early input-only frame's args must equal the completion
+    # Snapshot the ORIGINAL call args NOW, before normalization, gating, URI-resolve and
+    # secret-inject rewrite ``params``: the early input-only frame's args must equal the completion
     # frame's, so the card shows the same input the model sent both live and at completion.
     _original_tool_args = dict(params)
 
@@ -657,8 +657,8 @@ async def _dispatch_tool_and_persist(
 ) -> None:
     """Invoke a tool, then persist the agent's reply to the active Case; the persisted content is a
     readable summary of the result. NOTHING MAY ESCAPE THIS FRAME."""
-    # The !run path is a bare task with no awaiter: anything that escapes becomes an unretrieved-
-    # task log line and the client gets nothing, so every failure leaves as an error envelope.
+    # The !run path is a bare task with no awaiter: anything that escapes becomes an
+    # unretrieved-task log line and the client gets nothing, so every failure leaves as an error envelope.
     # Entry-time Case capture keeps a mid-turn switch from re-aiming the writes.
     turn_case_id = _turn_case_id(state)
     bind_turn_case(turn_case_id)  # envelope tagging

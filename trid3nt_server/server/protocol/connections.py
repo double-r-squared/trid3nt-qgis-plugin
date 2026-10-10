@@ -19,8 +19,8 @@ _SESSION_WS_CONNECTIONS: "dict[str, set[ServerConnection]]" = {}
 def _register_session_connection(
     session_id: str, websocket: "ServerConnection"
 ) -> None:
-    """Record ``websocket`` as a live connection of ``session_id``; set semantics make a re-
-    register a no-op."""
+    """Record ``websocket`` as a live connection of ``session_id``; set semantics make a
+    re-register a no-op."""
     if not session_id:
         return
     _SESSION_WS_CONNECTIONS.setdefault(session_id, set()).add(websocket)

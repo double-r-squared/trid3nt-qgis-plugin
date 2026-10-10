@@ -503,7 +503,6 @@ class ToolCandidate(ContractModel):
 class ToolCandidatesPayload(ContractModel):
     """``tool-candidates``: agent -> client, the tool picker."""
 
-
     MESSAGE_TYPE: ClassVar[str] = "tool-candidates"
 
     request_id: ULIDStr

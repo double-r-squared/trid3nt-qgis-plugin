@@ -33,8 +33,8 @@ async def reject_auth_handshake(
     session_id: str,
     message: str = "access token required: Add the token under Settings",
 ) -> None:
-    """Refuse a connection at the handshake with a typed ``AUTH_FAILED`` error and a policy-
-    violation close, the close the client classifies as an auth failure so it stops its
+    """Refuse a connection at the handshake with a typed ``AUTH_FAILED`` error and a
+    policy-violation close, the close the client classifies as an auth failure so it stops its
     reconnect ladder. Never raises."""
     await _send_error(websocket, session_id, "AUTH_FAILED", message)
     try:

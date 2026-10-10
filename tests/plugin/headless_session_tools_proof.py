@@ -44,7 +44,7 @@ def _drive(client, on_event, timeout_s: float) -> None:
             continue
         kind = ev.kind if ev.kind != "raw" else f"raw:{ev.data.get('type')}"
         EVIDENCE["events"].append(kind)
-        if kind in ("tool-io", "raw:tool-call-complete", "raw:tool-call-failed", "error"):
+        if kind in ("tool-io", "error"):
             EVIDENCE.setdefault("payloads", []).append({"kind": kind, "data": ev.data})
         if ev.kind == "payload-warning":
             client.confirm_payload(ev.data.get("warning_id"), "proceed", None)

@@ -218,8 +218,8 @@ def _parse_num_ctx_from_show_response(payload: dict[str, Any]) -> int | None:
     the model has no baked override, and the caller falls through."""
     if not isinstance(payload, dict):
         return None
-    # The RUNTIME override baked via ``PARAMETER num_ctx <n>`` shows up as a line inside the top-
-    # level ``parameters`` free-text field. Its neighbour ``model_info.<family>.context_length`` is
+    # The RUNTIME override baked via ``PARAMETER num_ctx <n>`` shows up as a line inside the
+    # top-level ``parameters`` free-text field. Its neighbour ``model_info.<family>.context_length`` is
     # the architecture's max TRAINED context, a different and much larger number: do NOT read it.
     params_text = payload.get("parameters")
     if not isinstance(params_text, str) or not params_text.strip():

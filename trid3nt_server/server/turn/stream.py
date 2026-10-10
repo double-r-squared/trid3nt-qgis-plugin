@@ -79,8 +79,8 @@ async def _stream_model_reply(
     )
 
     # Auto-name an Untitled Case from its FIRST user message BEFORE dispatch (a failed narration
-    # must not skip it). Deterministic heuristic, no LLM call; best-effort and never-raise. The end-
-    # of-turn call below stays as a no-op fallback covering a mid-stream case switch.
+    # must not skip it). Deterministic heuristic, no LLM call; best-effort and never-raise. The
+    # end-of-turn call below stays as a no-op fallback covering a mid-stream case switch.
     try:
         if await _maybe_autoname_case(state, user_text):
             await _emit_case_list(websocket, state, force=True)

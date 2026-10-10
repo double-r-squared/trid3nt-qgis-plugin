@@ -108,8 +108,8 @@ def _turn_index(contents: Any) -> int:
 # (inject a stream error) and "usage"; absent keys emit nothing, so ``{}`` is a genuinely empty
 # round and ``None`` (a list run past its end) yields a terminal narration. Usage is emitted ONLY
 # when a turn carries it: direct-adapter tests assert exact event counts. The source is a list or
-# a callable ``(call_index, contents) -> turn``. Advance is CALL-sequenced, not contents-model-
-# role counted, so a round with several tool calls still advances once.
+# a callable ``(call_index, contents) -> turn``. Advance is CALL-sequenced, not
+# contents-model-role counted, so a round with several tool calls still advances once.
 
 #: Installed fake-turn source (list of turn dicts OR a (index, contents)->turn
 #: callable). ``None`` => harness inactive (production transcript path runs).

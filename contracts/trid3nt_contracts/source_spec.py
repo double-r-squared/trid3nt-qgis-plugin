@@ -252,7 +252,6 @@ class HookSpec(ContractModel):
 
     # A field is added only when a real source cannot be expressed without it.
 
-
     #: ``(spec, params) -> list[RequestPlan]``; a paged source is called once per page.
     build_request: str | None = None
 
@@ -376,7 +375,6 @@ class SourceSpec(ContractModel):
     ingest: dict[str, Any] = Field(default_factory=dict)
 
     hooks: HookSpec | None = None
-
 
     dispatch: list[DispatchSpec] = Field(default_factory=list)
 

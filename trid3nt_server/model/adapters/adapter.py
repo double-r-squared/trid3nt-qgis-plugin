@@ -795,8 +795,8 @@ _FUNCTION_RESPONSE_CHAR_BUDGET = 4_000
 MAX_TURN_ITERATIONS = 12
 
 
-# NEVER-REHYDRATE guard. The persisted agent chat row carries a ``thinking`` field (the reasoning-
-# channel text for the same bubble as the answer -- see
+# NEVER-REHYDRATE guard. The persisted agent chat row carries a ``thinking`` field (the
+# reasoning-channel text for the same bubble as the answer -- see
 # ``trid3nt_contracts.case.CaseChatMessage.thinking``). That text is DISPLAY REPLAY only and must
 # NEVER re-enter LLM-bound contents: build_contents_from_history and _decode_parts_blob strip it
 # BY RULE, so even a writer that leaks it into a parts_blob entry cannot re-inject it, and
@@ -851,8 +851,8 @@ def _decode_parts_blob(blob: Any) -> list[Part] | None:
         if not isinstance(entry, dict):
             continue
         # NEVER-REHYDRATE guard: strip ``thinking`` (and any future guarded field) from the blob
-        # entry BY RULE before any key is read -- the full-fidelity parts_blob path must never re-
-        # inject reasoning text into LLM-bound contents.
+        # entry BY RULE before any key is read -- the full-fidelity parts_blob path must never
+        # re-inject reasoning text into LLM-bound contents.
         entry = _strip_never_rehydrate(entry)
         kwargs: dict[str, Any] = {}
         if "text" in entry and entry["text"]:
@@ -1096,8 +1096,8 @@ def rehydrate_history_from_case(
         if role in ("agent", "assistant", "model", "system"):
             if content.strip():
                 # ``agent`` collapses to ``model`` in the contents builder; ``system`` has no native
-                # role there, so it folds to model-side context text -- safer for routing than re-
-                # injecting it as a fresh ``user`` instruction.
+                # role there, so it folds to model-side context text -- safer for routing than
+                # re-injecting it as a fresh ``user`` instruction.
                 history.append({"role": "agent", "text": content})
             continue
         # Unknown role: skip rather than guess.
@@ -1110,8 +1110,8 @@ def rehydrate_history_from_case(
 
 
 def encode_parts_blob(parts: list[Part]) -> bytes:
-    """Encode a list of ``Part`` to the ``parts_blob`` wire shape. A JSON byte string, so it round-
-    trips through JSON persistence."""
+    """Encode a list of ``Part`` to the ``parts_blob`` wire shape. A JSON byte string, so it
+    round-trips through JSON persistence."""
     import json as _json
 
     out: list[dict[str, Any]] = []

@@ -226,8 +226,8 @@ async def _emit_case_open(
     if state.emitter is not None:
         state.emitter.reset_loaded_layers(session_state.loaded_layers)
         # Seed the URI registry from the SAME persisted layers the note advertises: a fresh
-        # connection that opens an EXISTING Case reaches here directly, and the registry is in-
-        # memory, so it would otherwise start empty and the advertised handles would not resolve.
+        # connection that opens an EXISTING Case reaches here directly, and the registry is
+        # in-memory, so it would otherwise start empty and the advertised handles would not resolve.
         await _seed_registry_for_case(
             state, case_id, session_state.loaded_layers
         )

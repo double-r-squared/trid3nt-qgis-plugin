@@ -1,5 +1,5 @@
-"""One three-way classifier for tool-dispatch errors: agent, user, operator. An explicit class-
-level ``actionability`` attribute wins outright; an unrecognized untyped exception stays
+"""One three-way classifier for tool-dispatch errors: agent, user, operator. An explicit
+class-level ``actionability`` attribute wins outright; an unrecognized untyped exception stays
 ``"agent"``, never the operator bucket."""
 
 from __future__ import annotations

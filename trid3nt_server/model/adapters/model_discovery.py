@@ -391,8 +391,8 @@ def apply_provider_config(raw_body: bytes) -> bytes:
     ``{"ok", "model", "base_url_host"}``; the adapter reads the env per call, so
     a push takes effect on the NEXT turn with no restart."""
     # The RESOLVED pair - this body over the live env - must pass the coherence check before
-    # anything is written, so a rejected push leaves the env byte-identical rather than half-
-    # applied. SECURITY: the api_key is written to the env but NEVER logged, echoed or raised;
+    # anything is written, so a rejected push leaves the env byte-identical rather than
+    # half-applied. SECURITY: the api_key is written to the env but NEVER logged, echoed or raised;
     # only the base URL HOST and the effective model name leave this function.
     try:
         payload = json.loads(raw_body.decode("utf-8")) if raw_body.strip() else None

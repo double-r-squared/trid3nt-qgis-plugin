@@ -160,7 +160,6 @@ def layer_seed() -> str:
 class HighWaterMarksLayerURI(LayerURI):
     """A high-water-mark point layer plus its survey-quality envelope."""
 
-
     n_marks: int = 0
     event: str | None = None
     #: ``{label: count}`` over surveyor accuracy, mark type and vertical datum.
@@ -175,7 +174,6 @@ class HighWaterMarksLayerURI(LayerURI):
 class FaultSourcesResult(LayerURI):
     """An active-fault trace layer plus the kinematic source records."""
 
-
     catalog: str = "gem"
     #: Always equals ``len(faults)``.
     fault_count: int = 0
@@ -187,7 +185,6 @@ class FaultSourcesResult(LayerURI):
 
 class FloodExtentObservationResult(LayerURI):
     """An OBSERVED flood-extent layer plus its observation envelope."""
-
 
     product: str = "MCDWD_L3_F3_NRT"
     observation_date: str | None = None
@@ -204,7 +201,6 @@ class LandcoverResult(LayerURI):
     """A landcover layer plus the sidecar a roughness mapping is validated on.
     The base layer is a frozen ``extra="forbid"`` contract, so carrying the
     vintage here keeps it typed rather than wrapped in a dict beside it."""
-
 
     #: The vintage the roughness mapping is validated against; None for a dataset with no such mapping.
     nlcd_vintage_year: int | None = None
@@ -230,7 +226,6 @@ class BlueTopoResult(LayerURI):
     never what was asked for.
     """
 
-
     #: The datum read off the tiles that painted, verbatim; orthometric rather than tidal, so it merges with a land DEM unconverted.
     vertical_datum: str = "NAVD88"
     tile_count: int = 0
@@ -247,7 +242,6 @@ class StormTracksLayerURI(LayerURI):
     The provenance travels the recorder channel, so it survives a cache hit that
     never re-runs the fetch; without a sidecar these DEFAULTS hold."""
 
-
     #: ``"active"`` (a live feed) or ``"historical"`` (an archive).
     mode: str = "historical"
     #: Distinct storms in the layer, and the names or ids attributed to them.
@@ -259,7 +253,6 @@ class NWMStreamflowLayerURI(LayerURI):
     """A point-streamflow layer plus the fetch-time provenance of a COMPOSITE.
     ``reference_time`` is unrecoverable from the produced file, so the recorder
     channel is what makes it survive a cache hit."""
-
 
     #: The model configuration that served.
     product: str = "analysis_assim"

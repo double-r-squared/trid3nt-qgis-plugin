@@ -1,5 +1,5 @@
-"""Per-session state: the ``SessionState`` dataclass and its registries. The dataclass holds per-
-connection fields; the registries here are keyed by ``session_id``, so every connection of a
+"""Per-session state: the ``SessionState`` dataclass and its registries. The dataclass holds
+per-connection fields; the registries here are keyed by ``session_id``, so every connection of a
 session, reconnects included, shares one binding."""
 
 from __future__ import annotations
@@ -101,8 +101,8 @@ class SessionState:
     # the text to the partial-narration row it persists, so the verdict lands in the SAME chat row
     # as the streamed text rather than only in an envelope a dead socket may drop.
     current_turn_context_abort_note: str | None = None
-    # The Case this TURN is bound to, pinned at dispatch time before the first write. Every turn-
-    # scoped write - chat rows, tool cards, layer attribution, project routing, charts - targets
+    # The Case this TURN is bound to, pinned at dispatch time before the first write. Every
+    # turn-scoped write - chat rows, tool cards, layer attribution, project routing, charts - targets
     # THIS binding, never the live pointer, which a mid-stream select can re-point.
     current_turn_case_id: str | None = None
     # Per-connection authenticated user context, populated by the connect handshake. Once set, every

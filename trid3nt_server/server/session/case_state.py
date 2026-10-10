@@ -141,8 +141,8 @@ _SESSION_CASE_LIST_HASH: "dict[str, str]" = {}
 
 def _case_list_digest(cases: "list[CaseSummary]") -> str:
     """Stable, order-independent digest of a case list, over the fields a client renders rather
-    than a raw model dump, so a field addition that changes nothing visible does not force a re-
-    emit."""
+    than a raw model dump, so a field addition that changes nothing visible does not force a
+    re-emit."""
     parts = sorted(
         f"{c.case_id}|{c.title}|{c.status}|{c.created_at}|{c.updated_at}"
         for c in cases
