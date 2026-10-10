@@ -504,7 +504,7 @@ def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
     is OPEN, then the rest.
 
     The rest is the whole module, folded under advanced with its engine default."""
-    rows = _fetcher_rows() + _fetcher_rows() + [_slot_row(name, row)
+    rows = _source_rows() + _coverage_rows() + [_slot_row(name, row)
                                                for name, row
                                                in sheet.filled.items()]
     rows += _coupled_rows(sheet)
@@ -521,7 +521,7 @@ def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
                    sorted(rest, key=lambda slot: _group(slot))]
 
 
-def _fetcher_rows() -> list[ParamSheetRow]:
+def _source_rows() -> list[ParamSheetRow]:
     """One row per DATA slot the match filled: the ranked list, pick highlighted.
     The card renders the list the model was given. Not editable: a source is superseded by supplying the slot."""
     from trid3nt_server.workflows.runtime.journal import run_choices
@@ -537,7 +537,7 @@ def _fetcher_rows() -> list[ParamSheetRow]:
         for choice in run_choices()]
 
 
-def _fetcher_rows() -> list[ParamSheetRow]:
+def _coverage_rows() -> list[ParamSheetRow]:
     """WHAT THE CUT COVERS, over the water and over the land, one row each.
     On the card so the unmeasured share is weighed BEFORE the solve. Not editable: an op or supplying the slot changes it."""
     from trid3nt_server.workflows.runtime.journal import run_coverage
