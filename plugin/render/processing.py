@@ -1,11 +1,8 @@
 """A ``processing-request`` from the agent, run in THIS QGIS session.
 
-An algorithm request runs ``processing.run`` over layers named in its params by
-id, canvas name or store uri - a case layer always read from its full source,
-never the copy the map paints - and writes every output to a file it names; the
-agent publishes that file as a case layer, which is what paints. A code request
-executes the approved snippet in the session's Python. The response carries the
-outcome honestly: an error is the session's own traceback, never a fabricated result.
+An algorithm request runs ``processing.run``, resolving layers named in its params
+(a case layer is read from its full source) and writing outputs to files the agent
+publishes. A code request executes the approved snippet. Errors are the session's own traceback.
 """
 
 from __future__ import annotations
@@ -16,7 +13,6 @@ import json
 import traceback
 from typing import Any, Dict, Optional, Tuple
 
-#: The tail of a snippet's stdout and of an error that rides the response.
 _TAIL_CHARS = 8000
 
 
@@ -118,9 +114,9 @@ def run_code(code: str, iface: Any = None) -> Tuple[Any, str]:
 
 @contextlib.contextmanager
 def _gdal_config_in_environ():
-    """The session's GDAL configuration in the process environment for the run:
-    a ``gdal:`` algorithm spawns a GDAL process, which reads ``/vsis3`` from its
-    environment and never sees an in-process config option."""
+    """The session's GDAL configuration in the process environment for the run: a ``gdal:``
+    algorithm spawns a GDAL process, which reads ``/vsis3`` from its environment and never
+    sees an in-process config option."""
     import os
 
     from osgeo import gdal
@@ -136,8 +132,7 @@ def _gdal_config_in_environ():
 
 
 def _resolved(project: Any, value: Any) -> Any:
-    """A param with every layer it names resolved, a multi-layer list included:
-    QGIS would otherwise resolve a listed name to the painted copy."""
+    """A param with every layer it names resolved, a multi-layer list included:"""
     if isinstance(value, str):
         return _layer_named(project, value)
     if isinstance(value, list):
@@ -146,9 +141,9 @@ def _resolved(project: Any, value: Any) -> Any:
 
 
 def _layer_named(project: Any, value: str) -> Any:
-    """A layer by its store uri, its QGIS id, the agent's layer id stamped on it,
-    or its canvas name; a layer the dock painted is read from its store source;
-    any other string passes through as the value."""
+    """A layer by its store uri, its QGIS id, the agent's layer id stamped on it, or its canvas
+    name; a layer the dock painted is read from its store source; any other string passes
+    through as the value."""
     if value.startswith("s3://"):
         return _full_source(value, value)
     known = project.mapLayer(value)
@@ -165,9 +160,9 @@ def _layer_named(project: Any, value: str) -> Any:
 
 
 def _full_source(uri: str, named: str) -> Any:
-    """The case layer at ``uri`` opened afresh through the dock's ``/vsis3``
-    path, so an algorithm reads what the store holds; a layer whose source does
-    not open is refused by name."""
+    """The case layer at ``uri`` opened afresh through the dock's ``/vsis3`` path, so an
+    algorithm reads what the store holds; a layer whose source does not open is refused by
+    name."""
     from ..net.trid3nt_client import s3_to_vsis3
 
     path = s3_to_vsis3(uri)

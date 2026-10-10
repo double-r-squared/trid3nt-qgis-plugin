@@ -58,9 +58,7 @@ def overlay(*, saturation_mgl: float, k1_per_day: float, k2_per_day: float
                           list[Line]]:
     """The chart's reference, closed over the kinetics the DECK states.
 
-    The closed form grades the solve only while the two hold the same rates and
-    the same saturation, so the curve is drawn at the deck's own O2 keywords
-    rather than at a second declaration of them."""
+    The closed form grades the solve only while both hold the same rates and saturation, so it is drawn at the deck's own O2 keywords."""
 
     def lines(read: Profile, reads: Mapping[Any, Any],
               params: Mapping[str, Any]) -> list[Line]:

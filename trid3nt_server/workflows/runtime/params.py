@@ -24,7 +24,6 @@ __all__ = [
 ]
 
 
-#: Resolution doors, in the order the resolver walks them.
 Door = Literal["user", "question", "scenario", "constant", "gate"]
 
 
@@ -42,7 +41,6 @@ _ORDER: tuple[str, ...] = (
     doors.USER, doors.QUESTION, doors.SCENARIO, doors.CONSTANT, doors.GATE,
 )
 
-#: A door's ``basis`` on the run's ``SyntheticInput`` provenance record.
 _BASIS_FOR_DOOR: dict[str, str] = {
     doors.USER: "user",
     doors.QUESTION: "prompt_interpreted",
@@ -68,14 +66,10 @@ class Param:
     consequence: Literal["physics", "scenario", "numerical", "aoi"] = "scenario"
     real_source: str | None = None
     derived_when_absent: str | None = None
-    #: The declared WIRE type - what the registration factory annotates the
-    #: generated tool argument with, hence what the model sees in the schema.
-    #: Unset is inferred from the declaration (bounded -> float, bool default ->
-    #: bool, otherwise str); declare it where the inference would be wrong. An
-    #: unbounded NUMERIC default is refused rather than inferred: see __post_init__.
+    #: The declared wire type; unset is inferred (bounded -> float, bool default -> bool, else str).
+    #: An unbounded NUMERIC default is refused rather than inferred: see __post_init__.
     type: Any = None
-    #: Whether the wire exposes this param at all. ``False`` marks a value the
-    #: model never sends because a coercion resolves it from other wire args.
+    #: False marks a value a coercion resolves from other wire args; the model never sends it.
     wire: bool = True
 
     def __set_name__(self, owner: type, name: str) -> None:
@@ -108,12 +102,7 @@ class Param:
         if self.type is None and self.bounds is None \
                 and isinstance(self.default, (int, float)) \
                 and not isinstance(self.default, bool):
-            # The wire-type inference ends in `str`, and a NUMBER advertised to the
-            # model as a string is a schema that lies: the model sends "12", the
-            # writer multiplies a string, and nothing refused on the way. The
-            # two honest declarations are bounds (which also refuse outside the
-            # range) or an explicit type; guessing between them is not this
-            # class's call.
+            # A number advertised as str is a schema that lies; declare bounds or an explicit type - guessing is not this class's call.
             raise PlanValidationError(
                 f"Param {self.name!r} has the numeric default {self.default!r} but "
                 "declares neither bounds nor type, so the wire would advertise it "
@@ -243,10 +232,8 @@ def wire_value(value: Any) -> Any:
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         return {k: wire_value(v) for k, v in dataclasses.asdict(value).items()}
     if isinstance(value, float):
-        # Six SIGNIFICANT figures, not decimal places: 9.3e-07 to four decimals is
-        # 0.0, and a row reporting a physics value as zero is worse than no row.
-        # The same rule shortens a large value - a latitude of 42.0176777 renders
-        # as 42.0177, about 10 m.
+        # Six SIGNIFICANT figures, not decimal places: 9.3e-07 to four decimals reads 0.0, and a physics value
+        # reported as zero is worse than no row.
         return float(f"{value:.6g}")
     if isinstance(value, (list, tuple)):
         return [wire_value(v) for v in value]

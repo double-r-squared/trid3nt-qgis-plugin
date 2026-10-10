@@ -1,10 +1,7 @@
 """The card a direct run opens for the inputs its call left out or that refused.
 
-It is the input review gate's own card: one row per open input, each dropdown
-listing exactly what that input's accept rule takes. A pick is accepted or
-refused by name on the redrawn card, and the card's proceed is the launch once
-the run is READY - nothing refused and nothing required missing; short of
-that the card is drawn again naming what the run waits on.
+One row per open input, each dropdown listing what that input's accept rule takes. The
+card's proceed launches only when the run is READY; short of that it is drawn again.
 """
 
 from __future__ import annotations

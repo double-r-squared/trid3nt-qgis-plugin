@@ -4,12 +4,9 @@ The forecast is a nested Zarr store whose socket and coordinate arrays the libra
 owns, so ``delegate`` returns an EPSG:4326 array -- the hook owning the reproject,
 clip and synthesis -- and ``delegate_resolve`` walks back to the newest cycle."""
 
-# ONE shared module serves both the forecast and the smoke source -- an identical
-# Zarr body. The per-source difference (the variable to level/s3_var table, the
-# forecast-only derived wind speed, the smoke-only fill mask) is declared in
-# ``ingest.hrrr`` and read here. The HRRR-grid physical facts -- the LCC proj4, the
-# 18/48 h horizons, the 6 h cycle backstop -- are the same for both mirrors, so they
-# stay module constants; the CONUS envelope is each row's declared gate.
+# One module serves both the forecast and the smoke source (an identical Zarr body); per-source
+# differences are declared in ``ingest.hrrr``. The grid facts (LCC proj4, horizons, cycle
+# backstop) are shared module constants; the CONUS envelope is each row's declared gate.
 
 from __future__ import annotations
 
@@ -29,9 +26,6 @@ logger = logging.getLogger(
 
 __all__ = ["resolve_cycle", "read_slice", "validate_inputs"]
 
-# HRRR LCC projection and horizons: the same physical grid for HRRR
-# and HRRR-Smoke, kept module-level rather than in ingest so both rows read one
-# source of truth for the grid facts.
 _HRRR_PROJ4 = (
     "+proj=lcc +lat_1=38.5 +lat_2=38.5 +lat_0=38.5 +lon_0=-97.5 "
     "+x_0=0 +y_0=0 +R=6371229 +units=m +no_defs"
@@ -50,7 +44,6 @@ def _hrrr_cfg(spec: SourceSpec) -> dict[str, Any]:
 
 
 def _var_levels(spec: SourceSpec, variable: str) -> tuple[str, str]:
-    """Return the ``(level_group, s3_var)`` for a plain (non-derived) variable."""
     variables = _hrrr_cfg(spec).get("variables") or {}
     entry = variables.get(variable)
     if not entry:
@@ -63,9 +56,7 @@ def _var_levels(spec: SourceSpec, variable: str) -> tuple[str, str]:
 
 
 def _probe_levels(spec: SourceSpec, variable: str) -> tuple[str, str]:
-    """The ``(level, s3_var)`` used to PROBE the cycle for ``variable``. A derived
-    variable has no single array, so its ``ingest.hrrr.derived`` entry names one
-    component: publishing is atomic per cycle, so one component proves the cycle."""
+    """The ``(level, s3_var)`` to PROBE the cycle: a derived variable names one component, since publishing is atomic per cycle."""
     derived = (_hrrr_cfg(spec).get("derived") or {}).get(variable)
     if derived:
         return _var_levels(spec, str(derived["probe"]))
@@ -73,7 +64,6 @@ def _probe_levels(spec: SourceSpec, variable: str) -> tuple[str, str]:
 
 
 def _target_cycle(spec: SourceSpec, params: dict[str, Any]) -> _dt.datetime:
-    """Resolve the user's ``cycle`` param (ISO-8601 UTC) or now() floored to the hour."""
     cycle = params.get("cycle")
     if not cycle:
         return _dt.datetime.now(_dt.timezone.utc).replace(
@@ -97,7 +87,6 @@ def _cycle_key(cycle_date: _dt.date, cycle_hour: int) -> str:
 
 
 def _zarr_paths(cycle_date: _dt.date, cycle_hour: int, level: str, s3_var: str) -> tuple[str, str]:
-    """The ``(outer_group, inner_group)`` S3 zarr paths for a (cycle, variable)."""
     date_str = cycle_date.strftime("%Y%m%d")
     base = f"{_BUCKET}/sfc/{date_str}/{_cycle_key(cycle_date, cycle_hour)}/{level}/{s3_var}"
     return f"s3://{base}", f"s3://{base}/{level}"
@@ -107,9 +96,7 @@ def _zarr_paths(cycle_date: _dt.date, cycle_hour: int, level: str, s3_var: str) 
 
 @register_hook("hrrr.validate")
 def validate_inputs(spec: SourceSpec, params: dict[str, Any]) -> None:
-    """The one input gate the declarative surface cannot express: the
-    forecast_hour-versus-cycle-horizon ceiling, which is cross-param with the
-    resolved-or-now cycle hour."""
+    """The cross-param gate the declarative surface cannot express: forecast_hour versus the cycle horizon."""
     sc = spec.error_code_prefix
     sfx = spec.input_error_suffix
     forecast_hour = int(params.get("forecast_hour", 1))
@@ -128,9 +115,8 @@ def validate_inputs(spec: SourceSpec, params: dict[str, Any]) -> None:
 
 @register_hook("hrrr.resolve_cycle")
 def resolve_cycle(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> dict[str, Any]:
-    """Walk the mirror backward for the newest published cycle, returning
-    ``{"cycle_date", "cycle_hour"}`` to merge into params BEFORE read_through so the
-    cycle enters the cache key. Exhausting the backstop raises NOT_AVAILABLE."""
+    """Walk the mirror back for the newest published cycle and return ``{"cycle_date", "cycle_hour"}`` to merge BEFORE
+    read_through so it enters the cache key; exhausting the backstop raises NOT_AVAILABLE."""
     sc = spec.error_code_prefix
     variable = params["variable"]
     forecast_hour = int(params.get("forecast_hour", 1))
@@ -183,9 +169,7 @@ def _open_component_4326(
     forecast_hour: int,
     bbox: tuple[float, float, float, float],
 ) -> Any:
-    """Open ONE plain HRRR-Zarr component, reproject to EPSG:4326 and clip to the bbox,
-    returning the materialized float32 DataArray. An open, decode or reproject failure
-    is UPSTREAM; an empty window after the clip is EMPTY."""
+    """Open ONE plain component, reproject to EPSG:4326, clip to the bbox as float32; open/decode/reproject failure is UPSTREAM, an empty clip EMPTY."""
     import fsspec
     import rioxarray  # noqa: F401 -- registers the .rio accessor
     import xarray as xr
@@ -256,9 +240,7 @@ def _open_component_4326(
 
 @register_hook("hrrr.read")
 def read_slice(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> tuple[Any, Any, Any]:
-    """Open the HRRR-Zarr slices to ``(array_2d_float32, affine, EPSG:4326)``. A plain
-    variable is one reprojected and clipped component; a derived one combines its
-    components on the same grid, NaN preserved."""
+    """Open the slices to ``(array_2d_float32, affine, EPSG:4326)``; a derived variable combines its components on one grid, NaN preserved."""
     import numpy as np
 
     sc = spec.error_code_prefix

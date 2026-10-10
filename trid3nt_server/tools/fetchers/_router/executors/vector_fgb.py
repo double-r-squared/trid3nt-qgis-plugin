@@ -32,14 +32,8 @@ __all__ = [
 ]
 
 
-# Declarative WHERE-clause builder for the ArcGIS family.
-#
-# `ingest.where_clauses` is an ordered list of {template, require:[params]}
-# rules: a rule contributes its `str.format(**params)` clause ONLY when every
-# `require` param is present + non-None in the validated params; the surviving
-# clauses are AND-joined. Absent/none-declared -> falls back to a literal
-# `where` param else "1=1". A voltage floor, a year range and a period filter are
-# all row data this way, with no source hardcode.
+# ``ingest.where_clauses``: a rule's ``str.format(**params)`` clause joins (AND) only when every
+# ``require`` param is present and non-None; none declared falls back to a literal ``where`` else "1=1".
 
 
 def build_where(spec: SourceSpec, params: dict[str, Any]) -> str:
@@ -62,22 +56,9 @@ def build_where(spec: SourceSpec, params: dict[str, Any]) -> str:
     return " AND ".join(parts) if parts else "1=1"
 
 
-# Declarative column normalizer for the ArcGIS family.
-#
-# `ingest.column_map` is an ORDERED map out_col -> rule, a raw-property to
-# output-column projection, rename and normalization with no source hardcode.
-# Rule fields:
-#   from            source property key, or a dotted path into the raw row when the
-#                   field map hands the whole row over. A literal key wins over the
-#                   path walk, so a source property whose own name carries a dot
-#                   still resolves.
-#   kind            passthrough(default) | int | float | str | lookup | epoch_ms_iso
-#   null_below      numeric: value <= this -> None (the -999 SVI sentinel)
-#   table           lookup: {key -> label}
-#   default         value when the source key is absent / lookup miss
-#   default_template  lookup miss: str formatted with {key} (drought "D{key}")
-# When column_map is present the executor emits EXACTLY the mapped columns (a
-# projection), then json_coerce / geometry_filter layer on top.
+# ``ingest.column_map`` projects raw properties to output columns (rule fields: ``from`` -- a
+# literal key wins over a dotted path --, ``kind``, ``null_below``, ``table``, ``default``,
+# ``default_template``); when present the executor emits EXACTLY the mapped columns.
 
 
 #: Absent source field, distinct from a present null (which stays null).
@@ -106,8 +87,7 @@ def _resolve_column(rule: dict[str, Any], src_props: dict[str, Any]) -> Any:
         if found is _MISSING or found is None:
             return rule.get("default")
         key = found
-        # YAML int-keyed tables load as int keys; coerce the lookup key to int
-        # when the table is int-keyed so a float/str code still resolves.
+        # YAML int-keyed tables load as int keys; coerce so a float/str code still resolves.
         if table and all(isinstance(k, int) for k in table):
             try:
                 key = int(key)
@@ -123,8 +103,7 @@ def _resolve_column(rule: dict[str, Any], src_props: dict[str, Any]) -> Any:
             return None
         return str(raw).strip() or None
     if kind == "epoch_ms_iso":
-        # Epoch milliseconds, the stamp an event API carries, as the ISO-8601 UTC
-        # instant the layer states. A date alone would drop the time of day.
+        # Epoch milliseconds become an ISO-8601 UTC instant; a date alone would drop the time of day.
         try:
             ms = float(raw)
         except (TypeError, ValueError):
@@ -156,9 +135,7 @@ def _resolve_column(rule: dict[str, Any], src_props: dict[str, Any]) -> Any:
 
 
 def _resolve_column_map(spec: SourceSpec, params: dict[str, Any] | None) -> dict[str, Any] | None:
-    """The effective column_map for this call: the static ``ingest.column_map``, or a
-    passthrough map synthesized from ``ingest.properties_by_param`` when the kept
-    property SET varies by an enum param, so the empty header follows it too."""
+    """The effective column_map: the static one, or a passthrough synthesized from ``ingest.properties_by_param``."""
     ingest = spec.ingest or {}
     pbp = ingest.get("properties_by_param")
     if isinstance(pbp, dict) and params is not None:
@@ -172,7 +149,6 @@ def _resolve_column_map(spec: SourceSpec, params: dict[str, Any] | None) -> dict
 def apply_column_map(
     features: list[dict[str, Any]], spec: SourceSpec, params: dict[str, Any] | None = None
 ) -> list[dict[str, Any]]:
-    """Project each feature's props to the declared ``ingest.column_map`` columns."""
     cmap = _resolve_column_map(spec, params)
     if not cmap:
         return features
@@ -190,15 +166,8 @@ def apply_column_map(
     ]
 
 
-# Declarative ingest transforms: nested-property to JSON coercion and the
-# Point/finite-geometry filter. Both are opt-in ``ingest.*`` directives; a row
-# declaring neither is untouched.
-
-
 def _passes_geometry_filter(geom: Any, gf: dict[str, Any]) -> bool:
-    """Point/finite-geometry filter: ``geom_types`` is a geometry-type allowlist and
-    ``require_finite`` drops a feature whose leading (x, y) pair is missing or
-    non-finite."""
+    """Point/finite-geometry filter: ``geom_types`` allowlist; ``require_finite`` drops a missing or non-finite leading (x, y)."""
     if geom is None:
         return False
     geom_types = gf.get("geom_types")
@@ -222,8 +191,7 @@ def apply_ingest_transforms(
     spec: SourceSpec,
     params: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """Apply the column map, then declarative ``geometry_filter`` /
-    ``json_coerce_nested`` to raw features (no-op when none are declared)."""
+    """Apply the column map, then ``geometry_filter`` / ``json_coerce_nested`` to raw features."""
     ingest = spec.ingest or {}
     features = apply_column_map(features, spec, params)
     gf = ingest.get("geometry_filter")
@@ -249,13 +217,11 @@ def apply_ingest_transforms(
 def _out_columns(
     spec: SourceSpec, features: list[dict[str, Any]], params: dict[str, Any] | None = None
 ) -> list[str]:
-    """Resolve the output property columns, row-declared or feature-derived."""
     ingest = spec.ingest or {}
     cmap = _resolve_column_map(spec, params)
     declared = ingest.get("properties")
     if cmap:
-        # column_map is the authoritative projected schema: the honest-empty header
-        # still carries every mapped column.
+        # column_map is authoritative: the empty header still carries every mapped column.
         cols = [str(c) for c in cmap]
     elif declared:
         cols = [str(c) for c in declared]
@@ -273,9 +239,8 @@ def features_to_fgb_bytes(
     spec: SourceSpec,
     params: dict[str, Any] | None = None,
 ) -> bytes:
-    """Serialize GeoJSON features to FlatGeobuf bytes, applying the declarative ingest
-    transforms first. Always emits a valid FGB: an empty feature list yields a
-    header-only FGB carrying the declared schema, so readers still parse."""
+    """Serialize GeoJSON features to FlatGeobuf bytes after the ingest transforms; an empty
+    list yields a header-only FGB carrying the declared schema."""
     try:
         import geopandas as gpd
         import pandas as pd
@@ -285,8 +250,7 @@ def features_to_fgb_bytes(
     features = apply_ingest_transforms(features, spec, params)
 
     crs = spec.normalize.crs
-    # keep_null_geometry preserves attribute-only rows -- an alert whose zone did not
-    # resolve -- instead of dropping NULL-geometry features. Default off.
+    # keep_null_geometry preserves attribute-only rows (an alert whose zone did not resolve).
     keep_null = bool(getattr(spec.output, "keep_null_geometry", False))
     if keep_null:
         rows = [f for f in features if isinstance(f, dict)]
@@ -302,8 +266,7 @@ def features_to_fgb_bytes(
         empty_df = pd.DataFrame(columns=cols)
         gdf = gpd.GeoDataFrame(empty_df, geometry=[], crs=crs)
     elif keep_null:
-        # Materialize every row (NULL geometry preserved); column order pinned to
-        # the declared schema so the property table is stable.
+        # Column order is pinned to the declared schema.
         gdf = gpd.GeoDataFrame.from_features(
             [
                 {
@@ -319,8 +282,7 @@ def features_to_fgb_bytes(
         gdf = gpd.GeoDataFrame.from_features(rows, crs=crs)
         gdf = gdf.dropna(subset=["geometry"]).copy()
 
-    # pyogrio rejects a spatial index over any NULL geometry; disable it when a
-    # kept-null source emits (or could emit) attribute-only rows.
+    # pyogrio rejects a spatial index over any NULL geometry.
     has_null_geom = keep_null and bool(len(gdf)) and (len(valid) < len(rows))
 
     tmp_fgb: str | None = None
@@ -354,16 +316,12 @@ def features_to_fgb_bytes(
 
 
 def resolve_endpoints(spec: SourceSpec, params: dict[str, Any]) -> list[Any]:
-    """Ordered endpoint chain: the selected primary then its fallbacks.
-    ``ingest.endpoint_select`` picks the primary by a param's presence, defaulting to
-    the ``data`` endpoint; ``spec.endpoint_fallback`` names SAME-DATA mirrors."""
+    """Ordered endpoint chain: the primary picked by ``ingest.endpoint_select`` (default ``data``), then SAME-DATA mirrors."""
     endpoints = spec.endpoints
     ingest = spec.ingest or {}
     sel = ingest.get("endpoint_select")
     by_enum = ingest.get("endpoint_by_param")
     if isinstance(by_enum, dict):
-        # Per-enum sub-layer routing (usace_levees ``layer`` -> FeatureServer
-        # sub-layer endpoint). No-op for every prior row (none declare it).
         pval = params.get(by_enum.get("param"))
         primary = endpoints.get((by_enum.get("map") or {}).get(pval))
     elif isinstance(sel, dict):

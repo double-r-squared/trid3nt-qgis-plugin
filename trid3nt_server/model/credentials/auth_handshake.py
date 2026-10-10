@@ -33,9 +33,7 @@ ADVERTISED_HTTP_PORT_DEFAULT: int = 8766
 
 
 def _advertised_http_port() -> int:
-    """The port the agent HTTP surface is bound on (``TRID3NT_AGENT_HTTP_PORT``).
-    Falls back to :data:`ADVERTISED_HTTP_PORT_DEFAULT` when the env is unset or
-    unparseable, so the advertised base tracks the actual listener."""
+    """The port the agent HTTP surface is bound on (``TRID3NT_AGENT_HTTP_PORT``)."""
     try:
         return int(
             os.environ.get(
@@ -47,9 +45,7 @@ def _advertised_http_port() -> int:
 
 
 def _host_for_url(host: str) -> str:
-    """Bracket a bare IPv6 literal for use in an ``http://host:port`` URL.
-    IPv4 and hostnames pass through unchanged; ``::1`` becomes ``[::1]`` so the
-    ``:port`` suffix is unambiguous."""
+    """Bracket a bare IPv6 literal for use in an ``http://host:port`` URL."""
     if ":" in host and not host.startswith("["):
         return f"[{host}]"
     return host
@@ -61,10 +57,9 @@ def derive_advertised_endpoints(
     """Build the ``endpoints`` object advertised on the ``auth-ack``.
     ``None`` when neither an env override nor a usable ``local_host`` yields any
     base; the ack then carries ``endpoints=None``."""
-    # Precedence per field, independently: an env override wins unconditionally
-    # so an operator can front the daemon behind a reverse proxy or a different
-    # hostname; otherwise each base is derived from THIS connection's own local
-    # address plus the known ports.
+    # Precedence per field, independently: an env override wins unconditionally so an operator can
+    # front the daemon behind a reverse proxy or a different hostname; otherwise each base is
+    # derived from THIS connection's own local address plus the known ports.
     data_base = os.environ.get("TRID3NT_ADVERTISED_DATA_BASE") or None
     http_base = os.environ.get("TRID3NT_ADVERTISED_HTTP_BASE") or None
     if local_host:
@@ -115,8 +110,7 @@ def ensure_access_token() -> str:
 
 
 def _read_token_file(path: Path) -> str | None:
-    """The token stored in ``path``, or ``None`` when absent or unreadable.
-    An empty file counts as absent so a truncated write re-mints."""
+    """The token stored in ``path``, or ``None`` when absent or unreadable."""
     try:
         return path.read_text(encoding="utf-8").strip() or None
     except OSError:

@@ -88,10 +88,8 @@ async def build_declared_mesh(*, mesh: dict[str, Any], name: Any = None,
 
 
 def mesh_key(recipe: Mapping[str, Any]) -> str:
-    """The CONTENT key of a bound recipe: the domain's geometry, the bytes of
-    every file the mesher reads, the resolution, the mesher and its own ops.
-    A file enters by what it holds, never by its name or uri; an object that
-    holds its own fields enters by them, its ``uri`` only where it came from."""
+    """The CONTENT key of a bound recipe: the domain's geometry, the bytes of every file
+    the mesher reads, the resolution, the mesher and its own ops. A file enters by what it holds, never by its name or uri."""
     blob = json.dumps(_content(recipe), sort_keys=True, default=str)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:24]
 
@@ -191,10 +189,7 @@ def _live(uri: str) -> bool:
 
 
 def _mesh_coverage(extent: Any, art: Any) -> None:
-    """Say how much of the domain's own centerline the built cells actually hold.
-
-    Only a domain whose producer MEASURED a centerline has one to measure
-    against; a drawn outline carries none and nothing is said."""
+    """Say how much of the domain's own centerline the built cells actually hold; a drawn outline has none, so nothing is said."""
     from trid3nt_server.inputs.geometry import covered_fraction
     from trid3nt_server.workflows.runtime import journal_note
 

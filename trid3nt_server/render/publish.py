@@ -41,19 +41,11 @@ class PublishLayerError(RuntimeError):
         self.retryable = retryable
 
 
-# The render chokepoint
-#
-# Two guards run FIRST because they are facts about the FILE rather than about
-# the style, and each one is a way a ramp would CORRUPT an already-painted
-# image: a COG carrying its own band-1 colour table is coloured by that table,
-# and an RGB(A) / multiband COG is coloured already. Neither takes a preset -
-# they are handed back as "already painted".
+# Two guards run first because they are facts about the file, not the style, and a ramp would corrupt an already-painted
+# image: a COG with its own band-1 colour table, or an RGB(A)/multiband COG. Neither takes a preset.
 
 def _is_rgba_or_multiband(raster_bytes: bytes | None) -> bool:
-    """True if the COG is RGB(A)/multiband - QGIS renders it DIRECTLY.
-
-    A read failure returns False, so a single-band scalar still gets its range.
-    """
+    """A read failure returns False so a single-band scalar still gets its range."""
     if not raster_bytes:
         return False
     try:
@@ -92,10 +84,7 @@ def resolve_layer_style(
     ``None`` for an already-painted raster.
     """
     preset = presets.from_row(style)
-    # A vector or mesh declaration takes this same call and the same resolve: it
-    # skips the raster probes, which are questions about a COG's bytes that a
-    # FlatGeobuf's features and a SELAFIN's dataset groups cannot answer. One
-    # seam, four kinds - never a second resolver per layer type.
+    # A vector or mesh declaration takes this call and resolve but skips the raster probes, which a FlatGeobuf or SELAFIN cannot answer. One seam, four kinds.
     if not presets.paints_a_raster(preset):
         resolved = presets.resolve(preset, override=override, shared=shared)
         logger.info("publish_layer (style) uri=%s -> %s", layer_uri,
@@ -123,22 +112,11 @@ def resolve_layer_style(
     return resolved
 
 
-# The resolved style, as the layer carries it
-#
-# The legend is built from the SAME resolution the .qml is written from, so the
-# colourbar and the painted raster span identical numbers - there is no second
-# range to drift. A raster that is already painted has no resolution to report:
-# a paletted COG's legend comes from its own table, and an RGB(A) composite has
-# no meaningful key at all.
-#
-# Fail-open: ANY failure here returns ``None`` so a publish is never blocked.
+# The legend is built from the same resolution the .qml is written from, so colourbar and raster span identical
+# numbers. An already-painted raster has no resolution to report. Fail-open: any failure returns ``None``.
 
-#: The most-recent published-raster ``LegendKey`` keyed by the layer's ``s3://``
-#: COG uri. The legend travels by URI rather than on the layer row, and the
-#: register-only manifest seam keys by the same uri, so both producers share one
-#: key shape. Module scope is safe - the legend is a pure function of the
-#: content-addressed COG plus the declared row. FIFO-bounded at the write site so
-#: the always-on agent process never grows it without limit.
+#: Published-raster ``LegendKey`` by ``s3://`` COG uri, shared with the register-only manifest seam. Module scope is
+#: safe (the legend is a pure function of the content-addressed COG and declared row); FIFO-bounded at the write site.
 _MAX_LEGEND_ENTRIES: int = 256
 _LAST_LEGEND_BY_URI: dict[str, Any] = {}
 
@@ -184,10 +162,7 @@ def legend_for_published_layer(
 
 
 def _stash_legend_for_uri(layer_uri: str, legend: "LegendKey | None") -> None:
-    """Record (or clear) the published layer's ``LegendKey`` keyed by its uri.
-    A ``None`` legend CLEARS the entry, so a re-publish that now resolves to no
-    key cannot leave an orphaned one behind.
-    """
+    """A ``None`` legend clears the entry so a re-publish cannot leave an orphan."""
     if not layer_uri:
         return
     if layer_uri in _LAST_LEGEND_BY_URI:
@@ -207,15 +182,11 @@ def pop_legend_for_uri(layer_uri: str) -> "LegendKey | None":
     return _LAST_LEGEND_BY_URI.get(layer_uri)
 
 
-# The raw ``s3://`` COG uri IS what the client renders: do not reintroduce an
-# XYZ tile-template mint here.
+# The raw ``s3://`` COG uri IS what the client renders: do not reintroduce an XYZ tile-template mint here.
 
 
-#: Vector artifact extensions. ``publish_layer`` is RASTER-ONLY: a vector
-#: reaching it is already a store object the plugin opens natively, and GDAL
-#: cannot open a FlatGeobuf as a raster COG, so routing one through the raster
-#: path would fail to open rather than render. Token-tail matched against the
-#: resolved URI basename.
+#: Vector artifact extensions, token-tail matched against the resolved URI basename. ``publish_layer`` is raster-only:
+#: GDAL cannot open a FlatGeobuf as a COG, so a vector routed through it would fail rather than render.
 _VECTOR_EXTS = (
     ".fgb",
     ".geojson",
@@ -232,14 +203,10 @@ def _is_vector_uri(layer_uri: str) -> bool:
     return layer_uri.lower().rstrip("/").endswith(_VECTOR_EXTS)
 
 
-# Overview enforcement (no-overview COGs render spotty / never paint)
 
 
 def _raster_has_overviews(raster_bytes: bytes) -> bool | None:
-    """True/False if the in-memory raster has internal overviews; None if unknown.
-    ``None`` means CANNOT DETERMINE - rasterio absent, or the open failed - and
-    every caller fails open on it and publishes the raster as-is.
-    """
+    """``None`` means undeterminable (rasterio absent or the open failed); callers fail open."""
     try:
         import rasterio
         from rasterio.io import MemoryFile
@@ -264,10 +231,7 @@ def _raster_has_overviews(raster_bytes: bytes) -> bool | None:
 
 
 def _read_band1_colormap(src) -> dict | None:
-    """Return the band-1 palette color table (``{idx: (r,g,b,a)}``) or ``None``.
-    ``None`` when band 1 carries no table - the normal case for a continuous
-    raster - so that no caller fabricates one.
-    """
+    """``None`` when band 1 carries no table, so no caller fabricates one."""
     try:
         return src.colormap(1)
     except ValueError:
@@ -278,10 +242,7 @@ def _read_band1_colormap(src) -> dict | None:
 
 
 def _apply_band1_colormap(dst, cmap: dict | None) -> None:
-    """Stamp a preserved band-1 color table + palette colorinterp onto ``dst``.
-
-    A ``None`` ``cmap`` is a no-op: a colour table is never fabricated.
-    """
+    """A ``None`` ``cmap`` is a no-op: a colour table is never fabricated."""
     if cmap is None:
         return
     try:
@@ -304,10 +265,7 @@ def _apply_band1_colormap(dst, cmap: dict | None) -> None:
 
 
 def _build_cog_with_overviews(raster_bytes: bytes) -> bytes | None:
-    """Encode raster bytes as a tiled COG with overviews - render's one COG writer.
-    Keeps dtype, CRS, transform, nodata, colour interpretation and a band-1
-    palette; ``None`` when the encode fails or yields no overview.
-    """
+    """Encode raster bytes as a tiled COG with overviews, render's one COG writer; ``None`` when the encode fails or yields no overview."""
     try:
         from rasterio.io import MemoryFile
 
@@ -323,8 +281,7 @@ def _build_cog_with_overviews(raster_bytes: bytes) -> bytes | None:
             colorinterp = src.colorinterp
             cmap = _read_band1_colormap(src)
             count = len(_overview_factors(src.width, src.height))
-        # Averaging class indices invents codes the palette maps to wrong
-        # colours, so a paletted raster downsamples by nearest.
+        # Averaging class indices invents codes the palette maps to wrong colours, so a paletted raster downsamples by nearest.
         resampling = "NEAREST" if cmap else "AVERAGE"
         with MemoryFile() as dst_mem:
             with dst_mem.open(OVERVIEW_COUNT=count, OVERVIEW_RESAMPLING=resampling,
@@ -345,10 +302,7 @@ def _build_cog_with_overviews(raster_bytes: bytes) -> bytes | None:
 
 
 def _overview_factors(width: int, height: int) -> list[int]:
-    """Power-of-two decimation factors down to a ~256px overview.
-
-    Never empty: a raster too small for the 256px floor still gets factor 2.
-    """
+    """Never empty: a raster below the 256px floor still gets factor 2."""
     factors: list[int] = []
     factor = 2
     while max(width, height) // factor >= 256:
@@ -356,20 +310,14 @@ def _overview_factors(width: int, height: int) -> list[int]:
         factor *= 2
         if len(factors) >= 8:  # safety cap
             break
-    # Always add factor=2 even when the image is already smaller than 512px: with
-    # no overview level at all QGIS computes minzoom == maxzoom for a tiny COG and
-    # renders nothing at a continental zoom. One factor-2 level is enough for it
-    # to lower its minzoom and overzoom the tiles.
+    # Always add factor=2: with no overview level QGIS computes minzoom == maxzoom for a tiny COG and renders nothing at a continental zoom.
     if not factors:
         factors = [2]
     return factors
 
 
 def _read_raster_bytes(layer_uri: str) -> bytes | None:
-    """Read raster bytes for an ``s3://`` / local URI (None on failure).
-
-    Fail-open: any read error returns ``None`` and the publish proceeds.
-    """
+    """Fail-open: any read error returns ``None``."""
     try:
         if layer_uri.startswith("s3://"):
             from trid3nt_server.tools.cache import read_object_bytes_s3
@@ -389,10 +337,7 @@ def _read_raster_bytes(layer_uri: str) -> bytes | None:
 
 
 def _split_s3_uri(uri: str) -> tuple[str, str] | None:
-    """``(bucket, key)`` for an ``s3://`` URI, or ``None`` when it is not one.
-
-    A local path is a legal input here rather than a fault, so this never raises.
-    """
+    """A local path is a legal input, so this never raises."""
     from trid3nt_server.store import objects as storage
 
     try:
@@ -403,10 +348,7 @@ def _split_s3_uri(uri: str) -> tuple[str, str] | None:
 
 
 def _write_overview_cog(layer_uri: str, cog_bytes: bytes) -> str | None:
-    """Write the auto-translated COG alongside the source; ``None`` on failure.
-    A fresh ULID-suffixed sibling: the original COG is never mutated in place
-    and a warm negative cache cannot poison the new object.
-    """
+    """A fresh ULID-suffixed sibling: the original COG is never mutated and a warm negative cache cannot poison the new object."""
     parsed_s3 = _split_s3_uri(layer_uri)
     try:
         if layer_uri.startswith("s3://") and parsed_s3 is not None:
@@ -437,10 +379,7 @@ def _write_overview_cog(layer_uri: str, cog_bytes: bytes) -> str | None:
 
 
 def _ensure_raster_has_overviews(layer_uri: str) -> str:
-    """Guarantee the published raster is a COG WITH overviews.
-    Fail-open at every step: an unreadable raster, a failed translate or a failed
-    write all return ``layer_uri`` unchanged rather than blocking the publish.
-    """
+    """Fail-open at every step: any failure returns ``layer_uri`` unchanged."""
     raster_bytes = _read_raster_bytes(layer_uri)
     if raster_bytes is None:
         return layer_uri
@@ -474,20 +413,14 @@ def _ensure_raster_has_overviews(layer_uri: str) -> str:
 
 
 def _looks_like_ulid(value: str) -> bool:
-    """True for a 26-char Crockford-base32 ULID shape (case-insensitive).
-
-    Shape only: enough to tell an identifier from a human name.
-    """
+    """Shape only: enough to tell an identifier from a human name."""
     import re as _re
 
     return bool(_re.match(r"^[0-9A-HJKMNP-TV-Z]{26}$", value, _re.IGNORECASE))
 
 
 def _looks_like_hash_or_id(value: str) -> bool:
-    """True for a bare ULID, or a long hex/opaque cache-key-shaped token.
-
-    The test for a URI segment that is not worth showing a reader.
-    """
+    """A URI segment not worth showing a reader."""
     import re as _re
 
     if _looks_like_ulid(value):
@@ -496,10 +429,7 @@ def _looks_like_hash_or_id(value: str) -> bool:
 
 
 def _label_from_uri(layer_uri: str) -> str | None:
-    """Human label from a source ``layer_uri`` path segment, or ``None``.
-
-    The PARENT segment wins over the file stem, which is usually a cache hash.
-    """
+    """The parent segment wins over the file stem, which is usually a cache hash."""
     from urllib.parse import urlparse as _urlparse
 
     path = _urlparse(layer_uri).path if "://" in layer_uri else layer_uri
@@ -518,10 +448,7 @@ def _label_from_uri(layer_uri: str) -> str | None:
 
 
 def _short_disambiguator(layer_id: str) -> str:
-    """Short suffix: the last 4 alnum chars of ``layer_id``, else today's MMDD.
-
-    So two derived names for the same family do not collide in the layer list.
-    """
+    """So two derived names for one family do not collide in the layer list."""
     import re as _re
 
     tail = _re.sub(r"[^A-Za-z0-9]", "", layer_id or "")[-4:]
@@ -541,9 +468,7 @@ def derive_readable_layer_name(
 
     An explicit non-ULID ``name`` returns verbatim; a derived one is disambiguated.
     """
-    # Precedence: an explicit non-ULID name, then a human segment of the source
-    # uri, then "Layer". A bare ULID must never reach the layer summary while
-    # any of the later signals is available.
+    # Precedence: an explicit non-ULID name, a human segment of the source uri, then "Layer"; a bare ULID never reaches the summary.
     if name and name.strip() and not _looks_like_ulid(name.strip()):
         return name.strip()
 
@@ -555,21 +480,16 @@ def publish_layer(
     layer_uri: str,
     layer_id: str,
     style: dict[str, Any] | None = None,
-    #: A declared SPECIALIZATION of the contract's scale for this one layer -
-    #: a param knob, or `restyle_layer`. Absent means the contract default,
-    #: which is what nearly every publish wants.
+    #: A specialization of the contract's scale for this one layer (a param knob or `restyle_layer`); absent means the contract default.
     scale: "ScaleSpec | None" = None,
-    #: One range shared across a COMPARED set, so before/after and
-    #: coarse-versus-refined are painted against each other rather than each
-    #: against itself.
+    #: One range shared across a compared set, so before/after and coarse-versus-refined are painted against each other.
     shared_range: tuple[float, float] | None = None,
 ) -> str:
     """Publish a COG raster: write, register, notify.
     Returns the ``s3://`` COG uri the client renders - the overview-enforced
     sibling when one had to be built. A vector needs no publish and comes back as is.
     """
-    # A vector is already a store object the client opens natively, and GDAL
-    # cannot open a FlatGeobuf as a raster COG.
+    # A vector is already a store object the client opens natively; GDAL cannot open a FlatGeobuf as a raster COG.
     if _is_vector_uri(layer_uri):
         return layer_uri
     if not layer_uri.startswith("s3://"):
@@ -579,15 +499,11 @@ def publish_layer(
             "Pass the producing tool's layer handle or its s3:// URI verbatim.",
             retryable=True,
         )
-    # A no-overview COG renders spotty: per-strip range requests time out cold
-    # and nothing can downsample it for a low zoom. Enforced BEFORE registration
-    # so the uri that is registered is the one that renders.
+    # A no-overview COG renders spotty (cold range requests time out, nothing downsamples it); enforced before registration so the registered uri is the one that renders.
     layer_uri = _ensure_raster_has_overviews(layer_uri)
 
-    # The DECLARED style row, resolved against this raster ONCE: the range, the
-    # ramp and the .qml all come out of that one resolution, stashed under the
-    # s3:// uri this call returns because the legend travels by uri, not on the
-    # returned value. Fail-open: a None legend clears the stash entry.
+    # The declared style row is resolved against this raster once and stashed under the returned s3:// uri, because the legend
+    # travels by uri; a None legend clears the stash entry. Fail-open.
     try:
         _stash_legend_for_uri(layer_uri, legend_for_published_layer(
             style, layer_uri, override=scale, shared=shared_range))
@@ -595,8 +511,6 @@ def publish_layer(
         logger.debug("publish_layer legend build skipped (%s: %s)",
                      type(exc).__name__, exc)
     logger.info("publish_layer layer_id=%s uri=%s", layer_id, layer_uri)
-    # Register the layer so a downstream tool resolves the handle to readable
-    # bytes. One scheme, one face: the s3:// COG is both the data uri and the uri
-    # the client renders.
+    # Register the layer so a downstream tool resolves the handle to readable bytes; the s3:// COG is both data uri and rendered uri.
     observe_published_layer(layer_id, uri=layer_uri)
     return layer_uri

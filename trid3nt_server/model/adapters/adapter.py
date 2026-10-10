@@ -25,7 +25,6 @@ logger = logging.getLogger("trid3nt_server.model.adapters.adapter")
 _NO_LAYERS_CODE = "MODEL_RUN_PRODUCED_NO_LAYERS"
 
 
-
 @dataclass(frozen=True)
 class TextDeltaEvent:
     """A streamed text fragment from the model."""
@@ -52,20 +51,16 @@ class FunctionCallEvent:
 
 @dataclass(frozen=True)
 class UsageMetadataEvent:
-    """Per-turn usage metadata harvested from the provider's usage report.
-    Emitted at most once per adapter call; every field may be ``None`` when the
-    provider does not expose it or the response was cancelled."""
+    """Per-turn usage metadata harvested from the provider's usage report. Emitted at most once
+    per adapter call; every field may be ``None`` when the provider does not expose it."""
 
     cached_content_token_count: int | None = None
     total_token_count: int | None = None
     prompt_token_count: int | None = None
     candidates_token_count: int | None = None
     cache_hit: bool = False
-    # Per-turn telemetry: reasoning-channel tokens where the
-    # provider reports them (OpenAI-compatible
-    # ``usage.completion_tokens_details.reasoning_tokens``). ``None`` when the
-    # provider does not report the figure -- absent is tolerated, NEVER
-    # fabricated.
+    # Reasoning-channel tokens (OpenAI-compatible ``usage.completion_tokens_details.
+    # reasoning_tokens``); ``None`` when the provider does not report them, NEVER fabricated.
     reasoning_token_count: int | None = None
 
 
@@ -237,7 +232,6 @@ def classify_provider_error_class(exc: BaseException) -> str:
         pass
 
     return "internal"
-
 
 
 _PROMPT = """\
@@ -653,18 +647,15 @@ def system_prompt() -> str:
     return _PROMPT.replace(_TOOLS_MARK, build_tool_section(TOOL_REGISTRY))
 
 
-
 def _is_union_type(annotation: Any) -> bool:
-    """True for any union form: ``typing.Union[X, Y]`` or ``X | Y``.
-    ``X | Y`` is a ``types.UnionType``; ``typing.Union`` is a ``_GenericAlias``
-    whose origin is ``Union``. Both must be detected."""
+    """True for any union form: ``X | Y`` is a ``types.UnionType`` while ``typing.Union`` is a
+    ``_GenericAlias`` with origin ``Union``; both must be detected."""
     if isinstance(annotation, _builtin_types.UnionType):
         return True
     return get_origin(annotation) is Union
 
 
 def _union_args(annotation: Any) -> tuple[Any, ...]:
-    """Return the member types of a union annotation (any union form)."""
     if isinstance(annotation, _builtin_types.UnionType):
         return annotation.__args__
     return get_args(annotation)
@@ -681,9 +672,8 @@ _JSON_TYPES: dict[Any, str] = {
 
 
 def _is_custom_class(annotation: Any) -> bool:
-    """True for a class the model boundary cannot carry as itself.
-    A pydantic model, a dataclass, a client object: each reaches a tool only as
-    its serialized form, so the schema offers text."""
+    """True for a class (pydantic model, dataclass, client object) that reaches a tool only as its
+    serialized form, so the schema offers text."""
     return (
         isinstance(annotation, type)
         and get_origin(annotation) is None
@@ -692,9 +682,8 @@ def _is_custom_class(annotation: Any) -> bool:
 
 
 def _json_schema_for_annotation(annotation: Any) -> dict[str, Any]:
-    """Convert one annotation to a JSON Schema node.
-    Every node carries an explicit ``type`` and neither ``anyOf`` nor ``$ref``:
-    a provider rejects a whole tool catalog over a union or a reference."""
+    """Convert one annotation to a JSON Schema node. Every node carries an explicit ``type`` and
+    neither ``anyOf`` nor ``$ref``: a provider rejects the whole tool catalog over either."""
     if annotation is inspect.Parameter.empty or annotation is Any or _is_custom_class(annotation):
         return {"type": "string"}
     if _is_union_type(annotation):
@@ -731,9 +720,9 @@ def _json_schema_for_annotation(annotation: Any) -> dict[str, Any]:
 
 
 def _parameter_schema(annotation: Any, default: Any) -> tuple[dict[str, Any], bool]:
-    """The JSON Schema node for one parameter, and whether the model must fill it.
-    Required means the annotation admits no ``None`` and the signature offers no
-    value; a ``None`` default is a sentinel, not a value the model may assume."""
+    """The JSON Schema node for one parameter, and whether the model must fill it. Required means
+    the annotation admits no ``None`` and the signature offers no value; a ``None`` default is a
+    sentinel, not a value the model may assume."""
     unfilled = default is inspect.Parameter.empty or default is None
     if annotation is inspect.Parameter.empty or annotation is Any or _is_custom_class(annotation):
         return {"type": "string"}, False
@@ -750,9 +739,8 @@ def _parameter_schema(annotation: Any, default: Any) -> tuple[dict[str, Any], bo
 
 
 def _tool_schema(fn: Any) -> dict[str, Any]:
-    """Build the JSON Schema of a tool callable's public parameters.
-    Underscore-prefixed injection kwargs are private by convention and NEVER
-    reach the model; an unresolvable forward reference types as text."""
+    """Build the JSON Schema of a tool callable's public parameters. Underscore-prefixed injection
+    kwargs never reach the model; an unresolvable forward reference types as text."""
     try:
         sig = inspect.signature(fn)
     except (TypeError, ValueError):
@@ -796,55 +784,39 @@ def build_tool_declarations(tool_registry: dict[str, Any]) -> list[ToolDeclarati
     ]
 
 
-
-
-# Hard upper bound on chars a tool response carries back to the model.
-# Anything bigger gets clipped -- the model does not need megabytes of GeoJSON
-# to decide the next tool call; it needs the LayerURI, key metrics, error code,
-# and a couple of identifying fields.
+# Hard upper bound on chars a tool response carries back to the model. Anything bigger gets clipped
+# -- the model does not need megabytes of GeoJSON to decide the next tool call; it needs the
+# LayerURI, key metrics, error code, and a couple of identifying fields.
 _FUNCTION_RESPONSE_CHAR_BUDGET = 4_000
 
-# Maximum loop iterations for the multi-turn driver.  Each iteration is one
-# model stream + (optionally) one dispatched tool call. 12 accommodates the
-# chain depth of the widest fetcher families (STAC, ERDDAP, THREDDS, gridMET,
-# CO-OPS, etc.) plus the search_tools -> fetch -> publish discovery overhead.
-# Past 12, that's a runaway and the fail-stop + loop_exhausted envelope is the
-# correct response.
+# Maximum loop iterations for the multi-turn driver: one model stream plus optional dispatched
+# calls each. 12 fits the widest fetcher chains plus search_tools -> fetch -> publish; past it is
+# a runaway, and the fail-stop + loop_exhausted envelope is the correct response.
 MAX_TURN_ITERATIONS = 12
 
 
-# NEVER-REHYDRATE guard.
-#
-# The persisted agent chat row carries a ``thinking`` field (the
-# reasoning-channel text for the same bubble as the answer -- see
-# ``trid3nt_contracts.case.CaseChatMessage.thinking``). That text is DISPLAY
-# REPLAY material only: it must NEVER re-enter LLM-bound contents. Enforced
-# at every seam that turns persisted rows into model contents:
-#
-#   * ``build_contents_from_history`` strips the fields from every history
-#     entry before reading it;
-#   * ``_decode_parts_blob`` strips them from every full-fidelity blob entry
-#     (so even a future writer that leaks ``thinking`` into a parts_blob entry
-#     cannot re-inject it);
-#   * ``rehydrate_history_from_case`` reads only role/content/tool_card and is
-#     covered by the same regression test.
+# NEVER-REHYDRATE guard. The persisted agent chat row carries a ``thinking`` field (the reasoning-
+# channel text for the same bubble as the answer -- see
+# ``trid3nt_contracts.case.CaseChatMessage.thinking``). That text is DISPLAY REPLAY only and must
+# NEVER re-enter LLM-bound contents: build_contents_from_history and _decode_parts_blob strip it
+# BY RULE, so even a writer that leaks it into a parts_blob entry cannot re-inject it, and
+# rehydrate_history_from_case reads only role/content/tool_card.
 
 #: Persisted-row field names that must NEVER reach LLM-bound contents.
 NEVER_REHYDRATE_FIELDS: frozenset[str] = frozenset({"thinking"})
 
 
 def _strip_never_rehydrate(entry: dict) -> dict:
-    """Return ``entry`` without any ``NEVER_REHYDRATE_FIELDS`` key.
-    Identity (no copy) when none is present, and never mutates the caller."""
+    """Return ``entry`` without any ``NEVER_REHYDRATE_FIELDS`` key; identity (no copy) when none is
+    present, and never mutates the caller."""
     if not any(k in entry for k in NEVER_REHYDRATE_FIELDS):
         return entry
     return {k: v for k, v in entry.items() if k not in NEVER_REHYDRATE_FIELDS}
 
 
 def _decode_parts_blob(blob: Any) -> list[Part] | None:
-    """Decode a persisted ``parts_blob`` into a list of ``Part``.
-    ``None`` when the blob is missing, empty or malformed: a single bad history
-    row must never raise and break the whole conversation."""
+    """Decode a persisted ``parts_blob`` into a list of ``Part``; ``None`` when missing, empty or
+    malformed, because one bad history row must never break the conversation."""
     import json as _json
 
     if blob is None:
@@ -870,20 +842,17 @@ def _decode_parts_blob(blob: Any) -> list[Part] | None:
     if not isinstance(raw, list) or not raw:
         return None
 
-    # Wire shape, one entry per part:
-    #   {"text": "..."}                                  text-only part
-    #   {"function_call": {"name", "id", "args"}}         model turn
-    #   {"function_response": {"name", "id", "response"}}
-    # The blob carries enough fidelity to rebuild the exact Parts, so a
-    # replayed turn reaches the provider as the turn it originally sent.
+    # Wire shape, one entry per part: {"text": "..."} text-only part {"function_call": {"name",
+    # "id", "args"}} model turn {"function_response": {"name", "id", "response"}} The blob carries
+    # enough fidelity to rebuild the exact Parts, so a replayed turn reaches the provider as the
+    # turn it originally sent.
     parts: list[Part] = []
     for entry in raw:
         if not isinstance(entry, dict):
             continue
-        # NEVER-REHYDRATE guard: strip ``thinking`` (and any future guarded
-        # field) from the blob entry BY RULE before any key is read -- the
-        # full-fidelity parts_blob path must never re-inject reasoning text
-        # into LLM-bound contents.
+        # NEVER-REHYDRATE guard: strip ``thinking`` (and any future guarded field) from the blob
+        # entry BY RULE before any key is read -- the full-fidelity parts_blob path must never re-
+        # inject reasoning text into LLM-bound contents.
         entry = _strip_never_rehydrate(entry)
         kwargs: dict[str, Any] = {}
         if "text" in entry and entry["text"]:
@@ -927,8 +896,7 @@ def build_contents_from_history(
             entry = _strip_never_rehydrate(entry)
             role = entry.get("role", "user")
             ir_role = "model" if role in ("agent", "assistant", "model") else "user"
-            # Prefer parts_blob when present -- it carries the call and
-            # response Parts, so the replayed turn reaches the provider whole.
+            # parts_blob carries the call and response Parts, so the turn replays whole.
             blob = entry.get("parts_blob")
             decoded = _decode_parts_blob(blob) if blob is not None else None
             if decoded:
@@ -942,21 +910,17 @@ def build_contents_from_history(
     return contents
 
 
-# Default cap on the number of persisted chat rows rehydrated into the live
-# model context on a Case reopen. A long-running Case
-# can accumulate hundreds of user/agent/tool rows; replaying all of them every
-# reopen turn would blow the context window (and the per-turn cost). We keep
-# the MOST RECENT rows (the tail carries the relevant recent state -- what the
-# user just did and what is on the map now). The injected layers-present note
-# (built separately) is the durable anchor for older work, so dropping the head
-# of a long transcript does not lose "what layers already exist".
+# Default cap on the number of persisted chat rows rehydrated into the live model context on a Case
+# reopen. A long-running Case can accumulate hundreds of user/agent/tool rows; replaying all of them
+# every reopen turn would blow the context window (and the per-turn cost). The MOST RECENT rows
+# are kept; the layers-present note anchors older work, so dropping the head loses nothing.
 REHYDRATE_HISTORY_CAP = 40
 
 
 def _summarize_tool_row_for_history(content: str, tool_card: Any) -> str:
-    """Collapse a persisted ``role="tool"`` row into one model-side text line.
-    The full function_call / function_response Parts are NOT persisted, so
-    ``[tool <name> completed|failed]`` is all that stands against a recompute."""
+    """Collapse a persisted ``role="tool"`` row into one model-side text line. The call/response
+    Parts are not persisted, so ``[tool <name> completed|failed]`` is all that stands against a
+    recompute."""
     name: str | None = None
     state: str | None = None
     # Prefer the typed record (duck-typed: ToolCardRecord or a dict).
@@ -983,9 +947,8 @@ def _summarize_tool_row_for_history(content: str, tool_card: Any) -> str:
 
 
 def _format_layer_bbox(bbox: Any) -> str | None:
-    """Compact ``[lon_min, lat_min, lon_max, lat_max]`` for a layer line.
-    ``None`` for anything that is not a valid 4-tuple; the rounding keeps the
-    Case-state note short."""
+    """Compact ``[lon_min, lat_min, lon_max, lat_max]`` for a layer line; ``None`` for anything but
+    a valid 4-tuple. Rounding keeps the Case-state note short."""
     if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
         return None
     try:
@@ -996,9 +959,9 @@ def _format_layer_bbox(bbox: Any) -> str | None:
 
 
 def _format_aoi_bbox_line(case_bbox: Any) -> str | None:
-    """Format the Case AOI bbox as one durable instruction line, or ``None``.
-    The AOI ANCHOR that must survive history capping: a long Case drops the head
-    turn that named the place, and a follow-up fetch would then re-geocode."""
+    """Format the Case AOI bbox as one durable instruction line, or ``None``. The AOI ANCHOR that
+    must survive history capping: a long Case drops the head turn naming the place, and a
+    follow-up fetch would then re-geocode."""
     if not isinstance(case_bbox, (list, tuple)) or len(case_bbox) != 4:
         return None
     try:
@@ -1019,15 +982,11 @@ def build_layers_present_note(
 ) -> str | None:
     """Build the compact "Case state" model turn: layers plus the AOI bbox.
     ``None`` only when there is neither a layer nor a usable bbox."""
-    # Each line carries enough IDENTITY for the model to recognize an existing
-    # RESULT and not re-run the work that made it:
-    #   - role: RESULT (a primary simulation / analysis output) vs INPUT
-    #     (a fetched / context layer used as an input), and for a fetched layer
-    #     the DATASET it carries, read off the address its bytes are cached
-    #     under, so "the land cover for this AOI is already here" reads
-    #     unambiguously;
-    #   - name, layer_type, the reusable handle (== layer_id), and the uri.
-    # Imported here: the tool package pulls the server in at import time.
+    # Each line carries enough IDENTITY for the model to recognize an existing RESULT and not re-run
+    # the work that made it: - role: RESULT (a primary simulation / analysis output) vs INPUT (a
+    # fetched / context layer used as an input), and for a fetched layer the DATASET it carries,
+    # read off the address its bytes are cached under. Imported here: the tool package pulls the
+    # server in at import time.
     from trid3nt_server.tools.cache import parse_cache_path
 
     lines: list[str] = []
@@ -1037,16 +996,11 @@ def build_layers_present_note(
         layer_id = layer.get("layer_id") or "?"
         name = layer.get("name") or layer_id
         layer_type = layer.get("layer_type") or "?"
-        # The layer_id IS the reusable handle; it is surfaced explicitly as
-        # ``handle=`` alongside the underlying ``uri`` so the model can hand an
-        # existing artifact straight to a tool instead of recomputing it.
+        # The layer_id IS the reusable handle, surfaced as ``handle=`` beside the ``uri``.
         uri = layer.get("uri")
         role_raw = layer.get("role")
-        # A ``role="primary"`` layer is a RESULT, which is what stops the re-run;
-        # everything else is an INPUT / context layer. A recognized FETCHED layer
-        # (buildings / landcover / dem / roads / ...) is an INPUT tagged with its
-        # KIND so a fit / resize / re-show follow-up reuses it - its own bbox is
-        # on this line - instead of re-fetching a duplicate.
+        # A ``role="primary"`` layer is a RESULT, which is what stops the re-run. A recognized
+        # FETCHED layer is an INPUT tagged with its KIND so a follow-up reuses it, not re-fetches.
         if role_raw == "primary":
             role_label = "RESULT"
         else:
@@ -1141,10 +1095,9 @@ def rehydrate_history_from_case(
             continue
         if role in ("agent", "assistant", "model", "system"):
             if content.strip():
-                # ``agent`` collapses to ``model`` in the contents builder;
-                # ``system`` has no native role there, so it folds to
-                # model-side context text -- safer for routing than
-                # re-injecting it as a fresh ``user`` instruction.
+                # ``agent`` collapses to ``model`` in the contents builder; ``system`` has no native
+                # role there, so it folds to model-side context text -- safer for routing than re-
+                # injecting it as a fresh ``user`` instruction.
                 history.append({"role": "agent", "text": content})
             continue
         # Unknown role: skip rather than guess.
@@ -1157,8 +1110,8 @@ def rehydrate_history_from_case(
 
 
 def encode_parts_blob(parts: list[Part]) -> bytes:
-    """Encode a list of ``Part`` to the ``parts_blob`` wire shape.
-    A JSON byte string, so it round-trips through JSON persistence."""
+    """Encode a list of ``Part`` to the ``parts_blob`` wire shape. A JSON byte string, so it round-
+    trips through JSON persistence."""
     import json as _json
 
     out: list[dict[str, Any]] = []
@@ -1184,9 +1137,8 @@ def encode_parts_blob(parts: list[Part]) -> bytes:
 
 
 def _coerce_to_summary_value(value: Any, depth: int = 0) -> Any:
-    """Recursive helper for ``summarize_tool_result``.
-    Non-JSON-native types become strings, long lists and strings truncate, and
-    a nested dict past depth 2 collapses: signal, never fidelity."""
+    """Coerce to summary form: non-JSON types become strings, long lists and strings truncate, and
+    a dict past depth 2 collapses - signal, never fidelity."""
     if value is None or isinstance(value, (bool, int, float)):
         return value
     if isinstance(value, str):
@@ -1223,9 +1175,8 @@ def _coerce_to_summary_value(value: Any, depth: int = 0) -> Any:
 
 
 def _classify_error(error: BaseException) -> tuple[str, bool]:
-    """Derive ``(error_code, retryable)`` for a tool-dispatch exception.
-    A typed tool exception's own ``error_code`` / ``retryable`` attributes win;
-    this NEVER raises, so the multi-turn loop always gets a stable pair."""
+    """Derive ``(error_code, retryable)`` for a tool-dispatch exception. A typed tool exception's
+    own ``error_code`` / ``retryable`` win; NEVER raises, so the loop always gets a stable pair."""
     # 1. Honour typed-tool exception class attributes when present.
     code_attr = getattr(error, "error_code", None)
     retry_attr = getattr(error, "retryable", None)
@@ -1236,10 +1187,9 @@ def _classify_error(error: BaseException) -> tuple[str, bool]:
     if isinstance(retry_attr, bool):
         return code, retry_attr
 
-    # 2. Heuristic fallback for an untyped exception: a timeout or a
-    # network-ish OSError is retryable; a ValueError / TypeError / KeyError /
-    # AttributeError is an argument-shape or programmer error and is NOT;
-    # everything else is retryable, capped either way by MAX_TURN_ITERATIONS.
+    # 2. Heuristic fallback for an untyped exception: a timeout or network-ish OSError is
+    # retryable; an argument-shape error (ValueError/TypeError/KeyError/AttributeError) is not;
+    # anything else is retryable, capped either way by MAX_TURN_ITERATIONS.
     import asyncio as _asyncio
 
     if isinstance(error, (_asyncio.TimeoutError, TimeoutError)):
@@ -1252,9 +1202,8 @@ def _classify_error(error: BaseException) -> tuple[str, bool]:
 
 
 def _summarize_chart_emission(tool_name: str, result: dict[str, Any]) -> dict[str, Any]:
-    """Compact summary for a chart-emission tool result.
-    The full ``vega_lite_spec`` is DROPPED -- it already reached the client on
-    its own envelope -- so narration must source its numbers from the caption."""
+    """Compact summary for a chart-emission tool result. The full ``vega_lite_spec`` is DROPPED (it
+    reached the client on its own envelope), so narration sources its numbers from the caption."""
     spec = result.get("vega_lite_spec")
     spec = spec if isinstance(spec, dict) else {}
     mark = spec.get("mark")
@@ -1281,8 +1230,6 @@ def _summarize_chart_emission(tool_name: str, result: dict[str, Any]) -> dict[st
             "chart_type": chart_type,
             "n_data_rows": n_rows,
             "source_layer_uri": result.get("source_layer_uri"),
-            # Explicit guidance for the LLM: the chart is now on the user's
-            # screen; narrate the caption's numbers and what the chart shows.
             "note": (
                 "A chart has been rendered for the user. Narrate what it shows "
                 "using the numbers in 'caption'; do NOT restate the raw data rows."
@@ -1292,17 +1239,14 @@ def _summarize_chart_emission(tool_name: str, result: dict[str, Any]) -> dict[st
 
 
 def _failed_modeled_envelope_error_code(result: dict[str, Any]) -> str | None:
-    """The threaded failure code of a failure-TAGGED "modeled" envelope, or
-    ``None`` when the envelope carries no marker at all. A run can append its
-    ``solver_run_id`` BEFORE failing, so the marker, not the presence of a run
-    id, is what decides."""
+    """The threaded failure code of a failure-TAGGED "modeled" envelope, or ``None`` when the
+    envelope carries no marker at all."""
     # A failed envelope threads its error code into TWO seams so it survives
-    # ``_coerce_to_summary_value``'s depth>=2 dict collapse: the top-level
-    # ``workflow_name == "<name>:FAILED:<CODE>"``, and the buried
-    # ``<hazard>.metrics.solver_version == "failed:<CODE>"``. The scan over the
-    # second is generic over the payload key: any composer threading a failure
-    # the same way resolves here, not only the one that prompted it. A marker
-    # with no code still means failed, and names the generic code.
+    # ``_coerce_to_summary_value``'s depth>=2 dict collapse: the top-level ``workflow_name ==
+    # "<name>:FAILED:<CODE>"``, and the buried ``<hazard>.metrics.solver_version ==
+    # "failed:<CODE>"``. The scan of the second is generic over the payload key. A marker with no
+    # code still means failed and names the generic code. A run can append its solver_run_id
+    # BEFORE failing, so the marker, not the run id, decides.
     wf = result.get("workflow_name")
     if isinstance(wf, str) and ":FAILED:" in wf:
         return wf.split(":FAILED:", 1)[1].strip() or _NO_LAYERS_CODE
@@ -1319,11 +1263,9 @@ def _failed_modeled_envelope_error_code(result: dict[str, Any]) -> str | None:
 
 
 def _metrics_phrase(result: dict[str, Any]) -> str:
-    """Render whatever NUMERIC metrics an envelope carries into an honest
-    narration fragment. A solve that succeeded but never reached the map still
-    produced real numbers; the metric NAMES carry their own units, so nothing
-    here knows one hazard's vocabulary from another's, and "" comes back when
-    the envelope carries no numbers at all."""
+    """Render whatever NUMERIC metrics an envelope carries into an honest narration fragment. A
+    solve that never reached the map still produced real numbers; metric NAMES carry their own
+    units, so nothing here knows one hazard's vocabulary. Returns "" when there are none."""
     metrics: dict[str, Any] | None = None
     for payload in result.values():
         if isinstance(payload, dict) and isinstance(payload.get("metrics"), dict):
@@ -1339,9 +1281,8 @@ def _metrics_phrase(result: dict[str, Any]) -> str:
 
 
 def _extract_synthetic_inputs(result: Any) -> list[dict[str, Any]]:
-    """Pull the structured ``synthetic_inputs`` provenance list off a tool result.
-    Returns plain dicts, or ``[]`` when none is declared; NEVER raises, so a
-    missing field on any result shape degrades to ``[]``."""
+    """Pull the structured ``synthetic_inputs`` provenance list off a tool result; plain dicts, or
+    ``[]`` when none is declared. NEVER raises."""
 
     def _as_dicts(value: Any) -> list[dict[str, Any]]:
         if not isinstance(value, (list, tuple)) or not value:
@@ -1397,9 +1338,9 @@ def _extract_synthetic_inputs(result: Any) -> list[dict[str, Any]]:
 
 
 def _hoist_synthetic_inputs(payload: dict[str, Any], result: Any) -> None:
-    """Hoist a one-line ``assumptions_summary`` and its structured list to the
-    TOP of the function_response, so which inputs are defaults versus
-    site-derived is narrated as ONE line and never a table. A no-op when none."""
+    """Hoist a one-line ``assumptions_summary`` and its structured list to the TOP of the
+    function_response, so which inputs are defaults versus site-derived is narrated as ONE line
+    and never a table. A no-op when none."""
     from trid3nt_contracts.common import render_assumptions_line
 
     entries = _extract_synthetic_inputs(result)
@@ -1433,18 +1374,14 @@ def summarize_tool_result(
     counts. The dict always carries ``"tool"`` and ``"status"``."""
     import json as _json
 
-    # An error becomes {status: "error", error_code, message, retryable,
-    # error_type}. The code and retryability are harvested from the tool's own
-    # typed exception when it declares them, so the model can retry with
-    # corrected args, pick another tool, or narrate the failure honestly;
-    # ``MAX_TURN_ITERATIONS`` caps a runaway retry either way.
+    # An error becomes {status: "error", error_code, message, retryable, error_type}; code and
+    # retryability come from the tool's own typed exception, so the model can retry with corrected
+    # args or narrate honestly. MAX_TURN_ITERATIONS caps a runaway retry either way.
     if error is not None:
         from trid3nt_server.model.guards.actionability import classify_actionability
 
-        # A gate card the user declined is NOT a tool failure. It comes back as
-        # its own status carrying which card was declined and what it asked, so
-        # the model acknowledges the decision rather than apologising for an
-        # error it can neither retry nor explain.
+        # A gate card the user declined is NOT a tool failure: its own status names the card and
+        # what it asked, so the model acknowledges the decision instead of apologising.
         if getattr(error, "declined", False):
             return {
                 "tool": tool_name,
@@ -1458,11 +1395,9 @@ def summarize_tool_result(
         message = str(error)[:500]
         actionability = classify_actionability(tool_name, error)
         if actionability == "operator":
-            # Contract violation or internal exception: the model gets a
-            # terse, honest acknowledgment ONLY -- nothing here for it to act
-            # on. The FULL exception already reached the log at the dispatch
-            # site, and error_code / actionability still ride the telemetry
-            # record.
+            # Contract violation or internal exception: the model gets a terse, honest
+            # acknowledgment ONLY -- nothing here for it to act on. The full exception was logged
+            # at the dispatch site.
             message = "internal error, logged"
         envelope = {
             "tool": tool_name,
@@ -1470,17 +1405,13 @@ def summarize_tool_result(
             "error_code": code,
             "message": message,
             "retryable": retryable,
-            # Legacy alias -- preserved so existing tests / callers that
-            # read ``error`` continue to work.  ``message`` is the new
-            # canonical field; both carry the same string.
-            "error": message,
+            "error": message,  # alias of ``message``; callers read either
             "error_type": type(error).__name__,
             "actionability": actionability,
         }
-        # Typed no-data / recovery contract: a tool exception may carry a
-        # ``suggestions`` sequence of short recovery options. It is surfaced as
-        # a STRUCTURED list so a small model relays the options rather than
-        # inventing a next step.
+        # Typed no-data / recovery contract: a tool exception may carry a ``suggestions`` sequence
+        # of short recovery options. It is surfaced as a STRUCTURED list so a small model relays the
+        # options rather than inventing a next step.
         raw_suggestions = getattr(error, "suggestions", None)
         if isinstance(raw_suggestions, (list, tuple)):
             suggestions = [str(s) for s in raw_suggestions if str(s).strip()]
@@ -1491,13 +1422,8 @@ def summarize_tool_result(
     if result is None:
         return {"tool": tool_name, "status": "no_result"}
 
-    # chart-emission results carry a full
-    # Vega-Lite spec with INLINE data rows (up to ~2000). The model must
-    # narrate from the chart's numbers, not re-read the inline rows -- and the
-    # spec could blow the char budget. Strip ``vega_lite_spec`` and surface a
-    # COMPACT summary (chart_id / title / caption / chart type / data-shape) so
-    # the function_response stays small and narration-focused. The FULL spec
-    # already reached the client on the ``chart-emission`` envelope.
+    # A chart-emission result carries a Vega-Lite spec with up to ~2000 INLINE rows: strip it and
+    # surface a compact summary, so the model narrates from numbers and the budget holds.
     if (
         isinstance(result, dict)
         and result.get("envelope_type") == "chart-emission"
@@ -1505,26 +1431,12 @@ def summarize_tool_result(
     ):
         return _summarize_chart_emission(tool_name, result)
 
-    # NET GUARANTEE: envelope_type=="modeled" AND an EMPTY ``layers`` list is
-    # NEVER stamped status="ok". Two sub-cases:
-    #
-    #   (a) FAILURE-TAGGED -- the depth-0 ``workflow_name`` carries ":FAILED:",
-    #       or a payload's ``metrics.solver_version`` starts with "failed:".
-    #       Surface status="error" with the parsed code, REGARDLESS of any
-    #       solver_run_id: a run can append one before failing.
-    #   (b) NOT FAILURE-TAGGED -- the solve COMPLETED (metrics present, no
-    #       ":FAILED:" tag) but the result layer was dropped at publish or
-    #       render. Surface status="error", error_code="NO_RENDERABLE_LAYER",
-    #       and INCLUDE the available metrics so the numbers can still be
-    #       narrated honestly even though nothing reached the map.
-    #
-    # ``_coerce_to_summary_value`` collapses the depth-2 metrics dict to bare
-    # key names, so without this detector the model sees {status:ok, layers:[],
-    # metrics:{dict keys=...}} and honestly narrates "done". The check keys off
-    # the STRUCTURE of the result, not on whether an exception was raised, so
-    # it is root-cause-agnostic. Do NOT broaden it to "observed"/"fetched"
-    # tools: those legitimately return non-layer data. A modeled envelope WITH
-    # a non-empty layers list still reads as status="ok".
+    # NET GUARANTEE: envelope_type=="modeled" AND an EMPTY ``layers`` list is NEVER stamped
+    # status="ok". Two sub-cases: (a) FAILURE-TAGGED -- the depth-0 ``workflow_name`` carries
+    # ":FAILED:", or a payload's ``metrics.solver_version`` starts with "failed:"; (b) the solve
+    # COMPLETED but the layer was dropped at publish/render -> NO_RENDERABLE_LAYER with the
+    # metrics. Keys off result STRUCTURE, not a raised exception (depth-2 collapse would hide it).
+    # Do NOT broaden it to observed/fetched tools: they legitimately return non-layer data.
     if (
         isinstance(result, dict)
         and result.get("envelope_type") == "modeled"
@@ -1532,9 +1444,7 @@ def summarize_tool_result(
     ):
         code = _failed_modeled_envelope_error_code(result)
         if code is not None:
-            # Sub-case (a): an explicitly failure-tagged run (covers both the
-            # never-dispatched non-runs AND the dispatched-then-failed exits
-            # that already appended a solver_run_id).
+            # Sub-case (a): failure-tagged, whether or not a solver_run_id was appended.
             message = (
                 f"{tool_name} produced no layers and the model did NOT run "
                 f"successfully ({code})."
@@ -1545,14 +1455,10 @@ def summarize_tool_result(
                 "error_code": code,
                 "message": message,
                 "retryable": False,
-                # Legacy alias -- same string as ``message`` (matches the raised-
-                # exception error path above so downstream consumers are uniform).
                 "error": message,
                 "error_type": "FailedModelEnvelope",
             }
-        # Sub-case (b): the solve completed (or at least produced metrics) but
-        # no renderable layer survived publish/render. Surface the numbers so
-        # the agent narrates honestly: real flood, just not on the map.
+        # Sub-case (b): the numbers are surfaced so the narration is honest.
         metrics_phrase = _metrics_phrase(result)
         if metrics_phrase:
             message = (
@@ -1587,25 +1493,20 @@ def summarize_tool_result(
             "status": "ok",
             "result": _coerce_to_summary_value(result),
         }
-        # HONESTY FLOOR: a bare LayerURI result repr-coerces clipped to 200
-        # chars, which would drop the layer's ``notes``. They are hoisted to a
-        # top-level key so the model ALWAYS reads them - a fallback source is
-        # named there, never mistaken for the primary.
+        # HONESTY FLOOR: a bare LayerURI result repr-coerces clipped to 200 chars, which would drop
+        # the layer's ``notes``. They are hoisted to a top-level key so the model ALWAYS reads them
+        # - a fallback source is named there, never mistaken for the primary.
         _notes = getattr(result, "notes", None)
         if isinstance(_notes, list) and _notes:
             payload["notes"] = [str(n) for n in _notes]
-        # Same clipping hazard, second channel: ``fallback_warning`` is the
-        # LABELED degrade a fetcher writes about its own composite (which source
-        # painted what share). It is the ONLY loudness a request that bypassed a
-        # coverage gate gets, so it must not die in the 200-char repr either.
+        # Same clipping hazard, second channel: ``fallback_warning`` is the LABELED degrade a
+        # fetcher writes about its own composite (which source painted what share).
         _fb_warning = getattr(result, "fallback_warning", None)
         if isinstance(_fb_warning, str) and _fb_warning:
             payload["fallback_warning"] = _fb_warning
 
-    # provenance-chain wave: whichever branch built the payload, hoist any
-    # structured input provenance the result carries (a demo default is buried in
-    # the coerced/repr'd result otherwise). Renders one compact assumptions line
-    # so the LLM narrates demo-vs-site-derived inputs. No-op when none declared.
+    # Whichever branch built the payload, hoist the structured input provenance: it is buried in
+    # the coerced/repr'd result otherwise.
     _hoist_synthetic_inputs(payload, result)
 
     # Final char-budget clip: serialize, if oversized clip and re-wrap.
@@ -1628,31 +1529,12 @@ def summarize_tool_result(
     return payload
 
 
-#
-# ``success`` (did the tool return without raising / without a failure-tagged
-# envelope) is NOT the same question as ``was the result USABLE`` -- the headline
-# bug: a layer-producing tool
-# can return status="ok" while carrying an EMPTY layers list (a modeled run that
-# produced no renderable layer, or a publish/render drop). That reads as a
-# SUCCESS in the per-tool count but is NOT a usable result. ``result_usable``
-# captures exactly that distinction so the tool-accuracy dashboard can separate
-# "the call worked" from "the call produced something the user can use".
-#
-# Returns:
-#   - ``False`` -- a layer-producing tool whose result has NO renderable layer
-#     (or a modeled envelope with empty layers), EVEN when success=True. This is
-#     keyed off the SAME honesty-floor classifier ``summarize_tool_result`` uses
-#     (NO_RENDERABLE_LAYER / failure-tagged modeled envelope), so the two stay
-#     in lockstep at the single dispatch chokepoint.
-#   - ``True`` -- a real renderable result (a LayerURI / non-empty layers list)
-#     OR a non-empty data payload from a layer/data tool.
-#   - ``None`` -- the notion does not apply (meta / control-plane tools that never
-#     produce a layer or a data payload, e.g. confirmation / discovery / cancel
-#     helpers; also when the call itself errored -- usability is undefined for a
-#     call that did not complete).
-#
-# Conservative by construction: anything we cannot positively classify as a
-# layer- or data-producing result returns ``None`` rather than guessing True.
+# ``success`` (no raise, no failure-tagged envelope) is not ``result_usable``: a layer-producing
+# tool can return status="ok" with an EMPTY layers list (a run that produced no renderable layer,
+# or a publish/render drop). Usable keys off the same classifier as summarize_tool_result, so the
+# two stay in lockstep. True = renderable layer or non-empty data; False = a layer-producer with
+# no layer even when success; None = not applicable (meta tools, errored calls). Anything not
+# positively classified returns None rather than guessing True.
 
 #: Result keys whose presence marks a layer-producing return. A non-empty value
 #: under any of these is a renderable artifact (LayerURI dict, gs://"/s3:// COG,
@@ -1670,9 +1552,8 @@ _LAYER_RESULT_KEYS = frozenset(
 
 
 def _result_has_renderable_layer(result: Any) -> bool | None:
-    """Whether ``result`` carries a renderable layer artifact.
-    ``True`` a layer survived; ``False`` a layer-producer whose slot is empty;
-    ``None`` not layer-shaped at all, leaving usability to the caller."""
+    """Whether ``result`` carries a renderable layer artifact: ``True`` a layer survived, ``False``
+    a layer-producer whose slot is empty, ``None`` not layer-shaped at all."""
     # LayerURI / pydantic-or-dataclass return with the two defining attributes.
     if not isinstance(result, (dict, str, bytes)) and result is not None:
         if hasattr(result, "layer_id") and hasattr(result, "uri"):
@@ -1694,7 +1575,6 @@ def _result_has_renderable_layer(result: Any) -> bool | None:
             elif val:
                 return True
     if saw_layer_key:
-        # A layer key was present but every one was empty/falsy.
         return False
     return None
 
@@ -1714,10 +1594,8 @@ def classify_result_usable(
         if isinstance(summary, dict):
             if summary.get("error_code") == "NO_RENDERABLE_LAYER":
                 return False
-        # 2. A modeled envelope that was failure-tagged also has no usable
-        #    layer. summarize_tool_result surfaces these as status=error with a
-        #    parsed code, but key off the result STRUCTURE directly so this is
-        #    robust even if the summary shape changes.
+        # 2. A failure-tagged modeled envelope also has no usable layer; keyed off the result
+        #    STRUCTURE directly so it survives a change to the summary shape.
         if isinstance(result, dict) and result.get("envelope_type") == "modeled":
             if not result.get("layers"):
                 return False
@@ -1730,10 +1608,9 @@ def classify_result_usable(
         #    of "renderable layer" doesn't apply -- treat as N/A (meta path).
         if result is None:
             return None
-        # 5. A non-empty data payload from a non-layer tool (point query,
-        #    table, scalar, count) IS a usable result. An empty dict / empty
-        #    string / empty collection is not. Anything else (a populated dict,
-        #    a number, a non-empty string) counts.
+        # 5. A non-empty data payload from a non-layer tool (point query, table, scalar, count) IS a
+        # usable result. An empty dict / empty string / empty collection is not. Anything else (a
+        # populated dict, a number, a non-empty string) counts.
         if isinstance(result, dict):
             # Drop bookkeeping-only keys before judging emptiness so a dict that
             # carries ONLY a status/tool marker is not mistaken for data.
@@ -1742,11 +1619,7 @@ def classify_result_usable(
                 for k in result
                 if k not in {"status", "tool", "envelope_type"}
             ]
-            # Real data -> usable (True). A dict carrying ONLY bookkeeping
-            # markers (a bare {"status":"ok"} control-plane return) has no data
-            # AND no notion of a "usable result" -> N/A (None), NOT unusable
-            # (False), so meta/confirm/discovery helpers don't drag the
-            # result_usability_rate down.
+            # Real data -> usable (True).
             return bool(data_keys) or None
         if isinstance(result, (list, tuple, set, str, bytes)):
             return bool(result)
@@ -1754,7 +1627,6 @@ def classify_result_usable(
         return True
     except Exception:  # noqa: BLE001 -- classification must never break dispatch
         return None
-
 
 
 async def stream_events(
@@ -1778,8 +1650,6 @@ async def stream_events(
         yield event
 
 
-
-
 async def stream_events_with_contents(
     contents: list[Message],
     tool_declarations: list[ToolDeclaration] | None = None,
@@ -1790,15 +1660,12 @@ async def stream_events_with_contents(
     """Stream ONE model round from a fully-built ``contents`` list.
     ``show_thinking`` reaches the OpenAI adapter only; the dispatch is an
     EXPLICIT provider switch, and any other provider raises."""
-    # Every adapter converts the IR contents and tool declarations at its own
-    # boundary and yields the SAME StreamEvent union, so the dispatch loop, the
-    # validator, the emitter and the UI are untouched.
+    # Every adapter converts IR contents and tool declarations at its own boundary and yields the
+    # SAME StreamEvent union.
     from .model_selection import model_provider
     from .scripted_adapter import model_provider_is_scripted, stream_scripted
 
-    # MODEL_PROVIDER=scripted (aliases replay/fake): replay a canned transcript of
-    # tool calls with NO model call -- the zero-cost deterministic test/dev
-    # lane. Intercepted FIRST so it never reaches a provider client.
+    # scripted (aliases replay/fake) is intercepted FIRST so it never reaches a provider client.
     if model_provider_is_scripted():
         async for _ev in stream_scripted(
             contents=contents,
@@ -1809,8 +1676,6 @@ async def stream_events_with_contents(
             yield _ev
         return
 
-    # MODEL_PROVIDER=anthropic: delegate to the Anthropic Messages API adapter
-    # (official ``anthropic`` SDK). Dormant unless selected.
     if model_provider() == "anthropic":
         from .anthropic_adapter import stream_anthropic
 
@@ -1823,10 +1688,8 @@ async def stream_events_with_contents(
             yield _ev
         return
 
-    # MODEL_PROVIDER=openai: delegate to the OpenAI-compatible adapter. Covers
-    # Ollama, vLLM, llama.cpp server, LM Studio, OpenAI, Groq, DeepSeek,
-    # OpenRouter -- any endpoint that speaks the chat.completions streaming API.
-    # Dormant unless selected; zero cloud impact when MODEL_PROVIDER != "openai".
+    # The OpenAI-compatible adapter covers any endpoint that speaks chat.completions streaming
+    # (Ollama, vLLM, llama.cpp, LM Studio, Groq, DeepSeek, OpenRouter).
     if model_provider() == "openai":
         from .openai_adapter import stream_openai
         async for _ev in stream_openai(
@@ -1839,9 +1702,7 @@ async def stream_events_with_contents(
             yield _ev
         return
 
-    # Provider dispatch is EXPLICIT -- scripted/replay/fake, anthropic and
-    # openai each returned above. Anything else is unsupported: a TYPED error,
-    # never a silent empty turn: there is no client path to fall through to.
+    # Dispatch is EXPLICIT: anything else is a TYPED error, never a silent empty turn.
     raise UnsupportedModelProviderError(
         f"MODEL_PROVIDER={model_provider()!r} is not supported. Valid providers: "
         "scripted/replay/fake, anthropic, openai."
@@ -1857,12 +1718,10 @@ __all__ = [
     "UsageMetadataEvent",
     "CompactionStartEvent",
     "CompactionCompleteEvent",
-    # Upstream-provider discipline
     "UpstreamProviderError",
     "classify_provider_error_class",
     "provider_retries",
     "provider_backoff_wait",
-    # Never-rehydrate guard (thinking persistence)
     "NEVER_REHYDRATE_FIELDS",
     "build_tool_section",
     "system_prompt",

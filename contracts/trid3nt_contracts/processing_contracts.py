@@ -1,10 +1,8 @@
 """The session processing pair and the code approval card.
 
-A registered tool that runs in the user's QGIS session is a request on the plugin
-wire: the agent emits ``processing-request``, the plugin runs it in the session
-and answers ``processing-response``. A code request is preceded by the
-``code-exec-request`` card; running code is a consequential action, and the
-approval rides back on the payload-confirmation keyed by ``code_exec_id``.
+A registered tool that runs in the user's QGIS session is a ``processing-request`` the plugin runs and answers with
+``processing-response``. A code request is preceded by the ``code-exec-request`` card, and the approval rides back on
+the payload-confirmation keyed by ``code_exec_id``.
 """
 
 from __future__ import annotations
@@ -27,8 +25,7 @@ __all__ = [
 #: A snippet is small; a megabyte of "code" is refused at the boundary.
 _CODE_CAP = 64 * 1024
 
-#: What the session is asked to run: a Processing algorithm over named canvas
-#: layers, or a Python snippet in the session's interpreter.
+#: What the session runs: a Processing algorithm over named canvas layers, or a Python snippet.
 ProcessingKind = Literal["algorithm", "code"]
 
 
@@ -40,12 +37,9 @@ class CodeExecRequestPayload(ContractModel):
     MESSAGE_TYPE: ClassVar[str] = "code-exec-request"
 
     envelope_type: Literal["code-exec-request"] = "code-exec-request"
-    #: The confirmation correlation key.
     code_exec_id: ULIDStr
-    #: The EXACT code to be run, verbatim - never a paraphrase, because this is
-    #: what the user is approving.
+    #: The exact code to be run, verbatim - never a paraphrase, because this is what the user approves.
     python_code: str = Field(min_length=1, max_length=_CODE_CAP)
-    #: One-line reason the code is being run. Capped to keep it a caption.
     rationale: str | None = Field(default=None, max_length=512)
 
 
@@ -58,15 +52,11 @@ class ProcessingRequestPayload(ContractModel):
 
     request_id: ULIDStr
     kind: ProcessingKind
-    #: The Processing algorithm id, ``provider:name``.
     algorithm: str | None = Field(default=None, min_length=1, max_length=200)
-    #: The algorithm's parameters, as the Processing framework takes them; a
-    #: layer is named by its canvas name.
+    #: Processing parameters; a layer is named by its canvas name.
     params: dict[str, Any] = Field(default_factory=dict)
-    #: The snippet, verbatim as approved.
     code: str | None = Field(default=None, min_length=1, max_length=_CODE_CAP)
-    #: The approval card a code request rode in on, so the session joins the
-    #: outcome to that card.
+    #: The approval card a code request rode in on, so the session joins the outcome to it.
     code_exec_id: ULIDStr | None = None
 
     @model_validator(mode="after")
@@ -88,9 +78,7 @@ class ProcessingResponsePayload(ContractModel):
     request_id: ULIDStr
     status: Literal["ok", "error"]
     result: dict[str, Any] | None = None
-    #: The error text of a failed run, the traceback foot included.
     error: str | None = Field(default=None, max_length=16 * 1024)
-    #: What the snippet printed, tail-bounded.
     stdout: str = Field(default="", max_length=16 * 1024)
 
 

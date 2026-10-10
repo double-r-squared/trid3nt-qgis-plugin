@@ -53,8 +53,8 @@ class _CaseListTask(QObject):
 
 
 class _ProviderConfigTask(QObject):
-    """POST /api/provider-config. SECURITY: the payload carries the provider
-    api key and this task NEVER logs it."""
+    """POST /api/provider-config. SECURITY: the payload carries the provider api key and this
+    task NEVER logs it."""
 
     finished = pyqtSignal(dict)  # {"ok", "model", "base_url_host"}
     errored = pyqtSignal(str)    # honest message (never contains the key)
@@ -132,10 +132,7 @@ class _LibrarySearchTask(QObject):
 
 
 class _KeyedSourcesTask(QObject):
-    """GET /api/library, reduced to the credentials its keyed rows declare.
-
-    The key entry offers these names beside the language model's; an error is
-    surfaced on the entry rather than silently leaving the names out."""
+    """GET /api/library, reduced to the credentials its keyed rows declare."""
 
     finished = pyqtSignal(list)  # list[{name, label, signup_url, env_var}]
     errored = pyqtSignal(str)    # honest message
@@ -160,9 +157,7 @@ class _KeyedSourcesTask(QObject):
 
 
 class _ModelListTask(QObject):
-    """GET /api/local-models. ``finished`` carries ``(model_ids, provider)``
-    so a stale fetch for a since-changed provider is ignored at the call
-    site."""
+    """GET /api/local-models."""
 
     finished = pyqtSignal(list, str)  # (model_ids, provider)
     errored = pyqtSignal(str)         # honest message
@@ -188,9 +183,8 @@ class _ModelListTask(QObject):
 
 
 class _EffectiveModelTask(QObject):
-    """GET the agent's EFFECTIVE (env-default) model id, so the status strip
-    can name the running model when the user picked none. Silent on failure:
-    the label keeps whatever text it had."""
+    """GET the agent's EFFECTIVE (env-default) model id, so the status strip can name the
+    running model when the user picked none."""
 
     finished = pyqtSignal(str)  # the agent default model id ("" if unknown)
 
@@ -210,9 +204,8 @@ class _EffectiveModelTask(QObject):
 
 
 class _PushLayerTask(QObject):
-    """Push the active QGIS layer into a case: one export-to-tempfile, upload
-    and register round trip. The temp file is deleted whether the ingest POST
-    succeeds or fails."""
+    """Push the active QGIS layer into a case: one export-to-tempfile, upload and register
+    round trip."""
 
     finished = pyqtSignal(str, dict)  # layer_name, result
     errored = pyqtSignal(str, str)    # layer_name, message
@@ -253,8 +246,7 @@ class _PushLayerTask(QObject):
 
 
 class _ProbePointTask(QObject):
-    """POST /api/probe-point for one map click. Only the round trip runs off
-    the UI thread; the result is formatted back in the ``finished`` slot."""
+    """POST /api/probe-point for one map click."""
 
     finished = pyqtSignal(float, float, dict)  # lon, lat, result
     errored = pyqtSignal(float, float, str)    # lon, lat, message

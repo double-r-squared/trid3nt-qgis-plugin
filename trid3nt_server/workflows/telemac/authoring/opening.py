@@ -1,10 +1,9 @@
-"""THE OPENING: the state the run starts from, and the water level it starts at.
+"""The opening: the state the run starts from, and the water level it starts at.
 
-An open-water domain opens at the level the question states or the sea it stands
-in; a reach carrying a discharge opens at the normal depth that flow holds over
-the channel its inflow face cuts. A run that carries on from another opens at
-that run's own last surface. Nothing is painted where nothing was measured - a
-domain with no level and no flow refuses by name."""
+An open-water domain opens at the stated level or the sea it stands in; a reach carrying a
+discharge at the normal depth that flow holds over its inflow face; a continued run at the
+previous surface. A domain with no level and no flow refuses by name.
+"""
 
 from __future__ import annotations
 
@@ -33,30 +32,23 @@ from .accepted_mesh import (
 
 __all__ = ["BED_PARALLEL", "FLAT", "open_channel", "open_water"]
 
-#: What the engine is told to lay: a flat surface at the level, or a sheet of one
-#: depth following the bed. Flat is what any body of water does; bed-parallel is
-#: what a reach that FALLS holds, and only its own addition measures that.
+# What the engine is told to lay: a flat surface at the level, or a sheet of one depth following the bed (what a reach that falls holds).
 FLAT = "CONSTANT ELEVATION"
 
 
 BED_PARALLEL = "CONSTANT DEPTH"
 
 
-#: The three keys every template reads the water off, and the two an addition fills
-#: where the edge carries values. A body nobody stated a level for carries None
-#: in all of them: no water was measured, and nothing is claimed.
+# The three keys every template reads the water off, and the two an addition fills; a body with no stated level carries None in all of them.
 _NO_WATER: dict[str, Any] = {
     "level_m": None, "depth_m": None, "max_depth_m": None, "opening": None,
     "inflow_q_m3s": None, "outflow_stage_m": None,
-    # THE WINDOW behind each of the two numbers above, where the record that
-    # reported them reported one: what the boundary's own file is written from.
+    # The window behind each number, where the record reported one; the boundary file is written from it.
     "inflow_q_series": None, "outflow_stage_series": None,
 }
 
 
-#: The class a level slot asks for. A run that asked for one and got nothing is
-#: the only run this refuses on: a question declaring no level slot opens the way
-#: its own template says.
+# The class a level slot asks for; only a run that asked for one and got nothing refuses.
 _LEVEL_CLASS = "water level series"
 
 
@@ -69,11 +61,7 @@ def _domain_unmeasured(message: str) -> Exception:
 
 
 def _refuse_dry(where: str) -> None:
-    """A CLOSED BODY THAT OPENED AT NOTHING: no edge feeds it, its bed is on a
-    datum, and the level slot the question asked for came back empty, so the
-    surface it stands at is unknown and a solve would run a dry basin and
-    publish it as a result. The refusal names that slot and lists what was
-    asked for it."""
+    """A closed body that opened at nothing (no edge, datum bed, empty level slot) would solve a dry basin and publish it; refuses naming the slot."""
     asked = [choice for choice in run_choices()
              if choice.need == _LEVEL_CLASS and not choice.picked]
     if not asked:
@@ -91,9 +79,7 @@ def _refuse_dry(where: str) -> None:
 
 def _liquid_boundaries(topology: Mapping[str, Any], node_xy: Any
                        ) -> list[dict[str, Any]]:
-    """Each numbered liquid boundary, where it sits: the centroid of its role's
-    nodes in the mesh's own metres. A role landing as several sections shares
-    one centroid, because the topology records nodes per role."""
+    """Each numbered liquid boundary's centroid in the mesh's metres; a role landing as several sections shares one centroid."""
     import numpy as np
 
     xy = np.asarray(node_xy, dtype=float)
@@ -107,30 +93,22 @@ def _liquid_boundaries(topology: Mapping[str, Any], node_xy: Any
 
 
 def _seconds(clock: Any) -> float:
-    """How long the water is open for, off however its module spells the length.
+    """How long the water is open for: one number, or the product of a step and a count.
 
-    A window stated as one number, or the keyword values whose PRODUCT is it - a
-    step and a count of them. A module that does not march in time spells none
-    and its water opens for the single record a steady solve writes."""
+    A module that does not march in time opens for the single record a steady solve writes.
+    """
     if isinstance(clock, (list, tuple)):
         return math.prod(float(value) for value in clock) if clock else 0.0
     return float(clock or 0.0)
 
 
 def _window(reading: Any) -> Any:
-    """The series an ingested reading carried, or ``None``.
-
-    A number stated on the call carries none: one number is the whole of what
-    the caller said, and the boundary states it as the constant the engine
-    reads."""
+    """The series an ingested reading carried, or ``None`` for a number stated on the call."""
     return getattr(reading, "series", None)
 
 
 def _held_level(stage: Any) -> tuple[float, str] | None:
-    """The water-surface ELEVATION somebody measured at the outflow, or ``None``.
-
-    An elevation on the datum the bed is painted on - never a height above a
-    gauge's own zero, which is a different number about a different surface."""
+    """The water-surface elevation measured at the outflow on the bed's datum, or ``None``; never a height above a gauge's own zero."""
     from trid3nt_server.inputs.observation import Observation
 
     if stage is None:
@@ -151,13 +129,7 @@ def _held_level(stage: Any) -> tuple[float, str] | None:
 
 
 def _stands_over_the_reach(bed: Mapping[str, Any], level_m: float) -> bool:
-    """Is this measured level the water over THIS reach, rather than part of it?
-
-    Over the inflow run's own bed, yes: the surface covers the reach end to end.
-    Below the outflow section altogether, also yes - it is not a level on this
-    bed at all and the opening refuses by name rather than quietly deriving one
-    instead. In between is the reach a uniform-flow depth is for: a horizontal
-    surface at the outflow's level would leave the inflow face dry."""
+    """Is this measured level the water over this reach? Over the inflow bed or below the outflow section, yes (the latter refuses by name); in between a horizontal surface would leave the inflow face dry."""
     section = [float(z) for _offset, z in (bed.get("outflow_section") or ())]
     return (level_m > float(bed["bed_top_m"])
             or (bool(section) and level_m <= min(section)))
@@ -165,11 +137,7 @@ def _stands_over_the_reach(bed: Mapping[str, Any], level_m: float) -> bool:
 
 def _level_opening(bed: Mapping[str, Any], held: tuple[float, str], *,
                    discharge_q: float) -> dict[str, Any]:
-    """The opening a reach that does not FALL takes: the level that was measured.
-
-    A uniform-flow depth is a fall over a length, so measured ends that sit level
-    have none; the water still stands where the measurement says it does, and the
-    run opens flat at the depth that leaves over the outflow section."""
+    """The opening a reach that does not fall takes: flat at the depth leaving over the outflow section, since a uniform-flow depth needs a fall."""
     stage_m, note = held
     section = [(float(offset), float(z))
                for offset, z in (bed.get("outflow_section") or ())]
@@ -194,12 +162,10 @@ def _level_opening(bed: Mapping[str, Any], held: tuple[float, str], *,
 
 
 def _reported_discharge(carrier: Any) -> tuple[float, str]:
-    """The streamflow the carrier OBSERVATION reports, with what reported it.
+    """The streamflow the carrier observation reports, with what reported it.
 
-    One value, whichever way it arrived: a stated number and a record read the
-    same. A record that never passed its slot's ingestion is refused by name
-    rather than read here: choosing the nearest site is what the observation
-    slot does."""
+    A record that never passed its slot's ingestion is refused; choosing the site is the slot's job.
+    """
     from trid3nt_server.inputs.observation import Observation
 
     if isinstance(carrier, (int, float)) and not isinstance(carrier, bool):
@@ -214,9 +180,7 @@ def _reported_discharge(carrier: Any) -> tuple[float, str]:
             error_code="TELEMAC_CARRIER_UNINGESTED")
     where = carrier.site_name or carrier.site_id
     if not where and not carrier.sampled:
-        # A reading with no site and no moment is the value the caller STATED,
-        # which the slot carries in the same shape as a record so this step reads
-        # one thing; saying a record reported it would name a source nobody read.
+        # A reading with no site and no moment is the stated value; naming a record as its source would name a source nobody read.
         return float(carrier.value), (
             f"the discharge {carrier.value:g} m3/s was stated on the call.")
     return float(carrier.value), (
@@ -227,11 +191,7 @@ def _reported_discharge(carrier: Any) -> tuple[float, str]:
 
 def _measured_channel(roles: Mapping[str, Any], node_xy: Any,
                       node_bed: Any) -> dict[str, Any]:
-    """What the accepted mesh says about the channel the outflow stage rests on.
-
-    The two bed medians are over the nodes the inflow and outflow runs name, and
-    the fall between them over the distance between them IS the friction slope -
-    measured on the mesh rather than on a line laid beside it."""
+    """The two bed medians are over the inflow and outflow runs' nodes; the fall between them over their distance is the friction slope."""
     import numpy as np
 
     bed = None if node_bed is None else np.asarray(node_bed, dtype=float)
@@ -266,18 +226,14 @@ def _measured_channel(roles: Mapping[str, Any], node_xy: Any,
 
 
 def _opening(level: Any, mesh: Mapping[str, Any]) -> dict[str, Any]:
-    """THE OPENING: the level this domain stands at and the depth that leaves.
+    """The level this domain stands at and the depth that leaves.
 
-    ``level`` is what somebody measured: a number, an observation, or the record
-    an ADDITION returned after measuring the water over this same mesh - a reach
-    holds its own opening, and the base takes it rather than deriving a second
-    one. Nothing measured and a bed stated as a DEPTH is the bed's own zero;
-    nothing measured over a bed on a datum is no water, which is a state and
-    not a refusal - a template that needs none opens the way it says."""
+    ``level`` is a number, an observation, or an addition's measured record. Nothing measured on a
+    depth-stated bed is the bed's zero; on a datum bed it is no water, a state and not a refusal.
+    """
     import numpy as np
 
-    # A bed STATED as a depth is counted from the free surface itself, so the
-    # mesh knows where that surface stands and nothing has to be read for it.
+    # A bed stated as a depth is counted from the free surface itself.
     zero = dict(mesh.get("provenance") or {}).get("free_surface_m")
     if isinstance(level, Mapping):
         measured = {**_NO_WATER, **{k: v for k, v in level.items() if k in _NO_WATER}}
@@ -294,17 +250,12 @@ def _opening(level: Any, mesh: Mapping[str, Any]) -> dict[str, Any]:
     floor, ceiling = float(np.nanmin(bed)), float(np.nanmax(bed))
     measured["level_m"] = round(surface, 3)
     if not isinstance(level, Mapping):
-        # WHAT AN OPEN EDGE HOLDS on a body with no channel to derive a stage:
-        # the level somebody measured, and the reading's own window where it
-        # carried one - a tide is a level that moves, and a boundary read off
-        # one number would hold the sea still.
+        # What an open edge holds with no channel to derive a stage: the measured level and its window (a tide moves; one number would hold the sea still).
         measured["outflow_stage_m"] = measured["level_m"]
         measured["outflow_stage_series"] = _window(level)
     measured["opening"] = measured["opening"] or FLAT
     if measured["opening"] == BED_PARALLEL:
-        # A SHEET OF ONE DEPTH following the bed: every node holds that depth,
-        # and the column is it. The level is where the outflow section stands
-        # under that sheet, which is the only place the two agree.
+        # A sheet of one depth following the bed; the level is where the outflow section stands under it.
         depth = float(measured["depth_m"])
         measured["max_depth_m"] = round(depth, 2)
         journal_note(
@@ -349,15 +300,11 @@ async def open_water(
     deck: str = "",
     open_depth_threshold_m: float | None = None,
 ) -> dict[str, Any]:
-    """A BODY OF WATER OPENS at a level over its bed: the mesh it was handed, the
-    clock the run turns on, the files the box is given, and THE OPENING - the
-    level the surface stands at and the depth that leaves over every node.
+    """A body of water opens at a level over its bed: mesh, clock, files, and the opening.
 
-    Any body of water: the level is stated or somebody measured it, the
-    depth is that level minus the bed, the edge is wall all round and the surface
-    opens flat. Nothing here knows a reach from a lake. What a question ADDS on
-    top - an inflow's normal depth, an outlet rating curve - is its own step,
-    and what that step measured arrives here as the level this one opens at."""
+    The depth is the level minus the bed and the edge is wall all round; what a question adds on
+    top (an inflow's normal depth, a rating curve) arrives here as the level.
+    """
     facts = mesh_facts(mesh, missing=_domain_unmeasured)
     measured = mesh.get("min_edge_m")
     mesh_size_m = round(max(float(measured if measured is not None
@@ -372,9 +319,7 @@ async def open_water(
     initial_state = await asyncio.to_thread(initial_state_of, continue_from,
                                             len(node_xy))
     topology = topology_of(files, missing=mesh_missing)
-    # A template that STATES the depth an open edge is designated at is one whose
-    # sea state is prescribed across that edge; a template that states none names a
-    # body of water that may legitimately be closed.
+    # A template that states the designating depth has a sea state prescribed across that edge; one that states none may be closed.
     if open_depth_threshold_m is not None:
         refuse_a_sealed_domain(topology, deck=deck or facts["mesh_name"],
                                open_depth_threshold_m=open_depth_threshold_m)
@@ -386,8 +331,7 @@ async def open_water(
         _refuse_dry(facts["mesh_name"])
     return {
         "name": slug,
-        # THE KEYWORDS THE SETTLE FILLS, by the engine's own names: the sheet
-        # takes each one a module spells and its template does not state.
+        # Keywords the settle fills, by the engine's names: the sheet takes each one a module spells that the template does not state.
         "keywords": {"TITLE": f"{slug} DOMAIN", "TIME_STEP": time_step_s,
                      "DURATION": duration_s,
                      "INITIAL_CONDITIONS": opening["opening"],
@@ -404,18 +348,13 @@ async def open_water(
         "start_time_s": start_time_s,
         "until_s": start_time_s + duration_s,
         "initial_state": initial_state["note"],
-        # THE OPENING, as every template reads it: what the surface opens at, the
-        # depth under it and the keyword that says which of the two the engine is
-        # to lay. A run nobody stated a level for carries None for all three and
-        # opens the way its own template says.
+        # The opening as every template reads it; a run with no stated level carries None for all three.
         **opening,
-        # WHICH dataset painted the mesh's nodes, and where each one stopped: a
-        # two-source bed says how much of the domain the survey covered.
+        # Which dataset painted the nodes and where each stopped.
         "bed_source": facts["bed_source"],
         "liquid_boundary_order": list(topology["liquid_boundary_order"]),
         "liquid_boundary_prescribes": list(topology["liquid_boundary_prescribes"]),
-        # WHERE each numbered liquid boundary sits, so a printed flux can be read
-        # at the one a Point stands on.
+        # Where each numbered liquid boundary sits, so a printed flux reads at the one a Point stands on.
         "liquid_boundaries": _liquid_boundaries(topology, node_xy),
         "continue_from": PREVIOUS_DEST if continue_from else None,
         "mesh_inputs": [
@@ -448,21 +387,12 @@ async def open_channel(
     carrier: Any = None,
     stage: Any = None,
 ) -> Any:
-    """A CHANNEL OPENS UNDER A DISCHARGE, on top of any body of water: what the
-    inflow carries, what the outflow holds, and the depth the run opens at.
+    """A channel opens under a discharge, on top of any body of water.
 
-    The flow is what the inflow run carries - a reading, or the number stated on
-    the call. Where a LEVEL was measured and it stands over the inflow run's own
-    bed, that level is what the outflow holds and what the run opens flat at.
-    Where none was, the stage is a NORMAL DEPTH over the section the outflow run
-    cuts, derived at the roughness the steering file is written at, and the run opens
-    bed-parallel at that same depth - the equilibrium its own downstream boundary
-    holds it to rather than a blanket depth draining into it.
-
-    A run that carries NO CARRIER opens no channel: there is no flow to impose,
-    so this hands back the level it was given and the body opens on its level
-    boundaries, which is the base's own opening. An edge that names no runs is a
-    closed body and is the same nothing."""
+    A measured level over the inflow bed is what the outflow holds and the run opens flat at; else
+    the stage is a normal depth over the outflow section at the deck's roughness, opened bed-parallel.
+    A run with no carrier opens no channel and hands back the level it was given.
+    """
     if carrier is None:
         return stage
     node_xy, node_bed = await asyncio.to_thread(mesh_nodes, mesh)
@@ -478,12 +408,7 @@ async def open_channel(
     law, coefficient = int(friction_law), float(friction_coefficient)
     inflow_q, discharge_note = _reported_discharge(carrier)
     bed = _measured_channel(roles, node_xy, node_bed)
-    # A LEVEL SOMEBODY MEASURED is where the water stands, and the run opens flat
-    # at it: a uniform-flow depth is a model of the same surface, and a model
-    # does not stand over a measurement of the thing it models. The derivation is
-    # for the reach that has no measurement - or the one a measurement does not
-    # reach, where a horizontal surface at the outflow's level leaves the inflow
-    # face dry and the engine has no water to impose a discharge on.
+    # A measured level is where the water stands; a uniform-flow depth is a model and does not override it. The derivation serves the reach with no measurement, or one not reaching it.
     if held is not None and _stands_over_the_reach(bed, held[0]):
         normal = _level_opening(bed, held, discharge_q=inflow_q)
         journal_note(
@@ -504,17 +429,13 @@ async def open_channel(
             f"friction slope {normal['slope']:.6f}, which IS the uniform-flow "
             f"surface. {discharge_note}")
     return {
-        # The level the base opens the water at, and HOW: a reach that falls
-        # holds a sheet of one depth on its own friction slope, and one that
-        # does not holds flat at the level somebody measured.
+        # The level the base opens at, and how: a falling reach holds one depth on its friction slope, otherwise flat at the measured level.
         "level_m": round(float(normal["stage_m"]), 3),
         "depth_m": round(float(normal["depth_m"]), 3),
         "opening": FLAT if float(normal["slope"]) == 0.0 else BED_PARALLEL,
         "outflow_stage_m": round(float(normal["stage_m"]), 3),
         "inflow_q_m3s": inflow_q,
-        # The window each number came out of, where the record carried one. The
-        # boundary writes the series and the number stands for the boundaries
-        # nothing measured a window at.
+        # The window each number came out of; the boundary writes the series and the number stands for the rest.
         "inflow_q_series": _window(carrier),
         "outflow_stage_series": _window(stage),
         "friction_law": law,

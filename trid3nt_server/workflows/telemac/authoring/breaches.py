@@ -1,9 +1,8 @@
 """TELEMAC-2D's breaches data file, as content: one dyke breach per drawn line.
 
-The reader takes one value per line, in a fixed order. A
-breach opened at a stated time (initiation option 1) states its opening moment
-and no control level; the lateral-growth options past 2 read extra lines this
-file does not write, so they refuse here rather than in the engine."""
+The reader takes one value per line in a fixed order. Lateral-growth options past 2 read
+extra lines this file does not write, so they refuse here.
+"""
 
 from __future__ import annotations
 
@@ -13,10 +12,9 @@ __all__ = ["BREACHES_FILENAME", "BreachRefused", "text"]
 
 BREACHES_FILENAME = "breaches.txt"
 
-#: Initiation option 1: the breach opens at a stated time.
+# Initiation option 1: the breach opens at a stated time (no control level).
 _AT_A_TIME = 1
-#: The lateral-growth options whose fields are only the ones written here: 1 the
-#: whole line lowered at once, 2 the opening widened linearly over the duration.
+# Lateral-growth options 1 (whole line lowered at once) and 2 (opening widened linearly over the duration).
 _GROWTH_OPTIONS = (1, 2)
 
 
@@ -43,9 +41,7 @@ def text(breaches: Sequence[dict[str, Any]], *, initial_widths: bool) -> str:
         if len(xy) < 2:
             raise BreachRefused(f"breach {n} carries {len(xy)} point(s); a "
                                 "breach is a line along the dyke crest.")
-        # In the reader's order: polygon width, initiation option, opening
-        # moment, duration, lateral-growth option, final bottom altitude, the
-        # initial width where the deck says widths are known, then the polyline.
+        # Reader's order: polygon width, initiation option, opening moment, duration, growth option, final bottom altitude, initial width, then the polyline.
         lines += [f"{float(breach['width_m']):.3f}", str(_AT_A_TIME),
                   f"{float(breach['opens_at_s']):.3f}",
                   f"{float(breach['duration_s']):.3f}", str(growth),

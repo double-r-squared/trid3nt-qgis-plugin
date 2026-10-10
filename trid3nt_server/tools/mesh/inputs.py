@@ -24,9 +24,8 @@ def finest_edge(stated: Any, ops: Iterable[Any],
                 bbox: tuple[float, float, float, float]) -> tuple[float, str | None]:
     """The mesh's finest edge -> ``(edge_m, the sentence the mesh states about it)``.
 
-    A stated edge stands whatever the data under it, and the bed says so where
-    it is coarser; unstated, it is the finest cell of the rasters the recipe
-    names, because the mesh library requires one and nothing finer is measured."""
+    A stated edge stands whatever the data under it, and the bed says so where it is coarser; unstated, it is the finest cell
+    of the rasters the recipe names, because the mesh library requires one and nothing finer is measured."""
     if stated not in (None, ""):
         return float(stated), None
     finest = min((cell for op in ops for cell in _cells(op, bbox)), default=None)
@@ -75,12 +74,8 @@ def op_input(value: Any) -> Any:
 
     if isinstance(value, Mapping) and "type" in value:
         return dict(value)
-    # Two conversions and no more, and which one applies is read off the
-    # artifact's CLASS, never guessed:
-    #     raster -> the readable raster the op reads at the nodes
-    #     vector -> the geometry document the op reads shapes out of
-    # A value whose class is not knowable passes through as it was written and
-    # the op refuses it in its own words if it cannot use it.
+    # Two conversions, chosen by the artifact's CLASS and never guessed: raster -> readable raster, vector -> geometry document.
+    # A value whose class is not knowable passes through and the op refuses it in its own words.
     kind = artifact_class(value)
     if kind == "raster":
         return op_raster(value)

@@ -1,14 +1,9 @@
 """An OBSERVATION: one measured value a slot opens on, read off what was fetched.
 
-A gauge layer, a sample-site layer and a user's own point layer all carry the
-same thing - somebody measured something somewhere at some time - and a slot
-that opens on it needs the number in ITS unit, on ITS datum, with the site, the
-distance and the date travelling beside it. A record that reported a WINDOW
-carries its whole series beside the reading, because a value the engine takes
-as a file of instants is lumped only where nothing measured one. A reading counted from a zero the
-slot does not read on moves onto it through an offset row the template names,
-never silently. A sample is a moment, never a climatology, so what is read is
-said on the run journal rather than folded into the answer.
+The value arrives in the slot's unit and on its datum; a reading counted from another
+zero moves onto it only through an offset row the template names. A record that
+reported a WINDOW carries its series beside the reading. A sample is a moment, never
+a climatology, so what is read is said on the run journal.
 """
 
 from __future__ import annotations
@@ -41,29 +36,23 @@ logger = logging.getLogger("trid3nt_server.inputs.observation")
 _CODE = "OBSERVATION_INVALID"
 
 #: What a source calls the MOMENT it reported, and what it calls the thing that
-#: reported. A sample portal names a site; a gridded analysis names the reach it
-#: published for and the cycle it published at, and both are what a reader of
-#: the journal note needs to find the number again.
+#: reported; the journal note needs both to find the number again.
 _STAMP_FIELDS = ("result_date", "valid_time", "datetime", "date_time")
 _SITE_FIELDS = ("site_id", "station_id", "feature_id")
 
-#: How far back of the moment a run asks at a SAMPLE still speaks for the water
-#: it was taken from. A month: what a body carries drifts with the season, so a
-#: reading from the same month of the same winter is the water this run opens
-#: on and one from another decade is a different river. A row that states no
-#: moment is asking about none, and every sample it fetched is a candidate.
+#: How far back of the moment a run asks at a SAMPLE still speaks for the water it was
+#: taken from: what a body carries drifts with the season. A row that states no moment
+#: asks about none, and every sample it fetched is a candidate.
 _WINDOW_DAYS = 30.0
 
-#: How far AHEAD of the asked moment a record may be read when it sampled
-#: nothing before it: one of the record's OWN cadences, so a daily record's
-#: same-day reading is that day's value and a six-minute gauge reaches six
-#: minutes on. A record holding one readable stamp states no spacing, and a day
-#: is the coarsest cadence a record that speaks for a moment is read at.
+#: How far AHEAD of the asked moment a record may be read when it sampled nothing before
+#: it: one of the record's OWN cadences, so a daily record's same-day reading is that
+#: day's value and a six-minute gauge reaches six minutes on. A record with one
+#: readable stamp states no spacing, so a day is the coarsest cadence.
 _LONE_CADENCE = dt.timedelta(days=1)
 
-#: What a ROW calls the zero its elevation is counted from. A portal that
-#: federates programs publishes readings on several, so the datum rides on the
-#: row and the layer's own is read only where the rows state none.
+#: What a ROW calls the zero its elevation is counted from; a portal federating
+#: programs publishes several, so the layer's own datum is read only where rows state none.
 _DATUM_FIELD = "vertical_datum"
 
 
@@ -77,9 +66,8 @@ class Observation:
     site_name: str | None = None
     sampled: str | None = None
     distance_km: float | None = None
-    #: What the value is counted from, once it is on the slot's datum, and what
-    #: the run says about the shift that got it there. Both empty on a reading
-    #: that is not an elevation.
+    #: What the value is counted from, once it is on the slot's datum, and what the run
+    #: says about the shift that got it there.
     datum: str | None = None
     datum_note: str = ""
     #: Every instant the record reported over its window, on the slot's own unit
@@ -92,9 +80,7 @@ class Observation:
         """What an engine is DRIVEN by here: the whole window where the record
         reported one, else the one number.
 
-        A slot that can write either hands this over, so the choice between a
-        measured record and a lumped constant is the record's own and not a
-        branch in the deck that reads it."""
+        The choice between a measured record and a lumped constant is the record's own."""
         return self.series if self.series is not None else self.value
 
 
@@ -112,10 +98,7 @@ class ObservationError(RuntimeError):
 def convert(value: float, units: Any, to_units: Any) -> float:
     """One reading moved onto the unit a slot reads, or a refusal naming both.
 
-    ONE table for a reading and for the window it came out of: the runtime's,
-    which is where a conversion is declared and a reader can check it - the
-    spellings a portal federates, "deg C" beside "degC" beside the engine's own
-    "DEGC", are one row of that table."""
+    ONE table serves a reading and its window: the runtime's, where "deg C", "degC" and "DEGC" are one row."""
     have, want = spelling(units), spelling(to_units)
     if not want or have == want:
         return float(value)
@@ -148,8 +131,7 @@ def _features(source: Any) -> list[dict[str, Any]]:
 def _samples(csv_text: str) -> list[tuple[str, float]]:
     """Every readable ``stamp,value`` row of a station's series, in file order.
 
-    A header row and a gap the source writes as an empty value both fail the
-    float read and are skipped: the row is not a reading."""
+    A header and an empty value fail the float read and are skipped."""
     rows: list[tuple[str, float]] = []
     for line in str(csv_text or "").splitlines():
         stamp, _sep, value = line.strip().partition(",")
@@ -161,11 +143,7 @@ def _samples(csv_text: str) -> list[tuple[str, float]]:
 
 
 def _cadence(rows: list[tuple[str, float]]) -> dt.timedelta:
-    """The spacing a record SPEAKS at, read off its own stamps.
-
-    The median gap between consecutive samples, so one hole in a daily record
-    does not make the record fortnightly. A record that holds one readable
-    stamp states no spacing at all and speaks for its day."""
+    """The spacing a record SPEAKS at: the median gap, so one hole does not coarsen it."""
     stamps = [taken for taken in (_moment(stamp) for stamp, _ in rows)
               if taken is not None]
     gaps = sorted(later - earlier for earlier, later in zip(stamps, stamps[1:])
@@ -177,11 +155,8 @@ def _pick(rows: list[tuple[str, float]],
           at: Any) -> tuple[str | None, float] | None:
     """THE row of a record the run OPENS on - one picker, every slot.
 
-    The latest sample at or before the moment asked about; failing that, the
-    earliest sample AFTER it within one of the record's own cadences, because a
-    day's reading stamped in the evening is still that day's reading and a
-    record that speaks every six minutes says nothing about the hour after. A
-    run that asks about no moment opens on the last row the record holds."""
+    The latest sample at or before ``at``, else the earliest after it within one
+    cadence; with no moment asked, the last row."""
     if not rows:
         return None
     asked = _moment(at)
@@ -203,10 +178,7 @@ def _reading(props: Mapping[str, Any], field: str, series_field: str,
              at: Any = None) -> tuple[str | None, float, dt.timedelta] | None:
     """One feature's value, the stamp it carries and the cadence it speaks at.
 
-    A record that carries a window is read AT the moment the run asks about, so
-    the stamp beside the value is the run's own instant inside the record and
-    the window check below is about that sample. A column that carries one
-    number speaks for no interval and is read at the lone cadence."""
+    A windowed record is read AT the moment asked; a single-number column is read at the lone cadence."""
     if series_field and props.get(series_field):
         rows = _samples(str(props[series_field]))
         found = _pick(rows, at)
@@ -236,10 +208,8 @@ def _moment(value: Any) -> dt.datetime | None:
 
 def _in_window(sampled: Any, at: Any,
                cadence: dt.timedelta = _LONE_CADENCE) -> bool:
-    """Whether a sample speaks for a run asking at ``at``: taken no older than
-    the window behind that moment, or no further than one cadence ahead of it.
-
-    An undated sample is never shown to be inside it, so it is outside."""
+    """Whether a sample speaks for a run asking at ``at``: no older than the window, or at
+    most one cadence ahead. An undated sample is outside."""
     taken, asked = _moment(sampled), _moment(at)
     if asked is None:
         return True
@@ -260,18 +230,10 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
                 code: str = _CODE) -> Observation | None:
     """THE ingestion: a fetched point layer, or a STATED value -> one reading.
 
-    ``near`` ranks the candidates when the source carries several - a fetch that
-    already asked for the nearest station returns one and nothing is ranked; a
-    sample outside the window that closes at ``at`` is not a sample for this run
-    and is never ranked at all; ``to_units`` is the unit the slot reads and
-    ``to_datum`` the zero it counts from, which a reading on another zero
-    reaches only through the ``offset`` row; ``record_units`` is the unit a
-    source that names none per site reports in. A number is the value the caller
-    stated, which stands over any record and is already on the slot's own datum;
-    ``caption`` is what the template CALLS this quantity - the noun every refusal
-    here is written about and the one the run journal opens its sentence with,
-    because a sample is a moment and its age is the reader's business. Nothing
-    that reports refuses typed."""
+    A number stands over any record and is already on the slot's datum; a reading on
+    another zero reaches ``to_datum`` only through ``offset``. ``near`` ranks several
+    candidates, none outside the window closing at ``at``; ``caption`` names the quantity
+    in every refusal and the journal note."""
     if source is None:
         return None
     measures, opens = caption or "this value", _opening(caption)
@@ -336,14 +298,10 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
 def _series(props: Mapping[str, Any], series_field: str, units: Any,
             to_units: Any, shift: float, label: str, at: Any = None,
             window_s: Any = None, quantity: str = "state") -> Series | None:
-    """THE WINDOW this station reported, on the slot's own unit and datum,
-    OPENED at the moment the run opens at.
+    """THE WINDOW this station reported, on the slot's unit and datum, opened at the run's moment.
 
-    The series rides the SAME shift the value did rather than a second one
-    derived off the same row, and ``None`` where the record reported one moment
-    - a single reading has no interval a reader could read between. A record
-    that carries no unit is not read in the slot's own: 2000 ft3/s read as
-    2000 m3/s is a different river."""
+    It rides the SAME shift as the value; ``None`` for a single reading. A record with
+    no unit refuses: 2000 ft3/s read as 2000 m3/s is a different river."""
     rows = _samples(str(props.get(series_field) or "")) if series_field else []
     if len(rows) < 2:
         return None
@@ -378,13 +336,9 @@ def _series(props: Mapping[str, Any], series_field: str, units: Any,
 
 def _gauge_zero(props: Mapping[str, Any], above_field: str, units: Any,
                 columns: Mapping[str, str], label: str, measures: str) -> float:
-    """The elevation of the zero this reading is counted from, in the reading's
-    own unit.
+    """The elevation of the zero this reading is counted from, in the reading's own unit.
 
-    A gauge publishes a HEIGHT above its own datum, which is a different surface
-    from the one a bed is painted on; the run reaches that surface by adding the
-    zero's own elevation, and a record that states none refuses rather than
-    reading the height as an elevation."""
+    A gauge publishes a HEIGHT above its own datum; a record that states no zero refuses."""
     if not above_field:
         return 0.0
     stated = props.get(above_field)
@@ -402,10 +356,7 @@ def _covers_the_run(rows: list[tuple[str, float]], at: Any,
                     window_s: Any, label: str) -> None:
     """Refuse a record that does not span the window this run solves over.
 
-    The run opens at ``at`` INSIDE the record; a record that stops before the
-    run does would be read flat past its last sample, which is a forcing nobody
-    measured. The refusal names the nearest sample and the statement that would
-    take the record as it is."""
+    A record stopping early would be read flat past its last sample, a forcing nobody measured."""
     opens = _moment(at)
     if opens is None or window_s is None:
         return
@@ -430,8 +381,7 @@ def _onto_datum(source: Any, props: Mapping[str, Any], to_datum: Any,
                 offset: Any, label: str) -> tuple[str | None, float, str]:
     """This reading on the datum the slot reads, and what the shift cost.
 
-    A slot that names no datum is not asking for an elevation, so nothing is
-    checked."""
+    A slot naming no datum is not asking for an elevation, so nothing is checked."""
     if to_datum is None:
         return (None, 0.0, "")
     on = {"vertical_datum": props.get(_DATUM_FIELD) or datum_of(source),
@@ -445,11 +395,7 @@ def _onto_datum(source: Any, props: Mapping[str, Any], to_datum: Any,
 
 
 def _opening(caption: str) -> str:
-    """What the run journal opens its sentence with, off the row's own caption.
-
-    The caption names the quantity as a thing - "a streamflow" - and the journal
-    says what THAT one did, so the article becomes the definite one. A row the
-    template captions nothing says nothing on the journal."""
+    """What the run journal opens its sentence with, off the caption ("a streamflow" -> "the"); no caption, nothing said."""
     words = str(caption or "").split()
     if not words:
         return ""
@@ -459,9 +405,7 @@ def _opening(caption: str) -> str:
 
 
 def _stated(source: Any) -> float | None:
-    """The value a caller STATED, or ``None`` when the source is a record.
-
-    A bool is not a reading: ``True`` would enter the sheet as 1.0."""
+    """The value a caller STATED, or ``None`` when the source is a record; a bool is not a reading."""
     if isinstance(source, bool):
         return None
     if isinstance(source, (int, float)):
@@ -470,9 +414,7 @@ def _stated(source: Any) -> float | None:
 
 
 def _journal(found: Observation, *, opens: str, stated: bool) -> None:
-    """Say on the run journal what this run opened on, where it says what it is.
-
-    Off a run there is no journal and nothing is said."""
+    """Say on the run journal what this run opened on; off a run there is no journal."""
     if not opens:
         return
     from trid3nt_server.workflows.runtime import journal_note
@@ -509,8 +451,7 @@ def _text(props: Mapping[str, Any], *keys: str) -> str | None:
 def _distance_km(feature: Mapping[str, Any], near: Any) -> float:
     """How far a feature is from the place asked about; ``inf`` orders nothing.
 
-    Ranking only has to ORDER candidates over a local box, so the flat-earth
-    distance on the latitude's own scale is the whole of what it needs."""
+    Ranking only orders candidates over a local box, so flat-earth distance suffices."""
     from trid3nt_server.inputs.point import lonlat_of
 
     place = lonlat_of(near)

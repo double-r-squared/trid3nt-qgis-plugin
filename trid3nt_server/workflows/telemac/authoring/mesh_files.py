@@ -1,9 +1,8 @@
 """The files TELEMAC asks an accepted mesh for, written from that mesh.
 
-The pair is ONE artifact written from ONE walk of the accepted geometry, and the
-boundary numbering that walk measures rides beside it. Nothing here is a mesh
-fact: a mesh states its nodes, its cells and the named stretches of its boundary,
-and this stage is what TELEMAC needs made out of them."""
+The pair is one artifact from one walk of the accepted geometry; the boundary numbering
+that walk measures rides beside it.
+"""
 
 from __future__ import annotations
 
@@ -30,9 +29,9 @@ __all__ = ["telemac_mesh_files"]
 async def telemac_mesh_files(*, mesh: Mapping[str, Any]) -> dict[str, Any]:
     """The accepted mesh's TELEMAC pair and the topology numbering it -> both.
 
-    A mesh whose record already carries the pair under TELEMAC's own names is
-    not written again; its boundary is walked either way, because the numbering
-    the steering author reads is measured and never stored."""
+    A record already carrying the pair is not rewritten; the boundary is walked either way,
+    because the numbering is measured and never stored.
+    """
     import asyncio
 
     return await asyncio.to_thread(_mesh_files, mesh)
@@ -82,8 +81,8 @@ def _mesh_files(mesh: Mapping[str, Any]) -> dict[str, Any]:
 def _stage(mesh_id: str, local: Path) -> str:
     """Upload one written file beside the mesh's other objects -> its uri.
 
-    With no cache bucket configured the file has nowhere to go and refuses:
-    a run staged from a path inside a temporary directory reads nothing."""
+    With no cache bucket configured it refuses: a temporary-directory path reads nothing.
+    """
     from trid3nt_server.store import objects as storage
 
     bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
@@ -99,8 +98,8 @@ def _stage(mesh_id: str, local: Path) -> str:
 def _record(art: Any, files: Mapping[str, str]) -> None:
     """Put what was written onto the mesh's own record, under the engine's names.
 
-    The sidecar is durability, never correctness: a write that fails leaves the
-    run holding the files it just wrote."""
+    The sidecar is durability, never correctness: a failed write leaves the run its files.
+    """
     from trid3nt_server.store import objects as storage
     from trid3nt_server.tools.mesh.artifact import write_mesh_artifact_sidecar
 

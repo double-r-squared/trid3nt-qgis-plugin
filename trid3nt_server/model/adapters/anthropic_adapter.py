@@ -61,9 +61,8 @@ _COUNT_TOKENS_CONSULT_RATIO = 0.7
 
 
 async def _exact_prompt_tokens(client: Any, kwargs: dict[str, Any]) -> int | None:
-    """The provider's OWN count of this request's input tokens, or ``None``.
-    Counts messages, system block and tool schemas; best-effort, so any fault
-    degrades to the heuristic rather than failing the turn."""
+    """The provider's OWN count of this request's input tokens, or ``None``. Counts messages, system
+    block and tool schemas; best-effort, so any fault degrades to the heuristic."""
     try:
         payload: dict[str, Any] = {
             "model": kwargs["model"],
@@ -104,8 +103,6 @@ def anthropic_model(session_model: str | None = None) -> str:
     return configured or ANTHROPIC_DEFAULT_MODEL
 
 
-
-
 def tool_declarations_to_anthropic_tools(
     tool_declarations: list[ToolDeclaration] | None,
 ) -> list[dict[str, Any]]:
@@ -127,12 +124,9 @@ def tool_declarations_to_anthropic_tools(
     return tools
 
 
-
-
 def _coalesce(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Merge consecutive same-role messages.
-    Tool results must ride the user message immediately after the assistant
-    ``tool_use`` turn, and one Content is emitted per part."""
+    """Merge consecutive same-role messages: tool results must ride the user message right after
+    the assistant ``tool_use`` turn."""
     merged: list[dict[str, Any]] = []
     for m in messages:
         if merged and merged[-1]["role"] == m["role"]:
@@ -214,22 +208,18 @@ def contents_to_anthropic_messages(
     return _ensure_messages_start_with_user(_coalesce(messages))
 
 
-
-
 def _build_message_kwargs(
     contents: Any,
     tool_declarations: Any,
     system_prompt: str | None,
     model: str | None,
 ) -> dict[str, Any]:
-    """Build the ``messages.stream`` kwargs (pure -- unit-testable).
-    Cache breakpoints land on the LAST tool and the system block, the end of the
-    stable prefix; a miss is a normal uncached call, never a correctness risk."""
-    # API constraints encoded below are 400s, not preferences: ``thinking`` is
-    # adaptive and ``budget_tokens`` is removed on this model family; the
-    # sampling params (temperature / top_p / top_k) are removed too, so none is
-    # sent; the request never ends on an assistant turn (no prefill); and every
-    # call streams so a long tool-planning turn cannot trip the SDK timeout.
+    """Build the ``messages.stream`` kwargs (pure -- unit-testable). Cache breakpoints land on the
+    LAST tool and the system block, the end of the stable prefix."""
+    # API constraints encoded below are 400s, not preferences: ``thinking`` is adaptive and
+    # ``budget_tokens`` is removed on this model family; the sampling params (temperature / top_p /
+    # top_k) are removed too, so none is sent; the request never ends on an assistant turn (no
+    # prefill); and every call streams so a long tool-planning turn cannot trip the SDK timeout.
     kwargs: dict[str, Any] = {
         "model": anthropic_model(model),
         "max_tokens": _DEFAULT_MAX_TOKENS,
@@ -257,12 +247,9 @@ def _build_message_kwargs(
     return kwargs
 
 
-
-
 def _is_transient_anthropic_error(exc: BaseException) -> bool:
-    """True when ``exc`` is a TRANSIENT upstream failure worth retrying.
-    Transient: 429, any status >= 500, connection drops and request timeouts. A
-    400 / 401 / 403 / 404 / 422 is a rejection where a retry only hides a bug."""
+    """True when ``exc`` is a TRANSIENT upstream failure worth retrying: 429, any status >= 500,
+    connection drops and timeouts. A 400/401/403/404/422 is a rejection a retry only hides."""
     try:
         import anthropic  # noqa: WPS433 -- dep dormant unless this provider is on
     except ImportError:
@@ -341,9 +328,8 @@ def _usage_event(usage: Any) -> UsageMetadataEvent:
 
 
 def _function_call_events(message: Any) -> list[FunctionCallEvent]:
-    """Harvest ``tool_use`` blocks off the final message.
-    Tool inputs are read as parsed JSON; a string payload is parsed with
-    ``json.loads``, never matched as text."""
+    """Harvest ``tool_use`` blocks off the final message; inputs are parsed JSON, and a string
+    payload goes through ``json.loads``, never text matching."""
     events: list[FunctionCallEvent] = []
     for block in getattr(message, "content", None) or []:
         if getattr(block, "type", None) != "tool_use":
@@ -374,8 +360,6 @@ def _refusal_notice(message: Any) -> str | None:
     return f"The model declined to answer this request{suffix}."
 
 
-
-
 async def stream_anthropic(
     contents: list[Message],
     tool_declarations: list[ToolDeclaration] | None = None,
@@ -398,12 +382,11 @@ async def stream_anthropic(
     client = AsyncAnthropic()
     model_id = anthropic_model(model)
 
-    # CLIENT-SIDE history management. The window is discovered from the Models
-    # API (``max_input_tokens``), and the trim strategy is the SHARED one in
-    # context_budget -- this adapter only rebuilds kwargs from the planned
-    # contents. Because the plan rewrites ONLY the conversation, and the cache
-    # breakpoints sit on ``tools``/``system`` (which render before messages),
-    # trimming can never invalidate the cached prefix.
+    # CLIENT-SIDE history management. The window is discovered from the Models API
+    # (``max_input_tokens``), and the trim strategy is the SHARED one in context_budget -- this
+    # adapter only rebuilds kwargs from the planned contents. The plan rewrites ONLY the
+    # conversation and cache breakpoints sit on tools/system (before messages), so trimming never
+    # invalidates the cached prefix.
     window = await discover_context_window("anthropic", model_id)
     working_contents = list(contents)
     tools_preview = tool_declarations_to_anthropic_tools(tool_declarations)
@@ -473,12 +456,10 @@ async def stream_anthropic(
                 yield _usage_event(usage)
             return
         except anthropic.APIError as exc:
-            # CONTEXT OVERFLOW is the one 400 worth retrying: the request is
-            # well-formed, it just did not fit. Standing upstream-provider
-            # rule -- log the provider's message VERBATIM, then trim HARDER
-            # (reactive ratio) and resend exactly once. A second overflow is
-            # the honest typed CONTEXT_WINDOW_EXCEEDED envelope, never the
-            # generic provider-unavailable bucket.
+            # CONTEXT OVERFLOW is the one 400 worth retrying: the request is well-formed, it just
+            # did not fit. Standing upstream-provider rule -- log the provider's message VERBATIM,
+            # then trim HARDER (reactive ratio) and resend exactly once. A second overflow is the
+            # typed CONTEXT_WINDOW_EXCEEDED envelope, not the provider-unavailable bucket.
             if (
                 looks_like_context_overflow_error(exc)
                 and not streamed_any

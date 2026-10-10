@@ -64,7 +64,6 @@ SCHEMA_VERSION = "v1"
 __all__ = [
     "__version__",
     "SCHEMA_VERSION",
-    # modules
     "auth",
     "ws",
     "collections",
@@ -78,23 +77,18 @@ __all__ = [
     "processing_contracts",
     "secrets",
     "tool_registry",
-    # the adapters' message IR
     "Message",
     "Part",
     "ToolCall",
     "ToolDeclaration",
     "ToolResponse",
-    # chart emission
     "ChartEmissionPayload",
     "SessionChartRecord",
-    # the borrowed-provider pair
     "LayerRequestPayload",
     "LayerResponsePayload",
-    # the session processing pair and the code approval card
     "CodeExecRequestPayload",
     "ProcessingRequestPayload",
     "ProcessingResponsePayload",
-    # common primitives
     "ContractModel",
     "ULIDStr",
     "BBox",

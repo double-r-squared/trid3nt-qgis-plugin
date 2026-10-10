@@ -10,12 +10,10 @@ from typing import Any
 
 
 def public_endpoint(region: str = "us-east-1") -> str:
-    """The real AWS S3 endpoint for ``region`` (public open-data buckets)."""
     return f"https://s3.{region}.amazonaws.com"
 
 
 def public_s3_client(region: str = "us-east-1") -> Any:
-    """Anonymous (UNSIGNED) boto3 S3 client pinned to the real AWS endpoint."""
     import boto3
     from botocore import UNSIGNED
     from botocore.config import Config
@@ -29,8 +27,7 @@ def public_s3_client(region: str = "us-east-1") -> Any:
 
 
 def public_s3fs_kwargs(region: str = "us-east-1") -> dict[str, Any]:
-    """kwargs for ``fsspec.filesystem('s3', ...)`` / ``fsspec.get_mapper``
-    that force anonymous access against the real AWS endpoint."""
+    """kwargs for ``fsspec.filesystem('s3', ...)`` / ``fsspec.get_mapper`` forcing anonymous access against the real AWS endpoint."""
     return {
         "anon": True,
         "client_kwargs": {"endpoint_url": public_endpoint(region)},

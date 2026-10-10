@@ -1,11 +1,4 @@
-"""A POINT: one location with an optional name, from every way a user names one.
-
-A canvas pick, a (lon, lat) pair, a "lat,lon" string and a selected point layer all
-enter through ``point``. What reads a Point after that reads ``.lon``, ``.lat`` and
-``.name`` and never parses again; where a point is allowed to be - inside a domain,
-on a river, in water - is answered here for any slot. A bare place NAME refuses: an
-ingestion resolves what it was handed and never fetches.
-"""
+"""A POINT: one location with an optional name, from every way a user names one."""
 
 from __future__ import annotations
 
@@ -49,10 +42,8 @@ class Point:
     lon: float
     lat: float
     name: str | None = None
-    #: THE PLACE'S OWN WORD for what it is - "river", "reservoir", "city" -
-    #: where the service that resolved the name published one, "" where nothing
-    #: said. Read off the answer that came; nothing here asks for it, because a
-    #: call to learn it asks the same service the same question.
+    #: THE PLACE'S OWN WORD for what it is - "river", "reservoir", "city" - where the
+    #: service that resolved the name published one, "" where nothing said.
     kind: str = ""
 
 
@@ -101,10 +92,7 @@ async def point(value: Any, *, label: str = "point",
 
 
 def _kind_of(value: Mapping[str, Any]) -> str:
-    """The word the answering service used for what this place is, or "".
-
-    A geocoder states it beside the coordinates it resolved; a pick, a pair and
-    a drawn feature state nothing, and nothing is an answer."""
+    """The word the answering service used for what this place is, or ""."""
     kind = value.get("place_type")
     if kind is None and isinstance(value.get("properties"), Mapping):
         kind = value["properties"].get("place_type")
@@ -120,11 +108,7 @@ def _named(value: Mapping[str, Any]) -> str | None:
 
 
 def lonlat_of(value: Any) -> tuple[float, float] | None:
-    """The place a value STATES, or ``None`` where it states none.
-
-    The synchronous half of the ingestion above: a Point, a mapping a pick or a
-    drawing returns, or a pair. Nothing readable is no place rather than a
-    refusal, because every caller here has somewhere else to look."""
+    """The place a value STATES, or ``None`` where it states none."""
     if value is None:
         return None
     lon, lat = getattr(value, "lon", None), getattr(value, "lat", None)
@@ -263,12 +247,8 @@ def snap_to_wet(xy: tuple[float, float], *, node_xy: Any, wet: Any,
                 ) -> tuple[tuple[float, float], float, int]:
     """Put a point where the run holds WATER at t0 -> where it went, how far, which node.
 
-    The engine solves a source at the mesh NODE nearest it, so that node is where
-    the point ends up: a coordinate between nodes is a claim about a position the
-    solve does not have, and one that drifted off the mesh - a flowline from
-    another dataset leaving the mapped banks - is a source the engine refuses as
-    outside its domain. A dry landing moves to the nearest wet node, and a state
-    with no wet node anywhere refuses. Mesh metres throughout."""
+    The engine solves a source at the nearest mesh NODE, so that node is where it lands;
+    a dry landing moves to the nearest wet node and a state with none refuses. Mesh metres."""
     import numpy as np
 
     nodes = np.asarray(node_xy, dtype=float)

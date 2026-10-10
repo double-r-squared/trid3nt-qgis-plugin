@@ -19,8 +19,6 @@ class Trid3ntPlugin:
         self.action = None
         self.dock = None
 
-    # -- QGIS plugin API ------------------------------------------------------ #
-
     def initGui(self) -> None:  # noqa: N802 -- QGIS-mandated name
         self.action = QAction(QIcon(_ICON_PATH), "TRID3NT chat", self.iface.mainWindow())
         self.action.setCheckable(True)
@@ -40,12 +38,9 @@ class Trid3ntPlugin:
             self.action.deleteLater()
             self.action = None
 
-    # -- behavior -------------------------------------------------------------- #
-
     def toggle_dock(self, checked: bool) -> None:
         if self.dock is None:
-            # Lazy import so plugin discovery stays cheap and a Qt problem in
-            # the dock cannot break classFactory.
+            # Lazy import: a Qt problem in the dock must not break classFactory.
             from .ui.dock import Trid3ntDock
 
             self.dock = Trid3ntDock(self.iface, self.iface.mainWindow())

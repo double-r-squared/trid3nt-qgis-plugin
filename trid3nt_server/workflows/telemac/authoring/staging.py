@@ -1,9 +1,8 @@
 """What the box receives: the authored run directory, uploaded, and its manifest.
 
-Nothing here reads a mesh, a geometry or a physical value - it moves files and
-names them. The manifest is written LAST, so a manifest exists only for a run
-whose every file is already where the launcher will look, and the staged
-directory is checked against itself before any of it leaves the daemon."""
+Nothing here reads a mesh or a physical value. The manifest is written last, so it exists
+only for a fully staged run.
+"""
 
 from __future__ import annotations
 
@@ -27,12 +26,11 @@ def case_section(*, module: str, steering: str, results: list[str],
                  coupling: str | None = None,
                  continue_from: str | None = None,
                  cores: int = 1) -> dict[str, Any]:
-    """The CASE a worker runs: which engine, which file, what it must produce.
+    """The case a worker runs: which engine, which file, what it must produce.
 
-    ``cores`` is the partition the steering file's own PARALLEL PROCESSORS
-    states, carried so the launcher and the engine are told the same number; a
-    serial run states neither. ``server_facts`` is copied into the worker's
-    metrics verbatim, never re-derived."""
+    ``cores`` is the partition the steering file states; ``server_facts`` is copied into the
+    worker's metrics verbatim.
+    """
     return {"module": module, "steering": steering,
             **({"user_fortran": list(user_fortran)} if user_fortran else {}),
             **({"coupling": coupling} if coupling else {}),
@@ -41,9 +39,7 @@ def case_section(*, module: str, steering: str, results: list[str],
             "results": list(results), "server_facts": dict(server_facts)}
 
 
-# ``inputs`` rows are ``{gs_uri, dest}``: what the launcher stages into the run
-# directory before the container starts, which is why the worker needs no network.
-# An authored run's section is ``case``.
+# ``inputs`` rows are ``{gs_uri, dest}``, staged into the run directory before the container starts (the worker has no network).
 def stage_telemac_manifest(*, section: str, config: Mapping[str, Any],
                            run_tag: str, outputs: list[str],
                            inputs: list[dict[str, str]] | None = None,
@@ -51,7 +47,8 @@ def stage_telemac_manifest(*, section: str, config: Mapping[str, Any],
                            extra: Mapping[str, Any] | None = None) -> str:
     """Write the worker manifest to the cache bucket -> its ``s3://`` URI.
 
-    ``section`` is the dispatch key, ``prefix`` the staging word; they differ."""
+    ``section`` is the dispatch key, ``prefix`` the staging word; they differ.
+    """
     cache_bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
     if not cache_bucket:
         raise TelemacError(
@@ -103,7 +100,8 @@ def _write_manifest(case: Mapping[str, Any], run_tag: str, *, outputs: list[str]
                     inputs: list[dict[str, str]], prefix: str) -> str:
     """Write the worker manifest for an authored case -> its ``s3://`` URI.
 
-    Written by the one manifest writer, under the ``case`` dispatch key."""
+    Written under the ``case`` dispatch key.
+    """
     return stage_telemac_manifest(
         section="case", config=case, run_tag=run_tag, outputs=outputs,
         inputs=inputs, prefix=prefix)
@@ -125,10 +123,9 @@ async def stage_run(rundir: Path, run_tag: str, *, module: str, steering: str,
                     cores: int = 1) -> dict[str, Any]:
     """An authored run directory -> the staged run the box receives.
 
-    The manifest is written LAST, so it exists only for a fully staged run."""
-    # Every file the authoring wrote, under its path INSIDE the run directory:
-    # the oil module's user fortran is a directory the engine compiles, so the
-    # walk is recursive and the manifest dest carries the same relative path.
+    The manifest is written last.
+    """
+    # Paths stay relative to the run directory: the oil module's user fortran is a directory the engine compiles, so the walk is recursive.
     authored = sorted(str(p.relative_to(rundir))
                       for p in rundir.rglob("*") if p.is_file())
     inputs = [*mesh_inputs,
@@ -138,11 +135,7 @@ async def stage_run(rundir: Path, run_tag: str, *, module: str, steering: str,
         module=module, steering=steering, results=results,
         user_fortran=user_fortran, coupling=coupling,
         continue_from=continue_from, cores=cores, server_facts=server_facts)
-    # THE LAST READ BEFORE THE IMAGE: the directory the box will receive,
-    # checked against itself. A run whose steering names a file nobody staged,
-    # whose boundary file is numbered against another walk, whose bed has a
-    # hole, whose clock disagrees with its own window or whose partition the box
-    # cannot seat dies in the first second of the solve, so it refuses here.
+    # The staged directory is checked against itself: a steering naming an unstaged file, a mis-numbered boundary, a holed bed, a clock outside its window or an unseatable partition dies in the solve's first second.
     await asyncio.to_thread(
         check_staged_run, rundir, steering=steering, inputs=inputs,
         written_by_the_engine=[*results, *outputs],

@@ -17,10 +17,8 @@ __all__ = ["VertexCaptureTool", "borrow_map_tool", "paint_bbox_overlay",
 
 
 def borrow_map_tool(canvas, tool, checked: bool, previous):
-    """Install ``tool`` while ``checked`` and hand back the tool it displaced,
-    which the caller keeps and passes here again to restore. OFF restores only
-    while the borrowed tool is still active, so a tool the user picked by hand
-    on the canvas is never yanked out from under them."""
+    """Install ``tool`` while ``checked`` and hand back the tool it displaced, which the caller
+    keeps and passes here again to restore."""
     if checked:
         previous = canvas.mapTool()
         canvas.setMapTool(tool)
@@ -49,7 +47,6 @@ def paint_bbox_overlay(canvas, band, bbox4326, color: str, *,
             band = QgsRubberBand(canvas, QgsWkbTypes.PolygonGeometry)
             band.setColor(QColor(color))
             band.setWidth(2)
-            # Outline-only: a fully transparent fill leaves just the ring.
             band.setFillColor(QColor(0, 0, 0, 0))
             if dotted:
                 try:
@@ -98,8 +95,6 @@ class VertexCaptureTool(QgsMapTool):
         self._band.setFillColor(_RUBBER_FILL)
         self._band.setWidth(2)
 
-    # -- capture ----------------------------------------------------------- #
-
     def canvasReleaseEvent(self, event) -> None:  # noqa: N802 - Qt override
         if event.button() == Qt.MouseButton.RightButton:
             self._finish()
@@ -109,8 +104,7 @@ class VertexCaptureTool(QgsMapTool):
         self.changed.emit(len(self._points))
 
     def canvasDoubleClickEvent(self, event) -> None:  # noqa: N802 - Qt override
-        # The release that precedes the double click already added a vertex, so
-        # finishing here would keep a duplicate of the last one.
+        # The release before the double click already added a vertex; finishing here would duplicate it.
         if self._points:
             self._points.pop()
         self._finish()
@@ -130,8 +124,6 @@ class VertexCaptureTool(QgsMapTool):
                 self._redraw()
                 self.changed.emit(len(self._points))
 
-    # -- state ------------------------------------------------------------- #
-
     def vertices(self) -> list:
         return list(self._points)
 
@@ -142,13 +134,10 @@ class VertexCaptureTool(QgsMapTool):
                          else QgsWkbTypes.LineGeometry)
 
     def deactivate(self) -> None:
-        # The overlay belongs to the pick, not to the canvas: leaving it behind
-        # would draw a shape over a map the user has moved on from.
+        # The overlay belongs to the pick: leaving it would draw over a map the user moved on from.
         self._band.reset(QgsWkbTypes.PolygonGeometry if self._polygon
                          else QgsWkbTypes.LineGeometry)
         super().deactivate()
-
-    # -- internals --------------------------------------------------------- #
 
     def _finish(self) -> None:
         if not self._points:

@@ -30,12 +30,10 @@ class AdvertisedEndpoints(ContractModel):
     Best-effort and wholly optional: a client that reads ``None`` falls back to
     its own configured defaults rather than failing the connect."""
 
-    #: Object-store (MinIO) http base, e.g. ``http://<host>:9000``. None when
-    #: the server cannot derive it and no env override is set.
+    #: Object-store (MinIO) http base, e.g. ``http://<host>:9000``; None when not derivable and no env override.
     data_base: str | None = Field(default=None, max_length=2048)
 
-    #: Agent read-only HTTP base, e.g. ``http://<host>:8766``. None when the
-    #: server cannot derive it and no env override is set.
+    #: Agent read-only HTTP base, e.g. ``http://<host>:8766``; None when not derivable and no env override.
     http_base: str | None = Field(default=None, max_length=2048)
 
 
@@ -48,9 +46,7 @@ class AuthTokenEnvelope(ContractModel):
 
     MESSAGE_TYPE: ClassVar[str] = "auth-token"
 
-    #: The daemon's shared access token. Consumed at verification and discarded
-    #: - never persisted, never re-emitted. Bounded at 8KB: far above the
-    #: minted token, far below a DOS.
+    #: The daemon's shared access token: consumed at verification and discarded, never persisted or re-emitted. Bounded at 8KB.
     token: str = Field(default="", max_length=8192)
 
 
@@ -64,11 +60,7 @@ class AuthAckEnvelope(ContractModel):
 
     MESSAGE_TYPE: ClassVar[str] = "auth-ack"
 
-    #: The fixed session id (ULID) this connection is scoped to.
     user_id: ULIDStr
 
-    #: Optional server-advertised sibling endpoints (object store + agent
-    #: HTTP). ``None`` when the server does not advertise; a client treats it
-    #: as best-effort. Additive and default-``None``, so the wire shape stays
-    #: byte-identical against a server or client that ignores it.
+    #: Server-advertised sibling endpoints; None when not advertised, and a client treats it as best-effort.
     endpoints: AdvertisedEndpoints | None = Field(default=None)

@@ -32,9 +32,8 @@ _BG_DRAIN_TIMEOUT_S: float = float(
 async def _drain_bg_tasks(
     timeout: float | None = None,
 ) -> None:
-    """Flush any outstanding detached background tasks on shutdown, bounded by
-    ``timeout`` so a pathologically slow task cannot hang the exit. Best-effort,
-    and a no-op when nothing is pending."""
+    """Flush any outstanding detached background tasks on shutdown, bounded by ``timeout`` so a
+    pathologically slow task cannot hang the exit. A no-op when nothing is pending."""
     pending = [t for t in _BG_TASKS if not t.done()]
     if not pending:
         return
@@ -143,9 +142,8 @@ async def _handle_secret_add(
     state: SessionState,
     envelope: SecretAddEnvelopePayload,
 ) -> None:
-    """Store a plugin-pushed credential VALUE in the in-memory session cache,
-    keyed by session and provider; it is NEVER persisted, echoed back or logged.
-    The user typing the key into the plugin IS the confirmation."""
+    """Store a plugin-pushed credential VALUE in the in-memory session cache, keyed by session and
+    provider; it is NEVER persisted, echoed back or logged. The user typing the key into the plugin IS the confirmation."""
     if not envelope.key_value:
         await _send_error(
             websocket,

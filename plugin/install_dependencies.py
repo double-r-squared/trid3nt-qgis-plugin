@@ -17,22 +17,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional, Sequence, Tuple
 
-#: (import_name, pip_package_name) pairs -- the true third-party import
-#: surface of plugin/. QGIS bundles numpy, pandas, shapely, pyproj, lxml and
-#: psycopg2, so none of those belong here; matplotlib is the one gap, bundled
-#: by QGIS 3 and dropped by QGIS 4.
+#: (import_name, pip_package_name) pairs, the third-party import surface of plugin/.
+#: QGIS bundles numpy, pandas, shapely, pyproj, lxml and psycopg2; matplotlib is dropped by QGIS 4.
 DEPENDENCIES: List[Tuple[str, str]] = [
     ("matplotlib", "matplotlib"),
 ]
 
-#: Modules that are part of the QGIS/Qt platform, never pip-installed by us
-#: (QGIS provides them) and never counted as "third-party" by the source
-#: sweep below.
+#: Platform modules (QGIS/Qt) never pip-installed and never counted as third-party by the source sweep.
 _PLATFORM_MODULES = frozenset({
     "qgis", "PyQt5", "PyQt6", "PyQt", "sip", "osgeo", "processing", "console",
 })
-
-
 
 
 @dataclass
@@ -81,14 +75,12 @@ def format_table(statuses: Sequence[DependencyStatus]) -> str:
     return "\n".join(rows)
 
 
-# Windows: OSGeo4W python.exe resolution. Linux needs none (the system python3
-# QGIS runs under already has pip); macOS never resolves a QGIS-side interpreter
-# at all, because there is no pip inside one to reach.
+# Windows: OSGeo4W python.exe resolution. Linux uses the system python3; macOS has no QGIS-side pip to reach.
 
 
 def _first_real_executable(candidates: Sequence[str]) -> Optional[str]:
-    """First candidate that exists AND is executable (``os.X_OK``) -- never
-    trust a derived-but-unverified path."""
+    """First candidate that exists AND is executable (``os.X_OK``) -- never trust a derived-
+    but-unverified path."""
     seen = set()
     for path in candidates:
         if not path or path in seen:
@@ -130,9 +122,8 @@ def pip_install_command_str(python_exe: str, pip_names: Sequence[str]) -> str:
 def _run_pip(
     python_exe: str, pip_names: Sequence[str], extra_args: Sequence[str] = ()
 ) -> bool:
-    """Run ``python_exe -m pip install <pip_names> <extra_args>`` with
-    inherited stdio so a caller sees the pip output live. Returns True on a
-    zero exit code."""
+    """Run ``python_exe -m pip install <pip_names> <extra_args>`` with inherited stdio so a
+    caller sees the pip output live."""
     cmd = [python_exe, "-m", "pip", "install", *pip_names, *extra_args]
     print(f"+ {' '.join(cmd)}")
     try:
@@ -163,10 +154,8 @@ def install_missing(
     return _run_pip(python_exe, pip_names, extra_args=["--user"])
 
 
-# macOS: pip-download-as-wheel-fetcher recipe. QGIS 4's bundled Python has no
-# pip at all, so there is no interpreter to install INTO; the fix downloads
-# prebuilt wheels with the system python3 and unzips them into the QGIS
-# profile's own python/ dir, which is already on QGIS's sys.path.
+# macOS: QGIS 4's bundled Python has no pip, so wheels are downloaded with the system python3
+# and unzipped into the profile's python/ dir, which is already on QGIS's sys.path.
 
 
 def python_version_tag(version_info=None) -> str:
@@ -188,16 +177,13 @@ def mac_platform_tag(machine: Optional[str] = None) -> str:
 def profile_python_dir(file: Optional[str] = None) -> str:
     """``<profile>/python``, the QGIS profile directory already on QGIS's own
     ``sys.path``."""
-    # The plugin ships at ``<profile>/python/plugins/trid3nt/`` and this module
-    # lives directly inside ``trid3nt/``, so reaching the profile's python dir
-    # is exactly three ``dirname()`` calls from this file.
+    # The plugin lives at ``<profile>/python/plugins/trid3nt/``: the profile's python dir is three ``dirname()`` calls up.
     file = __file__ if file is None else file
     package_dir = os.path.dirname(os.path.abspath(file))  # .../trid3nt
     return os.path.dirname(os.path.dirname(package_dir))  # .../python
 
 
-#: Scratch download dir -- disposable; the wheels are unzipped out of it into
-#: the profile and never read again after that.
+#: Scratch download dir; the wheels are unzipped out of it and never read again.
 _MAC_WHEEL_DOWNLOAD_DIR = "/tmp/qgis_mpl"
 
 
@@ -224,9 +210,7 @@ def mac_wheel_recipe(
         f"--python-version {python_version} --platform {platform_tag} "
         f"--implementation cp -d {_MAC_WHEEL_DOWNLOAD_DIR}"
     )
-    # QGIS bundles numpy; the downloaded numpy wheel must NOT reach the
-    # profile -- it shadows the bundled copy and breaks shapely's ABI,
-    # taking all of PyQGIS down at startup.
+    # The downloaded numpy wheel must NOT reach the profile: it shadows QGIS's copy and breaks shapely's ABI.
     drop_numpy = f"rm -f {_MAC_WHEEL_DOWNLOAD_DIR}/numpy*.whl"
     install = (
         f'for w in {_MAC_WHEEL_DOWNLOAD_DIR}/*.whl; do unzip -o -q "$w" -d '
@@ -235,14 +219,11 @@ def mac_wheel_recipe(
     return f"{download}\n{drop_numpy}\n{install}"
 
 
-
-
 def _stdlib_module_names() -> frozenset:
     names = getattr(sys, "stdlib_module_names", None)
     if names:
         return frozenset(names)
-    # Fallback for interpreters without sys.stdlib_module_names (< 3.10):
-    # only used by the drift check, never by the install decision itself.
+    # Fallback for interpreters without sys.stdlib_module_names (< 3.10); drift check only.
     return frozenset(sys.builtin_module_names)
 
 
@@ -254,9 +235,7 @@ def scan_third_party_imports(root: Path) -> frozenset:
     found = set()
     root = Path(root)
     for path in sorted(root.rglob("*.py")):
-        # Shipped code only -- the repo checkout co-locates the plugin's own
-        # tests/ and docs/ beside the package (they never ship); an installed
-        # profile has neither, so this skip is a no-op there.
+        # Shipped code only: the repo checkout co-locates tests/ and docs/ beside the package; an installed profile has neither.
         rel = path.relative_to(root).parts
         if {"__pycache__", "tests", "docs"} & set(rel):
             continue
@@ -274,8 +253,6 @@ def scan_third_party_imports(root: Path) -> frozenset:
                 if node.module:
                     found.add(node.module.split(".")[0])
     return frozenset(n for n in found if n not in stdlib and n not in _PLATFORM_MODULES)
-
-
 
 
 def main(argv: Optional[Iterable[str]] = None) -> int:

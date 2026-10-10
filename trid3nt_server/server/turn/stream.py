@@ -64,9 +64,9 @@ async def _stream_model_reply(
     model_id: str | None = None,
     show_thinking: bool = False,
 ) -> None:
-    """Stream one user-message reply with multi-turn tool dispatch: each round
-    forwards text deltas, dispatches the round's tool calls and feeds their
-    results back, until a round makes no call. A cancel aborts the whole loop."""
+    """Stream one user-message reply with multi-turn tool dispatch: each round forwards text
+    deltas, dispatches the round's tool calls and feeds their results back, until a round makes
+    no call; a cancel aborts the whole loop."""
     from trid3nt_server.inputs.gate.confirm import (
         SPATIAL_INPUT_SENTINEL_KEY,
         _handle_request_spatial_input,
@@ -78,10 +78,9 @@ async def _stream_model_reply(
         user_text[:80],
     )
 
-    # Auto-name an Untitled Case from its FIRST user message BEFORE dispatch
-    # (a failed narration must not skip it). Deterministic heuristic, no LLM
-    # call; best-effort and never-raise. The end-of-turn call below stays as
-    # a no-op fallback covering a mid-stream case switch.
+    # Auto-name an Untitled Case from its FIRST user message BEFORE dispatch (a failed narration
+    # must not skip it). Deterministic heuristic, no LLM call; best-effort and never-raise. The end-
+    # of-turn call below stays as a no-op fallback covering a mid-stream case switch.
     try:
         if await _maybe_autoname_case(state, user_text):
             await _emit_case_list(websocket, state, force=True)
@@ -91,56 +90,35 @@ async def _stream_model_reply(
             exc_info=True,
         )
 
-    # One bubble per CONTIGUOUS narration run: message_id is minted lazily on
-    # the first text of a segment, finalized when the next function-call
-    # round dispatches, and a new segment opens after that round. ``None``
-    # means no open segment (no leading-text-before-first-tool-call bubble).
+    # One bubble per CONTIGUOUS narration run: message_id is minted lazily on the first text of a
+    # segment, finalized when the next function-call round dispatches, and a new segment opens after
+    # that round. ``None`` means no open segment (no leading-text-before-first-tool-call bubble).
     current_message_id: str | None = None
     pipeline_id = new_ulid()
     step_id = new_ulid()
     state.current_pipeline_id = pipeline_id
-    # Fresh per-stream narration accumulator: one stream == one message_id
-    # bubble == one persisted role="agent" CaseChatMessage at turn close.
-    # Captured as LOCALS in the synchronous prefix (before any await) because
-    # per-Case turn concurrency re-points SessionState fields mid-stream; this
-    # turn must keep appending to ITS OWN lists. Also registered under the
-    # running task so the dispatch wrapper's finally joins THIS turn's list
-    # (never the live field), even on crash/cancel.
+    # Captured as LOCALS before any await: per-Case turn concurrency re-points SessionState fields
+    # mid-stream, and this turn must keep appending to its own lists.
     state.current_turn_narration = []
-    # Reset the per-turn context-window abort note: a new turn is a fresh
-    # request, and a prior turn's note must never leak forward.
     state.current_turn_context_abort_note = None
-    # Reset the per-turn gate-decision memory: a tool and bbox pair confirmed
-    # last turn must gate again this turn.
     state.gate_decisions_this_turn = {}
     turn_narration = state.current_turn_narration
     turn_history = state.chat_history
-    # Per-segment buffer for the CURRENTLY OPEN bubble only; reset via
-    # .clear() at each boundary (same list object stays registered).
-    # Captured + registered in the synchronous prefix so a crash/cancel
-    # mid-segment lets the wrapper's finally persist the tail.
+    # Per-segment buffer for the CURRENTLY OPEN bubble only; reset via .clear() at each boundary
+    # (same list object stays registered). Captured + registered in the synchronous prefix so a
+    # crash/cancel mid-segment lets the wrapper's finally persist the tail.
     _segment_buf: list[str] = []
-    # Per-segment reasoning-text buffer, filled only when the per-turn
-    # ``show_thinking`` toggle is ON. ``_finalize_segment`` persists it as the
-    # ``thinking`` field on the SAME agent row as the segment's answer
-    # (same-bubble contract; QGIS plugin reads this field) and clears it. A
-    # thinking-only segment keeps its buffer so it attaches to the turn's NEXT
-    # persisted row; thinking with no text anywhere persists no phantom
-    # bubble. NEVER-REHYDRATE: this is display replay material only --
-    # build_contents_from_history strips it BY RULE.
+    # Per-segment reasoning-text buffer, filled only when the per-turn ``show_thinking`` toggle is
+    # ON. ``_finalize_segment`` persists it as the ``thinking`` field on the SAME agent row as the
+    # segment's answer. Display replay only: build_contents_from_history strips it.
     _thinking_buf: list[str] = []
     _reg_task = asyncio.current_task()
     if _reg_task is not None:
         _TURN_NARRATION_BY_TASK[_reg_task] = turn_narration
         _TURN_OPEN_SEGMENT_BY_TASK[_reg_task] = _segment_buf
         _TURN_SEGMENTS_PERSISTED_BY_TASK[_reg_task] = 0
-        # False until the terminal finalize actually
-        # snapshots the accumulator onto a persisted row (see registry doc).
         _TURN_TERMINAL_ACC_PERSISTED_BY_TASK[_reg_task] = False
 
-    # Emit a one-step "thinking" pipeline snapshot so the client has a
-    # cancellable handle. The loop driver keeps this single outer step; each
-    # dispatched tool gets its own step through the emitter.
     thinking_step = PipelineStep(
         step_id=step_id,
         name="llm_generation",
@@ -155,10 +133,6 @@ async def _stream_model_reply(
         )
     )
 
-    # No model client is constructed here -- every live provider adapter
-    # (openai / anthropic / scripted) opens its own client at the boundary and
-    # ignores ``client``. Provider resolved once here and reused by the cache
-    # guard below.
     from trid3nt_server.model.adapters.model_selection import model_provider as _model_provider
 
     _provider = _model_provider()
@@ -168,26 +142,11 @@ async def _stream_model_reply(
         _effective_model = _effective_model_id(model_id)
     except Exception:  # noqa: BLE001 -- a log tag only, never fatal
         _effective_model = model_id
-    # No model client is built here -- the provider adapters ignore ``client``.
+    # Provider adapters open their own client at the boundary and ignore ``client``.
     client = None
     first_token_logged = False
     started_at = asyncio.get_running_loop().time()
 
-    # Build tool declarations + system prompt for this request.
-    #
-    # Tool-retrieval is the BUILT-IN surfacing path (unconditional enforce): each
-    # turn we compute the visible set via retrieve_visible_tools, UNION it into
-    # the Case's monotonic visible set so a once-visible tool never leaves within
-    # a Case, and subset TOOL_REGISTRY to the result before build_tool_declarations.
-    # Any retrieval error / empty result FAILS OPEN to the full registry, logged.
-    # The adapter inserts its own cache breakpoints downstream (after tools),
-    # so subsetting the dict here preserves them. K is the only lever
-    # (TRID3NT_TOOL_RETRIEVAL_K).
-    #
-    # DEFAULT declarable set: the full registry MINUS tier=catalog/internal
-    # (never the raw TOOL_REGISTRY). Engine
-    # templates are ordinary members of this default set now -- callable
-    # directly, no concierge. See _default_declarable_registry.
     _retrieval_registry = _default_declarable_registry()
     try:
         from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
@@ -199,10 +158,9 @@ async def _stream_model_reply(
         if not _visible:
             # FAIL-OPEN: an empty result must never trim the catalog.
             raise ValueError("retrieve_visible_tools returned empty")
-        # UNION the visible set into the Case's monotonic visible set FIRST
-        # (so it never shrinks across turns), then subset the registry to the
-        # CORE_FLOOR + accrued snapshot intersected with the registry (real,
-        # registered tools only).
+        # UNION the visible set into the Case's monotonic visible set FIRST (so it never shrinks
+        # across turns), then subset the registry to the CORE_FLOOR + accrued snapshot intersected
+        # with the registry (real, registered tools only).
         try:
             state.visible_tools |= set(_visible)
             _allowed_snapshot = set(CORE_FLOOR) | set(state.visible_tools)
@@ -243,11 +201,9 @@ async def _stream_model_reply(
         # members here. See _default_declarable_registry.
         _retrieval_registry = _default_declarable_registry()
 
-    # Auto/ask tool-candidates gate. May PAUSE here (bounded --
-    # see _tool_choice_timeout_s) awaiting the user's tool-choice. A pinned
-    # tool is unioned into the visible registry + allowed set BEFORE
-    # declarations are built so the model can actually call it. Any fault
-    # proceeds autonomously.
+    # Auto/ask tool-candidates gate. May PAUSE here (bounded -- see _tool_choice_timeout_s) awaiting
+    # the user's tool-choice. A pinned tool is unioned into the visible registry + allowed set
+    # BEFORE declarations are built so the model can actually call it.
     _pin_notes: list[str] = []
     try:
         _pinned_tool, _pin_notes = await _maybe_emit_tool_candidates(
@@ -265,16 +221,8 @@ async def _stream_model_reply(
         )
     tool_decls = build_tool_declarations(_retrieval_registry)
 
-    # Seed the multi-turn contents list with chat history + this user_text.
-    # The entry-captured list -- a mid-stream case switch rebinds
-    # state.chat_history, never mutates this one.
-    #
-    # Inject the already-loaded-layers + reuse-AOI note on EVERY live turn
-    # (lists each layer already on the map plus the Case AOI bbox with a
-    # REUSE instruction) so a long live turn does not re-geocode or re-fetch
-    # layers already present. Appended as the LAST history turn before the
-    # user message; ``None`` (no layers, no bbox) is a no-op. Built from the
-    # LIVE emitter + cached Case AOI so it reflects this turn's current truth.
+    # Seed the multi-turn contents list with chat history + this user_text. The entry-captured list
+    # -- a mid-stream case switch rebinds state.chat_history, never mutates this one.
     turn_history_for_contents = turn_history
     try:
         loaded_layers = (
@@ -293,11 +241,9 @@ async def _stream_model_reply(
         logger.debug("per-turn case-state note build failed", exc_info=True)
     contents = build_contents_from_history(user_text, turn_history_for_contents)
 
-    # Feed the tool-candidates outcome into the model
-    # context -- the pin directive ("Use the tool 'X'"), the user's free-text
-    # clarification, or the timeout proceed-autonomously note. Appended AFTER
-    # the user message so the model reads the ask, then the user's routing
-    # decision. No-op when the gate never fired (the common path).
+    # Feed the tool-candidates outcome into the model context -- the pin directive ("Use the tool
+    # 'X'"), the user's free-text clarification, or the timeout proceed-autonomously note. Appended
+    # AFTER the user message so the model reads the ask, then the user's routing decision.
     for _pin_note in _pin_notes:
         contents.append(Message.user_text(_pin_note))
 
@@ -321,65 +267,36 @@ async def _stream_model_reply(
     _watchdog = LoopWatchdog()
     _agent_abort: tuple[str, str] | None = None
 
-    # CRISP-END-AFTER-DELIVERABLE: once a terminal composer (run_model_* &
-    # friends) has produced its artifact, the model should narrate a short
-    # summary and STOP rather than spin to the loop_exhausted cap.
-    # _deliverable_done latches on first delivery; _post_deliverable_idle
-    # counts consecutive no-progress rounds and resets on a producing round
-    # (multi-deliverable flows are never cut off). See
-    # _POST_DELIVERABLE_WRAPUP_ROUNDS.
+    # CRISP-END-AFTER-DELIVERABLE: once a terminal composer (run_model_* & friends) has produced its
+    # artifact, the model should narrate a short summary and STOP rather than spin to the
+    # loop_exhausted cap.
     _deliverable_done = False
     _post_deliverable_idle = 0
     _crisp_concluded = False
 
-    # Fabrication backstop: tracks whether ANY round of this turn
-    # dispatched a tool call. A turn that ends with this still False AND
-    # whose closing narration claims a completed geospatial action gets an
-    # honest caveat appended -- see the ``not turn_function_calls`` block
-    # below. Never set True by a round that merely REQUESTED calls that
-    # later failed validation -- turn_function_calls is the model's raw
-    # request (a model that TRIED to act is not fabricating; one that never
-    # tried and claims success is).
+    # Fabrication backstop: set by any round that REQUESTED a call, even one that later failed
+    # validation (a model that tried to act is not fabricating). A turn ending with this False AND a
+    # closing narration claiming a completed geospatial action gets an honest caveat appended.
     _turn_ever_called_tool = False
 
-    # Empty-completion retry: per-turn counter of empty-round retries
-    # already spent, capped at ``_EMPTY_COMPLETION_RETRY_CAP``. Past the cap the
-    # empty round falls through to the existing terminal break (never an infinite
-    # loop). Local-path only (guarded on ``_provider == "openai"`` below).
+    # Empty-completion retry: per-turn counter of empty-round retries already spent, capped at
+    # ``_EMPTY_COMPLETION_RETRY_CAP``. Past the cap the empty round falls through to the terminal
+    # break; a retry round still counts toward the step cap and the watchdog.
     _empty_retries = 0
 
-    # Turn-loop invariants + guard (d) tracker:
-    #   _turn_tools_dispatched -- every tool NAME this turn requested (the
-    #       bare-geocode backstop reads it: a turn whose ONLY tool was
-    #       geocode_location while the user asked for data gets one nudge).
-    #   _continuation_nudged  -- the ONE-per-turn continuation-nudge budget
-    #       shared by both invariants (never more than one nudge per turn).
-    #   _turn_geocode_bbox    -- the last successful geocode_location bbox
-    #       this turn; guard (d) appends an advisory drift WARNING to any
-    #       later call whose bbox intersects neither this nor the active AOI.
+    # _continuation_nudged is the one-per-turn nudge budget shared by both turn-loop invariants.
     _turn_tools_dispatched: set[str] = set()
     _continuation_nudged = False
     _turn_geocode_bbox: list[float] | None = None
 
-    # BENCH pre-dispatch block hook: latched True by the dispatch except-path
-    # when a WRONG-pick block fired this round, so the turn ends after the
-    # round's function-responses are on the wire (see the check after the
-    # per-call loop). Unarmed sessions never touch it.
-
-    # Discovery expands the gate: tool names the tool-search tool
-    # (search_tools) returned THIS turn that were unioned into the visible gate
-    # for subsequent rounds, capped at ``_DISCOVERY_EXPAND_CAP`` per turn.
-    # ``_tool_decls_dirty`` requests a one-time rebuild of ``tool_decls`` after
-    # the round so the next model round sees the widened set.
+    # Tool names search_tools returned THIS turn and unioned into the visible gate, capped at
+    # ``_DISCOVERY_EXPAND_CAP``; ``_tool_decls_dirty`` rebuilds ``tool_decls`` once after the round.
     _discovery_expanded: set[str] = set()
     _tool_decls_dirty = False
 
-    # PER-TURN accumulators: token counts SUM the adapter's
-    # per-round UsageMetadataEvents across the whole turn; a provider that
-    # reports no usage leaves them None (tolerated, never fabricated).
-    # _turn_error_class is stamped by the exception handlers below and
-    # stays None on a clean turn. The record is emitted in the finally at
-    # the end of this function -- one record per turn, every outcome.
+    # PER-TURN accumulators: token counts SUM the adapter's per-round UsageMetadataEvents across the
+    # whole turn; a provider that reports no usage leaves them None (tolerated, never fabricated).
+    # _turn_error_class is stamped by the exception handlers below and stays None on a clean turn.
     _turn_prompt_tokens: int | None = None
     _turn_completion_tokens: int | None = None
     _turn_reasoning_tokens: int | None = None
@@ -389,33 +306,22 @@ async def _stream_model_reply(
     iterations = 0
     try:
         while iterations < _step_cap:
-            # Wall-clock guard: abort BEFORE the next, potentially long,
-            # model round if this turn has already overrun its budget. Checked
-            # at the top of every iteration so a turn whose rounds are each slow
-            # cannot exceed the wall-clock bound by more than one round.
+            # Wall-clock guard: abort BEFORE the next, potentially long, model round if this turn
+            # has already overrun its budget. Checked at the top of every iteration so a turn whose
+            # rounds are each slow cannot exceed the wall-clock bound by more than one round.
             if asyncio.get_running_loop().time() >= _turn_deadline:
                 _agent_abort = (ABORT_WALL_CLOCK, abort_message(ABORT_WALL_CLOCK))
                 break
             iterations += 1
-            # Per-turn collectors: text emitted, function-calls the model requested.
             turn_text_parts: list[str] = []
             turn_function_calls: list[FunctionCallEvent] = []
             last_usage = None
-            # Compaction UX: the step_id of the currently-open compaction card, if
-            # any -- set on CompactionStartEvent, read + cleared on the matching
-            # CompactionCompleteEvent. Local to this round: the adapter always
-            # pairs the two 1:1 within one stream_events_with_contents call, and a
-            # round can legitimately mint+complete more than one (proactive, then a
-            # later reactive retry).
+            # Compaction UX: the step_id of the currently-open compaction card, if any -- set on
+            # CompactionStartEvent, read + cleared on the matching CompactionCompleteEvent.
             _compaction_step_id: str | None = None
 
-            # Wave semantics: in ASK mode, surface a pre-dispatch
-            # tool-candidates WAVE before EACH subsequent round (round 1 is covered
-            # by the pre-loop emission above). Excluding this turn's
-            # already-dispatched tools advances the stage label so a multi-step
-            # turn reads as a SEQUENCE of stage-labeled picks, not one blob. AUTO
-            # mode is unchanged. Fail-open: the wave is an optimization, never a
-            # wall.
+            # Wave semantics: in ASK mode, surface a pre-dispatch tool-candidates WAVE before EACH
+            # subsequent round (round 1 is covered by the pre-loop emission above).
             if iterations > 1 and _session_routing_mode(state) == "ask":
                 try:
                     _w_pinned, _w_notes = await _maybe_emit_tool_candidates(
@@ -468,28 +374,16 @@ async def _stream_model_reply(
                         _new_envelope("agent-message-chunk", state.session_id, chunk)
                     )
                     turn_text_parts.append(event.delta)
-                    # Accumulate across ALL iterations -- the turn
-                    # close persists the full narration for Case replay.
-                    # Entry-captured list, never the live field.
+                    # Entry-captured list across ALL iterations, never the live field.
                     turn_narration.append(event.delta)
-                    # Also feed the OPEN-segment buffer so the
-                    # boundary finalize persists exactly this run's
-                    # text, and a crash leaves the un-finalized tail for the
-                    # wrapper. Same registered list object -- never rebound.
+                    # Also feed the OPEN-segment buffer so the boundary finalize persists exactly
+                    # this run's text, and a crash leaves the un-finalized tail for the wrapper.
+                    # Same registered list object -- never rebound.
                     _segment_buf.append(event.delta)
 
                 elif isinstance(event, ThinkingDeltaEvent):
-                    # Forward the model's reasoning-channel deltas so the
-                    # clients render the greyed foldable thinking block. Gated on the
-                    # per-turn user toggle -- with it off the /no_think suppressor is armed
-                    # and the channel is not generated, but a model that leaks reasoning
-                    # anyway must not reach a client that asked for it to stay hidden.
-                    # Shares the segment's message_id (the thinking block and its answer
-                    # live in the SAME bubble). The deltas also accumulate in
-                    # _thinking_buf so _finalize_segment persists them as the ``thinking``
-                    # field on the SAME agent row as the answer; a thinking-only segment
-                    # still persists no row of its own (no phantom bubble) -- its buffered
-                    # thinking rides the turn's next persisted row.
+                    # Gated on the per-turn toggle: a model that leaks reasoning with it off must not
+                    # reach a client that asked for it hidden. Shares the segment's message_id.
                     if show_thinking:
                         if current_message_id is None:
                             current_message_id = new_ulid()
@@ -504,10 +398,6 @@ async def _stream_model_reply(
                                 ),
                             )
                         )
-                        # Thinking persistence: accumulate the reasoning text
-                        # for THIS segment so
-                        # ``_finalize_segment`` persists it as the ``thinking``
-                        # field on the same agent row as the answer.
                         _thinking_buf.append(event.delta)
 
                 elif isinstance(event, FunctionCallEvent):
@@ -522,15 +412,10 @@ async def _stream_model_reply(
                     turn_function_calls.append(event)
 
                 elif isinstance(event, UsageMetadataEvent):
-                    # The model surfaces aggregate usage on the terminal chunk. Cache the event
-                    # so the post-turn block can pipe cached_content_token_count into
-                    # the tool-call line.
                     last_usage = event
-                    # PER-TURN: sum the
-                    # reported counts across the turn's model rounds. A round
-                    # that reports None for a figure leaves that accumulator
-                    # untouched (null stays null when NO round reports it --
-                    # tolerate absent, never fabricate).
+                    # PER-TURN: sum the reported counts across the turn's model rounds. A round that
+                    # reports None for a figure leaves that accumulator untouched (null stays null
+                    # when NO round reports it -- tolerate absent, never fabricate).
                     if event.prompt_token_count is not None:
                         _turn_prompt_tokens = (
                             (_turn_prompt_tokens or 0) + event.prompt_token_count
@@ -558,21 +443,13 @@ async def _stream_model_reply(
                     )
 
                 elif isinstance(event, CompactionStartEvent):
-                    # Compaction UX: mint the durable running "Compacting conversation..."
-                    # card the instant the adapter announces compaction is about to run
-                    # (proactive or the reactive clip-guard retry). Mirrors the two-card SIM
-                    # observability's running-card mint; best-effort so a mint failure can
-                    # never block the turn.
+                    # Best-effort: a failed mint never blocks the turn.
                     _compaction_step_id = await mint_compaction_card(
                         emitter=state.emitter
                     )
 
                 elif isinstance(event, CompactionCompleteEvent):
-                    # Compaction card: flip the card minted above to
-                    # its terminal "Conversation compacted (Nk -> Mk tokens)"
-                    # state. No-op (best-effort) if the mint above failed or
-                    # never fired (emitter unbound) -- see
-                    # complete_compaction_card's own None-guard.
+                    # No-op when the mint above failed or never fired.
                     await complete_compaction_card(
                         emitter=state.emitter,
                         step_id=_compaction_step_id,
@@ -581,19 +458,10 @@ async def _stream_model_reply(
                     )
                     _compaction_step_id = None
 
-            # Turn ended.  If the model emitted no function_calls this turn, it
-            # is finished -- either narrated the answer or had nothing more to
-            # do.  Break out of the loop.
             if not turn_function_calls:
-                # Empty-completion retry: a round with ZERO tool calls and ZERO
-                # non-whitespace text is the qwen3 empty-completion shape -- retry with a
-                # corrective user nudge, bounded by _EMPTY_COMPLETION_RETRY_CAP, rather
-                # than silently dropping the request. Runs BEFORE the fabrication
-                # backstop (disjoint: an empty round has no closing text to fabricate
-                # from). Scoped to the LOCAL (MODEL_PROVIDER=openai) path only -- Bedrock's
-                # production narration (a legitimately empty round) stays byte-unchanged.
-                # The empty round still counts toward _step_cap and never trips the loop
-                # watchdog, so a retry cannot escape the step cap or the runaway guard.
+                # Empty-completion retry: ZERO tool calls and ZERO non-whitespace text is the qwen3
+                # empty-completion shape. Local (openai) path only; runs BEFORE the fabrication
+                # backstop (an empty round has no closing text to fabricate from).
                 _empty_round = not "".join(turn_text_parts).strip()
                 if (
                     _provider == "openai"
@@ -608,28 +476,13 @@ async def _stream_model_reply(
                         state.session_id,
                         iterations,
                     )
-                    # Corrective user-role nudge, built with the same plain-text
-                    # Message idiom the initial user message uses (adapter.
-                    # build_user_text_content) -- no hand-rolled IR here.
-                    # Appended so the retried round sees "your last turn was
-                    # empty, act or answer".
+                    # Log-only: a retry must not inject a note into the persisted narration.
                     contents.append(Message.user_text(_EMPTY_COMPLETION_NUDGE))
-                    # Observability is log-only (above): a retry must not inject
-                    # a transient note into the persisted narration segment, and
-                    # inventing a new envelope type is out of scope -- the
-                    # log.warning is the durable retry witness.
                     continue
-                # Turn-loop invariants: ONE continuation nudge per turn, shared
-                # budget, injected as user-role content with the round retried:
-                #   (a) NO-SILENT-END -- terminating with tool results but ZERO
-                #       assistant text since the last tool round. Skipped when the
-                #       already nudged this turn (_empty_retries > 0).
-                #   (b) BARE-GEOCODE BACKSTOP -- the turn's ONLY tool was
-                #       geocode_location while the user asked for data or analysis.
-                # Kill-switch: TRID3NT_TURN_INVARIANTS=0. The nudge round still counts
-                # toward the step cap; the shared budget guarantees at most one nudge per
-                # turn, unified with that retry so they never stack. Every terminal round logs
-                # one INFO line per invariant: FIRED, or SKIPPED with its reason.
+                # Turn-loop invariants share ONE continuation nudge per turn: (a) NO-SILENT-END
+                # (tool results but no assistant text since the last tool round) and (b)
+                # BARE-GEOCODE (geocode_location was the only tool though data was asked for).
+                # Skipped after an empty-completion retry; kill-switch TRID3NT_TURN_INVARIANTS=0.
                 if (
                     not _continuation_nudged
                     and _empty_retries == 0
@@ -705,15 +558,9 @@ async def _stream_model_reply(
                     iterations,
                     len(turn_text_parts),
                 )
-                # Fabrication backstop: fires only on the FIRST and ONLY
-                # tool-call-free round this turn ever had. Conservative: only fires when
-                # the closing text pairs a completed-action verb with a geospatial-output
-                # noun in the same sentence -- see
-                # context_budget.looks_like_fabricated_action_claim. Ordinary Q&A
-                # answers, and any turn that dispatched even one tool call, never
-                # trigger this. Scoped to the LOCAL (MODEL_PROVIDER=openai) path only --
-                # a local-model-path guard that must not vary Bedrock's production
-                # narration.
+                # Fabrication backstop: only a turn that never called a tool, and only when the
+                # closing text pairs a completed-action verb with a geospatial-output noun (see
+                # looks_like_fabricated_action_claim). Local (openai) path only.
                 if _provider == "openai" and not _turn_ever_called_tool:
                     _closing_text = "".join(turn_text_parts)
                     if looks_like_fabricated_action_claim(_closing_text):
@@ -739,39 +586,21 @@ async def _stream_model_reply(
                         _segment_buf.append(_caveat)
                 break
             _turn_ever_called_tool = True
-            # Turn-loop invariants: record this round's requested tool names
-            # (the bare-geocode backstop compares the turn's full set).
             _turn_tools_dispatched.update(c.name for c in turn_function_calls)
 
-            # Loop watchdog: compute THIS round's (tool, canonical args)
-            # signature now, but feed it to the watchdog AFTER dispatch together
-            # with a PROGRESS witness. A no-progress runaway -- the SAME tool+args
-            # (or identical round signature) N rounds in a row that keeps returning
-            # nothing new -- trips the watchdog and aborts. A round that PRODUCES a
-            # layer/artifact, or one the circuit breaker owns (all calls failed /
-            # short-circuited), is NOT counted: a producing loop runs to the
-            # step-cap / loop-exhausted envelope, and the breaker handles the
-            # failing tool. Recording after dispatch (vs before) costs at most ONE
-            # extra identical round before the trip, still far under the step cap.
+            # The round signature is fed to the watchdog AFTER dispatch with a progress witness;
+            # recording late costs at most one extra identical round before the trip.
             _round_sig = [
                 (c.name, json.dumps(c.args or {}, sort_keys=True, default=str))
                 for c in turn_function_calls
             ]
-            # Per-round progress witness, OR'd across the round's calls. Seeded
-            # True only if EVERY call ends up failing / short-circuited (the
-            # breaker's territory) -- tracked as no calls-succeeded-without-output
-            # below. Starts False; set True by a producing dispatch.
+            # Progress witness, OR'd across the round's calls; set True by a producing dispatch.
             _round_made_progress = False
             _round_had_failure = False
             _round_had_success = False
 
-            # A function-call round is about to dispatch -- close the current
-            # narration bubble (if any text was emitted) BEFORE the tool cards for
-            # this round land on the wire, so the next run of text opens a fresh
-            # bubble that interleaves AFTER them. Fires ONCE per round, before ALL
-            # calls dispatch, so multiple function calls in one round close exactly
-            # one prior bubble. _finalize_segment sends done=True AND persists this
-            # segment's own role="agent" row.
+            # Closes the open bubble ONCE per round, BEFORE the round's tool cards land, so the
+            # next text opens a bubble that interleaves after them.
             if current_message_id is not None:
                 await _finalize_segment(
                     websocket, state, current_message_id, _segment_buf,
@@ -779,48 +608,25 @@ async def _stream_model_reply(
                 )
                 current_message_id = None  # next text opens a fresh segment
 
-            # Otherwise: dispatch each call, then append the call + summarized
-            # response back into contents so the next model turn sees them.
             for call in turn_function_calls:
-                # Dispatch through the registry and emitter (the model's
-                # tool choice IS the classification). A routing failure
-                # (TOOL_NOT_FOUND) and a gate DECLINE both raise typed
-                # exceptions, so the except-block below routes them through
-                # summarize_tool_result(error=...) -- a structured envelope the
-                # model tells apart from "tool ran and returned nothing": an
-                # error carries a code and a retry flag, a decline carries
-                # status="declined" and the card the user answered.
                 dispatch_error: BaseException | None = None
                 result: Any = None
-                # CRISP-END: set True iff THIS call is a
-                # top-level run-a-model composer that produced its deliverable.
                 _call_is_terminal_deliverable = False
                 _tool_start = asyncio.get_running_loop().time()
                 try:
-                    # Per-session circuit breaker: short-circuit before dispatch
-                    # if the tool has failed repeatedly this session. Raises
-                    # CircuitBreakerError, routed by the except-block below through
-                    # summarize_tool_result(error=...) so the model reads the
-                    # structured cooldown signal (not retryable).
+                    # Per-session circuit breaker: short-circuit before dispatch if the tool has
+                    # failed repeatedly this session.
                     if state.circuit_breaker.is_tripped(call.name):
                         remaining = state.circuit_breaker.cooldown_remaining_s(call.name)
                         raise CircuitBreakerError(call.name, remaining)
-                    # A hallucinated (non-registered) name is caught at dispatch:
-                    # _invoke_tool_via_emitter raises ToolNotFoundError, routed
-                    # through summarize_tool_result(error=...) as the structured
-                    # envelope the model reads to retry.
+                    # A hallucinated name raises ToolNotFoundError here, surfaced to the model
+                    # through summarize_tool_result(error=...).
                     result = await _invoke_tool_via_emitter(
                         websocket, state, call.name, call.args
                     )
-                    # request_spatial_input PAUSES the turn awaiting a
-                    # user-drawn FeatureCollection. The catalog tool returns the
-                    # SPATIAL_INPUT_SENTINEL_KEY sentinel (it has no websocket access);
-                    # here -- where the live socket + the session future registry ARE
-                    # reachable -- we emit the spatial-input-request, await the drawn
-                    # reply, and REPLACE result with the parsed, role-split geometry
-                    # (aoi_bbox + points + the section line). Fail-open:
-                    # timeout / cancel / no client / malformed draw all become a TYPED
-                    # result (honesty floor), never a fabricated AOI.
+                    # The tool has no websocket access; here the live socket is reachable, so the
+                    # turn PAUSES for the drawn reply. Timeout/cancel/malformed draw all become a
+                    # typed result, never a fabricated AOI.
                     if (
                         call.name == "request_spatial_input"
                         and isinstance(result, dict)
@@ -829,9 +635,7 @@ async def _stream_model_reply(
                         result = await _handle_request_spatial_input(
                             websocket, state, call.args or {}
                         )
-                    # Demo UX: snap the map to a geocoded location
-                    # IMMEDIATELY -- the user should not wait for a downstream
-                    # layer publish to see the map move. Best-effort.
+                    # Snap the map at once, before any downstream layer publish. Best-effort.
                     if (
                         call.name == "geocode_location"
                         and isinstance(result, dict)
@@ -853,13 +657,9 @@ async def _stream_model_reply(
                             )
                         except Exception:  # noqa: BLE001 -- UX nicety only
                             logger.debug("geocode zoom-to emit failed", exc_info=True)
-                    # SNAP-TO-AOI INDEPENDENT OF GEOLOCATE: the camera must snap whenever an
-                    # AOI/bbox is SET, not only on a geocode_location result -- when the
-                    # user gives coordinates directly the model skips geocode_location, so
-                    # generalize: ANY tool result carrying a usable bbox / aoi_bbox snaps
-                    # the camera (deduped against the turn's last zoom-to so a chain of
-                    # bbox-bearing tools does not re-snap to the SAME extent).
-                    # geocode_location is emitted above; skip it here to avoid a double-emit.
+                    # ANY tool result carrying a usable bbox / aoi_bbox snaps the camera (the model
+                    # skips geocode_location when given coordinates); a repeat of the turn's last
+                    # zoom-to extent is deduped.
                     if call.name != "geocode_location" and state.emitter is not None:
                         aoi = _aoi_zoom_to_bbox(
                             result, state.current_turn_map_commands
@@ -876,49 +676,28 @@ async def _stream_model_reply(
                                 logger.debug(
                                     "aoi-set zoom-to emit failed", exc_info=True
                                 )
-                    # Emit a chart envelope whenever a chart tool returns a
-                    # chart-emission payload. It fires IN ADDITION to the
-                    # function response: the client gets the full spec on the
-                    # envelope and the model gets a COMPACT summary, so it
-                    # narrates from numbers rather than inline rows. The chart
-                    # is persisted too, so it replays on rehydration.
+                    # In addition to the function response: the client gets the full spec, the
+                    # model a compact summary.
                     if is_chart_emission_result(result):
                         await _maybe_emit_chart(websocket, state, result)
-                    # Record success so the consecutive-failure counter
-                    # resets -- a recovered tool should not stay penalised.
                     state.circuit_breaker.record_success(call.name)
-                    # Loop-watchdog progress witness: a successful call that PRODUCED a real
-                    # artifact (layer/handle/feature set) resets the no-progress streak even
-                    # if the model repeats the same call; a bare-ack return does NOT -- that
-                    # is the no-op-repeat wedge shape the watchdog exists to catch.
+                    # Watchdog progress witness: a call that PRODUCED an artifact (layer, handle,
+                    # feature set) resets the no-progress streak even when repeated; a bare ack
+                    # does not.
                     _round_had_success = True
                     _call_made_progress = _dispatch_made_progress(result)
                     if _call_made_progress:
                         _round_made_progress = True
-                    # CRISP-END: a top-level run-a-model composer that just produced its
-                    # artifact IS the answer. Latch the deliverable + reset the
-                    # post-deliverable idle streak, and stamp a one-time wrap-up directive
-                    # below so the model summarizes and stops instead of spinning to the
-                    # loop_exhausted cap.
+                    # A top-level run-a-model composer's artifact IS the answer: latch it.
                     _call_is_terminal_deliverable = (
                         _call_made_progress and _is_terminal_composer(call.name)
                     )
                     if _call_is_terminal_deliverable:
                         _deliverable_done = True
                         _post_deliverable_idle = 0
-                    # On a successful dispatch, keep the tool in the Case's
-                    # monotonic visible set so the LLM can re-issue it on a later
-                    # turn with refined args (never hidden mid-task by the enforce
-                    # subset -- covers the rare fail-open turn where the dispatched
-                    # tool was not in the retrieved set).
                     state.visible_tools.add(call.name)
-                    # DISCOVERY-EXPANDS-GATE: when the tool-search tool returns
-                    # candidate tool names, UNION them into this turn's visible gate
-                    # (and the Case visible set, so they stay reachable) for
-                    # SUBSEQUENT rounds, capped at _DISCOVERY_EXPAND_CAP (bounds an
-                    # unbounded ranked tail). Only names that are real, registered,
-                    # and not already visible count toward the cap; the rebuild of
-                    # tool_decls is deferred to once-per-round below.
+                    # Search hits join this turn's gate and the Case visible set for later rounds;
+                    # only real, registered, not-yet-visible names count toward the cap.
                     if call.name in _gate_expander_tool_names():
                         _hits = _tool_names_from_search_result(result)
                         _added_now: list[str] = []
@@ -949,7 +728,6 @@ async def _stream_model_reply(
                                 _added_now,
                             )
                 except asyncio.CancelledError:
-                    # Propagate cancel through the loop -- handled below.
                     raise
                 except Exception as exc:  # noqa: BLE001 -- surface to the model
                     if getattr(exc, "declined", False):
@@ -969,20 +747,12 @@ async def _stream_model_reply(
                             call.name,
                             exc,
                         )
-                    # Record failure, passing the exception so the breaker counts ONLY
-                    # upstream/transient faults toward the trip threshold. Deterministic
-                    # CLIENT/arg errors (*ArgError, BboxInvalidError, ValueError/TypeError
-                    # arg-shape errors) are model-side faults the model can self-correct and
-                    # retry -- they must NOT trip a breaker that would then block the
-                    # corrected-args retry. CircuitBreakerError is excluded entirely (the
-                    # breaker already fired; do not increment again).
+                    # The breaker counts ONLY upstream/transient faults: model-side arg errors must
+                    # not trip it and block the corrected retry; CircuitBreakerError never recounts.
                     if not isinstance(exc, CircuitBreakerError):
                         state.circuit_breaker.record_failure(call.name, exc)
                     dispatch_error = exc
-                    # A failed / circuit-broken call is the CIRCUIT BREAKER's territory (it
-                    # delivers CIRCUIT_BREAKER_TRIPPED so the model adapts and the turn
-                    # continues). Mark the round so the watchdog does NOT also count it --
-                    # the breaker, not the watchdog, owns a stream-of-failures turn.
+                    # A failed call is the breaker's territory, not the watchdog's.
                     _round_had_failure = True
                 _tool_latency_ms = (asyncio.get_running_loop().time() - _tool_start) * 1000.0
 
@@ -990,18 +760,12 @@ async def _stream_model_reply(
                     call.name, result, error=dispatch_error
                 )
                 _uri_reg = get_uri_registry(state.session_id)
-                # EMIT SEAM: the LLM-facing function_response shows SHORT
-                # layer handles (L<n>) wherever a registered layer URI would appear --
-                # the single biggest hallucination surface (~30 tokens per raw URI
-                # echo). ONLY this LLM surface changes: the plugin-bound wire envelopes
-                # keep carrying the REAL uri the plugin renders from. The rewrite never
-                # raises (falls back to the unrewritten summary).
+                # Only the LLM-facing summary shows short layer handles (L<n>) for registered URIs
+                # (a raw URI echo is a hallucination surface); wire envelopes keep the real uri.
                 summary = _uri_reg.rewrite_result_for_llm(summary)
-                # Geocode drift warning. A successful
-                # geocode_location pins this turn's geocoded bbox; any LATER call whose
-                # bbox arg intersects NEITHER that bbox NOR the active AOI gets an
-                # advisory WARNING appended to its function_response (never blocks).
-                # Kill-switch: TRID3NT_GEOCODE_DRIFT_WARN=0.
+                # Geocode drift warning. A successful geocode_location pins this turn's geocoded
+                # bbox; any LATER call whose bbox arg intersects NEITHER that bbox NOR the active
+                # AOI gets an advisory WARNING appended to its function_response (never blocks).
                 if call.name == "geocode_location":
                     if dispatch_error is None and isinstance(result, dict):
                         _gc_bbox = as_bbox(result.get("bbox"))
@@ -1024,19 +788,14 @@ async def _stream_model_reply(
                             call.name,
                             _turn_geocode_bbox,
                         )
-                # Surface the layer handles this dispatch registered so the model passes
-                # HANDLES -- never raw storage paths -- into downstream *_uri params.
-                # The announcement maps {layer_id: L<n>}; the server resolves either
-                # form to the exact URIs it recorded (uri_registry.py).
+                # Surface the layer handles this dispatch registered so the model passes HANDLES --
+                # never raw storage paths -- into downstream *_uri params.
                 _new_handles = _uri_reg.drain_announcements()
                 if _new_handles and dispatch_error is None:
                     summary["layer_handles"] = {
                         _layer_id: (_uri_reg.short_for_uri(_uri) or _layer_id)
                         for _layer_id, _uri in _new_handles.items()
                     }
-                    # Emission is automatic: a produced layer is already on the
-                    # map, so the note carries the one thing the model must do
-                    # with a handle - pass it, never rebuild it.
                     summary["layer_handles_note"] = (
                         "These layers are already on the user's map. Pass the "
                         "short handle (the L<n> value above) or the layer name "
@@ -1045,10 +804,7 @@ async def _stream_model_reply(
                         "NOT construct or echo s3:// paths or any other "
                         "storage URI."
                     )
-                # A top-level run-a-model composer just delivered its artifact -- stamp
-                # a one-time wrap-up directive on its function_response so the model
-                # summarizes and STOPS rather than emitting more tool calls until the
-                # loop_exhausted cap.
+                # Wrap-up directive: the model summarizes and STOPS instead of spinning to the cap.
                 if _call_is_terminal_deliverable and isinstance(summary, dict):
                     summary["completion_directive"] = _DELIVERABLE_COMPLETE_DIRECTIVE
                 logger.info(
@@ -1059,22 +815,14 @@ async def _stream_model_reply(
                     sorted(summary.keys()),
                 )
 
-                # tool-card-expand-output: emit the raw input args + the raw
-                # function_response on a tool-io sidecar keyed by THIS dispatch's
-                # pipeline step. The web merges it into the matching tool card's
-                # expander so a server-side / upstream-API failure the narration hides
-                # becomes visible. Best-effort: a missing step_id (a dispatch that
-                # never reached the emitter) skips the emit; the emitter itself never
-                # raises on a bad payload.
                 _io_step = (
                     state.emitter.last_tool_step
                     if state.emitter is not None
                     else None
                 )
-                # Guard against a STALE last_tool_step: a dispatch that raised
-                # BEFORE the emitter created a step (ToolNotFoundError) leaves
-                # the prior tool's step on the accessor. Only stamp IO when the
-                # recorded step is THIS tool's step.
+                # Guard against a STALE last_tool_step: a dispatch that raised BEFORE the emitter
+                # created a step (ToolNotFoundError) leaves the prior tool's step on the accessor.
+                # Only stamp IO when the recorded step is THIS tool's step.
                 if _io_step is not None and _io_step.tool_name != call.name:
                     _io_step = None
                 if _io_step is not None:
@@ -1101,10 +849,8 @@ async def _stream_model_reply(
                             exc_info=True,
                         )
 
-                # ONE structured line per tool call. A workflow that swallowed its
-                # own exception returns a failed envelope and raises nothing, so
-                # success and error_code are read off the summary's honesty-floor
-                # status as well; a raised exception keeps its own code.
+                # A workflow that swallowed its exception returns a failed envelope and raises
+                # nothing, so success and error_code are also read off the summary status.
                 _call_error_code: str | None = None
                 _call_success = dispatch_error is None
                 if dispatch_error is not None:
@@ -1132,7 +878,6 @@ async def _stream_model_reply(
                     "result_usable": classify_result_usable(
                         call.name, result, summary),
                 }, default=str))
-                # One dispatched tool call, counted where its line is written.
                 _turn_tool_dispatch_count += 1
                 contents.append(
                     Message.call(call.name, call.args, call.call_id)
@@ -1141,10 +886,6 @@ async def _stream_model_reply(
                     Message.response(call.name, summary, call.call_id)
                 )
 
-            # Discovery expands the gate: a tool-search this round widened
-            # the visible gate -- rebuild ``tool_decls`` ONCE so the NEXT model
-            # round sees the unioned tools. No-op unless a search actually added
-            # (the common path never sets the dirty flag).
             if _tool_decls_dirty:
                 tool_decls = build_tool_declarations(_retrieval_registry)
                 _tool_decls_dirty = False
@@ -1156,14 +897,8 @@ async def _stream_model_reply(
                     state.session_id,
                 )
 
-            # Loop watchdog, post-dispatch record: the round counts toward
-            # the no-progress streak ONLY when it had calls, did NOT produce a real
-            # artifact, and was NOT a failure / circuit-broken round (the breaker's
-            # territory). A producing round, an all-failed round, or a
-            # short-circuited round resets the streak so the watchdog never
-            # pre-empts loop-exhausted or CIRCUIT_BREAKER_TRIPPED. A genuine
-            # no-op-repeat runaway (same successful call returning nothing new)
-            # trips and aborts.
+            # A producing round or an all-failed/short-circuited round resets the streak, so the
+            # watchdog never pre-empts loop-exhausted or CIRCUIT_BREAKER_TRIPPED.
             _round_progressed = _round_made_progress or (
                 _round_had_failure and not _round_had_success
             )
@@ -1184,13 +919,8 @@ async def _stream_model_reply(
                 _agent_abort = (_wd_trip, abort_message(_wd_trip))
                 break
 
-            # CRISP-END-AFTER-DELIVERABLE: once a terminal composer has delivered, a
-            # round that produces NOTHING NEW is the model spinning past a finished
-            # answer. This SAFETY budget concludes the turn CLEANLY after a couple
-            # of idle rounds -- a normal (no-tool) break, NOT the loop_exhausted
-            # cap. A producing round resets the streak so genuine follow-up work is
-            # never cut off. _agent_abort stays None: this is a clean conclusion,
-            # closed exactly like a natural text-terminal exit.
+            # After a delivery, idle rounds conclude the turn CLEANLY (a normal break, not
+            # loop_exhausted); a producing round resets the streak. _agent_abort stays None.
             if _deliverable_done:
                 if _round_made_progress:
                     _post_deliverable_idle = 0
@@ -1208,23 +938,11 @@ async def _stream_model_reply(
                         _crisp_concluded = True
                         break
 
-            # Loop: re-stream with the appended call + response so the model can
-            # decide its next move (another tool call OR a narrative wrap-up).
         else:
-            # Loop fell through the STEP CAP without a clean (no-tool-call) exit. A
-            # guard (wall-clock / watchdog) abort instead breaks with _agent_abort
-            # set and is surfaced below, so this else only handles natural
-            # exhaustion of the step cap.
-            #
-            # RECONCILE THE STEP CAP WITH MAX_TURN_ITERATIONS: when the binding
-            # bound is the historical MAX_TURN_ITERATIONS (full-tier models, where
-            # _step_cap >= MAX_TURN_ITERATIONS), natural exhaustion emits the
-            # pre-existing loop_exhausted / MAX_ITERATIONS_REACHED envelope (the
-            # user-facing contract the clients and tests rely on). Only when the cap
-            # was TIGHTENED for a cheap/loop-prone tier (_step_cap <
-            # MAX_TURN_ITERATIONS) is this a NEW, tighter runaway backstop, surfaced
-            # as AGENT_STEP_LIMIT_REACHED. AGENT_LOOP_DETECTED stays reserved for
-            # the watchdog (a genuine no-progress repeat), never natural exhaustion.
+            # Natural exhaustion of the step cap (guard aborts break with _agent_abort set). At
+            # the full MAX_TURN_ITERATIONS it emits the loop_exhausted envelope clients rely on;
+            # a cap tightened for a cheap tier is AGENT_STEP_LIMIT_REACHED. AGENT_LOOP_DETECTED
+            # is reserved for the watchdog.
             if _agent_abort is None and _step_cap < MAX_TURN_ITERATIONS:
                 _agent_abort = (
                     ABORT_STEP_CAP, abort_message(ABORT_STEP_CAP)
@@ -1237,14 +955,9 @@ async def _stream_model_reply(
                 state.session_id,
                 "agent-abort" if _agent_abort is not None else "loop_exhausted",
             )
-            # Full-tier natural exhaustion: the historical loop_exhausted path.
             if _agent_abort is None:
                 await _send_loop_exhausted(websocket, state.session_id)
-                # The client waits for a stream-closing done=True to stop
-                # spinning. A cap-hit turn ended mid tool-dispatch with no
-                # trailing narration (``current_message_id is None``), so the
-                # final-segment finalize below no-ops -- emit a standalone
-                # terminator here with a fresh id (mirrors the abort path).
+                # The client spins until a stream-closing done=True arrives.
                 if current_message_id is None:
                     await _session_safe_send(websocket, state.session_id,
                         _new_envelope(
@@ -1256,22 +969,13 @@ async def _stream_model_reply(
                         )
                     )
 
-        # A guard fired (tightened step cap, wall-clock, or loop watchdog).
-        # Surface the honest typed abort envelope and a stream-closing terminal
-        # frame, then fall through to the normal finalize/pipeline-complete path
-        # so the turn TERMINATES cleanly and its busy/lock state releases. The
-        # model CONTEXT is preserved (contents already hold the partial chain);
-        # we just stop dispatching. NOT a loop continuation -- this only runs on
-        # abort.
         if _agent_abort is not None:
             _abort_code, _abort_msg = _agent_abort
             await _send_loop_exhausted(
                 websocket, state.session_id, _abort_code, _abort_msg
             )
-            # A runaway loop exits mid tool-dispatch with no trailing narration,
-            # so ``current_message_id is None`` and the segment finalize below
-            # no-ops. The client still waits for a stream-closing done=True to
-            # stop spinning, so emit a standalone terminator with a fresh id.
+            # Mid-dispatch exit has no open segment, so the finalize below no-ops; the client
+            # still needs a stream-closing done=True.
             if current_message_id is None:
                 await _session_safe_send(websocket, state.session_id,
                     _new_envelope(
@@ -1283,11 +987,6 @@ async def _stream_model_reply(
                     )
                 )
 
-        # Terminal frame for the FINAL narration segment. Only fires if a
-        # segment is actually open (text was emitted after the last tool
-        # round); a turn with no trailing narration has current_message_id is
-        # None (no phantom empty bubble). is_terminal=True lets it snapshot the
-        # turn's layer/zoom accumulator.
         if current_message_id is not None:
             await _finalize_segment(
                 websocket,
@@ -1299,23 +998,9 @@ async def _stream_model_reply(
             )
             current_message_id = None
         else:
-            # The turn exited with NO open segment on the wire. Two distinct shapes:
-            #   (a) A narration segment WAS already streamed+finalized this turn
-            #       (segments_done > 0) -- the client already got the closing
-            #       summary; emit NOTHING here (re-streaming turn_narration would
-            #       DOUBLE the text and duplicate the chat rows).
-            #   (b) NO segment was ever streamed (segments_done == 0) yet the turn
-            #       accumulated real narration text across iterations (e.g. the
-            #       ONLY narration arrived in a round that ALSO carried the
-            #       terminating tool call, so the boundary finalize cleared its
-            #       buffer before it reached the wire as its own terminal segment).
-            #
-            # Recovery for (b): open ONE fresh terminal segment, replay the full
-            # accumulated turn_narration as chunks, then finalize it terminal
-            # (done=True wire frame + persisted role="agent" row that also
-            # snapshots the layer/zoom accumulator). Honesty floor: replay EXACTLY
-            # what the model accumulated -- never synthesize a success summary. Guarded
-            # so an empty-narration turn emits NO bubble.
+            # No open segment. If one was already streamed (_seg_done > 0) emit NOTHING: replaying
+            # the narration would double the text. Otherwise recover the accumulated narration
+            # EXACTLY as the model produced it (an empty turn emits no bubble).
             _seg_done = 0
             _cur_task = asyncio.current_task()
             if _cur_task is not None:
@@ -1323,10 +1008,7 @@ async def _stream_model_reply(
             _closing = "".join(turn_narration).strip()
             if _seg_done == 0 and _closing:
                 recovered_id = new_ulid()
-                # Stream the recovered narration so the live client renders the
-                # closing bubble (one message_id == one bubble). Each chunk
-                # carries done=False; the terminal done=True comes from
-                # ``_finalize_segment`` below.
+                # done=False here; the terminal done=True comes from ``_finalize_segment``.
                 await _session_safe_send(websocket, state.session_id,
                     _new_envelope(
                         "agent-message-chunk",
@@ -1336,10 +1018,7 @@ async def _stream_model_reply(
                         ),
                     )
                 )
-                # Persist + close via the SAME terminal-segment path so the
-                # closing row carries the turn's layer/zoom accumulator exactly
-                # like a normal text-terminal turn. ``_finalize_segment`` joins
-                # its buffer arg, so feed the recovered text in as the buffer.
+                # _finalize_segment joins its buffer arg, so the recovered text is passed as it.
                 await _finalize_segment(
                     websocket,
                     state,
@@ -1349,12 +1028,7 @@ async def _stream_model_reply(
                     thinking_parts=_thinking_buf,
                 )
             elif _crisp_concluded and _seg_done == 0:
-                # CRISP-END edge case: the turn delivered a composer artifact and
-                # concluded via the post-deliverable idle safety, but emitted ZERO
-                # narration anywhere -- so neither the segment-finalize nor the
-                # recovery branch above sent a stream-closing frame. Emit a standalone
-                # terminator with a fresh id (mirrors the loop_exhausted / abort paths).
-                # Honesty floor: no synthesized summary, just the close-frame.
+                # Delivered, then concluded with ZERO narration: no branch above closed the stream.
                 await _session_safe_send(websocket, state.session_id,
                     _new_envelope(
                         "agent-message-chunk",
@@ -1365,7 +1039,6 @@ async def _stream_model_reply(
                     )
                 )
 
-        # Complete the outer pipeline snapshot (LLM generation phase).
         thinking_step = PipelineStep(
             step_id=step_id,
             name="llm_generation",
@@ -1379,25 +1052,15 @@ async def _stream_model_reply(
                 PipelineStatePayload(pipeline_id=pipeline_id, steps=[thinking_step]),
             )
         )
-        # Append to the entry-captured list -- after a mid-stream
-        # case switch this turn's text must not leak into the NEW Case's
-        # LLM context (the carryover class).
+        # Entry-captured list: after a mid-stream case switch this text must not leak into the
+        # NEW Case's LLM context.
         turn_history.append({"role": "user", "text": user_text})
-        # Name an Untitled Case from its first prompt + refresh the left rail.
-        # The PRIMARY autoname is a pre-dispatch call; this tail is a
-        # guarded no-op fallback that only fires when a mid-stream case switch
-        # re-pinned active_case_id to a fresh Untitled case not yet seen by the
-        # pre-dispatch call.
         if await _maybe_autoname_case(state, user_text):
             await _emit_case_list(websocket, state, force=True)
 
     except asyncio.CancelledError:
-        # A distinct cancelled step state, never failed. A
-        # partially-open narration segment's done=True is intentionally NOT
-        # sent here (a cancelled stream has no clean terminal); current_turn_
-        # narration still holds the partial text and the dispatch wrapper's
-        # finally persists the un-finalized open-segment tail best-effort, so no
-        # narration is lost.
+        # A cancelled step state, never failed; the open segment's done=True is NOT sent and
+        # the dispatch wrapper's finally persists its un-finalized tail.
         _turn_error_class = "cancelled"
         cancelled_step = PipelineStep(
             step_id=step_id,
@@ -1417,17 +1080,9 @@ async def _stream_model_reply(
             pass
         raise
     except ConnectionClosed as exc:
-        # The CLIENT transport died mid-turn. This is NOT a model failure
-        # -- the LLM stream rides the provider transport, never the client
-        # websocket, so a
-        # ConnectionClosed reaching this scope can only be a residual raw send
-        # to the dead client socket. Every known per-turn send now routes
-        # through _session_safe_send (never raises; sibling-socket fallback),
-        # so this branch is a backstop: log once and end the turn quietly. NO
-        # LLM_UNAVAILABLE error envelope and NO terminal-failure card -- a
-        # client transport drop is not a model failure. The persisted
-        # chat/tool rows plus the session-resume replay carry the turn's
-        # results to the client when it reconnects.
+        # The CLIENT transport died mid-turn. This is NOT a model failure -- the LLM stream rides
+        # the provider transport, never the client websocket, so a ConnectionClosed reaching this
+        # scope can only be a residual raw send to the dead client socket.
         _turn_error_class = "client_disconnect"
         logger.warning(
             "client websocket closed mid-turn (transport drop, not a model "
@@ -1436,13 +1091,8 @@ async def _stream_model_reply(
             exc,
         )
     except ContextWindowExceededError as exc:
-        # Reactive clip guard: a local model's
-        # prompt was clipped by num_ctx even after one recompaction + retry.
-        # Distinct typed envelope -- NOT the generic LLM_UNAVAILABLE bucket --
-        # so the honesty floor tells the user exactly why the turn stopped (a
-        # genuinely oversized Case, not a transient model outage). Mirrors the
-        # terminal-failure-card persist so a reconnect / Case-reopen replay
-        # shows the failed card rather than a phantom "still running" spinner.
+        # A local model's prompt was clipped by num_ctx even after one recompaction + retry:
+        # a typed envelope, NOT the generic LLM_UNAVAILABLE bucket.
         _turn_error_class = "context_window"
         logger.warning(
             "context-budget: turn aborted, context window exceeded session=%s "
@@ -1450,15 +1100,8 @@ async def _stream_model_reply(
             state.session_id,
             exc.num_ctx,
         )
-        # Persist the terminal-failure card BEFORE attempting the error-envelope
-        # send (not the reverse) -- persist never touches the socket or this
-        # payload, so it cannot be starved by any failure in the send path.
-        # Both steps are individually try/excepted with explicit logging.
-        #
-        # The fabrication backstop also applies on this
-        # exception path: zero tool calls dispatched this whole turn, AND the
-        # accumulated narration matches the claim regex, appends the same
-        # honest caveat as the normal zero-tool-call terminal branch.
+        # Persist the failure card BEFORE the error send: persist never touches the socket, so
+        # a send failure cannot starve it. The fabrication backstop also applies on this path.
         _aborted_narration = "".join(turn_narration)
         _fabricated_claim = not _turn_ever_called_tool and looks_like_fabricated_action_claim(
             _aborted_narration
@@ -1497,28 +1140,16 @@ async def _stream_model_reply(
                 retryable=False,
             )
         except Exception:  # noqa: BLE001 -- _send_error/_session_safe_send
-            # _send_error/_session_safe_send already never raise on an ordinary
-            # send failure; this is defense-in-depth logging only. NOTE: a genuine
-            # asyncio.CancelledError here is NOT caught (it is a BaseException, not
-            # an Exception) and is intentionally left to propagate -- cancellation
-            # must never be swallowed. By the time we reach this send the
-            # terminal-failure persist has ALREADY completed, so a cancelled/dead-
-            # socket send can no longer suppress it.
+            # asyncio.CancelledError is a BaseException and deliberately propagates; the card
+            # persist above has already completed.
             logger.exception(
                 "context-budget: error-envelope send raised session=%s",
                 state.session_id,
             )
     except UpstreamProviderError as exc:
-        # UPSTREAM-PROVIDER DISCIPLINE (never internalize upstream failure).
-        # The adapter already retried the transient provider
-        # failure with backoff and exhausted its budget -- this turn ends with
-        # an HONEST provider-unavailable narration (typed, provider NAMED,
-        # verbatim detail), never a silent empty turn and never recorded as an
-        # internal error (error_class="upstream_provider" on the turn
-        # line). The wire error_code stays the contract-valid
-        # LLM_UNAVAILABLE (retryable) -- the closed ErrorCode Literal is a
-        # contracts surface this lane may not widen -- while the free-form
-        # failure-card code carries the DISTINCT UPSTREAM_PROVIDER_UNAVAILABLE.
+        # The adapter already retried with backoff and exhausted its budget: end with an honest
+        # provider-unavailable narration, never an internal error. The wire code stays the
+        # contract-valid LLM_UNAVAILABLE; the failure card carries UPSTREAM_PROVIDER_UNAVAILABLE.
         _turn_error_class = "upstream_provider"
         logger.error(
             "upstream provider unavailable session=%s provider=%s attempts=%d "
@@ -1535,9 +1166,7 @@ async def _stream_model_reply(
             "This is a temporary provider-side outage, not a problem with "
             "your request; please try again shortly or switch models."
         )
-        # Honest closing narration IN CHAT (one bubble, streamed + terminal
-        # done=True) and persisted as an agent row so a Case reopen replays
-        # the same honest ending. Best-effort sends via _session_safe_send.
+        # Persisted as an agent row so a Case reopen replays the same ending.
         _upstream_msg_id = current_message_id or new_ulid()
         await _session_safe_send(websocket, state.session_id,
             _new_envelope(
@@ -1591,10 +1220,6 @@ async def _stream_model_reply(
             retryable=True,
         )
     except Exception as exc:  # noqa: BLE001 -- surface as LLM_UNAVAILABLE
-        # PER-TURN: a NON-transient provider rejection (auth / bad
-        # request) classifies as ``provider_request`` (fail-fast, its own
-        # class); anything else is honestly ``internal``. Upstream transients
-        # that escaped the retry seam classify ``upstream_provider``.
         _turn_error_class = classify_provider_error_class(exc)
         logger.exception("model stream failed: %s", exc)
         await _send_error(
@@ -1604,20 +1229,9 @@ async def _stream_model_reply(
             f"Model generation failed: {exc}",
             retryable=True,
         )
-        # The error envelope above marks the in-memory pipeline failed on THIS
-        # live socket, but a WS reconnect / Case-reopen replays from
-        # chat_history, where nothing records this terminal failure -- any tool
-        # card the user last saw spinning would replay as "running" forever.
-        # Persist a role="tool" FAILED tool-card row (mirroring the existing
-        # tool-card shape) so the session-resume replay renders the failed card.
-        # Honesty floor: this writes a FAILURE -- never a success.
-        #
-        # EXCEPTION: a RuntimeError whose __cause__ is StopIteration is the
-        # PEP-479 async-generator-exhaustion artifact -- the model stream
-        # generator ran dry, NOT a genuine model failure (a finite mocked stream
-        # shape only). Persisting a failed tool card here would inject a
-        # phantom failure row into an otherwise-clean tool-terminal turn, so we
-        # skip it.
+        # Replay reads chat_history, so persist the failed card or a spinning tool card replays
+        # as "running" forever. A RuntimeError caused by StopIteration is async-generator
+        # exhaustion, not a model failure: persisting would inject a phantom failure row.
         if not isinstance(exc.__cause__, StopIteration):
             await _persist_terminal_failure_card(
                 state,
@@ -1626,8 +1240,6 @@ async def _stream_model_reply(
                 case_id=_turn_case_id(state),
             )
     finally:
-        # ONE structured line per turn, every outcome (clean / abort / cancel /
-        # provider failure); a fault writing it never masks the turn's own.
         try:
             logger.info("turn %s", json.dumps({
                 "turn_id": pipeline_id,
@@ -1648,7 +1260,6 @@ async def _stream_model_reply(
                            exc_info=True)
 
 
-
 async def _dispatch_model_turn_and_persist(
     websocket: ServerConnection,
     state: SessionState,
@@ -1660,18 +1271,12 @@ async def _dispatch_model_turn_and_persist(
     """Stream the model reply, then persist it to the active Case: the persisted
     content is the REAL accumulated narration, and a cancel or error still
     persists whatever the accumulator captured before the stream died."""
-    # Capture the turn's Case at task entry -- the finally-persist
-    # below must land in the Case that OWNED this turn even when the user
-    # switched Cases (or a newer turn re-pinned the binding) mid-stream.
+    # Captured at task entry: the finally-persist must land in the Case that OWNED this turn
+    # even if Cases switch mid-stream. The bind makes every emitted envelope carry its case_id.
     turn_case_id = _turn_case_id(state)
-    # Bind the owning Case into the per-task context var, so EVERY envelope this
-    # turn emits carries that case_id and a client routes it to that stream.
     bind_turn_case(turn_case_id)
-    # Per-turn object capture: a concurrent turn (or Case switch) re-points
-    # both SessionState fields mid-stream, so this wrapper gauges completion
-    # against THIS turn's history list and joins the narration list
-    # registered under the running task (mocked streams that never
-    # registered fall back to the live field).
+    # A concurrent turn re-points SessionState fields mid-stream, so completion is gauged
+    # against THIS turn's history list and the narration list registered under the running task.
     turn_history = state.chat_history
     pre_chat_len = len(turn_history)
     try:
@@ -1681,24 +1286,9 @@ async def _dispatch_model_turn_and_persist(
             show_thinking=show_thinking,
         )
     finally:
-        # Close out the turn's narration persistence. Each FINALIZED
-        # narration segment is already persisted in-loop by
-        # ``_finalize_segment`` (interleaved with the mid-turn tool rows), so
-        # this wrapper must NOT re-persist finalized segments -- it only owns
-        # the un-finalized remainder + the legacy fallbacks:
-        #
-        #   * ``open_tail``     -- text in a segment the stream NEVER finalized
-        #                         (crash/cancel mid-segment). Persisted as ONE
-        #                         agent row (the de-facto terminal row) so no
-        #                         narration is lost; layer_emissions=None lets
-        #                         it carry the layer/zoom accumulator.
-        #   * ``segments_done`` -- count of finalized agent rows this turn.
-        #                         When 0 AND the stream completed cleanly with
-        #                         no open tail, write the legacy single marker
-        #                         row (content == joined narration, possibly "").
-        #
-        # All three per-task registries are popped (mocked-stream tests that
-        # never registered fall back to the live field).
+        # Finalized segments were already persisted in-loop and must not be re-persisted: only
+        # the un-finalized ``open_tail`` and the ``segments_done == 0`` fallback row are written
+        # here. All per-task registries are popped.
         _own_task = asyncio.current_task()
         if _own_task is not None:
             turn_narration = _TURN_NARRATION_BY_TASK.pop(_own_task, None)
@@ -1717,21 +1307,14 @@ async def _dispatch_model_turn_and_persist(
         narration = "".join(turn_narration).strip()
         open_tail = "".join(open_segment or []).strip()
         stream_completed = len(turn_history) > pre_chat_len
-        # When the turn aborted on ``ContextWindowExceededError``,
-        # ``_stream_model_reply``'s except handler stashed the honest abort
-        # verdict here. Read + clear it once so it lands on exactly the row
-        # that carries the (unverified) streamed text below, and never leaks
-        # into a later turn.
+        # Stashed by the ContextWindowExceededError handler; read and cleared once so it lands on
+        # exactly one row and never leaks into a later turn.
         _abort_note = state.current_turn_context_abort_note
         state.current_turn_context_abort_note = None
         if turn_case_id:
             if open_tail:
-                # Crash/cancel left an un-finalized open segment carrying text
-                # (its done=True never fired). Persist the tail so the partial
-                # narration survives; as the de-facto terminal row it also
-                # captures the turn's layer/zoom accumulator (layer_emissions
-                # default None). No double-persist: finalized segments already
-                # cleared their buffer, so this is ONLY the un-finalized text.
+                # Crash/cancel left an open segment (done=True never fired); as the de-facto
+                # terminal row it also carries the layer/zoom accumulator.
                 await _persist_chat_turn(
                     state,
                     role="agent",
@@ -1740,13 +1323,8 @@ async def _dispatch_model_turn_and_persist(
                     case_id=turn_case_id,
                 )
             elif segments_done == 0 and (narration or stream_completed or _abort_note):
-                # No segment was finalized AND no open tail: either a clean
-                # narration-LESS completed turn (content="" marker -- replay row
-                # count unchanged from pre-fix), a mocked-stream test that
-                # populated only ``current_turn_narration`` (legacy one-row
-                # contract), or an abort with NO streamed text at all (still
-                # write the row so the abort note itself is not lost). Mirror
-                # the previous single-row write exactly, plus the note.
+                # No segment persisted and no open tail: write the single row (content possibly "")
+                # so an abort note or a narration-less completed turn is not lost.
                 await _persist_chat_turn(
                     state,
                     role="agent",
@@ -1758,19 +1336,8 @@ async def _dispatch_model_turn_and_persist(
                 not terminal_acc_persisted
                 and (state.current_turn_map_commands or state.current_turn_layer_ids)
             ):
-                # Invariant: EVERY turn that emitted a zoom-to/layer must
-                # persist at least one chat row carrying it. When
-                # segments_done > 0 (interleaved rows already persisted) and
-                # no open tail, but the turn's final round ended in tool
-                # calls with no trailing narration, none of the persisted
-                # segment rows carried the zoom-to/layer accumulator. Write
-                # an EMPTY marker row (content="" -- no phantom bubble) with
-                # layer_emissions=None so ``_persist_chat_turn`` snapshots
-                # ``current_turn_layer_ids``/``current_turn_map_commands``
-                # onto it. ``terminal_acc_persisted`` guards a double-write
-                # when the turn DID end in narration; the non-empty
-                # accumulator guard means an accumulator-less + text-less
-                # turn writes nothing.
+                # Invariant: EVERY turn that emitted a zoom-to/layer persists at least one chat row
+                # carrying it; an empty marker row (no phantom bubble) snapshots the accumulator.
                 await _persist_chat_turn(
                     state,
                     role="agent",
@@ -1778,16 +1345,8 @@ async def _dispatch_model_turn_and_persist(
                     pipeline_id=state.current_turn_pipeline_id,
                     case_id=turn_case_id,
                 )
-            # else: either the terminal segment already snapshotted the
-            # accumulator (segments_done > 0 ending in narration), or the turn
-            # emitted no zoom-to/layer accumulator at all -> every narration run
-            # was already persisted as its own interleaved row. Nothing to add.
-        # Whole-turn idle signal: fires on EVERY exit (clean, cancel,
-        # error) so the client settles any card still spinning ``running`` after
-        # the turn ends (its terminal pipeline-state frame may have died on a
-        # dropped socket). Outside the ``if turn_case_id`` guard so a root-stream
-        # turn (no Case) still idles its cards; ``_emit_turn_complete`` reads the
-        # turn's Case from the ContextVar bound at task entry. Best-effort.
+        # Fires on EVERY exit so the client settles cards still ``running`` (their terminal frame
+        # may have died on a dropped socket); outside the case guard so a Case-less turn idles too.
         await _emit_turn_complete(
             websocket, state, pipeline_id=state.current_turn_pipeline_id
         )

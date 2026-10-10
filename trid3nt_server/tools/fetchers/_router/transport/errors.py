@@ -16,12 +16,10 @@ __all__ = [
 
 
 class TransportError(OSError):
-    """Base for transport failures, carrying HTTP ``status``, verbatim ``body`` and
-    a ``retryable`` class. Subclasses OSError so a raise inside a GDAL C read frame
-    degrades to an IO error the opener's recorded-error bridge can recover."""
+    """Base for transport failures with HTTP ``status``, verbatim ``body`` and a ``retryable`` class; subclasses OSError so
+    a raise inside a GDAL C read frame degrades to an IO error the opener can recover."""
 
-    #: Closed over {"agent", "user", "operator"}: who can act on this failure. The
-    #: upstream 4xx/429/5xx/timeout class is "agent"; an auth subclass overrides.
+    #: Who can act: "agent", "user" or "operator"; an auth subclass overrides the default "agent".
     actionability: str = "agent"
 
     def __init__(self, message: str, *, status: int | None = None,
@@ -33,15 +31,11 @@ class TransportError(OSError):
 
 
 class TransportNotFound(TransportError):
-    """404 / S3 ``NoSuchKey`` -- the object does not exist (non-retryable)."""
-
     def __init__(self, message: str, *, status: int | None = 404, body: str | None = None):
         super().__init__(message, status=status, body=body, retryable=False)
 
 
 class TransportAuthError(TransportError):
-    """403 / S3 ``AccessDenied`` -- auth-class upstream failure (non-retryable)."""
-
     actionability: str = "user"
 
     def __init__(self, message: str, *, status: int | None = 403, body: str | None = None):
@@ -49,16 +43,12 @@ class TransportAuthError(TransportError):
 
 
 class TransportUpstreamError(TransportError):
-    """429 / 5xx / timeout / connection failure -- retryable upstream error."""
-
     def __init__(self, message: str, *, status: int | None = None, body: str | None = None):
         super().__init__(message, status=status, body=body, retryable=True)
 
 
 def classify_status(status: int, body: str | None, url: str) -> TransportError:
-    """Map an HTTP error status and verbatim body to a typed transport error: 404 or
-    a ``NoSuchKey`` body to not-found, 401/403 or ``AccessDenied`` to auth, 429/5xx
-    to retryable upstream, anything else >= 400 to upstream."""
+    """Map an HTTP error status and body to a typed error: 404/NoSuchKey not-found, 401/403/AccessDenied auth, 429/5xx retryable, else upstream."""
     snippet = (body or "")[:2000]
     if status == 404 or "NoSuchKey" in snippet:
         return TransportNotFound(

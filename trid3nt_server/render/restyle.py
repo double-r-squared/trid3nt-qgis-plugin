@@ -1,10 +1,7 @@
 """THE styling seam: the row a producer declared, and the ask a reader lays over it.
 
-Both ends of one decision live here, so two products of the same quantity cannot
-be painted by two different rules. All of it is DISPLAY STATE: re-painting,
-retitling or un-emitting a layer recomputes nothing and moves no number. Every
-restyle is journaled with the sentence the legend ends up saying, because the
-colours cannot state which policy produced them.
+Both ends of one decision live here, so two products of one quantity cannot be painted by two rules. All of it is
+display state: a restyle recomputes nothing and is journaled with the sentence the legend ends up saying.
 """
 
 from __future__ import annotations
@@ -37,8 +34,7 @@ def scale_override(*, policy: str | None = None,
                    transform: str | None = None,
                    clip: tuple[float, float] | None = None) -> Scale | None:
     """The caller's scale ASK in the preset vocabulary, or ``None``."""
-    # ``None`` rather than an empty spec: the resolver then falls straight through
-    # to the declared row instead of merging defaults back over it.
+    # ``None`` rather than an empty spec, so the resolver falls through to the declared row instead of merging defaults over it.
     if policy is None and value_range is None and transform is None and clip is None:
         return None
     return Scale(

@@ -4,18 +4,11 @@ One access mode serving three renders: a physical-scalar float grid, a uint8
 first-valid mosaic with a baked palette, and a 3-band photometric RGB. The library
 owns search, signing, the grid and the fuse; this module owns the band math."""
 
-# READ PATH. Assets are read by GDAL's own HTTP client, configured once through
-# ``odc.loader.configure_rio`` -- odc opens its own rasterio env per read from a
-# module-global config, so an enclosing ``rasterio.Env`` does not reach it. The
-# upstream STATUS is verbatim on the exception and retries fire on
-# 429/500/502/503/504. Two measured deviations from the transport's norm hold for
-# this family: GDAL keeps the status but discards the S3 XML ``<Code>`` body, and its
-# backoff is exponential-with-jitter rather than the server's ``Retry-After``.
-#
-# SOURCE NODATA is the source's own where the asset header publishes one. Where it
-# does not, the row's declared sentinel stands in, so a fill value never blends into
-# a resampling kernel; the loader has no channel for that, so it rides in on a reader
-# (see ``_driver_with_src_nodata``).
+# Assets are read by GDAL's own HTTP client, configured once through ``odc.loader.configure_rio``
+# (odc opens its own rasterio env per read, so an enclosing ``rasterio.Env`` does not reach it).
+# GDAL keeps the upstream status but discards the S3 XML ``<Code>`` body, and its backoff is
+# exponential-with-jitter, not the server's ``Retry-After``. A row's declared nodata stands in
+# where the asset header has none; it rides in on a reader (``_driver_with_src_nodata``).
 
 from __future__ import annotations
 
@@ -41,11 +34,8 @@ logger = logging.getLogger(
 
 __all__ = ["execute", "stac_to_mosaic", "fetch_source_array"]
 
-#: The transport's read policy, which replaces odc-stac's own default (10 tries at
-#: 0.5 s on GDAL's hard-coded code set). A netrc-gated catalog answers the first
-#: read with a redirect chain that ends in a per-user signed URL, and the login
-#: cookie has to survive it: one writable path for both ends carries it, inert for
-#: a catalog that needs no login.
+#: Replaces odc-stac's default read policy. A netrc-gated catalog redirects to a per-user signed
+#: URL and the login cookie must survive it: one writable cookie path serves both ends.
 _READ_PATH = {
     **READ_POLICY,
     "GDAL_HTTP_COOKIEFILE": os.path.join(tempfile.gettempdir(), "trid3nt_gdal_cookies"),
@@ -56,7 +46,6 @@ _read_path_configured = False
 
 
 def _configure_read_path() -> None:
-    """Apply the read policy to odc's reader (idempotent, process-global)."""
     global _read_path_configured
     if _read_path_configured:
         return
@@ -69,9 +58,7 @@ def _configure_read_path() -> None:
 
 
 def _signing_modifier(spec: SourceSpec) -> Any:
-    """The catalog's asset-signing hook, or a typed refusal naming what is missing:
-    ``netrc:<host>`` names a catalog behind an interactive login, and the refusal
-    names the file and the host rather than failing at the first 401."""
+    """The catalog's asset-signing hook, or a typed refusal naming the missing ``netrc:<host>`` login."""
     sign = str(((spec.ingest or {}).get("stac") or {}).get("sign") or "none")
     if sign == "planetary_computer":
         import planetary_computer
@@ -85,7 +72,6 @@ def _signing_modifier(spec: SourceSpec) -> Any:
 
 
 def _require_netrc(spec: SourceSpec, host: str) -> None:
-    """Refuse by name until ``~/.netrc`` carries credentials for ``host``."""
     import netrc as _netrc
 
     path = os.path.join(os.path.expanduser("~"), ".netrc")
@@ -104,7 +90,6 @@ def _require_netrc(spec: SourceSpec, host: str) -> None:
 
 def _normalize_via_aliases(spec: SourceSpec, value: Any, aliases: dict, allowed: list,
                            suffix: str) -> str:
-    """Alias-normalize a param (lower->table, else upper) + validate membership."""
     key = str(value).strip().lower()
     norm = aliases.get(key, str(value).strip().upper())
     if norm not in allowed:
@@ -115,7 +100,6 @@ def _normalize_via_aliases(spec: SourceSpec, value: Any, aliases: dict, allowed:
 
 
 def _resolve_collection(spec: SourceSpec, params: dict[str, Any]) -> tuple[str, str | None]:
-    """``(collection_id, normalized_product)`` -- static or param-keyed with aliasing."""
     stac = (spec.ingest or {}).get("stac", {})
     cbp = stac.get("collection_by_param")
     if not cbp:
@@ -129,9 +113,7 @@ def _resolve_collection(spec: SourceSpec, params: dict[str, Any]) -> tuple[str, 
 
 def _resolve_asset(spec: SourceSpec, params: dict[str, Any], product: str | None,
                    items: list[Any] | None = None) -> str:
-    """The asset key to read: static, param-keyed, or matched on a declared suffix. A
-    product whose asset keys are numbered per collection declares the suffix its
-    variants share, and the key is read off the items rather than hard-coded."""
+    """The asset key to read: static, param-keyed, or matched on a declared suffix."""
     stac = (spec.ingest or {}).get("stac", {})
     suffix = stac.get("asset_suffix")
     if suffix:
@@ -157,7 +139,6 @@ def _resolve_asset(spec: SourceSpec, params: dict[str, Any], product: str | None
 
 
 def _datetime_window(stac: dict, params: dict[str, Any]) -> str | None:
-    """Both bounds -> that window; else a trailing N-day window; None if time-static."""
     year_param = stac.get("year_param")
     if year_param:
         year = params.get(year_param)
@@ -176,7 +157,6 @@ def _datetime_window(stac: dict, params: dict[str, Any]) -> str | None:
 
 def _search(spec: SourceSpec, params: dict[str, Any], collection: str,
             dt_range: str | None) -> list[Any]:
-    """Search the catalog with the row's declared query; typed empty on no items."""
     stac = (spec.ingest or {}).get("stac", {})
     sel = stac.get("select") or {}
     query: dict[str, Any] = {}
@@ -219,7 +199,6 @@ def _search(spec: SourceSpec, params: dict[str, Any], collection: str,
 
 
 def _aoi_coverage(item: Any, aoi: Any) -> float:
-    """Fraction of ``aoi`` covered by ``item.geometry`` (0.0 on bad geometry)."""
     from shapely.geometry import shape
 
     try:
@@ -234,9 +213,7 @@ def _dt_key(item: Any) -> str:
 
 
 def _rank_item(sel: dict, items: list[Any], bbox: tuple) -> Any:
-    """The best item per the declarative ``select.rank`` keys: ``coverage_bucket`` puts
-    full-coverage scenes first, ``cloud_cover`` the least cloudy, ``coverage`` the most
-    AOI overlap. An empty rank returns the first, most-recent intersecting item."""
+    """The best item per the declarative ``select.rank`` keys; an empty rank returns the first, most-recent item."""
     rank = sel.get("rank") or []
     if not rank:
         return items[0]
@@ -262,9 +239,7 @@ def _rank_item(sel: dict, items: list[Any], bbox: tuple) -> Any:
 
 def _select_items(spec: SourceSpec, params: dict[str, Any], items: list[Any],
                   asset_key: str) -> list[Any]:
-    """Narrow the search result to the scenes the row's select mode asks for:
-    ``mosaic`` keeps every item, ``latest`` the most recent, ``coverage`` ranks AOI
-    coverage then recency over scenes carrying the asset, ``best`` the rank ladder."""
+    """Narrow the search result per the row's select mode (``mosaic``, ``latest``, ``coverage``, ``best``)."""
     stac = (spec.ingest or {}).get("stac", {})
     sel = stac.get("select") or {}
     mode = sel.get("mode", "mosaic")
@@ -292,9 +267,8 @@ def _select_items(spec: SourceSpec, params: dict[str, Any], items: list[Any],
 
 
 def _source_cell(items: list[Any]) -> tuple[float, float, float] | None:
-    """``(cell_deg, origin_x, origin_y)`` of the items' own EPSG:4326 lattice, read off
-    the STAC projection metadata so a native-lattice ask costs no probe read.
-    ``None`` when the item publishes no geographic grid."""
+    """``(cell_deg, origin_x, origin_y)`` of the items' own EPSG:4326 lattice from STAC projection
+    metadata, or ``None`` when the item publishes no geographic grid."""
     import odc.stac
 
     try:
@@ -309,9 +283,8 @@ def _source_cell(items: list[Any]) -> tuple[float, float, float] | None:
 
 def _geobox(spec: SourceSpec, params: dict[str, Any], items: list[Any],
             *, px_max: int | None = None) -> tuple[Any, str]:
-    """``(GeoBox, resampling)``: the source's own lattice when ``px_per_deg`` asks for
-    it, else a metric grid derived from ``native_cell_m``. A source whose cell is not
-    the declared density, or a lattice past the pixel cap, falls back to metric."""
+    """``(GeoBox, resampling)``: the source's own lattice when ``px_per_deg`` asks for it, else a
+    metric grid from ``native_cell_m``; a mismatched cell or a lattice past the pixel cap falls back to metric."""
     import math
 
     import rasterio
@@ -325,17 +298,14 @@ def _geobox(spec: SourceSpec, params: dict[str, Any], items: list[Any],
     px_max = int(px_max if px_max is not None else ingest.get("px_max", 4096))
     default_resampling = str(((ingest.get("stac") or {}).get("resampling")) or "bilinear")
 
-    # The metric grid is a lattice of the router's OWN, so it needs bilinear, and every
-    # value it returns is an interpolation of the source rather than the source.
+    # The metric grid is the router's OWN lattice, so it needs bilinear.
     def _resampled() -> tuple[Any, str]:
         w, h = bbox_pixel_dims(bbox, float(ingest.get("native_cell_m", 1000.0)),
                                px_min=px_min, px_max=px_max)
         return GeoBox((h, w), rasterio.transform.from_bounds(*bbox, w, h),
                       "EPSG:4326"), default_resampling
 
-    # The density may be a REQUEST param: the lattice a consumer samples against
-    # is the consumer's fact, so it travels from the caller and the row default
-    # is only what applies when nobody said.
+    # The density may be a REQUEST param; the row default applies only when nobody said.
     px_per_deg = params.get("px_per_deg")
     if px_per_deg is None:
         px_per_deg = ingest.get("px_per_deg")
@@ -352,13 +322,9 @@ def _geobox(spec: SourceSpec, params: dict[str, Any], items: list[Any],
             density, "unknown" if src is None else f"{src[0]:.10g} deg")
         return _resampled()
 
-    # The phase comes from the data. A global 1-arcsecond DEM tile is pixel-is-POINT:
-    # its pixel CENTRES sit on the integer arcsecond, so its edges sit half a pixel off
-    # the integer degree, and a lattice snapped to the prime meridian would land every
-    # destination centre exactly BETWEEN two source centres. Snapping to the source's
-    # own origin instead puts every destination centre on a source centre, and NEAREST
-    # carries the value across unchanged, so a consumer sampling the returned raster at
-    # its own nodes reads the number an in-container read of the tile would return.
+    # The phase comes from the data: a pixel-is-POINT DEM tile has centres on the integer
+    # arcsecond, so snapping to the prime meridian would put every destination centre BETWEEN two
+    # source centres; snapping to the source origin lets NEAREST carry values across unchanged.
     _, ox, oy = src
     west = ox + math.floor((bbox[0] - ox) / cell) * cell
     east = ox + math.ceil((bbox[2] - ox) / cell) * cell
@@ -381,18 +347,14 @@ def _geobox(spec: SourceSpec, params: dict[str, Any], items: list[Any],
 
 
 def _one_group(item: Any, parsed: Any, idx: int) -> int:
-    """Every item into one pixel plane, so the load returns a fused mosaic."""
     return 0
 
 
 def _driver_with_src_nodata(nodata: float) -> Any:
-    """A reader driver that carries a DECLARED source sentinel into the read, because
-    the loader resolves nodata from the asset header alone and the load API has no
-    channel for a value the header omits."""
+    """A reader driver that carries a DECLARED source sentinel into the read; the loader has no other channel."""
 
-    # A source that publishes no header nodata still HAS one, declared on the row,
-    # and excluding it from the resampling kernel is the difference between a class
-    # boundary and a blend of a class code with a fill value.
+    # A source with no header nodata still has one on the row; excluding it from the resampling
+    # kernel avoids blending a class code with a fill value.
     from dataclasses import replace
 
     from odc.loader import RioDriver
@@ -418,13 +380,10 @@ def _driver_with_src_nodata(nodata: float) -> Any:
 def _load(spec: SourceSpec, items: list[Any], bands: list[str], geobox: Any,
           resampling: Any, *, dtype: str, nodata: float | None,
           src_nodata: float | None = None) -> dict[str, Any]:
-    """``{band: 2D array}`` fused first-valid over ``items`` in the supplied order. A
-    source failure arrives as the library's own exception carrying the verbatim
-    upstream status, and is restamped with the row's code rather than swallowed."""
+    """``{band: 2D array}`` fused first-valid over ``items``; a source failure is restamped with the row's code."""
     import odc.stac
 
     _configure_read_path()
-    # a band name is an asset key, optionally with a band index ("image.2")
     keys = {b.rsplit(".", 1)[0] if b.rsplit(".", 1)[-1].isdigit() else b for b in bands}
     missing = [k for k in sorted(keys)
                if not any(k in (getattr(it, "assets", {}) or {}) for it in items)]
@@ -449,9 +408,7 @@ def _load(spec: SourceSpec, items: list[Any], bands: list[str], geobox: Any,
 
 
 def _render_float(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
-    """Continuous-FLOAT read, DN scale and offset applied, to float32
-    ``(array, transform, crs)``. NaN is the fill; the serialize directive decides
-    whether it is written as NaN or as the source's own sentinel."""
+    """Continuous-FLOAT read, DN scale and offset applied, to float32 ``(array, transform, crs)``; NaN is the fill."""
     import numpy as np
 
     ingest = spec.ingest or {}
@@ -475,12 +432,8 @@ def _render_float(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, A
     else:
         out = raw.astype("float32")
 
-    # positive_only: an importance product is strictly positive where mapped, so
-    # <=0 (and non-finite) is nodata.
     if tf.get("positive_only"):
         out = np.where(np.isfinite(out) & (out > 0.0), out, np.nan).astype("float32")
-    # log10_db: linear gamma0 power -> decibels. Non-positive / non-finite power
-    # is not renderable backscatter, so it is nodata.
     if tf.get("log10_db"):
         valid = np.isfinite(out) & (out > 0.0)
         db = np.full(out.shape, np.nan, dtype="float32")
@@ -496,7 +449,6 @@ def _render_float(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, A
 
 
 def _source_colormap(spec: SourceSpec, items: list[Any], asset: str) -> dict | None:
-    """The band-1 colour table the source itself publishes (palette passthrough)."""
     import rasterio
 
     try:
@@ -508,9 +460,7 @@ def _source_colormap(spec: SourceSpec, items: list[Any], asset: str) -> dict | N
 
 
 def stac_to_mosaic(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, str, dict | None]:
-    """uint8 first-valid mosaic ``(array, transform, crs, colormap|None)``. The palette
-    is the source's own where the row declares passthrough, else the row's pure
-    colormap hook."""
+    """uint8 first-valid mosaic ``(array, transform, crs, colormap|None)``."""
     import numpy as np
 
     ingest = spec.ingest or {}
@@ -525,8 +475,7 @@ def stac_to_mosaic(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, 
     asset = _resolve_asset(spec, params, product, found)
     items = _select_items(spec, params, found, asset)
     geobox, resampling = _geobox(spec, params, items)
-    # the sentinel is the destination fill AND the source's own where the asset
-    # header publishes none (the header wins wherever it exists)
+    # The header nodata wins wherever it exists; the row's sentinel is the fallback.
     arr = _load(spec, items, [asset], geobox, resampling, dtype="uint8",
                 nodata=float(nodata), src_nodata=float(nodata))[asset]
 
@@ -548,7 +497,6 @@ def stac_to_mosaic(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, 
 
 
 def fetch_source_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
-    """``(array, transform, crs)`` for the row's render (the tiled-mosaic seam)."""
     render = str((spec.ingest or {}).get("render", "float"))
     if render == "mosaic":
         arr, transform, crs, _cmap = stac_to_mosaic(spec, params)
@@ -556,14 +504,8 @@ def fetch_source_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, A
     return _render_float(spec, params)
 
 
-# RGB composites: N single-band assets (or N bands of one asset) scaled, masked
-# and rendered into a 3-band photometric-RGB uint8 COG.
-
-
 def _declare_asset_bands(items: list[Any], asset: str) -> int:
-    """Restate an item's per-band list in the form the loader enumerates and return the
-    band count, which comes from the item's OWN list: an asset described only by the
-    legacy ``eo:bands`` list would otherwise resolve to a single band."""
+    """Restate an item's per-band list as the loader enumerates it; the count comes from the item's OWN list."""
     n = 1
     for item in items:
         a = (getattr(item, "assets", {}) or {}).get(asset)
@@ -576,8 +518,7 @@ def _declare_asset_bands(items: list[Any], asset: str) -> int:
 
 
 def _rgb_apply_transform(dn: Any, tf: dict) -> Any:
-    """DN -> physical scalar per ``transform.kind`` (reflectance / lst_celsius /
-    none); the fill DN reads back as NaN so the render's nodata rule masks it."""
+    """DN -> physical scalar per ``transform.kind``; the fill DN reads back as NaN."""
     import numpy as np
 
     kind = tf.get("kind", "none")
@@ -592,7 +533,6 @@ def _rgb_apply_transform(dn: Any, tf: dict) -> Any:
 
 
 def _rgb_bad_mask(mask_arr: Any, mask: dict) -> Any:
-    """Boolean bad (cloud/shadow/fill) mask from a QA bitmask or an SCL class set."""
     import numpy as np
 
     kind = mask.get("kind")
@@ -607,9 +547,7 @@ def _rgb_bad_mask(mask_arr: Any, mask: dict) -> Any:
 
 
 def _rgb_render_joint_stretch(spec: SourceSpec, bands: list[Any], bad: Any, render: dict) -> Any:
-    """Joint 2..98 percentile-stretch N float bands to an ``(N, H, W)`` uint8 RGB, with
-    nodata and bad pixels zeroed per ``nodata_rule``. Raises a typed EMPTY when no
-    clear pixel remains, rather than returning a blank composite."""
+    """Joint 2..98 percentile-stretch of N float bands to ``(N, H, W)`` uint8 RGB; raises a typed EMPTY with no clear pixel."""
     import numpy as np
 
     stack = np.stack(bands)  # (N, H, W) float32
@@ -640,8 +578,6 @@ def _rgb_render_joint_stretch(spec: SourceSpec, bands: list[Any], bad: Any, rend
 
 
 def _rgb_render_colormap(spec: SourceSpec, band: Any, bad: Any, render: dict) -> Any:
-    """Percentile-stretch one float band through a baked matplotlib ramp, zeroing
-    nodata/clouded pixels. ``(3, H, W)`` uint8."""
     import numpy as np
 
     if bad is None:
@@ -674,7 +610,6 @@ def _rgb_render_colormap(spec: SourceSpec, band: Any, bad: Any, render: dict) ->
 
 
 def _rgb_cog_bytes(rgb: Any, transform: Any, crs: Any) -> bytes:
-    """Serialize a 3-band uint8 array to a photometric-RGB DEFLATE COG."""
     import rasterio
 
     count, height, width = rgb.shape
@@ -700,7 +635,6 @@ def _rgb_cog_bytes(rgb: Any, transform: Any, crs: Any) -> bytes:
 
 
 def _render_rgb(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, str]:
-    """Search -> rank -> read the recipe's assets -> scale/mask/render -> 3-band uint8."""
     import numpy as np
 
     ingest = spec.ingest or {}
@@ -725,8 +659,6 @@ def _render_rgb(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, str
 
     render = recipe.get("render", {})
     if render.get("kind") == "passthrough":
-        # N bands of ONE asset read straight to uint8 (no scale/mask/stretch); a
-        # band the asset does not carry stays 0.
         asset = channels[0]
         n = _declare_asset_bands(items, asset)
         idx = [int(b) for b in recipe.get("bands", [1, 2, 3]) if int(b) <= n][:3]
@@ -762,7 +694,6 @@ def _render_rgb(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, str
 
 
 def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
-    """Load the requested window from the catalog and serialize it to COG bytes."""
     ingest = spec.ingest or {}
     render = str(ingest.get("render", "float"))
 
@@ -785,8 +716,6 @@ def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
                                   dtype="uint8", colormap=colormap)
 
     arr, transform, crs = _render_float(spec, params)
-    # A float source that writes a NON-NaN nodata sentinel declares it here;
-    # absent, the NaN-nodata passthrough applies.
     ser = ingest.get("serialize") or {}
     out_nodata = ser.get("nodata")
     if out_nodata is None:

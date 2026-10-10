@@ -26,22 +26,15 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.render.charts")
 
 
-#: Maximum number of inline rows in a Vega-Lite spec's ``data.values``, so the
-#: wire envelope (and the function_response that summarizes it) stays small.
-#: Histograms and bars are pre-binned well under this; the cap is a hard rail.
+#: Maximum inline rows in a Vega-Lite spec's ``data.values``, so the wire envelope and its function_response stay small.
 _MAX_ROWS = 2000
 
-#: Maximum number of raster cells sampled for a histogram. A full COG can be
-#: tens of millions of cells; sampling caps the read cost while preserving the
-#: distribution shape. Deterministic sampling (fixed RNG seed) so the chart is
-#: stable across calls on the same layer.
+#: Maximum raster cells sampled for a histogram; sampling caps read cost, and a fixed RNG seed keeps the chart stable across calls.
 _RASTER_SAMPLE_CAP = 500_000
 
-#: Vega-Lite v5 schema URL - declaring it makes the spec pass the contract's
-#: structural sanity check (``is_structurally_valid_vega_lite_spec``).
+#: Vega-Lite v5 schema URL; declaring it passes the contract's structural check.
 _VEGA_LITE_V5_SCHEMA = "https://vega.github.io/schema/vega-lite/v5.json"
 
-#: Deterministic RNG seed for raster sampling.
 _SAMPLE_SEED = 1730000000
 
 _RASTER_EXTS = {".tif", ".tiff", ".img", ".vrt", ".nc"}
@@ -62,10 +55,7 @@ class ChartToolError(RuntimeError):
 
 
 def _download_uri_bytes(uri: str, storage_client: object | None = None) -> bytes:
-    """Download bytes from an ``s3://`` URI or read a local path.
-
-    ``storage_client`` is ignored: object-store reads route through boto3.
-    """
+    """``storage_client`` is ignored: object-store reads route through boto3."""
     del storage_client
     # The shared boto3 reader, never s3fs: only boto3 picks up the instance role.
     if uri.startswith("s3://"):
@@ -89,7 +79,6 @@ def _download_uri_bytes(uri: str, storage_client: object | None = None) -> bytes
 
 def _materialize_uri(uri: str, tmpdir: str, label: str, storage_client: object | None = None) -> str:
     """Return a local file path for the given URI (downloads ``s3://`` to tmpdir)."""
-    # s3:// URIs are staged via the shared reader.
     if uri.startswith("s3://"):
         name = uri.rstrip("/").rsplit("/", 1)[-1] or f"{label}.bin"
         local_path = os.path.join(tmpdir, f"{label}_{name}")
@@ -149,7 +138,6 @@ def build_chart_payload(
     spec = dict(vega_lite_spec)
     spec.setdefault("$schema", _VEGA_LITE_V5_SCHEMA)
 
-    # Hard row cap on inline data (contract + wire-size safety).
     data = spec.get("data")
     if isinstance(data, dict) and isinstance(data.get("values"), list):
         values = data["values"]
@@ -184,11 +172,7 @@ def is_chart_emission_result(result: Any) -> bool:
         and isinstance(result.get("chart_id"), str)
     )
 
-# Engine-output chart builders (wire non-raster engine values).
-#
-# Every number is a real parsed engine output, never synthesized. When the
-# required series is absent or empty each builder returns ``None``: the honesty
-# floor is to emit NO chart rather than invent one.
+# Every number is a real parsed engine output. When the required series is absent or empty a builder returns ``None``: no chart rather than an invented one.
 
 
 def build_budget_partition_chart(
@@ -215,7 +199,6 @@ def build_budget_partition_chart(
         )
     if not rows:
         return None
-    # Order largest-inflow -> largest-outflow for a readable budget.
     rows.sort(key=lambda r: r["flow_m3_day"], reverse=True)
 
     spec = {
@@ -262,10 +245,7 @@ def build_budget_partition_chart(
 
 
 def _sample_raster_values(local_path: str) -> np.ndarray:
-    """Return a 1-D array of valid (non-nodata, finite) cell values.
-
-    Samples at most ``_RASTER_SAMPLE_CAP`` cells, deterministically seeded.
-    """
+    """At most ``_RASTER_SAMPLE_CAP`` valid cells, deterministically seeded."""
     try:
         import rasterio
     except ImportError as exc:

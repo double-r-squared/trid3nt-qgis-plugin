@@ -1,11 +1,8 @@
 """The object store every run reaches through: one client, the bucket names.
 
-The client is a process-wide seam a deployment or a test binds once; absent a
-binding it is built lazily from the store's own settings - the endpoint and the
-key pair the stack's ``.env.local`` states - so a process that stores nothing
-never pays for boto3. The runs bucket has two readings: a read of
-a past run falls back to a default name, while a run that is about to UPLOAD
-refuses an unset environment rather than filling a bucket nobody provisioned.
+The client is a process-wide seam bound once by a deployment or test, else built lazily from the
+store's own settings. A read of a past run falls back to a default runs bucket; an UPLOAD refuses
+an unset environment rather than filling a bucket nobody provisioned.
 """
 
 from __future__ import annotations
@@ -38,12 +35,9 @@ _CLIENT: Any | None = None
 _RUNS_BUCKET: str | None = None
 
 
-#: The stack's own settings file, the one every process the stack starts sources.
 _SETTINGS_FILE = Path(__file__).resolve().parents[2] / ".env.local"
 
-#: What the store is reached by. Each is passed to boto3 explicitly, because a
-#: client left to find its own credentials takes whatever the process inherited
-#: - a shell's ``~/.aws`` profile the store has never heard of.
+#: Passed to boto3 explicitly: a client left to find its own credentials takes whatever the process inherited.
 _SETTINGS = ("AWS_ENDPOINT_URL", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
              "AWS_REGION")
 

@@ -12,11 +12,9 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional
 
-#: The anchored prefix token.
 RUN_PREFIX = "!run"
 
-#: The one-line usage string ``!run help`` (and a bare ``!run``) render
-#: locally.
+#: The usage line that ``!run help`` and a bare ``!run`` render locally.
 USAGE = (
     "!run <tool>(arg=value, ...)  or  !run <tool> {\"arg\": value}  -- invoke a "
     "tool directly (same call the model makes). "
@@ -70,11 +68,9 @@ def parse_run_invocation(text: str) -> Optional[RunInvocation]:
 
     remainder = stripped[len(RUN_PREFIX):].strip()
 
-    # ``!run`` / ``!run help`` -> usage.
     if remainder == "" or remainder.lower() == "help":
         return RunInvocation(help=True)
 
-    # JSON-object form: ``<name> {json}``.
     json_match = _JSON_FORM.match(remainder)
     if json_match is not None:
         name = json_match.group(1)
@@ -86,12 +82,10 @@ def parse_run_invocation(text: str) -> Optional[RunInvocation]:
             return _syntax_error("JSON args must be an object (e.g. {\"bbox\": [...]})")
         return RunInvocation(name=name, args=parsed)
 
-    # Bare name: ``<name>`` with no args.
     if _BARE_NAME.match(remainder):
         return RunInvocation(name=remainder, args={})
 
-    # Pythonic kwargs form: ``<name>(k=v, ...)``. Parse as a Python expression
-    # (a Call) and literal-eval each keyword value. NEVER eval names/calls.
+    # Pythonic kwargs form: literal-eval each keyword value; NEVER eval names/calls.
     try:
         tree = ast.parse(remainder, mode="eval")
     except SyntaxError as exc:
@@ -99,8 +93,7 @@ def parse_run_invocation(text: str) -> Optional[RunInvocation]:
 
     node = tree.body
     if isinstance(node, ast.Name):
-        # ``!run foo`` already handled above, but a name with odd whitespace
-        # can land here -- treat as a bare call.
+        # A name with odd whitespace can land here: treat as a bare call.
         return RunInvocation(name=node.id, args={})
     if not isinstance(node, ast.Call):
         return _syntax_error("expected a tool call like tool(arg=value, ...)")

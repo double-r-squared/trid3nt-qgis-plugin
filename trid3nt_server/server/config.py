@@ -11,9 +11,7 @@ import os
 # Tool-retrieval K, the discover top-k for retrieve_visible_tools. Surfacing is
 # unconditional; K is the only lever (retrieve_visible_tools clamps it).
 def _tool_retrieval_k() -> int:
-    """Resolve TRID3NT_TOOL_RETRIEVAL_K (default 25); fall back to the default on
-    any parse error. Read per-call so a test can override via the env without a
-    module reload."""
+    """Resolve TRID3NT_TOOL_RETRIEVAL_K (default 25); fall back to the default on any parse error. Read per call so a test can override via the env."""
     from ..tools.search.tool_retrieval import DEFAULT_K
 
     raw = os.environ.get("TRID3NT_TOOL_RETRIEVAL_K")
@@ -50,10 +48,9 @@ def _ambiguity_margin_threshold() -> float:
     """Measured-ambiguity threshold (``TRID3NT_AMBIGUITY_MARGIN``): the relative
     top-1 vs top-2 margin under which AUTO mode still surfaces the candidates
     card; ``0`` disables ambiguity asks and a malformed value takes the default."""
-    # RRF fused scores are rank-compressed: a tool that is rank-1 on every
-    # channel beats a consistent rank-2 by only ~1.6% relative, while a genuine
-    # cross-channel tie lands well under ~1%. The 0.01 default therefore fires
-    # only on real channel disagreement, not on a consistently ordered ranking.
+    # RRF fused scores are rank-compressed: a tool that is rank-1 on every channel beats a
+    # consistent rank-2 by only ~1.6% relative, while a genuine cross-channel tie lands well under
+    # ~1%. The 0.01 default fires only on real channel disagreement, not a consistent ranking.
     return max(0.0, _env_float("TRID3NT_AMBIGUITY_MARGIN", 0.01, positive=False))
 
 

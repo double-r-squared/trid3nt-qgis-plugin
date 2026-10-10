@@ -41,22 +41,13 @@ class RegisteredTool:
     module: str
 
 
-#: Module-level registry, keyed by ``metadata.name``. Populated at import time by
-#: ``@register_tool`` calls in submodules; the agent service reads it once at
-#: startup through ``get_registered_tools()`` to build its tool declarations.
+#: Keyed by ``metadata.name``; populated at import time by ``@register_tool``.
 TOOL_REGISTRY: dict[str, RegisteredTool] = {}
 
 
-# WHAT MAY BE A TOOL. An atomic tool is a fetcher or an irreducible primitive -
-# a thing that reads the world, or an operation the caller cannot assemble out
-# of the ones already here. An ANALYSIS is neither: several tools composed, a
-# threshold applied, a number derived from two layers. It is written as code and
-# run in the box, where the caller can vary it, and it is not registered.
-#
-# A registered analysis is one question's answer frozen into the surface. It
-# takes the arguments its author thought of, it answers the neighbouring
-# question wrong or not at all, and every tool beside it is a name retrieval has
-# to rank. The surface stays small so the model can see it whole.
+# An atomic tool is a fetcher or an irreducible primitive. An ANALYSIS (tools composed, a threshold applied)
+# is code run in the box, not a registration: it freezes one question's answer into the surface and
+# every extra tool is a name retrieval must rank.
 def register_tool(
     metadata: AtomicToolMetadata,
     *,
@@ -75,9 +66,7 @@ def register_tool(
             f"register_tool expects AtomicToolMetadata, got {type(metadata).__name__}"
         )
 
-    # Decorator-level flags fold into a fresh metadata. ``model_copy(update=...)``
-    # re-runs the validators because ``ContractModel`` sets ``validate_assignment``,
-    # so a bad combination still fails fast at import time.
+    # ``model_copy`` re-runs the validators (``validate_assignment``), so a bad combination fails at import.
     overrides: dict[str, Any] = {}
     if supports_global_query is not None:
         overrides["supports_global_query"] = supports_global_query
@@ -112,10 +101,8 @@ def register_tool(
     return _decorator
 
 
-#: Names in ``TOOL_REGISTRY`` that a live session MOUNTED rather than an import
-#: registered. They come and go with the thing they act on, so every visibility
-#: floor must carry them by name: the retrieval index is built from the tools
-#: that existed when it was built and can never rank one of these.
+#: Tools a live session MOUNTED rather than an import registering. Visibility floors carry them by name:
+#: the retrieval index predates them and can never rank one.
 MOUNTED_TOOLS: set[str] = set()
 
 
@@ -161,120 +148,48 @@ def clear_registry_for_tests() -> None:
     MOUNTED_TOOLS.clear()
 
 
-# Eager submodule import (fail-fast).
-#
-# Importing ``trid3nt_server.tools`` populates ``TOOL_REGISTRY`` with EVERY
-# atomic tool the service supports: each module below carries at least one
-# ``@register_tool`` decorator that fires at import time, so a registration-time
-# ``ValidationError`` / ``ToolRegistrationError`` surfaces at startup rather than
-# at first use. The block is EXPLICIT (no pkgutil walk), sorted, and grouped by
-# subpackage; regenerate it when adding a tool module.
-#
-# Almost every fetcher is ROW-DRIVEN - a co-located source.yaml plus its hooks,
-# registered by the tree walk below - so adding a source is adding a YAML, not an
-# import line here. Only a fetcher with a hand-written module appears in this
-# block.
+# Eager import so a registration error surfaces at startup. Explicit and sorted; row-driven fetchers
+# register through the tree walk below and need no line here.
 
-# -- fetchers/climate --
 from .fetchers.climate.lookup_precip_return_period import lookup_precip_return_period  # noqa: E402,F401
 
-# -- fetchers/hydrology --
 
-# -- fetchers/socioeconomic --
 from .fetchers.socioeconomic.geocode_location import geocode_location  # noqa: E402,F401
 
-# -- fetchers/_router: the walk over fetchers/**/source.yaml. Each promoted row
-# registers under its own tool name at tier="general", the default retrieval pool.
 from .fetchers._router.registration import register_specs_from_tree as _register_router_specs  # noqa: E402,F401
 
 _register_router_specs()
 
-# -- derive (compute / clip / extract / vector-edit / charts) --
 from .derive.charts.generate_chart import generate_chart  # noqa: E402,F401
 from .derive.fill_nodata import fill_nodata  # noqa: E402,F401
 from .derive.merge_rasters import merge_rasters  # noqa: E402,F401
 from .derive.probe_point import probe_point  # noqa: E402,F401
-from .derive.restyle_layer import restyle_layer  # noqa: E402,F401 - DISPLAY-state re-emission of an already-published layer
-# The two session tools: each is a request on the plugin wire, run in the
-# user's own QGIS session; the code one never runs without the approval card.
+from .derive.restyle_layer import restyle_layer  # noqa: E402,F401
 from .derive.run_pyqgis import run_pyqgis  # noqa: E402,F401
 from .derive.run_qgis_algorithm import run_qgis_algorithm  # noqa: E402,F401
 
-# -- simulation (engine bridges, model_* engines, solver seam) --
-# Run-diagnostics dispatcher: one registered tool over the per-engine parser
-# modules under workflows/solver/diagnostics/, which are NOT themselves registered.
 from trid3nt_server.workflows.solver.diagnostics import read_run_diagnostics  # noqa: E402,F401
 from trid3nt_server.workflows.solver import solver  # noqa: E402,F401
-# -- engine templates: tier=template members are ordinary retrieval-pool tools,
-# registered by their own @register_tool in the workflow-composer block below and
-# callable DIRECTLY. The solver seam they import is a separate module and registers
-# no tool of its own.
 
-# -- discovery (dataset/tool retrieval) --
 from .search.search_tools import search_tools  # noqa: E402,F401
-# find_sources: the model's face on the match, and the door a fetcher with a
-# row is reached through - a class and a place, never a description.
 from .search.find_sources import find_sources  # noqa: E402,F401
-# describe_keywords: the READ over any carried module's dictionary - the only way
-# the keyword surface is reached, since no docstring budget carries it.
 from .search.describe_keywords.describe_keywords import describe_keywords  # noqa: E402,F401
-# The draw gate's tool face lives beside the gate; importing it registers the tool.
 from trid3nt_server.inputs.gate import spatial_input_tool  # noqa: E402,F401
 
-# Workflow-composer registrations; each module carries its OWN @register_tool.
-# The REACH templates (engine="telemac", tier="template"). ONE TEMPLATE PER
-# QUESTION: a tracer, an oil slick, a moving bed, a settling class and an oxygen
-# sag fill DIFFERENT slots of the same deck, so routing picks a template rather
-# than a substance word picking a branch. Every one LISTS the shared river part,
-# whose two end faces are the transects the inflow and the outflow are prescribed
-# on; the edge length is an explicit sheet value on every one of them.
-from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import telemac_dye_release as _telemac_dye_release  # noqa: E402,F401 - reach conservative-plume front (engine=telemac, tier=template)
-from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import telemac_do_sag as _telemac_do_sag  # noqa: E402,F401 - reach dissolved-oxygen front (engine=telemac, tier=template)
-from trid3nt_server.workflows.telemac.templates.oil_spill.oil_spill import telemac_oil_spill as _telemac_oil_spill  # noqa: E402,F401 - reach oil-slick front (engine=telemac, tier=template)
-from trid3nt_server.workflows.telemac.templates.bed_scour.bed_scour import telemac_bed_scour as _telemac_bed_scour  # noqa: E402,F401 - reach mobile-bed front (engine=telemac, tier=template)
-from trid3nt_server.workflows.telemac.templates.sediment_plume.sediment_plume import telemac_sediment_plume as _telemac_sediment_plume  # noqa: E402,F401 - reach suspended-sediment front (engine=telemac, tier=template)
-# The three WAQTEL process questions over the same reach: the heat budget under a
-# real week of weather, a sorbing substance partitioning onto the river's sediment,
-# and what one pass down an enriched reach does to its nutrients and its oxygen.
-from trid3nt_server.workflows.telemac.templates.water_temperature.water_temperature import telemac_water_temperature as _telemac_water_temperature  # noqa: E402,F401 - reach water-temperature front (engine=telemac, tier=template)
-from trid3nt_server.workflows.telemac.templates.micropollutant_release.micropollutant_release import telemac_micropollutant_release as _telemac_micropollutant_release  # noqa: E402,F401 - reach sorbing-pollutant front (engine=telemac, tier=template)
-from trid3nt_server.workflows.telemac.templates.eutrophication.eutrophication import telemac_eutrophication as _telemac_eutrophication  # noqa: E402,F401 - reach nutrient-enrichment front (engine=telemac, tier=template)
-# The KHIONE question over that same reach: what the heat budget does when the
-# water reaches freezing - the frazil it makes and the cover that grows on it.
-from trid3nt_server.workflows.telemac.templates.ice_cover.ice_cover import telemac_ice_cover as _telemac_ice_cover  # noqa: E402,F401 - reach ice-cover front (engine=telemac, tier=template)
-# The reach's one WORKED question: a dredger driven by NESTOR on the sediment
-# deck, so the material it moves rides the same per-class mass evolution the bed
-# evolution and the sediment balance are computed from.
-from trid3nt_server.workflows.telemac.templates.channel_dredging.channel_dredging import telemac_channel_dredging as _telemac_channel_dredging  # noqa: E402,F401 - reach maintenance-dredge front (engine=telemac, tier=template)
-# The CATCHMENT front. Its one liquid boundary is declared on the mesh ask at the
-# delineation's snapped pour point, so the outlet hydrograph is the flux through
-# the nodes that role landed on.
-from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import telemac_rain_on_grid as _telemac_rain_on_grid  # noqa: E402,F401 - catchment rainfall-runoff front (engine=telemac, tier=template)
-# The ARTEMIS phase-resolving elliptic mild-slope engine, asked ONE question: does
-# the declared structure shelter the water behind it. The domain is cut from the
-# real shoreline with the structure punched out conformally and every deep boundary
-# stretch designated open; the bed is surveyed topobathy.
-from trid3nt_server.workflows.telemac.templates.agitation.agitation import artemis_harbor_agitation as _artemis_harbor_agitation  # noqa: E402,F401 - ARTEMIS agitation front (engine=telemac, tier=template)
-# The TOMAWAC phase-averaging spectral engine, asked ONE question: what the
-# offshore swell becomes by the time it reaches the shore. Its domain is the
-# water a coastline leaves inside the window, its open edge is forced at a sea
-# state a buoy measured, and the bed under it is surveyed topobathy.
-from trid3nt_server.workflows.telemac.templates.nearshore_waves.nearshore_waves import tomawac_nearshore_waves as _tomawac_nearshore_waves  # noqa: E402,F401 - TOMAWAC nearshore-wave front (engine=telemac, tier=template)
-# TELEMAC-2D coupled to TOMAWAC on one mesh, asked ONE question: the current the
-# breaking waves drive along the shore. The wave field is solved beside the water
-# and handed back as a momentum source, which is what the host's WAVE DRIVEN
-# CURRENTS switch reads.
-from trid3nt_server.workflows.telemac.templates.wave_driven_currents.wave_driven_currents import tomawac_wave_driven_currents as _tomawac_wave_driven_currents  # noqa: E402,F401 - TOMAWAC/T2D wave-driven-current front (engine=telemac, tier=template)
-# The TELEMAC-3D baroclinic engine, asked ONE question: what the column does over
-# the depth a 2D model averages away. Its domain is the water body's own mapped
-# polygon cut to the AOI, a CLOSED basin.
-from trid3nt_server.workflows.telemac.templates.stratified_flow.stratified_flow import telemac3d_stratified_flow as _telemac3d_stratified_flow  # noqa: E402,F401 - TELEMAC-3D stratified front (engine=telemac, tier=template)
-# build_mesh: the one mesh router. A RECIPE - three mesher-agnostic params plus an
-# ordered list of verbatim calls on the wrapped mesh library and on the shared
-# primitives. Declared in a template it is a frozen lazy ask; called standalone it
-# builds now and stashes the artifact in the case. Importing it registers every
-# mesher behind it.
-from trid3nt_server.tools.mesh.tool import build_mesh as _build_mesh  # noqa: E402,F401 - mesh domain primitive (tier=general)
-# mesh_op: append, alter or remove one call on the recipe of the mesh open at the
-# gate, then regenerate. The whole of the mesh-refinement loop.
-from trid3nt_server.tools.mesh.op_tool import mesh_op as _mesh_op  # noqa: E402,F401 - mesh domain primitive (tier=general)
+from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import telemac_dye_release as _telemac_dye_release  # noqa: E402,F401
+from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import telemac_do_sag as _telemac_do_sag  # noqa: E402,F401
+from trid3nt_server.workflows.telemac.templates.oil_spill.oil_spill import telemac_oil_spill as _telemac_oil_spill  # noqa: E402,F401
+from trid3nt_server.workflows.telemac.templates.bed_scour.bed_scour import telemac_bed_scour as _telemac_bed_scour  # noqa: E402,F401
+from trid3nt_server.workflows.telemac.templates.sediment_plume.sediment_plume import telemac_sediment_plume as _telemac_sediment_plume  # noqa: E402,F401
+from trid3nt_server.workflows.telemac.templates.water_temperature.water_temperature import telemac_water_temperature as _telemac_water_temperature  # noqa: E402,F401
+from trid3nt_server.workflows.telemac.templates.micropollutant_release.micropollutant_release import telemac_micropollutant_release as _telemac_micropollutant_release  # noqa: E402,F401
+from trid3nt_server.workflows.telemac.templates.eutrophication.eutrophication import telemac_eutrophication as _telemac_eutrophication  # noqa: E402,F401
+from trid3nt_server.workflows.telemac.templates.ice_cover.ice_cover import telemac_ice_cover as _telemac_ice_cover  # noqa: E402,F401
+from trid3nt_server.workflows.telemac.templates.channel_dredging.channel_dredging import telemac_channel_dredging as _telemac_channel_dredging  # noqa: E402,F401
+from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import telemac_rain_on_grid as _telemac_rain_on_grid  # noqa: E402,F401
+from trid3nt_server.workflows.telemac.templates.agitation.agitation import artemis_harbor_agitation as _artemis_harbor_agitation  # noqa: E402,F401
+from trid3nt_server.workflows.telemac.templates.nearshore_waves.nearshore_waves import tomawac_nearshore_waves as _tomawac_nearshore_waves  # noqa: E402,F401
+from trid3nt_server.workflows.telemac.templates.wave_driven_currents.wave_driven_currents import tomawac_wave_driven_currents as _tomawac_wave_driven_currents  # noqa: E402,F401
+from trid3nt_server.workflows.telemac.templates.stratified_flow.stratified_flow import telemac3d_stratified_flow as _telemac3d_stratified_flow  # noqa: E402,F401
+from trid3nt_server.tools.mesh.tool import build_mesh as _build_mesh  # noqa: E402,F401
+from trid3nt_server.tools.mesh.op_tool import mesh_op as _mesh_op  # noqa: E402,F401

@@ -31,9 +31,8 @@ logger = logging.getLogger("trid3nt_server.server")
 
 
 def _session_routing_mode(state: "SessionState") -> str:
-    """Routing-visibility mode for this session: the per-session setting, else
-    the env default, else auto. Consent gates are NEVER mode-dependent - the
-    mode governs tool-selection VISIBILITY only."""
+    """Routing-visibility mode for this session: the per-session setting, else the env default,
+    else auto. The mode governs tool-selection VISIBILITY only; consent gates never depend on it."""
     mode = getattr(state, "routing_mode", None)
     if isinstance(mode, str) and mode in ("auto", "ask"):
         return mode
@@ -91,9 +90,9 @@ def _stage_label_for_tool(tool_name: str) -> str:
     return "tool-selection"
 
 def _stage_label_for_candidates(ranked: list[tuple[str, float]]) -> str:
-    """Derive one ``stage_label`` from the TOP candidates: the plurality stage,
-    tie-broken toward the earliest, since a single rank-1 pick is a brittle
-    signal. An all-fallback candidate set yields the fallback."""
+    """Derive one ``stage_label`` from the TOP candidates: the plurality stage, tie-broken toward
+    the earliest, since a single rank-1 pick is a brittle signal. An all-fallback set yields the
+    fallback."""
     counts: dict[str, int] = {}
     for name, _score in ranked[:_TOOL_CANDIDATES_MAX]:
         stage = _stage_label_for_tool(name)
@@ -118,9 +117,8 @@ def _tool_summary_line(entry: Any) -> str:
 def _geocode_drift_note(
     args: Any, geocode_bbox: Any, active_aoi: Any
 ) -> str | None:
-    """Warning text when a call's bbox intersects NEITHER the turn's geocoded
-    bbox nor the active AOI, else ``None``. Advisory only: the dispatch is never
-    blocked, and a call with no coercible bbox is skipped."""
+    """Warning text when a call's bbox intersects NEITHER the turn's geocoded bbox nor the active
+    AOI, else ``None``. Advisory only: never blocks; a call with no coercible bbox is skipped."""
     if not isinstance(args, dict):
         return None
     for key in ("bbox", "aoi_bbox"):
@@ -147,9 +145,9 @@ def _union_pinned_tool(
     retrieval_registry: dict,
     state: SessionState,
 ) -> dict:
-    """Union a user-pinned tool into both the monotonic visible set and the
-    retrieval-visible registry, so it stays visible and its declaration is
-    built. Returns a NEW registry only when the pin widened it."""
+    """Union a user-pinned tool into both the monotonic visible set and the retrieval-visible
+    registry, so it stays visible and its declaration is built. Returns a NEW registry only when
+    the pin widened it."""
     if pinned and pinned in TOOL_REGISTRY:
         state.visible_tools.add(pinned)
         if pinned not in retrieval_registry:
@@ -160,12 +158,10 @@ def _union_pinned_tool(
 async def _handle_max_turns_reached(
     websocket: ServerConnection, state: SessionState
 ) -> None:
-    """Emit the cap-hit envelopes - the session state carrying the cap status,
-    then a closing message - instead of dispatching, once the session's turn
-    count exceeds the limit. No tool call runs."""
+    """Emit the cap-hit envelopes - the session state carrying the cap status, then a closing
+    message - instead of dispatching, once the session's turn count exceeds the limit. No tool
+    call runs."""
     _ensure_emitter(websocket, state)
-    # Re-emit session-state with the cap status so the client can render a
-    # "session full" indicator.
     closing_payload = SessionStatePayload(
         chat_history=state.chat_history,
         status="max_turns_reached",
@@ -173,8 +169,6 @@ async def _handle_max_turns_reached(
     await websocket.send(
         _new_envelope("session-state", state.session_id, closing_payload)
     )
-    # Send a closing agent-message-chunk so the user sees a human-readable
-    # explanation in the chat panel.
     message_id = new_ulid()
     closing_text = (
         "This session has reached its turn limit "
@@ -315,7 +309,6 @@ async def _maybe_emit_tool_candidates(
     finally:
         _PENDING_TOOL_CHOICES.pop(request_id, None)
 
-    # Defensive dict parse (contracts lane declares the typed model later).
     tool_name: str | None = None
     free_text: str | None = None
     if isinstance(reply, dict):
@@ -366,16 +359,11 @@ async def _prepare_user_turn(
 ) -> None:
     """Pre-dispatch sequence for one user message; it runs BEFORE the turn task
     is created, so the turn observes the final Case context."""
-    # The order is load-bearing: rebind the active-Case pointer to the client's
-    # stamp, sync this connection to that Case, auto-create a Case for a
-    # prompt that has none, pin the turn, persist the user row,
-    # and only then emit the open for an auto-created Case.
-    # The client's stamped Case is the authority for this turn, rebound before
-    # anything reads the pointer, so the whole turn - context sync, AOI, every
-    # write - follows the Case the user is actually viewing rather than a
-    # pointer that drifted while the socket reconnected. The sync marker is
-    # invalidated so the corrected Case's history and layers reload, and the
-    # pointer is persisted so it survives a restart.
+    # The order is load-bearing: rebind the active-Case pointer to the client's stamp, sync this
+    # connection to that Case, auto-create a Case for a prompt that has none, pin the turn, persist
+    # the user row, and only then emit the open for an auto-created Case. The client's stamped Case
+    # is the authority: it is rebound before anything reads the pointer, the sync marker is
+    # invalidated so history and layers reload, and the pointer is persisted for restarts.
     if client_case_id is not None and client_case_id != state.active_case_id:
         logger.info(
             "user-message re-binding active case session=%s server=%s client=%s",

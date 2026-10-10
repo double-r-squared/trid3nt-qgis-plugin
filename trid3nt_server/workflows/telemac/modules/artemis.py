@@ -1,9 +1,8 @@
 """The ARTEMIS wrapper: its dictionary, its composite, and its outputs.
 
-The wrapper asserts NO value of its own. ARTEMIS reads its forcing out of the
-BOUNDARY CONDITIONS FILE rather than out of the steering file, so the incident
-wave is a FILE this composite writes and the steering file names, and the
-coefficient KD is the wave height over the incident height that file stamps."""
+ARTEMIS reads its forcing from the BOUNDARY CONDITIONS FILE, so the incident wave is a file this
+composite writes and the steering file names; the coefficient KD is wave height over the stamped incident height.
+"""
 
 from __future__ import annotations
 
@@ -18,11 +17,7 @@ from .outputs import PRIMITIVES
 __all__ = ["ART", "BOUNDARY_FILENAME", "IncidentWave", "MODULE_OUTPUT",
            "incident_height", "stamp_boundary_rows"]
 
-#: What the module WRITES, by the mnemonic VARIABLES FOR GRAPHIC PRINTOUTS
-#: spells: the result-file name, the unit and how it draws. A mild-slope solve
-#: is steady, so nothing here varies in time and every field is read at its one
-#: frame. ``KD`` is the coefficient the module DERIVES over them, published like
-#: the rest and never asked of the engine.
+# What the module writes, by VARIABLES FOR GRAPHIC PRINTOUTS mnemonic. A mild-slope solve is steady (one frame); ``KD`` is derived over them and never asked of the engine.
 MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
     "HS": Output("WAVE HEIGHT", "m", varies=False,
                  style={"kind": "mesh", "ramp": "ylgnbu", "units": "m",
@@ -33,50 +28,37 @@ MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
                  style={"kind": "mesh", "ramp": "blues", "units": "m"}),
     "ZF": Output("BOTTOM", "m", varies=False,
                  style={"kind": "mesh", "ramp": "terrain", "units": "m"}),
-    # KD is a dimensionless amplification ratio, not a wave height. The legend
-    # is capped at the 99.5th percentile: the standing wave against the open
-    # boundary sets the field's maximum, and a ramp run to it paints the basin
-    # interior one colour.
+    # KD is a dimensionless ratio; the legend caps at the 99.5th percentile because the standing wave at the open boundary sets the maximum and would paint the interior one colour.
     "KD": Output("KD", "Hs/H0", varies=False,
                  style={"kind": "mesh", "range": "p99.5"}),
 })
 
-#: What the restamped boundary file is called in the run directory. The deck's own
-#: BOUNDARY CONDITIONS FILE statement, so the steering file reads as the record of
-#: the run it is.
+# The restamped boundary file's run-directory name, the deck's BOUNDARY CONDITIONS FILE statement.
 BOUNDARY_FILENAME = "artemis.cli"
 
-#: ARTEMIS's own boundary types in the first column: an INCIDENT wave enters the
-#: domain here and the scattered field radiates out through the same face; a SOLID
-#: face reflects whatever fraction its RP states.
+# ARTEMIS boundary types in column 1: INCIDENT admits the wave and radiates the scattered field; SOLID reflects the fraction its RP states.
 KINC, KLOG = 1, 2
 
-#: LIUBOR / LIVBOR under both types. The mild-slope solve reads no velocity
-#: condition; the pair writer's own rows carry 5 there and ARTEMIS is indifferent.
+# LIUBOR / LIVBOR under both types: the mild-slope solve reads no velocity condition; the pair writer's 5 is ignored.
 _LIQUID_VELOCITY_CODE = 5
-#: LITBOR. ARTEMIS carries no tracer, so the tracer code and its three columns are
-#: written as the wall value the pair writer already uses.
+# LITBOR: ARTEMIS carries no tracer, so the wall value the pair writer uses is written.
 _TRACER_CODE = 2
 
 
-# ``cli_text`` is the boundary file the mesh recipe wrote from this geometry's own
-# IPOBO; ``open_nodes`` and ``structure_nodes`` are measured against the accepted
-# mesh, because which node is which is a fact about the domain, not the wave.
+# ``open_nodes`` and ``structure_nodes`` are measured against the accepted mesh; ``cli_text`` is from this geometry's IPOBO.
 def IncidentWave(*, measured: Any, height_m: Any,  # noqa: N802 - a value constructor
                  reflection_coef: Any) -> Mapping[str, Any]:
     """The wave the domain is forced with, and which faces it enters through.
 
-    ``measured`` names what the workflow measures off the accepted harbour mesh
-    - the boundary file, the open faces and the structure's own."""
+    ``measured`` names what the workflow measures off the accepted harbour mesh.
+    """
     return MappingProxyType({"measured": measured, "height_m": height_m,
                              "reflection_coef": reflection_coef})
 
 
 def _incident_wave(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                                                       Mapping[str, Any]]:
-    """The incident wave -> the CONTENT of the boundary file that carries it.
-
-    The keyword that NAMES the file stays the template's own statement."""
+    """The incident wave -> the content of the boundary file carrying it; the keyword naming the file is the template's."""
     harbour = value["measured"]
     return ({},
             {BOUNDARY_FILENAME: stamp_boundary_rows(
@@ -92,7 +74,8 @@ def stamp_boundary_rows(cli_text: str, *, open_nodes: Sequence[int],
                         reflection_coef: float) -> str:
     """The mesh's boundary file, restamped as ARTEMIS reads it.
 
-    Rank and node are written back unchanged: the last two columns ARE the walk."""
+    Rank and node are written back unchanged: the last two columns are the walk.
+    """
     liquid = {int(n) for n in (open_nodes or ())}
     solid = {int(n) for n in (structure_nodes or ())}
     rows: list[tuple[int, int]] = []
@@ -112,10 +95,7 @@ def stamp_boundary_rows(cli_text: str, *, open_nodes: Sequence[int],
             f"the mesh's boundary file ranks {ranks[:5]}... are not a permutation "
             f"of 1..{len(rows)}; TELEMAC numbers its boundary once.")
     lines: list[str] = []
-    # The structure WINS a contested node: a barrier face that imposed the
-    # incident wave would radiate the sheltering away from inside the lee. Every
-    # other solid face is KLOG with RP 0 - the absorbing shore, which is what
-    # keeps a complex coastline from ringing the whole basin.
+    # The structure wins a contested node (an incident-wave barrier would radiate the sheltering away); every other solid face is KLOG with RP 0, the absorbing shore.
     for rank, node in rows:
         if node - 1 in solid:
             lihbor, hb, rp = KLOG, 0.0, float(reflection_coef)
@@ -123,9 +103,7 @@ def stamp_boundary_rows(cli_text: str, *, open_nodes: Sequence[int],
             lihbor, hb, rp = KINC, float(height_m), 0.0
         else:
             lihbor, hb, rp = KLOG, 0.0, 0.0
-        # Columns 4 to 7 are HB, TETAP, ALFAP and RP. TETAP is the BOUNDARY
-        # TANGENT and not the wave direction - the incident direction lives only
-        # in DIRECTION OF WAVE PROPAGATION - so it is 0 on every row.
+        # Columns 4 to 7 are HB, TETAP, ALFAP, RP. TETAP is the boundary tangent, not the wave direction (that is DIRECTION OF WAVE PROPAGATION), so 0 on every row.
         lines.append(
             f"{lihbor} {_LIQUID_VELOCITY_CODE} {_LIQUID_VELOCITY_CODE}  "
             f"{hb:.4f} 0.000 0.000 {rp:.3f}  {_TRACER_CODE}  "
@@ -136,8 +114,8 @@ def stamp_boundary_rows(cli_text: str, *, open_nodes: Sequence[int],
 def incident_height(cli_text: str) -> float:
     """The incident height the boundary file stamps on its KINC rows, in metres.
 
-    One height: the file forces one monochromatic wave, and a file stamping
-    several or none carries no incident wave to measure KD against."""
+    One monochromatic wave: a file stamping several or none has no incident wave to measure KD against.
+    """
     heights = set()
     for line in cli_text.splitlines():
         parts = line.split()
@@ -151,7 +129,6 @@ def incident_height(cli_text: str) -> float:
 
 
 def _kd(solved: Any) -> tuple[str, str, Any]:
-    """``KD``: the wave height over the incident height the run was forced with."""
     from trid3nt_server.workflows.solver.solver import download_result
 
     local = download_result(solved.run_id, BOUNDARY_FILENAME)

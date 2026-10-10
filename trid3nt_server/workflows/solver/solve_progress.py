@@ -17,9 +17,7 @@ from trid3nt_server.render.pipeline_emitter import dispatched_tool_name
 logger = logging.getLogger("trid3nt_server.workflows.solver.solve_progress")
 
 
-#: Cadence (seconds) for the LIVE solve-progress envelope during the long solve.
-#: Independent of the solver poll cadence - a UX tick on the running card, kept
-#: conservative so a 10-20-min solve emits a steady rather than chatty stream.
+#: Cadence (seconds) of the live solve-progress envelope: a UX tick independent of the solver poll, conservative for a 10-20 min solve.
 _LIVE_SOLVE_PROGRESS_INTERVAL_S = 10.0
 
 
@@ -65,8 +63,7 @@ async def drive_live_solve_progress(
                 )
             await asyncio.sleep(_LIVE_SOLVE_PROGRESS_INTERVAL_S)
     except asyncio.CancelledError:
-        # Normal teardown when the solve completes - re-raise so the task
-        # finalizes cleanly.
+        # Normal teardown on completion - re-raise so the task finalizes.
         raise
 
 
@@ -76,10 +73,7 @@ __all__ = [
 ]
 
 
-# Every solver-dispatch composer mints the same two cards: a Dispatch tool card
-# recording the submit, which lands complete immediately, and a Sim compute card
-# bound to the dispatched run whose live status the wait-loop poller feeds. Thin
-# orchestration over the emitter's own transition methods.
+# Every solver dispatch mints a Dispatch card (the submit, complete at once) and a Sim card bound to the run, fed by the wait-loop poller.
 
 
 async def mint_dispatch_and_sim_cards(
@@ -96,15 +90,12 @@ async def mint_dispatch_and_sim_cards(
     """
     if emitter is None:
         return None
-    # Named for the CASE, not the solver: a family whose legs share one
-    # registered solver id would otherwise label every run after one sibling.
-    # Outside a dispatch there is no case, and the solver id is the only
-    # identity there is.
+    # Named for the CASE, not the solver, so a family sharing one registered solver id does not label every run after one sibling;
+    # outside a dispatch the solver id is the only identity.
     case = dispatched_tool_name() or solver
     job_id = str(getattr(handle, "workflows_execution_id", "") or "")
     backend = str(getattr(handle, "workflow_name", "") or "local-docker")
     try:
-        # Card 1 "Dispatch": a normal tool step recording the submit.
         dispatch_label = f"Dispatch {case} solve"
         if cores:
             plural = "" if int(cores) == 1 else "s"
@@ -114,10 +105,8 @@ async def mint_dispatch_and_sim_cards(
         )
         await emitter.mark_running(dispatch_id)
         await emitter.mark_complete(dispatch_id)
-        # Persist the terminal Dispatch card, so the full pair replays on a Case
-        # reopen rather than existing only live on the wire.
+        # Persist the terminal Dispatch card so the pair replays on a Case reopen.
         await emitter.persist_terminal_dispatch_card(dispatch_id)
-        # Card 2 "Sim": the compute card bound to the dispatched run id.
         sim_id = await emitter.add_compute_step(
             name=f"{case} solve",
             tool_name=f"{case}:solve",
@@ -126,9 +115,7 @@ async def mint_dispatch_and_sim_cards(
             engine=solver,
             module=module,
         )
-        # Persist the SIM card NOW, still running, so a reconnect mid-solve
-        # replays the live card instead of dropping it. The same row is upserted
-        # to its terminal state when the solve finishes.
+        # Persist the SIM card still running so a reconnect mid-solve replays it; the row is upserted when the solve finishes.
         await emitter.persist_running_compute_card(sim_id)
         logger.info(
             "two-card sim observability: minted dispatch + compute cards "
@@ -161,13 +148,11 @@ async def route_sim_terminal(
         status = str(getattr(run_result, "status", "") or "") if run_result is not None else ""
         if run_result is None or status == "cancelled":
             await emitter.mark_cancelled(sim_step_id)
-            # A cancel UPSERTS the row written running at mint, leaving no
-            # orphaned running row: a stopped solve stays traceable.
+            # A cancel upserts the row written running at mint, leaving no orphan.
             await emitter.persist_terminal_compute_card(sim_step_id)
         elif status == "complete":
             await emitter.mark_complete(sim_step_id)
-            # The green card persists like a plain tool card, so it replays on a
-            # reconnect or a reopen.
+            # Persisted like a plain tool card so it replays on reconnect or reopen.
             await emitter.persist_terminal_compute_card(sim_step_id)
         else:
             error_code = (
@@ -181,8 +166,7 @@ async def route_sim_terminal(
             await emitter.mark_failed(
                 sim_step_id, error_code=str(error_code), error_message=str(error_message)
             )
-            # The red card persists too: a terminal solve FAILURE must survive a
-            # socket cycle rather than disappear with it.
+            # The red card persists too: a terminal failure must survive a socket cycle.
             await emitter.persist_terminal_compute_card(sim_step_id)
     except Exception as exc:  # noqa: BLE001 -- observability, never break the solve
         logger.warning("route_sim_terminal failed (non-fatal): %s", exc)

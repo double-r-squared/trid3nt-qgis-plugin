@@ -5,16 +5,10 @@ global relief, the national bathymetric surface - reads the same way: pick the
 tiles, open each over /vsicurl, window-read the AOI, reproject onto one shared
 bbox-clipped grid, last source wins. Only the tile PICK is a row's own."""
 
-# Raw heterogeneous tiles are NEVER merged directly - a mixed-CRS merge raises on
-# orientation - so each source is reprojected from its OWN CRS onto the shared
-# grid and the LAST one painted wins, which makes the caller's source order the
-# precedence. A source drops out silently where it is unreadable, empty or does
-# not intersect the AOI, so ``painted`` is what a caller reconciles a promised
-# footprint against, never the input list.
-#
-# The grid is built at the finest cell the sources carry, floored at the asked
-# ``resolution_m``, and a grid past the pixel budget REFUSES naming the spacing
-# that fits: nothing here coarsens on its own behalf.
+# Raw heterogeneous tiles are NEVER merged directly (a mixed-CRS merge raises on orientation): each
+# source is reprojected from its own CRS and the LAST painted wins, so source order is precedence.
+# ``painted`` is what a caller reconciles a promised footprint against. A grid past the pixel
+# budget REFUSES naming the spacing that fits.
 
 from __future__ import annotations
 
@@ -37,19 +31,13 @@ __all__ = [
 
 
 class MosaicEmpty(FetchError):
-    """No tile painted a cell of the AOI. A row translates it into its own
-    coverage refusal: the merge itself cannot know whether an empty AOI means the
-    programme publishes nothing here or that the pick was wrong."""
+    """No tile painted a cell of the AOI; a row translates it into its own coverage refusal."""
 
     error_code = "MOSAIC_EMPTY"
     retryable = False
 
 
-#: GDAL no-sign-request env for anonymous public-S3 /vsicurl/ reads. The MULTIRANGE
-#: + MERGE + HTTP/2 options batch the many small per-block (256x256) range requests
-#: a bbox-windowed read issues into few multiplexed transfers - without them each
-#: tile block is a separate latency-bound round trip and a native-resolution AOI
-#: read crawls.
+#: GDAL anonymous public-S3 /vsicurl/ options; MULTIRANGE + MERGE + HTTP/2 batch the many small per-block range requests.
 VSICURL_ENV = dict(
     AWS_NO_SIGN_REQUEST="YES",
     GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR",
@@ -62,19 +50,16 @@ VSICURL_ENV = dict(
     GDAL_BAND_BLOCK_CACHE="HASHSET",
 )
 
-#: Absolute physical cap (metres) on an elevation; any |z| at or above this is an
-#: UNFLAGGED fill/nodata sentinel leak, masked to NaN.
+#: Absolute cap (metres) on an elevation: any |z| at or above it is an unflagged fill sentinel, masked to NaN.
 SENTINEL_ABS = 9000.0
 
-#: Pixel budget per axis: past it the request refuses rather than coarsening, and
-#: the caller re-asks with a coarser resolution_m or a smaller AOI.
+#: Pixel budget per axis: past it the request refuses rather than coarsening.
 MAX_GRID_PX = 12000
 
 
 def target_grid(sources: list[str], target_crs: str,
                 bbox: tuple[float, float, float, float],
                 resolution_m: float | None = None, *, source: str = "") -> Any:
-    """The common bbox-aligned grid as ``(transform, width, height)``."""
     import rasterio
     from rasterio.transform import from_origin
     from rasterio.warp import transform_bounds
@@ -112,9 +97,7 @@ def target_grid(sources: list[str], target_crs: str,
     if resolution_m is not None and finest < float(resolution_m):
         finest = float(resolution_m)
 
-    # The budget is measured on THAT grid - the projected extent's pixel count -
-    # so the ceiling holds where the projected extent runs past the geodesic bbox
-    # at a UTM zone edge.
+    # The budget is measured on the PROJECTED grid, so it holds at a UTM zone edge.
     long_axis_m = max(t_east - t_west, t_north - t_south)
     fits = int(math.ceil(long_axis_m / MAX_GRID_PX))
     if finest < fits:
@@ -131,7 +114,6 @@ def target_grid(sources: list[str], target_crs: str,
 
 
 def _cell_m(ds: Any) -> float:
-    """A source's native cell in METRES (a geographic grid scaled at mid-latitude)."""
     cell = abs(ds.transform.a)
     try:
         if ds.crs is not None and ds.crs.is_geographic:
@@ -144,15 +126,9 @@ def _cell_m(ds: Any) -> float:
 
 def _windowed(ds: Any, target_cell_m: float,
               bbox: tuple[float, float, float, float]) -> tuple[Any, Any]:
-    """One band CLIPPED to the AOI and decimated to about the target cell, or
-    ``(None, None)`` where the AOI does not intersect this source."""
 
-    # Reading a full native tile only to resample it onto a coarse bbox-clipped
-    # grid is the dominant fetch cost. These COGs carry no overviews but ARE
-    # internally tiled, so a bbox WINDOW read pulls only the AOI-overlapping
-    # blocks. The read is oversampled about 2x against the target cell so the
-    # bilinear reprojection stays clean; a source already at or coarser than the
-    # target is read natively.
+    # These COGs have no overviews but ARE internally tiled, so a bbox WINDOW read pulls only the AOI
+    # blocks; it is oversampled ~2x so bilinear reprojection stays clean, and a coarser source is read natively.
     import numpy as np
     import rasterio
     from rasterio.warp import transform_bounds
@@ -187,9 +163,7 @@ def mosaic(sources: list[str], target_crs: str,
            bbox: tuple[float, float, float, float],
            resolution_m: float | None = None, *, source: str = ""
            ) -> tuple[Any, Any, str, list[bool]]:
-    """Warp every source onto one grid, last-wins -> ``(array, transform, crs,
-    painted)``, where ``painted`` flags per input source, in order, the ones that
-    contributed at least one cell."""
+    """Warp every source onto one grid, last-wins -> ``(array, transform, crs, painted)``; ``painted`` flags the contributing inputs."""
     import numpy as np
     import rasterio
     from rasterio.warp import Resampling, reproject
@@ -238,9 +212,7 @@ def mosaic(sources: list[str], target_crs: str,
 
 
 def painted_fraction(array: Any) -> float:
-    """The share of the AOI grid carrying a real value: the mosaic sits on a
-    bbox-clipped grid, so every cell is an AOI cell and a NaN is a cell nobody
-    painted. A measure of what was PAINTED, not of a delivered footprint."""
+    """The share of the AOI grid carrying a real value: a measure of what was PAINTED, not of a delivered footprint."""
     import numpy as np
 
     grid = np.asarray(array, dtype="float64")

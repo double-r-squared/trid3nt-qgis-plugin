@@ -1,12 +1,8 @@
 """The levers the RUNTIME declares once, for every template that runs on it.
 
-A template declares no Param that is not its own question's input. What moment
-the scenario is read at, how finely the domain is resolved, what the run is sized
-on and the axis its elevations are counted from are the runtime's, so twelve
-templates state them once here; a template that needs a different DEFAULT
-declares its own row and that row wins. A value the engine's own dictionary
-carries is NOT a lever: the deck states that keyword and the user overrides it by
-the keyword's name.
+The scenario moment, resolution, run sizing and elevation axis are the runtime's; a template declares only its own question's inputs.
+A template needing a different DEFAULT declares its own row and that row wins.
+An engine dictionary keyword is not a lever: the deck states it and the user overrides it by name.
 """
 
 from __future__ import annotations
@@ -21,17 +17,13 @@ from .params import Param, doors
 __all__ = ["BOX_CORES", "LEVERS", "LEVER_NAMES", "VERTICAL_FRAME",
            "cores_asked", "lever", "run_frame", "with_levers"]
 
-#: The vertical frame a run counts elevations from where nothing states another.
-#: NAVD88 is what the national terrain, the bathymetry and the gauges this
-#: substrate reaches are published on.
+#: NAVD88 is what the national terrain, bathymetry and gauges this substrate reaches are published on.
 VERTICAL_FRAME = "NAVD88"
 
-#: The cores this box can partition a solve across. A count past it is refused
-#: by name: a solve quietly cut to fit runs on a partition nobody was told about.
+#: Cores this box can partition a solve across; a count past it is refused by name.
 BOX_CORES: int = os.cpu_count() or 1
 
-#: The declared levers, in the order a card reads them. Each one is a value the
-#: skeleton or the mesh front reads, never a value a question asks about.
+#: The declared levers, in the order a card reads them.
 LEVERS: tuple[Param, ...] = (
     Param(name="mesh_resolution_m", door=doors.SCENARIO, optional=True,
           type=float, units="m", consequence="numerical", user_lever=True,
@@ -61,10 +53,8 @@ LEVERS: tuple[Param, ...] = (
                "module's own processors keyword stands; a count past this "
                "box's cores is refused rather than cut down, and an engine "
                "that solves on one core says so on the card"),
-    # NUMERICAL, not physics: this is the AXIS every elevation is placed on, and
-    # its default is a published national frame rather than a number nobody
-    # measured - what law 9 refuses in auto mode is an invented world, and a
-    # source that cannot reach this frame refuses here by name instead.
+    # NUMERICAL, not physics: the axis elevations are placed on, with a published national default;
+    # a source that cannot reach this frame refuses by name.
     Param(name="vertical_frame", door=doors.CONSTANT, default=VERTICAL_FRAME,
           consequence="numerical",
           desc="Vertical datum this run counts every elevation from - the bed "
@@ -96,16 +86,13 @@ def cores_asked(stated: Any) -> int | None:
     return asked
 
 
-#: Every lever by name - what a declaration that takes all of them states.
 LEVER_NAMES: tuple[str, ...] = tuple(row.name for row in LEVERS)
 
 
 def lever(name: str, **stated: Any) -> Param:
     """The runtime's lever with THIS question's opinion of it - nothing else.
 
-    A question whose window, edge or moment differs states the difference and the
-    lever carries the rest; a row written out in full restates a type, a unit and
-    a help text the runtime already has."""
+    A question states only the difference; the lever carries the rest."""
     found = next((row for row in LEVERS if row.name == name), None)
     if found is None:
         raise PlanValidationError(
@@ -116,11 +103,7 @@ def lever(name: str, **stated: Any) -> Param:
 
 
 def run_frame(params: Any) -> str:
-    """The vertical frame THIS run counts elevations from.
-
-    Every slot that ingests an elevation is read against one frame, so it is the
-    runtime's and not a row any question writes; a run that states none stands on
-    the lever's own default."""
+    """The vertical frame THIS run counts elevations from; a run stating none stands on the lever's default."""
     stated = params.value_of("vertical_frame") if params is not None else None
     return str(stated or VERTICAL_FRAME)
 
@@ -129,9 +112,7 @@ def with_levers(declared: Sequence[Param],
                 taken: Sequence[str] = ()) -> tuple[Param, ...]:
     """``declared`` plus each NAMED runtime lever it does not state for itself.
 
-    A template's own row WINS and keeps its position: the lever is a declaration
-    it no longer has to restate, never an override of one that differs. A lever
-    nothing takes is never seated - a param with no reader is not a feature."""
+    A template's own row wins and keeps its position; a lever nothing takes is never seated."""
     stated = {prm.name for prm in declared}
     wanted = set(taken)
     unknown = sorted(wanted - {lever.name for lever in LEVERS})

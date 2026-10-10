@@ -25,7 +25,6 @@ __all__ = ["plan_tile_grid", "mosaic_tile_files", "array_to_tempfile", "execute"
 
 
 def _tile_source(spec: SourceSpec) -> Any:
-    """The executor each sub-tile is fetched through (STAC catalog vs transport)."""
     return stac_raster if (spec.ingest or {}).get("access") == "stac" else raster_cog
 
 
@@ -33,9 +32,7 @@ def plan_tile_grid(
     bbox: tuple[float, float, float, float],
     tile_deg2: float,
 ) -> list[tuple[float, float, float, float]]:
-    """Split ``bbox`` into sub-bboxes each of area <= ``tile_deg2``. Border cells may
-    be narrower, and the cells cover the full bbox with no gaps; an area already
-    within ``tile_deg2`` returns a single entry equal to ``bbox``."""
+    """Split ``bbox`` into gapless sub-bboxes of area <= ``tile_deg2`` (border cells may be narrower); a small bbox returns itself."""
     min_lon, min_lat, max_lon, max_lat = bbox
     dlon = max_lon - min_lon
     dlat = max_lat - min_lat
@@ -62,7 +59,6 @@ def array_to_tempfile(
     array: Any, transform: Any, crs: Any, *, dtype: str = "float32",
     nodata: float | None = None,
 ) -> str:
-    """Write a single-band array to a temp GTiff and return its path (caller unlinks)."""
     import numpy as np
     import rasterio
 
@@ -91,9 +87,7 @@ def mosaic_tile_files(
     nodata: float | None = None,
     colormap: dict | None = None,
 ) -> bytes:
-    """Merge tile GTiffs into one COG and return its bytes. First-non-nodata with
-    nearest resampling keeps class codes un-interpolated, and ``nodata`` plus
-    ``colormap`` carry the categorical palette through to the output."""
+    """Merge tile GTiffs into one COG, first-non-nodata with nearest resampling so class codes stay un-interpolated."""
     import rasterio
     from rasterio.enums import Resampling
     from rasterio.merge import merge as rio_merge
@@ -118,7 +112,6 @@ def mosaic_tile_files(
 
 
 def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
-    """Plan the tile grid, fetch each via the raster-cog executor, merge -> COG."""
     ingest = spec.ingest or {}
     mosaic_cfg = ingest.get("mosaic", {})
     tile_deg2 = float(ingest.get("tile_deg2", 0.5))
@@ -137,14 +130,10 @@ def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
 
     tiles = plan_tile_grid(tuple(bbox), tile_deg2)  # type: ignore[arg-type]
 
-    # Fast path: single tile == one executor call, no merge (the palette COG a
-    # categorical mosaic carries comes from the executor's own serialize).
     source = _tile_source(spec)
     if len(tiles) == 1:
         return source.execute(spec, {**params, "bbox": list(tiles[0])})
 
-    # Categorical (esri_landcover): uint8 tiles carrying nodata + the embedded
-    # palette merged first-non-nodata -> palette COG.
     categorical = ingest.get("palette") == "passthrough" or str(ingest.get("dtype")) == "uint8"
     nodata = int(mosaic_cfg.get("nodata", 0)) if categorical else None
     method = mosaic_cfg.get("method", "first")
@@ -166,7 +155,6 @@ def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
                         spec, {**params, "bbox": list(tile)}
                     )
             except Exception as exc:  # noqa: BLE001
-                # A tile with no coverage is skipped (first-non-nodata mosaic).
                 if type(exc).__name__ == "RouterEmptyError":
                     continue
                 raise

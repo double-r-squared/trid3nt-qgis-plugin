@@ -1,10 +1,7 @@
 """One typed check over the staged run directory, before it leaves the daemon.
 
-The launcher stages the authored files and the mesh pair into one directory and
-the image solves whatever is in it, so a disagreement between the steering file
-and the files beside it surfaces as a solve that stops inside Fortran. Every
-clause below reads the STAGED artifacts rather than what the daemon believes it
-wrote, and each refuses by name.
+A disagreement between the steering file and the files beside it otherwise surfaces as a
+solve that stops inside Fortran. Every clause reads the staged artifacts and refuses by name.
 """
 
 from __future__ import annotations
@@ -23,7 +20,7 @@ logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.staged_ch
 
 __all__ = ["check_staged_run", "read_steering"]
 
-#: The keyword a partitioned run states its core count under.
+# The keyword a partitioned run states its core count under.
 _PROCESSORS = "PARALLEL PROCESSORS"
 _TIME_STEP = "TIME STEP"
 _STEPS = "NUMBER OF TIME STEPS"
@@ -31,21 +28,19 @@ _DURATION = "DURATION"
 _GEOMETRY = "GEOMETRY FILE"
 _BOUNDARY = "BOUNDARY CONDITIONS FILE"
 _LIQUID = "LIQUID BOUNDARIES FILE"
-#: What a DAMOCLES line separates a keyword from its value with, and what opens
-#: a comment line.
+# What a DAMOCLES line separates keyword from value with, and what opens a comment line.
 _ASSIGN = re.compile(r"^\s*([A-Z0-9][^=:]*?)\s*[=:]\s*(.*)$")
-#: The prescribed lists, one entry per liquid boundary in the engine's own
-#: numbering, however many faces that boundary spans.
+# Prescribed lists carry one entry per liquid boundary in the engine's numbering, however many faces it spans.
 _PRESCRIBED = ("PRESCRIBED FLOWRATES", "PRESCRIBED ELEVATIONS")
-#: A solid wall states this code; every other LIHBOR opens the face.
+# A solid wall states this code; every other LIHBOR opens the face.
 _WALL = 2
 
 
 def read_steering(path: Path) -> dict[str, list[str]]:
     """One steering file -> ``{keyword: [value, ...]}`` in its own spelling.
 
-    The values stay strings: this reads what was WRITTEN, and a value's type is
-    the dictionary's business, checked where the engine's own parser reads it."""
+    Values stay strings; typing is the dictionary's business.
+    """
     values: dict[str, list[str]] = {}
     for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
         if line.lstrip().startswith("/"):
@@ -71,7 +66,6 @@ def _number(values: Mapping[str, list[str]], keyword: str) -> float | None:
 
 
 def _named_files(values: Mapping[str, list[str]]) -> list[tuple[str, str]]:
-    """``(keyword, name)`` for every file a deck names, in the deck's spelling."""
     return [(keyword, stated[0])
             for keyword, stated in values.items()
             if keyword.split()[-1:] == ["FILE"] and stated and stated[0]]
@@ -79,13 +73,8 @@ def _named_files(values: Mapping[str, list[str]]) -> list[tuple[str, str]]:
 
 def _staged_here(rundir: Path, inputs: Sequence[Mapping[str, str]]
                  ) -> dict[str, Path | str]:
-    """Every name the box will find in the run directory -> where it is now.
-
-    An authored file is on this disk; a mesh input is still the object the
-    launcher will stage under that name."""
-    # A DIRECTORY is a staged name too: the engine compiles the directory its
-    # FORTRAN FILE statement names, so the deck states the directory and the
-    # manifest carries the files inside it.
+    """Every name the box will find in the run directory -> where it is now (authored: this disk; mesh input: the object the launcher stages)."""
+    # A directory is a staged name too: the engine compiles the directory its FORTRAN FILE statement names.
     here: dict[str, Path | str] = {
         str(p.relative_to(rundir)): p for p in rundir.rglob("*")}
     for row in inputs:
@@ -96,7 +85,6 @@ def _staged_here(rundir: Path, inputs: Sequence[Mapping[str, str]]
 
 
 def _read(found: Path | str) -> Path:
-    """A staged name resolved to a readable path, fetching the object if needed."""
     if isinstance(found, Path):
         return found
     from trid3nt_server.tools.cache import read_object_bytes_s3
@@ -126,9 +114,7 @@ def _files_are_present(decks: Mapping[str, dict[str, list[str]]],
 
 def _boundary_matches_the_walk(mesh: Mapping[str, Any], geometry: str,
                                boundary: Path) -> tuple[list[int], int]:
-    """The ``.cli`` rows -> ``(LIHBOR per row, liquid boundaries numbered)``.
-
-    Or the refusal by name, when the file and the walk disagree."""
+    """The ``.cli`` rows -> ``(LIHBOR per row, liquid boundaries numbered)``, or a refusal when file and walk disagree."""
     import numpy as np
 
     from trid3nt_server.tools.mesh.shared.formats.tin_topology import (
@@ -156,9 +142,7 @@ def _boundary_matches_the_walk(mesh: Mapping[str, Any], geometry: str,
                 f"and the walk over {geometry} numbers node {walk[first]} at "
                 "that rank; the boundary file is ordered by a numbering the "
                 "geometry does not agree with.")
-    # The engine prescribes one value per LIQUID BOUNDARY - a run of open faces
-    # between walls, split where the codes change - never one per face, so the
-    # rows are numbered by the engine's own walk rather than counted.
+    # The engine prescribes one value per liquid boundary (a run of open faces between walls), never per face, so rows are numbered by its walk.
     quads = [(int(row[0]), int(row[1]), int(row[2]), int(row[7])) for row in rows]
     try:
         runs = _liquid_boundaries(
@@ -237,8 +221,7 @@ def _series_covers_the_window(table: Path, name: str, duration_s: float) -> None
 
 def _clock_is_consistent(values: Mapping[str, list[str]],
                          duration_s: float | None) -> None:
-    # A fill that states no window - a steady wave field is solved once, not
-    # advanced - has no clock for a step count to disagree with.
+    # A fill with no window (a steady wave field) has no clock for a step count to disagree with.
     if duration_s is None:
         return
     step = _number(values, _TIME_STEP)
@@ -277,8 +260,8 @@ def check_staged_run(rundir: Path | str, *, steering: str,
                      duration_s: float | None, cores: int) -> dict[str, Any]:
     """The staged run directory, checked clause by clause -> what each one read.
 
-    A run that would die in the first second of the solve refuses here by name
-    instead of reaching the image."""
+    A run that would die in the solve's first second refuses here by name.
+    """
     rundir = Path(rundir)
     decks = {p.name: read_steering(p) for p in sorted(rundir.rglob("*.cas"))}
     top = decks.get(steering)
@@ -292,8 +275,7 @@ def check_staged_run(rundir: Path | str, *, steering: str,
     _processors_fit_the_box(top, cores)
     geometry = (top.get(_GEOMETRY) or [""])[0]
     boundary = (top.get(_BOUNDARY) or [""])[0]
-    # A deck naming one half of the pair and not the other states a numbering
-    # nothing can be read against; a deck naming neither solves on no mesh.
+    # A deck naming one of the mesh pair and not the other states a numbering nothing can be read against.
     if not geometry or not boundary:
         _refuse("FILE_MISSING",
                 f"{steering} states {_GEOMETRY} = {geometry!r} and {_BOUNDARY} "

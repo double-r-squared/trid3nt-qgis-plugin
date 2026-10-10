@@ -80,20 +80,18 @@ class _Env:
     #: Absences worth narrating, each as the SENTENCE the run carries: an
     #: optional Data nothing satisfied, or a context row whose source was empty.
     absences: list[str] = field(default_factory=list)
-    #: How long the solve runs, in seconds, off the deck this run writes. It is
-    #: the WINDOW a matched series source has to cover, so a run longer than the
-    #: record refuses rather than opening on a record that stops early.
+    #: How long the solve runs, in seconds, off the deck this run writes: the WINDOW a
+    #: matched series source must cover, or the run refuses.
     window_s: float | None = None
     #: The UNIT each slot's value is converted to, by role - the unit of the
     #: keyword that role fills, which the transform fixes. No row states one.
     slot_units: Mapping[str, str] = field(default_factory=dict)
     #: What the template CALLS each thing it publishes or measures, by published
-    #: variable and by DATA row name. A measured row's caption is the noun the
-    #: run's refusals and its journal line are written about.
+    #: variable and by DATA row name; a measured row's caption is the noun its refusals
+    #: and journal line are written about.
     captions: Mapping[str, str] = field(default_factory=dict)
-    #: The unit each PUBLISHED variable is written in, by the name the result
-    #: carries. A row that observes one is read in that unit, so the record and
-    #: the thing it is a measurement of are the same measurement.
+    #: The unit each PUBLISHED variable is written in, by the name the result carries;
+    #: a row that observes one is read in that unit.
     published_units: Mapping[str, str] = field(default_factory=dict)
 
 
@@ -104,8 +102,7 @@ def _data_step_label(name: str) -> str:
 async def _produce(env: _Env, decl: DataDecl) -> Any:
     """Satisfy one declared artifact, ON DEMAND - when a step that reads it runs.
 
-    A declared artifact nothing reads costs no fetch; a CONTEXT row is asked
-    all the same, because the sentence it states IS its product."""
+    An artifact nothing reads costs no fetch; a CONTEXT row is asked regardless."""
     handed_in = env.supplied.get(decl.name)
     if handed_in is not None:
         # A MARKED producer states the check the value handed to its row is held
@@ -117,10 +114,9 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
         return await _ingested(env, decl, handed_in)
     producer = decl.producer
     if producer is None and decl.role == LINE:
-        # THE DOMAIN'S PRODUCER measured this beside the polygon it cut - a
-        # reach's centerline rides on the artifact it returned. A body whose
-        # producer measured none is asked on the canvas next, which is what a
-        # profile across a lake is.
+        # THE DOMAIN'S PRODUCER measured this beside the polygon it cut - a reach's
+        # centerline rides on the artifact it returned. A body whose producer measured
+        # none is asked on the canvas next.
         measured = await _domain_companion(env, "centerline")
         if measured is not None:
             return measured
@@ -130,9 +126,9 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
         # journal line like any other producer.
         return await _matched(env, decl)
     if producer is None and decl.role:
-        # A SLOT the caller did not fill and no producer answers is asked for on
-        # the canvas, where the user has one. A declined drawing is not a value:
-        # the slot's own refusal below is what a reader then sees.
+        # A SLOT the caller did not fill and no producer answers is asked for on the
+        # canvas, where the user has one. A declined drawing is not a value: the slot's
+        # own refusal below is what a reader sees.
         from trid3nt_server.inputs.slots import ask_on_canvas
 
         drawn = await ask_on_canvas(decl.role, tool=env.workflow,
@@ -169,25 +165,22 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
 async def _matched(env: _Env, decl: DataDecl) -> Any:
     """Fill a slot that states a NEED, through the match.
 
-    Every slot takes the ONE source its own class matched, the bed included:
-    what covers the ground that source does not is a layer the person composes
-    and hands the slot, never this fill's."""
+    Every slot takes the ONE source its class matched, the bed included; what covers
+    the rest is a layer the person composes and hands the slot, never this fill's."""
     await _somewhere_to_ask(env)
     if decl.role == BED:
         return await _ingested(env, decl, await _bed_surface(env, decl))
-    # The INGESTION rides INSIDE the probe: a source that answered with rows this
-    # slot finds nothing usable in - a gauge reporting no streamflow over a
-    # closed body - held nothing for this run either, and the next survivor
-    # takes its turn rather than the run standing on the first answer.
+    # The INGESTION rides INSIDE the probe: a source whose rows the slot finds nothing
+    # usable in held nothing for this run, so the next survivor takes its turn.
     beside = await _beside(env, decl)
     choice, value = await _probe(
         env, decl, decl.data_class, decl.name,
         read=lambda answer, row: _ingested(env, decl, answer, row, beside))
     if value is None:
         if decl.is_optional or decl.is_context:
-            # A slot nothing measured is an absence the run STATES - the run's
-            # own sentence, and the row's beside it where the row wrote one. The
-            # refusal below is for a slot the run cannot stand without.
+            # A slot nothing measured is an absence the run STATES - the run's own
+            # sentence, and the row's beside it where the row wrote one. The refusal
+            # below is for a slot the run cannot stand without.
             env.absences.append(choice.sentence if decl.is_optional else
                                 f"{decl.context_sentence} ({choice.sentence})")
             return None
@@ -199,11 +192,8 @@ async def _matched(env: _Env, decl: DataDecl) -> Any:
 async def _beside(env: _Env, decl: DataDecl) -> dict[str, Any]:
     """The rows this SLOT declared beside the one its own class matched.
 
-    A slot may state that what fills it is not one artifact - a line and the
-    water surface it runs between - and each of those is produced here, under
-    this slot, through the match. The
-    slot still fetches nothing: it states a need and the match fills it. Empty
-    for every slot and every kind that declares none."""
+    Each is produced here, under this slot, through the match; the slot fetches
+    nothing itself. Empty for every slot and kind that declares none."""
     from trid3nt_server.inputs.slots import needs_of
 
     seed = await _seed(env, decl)
@@ -226,10 +216,8 @@ async def _beside(env: _Env, decl: DataDecl) -> dict[str, Any]:
 async def _bed_surface(env: _Env, decl: DataDecl) -> Any:
     """THE BED: the ONE row the match ranked first, as it came.
 
-    Nothing else paints, and nothing here grids: a row of soundings refuses at
-    the slot's ingestion. What that row does not cover is the surface's own
-    coverage feedback to state, and water nothing measured refuses at the
-    slot naming the steps that compose a bed which covers it."""
+    Nothing is gridded here: soundings refuse at the slot's ingestion, and water nothing
+    measured refuses there naming the steps that compose a covering bed."""
     choice, top = await _probe(env, decl, decl.data_class,
                                f"{decl.name} {decl.data_class}")
     if top is None:
@@ -242,9 +230,7 @@ async def _ranked(env: _Env, decl: DataDecl, data_class: str,
                   label: str) -> SourceChoice:
     """What the match RANKS for this slot over one class, nothing produced.
 
-    Both readers ask the class its own way round: the feedback offers the rows
-    that measure a ground, and a named row is matched for the class it serves so
-    the ask it is called with is the one that class states."""
+    A named row is matched for the class it serves, so its ask is the one that class states."""
     return match(await _need(env, decl, data_class, label),
                  sources_with_coverage())
 
@@ -253,11 +239,8 @@ async def _probe(env: _Env, decl: DataDecl, data_class: str, label: str, *,
                  read: Any = None) -> tuple[SourceChoice, Any]:
     """Match a class, then CALL the survivors in rank order -> the first answer.
 
-    A source that held nothing over this domain is dropped and the next takes
-    its turn, which is how the list a reader sees says what the world answered
-    rather than what the sort preferred. ``read`` is the slot's own reading of an
-    answer, handed the row that was matched and run HERE so a record this slot
-    cannot read drops out like an empty one. ``None`` where none answered."""
+    A source holding nothing over this domain is dropped and the next takes its turn;
+    ``read`` is the slot's own reading, so an unreadable record drops out like an empty one."""
     choice = match(await _need(env, decl, data_class, label),
                    sources_with_coverage())
     while choice.picked:
@@ -288,8 +271,7 @@ async def _probe(env: _Env, decl: DataDecl, data_class: str, label: str, *,
 
 def _runtime_row(env: _Env, name: str, runner: str,
                  ask: Mapping[str, Any]) -> DataDecl:
-    """One producer row the RUNTIME declares, registered so it is produced like
-    a question's own."""
+    """One producer row the RUNTIME declares, registered so it is produced like a question's own."""
     row = DataDecl(name=name, producer=Producer(runner=runner, kwargs=dict(ask),
                                                 row=name))
     env.data[name] = row
@@ -305,11 +287,8 @@ def _spec_of(fetcher: str) -> Any:
 def _fetcher_row(fetcher: str, data_class: str, kind: str = "") -> Any:
     """The row THIS source states about THIS class, or ``None``.
 
-    A source serving two classes states one row each, and the row a slot reads
-    is the row of the class it asked for; where it serves one class two ways - a
-    measured record beside a prediction - the ``kind`` the match ranked says
-    which of the two, because each publishes its own columns and units. A row
-    asking about no class at all - a derive the runtime declared - names none."""
+    Where a source serves one class two ways (a record beside a prediction) the ranked
+    ``kind`` picks the row, since each publishes its own columns and units."""
     if not data_class:
         return None
     return next((row for row in getattr(_spec_of(fetcher), "coverage", ())
@@ -320,9 +299,7 @@ def _fetcher_row(fetcher: str, data_class: str, kind: str = "") -> Any:
 def _matched_row(choice: SourceChoice, fetcher: str) -> Any:
     """THE ROW the match produced, or ``None`` where it picked nothing.
 
-    The ranked row names it by both facts a source can serve twice under - the
-    class the slot asked for and the kind the row was ranked on - so what a slot
-    is told about the record is the statement of the row that answered it."""
+    Named by the class asked for and the kind ranked, so a slot is told the statement of the row that answered."""
     kind = next((row.kind for row in choice.rows
                  if row.fetcher == fetcher and not row.excluded), "")
     return _fetcher_row(fetcher, choice.need, kind) if fetcher else None
@@ -336,8 +313,8 @@ async def _need(env: _Env, decl: DataDecl, data_class: str,
                 label: str) -> Need:
     """What this slot asks the world for, assembled off the RUN.
 
-    The class is the slot's; the place is the domain's or the point the row was
-    told to rank against, the window is the run's and the frame is the lever's."""
+    The class is the slot's; the place is the domain's or the row's own point; the
+    window is the run's and the frame is the lever's."""
     from ..workflows.runtime.levers import run_frame
 
     seed = await _seed(env, decl)
@@ -354,11 +331,8 @@ async def _need(env: _Env, decl: DataDecl, data_class: str,
 def _asked_of(decl: DataDecl, seed: Any) -> str:
     """WHAT OF ITS CLASS this row asks the world for.
 
-    THE DOMAIN asks for its own KIND: the one the template states where the
-    seed cannot imply it, else the one the SEED stands on - which water a place
-    is, is a fact of the place, so the run reads it off the seed rather than
-    hearing it from the question. Every other row asks for the variable it
-    observes."""
+    The domain asks for its own KIND: the template's, else the one the SEED stands on,
+    read off the seed because which water a place is is a fact of the place."""
     from trid3nt_server.inputs.domain import place_kind
 
     if decl.role == DOMAIN:
@@ -369,9 +343,7 @@ def _asked_of(decl: DataDecl, seed: Any) -> str:
 async def _somewhere_to_ask(env: _Env) -> None:
     """Make sure the run has a PLACE before a source is asked for one.
 
-    A question whose domain is CUT out of a box has no polygon until the cut
-    runs, and the cut's own sources are asked over ground: the window the
-    question was asked in is that ground, so its slot is filled first."""
+    A domain CUT out of a box has no polygon until the cut runs, so the extent slot fills first."""
     if current_domain() is not None:
         return
     row = next((r for r in env.data.values() if r.role == EXTENT), None)
@@ -382,9 +354,7 @@ async def _somewhere_to_ask(env: _Env) -> None:
 def _water() -> CoverageExtent | None:
     """The domain's own outline, which is the water a gauge has to stand on.
 
-    The polygon the run drew where the domain carries one, else its box, and the
-    note says WHICH - a box is a coarser statement of the same water, and a
-    reader of the refusal has to know which one answered."""
+    The polygon where the domain has one, else its box, and the note says WHICH."""
     from trid3nt_server.inputs.domain import domain_ring
 
     dom = current_domain()
@@ -407,8 +377,7 @@ def _water() -> CoverageExtent | None:
 def _cut_polygon() -> dict[str, Any] | None:
     """The polygon the domain was CUT with, or ``None`` where it carries none.
 
-    A box is not a cut: it states where the question was asked, not where the
-    water is, and a bed restricted to one would leave dry ground unpainted."""
+    A box is not a cut: a bed restricted to one would leave dry ground unpainted."""
     dom = current_domain()
     return dict(dom.geometry) if dom is not None and dom.geometry else None
 
@@ -416,9 +385,7 @@ def _cut_polygon() -> dict[str, Any] | None:
 def _pick(env: _Env, decl: DataDecl, data_class: str) -> str:
     """The source this RUN names for this slot, "" where it names none.
 
-    A slot that reads two classes - the bed reads a measurement and a terrain -
-    takes the name on the class the named source actually serves, so one
-    statement never answers for the other."""
+    A slot reading two classes takes the name on the class the named source serves."""
     named = str(env.picks.get(decl.name) or "")
     if not named:
         return ""
@@ -441,13 +408,11 @@ def _closes(opens: Any, window_s: float | None) -> str | None:
 
 
 def _place(seed: Any) -> tuple[float | None, float | None]:
-    """The point a slot's coverage is tested at: what the row ranks against, else
-    the domain's own centre."""
+    """The point a slot's coverage is tested at: what the row ranks against, else the domain's centre."""
     from trid3nt_server.inputs.point import lonlat_of
 
-    # THE POINT a row is asked at, in whatever shape the question stated it: a
-    # pick, a pair, a drawn feature. A value no place reads out of is no place
-    # rather than a refusal - the domain's own centre answers next.
+    # THE POINT a row is asked at, in whatever shape the question stated it: a pick, a
+    # pair, a drawn feature. A value no place reads out of is no place, not a refusal.
     near = lonlat_of(seed)
     if near is not None:
         return near
@@ -462,11 +427,8 @@ async def _ask_for(env: _Env, choice: SourceChoice,
                    decl: DataDecl) -> dict[str, Any]:
     """What a matched source is CALLED with, read off its own declared params.
 
-    Every source states where it wants the place - a box or a seed - and a
-    series source states the window as two dates; what the matched ROW adds to
-    that is the match's to say, so the ask closes through it. The row's own
-    generic attributes travel with it, for the matched row to map onto the
-    params this source states them in."""
+    A box or a seed for the place, two dates for a window; the matched ROW closes the
+    ask and maps its generic attributes onto the params this source states them in."""
     dom = current_domain()
     seed = await _seed(env, decl)
     lon, lat = _place(seed)
@@ -483,8 +445,7 @@ async def _ask_for(env: _Env, choice: SourceChoice,
 def _around(bbox: Sequence[float], mesh_m: float | None) -> list[float]:
     """The domain's box with a MARGIN, which is what a slot asks a source for.
 
-    A surface that stops exactly at the domain's edge leaves the nodes on that
-    edge standing on nothing, so the ask reaches a few cells past it."""
+    A surface stopping exactly at the edge leaves the edge nodes standing on nothing."""
     west, south, east, north = (float(v) for v in bbox)
     pad = max(3.0 * float(mesh_m or 0.0), 100.0) / 111_320.0
     lon_pad = pad / max(math.cos(math.radians((south + north) / 2.0)), 0.1)
@@ -494,8 +455,7 @@ def _around(bbox: Sequence[float], mesh_m: float | None) -> list[float]:
 async def _domain_companion(env: _Env, named: str) -> Any:
     """One geometry the DOMAIN's producer measured beside its polygon, or ``None``.
 
-    Read off the domain on demand like any other slot, so a question that needs
-    the companion pays for the domain and a question that does not never asks."""
+    Read on demand, so a question that never needs the companion never asks for the domain."""
     row = next((r for r in env.data.values() if r.role == DOMAIN), None)
     if row is None:
         return None
@@ -506,12 +466,9 @@ async def _domain_companion(env: _Env, named: str) -> Any:
 async def _ingested(env: _Env, decl: DataDecl, value: Any,
                     row: Any = None, beside: Mapping[str, Any] | None = None
                     ) -> Any:
-    """A SLOT's value through the one ingestion its role reads; a plain row's
-    value as it came.
+    """A SLOT's value through the one ingestion its role reads; a plain row's value as it came.
 
-    The whole point of a slot is that what fills it reads the same afterwards,
-    so the ingestion runs wherever the value entered. Off the loop: reading a
-    layer's geometry is object-store IO, and the run awaits on it."""
+    Runs off the loop: reading a layer's geometry is object-store IO."""
     if not decl.role:
         return value
     from trid3nt_server.inputs.slots import ingest_slot
@@ -543,10 +500,9 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any,
                            geometry=dict(ingested.geometry),
                            label=ingested.name))
     elif decl.role == EXTENT and ingested is not None and current_domain() is None:
-        # A QUESTION WHOSE DOMAIN IS CUT OUT OF A BOX has no polygon until the
-        # cut runs, and the cut's own sources have to be asked somewhere: the
-        # window the question was asked in is that place until the domain slot
-        # supersedes it.
+        # A QUESTION WHOSE DOMAIN IS CUT OUT OF A BOX has no polygon until the cut runs,
+        # and the cut's own sources have to be asked somewhere: the window the question
+        # was asked in is that place until the domain slot supersedes it.
         bind_domain(Domain(bbox=tuple(ingested.bbox), geometry={},
                            label=ingested.name))
     return ingested
@@ -555,10 +511,7 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any,
 def _the_window_it_is_cut_from(decl: DataDecl) -> dict[str, Any]:
     """The BOX a domain slot cuts a land-water edge against, where the run has one.
 
-    The window a question is asked in is the RUN's - its own slot bound it
-    before any source was asked - so a deck states it once and the ingestion
-    that cuts with it reads it here. Empty once a polygon is bound: a domain
-    that arrived closed is cut against nothing."""
+    Empty once a polygon is bound: a domain that arrived closed is cut against nothing."""
     if decl.role != DOMAIN:
         return {}
     dom = current_domain()
@@ -571,14 +524,8 @@ def _what_the_run_calls_it(env: _Env, decl: DataDecl,
                            observed: str) -> dict[str, Any]:
     """The UNIT this slot converts to and the NOUN the run says it in.
 
-    Neither is a row's to state: the unit is the one the keyword this role fills
-    is read in, fixed by the transform that writes it, and the noun is the
-    template's caption for the row - the same word the sheet and the published
-    variable are captioned with. A row that OBSERVES a published variable is
-    read in that variable's own unit instead, because a measurement and the
-    thing it is a measurement of are comparable in one unit and no other; a role
-    the workflow states no unit for is read in the unit the record was measured
-    in."""
+    The unit is the keyword's, fixed by the transform; a row OBSERVING a published
+    variable is read in that variable's unit, else in the unit the record was measured in."""
     told: dict[str, Any] = {}
     unit = (_observed_unit(env, decl, observed)
             if observed and decl.slot.record
@@ -594,10 +541,8 @@ def _what_the_run_calls_it(env: _Env, decl: DataDecl,
 def _observed_unit(env: _Env, decl: DataDecl, observed: str) -> str:
     """The unit the variable this row OBSERVES is published in.
 
-    A name this run publishes nothing under, or publishes under no stated unit,
-    refuses: reading the record in whatever its source published would pair a
-    measurement against a variable in another unit and call the difference the
-    model's error."""
+    A name published under no stated unit refuses: pairing a measurement with a
+    variable in another unit would call the difference the model's error."""
     unit = str(env.published_units.get(observed) or "")
     if unit:
         return unit
@@ -614,14 +559,8 @@ def _what_the_record_reports(env: _Env, decl: DataDecl,
                              row: Any) -> dict[str, Any]:
     """What an OBSERVATION slot is told about the record it was handed.
 
-    Every word of it is THE MATCHED ROW's own statement, never a reading across
-    the other rows the source serves: one service publishing a level in metres
-    and a temperature in degrees under the same column name states a row each,
-    and the units of the row nobody matched are another measurement's. A record
-    that carries no unit column is still read in the unit it was measured in,
-    never in the unit the slot wanted. The moment the run opens at and how long
-    it covers are the run's, so the series is placed on the run's clock and a
-    record that stops early refuses."""
+    Every word is THE MATCHED ROW's own statement, never read across the source's other
+    rows; a record with no unit column is read in its measured unit. A record stopping early refuses."""
     if not decl.slot.record:
         return {}
     told: dict[str, Any] = {"window_s": env.window_s}
@@ -646,11 +585,8 @@ async def _on_the_run_s_frame(env: _Env, decl: DataDecl,
                               value: Any) -> dict[str, Any]:
     """What an ELEVATION slot is told about the run's own vertical frame.
 
-    One frame per run, stated once as a runtime lever: a bed is read on it and a
-    level is read on it, so neither is a row a question writes. Nothing else a
-    run ingests is an elevation, and a slot that is handed a frame it does not
-    need would demand a datum of a temperature. A source counting from ANOTHER
-    frame is bridged by the offset row below, which the slot then reads."""
+    Only the bed and the level are elevations; another slot handed a frame would demand a
+    datum of a temperature. A source on ANOTHER frame is bridged by the offset row."""
     from ..workflows.runtime.levers import run_frame
 
     if decl.role not in (BED, LEVEL):
@@ -670,12 +606,9 @@ async def _datum_offset_ask(value: Any, frame: str,
 
 
 async def _question_seed(env: _Env) -> Any:
-    """The point the QUESTION named, read off the row that stands the run on a
-    place, or ``None`` where it named none.
+    """The point the QUESTION named, off the row that stands the run on a place, or ``None``.
 
-    A question states its point once, on the row that puts the run on the ground
-    - a reach is cut from it, a basin is traced up from it. Another row's own
-    point ranks a reporting site and is not the question's place."""
+    Another row's own point ranks a reporting site and is not the question's place."""
     from trid3nt_server.inputs.point import lonlat_of
 
     row = next((r for r in env.data.values() if r.role in (DOMAIN, EXTENT)
@@ -688,15 +621,8 @@ async def _question_seed(env: _Env) -> Any:
 async def _offset_row(env: _Env, owner: str, value: Any, frame: str) -> Any:
     """The measured shift onto the run's frame, as a DATA row the RUNTIME declares.
 
-    The frame is the runtime's, so the question a differing source raises is the
-    runtime's too - and it is asked the way every other fact about the world is,
-    as a producer row with a line on the journal naming the
-    service that answered, at the point of the source's own footprint nearest
-    the question's seed. ``None`` where the pair owes no row: the source stands
-    on the frame already, publishes its own shift, or names a datum no service
-    transforms - and that last one leaves the alignment to refuse naming both.
-
-    ``owner`` is the slot the row is named after."""
+    Asked like any fact about the world, with a journal line naming the service. ``None``
+    where no row is owed, which leaves the alignment to refuse. ``owner`` names the row."""
     from trid3nt_server.inputs.vertical_datum import OFFSET_FETCH
 
     ask = await _datum_offset_ask(value, frame, await _question_seed(env))
@@ -710,17 +636,13 @@ async def _offset_row(env: _Env, owner: str, value: Any, frame: str) -> Any:
 
 
 async def _context(env: _Env, decl: DataDecl, label: str) -> Any:
-    """A CONTEXT row: produced where the source has something, absent where it
-    does not, and the run continues either way under its own stated sentence.
+    """A CONTEXT row: produced where the source has something, absent where it has not.
 
-    Only an empty SOURCE is an absence - a cancelled run is not, and a retryable
-    gate error is a channel the caller still has to see."""
+    Only an empty SOURCE is an absence; a cancelled run or a retryable gate error is not."""
     try:
         value = await _produced(env, decl.producer, label)
-        # The ingestion is INSIDE the absence: a source that answered with rows
-        # its slot finds nothing usable in - sites that report another
-        # characteristic, a survey with no soundings - held nothing for this run
-        # either, and a context row says so rather than refusing.
+        # The ingestion is INSIDE the absence: rows the slot finds nothing usable in
+        # held nothing, and a context row says so rather than refusing.
         ingested = await _ingested(env, decl, value, _fetcher_row(
             decl.producer.runner, decl.data_class))
     except asyncio.CancelledError:
@@ -740,10 +662,7 @@ async def _context(env: _Env, decl: DataDecl, label: str) -> Any:
 def _malformed_ask(exc: BaseException) -> bool:
     """Is this the ASK being wrong rather than the source holding nothing?
 
-    A window, a bbox or a unit the caller stated wrong is a refusal the caller
-    has to see; only an empty source is the absence a context row continues on.
-    A producer's refusal reaches here inside the step that called it, so the
-    whole chain is read and not just the wrapper."""
+    A producer's refusal arrives inside the step that called it, so the whole chain is read."""
     from trid3nt_server.inputs.user_input import UserInputError
     from trid3nt_server.tools.fetchers._router.errors import RouterInputError
 
@@ -766,9 +685,8 @@ async def _produced(env: _Env, producer: Producer, label: str) -> Any:
 
 def _validate_supplied(env: _Env, decl: DataDecl, supplied: Any,
                       validate: Any) -> None:
-    """Two checks and no third before a supplied artifact is adopted: the slot's
-    declared SHAPE against the artifact's class, and - under ``CoversAOI`` - that a
-    domain with an extent is bound. The artifact's own extent is never read."""
+    """Two checks and no third before a supplied artifact is adopted: the slot's declared
+    SHAPE against its class, and under ``CoversAOI`` that a domain with an extent is bound."""
     decl.refuse_wrong_shape(supplied)
     if isinstance(supplied, (int, float)) and not isinstance(supplied, bool):
         # A NUMBER is not an artifact: a stated depth or a stated reading has no
@@ -781,11 +699,8 @@ def _validate_supplied(env: _Env, decl: DataDecl, supplied: Any,
     if dom is not None and dom.bbox is not None:
         return
     if any(row.role == DOMAIN for row in env.data.values()):
-        # A workflow that DECLARES a domain slot carries its own: the slot binds
-        # it the moment it is filled, and a row produced before that one - a
-        # structure the mesh subtracts, the box the water is cut out of - is
-        # adopted for the shape it declares. What must agree with the domain is
-        # checked where the two are used together.
+        # A workflow that DECLARES a domain slot carries its own: the slot binds it the
+        # moment it is filled, so a row produced before it is adopted for its declared shape.
         return
     raise SuppliedCoverageError(
         f"the artifact supplied for {decl.name!r} cannot be checked against the "
@@ -851,9 +766,8 @@ class Fill:
 async def fill(state: Fill, values: Mapping[str, Any]) -> Fill:
     """Put ``values`` into their inputs -> the fill's state, each input answered.
 
-    A value is a literal, ``{"layer": <case layer id>}`` or ``{"source": <name>}``;
-    a sourced or layer input is fetched and ingested before it answers. Inputs
-    not named keep their verdicts; the rest default to the module's own value."""
+    A value is a literal, ``{"layer": id}`` or ``{"source": name}``; a sourced or layer
+    input is fetched and ingested first. Inputs not named keep their verdicts."""
     wf = state.workflow
     values = {k: v for k, v in dict(values).items() if v is not None}
     for name in _CARRIED:
@@ -908,8 +822,7 @@ def restate(state: Fill) -> None:
 
 
 def _keyword(state: Fill, name: str, value: Any) -> None:
-    """One engine keyword through the module's own accept rule; a file keyword
-    filled with a layer takes that layer as the file."""
+    """One engine keyword through the module's own accept rule; a file keyword filled with a layer takes it as the file."""
     if isinstance(value, Mapping) and "layer" in value:
         value = value["layer"]
     try:
@@ -1035,9 +948,7 @@ async def _row(state: Fill, decl: DataDecl, value: Any) -> None:
 
 
 def _refusal_code(exc: BaseException, name: str) -> str:
-    """The code a refused input carries. An error that states no code is a
-    fault, not a refusal of the value: the caller still gets the refusal, and
-    the log gets the trace."""
+    """The code a refused input carries; an error stating none is a fault, logged with its trace."""
     code = getattr(exc, "error_code", None)
     if code is None:
         logger.warning("input %s refused on an untyped error", name,
@@ -1048,8 +959,7 @@ def _refusal_code(exc: BaseException, name: str) -> str:
 async def _place_first(env: _Env) -> None:
     """A sourced input stands on the run's place, so the place is filled first.
 
-    Producing a row may register the runtime's own rows, so the loop is over
-    the rows as they stood before it."""
+    Producing a row may register runtime rows, so the loop is over the rows as they stood."""
     for row in list(env.data.values()):
         if row.role == DOMAIN and row.name not in env.run:
             env.run[row.name] = await _produce(env, row)
@@ -1092,6 +1002,7 @@ async def call(fn: Any, kwargs: dict[str, Any], label: str) -> Any:
 
 def _load(runner: str) -> Any:
     """The runner a row names: a REGISTERED TOOL first, then a dotted import path.
+
     A name that resolves as BOTH refuses rather than letting lookup order decide."""
     from trid3nt_server.tools import TOOL_REGISTRY
 

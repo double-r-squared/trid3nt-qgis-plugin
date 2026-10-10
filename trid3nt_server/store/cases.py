@@ -19,20 +19,15 @@ from trid3nt_contracts.case import (
 
 logger = logging.getLogger("trid3nt_server.store.cases")
 
-# Logical database name for all Case/Secret persistence: the file backend
-# uses it as the namespace subdirectory under the dev-persistence root. Test
-# isolation goes through ``TRID3NT_DEV_PERSISTENCE_DIR``, which relocates the
-# whole root rather than renaming one namespace inside it.
+# Namespace subdirectory under the dev-persistence root; tests isolate through ``TRID3NT_DEV_PERSISTENCE_DIR``, which relocates the root.
 DEFAULT_DATABASE = "trid3nt_dev"
 
-# Collection names -- pinned nomenclature: "projects" for Cases, "sessions"
-# for chat history, "secrets" for per-Case keys.
+# "projects" holds Cases, "sessions" chat history, "secrets" per-Case keys.
 CASES_COLLECTION = "projects"  # Case <-> projects 1:1
 CHAT_COLLECTION = "case_chat_messages"  # per-turn message log
 SESSIONS_COLLECTION = "sessions"  # agent's own session records
 
 
-# Store client protocol -- duck-typed so tests can pass a mock
 
 
 class MCPClientProtocol(Protocol):
@@ -73,7 +68,6 @@ class Persistence:
         self._store = client
         self._db = database
 
-    # ----- Cases --------------------------------------------------------- #
 
     async def get_case(self, case_id: str) -> CaseSummary | None:
         """Find one Case by id, or ``None``; a storage field the wire
@@ -105,8 +99,7 @@ class Persistence:
             if k in {"user_id", "owner_user_id"}:
                 continue
             if k not in allowed:
-                # storage-only field (e.g. user_id, expires_at TTL stamp) --
-                # never surfaced to the wire CaseSummary.
+                # storage-only fields never reach the wire CaseSummary.
                 continue
             normalized[k] = v
         if "case_id" not in normalized and "_id" in doc:
@@ -149,9 +142,7 @@ class Persistence:
         """Append each summary to the Case's layers, or replace it by
         ``layer_id``, keeping the lightweight projection in lockstep. ``False``
         means no such Case; ``bbox`` also pins the Case's AOI when given."""
-        # MERGE rather than replace: a caller holding only its own partial view
-        # of the Case (a fresh connection, a cold route) must never clobber
-        # summaries it never saw. Its entry wins on a layer_id collision.
+        # MERGE, not replace: a caller holding a partial view must never clobber summaries it never saw. Its entry wins on a layer_id collision.
         case = await self.get_case(case_id)
         if case is None:
             return False
@@ -253,7 +244,6 @@ class Persistence:
             },
         )
         docs = _unwrap_result(raw)
-        # A store with no filter match returns an empty list or None.
         if not docs:
             return []
         if isinstance(docs, dict):
@@ -268,7 +258,7 @@ class Persistence:
                 logger.warning("skipping malformed Case doc: %s", d)
                 continue
             if case.status in ("deleted", "archived"):
-                # guard: backend ignored/mangled the $nin filter.
+                # backend ignored or mangled the $nin filter.
                 continue
             cases.append(case)
         return cases
@@ -292,7 +282,6 @@ class Persistence:
             },
         )
 
-    # ----- Chat history + session state (rehydration) --------------------- #
 
     async def append_chat_message(self, msg: CaseChatMessage) -> None:
         """Append one chat exchange to a Case's history; the chat log is the
@@ -340,8 +329,7 @@ class Persistence:
         because ``trid3nt_contracts`` owns those shapes."""
         case = await self.get_case(case_id)
         if case is None:
-            # Surface a minimal placeholder so the caller can decide how to
-            # handle "Case not found" without raising through the store layer.
+            # Placeholder so the caller can handle "Case not found" without raising through the store layer.
             return CaseSessionState(
                 case=CaseSummary(
                     case_id=case_id,
@@ -351,7 +339,6 @@ class Persistence:
                     status="deleted",
                 ),
             )
-        # Chat history, oldest-first
         raw = await self._store.call_tool(
             "find",
             {
@@ -374,16 +361,11 @@ class Persistence:
             except Exception:  # noqa: BLE001
                 logger.warning("skipping malformed CaseChatMessage doc: %s", d)
                 continue
-        # Deterministic replay order whatever the backend's sort support: the
-        # stream interleaves by ``created_at`` and the ULID ``message_id``
-        # breaks ties in write order.
+        # Deterministic replay order whatever the backend's sort: ULID ``message_id`` breaks ``created_at`` ties in write order.
         chat.sort(key=lambda m: (m.created_at, m.message_id))
-        # A re-open repopulates the layer panel from the persisted summaries:
-        # the emitter's copy is per-connection and dies with the socket.
+        # The emitter's copy is per-connection and dies with the socket, so a re-open repopulates from the persisted summaries.
         loaded_layers = list(case.loaded_layer_summaries)
-        # Charts persist as ``SessionChartRecord``s pushed onto the sessions
-        # doc; replay unwraps each record's ``payload`` in emitted_at order.
-        # Best-effort: a missing or malformed doc yields no charts.
+        # Charts persist as ``SessionChartRecord``s on the sessions doc; replay unwraps each ``payload`` in emitted_at order. Best-effort.
         charts: list[dict] = []
         try:
             sraw = await self._store.call_tool(
@@ -408,10 +390,7 @@ class Persistence:
             case=case, chat_history=chat, loaded_layers=loaded_layers, charts=charts,
         )
 
-    # ----- Session records (``sessions`` collection) ----------------------- #
-    # The ``sessions`` document is the TTL-cleaned activity header: who and when,
-    # which Cases were touched, and the append-only ``charts`` array. Chat content
-    # lives in ``case_chat_messages`` and never duplicates into this document.
+    # The ``sessions`` document is the TTL-cleaned activity header plus the append-only ``charts`` array; chat content never duplicates into it.
 
     async def upsert_session_record(self, doc: "SessionDocument") -> None:
         """Insert or fully overwrite a session record; ``$set`` of the named
@@ -488,9 +467,7 @@ class Persistence:
                 "upsert": True,
             },
         )
-        # Header repair: a doc first created by a bare chart ``$push`` carries no
-        # ``created_at``/``schema_version`` and ``$setOnInsert`` cannot backfill
-        # an existing doc, so repair once with ``created_at=now``.
+        # A doc first created by a bare chart ``$push`` has no ``created_at``/``schema_version`` and ``$setOnInsert`` cannot backfill it.
         raw = await self._store.call_tool(
             "find-one",
             {
@@ -590,12 +567,9 @@ class Persistence:
             return None
 
 
-# Storage is ``~/.trid3nt/dev_persistence/<database>/<collection>.json``, one
-# JSON file per collection mapping ``_id`` to document. A per-collection
-# ``asyncio.Lock`` serializes concurrent calls and writes land through a sibling
-# ``.tmp`` plus ``os.replace``. The supported query surface is exactly what
-# ``Persistence`` invokes: ``insert-one``, ``update-one`` (``$set`` plus optional
-# ``upsert``), ``delete-one``, ``find-one`` and ``find`` with a single-key sort.
+# Storage is ``~/.trid3nt/dev_persistence/<database>/<collection>.json``, one JSON file per collection mapping
+# ``_id`` to document; writes land through a sibling ``.tmp`` plus ``os.replace``. The query surface is exactly what
+# ``Persistence`` invokes.
 
 import asyncio as _asyncio
 import contextlib as _contextlib
@@ -612,11 +586,8 @@ except ImportError:  # pragma: no cover - this box is Linux
 DEV_PERSISTENCE_DIR_ENV = "TRID3NT_DEV_PERSISTENCE_DIR"
 DEV_PERSISTENCE_ENABLED_ENV = "TRID3NT_DEV_PERSISTENCE"
 
-#: running loop -> {collection path -> asyncio.Lock}, shared by EVERY
-#: FileMCPClient. The store is the FILE, not the instance: two clients over one
-#: collection must serialize, or a read-modify-write from one resurrects what the
-#: other deleted. Keyed by loop because a Lock can only ever be waited on from the
-#: loop that first suspended on it, and weakly so a finished loop's locks go too.
+#: running loop -> {collection path -> asyncio.Lock}, shared by every FileMCPClient: the store is the file, so two
+#: clients over one collection must serialize. Keyed by loop (a Lock is only waited on from its loop), weakly.
 _COLLECTION_LOCKS: "_weakref.WeakKeyDictionary[Any, dict[str, _asyncio.Lock]]" = \
     _weakref.WeakKeyDictionary()
 
@@ -689,8 +660,7 @@ class FileMCPClient:
 
     @staticmethod
     def _read_store(path: _Path) -> dict[str, dict]:
-        # OFF-LOOP CONTRACT: this is a BLOCKING body, reached through
-        # ``_cycle`` inside ``to_thread`` so it never stalls the asyncio WS loop.
+        # Blocking body: reached through ``_cycle`` inside ``to_thread`` so it never stalls the asyncio WS loop.
         if not path.exists():
             return {}
         try:
@@ -712,19 +682,16 @@ class FileMCPClient:
         """Atomic JSON write: tmp file + os.replace (POSIX-atomic rename)."""
         tmp = path.with_suffix(path.suffix + ".tmp")
         with tmp.open("w", encoding="utf-8") as fh:
-            # default=str so a raw datetime in any document serializes instead
-            # of raising ``TypeError`` and dropping the row.
+            # default=str so a raw datetime serializes instead of raising ``TypeError``.
             _json_for_file.dump(store, fh, indent=2, sort_keys=True, default=str)
             fh.flush()
             try:
                 _os_for_file.fsync(fh.fileno())
             except OSError:
-                # fsync isn't available on every filesystem; the os.replace
-                # below is still atomic on POSIX so we don't escalate.
+                # fsync isn't available on every filesystem; os.replace is still atomic on POSIX.
                 pass
         _os_for_file.replace(tmp, path)
 
-    # Query matcher -- the same subset the test mock supports
 
     @staticmethod
     def _matches(doc: dict, filt: dict) -> bool:
@@ -742,9 +709,7 @@ class FileMCPClient:
                     return False
                 continue
             if isinstance(v, dict) and "$nin" in v:
-                # A MISSING field matches $nin: the document's value, None, is
-                # "not in" the exclusion list unless None is itself listed, so a
-                # Case doc written before the status field stays listed.
+                # A missing field matches $nin unless None is itself listed, so a Case doc written before the status field stays listed.
                 if doc.get(k) in v["$nin"]:
                     return False
                 continue
@@ -833,7 +798,6 @@ class FileMCPClient:
                     self._apply_update(fresh, update, inserting=True)
                     store[target_id] = fresh
                 else:
-                    # Update by a non-``_id`` filter. First match wins.
                     for doc in store.values():
                         if self._matches(doc, filt):
                             self._apply_update(doc, update, inserting=False)
@@ -906,10 +870,7 @@ def make_file_persistence(base_dir: _Path | None = None) -> Persistence:
     return Persistence(FileMCPClient(base_dir=base_dir))
 
 
-#
-# ``file`` is the ONLY persistence backend. ``TRID3NT_PERSISTENCE_BACKEND``
-# unset (or ``file``) binds the file backend; any other value is an explicit
-# request for an unsupported backend and raises a typed error naming ``file``.
+# ``file`` is the only persistence backend; any other ``TRID3NT_PERSISTENCE_BACKEND`` value raises a typed error naming ``file``.
 
 #: Env that selects the persistence backend. Unset defaults to ``file``.
 PERSISTENCE_BACKEND_ENV = "TRID3NT_PERSISTENCE_BACKEND"

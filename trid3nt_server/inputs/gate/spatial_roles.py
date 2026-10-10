@@ -33,22 +33,19 @@ class SpatialRoleError(ValueError):
 #: The same error type under its second accepted name.
 SpatialInputParseError = SpatialRoleError
 
-
-#: The canonical role vocabulary, read off ``properties.role`` on each drawn
-#: ``Feature``: ``aoi_clip`` a Polygon that clips the run domain, ``point`` a
-#: generic Point, ``line`` a neutral LineString with no mesh semantics,
-#: ``breakline`` a LineString the mesh's edges follow, ``refine_region`` a
-#: Polygon the mesh is sized finer inside (``properties.target_size_m``),
-#: ``boundary`` a LineString stretch of the domain's edge typed by
-#: ``properties.boundary_type``, and ``breach`` a LineString along a dyke crest
-#: where the dyke fails.
+#: The canonical role vocabulary, read off ``properties.role`` on each drawn ``Feature``:
+#: ``aoi_clip`` a Polygon clipping the run domain; ``point`` a generic Point; ``line`` a
+#: neutral LineString; ``breakline`` a LineString the mesh edges follow; ``refine_region``
+#: a Polygon sized finer inside (``target_size_m``); ``boundary`` a LineString stretch of
+#: the domain edge typed by ``boundary_type``; ``breach`` a LineString along a dyke crest
+#: where it fails.
 CANONICAL_ROLES = frozenset({"aoi_clip", "point", "line", "breakline",
                              "refine_region", "boundary", "breach"})
 
 #: Wire roles accepted as aliases for a canonical role.
 ROLE_ALIASES = {"aoi": "aoi_clip"}
 
-#: Every role string this parser accepts on the wire (canonical + legacy alias).
+#: Every role string this parser accepts on the wire (canonical + alias).
 _ACCEPTED_ROLES = frozenset(CANONICAL_ROLES | set(ROLE_ALIASES))
 
 
@@ -246,8 +243,7 @@ def _refine_regions(feats: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def _boundary_lines(feats: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Parse ``boundary`` LineStrings into ``{coords, boundary_type}``.
 
-    The type is required: an untyped stretch of the edge is wall, which a
-    drawing does not need to state."""
+    The type is required: an untyped stretch of the edge is wall, which a drawing need not state."""
     from trid3nt_server.inputs.boundary import OPEN_TYPES
 
     out: list[dict[str, Any]] = []

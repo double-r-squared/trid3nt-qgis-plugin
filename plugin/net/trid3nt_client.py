@@ -24,8 +24,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable, Optional, Tuple
 
-# Numeric-finiteness helpers shared with the render path, so the WS-boundary
-# sanitizer and the native styling clamps agree on what "a real number" is.
+# Numeric-finiteness helpers shared with the render path.
 from ..render import formatting
 
 _LOG = logging.getLogger("trid3nt.trid3nt_client")
@@ -125,8 +124,6 @@ def build_ws_url(base_url: str, token: Optional[str] = None) -> str:
     return f"{base_url}{sep}st={urllib.parse.quote(token, safe='')}"
 
 
-
-
 @dataclass
 class LayerEvent:
     """One row of ``session-state.loaded_layers`` (a ProjectLayerSummary)."""
@@ -141,12 +138,8 @@ class LayerEvent:
     raw: dict = field(default_factory=dict)
 
 
-#: Opacity is the one numeric style field that rides from a wire row into a
-#: NATIVE QGIS call (``setOpacity``), so a non-finite value is stripped here at
-#: the boundary rather than trusted downstream (the arm64 double-to-int32
-#: saturation that smashes the stack). The legend's own numbers never reach Qt
-#: from this side: the map loads the ``.qml`` the row carries, and the server
-#: resolved the range that document states.
+#: Opacity rides into a NATIVE QGIS call (``setOpacity``), so a non-finite value is
+#: stripped at the boundary (an arm64 double-to-int32 saturation smashes the stack).
 
 
 def parse_layer_events(session_state_payload: dict) -> list[LayerEvent]:
@@ -202,19 +195,15 @@ class PipelineStep:
     parent_step_id: Optional[str] = None
     substep_label: Optional[str] = None
     error_message: Optional[str] = None
-    # ``role`` discriminates the off-box solver card ("compute", tool_name
-    # "<solver>:solve") from a plain tool card ("tool"); the dock routes a
-    # compute step to its collapsible sim card instead of a grey row.
-    # ``batch_job_id`` is "local-docker:<run_id>" on the local seam;
-    # ``batch_status`` mirrors the control plane verbatim; ``duration_ms`` is
-    # stamped on the terminal transition only.
+    # ``role`` is "compute" for the off-box solver card (tool_name "<solver>:solve"),
+    # "tool" for a plain tool card. ``batch_job_id`` is "local-docker:<run_id>";
+    # ``duration_ms`` is stamped on the terminal transition only.
     role: str = "tool"
     batch_job_id: Optional[str] = None
     batch_status: Optional[str] = None
     progress_percent: Optional[int] = None
     duration_ms: Optional[int] = None
-    # WHICH engine and which of its modules the compute card is a run of; both
-    # empty on a plain tool card, which is a run of nothing.
+    # Engine and module the compute card runs; both empty on a plain tool card.
     engine: str = ""
     module: str = ""
 
@@ -246,8 +235,6 @@ def parse_pipeline_steps(pipeline_state_payload: dict) -> list[PipelineStep]:
                 error_message=row.get("error_message")
                 if isinstance(row.get("error_message"), str)
                 else None,
-                # Sim-card fields: all optional on the wire, all
-                # default-preserving here.
                 role=str(row.get("role") or "tool"),
                 batch_job_id=row.get("batch_job_id")
                 if isinstance(row.get("batch_job_id"), str)
@@ -266,8 +253,6 @@ def parse_pipeline_steps(pipeline_state_payload: dict) -> list[PipelineStep]:
             )
         )
     return steps
-
-
 
 
 @dataclass
@@ -322,9 +307,8 @@ def choose_startup_case(
 ) -> Tuple[str, Optional[str]]:
     """Decide which case a fresh connect binds: ``("resume" | "select" |
     "create", case_id_or_None)``. PURE -- no sockets, no Qt."""
-    # The ladder: a resumed persisted case wins; else the NEWEST live case
-    # (``updated_at`` descending, ISO-8601 Z sorting lexicographically) with
-    # tombstoned and malformed rows skipped; else create, the last resort.
+    # A resumed persisted case wins; else the NEWEST live case (``updated_at`` descending,
+    # tombstoned and malformed rows skipped); else create.
     if isinstance(resumed_case_id, str) and resumed_case_id:
         return ("resume", resumed_case_id)
     candidates = []
@@ -384,8 +368,7 @@ def fetch_case_list(base_url: str, timeout: float = 5.0) -> list:
     return parse_case_list(payload)
 
 
-# Provider-config POST + live model-list GET, both against the local agent's
-# HTTP listener.
+# Provider-config POST + live model-list GET against the agent's HTTP listener.
 
 
 class ProviderConfigRequestError(Exception):
@@ -490,19 +473,14 @@ def fetch_model_list(
     return ids, default
 
 
-
-
 class KeyedSourcesRequestError(Exception):
     """``fetch_keyed_sources`` failed -- transport, HTTP status, or a non-JSON
     body. Carries an honest, user-facing message."""
 
 
 def fetch_keyed_sources(base_url: str, timeout: float = 8.0) -> list:
-    """``GET {base_url}/api/library`` -> the credentials its keyed rows declare.
-
-    One entry per credential NAME, so two sources served by one account appear
-    once, and no key material. Any fault RAISES so the form can say the agent
-    is unreachable."""
+    """``GET {base_url}/api/library`` -> the credentials its keyed rows declare. Any fault
+    RAISES so the form can say the agent is unreachable."""
     url = f"{base_url.rstrip('/')}/api/library"
     request = urllib.request.Request(url, method="GET")
     try:
@@ -569,8 +547,8 @@ class Library:
 
 
 def _library_facts(raw) -> list:
-    """Wire facts as ordered (label, value) pairs; absent and empty values are
-    dropped so the detail pane never shows a blank row."""
+    """Wire facts as ordered (label, value) pairs; absent and empty values are dropped so the
+    detail pane never shows a blank row."""
     out = []
     if not isinstance(raw, dict):
         return out
@@ -589,8 +567,8 @@ def _library_facts(raw) -> list:
 
 
 def _library_item(raw, group: str, kind: str) -> Optional["LibraryItem"]:
-    """One wire entry as a LibraryItem, or None when it carries no name -- a
-    nameless entry cannot be typed into a direct run, so it is not shown."""
+    """One wire entry as a LibraryItem, or None when it carries no name -- a nameless entry
+    cannot be typed into a direct run, so it is not shown."""
     if not isinstance(raw, dict):
         return None
     name = raw.get("name")
@@ -677,9 +655,9 @@ def parse_library_hits(payload) -> list:
 
 
 def _library_get(url: str, what: str, timeout: float):
-    """One GET against a library route, decoded as JSON. Every fault RAISES
-    LibraryRequestError so the panel can say what failed instead of showing an
-    empty list as if the library were empty."""
+    """One GET against a library route, decoded as JSON. Every fault RAISES LibraryRequestError
+    so the panel can say what failed instead of showing an empty list as if the library were
+    empty."""
     request = urllib.request.Request(url, method="GET")
     try:
         with urllib.request.urlopen(request, timeout=timeout) as resp:
@@ -718,8 +696,7 @@ def search_library(base_url: str, query: str, timeout: float = 8.0) -> list:
     return parse_library_hits(_library_get(url, "library search", timeout))
 
 
-#: Cap on chat-history replay rows: a Case that has chatted for hours must not
-#: stall the dock repainting hundreds of bubbles.
+#: Cap on chat-history replay rows so the dock does not stall repainting bubbles.
 CHAT_HISTORY_REPLAY_MAX = 50
 
 
@@ -737,9 +714,8 @@ def parse_chat_history(session_state_payload: dict) -> list:
         role = row.get("role")
         content = row.get("content")
         if role == "tool":
-            # The typed tool_card dict is the render source; a content JSON
-            # twin stands in where the row carries no typed card. A row that
-            # resolves to neither is skipped, never raised on.
+            # The typed tool_card dict is the render source; a content JSON twin
+            # stands in where absent; a row with neither is skipped.
             card = row.get("tool_card")
             if not isinstance(card, dict):
                 try:
@@ -755,8 +731,7 @@ def parse_chat_history(session_state_payload: dict) -> list:
         if not isinstance(content, str) or not content:
             continue
         if role == "agent":
-            # Persisted reasoning, so the dock can replay the collapsible
-            # thinking fold. Absent, non-string or blank -> an honest None.
+            # Persisted reasoning; absent, non-string or blank -> None.
             thinking = row.get("thinking")
             if not isinstance(thinking, str) or not thinking.strip():
                 thinking = None
@@ -806,9 +781,8 @@ class CaseOpenInfo:
 
 
 def _coerce_bbox(raw) -> Optional[Tuple[float, float, float, float]]:
-    """A candidate ``[lon_min, lat_min, lon_max, lat_max]`` value -> a clean
-    float 4-tuple, or None when it is not a well-formed EPSG:4326 bbox.
-    Never raises."""
+    """A candidate ``[lon_min, lat_min, lon_max, lat_max]`` value -> a clean float 4-tuple, or
+    None when it is not a well-formed EPSG:4326 bbox. Never raises."""
     if (
         isinstance(raw, (list, tuple))
         and len(raw) == 4
@@ -822,9 +796,7 @@ def find_fallback_bbox(payload: dict) -> Optional[Tuple[float, float, float, flo
     """Scan a ``case-open`` payload for a bbox in any carrier, checked in
     order: ``payload.bbox``, ``session_state.bbox``, ``session_state.case.
     bbox``. None when nothing usable is found; never raises."""
-    # Today's wire shape carries exactly ONE bbox field, so this normally
-    # re-finds the same value the case row already gave; it stands so a new
-    # server-side carrier is picked up without another client change.
+    # The wire carries exactly ONE bbox field today; this stays so a new server-side carrier is picked up.
     if not isinstance(payload, dict):
         return None
     direct = _coerce_bbox(payload.get("bbox"))
@@ -870,8 +842,6 @@ def parse_case_open(payload: dict) -> Optional[CaseOpenInfo]:
     )
 
 
-
-
 def is_auth_failure(text: str) -> bool:
     """True for a REJECTED TOKEN, false for a transport failure. The
     distinction decides policy: a transport failure drives the reconnect
@@ -891,9 +861,7 @@ def is_auth_failure(text: str) -> bool:
     return any(marker in low for marker in markers)
 
 
-
-#: Minimum seconds between case-list refresh round trips: session-resume is
-#: cheap, but a click-happy user must not be able to queue a resume storm.
+#: Minimum seconds between case-list refreshes, so a click-happy user cannot queue a resume storm.
 REFRESH_DEBOUNCE_S = 2.0
 
 
@@ -919,15 +887,11 @@ class Debouncer:
         return True
 
 
-
-#: Backoff FLOOR (ms): the first reconnect after a drop waits at least this
-#: long, which is what keeps a drop from becoming a reconnect storm.
+#: Backoff FLOOR (ms): keeps a drop from becoming a reconnect storm.
 RECONNECT_FLOOR_MS = 1500
-#: Backoff CEILING (ms): the doubling ladder caps here.
 RECONNECT_MAX_MS = 5000
 
-#: Outbound-queue bound: beyond this the OLDEST frames are dropped first, so
-#: the most recent intent is the intent that survives.
+#: Outbound-queue bound: the OLDEST frames drop first so the most recent intent survives.
 OUTBOUND_QUEUE_MAX = 50
 
 
@@ -944,8 +908,6 @@ def next_backoff(
     return delay, min(base * 2, RECONNECT_MAX_MS)
 
 
-
-
 def s3_to_vsis3(uri: str) -> Optional[str]:
     """``s3://bucket/key`` -> the ``/vsis3/bucket/key`` path GDAL reads. The
     endpoint and credentials are GDAL CONFIGURATION, so no host appears here;
@@ -959,9 +921,7 @@ def s3_to_vsis3(uri: str) -> Optional[str]:
     return f"/vsis3/{bucket}/{key}"
 
 
-#: The local agent's HTTP listener port (tool catalog + /api/* routes). A
-#: daemon that advertises no endpoint still binds it, so it is the constant
-#: the fallback derivation uses.
+#: The local agent's HTTP listener port; the fallback derivation uses it when no endpoint is advertised.
 DEFAULT_HTTP_PORT = 8766
 
 
@@ -995,19 +955,14 @@ def resolve_data_base(advertised: Optional[str], fallback: str) -> str:
 
 def qgis_xyz_uri(template: str, zmin: int = 0, zmax: int = 24) -> str:
     """Build the QGIS ``wms`` provider uri for an XYZ tile TEMPLATE."""
-    # Encode as LITTLE as possible: QGIS does NOT percent-decode the ``url``
-    # component, so a fully-quoted template yields a layer that reports valid
-    # yet never issues a tile request. Only the template's own query-string
-    # ampersands are escaped, so the provider's ``&``-splitting of uri
-    # parameters cannot eat them; scheme, slashes, ``?``, ``=`` and the
-    # ``{z}/{x}/{y}`` placeholders stay literal, and an already-encoded query
-    # value passes through verbatim exactly as the tile server expects.
+    # Encode as LITTLE as possible: QGIS does NOT percent-decode the ``url`` component,
+    # so a fully-quoted template yields a layer that reports valid yet never requests
+    # tiles. Only the query-string ampersands are escaped (the provider splits uri
+    # parameters on ``&``); scheme, slashes, ``?``, ``=`` and ``{z}/{x}/{y}`` stay literal.
     return (
         f"type=xyz&url={template.replace('&', '%26')}"
         f"&zmin={zmin}&zmax={zmax}"
     )
-
-
 
 
 class WebSocketError(Exception):
@@ -1051,8 +1006,6 @@ class WebSocketConnection:
         self._send_lock = threading.Lock()
         self._recv_buf = b""
         self._closed = False
-
-    # -- lifecycle ---------------------------------------------------------- #
 
     def connect(self) -> None:
         parts = urllib.parse.urlsplit(self.url)
@@ -1123,8 +1076,6 @@ class WebSocketConnection:
             pass
         self._sock = None
 
-    # -- send --------------------------------------------------------------- #
-
     def send_text(self, text: str) -> None:
         self._send_frame(_OP_TEXT, text.encode("utf-8"))
 
@@ -1147,8 +1098,6 @@ class WebSocketConnection:
                 sock.sendall(header + mask + masked)
             except OSError as exc:
                 raise ConnectionClosed(reason=f"send failed: {exc}") from exc
-
-    # -- receive ------------------------------------------------------------ #
 
     def recv(self, timeout: Optional[float] = None) -> Optional[str]:
         """Receive the next complete TEXT message. ``None`` means ``timeout``
@@ -1183,8 +1132,7 @@ class WebSocketConnection:
                 self.close()
                 raise ConnectionClosed(code=code, reason=reason)
             if opcode == _OP_BINARY:
-                # The agent protocol is JSON-text-only; skip binary frames
-                # (and their continuations, which carry opcode 0).
+                # JSON-text-only protocol: skip binary frames and their continuations (opcode 0).
                 while not fin:
                     nxt = self._recv_frame(self.frame_timeout)
                     if nxt is None:
@@ -1195,7 +1143,6 @@ class WebSocketConnection:
                 if opcode == _OP_TEXT and fragments:
                     raise WebSocketError("unexpected new TEXT frame mid-message")
                 if opcode == _OP_CONT and not fragments:
-                    # Stray continuation (e.g. tail of a skipped message).
                     continue
                 fragments.append(payload)
                 if sum(len(f) for f in fragments) > self.max_message_bytes:
@@ -1203,7 +1150,6 @@ class WebSocketConnection:
                 if fin:
                     return b"".join(fragments).decode("utf-8", "replace")
                 continue
-            # Unknown opcode: skip.
             continue
 
     def _recv_frame(self, timeout: Optional[float]) -> Optional[tuple[bool, int, bytes]]:
@@ -1265,8 +1211,6 @@ class WebSocketConnection:
         return out
 
 
-
-
 @dataclass
 class AgentEvent:
     """One dispatched server frame, normalized for the UI bridge. ``kind`` is
@@ -1298,34 +1242,20 @@ class AgentClient:
         self.user_id: Optional[str] = None
         self.case_id: Optional[str] = None
         self.last_session_state: Optional[dict] = None
-        #: The most recent ``case-list`` observed, stashed by BOTH the
-        #: handshake drain and the event pump because a server may emit it
-        #: either side of session-state. None until one arrives.
+        #: The most recent ``case-list``, stashed by both the handshake drain and the event pump. None until one arrives.
         self.last_case_list: Optional[list] = None
-        #: The last ``error`` envelope payload seen while draining a handshake
-        #: wait (AUTH_FAILED before a 1008 close, say). It is folded into the
-        #: failure text so a token rejection stays classifiable.
+        #: The last ``error`` payload seen while draining a handshake wait; folded into the failure text so an AUTH rejection stays classifiable.
         self.last_handshake_error: Optional[dict] = None
-        #: Server-advertised endpoint bases from the last ``auth-ack``. When
-        #: present they are the ONLY source of truth for the agent's HTTP base
-        #: and the store's endpoint; ``None`` means the caller derives a
-        #: fallback instead.
+        #: Endpoint bases from the last ``auth-ack``: the ONLY source of truth for the HTTP base and store endpoint when present; None means derive a fallback.
         self.advertised_http_base: Optional[str] = None
         self.advertised_data_base: Optional[str] = None
-        #: True between a completed handshake and the next transport loss.
         self.connected = False
-        #: Optional credential broker. When set, connect pushes every key the
-        #: keys form stored over ``secret-add``. None where there is no auth
-        #: home, and the daemon then falls back to its own env.
+        #: Optional credential broker: connect pushes every stored key over ``secret-add``; None falls back to the daemon env.
         self.credential_broker = None
         self._ws: Optional[WebSocketConnection] = None
-        # Outbound intent queue: pre-serialized frames buffered while
-        # disconnected, flushed FIFO after the resume handshake. Bounded,
-        # OLDEST dropped first.
+        # Pre-serialized frames buffered while disconnected, flushed FIFO after resume; OLDEST dropped first.
         self._outbound_queue: list[str] = []
         self._queue_lock = threading.Lock()
-
-    # -- lifecycle ---------------------------------------------------------- #
 
     @property
     def ws_url(self) -> str:
@@ -1348,12 +1278,8 @@ class AgentClient:
         if not isinstance(user_id, str) or not user_id:
             raise HandshakeFailed(f"auth-ack without user_id: {payload!r}")
         self.user_id = user_id
-        # Endpoint advertisement is OPTIONAL and arrives in either of two
-        # shapes -- flat on the payload, or nested under ``endpoints`` -- so
-        # both are read defensively; absence just means the caller falls back.
-        # The store endpoint is GDAL CONFIGURATION, never part of a layer uri:
-        # a layer is always ``s3://bucket/key`` and the endpoint decides which
-        # host serves it.
+        # Endpoint advertisement is OPTIONAL, flat on the payload or nested under ``endpoints``.
+        # The store endpoint is GDAL CONFIGURATION, never part of a layer uri (``s3://bucket/key``).
         endpoints = payload.get("endpoints")
         if not isinstance(endpoints, dict):
             endpoints = {}
@@ -1372,10 +1298,7 @@ class AgentClient:
         self._send("session-resume", {"case_id": self.case_id})
         state = self._wait_for("session-state")
         self.last_session_state = state.get("payload") or {}
-        # The session-state reply's envelope ``case_id`` is the active case
-        # the resume rebound. Adopt it ONLY when this client has no case yet,
-        # so a fresh connect keeps the persisted case instead of minting one;
-        # a client that already carries a case is the authority on its own.
+        # Adopt the reply's ``case_id`` ONLY when this client has no case yet, so a fresh connect keeps the persisted case.
         resumed = state.get("case_id")
         if self.case_id is None and isinstance(resumed, str) and resumed:
             self.case_id = resumed
@@ -1385,9 +1308,9 @@ class AgentClient:
         return user_id
 
     def _broker_push_on_connect(self) -> None:
-        """Push every stored credential over ``secret-add``. Best-effort: no
-        broker, an empty store or a locked auth DB is a silent no-op, because
-        connect must never block on the credential home."""
+        """Push every stored credential over ``secret-add``. Best-effort: no broker, an empty
+        store or a locked auth DB is a silent no-op, because connect must never block on the
+        credential home."""
         broker = self.credential_broker
         if broker is None:
             return
@@ -1407,8 +1330,6 @@ class AgentClient:
             self._ws.close()
             self._ws = None
 
-    # -- protocol verbs ------------------------------------------------------ #
-
     def create_case(self, title: str, bbox: Optional[list] = None) -> str:
         """Create a fresh case; returns its case_id. BLOCKS until the
         ``case-open`` reply. An optional ``bbox`` (EPSG:4326) seeds the case
@@ -1427,14 +1348,12 @@ class AgentClient:
             if isinstance(case_id, str) and case_id:
                 self.case_id = case_id
                 return case_id
-            # A case-open without a case_id (e.g. a null rehydration) --
-            # keep draining until the deadline.
+            # A case-open without a case_id (null rehydration): keep draining.
 
     def select_case(self, case_id: str) -> None:
         """Switch the active case. Does NOT block: the ``case-open``
         rehydration arrives through ``next_event``."""
-        # The local stamp updates AT SEND TIME, so the next resume or message
-        # re-asserts the same case even if a queued select and a resume race.
+        # Stamped AT SEND TIME so a queued select racing a resume still re-asserts the same case.
         self.case_id = case_id
         self._send(
             "case-command",
@@ -1463,10 +1382,7 @@ class AgentClient:
         """Refresh the case list; False when disconnected, because there is
         then nothing to ask and the reconnect resume refreshes anyway. The
         caller debounces."""
-        # The protocol has NO list-cases verb: ``case-list`` only ever arrives
-        # as a server emission, and the session-resume reply carries one. The
-        # redundant ``session-state`` that rides along is harmless, since
-        # layer materialization dedups by layer_id.
+        # The protocol has NO list-cases verb: ``case-list`` only arrives as a server emission, and the session-resume reply carries one.
         if not self.connected:
             return False
         self._send("session-resume", {"case_id": self.case_id})
@@ -1493,8 +1409,7 @@ class AgentClient:
             payload["aoi_bbox"] = [float(v) for v in aoi_bbox]
         if tool_choice_mode == "ask":
             payload["tool_choice_mode"] = "ask"
-        # A drawn region rides as ``{"geometry_type": ..., "bbox": [4 floats]}``
-        # in EPSG:4326, exactly as ``aoi_bbox`` carries the canvas AOI.
+        # A drawn region rides as ``{"geometry_type": ..., "bbox": [4 floats]}`` in EPSG:4326.
         if drawn_geometry is not None:
             payload["drawn_geometry"] = drawn_geometry
         self._send(
@@ -1586,10 +1501,7 @@ class AgentClient:
         name: Optional[str] = None,
         cancelled: bool = False,
     ) -> None:
-        """Answer a ``spatial-input-request`` gate. ``geometry_type`` is
-        ``"point"`` (``[lon, lat]``, plus the ``name`` the user gave it),
-        ``"bbox"`` (four coordinates) or ``"vector_draw"`` (``features``);
-        ``cancelled`` is the decline path."""
+        """Answer a ``spatial-input-request`` gate."""
         self._send(
             "spatial-input-response",
             {
@@ -1641,8 +1553,6 @@ class AgentClient:
             queue_if_closed=True,
         )
 
-    # -- event pump ---------------------------------------------------------- #
-
     def next_event(self, timeout: float = 1.0) -> Optional[AgentEvent]:
         """Receive + normalize one server frame; None on timeout. Raises
         ``ConnectionClosed`` when the socket dies -- the caller, not this
@@ -1660,10 +1570,7 @@ class AgentClient:
         payload = env.get("payload") or {}
         if not isinstance(payload, dict):
             payload = {}
-        # Every envelope the dock acts on gets its OWN kind below. An
-        # unrecognized type falls through to ``"raw"`` and SURFACES there --
-        # a silently dropped gate envelope leaves the server's paused turn
-        # hanging forever.
+        # An unrecognized type falls through to ``"raw"`` and SURFACES there: a dropped gate envelope hangs the server's paused turn.
         if etype == "agent-message-chunk":
             return AgentEvent(
                 "chunk",
@@ -1674,9 +1581,7 @@ class AgentClient:
                 },
             )
         if etype == "agent-thinking-chunk":
-            # Reasoning-channel tokens, keyed by the SAME message_id as the
-            # answer chunk that follows, so the dock attaches the thinking
-            # block to the right assistant entry.
+            # Keyed by the SAME message_id as the answer chunk that follows.
             return AgentEvent(
                 "thinking-chunk",
                 {
@@ -1704,11 +1609,8 @@ class AgentClient:
         if etype == "turn-complete":
             return AgentEvent("turn-complete", payload)
         if etype == "case-open":
-            # The case-open reply is the ONE signal every rebind path shares
-            # -- create, select and startup reuse alike -- so the wire stamp
-            # follows it unconditionally. Without that, an envelope sent after
-            # a rebind carries the previous case_id and the turn persists into
-            # the wrong case.
+            # The one signal every rebind path shares; the wire stamp must follow it
+            # or later envelopes persist into the previous case.
             opened = ((payload.get("session_state") or {}).get("case") or {}).get(
                 "case_id"
             )
@@ -1718,59 +1620,41 @@ class AgentClient:
         if etype == "tool-payload-warning":
             return AgentEvent("payload-warning", payload)
         if etype == "code-exec-request":
-            # The agent BLOCKS before sending a code request to this session
-            # until a ``tool-payload-confirmation`` whose ``warning_id`` equals
-            # this request's ``code_exec_id`` arrives.
+            # The agent BLOCKS until a ``tool-payload-confirmation`` whose ``warning_id`` equals ``code_exec_id`` arrives.
             return AgentEvent("code-exec-request", payload)
         if etype == "processing-request":
-            # A gate WAIT: the agent asks THIS session to run an algorithm or an
-            # approved snippet and PAUSES until the processing-response lands.
+            # Gate WAIT: the agent PAUSES until the processing-response lands.
             return AgentEvent("processing-request", payload)
         if etype == "layer-request":
-            # A gate WAIT: the agent borrows THIS session's data providers to
-            # open one layer and PAUSES until the layer-response lands.
+            # Gate WAIT: the agent PAUSES until the layer-response lands.
             return AgentEvent("layer-request", payload)
         if etype == "tool-candidates":
-            # The agent ranked several plausible tools and asks which runs.
-            # Unanswered, the server's own ``timeout_s`` fail-open proceeds
-            # with its top pick, so the user's window to redirect is finite.
+            # Unanswered, the server's ``timeout_s`` fail-open proceeds with its top pick.
             return AgentEvent("tool-candidates", payload)
         if etype == "chart-emission":
-            # A live mid-turn chart. Its persisted replay twin rides in the
-            # case-open ``session_state.charts``.
             return AgentEvent("chart", payload)
         if etype == "map-command":
             return AgentEvent("map-command", payload)
         if etype == "solve-progress":
             return AgentEvent("solve-progress", payload)
         if etype == "tool-io":
-            # The raw tool-args sidecar, keyed by pipeline step_id: an
-            # input-only frame arrives at dispatch START, the full one on
-            # completion.
+            # Raw tool-args sidecar keyed by step_id: input-only at dispatch START, full on completion.
             return AgentEvent("tool-io", payload)
         if etype == "spatial-input-request":
-            # A gate WAIT: the agent needs a picked geometry and PAUSES the
-            # turn until a response arrives. Cancel sends ``cancelled=True``
-            # and closes the gate.
+            # Gate WAIT: the turn PAUSES until a response arrives; cancel sends ``cancelled=True``.
             return AgentEvent("spatial-input-request", payload)
         if etype == "secrets-list":
-            # The per-Case secret roster. Raw key values NEVER ride here --
-            # only vault_ref records.
+            # Raw key values NEVER ride here, only vault_ref records.
             return AgentEvent("secrets-list", payload)
         if etype == "case-list":
             cases = parse_case_list(payload)
-            # Stashed like ``last_session_state`` above, so the startup
-            # case-reuse decision reads the freshest list either way.
             self.last_case_list = cases
             return AgentEvent("case-list", {"cases": cases, "payload": payload})
         if etype == "loop_exhausted":
-            # The agent hit its runaway guard. Surfaced as an ERROR, so the
-            # user is told WHY the turn stopped.
+            # Surfaced as an ERROR so the user is told why the turn stopped.
             reason = (payload or {}).get("reason", "Agent reached its iteration limit.")
             return AgentEvent("error", {"message": reason, "source": "loop_exhausted"})
         return AgentEvent("raw", {"type": etype, "payload": payload})
-
-    # -- internals ------------------------------------------------------------ #
 
     def _send(
         self,
@@ -1779,9 +1663,7 @@ class AgentClient:
         case_id: Optional[str] = None,
         queue_if_closed: bool = False,
     ) -> None:
-        """Send an envelope, or buffer it when disconnected. With
-        ``queue_if_closed`` a user-intent verb is buffered instead of raising
-        and flushed after the next resume; a handshake verb still raises."""
+        """Send an envelope, or buffer it when disconnected."""
         env = make_envelope(type_, self.session_id, payload, case_id=case_id)
         raw = json.dumps(env)
         if queue_if_closed and (not self.connected or self._ws is None):
@@ -1794,7 +1676,6 @@ class AgentClient:
         except ConnectionClosed:
             self.connected = False
             if queue_if_closed:
-                # The transport died under the send: keep the user's intent.
                 self._enqueue(raw)
                 return
             raise
@@ -1806,9 +1687,7 @@ class AgentClient:
                 del self._outbound_queue[: len(self._outbound_queue) - OUTBOUND_QUEUE_MAX]
 
     def _flush_outbound_queue(self) -> None:
-        """FIFO-flush buffered intent frames after a resume handshake. If the
-        socket dies mid-flush the unsent remainder is re-buffered (frame
-        included) and the failure propagates to the reconnect loop."""
+        """FIFO-flush buffered intent frames after a resume handshake."""
         with self._queue_lock:
             pending, self._outbound_queue = self._outbound_queue, []
         for i, raw in enumerate(pending):
@@ -1837,9 +1716,7 @@ class AgentClient:
             raise
 
     def _wait_for(self, etype: str, deadline: Optional[float] = None) -> dict:
-        """Drain frames until one of ``etype`` arrives. Non-matching frames
-        are DROPPED, except an ``error`` and a ``case-list``, whose payloads
-        are stashed so a rejection or a list survives the drain."""
+        """Drain frames until one of ``etype`` arrives."""
         if deadline is None:
             deadline = time.monotonic() + self.handshake_timeout
         while True:
@@ -1857,8 +1734,6 @@ class AgentClient:
                 continue
             if env.get("type") == "error" and isinstance(env.get("payload"), dict):
                 self.last_handshake_error = env["payload"]
-            # A ``case-list`` that lands mid-handshake would otherwise be
-            # dropped; stash it for the startup case-reuse decision.
             if env.get("type") == "case-list" and isinstance(env.get("payload"), dict):
                 self.last_case_list = parse_case_list(env["payload"])
             if env.get("type") == etype:

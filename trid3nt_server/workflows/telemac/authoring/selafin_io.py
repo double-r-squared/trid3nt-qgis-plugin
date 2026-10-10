@@ -1,10 +1,8 @@
 """SELAFIN in the daemon: the TELEMAC geometry pair out, a result in.
 
-The geometry and its ``.cli`` are ONE artifact - the boundary rows are ordered by
-the geometry's own IPOBO, so a boundary file written against any other numbering
-classifies the wrong nodes - and both come from one walk of one connectivity.
-Reading and writing happen in this process: the engine image solves and does
-nothing else, so nothing here may shell into it."""
+The geometry and its ``.cli`` are one artifact from one walk: boundary rows are ordered by the
+geometry's IPOBO, so any other numbering classifies the wrong nodes. Nothing here may shell into the image.
+"""
 
 from __future__ import annotations
 
@@ -23,34 +21,22 @@ from .topology import FREE_EXIT_ROLE, RATING_CURVE_ROLE
 __all__ = ["BOUNDARY_CONDITIONS_FILE", "GEOMETRY_FILE", "telemac_boundary",
            "write_telemac_pair", "read_selafin", "SelafinReadError"]
 
-#: The steering keywords TELEMAC reads the pair under. A mesh's file map is
-#: keyed by them, so a reader asks for a file by the name the engine uses for it
-#: and no other module spells either string.
+# The steering keywords TELEMAC reads the pair under; a mesh's file map is keyed by them.
 GEOMETRY_FILE: str = "GEOMETRY FILE"
 
 
 BOUNDARY_CONDITIONS_FILE: str = "BOUNDARY CONDITIONS FILE"
 
-#: TELEMAC's own boundary-condition type codes, from ``declarations_telemac.f``:
-#: a prescribed value, a free exit, a solid wall.
+# TELEMAC's boundary-condition type codes (``declarations_telemac.f``): prescribed value, free exit, solid wall.
 KENT, KSORT, KLOG = 5, 4, 2
 
-#: Boundary role -> the TELEMAC ``(LIHBOR, LIUBOR, LIVBOR, LITBOR)`` quad that
-#: states it. An inflow prescribes velocity and tracer and leaves the depth free;
-#: an outflow, an open sea boundary and a RATING CURVE make the SAME statement to
-#: the solver - a prescribed water level, free velocity - and are named apart
-#: because the measured liquid-boundary order is what a steering author reads to
-#: decide which boundary carries a flowrate, which a level, and which one's level
-#: is read off a stage-discharge curve instead of a constant. A FREE EXIT
-#: prescribes nothing at all: ``bord.f`` overrides the depth only under
-#: ``LIHBOR = KENT`` and the velocity only under ``LIUBOR = KENT``, so an
-#: all-``KSORT`` quad leaves the water leaving at whatever level and velocity the
-#: interior brings to the face. It is well-posed only while that velocity leaves:
-#: ``propin_telemac2d.f`` refuses a free velocity whose normal component enters.
-#:
-#: THIS IS THE ONE AUTHORING DECISION for the pair. The quad lands in the
-#: ``.cli`` and :func:`_prescribes` derives the steering keyword from the same
-#: quad, so moving an entry here moves both files together.
+# Boundary role -> the ``(LIHBOR, LIUBOR, LIVBOR, LITBOR)`` quad. An inflow prescribes velocity and
+# tracer, leaving depth free; outflow, open sea and rating curve prescribe a level with free velocity,
+# named apart because the liquid-boundary order tells the steering author which carries a flowrate,
+# a level, or a curve. A free exit prescribes nothing (``bord.f`` overrides depth only under
+# ``LIHBOR = KENT``, velocity only under ``LIUBOR = KENT``), well-posed only while the velocity leaves
+# (``propin_telemac2d.f`` refuses an entering free velocity). The quad lands in the ``.cli`` and
+# ``_prescribes`` derives the steering keyword from it, so an entry here moves both files.
 _ROLE_CODES = {
     "wall": (KLOG, KLOG, KLOG, KLOG),
     "inflow": (KSORT, KENT, KENT, KENT),
@@ -60,9 +46,7 @@ _ROLE_CODES = {
     FREE_EXIT_ROLE: (KSORT, KSORT, KSORT, KSORT),
 }
 
-#: One ``.cli`` row, in the column widths ``bief``'s own reader is written
-#: against: the three type codes, the four velocity-side values, the tracer code
-#: and its three, then the global node number and the boundary rank.
+# One ``.cli`` row in ``bief``'s column widths: three type codes, four velocity-side values, tracer code and its three, global node number, boundary rank.
 _CLI_ROW = ("{0:3d}{1:2d}{2:2d}{3:25.12f}{4:25.12f}{5:25.12f}{6:26.12f}"
             "{7:4d}{8:25.12f}{9:25.12f}{10:25.12f}{11:10d}{12:10d}")
 
@@ -74,14 +58,11 @@ class SelafinReadError(RuntimeError):
 
 
 def _prescribes(codes) -> str:
-    """What a code quad makes the engine READ from the steering file.
+    """What a code quad makes the engine read from the steering file.
 
-    ``"nothing"`` is what a FREE EXIT reads as: an answer, never a gap."""
-    # ``bord.f`` consumes PRESCRIBED ELEVATIONS only where ``LIHBOR`` is KENT
-    # and the prescribed flowrate only where ``LIUBOR`` is; a value written
-    # against any other code is a number the engine never looks at. Reading the
-    # quad rather than the role name is what leaves the steering file unable to
-    # disagree with it.
+    ``"nothing"`` is a free exit: an answer, never a gap.
+    """
+    # ``bord.f`` consumes elevations only where ``LIHBOR`` is KENT and flowrate only where ``LIUBOR`` is; reading the quad rather than the role keeps the steering file consistent.
     lihbor, liubor = int(codes[0]), int(codes[1])
     if lihbor == KENT:
         return "elevation"
@@ -91,7 +72,6 @@ def _prescribes(codes) -> str:
 
 
 def _roles_by_node(roles: Mapping[str, Any]) -> dict:
-    """``{role: [node, ...]}`` -> ``{node: role}``, refusing a node claimed twice."""
     out: dict = {}
     for role, nodes in roles.items():
         if role not in _ROLE_CODES or role == "wall":
@@ -108,9 +88,10 @@ def _roles_by_node(roles: Mapping[str, Any]) -> dict:
 
 
 def _successors(contour_lengths) -> list:
-    """``kp1bor`` over the written row order: the next row on the SAME contour.
+    """``kp1bor`` over the written row order: the next row on the same contour.
 
-    A run straddling a contour's first row is ONE boundary to the engine."""
+    A run straddling a contour's first row is one boundary to the engine.
+    """
     kp1: list = []
     at = 0
     for length in contour_lengths:
@@ -120,9 +101,7 @@ def _successors(contour_lengths) -> list:
 
 
 def _south_west(keys, unvisited) -> int:
-    """The row FRONT2 starts a contour at: south-westernmost, then southernmost.
-
-    The engine picks its start point off the GEOMETRY, never off the file."""
+    """The row FRONT2 starts a contour at: south-westernmost, then southernmost (off the geometry, never the file)."""
     sums = [keys[k][0] for k in unvisited]
     lowest, highest = min(sums), max(sums)
     eps = (highest - lowest) * 1.0e-4
@@ -132,24 +111,17 @@ def _south_west(keys, unvisited) -> int:
 
 
 def _liquid_boundaries(x, y, bnodes, codes, contour_lengths) -> list:
-    """TELEMAC's OWN liquid-boundary numbering -> one ``[first, last]`` row pair.
-
-    A port of ``bief/front2.f``: the engine's own choice of boundary number 1."""
+    """TELEMAC's own liquid-boundary numbering -> one ``[first, last]`` row pair; a port of ``bief/front2.f``."""
     kp1 = _successors(contour_lengths)
     quads = [(int(quad[0]), int(quad[1])) for quad in codes]
     solid = [quad[0] == KLOG for quad in quads]
     keys = [(float(x[n]) + float(y[n]), float(y[n])) for n in bnodes]
     seen = [False] * len(kp1)
     runs: list = []
-    # FRONT2 does NOT start at the first row of the file: it starts each contour
-    # at the south-westernmost boundary point, walks the successor from there,
-    # calls a segment solid when EITHER of its ends is solid, and folds the run
-    # straddling that start point back into one boundary. Numbering from row
-    # order instead agrees only by luck: on a reach whose inflow face holds the
-    # domain's south-west corner the two disagree, and a steering file then
-    # states its level at the inflow's number and its flowrate at the outflow's
-    # - each into a code that never reads it, so the inflow supplies nothing and
-    # the outflow is clamped to elevation zero and drains the domain.
+    # FRONT2 starts each contour at the south-westernmost point, walks the successor, calls a segment
+    # solid when either end is solid, and folds the run straddling the start into one boundary. Row-order
+    # numbering disagrees when the inflow holds the south-west corner: level and flowrate land on the
+    # wrong numbers, each into a code that never reads it, and the outflow clamps to elevation zero.
     while not all(seen):
         start = _south_west(keys, [k for k in range(len(seen)) if not seen[k]])
         opened_first = not (solid[start] or solid[kp1[start]])
@@ -170,9 +142,7 @@ def _liquid_boundaries(x, y, bnodes, codes, contour_lengths) -> list:
                 ends_liquid, ends_solid = False, True
             elif not back and not at and not ahead:
                 ends_liquid, ends_solid = True, False
-                # A liquid-liquid seam where the CODES change is a boundary
-                # break to the engine: one prescribed level and one prescribed
-                # flowrate touching are two boundaries, not one.
+                # A liquid-liquid seam where the codes change is a boundary break: a level and a flowrate touching are two boundaries.
                 if quads[here] != quads[kp1[here]]:
                     runs[-1][1] = here
                     runs.append([kp1[here], kp1[here]])
@@ -199,14 +169,12 @@ def _liquid_boundaries(x, y, bnodes, codes, contour_lengths) -> list:
             else:
                 runs[-1][1] = start
         elif opened_first:
-            # A contour of ONE type: an all-liquid ring is one circular boundary
-            # that begins and ends at the start point.
+            # A contour of one type: an all-liquid ring is one circular boundary from the start point.
             runs[first_run - 1] = [start, start]
     return runs
 
 
 def _numliq(runs, kp1, nptfr) -> list:
-    """The liquid-boundary number on every row, 0 where the row is solid."""
     numliq = [0] * nptfr
     for number, (first, last) in enumerate(runs, start=1):
         row = first
@@ -222,12 +190,12 @@ def _numliq(runs, kp1, nptfr) -> list:
 def _joined(values) -> str:
     """One statement per numbered boundary, or the joined names when it is two.
 
-    A boundary whose rows disagree is reported joined, never resolved here."""
+    A boundary whose rows disagree is reported joined, never resolved here.
+    """
     return "+".join(sorted(set(values))) if values else "wall"
 
 
 def _write_cli(path: Path, bnodes, codes) -> None:
-    """The boundary file, one row per boundary node in IPOBO order."""
     rows = []
     for rank, (node, quad) in enumerate(zip(bnodes, codes), start=1):
         rows.append(_CLI_ROW.format(
@@ -239,11 +207,11 @@ def _write_cli(path: Path, bnodes, codes) -> None:
 
 def telemac_boundary(*, x: Any, y: Any, cells: Any,
                      roles: Mapping[str, Any] | None = None) -> dict[str, Any]:
-    """The engine's OWN boundary numbering over this geometry -> the walk.
+    """The engine's own boundary numbering over this geometry -> the walk.
 
-    The IPOBO order, the code quad written on every boundary row, and what each
-    numbered liquid boundary prescribes. One walk: the ``.cli`` rows and the
-    topology beside them are both read off this, so neither can disagree."""
+    The IPOBO order, the quad on every row, and what each liquid boundary prescribes; the ``.cli``
+    and the topology are both read off this one walk.
+    """
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
     cells = np.asarray(cells, dtype=np.int64)
@@ -268,8 +236,6 @@ def telemac_boundary(*, x: Any, y: Any, cells: Any,
         "liquid_boundary_roles": [
             _joined([role_of.get(int(bnodes[k]), "wall") for k in here])
             for here in rows],
-        # What each numbered boundary PRESCRIBES, read off the quad written for
-        # it - the half of the cross-file contract the steering author reads.
         "liquid_boundary_prescribes": [
             _joined([_prescribes(codes[k]) for k in here]) for here in rows],
         "n_contours": len(contours),
@@ -285,7 +251,8 @@ def write_telemac_pair(rundir: Path | str, *, x: Any, y: Any, cells: Any,
                        title: str = "TRID3NT MESH") -> dict[str, Any]:
     """Write the SELAFIN geometry and its ``.cli`` -> the two paths and the walk.
 
-    ``roles`` maps a boundary role to its node indices; the rest are wall."""
+    ``roles`` maps a boundary role to its node indices; the rest are wall.
+    """
     from serafin import SerafinHeader, SerafinWriter
 
     rundir = Path(rundir)
@@ -298,18 +265,12 @@ def write_telemac_pair(rundir: Path | str, *, x: Any, y: Any, cells: Any,
 
     geo_slf, cli = rundir / "mesh.slf", rundir / "mesh.cli"
     header = SerafinHeader(title=str(title)[:72])
-    # ``from_triangulation`` takes the connectivity 1-based and the IPOBO the
-    # walk numbered; left to itself it would rebuild IPOBO from its own walk,
-    # and the ``.cli`` rows below would then be ordered by a numbering no other
-    # file agrees with.
+    # ``from_triangulation`` takes 1-based connectivity and the walk's IPOBO; left alone it would rebuild IPOBO and the ``.cli`` rows would follow a numbering no other file shares.
     header.from_triangulation(np.column_stack([x, y]), cells + 1, ipobo)
     header.add_variable_str("BOTTOM", "BOTTOM", "M")
     bottom = (np.asarray(bed, dtype=float) if bed is not None
               else np.zeros(npoin, dtype=float))
-    # The pair is ONE artifact: a geometry without its .cli, or a .cli written
-    # against a geometry that never landed, is a numbering nothing agrees with.
-    # Either half failing refuses by name here - there is no in-image writer
-    # left to fall back to.
+    # The pair is one artifact; either half failing refuses by name.
     try:
         with SerafinWriter(str(geo_slf), "en", overwrite=True) as writer:
             writer.write_header(header)
@@ -327,16 +288,9 @@ def write_telemac_pair(rundir: Path | str, *, x: Any, y: Any, cells: Any,
 def read_selafin(path: str | Path) -> dict[str, Any]:
     """A result file -> its mesh and per-variable time series.
 
-    ``varnames`` carry no unit (``varunits`` does), ``ikle`` is 0-based, origins
-    are not applied."""
-    # {"varnames": [str], "varunits": [str], "npoin": int, "nelem": int,
-    #  "x": ndarray(npoin), "y": ndarray(npoin), "ikle": ndarray(nelem, ndp),
-    #  "nplan": int, "npoin2": int, "nelem2": int, "ikle2": ndarray(nelem2, 3),
-    #  "x_origin": int, "y_origin": int, "times": ndarray(nframes),
-    #  "data": {varname: ndarray(nframes, npoin)}}
-    # ``x``/``y`` stay exactly as the file stores them: a reader that places a
-    # local-coordinate mesh adds the origin it recovers from the domain bbox,
-    # and applying it here would double the offset.
+    ``varnames`` carry no unit (``varunits`` does), ``ikle`` is 0-based, origins are not applied.
+    """
+    # ``x``/``y`` stay as the file stores them: a reader placing a local-coordinate mesh adds the origin itself, and applying it here would double the offset.
     from serafin import SerafinReader
 
     slf = Path(path).resolve()
@@ -353,10 +307,7 @@ def read_selafin(path: str | Path) -> dict[str, Any]:
         varnames = [name.decode().strip() for name in header.var_names]
         nplan = int(header.nb_planes)
         times = np.asarray(reader.time, dtype="float64")
-        # Read by POSITION, one seek per frame: the reader's own lookup keys on
-        # the dictionary id it resolved the name to, and a result carrying two
-        # variables the dictionary gives the same id (appended tracers) would
-        # then return one of them twice.
+        # Read by position, one seek per frame: the reader's lookup keys on the dictionary id, and two variables sharing an id (appended tracers) would return one twice.
         frames = (np.stack([reader.read_vars_in_frame(index)
                             for index in range(times.shape[0])])
                   if times.shape[0]
@@ -368,9 +319,7 @@ def read_selafin(path: str | Path) -> dict[str, Any]:
             "varunits": [unit.decode().strip() for unit in header.var_units],
             "npoin": int(header.nb_nodes),
             "nelem": int(header.nb_elements),
-            # The vertical shape a 3D result carries. A 3D field is flat over
-            # NPOIN3 and is NPLAN planes stacked over the 2D mesh, bottom first;
-            # a 2D file reports one plane and the same mesh twice.
+            # A 3D field is flat over NPOIN3 and is NPLAN planes stacked over the 2D mesh, bottom first; a 2D file reports one plane and the same mesh twice.
             "nplan": nplan,
             "npoin2": int(header.nb_nodes_2d),
             "nelem2": int(header.nb_elements_2d),
@@ -385,8 +334,7 @@ def read_selafin(path: str | Path) -> dict[str, Any]:
             "times": times,
             "data": data,
         }
-    # A file whose header opens and whose frames do not is unreadable too, and
-    # says so by the same name rather than returning a short series.
+    # A file whose header opens and whose frames do not is unreadable too, by the same name.
     except Exception as failure:
         raise SelafinReadError(
             f"the SELAFIN reader could not read {slf.name}: {failure}") from failure

@@ -93,7 +93,6 @@ class MeshRecipe:
         object.__setattr__(self, "ops", tuple(self.ops))
         bind_ops(get_mesher(self.mesher), self.ops)
 
-    # -- editing ----------------------------------------------------------- #
     def appending(self, op: MeshOp) -> "MeshRecipe":
         """The recipe with one more entry at the end."""
         return replace(self, ops=self.ops + (op,))
@@ -134,7 +133,6 @@ class MeshRecipe:
                 f"this recipe has {len(self.ops)} op(s), numbered 0 to "
                 f"{len(self.ops) - 1}; there is no entry {index} to {what}.")
 
-    # -- the record -------------------------------------------------------- #
     def numbered(self) -> list[str]:
         """The ops as the numbered lines a gate card and a journal quote."""
         return [f"{i}: {op!r}" for i, op in enumerate(self.ops)]

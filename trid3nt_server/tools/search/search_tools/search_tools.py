@@ -43,8 +43,6 @@ __all__ = [
 logger = logging.getLogger("trid3nt_server.tools.search.search_tools.search_tools")
 
 
-
-
 class SearchToolsError(RuntimeError):
     """Base class for search_tools failures."""
 
@@ -71,17 +69,15 @@ class CorpusFormatError(SearchToolsError):
         self.entry = entry
 
 
-# Index state (module-level, lazy-built on first call).
-
-
 _INDEX_LOCK = threading.Lock()
 _INDEX: "_DiscoverIndex | None" = None
 
 
 class _DiscoverIndex:
-    """In-memory hybrid retrieval index. Every per-tool list is PARALLEL to
-    ``tool_names``; ``dense_encode_fn`` must match the modality ``dense_matrix``
-    was built with, and ``bm25`` or ``dense_matrix`` may each be ``None``."""
+    """In-memory hybrid retrieval index.
+
+    Every per-tool list is PARALLEL to ``tool_names``; ``dense_encode_fn`` must match the modality ``dense_matrix`` was built with,
+    and ``bm25`` or ``dense_matrix`` may each be ``None``."""
 
     def __init__(
         self,
@@ -106,30 +102,19 @@ class _DiscoverIndex:
         self.vocabulary = vocabulary
 
 
-
-
 _TOKEN_RE = re.compile(r"[A-Za-z0-9_]+")
 
 
 def _tokenize(text: str) -> list[str]:
-    """Lowercasing tokenizer for BM25. Splits on any non-alphanumeric character
-    but KEEPS underscores, so a tool name referenced verbatim survives as one
-    token. No stemming."""
+    """Lowercasing tokenizer for BM25. Splits on any non-alphanumeric character but
+    KEEPS underscores, so a tool name referenced verbatim survives as one token."""
     if not isinstance(text, str):
         return []
     return [tok.lower() for tok in _TOKEN_RE.findall(text)]
 
 
-# Typo query expansion: model-free, stdlib difflib, deterministic.
-#
-# The BM25 channel is exact-token and the hashed dense fallback hashes the same
-# exact tokens, so a single misspelt content word can miss the tool that answers
-# the ask outright. At QUERY time only, an out-of-vocabulary token gets up to two
-# close vocabulary matches APPENDED - expansion, never replacement - so the raw
-# prompt the model sees is untouched and no correct token is ever displaced.
-#
-# The wrappers below are installed on the built index's slots, so every consumer
-# of the cached index inherits the expansion without its own code.
+# Typo expansion, model-free (difflib): at QUERY time an out-of-vocabulary token gets up to two close vocabulary matches APPENDED, never replacing,
+# so a misspelt word cannot miss the tool and the raw prompt is untouched. Installed on the built index's slots so every consumer inherits it.
 
 #: Minimum token length eligible for fuzzy correction; a short token is too
 #: ambiguous to correct toward anything in particular.
@@ -142,9 +127,8 @@ _TYPO_CUTOFF = 0.8
 
 @functools.lru_cache(maxsize=4096)
 def _close_vocab_matches(token: str, vocabulary: frozenset) -> tuple[str, ...]:
-    """Fuzzy vocabulary corrections for ONE query token, most similar first, or
-    ``()`` when it is already in vocabulary, too short, or numeric. The vocabulary
-    is SORTED first, so the result never depends on set iteration order."""
+    """Fuzzy vocabulary corrections for ONE query token, most similar first, or ``()``
+    when it is already in vocabulary, too short, or numeric. The vocabulary is SORTED first, so iteration order never matters."""
     # The vocabulary frozenset is part of the lru_cache key and frozensets hash by
     # content, so a rebuild with a changed corpus keys fresh entries on its own
     # while a rebuild with identical content reuses them.
@@ -164,9 +148,8 @@ def _close_vocab_matches(token: str, vocabulary: frozenset) -> tuple[str, ...]:
 def _expand_query_tokens(
     tokens: list[str], vocabulary: frozenset
 ) -> list[str]:
-    """``tokens`` with fuzzy corrections APPENDED, never replaced: the originals
-    keep their order and multiplicity at the head, and each distinct correction is
-    appended at most once."""
+    """``tokens`` with fuzzy corrections APPENDED, never replaced: the originals keep
+    their order and multiplicity at the head, and each distinct correction is appended at most once."""
     if not vocabulary:
         return list(tokens)
     expanded = list(tokens)
@@ -180,9 +163,7 @@ def _expand_query_tokens(
 
 
 class _TypoTolerantBM25:
-    """Proxy over ``BM25Okapi`` that typo-expands query tokens in ``get_scores``.
-    The corpus is tokenized and fed to the wrapped BM25 BEFORE this proxy exists,
-    so only QUERIES are ever expanded; every other attribute delegates."""
+    """Proxy over ``BM25Okapi`` that typo-expands query tokens in ``get_scores``; the corpus is fed to the wrapped BM25 BEFORE the proxy exists."""
 
     def __init__(self, bm25: Any, vocabulary: frozenset) -> None:
         self._bm25 = bm25
@@ -198,9 +179,8 @@ class _TypoTolerantBM25:
 
 
 def _wrap_hashed_encode_with_expansion(encode_fn: Any, vocabulary: frozenset) -> Any:
-    """Query-side typo expansion for the HASHED fallback ONLY, which is as
-    typo-blind as BM25. A real embedding backend is subword-tolerant and must NEVER
-    be handed a synthetic token join."""
+    """Query-side typo expansion for the HASHED fallback ONLY, which is as typo-blind as
+    BM25; a real embedding backend is subword-tolerant and must NEVER be handed a synthetic token join."""
 
     def _encode_expanded(texts: list[str]) -> Any:
         return encode_fn(
@@ -216,7 +196,6 @@ def _short_description(docstring: str | None) -> str:
     if not docstring:
         return ""
     text = docstring.strip()
-    # First paragraph = first blank-line-separated block.
     parts = text.split("\n\n", 1)
     head = parts[0].strip().replace("\n", " ")
     head = re.sub(r"\s+", " ", head)
@@ -226,9 +205,7 @@ def _short_description(docstring: str | None) -> str:
 
 
 def _read_corpus_yaml(p: Path) -> dict[str, list[str]]:
-    """One corpus YAML file as ``{tool: [queries]}``. A MISSING file yields
-    ``{}`` and the index still builds in docstring-only mode; a non-string entry
-    raises ``CorpusFormatError`` naming the file rather than being dropped."""
+    """One corpus YAML file as ``{tool: [queries]}``; a MISSING file yields ``{}``, a non-string entry raises ``CorpusFormatError``."""
     if not p.exists():
         return {}
     try:
@@ -252,16 +229,14 @@ def _read_corpus_yaml(p: Path) -> dict[str, list[str]]:
 
 
 def _compose_corpus_from_tree() -> dict[str, list[str]]:
-    """The flat ``{key: [queries]}`` corpus: every co-located ``corpus.yaml``
-    under ``tools/`` and ``workflows/`` - engine templates are ordinary
-    pool members - then the residual file merged on top. A key is a tool name or a
-    DATA CLASS, which the index turns into its own document. No tier semantics."""
+    """The flat ``{key: [queries]}`` corpus: every co-located ``corpus.yaml`` under
+    ``tools/`` and ``workflows/`` - engine templates are ordinary pool members.
+    A key is a tool name or a DATA CLASS; the residual file merges on top."""
     server_dir = Path(__file__).resolve().parents[3]
     composed: dict[str, list[str]] = {}
     for base in (server_dir / "tools", server_dir / "workflows"):
         for cpath in sorted(base.rglob("corpus.yaml")):
             composed.update(_read_corpus_yaml(cpath))
-    # Merge the residual: tools registered outside either tree.
     residual = server_dir / "tools" / "tool_query_corpus.yaml"
     composed.update(_read_corpus_yaml(residual))
     return composed
@@ -278,17 +253,13 @@ def _load_corpus(path: Path | None = None) -> dict[str, list[str]]:
     return _compose_corpus_from_tree()
 
 
-
-
 #: Default sentence-transformers model id; env-overridable for an experiment
 #: without a code change.
 _DEFAULT_SENTENCE_TRANSFORMERS_MODEL = "all-MiniLM-L6-v2"
 
 
 def _try_sentence_transformers_backend() -> tuple[Any, Any, str] | None:
-    """``(encode_fn, np_module, backend_name)``, or ``None`` when the library is
-    absent. The model LOAD is deferred to the first encode call, so importing this
-    module never pays for it."""
+    """``(encode_fn, np_module, backend_name)``, or ``None`` when the library is absent; the model LOAD is deferred to the first encode."""
     try:
         from sentence_transformers import SentenceTransformer  # type: ignore[import-not-found]
         import numpy as np  # noqa: F401
@@ -313,9 +284,7 @@ def _try_sentence_transformers_backend() -> tuple[Any, Any, str] | None:
 
 
 def _try_hashed_backend() -> tuple[Any, Any, str] | None:
-    """Final-fallback dense backend: hashed token-count vectors. LEXICAL ONLY, so
-    its signal near-duplicates BM25 - it exists to keep the fusion path live
-    without a real embedding library, not to add semantics."""
+    """Final-fallback dense backend: hashed token-count vectors, LEXICAL ONLY (keeps the fusion path live, adds no semantics)."""
     try:
         import numpy as _np
     except Exception:
@@ -353,26 +322,19 @@ def _select_dense_backend() -> tuple[Any, Any, str] | None:
     return None
 
 
-
-
 def _build_index(
     corpus_path: Path | None = None,
     registry_snapshot: dict[str, Any] | None = None,
 ) -> _DiscoverIndex:
-    """The BM25 + dense index over the registry and the composed corpus. ONE
-    document per tool feeds both channels; a row-driven tool indexes exactly like a
-    hand-written one, with no special case."""
+    """The BM25 + dense index over the registry and the composed corpus."""
     from trid3nt_contracts.coverage import DATA_CLASSES
     from trid3nt_server.tools.search.find_sources.find_sources import FIND_SOURCES
     from trid3nt_server.tools.search.match import covered_sources
 
     snapshot = registry_snapshot if registry_snapshot is not None else dict(TOOL_REGISTRY)
     corpus = _load_corpus(corpus_path)
-    # A fetcher with a ROW is found rather than ranked: which source
-    # measures a class at a place is decided on the row's extent, window and
-    # cell, which no phrasing can weigh. It leaves the index, the class
-    # phrasings route to find_sources instead, and the survivors it names enter
-    # the gate. A fetcher with no row stays here and is routed by description.
+    # A fetcher with a ROW is found, not ranked: its extent, window and cell decide which source measures a class at a place. It leaves the index,
+    # class phrasings route to find_sources, and a fetcher with no row stays here, routed by description.
     covered = covered_sources()
 
     tool_names: list[str] = []
@@ -383,10 +345,7 @@ def _build_index(
 
     for name in sorted(snapshot.keys()):
         entry = snapshot[name]
-        # Engine templates (tier=template) index HERE alongside general tools:
-        # their practitioner phrasings do the routing. tier=internal is the ONE
-        # tier withheld - an absorbed in-process seam, registry-resolvable but not
-        # searchable.
+        # Templates (tier=template) index here; only tier=internal is withheld (registry-resolvable, not searchable).
         if getattr(entry.metadata, "tier", "general") in ("internal",):
             continue
         if name in covered:
@@ -433,7 +392,6 @@ def _build_index(
         tok for toks in corpus_tokens for tok in toks
     )
 
-    # BM25 (optional -- degrades gracefully when rank_bm25 is absent).
     bm25 = None
     try:
         from rank_bm25 import BM25Okapi  # type: ignore[import-not-found]
@@ -446,7 +404,6 @@ def _build_index(
         logger.warning("rank_bm25 unavailable; BM25 path disabled (%s)", exc)
         bm25 = None
 
-    # Dense (optional -- graceful degradation).
     dense_matrix = None
     dense_encode_fn = None
     backend_name = None
@@ -514,17 +471,13 @@ def _reset_index_for_tests() -> None:
     _close_vocab_matches.cache_clear()
 
 
-
-
 def _reciprocal_rank_fusion(
     rankings: list[list[int]],
     *,
     k: int = 60,
 ) -> list[tuple[int, float]]:
-    """Reciprocal Rank Fusion of N rank lists of doc indices, returning
-    ``[(doc_index, fused_score), ...]`` descending. Rank-aware, not score-aware, so
-    the channels need no normalization and an absent doc simply contributes 0."""
-    # The fused score for doc i is sum over channels of 1/(k + rank), rank from 1.
+    """Reciprocal Rank Fusion of N rank lists of doc indices, returning ``[(doc_index,
+    fused_score), ...]`` descending. Rank-aware, not score-aware: an absent doc contributes 0."""
     scores: dict[int, float] = {}
     for ranking in rankings:
         for rank, idx in enumerate(ranking, start=1):
@@ -533,13 +486,8 @@ def _reciprocal_rank_fusion(
     return out
 
 
-# Lexical-champion reinforcement.
-#
-# For a short or domain-worded query the dense channel often ranks a tool's BEST
-# exact-lexical match only mid-pack, so plain RRF buries that lexical number one
-# beneath tools that merely rank mid on BOTH channels. The BM25 champion earns ONE
-# extra reciprocal-rank term, on the same 1/(k+rank) scale as a real channel:
-# bounded, deterministic, never a hard slot, and no corpus edit.
+# Lexical-champion reinforcement: plain RRF buries a tool's best exact-lexical match beneath tools that rank mid on both channels,
+# so the BM25 champion earns ONE extra reciprocal-rank term on the same 1/(k+rank) scale; bounded and deterministic.
 
 
 def _lexical_reinforcement(
@@ -562,9 +510,8 @@ def _lexical_reinforcement(
 def _match_synthetic_queries(
     query: str, synthetic_queries: list[str], limit: int = 3
 ) -> list[str]:
-    """Up to ``limit`` corpus phrasings sharing the most content tokens with
-    ``query``. Purely lexical, and returned so the caller can see WHY a tool
-    surfaced."""
+    """Up to ``limit`` corpus phrasings sharing the most content tokens with ``query``.
+    Purely lexical, and returned so the caller can see WHY a tool surfaced."""
     if not synthetic_queries:
         return []
     q_tokens = set(_tokenize(query)) - _STOPWORDS
@@ -580,17 +527,12 @@ def _match_synthetic_queries(
     return [sq for _, sq in scored[:limit]]
 
 
-#: Generic operator/shape tokens that appear in many utility tool names but
-#: that the LLM uses descriptively in queries. Skipped by the name-substring
-#: ranker so e.g. "flood zone polygons" doesn't over-boost a polygon-named
-#: utility over the data-intent target ``fetch_fema_nfhl_zones``.
+#: Generic operator/shape tokens in many utility tool names that the LLM uses descriptively; skipped by the name-substring ranker
+#: so "flood zone polygons" does not over-boost a polygon-named utility over the data-intent target.
 _NAME_RANKER_GENERICS: set[str] = {
     "polygon",
     "polygons",
-    # Bare domain nouns: content channels route these; letting
-    # them earn NAME-channel RRF terms made name-bearing tools (fetch_buildings,
-    # compute_flood_depth_damage) structurally unbeatable for analytical asks
-    # like "summary statistics for the building layer".
+    # Bare domain nouns are routed by the content channels; name-channel RRF terms would make name-bearing tools unbeatable for analytical asks.
     "building",
     "buildings",
     "flood",
@@ -644,17 +586,12 @@ _STOPWORDS: set[str] = {
     "want",
     "need",
     "data",
-    # Demonstratives carry no routing signal and appear in most AOI phrasings,
-    # but the name channel STEMS a trailing "s" before substring-matching, so
-    # "this" becomes "thi" and silently matches any tool name containing it -
-    # a one-entry name channel is enough to take the top RRF slot.
+    # Demonstratives carry no routing signal, and the name channel stems a trailing "s" ("this" -> "thi") and would match any tool name containing it.
     "this",
     "that",
     "these",
     "those",
 }
-
-
 
 
 _SEARCH_TOOLS_METADATA = AtomicToolMetadata(
@@ -667,8 +604,6 @@ _SEARCH_TOOLS_METADATA = AtomicToolMetadata(
 @register_tool(
     _SEARCH_TOOLS_METADATA,
     supports_global_query=False,
-    # In-process retrieval over the local corpus: no external call, and the same
-    # query over the same corpus always ranks the same way.
 )
 async def search_tools(
     query: str,
@@ -711,7 +646,6 @@ async def search_tools(
     if not fused:
         return {"results": []}
 
-    # Build the response payload.
     results: list[dict[str, Any]] = []
     seen: set[str] = set()
     for idx, score in fused:

@@ -37,8 +37,7 @@ def inputs_of(fn: Any) -> list[str]:
 
 
 def _annotation(fn: Any, name: str) -> Any:
-    """The resolved annotation of one input with ``None`` unwrapped; ``Any`` where
-    the annotation does not resolve."""
+    """The resolved annotation with ``None`` unwrapped; ``Any`` when it does not resolve."""
     try:
         found = get_type_hints(fn).get(name, Any)
     except Exception:  # noqa: BLE001 - an unresolvable annotation states nothing

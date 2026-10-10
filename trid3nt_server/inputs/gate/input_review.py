@@ -27,18 +27,15 @@ __all__ = [
     "PHYSICS_INPUT_REQUIRED",
 ]
 
-#: The one code a physics-default refusal carries, whichever caller raises it: a
-#: refusal keeps the code of its reason, and only a person's own cancel is a
-#: decline.
+#: The one code a physics-default refusal carries, whichever caller raises it: a refusal
+#: keeps the code of its reason, and only a person's own cancel is a decline.
 PHYSICS_INPUT_REQUIRED = "PHYSICS_INPUT_REQUIRED"
 
 #: Run-mode lever for every gated thing. ``auto``
 #: proceeds immediately with labeled inputs; ``user_gated`` pauses for review.
 InputGateMode = Literal["auto", "user_gated"]
 
-#: Max review rounds before an honest cancel. One round == one presentation; a
-#: ``provide values`` reply consumes a round and re-presents, so the user gets
-#: up to this many looks.
+#: Max review rounds before an honest cancel; a ``provide values`` reply consumes one.
 _DEFAULT_MAX_ROUNDS = 3
 
 #: Gate wait cap (seconds); running out is a typed cancel, never a silent run.
@@ -87,8 +84,7 @@ def render_input_review_lines(entries: Any) -> list[str]:
 def _physics_demo_entries(entries: Any) -> list[Any]:
     """The entries that must REFUSE in auto: ``consequence="physics"`` demo defaults.
 
-    Scenario, numerical and aoi demo defaults are the user's question or a solver
-    knob, not a world invention, and are excluded."""
+    Scenario, numerical and aoi demo defaults are not world inventions and are excluded."""
     out = []
     for e in entries or []:
         if (_entry_field(e, "basis") == "default_demo"
@@ -146,8 +142,7 @@ def _build_review_envelope(
 ) -> PayloadWarningEnvelopePayload:
     """Build the gate's ``tool-payload-warning`` round card.
 
-    ``param_sheet`` is the resolved sheet as an EDIT SURFACE; ``narrow_scope`` is
-    the "provide values" action, and its reply carries ``revised_args``."""
+    ``param_sheet`` is the resolved sheet as an EDIT SURFACE; ``narrow_scope`` is "provide values"."""
     # The card is carried twice on purpose: rendered into ``recommendation`` so
     # a client with no rich renderer still surfaces it, and structured on
     # ``param_sheet`` and ``synthetic_inputs`` for the ones that do.
@@ -183,8 +178,7 @@ def _apply_revision(
 ) -> tuple[list[SyntheticInput], dict[str, Any]]:
     """Merge a ``provide values`` revision into the params + provenance entries.
 
-    A revised value is re-stamped ``basis="user"`` with its units preserved; an
-    unknown key becomes a new user-basis entry."""
+    A revised value is re-stamped ``basis="user"``, units preserved; an unknown key becomes a new entry."""
     revised = revised_args or {}
     if not revised:
         return entries, params
@@ -259,12 +253,9 @@ async def gate_input_review(
 ) -> ReviewOutcome:
     """Present what is under review before it runs, and ask.
 
-    In ``auto`` the inputs proceed at once UNLESS a physics demo default is present;
-    ``user_gated`` with no live session REFUSES by name. ``present``
-    builds the round's card where the caller owns the thing being reviewed, and
-    ``apply_revision`` takes a reply as a change to that thing and re-presents;
-    ``blocked`` names what keeps a proceed from launching, and re-presents too.
-    ``emitter`` is the session's, for a caller outside a tool's own dispatch."""
+    ``auto`` proceeds at once unless a physics demo default is present; ``user_gated`` with no
+    live session REFUSES. ``present``/``apply_revision``/``blocked`` let a caller that owns the
+    thing reviewed build the card, take a reply as a change, and name what blocks a proceed."""
     resolved_mode = resolve_input_gate_mode(mode)
     physics_refusal = physics_refusal_reason(tool_name, entries)
     if resolved_mode == "auto":
@@ -367,9 +358,8 @@ async def gate_input_review(
                 cancelled=True, cancel_reason="declined by user at input review",
                 mode="user_gated", rounds_used=round_idx, cancel_code="declined",
             )
-        # narrow_scope == "provide values". A caller that owns the thing under
-        # review applies the reply to it and gets another look; otherwise the
-        # revision merges into the params here.
+        # narrow_scope == "provide values": a caller owning the thing under review applies
+        # the reply to it and re-presents; otherwise the revision merges into the params.
         if apply_revision is not None:
             await apply_revision(decision.revised_args or {})
             if round_idx == max_rounds:
@@ -385,10 +375,9 @@ async def gate_input_review(
             cur_entries, cur_params, decision.revised_args
         )
         if param_sheet is not None:
-            # The form card showed the WHOLE sheet, so submitting it IS the
-            # approval and the gate proceeds instead of re-presenting. Without a
-            # sheet the text card keeps its adjust-and-re-present rounds, where a
-            # revision the user could not see in full deserves another look.
+            # The form card showed the WHOLE sheet, so submitting it IS the approval and
+            # the gate proceeds instead of re-presenting. Without a sheet the text card
+            # re-presents, since the user could not see the revision in full.
             logger.info(
                 "input-review gate submit-with-edits session=%s tool=%s revised=%s",
                 emitter.session_id, tool_name,

@@ -34,32 +34,11 @@ logger = logging.getLogger("trid3nt_server.tools.search.tool_retrieval")
 DEFAULT_K = 25
 MAX_K = 25
 
-# SEARCH IS THE FRONT DOOR; ENUMERATION IS THE EXCEPTION. A surface that is
-# large, documented and touched OCCASIONALLY per turn is reached by ranking it -
-# the catalog, the data sources, the engine keywords. A surface that is SMALL
-# and needed on MOST turns is enumerated, because a lookup for it would be pure
-# overhead. A browse TREE over either is the shape this refuses: it multiplies
-# wrong turns, each one a full round trip, and grows dead ends faster than the
-# corpus grows wide.
-#
-# The revisit trigger is MEASURED, not felt: a registry of order a thousand tools
-# AND a demonstrated fall in recall at k. Until both hold, a ranking is
-# sub-millisecond CPU and a tree buys back no latency to pay for its errors.
+# Search is the front door: a large, documented surface touched occasionally is ranked; a small one needed on most turns is enumerated.
+# A browse TREE is refused: it multiplies wrong turns, each a full round trip, and grows dead ends faster than the corpus.
 
-#: The always-visible floor: tools that must NEVER be retrieved out whatever the
-#: turn ranks - the "before you can do anything else" primitives, the discovery
-#: escape hatch, and the cross-cutting actions a user reaches for at any point.
-#:
-#: No engine template belongs here: a template answers ONE question class, so
-#: flooring one biases every turn toward it. Templates reach the model through the
-#: turn's ranking instead.
-#:
-#: No publish tool belongs here: emission is automatic, so there is no "display
-#: this" intent for the model to route to.
-#:
-#: No COVERED fetcher belongs here: a source that states a row is FOUND
-#: through the match at a place, never declared every turn regardless of whether
-#: it reaches the ground under the question.
+#: The always-visible floor: tools that must NEVER be retrieved out - the prerequisite primitives, the discovery escape hatch, cross-cutting actions.
+#: No engine template (flooring one biases every turn), no publish tool (emission is automatic), no covered fetcher (found through the match at a place).
 CORE_FLOOR: frozenset[str] = frozenset(
     {
         "geocode_location",
@@ -77,13 +56,11 @@ CORE_FLOOR: frozenset[str] = frozenset(
 def _build_channel_rankings(
     query_clean: str, index: Any
 ) -> tuple[list[list[int]], list[int]]:
-    """The three sync ranking channels over the CACHED index, as rank lists of
-    tool indices. Pure CPU; NEVER builds the index. The BM25 rank list is returned
-    separately so a caller can feed it to the lexical reinforcement."""
+    """The three sync ranking channels over the CACHED index, as rank lists of tool
+    indices. Pure CPU; NEVER builds the index. The BM25 rank list is returned separately for the lexical reinforcement."""
     rankings: list[list[int]] = []
     bm25_ranking: list[int] = []
 
-    # --- BM25 channel ---
     if index.bm25 is not None:
         q_tokens = _tokenize(query_clean)
         if q_tokens:
@@ -97,10 +74,7 @@ def _build_channel_rankings(
                 logger.warning("tool_retrieval: BM25 channel failed", exc_info=True)
                 bm25_ranking = []
 
-    # --- Dense channel, LOCAL backends only ---
-    # A positive allowlist of the CPU-local backends, so any FUTURE network-backed
-    # backend is excluded by default rather than by omission: a per-query network
-    # encode here would be hot-path I/O.
+    # A positive allowlist of CPU-local backends excludes any future network-backed one by default; a per-query network encode would be hot-path I/O.
     if (
         index.dense_matrix is not None
         and index.dense_encode_fn is not None
@@ -121,7 +95,6 @@ def _build_channel_rankings(
         except Exception:  # noqa: BLE001
             logger.warning("tool_retrieval: dense channel failed", exc_info=True)
 
-    # --- Name-substring channel ---
     q_content = [
         t for t in _tokenize(query_clean)
         if t not in _STOPWORDS and t not in _NAME_RANKER_GENERICS
@@ -208,9 +181,9 @@ def retrieve_ranked_tools(
 
 
 def _full_registry_floor(floor: set[str]) -> set[str]:
-    """The FAIL-OPEN result: every model-facing registered tool UNION the core
-    floor. The FULL registry is populated first, because a coded tool registers
-    only when its module is imported. Idempotent; only this rare path pays."""
+    """The FAIL-OPEN result: every model-facing registered tool UNION the core floor.
+
+    The FULL registry is populated first, because a coded tool registers only when its module is imported."""
     try:
         import trid3nt_server.main as _main
 
@@ -244,21 +217,16 @@ def retrieve_visible_tools(
         k = DEFAULT_K
     k = max(1, min(k, MAX_K))
 
-    # --- Core floor + the Case's accumulated visible set (ALWAYS included). ---
-    # The accrued set carries every tool once made visible this Case -> the
-    # NEVER-HIDE-MID-TASK guarantee. A MOUNTED tool joins the floor for as long
-    # as its session is open: it did not exist when the index was built, so no
-    # ranking channel can surface it.
+    # The accrued set carries every tool made visible this Case (never hide mid-task). A MOUNTED tool joins the floor while its session is open:
+    # no ranking channel can surface it.
     floor: set[str] = set(CORE_FLOOR) | set(mounted_tool_names())
     if accrued:
         floor |= set(accrued)
 
-    # --- No query -> floor only (nothing to rank; do NOT dump the full catalog). ---
     if not isinstance(user_text, str) or not user_text.strip():
         return floor
 
-    # --- Query relevance via the cached index. A cold index, a fault or an empty
-    # ranking all FAIL OPEN to the full registry. ---
+    # A cold index, a fault or an empty ranking FAIL OPEN to the full registry.
     ranked = retrieve_ranked_tools(user_text, k)
     if not ranked:
         logger.info(

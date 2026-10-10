@@ -40,14 +40,11 @@ def seat_param(param: Param, value: Any) -> ResolvedParam:
         real_source=param.real_source, required_missing=not param.optional)
 
 
-#: A value seated from its own DECLARED DEFAULT is a labeled default whatever door
-#: it hangs under - the door says who may override it, not where this value came from.
+#: A value seated from its declared default is a labeled default whatever door it hangs under.
 _BASIS_DEFAULT = "default_demo"
 
 
-#: The only two bases that HAVE a real source. A value the caller typed, or one
-#: seated from a declared default, did not come from the data the declaration
-#: names - claiming otherwise on the row would be the provenance lying.
+#: The only two bases with a real source; a typed or defaulted value did not come from the declared data.
 _SOURCED_BASES = frozenset({"derived", "fetched"})
 
 
@@ -63,17 +60,13 @@ def _finish(param: Param, value: Any, door: str, note: str, *,
             )
         lo, hi = float(param.bounds[0]), float(param.bounds[1])
         if not lo <= coerced <= hi:
-            # The lever is the user's. A value moved onto the bound runs a
-            # question nobody asked and says nothing while it does it.
+            # The lever is the user's; a value moved onto the bound runs an unasked question silently.
             units = f" {param.units}" if param.units else ""
             raise GateRefusedError(
                 f"{param.name}={coerced:g}{units} is outside the declared range "
                 f"{lo:g} to {hi:g}{units}; state a value inside it."
             )
-        # The bound compares numbers; it does not RETYPE the param. A row that
-        # declares int and resolves to a float states a value its own
-        # declaration says it cannot hold, and an engine keyword typed INTEGER
-        # refuses it several steps later, naming the keyword rather than this.
+        # The bound compares numbers without retyping: an int param resolved to float would reach an INTEGER keyword and refuse far from here.
         value = int(coerced) if param.type is int else coerced
     if basis is None:
         basis = "user" if door in (doors.USER, doors.GATE) else _basis(param, door)
@@ -92,8 +85,7 @@ def _basis(param: Param, door: str) -> str:
 
 
 def _as_float(value: Any) -> float | None:
-    # bool IS an int in Python, so True would coerce to 1.0 and slip past the
-    # refusal a bounded param exists to make. A flag is not a measurement.
+    # bool is an int: True would coerce to 1.0 and slip past a bounded param's refusal.
     if isinstance(value, bool):
         return None
     try:
@@ -145,8 +137,7 @@ def merge_provenance(existing: Sequence[SyntheticInput],
 
 
 def _provenance_value(value: Any) -> Any:
-    # Rendered by the one shared rule, then flattened: a provenance row's value is
-    # a scalar or a string, so a coordinate pair travels as its text.
+    # A provenance row's value is a scalar or a string, so a coordinate pair travels as its text.
     rendered = wire_value(value)
     if isinstance(rendered, dict):
         return ", ".join(f"{k}={v}" for k, v in rendered.items() if v is not None)

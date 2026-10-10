@@ -28,11 +28,8 @@ __all__ = [
     "SourceOption",
 ]
 
-#: THE COARSE VOCABULARY a slot's need and a source's coverage are both stated
-#: in. Coarse on purpose: it is the one question a mechanical filter can answer
-#: about a source without reading its bytes - is this the kind of thing the slot
-#: is asking for. A finer class would make the filter a taxonomy argument, and a
-#: source that measures two things carries two rows rather than a hybrid word.
+#: Coarse vocabulary for a slot's need and a source's coverage: the one question a mechanical filter can
+#: answer without reading bytes. A source measuring two things carries two rows, not a hybrid word.
 DATA_CLASSES = (
     "bathymetry",
     "channel survey",
@@ -78,12 +75,10 @@ DataClass = Literal[
 ]
 
 
-#: One degree of latitude, in kilometres - what a ring distance is read in.
+#: Kilometres per degree of latitude.
 _KM_PER_DEGREE = 111.32
 
-#: A unit or a zero the RECORD carries per feature, which no one word states for
-#: the whole source. The slot reads it off the feature and refuses a feature that
-#: carries none - a stated word here would answer for features it never measured.
+#: A unit or zero the record carries per feature; the slot reads it off the feature and refuses a feature carrying none.
 PER_RECORD = "record"
 
 
@@ -108,23 +103,15 @@ class CoverageExtent(ContractModel):
     discovered by box - and ``service`` means the catalogue answers coverage and
     only the probe can, so the filter passes the source through to it."""
 
-    #: ``surface`` covers every point inside the rings; ``stations`` holds
-    #: discrete sites, so a point within reach of one is a candidate and the
-    #: probe decides; ``service`` states no geometry at all.
+    #: ``stations``: a point within reach of one is a candidate and the probe decides; ``service`` states no geometry.
     kind: Literal["surface", "stations", "service"]
     #: Closed lon/lat rings, coarse. Empty ONLY on ``service``.
     rings: list[list[tuple[float, float]]] = Field(default_factory=list)
-    #: What the rings are, in the source's own words - the reader's check that
-    #: the outline is the dataset's and not a guess.
     note: str = Field(default="", max_length=300)
-    #: The stations themselves, where the set is small enough to state.
     points: list[CoveragePoint] = Field(default_factory=list)
-    #: A ``<source>.<point>`` hook naming the listing that reads the stations in,
-    #: for a set too large to state and bounded enough to read once and cache.
+    #: A ``<source>.<point>`` hook naming the station listing, for a set too large to state.
     read_from: str = Field(default="", max_length=120)
-    #: A network with no bounded listing, found by box inside the rings: the
-    #: reach applies to the station the PROBE discovers, and an empty probe
-    #: drops the source the way any other empty answer does.
+    #: A network with no bounded listing: reach applies to the station the probe discovers, and an empty probe drops the source.
     discover: Literal["", "bbox"] = ""
 
     @model_validator(mode="after")
@@ -182,12 +169,8 @@ class CoverageExtent(ContractModel):
             (p.lon - float(lon)) * scale, p.lat - float(lat)))
 
     def distance_km(self, lon: float, lat: float) -> float:
-        """How far this point lies from what the source holds, in kilometres.
-
-        Zero off a ``service``, which answers for itself. A LISTED station set is
-        read at its nearest station; everything else is read against the rings,
-        zero inside them, which for a discovered network is how far the place is
-        from the region the probe would search."""
+        """How far this point lies from what the source holds, in km: zero off a ``service``, the nearest
+        station for a listed set, otherwise against the rings (zero inside)."""
         if self.kind == "service":
             return 0.0
         station = self.nearest(float(lon), float(lat))
@@ -233,10 +216,7 @@ def _in_ring(ring: list[tuple[float, float]], lon: float, lat: float) -> bool:
     return inside
 
 
-#: HOW a source came by its numbers, ranked: an instrument record beats a
-#: prediction and a prediction beats a model grid. It is the first fact the
-#: match sorts on, because a gauge at the place answers a question a modelled
-#: cell over it only estimates.
+#: How a source came by its numbers, ranked: an instrument record beats a prediction beats a model grid; the match sorts on it first.
 PROVENANCE_KINDS = ("measured", "predicted", "modelled")
 
 ProvenanceKind = Literal["measured", "predicted", "modelled"]
@@ -249,16 +229,13 @@ class CoverageWindow(ContractModel):
     the refusal says so. A STATIC surface never fails it - a 2014 survey answers
     a 2026 question - and its ``latest`` is the recency the sort ranks on."""
 
-    #: The source publishes a record per instant. False = one surface, measured
-    #: once and standing until it is re-measured.
+    #: False is one surface, measured once and standing until re-measured.
     series: bool
-    #: ISO dates the source's own records open and close at. ``None`` on either
-    #: side is unbounded - back to the record's beginning, forward to now.
+    #: ISO dates the records open and close at; None on a side is unbounded.
     earliest: str | None = None
     latest: str | None = None
     #: The longest window ONE call may ask for, from the service's own cap.
     max_span_days: float | None = None
-    #: The interval between records, in the source's words ("6-min samples").
     cadence: str = Field(default="", max_length=120)
 
 
@@ -270,55 +247,28 @@ class Coverage(ContractModel):
     reader downstream, and this row is what decides which source fills a slot."""
 
     data_class: DataClass
-    #: Whether these numbers were measured, predicted or modelled.
     kind: ProvenanceKind
     extent: CoverageExtent
     window: CoverageWindow
-    #: How far one STATION serves, in kilometres - the distance at which its
-    #: record still speaks for the place. Only a station set states one: a
-    #: surface answers everywhere inside its rings and a service answers for
-    #: itself.
+    #: Kilometres one station serves; only a station set states one.
     reach_km: float | None = Field(default=None, gt=0.0)
-    #: The finest cell the source publishes, in metres. ``None`` where the
-    #: source is not a grid - a station set, a point sample, a polygon.
+    #: The finest cell in metres; None where the source is not a grid.
     resolution_m: float | None = Field(default=None, gt=0.0)
-    #: The zero this source's elevations are counted from, as ONE FRAME NAME the
-    #: offset service converts - the row is what an offset is asked in, so prose
-    #: here is a surface nothing can bring another onto, and the loader refuses
-    #: it. ``None`` where the dataset publishes none, which the match flags and
-    #: the offset row refuses at. :data:`PER_RECORD` where the record carries a
-    #: zero per feature and the row can state no one word for the network.
+    #: The zero elevations are counted from, as one frame name the offset service converts (the loader refuses prose).
+    #: None where the dataset publishes none; :data:`PER_RECORD` where each feature carries its own.
     datum: str | None = None
-    #: The unit of EACH value column the record carries, by column name. A slot
-    #: reads the column it needs and converts to the keyword's unit or refuses;
-    #: an absent column here is a unit nobody stated, which also refuses.
-    #: :data:`PER_RECORD` where the record carries the unit beside the value, and
-    #: the slot reads it per feature and refuses a feature carrying none.
+    #: Unit of each value column, by column name; an absent column is a unit nobody stated and refuses.
+    #: :data:`PER_RECORD` where the record carries the unit beside the value.
     units: dict[str, str] = Field(default_factory=dict)
-    #: The request values this ROW is fetched under, by param name - what makes
-    #: the source answer with THIS row rather than another it also serves. The
-    #: probe passes them, because the row is what was matched and a row default
-    #: answers for whichever row the row was written around. A value written
-    #: ``need:<attribute>`` is not a literal: it maps one of the need's own
-    #: generic attributes - ``span_km``, how far the question reaches, or
-    #: ``seed_point``, the place it is asked at - onto the param THIS source
-    #: states it in, so a question states its opinion once and every source
-    #: hears it in its own words.
+    #: Request values this row is fetched under, by param name, so the source answers with this row.
+    #: ``need:<attribute>`` maps a need's generic attribute (``span_km``, ``seed_point``) onto the param this source states it in.
     ask: dict[str, str] = Field(default_factory=dict)
-    #: WHICH column carries what, in the record's own column names: the value a
-    #: reading is taken from, the window it reported over, and the elevation of
-    #: the zero that value is counted from. Named here because a slot that
-    #: states a need cannot name a column of a source it did not choose; every
-    #: name must be one the units above state a unit for.
+    #: Which record columns carry the value, the reported window and the zero elevation; each name needs a unit stated above.
     value_column: str = ""
     series_column: str = ""
     above_column: str = ""
-    #: THIS SOURCE'S OWN WORD for each published variable it can be asked for,
-    #: by the variable's published name. A row that maps ``need:of`` onto one of
-    #: its params is asked by the word here, so a question names the variable it
-    #: observes once and every source hears the measurement in its own
-    #: vocabulary; a variable this table has no word for is a measurement the
-    #: source does not take, and the match excludes it saying so.
+    #: This source's own word for each published variable, by the variable's name; a variable with no word here
+    #: is a measurement the source does not take, and the match excludes it.
     vocabulary: dict[str, str] = Field(default_factory=dict)
 
     def word_for(self, variable: str) -> str:
@@ -357,17 +307,14 @@ class SourceOption(ContractModel):
     """One row of the ranked list: a source and the four facts it is picked on."""
 
     fetcher: str = Field(min_length=1)
-    #: Rendered facts, not numbers to re-derive: how the numbers were come by,
-    #: how far the place is from what the source holds, the cell, how current
-    #: the record is, the zero it counts from, and where it reaches.
+    #: Rendered facts, not numbers to re-derive.
     kind: str = Field(default="", max_length=40)
     distance: str = Field(default="", max_length=120)
     resolution: str = Field(default="", max_length=120)
     recency: str = Field(default="", max_length=120)
     datum: str = Field(default="", max_length=120)
     extent: str = Field(default="", max_length=300)
-    #: Why the filter dropped this row, "" on a survivor. A refusal NAMES what
-    #: each filter excluded, so an excluded row travels with its reason.
+    #: Why the filter dropped this row; "" on a survivor.
     excluded: str = Field(default="", max_length=300)
 
 
@@ -379,22 +326,16 @@ class SourceChoice(ContractModel):
     authored once: the sentence the model is given IS the sentence the card
     shows."""
 
-    #: The slot this list filled, by its own name.
     slot: str = Field(min_length=1)
-    #: The class the slot asked for.
     need: str = Field(min_length=1)
     #: Survivors in rank order first, then the excluded, at most five rows.
     rows: list[SourceOption] = Field(default_factory=list, max_length=5)
     #: The fetcher that filled the slot; "" on a refusal.
     picked: str = Field(default="", max_length=120)
     sentence: str = Field(default="", max_length=600)
-    #: Several survivors ranked equal on every fact the sort reads: the model or
-    #: the user picks by row, and the tool result carries the list.
+    #: Survivors ranked equal on every fact the sort reads: the model or the user picks by row.
     tie: bool = False
-    #: The run-level statement that loosened a filter, "" where none did. It
-    #: shows as the user's choice, never as the match's own judgement.
+    #: The run-level statement that loosened a filter, "" where none did; it shows as the user's choice.
     loosened: str = Field(default="", max_length=300)
-    #: The run NAMED this source for this slot. The list is still the list -
-    #: what the sort would have taken stays on it - and the pick reads as the
-    #: user's choice rather than the match's.
+    #: The run named this source for this slot; the sort's own pick stays on the list.
     picked_by_user: bool = False

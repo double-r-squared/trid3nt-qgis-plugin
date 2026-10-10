@@ -55,10 +55,8 @@ def _inside(within: Any, crs: Any, transform: Any, shape: tuple[int, int]) -> An
 def _painted(band: Any, inside: Any, hole: Any, seed: float) -> Any:
     """The holes inside the polygon painted BETWEEN the measurements and its edge.
 
-    The substrate's own inverse-distance fill on the polygon ALONE: ground outside
-    it is never read in, and the polygon's own edge is seeded at ``seed``. There
-    is no distance cap - a hole far from every measurement is painted and says so
-    through the second band, which is what a reader weighs."""
+    Inverse-distance fill on the polygon ALONE: ground outside it is never read, and its edge is seeded at ``seed``.
+    There is no distance cap; a far hole is painted and says so through the second band."""
     import numpy as np
     from rasterio.fill import fillnodata
 

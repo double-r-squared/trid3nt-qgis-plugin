@@ -91,10 +91,9 @@ def _entry(session: Any, fn: str | None, kwargs: dict[str, Any]) -> MeshOp:
 
 
 def drawn_ops(roles: Any) -> list[dict[str, Any]]:
-    """The mesh constraints a drawing states, as the ``mesh_op`` entries that
-    impose them: a breakline is locked into the mesh as a line its edges follow,
-    a refine region is a target edge written inside the polygon, and a drawn
-    boundary stretch is a typed run of the domain's edge."""
+    """The mesh constraints a drawing states, as the ``mesh_op`` entries that impose
+    them: a breakline is locked into the mesh as a line its edges follow, a refine
+    region is a target edge written inside the polygon, and a drawn boundary stretch is a typed run of the domain's edge."""
     ops: list[dict[str, Any]] = []
     for coords in roles.breaklines:
         # A line punched from the domain has no area to remove, so what remains

@@ -1,9 +1,8 @@
-"""``restyle_layer`` - THE presentation surface for layers already on the map. It
-cannot CREATE one (a uri nothing published is a typed refusal) and it cannot invent
-a renderer (every layer is drawn by one of four preset shapes, and a restyle only
-parameterises one of them). A title RENAMES the layer where the user reads it. It
-takes a LIST because two layers being compared must be painted on ONE range or the
-picture is of two colour maps, not of a difference."""
+"""``restyle_layer`` - THE presentation surface for layers already on the map. It cannot
+CREATE one (a uri nothing published is a typed refusal) and it cannot invent a
+renderer (every layer is drawn by one of four preset shapes, and a restyle only
+parameterises one of them). A title RENAMES the layer where the user reads it. It takes a LIST because
+two layers being compared must be painted on ONE range or the picture is of two colour maps, not a difference."""
 
 from __future__ import annotations
 

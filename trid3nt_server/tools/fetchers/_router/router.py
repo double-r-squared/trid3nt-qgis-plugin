@@ -18,10 +18,8 @@ from trid3nt_contracts.source_spec import SourceSpec
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_contracts.gate_spec import GateSpec, LeverSpec
 
-#: The canonical confirm gate for a heavy raster FETCHER: one resolution_m lever
-#: and the shared estimate/pin providers, kind='fetch' (no ``confirmed``
-#: injection - fetchers ignore it). A source opts in by declaring
-#: ``confirm_gate: fetch_resolution``, which is the only thing that gates it.
+#: The confirm gate for a heavy raster fetcher (one resolution_m lever, no ``confirmed`` injection);
+#: a source opts in with ``confirm_gate: fetch_resolution``.
 _PROVIDERS = "trid3nt_server.inputs.gate.cards.fetch_resolution"
 FETCH_RESOLUTION_GATE_SPEC = GateSpec(
     kind="fetch",
@@ -37,7 +35,6 @@ FETCH_RESOLUTION_GATE_SPEC = GateSpec(
 
 
 def _gate_spec_for_source(spec: SourceSpec) -> GateSpec | None:
-    """Map a source's declared ``confirm_gate`` marker to its GateSpec (or None)."""
     if spec.confirm_gate == "fetch_resolution":
         return FETCH_RESOLUTION_GATE_SPEC
     return None
@@ -67,21 +64,16 @@ __all__ = [
     "route",
 ]
 
-#: Sentinel: no ``spec.dispatch`` condition matched (distinct from a dispatch that
-#: legitimately returns ``None``, though none does today). ``route()`` proceeds to
-#: its own pipeline only on this sentinel.
+#: Sentinel: no ``spec.dispatch`` condition matched; ``route()`` proceeds only on this.
 _NO_DISPATCH = object()
 
-#: CONUS domain for the conus_only gate (gridmet native bounds).
 _CONUS_BBOX: tuple[float, float, float, float] = (-124.77, 25.05, -67.06, 49.40)
 
 
 
 
 def synthesize_metadata(spec: SourceSpec) -> AtomicToolMetadata:
-    """Synthesize ``AtomicToolMetadata`` from the row. An ``internal_only`` row (an
-    absorbed seam resolved in-process) is tier="internal": registry-resolvable but
-    off both the declarable pool and the search index."""
+    """Synthesize ``AtomicToolMetadata`` from the row; an ``internal_only`` row is tier="internal" (off the pool and the index)."""
     return AtomicToolMetadata(
         name=spec.name,
         ttl_class=spec.cache.ttl_class,
@@ -90,15 +82,12 @@ def synthesize_metadata(spec: SourceSpec) -> AtomicToolMetadata:
         payload_mb_estimator_name="estimate_payload_mb",
         open_world_hint=True,
         tier="internal" if spec.internal_only else "general",
-        # The declared confirm gate: a heavy fetcher's resolution gate rides onto the
-        # metadata, so the server gate engine reads membership here.
         gate_spec=_gate_spec_for_source(spec),
     )
 
 
 def synthesize_payload_estimator(spec: SourceSpec) -> Callable[..., float]:
-    """Synthesize ``estimate_payload_mb(**args) -> float`` from the row, for the
-    payload-warning seam that warns over 25 MB and blocks over 250 MB."""
+    """Synthesize ``estimate_payload_mb(**args) -> float`` from the row for the 25 MB warn / 250 MB block seam."""
     pe = spec.payload_estimate
 
     def _sq_deg(bbox: Any) -> float:
@@ -120,14 +109,10 @@ def synthesize_payload_estimator(spec: SourceSpec) -> Callable[..., float]:
             return 1
 
     def _clip(v: float) -> float:
-        # ceil_mb is the upper half of a [floor, ceil] clip; None = no cap.
         return v if pe.ceil_mb is None else min(v, pe.ceil_mb)
 
     def _bbox_area_coeff(kw: dict[str, Any]) -> float:
-        # mb_per_sq_deg_by_param: a per-param coefficient table for the
-        # bbox_area model (fetch_3dep_extra per-resolution 5/500/5000/1/200). The
-        # resolved param value keys the map; absent -> default -> scalar -> 0.01.
-        # No-op when unset (returns the scalar coefficient).
+        # mb_per_sq_deg_by_param: the resolved param value keys the map; absent -> default -> scalar -> 0.01.
         table = pe.mb_per_sq_deg_by_param
         if not table:
             return pe.mb_per_sq_deg or 0.01
@@ -164,10 +149,8 @@ def synthesize_payload_estimator(spec: SourceSpec) -> Callable[..., float]:
 
 
 def validate_params(spec: SourceSpec, raw: dict[str, Any]) -> dict[str, Any]:
-    """The request's params through the row's own model, then the row's gates,
-    as the quantized dict BOTH the executor and the cache key are built from. Any
-    bad input raises a source-stamped :class:`RouterInputError` before any network
-    call."""
+    """The request's params through the row's model and gates, as the quantized dict BOTH the
+    executor and the cache key are built from; bad input raises a source-stamped :class:`RouterInputError`."""
     out = validated(spec, raw)
     _apply_gates(spec, out)
     return out
@@ -182,8 +165,6 @@ def _apply_gates(spec: SourceSpec, params: dict[str, Any]) -> None:
             break
     if bbox is None:
         return
-    # A bbox-class gate failure stamps the bbox param's own error suffix
-    # (BBOX_INVALID, else INPUT_ERROR / INPUT_INVALID).
     bsfx = bbox_error_suffix(spec)
     if g.conus_only:
         envelope = g.conus_bbox or _CONUS_BBOX
@@ -216,22 +197,11 @@ def _apply_gates(spec: SourceSpec, params: dict[str, Any]) -> None:
 
 
 def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], bytes]:
-    """Return the ``(spec, params) -> bytes`` closure for the row's shape/transform."""
-    # Borrowed-provider path: a row the session's QGIS opens through its own data
-    # provider dispatches by ACCESS, ahead of the shape ladder, because the two
-    # modes land on different shapes - an opened overlay is a record, a
-    # materialised row is a layer - and one executor answers both.
+    # A QGIS-provider row dispatches by ACCESS ahead of the shape ladder: one executor answers both modes.
     if (spec.ingest or {}).get("access") == qgis_provider.ACCESS:
         return qgis_provider.execute
-    # A row-declared library delegation (``hooks.delegate``, a registered hook that
-    # calls a maintained library owning discovery and the socket) wins over the
-    # shape dispatch. A raster row routes through raster_cog, whose
-    # fetch_source_array calls the delegate for the array; a vector row routes
-    # through library_delegate.execute (features -> FGB).
-    #
-    # Record-return path: a ``shape: record`` source produces a bare JSON dict, not a
-    # LayerURI. It wins over every layer executor below: its build_request hook is the
-    # PURE plan builder feeding the record dict-shaper, not the http_json vector path.
+    # A hook-delegated row wins over the shape dispatch; a ``shape: record`` row wins over every
+    # layer executor (its build_request is the plan builder for the record shaper).
     if spec.shape == "record":
         from .executors import record as record_executor
         return record_executor.execute
@@ -240,33 +210,22 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
             return raster_cog.execute
         from .executors import library_delegate
         return library_delegate.execute
-    # A vector row published through a GDAL driver (an ArcGIS query URL, an OGC
-    # API - Features collection, a shapefile inside a remote ZIP) reads through
-    # the vector_ogr executor: the library owns the socket, the paging and the
-    # decode, so this wins over every hook-driven branch below.
+    # A GDAL-driver vector row wins over every hook-driven branch below.
     if (spec.ingest or {}).get("access") == "ogr":
         from .executors import vector_ogr
         return vector_ogr.execute
-    # Chained-resolution path: a row that declares an offset-paging
-    # (next_page) or per-item detail-enrichment (enrich_plan) hook routes to the
-    # chained_resolution executor (resolve-then-fetch + bounded enrichment over the
-    # shared transport). The pure name->id resolve phase (resolve_build only) still
-    # uses the http_json main-fetch body, so it is NOT a trigger here -- pre_resolve
-    # runs it in route().
+    # next_page / enrich_plan hooks route to chained_resolution; resolve_build alone does not
+    # (pre_resolve runs it in route()).
     if (spec.hooks is not None and (spec.hooks.next_page or spec.hooks.enrich_plan)) \
             or (spec.ingest or {}).get("enrich"):
         from .executors import chained_resolution
         return chained_resolution.execute
-    # The HTTP fetch path: a row that names a build_request hook, or one that
-    # declares ``ingest.access: http_json`` and states its request and body as a
-    # field map instead. The executor's two switches pick between them per call.
     if (spec.hooks is not None and spec.hooks.build_request) \
             or (spec.ingest or {}).get("access") == "http_json":
         from .executors import http_json
         return http_json.execute
-    # No in-tree row declares a join block, so a row that does arrived with an
-    # extension whose transform module is not present. Refuse rather than fall through
-    # to the geometry-only vector read, which would silently drop the values leg.
+    # No in-tree row declares a join block: refuse rather than fall through to the geometry-only
+    # read, which would silently drop the values leg.
     if spec.join is not None:
         raise router_not_available_error(
             spec.error_code_prefix,
@@ -277,9 +236,6 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
         ingest = spec.ingest or {}
         if "mosaic" in ingest or "tile_deg2" in ingest:
             return tiled_mosaic.execute
-        # A STAC catalog source reads through the stac_raster executor (the
-        # library owns search + grid + fuse); every other raster access mode
-        # reads through the transport-bound raster_cog executor.
         if ingest.get("access") == "stac":
             from .executors import stac_raster
             return stac_raster.execute
@@ -301,9 +257,7 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
 
 
 def resolve_style_row(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any] | None:
-    """The declared ``style:`` row for THIS call, with ``by_param`` applied: a mapped
-    entry overrides the base row key by key, so one source serving several variables
-    gives each its own ramp, units and range."""
+    """The declared ``style:`` row for THIS call with ``by_param`` applied key by key over the base row."""
     row = spec.output.style
     if row is None:
         return None
@@ -317,14 +271,9 @@ def resolve_style_row(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any
 
 
 def prospective_cache_key(spec: SourceSpec, raw_params: dict[str, Any]) -> str | None:
-    """The key a fetch of ``spec`` with ``raw_params`` would land its artifact under,
-    else ``None``. It runs the same validation and pre-cache-key resolve ``route``
-    does, so the two agree; a ``pre_resolve`` that reaches the network does that
-    work again here, which is why the caller runs this off the event loop.
-
-    ``None`` for an uncacheable source, for a frames list (one key per frame), for
-    params that do not validate, and for a source whose key depends on a delegate
-    round trip ``route`` owns - each simply does not reuse."""
+    """The key a fetch of ``spec`` with ``raw_params`` would land under, else ``None``. It runs
+    the same validation and pre-resolve as ``route``, so a network ``pre_resolve`` repeats here: run off the loop.
+    ``None`` for an uncacheable source, a frames list, invalid params, or a key needing a delegate round trip."""
     metadata = synthesize_metadata(spec)
     hooks = spec.hooks
     if not is_cacheable(metadata) or spec.shape == "animation_frames":
@@ -343,40 +292,28 @@ def prospective_cache_key(spec: SourceSpec, raw_params: dict[str, Any]) -> str |
 
 
 def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> LayerURI:
-    """Emit the ``LayerURI`` from ``spec.output`` (the shared emission seam)."""
     bbox = None
     for pname, pspec in spec.params.items():
-        # A bbox param present-but-None (a pre_resolve that nulls bbox when an
-        # alternate selector wins the cache key -- nwis state_code) yields no bbox
-        # stamp; bbox_from_features or the requested bbox governs instead.
+        # A present-but-None bbox param yields no bbox stamp; the features' or requested bbox governs.
         if pspec.type == "bbox" and params.get(pname) is not None:
             b = params[pname]
             bbox = (float(b[0]), float(b[1]), float(b[2]), float(b[3]))
             break
     variable = params.get("variable") or params.get("product") or spec.source_class
     layer_id = f"{spec.source_class}-{variable}"
-    # emit_bbox=false suppresses the LayerURI.bbox stamp entirely.
     if not spec.output.emit_bbox:
         bbox = None
-    # Per-variable LayerURI.units (full fidelity): a JOIN row carries the units
-    # on the resolved variable (census: usd / years / percent / count), matching
-    # A non-JOIN source keeps the single normalize.units stamp. Resolution can only
-    # fail on an invalid variable, which the executor rejected before this point.
     units = spec.normalize.units
-    # units_from_param (wqp): stamp LayerURI.units from a request param's resolved
-    # value (the characteristic). No-op when unset. Overrides the static stamp.
+    # units_from_param stamps units from a request param's resolved value and overrides the static stamp.
     if spec.normalize.units_from_param:
         pv = params.get(spec.normalize.units_from_param)
         if pv is not None:
             units = str(pv)
-    # units_by_param: MAP a param value to units (a per-layer source); a value absent
-    # from the map -> units=None. No-op when unset.
+    # units_by_param maps a param value to units; an absent value yields units=None.
     ubp = spec.normalize.units_by_param
     if ubp:
         units = (ubp.get("map") or {}).get(params.get(ubp.get("param")))
-    # role_by_param: MAP a param value to the LayerURI role (landsat
-    # thermal LST -> primary, RGB composites -> context); a value absent from the
-    # map falls back to the static role. No-op when unset.
+    # role_by_param maps a param value to the LayerURI role; an absent value falls back to the static role.
     role = spec.output.role
     rbp = spec.output.role_by_param
     if rbp:
@@ -390,27 +327,19 @@ def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> Layer
         role=role,
         units=units,
         bbox=bbox,
-        # What the ROW states its elevations are counted from, carried on
-        # the layer it produced so a consumer reads the row it was handed. A
-        # source whose data states its own zero per feature is stamped off its
-        # records once they are written.
+        # The row's statement of what its elevations are counted from rides on the layer; a source
+        # whose data states its own zero per feature is stamped off its records once written.
         vertical_datum=spec.vertical_datum or None,
-        # WHAT the values are - an elevation, or a depth counted down from that
-        # zero - is the row's statement too, and a consumer reads it here.
         quantity=spec.normalize.quantity or None,
     )
 
 
 def try_dispatch(spec: SourceSpec, raw_params: dict[str, Any]) -> Any:
-    """Cross-sibling PRE-FLIGHT dispatch: on a matching ``spec.dispatch`` condition,
-    return the named sibling tool's result verbatim -- its own cache prefix, layer_id
-    and name -- else the ``_NO_DISPATCH`` sentinel."""
+    """Cross-sibling PRE-FLIGHT dispatch: on a matching ``spec.dispatch`` condition return the
+    named sibling's result verbatim, else the ``_NO_DISPATCH`` sentinel."""
 
-    # The seam is deliberately narrow: ONE row-declared target per condition, no
-    # chains (a target that itself dispatches is refused, so the result is always
-    # exactly one sibling's verbatim output), and evaluation on RAW params before
-    # validate / gate / cache / fetch. Only the ``pass_args``-mapped params are
-    # forwarded, and nothing is re-cached under this row.
+    # ONE row-declared target per condition, evaluated on RAW params before validate/gate/cache;
+    # only ``pass_args``-mapped params are forwarded and nothing is re-cached under this row.
     if not spec.dispatch:
         return _NO_DISPATCH
     from trid3nt_server.tools import TOOL_REGISTRY
@@ -425,7 +354,6 @@ def try_dispatch(spec: SourceSpec, raw_params: dict[str, Any]) -> Any:
             val = raw
         if val not in d.equals_any:
             continue
-        # NO-CHAIN guard: the dispatched target must not itself dispatch.
         target_spec = get_spec(d.to)
         if target_spec is not None and target_spec.dispatch:
             raise router_upstream_error(
@@ -447,68 +375,43 @@ def try_dispatch(spec: SourceSpec, raw_params: dict[str, Any]) -> Any:
 def route(
     spec: SourceSpec, raw_params: dict[str, Any]
 ) -> LayerURI | dict[str, Any] | list[LayerURI]:
-    """The engine: validate, gate, dispatch, cache, emit. Returns a LayerURI, a record
-    dict for a ``shape: record`` source, or an ordered ``list[LayerURI]`` for a
-    ``shape: animation_frames`` source."""
-    # Emit-on-fetch control kwargs: router-level, so EVERY row inherits
-    # them via the promoted signature's ``**_extra_ignored`` absorber. Popped here
-    # so they never reach validation / the cache key -- ``visualize=False`` (probe
-    # fetch) suppresses the in-composer input surfacing; ``purpose`` contributes one
-    # word to the surfaced layer's name.
+    """The engine: validate, gate, dispatch, cache, emit. Returns a LayerURI, a record dict for
+    ``shape: record``, or an ordered ``list[LayerURI]`` for ``shape: animation_frames``."""
+    # Router-level control kwargs (``visualize``, ``purpose``) are popped so they never reach
+    # validation or the cache key.
     raw_params = dict(raw_params)
     _visualize = raw_params.pop("visualize", None)
     _purpose = raw_params.pop("purpose", None)
-    # Cross-sibling PRE-FLIGHT dispatch: before ANY validation / gate /
-    # cache / fetch, a declared ``source``-value condition may serve the request
-    # from a named sibling tool and return its result verbatim (fetch_dem
-    # source="copernicus" -> fetch_copernicus_dem's layer, verbatim).
     dispatched = try_dispatch(spec, raw_params)
     if dispatched is not _NO_DISPATCH:
         return dispatched
     metadata = synthesize_metadata(spec)
     params = validate_params(spec, raw_params)
-    # The ASK, on the log, for every fetch: a cache hit reaches no executor, so
-    # this is the only place that states what was requested of a source.
+    # The ASK is logged for every fetch: a cache hit reaches no executor.
     logger.info("fetch %s ask=%s", metadata.name, str(params)[:400])
-    # Frames-list output shape: an animation source returns an ORDERED
-    # list[LayerURI] (one cache entry + one layer per timestamp), so the executor
-    # owns the per-frame read_through loop -- there is no single top-level
-    # read_through / LayerURI. It wins over every layer executor below.
+    # An animation source owns its per-frame read_through loop: there is no single LayerURI.
     if spec.shape == "animation_frames":
         from .executors import animation_frames
         return animation_frames.execute(spec, params, metadata)
-    # A delegated row's source-specific INPUT gate (hooks.delegate_validate) runs
-    # BEFORE read_through, so a bad request raises pre-cache and pre-network.
     if spec.hooks is not None and spec.hooks.delegate:
         from .executors import library_delegate
         library_delegate.pre_validate(spec, params)
-    # Socketed pre-cache-key delegate resolve: the HRRR-Zarr s3fs cycle
-    # walk resolves the published cycle BEFORE read_through so the resolved cycle
-    # merges into params and enters the cache key (a cycle=None request would else
-    # compute a non-deterministic key). No-op unless the row declares it.
+    # Socketed pre-cache-key delegate resolve: a cycle=None request would else key non-deterministically.
     if spec.hooks is not None and spec.hooks.delegate_resolve:
         from .executors import library_delegate
         params = {**params, **library_delegate.resolve(spec, params)}
-    # Chained-resolution PHASE R: resolve a name -> id BEFORE read_through
-    # so the resolved id enters the cache key (a name query and its id query collapse
-    # to one entry). Does the round-1 I/O; no-op unless the row declares resolve_build.
+    # Name -> id resolves BEFORE read_through so a name query and its id query share one cache entry.
     if spec.hooks is not None and spec.hooks.resolve_build:
         from .executors import chained_resolution
         params = chained_resolution.pre_resolve(spec, params)
-    # Generic pre-cache-key resolve: a source whose cache key depends on a
-    # value resolved over the shared HTTP transport (the LANCE MCDWD year->doy dir-walk
-    # for a date=None latest request) names a pure-ish pre_resolve hook. Runs BEFORE
-    # read_through so the resolved value enters the cache key (a non-deterministic key
-    # otherwise forever serves the first-cached day). No-op unless the row declares it.
+    # pre_resolve runs BEFORE read_through so the resolved value enters the cache key (else a
+    # date=None request forever serves the first-cached day).
     if spec.hooks is not None and spec.hooks.pre_resolve:
         from .hooks import resolve_hook
         params = {**params, **resolve_hook(spec.hooks.pre_resolve)(spec, params)}
     executor = select_executor(spec)
 
-    # Record-return path: a ``shape: record`` source caches its JSON dict
-    # bytes and returns the parsed dict envelope -- no LayerURI. The honesty floor is
-    # intact: the record executor raises the source's typed empty/upstream errors, so
-    # read_through never writes a fabricated-success sentinel.
+    # A ``shape: record`` source caches its JSON dict bytes and returns the parsed dict, no LayerURI.
     if spec.output.layer_type == "record":
         result = read_through(
             metadata=metadata,
@@ -520,11 +423,8 @@ def route(
         assert result.data is not None, "record source is cacheable; data must be set"
         return json.loads(result.data.decode("utf-8"))
 
-    # Fetch-time provenance channel: a row that declares
-    # output.provenance rides a recorder through read_through so the delegate's
-    # record_provenance() is persisted as a sidecar (fresh) and replayed from it
-    # (cache hit); the recorded dict reaches the envelope hook below. No-op
-    # No-op when unset: recorder=None leaves read_through unchanged.
+    # A recorder rides through read_through so the delegate's provenance is persisted fresh and
+    # replayed on a cache hit.
     recorder = ProvenanceRecorder() if spec.output.provenance else None
     result = read_through(
         metadata=metadata,
@@ -535,12 +435,8 @@ def route(
         record_shape=record_shape(spec),
     )
     assert result.uri is not None, "router source is cacheable; uri must be set"
-    # variant_by_emptiness: a source whose non-empty path is a
-    # renderable LayerURI but whose empty-AOI degrade is a bare record dict + typed
-    # note (fetch_fault_sources' honesty gate: a zero-fault AOI is NEVER given a
-    # layer). When the produced vector FGB is feature-empty the named hook returns
-    # the record dict, which route() returns INSTEAD of the LayerURI. No-op unless
-    # the row declares it (a non-empty fetch always takes the LayerURI path below).
+    # variant_by_emptiness: a feature-empty FGB returns the hook's record dict INSTEAD of the
+    # LayerURI (a zero-fault AOI is never given a layer).
     vbe = spec.output.variant_by_emptiness
     if vbe is not None and result.data is not None and _fgb_feature_count(result.data) == 0:
         from .hooks import resolve_hook
@@ -548,28 +444,18 @@ def route(
     layer = build_layer_uri(spec, params, result.uri)
     if result.data and any(row.datum == PER_RECORD for row in spec.coverage):
         layer = layer.model_copy(update=_stated_by_records(result.data))
-    # bbox_from_features: stamp the camera bbox from the emitted vector
-    # features' extent (point-event fetchers auto-zoom to the events). Read from
-    # the produced FGB (result.data is populated on cache hit + miss), so the
-    # stamp is consistent across cache paths. No-op when unset.
+    # bbox_from_features reads the produced FGB so the stamp is consistent across cache paths.
     bff = spec.output.bbox_from_features
     if bff is not None and result.data:
         extent = _extent_from_fgb(result.data, float(bff.get("pad", 0.1)))
         if extent is not None:
             layer = layer.model_copy(update={"bbox": extent})
-    # envelope hook: a source returning a LayerURI SUBCLASS with
-    # business fields computed POST-serialize names a pure envelope hook +
-    # output.result_model. The hook receives the assembled layer + produced bytes
-    # and returns the extra fields; the router builds the named subclass. The
-    # honesty floor still owns status/error semantics -- a hook may ADD fields but
-    # the router drops uri/layer_type from its return so it can never flip an error
-    # to success or re-point the layer. No-op when unset.
+    # An envelope hook may ADD fields; uri/layer_type are dropped so it can never flip an error
+    # to success or re-point the layer.
     if spec.hooks is not None and spec.hooks.envelope:
         layer = _apply_envelope(spec, params, layer, result.data, result.provenance)
-    # Emit-on-fetch: when this fetch ran NESTED inside a composer (not
-    # as its own direct dispatch), surface the fetched data as a role=context input
-    # so the engine's terrain / rivers / land cover are visible. Best-effort; never
-    # fails the fetch. A direct chat dispatch is skipped (the wrapper emits it).
+    # A fetch nested inside a composer surfaces as a role=context input; best-effort, never fails
+    # the fetch. A direct chat dispatch is skipped (the wrapper emits it).
     from .emit_on_fetch import maybe_emit_input_on_fetch
     maybe_emit_input_on_fetch(
         spec, params, layer, visualize=_visualize, purpose=_purpose
@@ -577,15 +463,11 @@ def route(
     return layer
 
 
-#: What a source whose zero rides on each record states about its values.
 _RECORD_STATEMENTS = ("vertical_datum", "datum_offset_m", "datum_offset_frame")
 
 
 def _stated_by_records(data: bytes) -> dict[str, Any]:
-    """The datum and published shift every record of a vector layer agrees on.
-
-    A statement two records make differently is the layer's by neither, so it
-    is left unsaid rather than picked."""
+    """The datum and published shift every record of a vector layer agrees on; a disputed statement is left unsaid."""
     import io
 
     import pyogrio
@@ -600,8 +482,7 @@ def _stated_by_records(data: bytes) -> dict[str, Any]:
     return out
 
 
-#: Honesty-floor-owned fields an envelope hook must never re-write (the layer
-#: already points at real, successfully-produced bytes; a hook only adds fields).
+#: Fields an envelope hook must never re-write.
 _ENVELOPE_PROTECTED_KEYS = ("uri", "layer_type")
 
 
@@ -612,14 +493,9 @@ def _apply_envelope(
     data: bytes | None,
     provenance: dict[str, Any] | None = None,
 ) -> LayerURI:
-    """Build the row's ``output.result_model`` subclass via the pure envelope hook,
-    which computes extra business fields over the produced bytes with no I/O. The
-    identity keys ``uri`` and ``layer_type`` are stripped, so a hook only enriches."""
+    """Build the row's ``output.result_model`` subclass via the pure envelope hook; ``uri`` and ``layer_type`` are stripped."""
 
-    # The fetch-time provenance dict (fresh or replayed from a cache hit) is passed
-    # only to a hook that DECLARES a ``provenance`` parameter, so a result model whose
-    # fields ARE fetch-time provenance survives every cache path; a hook without that
-    # parameter is called with the four-argument signature.
+    # The provenance dict is passed only to a hook that DECLARES a ``provenance`` parameter.
     import inspect
 
     from trid3nt_contracts.execution import LAYER_RESULT_MODELS
@@ -637,9 +513,7 @@ def _apply_envelope(
     model_name = spec.output.result_model
     cls = LAYER_RESULT_MODELS.get(model_name) if model_name else None
     if cls is None:
-        # No declared subclass: overlay the (non-protected) extra onto the base
-        # LayerURI so a name/units override still lands (defensive; a row that
-        # declares envelope also declares result_model, validated at load).
+        # No declared subclass: overlay the non-protected extra onto the base LayerURI.
         base_fields = set(type(layer).model_fields)
         safe = {k: v for k, v in extra.items() if k in base_fields}
         return layer.model_copy(update=safe) if safe else layer
@@ -647,9 +521,7 @@ def _apply_envelope(
 
 
 def _fgb_feature_count(data: bytes) -> int:
-    """The number of features in an FGB, 0 for a header-only honest-empty one. An
-    UNREADABLE FGB counts as non-empty, so a read hiccup never silently swallows a
-    real fetch into the empty-record degrade."""
+    """The number of features in an FGB; an UNREADABLE FGB counts as non-empty."""
     import os
     import tempfile
 
@@ -672,9 +544,8 @@ def _fgb_feature_count(data: bytes) -> int:
 
 
 def _extent_from_fgb(data: bytes, pad: float) -> tuple[float, float, float, float] | None:
-    """The (west, south, east, north) extent of an FGB's features. A collapsed axis is
-    padded by ``pad`` degrees so the camera cannot zoom to an infinite level; an
-    unreadable or empty FGB returns None, leaving the caller its request bbox."""
+    """The (west, south, east, north) extent of an FGB's features, a collapsed axis padded by
+    ``pad`` degrees; None when unreadable or empty."""
     import os
     import tempfile
 

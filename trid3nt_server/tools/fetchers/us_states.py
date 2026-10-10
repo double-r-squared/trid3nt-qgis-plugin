@@ -22,7 +22,6 @@ __all__ = [
 
 
 
-#: 2-letter USPS code -> 2-digit FIPS state code (50 states + DC + 5 territories).
 STATE_CODE_TO_FIPS: dict[str, str] = {
     "AL": "01", "AK": "02", "AZ": "04", "AR": "05", "CA": "06", "CO": "08",
     "CT": "09", "DE": "10", "DC": "11", "FL": "12", "GA": "13", "HI": "15",
@@ -36,9 +35,7 @@ STATE_CODE_TO_FIPS: dict[str, str] = {
     "AS": "60", "MP": "69",
 }
 
-#: State FIPS -> approximate WGS84 envelope, for the bbox -> intersecting-states
-#: derivation (50 states + DC + PR + VI; generous ~10km border buffers). It is a
-#: SELECTOR, never a boundary: the real polygons come from the census row.
+#: State FIPS -> approximate WGS84 envelope (generous ~10 km buffers) for bbox -> states: a SELECTOR, never a boundary.
 STATE_FIPS_BBOXES: dict[str, tuple[float, float, float, float]] = {
     "01": (-88.5, 30.1, -84.9, 35.0), "02": (-180.0, 51.2, -130.0, 71.5),
     "04": (-114.8, 31.3, -109.0, 37.0), "05": (-94.6, 33.0, -89.7, 36.5),
@@ -73,8 +70,7 @@ FIPS_TO_STATE_CODE: dict[str, str] = {v: k for k, v in STATE_CODE_TO_FIPS.items(
 
 
 def states_intersecting_bbox(bbox: tuple[float, float, float, float]) -> list[str]:
-    """The 2-letter codes whose envelope the bbox touches, sorted. Empty means the box
-    is outside the US, which a US-only row reports as the refusal it is."""
+    """The 2-letter codes whose envelope the bbox touches, sorted; empty means outside the US."""
     west, south, east, north = (float(v) for v in bbox)
     codes = [
         FIPS_TO_STATE_CODE[fips]
@@ -84,23 +80,19 @@ def states_intersecting_bbox(bbox: tuple[float, float, float, float]) -> list[st
     ]
     return sorted(codes)
 
-#: Full set of 2-letter area codes accepted by api.weather.gov/alerts/active
-#: (?area=): 50 states + DC + 5 territories + marine zones.
+#: Area codes accepted by api.weather.gov alerts (?area=): states, DC, territories and marine zones.
 NWS_AREA_CODES: frozenset[str] = frozenset({
     "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "HI",
     "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN",
     "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH",
     "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA",
     "WV", "WI", "WY",
-    # Territories
     "AS", "GU", "MP", "PR", "VI",
-    # Marine zones
     "PZ", "PK", "PH", "PS", "PM", "AN", "AM", "GM", "LS", "LM", "LH", "LC",
     "LE", "LO",
 })
 
 
-#: Full state/territory names (lowercase, single-spaced) -> 2-letter code.
 STATE_NAME_TO_CODE: dict[str, str] = {
     "alabama": "AL", "alaska": "AK", "arizona": "AZ", "arkansas": "AR",
     "california": "CA", "colorado": "CO", "connecticut": "CT",
@@ -117,7 +109,6 @@ STATE_NAME_TO_CODE: dict[str, str] = {
     "south dakota": "SD", "tennessee": "TN", "texas": "TX", "utah": "UT",
     "vermont": "VT", "virginia": "VA", "washington": "WA",
     "west virginia": "WV", "wisconsin": "WI", "wyoming": "WY",
-    # Territories
     "american samoa": "AS", "guam": "GU",
     "northern mariana islands": "MP", "puerto rico": "PR",
     "virgin islands": "VI", "us virgin islands": "VI",
@@ -125,8 +116,7 @@ STATE_NAME_TO_CODE: dict[str, str] = {
     "washington d.c.": "DC",
 }
 
-#: Reverse mapping for display labels (codes with multiple names keep the
-#: first/canonical entry; marine zones have no entry).
+#: Reverse mapping for display labels; a code with several names keeps the first, marine zones have none.
 STATE_CODE_TO_NAME: dict[str, str] = {}
 for _name, _code in STATE_NAME_TO_CODE.items():
     STATE_CODE_TO_NAME.setdefault(_code, _name.title())
@@ -137,25 +127,19 @@ _LEADING_NOISE = re.compile(r"^(?:the\s+)?(?:state\s+of\s+)?", re.IGNORECASE)
 
 
 def resolve_state_code(text: str) -> str | None:
-    """Resolve free-form state text to a 2-letter NWS area code, or ``None``.
-    Case-insensitive, whitespace-tolerant and tolerant of a leading "state of ";
-    anything unrecognized returns ``None`` rather than raising."""
+    """Resolve free-form state text to a 2-letter NWS area code, or ``None`` (case-insensitive, tolerant of "state of ")."""
     if not isinstance(text, str):
         return None
     s = text.strip()
     if not s:
         return None
-    # 2-letter code fast path.
     if len(s) == 2 and s.upper() in NWS_AREA_CODES:
         return s.upper()
-    # Full-name path: strip noise prefix, collapse whitespace, lowercase.
     s = _LEADING_NOISE.sub("", s)
     s = re.sub(r"\s+", " ", s).strip().lower()
     return STATE_NAME_TO_CODE.get(s)
 
 
 def state_display_name(code: str) -> str:
-    """Human-readable label for a 2-letter area code ("TX" -> "Texas").
-
-    Marine-zone codes have no name mapping and echo the code itself."""
+    """Human-readable label for a 2-letter area code; marine-zone codes echo the code."""
     return STATE_CODE_TO_NAME.get(code.upper(), code.upper())

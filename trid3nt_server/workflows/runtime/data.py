@@ -30,18 +30,11 @@ __all__ = [
     "tool",
 ]
 
-# A ROW STATES THE CLASS IT NEEDS; IT NEVER NAMES A FETCHER. Text relevance
-# cannot judge the facts that decide whether a source can carry a solve - its
-# cell, its coverage over this domain, its window, its datum - and a NAMED
-# fetcher is a question frozen against one source that may hold nothing here. So
-# a runtime row states a need and the match reads those facts off every
-# fetcher's own row. Search is how a MODEL finds a tool to call; a slot
-# is filled from declarations.
+# A row states the class it needs, never a fetcher: the match reads cell, coverage, window and datum
+# off every fetcher's own row, which a named fetcher would freeze against one source.
 
 class _CoversAOI:
-    """Validator sentinel: a domain must be BOUND and have an extent before a
-    supplied artifact is adopted. The artifact's own extent is never read, so one
-    covering LESS than the modelled domain is adopted without saying so."""
+    """Validator sentinel: a domain must be BOUND; the artifact's own extent is never read."""
 
     def __repr__(self) -> str:
         return "CoversAOI"
@@ -49,21 +42,15 @@ class _CoversAOI:
 
 CoversAOI = _CoversAOI()
 
-#: The shapes a producer-less slot can declare it accepts.
 _GEOMETRIES: frozenset[str] = frozenset(
     {"point", "polyline", "polygon", "rectangle", "raster", "mesh"})
 
-#: What a declared shape means for the KIND of artifact that can satisfy it. The
-#: exact vector shape (a point layer vs a line layer) is not knowable from a file
-#: name, so the shapes collapse to one vector class here.
+#: Vector shapes collapse to one class: a file name cannot tell a point layer from a line layer.
 _GEOMETRY_CLASS: Mapping[str, str] = MappingProxyType({
     "point": "vector", "polyline": "vector", "polygon": "vector",
     "rectangle": "vector", "raster": "raster", "mesh": "mesh"})
 
-#: Which class an artifact SUFFIX belongs to. A suffix nobody lists here leaves
-#: the artifact unclassifiable, and an unclassifiable artifact is adopted rather
-#: than refused: this check answers what a file name can honestly answer, and a
-#: refusal must never rest on a guess.
+#: An unlisted suffix is unclassifiable and adopted, never refused: a refusal must not rest on a guess.
 _CLASS_BY_SUFFIX: Mapping[str, str] = MappingProxyType({
     ".tif": "raster", ".tiff": "raster", ".vrt": "raster", ".img": "raster",
     ".asc": "raster", ".jp2": "raster",
@@ -98,12 +85,8 @@ def artifact_class(value: Any) -> str | None:
 
 
 def shapes_of(data_class: str) -> frozenset[str]:
-    """The artifact CLASSES one data class arrives in, off the sources that
-    measure it.
-
-    Never restated: which shapes a class is published in is the rows'
-    own statement, so a source added in a new shape widens what a slot of that
-    class accepts without a second list moving."""
+    """The artifact CLASSES one data class arrives in, off the sources that measure it.
+    Read from the rows, so a source published in a new shape widens what a slot accepts."""
     from trid3nt_server.tools.fetchers._router.registration import _SPEC_REGISTRY
     from trid3nt_server.tools.search.match import sources_with_coverage
 
@@ -123,10 +106,8 @@ class Producer:
     kwargs: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
     supplied_uri: str | None = None
     supplied_validate: Any = None
-    #: Marked ``.supplied()``: the caller's own artifact stands in place of the
-    #: build, whether or not the mark baked a uri in with it.
+    #: Marked ``.supplied()``: the caller's own artifact stands in place of the build.
     is_supplied: bool = False
-    #: The DATA-body attribute name this producer was declared under.
     row: str = ""
 
     def __set_name__(self, owner: type, name: str) -> None:
@@ -162,8 +143,7 @@ class ToolWord:
         return MeshTool.build_mesh(**ask)
 
 
-#: The author word itself. One object, so ``from ...runtime import tool`` and
-#: ``from ...mesh.tool import tool`` are the same name for the same thing.
+#: One object, so every import path of ``tool`` is the same name.
 tool = ToolWord()
 
 
@@ -173,60 +153,34 @@ class DataDecl:
     A PRODUCER-LESS declaration is a CONTEXT SLOT - the artifact is named, its source
     is not; what fills it comes from outside, or ``.optional()`` allows an absence."""
 
-    #: The DATA-body attribute name this row was declared under.
     name: str = ""
     producer: Producer | None = None
-    #: Absence is legal. Only meaningful on a producer-less slot; a declared
-    #: producer either produces or fails.
+    #: Absence is legal only on a producer-less slot; a producer either produces or fails.
     is_optional: bool = False
-    #: The GEOMETRY a producer-less slot accepts (point | polyline | polygon |
-    #: rectangle | raster | mesh). Declared so the slot says what shape of thing
-    #: it takes, which is the only thing a template CAN say about a context layer
-    #: whose source it deliberately does not name.
+    #: The geometry a producer-less slot accepts (point | polyline | polygon | rectangle | raster | mesh).
     geometry: str | None = None
-    #: How a supplied artifact is checked against the domain - BOUND-DOMAIN-ONLY
-    #: under ``CoversAOI`` (see :class:`_CoversAOI`), which is not a coverage test.
+    #: Bound-domain-only under ``CoversAOI``; not a coverage test.
     supplied_validate: Any = CoversAOI
-    #: This row is CONTEXT: it names a producer, and its absence continues the
-    #: run under the sentence below rather than refusing.
+    #: CONTEXT row: it names a producer, and its absence continues the run under the sentence below.
     is_context: bool = False
-    #: What the sheet says when a context row came back empty. Stated by the
-    #: template in its own words about what is not there.
+    #: What the sheet says when a context row came back empty.
     absent_note: str = ""
-    #: THE NEED this slot states instead of naming a producer: one class of the
-    #: coarse vocabulary, which the match filters every fetcher's row
-    #: against. The place, the window and the frame are the RUN's and are read
-    #: off it, so a question states none of them.
+    #: The class of the coarse vocabulary this slot needs instead of naming a producer; place, window and frame are the run's.
     data_class: str = ""
-    #: WHAT OF ITS CLASS this row asks for, by the name the source publishes it
-    #: under: the variable the run itself publishes, which a measurement of it
-    #: is comparable against in one unit and no other. Empty where any of the
-    #: class will do. The DOMAIN states none - the water it is solved over is
-    #: the place's own kind, which is ``kind`` above.
+    #: What of the class is asked for, by the name the source publishes it under; empty where any will do.
     observes: str = ""
-    #: THE DOMAIN'S OWN KIND, in the word a source publishes that feature under.
-    #: Stated only where the SEED cannot imply it - the land draining through a
-    #: pour point, the water inside a box drawn over land and water - because
-    #: which water a place is, is a fact of the place and is read off the seed
-    #: otherwise. A stated kind always wins.
+    #: The domain's own kind, stated only where the seed cannot imply it; a stated kind wins.
     kind: str = ""
-    #: HOW FAR this question's domain reaches, in kilometres: the one opinion a
-    #: question has about its own extent. Generic, because every source calls it
-    #: something else - the row's ``ask`` block maps it to the param
-    #: the source states it in.
+    #: How far the domain reaches, in km; the row's ``ask`` block maps it to the source's own param.
     span_km: float | None = None
-    #: The point a nearest-site query ranks against, the one thing a row tells
-    #: its ingestion: ``near`` is the NAME of the run input the point is read
-    #: off. No conversion is declared here.
+    #: The point a nearest-site query ranks against: ``near`` names the run input holding it.
     coercion: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
 
     @property
     def role(self) -> str:
         """The engine-neutral SLOT this row is, or ``""`` for a plain row.
 
-        THE ROW'S NAME IS ITS SLOT: a reserved name plays its role however it is
-        filled - a drawing, the user's layer, or the match - and nothing
-        downstream branches on which."""
+        The row's name is its slot: a reserved name plays its role however it is filled."""
         return role_of(self.name)
 
     @property
@@ -274,8 +228,7 @@ class DataDecl:
             )
 
     def __set_name__(self, owner: type, name: str) -> None:
-        """The row's name IS its slot, so what only one slot may state is
-        refused here, where the name first exists."""
+        """The row's name IS its slot, so what only one slot may state is refused here."""
         take_name(self, "name", name)
         if self.kind and self.role != DOMAIN:
             raise PlanValidationError(
@@ -291,12 +244,7 @@ class DataDecl:
     def fills_from_user(self) -> bool:
         """Is this row on the WIRE for a caller to fill?
 
-        Every producer-less row is, and so is a SLOT that names a producer: a
-        drawn domain or a surveyed bed supersedes the fetcher the template
-        preferred, and the run reads one value either way. A producer marked
-        ``.supplied()`` is on the wire too - the mark says the caller's own
-        artifact stands in place of the build, and only the caller can hand
-        that in."""
+        True for every producer-less row, a slot naming a producer, and a ``.supplied()`` producer."""
         return self.producer is None or bool(self.role) or self.is_supplied
 
     @property
@@ -311,8 +259,7 @@ class DataDecl:
         Always a string: the declared shape rides along as :class:`SuppliedGeometry`
         metadata rather than narrowing the type."""
         if self.slot.number:
-            # A schema that advertised only a layer name would refuse the level
-            # a user knows or the pond they can describe in one number.
+            # A schema advertising only a layer name would refuse a known level or a one-number pond.
             return str | float | None
         if self.geometry is None:
             return str | None
@@ -340,8 +287,7 @@ class DataDecl:
                     + ("; unfilled, the template's own producer looks for one."
                        if self.producer is not None else self._unfilled))
         if self.data_class and self.producer is None:
-            # A ROW THAT STATES A NEED NAMES NO SOURCE AND IS NOT UNSOURCED: the
-            # match fills it, and what the caller hands in supersedes that.
+            # A row stating a need names no source and is not unsourced: the match fills it; a caller's value supersedes.
             return (f"the {self.data_class} this run reads, as a uri or a layer "
                     "name" + self._unfilled)
         shape = f"a {self.geometry} layer" if self.geometry else "a layer"
@@ -364,12 +310,7 @@ class DataDecl:
 
         Suffix-deep and no deeper; an unclassifiable artifact passes."""
         if self.data_class:
-            # THE SUPPLIED TWIN OF A CLASS takes every shape that class is
-            # measured in - a bathymetry handed in as a raster and one handed in
-            # as soundings are both bathymetry - so the shapes are the ones the
-            # sources of this class publish and no slot restates them. A value
-            # no shape reads out of is the number itself, which every
-            # observation and every bed also takes.
+            # The supplied twin takes every shape the class's sources publish; a value no shape reads out of is the number itself.
             found = artifact_class(value)
             shapes = shapes_of(self.data_class)
             if found is None or not shapes or found in shapes:
@@ -414,9 +355,7 @@ class DataDecl:
 
     def __call__(self, producer: Producer) -> "DataDecl":
         """This row, produced by ``producer``: what ``Data(tool(...))`` declares.
-
-        The row shape a modifier is written on - ``Data(tool(...)).context()`` -
-        where a bare ``tool(...)`` row has nothing to write one on."""
+        The row shape ``Data(tool(...)).context()`` modifiers are written on."""
         if not isinstance(producer, Producer):
             raise PlanValidationError(
                 f"Data(...) takes a producer - tool(name, **kwargs) - and was "
@@ -430,24 +369,9 @@ class DataDecl:
     def need(self, data_class: str, *, at: Any = None, of: Any = "",
              kind: str = "", span_km: float | None = None,
              geometry: str | None = None) -> "DataDecl":
-        """THE CLASS this row needs, which the match fills from whatever measures
-        it here.
-
-        The slot is the row's NAME. The window and the frame are the RUN's and
-        are read off it, so a question states neither; ``at`` is the POINT this
-        row is asked at where the domain's own centre is not it - the seed a
-        reach is cut from, the place the nearest reporting site is ranked
-        against - named by the run input that holds it, a plain string. ``of`` names WHAT OF THE CLASS is asked for - the variable a
-        record is read for - and a source publishing none of it leaves the
-        match's list;
-        ``kind`` is the DOMAIN'S own kind, stated only where the seed cannot
-        imply it - a basin from a pour point, the water inside a drawn box -
-        and it wins over what the seed carries;
-        ``span_km`` is how far the question reaches,
-        which the answering source's row maps to its own param.
-        ``geometry`` is the SHAPE this row is read as - a class measured in more
-        than one shape has sources publishing each, and a step that cuts a box
-        with a line cannot be handed a polygon."""
+        """The class this row needs, filled by the match from whatever measures it here.
+        ``at`` names the run input holding the asked point; ``of`` the variable; ``kind`` the domain's own kind
+        (wins over the seed's); ``span_km`` the reach; ``geometry`` the shape the row is read as."""
         if geometry is not None and geometry not in _GEOMETRIES:
             raise PlanValidationError(
                 f"Data {self.name!r}: .need(geometry={geometry!r}) is not a "
@@ -474,9 +398,7 @@ class DataDecl:
                 "value stands")
 
 
-#: The unfilled CONTEXT SLOT a ``DATA`` body writes its modifiers onto. Every
-#: modifier returns a fresh row, so the prototype itself is never a template's
-#: row and two bodies can never share one object.
+#: The unfilled CONTEXT SLOT a ``DATA`` body writes modifiers onto; each returns a fresh row, so bodies never share one.
 Data = DataDecl()
 
 

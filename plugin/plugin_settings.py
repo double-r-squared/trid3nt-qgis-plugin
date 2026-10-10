@@ -14,18 +14,13 @@ DEFAULT_LOCAL_URL = "ws://127.0.0.1:8765/ws"
 DEFAULT_MINIO_ENDPOINT = "http://127.0.0.1:9000"
 DEFAULT_EXPORT_API = "http://127.0.0.1:8766"
 
-#: The bundled local stack's object-store credentials (``scripts/start_minio.sh``
-#: provisions this user). They are defaults, not secrets: a store standing
-#: anywhere but this box is reached by overriding these two keys in the profile.
+#: Bundled local stack object-store credentials (defaults, not secrets); override these two keys in the profile for a remote store.
 DEFAULT_STORE_ACCESS_KEY = "trid3nt"
 DEFAULT_STORE_SECRET_KEY = "trid3nt-local-dev"
 DEFAULT_STORE_REGION = "us-east-1"
 
-#: The product is LOCAL-only: the agent runs on this box or a tailnet peer,
-#: reached over ws:// (the tailnet itself is the trust boundary). ``MODE_LOCAL``
-#: and the read-only ``mode`` property exist ONLY as a migration seam, so a
-#: config persisted with ``mode=remote`` loads without a crash and degrades to
-#: the sole local behavior.
+#: The product is LOCAL-only (the agent on this box or a tailnet peer over ws://). ``MODE_LOCAL``
+#: and the read-only ``mode`` property exist only so a config persisted with ``mode=remote`` loads.
 MODE_LOCAL = "local"
 
 
@@ -37,15 +32,11 @@ class PluginSettings:
         # A key never lives in QSettings, so one stored under this group goes.
         self._qs.remove(f"{GROUP}/openrouter_api_key")
 
-    # -- raw accessors -------------------------------------------------------- #
-
     def _get(self, key: str, default: str = "") -> str:
         return str(self._qs.value(f"{GROUP}/{key}", default) or default)
 
     def _set(self, key: str, value: str) -> None:
         self._qs.setValue(f"{GROUP}/{key}", value)
-
-    # -- typed properties ------------------------------------------------------ #
 
     @property
     def mode(self) -> str:
@@ -199,8 +190,6 @@ class PluginSettings:
     @model_id.setter
     def model_id(self, value: str) -> None:
         self._set("model_id", value.strip())
-
-    # -- derived --------------------------------------------------------------- #
 
     def effective_url(self) -> str:
         return self.local_url

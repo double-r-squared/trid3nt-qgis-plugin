@@ -19,23 +19,17 @@ __all__ = ["ENGINE_PATHS", "code_identity", "engine_paths", "resolve_engine",
 #: Repository root: this file is ``<root>/trid3nt_server/workflows/solver/``.
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
-#: What each engine's ANSWER depends on, as repo-relative paths. A commit outside
-#: them can still change a run, but "the engine moved" is the question a reader of
-#: a packet is asking; widening the table to the whole tree would make every packet
-#: stale on every commit and so tell them nothing.
+#: What each engine's ANSWER depends on, repo-relative; widening to the whole tree would make every packet stale on every commit.
 ENGINE_PATHS: dict[str, tuple[str, ...]] = {
     "telemac": ("workers/telemac/", "trid3nt_server/workflows/telemac/"),
 }
 
-#: A commit list is a warning, not a changelog. Past this many, the warning says
-#: how many and shows the newest.
+#: A commit list is a warning, not a changelog: past this many, the warning says how many and shows the newest.
 _MAX_LISTED_COMMITS = 12
 
 
 def _git(*args: str, empty_ok: bool = False) -> str | None:
-    """Run git in the repo root; ``None`` on any failure (git missing, no repo).
-    ``empty_ok`` separates "succeeded and said nothing" from "failed", which for a
-    log query are opposite answers: an empty log is the CLEAN case."""
+    """Run git in the repo root; ``None`` on failure. ``empty_ok`` separates "succeeded and said nothing" (the clean case) from "failed"."""
     try:
         out = subprocess.run(  # noqa: S603 -- argv list, no shell
             ["git", "-C", str(_REPO_ROOT), *args],

@@ -1,8 +1,8 @@
 """One wrapper per TELEMAC module: the dictionary, the composites, the outputs.
 
-The machinery is in ``module.py`` (what a slot and a wrapper are), ``sheet.py``
-(fill, then run) and ``outputs.py`` (the primitive set and the read of each).
-Every other file here is one module's wrapper."""
+``module.py`` holds what a slot and a wrapper are, ``sheet.py`` fill then run, ``outputs.py`` the
+primitive set; every other file is one module's wrapper.
+"""
 
 from __future__ import annotations
 
@@ -38,10 +38,7 @@ __all__ = [
     "spectrum", "wrapper_for",
 ]
 
-#: The exposed wrappers, by the module name the engine knows each by. A coupled
-#: body names its module rather than carrying its wrapper, so this is where the
-#: serializer turns that name back into the dictionary its slots are checked
-#: against.
+# The exposed wrappers by engine module name; the serializer turns a coupled body's module name back into the dictionary its slots are checked against.
 WRAPPERS: Mapping[str, type] = MappingProxyType({
     "artemis": ART, "telemac2d": T2D, "telemac3d": T3D, "waqtel": WAQTEL,
     "gaia": GAIA, "khione": KHIONE, "tomawac": WAC})

@@ -22,9 +22,8 @@ __all__ = ["DrawGeometry", "DrawOutcome", "gate_draw_input"]
 #: vector-draw surface with the purpose that shows only the tool they need.
 DrawGeometry = Literal["point", "polyline", "polygon", "rectangle"]
 
-#: The client mode each draw kind rides, and the purpose it rides under when the
-#: caller names none. A SLOT names its own purpose - a domain, a boundary run -
-#: and the card then offers only the tool that slot needs.
+#: The client mode each draw kind rides, and the purpose it rides under when the caller
+#: names none. A SLOT names its own purpose, and the card then offers only its tool.
 _AFFORDANCE: dict[str, tuple[str, str | None]] = {
     "point": ("point", None),
     "rectangle": ("bbox", None),
@@ -118,9 +117,7 @@ async def gate_draw_input(
 async def _value_from(response: Any, geometry: str) -> Any:
     """The PARAM value inside the reply - a handful of vertices, never a dataset.
 
-    Read through the SAME ingestions a typed wire value passes, so the drawn
-    vocabulary cannot drift from the typed one; a point keeps the name it was
-    picked under."""
+    Read through the SAME ingestions a typed value passes; a point keeps its picked name."""
     # The imports are function-local: the declarative library's interpreter
     # imports this module, and the package edge is the cycle.
     from trid3nt_server.inputs.point import point

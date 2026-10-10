@@ -37,13 +37,8 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
-#: Max raster layers opened per probe click. A case accumulates loaded layers
-#: over a long session and a probe is a synchronous point-and-wait UI action,
-#: so the cap is honest rather than a silent drop: the response carries
-#: ``truncated: true`` when the case has more.
+#: Max raster layers opened per probe click; the response carries ``truncated: true`` when the case has more.
 MAX_PROBE_LAYERS = 40
-
-
 
 
 class ProbePointError(RuntimeError):
@@ -65,10 +60,6 @@ class ProbePointCaseNotFoundError(ProbePointError):
 
     error_code = "PROBE_POINT_CASE_NOT_FOUND"
     retryable = False
-
-
-# The case-layer read seam: which case, what layers it holds, how one is
-# materialized and sampled. Every point read over a case goes through here.
 
 
 def resolve_case_id(case_id: Any,
@@ -167,25 +158,17 @@ def sample_raster_at_point(
     return value, None, units
 
 
-# Frame-token parsing.
-#
-# The token read here is an ANALYSIS over the layers a case already holds, not
-# the map's clock: presentation reads the valid_from / valid_to window a frame
-# declares. A case persisted before that window existed carries only the name,
-# which is why the token read stays.
+# The token read is an analysis over layers a case holds, not the map's clock; a case persisted before the valid_from / valid_to window carries only the name.
 
 _FRAME_PATTERNS: tuple[tuple[re.Pattern[str], Any], ...] = (
-    # Forecast lead hour: "F+01h", "f+12h", "F+1 h", "+06h"
     (
         re.compile(r"\bf?\+?\s*(\d{1,3})\s*h\b", re.IGNORECASE),
         lambda m: f"F+{int(m.group(1)):02d}h",
     ),
-    # Hour token: "hour 3", "hr 06", "h12"
     (
         re.compile(r"\bh(?:ou)?r?\s*\+?(\d{1,3})\b", re.IGNORECASE),
         lambda m: f"hr {int(m.group(1))}",
     ),
-    # Step/frame/index: "step 4", "frame 02", "idx 3", "index 12"
     (
         re.compile(r"\b(?:step|frame|idx|index)\s*\+?(\d{1,4})\b", re.IGNORECASE),
         lambda m: f"step {int(m.group(1))}",
@@ -195,17 +178,13 @@ _FRAME_PATTERNS: tuple[tuple[re.Pattern[str], Any], ...] = (
         lambda m: f"t+{int(m.group(1))}",
     ),
     (re.compile(r"#\s*(\d{1,4})\b"), lambda m: f"#{int(m.group(1))}"),
-    # Day token: "day 1", "d+3"
     (
         re.compile(r"\bd(?:ay)?\s*\+?(\d{1,3})\b", re.IGNORECASE),
         lambda m: f"day {int(m.group(1))}",
     ),
 )
 
-#: ISO-8601 UTC valid-time substring, e.g. "2026-06-22T18:05:00Z". When a frame
-#: name carries BOTH a step token and an ISO valid-time (the satellite
-#: fire-animation convention), the ISO becomes the per-frame LABEL and is
-#: stripped from the grouping stem.
+#: ISO-8601 UTC valid-time substring. Beside a step token it becomes the per-frame LABEL and is stripped from the grouping stem.
 _ISO_TIME_RX = re.compile(r"\b(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::\d{2})?Z?\b")
 
 _STEM_EDGE_PUNCT = re.compile(r"^[\s,(\-]+|[\s,(\-]+$")
@@ -258,16 +237,10 @@ def detect_frame_sequences(
     return sequences
 
 
-# Sync per-layer/per-frame sampling (wrapped in asyncio.to_thread by callers).
-
-
 def _sample_single_layer(
     layer: dict[str, Any], lon: float, lat: float, tmpdir: str, tag: str
 ) -> dict[str, Any]:
-    """SYNC: stage and sample one non-series raster layer at a point.
-
-    Never raises: outside-extent and nodata carry a ``note``, an unreadable
-    layer an ``error``, and both leave ``value`` null."""
+    """SYNC: stage and sample one non-series raster layer at a point; never raises (``note`` or ``error`` with ``value`` null)."""
     name = str(layer.get("name") or layer.get("layer_id") or tag)
     entry: dict[str, Any] = {
         "layer_id": str(layer.get("layer_id") or ""),
@@ -296,10 +269,7 @@ def _sample_single_layer(
 def _sample_series_member(
     layer: dict[str, Any], label: str, lon: float, lat: float, tmpdir: str, tag: str
 ) -> tuple[dict[str, Any], str | None]:
-    """SYNC: stage and sample one frame of a detected sequence at a point.
-
-    ``units`` is the frame's OWN units, so the caller can pick the first
-    non-null one for the whole series."""
+    """SYNC: stage and sample one frame of a detected sequence at a point; ``units`` is the frame's OWN."""
     entry: dict[str, Any] = {"label": label, "value": None}
     units: str | None = None
     uri = str(layer.get("uri") or "")
@@ -318,8 +288,6 @@ def _sample_series_member(
             "probe_point: frame %r unreadable at point: %s", label, exc
         )
     return entry, units
-
-
 
 
 _METADATA = AtomicToolMetadata(
@@ -357,8 +325,7 @@ async def probe_point(
     any note. A layer outside its extent, on nodata or unreadable is a null with
     its reason, never a fabricated number; a case with no rasters reads empty.
     """
-    # Vector layers are not sampled at all -- a point probe of a vector needs a
-    # different query shape -- and are simply absent from the results.
+    # Vector layers are absent from the results: a point probe of a vector needs a different query shape.
     picked = await ingest_point(point, label="probe point",
                                 code=ProbePointInputError.error_code)
     if picked is None:
@@ -384,9 +351,7 @@ async def probe_point(
 
     results: list[dict[str, Any]] = []
     emitted_stems: set[str] = set()
-    # The sync boto3 / rasterio work goes off the loop per layer and per frame:
-    # this module is called directly on the agent's asyncio loop, with no outer
-    # executor, so blocking here would stall the WS heartbeat.
+    # Called directly on the agent's asyncio loop with no executor: sync boto3 / rasterio work goes to threads so the WS heartbeat is not stalled.
     with tempfile.TemporaryDirectory(prefix="trid3nt_probe_point_") as tmpdir:
         for idx, layer in enumerate(capped):
             stem = stem_by_layer_id.get(id(layer))

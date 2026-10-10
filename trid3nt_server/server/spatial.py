@@ -13,9 +13,8 @@ logger = logging.getLogger("trid3nt_server.server")
 def _aoi_zoom_to_bbox(
     result: Any, current_turn_map_commands: list[dict]
 ) -> tuple[float, float, float, float] | None:
-    """Return the bbox the camera should snap to for a tool ``result``, or
-    ``None`` when there is no finite extent or the extent repeats this turn's
-    last zoom-to. Pure: the caller owns the emit and the accumulator append."""
+    """Return the bbox the camera should snap to for a tool ``result``, or ``None`` when there is
+    no finite extent or the extent repeats this turn's last zoom-to. Pure: the caller owns the emit and the append."""
     # A top-level ``bbox`` wins over ``aoi_bbox``, and the fire is on any
     # established extent, not only a geocode: coordinates given directly skip
     # geocoding, and the map must still move to where the work is.
@@ -31,9 +30,8 @@ def _aoi_zoom_to_bbox(
 
 
 def _last_zoom_to_bbox(commands: list[dict]) -> list | None:
-    """Return the bbox of the most-recent ``zoom-to`` entry, else ``None``; the
-    walk is newest-first so the dedupe compares against the same bbox the client
-    would replay."""
+    """Return the bbox of the most-recent ``zoom-to`` entry, else ``None``; the walk is
+    newest-first so the dedupe compares against the same bbox the client would replay."""
     for cmd in reversed(commands):
         if isinstance(cmd, dict) and cmd.get("command") == "zoom-to":
             args = cmd.get("args")
@@ -43,5 +41,4 @@ def _last_zoom_to_bbox(commands: list[dict]) -> list | None:
                     return list(bbox)
             return None
     return None
-
 

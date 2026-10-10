@@ -20,7 +20,6 @@ from .common import (
 )
 
 __all__ = [
-    # Case persistence envelopes
     "CaseStatus",
     "CaseSummary",
     "CaseChatMessage",
@@ -28,7 +27,6 @@ __all__ = [
     "ToolCardRecord",
     "ToolCardState",
     "PersistedSubStepRecord",
-    # WebSocket envelopes
     "CaseListEnvelopePayload",
     "CaseOpenEnvelopePayload",
     "CaseCommand",
@@ -37,9 +35,7 @@ __all__ = [
 
 
 
-# Closed enum: Case lifecycle status. ``deleted`` is a soft-delete tombstone,
-# not a removal. The list is CLOSED - a new status is an explicit amendment
-# rather than a value that quietly appears on the wire.
+# Closed: a new status is an explicit amendment. ``deleted`` is a soft-delete tombstone.
 CaseStatus = Literal["active", "archived", "deleted"]
 
 
@@ -58,33 +54,22 @@ class CaseSummary(ContractModel):
     status: CaseStatus = "active"
 
     bbox: BBox | None = None
-    # Primary hazard label is denormalized from the Case's runs; open enum so
-    # registering a new hazard does not break the Case envelope.
+    # Open enum so registering a new hazard does not break the envelope.
     primary_hazard: str | None = None
 
-    # A flat list of layer ids only: full layer detail arrives on Case open, so
-    # the left-rail summary stays cheap.
+    # Layer ids only; full detail arrives on Case open.
     layer_summary: list[str] = Field(default_factory=list)
 
-    # The per-Case mirror of the in-memory layer set, so a re-open on a fresh
-    # connection rehydrates deterministically instead of showing nothing.
-    # Entries are full layer-summary ``model_dump(mode="json")`` shapes.
-    # Dedup is by ``uri``: republishing a layer overwrites its entry in place.
+    # Per-Case mirror of the in-memory layer set, so a re-open rehydrates deterministically; deduped by ``uri``.
     loaded_layer_summaries: list[dict] = Field(default_factory=list)
 
-    # Lazy-init: a fresh Case has no published project file, and the URI is
-    # written on first layer emission.
+    # Written on first layer emission; a fresh Case has no project file.
     qgs_project_uri: str | None = None
 
 
-# Persisted tool-card lifecycle states. NOTHING about the chat is transient, so
-# a long-running solve card is written the moment it is minted (``running``) and
-# UPDATED IN PLACE to its terminal state: ONE row whose ``state`` walks, keyed by
-# a stable ``message_id`` - an upsert, never a duplicate. A short atomic-tool
-# dispatch instead persists once, at terminal, so a cancelled one leaves no row;
-# a cancelled SOLVE does persist, because a stopped sim is a finished sim the
-# user must be able to trace afterwards. A child step only ever carries the two
-# terminal values; the wider type is a harmless superset for it.
+# A long-running solve card is written at once (``running``) and updated in place to its terminal state: one
+# row keyed by a stable ``message_id``. A short atomic dispatch persists once, at terminal; a cancelled solve
+# persists too. A child step carries only the two terminal values.
 ToolCardState = Literal["running", "complete", "failed", "cancelled"]
 
 
@@ -95,25 +80,17 @@ class PersistedSubStepRecord(ContractModel):
 
     schema_version: Literal["v1"] = "v1"
 
-    # Carried for fidelity and keying, but a replay RE-PARENTS children onto
-    # the step id it synthesizes: the live wire ids are absent from a snapshot.
+    # A replay re-parents children onto the step id it synthesizes; the live wire ids are absent from a snapshot.
     step_id: ULIDStr
     parent_step_id: ULIDStr | None = None
-    #: The child's RAW tool name; a client humanizes it for display.
     name: str | None = None
     tool_name: str
     state: ToolCardState
-    #: Authoritative wall-clock elapsed time. ``None`` when the child never
-    #: reached a timed terminal state.
     duration_ms: int | None = Field(default=None, ge=0)
-    #: Present on a FAILED child, so it replays red WITH its reason.
     error_code: str | None = None
     error_message: str | None = None
 
-    # Child tool-io, under the SAME field names the live sidecar carries.
-    # Present only when the dispatch's IO was captured; absent IO leaves the
-    # child's expander absent rather than fabricating one. ``raw_args`` and
-    # ``function_response`` are pre-serialized JSON strings.
+    # Child tool-io under the live sidecar's field names; absent IO leaves the expander absent.
     raw_args: str | None = None
     function_response: str | None = None
     is_error: bool | None = None
@@ -132,18 +109,12 @@ class ToolCardRecord(ContractModel):
 
     tool_name: str  # the registry tool name
     state: ToolCardState
-    # The authoritative stamps, copied from the terminal step where there is
-    # one and measured around the dispatch otherwise.
     started_at: UTCDatetime | None = None
     duration_ms: int | None = Field(default=None, ge=0)
-    # The card label at dispatch time. A client MAY override it with its own
-    # humanizer keyed on ``tool_name``.
+    # The card label at dispatch time; a client may override it keyed on ``tool_name``.
     label: str | None = None
 
-    # Persisted tool-io, under the SAME field names the live sidecar carries so
-    # persisted shape equals wire shape. ``raw_args`` and ``function_response``
-    # are pre-serialized JSON strings; ``*_truncated`` and ``*_bytes`` carry the
-    # large-payload note, and ``is_error`` the honesty signal.
+    # Persisted tool-io under the live sidecar's field names; ``raw_args`` and ``function_response`` are pre-serialized JSON strings.
     raw_args: str | None = None
     function_response: str | None = None
     is_error: bool | None = None
@@ -152,9 +123,7 @@ class ToolCardRecord(ContractModel):
     args_bytes: int | None = None
     response_bytes: int | None = None
 
-    # The ordered CHILD steps under this card, chronological by start. A replay
-    # rebuilds the nested timeline from these, READ-ONLY - it never re-dispatches.
-    # Additive and optional: a row without them replays as a plain card.
+    # Ordered child steps, chronological by start; a replay rebuilds the nested timeline read-only. Optional.
     children: list[PersistedSubStepRecord] | None = None
 
 
@@ -167,33 +136,23 @@ class CaseChatMessage(ContractModel):
 
     message_id: ULIDStr  # matches the wire envelope id for agent messages
     case_id: ULIDStr  # owning Case
-    # One ``tool`` row per dispatched tool, interleaved with the user and agent
-    # turns by ``created_at``.
     role: Literal["user", "agent", "system", "tool"]
-    # Accumulated text once streaming completes. On a ``tool`` row this is the
-    # same record as ``tool_card``, serialized - never free text.
+    # On a ``tool`` row this is ``tool_card`` serialized, never free text.
     content: str
 
-    # The reasoning-channel text streamed for the SAME bubble as this row's
-    # answer. Set ONLY on ``role="agent"`` rows whose turn had thinking on.
-    # The field NAME is a fixed cross-surface interface: a reader keys on it.
-    #
-    # NEVER REHYDRATED: display-replay material only. Thinking text must never
-    # re-enter LLM-bound contents, by any path.
+    # Reasoning-channel text of the same bubble, on ``role="agent"`` rows only; the field name is a fixed
+    # cross-surface interface. Display-replay material: never rehydrated into LLM-bound contents.
     thinking: str | None = None
 
-    # typed tool-card payload; set IFF ``role == "tool"``.
+    # Set iff ``role == "tool"``.
     tool_card: ToolCardRecord | None = None
 
-    # The pipeline this turn dispatched, if any. ``None`` for a pure-chat turn.
     pipeline_id: ULIDStr | None = None
 
-    # Per-turn layer emissions: layer_ids the agent surfaced this turn so the
-    # rehydration replay knows which layers to re-register.
+    # Layer ids the agent surfaced this turn, for the replay to re-register.
     layer_emissions: list[str] = Field(default_factory=list)
 
-    # ``[{"command": "...", "args": {...}}, ...]``. The typed args are validated
-    # at emit time; they stay dicts here to keep this module acyclic.
+    # Typed args are validated at emit time and stay dicts here to keep this module acyclic.
     map_command_emissions: list[dict] = Field(default_factory=list)
 
     created_at: UTCDatetime
@@ -211,8 +170,7 @@ class CaseSessionState(ContractModel):
     loaded_layers: list[dict] = Field(default_factory=list)  # ProjectLayerSummary[]
     pipeline_history: list[dict] = Field(default_factory=list)  # PipelineSnapshot[]
     current_pipeline: dict | None = None  # PipelineSnapshot | None
-    # The chart replay set: one ``ChartEmissionPayload`` dict per persisted
-    # chart, in emitted-at order. Empty for a Case that emitted none.
+    # One ``ChartEmissionPayload`` dict per persisted chart, in emitted-at order.
     charts: list[dict] = Field(default_factory=list)
 
 
@@ -242,8 +200,7 @@ class CaseOpenEnvelopePayload(ContractModel):
     session_state: CaseSessionState | None = None
 
 
-# Closed enum: Case lifecycle commands. CLOSED because the dispatch table has
-# to enumerate a handler for each.
+# Closed because the dispatch table enumerates a handler for each.
 CaseCommand = Literal["create", "select", "rename", "delete", "set-bbox"]
 
 
@@ -257,9 +214,7 @@ class CaseCommandEnvelopePayload(ContractModel):
 
     envelope_type: Literal["case-command"] = "case-command"
     command: CaseCommand
-    # Required for every command except ``create``, where the server mints the
-    # id, and ``deselect``, which clears the binding and has no target.
+    # Required for every command except ``create`` and ``deselect``.
     case_id: ULIDStr | None = None
-    # Command-specific args, validated against the command's own schema before
-    # dispatch. Kept a dict here so one envelope covers every command.
+    # Validated against the command's own schema before dispatch; a dict so one envelope covers every command.
     args: dict = Field(default_factory=dict)

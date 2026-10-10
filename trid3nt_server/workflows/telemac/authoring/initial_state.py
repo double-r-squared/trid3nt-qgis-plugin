@@ -1,6 +1,6 @@
-"""THE INITIAL STATE a run starts from: every node wet for a fresh run, or the
-last instant and wet/dry field of the restart record a continued run carries on
-from, read off that record by the one reader of the format."""
+"""The initial state a run starts from: every node wet for a fresh run, or the last
+instant and wet/dry field of the restart record a continued run carries on from.
+"""
 
 from __future__ import annotations
 
@@ -11,19 +11,15 @@ from ..errors import TelemacError
 
 __all__ = ["PREVIOUS_DEST", "initial_state_of"]
 
-#: What a continued run's PREVIOUS COMPUTATION FILE is called in the run
-#: directory. The engine reads a file, not a URI, so the previous run's restart
-#: record is staged under one name and the steering file names that.
+# The engine reads a file, not a URI: the previous run's restart record is staged under this name.
 PREVIOUS_DEST = "previous.slf"
 
 
-#: The engine's perfect-restart record, under the name a body that keeps one
-#: writes it.
+# The engine's perfect-restart record, under the name a body that keeps one writes it.
 _RESTART = "restart_domain.slf"
 
 
-#: How a restart record names its depth, and the depth a node has to hold at
-#: that instant to count as water a source can be released into.
+# How a restart record names its depth, and the depth that counts as water a source can be released into.
 _DEPTH_VARIABLE = ("WATER DEPTH", "HAUTEUR D'EAU", "HAUTEUR D EAU")
 
 
@@ -31,10 +27,10 @@ _WET_DEPTH_M = 0.01
 
 
 def _continuation_state(uri: str, node_count: int) -> dict[str, Any]:
-    """The restart record's own last instant and depth field - read off the file,
-    taken only where its node count is this run's mesh's.
+    """The restart record's last instant and depth field, read off the file.
 
-    A continued run is the same declared scenario over an extended horizon."""
+    Taken only where its node count is this run's mesh's.
+    """
     import tempfile
 
     import numpy as np
@@ -65,11 +61,7 @@ def _continuation_state(uri: str, node_count: int) -> dict[str, Any]:
             f"{uri} carries no water depth among {record['varnames']}, so the "
             "state this run would start from cannot say where it is wet.",
             error_code="TELEMAC_CONTINUATION_UNREADABLE")
-    # Only the file can say where the continued leg stopped: the engine writes the
-    # restart at its own last time step, which is not the graphic period, not the
-    # asked duration, and not anything the server can compute from the ask. The
-    # depth at that instant is the initial state, which decides where a release
-    # can land.
+    # Only the file knows where the continued leg stopped: the restart is written at the engine's own last step; that instant's depth decides where a release can land.
     start_s = float(record["times"][-1])
     wet = np.asarray(depth[-1], dtype=float) > _WET_DEPTH_M
     return {
@@ -81,9 +73,9 @@ def _continuation_state(uri: str, node_count: int) -> dict[str, Any]:
 
 
 def initial_state_of(continue_from: str | None, node_count: int) -> dict[str, Any]:
-    """WHAT THE RUN STARTS FROM: a fresh reach opens at the derived normal depth
-    laid bed-parallel, a positive depth at every node; a CONTINUED one opens at
-    the restart record's own wet/dry field and the instant it stands at."""
+    """What the run starts from: a fresh reach opens at the derived normal depth laid
+    bed-parallel; a continued one at the restart record's wet/dry field and instant.
+    """
     if continue_from:
         return _continuation_state(str(continue_from), node_count)
     return {"start_s": None, "wet": [True] * node_count,

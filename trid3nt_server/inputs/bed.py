@@ -1,15 +1,8 @@
 """THE BED: what every node of the domain carries for elevation.
 
-One slot over every source a user can have: a fetched DEM, a fetched or supplied
-bathymetry raster, a case layer by its id, or a stated depth below the free
-surface. A layer of soundings is REFUSED by name: gridding it is a step the
-person runs first. A surface STATES what it covers - the water and the
-land it measured, and what nothing measured - and water nothing measured is
-REFUSED by name: composing a bed that covers it is a merge and a fill the person
-runs first, and hands this slot the layer they produce. One thing happens on the
-way in, because only the slot knows the bed is an ELEVATION: the surface is read
-on the RUN's own vertical frame, and a surface of depths is turned into
-elevations counted up from the zero it states.
+A layer of soundings is REFUSED by name (gridding it is a step the person runs first),
+and so is water the surface did not measure. A surface is read on the RUN's vertical
+frame, and a surface of depths becomes elevations counted up from the zero it states.
 """
 
 from __future__ import annotations
@@ -38,9 +31,8 @@ DEPTH = "depth"
 #: The QGIS step a layer of soundings is gridded by before it is a bed.
 _GRID_STEP = "gdal:gridinversedistancenearestneighbor"
 
-#: What a surface of DEPTHS names its quantity as. A depth is counted DOWN from
-#: the survey's own zero, and a bed is an elevation counted UP from the run's,
-#: so a source stating this reaches the mesh only through the flip below.
+#: What a surface of DEPTHS names its quantity as; a depth counts DOWN from the
+#: survey's zero and a bed counts UP, so it reaches the mesh only through the flip.
 _DEPTH_QUANTITY = "depth_below_datum"
 
 #: How deep a stated depth may be. A bed stated as a depth below the free
@@ -68,12 +60,8 @@ def bed(value: Any, *, frame: Any = None, offset: Any = None,
         water: Any = None, label: str = "bed", code: str = _CODE) -> Bed | None:
     """THE ingestion: a raster, a case layer id, or a depth in metres -> Bed.
 
-    ``None`` only when nothing came. A number is a DEPTH below the free surface;
-    a vector artifact refuses; everything else is a surface. ``frame``
-    is the RUN's vertical frame and ``offset`` the measured shift onto it the
-    runtime's own DATA row produced. ``water`` is the polygon the domain was cut
-    with - empty where it was cut with none - handed by the fill, which is where
-    a surface states its coverage and a wet hole refuses."""
+    A number is a DEPTH below the free surface; a vector artifact refuses. ``frame``
+    and ``offset`` are the run's vertical frame and shift; ``water`` is the cut polygon."""
     if isinstance(value, Bed):
         return value
     if value is None:
@@ -109,8 +97,7 @@ def bed(value: Any, *, frame: Any = None, offset: Any = None,
 
 
 def _by_id(value: Any) -> Any:
-    """A case layer named by its id, with the datum and the quantity its
-    producer stated; anything else as it came."""
+    """A case layer named by its id, with the datum and quantity its producer stated."""
     if not isinstance(value, str):
         return value
     from trid3nt_server.render.uri_registry import lookup_layer_for_handle
@@ -119,14 +106,9 @@ def _by_id(value: Any) -> Any:
 
 
 def _covered(surface: Any, water: Any, label: str) -> None:
-    """STATE what this surface covers over the water and the land, and REFUSE a
-    WET hole by name.
+    """State what the surface covers over water and land, and REFUSE a WET hole by name.
 
-    The coverage is read on a grid reaching over the whole cut, so water past
-    the surface's own edge counts as unmeasured. Each ground is said for itself:
-    a share over the whole grid mixes the land with the channel the run is
-    about. A dry hole is said and left to the mesh, which refuses a node no
-    value reaches."""
+    Coverage is read on a grid over the whole cut; a dry hole is left to the mesh."""
     import tempfile
 
     import numpy as np
@@ -165,10 +147,7 @@ def _covered(surface: Any, water: Any, label: str) -> None:
 
 
 def _depth(value: Any) -> float | None:
-    """``value`` as a stated depth, or ``None`` when it is not a number.
-
-    A bool is not a depth: it is an int in Python and nothing states a bed as
-    one."""
+    """``value`` as a stated depth, or ``None``; a bool is not a depth."""
     if isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
@@ -185,11 +164,8 @@ def elevations(layer: Any, *, frame: Any, offset: Any = None,
                label: str = "bed", code: str = _CODE) -> Any:
     """One surface on the RUN's vertical frame, counted UP.
 
-    The flip is the bed slot's, because only the slot knows a bed is an
-    elevation; the SHIFT onto the run's frame is the vertical-frame coercion's,
-    the one every elevation the run ingests goes through. A source whose zero
-    reaches the run's frame through nothing refuses by name - inventing a shift
-    would be indistinguishable from a measurement downstream."""
+    A source whose zero reaches the run's frame through nothing refuses by name:
+    an invented shift would read downstream as a measurement."""
     from .vertical_datum import DatumError, datum_of, onto_frame
 
     quantity = (layer.get("quantity") if isinstance(layer, Mapping)
@@ -221,10 +197,7 @@ def elevations(layer: Any, *, frame: Any, offset: Any = None,
 
 
 def _journal(label: str, layer: Any, aligned: Any, depths: bool) -> None:
-    """What the run SAYS about the bed it ingested: the flip, and the shift.
-
-    On the run's journal and not in a log line - the shift a bed was moved by is
-    part of the answer, and a reader of the packet has to see it."""
+    """Say the flip and the shift on the run's journal, where a packet reader sees them."""
     from trid3nt_server.workflows.runtime import journal_note
     from .vertical_datum import datum_of
 
@@ -240,10 +213,7 @@ def _journal(label: str, layer: Any, aligned: Any, depths: bool) -> None:
 def on_the_frame(values: Any, offset_m: float, *, depths: bool) -> Any:
     """One grid read on another zero: ``offset - depth``, or ``value + offset``.
 
-    A depth is counted DOWN from the zero it states and an elevation UP from the
-    frame it lands on, so the two are one axis only through the flip. It happens
-    on the source's OWN grid, before anything reads it onto another, so the cells
-    that land carry the measurement's own values re-zeroed."""
+    Runs on the source's OWN grid, before anything resamples it onto another."""
     import numpy as np
 
     return (np.float32(offset_m) - values if depths
@@ -252,8 +222,7 @@ def on_the_frame(values: Any, offset_m: float, *, depths: bool) -> Any:
 
 def _flipped(layer: Any, offset_m: float, frame: str, label: str,
              code: str, *, depths: bool) -> Any:
-    """The same grid on the run's frame: ``offset - depth``, or ``value +
-    offset``. One raster, written once."""
+    """The same grid on the run's frame, written once as one raster."""
     import tempfile
 
     import numpy as np

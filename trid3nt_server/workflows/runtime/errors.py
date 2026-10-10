@@ -76,8 +76,7 @@ class StepFailedError(DeclarativeError):
 
     def __init__(self, message: str, *, error_code: str | None = None,
                  step: str | None = None, cause: BaseException | None = None) -> None:
-        # The sentence is what the packet says stopped the run; a failure that
-        # states none cannot be recorded at all.
+        # The sentence is what the packet says stopped the run.
         if not str(message or "").strip():
             raise NamelessFailureError(
                 f"a step failure was raised for {step!r} carrying no sentence; "

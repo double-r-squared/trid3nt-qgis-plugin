@@ -14,9 +14,9 @@ from typing import Any
 logger = logging.getLogger("trid3nt_server.server")
 
 async def _replay_active_case_layers(state: SessionState) -> None:
-    """Seed this connection's emitter from the active Case's persisted layers,
-    so the caller's single session-state emit re-renders every already-rendered
-    layer with no case-open. Best-effort: the resume completes regardless."""
+    """Seed this connection's emitter from the active Case's persisted layers, so the caller's
+    single session-state emit re-renders every already-rendered layer with no case-open.
+    Best-effort: the resume completes regardless."""
     if state.emitter is None:  # pragma: no cover -- _ensure_emitter always binds
         return
     case_id = state.active_case_id
@@ -73,9 +73,8 @@ def _bind_session_identity(state: SessionState) -> None:
 async def _touch_session_record(
     state: SessionState, *, case_id: str | None = None
 ) -> None:
-    """Heartbeat the session record: the activity stamps advance and the active
-    Case is recorded. Best-effort - a persistence hiccup never reaches the
-    caller - and never a confirmable write."""
+    """Heartbeat the session record: the activity stamps advance and the active Case is recorded.
+    Best-effort: a persistence failure never reaches the caller."""
     p = get_persistence()
     if p is None:
         return
@@ -93,9 +92,8 @@ async def _touch_session_record(
 async def _persist_session_active_case(
     state: SessionState, case_id: str | None
 ) -> None:
-    """Persist the session's active-Case pointer so it survives a restart that
-    wipes the in-memory registry; the client's stamp stays the authority and
-    this is only the cold-start cache. Best-effort."""
+    """Persist the session's active-Case pointer so it survives a restart that wipes the in-memory
+    registry; the client's stamp stays the authority and this is only the cold-start cache. Best-effort."""
     p = get_persistence()
     if p is None:
         return
@@ -109,9 +107,8 @@ async def _persist_session_active_case(
         )
 
 async def _reload_session_active_case(state: SessionState) -> None:
-    """Warm the in-memory pointer from the persisted one before the first replay
-    or turn, only when the registry has NO entry for this session yet: a value
-    already there is the live truth. A client stamp still wins on disagreement."""
+    """Warm the in-memory pointer from the persisted one before the first replay or turn, only when
+    the registry has NO entry for this session yet: a value already there is the live truth. A client stamp still wins on disagreement."""
     if state.session_id in _SESSION_ACTIVE_CASE:
         return
     p = get_persistence()
@@ -143,9 +140,9 @@ async def _reload_session_active_case(state: SessionState) -> None:
 _SESSION_CASE_LIST_HASH: "dict[str, str]" = {}
 
 def _case_list_digest(cases: "list[CaseSummary]") -> str:
-    """Stable, order-independent digest of a case list, over the fields a client
-    renders rather than a raw model dump, so a field addition that changes
-    nothing visible does not force a re-emit."""
+    """Stable, order-independent digest of a case list, over the fields a client renders rather
+    than a raw model dump, so a field addition that changes nothing visible does not force a re-
+    emit."""
     parts = sorted(
         f"{c.case_id}|{c.title}|{c.status}|{c.created_at}|{c.updated_at}"
         for c in cases
@@ -216,9 +213,9 @@ def _cache_case_bbox_from_session_state(
 async def _persist_case_layer_handles(
     state: SessionState, *, case_id: str | None
 ) -> None:
-    """Persist the session registry's short-handle map onto the Case, so a
-    reconnect restores the exact handles the model has already been shown.
-    Skipped when nothing new was minted; a failure leaves the map dirty."""
+    """Persist the session registry's short-handle map onto the Case, so a reconnect restores the
+    exact handles the model has already been shown. Skipped when nothing new was minted; a failure
+    leaves the map dirty."""
     if not case_id:
         return
     reg = get_uri_registry(state.session_id)
@@ -238,9 +235,9 @@ async def _persist_case_layer_handles(
 async def _seed_registry_for_case(
     state: SessionState, case_id: str | None, loaded_layers: Any
 ) -> None:
-    """Reset the URI registry to a Case and restore its handle map: the one
-    reseed path for every open, switch and resume. It REPLACES rather than
-    merges, so announced handles keep their numbers."""
+    """Reset the URI registry to a Case and restore its handle map: the one reseed path for every
+    open, switch and resume. It REPLACES rather than merges, so announced handles keep their
+    numbers."""
     # A failed read degrades to fresh minting, and a stale handle then draws a
     # typed rejection listing the current inventory - honest and retryable.
     reg = get_uri_registry(state.session_id)
@@ -285,9 +282,8 @@ def _set_active_aoi_from_payload(state: SessionState, raw: Any) -> None:
     )
 
 def _set_drawn_geometry_from_payload(state: SessionState, raw: Any) -> None:
-    """Bind or clear the turn's user-drawn geometry: a valid rectangle sets it,
-    an explicit ``None`` clears it, and a malformed value is logged and ignored.
-    Stored as a plain dict for the turn dispatcher to bind."""
+    """Bind or clear the turn's user-drawn geometry: a valid rectangle sets it, an explicit
+    ``None`` clears it, and a malformed value is logged and ignored."""
     if raw is None:
         state.drawn_geometry = None
         return
@@ -317,8 +313,8 @@ def _set_drawn_geometry_from_payload(state: SessionState, raw: Any) -> None:
 async def _persist_case_loaded_layers(
     state: SessionState, *, case_id: str | None = None
 ) -> None:
-    """Sync the emitter's layer accumulator onto the turn's Case. Best-effort,
-    and an archived or deleted Case is skipped rather than resurrected."""
+    """Sync the emitter's layer accumulator onto the turn's Case. Best-effort; an archived or
+    deleted Case is skipped rather than resurrected."""
     # ``case_id`` pins the target Case explicitly - a caller inside a dispatch
     # passes its entry-time capture - so a mid-turn switch never re-aims the
     # attribution.

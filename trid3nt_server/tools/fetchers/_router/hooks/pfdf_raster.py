@@ -17,7 +17,6 @@ from . import register_hook
 __all__ = ["read_statsgo", "read_3dep"]
 
 def _raster_to_array(spec: SourceSpec, raster: Any) -> tuple[Any, Any, Any]:
-    """pfdf ``Raster`` -> ``(float32 array, affine, crs)`` with nodata masked to NaN."""
     import numpy as np
 
     arr = np.asarray(raster.values, dtype="float32")
@@ -36,9 +35,7 @@ def _raster_to_array(spec: SourceSpec, raster: Any) -> tuple[Any, Any, Any]:
 
 @register_hook("pfdf_statsgo.read")
 def read_statsgo(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> tuple[Any, Any, Any]:
-    """Read a STATSGO field COG via pfdf to ``(array, affine, crs)``. An all-NaN window
-    inside CONUS -- open water, a Great Lakes pocket -- is a typed EMPTY; a library
-    failure reaches the invoke wrapper's verbatim upstream backstop."""
+    """Read a STATSGO field COG via pfdf to ``(array, affine, crs)``; an all-NaN window inside CONUS is a typed EMPTY."""
     sc = spec.error_code_prefix
     field = params["field"]
     bbox = [float(v) for v in params["bbox"]]
@@ -68,12 +65,9 @@ def read_statsgo(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) 
 
 @register_hook("pfdf_3dep.read")
 def read_3dep(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> tuple[Any, Any, Any]:
-    """Read a 3DEP DEM tile mosaic via pfdf TNM to ``(array, affine, crs)``. A
-    zero-coverage resolution is EMPTY (a coarser one may cover), a tile-count overrun
-    is INPUT, and anything else reaches the invoke wrapper's upstream backstop."""
+    """Read a 3DEP DEM mosaic via pfdf TNM to ``(array, affine, crs)``; zero coverage is EMPTY, a tile-count overrun INPUT."""
 
-    # There is no all-NaN empty gate here: the library's own no-products error is the
-    # only empty signal 3DEP gives.
+    # No all-NaN gate: the library's own no-products error is 3DEP's only empty signal.
     sc = spec.error_code_prefix
     resolution = params["resolution"]
     max_tiles = int(params["max_tiles"])

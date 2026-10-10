@@ -68,9 +68,9 @@ async def _finalize_segment(
     is_terminal: bool = False,
     thinking_parts: list[str] | None = None,
 ) -> None:
-    """Close ONE narration bubble: send its terminal chunk, then persist the
-    segment's text as its own ``role="agent"`` row so replay interleaves with
-    the tool rows. An empty segment persists nothing."""
+    """Close ONE narration bubble: send its terminal chunk, then persist the segment's text as its
+    own ``role="agent"`` row so replay interleaves with the tool rows. An empty segment persists
+    nothing."""
     # Only the TERMINAL segment passes ``layer_emissions=None``, so the turn's
     # layer and zoom-to accumulators are snapshotted onto the closing row alone
     # rather than duplicated across every segment. A thinking-only segment keeps
@@ -110,14 +110,11 @@ async def _finalize_segment(
             _TURN_SEGMENTS_PERSISTED_BY_TASK[_task] = (
                 _TURN_SEGMENTS_PERSISTED_BY_TASK.get(_task, 0) + 1
             )
-            # A terminal non-empty segment row just snapshotted the turn's
-            # zoom-to and layer accumulator, so the wrapper's finally must not
-            # write a duplicate closing marker; the marker is only for the
-            # tool-terminal shape, where this never fires.
+            # A terminal non-empty segment row just snapshotted the turn's zoom-to and layer
+            # accumulator, so the wrapper's finally must not write a duplicate closing marker; the
+            # marker is only for the tool-terminal shape, where this never fires.
             if is_terminal:
                 _TURN_TERMINAL_ACC_PERSISTED_BY_TASK[_task] = True
-    # The open buffer is now closed: clear the SAME list object (do not rebind)
-    # so the task-registered open buffer the wrapper reads is always current.
     segment_parts.clear()
 
 async def _persist_chat_turn(
@@ -132,14 +129,12 @@ async def _persist_chat_turn(
     message_id: str | None = None,
     thinking: str | None = None,
 ) -> None:
-    """Append one ``CaseChatMessage`` for the active Case; a missing binding or
-    no active Case short-circuits and a failed write is logged, never raised.
-    ``message_id`` upserts a stable row instead of appending a fresh one."""
-    # ``case_id`` pins the target Case explicitly - the dispatch wrappers
-    # capture it at task entry, so a cancel-and-redispatch race cannot re-aim
-    # the write; omitted, it resolves through the turn's Case rather than the
-    # raw write-time pointer. The upsert path is what lets a solve card
-    # persisted ``running`` walk to its terminal state in the SAME row.
+    """Append one ``CaseChatMessage`` for the active Case; a missing binding or no active Case
+    short-circuits and a failed write is logged, never raised. ``message_id`` upserts a stable
+    row, so a ``running`` solve card walks to terminal in the SAME row."""
+    # ``case_id`` pins the target Case explicitly - the dispatch wrappers capture it at task entry,
+    # so a cancel-and-redispatch race cannot re-aim the write; omitted, it resolves through the
+    # turn's Case rather than the raw write-time pointer.
     target_case = case_id if case_id is not None else _turn_case_id(state)
     if not target_case:
         return
@@ -213,9 +208,8 @@ async def _persist_tool_card(
     message_id: str | None = None,
     extra_content: dict[str, Any] | None = None,
 ) -> None:
-    """Persist one replayable tool-card row for the active Case, on a complete
-    or failed dispatch; a cancelled dispatch persists nothing. Best-effort and
-    never raises; ``extra_content`` rides the JSON twin only."""
+    """Persist one replayable tool-card row for the active Case, on a complete or failed dispatch;
+    a cancelled dispatch persists nothing. Best-effort; ``extra_content`` rides the JSON twin only."""
     # Storage shape is ``CaseChatMessage(role="tool")`` in the same collection
     # as user and agent turns, so replay interleaves the stream by created_at
     # with no extra query; the typed ``tool_card`` is the integration path and
@@ -233,11 +227,9 @@ async def _persist_tool_card(
                 started_at = emitter_step.started_at
             if emitter_step.duration_ms is not None:
                 duration_ms = emitter_step.duration_ms
-        # The persisted IO must ride the TYPED record, which is what replay
-        # reads; the ``content`` JSON twin carries the identical values for
-        # non-contract consumers. Computed only when at least one of raw_args /
-        # function_response was provided, so a compute card's row stays IO-less
-        # and existing documents validate unchanged.
+        # The persisted IO must ride the TYPED record, which is what replay reads; the ``content``
+        # JSON twin carries the identical values. Computed only when raw_args or
+        # function_response was provided, so a compute card's row stays IO-less.
         _io_fields: dict[str, Any] = {}
         if raw_args is not None or function_response is not None:
             args_str, args_trunc, args_bytes = ToolIoPayload.json_field(raw_args)
@@ -251,10 +243,9 @@ async def _persist_tool_card(
                 "response_bytes": resp_bytes,
                 "is_error": bool(io_is_error),
             }
-        # Carry the ordered CHILD substeps the emitter snapshotted at the
-        # terminal transition: the live steps are already cleared by then, so
-        # the snapshot is the only source. The tool match guards against a stale
-        # prior-dispatch snapshot attaching to this row.
+        # Carry the ordered CHILD substeps the emitter snapshotted at the terminal transition: the
+        # live steps are already cleared by then, so the snapshot is the only source. The tool match
+        # guards against a stale prior-dispatch snapshot attaching to this row.
         _children: list | None = None
         emitter_children = (
             state.emitter.last_tool_children if state.emitter is not None else None
@@ -274,9 +265,6 @@ async def _persist_tool_card(
             children=_children,
             **_io_fields,  # typed IO on the record is the integration path
         )
-        # Content JSON twin: model_dump_json now already carries the IO fields
-        # (they live on the typed record), so a single dump matches the wire
-        # shape for non-contract consumers without a separate merge.
         content = record.model_dump_json()
         if extra_content:
             content = json.dumps({**json.loads(content), **extra_content})
@@ -305,9 +293,9 @@ async def _persist_terminal_failure_card(
     message: str,
     case_id: str | None = None,
 ) -> None:
-    """Persist a FAILED tool-card row for a terminal turn failure that did not
-    flow through the dispatch path's own failed-card persist, so a reconnect
-    never replays a card stuck ``running``. Best-effort, never raises."""
+    """Persist a FAILED tool-card row for a terminal turn failure that did not flow through the
+    dispatch path's own failed-card persist, so a reconnect never replays a card stuck
+    ``running``. Best-effort, never raises."""
     # The record contract carries no error code, so the code and message ride
     # the JSON twin and the label. The card is the emitter's last tool step when
     # there is one, else a synthetic model-generation card.

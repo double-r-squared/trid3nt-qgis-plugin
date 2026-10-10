@@ -1,8 +1,7 @@
 """The declarative field map: what a build/parse hook pair states in Python.
 
-A row states its request template, its body decode, its paging style and its keyed
-detail join under ``ingest``; the executors read them wherever no hook is named. The
-vocabulary is the station_timeseries one generalized from a station loop to a row list."""
+A row states its request template, body decode, paging style and keyed detail join under
+``ingest``; the executors read them wherever no hook is named."""
 
 from __future__ import annotations
 
@@ -35,9 +34,7 @@ _FORMATTER = string.Formatter()
 
 
 def read_path(obj: Any, path: str) -> Any:
-    """Read a dotted path out of a decoded body. A whole segment that is all digits
-    indexes a list, so a GeoJSON depth is ``geometry.coordinates.2``. A missing or
-    mistyped segment yields None rather than raising."""
+    """Read a dotted path out of a decoded body; an all-digit segment indexes a list, a missing segment yields None."""
     cur = obj
     for seg in str(path).split("."):
         if cur is None:
@@ -53,8 +50,6 @@ def read_path(obj: Any, path: str) -> Any:
 
 
 def _template_fields(template: str) -> list[str]:
-    """The param names a request template references, each stripped to its root so
-    ``{bbox[0]}`` and ``{start:%Y%m%d}`` both report ``bbox`` / ``start``."""
     out: list[str] = []
     for _lit, field, _spec, _conv in _FORMATTER.parse(template):
         if field:
@@ -63,9 +58,7 @@ def _template_fields(template: str) -> list[str]:
 
 
 def _render(template: Any, fmt: dict[str, Any]) -> Any:
-    """Render one request value, or None when the template references a param that is
-    unset. An unset param DROPS its key: sending the string "None" would ask the
-    source a question about a value nobody supplied."""
+    """Render one request value, or None when it references an unset param: an unset param DROPS its key."""
     if not isinstance(template, str):
         return template
     for name in _template_fields(template):
@@ -91,8 +84,7 @@ def _render_block(block: Any, fmt: dict[str, Any]) -> Any:
 
 
 def _parse_moment(spec: SourceSpec, name: str, raw: Any, *, is_end: bool) -> _dt.datetime:
-    """Parse one window bound as an ISO date or datetime, UTC. A bare date is the start
-    of its day for a window start and the end of it for a window end."""
+    """Parse one window bound as an ISO date or datetime, UTC; a bare date is the start of its day for a start, the end for an end."""
     text = str(raw).strip()
     try:
         moment = _dt.datetime.fromisoformat(text.replace("Z", "+00:00"))
@@ -114,9 +106,7 @@ def _parse_moment(spec: SourceSpec, name: str, raw: Any, *, is_end: bool) -> _dt
 
 
 def _date_window(spec: SourceSpec, window: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
-    """Resolve a relative request window into the two format keys the request names.
-    It resolves HERE, after the cache key, so an unbounded ask keys as the unbounded
-    ask it is instead of keying a fresh instant on every call."""
+    """Resolve a relative request window into the request's format keys, AFTER the cache key so an unbounded ask keys as unbounded."""
     start_name = str(window.get("start", "start_date"))
     end_name = str(window.get("end", "end_date"))
     days = int(window.get("default_days", 30))
@@ -161,10 +151,7 @@ def _request_fmt(spec: SourceSpec, request: dict[str, Any], params: dict[str, An
 
 
 def declared_plans(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan]:
-    """The request plans stated by ``ingest.request``, one per endpoint in the chain --
-    the endpoints ``request.endpoint`` names, else the resolved default. Every query
-    value is a template over the validated params, and a template referencing an unset
-    param drops its key."""
+    """The request plans stated by ``ingest.request``, one per endpoint in the chain; a template over an unset param drops its key."""
     from .executors.vector_fgb import resolve_endpoints
 
     request = (spec.ingest or {}).get("request") or {}
@@ -176,8 +163,7 @@ def declared_plans(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan
     method = str(request.get("method", "GET")).upper()
     named = request.get("endpoint")
     if named:
-        # One name is one endpoint; a list is the endpoints this request is MADE of,
-        # every one fetched and the bodies joined at parse.
+        # A list names the endpoints this request is MADE of: every one fetched, the bodies joined at parse.
         names = [named] if isinstance(named, str) else list(named)
         chain = [spec.endpoints[n] for n in names if n in spec.endpoints]
     else:
@@ -199,9 +185,7 @@ def declared_plans(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan
 
 
 def _refuse_declared(spec: SourceSpec, body: dict[str, Any], text: str) -> None:
-    """The source's own refusal wearing a body: ``ingest.body.refuse`` names the
-    markers a failure is spelled with. A service that reports a bad key under HTTP 200
-    as often as under a 4xx is refused off the body either way."""
+    """The source's refusal read off the body: ``ingest.body.refuse`` markers, whether the service reports under HTTP 200 or a 4xx."""
     for rule in body.get("refuse") or []:
         if str(rule.get("contains", "")).lower() not in text.lower():
             continue
@@ -213,9 +197,7 @@ def _refuse_declared(spec: SourceSpec, body: dict[str, Any], text: str) -> None:
 
 
 def _csv_rows(spec: SourceSpec, body: dict[str, Any], text: str) -> list[dict[str, str]]:
-    """A comma-separated body as its own header's rows. The values stay text: the
-    column map states which are numbers and coerces them. A header that does not name
-    the geometry's own columns is a body this declaration cannot read."""
+    """A comma-separated body as its header's rows; values stay text for the column map; an unreadable geometry header is refused."""
     reader = csv.DictReader(io.StringIO(text))
     names = list(reader.fieldnames or [])
     geometry = body.get("geometry") or {}
@@ -255,8 +237,7 @@ def _decode(spec: SourceSpec, body: dict[str, Any], raw: bytes) -> Any:
 
 
 def rows_in_body(spec: SourceSpec, raw: bytes) -> list[Any]:
-    """The row list one body carries, per ``ingest.body``. The pager counts with this,
-    so a short page is measured against the same rows the decode yields."""
+    """The row list one body carries, per ``ingest.body``; the pager counts with this."""
     body = (spec.ingest or {}).get("body") or {}
     obj = _decode(spec, body, raw) if raw else None
     if obj is None:
@@ -307,9 +288,7 @@ def _check_row_cap(spec: SourceSpec, body: dict[str, Any], obj: Any, n_rows: int
 def declared_features(
     spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
 ) -> list[dict[str, Any]]:
-    """The features stated by ``ingest.body``: decode each body, walk to the row list,
-    build the geometry, and hand the RAW row to the column map the serializer applies.
-    A declared ``ingest.empty`` turns a zero-row answer into the source's typed empty."""
+    """The features stated by ``ingest.body``, handing the RAW row to the column map; ``ingest.empty`` makes a zero-row answer the typed empty."""
     body = (spec.ingest or {}).get("body") or {}
     features: list[dict[str, Any]] = []
     for raw in bodies:
@@ -334,8 +313,7 @@ def declared_features(
 
 
 def declared_empty_error(spec: SourceSpec, fallback: str) -> RouterError | None:
-    """The source's typed empty from ``ingest.empty``, or None when it declares none -
-    in which case the serializer's header-only file is the honest answer."""
+    """The source's typed empty from ``ingest.empty``, or None (the header-only file is then the honest answer)."""
     empty = (spec.ingest or {}).get("empty")
     if not empty:
         return None
@@ -349,10 +327,7 @@ def declared_empty_error(spec: SourceSpec, fallback: str) -> RouterError | None:
 def declared_status_error(
     spec: SourceSpec, status: int | None, body: str | None
 ) -> RouterError | None:
-    """The typed error an HTTP failure body states: ``ingest.body.refuse`` first -- the
-    same markers a 200 body is refused on -- then ``ingest.empty.on_status`` with an
-    optional ``body_contains``, which says which status over which body IS the source's
-    empty. Anything else stays an upstream failure."""
+    """The typed error an HTTP failure body states: ``ingest.body.refuse``, then ``ingest.empty.on_status`` (optional ``body_contains``); else upstream."""
     try:
         _refuse_declared(spec, (spec.ingest or {}).get("body") or {}, body or "")
     except RouterError as refusal:
@@ -368,9 +343,7 @@ def declared_status_error(
 
 
 def page_injection(pagination: dict[str, Any], page: int, cursor: Any) -> dict[str, Any]:
-    """The params one page adds, by style: ``page`` counts from 1, ``offset`` counts
-    rows, ``cursor`` carries the token the previous body named. The request template
-    reads them by name, so a build hook and a declared request page identically."""
+    """The params one page adds: ``page`` counts from 1, ``offset`` counts rows, ``cursor`` carries the previous body's token."""
     style = str(pagination.get("style", "page"))
     size = int(pagination.get("page_size", 1000))
     if style == "offset":
@@ -383,9 +356,7 @@ def page_injection(pagination: dict[str, Any], page: int, cursor: Any) -> dict[s
 def enrich_plans(
     spec: SourceSpec, params: dict[str, Any], features: list[dict[str, Any]]
 ) -> list[tuple[str, RequestPlan]]:
-    """One detail request per DISTINCT value of ``ingest.enrich.key_column``, in first-
-    seen order. The key is an already-mapped output column, so the declaration names
-    what the layer carries rather than what the payload happened to call it."""
+    """One detail request per DISTINCT value of ``ingest.enrich.key_column``, in first-seen order; the key is a mapped output column."""
     enrich = (spec.ingest or {}).get("enrich") or {}
     key_column = str(enrich.get("key_column"))
     request = enrich.get("request") or {}
@@ -409,8 +380,6 @@ def enrich_plans(
 
 
 def _detail_rows(spec: SourceSpec, enrich: dict[str, Any], results: dict[str, Any]) -> dict[str, Any]:
-    """Index every fetched detail row by the join's ``detail_key`` path. A ref that failed is
-    absent from the index, which the join then treats as an unmatched key."""
     body = enrich.get("body") or {}
     detail_key = str((enrich.get("join") or {}).get("detail_key"))
     index: dict[str, Any] = {}
@@ -435,11 +404,8 @@ def enrich_merge(
     spec: SourceSpec, params: dict[str, Any], features: list[dict[str, Any]],
     results: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    """Left-join the fetched detail onto each feature by ``feature_key`` -> ``detail_key``.
-    ``take`` names the output columns lifted off the detail row, ``geometry`` lifts its
-    shape, and an unmatched feature survives unless the join declares otherwise."""
-    # The keys are spelled detail_key / feature_key rather than on / onto: YAML reads a
-    # bare ``on`` as the boolean true, which would silently lose the join field.
+    """Left-join fetched detail onto each feature by ``feature_key`` -> ``detail_key``; ``take`` lifts columns, ``geometry`` its shape."""
+    # Keys are spelled detail_key / feature_key, not on / onto: YAML reads a bare ``on`` as true.
     enrich = (spec.ingest or {}).get("enrich") or {}
     join = enrich.get("join") or {}
     feature_key = str(join.get("feature_key"))

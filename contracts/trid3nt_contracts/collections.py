@@ -15,9 +15,7 @@ from pydantic import ConfigDict, Field, field_validator
 from .common import ContractModel, ULIDStr, UTCDatetime
 from .execution import LegendKey
 
-#: SCREAMING_SNAKE_CASE error-code pattern. The SET is open: a code is validated
-#: by SHAPE and never against a registry, so a workflow registers its own codes
-#: without a schema change.
+#: SCREAMING_SNAKE_CASE error-code pattern; the set is open, validated by shape and never against a registry.
 _ERROR_CODE_RE: re.Pattern[str] = re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$")
 
 #: Cap on ``error_message`` length, to discourage stack-trace leakage.
@@ -58,58 +56,40 @@ class ProjectLayerSummary(ContractModel):
 
     layer_id: str
     name: str
-    # ``mesh`` is an unstructured solver mesh, STAGED rather than streamed.
+    # ``mesh`` is staged rather than streamed.
     layer_type: Literal["raster", "vector", "mesh"]
     uri: str
     visible: bool
     role: Literal["primary", "context", "input"]
-    #: WHERE the layer came from, read by a person. ``user`` is a file the user
-    #: pushed in themselves; ``None`` is the system saying nothing.
     origin: Literal["user"] | None = None
     temporal: bool  # computed: the row states its own [valid_from, valid_to)
 
-    # Layer-stack arbitration. A client absent both falls back to fully opaque
-    # and its own default order.
+    # Layer-stack arbitration; a client given neither is fully opaque in its own default order.
     opacity: float | None = None     # 0.0-1.0
     z_index: int | None = None       # lower draws first
 
-    # The CRS for a ``layer_type="mesh"`` row: a mesh reader reports an empty
-    # CRS for these formats, so the run has to state it. ``None`` otherwise.
+    # CRS for a mesh row, whose reader reports an empty CRS; None otherwise.
     crs_authid: str | None = None
 
-    # The MDAL dataset files a mesh row carries beside the groups its own file
-    # holds, loaded onto the layer before its declared group is bound. ``[]``
-    # for every other row.
+    # MDAL dataset files a mesh row carries beside its own groups, loaded before its declared group is bound; [] otherwise.
     dataset_uris: list[str] = Field(default_factory=list)
 
-    # WHICH of a mesh's dataset groups this row paints. One mesh file carries
-    # many, and a run publishes one layer per group it wants read, so the group
-    # is half of what identifies a mesh row. ``None`` for every other row.
+    # Which dataset group of the mesh this row paints; a run publishes one layer per group, so the group is half the row's identity.
     dataset_group: str | None = None
 
-    # The instant a mesh row's dataset times are counted from. A SELAFIN records
-    # no origin, so without it a scrubber reads 1900. ``None`` otherwise.
+    # The instant a mesh row's dataset times are counted from (a SELAFIN records no origin); None otherwise.
     reference_time: str | None = None
 
-    # One frame of an ordered sequence states its own window, ISO-8601 UTC, and
-    # the map stamps it as the layer's fixed temporal range. ``None`` for a
-    # layer that is not one frame.
+    # ISO-8601 UTC window of one frame of an ordered sequence, stamped as the layer's fixed temporal range; None otherwise.
     valid_from: str | None = None
     valid_to: str | None = None
 
-    #: The layer's RESOLVED style: the concrete range, the colours and the
-    #: document the map loads.
     legend: LegendKey | None = None
 
-    # The physical quantity, as the producer names it - a layer's identity, and
-    # what a still, a frame and an animation of ONE field are matched by when
-    # they are held to a single scale. ``None`` when none was declared.
+    # The physical quantity: the layer's identity, by which a still, a frame and an animation of one field share a scale.
     quantity: str | None = None
 
-    # WHICH tracer of the run this row carries, counted from 1 in the order the
-    # deck declares them. A tracer's NAME is the run's - a named release renames
-    # it - so its position is the only stable way to ask for one. ``None`` on
-    # every row that is not a tracer.
+    # Which tracer, counted from 1 in the deck's order; a tracer's name is the run's, so position is the stable key.
     tracer: int | None = None
 
 
@@ -148,27 +128,18 @@ class PipelineStepSummary(ContractModel):
     state: Literal["pending", "running", "complete", "failed", "cancelled"]
     started_at: UTCDatetime | None = None
     completed_at: UTCDatetime | None = None
-    #: Populated only where a workflow can genuinely attribute progress -
-    #: chunk N of M, row n of M. Optional everywhere, and never estimated.
+    #: Only where a workflow can genuinely attribute progress; never estimated.
     progress_percent: int | None = Field(default=None, ge=0, le=100)
-    #: Populated only when the step FAILED. The code set is open and validated
-    #: by shape; the message is short and capped to discourage a stack trace.
+    #: Only when the step failed; the code set is open and validated by shape, the message capped against stack traces.
     error_code: str | None = None
     error_message: str | None = Field(default=None, max_length=_ERROR_MESSAGE_MAX_LEN)
-    #: The AUTHORITATIVE wall-clock elapsed time, derived from the two stamps
-    #: above at the terminal transition. ``None`` while pending or running.
+    #: Authoritative elapsed time from the two stamps above; None while pending or running.
     duration_ms: int | None = Field(default=None, ge=0)
-    # The card-kind discriminator and the compute binding, mirrored from the
-    # live step, so a replayed snapshot carries the off-box solver card across a
-    # reconnect. ``"compute"`` is the solver card; ``batch_status`` mirrors the
-    # backend's own status VERBATIM rather than being interpreted.
+    # Mirrored from the live step so a replay carries the off-box solver card; ``batch_status`` is the backend's own, verbatim.
     role: Literal["tool", "compute"] = "tool"
     batch_job_id: str | None = None
     batch_status: str | None = None
-    # The nested sub-step timeline, mirrored from the live step so a replay
-    # carries it across a reconnect. ``parent_step_id`` marks a CHILD; the three
-    # substep fields are the PARENT's live breadcrumb, cleared when the parent
-    # reaches a terminal state.
+    # Mirrored from the live step; ``parent_step_id`` marks a child, the substep fields are the parent's breadcrumb, cleared at terminal.
     parent_step_id: ULIDStr | None = None
     substep_label: str | None = None
     substep_index: int | None = Field(default=None, ge=1)
@@ -228,8 +199,7 @@ class SessionDocument(DocModel):
     map_view: MapView | None = None
 
 
-#: TTL index spec for sessions: a document is deleted 30 days after
-#: ``expires_at``. This is the CONTRACT; provisioning creates the index.
+#: TTL index spec: a document is deleted 30 days after ``expires_at``; provisioning creates the index.
 SESSIONS_TTL: dict[str, Any] = {
     "collection": "sessions",
     "field": "expires_at",

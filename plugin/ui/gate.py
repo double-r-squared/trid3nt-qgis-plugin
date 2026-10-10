@@ -92,8 +92,7 @@ def parse_payload_warning(payload: dict) -> Optional[PayloadWarning]:
         return None
     options = payload.get("options")
     if not isinstance(options, list) or not options:
-        # Contract guarantees a non-empty subset; a malformed envelope gets
-        # the full default so the user is never left without a button.
+        # A malformed envelope gets the full default so the user always has a button.
         options = ["proceed", "cancel", "narrow_scope"]
     granularity = payload.get("granularity")
     time_scale = payload.get("time_scale")
@@ -119,11 +118,8 @@ def parse_payload_warning(payload: dict) -> Optional[PayloadWarning]:
     )
 
 
-#
-# The sheet rides an OPTIONAL field of the payload warning, and its presence is
-# what turns the gate card into an editable property grid. Edits ride back on
-# the SAME confirmation envelope, and a submit-with-edits IS the approval: the
-# server does not re-present the sheet.
+# The sheet rides an OPTIONAL payload field; its presence makes the gate card an editable
+# property grid, and a submit-with-edits IS the approval (the server does not re-present it).
 
 
 @dataclass
@@ -142,10 +138,7 @@ class SourceOptionRow:
 
 @dataclass
 class SourceChoiceRow:
-    """The ranked list a matched DATA slot was filled from.
-
-    The same object the server gave the model, so the card and the chat cannot
-    describe one run differently."""
+    """The ranked list a matched DATA slot was filled from."""
 
     slot: str
     need: str = ""
@@ -167,8 +160,7 @@ class ParamRow:
     desc: str = ""
     door: str = "scenario"
     basis: str = "default_demo"
-    # WHERE the value came from, as one word of the server's closed set. Empty
-    # on a row that is not a filled slot, which is the row that gets no chip.
+    # One word of the server's closed set; empty on a row that is not a filled slot (no chip).
     origin: str = ""
     source_badge: str = ""
     bounds: Optional[tuple] = None
@@ -177,11 +169,9 @@ class ParamRow:
     advanced: bool = False
     group: str = ""
     note: Optional[str] = None
-    # The ranked list behind a matched DATA slot. ``None`` on every row that is
-    # not one, which is every keyword row.
+    # The ranked list behind a matched DATA slot; None on every other row.
     choices: Optional[SourceChoiceRow] = None
-    # EXACTLY what this input would accept, as ``(value, label)``: a pick sends
-    # the value back. ``None`` on a row whose value is typed.
+    # EXACTLY what this input accepts, as ``(value, label)``; None where the value is typed.
     options: Optional[list] = None
 
     @property
@@ -280,8 +270,7 @@ def _parse_param_row(raw: dict) -> Optional[ParamRow]:
 
 
 def _parse_options(raw: object) -> Optional[list]:
-    """The accepted values off the wire as ``(value, label)``; ``None`` where
-    the row lists none. An empty list is kept: nothing in the case is accepted."""
+    """The accepted values off the wire as ``(value, label)``;"""
     if not isinstance(raw, list):
         return None
     return [(o.get("value"), str(o.get("label") or o.get("value")))
@@ -322,7 +311,6 @@ def resolve_param_sheet_edits(rows: list, edited: dict) -> dict:
         if row is None or not row.editable:
             continue
         if row.options is not None:
-            # A PICK is one of the values the row lists, sent as listed.
             if text != row.value and any(text == v for v, _l in row.options):
                 revised[name] = text
             continue
@@ -345,8 +333,6 @@ def param_sheet_summary(sheet: ParamSheetRequest, revised: dict) -> str:
     if not revised:
         return f"Run asked with the inputs as shown ({len(sheet.rows)} rows)"
     return "Inputs sent with edits: " + ", ".join(sorted(revised))
-
-
 
 
 def estimate_cells(granularity: dict, chosen_resolution_m: float) -> int:
@@ -388,8 +374,6 @@ def estimate_frames(time_scale: dict, interval_min: float, duration_hr: float) -
     return max(1, raw)
 
 
-
-
 @dataclass
 class GateDecision:
     """What the card should send: ``decision`` + ``revised_args`` (or an
@@ -408,9 +392,7 @@ def resolve_gate_decision(
 ) -> GateDecision:
     """Map the card's UI state to the confirmation envelope. Any override
     becomes ``narrow_scope`` under the EXACT param keys the envelope named."""
-    # An unchanged sheet is a plain ``proceed``, EXCEPT on a hard-cap warning,
-    # whose options omit proceed: that is refused with an honest note rather
-    # than sent as a decision the agent would reject.
+    # An unchanged sheet is ``proceed``, EXCEPT on a hard-cap warning (its options omit proceed): refused with a note.
     if cancel:
         return GateDecision("cancel", None)
 
@@ -429,9 +411,7 @@ def resolve_gate_decision(
             revised[param] = chosen_resolution_m
     ts = warning.time_scale
     if ts:
-        # The CADENCE is not among the overrides: a run writes its frames on its
-        # own module's printout-period keyword, which a caller sets by that
-        # keyword's name rather than through an args key this card knows.
+        # The CADENCE is not an override: a run sets it by its module's printout-period keyword.
         duration_param = ts.get("duration_param") or "duration_hr"
         suggested_duration = ts.get("suggested_duration_hr")
         if (
@@ -462,12 +442,8 @@ def resolve_gate_decision(
     return GateDecision("proceed", None)
 
 
-#
-# The decision rides back on the ORDINARY payload-confirmation envelope, with
-# its ``warning_id`` set to the request's ``code_exec_id``. The server
-# fail-closes everything but ``proceed`` -- you do not "narrow" a code snippet
-# -- so the card offers exactly Run and Deny, and ``revised_args`` is always
-# None.
+# The decision rides the ordinary payload-confirmation envelope with ``warning_id`` = ``code_exec_id``.
+# The server fail-closes all but ``proceed``, so the card offers Run and Deny and ``revised_args`` is None.
 
 
 @dataclass
@@ -508,13 +484,8 @@ def resolve_code_exec_decision(approve: bool) -> GateDecision:
     return GateDecision("proceed" if approve else "cancel", None)
 
 
-#
-# Candidates arrive ranked best-first and MAY be empty on a retrieval degrade,
-# in which case the card offers only free text and let-agent-decide. The reply
-# is ONE envelope carrying exactly one of three shapes: a verbatim candidate
-# pick, typed guidance, or neither. Unanswered, the SERVER's own fail-open
-# window proceeds with the agent's top pick, which is what the third shape
-# does instantly.
+# Candidates arrive ranked best-first and MAY be empty on a retrieval degrade (free text and
+# let-agent-decide only). The reply carries exactly one of: a candidate pick, typed guidance, neither.
 
 
 @dataclass
@@ -621,8 +592,6 @@ def tool_choice_summary(tool_name: Optional[str], free_text: Optional[str]) -> s
     return "agent decided"
 
 
-
-
 def summary_lines(warning: PayloadWarning) -> list:
     """The card's body lines. Every number is a structured envelope field,
     never re-derived from prose."""
@@ -679,13 +648,8 @@ def summary_lines(warning: PayloadWarning) -> list:
     return lines
 
 
-#
-# The agent asks the user to pick a geometry: a point, a dragged bbox, or a
-# drawn shape whose purpose is an area (an aoi, a solved domain) or a line (a
-# neutral section, a boundary run). This plugin answers the first two through
-# the canvas point-emit and extent tools, and the third through the
-# vertex-capture tool -- a polygon for an area, a polyline for a line.
-# ``cancelled`` is the decline path and closes the gate.
+# Point and bbox picks use the canvas emit/extent tools; a drawn shape uses vertex capture
+# (polygon for an area, polyline for a line). ``cancelled`` closes the gate.
 
 
 @dataclass
@@ -736,10 +700,8 @@ def parse_spatial_input_request(payload: dict) -> Optional[SpatialInputRequest]:
 
 def resolve_spatial_input_point(request_id: str, lon: float, lat: float,
                                 name: Optional[str] = None) -> dict:
-    """Build the ``spatial-input-response`` wire dict for a POINT pick
-    (contract SpatialInputResponsePayload): ``coordinates=[lon, lat]``, the
-    ``name`` the user gave the point (blank sends None), ``features`` None.
-    All keys present (the explicit-None convention)."""
+    """Build the ``spatial-input-response`` wire dict for a POINT pick (contract
+    SpatialInputResponsePayload):"""
     text = (name or "").strip()
     return {
         "request_id": request_id,
@@ -832,10 +794,7 @@ def spatial_input_summary(request: SpatialInputRequest, wire: dict) -> str:
     return "spatial input sent"
 
 
-#
-# The outcome of the code the session ran, joined to the card that approved it
-# by ``code_exec_id``. The status is the HONEST terminal outcome and is never
-# dressed up.
+# The outcome of the session-run code, joined to its approving card by ``code_exec_id``; the status is never dressed up.
 
 
 @dataclass
@@ -886,10 +845,7 @@ def code_exec_result_lines(result: CodeExecResult) -> list:
     return lines
 
 
-#
-# Emitted when the secrets surface opens, and as the confirmation after an
-# add or a revoke. The raw key value NEVER appears here -- only the
-# ``vault_ref``-bearing records -- and a vault_ref is never logged.
+# The raw key value NEVER appears here, only ``vault_ref`` records, and a vault_ref is never logged.
 
 
 @dataclass

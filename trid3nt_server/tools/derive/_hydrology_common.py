@@ -70,11 +70,8 @@ class HydrologyUpstreamError(HydrologyPrimitivesError):
     retryable = True
 
 
-#: CPU-bound clamp on the D8 chain, in the DEM's own CELLS - which is what the
-#: chain costs. Degrees are not a cost: a projected DEM's degree extent is its
-#: map bulge, and one grid of cells conditions in the same time wherever it sits
-#: and whatever it spans. A 4000 x 4000 grid conditions in about forty seconds
-#: here, measured on the pysheds chain below.
+#: CPU-bound clamp on the D8 chain in the DEM's own CELLS, not degrees (a projected DEM's degree extent is map bulge).
+#: A 4000 x 4000 grid conditions in about forty seconds on the pysheds chain.
 _MAX_DEM_CELLS: int = 16_000_000
 
 _ENGINE_NOTE = (
@@ -88,12 +85,9 @@ _ENGINE_NOTE = (
 #: pysheds' default D8 direction map, in [N, NE, E, SE, S, SW, W, NW] order.
 _D8_DIRMAP: tuple[int, ...] = (64, 128, 1, 2, 4, 8, 16, 32)
 
-#: Half-window (cells) for max-accumulation outlet snapping in the shared,
-#: alignment-invariant delineation. An 8-cell window (~240 m at 30 m) is enough
-#: to seat the outlet on the main channel without swallowing a neighbouring
-#: basin.
+#: Half-window (cells) for max-accumulation outlet snapping; 8 cells (~240 m at 30 m) seats the outlet on the
+#: main channel without swallowing a neighbouring basin.
 _OUTLET_SNAP_SEARCH_CELLS: int = 8
-
 
 
 def _import_pysheds() -> Any:
@@ -195,11 +189,7 @@ def _dem_bbox_4326(dem_path: str) -> tuple[float, float, float, float]:
 
 
 def _open_dem(dem_path: str) -> tuple[Any, Any]:
-    """``(grid, dem)`` for a DEM raster, held to the D8 cell clamp.
-
-    Every path into the conditioning chain opens its DEM here, so the clamp is
-    stated once and no caller can reach the chain around it.
-    """
+    """``(grid, dem)`` for a DEM raster, held to the D8 cell clamp."""
     Grid = _import_pysheds()
     try:
         grid = Grid.from_raster(dem_path)
@@ -249,10 +239,7 @@ def write_conditioned_dem(dem_path: str, out_path: str) -> str:
     import rasterio
 
     grid, dem = _open_dem(dem_path)
-    # A mesh bed painted from the RAW DEM ponds in exactly the pits the
-    # delineation already fills to route through: the deepest water in the run is
-    # then a single node inside an unfilled sink, and the published depth map is
-    # scaled by a terrain artifact rather than by the storm.
+    # A bed painted from the RAW DEM ponds in the pits the delineation fills, so published depth would scale with a terrain artifact.
     try:
         inflated = np.asarray(_conditioned(grid, dem), dtype="float32")
     except Exception as exc:  # noqa: BLE001
@@ -290,18 +277,12 @@ def snap_and_delineate_index_space(
             f"pour point ({lon}, {lat}) falls outside the DEM window; supply a "
             "bbox/pour point inside the analysis AOI."
         )
-    # Snapping the outlet to the max-accumulation cell of the window is what
-    # guarantees it sits on the main channel rather than on a hillslope cell.
     win = acc_arr[rmin:rmax, cmin:cmax]
     di, dj = np.unravel_index(int(np.argmax(win)), win.shape)
     rr, cc = rmin + int(di), cmin + int(dj)
     x_snap, y_snap = affine * (cc + 0.5, rr + 0.5)
 
-    # Tracing in INDEX space is alignment-invariant; xytype="coordinate" is not.
-    # Its coordinate->cell round-trip can land on a neighbour cell and collapse
-    # the basin to a 1-cell sliver on certain grid alignments: 33.7-34.0k cells
-    # in index space across box quantizations against 1-14 for the coordinate
-    # path.
+    # Index-space tracing is alignment-invariant; xytype="coordinate" can land on a neighbour cell and collapse the basin to a 1-cell sliver.
     try:
         catch = grid.catchment(
             x=cc,
@@ -382,12 +363,11 @@ class RasterWriteError(DeriveError):
 def write_cog(band: Any, *, crs: Any, transform: Any, prefix: str, seed: str,
               output_dir: str | None, code: str, nodata: float | None = None,
               photometric: str | None = None) -> str:
-    """Write a raster as a COG and return its uri: a local path when ``output_dir``
-    is given, else an ``s3://`` key in the runs bucket.
+    """Write a raster as a COG and return its uri: a local path when ``output_dir`` is
+    given, else an ``s3://`` key in the runs bucket.
 
-    ``band`` is ``(height, width)`` or ``(count, height, width)``; its dtype and
-    shape are the profile. The COG driver is not always built into the GDAL a box
-    carries, so a tiled GTiff is the labeled second try rather than a failure."""
+    ``band`` is ``(height, width)`` or ``(count, height, width)``; its dtype and shape are the profile.
+    The COG driver is not always in the box's GDAL, so a tiled GTiff is the labeled second try."""
     import rasterio
 
     array = np.asarray(band)

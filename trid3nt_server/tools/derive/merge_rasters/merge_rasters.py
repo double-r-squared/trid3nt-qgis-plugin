@@ -109,9 +109,8 @@ def _bridge(layer: Any, zero: str, offsets: list[Any]) -> Any:
 
 
 def _aligned(layer: Any, label: str, zero: str, offsets: list[Any]) -> Any:
-    """What it costs to read ONE input on ``zero``: nothing on that frame, the
-    shift it publishes about itself, or the offset handed in for its pair - else
-    a refusal naming the fetch that measures one."""
+    """What it costs to read ONE input on ``zero``: nothing on that frame, the shift it
+    publishes about itself, or the offset handed in for its pair - else a refusal naming the fetch that measures one."""
     from trid3nt_server.inputs.vertical_datum import (
         OFFSET_FETCH, DatumError, datum_of, one_datum, onto_frame)
 
@@ -153,11 +152,10 @@ def _band(spans: list[tuple[float, float, str]]) -> str:
 
 
 def _no_cliff(grids: list[Any], won: Any, labels: list[str]) -> None:
-    """REFUSE a merge whose painted values split into two populations farther
-    apart than the relief the last input measures over the whole grid.
+    """REFUSE a merge whose painted values split into two populations farther apart than
+    the relief the last input measures over the whole grid.
 
-    A step wider than that is two zeros that never met, and every cell is
-    painted, so nothing downstream catches it."""
+    Such a step is two zeros that never met, and every cell is painted, so nothing downstream catches it."""
     import numpy as np
 
     under = grids[-1][np.isfinite(grids[-1])]

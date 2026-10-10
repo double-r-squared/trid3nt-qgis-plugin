@@ -1,10 +1,8 @@
-"""The Library window -- a bottom-docked, read-only listing of what can be run.
+"""The Library window - a bottom-docked, read-only listing of what can be run.
 
-The left tree carries the subsystems and the data classes, the middle list the
-selected group's entries, the right pane the selected entry's description, the
-exact name a direct run takes and its facts. The search box runs the daemon's
-BM25 route -- the same corpus the model routes on. This window OWNS no network
-call and no case state: the dock fetches and hands results in."""
+Groups tree, entry list, and a description pane with the exact direct-run name. The
+search box runs the daemon's BM25 route. This window OWNS no network call or case
+state: the dock fetches and hands results in."""
 
 from __future__ import annotations
 

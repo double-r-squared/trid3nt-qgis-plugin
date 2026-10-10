@@ -35,9 +35,8 @@ def _ollama_root(base_url: str | None) -> str:
 
 
 def _ollama_tags_url() -> str:
-    """Derive the Ollama ``/api/tags`` URL from the agent's own LLM endpoint.
-    The native API lives one level above the OpenAI-compat base; falls back to
-    the Ollama default host when ``TRID3NT_OPENAI_BASE_URL`` is unset."""
+    """Derive the Ollama ``/api/tags`` URL from the agent's own LLM endpoint: the native API lives
+    one level above the OpenAI-compat base; the Ollama default host when the env is unset."""
     base = _ollama_root(os.environ.get("TRID3NT_OPENAI_BASE_URL", "").strip())
     if not base:
         base = "http://127.0.0.1:11434"
@@ -48,10 +47,8 @@ class _LocalModelsUpstreamError(Exception):
     """Ollama /api/tags (or OpenRouter /models) unreachable or unusable."""
 
 
-# OpenRouter ``GET /models`` is large (~300 entries) and rarely changes; cache the
-# FILTERED result per base_url for a process TTL so a provider-change repopulate
-# does not re-fetch every open. A restart (or a different base_url key) naturally
-# bypasses staleness -- there is no explicit invalidation, by design.
+# OpenRouter ``GET /models`` is large (~300 entries) and rarely changes; cache the FILTERED result
+# per base_url for a process TTL so a provider-change repopulate does not re-fetch every open.
 _OPENROUTER_MODELS_TTL_S = 600.0
 _OPENROUTER_MODELS_CACHE: dict[str, tuple[float, list[dict[str, str]]]] = {}
 
@@ -64,9 +61,8 @@ def _base_url_host(base_url: str) -> str:
 
 
 def _filter_openrouter_models(raw: Any) -> list[dict[str, str]]:
-    """PURE: an OpenRouter ``GET /models`` body -> ``[{"id","label"}]``, the
-    FREE and TOOL-CAPABLE models only.
-    A malformed row is skipped, never fatal: one bad entry cannot blank the list."""
+    """PURE: an OpenRouter ``GET /models`` body -> ``[{"id","label"}]``, the FREE and TOOL-CAPABLE
+    models only. A malformed row is skipped, never fatal."""
     data = raw.get("data") if isinstance(raw, dict) else None
     if not isinstance(data, list):
         return []
@@ -101,8 +97,8 @@ def _filter_openrouter_models(raw: Any) -> list[dict[str, str]]:
 
 def _fetch_openrouter_models(base_url: str) -> bytes:
     """SYNC (httpx): free + tool-capable OpenRouter models, in the Ollama shape
-    ``{"models":[{"id","label"}], "default": ...}``.
-    An upstream fault raises ``_LocalModelsUpstreamError``, never an empty list."""
+    ``{"models":[{"id","label"}], "default": ...}``. An upstream fault raises
+    ``_LocalModelsUpstreamError``, never an empty list."""
     import time
 
     import httpx
@@ -148,9 +144,8 @@ def _fetch_openrouter_models(base_url: str) -> bytes:
 
 
 def _fetch_local_models() -> bytes:
-    """SYNC (httpx; the caller wraps it in ``asyncio.to_thread``): the JSON body.
-    An ``openrouter.ai`` base lists OpenRouter's free tool-capable models, any
-    other lists the installed Ollama models; an upstream fault raises."""
+    """SYNC (httpx; the caller wraps it in ``asyncio.to_thread``): the JSON body. An openrouter.ai
+    base lists its free tool-capable models, any other the installed Ollama models."""
     import httpx
 
     base = os.environ.get("TRID3NT_OPENAI_BASE_URL", "").strip()
@@ -191,11 +186,9 @@ def _fetch_local_models() -> bytes:
     ).encode("utf-8")
 
 
-# Per-provider CONTEXT-WINDOW resolvers
-#
-# Each returns the model's INPUT-token capacity, or None when the provider
-# exposes no such fact. None means "undiscoverable", NEVER "assume a default"
-# -- the caller owns the fallback and the warning that goes with it.
+# Per-provider CONTEXT-WINDOW resolvers Each returns the model's INPUT-token capacity, or None when
+# the provider exposes no such fact. None means "undiscoverable", NEVER "assume a default" -- the
+# caller owns the fallback and the warning that goes with it.
 
 
 def is_openrouter_base_url(base_url: str | None) -> bool:
@@ -231,9 +224,9 @@ def parse_openrouter_context_length(raw: Any, model_name: str) -> int | None:
 
 
 async def openrouter_context_length(base_url: str, model_name: str) -> int | None:
-    """OpenRouter ``GET /models`` -> this model's ``context_length``.
-    Unfiltered, so a paid or non-tool model still gets an honest window;
-    best-effort, and any network or parse fault returns ``None``."""
+    """OpenRouter ``GET /models`` -> this model's ``context_length``. Unfiltered, so a paid or
+    non-tool model still gets an honest window; best-effort, and any network or parse fault returns
+    ``None``."""
     import httpx
 
     from .openai_adapter import openai_api_key
@@ -285,15 +278,14 @@ async def anthropic_max_input_tokens(model_id: str) -> int | None:
 
 
 class ProviderConfigBadRequest(Exception):
-    """POST /api/provider-config body was malformed. SECURITY: the message
-    NEVER echoes the request body or the api_key -- only field-shape complaints
-    (a malformed body could itself be a mistyped key)."""
+    """POST /api/provider-config body was malformed. SECURITY: the message NEVER echoes the request body or the api_key -- only field-shape
+    complaints (a malformed body could itself be a mistyped key)."""
 
 
 class ProviderConfigIncoherent(ProviderConfigBadRequest):
-    """base_url and model name DIFFERENT providers, so the push is refused with
-    the env left exactly as it was. The message may name the base URL HOST and
-    the model id, never the full URL or the api_key."""
+    """base_url and model name DIFFERENT providers, so the push is refused with the env left exactly
+    as it was. The message may name the base URL HOST and the model id, never the full URL or the
+    api_key."""
 
 
 #: Ollama's fixed listen port. The ONLY signal that an OpenAI-compatible
@@ -326,9 +318,9 @@ def _provider_family(base_url: str) -> str | None:
 
 
 def _ollama_serves_model(base_url: str, model: str) -> bool | None:
-    """SYNC live probe of the installed-model list: True or False when the
-    endpoint answers, ``None`` when it cannot be reached. ``None`` must never be
-    read as incoherence - only a non-empty answer can prove a model absent."""
+    """SYNC live probe of the installed-model list: True or False when the endpoint answers,
+    ``None`` when it cannot be reached. ``None`` must never be read as incoherence: only a
+    non-empty answer can prove a model absent."""
     import httpx
 
     root = _ollama_root(base_url)
@@ -361,13 +353,11 @@ def _ollama_serves_model(base_url: str, model: str) -> bool | None:
 
 
 def _check_provider_coherence(base_url: str, model: str) -> None:
-    """Refuse when base_url and model belong to DIFFERENT providers. Called
-    BEFORE any env mutation, on the RESOLVED pair rather than per field."""
-    # A client saves fields independently, so a base-URL-only push can strand a
-    # model id from the previous provider and leave the daemon dialling an
-    # endpoint that does not serve it. Static identification is the gate; the
-    # live probe runs only for the one shape static form cannot settle, and an
-    # unreachable probe never rejects.
+    """Refuse when base_url and model belong to DIFFERENT providers; runs BEFORE any env mutation,
+    on the RESOLVED pair."""
+    # Static identification is the gate; the live probe runs only for the one shape static form
+    # cannot settle, and an unreachable probe never rejects. A client saves fields independently, so a base-URL-only push can strand a model id from the
+    # previous provider and leave the daemon dialling an endpoint that does not serve it.
     family = _provider_family(base_url)
     if family is None or not model:
         return
@@ -400,11 +390,10 @@ def apply_provider_config(raw_body: bytes) -> bytes:
     """Update the provider env from the POST body and return
     ``{"ok", "model", "base_url_host"}``; the adapter reads the env per call, so
     a push takes effect on the NEXT turn with no restart."""
-    # The RESOLVED pair - this body over the live env - must pass the coherence
-    # check before anything is written, so a rejected push leaves the env
-    # byte-identical rather than half-applied. SECURITY: the api_key is written
-    # to the env but NEVER logged, echoed or raised; only the base URL HOST and
-    # the effective model name leave this function.
+    # The RESOLVED pair - this body over the live env - must pass the coherence check before
+    # anything is written, so a rejected push leaves the env byte-identical rather than half-
+    # applied. SECURITY: the api_key is written to the env but NEVER logged, echoed or raised;
+    # only the base URL HOST and the effective model name leave this function.
     try:
         payload = json.loads(raw_body.decode("utf-8")) if raw_body.strip() else None
     except (UnicodeDecodeError, json.JSONDecodeError):

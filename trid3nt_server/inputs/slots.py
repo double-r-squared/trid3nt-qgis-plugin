@@ -1,10 +1,8 @@
 """The engine-neutral SLOTS, ingested once: what fills each, and what it becomes.
 
-A ROW'S NAME is its slot. This is the one list of the reserved names, and it says
-for each what ingestion reads it, which data classes its role serves and what the
-canvas offers for it - so a workflow that needs a domain asks for one the same way
-whichever engine solves over it, and nothing downstream branches on whether it was
-drawn, supplied or matched.
+A ROW'S NAME is its slot; this is the one list of the reserved names, with the
+ingestion, data classes and canvas offer of each. Nothing downstream branches on
+whether a value was drawn, supplied or matched.
 """
 
 from __future__ import annotations
@@ -23,48 +21,34 @@ __all__ = ["BED", "DISCHARGE", "DOMAIN", "EXTENT", "LEVEL", "LINE", "OBSERVE",
 
 logger = logging.getLogger("trid3nt_server.inputs.slots")
 
-#: THE RESERVED ROW NAMES. A row's NAME is its slot: these are the names
-#: :data:`SLOTS` keys the role behaviour off.
-#: The two a solved run stands on are engine-neutral - the closed polygon the
-#: equations are solved over and the elevation every node of it carries - and a
-#: raster engine fills the same two with a grid, so no word here belongs to an
-#: engine. The named stretches of the edge are no row: they ride on the polygon
-#: the domain arrived as.
+#: THE RESERVED ROW NAMES. A row's NAME is its slot: these are the names :data:`SLOTS`
+#: keys the role behaviour off. The named stretches of the edge are no row: they ride
+#: on the polygon the domain arrived as.
 DOMAIN = "domain"
 BED = "bed"
 
-#: The LINE a placed read is measured along. Not one of the three - a run solves
-#: without it - but a slot for the same reason: a producer's own centerline, a
-#: drawn polyline and a line layer all fill it and read the same afterwards.
+#: The LINE a placed read is measured along.
 LINE = "line"
 
-#: The slot a run OPENS ON: one measured value read off whatever reports it near
-#: this domain, in the unit the keyword the role fills reads. Engine-neutral for
-#: the same reason the three above are - somebody measured something somewhere at
-#: some time.
+#: The slot a run OPENS ON: one measured value read off whatever reports it near this
+#: domain, in the unit the keyword the role fills reads.
 OBSERVE = "observe"
 
-#: The two observations a solve READS BY ROLE rather than by name: the elevation
-#: the water surface stands at, and the flow an inflow run carries. Both are
-#: observations and ingest as one; they are their own names because the workflow
-#: has to know which row is which to build the stages a body of water needs.
+#: The two observations a solve READS BY ROLE rather than by name: the elevation the
+#: water surface stands at, and the flow an inflow run carries.
 LEVEL = "level"
 DISCHARGE = "discharge"
 
-#: The RECTANGLE a question is asked inside: the window a domain is cut out of,
-#: the grid a raster engine solves on. Not a domain - it has no shoreline - so it
-#: is its own name, and the canvas offers a box for it.
+#: The RECTANGLE a question is asked inside: the window a domain is cut out of, the grid
+#: a raster engine solves on. Not a domain: it has no shoreline.
 EXTENT = "extent"
 
-#: The record of the air over the domain, read by the composite that puts it on
-#: the run's own clock. Nothing ingests it on the way in; the name is reserved so
-#: a row that carries weather is the row that composite reads.
+#: The record of the air over the domain, read by the composite that puts it on the
+#: run's own clock. Nothing ingests it on the way in.
 WEATHER = "weather"
 
-#: The sea state at the open edge: the same kind of thing as the weather over a
-#: domain - one record, several columns, measured somewhere near - so it is its
-#: own name too, and its ingestion turns those columns into the keywords a
-#: spectral deck forces its boundary at.
+#: The sea state at the open edge: one record, several columns, measured somewhere near;
+#: its ingestion turns those columns into the keywords a spectral deck forces.
 WAVE = "wave"
 
 
@@ -73,10 +57,9 @@ class Slot:
     """One reserved row name: what reads its value, what it may ask the world
     for, and what the canvas offers when the user fills it by hand."""
 
-    #: The inputs module whose same-named function takes every form this
-    #: slot's value arrives in; "" where the value is read by whatever consumes
-    #: it, not on the way in. Named rather than imported: the runtime reads
-    #: these facts while the ingestions are still importing it.
+    #: The inputs module whose same-named function takes every form this slot's value
+    #: arrives in; "" where the value is read by whatever consumes it. Named rather than
+    #: imported: the runtime reads these facts while the ingestions are still importing.
     ingestion: str = ""
     #: The classes a row under this name may state a need of. Empty means the
     #: name states no need at all - a geometry is drawn, supplied or measured.
@@ -148,9 +131,7 @@ def needs_of(role: str, kind: str) -> tuple[tuple[str, str, str], ...]:
     """The rows a slot of this ROLE declares beside the one its own class
     matched, for a value of this KIND.
 
-    Only the domain declares any, and only for the kinds that do not arrive
-    closed. The runtime produces them through the match and hands each back
-    under its own name; the slot states the need and never fetches."""
+    Only the domain declares any; the slot states the need and never fetches."""
     if str(role) != DOMAIN:
         return ()
     from .domain import needs_beside
@@ -162,12 +143,8 @@ def ingest_slot(role: str, value: Any, *, label: str = "",
                 **coercion: Any) -> Any:
     """One slot's value, through the ingestion its ROLE reads.
 
-    ``coercion`` is what the RUN told this slot about the value - the point a
-    nearest site is ranked against, the unit the keyword it fills reads. A role
-    nothing here reads returns the value as it came: the slot is then whatever
-    its own consumer makes of it. An ingestion is handed the keys IT declares:
-    the point a row is asked at is the ASK's, and only the ingestion that ranks
-    a nearest site reads it."""
+    ``coercion`` is what the RUN told the slot; an ingestion is handed only the keys
+    IT declares. A role nothing reads returns the value as it came."""
     slot = SLOTS.get(str(role))
     if slot is None or slot.ingest is None:
         return value
@@ -186,9 +163,7 @@ async def ask_on_canvas(role: str, *, tool: str, param: str,
                         input_mode: Any = None) -> Any:
     """Ask the canvas for a slot the caller did not fill -> the typed value.
 
-    ``None`` whenever there is nothing to ask - no live session, a role the
-    canvas offers nothing for, or a declined drawing - so the caller's own
-    refusal is what a reader sees, never a geometry nobody drew."""
+    ``None`` when there is nothing to ask (no session, no canvas offer, a declined drawing)."""
     slot = SLOTS.get(str(role))
     if slot is None or slot.draw is None:
         return None

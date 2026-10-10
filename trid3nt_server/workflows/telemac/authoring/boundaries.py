@@ -1,11 +1,8 @@
-"""The LIQUID BOUNDARIES FILE: the value at an open edge, instant by instant.
+"""The liquid boundaries file: the value at an open edge, instant by instant.
 
-ONE writer for both hosts: ``read_fic_frliq`` sits in TELEMAC-2D and
-TELEMAC-3D's own boundary routines call it, so the table is the same table. The
-engine looks for ONE COLUMN PER BOUNDARY by the name it builds from that
-boundary's number, and reads the steering file's constant list for every
-boundary whose column is absent - so a run states a measured series where it
-has one and a number where it does not, in the same deck.
+One writer for both hosts (``read_fic_frliq``). The engine reads one column per boundary by
+the name built from its number, and the steering file's constant for any boundary whose
+column is absent.
 """
 
 from __future__ import annotations
@@ -19,26 +16,22 @@ from ..errors import TelemacError
 __all__ = ["LIQUID_BOUNDARIES_FILENAME", "TRACER", "column_name",
            "liquid_boundaries_file"]
 
-#: The file a host's LIQUID BOUNDARIES FILE statement names.
+# The file a host's LIQUID BOUNDARIES FILE statement names.
 LIQUID_BOUNDARIES_FILENAME = "river_boundaries.txt"
 
-#: The reader's own name for the time column, which it refuses to start without.
+# The reader's name for the time column, which it refuses to start without.
 _TIME = "T"
 
-#: What the engine calls the column it looks for, by what the boundary
-#: prescribes: ``q.f`` builds ``Q(I)`` and ``sl.f`` builds ``SL(I)`` from the
-#: LIQUID BOUNDARY NUMBER, which is the walk order the mesh topology numbers,
-#: and ``tr.f`` builds ``TR(I,ITRAC)`` from that number AND the tracer's
-#: position. The scan compares nine characters exactly, so no other spelling is
-#: found. A tracer's unit is the record's own and rides on the series, so this
-#: table states none for it.
+# Column names by what the boundary prescribes: ``q.f`` builds ``Q(I)`` and ``sl.f`` ``SL(I)``
+# from the liquid boundary number (the mesh topology's walk order), ``tr.f`` ``TR(I,ITRAC)`` from
+# that number and the tracer's position. The scan compares nine characters exactly.
 _MNEMONIC: Mapping[str, tuple[str, str]] = {
     "flowrate": ("Q", "m3/s"),
     "elevation": ("SL", "m"),
     "tracer": ("TR", ""),
 }
 
-#: What a TRACER column is addressed by, beside its boundary.
+# What a tracer column is addressed by, beside its boundary.
 TRACER = "tracer"
 
 #: The longest column name the reader holds (``CHARACTER(LEN=9)``).
@@ -48,10 +41,8 @@ _NAME_CHARS = 9
 def column_name(prescribes: str, number: int, tracer: int | None = None) -> str:
     """The column THIS boundary's value is read out of, or a refusal by name.
 
-    A tracer is read per boundary AND per tracer, so its column names both and
-    the engine falls back to the steering list's constant wherever it is
-    absent - which is how one deck states a measured inflow and a number
-    everywhere else."""
+    A tracer's column names both boundary and tracer; absent columns fall back to the steering constant.
+    """
     if str(prescribes) not in _MNEMONIC:
         raise TelemacError(
             f"liquid boundary {number} prescribes {prescribes!r}, and the "
@@ -75,18 +66,16 @@ def liquid_boundaries_file(columns: Sequence[tuple[str, str, Series]], *,
                            tail_s: float, note: str = "") -> str:
     """The columns a run measured -> the table the engine scans.
 
-    A comment, the header the scan splits on, a units line the reader skips
-    unconditionally, then one row per instant. Every column shares ONE clock,
-    which is the run's: the reader takes one time column and reads every value
-    of a row at it."""
+    A comment, the header the scan splits on, a units line the reader skips, then one row per
+    instant. Every column shares the run's one clock.
+    """
     if not columns:
         raise TelemacError(
             "a liquid boundaries file with no column states nothing the engine "
             "reads; omit it and let the steering file's constant lists stand.",
             error_code="TELEMAC_BOUNDARY_SERIES_EMPTY")
     instants = _instants(columns, start_s, until_s, tail_s)
-    # TABS ARE NOT WRITTEN. The header scan splits the line itself, and its own
-    # error path names a tab as what it cannot split.
+    # No tabs: the header scan splits the line itself and its error path names a tab as unsplittable.
     rows = [f"#{note}" if note else "#the values this run was driven by",
             " ".join([_TIME] + [name for name, _unit, _series in columns]),
             " ".join(["s"] + [unit for _name, unit, _series in columns])]
@@ -99,11 +88,10 @@ def liquid_boundaries_file(columns: Sequence[tuple[str, str, Series]], *,
 
 def _instants(columns: Sequence[tuple[str, str, Series]], start_s: float,
               until_s: float, tail_s: float) -> list[float]:
-    """The one clock every column is read on: every instant any of them
-    measured inside the run, and a row past the end.
+    """The one clock every column is read on, plus a row past the end.
 
-    The engine STOPS on a time outside the table at either end, so the table
-    opens at or before the run does and closes past where it ends."""
+    The engine stops on a time outside the table at either end.
+    """
     end = float(until_s) + float(tail_s)
     inside = sorted({float(t) for _n, _u, found in columns
                      for t in found.times_s

@@ -17,9 +17,7 @@ from trid3nt_server.server.protocol.http.transport import (
 
 @failure("local models failed")
 async def _local_models(_request: web.Request) -> web.Response:
-    """``GET /api/local-models``: the installed local models, for a client's
-    model picker. Absent, like any unknown path, unless the local provider is
-    active; the upstream fetch runs off the event loop."""
+    """``GET /api/local-models``: the installed local models, for a client's model picker. Absent unless the local provider is active; the upstream fetch runs off the event loop."""
     if not model_discovery._local_models_route_enabled():
         raise HttpError(404, "not found")
     try:
@@ -31,10 +29,8 @@ async def _local_models(_request: web.Request) -> web.Response:
 
 @failure("provider config update failed")
 async def _provider_config(request: web.Request) -> web.Response:
-    """``POST /api/provider-config``: a provider, model or key switch that takes
-    effect on the NEXT turn with no restart, because the adapter reads the env
-    per call. The api_key rides the body into the env and is never logged or
-    echoed; the coherence gate's short blocking probe runs off the event loop."""
+    """``POST /api/provider-config``: a provider, model or key switch that takes effect on the NEXT
+    turn with no restart, because the adapter reads the env per call. The api_key is never logged or echoed; the coherence probe runs off the event loop."""
     if not model_discovery._local_models_route_enabled():
         raise HttpError(404, "not found")
     raw = await request.read()

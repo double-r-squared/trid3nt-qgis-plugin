@@ -1,8 +1,8 @@
-"""THE RATING CURVE the outlet holds: a stage for every flow the storm can send.
+"""The rating curve the outlet holds: a stage for every flow the storm can send.
 
-The normal depth over the section the outlet's own face cuts, swept over that
-flow range at the roughness the deck writes at those same nodes - a level read
-off another law is a level the run never sits at."""
+The normal depth over the outlet face's section, swept over the flow range at the roughness
+the deck writes at those same nodes.
+"""
 
 from __future__ import annotations
 
@@ -20,11 +20,8 @@ from .accepted_mesh import face_section, mesh_missing, topology_of
 
 __all__ = ["settle_outlet_rating"]
 
-#: The mesh boundary ROLE a catchment's outlet carries. Its quad prescribes a
-#: LEVEL and the level comes from the run's own derived stage-discharge curve, so
-#: the outlet stands where the flow leaving it says it stands rather than at a
-#: constant nobody measured. The hydrograph is the flux across the nodes that
-#: took the role.
+# The mesh boundary role a catchment's outlet carries: its quad prescribes a level read off
+# the derived stage-discharge curve. The hydrograph is the flux across the nodes with the role.
 _OUTLET_ROLE = RATING_CURVE_ROLE
 
 
@@ -34,9 +31,9 @@ def _outlet_section_unmeasured(message: str) -> Exception:
 
 def _outlet_boundary(files: Mapping[str, Any]
                      ) -> tuple[dict[str, Any], int, str, int]:
-    """The declared OUTLET: ``(topology, number, what its quad prescribes, count)``.
-
-    The number is the solver's own liquid-boundary walk order, 1-based."""
+    """The declared outlet: ``(topology, number, what its quad prescribes, count)``.
+    The number is the solver's liquid-boundary walk order, 1-based.
+    """
     topology = topology_of(files, missing=mesh_missing)
     order = list(topology["liquid_boundary_order"])
     if _OUTLET_ROLE not in topology["roles"] or _OUTLET_ROLE not in order:
@@ -46,11 +43,7 @@ def _outlet_boundary(files: Mapping[str, Any]
             "to measure. Move the pour point onto the basin's own outlet, or mesh "
             "it finer so a boundary node reaches it.",
             error_code="TELEMAC_OUTLET_UNSET")
-    # The solver numbers its liquid boundaries by walking the geometry and prints
-    # one flux per number in its own volume balance; the accepted topology recorded
-    # that numbering when the ``.cli`` was written. So the number is what turns
-    # "the outlet" into the series the hydrograph reads, and the count is what lets
-    # the deck state one stage-discharge entry per boundary in the same numbering.
+    # The solver prints one flux per liquid-boundary number in its volume balance; the topology's numbering maps the outlet to that series and to one stage-discharge entry per boundary.
     number = order.index(_OUTLET_ROLE) + 1
     return (topology, number,
             str(topology["liquid_boundary_prescribes"][number - 1]), len(order))
@@ -58,9 +51,7 @@ def _outlet_boundary(files: Mapping[str, Any]
 
 def _bed_slope(nodes: Sequence[int], node_xy: Any, node_bed: Any,
                cells: Any) -> float:
-    """The bed gradient at a face, over the ELEMENTS that face's nodes belong to.
-
-    The plane is fitted through the painted nodes of the touching elements."""
+    """Bed gradient at a face, from the plane fitted through the touching elements' nodes."""
     import numpy as np
 
     xy = np.asarray(node_xy, dtype=float)
@@ -94,9 +85,6 @@ def _outlet_nodes(topology: Mapping[str, Any]) -> list[int]:
 
 def _outlet_manning(landcover: Any, lonlat: Any, roughness: Mapping[Any, Any],
                     unmapped: Any) -> list[float]:
-    """The Manning n at the outlet nodes, read off the land cover the way the
-    infiltration surface reads it, so the curve is derived under the roughness
-    the deck writes at those nodes."""
     table = {int(code): tuple(row) for code, row in dict(roughness).items()}
     return [float(table.get(int(round(float(code))), tuple(unmapped))[1])
             for code in sample_layer_at_nodes(landcover, lonlat)]
@@ -105,10 +93,7 @@ def _outlet_manning(landcover: Any, lonlat: Any, roughness: Mapping[Any, Any],
 def _measured_outlet(topology: Mapping[str, Any], node_xy: Any, node_bed: Any,
                      cells: Any, manning: Any, *, law: int,
                      q_ceiling_m3s: float, q_ceiling_basis: str) -> dict[str, Any]:
-    """What the accepted mesh says about the face the basin drains through.
-
-    Section, slope and roughness, every one measured off the artifact itself;
-    ``manning`` is the roughness at the outlet's own nodes."""
+    """Section, slope and roughness measured off the accepted mesh at the outlet's nodes."""
     import numpy as np
 
     nodes = _outlet_nodes(topology)
@@ -130,9 +115,7 @@ def _measured_outlet(topology: Mapping[str, Any], node_xy: Any, node_bed: Any,
 
 def _rain_ceiling(rain: Mapping[str, Any], cells: Any,
                   node_xy: Any) -> tuple[float, str]:
-    """The most the outlet can ever discharge, and the basis of that number.
-
-    Gross rain on the meshed area caps it: infiltration only removes water."""
+    """The most the outlet can discharge: gross rain on the meshed area (infiltration only removes water)."""
     import numpy as np
 
     xy = np.asarray(node_xy, dtype=float)
@@ -140,9 +123,7 @@ def _rain_ceiling(rain: Mapping[str, Any], cells: Any,
     a, b, c = xy[tri[:, 0]], xy[tri[:, 1]], xy[tri[:, 2]]
     area_m2 = float(0.5 * np.abs((b[:, 0] - a[:, 0]) * (c[:, 1] - a[:, 1])
                                  - (b[:, 1] - a[:, 1]) * (c[:, 0] - a[:, 0])).sum())
-    # A measured record is gross millimetres over each of its own hourly blocks;
-    # a design storm is the engine's own keyword, in millimetres per day. Both
-    # reach the ceiling as a depth per second over the meshed area.
+    # A measured record is gross mm per hourly block; a design storm is the engine's keyword in mm/day. Both become depth per second over the meshed area.
     peak_m_per_s = (max(float(v) for v in rain["series"]) / 1000.0 / 3600.0
                     if rain.get("kind") == "hyetograph"
                     else float(rain["mm_per_day"] or 0.0) / 1000.0 / 86400.0)
@@ -173,15 +154,11 @@ async def settle_outlet_rating(
     series: Any = None,
     record: Any = None,
 ) -> dict[str, Any]:
-    """The stage-discharge curve the catchment's outlet holds, and which boundary
-    reads it.
+    """The stage-discharge curve the catchment's outlet holds, and which boundary reads it.
 
-    The section, the bed slope and the roughness are measured off the accepted
-    mesh itself; the flow range is the gross rain on the meshed area, which
-    nothing leaving it can exceed, because infiltration only removes water and
-    storage only delays it. ``friction_law`` is the deck's own LAW OF BOTTOM
-    FRICTION: a curve derived under a roughness the run is not solved at is a
-    level the run never sits at."""
+    Section, slope and roughness are measured off the accepted mesh; the flow range is the gross
+    rain on it. ``friction_law`` is the deck's, so the curve matches the roughness the run solves at.
+    """
     topology, outlet_boundary, outlet_prescribes, n_liquid = _outlet_boundary(files)
     if outlet_prescribes != "elevation":
         raise TelemacError(

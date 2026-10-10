@@ -1,14 +1,9 @@
-"""The TOMAWAC wrapper: its module input, the forty variables its own result
-carries, and the coupled body a hydrodynamic host names.
+"""The TOMAWAC wrapper: its module input, the forty variables its result carries, and the coupled body a host names.
 
-TOMAWAC serves BOTH roles off one dictionary. STANDALONE it is a template's own
-steering base, solving the wave field on its own mesh and boundary file.
-COUPLED it runs under a host through that host's own keywords and hands the
-wave forces back in memory - it appends NO tracer to the host's result, so the
-host feels the waves only with its own WAVE DRIVEN CURRENTS true, which is why
-a coupled body ARMS that switch. What the dictionary already spells - the wind,
-the current, the imposed and the boundary spectra - is stated by keyword name,
-so the wrapper carries no composite at all."""
+Standalone it is a template's steering base; coupled it hands wave forces back in memory and
+appends no tracer, so the host needs its WAVE DRIVEN CURRENTS true, which a coupled body arms.
+Dictionary keywords are stated by name, so there is no composite.
+"""
 
 from __future__ import annotations
 
@@ -20,62 +15,40 @@ from .outputs import PRIMITIVES, read_spectrum
 
 __all__ = ["MODULE_OUTPUT", "RESULT_FILENAME", "STEERING_FILENAME", "WAC"]
 
-#: The TOMAWAC steering file a host names, and the module's own 2D result. A
-#: standalone deck names the same result file, so the wave field is read off one
-#: name in both roles.
+# The TOMAWAC steering file a host names and the module's 2D result; a standalone deck names the same result file.
 STEERING_FILENAME = "tomawac_waves.cas"
 RESULT_FILENAME = "tomawac_waves.slf"
 
-#: The keyword this table is written into, and the one saying how often.
+# The keyword this table is written into, and the one saying how often.
 PRINTOUTS = "VARIABLES_FOR_2D_GRAPHIC_PRINTOUTS"
 CADENCE = "PERIOD_FOR_GRAPHIC_PRINTOUTS"
 
-#: Deep water: the engine computes no bottom quantity at all under it.
+# Deep water: the engine computes no bottom quantity under it.
 _INFINITE_DEPTH = "INFINITE_DEPTH"
 
-#: A wave height and the variance under it are quantities the sea carries
-#: everywhere the water is, floored where there is no wave.
+# Wave height and its variance exist wherever the water is, floored where there is no wave.
 _HEIGHT = {"kind": "mesh", "ramp": "ylgnbu", "units": "m", "floor": 0}
-#: A DIRECTION is a compass bearing, and a bearing wraps: its ramp closes on
-#: itself so 0 and 360 degrees are one colour.
+# A direction is a compass bearing: the ramp closes on itself so 0 and 360 are one colour.
 _DIRECTION = {"kind": "mesh", "ramp": "hsv", "units": "deg"}
-#: A signed component reads about zero, so its ramp diverges there and the
-#: legend is ranged symmetrically. The current and the wind are both read as
-#: metres per second along the mesh's own axes.
+# A signed component reads about zero, so its ramp diverges and the legend is symmetric; current and wind are m/s along the mesh axes.
 _COMPONENT = {"kind": "mesh", "ramp": "rdbu", "units": "m/s", "center": 0.0}
 _FORCE = {"kind": "mesh", "ramp": "rdbu", "units": "m/s2", "center": 0.0}
 _STRESS = {"kind": "mesh", "ramp": "rdbu", "units": "m3/s2", "center": 0.0}
-#: A SPEED rather than a component: it has no sign to diverge about.
+# A speed has no sign to diverge about.
 _SPEED = {"kind": "mesh", "ramp": "plasma", "units": "m/s", "floor": 0}
 _FREQUENCY = {"kind": "mesh", "ramp": "cividis", "units": "Hz", "floor": 0}
 _PERIOD = {"kind": "mesh", "ramp": "viridis", "units": "s", "floor": 0}
-#: WHAT HAS AN EDGE. The roller the breaking leaves happens in a band the sea
-#: makes where the bar or the shore is, so it is read as the shape it has; a
-#: height, a period and a direction are everywhere the water is and are drawn
-#: whole.
-#: WHAT DISSIPATION IS PUBLISHED AS. The engine writes every dissipation row as
-#: a NEGATIVE quantity - energy leaving the spectrum - so a surf band runs from
-#: the field's minimum up to zero. The ramp is reversed for that, the strongest
-#: dissipation taking the deepest colour, and no floor is declared: a bottom
-#: pinned at zero would collapse the whole band onto one colour and an edge
-#: taken as a fraction of the peak would clip every node of it away.
+# The roller lies in a band, so it is read as the shape it has; height, period and direction are drawn whole.
+# The engine writes dissipation as a negative quantity (energy leaving), so its ramp is reversed with no
+# floor: a bottom pinned at zero would collapse the band to one colour and a peak-fraction edge would clip it.
 _BREAKING = {"kind": "mesh", "ramp": "reds_r", "units": "1/s"}
 
-#: What the module WRITES, by the mnemonic VARIABLES FOR 2D GRAPHIC PRINTOUTS
-#: spells: the SIXTEEN characters the result record names the row in, the unit
-#: it is read in, and how it draws. The engine indexes exactly forty variables
-#: and packs each name and unit into one thirty-two character record, so a name
-#: longer than sixteen characters spills its remaining letter into the field the
-#: unit would have been in - which is what the record then carries, and which is
-#: why six period rows are named without their last letter.
-#:
-#: TOMAWAC never dies on a row it cannot compute: LECDON clears the output flag
-#: for every variable this deck's physics does not produce - the wind rows with
-#: no wind, the current rows with neither current nor coupling, the bottom and
-#: radiation-stress rows over infinite depth, the roller rows without surface
-#: rollers, the white-capping rate with that dissipation off - and the result
-#: simply does not carry the row. So every row is declared and the ones a deck
-#: does not reach are skipped.
+# What the module writes, by VARIABLES FOR 2D GRAPHIC PRINTOUTS mnemonic: the sixteen characters the
+# result names the row in, its unit, how it draws. The engine indexes exactly forty variables and packs
+# name and unit into one 32-character record, so a name past sixteen spills into the unit field (why
+# six period rows lack their last letter). LECDON clears the output flag for any variable this deck's
+# physics does not produce (wind, current, bottom and radiation stress over infinite depth, rollers,
+# white-capping), so every row is declared and absent ones are skipped.
 MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
     "M0": Output("VARIANCE M0", "m2",
                  style={"kind": "mesh", "ramp": "ylgnbu", "units": "m2",
@@ -100,8 +73,7 @@ MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
     "SXY": Output("STRESS SXY", "m3/s2", style=_STRESS),
     "SYY": Output("STRESS SYY", "m3/s2", style=_STRESS),
     "UWB": Output("BOTTOM VELOCITY", "m/s", style=_SPEED),
-    # PRIVATE 1 is the user-Fortran table. Nothing in the distributed code
-    # writes it, so it is a slot the wildcard may reach and never a row.
+    # PRIVATE 1 is the user-Fortran table; nothing writes it, so it is a slot the wildcard may reach, never a row.
     "FMOY": Output("MEAN FREQ FMOY", "Hz", style=_FREQUENCY),
     "FM01": Output("MEAN FREQ FM01", "Hz", style=_FREQUENCY),
     "FM02": Output("MEAN FREQ FM02", "Hz", style=_FREQUENCY),
@@ -148,10 +120,9 @@ class _Tomawac(Module("tomawac")):  # type: ignore[misc]
               ) -> Mapping[str, Output]:
         """The rows above, less the one the engine leaves to whatever was there.
 
-        Over infinite depth DUMP2D computes no bottom velocity, and LECDON does
-        NOT clear that row the way it clears the other bottom rows, so a deep
-        deck asking for it writes an untouched work array. It is the one row a
-        deck can take off this table."""
+        Over infinite depth DUMP2D computes no bottom velocity and LECDON does not clear that row, so
+        a deep deck asking for it writes an untouched work array.
+        """
         rows = dict(super().table(stated))
         if cls.switched(_INFINITE_DEPTH, stated):
             rows.pop("UWB", None)
@@ -162,11 +133,9 @@ class _Tomawac(Module("tomawac")):  # type: ignore[misc]
              **keywords: Any) -> Mapping[str, Any]:
         """The wave field a host solves its currents under.
 
-        The mesh is the host's own where the coupling is same-mesh, the boundary
-        file is TOMAWAC's own walk of it, and the result is the module's file
-        beside the host's. Everything else is a keyword the dictionary carries,
-        stated by its own name on the body: the frequency and direction
-        discretisation, the boundary spectrum, the wind, the source terms."""
+        The mesh is the host's where coupling is same-mesh, the boundary file is TOMAWAC's walk of it;
+        everything else is a dictionary keyword stated by name on the body.
+        """
         for name in keywords:
             cls.slot(name)
         return {"module": "tomawac", "steering": STEERING_FILENAME,
@@ -180,36 +149,25 @@ WAC = _Tomawac
 WAC.MODULE_OUTPUT = MODULE_OUTPUT
 WAC.PRINTOUTS = PRINTOUTS
 WAC.CADENCE = CADENCE
-#: The result the primitives read: TOMAWAC writes its own 2D field, standalone
-#: and beside a host's alike.
+# The result the primitives read: TOMAWAC writes its own 2D field, standalone and beside a host.
 WAC.RESULT_FILE = RESULT_FILENAME
-#: TOMAWAC spells that file 2D RESULTS FILE, not RESULTS FILE.
+# TOMAWAC spells that file 2D RESULTS FILE, not RESULTS FILE.
 WAC.RESULT_KEYWORD = "ED_RESULTS_FILE"
-#: THE CLOCK: TOMAWAC has no DURATION keyword at all - it names the step and how
-#: many of them, and their product is the seconds the wave field is marched over.
+# TOMAWAC has no DURATION keyword: step times count is the seconds marched over.
 WAC.CLOCK = ("TIME_STEP", "NUMBER_OF_TIME_STEP")
-#: The SPECTRA, which are results over the polar frequency-direction grid rather
-#: than over the domain: the run keeps and publishes each file a deck names, and
-#: no primitive of the geographic mesh reads either.
+# The spectra are results over the polar frequency-direction grid, not the domain: published per file a deck names; no geographic-mesh primitive reads them.
 WAC.RESULT_FILES = ("PUNCTUAL_RESULTS_FILE", "ZD_SPECTRA_RESULTS_FILE")
-#: The source carries no DEPRECATED mark for PRI; its mark is that the array is
-#: the user's own, which the engine computes nothing into.
+# PRI carries no DEPRECATED mark; its mark is that the array is the user's own and the engine computes nothing into it.
 WAC.UNWRITTEN = MappingProxyType({
     "PRI": Unwritten("PRIVATE 1", (
         "point_tomawac.f: 'USER DEDICATED ARRAY (2-DIMENSIONAL * NPRIV)', the "
         "SPRIVE block output 17 is bound to"), french="PRIVE 1"),
 })
-#: The wave forces reach a host as a MOMENTUM SOURCE in memory - PROSOU adds
-#: FXWAVE and FYWAVE into FU and FV - and the host records no wave row, so this
-#: module appends nothing to its host's tracers and arms the switch that
-#: addition happens under instead.
+# Wave forces reach a host as a momentum source in memory (PROSOU adds FXWAVE, FYWAVE into FU, FV) and the host records no wave row, so nothing is appended to its tracers and the switch is armed instead.
 WAC.ARMS_ON_HOST = ("WAVE_DRIVEN_CURRENTS",)
-#: The spectra are read by the one primitive that reads a polar grid, and by no
-#: module whose results are written over a geographic mesh.
+# The spectra are read by the one primitive that reads a polar grid.
 WAC.reads(**PRIMITIVES, spectrum=read_spectrum)
-#: The sea state at the open edge fills the JONSWAP numbers; the gauged level is
-#: the still water every depth is read under; a settled station is where the
-#: spectrum is printed. A coupled body takes only the sea state.
+# The sea state at the open edge fills the JONSWAP numbers; the gauged level is the still water depths are read under; a settled station is where the spectrum is printed. A coupled body takes only the sea state.
 WAC.FILLED_BY = MappingProxyType({
     "wave": {"BOUNDARY_SIGNIFICANT_WAVE_HEIGHT": lambda wave: wave.height_m,
              "BOUNDARY_PEAK_FREQUENCY": lambda wave: wave.peak_frequency_hz,

@@ -27,8 +27,6 @@ __all__ = [
 ]
 
 
-# --- quantity classes: what a number MEANS decides how it may be moved ------ #
-
 #: A per-time quantity (mm/day, m3/s). Resampling must preserve the total.
 RATE = "rate"
 #: An instantaneous level or condition (water level, temperature). Linear.
@@ -53,15 +51,8 @@ class TemporalShapeError(DeclarativeError):
     error_code = "TEMPORAL_NOT_RESAMPLEABLE"
 
 
-# --- the unit table: dimension, factor to the dimension's base, offset ------ #
-#
-# Small and explicit on purpose. An entry is a conversion someone declared and
-# a reader can check; anything absent refuses by name rather than being guessed
-# at. Base units are the first row of each block. A row is matched on the
-# SPELLING the table is indexed under - case, spaces, degree signs and full
-# stops are how a source writes a unit, not which unit it is - so "deg C",
-# "degC" and "DEGC" are one entry and a spelling a source federates is declared
-# here beside the scale it names rather than normalized somewhere else.
+# Entries are declared conversions; an absent unit refuses by name. Base units are each block's first row.
+# Rows match on spelling normalized for case, spaces, degree signs and full stops, so "deg C", "degC" and "DEGC" are one entry.
 _UNITS: dict[str, tuple[str, float, float]] = {
     "m": ("length", 1.0, 0.0),
     "cm": ("length", 0.01, 0.0),
@@ -139,16 +130,9 @@ def _unit(name: str) -> tuple[str, float, float]:
         ) from None
 
 
-# --- the declaration ------------------------------------------------------- #
-
-
 class Series:
     """A measured quantity over time, on the RUN's own clock: seconds and values.
-
-    What a slot holds where a number would be a lumped stand-in for a record
-    somebody measured. Not a dataclass: a card row and a run record both print
-    it, and what a reader needs there is the shape, not a second copy of the
-    points."""
+    Not a dataclass: a card row and a run record print its shape, not a copy of the points."""
 
     __slots__ = ("times_s", "values", "units")
 
@@ -182,11 +166,8 @@ class Series:
         return len(self.times_s)
 
     def to_doc(self) -> dict[str, Any]:
-        """The series as plain data, which is what a run RECORD carries.
-
-        A record is read back off a JSON store, so what it holds is rows and not
-        this object; the points are written whole because a summary in their
-        place would be a measurement nobody could replay."""
+        """The series as plain data, as a run RECORD carries it.
+        Points are written whole: a summary would be a measurement nobody could replay."""
         return {"times_s": list(self.times_s), "values": list(self.values),
                 "units": self.units}
 
@@ -208,11 +189,8 @@ class Series:
     def from_samples(cls, samples: Sequence[tuple[Any, float]], *, units: str,
                      start_s: float = 0.0, at: Any = None) -> "Series":
         """Stamped readings -> this series on a clock that opens at ``start_s``.
-
-        ``at`` is the instant the RUN opens at, so t = ``start_s`` is that
-        moment INSIDE the record and the readings before it carry negative
-        times. Unstated, t = ``start_s`` is the record's first sample, which is
-        the only honest origin when the run names no moment."""
+        ``at`` is the instant the run opens at, so earlier readings carry negative times;
+        unstated, t = ``start_s`` is the record's first sample."""
         import pandas as pd
 
         stamps = pd.to_datetime([stamp for stamp, _v in samples], utc=True)
@@ -242,13 +220,9 @@ class Series:
                       units=self.units)
 
     def opening_at(self, start_s: float) -> "Series":
-        """The same readings on a clock that reads ``start_s`` where this one
-        reads zero.
+        """The same readings on a clock that reads ``start_s`` where this one reads zero.
 
-        A record is opened at the run's own moment, at t = 0, and the readings
-        before that moment keep their negative times; a run continuing another
-        reads that same moment past zero on its own clock. Re-anchoring the
-        FIRST sample here would open the run at the record's beginning."""
+        Readings before the moment keep negative times; re-anchoring the FIRST sample would open the run at the record's beginning."""
         offset = float(start_s)
         if not offset:
             return self

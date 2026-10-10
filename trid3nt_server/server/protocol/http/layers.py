@@ -1,12 +1,7 @@
-"""The LAYER door: the map's own round trips - push a layer in, probe a point.
-
-Two routes carry ONE upload flow. The QGIS Python runtime is stdlib-only, so
-the plugin cannot PUT to the object store itself: it streams the exported
-file's bytes to the file route (a raw body, not multipart - there is no
-multipart parser in this codebase and a single file needs none) and the daemon
-writes the object; the second route then registers that object onto the case
-through the ingest core. The probe samples every raster layer, and any detected
-frame sequence, on the case at one point."""
+"""The LAYER door: the map's own round trips - push a layer in, probe a point. Two routes carry ONE
+upload flow. The QGIS Python runtime is stdlib-only, so the plugin streams the file's bytes as a
+raw body (no multipart parser here) to the file route; the second route registers that object on
+the case. The probe samples every raster layer on the case at one point."""
 
 from __future__ import annotations
 
@@ -172,7 +167,6 @@ async def _ingest_layer(request: web.Request) -> web.Response:
     except (CaseNotFoundError, ObjectNotFoundError) as exc:
         raise HttpError(404, str(exc)) from exc
     except ImportLayerError as exc:
-        # The request was well-formed HTTP but ingestion cannot succeed.
         raise HttpError(400, str(exc)) from exc
 
 

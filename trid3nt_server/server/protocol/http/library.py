@@ -86,10 +86,8 @@ def _tool_entry(name: str, entry: Any) -> dict[str, Any]:
 
 
 def _row_name(fetcher: str, row: Any) -> str:
-    """What names one row under its class and kind: the request values
-    it is fetched under, which are the only thing separating two rows of one
-    fetcher there. A row asked under nothing is its fetcher's only row there and
-    takes the fetcher's name."""
+    """What names one row under its class and kind: the request values it is fetched under, which
+    are the only thing separating two rows of one fetcher there. A row asked under nothing takes the fetcher's name."""
     asked = " ".join(f"{k}={row.ask[k]}" for k in sorted(row.ask))
     return asked or fetcher
 
@@ -117,8 +115,8 @@ def _data_entry(fetcher: str, row: Any) -> dict[str, Any]:
 
 
 def _classes() -> list[dict[str, Any]]:
-    """Every row under its class and then its kind. The class is the
-    row's own declaration and never inferred, so no row is listed without one."""
+    """Every row under its class and then its kind. The class is the row's own declaration, never
+    inferred."""
     from trid3nt_server.tools.search.match import sources_with_coverage
 
     grouped: dict[str, dict[str, list[dict[str, Any]]]] = {}
@@ -179,12 +177,8 @@ def build_library_payload(*, use_cache: bool = True) -> dict[str, Any]:
 
 
 def _classes_named_by(query: str) -> list[str]:
-    """The data classes an ask names, best overlap first.
-
-    A covered source is reached by asking the world for a CLASS, so it carries
-    no corpus phrasing and the tool index cannot rank it. The ask is read
-    against the class vocabulary itself, through the index's own tokenizer, so
-    both halves of a search are split on the same words."""
+    """The data classes an ask names, best overlap first. Read against the class vocabulary through the tool index's own tokenizer, since a covered
+    source carries no corpus phrasing."""
     from trid3nt_server.tools.search.search_tools.search_tools import (
         _STOPWORDS, _tokenize,
     )
@@ -216,7 +210,6 @@ async def build_library_search(query: str, top_k: int = 10) -> dict[str, Any]:
         name = str(ranked.get("tool_name") or "")
         entry = TOOL_REGISTRY.get(name)
         if entry is None:
-            # The index was built when a tool was registered that no longer is.
             continue
         hit = _tool_entry(name, entry)
         hit["kind"] = "tool"
@@ -251,9 +244,7 @@ async def _listing(_request: web.Request) -> web.Response:
 
 @failure("library search failed")
 async def _search(request: web.Request) -> web.Response:
-    """``GET /api/library/search?q=``: the ranked hits over the BM25 corpus the
-    model routes on. An empty query answers with no hits rather than the whole
-    library, which the listing route already serves."""
+    """``GET /api/library/search?q=``: the ranked hits over the BM25 corpus the model routes on. An empty query answers with no hits, not the whole library."""
     return json_reply(
         await build_library_search(request.query.get("q", "").strip()))
 

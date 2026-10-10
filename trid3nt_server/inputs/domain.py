@@ -29,12 +29,10 @@ _LAYER_SCHEMES = ("s3://", "gs://", "file://", "/", "./")
 #: polygon. Anything else handed in is read as a vector document.
 _RASTER_SUFFIXES = (".tif", ".tiff", ".vrt", ".img", ".asc", ".jp2")
 
-#: WHAT A PLACE IS, in the word the hydrography sources publish that feature
-#: under, by the word the service that resolved the place used for it. Only
-#: water: a city, a county and a building are places this says nothing about,
-#: and nothing is the honest answer - the match then ranks every row it has.
-#: A word absent here is absent on purpose; guessing which water a stadium is
-#: would fill a domain with the wrong shape under the right name.
+#: WHAT A PLACE IS, in the word the hydrography sources publish that feature under, by
+#: the word the service that resolved the place used for it. Only water: a word absent
+#: here is absent on purpose, since guessing the water would fill a domain with the
+#: wrong shape.
 _PLACE_KINDS: Mapping[str, str] = MappingProxyType({
     "river": "flowline",
     "stream": "flowline",
@@ -63,8 +61,6 @@ class Domain:
     name: str | None = None
     uri: str | None = None
     #: The stretches of this domain's edge its PRODUCER measured, where one did.
-    #: A reach fetcher returns the section and the two faces it was cut between
-    #: as one artifact, and a run the user draws lands the same way.
     runs: tuple[BoundaryRun, ...] = ()
     #: The geometries a producer measured BESIDE the polygon, under its own names
     #: - a reach's centerline, a catchment's snapped outlet. A drawn outline
@@ -84,9 +80,7 @@ class Domain:
     def __str__(self) -> str:
         """What a reader CALLS this domain: the name it came with, else the word.
 
-        A layer title, a mesh session and a run's own name are all written from
-        this, so a domain that stringified as its geometry would name every one
-        of them after its coordinates."""
+        Layer titles and run names are written from this, never from the coordinates."""
         return self.name or "domain"
 
     @property
@@ -111,10 +105,7 @@ class Domain:
     def as_feature_collection(self) -> dict[str, Any]:
         """This domain as the one collection every geometry reader opens.
 
-        WHOLE: the polygon, the runs its producer measured and the companions it
-        wrote beside them, each under its own ``part``. A reader that keeps only
-        the polygon is what turns a recorded recipe into a domain with no edge
-        conditions, so the round trip back through ``domain`` is lossless."""
+        WHOLE (polygon, runs, companions), so the round trip back through ``domain`` is lossless."""
         return {"type": "FeatureCollection", "features": [
             {"type": "Feature", "properties": {"role": "domain", "part": "domain",
                                                "name": self.name},
@@ -129,21 +120,17 @@ def place_kind(seed: Any) -> str:
     """WHICH FEATURE the seed is a place on, in the word a source publishes it
     under - "flowline", "waterbody", "coastline" - or "" where nothing said.
 
-    The kind is a fact of the PLACE and not of the question asked there, so it
-    is read off what the seed arrived with rather than stated by a template. A
-    seed nothing said a type for is unclassified, never guessed."""
+    Read off what the seed arrived with, never guessed."""
     kind = getattr(seed, "kind", None)
     if kind is None and isinstance(seed, Mapping):
         kind = seed.get("place_type")
     return _PLACE_KINDS.get(str(kind or "").strip().lower(), "")
 
 
-#: WHAT A DOMAIN OF EACH KIND DECLARES BESIDE the row its own class matched, by
-#: the word that kind is published under: the name it reads the row back under,
-#: what that row asks its class for, and the shape it is read as. A flowline is a
-#: line and a domain is a polygon, so a place on one needs the water surface the
-#: line runs between before there is anything closed to solve over. Declaring a
-#: need is not fetching: the slot states it and the match fills it.
+#: WHAT A DOMAIN OF EACH KIND DECLARES BESIDE the row its own class matched, by the word
+#: that kind is published under: the name it reads the row back under, what that row
+#: asks its class for, and the shape it is read as. A flowline is a line, so a place on
+#: one needs the water surface it runs between; declaring a need is not fetching.
 _BESIDE: Mapping[str, tuple[tuple[str, str, str], ...]] = MappingProxyType({
     "flowline": (("banks", "water surface", "polygon"),)})
 
@@ -161,13 +148,8 @@ def domain(value: Any, *, label: str = "domain", code: str = _CODE,
            near: Any = None) -> Domain | None:
     """THE ingestion: a drawing, a layer, a fetched polygon, a ring -> Domain.
 
-    ``None`` only when nothing came; anything that is not a closed polygon
-    refuses typed rather than being squared off into one. ``extent`` is the
-    window the question was asked in, which a LAND-WATER EDGE is cut against:
-    a coastline is a line and a domain is the polygon it leaves inside a box.
-    ``banks`` is the WATER SURFACE this slot declared beside a line it stands
-    on, and the cut between the two ends of ``span_km`` of that line from
-    ``near`` is what closes it."""
+    ``None`` only when nothing came; anything not a closed polygon refuses typed.
+    ``extent`` cuts a land-water edge; ``banks``, ``span_km`` and ``near`` close a line."""
     if value is None or isinstance(value, Domain):
         return value
     if banks is not None:
@@ -236,11 +218,7 @@ def _rings(geometry: Mapping[str, Any]) -> list[list[Any]]:
 def _carried_by(doc: Any, name: str | None, uri: str | None,
                 stated: tuple[BoundaryRun, ...], extent: Any, label: str,
                 code: str) -> Domain:
-    """The domain one geometry document carries.
-
-    A document of LINES carries no polygon and no companions either: it is the
-    land-water EDGE, and the water the cut leaves is the whole of what the slot
-    then holds."""
+    """The domain one document carries; a document of LINES is a land-water edge cut against ``extent``."""
     geometries = list(flatten_geometries(read_geometry_doc(doc)))
     polygons = [g for g in geometries
                 if str(g.get("type")) in ("Polygon", "MultiPolygon")]
@@ -255,10 +233,7 @@ def _carried_by(doc: Any, name: str | None, uri: str | None,
 
 def _nothing_closed(geometries: list[dict[str, Any]], uri: str | None,
                     label: str) -> str:
-    """Why this document closes nothing, in the two cases a reader acts on
-    differently: a producer that RAN and returned nothing, and a document that
-    carries the wrong shape. An empty artifact and an absent one read alike
-    otherwise, and the reader is told to draw a polygon that already exists."""
+    """Why a document closes nothing: a producer that ran and returned nothing, or the wrong shape."""
     closed = ("A domain is the CLOSED outline the equations are solved over: "
               "draw it, name a polygon layer, or let the template's own "
               "producer find one.")
@@ -279,9 +254,8 @@ def _one_polygon(polygons: list[dict[str, Any]]) -> dict[str, Any]:
     """The polygon a document carries; several are the one they cover together."""
     if len(polygons) == 1:
         return dict(polygons[0])
-    # SEVERAL polygons are one domain with parts - a lake with islands cut out,
-    # a two-basin harbour - and the mesher meshes the union. Picking the largest
-    # would silently drop the rest.
+    # SEVERAL polygons are one domain with parts - a lake with islands cut out, a
+    # two-basin harbour - and the mesher meshes the union; picking the largest would drop the rest.
     return {"type": "MultiPolygon",
             "coordinates": [g["coordinates"] if str(g["type"]) == "Polygon"
                             else part
@@ -295,10 +269,7 @@ def _water_left_by(doc: Any, extent: Any, label: str,
                    code: str) -> dict[str, Any]:
     """The water a LAND-WATER EDGE leaves inside the window this question was asked in.
 
-    A coastline is a line, a domain is a polygon, and the step between the two
-    is this slot's ingestion: the mesh seam's own cut, run where the line
-    arrived. Without a window there is nothing to cut against, and a cut that
-    does not close refuses in the cut's own words."""
+    Without a window there is nothing to cut against; a cut that does not close refuses."""
     from trid3nt_server.tools.mesh.meshers import MeshToolError
     from trid3nt_server.tools.mesh.water import water_polygon
 
@@ -315,18 +286,12 @@ def _water_left_by(doc: Any, extent: Any, label: str,
 
 
 def _closed(ring: list[list[float]]) -> dict[str, Any]:
-    """A typed or drawn OPEN ring as a closed GeoJSON polygon.
-
-    How few vertices a ring may have is the ingestion's own rule, stated where
-    every drawn shape passes it."""
+    """An OPEN ring as a closed polygon; the minimum vertex count is checked before this."""
     return {"type": "Polygon", "coordinates": [[*ring, list(ring[0])]]}
 
 
 def _runs_of(value: Any, label: str, code: str) -> tuple[BoundaryRun, ...]:
-    """The boundary runs a producer stated beside its polygon, or none.
-
-    A producer that measured the edge says so ON the artifact; a drawn outline
-    says nothing, and nothing is an answer."""
+    """The runs a producer stated ON the artifact; a drawn outline states none."""
     stated = (value.get("runs") if isinstance(value, Mapping)
               else getattr(value, "runs", None))
     return boundary_runs(stated, label=f"{label} runs", code=code)
@@ -335,12 +300,8 @@ def _runs_of(value: Any, label: str, code: str) -> tuple[BoundaryRun, ...]:
 def _prescribed(doc: Any, label: str, code: str) -> tuple[BoundaryRun, ...]:
     """The run rows a producer wrote INTO the artifact beside its polygon.
 
-    A fetcher that cut a polygon between two faces returns those faces as rows
-    of the same document, each row naming which stretch it is; a row naming a
-    stretch that prescribes nothing is the wall the edge already is, and is not
-    a run. The row's own word for which row it is - ``part`` on a multi-part
-    artifact - is what names it, because a slot reads the producer's vocabulary
-    rather than asking the producer to speak its own."""
+    A row naming a stretch that prescribes nothing is the wall, not a run; the
+    producer's own ``part`` word names the row."""
     if not isinstance(doc, Mapping) or doc.get("type") != "FeatureCollection":
         return ()
     rows = []
@@ -357,9 +318,7 @@ def _prescribed(doc: Any, label: str, code: str) -> tuple[BoundaryRun, ...]:
 def _companions(doc: Any) -> dict[str, dict[str, Any]]:
     """The geometries a producer wrote beside its polygon, by the name it gave.
 
-    A producer names each row by what it IS - ``centerline``, ``outlet`` - and
-    the slot keeps every row that is neither the polygon nor a run under that
-    name. A row naming a run type is a boundary run and is read as one."""
+    A row naming a run type is a boundary run and is read as one."""
     if not isinstance(doc, Mapping) or doc.get("type") != "FeatureCollection":
         return {}
     found: dict[str, dict[str, Any]] = {}
@@ -391,10 +350,8 @@ def _uri_of(value: Mapping[str, Any]) -> str | None:
 #: a direction to be square to, in metres. Below it the two ends are one point.
 _MIN_CHORD_M = 1.0
 
-#: How far off a cut plane a vertex may stand and still BE on it, in metres. The
-#: cut puts its vertices there exactly; what separates them from the surface's
-#: own bank vertices is the clip's double-precision residue - nanometres on a
-#: UTM coordinate - against metres of real geometry.
+#: How far off a cut plane a vertex may stand and still BE on it, in metres: the
+#: clip's double-precision residue, against metres of real geometry.
 _ON_CUT_M = 1.0e-6
 
 
@@ -402,10 +359,8 @@ def _between_the_ends(line_doc: Any, banks: Any, near: Any, span_km: Any,
                       label: str, code: str) -> Domain:
     """The WATER SURFACE cut square to a line, between the two ends of the span.
 
-    A line is not a domain and a surface is not one either: the polygon is what
-    the two leave together, and the two end transects the cut left are the runs
-    the water crosses. The centerline rides along as a companion, because the
-    producer of neither row measured it as one."""
+    The two end transects are the runs the water crosses; the centerline rides along
+    as a companion."""
     from shapely.geometry import mapping
 
     centre = _clipped(_one_line(line_doc, label, code), near, span_km, label,
@@ -424,9 +379,8 @@ def _between_the_ends(line_doc: Any, banks: Any, near: Any, span_km: Any,
 def _one_line(doc: Any, label: str, code: str) -> Any:
     """Every line the row carries, joined into ONE running the way the water does.
 
-    NHD digitizes downstream, so the merged line is put in the vertex order of
-    its longest part: the first vertex is then the upstream end whichever way
-    the walk that produced the rows ran."""
+    NHD digitizes downstream, so the merged line takes the vertex order of its
+    longest part and the first vertex is the upstream end."""
     from shapely.geometry import LineString, Point, shape
     from shapely.ops import linemerge
 
@@ -450,9 +404,7 @@ def _one_line(doc: Any, label: str, code: str) -> Any:
 def _clipped(line: Any, near: Any, span_km: Any, label: str, code: str) -> Any:
     """``span_km`` of the line DOWNSTREAM of the seed, in the line's flow order.
 
-    Measured on the ground rather than in degrees, so a span is the same length
-    at the Gulf and at the Canadian border. A run that states no seed takes the
-    line as it came - the row was already asked over the span."""
+    Measured on the ground, not in degrees; a run stating no seed takes the line as it came."""
     from pyproj import Transformer
     from shapely.geometry import Point
     from shapely.ops import substring, transform as _transform
@@ -479,7 +431,7 @@ def _clipped(line: Any, near: Any, span_km: Any, label: str, code: str) -> Any:
 
 
 def _surfaces(banks: Any, label: str, code: str) -> list[Any]:
-    """The water-surface polygons the declared row carries, valid."""
+    """The valid water-surface polygons the declared row carries."""
     from shapely.geometry import shape
 
     found = []
@@ -499,11 +451,9 @@ def _surfaces(banks: Any, label: str, code: str) -> list[Any]:
 
 def _cut_square(surfaces: list[Any], centre: Any, label: str,
                 code: str) -> tuple[dict[str, Any], list[list[list[float]]]]:
-    """The surfaces cut square to the line's two ends -> the polygon and the
-    two transects the cut left.
+    """The surfaces cut square to the line's two ends -> the polygon and the two transects.
 
-    Square is measured in the local UTM zone, because square in degrees is not
-    square on the ground."""
+    Square is measured in the local UTM zone; square in degrees is not square on the ground."""
     import numpy as np
     from pyproj import Transformer
     from shapely.geometry import LineString, mapping
@@ -548,8 +498,7 @@ def _cut_square(surfaces: list[Any], centre: Any, label: str,
 
 
 def _strip(a: Any, b: Any, across: float) -> Any:
-    """The band between the two perpendicular cuts at ``a`` and ``b``, wide
-    enough that only those two cuts ever touch the surface."""
+    """The band between the two perpendicular cuts at ``a`` and ``b``, wide enough that only those cuts touch the surface."""
     import numpy as np
     from shapely.geometry import Polygon
 
@@ -564,12 +513,8 @@ def _end_face(cut_m: Any, point: Any, unit: Any, normal: Any, name: str,
               back: Any, label: str, code: str) -> list[list[float]]:
     """The TRANSECT one cut left, as its two lon/lat ends.
 
-    The cut put VERTICES on the plane through the point, and the two furthest
-    apart across the water are the face's ends. They are found by projecting the
-    polygon's OWN boundary vertices, never by intersecting a probe line: the cut
-    edge is exactly collinear with such a line, and a collinear intersection
-    over a domain-sized probe returns an edge at one end and nothing at the
-    other, for no reason a reader can see."""
+    Found by projecting the polygon's OWN boundary vertices, never by intersecting a
+    probe line: the cut edge is exactly collinear with one, so that intersection is unreliable."""
     import numpy as np
 
     origin = np.asarray(point, dtype=float)

@@ -1,12 +1,8 @@
 """The ZERO two sources count from, or the OFFSET that brings one onto the other.
 
-A water level and a bed elevation are only on one axis when both documents count
-from the same datum. What a document counts from is stated on the thing itself -
-on the layer a fetch produced, or on the rows of a survey that carries its own
-project datum - so the check is over what the caller holds, and an unstated zero
-refuses by name. Two DIFFERING zeros are bridged only by an offset somebody
-measured, named here as the row it came from: a shift nobody measured would be
-indistinguishable from a measurement to every reader downstream.
+An unstated zero refuses by name. Two DIFFERING zeros are bridged only by an offset
+somebody measured, named as the row it came from: a shift nobody measured would read
+as a measurement to every reader downstream.
 """
 
 from __future__ import annotations
@@ -20,9 +16,8 @@ __all__ = ["Alignment", "DatumError", "OFFSET_FETCH", "Offset", "align",
            "datum_of", "names_frame", "offset_ask", "offset_row", "one_datum",
            "one_frame", "onto_frame", "published_offset"]
 
-#: The fetch that measures one frame's zero against another's at a point. The
-#: RUNTIME declares this row where a source reaches the run on another frame and
-#: publishes no shift of its own; no question writes it, and nothing here calls
+#: The fetch that measures one frame's zero against another's at a point. The runtime
+#: declares this row where a source publishes no shift of its own; nothing here calls
 #: it - a coercion reads the row's value.
 OFFSET_FETCH = "fetch_vertical_datum_offset"
 
@@ -41,9 +36,7 @@ class DatumError(RuntimeError):
 def datum_of(source: Any) -> str:
     """What ONE source states its elevations are counted from, or "".
 
-    A layer states its own - the survey's project datum, the row's zero
-    carried onto what it produced - and a bare source NAME is looked up on the
-    row that declares it."""
+    A bare source NAME is looked up on the row that declares it."""
     stated = (source.get("vertical_datum") if isinstance(source, Mapping)
               else getattr(source, "vertical_datum", None))
     if stated:
@@ -54,10 +47,8 @@ def datum_of(source: Any) -> str:
 def record_datum(source: Any) -> str:
     """The zero a fetched RECORD is counted from, or "".
 
-    A layer states its own where the row states one; a record whose
-    readings each carry their site's zero states it per feature instead, and it
-    is the record's only where every feature that names one names the SAME one -
-    two zeros in one record is two records and no single shift reads them."""
+    Per-feature zeros are the record's only where every feature that names one names
+    the SAME one: two zeros is two records and no single shift reads them."""
     stated = datum_of(source)
     if stated or source is None:
         return stated
@@ -108,9 +99,7 @@ def one_datum(*sources: Any, code_prefix: str = "") -> str:
 def one_frame(datums: Sequence[str]) -> str | None:
     """The frame every one of these spellings NAMES, or ``None`` for two frames.
 
-    A source states its datum in its own words - "NAVD88 (metres, positive up)"
-    beside a bare "NAVD88" - and two spellings of one zero are one zero. The
-    fullest spelling is what comes back, because it is what a reader learns from."""
+    "NAVD88 (metres, positive up)" and "NAVD88" are one zero; the fullest spelling comes back."""
     stated = [d for d in datums if d]
     if not stated:
         return None
@@ -127,8 +116,7 @@ def _stated(name: str) -> str:
 
 
 def _label(source: Any) -> str:
-    """How a refusal NAMES this source: the tool name, or what the layer calls
-    itself."""
+    """How a refusal NAMES this source: the tool name, or what the layer calls itself."""
     if isinstance(source, str):
         return source
     for field in ("name", "layer_id"):
@@ -143,11 +131,8 @@ def _label(source: Any) -> str:
 class Offset:
     """How far one vertical frame's zero sits above another's, and who measured it.
 
-    ``metres`` is ADDED to an elevation on ``from_frame`` to read that elevation
-    on ``to_frame``. The frames are empty on a shift the caller stated bare, which
-    nothing can check against the datums it is applied between. ``at`` is the
-    lon/lat the measurement was asked at, which a reader needs to dispute it: one
-    point stands for a whole source, and which point it was is the claim."""
+    ``metres`` is ADDED to an elevation on ``from_frame`` to read it on ``to_frame``; the
+    frames are empty on a bare stated shift. ``at`` is where it was measured."""
 
     metres: float
     from_frame: str = ""
@@ -161,11 +146,9 @@ class Offset:
         return bool(self.from_frame and self.to_frame)
 
     def reversed(self) -> "Offset":
-        """The same measurement read the other way.
+        """The same measurement read the other way, by negation.
 
-        A negation, which is what a grid shift is; a conversion the service runs
-        through the ellipsoid is not exactly reversible, and asking it in the
-        direction it is wanted is a few centimetres closer than negating it."""
+        A service conversion through the ellipsoid is not exactly reversible; ask it in the wanted direction."""
         return Offset(metres=-self.metres, from_frame=self.to_frame,
                       to_frame=self.from_frame, source=self.source,
                       uncertainty_m=self.uncertainty_m, at=self.at)
@@ -235,8 +218,8 @@ def names_frame(datum: str, frame: str) -> bool:
 
     A source states its datum in its own words - "NAVD88 (metres, positive up)",
     "SD (Columbia River Datum: CRD)" - so the frame is looked for as a run of its
-    words. A frame whose name ENDS another's, as IGLD85 ends LWD_IGLD85, reads as
-    present in the longer one."""
+    words. A frame whose name ENDS another's (IGLD85 in LWD_IGLD85) reads as present
+    in the longer one."""
     words = re.findall(r"[a-z0-9]+", str(datum or "").lower())
     wanted = re.findall(r"[a-z0-9]+", str(frame or "").lower())
     if not wanted:
@@ -249,9 +232,8 @@ def align(source: Any, onto: Any, *, offset: Any = None,
           code_prefix: str = "") -> Alignment:
     """Read ``source``'s elevations on ``onto``'s datum, or refuse by name.
 
-    Same datum, nothing is shifted and an unstated one refuses. Different datums,
-    the ``offset`` row bridges them - checked against both frames where it names
-    them - and an absent offset refuses rather than laying one over the other."""
+    Same datum shifts nothing; different datums need the ``offset`` row, checked against
+    both frames, and an absent one refuses."""
     here, there = datum_of(source), datum_of(onto)
     if one_frame([here, there]) or not (here and there):
         return Alignment(datum=one_datum(source, onto, code_prefix=code_prefix),
@@ -277,9 +259,7 @@ def align(source: Any, onto: Any, *, offset: Any = None,
 def published_offset(source: Any) -> Offset | None:
     """The shift a source publishes about ITSELF, or ``None``.
 
-    A survey measured on a district's project datum states in its own metadata
-    how far that zero sits above a national frame; nothing else knows it, and a
-    service will not serve a datum nobody but its owner uses."""
+    A district's project datum states its own height above a national frame; no service serves it."""
     metres = getattr(source, "datum_offset_m", None)
     if isinstance(source, Mapping):
         metres = source.get("datum_offset_m", metres)
@@ -296,15 +276,8 @@ def onto_frame(source: Any, frame: Any, *, offset: Any = None,
                code_prefix: str = "") -> Alignment:
     """Read ``source``'s elevations on the RUN's vertical frame, or refuse by name.
 
-    One frame per run, so every elevation a run ingests is brought onto it here:
-    a source already on it is not shifted, one that publishes its own shift is
-    moved by that measurement, and one that publishes none is moved by ``offset``
-    - the row the runtime declared for this pair. A pair nothing measures refuses
-    naming both frames rather than laying one over the other.
-
-    A run that names no frame asks nothing, and an unstated zero refuses the way
-    it does anywhere else - what a slot does with a source that states none is
-    that slot's own statement."""
+    A source already on it is not shifted; one publishing its own shift uses that, else
+    ``offset``; a pair nothing measures refuses naming both. A run naming no frame asks nothing."""
     wanted = str(frame or "").strip()
     here = record_datum(source)
     if not wanted:
@@ -324,13 +297,8 @@ def offset_ask(source: Any, frame: Any, *, at: Any = None
                ) -> dict[str, Any] | None:
     """What a DATA row on :data:`OFFSET_FETCH` ASKS for this source, or ``None``.
 
-    ``at`` is the question's SEED, and the row is asked at the point of the
-    source's own footprint nearest it. ``None`` says no row is owed: the run
-    names no frame, the source states none or already stands on it, the source
-    publishes its own shift, there is no point to ask at, or the service
-    transforms neither frame - and that last one leaves the alignment to refuse
-    naming both, which is the honest answer for a district's project datum no
-    service knows."""
+    ``None`` when no row is owed, including when the service transforms neither frame:
+    the alignment then refuses naming both. ``at`` is the question's SEED."""
     wanted = str(frame or "").strip()
     here = record_datum(source)
     if not wanted or not here or one_frame([here, wanted]):
@@ -359,25 +327,16 @@ def _served_frames() -> tuple[str, ...]:
 def _as_served(datum: str, served: Sequence[str]) -> str:
     """This stated datum as the frame name the fetch knows, or "".
 
-    A source states its zero in its own words, and a service takes one word: the
-    LONGEST frame the words name, because a chart datum names the system it is
-    expressed on - LWD_IGLD85 names IGLD85 - and the two are different surfaces,
-    a low water plane and a geodetic zero, metres apart on the lakes."""
+    The LONGEST frame the words name: LWD_IGLD85 names IGLD85, a different surface metres apart."""
     naming = [name for name in served if names_frame(datum, name)]
     return max(naming, key=len) if naming else ""
 
 
 def _point_of(source: Any, at: Any) -> tuple[float, float] | None:
-    """WHERE this source is asked for its offset: the point of its OWN footprint
-    nearest the question's seed, which is the seed itself where the seed lies
-    inside that footprint.
+    """WHERE this source is asked for its offset: the point of its OWN footprint nearest the seed.
 
-    A datum relation is a shift and not a field, so one point stands for the
-    source - but it has to be a point the source HAS data at, which a bbox centre
-    and a centroid are both free not to be. A question that named no seed stands
-    on its domain instead, and the ask lands inside the ground the run and the
-    source share. A record carrying no layer to read a footprint off is asked at
-    the seed, the only point there is."""
+    It must be a point the source HAS data at, which a bbox centre or centroid need not be;
+    with no seed the domain stands in, and a record with no layer is asked at the seed."""
     from shapely.ops import nearest_points
 
     seed = _seed_shape(at)
@@ -396,8 +355,7 @@ def _point_of(source: Any, at: Any) -> tuple[float, float] | None:
 
 
 def _seed_shape(at: Any) -> Any:
-    """What the ask is measured NEAREST TO: the question's seed, else the ground
-    the run stands on - a shape either way, never a box's centre."""
+    """What the ask is measured NEAREST TO: the question's seed, else the ground the run stands on."""
     from shapely.geometry import Point as _Point, box, shape
 
     from .point import lonlat_of
@@ -416,12 +374,9 @@ def _seed_shape(at: Any) -> Any:
 
 
 def _footprint(source: Any) -> Any:
-    """Where this source ACTUALLY holds data, as one shape in EPSG:4326, or
-    ``None`` where it carries nothing a footprint reads out of.
+    """Where this source ACTUALLY holds data, as one EPSG:4326 shape, or ``None``.
 
-    A raster's valid-data mask, a point set's hull, a polygon's own shape - read
-    off the layer the fetch produced, because a file's rectangle claims ground
-    the source left as nodata."""
+    Read off the layer's valid-data mask, hull or shape: a file's rectangle claims nodata ground."""
     from shapely.geometry import shape
     from shapely.ops import unary_union
 

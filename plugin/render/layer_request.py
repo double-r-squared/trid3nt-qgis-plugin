@@ -1,13 +1,8 @@
 """A ``layer-request`` from the agent, opened in THIS QGIS session.
 
-The daemon borrows the session's data providers: it hands over a provider name
-and the datasource string that provider takes, and the session opens the layer.
-``mode: open`` leaves it on the map as context and answers at once; ``mode:
-materialise`` exports it over the asked bbox and uploads it through the ingest
-route, so the daemon can land it in the store as any fetch does. The
-request carries the row's own ask: an absent bbox is the whole published layer,
-and a stated spacing is the grid the export is written at. An error is the
-provider's own text, never a fabricated success.
+``mode: open`` leaves the provider layer on the map and answers at once; ``mode:
+materialise`` exports it over the asked bbox (absent = whole layer) at the asked
+spacing and uploads it through the ingest route. An error is the provider's own text.
 """
 
 from __future__ import annotations
@@ -20,11 +15,9 @@ from ..case.push_layer import upload_layer_bytes
 from ..net.auth_broker import AuthBroker
 from .export_layer import export_to_tempfile
 
-#: The tail of an error that rides the response.
 _TAIL_CHARS = 8000
 
-#: The providers that publish a raster. Every other provider name opens as a
-#: vector layer, which is what the registry's own decode expects.
+#: Providers that publish a raster; every other name opens as a vector layer.
 _RASTER_PROVIDERS = frozenset(
     {"wms", "wcs", "gdal", "arcgismapserver", "arcgisimageserver", "virtualraster"}
 )
@@ -69,9 +62,9 @@ def _response(
 
 
 def _no_key(credential: str, name: str) -> str:
-    """The refusal for a keyed row with nothing stored under its credential.
-    Opening without the key would fail in the provider with the upstream's own
-    wording, which names neither the credential nor where a key is entered."""
+    """The refusal for a keyed row with nothing stored under its credential. Opening without
+    the key would fail in the provider with the upstream's own wording, which names neither
+    the credential nor where a key is entered."""
     return (
         f"{name} is published through a keyed service and no key is stored "
         f"under {credential!r}. Open the plugin's Settings -> Keys and enter "

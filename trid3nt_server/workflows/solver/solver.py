@@ -141,11 +141,8 @@ def set_emitter_binding(binding: EmitterBinding | None) -> None:
     _EMITTER_BINDING = binding
 
 
-# The local backend envelope, one shape for every solver: stage the manifest's
-# inputs from the object store, launch the solver DETACHED, hand a supervisor
-# thread the process, upload the outputs and ALWAYS write completion.json, poll
-# that object from the caller, and cancel by killing the container or the process
-# group. Only the knobs in ``LocalSolverSpec`` differ between solvers.
+# The local backend envelope, one shape for every solver: only the knobs in ``LocalSolverSpec`` differ.
+# completion.json is ALWAYS written; cancel kills the container or the process group.
 
 
 def _utc_now_iso() -> str:
@@ -154,8 +151,7 @@ def _utc_now_iso() -> str:
 
 
 def _read_object_bytes(uri: str) -> bytes:
-    """Read one object's bytes, resolved BY SCHEME: ``s3://`` via boto3, a
-    ``file://`` or bare local path through the filesystem."""
+    """Read one object's bytes by SCHEME: ``s3://`` via boto3, ``file://`` or a bare path via the filesystem."""
     if uri.startswith("file://"):
         return Path(uri[len("file://"):]).read_bytes()
     if not uri.startswith("s3://"):
@@ -217,9 +213,7 @@ def _with_declared_network(spec: LocalSolverSpec, cmd: list[str]) -> list[str]:
     """Apply the spec's declared docker network to a launch line.
     A spec that writes its own ``--network`` is refused rather than doubled: two of
     them on one command line is a launch failure."""
-    # The flag goes in here rather than in each ``build_argv`` because the network a
-    # container is allowed is a property of whether its inputs are staged, not of
-    # how its argv is spelled, and a posture spread across closures drifts.
+    # The network is a property of whether inputs are staged, not of argv spelling; a posture spread across closures drifts.
     if not spec.network:
         return cmd
     if "--network" in cmd:
@@ -246,17 +240,14 @@ class _LocalRun:
     stdout_path: Path
     stderr_path: Path
     spec: LocalSolverSpec
-    #: WHICH CODE dispatched this run - stamped at launch, carried into
-    #: completion.json, so a reader of the artifact can ask whether the engine
-    #: has moved since rather than assuming it has not.
+    #: Which code dispatched this run, stamped at launch and carried into completion.json.
     code: dict[str, Any] = field(default_factory=dict)
     cancel_requested: threading.Event = field(default_factory=threading.Event)
     supervisor: threading.Thread | None = None
 
 
-#: run_id -> live local run. In-process only: ``run_solver`` and the cancel
-#: chain are co-located in the agent process (the deployed topology). The
-#: supervisor pops its entry when the completion.json is written.
+#: run_id -> live local run, in-process only: ``run_solver`` and the cancel chain share the agent process;
+#: the supervisor pops its entry when completion.json is written.
 _LOCAL_RUNS: dict[str, _LocalRun] = {}
 
 
@@ -290,14 +281,10 @@ def _write_local_completion(
     engine: str | None = None,
     code: dict[str, Any] | None = None,
 ) -> None:
-    """Write ``s3://<runs_bucket>/<run_id>/completion.json``, the terminal signal
-    ``wait_for_completion`` polls for. The stdout/stderr field names and the
-    ``extra`` fold are spec-driven, so each solver writes its own key set."""
-    # The envelope's own fields land AFTER the classifier's fold: the fold is
-    # whatever the worker measured, and where the two share a name the
-    # supervisor's answer is the one a reader of the terminal signal needs.
-    # ``engine`` is recorded so a reader resolves the engine directly instead of
-    # inferring it from a stdout field name.
+    """Write ``s3://<runs_bucket>/<run_id>/completion.json``, the terminal signal ``wait_for_completion`` polls for.
+    Stdout/stderr field names and the ``extra`` fold are spec-driven."""
+    # The envelope's fields land AFTER the classifier's fold so the supervisor's answer wins a shared name;
+    # ``engine`` is recorded so a reader need not infer it from a stdout field name.
     payload = {
         **(code or {}),
         **(extra or {}),
@@ -327,9 +314,8 @@ def _write_local_completion(
 
 
 def _supervise_local_run(run: _LocalRun) -> None:
-    """Supervisor body (daemon thread): wait on the solver process, upload
-    stdout/stderr and the expanded outputs, and ALWAYS write completion.json -
-    on crash and on cancel too. No upload failure may prevent that write."""
+    """Supervisor body (daemon thread): wait on the process, upload outputs, and ALWAYS write completion.json,
+    on crash and cancel too; no upload failure may prevent that write."""
     status = "error"
     exit_code = 1
     error_msg: str | None = None
@@ -340,8 +326,7 @@ def _supervise_local_run(run: _LocalRun) -> None:
 
     try:
         exit_code = run.proc.wait()
-        # The spec's own post-exit classifier first, the plain exit-code rule
-        # otherwise. A user cancel overrides either verdict below.
+        # The spec's classifier first, the exit-code rule otherwise; a user cancel overrides either.
         if run.spec.classify_exit is not None:
             try:
                 status, exit_code, error_msg, completion_extra = (
@@ -379,7 +364,7 @@ def _supervise_local_run(run: _LocalRun) -> None:
         _LOCAL_RUNS.pop(run.run_id, None)
         return
 
-    # Always upload stdout/stderr (entrypoint parity -- evidence even on error).
+    # Always upload stdout/stderr: evidence even on error.
     try:
         if run.stdout_path.exists():
             stdout_uri = _upload_file_s3(
@@ -469,7 +454,6 @@ def launch_local_solver(
     )
     rundir.mkdir(parents=True, exist_ok=True)
 
-    # --- Manifest read + input staging (the entrypoint's download phase) ---
     try:
         manifest = json.loads(_read_object_bytes(model_setup_uri))
     except SolverDispatchError:
@@ -486,13 +470,9 @@ def launch_local_solver(
     solver_args = [str(a) for a in (manifest.get(spec.args_key, []) or [])]
     output_patterns = [str(p) for p in (manifest.get("outputs", []) or [])]
 
-    # The manifest is written to rundir/manifest.json so a subprocess-runner spec
-    # can pass a file:// URI to its entrypoint without a second S3 read. A spec
-    # that passes its arguments on the command line simply ignores the file.
-    # WHICH CODE is dispatching. It lands BESIDE the manifest rather than inside
-    # it: manifest.json is the worker's input contract and several entrypoints
-    # gate it strictly, so run provenance goes in its own file. The run record
-    # carries the same values into completion.json.
+    # manifest.json lets a subprocess-runner spec pass a file:// URI without a second S3 read.
+    # Dispatch provenance lands BESIDE the manifest: manifest.json is the worker's strictly gated input contract.
+    # The run record carries the same values into completion.json.
     from .code_provenance import code_identity
 
     code = code_identity()
@@ -525,8 +505,7 @@ def launch_local_solver(
                 f"manifest input entry malformed (need gs_uri + dest): {item!r}"
             ) from exc
         dest = rundir / dest_rel
-        # Host-side path-traversal guard: staging writes to the instance
-        # filesystem, so a dest that climbs out of the rundir is refused.
+        # Host-side path-traversal guard: a dest that climbs out of the rundir is refused.
         if rundir_resolved not in dest.resolve().parents:
             raise SolverDispatchError(
                 f"manifest input dest escapes the rundir: {dest_rel!r}"
@@ -625,13 +604,8 @@ def _run_solver_local_docker(
     )
 
 
-# Per-solver local-spec registry -- EVERY solver, no exceptions.
-#
-# Maps solver name -> callable returning a LocalSolverSpec. The callable form
-# (factory, not a pre-built spec) avoids circular imports: each workflow module
-# registers itself at import time via register_local_solver_spec(), and the
-# factory is only CALLED inside _run_solver_local_docker, by which time the
-# module is fully loaded.
+# Per-solver local-spec registry. The callable form (factory, not a pre-built spec) avoids circular imports:
+# modules register at import, and the factory is called only inside _run_solver_local_docker.
 
 #: solver name -> zero-arg callable returning a LocalSolverSpec.
 LOCAL_SOLVER_SPEC_REGISTRY: dict[str, Any] = {}
@@ -802,9 +776,7 @@ async def _wait_for_completion_local(
                     timeout_s,
                     handle.run_id,
                 )
-                # A timeout is not a user cancel: kill WITHOUT the cancelled flag so the
-                # supervisor records status="error" (mirrors the worker path's
-                # best-effort cancel + SOLVER_TIMEOUT result).
+                # A timeout is not a user cancel: kill WITHOUT the cancelled flag so the supervisor records status="error".
                 await loop.run_in_executor(None, _docker_kill, handle.run_id)
                 return RunResult(
                     run_id=handle.run_id,
@@ -847,12 +819,7 @@ _RUN_SOLVER_METADATA = AtomicToolMetadata(
 
 @register_tool(
     _RUN_SOLVER_METADATA,
-    # Annotations: readOnlyHint=False (submits a solver run that ultimately
-    # writes output artifacts to the runs bucket), openWorldHint=False
-    # (local container / direct binary -- no public external API),
-    # destructiveHint=False (writes go to a new runs/ prefix; no existing
-    # state overwritten), idempotentHint=False (each call creates a new
-    # run with a distinct run_id).
+    # Annotations: not read-only (submits a run writing to the runs bucket), closed-world, non-destructive (new runs/ prefix), non-idempotent.
     read_only_hint=False,
     open_world_hint=False,
     destructive_hint=False,
@@ -898,9 +865,7 @@ def run_solver(
             f"model_setup_uri must be a non-empty string; got {model_setup_uri!r}"
         )
 
-    # --- Backend seam: local-docker is the only backend, so dispatch is
-    # unconditional. The handle pins its backend (workflow_name=local-docker) so
-    # wait_for_completion routes correctly. ---
+    # local-docker is the only backend; the handle pins it so wait_for_completion routes correctly.
     return _run_solver_local_docker(
         solver=solver,
         model_setup_uri=model_setup_uri,
@@ -940,13 +905,7 @@ async def _emit_progress(progress_percent: int) -> None:
 
 @register_tool(
     _WAIT_FOR_COMPLETION_METADATA,
-    # Annotations: readOnlyHint=False (emits pipeline-state progress envelopes
-    # as a side effect on every poll tick -- stateful even though it does not
-    # write to the object store directly), openWorldHint=False (polls the S3
-    # completion.json; no public external API),
-    # destructiveHint=False (reads completion.json from the runs bucket; does
-    # not overwrite anything), idempotentHint=False (each call emits progress
-    # events; cancellation path terminates the live container).
+    # Annotations: not read-only (emits progress envelopes every poll tick), closed-world, non-destructive, non-idempotent.
     read_only_hint=False,
     open_world_hint=False,
     destructive_hint=False,

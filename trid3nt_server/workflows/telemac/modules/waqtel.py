@@ -1,8 +1,8 @@
 """The WAQTEL wrapper: its dictionary, and the coupled bodies a carrier names.
 
-WAQTEL runs UNDER a hydrodynamic module and states only what its caller handed
-it. It writes no result file of its own and rows no output: what its processes
-produce are TRACERS APPENDED to the carrier's own, which it states by process."""
+WAQTEL runs under a hydrodynamic module, writes no result file and rows no output: its
+processes produce tracers appended to the carrier's own.
+"""
 
 from __future__ import annotations
 
@@ -13,10 +13,7 @@ from .module import Module, Output, SlotRefused
 
 __all__ = ["WAQTEL", "STEERING_FILENAME"]
 
-#: The processes a carrier's WATER QUALITY PROCESS carries. The engine dispatches
-#: with ``IF( p*INT(WAQPROCESS/p).EQ.WAQPROCESS )`` and so reaches every process
-#: whose PRIME divides the keyword; 1 is the dictionary's default and is no
-#: process at all.
+# The engine dispatches with ``IF( p*INT(WAQPROCESS/p).EQ.WAQPROCESS )``, so every process whose prime divides the keyword runs; 1 is the default and no process.
 _O2 = 2
 _BIOMASS = 3
 _EUTRO = 5
@@ -24,13 +21,8 @@ _MICROPOL = 7
 _THERMAL = 11
 _DEGRADATION = 17
 
-#: One style per appended variable, stated where the rows that carry it are. A
-#: variable two processes both write draws the same way under either.
-#:
-#: A BACKGROUND variable - one the water already carries everywhere - is ranged
-#: over what was measured on the wet nodes and pins no bottom: oxygen sitting
-#: between 8.0 and 8.7 mg/L on a ramp pinned to zero spends half a percent of
-#: its colours on the whole answer.
+# One style per appended variable. A background variable (oxygen at 8.0-8.7 mg/L on a ramp pinned
+# to zero would spend half a percent of its colours) is ranged over what was measured on wet nodes.
 _TEMPERATURE = {"kind": "mesh", "ramp": "rdylbu_r", "units": "C"}
 _O2_STYLE = {"kind": "mesh", "ramp": "rdylbu", "units": "mg/L"}
 _ORGANIC = {"kind": "mesh", "ramp": "oranges", "units": "mg/L"}
@@ -40,28 +32,18 @@ _PO4 = {"kind": "mesh", "ramp": "ylorrd", "units": "mg/L"}
 _POR = {"kind": "mesh", "ramp": "plasma", "units": "mg/L"}
 _NO3 = {"kind": "mesh", "ramp": "gnbu", "units": "mg/L"}
 _NOR = {"kind": "mesh", "ramp": "cividis", "units": "mg/L"}
-#: MICROPOL's five, in the units its own source terms are written in: the
-#: sediment in suspension is the concentration COEFFICIENT OF DISTRIBUTION is
-#: read against, which the dictionary states in m3/kg, so it is kg/m3; the bed
-#: sediment and the pollutant on it are what SETTLED onto a square metre, which
-#: is the same terms without the water column divided out.
+# MICROPOL's five, in its source terms' units: suspended sediment is kg/m3 (the distribution coefficient is m3/kg); bed sediment and pollutant are per square metre settled.
 _SUSPENDED = {"kind": "mesh", "ramp": "oranges", "units": "kg/m3", "floor": 0}
 _DEPOSITED = {"kind": "mesh", "ramp": "ylorrd", "units": "kg/m2", "floor": 0}
 _DISSOLVED = {"kind": "mesh", "ramp": "reds", "units": "mg/L", "floor": 0}
 _ON_SUSPENDED = {"kind": "mesh", "ramp": "magma", "units": "mg/L", "floor": 0}
 _ON_DEPOSITED = {"kind": "mesh", "ramp": "plasma", "units": "g/m2", "floor": 0}
 
-#: What each process puts on the carrier's result, in the order the engine
-#: appends them behind the tracers the carrier declares, under the engine's own
-#: 16-character names. A carrier that declares one of these names keeps its own
-#: row and the process attaches to it. Degradation (17) acts on a tracer the
-#: carrier already has, so it appends none. The third algal tracer is one
-#: quantity under two spellings - EUTRO writes ``POR NON ASSIMIL``, BIOMASS the
-#: shorter ``POR NON ASSIM`` - so the two row sets cannot share it.
-#: WHAT HAS AN EDGE. A process variable of the water column - oxygen, a nutrient,
-#: the temperature - is everywhere the water is, so masking it below a fraction
-#: of its own peak erases the field rather than shaping it. A micropollutant is
-#: PUT INTO the water, so the ground it has reached has a boundary to draw.
+# What each process appends to the carrier's result, in engine order behind the carrier's tracers,
+# under 16-character names. A carrier declaring one of these names keeps its row. Degradation (17)
+# acts on an existing tracer and appends none. The third algal tracer has two spellings (EUTRO
+# ``POR NON ASSIMIL``, BIOMASS ``POR NON ASSIM``), so the row sets cannot share it. Water-column
+# variables are everywhere, so no peak-fraction mask; a micropollutant is put into the water and has an edge.
 _APPENDED: Mapping[int, tuple[Output, ...]] = MappingProxyType({
     _O2: (Output("DISSOLVED O2", "mgO2/L", style=_O2_STYLE, has_edge=False),
           Output("ORGANIC LOAD", "mgO2/L", style=_ORGANIC, has_edge=False),
@@ -89,9 +71,7 @@ _APPENDED: Mapping[int, tuple[Output, ...]] = MappingProxyType({
     _THERMAL: (Output("TEMPERATURE", "oC", style=_TEMPERATURE, has_edge=False),),
 })
 
-#: The ELEVEN keywords EUTRO reads and BIOMASS does not - every one a term in the
-#: oxygen, organic-load and ammonium balance the three extra tracers carry. A
-#: body that states one of them under BIOMASS is stating a number nobody reads.
+# The eleven keywords EUTRO reads and BIOMASS does not, all terms in the oxygen, organic-load and ammonium balance; stating one under BIOMASS is a number nobody reads.
 _OXYGEN_ONLY = frozenset((
     "CONSTANT_OF_DEGRADATION_OF_ORGANIC_LOAD_K120",
     "CONSTANT_FOR_THE_NITRIFICATION_KINETIC_K520",
@@ -106,15 +86,11 @@ _OXYGEN_ONLY = frozenset((
     "WATER_SALINITY",
 ))
 
-#: The second sorption site. Its model number appends two more tracers, which
-#: moves the MICROPOL rows above and every array a carrier sizes to its tracer
-#: count, so the one-site model is what is exposed.
+# The second sorption site's model number appends two tracers, shifting the MICROPOL rows and every tracer-count array, so the one-site model is exposed.
 _TWO_SITE = frozenset(("KINETIC_EXCHANGE_MODEL", "COEFFICIENT_OF_DISTRIBUTION_2",
                        "CONSTANT_OF_DESORPTION_KINETIC_2"))
 
-#: The WAQTEL steering file a carrier names. DAMOCLES parses it against WAQTEL's
-#: own dictionary, so it is a sheet of its own rather than a block in the
-#: carrier's deck.
+# The WAQTEL steering file a carrier names; DAMOCLES parses it against WAQTEL's dictionary, so it is a sheet of its own.
 STEERING_FILENAME = "t2d_river.waqtel"
 
 
@@ -123,13 +99,10 @@ class _Waqtel(Module("waqtel")):  # type: ignore[misc]
 
     @classmethod
     def degradation(cls, *, substance: Any, presets: Any) -> Mapping[str, Any]:
-        """First-order tracer DEGRADATION (process 17) over the carrier's tracers,
-        from a named substance's preset row.
+        """First-order tracer degradation (process 17) over the carrier's tracers, from a named substance's preset row.
 
-        A caller with a rate of its own states LAW OF TRACERS DEGRADATION and
-        COEFFICIENT 1 FOR LAW OF TRACERS DEGRADATION by name, which is what the
-        refusal below names. Given nothing, the body states nothing and the
-        carrier couples nothing."""
+        A caller with its own rate states LAW OF TRACERS DEGRADATION and COEFFICIENT 1 by name. Given nothing, it states nothing.
+        """
         return {**_body(_DEGRADATION,
                         degradation={"substance": substance,
                                      "presets": presets}),
@@ -137,35 +110,25 @@ class _Waqtel(Module("waqtel")):  # type: ignore[misc]
 
     @classmethod
     def thermal(cls, **keywords: Any) -> Mapping[str, Any]:
-        """The heat budget between the water and the air (process 11), which
-        appends a TEMPERATURE tracer to the carrier's own.
+        """The heat budget between water and air (process 11), appending a TEMPERATURE tracer.
 
-        The forcing is the HOST's: the exchange reads the air temperature, the
-        humidity, the wind, the cloud and the solar radiation out of the
-        atmospheric data file the carrier names. ATMOSPHERE-WATER EXCHANGE MODEL
-        is the 3D surface-exchange switch, and its engine default - no model - is
-        the only value a 2D run takes."""
+        Forcing is the host's atmospheric data file. ATMOSPHERE-WATER EXCHANGE MODEL is the 3D
+        surface-exchange switch; its engine default is the only value a 2D run takes.
+        """
         return cls._process(_THERMAL, keywords)
 
     @classmethod
     def o2(cls, **keywords: Any) -> Mapping[str, Any]:
-        """The dissolved-oxygen balance (process 2), which appends the oxygen,
-        the organic load and the ammonium to the carrier's own tracers."""
+        """The dissolved-oxygen balance (process 2), appending oxygen, organic load and ammonium."""
         return cls._process(_O2, keywords)
 
     @classmethod
     def micropollutant(cls, **keywords: Any) -> Mapping[str, Any]:
-        """A sorbing substance and the sediment it rides on (process 7), which
-        appends the sediment in suspension and on the bed and the substance
-        dissolved, on the suspended sediment and on the bed sediment.
+        """A sorbing substance and the sediment it rides (process 7), appending suspended and bed sediment and the dissolved, suspended-sorbed and bed-sorbed substance.
 
-        The settling and the bed exchange, the sorption equilibrium and its
-        kinetics and the substance's own decay are WAQTEL's own keywords. The
-        sorption sink on the dissolved phase is the desorption kinetic times the
-        COEFFICIENT OF DISTRIBUTION times the SUSPENDED LOAD, so the sediment a
-        deck states is a concentration in kg/m3 - the class that coefficient's
-        own m3/kg is defined over - and a deck that states it in mg/L sorbs a
-        thousandfold and empties the dissolved phase in minutes."""
+        The sorption sink is the desorption kinetic times the distribution coefficient (m3/kg) times the
+        suspended load, so sediment is kg/m3; a deck stating mg/L sorbs a thousandfold too much.
+        """
         named = sorted(set(keywords) & _TWO_SITE)
         if named:
             raise SlotRefused(
@@ -177,12 +140,10 @@ class _Waqtel(Module("waqtel")):  # type: ignore[misc]
     @classmethod
     def eutrophication(cls, *, oxygen: bool = False,
                        **keywords: Any) -> Mapping[str, Any]:
-        """Nutrient-limited algal growth over the carrier's water, and the oxygen
-        balance it drives where the caller asks for the oxygen half.
+        """Nutrient-limited algal growth, and the oxygen balance it drives where asked.
 
-        ``oxygen`` is the whole of the choice between the engine's two algal
-        source terms - EUTRO's five tracers plus the three the oxygen balance is
-        carried on, or BIOMASS's five alone."""
+        ``oxygen`` chooses the engine's algal source term: EUTRO (five tracers plus the three oxygen ones) or BIOMASS (five).
+        """
         if not oxygen:
             named = sorted(set(keywords) & _OXYGEN_ONLY)
             if named:
@@ -194,8 +155,7 @@ class _Waqtel(Module("waqtel")):  # type: ignore[misc]
 
     @classmethod
     def _process(cls, number: int, keywords: Mapping[str, Any]) -> Mapping[str, Any]:
-        """One coupled body: the process, and the keywords stated by their own
-        name. An unknown keyword refuses at IMPORT, naming the nearest."""
+        """One coupled body: the process, and keywords stated by name; an unknown keyword refuses at import."""
         for name in keywords:
             cls.slot(name)
         return _body(number, **keywords)
@@ -203,10 +163,7 @@ class _Waqtel(Module("waqtel")):  # type: ignore[misc]
 
 def _degradation(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                                                     Mapping[str, Any]]:
-    """The named substance -> the law and its coefficient, sized to one tracer.
-
-    A word the deck's own preset table does not carry is refused by the keyword
-    pair that states a rate directly: this composite invents no die-off."""
+    """The named substance -> the law and its coefficient, sized to one tracer; a word absent from the preset table refuses (no invented die-off)."""
     word = str(value.get("substance") or "").strip().lower()
     preset = next((row for key, row in dict(value["presets"]).items()
                    if key in word), None)
@@ -223,15 +180,11 @@ def _degradation(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
 
 
 def _body(process: int, **slots: Any) -> Mapping[str, Any]:
-    """One coupled body, as the carrier's ``coupling`` composite reads it.
-
-    A MAPPING: the carrier's coupling composite reads it by key."""
     return {"module": "waqtel", "steering": STEERING_FILENAME,
             "process": process, "slots": dict(slots)}
 
 
 def _appended(body: Mapping[str, Any]) -> tuple[Output, ...]:
-    """The tracers this coupled body puts on its carrier's result, by process."""
     return _APPENDED.get(int(body.get("process") or 0), ())
 
 

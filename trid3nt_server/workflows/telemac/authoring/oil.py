@@ -1,9 +1,8 @@
 """The oil module's two input files, as content: the preset the module reads,
 and the release routine this run's source is compiled into.
 
-The presence of the steering file activates the module on top of the tracer
-solve. The point compiled in has to be the settled one: a source the flow never
-reaches solves clean and slicks nothing."""
+The steering file activates the module; the compiled-in point must be the settled one.
+"""
 
 from __future__ import annotations
 
@@ -13,8 +12,7 @@ from typing import Any, Mapping
 
 __all__ = ["release_routine", "steering_text"]
 
-#: The engine's own release routine, shipped beside this module because the
-#: release coordinates are compiled INTO it.
+# The engine's release routine; the release coordinates are compiled INTO it.
 _TEMPLATE = Path(__file__).resolve().parent / "oil_templates" / "oil_flot_template.f"
 
 

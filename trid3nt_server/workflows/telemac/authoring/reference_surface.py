@@ -1,9 +1,8 @@
-"""THE REFERENCE SURFACE a dredger cuts to: the grade, as NESTOR reads levels.
+"""The reference surface a dredger cuts to: the grade, as NESTOR reads levels.
 
-The design grade laid out as cross-sections along the domain's own centerline,
-stationed downstream from the end the inflow names, and the stock under it
-measured against the bed before the run dispatches - the engine only refuses a
-dredger with nothing left to cut part-way through its first pass."""
+The design grade as cross-sections along the centerline, stationed downstream from the
+inflow end, with the stock under it measured against the bed before dispatch.
+"""
 
 from __future__ import annotations
 
@@ -18,39 +17,28 @@ from .opening import FLAT
 
 __all__ = ["settle_dredge"]
 
-#: How far past the outermost node a reference profile reaches, as a fraction of
-#: what it spans. The profiles are a SURFACE the engine interpolates every node
-#: of a field onto, and a node outside the quadrangle two neighbouring profiles
-#: bound reads no level at all - so the band overhangs the mesh on all four
-#: sides rather than ending on it.
+# How far past the outermost node a profile reaches, as a fraction of its span: the engine
+# interpolates every node onto the surface and a node outside two profiles' quadrangle reads
+# no level, so the band overhangs the mesh on all four sides.
 _PROFILE_MARGIN = 1.25
 
 
-#: How close two profiles may stand, as a multiple of their own half-width. Two
-#: perpendiculars to a bending line converge on the inside of the bend, and a
-#: pair that crosses inside the band bounds a quadrangle turned inside out; at
-#: this spacing they can only cross where the reach turns more than fifty
-#: degrees between them.
+# Minimum profile spacing as a multiple of half-width: perpendiculars converge on the inside
+# of a bend, and a crossing pair bounds an inside-out quadrangle; at this spacing they cross
+# only where the reach turns more than fifty degrees.
 _PROFILE_SPACING = 2.0
 
 
-#: The fewest profiles the reader takes, and the most a reach is described with:
-#: the surface between them is linear, so past a handful the extra lines state
-#: nothing the interpolation does not already carry.
+# The fewest profiles the reader takes and the most worth stating: the surface between them is linear.
 _PROFILE_MIN, _PROFILE_MAX = 2, 12
 
 
-#: The fewest profiles the reader takes, and the most a reach is described with:
-#: the surface between them is linear, so past a handful the extra lines state
-#: nothing the interpolation does not already carry.
+# The fewest profiles the reader takes and the most worth stating: the surface between them is linear.
 _PROFILE_MIN, _PROFILE_MAX = 2, 12
 
 
 def _dredge_head(domain: Any) -> tuple[float, float] | None:
-    """Which end of the centerline is upstream, off the domain's own inflow run.
-
-    Without one the merged direction stands, and the stationing is whichever way
-    the line was drawn."""
+    """Which end of the centerline is upstream, off the inflow run; without one the drawn direction stands."""
     for run in getattr(domain, "runs", ()) or ():
         if getattr(run, "type", "") == "inflow":
             return (float(run.start.lon), float(run.start.lat))
@@ -59,9 +47,7 @@ def _dredge_head(domain: Any) -> tuple[float, float] | None:
 
 def _dredge_field(source: Any, name: str, *, utm_epsg: int,
                   node_xy: Any) -> dict[str, Any]:
-    """One drawn area -> the polygon the engine works in, in the mesh's metres.
-
-    An area holding no mesh node is refused: nothing in it could be moved."""
+    """One drawn area -> the polygon in the mesh's metres; an area holding no mesh node refuses."""
     import numpy as np
     from shapely import contains_xy
     from shapely.geometry import Polygon
@@ -74,9 +60,7 @@ def _dredge_field(source: Any, name: str, *, utm_epsg: int,
             f"the {name} area carries no polygon, so it bounds nothing to work "
             "on. Draw the area on the canvas or supply a polygon layer.",
             error_code="TELEMAC_DREDGE_AREA_EMPTY")
-    # The engine reads a field as ONE closed ring, so both the file and the guard
-    # take that ring: a bent or rotated area whose bounding box holds nodes its
-    # interior does not would otherwise pass here and find nothing at the solve.
+    # The engine reads a field as one closed ring, so file and guard both take that ring; a bounding box could hold nodes the interior does not.
     worked = Polygon(parts[0].exterior)
     ring = [[round(float(x), 3), round(float(y), 3)]
             for x, y in worked.exterior.coords]
@@ -94,11 +78,7 @@ def _refuse_a_cut_past_the_stock(ring: Sequence[Sequence[float]], *,
                                  node_xy: Any, node_bed: Any, name: str,
                                  level_m: float, depth_m: float | None,
                                  grade_depth_m: float, stock_m: float) -> None:
-    """The deepest cut the stated grade asks for, against the erodible stock.
-
-    A dredger cannot cut below the layer the deck gives it, and the engine says
-    so only once it has solved far enough to try, so the arithmetic is done here
-    with the node, its bed, the grade and the stock all named."""
+    """The deepest cut the grade asks for, against the erodible stock; the engine only objects after solving far enough to try."""
     import numpy as np
     from shapely import contains_xy
     from shapely.geometry import Polygon
@@ -107,9 +87,7 @@ def _refuse_a_cut_past_the_stock(ring: Sequence[Sequence[float]], *,
     bed = np.asarray(node_bed, dtype=float)
     inside = np.flatnonzero(
         np.asarray(contains_xy(Polygon(ring), xy[:, 0], xy[:, 1])))
-    # The reference is the surface the run opens on, read the same way the
-    # profiles below read it: the stated level where it is flat, the local bed
-    # plus the normal depth where it follows the bed.
+    # The reference is the opening surface: the stated level where flat, the local bed plus normal depth where it follows the bed.
     reference = (np.full(inside.size, level_m) if depth_m is None
                  else bed[inside] + depth_m)
     cut = bed[inside] - (reference - grade_depth_m)
@@ -129,7 +107,6 @@ def _refuse_a_cut_past_the_stock(ring: Sequence[Sequence[float]], *,
 
 def _chainage(xy: Any, line: Any, segment: Any, length: Any,
               cumulative: Any) -> tuple[Any, Any]:
-    """Each point's arc length ALONG the line and its distance OFF it."""
     import numpy as np
 
     t = np.clip(((xy[:, None, 0] - line[None, :-1, 0]) * segment[None, :, 0]
@@ -146,10 +123,7 @@ def _chainage(xy: Any, line: Any, segment: Any, length: Any,
 
 def _on_line(line: Any, segment: Any, length: Any, cumulative: Any,
              where: float) -> tuple[Any, Any]:
-    """The point at arc length ``where`` and the unit tangent there.
-
-    Past either end the end segment is extended, which is how a profile comes to
-    stand outside the mesh it has to overhang."""
+    """Past either end the end segment is extended, so a profile can stand outside the mesh."""
     import numpy as np
 
     index = int(np.clip(np.searchsorted(cumulative, where) - 1, 0,
@@ -163,10 +137,9 @@ def _reference_profiles(centerline_utm: Any, *, node_xy: Any, node_bed: Any,
                         ) -> list[list[float]]:
     """The reference surface as the engine reads it: seven reals per profile.
 
-    A band of cross-sections down the reach at the water surface the run opens
-    at - the stated level where that surface is flat, the local bed plus the
-    depth where it follows the bed - overhanging the mesh at both ends and both
-    sides so every node of a field lies inside one pair."""
+    A band of cross-sections at the opening water surface, overhanging the mesh at both ends and
+    sides so every node of a field lies inside one pair.
+    """
     import numpy as np
 
     line = np.asarray(centerline_utm, dtype=float)
@@ -202,14 +175,11 @@ async def settle_dredge(*, mesh: dict[str, Any], line: Any, domain: Any,
                         settled: Mapping[str, Any], areas: Mapping[str, Any],
                         dug_area: str, grade_depth_m: float,
                         stock_m: float) -> dict[str, Any]:
-    """The areas a dredge works on and the surface its levels are read from,
-    both measured against the ACCEPTED mesh.
+    """The areas a dredge works on and the surface its levels are read from, measured against the accepted mesh.
 
-    ``areas`` is ``{name: geometry source}``; each comes back as the polygon in
-    the mesh's own metres; ``line`` is the LINE the profiles are stationed along,
-    and the reference is the run's OWN opening water surface. ``dug_area`` names
-    the one the dig works in, and the cut it asks for is measured here against
-    the stock the deck states."""
+    ``areas`` is ``{name: geometry source}``, each returned as a polygon in the mesh's metres;
+    ``line`` stations the profiles; ``dug_area`` names the dig, whose cut is checked against the stock.
+    """
     utm_epsg = int(settled["utm_epsg"])
     node_xy, node_bed = await asyncio.to_thread(mesh_nodes, mesh)
     centerline_utm = await asyncio.to_thread(

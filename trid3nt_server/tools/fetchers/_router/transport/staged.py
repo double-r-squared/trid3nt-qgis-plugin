@@ -12,20 +12,15 @@ __all__ = ["StagedEndpointNotConfigured", "is_staged_uri", "staged_object_url"]
 
 
 class StagedEndpointNotConfigured(RuntimeError):
-    """No local object-store endpoint is configured to resolve a staged uri. There is
-    no legitimate real-AWS fallback, so an unset endpoint is always a deployment
-    misconfiguration and never a signal that the object is absent."""
+    """No local object-store endpoint is configured; there is no real-AWS fallback, so this is never a signal that the object is absent."""
 
 
 def is_staged_uri(url: str) -> bool:
-    """Whether ``url`` names an object-store object rather than an http endpoint."""
     return url.startswith("s3://")
 
 
 def staged_object_url(uri: str) -> str:
-    """``s3://bucket/key`` -> the path-style http URL for the active endpoint. Raises
-    :class:`StagedEndpointNotConfigured` when no endpoint is set, and ``ValueError``
-    for a uri carrying no key: a bucket alone is never a readable object."""
+    """``s3://bucket/key`` -> the path-style http URL; raises :class:`StagedEndpointNotConfigured` with no endpoint, ``ValueError`` for a keyless uri."""
     rest = uri[len("s3://"):]
     bucket, _, key = rest.partition("/")
     if not bucket or not key:

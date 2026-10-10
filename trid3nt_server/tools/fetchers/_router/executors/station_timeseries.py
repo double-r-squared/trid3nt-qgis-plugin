@@ -33,17 +33,14 @@ __all__ = [
 
 
 def _normalize_time(t: Any, mode: str | None) -> Any:
-    """Normalize a timestamp per ``ingest.per_station.time_normalize``: ``iso8601z``
-    rewrites ``"2022-09-28 00:00"`` to ``"2022-09-28T00:00Z"`` ONLY when the value
-    carries a space, so an already-ISO value passes through untouched."""
+    """Normalize a timestamp per ``time_normalize``; ``iso8601z`` rewrites only a value carrying a space."""
     if mode == "iso8601z" and isinstance(t, str) and " " in t:
         return t.replace(" ", "T") + "Z"
     return t
 
 
 def _as_date(v: Any) -> Any:
-    """Coerce a router-validated ``YYYY-MM-DD`` string to a ``date``, so a
-    ``{start:%Y%m%d}`` request template strftimes instead of raising on a str."""
+    """Coerce a ``YYYY-MM-DD`` string to a ``date`` so a ``{start:%Y%m%d}`` template can strftime."""
     if isinstance(v, _dt.date):
         return v
     try:
@@ -51,8 +48,7 @@ def _as_date(v: Any) -> Any:
     except (TypeError, ValueError):
         return v
 
-#: The generalized point-FGB column schema (coops reference). ``time_series_csv``
-#: carries the inline per-station series for SFINCS forcing.
+#: The point-FGB column schema; ``time_series_csv`` carries the inline per-station series.
 _COLUMNS = [
     "station_id", "station_name", "lon", "lat", "product", "datum",
     "time_start", "time_end", "n_timesteps",
@@ -62,8 +58,7 @@ _COLUMNS = [
 
 def _points_to_fgb(records: list[dict[str, Any]], rows: list[dict[str, Any]],
                    spec: SourceSpec) -> bytes:
-    """One Point feature per station, its row as the properties, through the one
-    vector serializer."""
+    """One Point feature per station, its row as the properties."""
     return features_to_fgb_bytes(
         [{"type": "Feature",
           "geometry": {"type": "Point", "coordinates": [rec["lon"], rec["lat"]]},
@@ -73,15 +68,12 @@ def _points_to_fgb(records: list[dict[str, Any]], rows: list[dict[str, Any]],
 
 
 def _get_json(spec: SourceSpec, url: str, params: dict[str, Any]) -> Any:
-    """GET a JSON body through the transport's retry authority."""
     body, _ct, _url = get_bytes(get_client(), url, params=params,
                                 headers={"User-Agent": spec.auth.user_agent})
     return json.loads(body)
 
 
 def _format_request(template: dict[str, Any], fmt: dict[str, Any]) -> dict[str, Any]:
-    """Each templated request value formatted over ``fmt``; a value that does not
-    format passes through as declared."""
     req: dict[str, Any] = {}
     for k, v in template.items():
         try:
@@ -97,9 +89,8 @@ def stations_to_point_fgb(
     *,
     product: str = "water_level",
 ) -> bytes:
-    """Serialize records of ``{station_id, station_name, lon, lat, rows}`` to point-FGB
-    bytes: one Point per station with the scalar rollups and the inline
-    ``time_series_csv``. An all-empty set raises ``*_EMPTY``, never a header-only FGB."""
+    """Serialize ``{station_id, station_name, lon, lat, rows}`` records to point-FGB bytes; an
+    all-empty set raises ``*_EMPTY``, never a header-only FGB."""
     import numpy as np
 
     datum = spec.normalize.datum or "MLLW"
@@ -146,13 +137,8 @@ def stations_to_point_fgb(
     return _points_to_fgb(rows_out, rows_out, spec)
 
 
-# Catalog discover + per-station loop (network). Tests monkeypatch this.
-
-
 def _guard_not_staged(spec: SourceSpec, url: str) -> None:
-    """Refuse a staged ``s3://`` uri before it reaches the transport: this executor
-    talks a REST API and cannot resolve an object-store bucket and key, so the scheme
-    raises a typed error rather than an opaque client failure."""
+    """Refuse a staged ``s3://`` uri with a typed error: this executor talks a REST API."""
     if is_staged_uri(url):
         raise router_upstream_error(
             spec.error_code_prefix,
@@ -161,7 +147,6 @@ def _guard_not_staged(spec: SourceSpec, url: str) -> None:
 
 
 def _discover_stations(spec: SourceSpec, bbox: tuple[float, float, float, float]) -> list[dict[str, Any]]:
-    """Fetch the station catalog and bbox-filter it. Network."""
     ingest = spec.ingest or {}
     cat = ingest.get("station_catalog", {})
     lat_key = cat.get("lat_key", "lat")
@@ -192,24 +177,18 @@ def _discover_stations(spec: SourceSpec, bbox: tuple[float, float, float, float]
 
 
 def _fetch_station_series(spec: SourceSpec, station: dict[str, Any], params: dict[str, Any]) -> list[dict[str, Any]]:
-    """Fetch one station's time series. Network. Returns ``[]`` on failure/empty."""
     ingest = spec.ingest or {}
     per = ingest.get("per_station", {})
     endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
     url = endpoint.url_template or endpoint.url or ""
     _guard_not_staged(spec, url)
     product = params.get("product", "water_level")
-    # A product measuring something else asks the same API differently - its own
-    # cadence, and none of the stamps that belong to a water level - so its
-    # overrides sit on the row that asks for it and replace the shared request's.
-    # A null override DROPS the shared request's key: a stamp that means nothing
-    # for this product is absent rather than empty.
+    # A product's overrides replace the shared request's; a null override DROPS the shared key.
     req_tmpl = {k: v for k, v in
                 {**per.get("request", {}),
                  **(per.get("request_by_product", {}).get(product) or {})}.items()
                 if v is not None}
-    # start/end are date objects so a "{start:%Y%m%d}" template strftimes to the
-    # CO-OPS datagetter's required YYYYMMDD (a raw str would raise on %Y).
+    # start/end are date objects so ``{start:%Y%m%d}`` strftimes to the datagetter's YYYYMMDD.
     fmt = {"id": station["station_id"], "product": product,
            "start": _as_date(params.get("start_date")), "end": _as_date(params.get("end_date"))}
     try:
@@ -238,7 +217,6 @@ def _fetch_station_series(spec: SourceSpec, station: dict[str, Any], params: dic
 
 
 def fetch_station_records(spec: SourceSpec, params: dict[str, Any]) -> list[dict[str, Any]]:
-    """Discover stations and fetch each series. Returns records with ``rows``."""
     bbox = params["bbox"]
     stations = _discover_stations(spec, bbox)
     records: list[dict[str, Any]] = []
@@ -248,29 +226,15 @@ def fetch_station_records(spec: SourceSpec, params: dict[str, Any]) -> list[dict
     return records
 
 
-# SNAPSHOT mode (``ingest.per_station.emit == "snapshot"``). One representative row
-# per station -- the latest observed or the nearest-now prediction -- instead of the
-# full time series. The flood/ebb/slack direction lives in the named
-# ``coops_currents`` selector, dispatched by ``snapshot.transform``.
-#
-# This is NOT the series path over a one-sample window. A series row reads ONE value
-# column (``value_key``) into ``{t, v}``, and a current sample is a vector: a speed
-# and a bearing observed, and predicted, a signed major velocity whose sign chooses
-# between the station's mean flood and mean ebb bearings and names the flow state.
-# The rollups the series path writes are the water level's by name (``datum``,
-# ``wl_min_m``, ``wl_max_m``, ``wl_mean_m``), and there is no "latest" among them.
-# The prediction pick is not the latest sample either: over a MAX_SLACK lookahead
-# the last row is two days out and the one anybody asked for is the nearest to now.
-# The depth bin is no pick at all - CO-OPS answers on the station's own default bin
-# and the row REPORTS which one it was, so there is nothing to declare.
+# SNAPSHOT mode (``emit == "snapshot"``): one row per station, not the series path over a
+# one-sample window: a current sample is a vector (speed and bearing; the sign of the major
+# velocity picks flood or ebb), and a prediction pick is the row nearest now, not the last one.
 
 
 def _snapshot_window(
     product: str, wcfg: dict[str, Any] | None, now: _dt.datetime
 ) -> tuple[_dt.date, _dt.date]:
-    """The now-relative ``(begin, end)`` date window for a product: ``lookback`` gives
-    ``[now-days, now]`` and ``lookahead`` gives ``[now, now+days]``, defaulting to a
-    two-day lookback."""
+    """The now-relative ``(begin, end)`` window: ``lookback`` is ``[now-days, now]``, ``lookahead`` ``[now, now+days]``."""
     cfg = (wcfg or {}).get(product) or {}
     days = int(cfg.get("days", 2))
     if cfg.get("mode") == "lookahead":
@@ -279,7 +243,6 @@ def _snapshot_window(
 
 
 def _cur_to_dt(t: Any) -> _dt.datetime | None:
-    """Parse a CO-OPS ``"YYYY-MM-DD HH:MM"`` string to a UTC datetime, else None."""
     try:
         return _dt.datetime.strptime(str(t), "%Y-%m-%d %H:%M").replace(tzinfo=_dt.timezone.utc)
     except (ValueError, TypeError):
@@ -287,7 +250,6 @@ def _cur_to_dt(t: Any) -> _dt.datetime | None:
 
 
 def _cur_iso(t: Any) -> str:
-    """Normalize ``"YYYY-MM-DD HH:MM"`` to ``"YYYY-MM-DDTHH:MMZ"``."""
     s = str(t)
     return s.replace(" ", "T") + "Z" if " " in s else s
 
@@ -295,9 +257,8 @@ def _cur_iso(t: Any) -> str:
 def coops_currents_select(
     body: dict[str, Any], product: str, now: _dt.datetime
 ) -> dict[str, Any] | None:
-    """The CO-OPS currents snapshot transform: the latest valid observed row, or the
-    predicted row nearest ``now`` with flood/ebb/slack read off the velocity sign.
-    Returns ``{speed_kn, direction_deg, datetime, bin, flow_state}`` or ``None``."""
+    """The CO-OPS currents snapshot transform: the latest valid observed row, or the predicted
+    row nearest ``now`` with flood/ebb/slack read off the velocity sign, or ``None``."""
     import math
 
     if product == "currents_predictions":
@@ -350,7 +311,6 @@ def coops_currents_select(
                 }
         return best
 
-    # observed: pick the most-recent valid (speed, direction) row.
     rows = body.get("data") or []
     best = None
     best_dt: _dt.datetime | None = None
@@ -391,8 +351,6 @@ _SNAPSHOT_SELECTORS = {"coops_currents": coops_currents_select}
 def _fetch_station_snapshot(
     spec: SourceSpec, station: dict[str, Any], params: dict[str, Any], now: _dt.datetime
 ) -> dict[str, Any] | None:
-    """Fetch + select one station's snapshot. Network. ``None`` on failure/empty
-    (one bad station never aborts the bbox)."""
     ingest = spec.ingest or {}
     per = ingest.get("per_station", {})
     snap = per.get("snapshot", {})
@@ -403,7 +361,6 @@ def _fetch_station_snapshot(
     _guard_not_staged(spec, url)
     fmt = {"id": station["station_id"], "product": product, "start": d0, "end": d1}
     req = _format_request(dict(per.get("request", {})), fmt)
-    # product-conditional extra request params (predictions -> interval=MAX_SLACK).
     for k, v in (snap.get("request_by_product", {}).get(product) or {}).items():
         req[k] = v
     try:
@@ -431,9 +388,7 @@ def _fetch_station_snapshot(
 def snapshots_to_point_fgb(
     records: list[dict[str, Any]], spec: SourceSpec, *, product: str = "currents"
 ) -> bytes:
-    """Serialize per-station snapshot records to point-FGB bytes: one Point per station
-    carrying the declared ``snapshot.columns``. An empty record set raises the typed
-    ``*_EMPTY``, never a header-only FGB."""
+    """Serialize per-station snapshot records to point-FGB bytes; an empty set raises ``*_EMPTY``."""
     if not records:
         raise router_empty_error(
             spec.error_code_prefix,
@@ -447,7 +402,6 @@ def snapshots_to_point_fgb(
 
 
 def execute_snapshot(spec: SourceSpec, params: dict[str, Any]) -> bytes:
-    """Discover stations, fetch each snapshot, serialize to point-FGB bytes."""
     now = _dt.datetime.now(_dt.timezone.utc)
     stations = _discover_stations(spec, params["bbox"])
     product = params.get("product", "currents")
@@ -460,9 +414,7 @@ def execute_snapshot(spec: SourceSpec, params: dict[str, Any]) -> bytes:
 
 
 def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
-    """Discover and fetch stations, then serialize to point-FGB bytes.
-    ``ingest.per_station.emit == "snapshot"`` selects the one-row-per-station path;
-    every other row takes the rollup and inline ``time_series_csv`` path."""
+    """Discover and fetch stations, then serialize to point-FGB bytes; ``emit == "snapshot"`` takes the one-row-per-station path."""
     if ((spec.ingest or {}).get("per_station") or {}).get("emit") == "snapshot":
         return execute_snapshot(spec, params)
     records = fetch_station_records(spec, params)

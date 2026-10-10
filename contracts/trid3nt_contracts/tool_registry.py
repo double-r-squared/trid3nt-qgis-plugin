@@ -26,10 +26,8 @@ __all__ = [
 ]
 
 
-#: The four TTL classes, one declared per atomic tool.
 TTLClass = Literal["static-30d", "semi-static-7d", "dynamic-1h", "live-no-cache"]
 
-#: Tuple form of the same four classes.
 TTL_CLASSES: tuple[str, ...] = (
     "static-30d",
     "semi-static-7d",
@@ -38,16 +36,9 @@ TTL_CLASSES: tuple[str, ...] = (
 )
 
 
-#: Retrieval tier - what DECOUPLES registration from model-facing visibility.
-#:
-#: - ``general`` - the ordinary per-turn retrieval pool.
-#: - ``door`` - a read-only engine concierge that ALSO competes in that pool.
-#: - ``template`` - excluded from the default pool and surfaced only by its
-#:   door's gate expansion.
-#: - ``catalog`` - excluded from the default pool like a template, but KEPT in
-#:   the search index, so a discovery hit can still rank and expand it.
-#: - ``internal`` - excluded from BOTH the pool and the index, with no door to
-#:   expand it: reachable only by an in-process call from another tool.
+#: Retrieval tier, decoupling registration from model-facing visibility: ``general`` is the per-turn pool; ``door``
+#: also competes in it; ``template`` is surfaced only by its door's gate expansion; ``catalog`` is out of the pool but
+#: kept in the search index; ``internal`` is in neither, reachable only by an in-process call.
 EngineTier = Literal["general", "door", "template", "catalog", "internal"]
 
 
@@ -57,22 +48,16 @@ class AtomicToolMetadata(ContractModel):
     cross-field validator - so a misconfigured tool never reaches the wire.
     """
 
-    #: The tool's function name, and the registry key.
     name: str = Field(min_length=1)
-    #: ``"live-no-cache"`` is reserved for the uncacheable-by-construction set:
-    #: interactive solicitation, envelope emission, persistence writes, solver
-    #: dispatch.
+    #: ``"live-no-cache"`` is reserved for the uncacheable-by-construction set: interactive solicitation,
+    #: envelope emission, persistence writes, solver dispatch.
     ttl_class: TTLClass
-    #: The prefix in the cache layout. Required when cacheable, and omittable
-    #: when not, since nothing is written.
+    #: The cache layout prefix; required when cacheable.
     source_class: str | None = None
-    #: DERIVED from ``ttl_class``, which already decides it: every class but
-    #: ``live-no-cache`` is cached. Unstated it resolves; stated it must agree
-    #: with the class, which the cross-field validator below is.
+    #: Derived from ``ttl_class``: every class but ``live-no-cache`` is cached; stated, it must agree.
     cacheable: bool | None = None
 
-    # Both default to the safe, opted-out value, so a tool opts in by passing
-    # the keyword rather than by remembering to.
+    # Both default to the opted-out value, so a tool opts in by passing the keyword.
 
     supports_global_query: bool = Field(
         default=False,
@@ -96,9 +81,7 @@ class AtomicToolMetadata(ContractModel):
         ),
     )
 
-    # Annotation hints a consumer reads for exposure, parallelization and
-    # capability auditing. All four default to the most CONSERVATIVE value, so
-    # a tool that says nothing is treated as the least dangerous case.
+    # Annotation hints for exposure, parallelization and capability auditing; each defaults to the most conservative value.
 
     read_only_hint: bool = Field(
         default=True,
@@ -150,10 +133,7 @@ class AtomicToolMetadata(ContractModel):
     )
 
 
-    # Two OPTIONAL fields for the engine-door family, ORTHOGONAL to the
-    # cacheable / ttl_class rule - no cross-field validator joins them. The soft
-    # convention that a door or template carries an engine slug is enforced
-    # outside this module, so the contract stays a pure shape.
+    # Engine-door fields, orthogonal to cacheable / ttl_class; the convention that a door or template carries an engine slug is enforced elsewhere.
 
     engine: str | None = Field(
         default=None,
@@ -178,9 +158,7 @@ class AtomicToolMetadata(ContractModel):
         ),
     )
 
-    # A consequential run or a heavy fetch DECLARES its confirm gate here, so
-    # membership is read from METADATA rather than from a hand-wired name set.
-    # Presence is the ONE membership signal. Default None = un-gated.
+    # A consequential run or heavy fetch declares its confirm gate here; presence is the one membership signal. None is un-gated.
     gate_spec: GateSpec | None = Field(
         default=None,
         description=(

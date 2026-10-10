@@ -141,9 +141,7 @@ def _in_polygons(line_4326: Any, source: Any) -> tuple[float, float, int]:
 def _in_mesh_cells(line: Any, uri: str, epsg: int | None) -> tuple[float, float, int]:
     """``(covered_m, length_m, epsg)`` of the line inside a mesh's own cells.
 
-    Summed over the cells the line touches: a triangulation tiles its domain
-    without overlap, so the per-cell lengths already add to the length inside it
-    and no union of tens of thousands of triangles has to be built."""
+    Per-cell lengths are summed, never unioned: a triangulation tiles without overlap."""
     import numpy as np
     import shapely
     from shapely.geometry import LineString
@@ -174,9 +172,7 @@ def covered_fraction(line: Any, within: Any,
 
     The area is polygons (what a water-body source maps) or the cells of a built
     mesh (what a triangulation actually holds), read off the file it arrived in.
-    Lengths are metres in the line's own UTM zone, never in degree space; a line
-    and an area that do not meet at all is a fact about the two inputs, so it is
-    reported as zero rather than measured further."""
+    Lengths are metres in the line's own UTM zone; a line that misses the area is zero."""
     line_4326 = _covering_line(line)
     uri = str(source_uri(within) or "")
     if uri.lower().endswith(_MESH_SUFFIXES):

@@ -91,9 +91,9 @@ async def request_spatial_input(
                 f"purpose must be one of {list(_VALID_PURPOSES)}, got {purpose!r}."
             ),
         }
-    # This body deliberately does NOT touch the websocket: a tool invoked through
-    # the emitter has no socket. The SENTINEL carries the validated args back so the
-    # turn loop can build the request from them and swap in the real result.
+    # This body deliberately does NOT touch the websocket: a tool invoked through the
+    # emitter has no socket. The SENTINEL carries the validated args back so the turn loop
+    # can build the request from them and swap in the real result.
     logger.info(
         "request_spatial_input sentinel mode=%s purpose=%s",
         norm_mode,

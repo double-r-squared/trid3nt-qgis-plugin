@@ -19,12 +19,10 @@ logger = logging.getLogger("trid3nt_server.server")
 async def _run_to_completion_shielded(coro: Awaitable[Any]) -> None:
     """Await ``coro`` so it COMPLETES even if the surrounding task is cancelled,
     then re-raise the cancellation."""
-    # A bare ``await`` in a ``finally`` is not safe under cancellation: the first
-    # suspension point inside it re-raises the pending CancelledError and the
-    # write is skipped, losing a fully computed layer on a mid-solve disconnect.
-    # Shielding a real task keeps the write running; the cancel still propagates
-    # afterwards. The persist coroutines swallow their own errors, so the parent
-    # cancel absorbed here is the only thing that can interrupt them.
+    # A bare ``await`` in a ``finally`` is not safe under cancellation: the first suspension point
+    # inside it re-raises the pending CancelledError and the write is skipped, losing a fully
+    # computed layer on a mid-solve disconnect. The persist coroutines swallow their own errors, so
+    # the parent cancel is the only interruption this absorbs.
     task = asyncio.ensure_future(coro)
     cancelled = False
     while True:
@@ -33,18 +31,13 @@ async def _run_to_completion_shielded(coro: Awaitable[Any]) -> None:
             break
         except asyncio.CancelledError:
             if task.cancelled():
-                # The inner task itself was cancelled (not just our shield) --
-                # nothing more to wait on; propagate.
                 raise
-            # Parent was cancelled but the shielded write is NOT cancelled.
-            # Remember the cancel, and keep waiting on the still-running write
-            # (the next loop awaits the same shielded task) so the persistence write
-            # COMPLETES before the cancel propagates. If the write already
-            # finished, the next ``await shield(task)`` returns immediately.
+            # Remember the cancel, and keep waiting on the still-running write (the next loop awaits
+            # the same shielded task) so the persistence write COMPLETES before the cancel
+            # propagates.
             cancelled = True
             continue
     if cancelled:
-        # The write landed; now honor the parent cancellation.
         raise asyncio.CancelledError
 
 async def _maybe_emit_chart(

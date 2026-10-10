@@ -18,9 +18,7 @@ __all__ = [
     "post_probe_point",
 ]
 
-#: A probe click waits for one HTTP round trip; generous but bounded (the
-#: server caps work at 40 raster layers per click, so this should never be
-#: reached in practice).
+#: One HTTP round trip per probe click; the server caps work at 40 raster layers.
 DEFAULT_PROBE_TIMEOUT = 30.0
 
 
@@ -30,8 +28,7 @@ class ProbePointRequestError(Exception):
 
 
 def _http_error_detail(exc: urllib.error.HTTPError) -> str:
-    """The server's own ``{"error": ...}`` message, prefixed with the HTTP
-    status."""
+    """The server's own ``{"error": ...}`` message, prefixed with the HTTP status."""
     detail = ""
     try:
         payload = json.loads(exc.read().decode("utf-8", "replace"))
@@ -50,8 +47,7 @@ def _build_probe_body(case_id: str, lon: float, lat: float) -> bytes:
 
 
 def _parse_probe_response(raw: bytes) -> Dict[str, Any]:
-    """Raw HTTP body bytes -> the result dict. A non-JSON or non-object body
-    raises rather than degrading to an empty result."""
+    """Raw HTTP body bytes -> the result dict."""
     try:
         result = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -90,15 +86,13 @@ def post_probe_point(
     return _parse_probe_response(raw)
 
 
-
-
 def _format_number(value: float) -> str:
     return f"{value:.3g}"
 
 
 def _format_single_line(entry: Dict[str, Any]) -> str:
-    """One non-series result entry -> ``"<name>: <value> <units>"``, or the
-    honest reason (``note`` / ``error``) when the point has no value."""
+    """One non-series result entry -> ``"<name>: <value> <units>"``, or the honest reason
+    (``note`` / ``error``) when the point has no value."""
     name = str(entry.get("name") or entry.get("layer_id") or "layer")
     value = entry.get("value")
     if value is None:
@@ -112,9 +106,7 @@ def _format_single_line(entry: Dict[str, Any]) -> str:
 
 
 def _format_series_line(entry: Dict[str, Any]) -> str:
-    """One series result entry -> a compact chain line with a step count and
-    a peak. A step with no value renders ``"--"`` rather than being dropped,
-    so the step count always matches the frame count."""
+    """One series result entry -> a compact chain line with a step count and a peak."""
     name = str(entry.get("name") or "series")
     series = entry.get("series") or []
     units = entry.get("units")

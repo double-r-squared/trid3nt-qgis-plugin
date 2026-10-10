@@ -1,12 +1,4 @@
-"""THE ALIGNMENT: one measured record moved onto the clock a reader asks it on.
-
-A series carries its own instants, its own unit and - off the row that
-fetched it - its own QUANTITY CLASS, and those three decide every move that may
-be made on it: a rate is conserved, a state interpolates, a class label goes to
-its nearest neighbour. A hole wider than the bound refuses rather than being
-drawn over. What was done rides back as a stamp, so a record nobody realigned
-says so too.
-"""
+"""THE ALIGNMENT: one measured record moved onto the clock a reader asks it on."""
 
 from __future__ import annotations
 
@@ -24,11 +16,8 @@ from trid3nt_server.workflows.runtime.temporal import (
 
 __all__ = ["Aligned", "align", "quantity_class"]
 
-#: How a DATA CLASS moves in time. Stated over the coverage vocabulary because
-#: the row that fetched a record already says what it measured, and an author
-#: asked to restate it would be stating it for a source they did not choose.
-#: Rainfall and flow are per-time totals; a class label has no average and no
-#: slope; everything else is a level or a condition read at an instant.
+#: How a DATA CLASS moves in time: rainfall and flow are per-time totals, a class
+#: label has no average, everything else is a level read at an instant.
 _QUANTITY: dict[str, str] = {
     "precipitation series": RATE,
     "discharge series": RATE,
@@ -58,10 +47,8 @@ def align(series: Series, *, onto: Any = None, quantity: str = STATE,
           opening_at: float = 0.0) -> Aligned:
     """One record onto the clock a reader reads it on, in the unit that reader reads.
 
-    ``onto`` is the engine's own time step, the instants a reader asks at, or
-    nothing where the record's own clock is what gets written; ``opening_at``
-    moves the whole record to where the reader's zero sits. A hole wider than
-    ``max_gap_s`` - three native intervals unstated - refuses."""
+    ``opening_at`` moves the record to the reader's zero; a hole wider than
+    ``max_gap_s`` (three native intervals unstated) refuses."""
     notes: list[str] = []
     native = min(b - a for a, b in zip(series.times_s, series.times_s[1:]))
     bound = float(max_gap_s) if max_gap_s is not None else native * _GAP_INTERVALS
@@ -99,10 +86,7 @@ def _instants(series: Series, onto: Any) -> tuple[float, ...]:
 
 
 def _moved(series: Series, instants: tuple[float, ...], quantity: str) -> Series:
-    """The record read at each instant the way its quantity class may be read.
-
-    A clock no COARSER than the record's own asks for nothing the record does
-    not already answer between two rows, so the record stands as measured."""
+    """The record read at each instant the way its quantity class may be read."""
     if instants == series.times_s:
         return series
     native = min(b - a for a, b in zip(series.times_s, series.times_s[1:]))
@@ -118,10 +102,7 @@ def _moved(series: Series, instants: tuple[float, ...], quantity: str) -> Series
 
 
 def _interval_mean(series: Series, instants: tuple[float, ...], index: int) -> float:
-    """A RATE over the interval this instant opens: the time-weighted mean.
-
-    What a rate reports is a total over the interval it was reported for, so the
-    mean over the target interval is the value that keeps that total."""
+    """A RATE over the interval this instant opens: the time-weighted mean."""
     start = instants[index]
     end = instants[index + 1] if index + 1 < len(instants) else instants[-1]
     if end <= start:
@@ -133,8 +114,7 @@ def _interval_mean(series: Series, instants: tuple[float, ...], index: int) -> f
 
 
 def _nearest(series: Series, time_s: float) -> float:
-    """The value of the sample closest to one instant - the only honest move on a
-    class label, which has no average and no slope."""
+    """The sample closest to one instant - the only honest move on a class label."""
     index = bisect_left(series.times_s, float(time_s))
     if index <= 0:
         return series.values[0]
@@ -162,8 +142,7 @@ def _method(quantity: str) -> str:
 
 
 def _step(instants: Sequence[float]) -> float:
-    """The clock's own spacing. The MEAN, not the shortest: a swept step leaves a
-    ragged last interval, and the record is not read finely because of it."""
+    """The clock's own spacing: the MEAN, since a swept step leaves a ragged last interval."""
     return (instants[-1] - instants[0]) / float(len(instants) - 1)
 
 

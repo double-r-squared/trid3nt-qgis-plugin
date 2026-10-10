@@ -1,8 +1,6 @@
-"""One three-way classifier for tool-dispatch errors: agent, user, operator.
-
-An explicit class-level ``actionability`` attribute wins outright; an
-unrecognized untyped exception stays ``"agent"``, never the operator bucket.
-"""
+"""One three-way classifier for tool-dispatch errors: agent, user, operator. An explicit class-
+level ``actionability`` attribute wins outright; an unrecognized untyped exception stays
+``"agent"``, never the operator bucket."""
 
 from __future__ import annotations
 
@@ -43,11 +41,9 @@ def classify_actionability(tool_name: str, error: BaseException) -> Actionabilit
         if explicit in ("agent", "user", "operator"):
             return explicit  # type: ignore[return-value]
 
-        # 2. Any OTHER typed tool exception (declares its own
-        #    error_code) -- the agent-visible retry surface. A credential
-        #    failure reaches the user bucket through step 1: the refusal and
-        #    the transport's auth error both DECLARE themselves user-actionable,
-        #    so nothing here has to guess a missing key from message text.
+        # 2. Any OTHER typed tool exception (declares its own error_code) -- the agent-visible retry
+        # surface. A credential failure reaches the user bucket through step 1: the refusal and
+        # the transport's auth error both DECLARE themselves user-actionable.
         code_attr = getattr(error, "error_code", None)
         if isinstance(code_attr, str) and code_attr:
             return "agent"
@@ -68,10 +64,9 @@ def classify_actionability(tool_name: str, error: BaseException) -> Actionabilit
         except Exception:  # noqa: BLE001 -- pydantic always present here, but defensive
             pass
 
-        # 5. Everything else -- an untyped, unrecognized exception (e.g. a
-        #    bare RuntimeError) -- is agent-visible/retryable: the operator
-        #    bucket must never silently swallow a message a caller expects
-        #    to read verbatim.
+        # 5. Everything else -- an untyped, unrecognized exception (e.g. a bare RuntimeError) -- is
+        # agent-visible/retryable: the operator bucket must never silently swallow a message a
+        # caller expects to read verbatim.
         return "agent"
     except Exception:  # noqa: BLE001 -- classification must never itself fail
         return "agent"

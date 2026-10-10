@@ -1,10 +1,9 @@
-"""THE SETTLED RELEASE POINT: where on the accepted mesh a source enters water.
+"""The settled release point: where on the accepted mesh a source enters water.
 
-An unplaced point sits its fraction along the domain's own centerline and walks
-downstream to the first station the triangulation holds; a supplied one is held
-inside the domain and moved onto the flowline. Either way it lands on a node the
-run's own initial state has water at, off the rim, because the solver reads a
-source on the rim as outside the domain."""
+An unplaced point walks downstream along the centerline to the first station the mesh holds;
+a supplied one is held inside the domain. Either lands on a wet node off the rim, because
+the solver reads a source on the rim as outside the domain.
+"""
 
 from __future__ import annotations
 
@@ -29,7 +28,6 @@ logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.release_p
 
 def _to_lonlat_point(xy: tuple[float, float],
                      utm_epsg: int) -> tuple[float, float]:
-    """One point in the mesh's own metres back in lon/lat."""
     from pyproj import Transformer
 
     lon, lat = Transformer.from_crs(int(utm_epsg), 4326, always_xy=True).transform(
@@ -38,13 +36,8 @@ def _to_lonlat_point(xy: tuple[float, float],
 
 
 def _domain_polygon(artifact: Any) -> Any:
-    """The polygon the accepted mesh was cut from, or a typed refusal.
-
-    A mesh cut from a bbox carries no polygon and is refused, never approximated."""
-    # The mesh records the RECIPE it was built from, so the domain a containment
-    # test runs against is the mesh's own statement of it rather than a second
-    # resolution of the same question. A point tested against four numbers is a
-    # point nobody tested.
+    """The polygon the accepted mesh was cut from; a mesh cut from a bbox refuses."""
+    # The mesh records its build recipe, so containment runs against the mesh's own domain.
     recipe = ((getattr(artifact, "provenance", None) or {}).get("recipe") or {})
     extent = recipe.get("extent")
     if isinstance(extent, (tuple, list)) or extent is None:
@@ -59,15 +52,7 @@ def _domain_polygon(artifact: Any) -> Any:
 
 def _station_on_mesh(*, centerline_utm: Any, mesh: Any,
                      fraction: float) -> tuple[tuple[float, float], str | None]:
-    """A DERIVED source: ``fraction`` along the centerline, inside the mesh.
-
-    Returns ``((lon, lat), note)`` in EPSG:4326, the note ``None`` if unmoved."""
-    # The centerline is the whole navigated stretch; the accepted mesh is only the
-    # part of it the mapped banks and the cleanup left, so a station on the line is
-    # not a station in the domain. A source the solver cannot find an element for
-    # stops the run at startup with nothing but "SOURCE POINT OUTSIDE DOMAIN", so
-    # the station is walked DOWNSTREAM to the first one the triangulation holds and
-    # the distance it travelled is said out loud.
+    # The centerline spans the whole navigated stretch but the mesh holds only part; a source with no element stops the run with "SOURCE POINT OUTSIDE DOMAIN", so the station walks downstream to one the mesh holds.
     import numpy as np
     import shapely
     from pyproj import Transformer
@@ -83,8 +68,7 @@ def _station_on_mesh(*, centerline_utm: Any, mesh: Any,
     rings = np.asarray(points_utm, dtype=float)[np.asarray(cells, dtype=np.int64)]
     tree = shapely.STRtree(
         shapely.polygons(np.concatenate([rings, rings[:, :1]], axis=1)))
-    # A cell-length stride: finer than that resolves nothing the mesh can hold,
-    # coarser than that could step over a short meshed stretch entirely.
+    # A cell-length stride: finer resolves nothing, coarser could skip a short meshed stretch.
     step = max(float(line.length) / 2000.0, 1.0)
     walked = 0.0
     while start + walked <= line.length:
@@ -108,10 +92,7 @@ def _station_on_mesh(*, centerline_utm: Any, mesh: Any,
 
 
 def _inside_domain(point: Point, polygon: Any, label: str) -> Point:
-    """Refuse a point the meshed domain does not hold; hold one it does.
-
-    What a domain with no channel through it can say about a placed point: it is
-    inside or it is not, and moving it would be this step choosing the place."""
+    """A point is inside or not; moving it would be this step choosing the place."""
     from shapely.geometry import Point as _P, shape as _shape
     from shapely.ops import transform as _transform
     from pyproj import Transformer
@@ -141,7 +122,6 @@ def _inside_domain(point: Point, polygon: Any, label: str) -> Point:
 
 
 def _inside_water(cells: Any, wet: Any) -> Any:
-    """The nodes a SOURCE may enter the water at: wet at t0, and not on the edge."""
     import numpy as np
 
     from trid3nt_server.tools.mesh.shared.nodes import interior_nodes
@@ -155,14 +135,7 @@ async def _settle_release(
     centerline: Any, centerline_utm: Any, utm_epsg: int, fraction: float,
     node_xy: Any, initial_state: Mapping[str, Any], label: str,
 ) -> tuple[Point, str]:
-    """WHERE the source enters the water -> the settled Point and how it was decided.
-
-    A supplied point the domain polygon does not hold raises rather than moves."""
-    # With no point placed the source sits at ``fraction`` along the domain's own
-    # CENTERLINE companion, walked downstream to the first station the ACCEPTED
-    # MESH holds: the centerline is the whole navigated stretch and the mesh is
-    # only the part of it the mapped banks left, so "on the line" and "in the
-    # domain" are two different claims and only the second one solves.
+    """A supplied point the domain polygon does not hold raises rather than moves."""
     if point is None:
         if centerline_utm is None:
             raise TelemacError(
@@ -187,10 +160,7 @@ async def _settle_release(
                 f"supplied point, inside the modeled domain; moved {moved_m:.0f} m "
                 "onto the flowline")
 
-    # The settled point lands LAST on the nearest node a source may enter the
-    # water at. Both steps above ask about geometry only; a bankfull domain at
-    # low flow has mapped river that is dry ground when the run opens, and a
-    # source released onto it discharges into the bed.
+    # The point lands last on the nearest node a source may enter: a bankfull domain at low flow has dry mapped river, and a source released there discharges into the bed.
     wet_utm, moved_m, node = await asyncio.to_thread(
         snap_to_wet, as_utm(placed, utm_epsg),
         node_xy=node_xy, wet=initial_state["wet"], state=initial_state["note"],
@@ -215,34 +185,29 @@ async def settle_release(
     fraction: float = 0.5,
     continue_from: str | None = None,
 ) -> dict[str, Any]:
-    """Where a source enters the water, settled against the ACCEPTED mesh.
+    """Where a source enters the water, settled against the accepted mesh.
 
-    A supplied point is held inside the domain - and onto the channel where the
-    domain has a CENTERLINE companion; an unplaced one sits ``fraction`` along
-    that centerline. Both land on the nearest node holding water at t0, and a
-    domain with no centerline and no placed point refuses rather than guessing."""
+    A supplied point is held inside the domain (and onto the centerline where there is one); an
+    unplaced one sits ``fraction`` along it. A domain with neither refuses.
+    """
     from trid3nt_server.render.pipeline_emitter import current_emitter
 
     utm_epsg = mesh_zone(mesh)
-    # The producer's own centerline runs head-to-tail the way the water does, so
-    # ``fraction`` counts from upstream without a seed to orient it.
+    # The centerline runs head-to-tail the way the water does, so ``fraction`` counts from upstream.
     centerline = getattr(domain, "companions", {}).get("centerline")
     centerline_utm = None if centerline is None else await asyncio.to_thread(
         read_centerline_utm, centerline, utm_epsg)
     node_xy, cells, _bed, _lonlat = await asyncio.to_thread(
         accepted_mesh_nodes, mesh)
     initial_state = await asyncio.to_thread(initial_state_of, continue_from, len(node_xy))
-    # WHERE A SOURCE MAY ENTER: wet at t0, and off the edge - the mesh's own rim
-    # is where boundary conditions are imposed, and a source placed on it is one
-    # the solver reads as outside the domain it solves.
+    # A source may enter where wet at t0 and off the edge; boundary conditions are imposed on the rim.
     initial_state = {**initial_state,
                      "wet": _inside_water(cells, initial_state["wet"])}
     placed, note = await _settle_release(
         point, mesh=mesh, centerline=centerline, centerline_utm=centerline_utm,
         utm_epsg=utm_epsg, fraction=fraction, node_xy=node_xy,
         initial_state=initial_state, label=label)
-    # The marker rides BEFORE the solve, so the user sees the input against the
-    # mesh rather than only in the results, and it carries the SETTLED point.
+    # The marker is emitted before the solve and carries the settled point.
     await publish_point(current_emitter(), placed, label=label,
                         basis="user" if point is not None else "derived",
                         context=slug_of(getattr(domain, "name", None)

@@ -1,10 +1,8 @@
 """The MESH display faces MDAL opens: a mesh file, and a dataset beside one.
 
-MDAL reads a ``.2dm`` directly as a mesh layer and turns the node z column into
-its "Bed Elevation" dataset. The format carries no CRS, so the layer row's
-``crs_authid`` is what names the coordinates the nodes are written in. A value
-per node that no mesh file carries is written as an SMS ASCII dataset - the
-least machinery MDAL reads - and loaded onto the mesh it was measured over.
+MDAL reads a ``.2dm`` directly and turns the node z column into its "Bed Elevation" dataset. The format carries no CRS,
+so the layer row's ``crs_authid`` names the node coordinates. A per-node value no mesh file carries is written as an
+SMS ASCII dataset and loaded onto the mesh it was measured over.
 """
 
 from __future__ import annotations
@@ -16,8 +14,7 @@ import numpy as np
 __all__ = ["MESH_ELEMENT_TAG", "MeshDisplayError", "mesh_display_path",
            "write_ascii_dataset", "write_2dm", "write_2dm_arrays"]
 
-#: The SMS element tag for a cell of N nodes. A cell of any other arity has no
-#: display face here and says so rather than being silently reshaped.
+#: The SMS element tag for a cell of N nodes; any other arity has no display face and says so.
 MESH_ELEMENT_TAG: Mapping[int, str] = {3: "E3T", 4: "E4Q"}
 
 

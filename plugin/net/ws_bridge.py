@@ -26,12 +26,8 @@ from .trid3nt_client import (
 class AgentWorker(QObject):
     """Runs connect + handshake + case create + the receive/reconnect loop."""
 
-    # NEVER name a pyqtSignal after a QObject virtual (event / eventFilter /
-    # timerEvent / childEvent / ...). A signal named ``event`` shadows the C++
-    # virtual ``QObject.event()``, so the first QEvent Qt delivers -- the
-    # ChildAdded from ``QThread(self)`` in AgentBridge.start -- makes PyQt call
-    # the attribute as the reimplemented handler: "native Qt signal is not
-    # callable", then a qFatal abort of the whole QGIS process.
+    # NEVER name a pyqtSignal after a QObject virtual (event, eventFilter, ...): it
+    # shadows the C++ virtual and PyQt aborts the whole QGIS process on the first QEvent.
     # user_id, advertised_http_base ("" if none), advertised_data_base ("" if none)
     connected = pyqtSignal(str, str, str)
     case_ready = pyqtSignal(str)       # case_id
@@ -59,26 +55,20 @@ class AgentWorker(QObject):
         self._stop = False
         self.client: Optional[AgentClient] = None
 
-    # Runs on the worker thread (wired to QThread.started).
     def run(self) -> None:
         self.client = AgentClient(
             self._url,
             token=self._token,
         )
-        # QgsAuthManager credential broker: connect-time push of stored keys +
-        # prompt-store. Best-effort -- a locked / unprovisioned auth DB is a
-        # silent no-op (the daemon's env fallback covers it).
+        # Best-effort: a locked or unprovisioned auth DB is a silent no-op.
         try:
             from .auth_broker import AuthBroker
 
             self.client.credential_broker = AuthBroker()
         except Exception:  # noqa: BLE001 -- broker is optional, never fatal
             pass
-        # The FIRST connect is fail-fast: a dead port, a bad URL or a rejected
-        # upgrade at the moment the user presses Connect surfaces immediately
-        # rather than retrying silently against a stack that was never up. An
-        # AUTH-classified failure STOPS rather than retrying, here and in the
-        # ladder alike -- a rejected token cannot be fixed by looping on it.
+        # The FIRST connect is fail-fast, and an AUTH-classified failure stops
+        # rather than retrying, here and in the ladder.
         try:
             user_id = self.client.connect()
             self.connected.emit(
@@ -101,7 +91,6 @@ class AgentWorker(QObject):
         reason = "stopped"
         try:
             while not self._stop:
-                # -- receive until stop or transport loss -------------------- #
                 try:
                     while not self._stop:
                         ev = self.client.next_event(timeout=1.0)
@@ -113,11 +102,8 @@ class AgentWorker(QObject):
                         break
                     self.reconnecting.emit(str(exc))
 
-                # -- capped-jitter reconnect ladder --------------------------- #
-                # Each re-dial reuses the SAME session_id and resumes with the
-                # current case_id, so the server re-binds the Case and replays
-                # its layers; queued outbound intent flushes FIFO. ``stop()``
-                # exits the ladder because the backoff sleep polls the flag.
+                # Each re-dial reuses the SAME session_id and resumes with the current
+                # case_id; the backoff sleep polls the stop flag.
                 while not self._stop:
                     delay_ms, backoff_ms = next_backoff(backoff_ms)
                     if not self._sleep_interruptible(delay_ms / 1000.0):
@@ -127,8 +113,6 @@ class AgentWorker(QObject):
                     except (WebSocketError, OSError) as exc:
                         text = self._failure_text(exc)
                         if is_auth_failure(text):
-                            # A dead token cannot be fixed by retrying --
-                            # exit the ladder honestly instead of looping.
                             self.auth_expired.emit(text)
                             reason = "auth-expired"
                             self._stop = True
@@ -146,15 +130,10 @@ class AgentWorker(QObject):
             self.closed.emit(reason)
 
     def _bind_startup_case(self) -> str:
-        """Bind the fresh connection to a case; returns its case_id. Under
-        ``reuse_case`` a fresh case is minted only when the user has none, and
-        every reuse rung still sends a select so case-open rehydration runs."""
+        """Bind the fresh connection to a case; returns its case_id."""
         if self._reuse_case:
-            # The live server emits ``case-list`` right AFTER the session-state
-            # the connect handshake consumed, so with neither a resumed case
-            # nor a stashed list we pump events briefly -- forwarding them to
-            # the dock as usual -- until the list lands. A no-show inside the
-            # window falls through to an honest create.
+            # The server emits ``case-list`` right AFTER the session-state the handshake
+            # consumed: pump events briefly until it lands, else fall through to a create.
             if self.client.case_id is None and self.client.last_case_list is None:
                 deadline = time.monotonic() + 5.0
                 while (
@@ -187,8 +166,7 @@ class AgentWorker(QObject):
         self._stop = True
 
     def _failure_text(self, exc: Exception) -> str:
-        """The exception, plus any error envelope the handshake drained
-        (e.g. AUTH_FAILED before a 1008 close) -- one classifiable line."""
+        """The exception, plus any error envelope the handshake drained (e.g."""
         text = f"{type(exc).__name__}: {exc}"
         err = getattr(self.client, "last_handshake_error", None)
         if isinstance(err, dict):
@@ -206,9 +184,7 @@ class AgentWorker(QObject):
             except Exception:  # noqa: BLE001
                 pass
 
-    # -- UI-thread-safe outbound verbs. Socket writes are mutex-guarded and -- #
-    # -- buffer in the client's bounded queue while disconnected, so a paused - #
-    # -- turn never hangs. A raw key passes through and is never logged here. - #
+    # UI-thread-safe outbound verbs: writes are mutex-guarded and buffer in the client's bounded queue while disconnected.
 
     def send_chat(
         self,
@@ -326,13 +302,9 @@ class AgentWorker(QObject):
 class AgentBridge(QObject):
     """Owns the QThread + worker pair; the dock talks only to this."""
 
-    # ``agent_event``, NOT ``event``: naming a signal after a QObject virtual
-    # aborts the QGIS process (see the AgentWorker signal block).
-    # ``connected`` carries (user_id, http_base, data_base) --
-    # the signature MUST match the worker's 3-arg signal it forwards at
-    # start(); a narrower signature here silently DROPS the advertised
-    # endpoints and every remote (tailnet) client falls back to localhost
-    # layer fetches.
+    # ``agent_event``, NOT ``event`` (see the AgentWorker signal block).
+    # ``connected`` must match the worker's 3-arg signal: a narrower signature
+    # silently drops the advertised endpoints and remote clients fall back to localhost.
     connected = pyqtSignal(str, str, str)
     case_ready = pyqtSignal(str)
     agent_event = pyqtSignal(str, object)
@@ -378,9 +350,7 @@ class AgentBridge(QObject):
         self._worker.reconnecting.connect(self.reconnecting)
         self._worker.resumed.connect(self.resumed)
         self._worker.auth_expired.connect(self.auth_expired)
-        # Whichever way the run loop exits, wind the thread down. (The
-        # first-connect auth path emits auth_expired and returns without a
-        # closed emission, so it must quit the thread too.)
+        # Quit the thread on every exit; the first-connect auth path emits no ``closed``.
         self._worker.failed.connect(self._thread.quit)
         self._worker.closed.connect(self._thread.quit)
         self._worker.auth_expired.connect(self._thread.quit)
@@ -394,10 +364,6 @@ class AgentBridge(QObject):
             self._thread.wait(5000)
         self._worker = None
         self._thread = None
-
-    # -- outbound: pass-through to the worker's client. Socket writes are ----- #
-    # -- mutex-guarded and buffer while disconnected; the bridge stores ------- #
-    # -- nothing of what passes through it. ---------------------------------- #
 
     def send_chat(
         self,

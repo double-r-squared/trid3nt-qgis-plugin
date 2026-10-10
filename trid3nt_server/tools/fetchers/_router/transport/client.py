@@ -40,7 +40,6 @@ _CLIENT_LOCK = threading.Lock()
 
 
 def get_client() -> httpx.Client:
-    """Return the process-wide pooled client (lazy, thread-safe singleton)."""
     global _CLIENT
     if _CLIENT is None:
         with _CLIENT_LOCK:
@@ -56,7 +55,6 @@ def get_client() -> httpx.Client:
 
 
 def _retry_after_seconds(raw: str | float | None) -> float | None:
-    """Parse a ``Retry-After`` hint (seconds, delta-seconds or HTTP-date) to seconds."""
     if isinstance(raw, (int, float)):
         return max(0.0, float(raw))
     if not raw:
@@ -76,7 +74,6 @@ def _retry_after_seconds(raw: str | float | None) -> float | None:
 
 
 def _sleep_backoff(attempt: int, retry_after: str | float | None) -> None:
-    """Sleep before the next attempt: honor ``Retry-After`` else exp backoff+jitter."""
     hinted = _retry_after_seconds(retry_after)
     if hinted is not None:
         delay = min(hinted, _BACKOFF_CAP)
@@ -88,11 +85,8 @@ def _sleep_backoff(attempt: int, retry_after: str | float | None) -> None:
 
 def retried(call: Callable[[], T], *, transient: Callable[[Exception], bool],
             label: str) -> T:
-    """Run ``call`` under this module's attempt budget and backoff, for a library
-    that owns its own socket. ``transient`` names which of its exceptions another
-    attempt may cure; any other raises at once, and the last transient one raises
-    unchanged once the budget is spent, so the caller maps it to its typed error.
-    A ``retry_after`` the exception carries is the provider's wait, and is honoured."""
+    """Run ``call`` under this module's attempt budget and backoff for a library that owns its socket: only a ``transient``
+    exception is retried, the last raises unchanged, and an exception's ``retry_after`` is honoured."""
     for attempt in range(MAX_RETRIES + 1):
         try:
             return call()
@@ -105,9 +99,7 @@ def retried(call: Callable[[], T], *, transient: Callable[[Exception], bool],
 
 
 def _send(client: httpx.Client, method: str, url: str, **kw: Any) -> httpx.Response:
-    """One request under :func:`retried`: a network failure or a 429/5xx answer is
-    another attempt, and exhaustion raises the provider's status and body verbatim.
-    Any other answer, 4xx included, comes back for the caller to classify."""
+    """One request under :func:`retried`: a network failure or 429/5xx is retried and exhaustion raises status and body verbatim."""
     def call() -> httpx.Response:
         try:
             resp = client.request(method, url, **kw)
@@ -135,16 +127,13 @@ def get_bytes(
     client: httpx.Client, url: str, *, headers: dict[str, str] | None = None,
     params: dict[str, Any] | None = None,
 ) -> tuple[bytes, str, str]:
-    """GET a whole object; return ``(body, content_type, final_url)``. Redirects are
-    followed; any 4xx classifies to a typed transport error at once."""
+    """GET a whole object; return ``(body, content_type, final_url)``; any 4xx classifies to a typed transport error at once."""
     return _body(_send(client, "GET", url, headers=headers, params=params), url)
 
 
 def get_once(client: httpx.Client, url: str, *, headers: dict[str, str] | None = None
              ) -> tuple[bytes, int]:
-    """ONE GET, no retry, no typed error: the body and status exactly as answered, for
-    a caller that already spent its retries elsewhere. Any status (500 included)
-    comes back to be read; only a network failure raises, with nothing retried."""
+    """ONE GET, no retry, no typed error: body and status as answered (500 included); only a network failure raises."""
     try:
         resp = client.get(url, headers=headers)
     except (httpx.TimeoutException, httpx.TransportError) as exc:
@@ -158,8 +147,6 @@ def post_bytes(
     params: dict[str, Any] | None = None, json_body: Any = None,
     data: dict[str, Any] | None = None,
 ) -> tuple[bytes, str, str]:
-    """POST a body and return ``(body, content_type, final_url)``: ``json_body`` sends
-    JSON, ``data`` sends form-encoded. Retried like a GET, on the assumption every
-    routed endpoint is a pure query with no side effect; a 4xx classifies at once."""
+    """POST ``json_body`` or form-encoded ``data``; retried like a GET, assuming every routed endpoint is a side-effect-free query."""
     return _body(_send(client, "POST", url, headers=headers, params=params,
                        json=json_body, data=data), url)

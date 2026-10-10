@@ -32,13 +32,10 @@ __all__ = [
     "clear_specs_for_tests",
 ]
 
-#: twin_name -> SourceSpec for every promoted row-driven tool (diagnostics/tests).
 _SPEC_REGISTRY: dict[str, SourceSpec] = {}
 
 def promoted_signature(spec: SourceSpec) -> tuple[inspect.Signature, dict[str, Any]]:
-    """Synthesize the promoted tool's signature and annotations from ``spec.params``:
-    required params first, defaulted next, then a VAR_KEYWORD absorber. A param is
-    required-in-signature iff it is ``required`` and carries no ``default``."""
+    """Synthesize the promoted signature from ``spec.params``: required params, defaulted, then a VAR_KEYWORD absorber."""
     required: list[inspect.Parameter] = []
     optional: list[inspect.Parameter] = []
     annotations: dict[str, Any] = {}
@@ -58,17 +55,12 @@ def promoted_signature(spec: SourceSpec) -> tuple[inspect.Signature, dict[str, A
         inspect.Parameter("_extra_ignored", inspect.Parameter.VAR_KEYWORD, annotation=Any)
     ]
     annotations["_extra_ignored"] = Any
-    # An animation_frames source returns an ordered list[LayerURI]; every other shape
-    # returns a single LayerURI / record dict. The return annotation is cosmetic to
-    # the inputSchema, which is built from params, but is kept honest anyway.
     ret = list if spec.shape == "animation_frames" else dict
     annotations["return"] = ret
     return inspect.Signature(params, return_annotation=ret), annotations
 
 
 def _synthesize_doc(spec: SourceSpec) -> str:
-    """The promoted tool's docstring: the row's own when it carries one, else a
-    surface derived from its caveats and corpus phrasings."""
     if spec.docstring:
         return spec.docstring
     lines = [f"{spec.name} (row-driven, source_class={spec.source_class})."]
@@ -80,9 +72,7 @@ def _synthesize_doc(spec: SourceSpec) -> str:
 
 
 def _estimator_module(spec: SourceSpec) -> str:
-    """Create a per-spec synthetic module carrying ``estimate_payload_mb``. The
-    payload-warning seam resolves the estimator off ``entry.module``, so each
-    promoted tool needs a module of its own for that lookup to land."""
+    """Create a per-spec synthetic module carrying ``estimate_payload_mb``; the payload seam resolves it off ``entry.module``."""
     mod_name = f"trid3nt_server.tools.fetchers._router._promoted.{spec.name}"
     mod = types.ModuleType(mod_name)
     mod.estimate_payload_mb = router.synthesize_payload_estimator(spec)  # type: ignore[attr-defined]
@@ -91,14 +81,11 @@ def _estimator_module(spec: SourceSpec) -> str:
 
 
 def _validate_hooks(spec: SourceSpec) -> None:
-    """Assert every ``hooks.*`` name the row declares resolves at load. The hook
-    contract is a name-string reference, so a typo or a deleted hook must fail
-    LOUDLY at registration rather than silently at first call."""
+    """Assert every ``hooks.*`` name the row declares resolves, failing LOUDLY at registration rather than at first call."""
     from .hooks import HookResolutionError, has_hook
 
     if spec.hooks is not None:
-        # Every HookSpec field IS a hook point, so the contract's own field set is
-        # the list; a hand-kept copy of it drifts the turn a point is added.
+        # Every HookSpec field IS a hook point; a hand-kept list drifts.
         for point in type(spec.hooks).model_fields:
             name = getattr(spec.hooks, point)
             if name and not has_hook(name):
@@ -106,11 +93,8 @@ def _validate_hooks(spec: SourceSpec) -> None:
                     f"row {spec.name!r} references unknown hook {point}={name!r}"
                 )
 
-    # endpoint_fallback: every entry must name a key in this row's OWN endpoints.
-    # ``resolve_endpoints`` indexes ``spec.endpoints``, never the tool registry, so
-    # an entry naming a sibling TOOL silently resolves to nothing while the row
-    # card advertises it to the model as a fallback this source has. A promise no
-    # code path can keep fails at load instead of shipping as catalog text.
+    # endpoint_fallback entries must name a key in this row's OWN endpoints: ``resolve_endpoints``
+    # indexes ``spec.endpoints``, so a sibling TOOL name would silently resolve to nothing.
     for fb in spec.endpoint_fallback:
         if fb not in spec.endpoints:
             raise ValueError(
@@ -120,17 +104,14 @@ def _validate_hooks(spec: SourceSpec) -> None:
                 "CROSS-DATASET alternative is a row of its own."
             )
 
-    # variant_by_emptiness: the emptiness-switch hook name must resolve.
     vbe = spec.output.variant_by_emptiness
     if vbe and not has_hook(vbe):
         raise HookResolutionError(
             f"row {spec.name!r} references unknown variant_by_emptiness hook {vbe!r}"
         )
 
-    # record shape: a record source MUST declare hooks.record (the router
-    # has nothing else to shape the dict), unless its executor shapes the dict
-    # itself - a borrowed-provider overlay's record IS the session's own answer.
-    # A delegate_resolve pairs with a delegate.
+    # A record source MUST declare hooks.record unless its executor shapes the dict itself
+    # (a borrowed-provider overlay's record IS the session's answer); delegate_resolve pairs with a delegate.
     if spec.output.layer_type == "record":
         record_hook = spec.hooks.record if spec.hooks is not None else None
         executor_shapes_it = (
@@ -145,9 +126,7 @@ def _validate_hooks(spec: SourceSpec) -> None:
             f"row {spec.name!r}: hooks.delegate_resolve requires hooks.delegate"
         )
 
-    # animation_frames shape: a frames-list source MUST declare both
-    # frames_plan (pre-loop resolve) and frame_bytes (per-frame COG builder); the
-    # executor has nothing else to resolve the frame set / build a frame.
+    # A frames-list source MUST declare both frames_plan and frame_bytes.
     if spec.shape == "animation_frames":
         fp = spec.hooks.frames_plan if spec.hooks is not None else None
         fb = spec.hooks.frame_bytes if spec.hooks is not None else None
@@ -157,9 +136,7 @@ def _validate_hooks(spec: SourceSpec) -> None:
                 f"hooks.frames_plan + hooks.frame_bytes"
             )
 
-    # result_model: if the row names a LayerURI-subclass result model
-    # it must resolve, and it pairs with an envelope hook (each is meaningless
-    # without the other). Fail LOUD per-spec at load, never silently at first call.
+    # result_model must resolve and pairs with an envelope hook; each is meaningless without the other.
     from trid3nt_contracts.execution import LAYER_RESULT_MODELS
 
     result_model = spec.output.result_model
@@ -175,9 +152,7 @@ def _validate_hooks(spec: SourceSpec) -> None:
             f"declared together (got result_model={result_model!r}, envelope={envelope!r})"
         )
 
-    # provenance channel: the fetch-time provenance is delivered to the
-    # envelope hook, so a row that declares output.provenance MUST declare an
-    # envelope hook to consume it (else the recorded dict has nowhere to land).
+    # output.provenance MUST pair with an envelope hook, else the recorded dict has nowhere to land.
     if spec.output.provenance and not envelope:
         raise HookResolutionError(
             f"row {spec.name!r}: output.provenance requires hooks.envelope "
@@ -186,9 +161,7 @@ def _validate_hooks(spec: SourceSpec) -> None:
 
 
 def register_spec(spec: SourceSpec) -> str:
-    """Register the row-driven surface as THE tool under ``spec.name`` and return
-    that name. Idempotent: a second registration of a present name only re-records
-    the row."""
+    """Register the row-driven surface as THE tool under ``spec.name`` and return it; idempotent (a repeat re-records the row)."""
     from trid3nt_server import tools as _tools
 
     _validate_hooks(spec)
@@ -222,9 +195,7 @@ def register_spec(spec: SourceSpec) -> str:
 
 
 def register_specs_from_tree(root: Path | None = None) -> list[str]:
-    """Walk ``fetchers/**/source.yaml``, promote each row, and return the registered
-    names. A row that fails to register -- an unresolved hook name, say -- is logged
-    and skipped, so one broken co-located file never takes down startup."""
+    """Walk ``fetchers/**/source.yaml``, promote each row and return the names; a failing row is logged and skipped."""
     registered: list[str] = []
     for spec in compose_specs_from_tree(root).values():
         try:
@@ -235,18 +206,14 @@ def register_specs_from_tree(root: Path | None = None) -> list[str]:
 
 
 def registered_spec_names() -> set[str]:
-    """The names now served by a promoted row-driven tool."""
     return set(_SPEC_REGISTRY)
 
 
 def get_spec(name: str) -> SourceSpec | None:
-    """The promoted ``SourceSpec`` for ``name``, or None when it is not row-served.
-    The in-process seam for a consumer that needs a source's raw bytes without the
-    cache and publish round trip: resolve, validate params, run the executor."""
+    """The promoted ``SourceSpec`` for ``name``, or None when it is not row-served."""
     return _SPEC_REGISTRY.get(name)
 
 
 def clear_specs_for_tests() -> None:
-    """Drop all recorded rows (tests only). Does NOT unregister the tools from
-    TOOL_REGISTRY -- pair with ``clear_registry_for_tests`` when needed."""
+    """Drop all recorded rows (tests only); does NOT unregister from TOOL_REGISTRY."""
     _SPEC_REGISTRY.clear()

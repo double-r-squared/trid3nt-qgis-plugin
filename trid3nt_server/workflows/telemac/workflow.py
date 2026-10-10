@@ -1,10 +1,8 @@
 """The TELEMAC workflow: fill, run, then read.
 
-``fill`` sets slots, expands composites and binds producers; it is repeatable and
-decides nothing. ``run`` serializes the complete sheet, stages the run directory
-and hands it to the box; it is explicit and consequential. ``publish_outputs``
-reads the primitives a template listed off the solved run and publishes each
-the way it asked."""
+``fill`` sets slots, expands composites and binds producers; it is repeatable and decides nothing.
+``run`` serializes the sheet, stages the run directory and hands it to the box; it is explicit and consequential.
+``publish_outputs`` reads the primitives a template listed off the solved run and publishes each as asked."""
 
 from __future__ import annotations
 
@@ -71,10 +69,8 @@ _DISPATCH = f"{_TELEMAC}.engine.solve_case"
 #: What the settle is called: what the deck and every later stage read it as.
 _SETTLED = "settled"
 
-#: The measurements the workflow takes of this question's world, by the KIND a
-#: composite asks for: the runner that takes it, the stage it is taken at and
-#: WHEN - before the world is meshed, before the run is settled, as the settle
-#: itself, or against the settled run.
+#: The measurements the workflow takes of this question's world, by the KIND a composite asks for: the runner and the stage
+#: it is taken at (before meshing, before the settle, as the settle, or against the settled run).
 _MEASURES: Mapping[str, tuple[str, str, str]] = MappingProxyType({
     "footprint": ("trid3nt_server.inputs.structure.structure", "prep", "world"),
     "transect": ("trid3nt_server.inputs.structure.transect", "prep", "world"),
@@ -85,12 +81,9 @@ _MEASURES: Mapping[str, tuple[str, str, str]] = MappingProxyType({
     "dredge": (f"{_TELEMAC}.authoring.reference_surface.settle_dredge",
                "author", "derive")})
 
-#: The mesher's own clean passes, under its own names, that every domain gets
-#: before anything is imposed on it. They change the TOPOLOGY, so they run ahead
-#: of the bed and the roles - a renumbering after a primitive painted node values
-#: is refused by the mesher itself. The smoothing pass is NOT among them: it folds
-#: elements beside a rim locked at one spacing, and the boundary walk that numbers
-#: a TELEMAC geometry meets the folded pair's unpaired edges as a second rim.
+#: The mesher's own clean passes every domain gets first. They change the TOPOLOGY, so they run ahead of the bed and roles
+#: (a renumbering after a primitive painted node values is refused). Smoothing is NOT among them: it folds elements beside
+#: a rim locked at one spacing, and the boundary walk meets the folded pair's unpaired edges as a second rim.
 def _clean_ops() -> list[Any]:
     from trid3nt_server.tools.mesh.tool import mesh_op
 
@@ -104,10 +97,7 @@ def _clean_ops() -> list[Any]:
 class Placed:
     """A point the run SETTLES onto a node of the accepted mesh, under ``name``.
 
-    ``point`` names the run input the user gave it in; with none, the point
-    sits ``fraction`` along the domain's own centerline - a number, or the
-    name of the input that holds one. What reads the placement reads it by
-    ``name``."""
+    ``point`` names the run input holding it; with none, it sits ``fraction`` (a number or an input name) along the domain's centerline."""
 
     name: str
     point: str | None = None
@@ -123,10 +113,7 @@ class Placed:
 class Measured:
     """A measurement the run takes against its own world, under ``name``.
 
-    ``kind`` says which; ``reads`` maps the runner's arguments to the run
-    inputs they are read off, by name, and ``asked`` states the literals only
-    this question can state. The mesh, the line, the domain and the settled run
-    are the workflow's and are never restated here."""
+    ``kind`` picks the runner; ``reads`` maps its arguments to run inputs by name; ``asked`` states the literals only this question can state."""
 
     name: str
     kind: str = ""
@@ -163,11 +150,8 @@ async def _read_named(env: Any, value: Any) -> Any:
 
 
 def _painted(row: Mapping[str, Any]) -> list[Primitive]:
-    """One table row -> the ONE layer the run publishes of it: the temporal layer
-    where the row varies in time, the final frame where it does not.
-
-    A still beside a time series is a copy of a frame the temporal layer already
-    carries; a picture of one instant is a render of that layer."""
+    """One table row -> the ONE layer the run publishes of it: the temporal layer where the row varies in time, the final frame where it does not.
+    A still beside a time series would copy a frame the temporal layer already carries."""
     from trid3nt_server.workflows.telemac.modules.outputs import field
 
     token, module, style = row["token"], row["module"], row.get("style")
@@ -179,11 +163,8 @@ def _painted(row: Mapping[str, Any]) -> list[Primitive]:
 @dataclass(frozen=True, slots=True)
 class _Written:
     """One variable a result file carries, and the layer it is published as.
-
-    ``spelling`` is the file's own name for it, empty for a row the result does
-    not carry; ``first`` names the file whose layer carries a spelling this file
-    repeats, ``rowed`` whether a module row names it, and ``withheld`` the
-    module's own mark on a slot its engine never writes, which no layer reads."""
+    ``spelling`` is the file's own name (empty for a row the result lacks); ``first`` names the file whose layer carries a repeated spelling;
+    ``rowed`` whether a module row names it; ``withheld`` the module's mark on a slot its engine never writes."""
 
     primitive: Primitive
     file: str
@@ -196,16 +177,8 @@ class _Written:
 def _written(run: Mapping[str, Any],
              solved: Callable[[str], Solved]) -> list[_Written]:
     """EVERY variable this run wrote -> the one layer each is published under.
-
-    THE RESULT FILE IS THE LIST. The module's rows come first, in the table's
-    own order, styled and captioned from the row; then every variable a result
-    file carries that no row resolved to, under the spelling the file itself
-    carries. A spelling two of a run's files both carry is ONE layer, off the
-    first row that names it: a coupled module writes its host's tracers into its
-    own file too, and two layers of one name are two pictures nobody can tell
-    apart. A table decides how a variable is drawn, never whether it is drawn:
-    a slot the module's own source marks as never written is carried here with
-    that mark and published by no layer."""
+    Module rows come first in table order, then every variable a result file carries that no row resolved; a spelling two files carry is ONE layer.
+    A table decides how a variable is drawn, never whether; a slot marked never-written is carried with that mark and published by no layer."""
     from trid3nt_server.workflows.telemac.modules.outputs import field
 
     written: list[_Written] = []
@@ -228,8 +201,7 @@ def _written(run: Mapping[str, Any],
         try:
             variable, _ = read.variable(str(row["token"]))
         except OutputEmpty:
-            # A row the result does not carry names nothing in it; the read of
-            # it is skipped downstream and it claims no spelling here.
+            # A row the result does not carry claims no spelling and is skipped downstream.
             written.extend(_Written(p, read.result_file, "", True)
                            for p in _painted(row))
             continue
@@ -263,9 +235,7 @@ def _written(run: Mapping[str, Any],
 
 def _account(written: Sequence[_Written], layers: Sequence[LayerURI],
              why: Mapping[Primitive, str]) -> None:
-    """Journal what became of every variable a result file carries, read off
-    the layers the publish SURFACED - so a note never says a variable is on the
-    map that the layer list does not show."""
+    """Journal what became of every variable a result file carries, read off the layers the publish SURFACED."""
     from trid3nt_server.render.formats import quantity_of
     from trid3nt_server.workflows.runtime.journal import journal_note
 
@@ -287,8 +257,7 @@ def _account(written: Sequence[_Written], layers: Sequence[LayerURI],
                          "under the spelling the result file carries")
 
 
-#: How long a stated value is printed before the doc names its shape instead: a
-#: whole tracer array spelled out crowds the keywords around it off the page.
+#: How long a stated value is printed before the doc names its shape: a whole tracer array crowds the keywords off the page.
 _VALUE_CHARS = 48
 
 
@@ -316,19 +285,9 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
                           params: Mapping[str, Any],
                           anchors: Sequence[Mapping[str, Any]] = ()
                           ) -> LayerURI:
-    """Read what the run wrote off it and publish every variable.
-
-    WHAT THE RESULT FILES WROTE is the outputs list - the host's and each
-    coupled module's - published as ONE layer each: the temporal one where the
-    row varies in time, the final frame where it does not, styled from the
-    module row that names it and under the file's own spelling where no row
-    does. A row naming a variable the result does not carry is skipped, and a
-    variable a file carries that reaches no layer is journalled by name. The
-    template's own list is the reads it PLACED beside them. Each module's result
-    is read ONCE; a coupled module's own file goes through its own wrapper. A
-    chart's reference is a callable computing lines beside the read, or another
-    primitive read where the chart's own is anchored and drawn as a line. A
-    placed read the result lacks refuses."""
+    """Read what the run wrote and publish every variable, ONE layer each (temporal where the row varies in time, else the final frame).
+    Module rows style the layer; a variable no row names goes under the file's own spelling and one reaching no layer is journalled by name. Each module's result is read ONCE.
+    A chart's reference is a callable or another primitive read; a placed read the result lacks refuses."""
     solved: dict[str, Solved] = {}
 
     def _solved(module: str) -> Solved:
@@ -350,9 +309,7 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
         try:
             return read.body.READS[key.kind](key, read)
         except OutputEmpty as exc:
-            # A row of the module's OWN table the result does not carry is
-            # skipped, and the journal says why; a read the template PLACED is
-            # a refusal.
+            # A row of the module's OWN table the result lacks is skipped and journalled; a PLACED read is a refusal.
             if key in published_keys:
                 raise
             why[key] = str(exc)
@@ -422,10 +379,7 @@ def _note(caption: str, read: Any) -> None:
 
 
 def _record(solved: Solved, *, name: str) -> LayerURI:
-    """The run's own record: the mesh every published group rides.
-
-    It binds no group and ranks none of the rows the run published, so it is
-    DRAWN rather than measured; its extent is what the camera frames."""
+    """The run's own record: the mesh every published group rides; it binds no group, so it is DRAWN rather than measured."""
     from trid3nt_server.store import objects as storage
 
     return LayerURI(
@@ -438,10 +392,7 @@ def _record(solved: Solved, *, name: str) -> LayerURI:
 
 def stated(*, steering: type, keywords: Mapping[str, Any]) -> dict[str, Any]:
     """The run's own keyword values by identifier, resolved ONCE before any stage.
-
-    The template's assertions under the floor that overrides them, so a stage
-    that runs before the steering file is filled reads the value it will be
-    written with. A composite has no number of its own and is absent."""
+    The template's assertions under the floor that overrides them; a composite has no number of its own and is absent."""
     out = {name: value for name, value in steering.ASSERTED.items()
            if value is not None and name in steering.MODULE_INPUT}
     return {**out, **_floor(steering, keywords)[0]}
@@ -449,8 +400,7 @@ def stated(*, steering: type, keywords: Mapping[str, Any]) -> dict[str, Any]:
 
 def _floor(steering: type, keywords: Mapping[str, Any]
            ) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
-    """The raw keyword floor routed onto this run's bodies -> the carrier's
-    values by identifier, and each coupled module's."""
+    """The raw keyword floor routed onto this run's bodies -> the carrier's values and each coupled module's, by identifier."""
     if keywords and not isinstance(keywords, Mapping):
         raise SlotRefused(
             f"keywords takes a mapping of the engine's own keyword names to "
@@ -469,11 +419,8 @@ def _floor(steering: type, keywords: Mapping[str, Any]
 
 
 def run_bodies(steering: type) -> list[type]:
-    """This run's bodies in DECK ORDER: the carrier, then each module its own
-    coupling statement names.
-
-    Read off the declaration, so the names a floor may qualify are known before
-    any fill has run."""
+    """This run's bodies in DECK ORDER: the carrier, then each module its coupling statement names.
+    Read off the declaration, so the names a floor may qualify are known before any fill."""
     from trid3nt_server.workflows.telemac.modules import wrapper_for
 
     coupled = steering.ASSERTED.get("coupling") or ()
@@ -495,13 +442,11 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
     stated, coupled = _floor(steering, keywords)
 
     async def fill(values: Mapping[str, Any], edits: Mapping[str, Any]) -> Sheet:
-        # A composite may read fetched data at the fill - a raster sampled at
-        # the mesh's nodes - so the fill runs off the loop.
+        # A composite may read fetched data at the fill, so the fill runs off the loop.
         sheet = await asyncio.to_thread(
             fill_slots, steering, template=workflow, produced=dict(produced),
             params=dict(values), settled=settled, **{**stated, **edits})
-        # After the fill, because the coupled decks are what the carrier's own
-        # coupling composite wrote into the sheet's files.
+        # After the fill: the coupled decks are what the carrier's coupling composite wrote into the sheet's files.
         return fill_coupled(sheet, coupled) if coupled else sheet
 
     sheet = await _review(fill, params, steering=steering, workflow=workflow,
@@ -518,11 +463,7 @@ async def run_sheet(*, sheet: Sheet, settled: Mapping[str, Any],
                     dispatch: str, cores: Any,
                     display: str = "") -> dict[str, Any]:
     """A complete sheet: serialize, stage, hand it to the box -> the run handle.
-
-    Nothing is listed as readable that the run does not carry. The handle names
-    every variable the deck asked for, because what the run wrote is decided
-    here - where the coupled bodies and the declared tracers are both in hand -
-    and not again where it is read."""
+    The handle names every variable the deck asked for; what the run wrote is decided here, where the coupled bodies and declared tracers are in hand."""
     module, _, attribute = str(dispatch).rpartition(".")
     to_the_box = getattr(import_module(module), attribute)
     coupled = dict(sheet.resolved()).get("COUPLING WITH")
@@ -546,9 +487,8 @@ async def run_sheet(*, sheet: Sheet, settled: Mapping[str, Any],
             "tracer_names": dict(sheet.resolved()).get("NAMES OF TRACERS")}
 
 
-#: How a slot's ORIGIN reads on the card: which door served the value, and what
-#: the basis beside it says. The card is a view of the sheet, so the row's name
-#: is the keyword's own identifier and an edit of it is another fill.
+#: How a slot's ORIGIN reads on the card: which door served the value and its basis. The row's name is the keyword's
+#: identifier; an edit of it is another fill.
 _ORIGIN_DOORS: Mapping[Origin, tuple[str, str]] = {
     Origin.TEMPLATE: ("scenario", "derived"),
     Origin.USER: ("user", "user"),
@@ -571,11 +511,8 @@ def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
     rows += _written_rows(sheet)
     rows += _serial_rows(sheet)
     rows += [_open_row(slot) for slot in sheet.required()]
-    # The advanced fold reads down the dictionary's own RUBRIQUES, and inside one
-    # down the dictionary's own order - the sections the engine's documentation
-    # is written in, rather than a flat thousand-row list. A keyword the sheet
-    # GENERATES is already a written row above; the fold is engine DEFAULTS, and
-    # a generated value is not one.
+    # The advanced fold reads down the dictionary's RUBRIQUES and, inside one, its own order. A keyword the sheet GENERATES
+    # is already a written row above; the fold is engine DEFAULTS only.
     generated = {body.PRINTOUTS for body, _, _ in _decks(sheet)}
     rest = [slot for name, slot in sheet.body.MODULE_INPUT.items()
             if name not in sheet.filled and name not in generated
@@ -586,10 +523,7 @@ def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
 
 def _fetcher_rows() -> list[ParamSheetRow]:
     """One row per DATA slot the match filled: the ranked list, pick highlighted.
-
-    The card renders the list the model was given, so the two cannot describe
-    one run differently. Not editable here - a source is superseded by supplying
-    the slot, which is a different door."""
+    The card renders the list the model was given. Not editable: a source is superseded by supplying the slot."""
     from trid3nt_server.workflows.runtime.journal import run_choices
 
     return [ParamSheetRow(
@@ -605,12 +539,7 @@ def _fetcher_rows() -> list[ParamSheetRow]:
 
 def _fetcher_rows() -> list[ParamSheetRow]:
     """WHAT THE CUT COVERS, over the water and over the land, one row each.
-
-    The share of this domain measured by nothing is a number a person weighs
-    BEFORE the solve, so it is on the card the fill is reviewed on and not only
-    on the journal the run is read back from. Not editable: what covers a
-    domain is changed by an op or by supplying the slot, never by typing over
-    the share."""
+    On the card so the unmeasured share is weighed BEFORE the solve. Not editable: an op or supplying the slot changes it."""
     from trid3nt_server.workflows.runtime.journal import run_coverage
 
     return [ParamSheetRow(
@@ -622,8 +551,7 @@ def _fetcher_rows() -> list[ParamSheetRow]:
 
 
 def _decks(sheet: Sheet) -> list[tuple[Any, list[str], Mapping[str, Any]]]:
-    """Every body this run writes a deck for, the tracers each carries, and what
-    that deck states - the row a variable's own condition is read against."""
+    """Every body this run writes a deck for, its tracers, and what that deck states - the row a variable's condition is read against."""
     from trid3nt_server.workflows.telemac.modules import wrapper_for
 
     return ([(sheet.body, [row.name for row in sheet.tracers], sheet.stated())]
@@ -633,10 +561,7 @@ def _decks(sheet: Sheet) -> list[tuple[Any, list[str], Mapping[str, Any]]]:
 
 def _coupled_rows(sheet: Sheet) -> list[ParamSheetRow]:
     """What each COUPLED deck of this run states, one group per deck in deck order.
-
-    The value is read against that module's own dictionary, so the row carries
-    the unit and the bounds the coupled keyword is taken in, and the group names
-    the body - two modules may spell one keyword and mean different numbers.
+    Read against that module's own dictionary, so the row carries its unit and bounds and the group names the body (two modules may spell one keyword).
     Not editable: the review's own filter answers for the carrier's sheet."""
     from trid3nt_server.workflows.telemac.modules import wrapper_for
 
@@ -646,9 +571,7 @@ def _coupled_rows(sheet: Sheet) -> list[ParamSheetRow]:
         wrapper = wrapper_for(module)
         user = set(body.get("stated", ()))
         for identifier, value in body["slots"].items():
-            # KEYWORDS ONLY: a coupled body holds its composites unexpanded
-            # until the serializer fills it, and a composite has neither the
-            # unit nor the range a card row is rendered with.
+            # KEYWORDS ONLY: a coupled body holds composites unexpanded until the serializer fills it, and a composite has no unit or range.
             slot = wrapper.MODULE_INPUT.get(identifier)
             if slot is None or value is None:
                 continue
@@ -669,9 +592,7 @@ def _coupled_rows(sheet: Sheet) -> list[ParamSheetRow]:
 
 def _written_rows(sheet: Sheet) -> list[ParamSheetRow]:
     """What each deck of this run WRITES, expanded, in the module's own order.
-
-    The keyword is generated from the module's table, so the card states it here
-    rather than reading it off a slot nobody filled."""
+    Generated from the module's table, so the card states it rather than reading a slot nobody filled."""
     rows = []
     for body, tracers, stated in _decks(sheet):
         if not body.PRINTOUTS:
@@ -689,10 +610,7 @@ def _written_rows(sheet: Sheet) -> list[ParamSheetRow]:
 
 def _serial_rows(sheet: Sheet) -> list[ParamSheetRow]:
     """What a deck the engine cannot partition says about the run's sizing class.
-
-    A body that spells no processor keyword runs on one core whatever class was
-    asked for, and the card says so rather than leaving the lever looking like
-    it did something."""
+    A body with no processor keyword runs on one core whatever class was asked, and the card says so."""
     return [ParamSheetRow(
         name=f"{body.MODULE}.cores", value="serial: this engine runs on one core",
         desc="How many cores this module's solve is partitioned across.",
@@ -758,8 +676,7 @@ async def _review(fill: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
         tool_name=workflow, mode=input_mode, entries=_entries(rows()),
         params={}, present=card, apply_revision=revise)
     if not outcome.proceed:
-        # A refusal keeps the code of its reason; only a person's own cancel is
-        # the decline code every gate in the tree cancels under.
+        # A refusal keeps its reason's code; only a person's own cancel is the decline code every gate cancels under.
         raise TelemacError(
             outcome.cancel_reason or f"{workflow} was cancelled at the review.",
             error_code={"physics": PHYSICS_INPUT_REQUIRED, "no_session": "NO_SESSION"}
@@ -770,8 +687,7 @@ async def _review(fill: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
 
 
 def _strings(value: Any) -> set[str]:
-    """Every plain string a template's assertions carry: the params a keyword of
-    it reads by name are among them."""
+    """Every plain string a template's assertions carry, the params a keyword reads by name among them."""
     if isinstance(value, str):
         return {value}
     if isinstance(value, Mapping):
@@ -829,10 +745,7 @@ def _slot_row(name: str, row: Any) -> ParamSheetRow:
 
 def _editor_bounds(slot: Any) -> tuple[float, float] | None:
     """The range a card clamps this keyword's editor to, or nothing at all.
-
-    ONE pair bounds the whole value; a keyword the sidecar rows a pair per
-    element for - a speed beside a bearing - has no single range an editor
-    could clamp to, and the refusal at the fill names the element that missed."""
+    ONE pair bounds the whole value; a keyword with a pair per element has no single range, and the fill's refusal names the element."""
     return slot.bounds[0] if len(slot.bounds) == 1 else None
 
 
@@ -848,9 +761,7 @@ def _default_row(slot: Any) -> ParamSheetRow:
     """One slot this run leaves to the engine, under the advanced fold.
 
     Carries the value the engine will use rather than an empty."""
-    # A slot the dictionary answers for carries a DEFAULT basis; one it answers
-    # for nobody carries the same basis the open mandatory rows do, because there
-    # is no default there to call one.
+    # A slot the dictionary answers for carries a DEFAULT basis; one it answers for nobody carries the open-mandatory basis, as there is no default.
     return ParamSheetRow(
         name=slot.identifier,
         value=None if slot.is_open else slot.engine_default,
@@ -868,12 +779,8 @@ def _group(slot: Any) -> str:
 
 class TelemacWorkflow(Workflow):
     """TELEMAC: the template module, read by its own names.
-
-    A template DECLARES - STEERING and the coupling on it, DATA, PARAMS, OUTPUTS,
-    CAPTIONS, DOC, and the run's own files beside them - and this builds
-    every stage off those declarations: the world, the mesh, the placements, the
-    settle, the fill, the solve and the publish. Nothing here restates a
-    template, and a name a template does not state takes the default beside it."""
+    A template DECLARES STEERING (and its coupling), DATA, PARAMS, OUTPUTS, CAPTIONS, DOC and its run files; this builds every stage off them.
+    Nothing here restates a template, and a name a template does not state takes the default beside it."""
 
     engine = "telemac"
     solve_step = "solve"
@@ -913,13 +820,9 @@ class TelemacWorkflow(Workflow):
                 LEVEL: PRESCRIBED_UNITS["elevation"]}
 
     def published_units(self) -> Mapping[str, str]:
-        """The unit each variable this run publishes is written in, by the name
-        the result file carries.
-
-        Three statements, all the deck's own: the module's variable table, the
-        rows every coupled module appends behind it, and the 32-character
-        tracer text the deck writes its own tracers as. A row that observes one
-        of them is read in that unit."""
+        """The unit each variable this run publishes is written in, by the name the result file carries.
+        Three statements, all the deck's own: the module's variable table, the rows every coupled module appends,
+        and the 32-character tracer text the deck writes its tracers as."""
         from .modules import wrapper_for
         from .modules.sheet import tracer_text
 
@@ -935,11 +838,8 @@ class TelemacWorkflow(Workflow):
         return published
 
     def run_window_s(self, keywords: Mapping[str, Any]) -> float | None:
-        """How long this run's solve covers, as THIS module spells it, under the
-        floor that may have moved it.
-
-        A matched series source has to hold a record over it, so the number the
-        deck will write is the number the match filters on."""
+        """How long this run's solve covers, as THIS module spells it, under the floor that may have moved it.
+        A matched series source filters on the number the deck will write."""
         return self.steering.seconds(
             stated(steering=self.steering, keywords=keywords))
 
@@ -983,11 +883,8 @@ class TelemacWorkflow(Workflow):
         return {role: names[0] for role, names in slots.items()}
 
     async def launch(self, state: Fill) -> RunResult:
-        """The run, in order: the world, the mesh and its files, what the run
-        places and measures on it, the settle, the sheet, the solve, the outputs.
-
-        Every stage writes what it produced into the run's one mapping and
-        reads what it needs off it by plain name."""
+        """The run, in order: the world, the mesh and its files, what the run places and measures, the settle, the sheet, the solve, the outputs.
+        Every stage writes into the run's one mapping and reads off it by plain name."""
         from trid3nt_server.tools.mesh.step import build_declared_mesh, keep_mesh
         from trid3nt_server.render.pipeline_emitter import (begin_substeps,
                                                             current_emitter,
@@ -1040,15 +937,11 @@ class TelemacWorkflow(Workflow):
                     supplied=await given(self._states("SUPPLIED_MESH", None)),
                     tool=self.name, input_mode=env.input_mode,
                     fresh=bool(state.carried.get("restart_clean")))
-        # THE FILES THIS ENGINE ASKS THE ACCEPTED MESH FOR, written from it before
-        # anything reads one: the boundary numbering it measures is what every
-        # stage below reads to know which face carries what.
+        # The files this engine asks the accepted mesh for are written from it before anything reads one: its boundary numbering says which face carries what.
         await stage("mesh_files", telemac_mesh_files, mesh=run["mesh"])
         await keep_mesh(run["mesh"])
         if inflow:
-            # THE OPEN-CHANNEL ADDITION: whether a run CARRIES a discharge is a
-            # run-time fact, so the author decides it off the carrier it is
-            # handed, and an absent one authors no channel.
+            # THE OPEN-CHANNEL ADDITION: whether a run CARRIES a discharge is a run-time fact, decided off the carrier handed in; an absent one authors no channel.
             await stage("channel", open_channel, mesh=run["mesh"],
                         files=run["mesh_files"], carrier=await read(env, inflow),
                         stage=await read(env, level) if level else None,
@@ -1073,9 +966,8 @@ class TelemacWorkflow(Workflow):
             await stage(_SETTLED, open_water, **await self._opening(
                 env, domain, level, inflow), continue_from=previous)
         await measure("derive")
-        # A CONTEXT row's product is the SENTENCE, so one nothing read is asked
-        # all the same once everything it could stand on is in hand; a row the
-        # module fills a keyword from is read here, before the sheet.
+        # A CONTEXT row's product is the SENTENCE, so one nothing read is asked once everything it could stand on is in hand;
+        # a row a module fills a keyword from is read here, before the sheet.
         for row in self.data:
             if row.is_context and row.name not in run:
                 run[row.name] = await _produce(env, row)
@@ -1103,8 +995,7 @@ class TelemacWorkflow(Workflow):
             cores=run.get("cores") if "cores" in declared else None)
         await keep_mesh(run["mesh"], solved.get("run_id"))
         outputs, captions = self._outputs()
-        # A primitive's point, line and band name inputs of the run; each is
-        # read here and rejoins its primitive at publish.
+        # A primitive's point, line and band name run inputs; each is read here and rejoins its primitive at publish.
         anchors = [{"at": await given(p.at), "along": await given(p.along),
                     "within": await given(p.within)} for p in outputs]
         value = await stage(
@@ -1114,8 +1005,7 @@ class TelemacWorkflow(Workflow):
         return RunResult(value=value, results=dict(run))
 
     def _declared(self, kind: type) -> tuple[Any, ...]:
-        """Every placement or measurement the template module declares, in the
-        order it declares them."""
+        """Every placement or measurement the template module declares, in declared order."""
         return tuple(value for value in vars(self.template).values()
                      if isinstance(value, kind))
 
@@ -1192,15 +1082,11 @@ class TelemacWorkflow(Workflow):
         return tool.build_mesh(
             mesher=_MESHER, kind=_MESH_KIND, extent=domain,
             resolution_m="mesh_resolution_m",
-            # THE RIM IS THE ASK'S TO SIZE: no sizing function the library has
-            # measures the domain's own outline, so an undeclared rim comes back
-            # an order of magnitude past the size word, and the granularity lever
-            # is the user's.
+            # THE RIM IS THE ASK'S TO SIZE: no library sizing function measures the domain's outline, so an undeclared rim
+            # comes back an order of magnitude past the size word; granularity is the user's.
             ops=[mesh_op("set_rim_size"), *_clean_ops(),
                  mesh_op("set_bed", source=slots[BED]),
-                 # The runs ride on the DOMAIN: the producer measured them where
-                 # it cut the polygon, and a drawn outline carries the ones the
-                 # canvas asked for.
+                 # The runs ride on the DOMAIN: the producer measured them where it cut the polygon; a drawn outline carries the canvas's.
                  mesh_op("set_boundary_roles", runs=domain)])
 
     async def _opening(self, env: Any, domain: str, level: str,
@@ -1212,22 +1098,16 @@ class TelemacWorkflow(Workflow):
         declared = {prm.name for prm in self.params}
         return {
             "mesh": run["mesh"], "files": run["mesh_files"],
-            # WHAT THE WATER STANDS AT: the channel's own measurement where this
-            # question has one, else the level slot, else nothing - and a bed
-            # stated as a depth needs nothing.
+            # WHAT THE WATER STANDS AT: the channel's own measurement, else the level slot, else nothing; a bed stated as a depth needs nothing.
             "level": (run["channel"] if inflow
                       else await read(env, level) if level else None),
             "geometry": self._file("GEOMETRY_FILE", "geometry.slf"),
             "boundary": self._file("BOUNDARY_CONDITIONS_FILE", "boundary.cli"),
             "result": self._result(),
             "mesh_resolution_m": run["mesh_resolution_m"],
-            # THE CLOCK IS THE MODULE'S: how a run length is spelled is the
-            # module's own statement, so the settle reads the seconds the deck
-            # was written for rather than a lever restating it.
+            # THE CLOCK IS THE MODULE'S: the settle reads the seconds the deck was written for, not a lever restating them.
             "duration_s": self._clock(run),
-            # A deck that STATES the depth an open edge is designated at is one
-            # whose sea state is prescribed across that edge, and a mesh where
-            # nothing reaches it is sealed.
+            # A deck that STATES the depth an open edge is designated at prescribes the sea state across it, so a mesh where nothing reaches it is sealed.
             **({"deck": self.name,
                 "open_depth_threshold_m": run["open_depth_threshold_m"]}
                if "open_depth_threshold_m" in declared else {}),
@@ -1261,20 +1141,14 @@ class TelemacWorkflow(Workflow):
 
     def _clock(self, run: Mapping[str, Any] | None = None) -> Any:
         """How long the settle opens this run's water for, as the module spells it.
-
-        One keyword where the module names the window itself, the step and the
-        count where it names those; the deck has to state each, and that refusal
-        stands at import. A module that does not march in time spells none."""
+        One keyword where the module names the window, the step and count where it names those; the deck must state each (refused at import).
+        A module that does not march in time spells none."""
         spelled = [self._asserted(run, keyword) for keyword in self.steering.CLOCK]
         return spelled[0] if len(spelled) == 1 else spelled or None
 
     def _asserted(self, run: Mapping[str, Any] | None, keyword: str) -> Any:
         """One value the DECK itself states, read at RUN time off the floor.
-
-        A stage settled at a number the deck was not written at describes a
-        different run, and the floor may have moved that number before the deck
-        writes it, so the stage reads it rather than being built from it. The
-        deck still has to state it, and that refusal stands at import."""
+        The floor may move the number before the deck writes it, so the stage reads it rather than being built from it; the deck must state it (refused at import)."""
         if self.steering.ASSERTED.get(keyword) is None:
             raise PlanValidationError(
                 f"the workflow settles this question's run on the {keyword} its "
@@ -1283,9 +1157,7 @@ class TelemacWorkflow(Workflow):
 
     def _file(self, keyword: str, fallback: str) -> str:
         """One file the deck itself names, read off the body that names it.
-
-        The deck's own GEOMETRY / BOUNDARY CONDITIONS / RESULTS statements ARE
-        the run directory's names; restating them would let the two drift."""
+        The deck's GEOMETRY / BOUNDARY CONDITIONS / RESULTS statements ARE the run directory's names; restating them would let the two drift."""
         named = self.steering.ASSERTED.get(keyword)
         return str(named) if isinstance(named, str) and named else fallback
 
@@ -1314,10 +1186,7 @@ class TelemacWorkflow(Workflow):
 
     def _stated_keywords(self) -> str:
         """The deck's own opinions, keyword by keyword, in dictionary order.
-
-        Generated off ASSERTED so the doc cannot claim an opinion the deck does
-        not hold; a value the run MEASURES is named as measured rather than
-        printed, because it has no number until the run has one."""
+        Generated off ASSERTED so the doc cannot claim an opinion the deck does not hold; a value the run MEASURES is named as measured."""
         body = self.steering
         rows = []
         for name, slot in body.MODULE_INPUT.items():
@@ -1347,9 +1216,7 @@ class TelemacWorkflow(Workflow):
 
 def _previous(steering: type, keywords: dict[str, Any]) -> str | None:
     """The module's previous-computation file, taken off the keyword floor.
-
-    The settle stages it and reads the state it opens at, and the sheet names
-    the staged copy, so the floor never writes the caller's uri into the deck."""
+    The settle stages it and the sheet names the staged copy, so the floor never writes the caller's uri into the deck."""
     for name in list(keywords):
         body, identifier = identify_on(run_bodies(steering), name)
         if body is steering and identifier == CONTINUATION:
@@ -1359,9 +1226,7 @@ def _previous(steering: type, keywords: dict[str, Any]) -> str | None:
 
 def _signature(runner: str) -> frozenset[str]:
     """The keyword names one measurement runner takes, by ONE attribute lookup.
-
-    A name the module does not carry refuses here rather than at the call, so a
-    measurement nothing takes is seen where the template states it."""
+    A name the module does not carry refuses here rather than at the call."""
     from inspect import signature
 
     module, _, name = runner.rpartition(".")

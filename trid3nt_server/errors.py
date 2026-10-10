@@ -1,10 +1,7 @@
 """The base of the typed-error tree: a failure carrying the code the emitter renders.
 
-It lives at the package root because BOTH the input layer and the declarative
-library raise over it, and the input layer sits below the library - an input
-module that reached up into ``workflows`` would close an import cycle, since
-importing any workflows module registers the TELEMAC solver and pulls the whole
-tool registry back through the templates.
+It lives at the package root because the input layer sits below the library and both raise over it;
+importing any workflows module registers the TELEMAC solver and would close an import cycle.
 """
 
 from __future__ import annotations

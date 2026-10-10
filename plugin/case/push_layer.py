@@ -26,9 +26,7 @@ __all__ = [
     "upload_layer_bytes",
 ]
 
-#: Generous default -- a pushed layer can legitimately be tens of MB (the
-#: agent enforces the real 200 MB cap; this is just a client-side patience
-#: budget for the upload + ingest round trip).
+#: Client-side patience budget; the agent enforces the real 200 MB cap.
 DEFAULT_INGEST_TIMEOUT = 120.0
 
 
@@ -39,8 +37,8 @@ class PushLayerRequestError(Exception):
 
 
 def _http_error_detail(exc: urllib.error.HTTPError) -> str:
-    """The server's own ``{"error": ...}`` message, prefixed with the HTTP
-    status so a 404 and a 413 are distinguishable at a glance."""
+    """The server's own ``{"error": ...}`` message, prefixed with the HTTP status so a 404 and
+    a 413 are distinguishable at a glance."""
     detail = ""
     try:
         payload = json.loads(exc.read().decode("utf-8", "replace"))

@@ -1,9 +1,8 @@
 """The sheet -> the engine's own steering file. One function, every module.
 
-telapy's ``TelemacCas`` is the only writer of the format. What it writes is read
-straight back by the engine's own parser against the engine's own dictionary, so
-a value outside a keyword's CHOIX is caught there and never on inspection. The
-variables keyword is the module's table, generated per deck as it is written."""
+telapy's ``TelemacCas`` is the only writer; the engine's own parser reads it back against
+its dictionary, so a value outside a keyword's CHOIX is caught there.
+"""
 
 from __future__ import annotations
 
@@ -23,7 +22,8 @@ def serialize(sheet: Any, rundir: Path | str, *,
               steering: str | None = None) -> dict[str, Any]:
     """Write ``sheet`` into ``rundir`` as its module's steering file.
 
-    Engine defaults are not written; a coupled deck goes in the same driver call."""
+    Engine defaults are not written; a coupled deck goes in the same driver call.
+    """
     rundir = Path(rundir)
     rundir.mkdir(parents=True, exist_ok=True)
     decks: dict[str, dict[str, Any]] = {}
@@ -45,9 +45,8 @@ def _spread(sheet: Any, rundir: Path, steering: str,
             decks: dict[str, dict[str, Any]], *, host: Any = None) -> None:
     """``sheet`` and everything it names, onto the disk and into ``decks``.
 
-    A coupled body is not content: it is filled against its own module's
-    dictionary. What each deck WRITES is its module's own table, generated here
-    rather than restated by whoever asked the question."""
+    A coupled body is filled against its own module's dictionary.
+    """
     from ..modules import fill, wrapper_for
 
     stated = {**dict(sheet.resolved()), **sheet.printouts()}
@@ -67,18 +66,15 @@ def _spread(sheet: Any, rundir: Path, steering: str,
             path.write_text(str(content))
 
 
-#: The two files the engine's launcher partitions PER DECK: it splits the mesh
-#: and the boundary conditions each steering names into one piece per core, so a
-#: coupled steering naming neither is handed nothing to read on more than one
-#: core and the run dies in partel.
+# The launcher partitions the mesh and boundary files each steering names, per deck; a coupled steering naming neither dies in partel on more than one core.
 _PARTITIONED = ("GEOMETRY_FILE", "BOUNDARY_CONDITIONS_FILE")
 
 
 def _partitioned(sheet: Any, host: Any) -> dict[str, Any]:
     """The host's mesh and boundary files, under the coupled module's spelling.
 
-    A coupled body runs on the host's domain, so the files are the host's; a
-    module whose dictionary has no such keyword takes none."""
+    A module whose dictionary has no such keyword takes none.
+    """
     if host is None:
         return {}
     named = {}

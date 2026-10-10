@@ -11,10 +11,9 @@ from trid3nt_server.model.guards.context_budget import COMPACTING_LABEL, compact
 
 logger = logging.getLogger("trid3nt_server.server.turn.compaction")
 
-# Compaction is one atomic local pass, not a dispatch and a solve, so it takes a
-# ``role="tool"`` card and never a compute one - there is no dispatched run to
-# bind. It starts running and is later renamed and completed, riding the same
-# wire shape as every other tool card rather than a new envelope type.
+# Compaction is one atomic local pass, not a dispatch and a solve, so it takes a ``role="tool"``
+# card and never a compute one - there is no dispatched run to bind. It rides the same wire shape
+# as every other tool card (running, then renamed and completed).
 
 
 async def mint_compaction_card(*, emitter: Any) -> str | None:
@@ -45,10 +44,8 @@ async def complete_compaction_card(
     before_tokens: int,
     after_tokens: int,
 ) -> None:
-    """Drive the minted compaction card to its terminal state.
-    A no-op when the mint failed or was never called; an emit or persist failure
-    is swallowed rather than raised into the turn.
-    """
+    """Drive the minted compaction card to its terminal state. A no-op when the mint failed;
+    an emit or persist failure is swallowed rather than raised into the turn."""
     if emitter is None or step_id is None:
         return
     try:

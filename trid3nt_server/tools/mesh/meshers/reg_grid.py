@@ -27,11 +27,8 @@ def build(recipe: Any) -> Mesh:
     """Build the lattice this recipe's extent and resolution describe."""
     extent = recipe.extent
     if not isinstance(extent, (tuple, list)):
-        # A lattice IS its origin, cell size and row/column counts - that is what
-        # a structured deck writes and what every consumer of this mesh reads back
-        # out of the meta. Dropping the cells outside a polygon would leave
-        # something no longer describable that way, so the narrowing is refused
-        # here and escalates to the mesher that meshes an interior.
+        # A lattice IS its origin, cell size and counts; dropping cells outside a polygon would make it indescribable,
+        # so narrowing is refused and escalates to the mesher that meshes an interior.
         raise MeshToolError(
             "MESH_POLYGON_DOMAIN_UNSUPPORTED",
             "mesher 'reg_grid' takes a rectangular extent: a regular lattice is "

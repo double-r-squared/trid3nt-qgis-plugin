@@ -1,10 +1,7 @@
-"""RESOLUTION SENSITIVITY: which of a run's published reads a coarse mesh gets
-wrong, and which way.
+"""RESOLUTION SENSITIVITY: which of a run's published reads a coarse mesh gets wrong, and which way.
 
-A label is conditioned on the run's own resolution lever, never a spacing
-threshold: only a lever row with BOTH a user basis and a seated value counts as
-refined. The note is FEEDBACK about the run's fidelity, so it names what the run
-PUBLISHED and says nothing about what the numbers mean.
+A label is conditioned on the run's own resolution lever: only a lever row with BOTH a user basis and a seated value counts as refined.
+The note names what the run PUBLISHED and says nothing about what the numbers mean.
 """
 
 from __future__ import annotations
@@ -14,13 +11,9 @@ from typing import Any, Collection, Mapping, Sequence
 __all__ = ["CLASSES", "SensitivityDecl", "sensitivity_notes"]
 
 
-#: The four sensitive classes: what the class IS, and which way a coarse mesh
-#: reads it. Every direction is MEASURED on run pairs at two spacings - the peak
-#: 6x low, the flooded extent 4x low, a crest location 2x high, the gradient reads
-#: low (upwind Hs -62%, agitation Kd -30 to -50%, stratification dT -25%) - and
-#: every one of them in the unsafe direction. The CONVERGED classes (integrals,
-#: saturated maxima, ratios) carry no label, because labeling everything is the
-#: same as labeling nothing.
+#: The four sensitive classes and which way a coarse mesh reads each, measured on run pairs at two spacings:
+#: peak 6x low, flooded extent 4x low, crest location 2x high, gradient low (upwind Hs -62%, agitation Kd -30 to -50%,
+#: stratification dT -25%), all unsafe. Converged classes (integrals, saturated maxima, ratios) carry no label.
 CLASSES: Mapping[str, tuple[str, str]] = {
     "peak": ("a concentration/magnitude PEAK",
              "a coarse element averages a peak away, so this reads LOW"),
@@ -34,12 +27,9 @@ CLASSES: Mapping[str, tuple[str, str]] = {
 
 
 class SensitivityDecl:
-    """One template's declaration: which PUBLISHED quantities are in which class.
-    Rows are ``(quantity, class)`` - the name the run's own layer or chart carries,
-    so a declaration stands on something a reader can open - and an unknown class
-    name is refused where it is declared, because a label nobody can read is worse
-    than no label. ``lever`` is the granularity the reads depend on: the mesh edge,
-    or a module keyword such as a 3D deck's plane count."""
+    """One template's declaration: ``(quantity, class)`` rows by the name the run's layer or chart carries.
+    An unknown class is refused where declared; ``lever`` is the granularity the reads depend on
+    (the mesh edge, or a module keyword such as a 3D deck's plane count)."""
 
     __slots__ = ("rows", "lever")
 
@@ -66,12 +56,8 @@ def sensitivity_notes(decl: SensitivityDecl,
                       fill: Mapping[str, Mapping[str, Any]] | None = None,
                       mesh_size_m: Any = None) -> tuple[str, ...]:
     """The honesty note(s) this run carries about its own fidelity, or ``()``.
-    ONE note per run, not one per quantity, and a declared quantity this run did
-    not publish is dropped - a note about a product that is not there points at
-    nothing. ``published`` is what the run put on the map and on its charts.
-    ``fill`` is the solved deck's slots with their origins, so a lever that is a KEYWORD
-    rather than a param is read where the run actually states it, and
-    ``mesh_size_m`` is the edge off the mesh the run published."""
+    One note per run; a declared quantity the run did not publish is dropped. ``fill`` is the solved deck's
+    slots with origins (a keyword lever is read there); ``mesh_size_m`` is the published mesh edge."""
     if not decl:
         return ()
     present = [(quantity, cls) for quantity, cls in decl.rows
@@ -81,15 +67,11 @@ def sensitivity_notes(decl: SensitivityDecl,
 
     lever = decl.lever
     row = next((r for r in sheet if getattr(r, "name", None) == lever), None)
-    # BOTH halves are load-bearing: a lever declared optional on the USER door
-    # carries a user basis on the row nobody supplied, so the SEATED VALUE is
-    # what says the user actually put a spacing through the door. Testing the
-    # basis alone labels a default-spacing run as refined and swallows the bound.
+    # BOTH halves are load-bearing: an optional USER-door lever carries a user basis on an unsupplied row,
+    # so the seated value says a spacing was put through; basis alone labels a default run as refined.
     refined = (getattr(row, "basis", None) == "user"
                and getattr(row, "value", None) is not None)
-    # A LEVER THAT IS A KEYWORD has no param row at all: the run states it on
-    # the deck, and the fill records who put it there. A user or a model set it
-    # for the same reason - somebody chose this granularity.
+    # A keyword lever has no param row: the fill records who stated it, and a user or model set it deliberately.
     stated = str(((fill or {}).get(lever) or {}).get("from") or "")
     refined = refined or stated.startswith(("user", "model"))
     at = f" at {float(mesh_size_m):g} m" if mesh_size_m is not None else ""

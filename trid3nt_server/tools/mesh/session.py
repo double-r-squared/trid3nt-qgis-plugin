@@ -62,7 +62,6 @@ class MeshSession:
         #: has replaced the topology the recipe produces.
         self.regen_note: str | None = None
 
-    # -- the mesh ---------------------------------------------------------- #
     @property
     def mesh(self) -> Mesh:
         self._ensure_built()
@@ -89,7 +88,6 @@ class MeshSession:
         self._ensure_built()
         return self.probes()
 
-    # -- editing the recipe ------------------------------------------------ #
     def append_op(self, op: MeshOp) -> dict[str, Any]:
         """Add one op to the end of the recipe and regenerate -> the probes."""
         self.recipe = self.recipe.appending(op)
@@ -139,10 +137,8 @@ class MeshSession:
                 "- so an adopted layer cannot be reconciled with what a solve "
                 "would be staged from.")
         points, cells, z = read_2dm_mesh(str(layer))
-        # A .2dm always carries a node z column, so the edited layer cannot say
-        # whether a bed was ever painted; the mesh it replaces is what knows. The
-        # probes described the cells the edit replaced, so they are dropped
-        # rather than carried onto a different topology.
+        # A .2dm always carries a node z column, so the edited layer cannot say whether a bed was painted; the replaced mesh knows.
+        # Probes described the replaced cells and are dropped.
         carried = {k: v for k, v in mesh.meta.items()
                    if k not in ("probes", "lonlat")}
         self._mesh = dataclasses.replace(
@@ -160,7 +156,6 @@ class MeshSession:
         self._journal()
         return self.probes()
 
-    # -- the loop ---------------------------------------------------------- #
     def probes(self) -> dict[str, Any]:
         """The numeric facts a human or an agent judges the mesh on."""
         return _probes(self.mesh, self.recipe)
@@ -186,8 +181,6 @@ class MeshSession:
         The RECIPE is frozen on as its provenance, beside the mesher's own facts."""
         mesh = self.mesh
         declared = dict(mesh.meta.get("artifact") or {})
-        # The counts are already read through the mesh's own properties; passing
-        # them again would name one field twice.
         declared.pop("node_count", None)
         declared.pop("element_count", None)
         _, display_uri = self._display_face()
@@ -197,11 +190,7 @@ class MeshSession:
         provenance = {"mesher": self.mesher.name,
                       "recipe": self.recipe.to_json(),
                       "deterministic": self.mesher.deterministic,
-                      # WHAT ACTUALLY PAINTED THE BED, not what the recipe asked
-                      # for: the ladder rung that served is the only statement a
-                      # reader downstream can tell a coarse global relief from the
-                      # surveyed topobathy by, and the op that painted it is the
-                      # only thing that knows.
+                      # WHAT ACTUALLY PAINTED THE BED, not what the recipe asked: the rung that served is how a reader tells coarse global relief from surveyed topobathy.
                       **({"bed_source": str(mesh.meta["bed_source"])}
                          if mesh.meta.get("bed_source") else {}),
                       # The elevation the bed's own zero names, where it names
@@ -237,7 +226,6 @@ class MeshSession:
                     art.element_count, art.crs_authid, has_bed)
         return art
 
-    # -- files ------------------------------------------------------------- #
     def _display_face(self) -> tuple[Path, str]:
         """The ``.2dm`` this mesh renders as, written and staged ONCE per build.
 
@@ -264,7 +252,6 @@ class MeshSession:
         _s3_client().put_object(Bucket=bucket, Key=key, Body=local.read_bytes())
         return f"s3://{bucket}/{key}"
 
-    # -- the journal ------------------------------------------------------- #
     def recipe_lines(self) -> list[dict[str, Any]]:
         """The journal as records: the declaration, then one per edit event.
 

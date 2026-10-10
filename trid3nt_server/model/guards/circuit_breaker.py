@@ -18,9 +18,8 @@ _DEFAULT_COOLDOWN_S = 60.0
 
 
 def _get_threshold() -> int:
-    """Consecutive-failure threshold before the breaker trips.
-
-    ``TRID3NT_CIRCUIT_THRESHOLD`` overrides; anything below 1 falls back to 3."""
+    """Consecutive-failure threshold before the breaker trips; ``TRID3NT_CIRCUIT_THRESHOLD``
+    overrides, and anything below 1 falls back to 3."""
     raw = os.environ.get("TRID3NT_CIRCUIT_THRESHOLD")
     if raw is None:
         return _DEFAULT_THRESHOLD
@@ -40,9 +39,8 @@ def _get_threshold() -> int:
 
 
 def _get_cooldown_s() -> float:
-    """Cooldown duration in seconds after the breaker trips.
-
-    ``TRID3NT_CIRCUIT_COOLDOWN_S`` overrides; a negative value falls back to 60."""
+    """Cooldown duration in seconds after the breaker trips; ``TRID3NT_CIRCUIT_COOLDOWN_S``
+    overrides, and a negative value falls back to 60."""
     raw = os.environ.get("TRID3NT_CIRCUIT_COOLDOWN_S")
     if raw is None:
         return _DEFAULT_COOLDOWN_S
@@ -59,8 +57,6 @@ def _get_cooldown_s() -> float:
             _DEFAULT_COOLDOWN_S,
         )
         return _DEFAULT_COOLDOWN_S
-
-
 
 
 class CircuitBreakerError(RuntimeError):
@@ -81,8 +77,6 @@ class CircuitBreakerError(RuntimeError):
             "The tool has failed repeatedly and is temporarily disabled. "
             "Please try again later."
         )
-
-
 
 
 def is_client_arg_error(error: BaseException | None) -> bool:
@@ -116,8 +110,6 @@ def _is_operator_class_error(tool_name: str, error: BaseException) -> bool:
     return classify_actionability(tool_name, error) == "operator"
 
 
-
-
 @dataclass
 class ToolCircuitBreaker:
     """Per-session breaker tracking consecutive failures per tool.
@@ -138,7 +130,7 @@ class ToolCircuitBreaker:
         if deadline is None:
             return False
         if time.monotonic() >= deadline:
-            # Cooldown elapsed — auto-close the breaker.
+            # Cooldown elapsed: auto-close the breaker.
             self._cooldown_until.pop(tool_name, None)
             self._consecutive_failures.pop(tool_name, None)
             logger.info(

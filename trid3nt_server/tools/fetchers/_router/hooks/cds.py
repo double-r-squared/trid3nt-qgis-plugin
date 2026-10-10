@@ -4,11 +4,9 @@ The ``cdsapi`` client owns the request-poll-download socket, so both sources fol
 onto the library-delegate executor: these hooks own a ``retrieve`` call under a
 declared wall-clock timeout, plus a pure pre-cache validate hook per source."""
 
-# KEY RESOLUTION, per source: an ``api_key`` kwarg, then a str ``secret_ref``, then
-# the ``TRID3NT_COPERNICUS_CDS_API_KEY`` env var, then None. None is NOT an error:
-# cdsapi falls back to ``~/.cdsapirc``, and absent that its Client constructor raises
-# its own missing-configuration error, which the classifier below maps to the source's
-# ``*_MISSING_KEY``. No key is ever registered here.
+# Key resolution: ``api_key`` kwarg, then a str ``secret_ref``, then ``TRID3NT_COPERNICUS_CDS_API_KEY``,
+# then None. None is NOT an error: cdsapi falls back to ``~/.cdsapirc`` and its own
+# missing-configuration error maps to the source's ``*_MISSING_KEY``. No key is registered here.
 
 from __future__ import annotations
 
@@ -40,10 +38,7 @@ logger = logging.getLogger(
 _DEFAULT_CDS_URL = "https://cds.climate.copernicus.eu/api"
 _KEY_ENV = "TRID3NT_COPERNICUS_CDS_API_KEY"
 
-#: The missing-``~/.cdsapirc`` / no-config phrase family. The cdsapi Client
-#: constructor raises "Missing/incomplete configuration file: <path>/.cdsapirc" when
-#: no credential is discoverable; these catch that and its close variants WITHOUT
-#: over-matching a transient queue or network upstream error.
+#: The cdsapi "Missing/incomplete configuration file" phrase family, without over-matching a transient upstream error.
 _MISSING_KEY_CDS_PHRASES: tuple[str, ...] = (
     ".cdsapirc",
     "missing/incomplete configuration",
@@ -84,9 +79,7 @@ _GTSM_MAX_DATE_RANGE_DAYS = 366
 
 
 def _resolve_key(params: dict[str, Any]) -> str | None:
-    """Resolve the CDS key: ``api_key`` kwarg, then a str ``secret_ref`` passed
-    verbatim, then the env var, then ``None``. None is NOT an error -- cdsapi falls
-    back to ``~/.cdsapirc``, and its own missing-config error classifies downstream."""
+    """Resolve the CDS key (kwarg, str ``secret_ref``, env var, else ``None``); None is NOT an error."""
     api_key = params.get("api_key")
     if api_key:
         return str(api_key)
@@ -109,9 +102,7 @@ def _cds_retrieve_with_timeout(
     timeout_s: float,
     missing_phrases: tuple[str, ...],
 ) -> None:
-    """Run ``cdsapi.Client.retrieve`` under a wall-clock watchdog, since cdsapi has no
-    native timeout: a daemon worker thread joined with a deadline. A failure classifies
-    in priority order -- missing key, then auth, then retryable upstream."""
+    """Run ``cdsapi.Client.retrieve`` under a wall-clock watchdog (cdsapi has no timeout); failures classify missing key, auth, then retryable."""
     import threading
 
     sc = spec.error_code_prefix
@@ -170,8 +161,7 @@ def _parse_iso(sc: str, s: Any, field: str, suffix: str) -> _dt.date:
 
 @register_hook("era5.validate")
 def era5_validate(spec: SourceSpec, params: dict[str, Any]) -> None:
-    """Pre-cache ERA5 input gate: variable and date range (the bbox is the params
-    model's)."""
+    """Pre-cache ERA5 input gate: variable and date range."""
     sc = spec.error_code_prefix
     sfx = spec.input_error_suffix
     variable = params.get("variable")
@@ -215,7 +205,6 @@ def _era5_build_request(variable: str, bbox: tuple[float, float, float, float], 
 
 
 def _era5_netcdf_to_da(spec: SourceSpec, nc_path: str, cds_variable: str, bbox: tuple[float, float, float, float]) -> Any:
-    """CDS NetCDF to a single 2D lat-ascending DataArray clipped to the bbox."""
     import numpy as np
     import rioxarray  # noqa: F401 -- registers the .rio accessor
     import xarray as xr
@@ -279,12 +268,8 @@ def _era5_netcdf_to_da(spec: SourceSpec, nc_path: str, cds_variable: str, bbox: 
 
 
 def _da_to_array_transform(da: Any) -> tuple[Any, Any, Any]:
-    """A DataArray -> north-up ``(array, affine, crs)`` for the COG writer.
-
-    The coordinates a NetCDF carries are CELL CENTRES, so the raster's extent is
-    half a cell beyond the outermost of them on every side; rioxarray computes
-    that from the spacing, which is why the affine is asked of it rather than
-    built from the coordinate range."""
+    """A DataArray -> north-up ``(array, affine, crs)``; coordinates are CELL CENTRES, so the
+    affine is asked of rioxarray, which extends half a cell past the outermost coordinate."""
     import numpy as np
 
     north_up = da.sortby("latitude", ascending=False)
@@ -294,9 +279,7 @@ def _da_to_array_transform(da: Any) -> tuple[Any, Any, Any]:
 
 @register_hook("era5.read")
 def era5_read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> tuple[Any, Any, Any]:
-    """CDS retrieves to a north-up ``(array, transform, crs)``. A CDS-native variable is
-    one retrieve; the derived ``10m_wind_speed`` is two, the U and V components
-    combined into the elementwise magnitude on their shared grid."""
+    """CDS retrieves to a north-up ``(array, transform, crs)``; ``10m_wind_speed`` is the magnitude of two retrieves (U, V)."""
     import numpy as np
     import xarray as xr
 
@@ -354,8 +337,7 @@ def era5_read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> 
 
 @register_hook("gtsm.validate")
 def gtsm_validate(spec: SourceSpec, params: dict[str, Any]) -> None:
-    """Pre-cache GTSM input gate: the date range (the bbox and the output enum are
-    the params model's)."""
+    """Pre-cache GTSM input gate: the date range."""
     sc = spec.error_code_prefix
     sfx = spec.input_error_suffix
     d0 = _parse_iso(sc, params.get("start_date"), "start_date", sfx)
@@ -527,7 +509,6 @@ def _gtsm_netcdf_to_records(spec: SourceSpec, nc_paths: list[str], bbox: tuple[f
 
 
 def _gtsm_records_to_features(records: list[dict[str, Any]], output: str) -> list[dict[str, Any]]:
-    """Per-gauge records -> GeoJSON Point features (the shared vector_fgb writer's shape)."""
     import numpy as np
 
     features: list[dict[str, Any]] = []
@@ -571,7 +552,6 @@ def _gtsm_records_to_features(records: list[dict[str, Any]], output: str) -> lis
 
 @register_hook("gtsm.read")
 def gtsm_read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[dict[str, Any]]:
-    """CDS retrieve -> ZIP -> NetCDF(s) -> bbox-subset -> GeoJSON gauge features."""
     bbox = tuple(float(v) for v in params["bbox"])  # type: ignore[assignment]
     d0 = _dt.date.fromisoformat(str(params["start_date"]))
     d1 = _dt.date.fromisoformat(str(params["end_date"]))

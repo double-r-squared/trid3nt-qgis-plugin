@@ -1,10 +1,5 @@
 """An EXTENT: one lon/lat bounding box with an optional name, from every way a user
-names one.
-
-A bbox pick, the canvas AOI, four numbers and a layer's bounds all enter through
-``extent``; what reads an Extent after that reads ``.bbox`` ordered west, south,
-east, north and never parses again. A bare place NAME refuses: an ingestion
-resolves what it was handed and never fetches.
+names one. ``.bbox`` is ordered west, south, east, north; a bare place NAME refuses.
 """
 
 from __future__ import annotations

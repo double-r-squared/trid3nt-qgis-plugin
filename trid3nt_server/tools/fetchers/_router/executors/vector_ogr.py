@@ -33,28 +33,21 @@ __all__ = [
     "execute",
 ]
 
-#: The read policy for every driver read in this family. The retry half is the
-#: transport's own code set; GDAL's default is retry OFF.
+#: Read policy for every driver read here; GDAL's default is retry OFF.
 _READ_PATH = {
     "GDAL_HTTP_MAX_RETRY": "5",
     "GDAL_HTTP_RETRY_DELAY": "1",
     "GDAL_HTTP_RETRY_CODES": "429,500,502,503,504",
 }
 
-#: Config options are process-global in libgdal, so a per-source header set has
-#: to be installed and withdrawn around its own read.
+#: libgdal config options are process-global: per-source headers are installed and withdrawn around their read.
 _config_lock = threading.Lock()
 
 
-# pyogrio links its own libgdal, so the read policy is applied through
-# ``pyogrio.set_gdal_config_options``; a ``rasterio.Env`` does not reach it. Retries
-# fire on 429/500/502/503/504 and the upstream STATUS is verbatim on
-# ``DataSourceError``. Two measured deviations from the transport's norm hold for
-# this family: GDAL discards the S3 XML ``<Code>`` body, and its backoff is
-# exponential-with-jitter rather than the server's ``Retry-After``.
+# pyogrio links its own libgdal, so the read policy goes through ``pyogrio.set_gdal_config_options``
+# (a ``rasterio.Env`` does not reach it). GDAL discards the S3 XML ``<Code>`` body, and its
+# backoff is exponential-with-jitter, not the server's ``Retry-After``.
 class _ReadPolicy:
-    """Install the read policy plus this source's headers for one driver read."""
-
     def __init__(self, spec: SourceSpec) -> None:
         ogr = (spec.ingest or {}).get("ogr") or {}
         headers = dict(ogr.get("headers") or {})
@@ -91,9 +84,7 @@ def build_query(
     endpoint: Any | None = None,
     page_size: int | None = None,
 ) -> str:
-    """The ArcGIS ``/query`` URL the ESRIJSON driver opens, carrying no offset because
-    paging is the driver's. ``bbox=None`` omits the geometry envelope for a global
-    sweep, and ``page_size`` pins the ``resultRecordCount`` the driver carries."""
+    """The ArcGIS ``/query`` URL the ESRIJSON driver opens, without an offset (paging is the driver's); ``bbox=None`` omits the envelope."""
     ingest = spec.ingest or {}
     qt = ingest.get("query_template", {})
     if endpoint is None:
@@ -134,15 +125,13 @@ def build_query(
 
 
 def open_path(spec: SourceSpec, url: str) -> str:
-    """The driver-prefixed path for this source shape."""
     driver = str(((spec.ingest or {}).get("ogr") or {}).get("driver", "ESRIJSON"))
     if driver == "ESRIJSON":
         return f"ESRIJSON:{url}"
     if driver == "OAPIF":
         return f"OAPIF:{url}"
     if driver == "vsizip":
-        # One layer per TIGER-shaped archive, so the member needs no naming; a
-        # source that publishes several names the one it wants.
+        # One layer per TIGER-shaped archive needs no member name.
         member = str(((spec.ingest or {}).get("ogr") or {}).get("member", ""))
         return f"/vsizip//vsicurl/{url}/{member}" if member else f"/vsizip//vsicurl/{url}"
     raise router_input_error(
@@ -151,18 +140,14 @@ def open_path(spec: SourceSpec, url: str) -> str:
 
 
 def zip_urls(spec: SourceSpec, params: dict[str, Any], endpoint: Any) -> list[str]:
-    """The ZIP URLs this request spans: the source's own planner, else the endpoint. A
-    nationwide archive is one URL; a per-state one fans out over every state the bbox
-    reaches, which is a routing table only the source holds."""
+    """The ZIP URLs this request spans: the source's own planner, else the endpoint."""
     if spec.hooks is not None and spec.hooks.build_request:
         return [p.url for p in resolve_hook(spec.hooks.build_request)(spec, params)]
     return [endpoint.url or endpoint.url_template or ""]
 
 
 def _verbatim_upstream(spec: SourceSpec, url: str, exc: Exception) -> RouterError:
-    """The upstream's own message for a read the driver could only call malformed, via
-    ONE un-retried GET: the driver already spent this family's retry budget. Only a
-    query URL is re-read, and an unrecognized body keeps the driver's own text."""
+    """The upstream's own message for a malformed read, via ONE un-retried GET of a query URL."""
     driver = str(((spec.ingest or {}).get("ogr") or {}).get("driver", "ESRIJSON"))
     if driver != "ESRIJSON":
         return router_upstream_error(spec.error_code_prefix, f"read failed url={url}: {exc}")
@@ -171,7 +156,6 @@ def _verbatim_upstream(spec: SourceSpec, url: str, exc: Exception) -> RouterErro
         parsed = json.loads(body.decode("utf-8", "replace"))
     except (TransportError, Exception):  # noqa: BLE001 -- the driver's text stands
         return router_upstream_error(spec.error_code_prefix, f"read failed url={url}: {exc}")
-    # ArcGIS answers a failed query 200 with an ``{"error": ...}`` envelope.
     if isinstance(parsed, dict) and "error" in parsed:
         return router_upstream_error(
             spec.error_code_prefix, f"error envelope url={url}: {parsed['error']}"
@@ -182,7 +166,6 @@ def _verbatim_upstream(spec: SourceSpec, url: str, exc: Exception) -> RouterErro
 def fetch_from_endpoint(
     spec: SourceSpec, endpoint: Any, params: dict[str, Any]
 ) -> list[dict[str, Any]]:
-    """One driver read of ONE endpoint -> GeoJSON features."""
     import pyogrio
 
     ingest = spec.ingest or {}
@@ -191,9 +174,7 @@ def fetch_from_endpoint(
     bbox = params.get("bbox")
     bbox = tuple(bbox) if bbox is not None else None
     max_features = spec.gates.max_features or 30000
-    # A caller may CAP the sweep at its own count, and that is a single-shot
-    # request rather than a paging hint: the service page and the ceiling move
-    # together, so the read returns exactly the cap in server order.
+    # A caller's CAP is a single-shot request: the service page and the ceiling move together.
     capped = params.get("max_records")
     page_size = int(capped) if capped is not None else None
     if capped is not None:
@@ -239,8 +220,7 @@ def fetch_from_endpoint(
         driver, len(out), len(urls), spec.source_class,
     )
     if not out and ogr.get("empty_is_typed_error"):
-        # A published administrative archive covers what it covers: a bbox it does
-        # not reach is out of coverage, not an empty answer about it.
+        # A bbox the archive does not reach is out of coverage, not an empty answer.
         raise router_empty_error(
             spec.error_code_prefix, f"no features intersect bbox={bbox}",
             spec.empty_error_suffix,
@@ -249,9 +229,7 @@ def fetch_from_endpoint(
 
 
 def fetch_features(spec: SourceSpec, params: dict[str, Any]) -> list[dict[str, Any]]:
-    """Fetch across the resolved endpoint chain. Every mirror publishes the SAME
-    dataset, so the hop is silent under the loudness floor; a single endpoint is one
-    read with no mirror."""
+    """Fetch across the resolved endpoint chain; mirrors publish the SAME dataset, so a hop is silent."""
     chain = resolve_endpoints(spec, params)
     last_exc: Exception | None = None
     for i, endpoint in enumerate(chain):
@@ -274,5 +252,4 @@ def fetch_features(spec: SourceSpec, params: dict[str, Any]) -> list[dict[str, A
 
 
 def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
-    """Read through the driver and serialize to FGB bytes (the ``fetch_fn`` body)."""
     return features_to_fgb_bytes(fetch_features(spec, params), spec, params)

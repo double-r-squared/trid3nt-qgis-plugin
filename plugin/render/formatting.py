@@ -9,18 +9,10 @@ from __future__ import annotations
 import math
 from typing import Optional, Tuple
 
-# A NON-FINITE or degenerate number reaching a NATIVE Qt double-to-string call
-# is catastrophic, not cosmetic. Qt derives a digit count internally; fed a
-# range whose span is zero (``-log10`` -> ``+inf``) or a NaN/inf bound, that
-# precision is a non-finite double cast to a C ``int``. On arm64 that
-# conversion SATURATES to ``INT_MAX`` instead of raising, so the formatter is
-# asked to emit ~2.1 billion digits and smashes the stack. Python's own
-# f-strings raise on a bad precision, so the danger lives only at the NATIVE
-# boundary, and only a computed -- never a literal -- precision reaches it.
-#
-#: Decimal places we will ever ask a formatter to emit. 12 is already past
-#: double precision's meaningful digits; the point is a hard ceiling far below
-#: the INT_MAX that crashes Qt.
+# A NON-FINITE or degenerate number reaching a NATIVE Qt double-to-string call is
+# catastrophic: on arm64 the non-finite precision saturates to INT_MAX and smashes
+# the stack. Python f-strings raise instead, so the hazard is only at the native boundary.
+#: Hard ceiling on decimal places asked of a formatter, far below the INT_MAX that crashes Qt.
 MIN_DECIMALS = 0
 MAX_DECIMALS = 12
 DEFAULT_DECIMALS = 6

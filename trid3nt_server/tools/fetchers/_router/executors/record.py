@@ -24,13 +24,9 @@ __all__ = ["execute"]
 
 
 def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
-    """Fetch the build plan(s) and shape the record dict to JSON bytes: the first
-    non-None ``hooks.record`` dict, walking the plans in order. Every plan yielding
-    None raises the source's typed empty/not-found error, never a fabricated hit."""
     record = resolve_hook(spec.hooks.record)  # type: ignore[union-attr]
     build_name = spec.hooks.build_request if spec.hooks is not None else None
     if not build_name:
-        # Pure record: no fetch, the hook builds the dict from params alone.
         result = record(spec, params, [])
         if result is None:
             raise router_empty_error(

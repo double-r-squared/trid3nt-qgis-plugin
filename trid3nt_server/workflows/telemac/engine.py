@@ -1,10 +1,8 @@
 """The engine: its image, its verdict on an exit, and the one run path.
 
-Status is the worker's exit code AND the CORRECT-END flag in the metrics file
-together: a clean process that never reached the end of the run is an error. The
-worker runs ``--network none``, so everything it reads is staged. The wait is
-sized off the sheet's own horizon and step, against the worst honest mesh; a
-sheet that states no horizon is bounded rather than estimated.
+Status is the worker's exit code AND the CORRECT-END flag together: a clean process that never reached the end is an error.
+The worker runs ``--network none``, so everything it reads is staged.
+The wait is sized off the sheet's horizon and step against the worst honest mesh; a sheet with no horizon is bounded, not estimated.
 """
 
 from __future__ import annotations
@@ -54,10 +52,8 @@ _METRICS_FILENAME: str = "telemac_metrics.json"
 _MIN_WAIT_S: float = 1800.0
 _WAIT_HEADROOM: float = 1.5
 
-#: The wait for a sheet that states no horizon: a steady harmonic run has no
-#: duration and no timestep to size one from. It is a bound on the wait, not an
-#: estimate of the run - it exists so a wedged container becomes a typed failure
-#: instead of a daemon that never returns.
+#: The wait for a sheet that states no horizon (a steady harmonic run has no duration or timestep): a bound, not an estimate,
+#: so a wedged container becomes a typed failure.
 _TIMELESS_WAIT_S: float = 86400.0
 
 
@@ -103,9 +99,7 @@ def classify_exit(rundir: Path, exit_code: int
                   ) -> tuple[str, int, str | None, dict[str, Any]]:
     """The post-exit verdict -> ``(status, exit_code, error, extra)``.
 
-    The error sentence names the MODULE the worker says it ran; the whole metrics
-    file is the completion's extra, because the worker is ours and writes
-    module-level metrics only."""
+    The error names the MODULE the worker says it ran; the whole metrics file is the completion's extra."""
     metrics = _metrics(rundir)
     label = str(metrics.get("module") or TELEMAC_SOLVER_NAME)
     if exit_code != 0:
@@ -192,9 +186,7 @@ async def solve_case(*, run: dict[str, Any], cores: int) -> dict[str, Any]:
             f"{getattr(run_result, 'error_message', '') or ''}",
             error_code="TELEMAC_RUN_FAILED")
     metrics = await asyncio.to_thread(read_run_metrics, batch_run_id)
-    # No local path travels out of this step: it is the ledger's record of the
-    # solve, and a replayed record must not hand back a temp file that a later
-    # process cannot see. The products step re-downloads from the run prefix.
+    # No local path travels out of this step: a replayed record must not hand back a temp file; the products step re-downloads from the run prefix.
     return {
         "run_id": batch_run_id,
         "uri": (f"s3://{storage.runs_bucket()}/{batch_run_id}/"

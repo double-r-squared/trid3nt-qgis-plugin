@@ -46,27 +46,18 @@ async def _send_error(
     retryable: bool = False,
 ) -> None:
     payload = ErrorPayload(error_code=code, message=message, retryable=retryable)
-    # Route through the session-aware safe send: an error aimed at a
-    # just-dropped socket must reach a surviving sibling when one exists, and
-    # must NEVER raise into the caller, or the turn-failure path skips its
-    # terminal-card persist.
+    # Route through the session-aware safe send: an error aimed at a just-dropped socket must reach
+    # a surviving sibling when one exists, and must NEVER raise into the caller, or the turn-failure
+    # path skips its terminal-card persist.
     await _session_safe_send(
         websocket, session_id, _new_envelope("error", session_id, payload)
     )
 
 
-# A protocol-level PING is handled transparently by a client's socket and never
-# surfaces as a message, so the server's pings do NOT reset a client's
-# inbound-frame timer. Between turns the only data frame a client sees is the
-# reply to its own keepalive, and when that reply stalls - a reconnect re-runs
-# the layer replay - its pong deadline expires and it force-reconnects, which
-# re-runs the replay: a self-sustaining reconnect storm in which the user's
-# prompts never reach the turn handler.
-#
-# So each connection ticks a lightweight ``heartbeat`` DATA frame on this
-# interval, deliberately far inside a client's ping-plus-pong window, resetting
-# its inbound-activity timer on a cheap server clock independent of the resume
-# reply.
+# A protocol-level PING is handled transparently by a client's socket and never surfaces as a
+# message, so the server's pings do NOT reset a client's inbound-frame timer; a stalled reply to
+# its own keepalive then force-reconnects it (a reconnect storm). The DATA-frame heartbeat interval
+# stays far inside a client's ping-plus-pong window.
 HEARTBEAT_INTERVAL_SECONDS: float = 12.0
 
 
@@ -152,9 +143,8 @@ async def _send_loop_exhausted(
     reason_code: str = "MAX_ITERATIONS_REACHED",
     message: str | None = None,
 ) -> None:
-    """Emit the ``loop_exhausted`` envelope: the iteration cap by default, or a
-    per-turn guard's own code and message. Its own type, distinct from a generic
-    error, so a client can tell a stopped tool chain from a model failure."""
+    """Emit the ``loop_exhausted`` envelope: the iteration cap by default, or a per-turn guard's
+    own code and message."""
     # ``retryable=False``: the agent already consumed its turns, so the user
     # rephrases or narrows scope. Best-effort - a wire failure is logged, never
     # raised, so the terminal chunk still fires.
@@ -203,13 +193,11 @@ async def _emit_turn_complete(
     pipeline_id: str | None = None,
     final_state: str | None = None,
 ) -> None:
-    """Emit the end-of-turn idle signal, so a client force-completes any card
-    still rendering as running. Best-effort: the persisted terminal card state
-    is the durable backstop and a resume re-emits this anyway."""
-    # A terminal pipeline frame can be written onto a just-dropped socket and
-    # lost, leaving a card spinning after its tool finished. Raw JSON, because
-    # the typed envelope forbids extra fields and this payload has no contract
-    # model; the Case tag routes it to the owning Case's stream.
+    """Emit the end-of-turn idle signal, so a client force-completes any card still rendering as
+    running."""
+    # A terminal pipeline frame can be written onto a just-dropped socket and lost, leaving a card
+    # spinning after its tool finished. Raw JSON, because the typed envelope forbids extra fields
+    # and this payload has no contract model; the Case tag routes it to the owning Case's stream.
     import json as _json
 
     try:
@@ -238,5 +226,4 @@ async def _emit_turn_complete(
             "turn-complete emit failed session=%s", state.session_id,
             exc_info=True,
         )
-
 

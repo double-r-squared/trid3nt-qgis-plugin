@@ -61,12 +61,9 @@ class Workflow:
     A workflow declares two facts about its engine - the solver family and the name
     of its solve step; hooks have SILENT defaults and no subtype restates one."""
 
-    #: The solver family a run of this workflow records.
     engine: str = ""
 
-    #: What the SOLVE step is NAMED. The skeleton reads the run prefix off that
-    #: step when the result carries none, and a workflow that renamed its solve
-    #: would otherwise lose the run id to a literal guess. Declared, never assumed.
+    #: The SOLVE step's name; the skeleton reads the run prefix off it when the result carries none.
     solve_step: str = ""
 
     @classmethod
@@ -84,34 +81,22 @@ class Workflow:
                  levers: Sequence[str] = ()) -> None:
         self.metadata = metadata
         self.name = metadata.name
-        #: The declared PARAMS rows, in class-body order - the template hands over
-        #: the body itself and the row names are the attribute names on it - plus
-        #: each RUNTIME LEVER this declaration takes rather than restating.
+        #: Declared PARAMS rows in class-body order, plus each runtime lever taken rather than restated.
         self.params = with_levers(param_rows(params), levers)
-        #: The declared DATA rows, the same way.
         self.data = data_rows(data)
-        #: What this template accepts when something is SUPPLIED to it, role by
-        #: role. Declared beside PARAMS because it is part of the same readable
-        #: input contract, and read back off the registry by every supply door;
-        #: absence is a refusal, per role and overall.
+        #: What this template accepts when SUPPLIED, per role; absence is a refusal.
         self.accepts = accepts
-        #: The template MODULE this workflow is declared by. Every stage is read
-        #: off its own names - STEERING, OUTPUTS, CAPTIONS and the files
-        #: beside them - so no object stands between the declaration and the run.
+        #: The template MODULE: STEERING, OUTPUTS, CAPTIONS and its files are read off its own names.
         self.template = template
-        #: What this template CALLS each thing it names: every published variable,
-        #: and every DATA row it reads a measurement into. One dict, because a
-        #: caption is one kind of statement whatever it is about.
+        #: What the template calls every published variable and every DATA row it reads into; one dict.
         self.captions = dict(getattr(template, "CAPTIONS", {}) or {})
-        #: Which published reads sit in a resolution-sensitive class. The skeleton
-        #: turns this into the run's honesty label; see ``resolution.py``.
+        #: Published reads in a resolution-sensitive class; see ``resolution.py``.
         self.sensitivity = (sensitivity if isinstance(sensitivity, SensitivityDecl)
                             else SensitivityDecl(sensitivity))
         self.coercions = tuple(coerce)
         self.error_prefix = str(getattr(metadata, "engine", "") or "workflow").upper()
         self.check()
 
-    # -- hooks: silent defaults ------------------------------------------- #
 
     def check(self) -> None:
         """Refuse at import what this template's declarations cannot run; the
@@ -141,28 +126,17 @@ class Workflow:
 
     def slot_units(self) -> Mapping[str, str]:
         """The UNIT each slot's value is converted to, by role.
-
-        The unit is the one the KEYWORD that role fills is read in, which the
-        engine's transform fixes - so a runtime that writes no keywords states
-        none and a matched record is then read in the unit it was measured in."""
+        Fixed by the engine's transform for the keyword the role fills; a runtime writing no keywords states none."""
         return {}
 
     def published_units(self) -> Mapping[str, str]:
-        """The UNIT each variable this run publishes is written in, by the name
-        the result carries it under.
-
-        What an observe row is read in: a measurement of a published variable
-        and the variable itself are comparable only in one unit. A runtime that
-        publishes nothing named states none, and a row that observes one then
-        refuses rather than being read in whatever its source published."""
+        """The UNIT each published variable is written in, by the name the result carries it under.
+        A measurement and its variable compare in one unit only; a runtime publishing nothing named states none."""
         return {}
 
     def run_window_s(self, keywords: Mapping[str, Any]) -> float | None:
-        """How long this run's solve covers, in seconds - the window a matched
-        SERIES source has to hold a record over.
-
-        The engine's own deck states it, so a runtime that knows no engine
-        states none and a series match then holds only the opening instant."""
+        """How long this run's solve covers, in seconds - the window a matched SERIES source must hold.
+        The engine's deck states it; a runtime knowing no engine states none."""
         return None
 
     def checks(self, run: RunResult) -> tuple[str, ...]:
@@ -177,14 +151,9 @@ class Workflow:
                                  mesh_size_m=self._mesh_size_m(run))
 
     def _published(self, run: RunResult) -> set[str]:
-        """Every QUANTITY this run put on the map or on a chart, by the name the
-        publish stage wrote it under.
-
-        One name for one quantity whichever product carries it, so a declaration
-        stands on something a reader can open rather than on a field of its own."""
+        """Every QUANTITY the run put on the map or a chart, by the name the publish stage wrote it under."""
         return {str(row.get("quantity") or "") for row in run.outputs} - {""}
 
-    # -- the spine --------------------------------------------------------- #
 
     async def run(self, wire: Mapping[str, Any]) -> Any:
         """The absorbed tool body: fill every input, then launch when READY."""
@@ -218,9 +187,7 @@ class Workflow:
             return self._error(exc.error_code, exc)
         except Exception as exc:  # noqa: BLE001
             if getattr(exc, "retryable", False):
-                # A retryable typed error is a GATE: the adapter harvests its
-                # .suggestions off the RAISED exception so the model can retry with
-                # corrected args. Flattening it into an envelope destroys that channel.
+                # A retryable typed error is a GATE: its .suggestions are harvested off the RAISED exception; an envelope destroys that channel.
                 raise
             logger.exception("%s unexpected failure", self.name)
             return self._error(f"{self.error_prefix}_INTERNAL_ERROR", exc)
@@ -229,9 +196,7 @@ class Workflow:
                                    supplied=dict(state.env.supplied))
 
     async def _launched(self, state: Fill) -> RunResult:
-        """The launch under the run's own domain and collectors: what a stage
-        notes, publishes or matches rides out on the run, and a failed run's
-        notes ride on the failure that ends it."""
+        """Launch under the run's own domain and collectors; notes ride out on the run or on the failure."""
         from ...inputs.fill import production, restate
 
         env = production(state)
@@ -241,8 +206,7 @@ class Workflow:
         notes, outputs = journal.bind_notes(), journal.bind_outputs()
         choices, coverage = journal.bind_choices(), journal.bind_coverage()
         restate(state)
-        # A context token resets once; the drain lives only in the finally so
-        # a second reset never replaces the run's own error.
+        # The drain lives only in the finally so a second reset never replaces the run's own error.
         try:
             try:
                 run = await self.launch(state)
@@ -273,21 +237,16 @@ class Workflow:
     def _error(self, code: str, exc: BaseException) -> dict[str, Any]:
         """The failure, plus whatever auxiliary products the run also lost on the way."""
         notes = getattr(exc, "__notes__", ()) or ()
-        # The envelope's sentence is the only thing a card can print, so an
-        # exception that stringifies to nothing reports its type instead.
+        # An exception that stringifies to nothing reports its type; the sentence is all a card prints.
         return {"status": "error", "error_code": code,
                 "error_message": " ".join([said(exc), *notes])}
 
-    # -- post + publish ---------------------------------------------------- #
 
     async def _publish(self, run: RunResult, wall_seconds: float = 0.0, *,
                        supplied: Mapping[str, Any] | None = None) -> Any:
         result = run.value
         notes = list(run.notes) + [n for n in self.checks(run) if n]
-        # THE TIE VIEW: several sources ranked equal on every fact the sort
-        # reads, so the rows travel on the result and the model or the user
-        # picks one. A list with a clear winner carries no table - the sentence
-        # already said which source filled the slot and why.
+        # The tie view: sources ranked equal on every fact travel as rows so the model or user picks; a clear winner carries no table.
         notes += [_ranked_rows(choice) for choice in run.choices if choice.tie]
         update: dict[str, Any] = {
             "synthetic_inputs": merge_provenance(
@@ -298,10 +257,7 @@ class Workflow:
         result = result.model_copy(update=update)
 
         run_id = self._run_id(result, run)
-        # The journal takes the MERGED notes, not the launch's alone: a
-        # resolution-sensitivity label that lived only on the layer would be gone
-        # the moment the layer was, and the journal is the record that outlives
-        # the artifacts.
+        # The journal takes the MERGED notes: a label only on the layer would vanish with it.
         await asyncio.to_thread(self._journal, run_id, run, result,
                                 wall_seconds, notes, dict(supplied or {}))
         logger.info("%s complete layer_id=%s stages=%s notes=%s",
@@ -310,34 +266,26 @@ class Workflow:
         return result
 
     def _run_id(self, result: Any, run: RunResult) -> str | None:
-        """The solve's run prefix, from the layer or from the solve step itself.
-        Read off the DECLARED ``solve_step``, never the literal ``"solve"``; a
-        workflow that declares none has no prefix to find here."""
+        """The solve's run prefix from the layer or the declared ``solve_step``; none without one."""
         direct = getattr(result, "run_id", None)
         if direct or not self.solve_step:
             return direct
         return (run.results.get(self.solve_step) or {}).get("run_id")
 
     def _mesh_size_m(self, run: RunResult) -> Any:
-        """The EDGE the run was meshed at, off the solve step's own record.
-        The mesh the run published is where this is a fact; a workflow that
-        declares no solve step meshed nothing and states no spacing."""
+        """The edge the run was meshed at, off the solve step's record; none without a solve step."""
         if not self.solve_step:
             return None
         return (run.results.get(self.solve_step) or {}).get("mesh_size_m")
 
     def _module(self, run: RunResult) -> str | None:
-        """WHICH module of the engine ran, as the solve step itself states it.
-        The engine is the workflow's; the module is the run's, so a family that
-        shares one engine does not record every run under one sibling's name."""
+        """Which module of the engine ran, as the solve step states it."""
         if not self.solve_step:
             return None
         return (run.results.get(self.solve_step) or {}).get("module")
 
     def _fill(self, run: RunResult) -> dict[str, dict[str, Any]]:
-        """Every slot of the solved deck -> the value it was solved at, and where
-        the fill took it from. Read off the solve step's own sheet, so a workflow
-        that fills no sheet records no fill rather than an invented one."""
+        """Every slot of the solved deck -> value and origin, off the solve step's sheet."""
         if not self.solve_step:
             return {}
         sheet = (run.results.get(self.solve_step) or {}).get("sheet") or {}
@@ -346,8 +294,7 @@ class Workflow:
                 for name, row in (sheet.get("filled") or {}).items()}
 
     def _correct_end(self, run: RunResult) -> bool | None:
-        """Did the solver say it reached its own correct end? ``None`` where the
-        solve step's metrics state nothing either way."""
+        """Did the solver reach its own correct end? None where the metrics say nothing."""
         if not self.solve_step:
             return None
         metrics = (run.results.get(self.solve_step) or {}).get("metrics") or {}
@@ -358,9 +305,7 @@ class Workflow:
                  wall_seconds: float,
                  notes: Sequence[str] = (),
                  supplied: Mapping[str, Any] | None = None) -> None:
-        """Append this run to the run journal - one seam, every engine.
-        Called from publish, the one point where the sheet, the provenance rows
-        and the wall time are all in hand at once."""
+        """Append this run to the run journal, from publish where sheet, provenance and wall time are all in hand."""
         from trid3nt_server.render.pipeline_emitter import current_emitter
 
         sheet = run.params.rows() if run.params is not None else ()
@@ -377,16 +322,13 @@ class Workflow:
         ))
 
 
-#: The one code the invented-physics floor refuses under, so callers route on the
-#: reason rather than on the shape of the run that hit it.
+#: The code the invented-physics floor refuses under, so callers route on the reason.
 _PHYSICS_INPUT_REQUIRED = "PHYSICS_INPUT_REQUIRED"
 
 
 def _refuse_invented_physics(entries: Sequence[SyntheticInput], tool_name: str,
                              input_mode: str | None) -> None:
-    """A physics value nobody approved never reaches a solve: only a live
-    user_gated session, whose review card puts the values in front of a
-    person, opens the floor."""
+    """Only a live user_gated session, whose review card shows the values to a person, opens the floor."""
     from trid3nt_server.inputs.gate.input_review import (physics_refusal_reason,
                                                    resolve_input_gate_mode)
     from trid3nt_server.render.pipeline_emitter import current_emitter
@@ -402,12 +344,8 @@ def _refuse_invented_physics(entries: Sequence[SyntheticInput], tool_name: str,
         raise GateRefusedError(reason, error_code=_PHYSICS_INPUT_REQUIRED)
 
 
-# -- the registration factory --------------------------------------------- #
-
-#: Controls every workflow carries: whether the run PAUSES, whether a kept mesh
-#: is rebuilt, the RAW KEYWORD floor a caller states the engine's own keywords
-#: through, and the source a caller NAMES for a matched slot. None of the four
-#: is a physical value, so none is a Param.
+#: Controls every workflow carries: whether the run pauses, whether a kept mesh is rebuilt, the raw keyword floor,
+#: and the source a caller names for a matched slot. None is a physical value, so none is a Param.
 _CONTROLS: tuple[tuple[str, Any, Any], ...] = (
     ("input_mode", str | None, None),
     ("restart_clean", bool, False),
@@ -416,18 +354,8 @@ _CONTROLS: tuple[tuple[str, Any, Any], ...] = (
 )
 
 
-# A TEMPLATE IS THE SIMULATION SURFACE. One registered template answers one
-# question on one engine, out of its own declarations. A question that spans
-# several templates, or a template plus fetchers - an alert polygon routed into
-# a flood run, a described spill turned into a plume, damage summed across
-# hazards - is COMPOSED by the model from what is already registered, and does
-# not become a tool of its own.
-#
-# A wrapper tool is an archetype somebody guessed. It fixes the chain, the AOI
-# rule and the degrade path at authoring time, so the question that differs by
-# one step has nothing to call, and the judgment it encoded is invisible to the
-# model that needed it. That judgment belongs where the model reads it: the
-# system prompt, or the docstring of the tool it routes to.
+# A template answers one question on one engine from its own declarations; a question spanning templates or fetchers
+# is composed by the model, never a wrapper tool (a wrapper fixes the chain and hides its judgment from the model).
 def register_workflow(
     facade: type[Workflow],
     metadata: Any,
@@ -439,18 +367,14 @@ def register_workflow(
     **register_kwargs: Any,
 ) -> Callable[..., Any]:
     """Generate and register the tool for a declared workflow.
-    The TEMPLATE MODULE is the declaration: PARAMS, DATA, ACCEPTS and DOC
-    are read off its own names, and the workflow class reads the rest. The
-    signature is synthesized from the declared params, so the model-facing schema
-    comes from the same declaration the run resolves."""
+    The template module is the declaration (PARAMS, DATA, ACCEPTS, DOC); the signature is synthesized from the
+    declared params, so the model-facing schema comes from the declaration the run resolves."""
     from trid3nt_server.tools import register_tool
 
     params = param_rows(getattr(template, "PARAMS"))
     data = getattr(template, "DATA", ())
     doc = getattr(template, "DOC", None)
-    # WHICH runtime levers this declaration takes without restating them: the
-    # stages that read a lever are the workflow class's, so the class answers,
-    # and a template that seats none of them states so here.
+    # Which runtime levers the declaration takes without restating them; the workflow class answers.
     if levers is None:
         levers = facade.levers()
     workflow = facade(metadata=metadata, params=params, template=template,
@@ -471,13 +395,8 @@ def register_workflow(
     if doc:
         from .docstring import render_docstring
 
-        # The prose sheet describes THIS wire, so it is rendered from the params
-        # the signature actually carries. A template declares `params=PARAMS` and
-        # the factory narrows it; documenting a constant the schema does not offer
-        # would be the docstring inviting a call the tool cannot take.
-        # The SHEET line is the WORKFLOW's own: only it knows which engine
-        # surface it fills, so a template never restates it and cannot drift
-        # from what it actually declares.
+        # The sheet describes THIS wire, so it renders from the params the signature carries (the factory narrows
+        # ``params=PARAMS``); the SHEET line is the workflow's own, so a template cannot drift from it.
         sheet = workflow.sheet_doc()
         doc = {**doc, "params": _wire_params(params),
                **({} if sheet is None else {"sheet": sheet}),
@@ -495,9 +414,7 @@ def register_workflow(
 
 def _context_doc(data: Sequence[DataDecl],
                  controls: Sequence[tuple[str, str]]) -> dict[str, Any]:
-    """The docstring's ``context`` rows, and the ``controls`` with the slots taken out.
-    A slot a CALLER can fill is documented ONCE: its shape from the declaration,
-    the template's own prose appended, and its control row dropped."""
+    """The docstring's ``context`` rows and the ``controls`` with slots removed; a caller-fillable slot is documented once."""
     slots = tuple(decl for decl in data if decl.fills_from_user)
     names = {decl.name for decl in slots}
     written = dict(controls)
@@ -511,12 +428,8 @@ def _context_doc(data: Sequence[DataDecl],
 
 
 def _wire_params(params: Sequence[Param]) -> tuple[Param, ...]:
-    """The declared params the MODEL-FACING wire carries - the one definition of it.
-    Read by both the synthesized signature and the generated docstring, so the
-    schema and the prose cannot drift apart."""
-    # Two exclusions: ``wire=False`` marks a value a COERCION resolves out of other
-    # wire args, and a CONSTANT-door param is non-question physics the schema must
-    # never invite the model to fill.
+    """The declared params the model-facing wire carries; signature and docstring both read it."""
+    # Excluded: ``wire=False`` (a coercion resolves it) and CONSTANT-door params (non-question physics the schema must not invite).
     return tuple(prm for prm in params
                  if prm.wire and prm.door != doors.CONSTANT)
 
@@ -524,20 +437,13 @@ def _wire_params(params: Sequence[Param]) -> tuple[Param, ...]:
 def _wire_signature(params: Sequence[Param],
                     data: Sequence[DataDecl] = ()) -> tuple[inspect.Signature, dict]:
     """The generated tool's signature: declared params, context slots, aliases, controls.
-    Every argument is keyword-with-default, and a ``**`` absorber keeps an unknown
-    key from dead-ending a call the doors could still answer."""
-    # CONSTANT-door params are absent here and from the docstring's param list: that
-    # exclusion is the whole of the enforcement. The generated body still takes
-    # ``**wire`` and filters the sheet by DECLARED name, so a value that arrives for
-    # a constant anyway seats through the USER door with ``basis=user`` - which is
-    # what keeps the row a user lever on the form card and the all-params invocation.
+    A ``**`` absorber keeps an unknown key from dead-ending a call."""
+    # CONSTANT-door params are absent here and from the docstring; the body still takes ``**wire`` and seats a stray
+    # value through the USER door with ``basis=user``, which keeps the row a user lever on the form card.
     entries: list[tuple[str, Any, Any]] = [
         (prm.name, prm.wire_type | None, None) for prm in _wire_params(params)
     ]
-    # A producer-less Data slot IS on the wire: it has no source of its own, so
-    # the only way it ever gets filled is a caller naming the layer. The slot's
-    # declared SHAPE travels on the annotation, which is the schema's own record
-    # of what the argument accepts.
+    # A producer-less Data slot is on the wire - a caller naming the layer is the only way it is filled; its shape travels on the annotation.
     entries += [(decl.name, decl.wire_annotation, None) for decl in data
                 if decl.fills_from_user]
     entries += list(_CONTROLS)
@@ -560,9 +466,7 @@ def _wire_signature(params: Sequence[Param],
 
 
 def _ranked_rows(choice: Any) -> str:
-    """The ranked list as the TOOL RESULT carries it: the rows and their facts.
-
-    One line per source so a model can answer with a row rather than a name."""
+    """The ranked list as the tool result carries it: one line per source so a model can answer with a row."""
     rows = "; ".join(
         f"{index + 1}) {row.fetcher} - {row.resolution}, {row.recency}, "
         f"{row.datum}, {row.extent}"

@@ -23,8 +23,6 @@ if TYPE_CHECKING:  # runtime-false: avoids a ui.dock <-> ui.cases_dialog import 
     from .dock import Trid3ntDock
 
 
-
-
 class CasesDialog(QDialog):
     """The user's cases, from the latest ``case-list`` envelope or the cold
     HTTP route when no connection exists yet. A LEFT CLICK opens a case, so
@@ -38,10 +36,8 @@ class CasesDialog(QDialog):
         lay = QVBoxLayout(self)
 
         self.listw = QListWidget()
-        # Rows are inline-EDITABLE for rename, but single-click-open fires
-        # first, so it is the rename gesture that yields to open, by design.
-        # ``_populating`` guards the ``itemChanged`` slot, so a programmatic
-        # repopulation never mis-fires as a user rename.
+        # Rows are inline-editable, but single-click-open fires first, so rename yields to open.
+        # ``_populating`` keeps programmatic repopulation from mis-firing ``itemChanged`` as a rename.
         self._populating = False
         self.listw.itemClicked.connect(self._open_item)
         self.listw.itemDoubleClicked.connect(self._open_item)
@@ -74,8 +70,6 @@ class CasesDialog(QDialog):
         current = self.listw.currentItem()
         if current is not None:
             selected = current.data(Qt.ItemDataRole.UserRole)
-        # Guard the itemChanged rename slot while the list rebuilds, so a
-        # programmatic clear and add never looks like a user rename commit.
         self._populating = True
         self.listw.clear()
         for case in cases:
@@ -87,7 +81,6 @@ class CasesDialog(QDialog):
             item = QListWidgetItem(label)
             item.setData(Qt.ItemDataRole.UserRole, case.case_id)
             item.setData(Qt.ItemDataRole.UserRole + 1, case.title)
-            # Inline-editable for rename (F2 or the context menu).
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
             self.listw.addItem(item)
             if case.case_id == selected:
@@ -113,9 +106,7 @@ class CasesDialog(QDialog):
         case_id = item.data(Qt.ItemDataRole.UserRole)
         title = item.data(Qt.ItemDataRole.UserRole + 1) or item.text()
         if isinstance(case_id, str) and case_id:
-            # The cold-list open path rides the SAME action: ``open_case``
-            # itself decides whether a direct select suffices or a
-            # connect-then-queue is needed.
+            # ``open_case`` decides whether a direct select suffices or connect-then-queue is needed.
             self._dock.open_case(case_id, str(title))
             self.accept()
 
@@ -138,8 +129,8 @@ class CasesDialog(QDialog):
             self._delete_case(case_id, str(title))
 
     def _begin_rename(self, item: QListWidgetItem) -> None:
-        """Start the inline rename edit on ``item``, swapping the decorated
-        row label for the PLAIN title first so the user edits just the name."""
+        """Start the inline rename edit on ``item``, swapping the decorated row label for the
+        PLAIN title first so the user edits just the name."""
         plain = item.data(Qt.ItemDataRole.UserRole + 1) or item.text()
         self._populating = True
         item.setText(str(plain))
@@ -148,8 +139,7 @@ class CasesDialog(QDialog):
         self.listw.editItem(item)
 
     def _commit_rename(self, item: QListWidgetItem) -> None:
-        """An inline edit committed: send the rename, then refresh the list. A
-        blank or unchanged title is a NO-OP that restores the row label."""
+        """An inline edit committed: send the rename, then refresh the list."""
         if self._populating:
             return
         case_id = item.data(Qt.ItemDataRole.UserRole)
@@ -158,13 +148,10 @@ class CasesDialog(QDialog):
         if not isinstance(case_id, str) or not case_id:
             return
         if not new_title or new_title == old_title:
-            # Restore the row's stored title (blank/no-op edits never rename).
             self._populating = True
             item.setText(str(old_title or ""))
             self._populating = False
             return
-        # Optimistic local update (the refresh below re-authoritatively repaints
-        # the decorated label once the server confirms).
         self._populating = True
         item.setData(Qt.ItemDataRole.UserRole + 1, new_title)
         item.setText(new_title)

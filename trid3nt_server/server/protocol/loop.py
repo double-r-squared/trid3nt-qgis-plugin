@@ -42,16 +42,12 @@ def _make_handler(settings: ModelSettings):
     """Build the per-connection coroutine, closing over the resolved settings."""
 
     async def handler(websocket: ServerConnection) -> None:
-        # The session_id will be set on the first inbound envelope; we surface
-        # an error if the client speaks before establishing one.
+        # session_id binds on the first inbound envelope.
         state: SessionState | None = None
 
-        # Start the per-connection data heartbeat so the client's inbound-activity
-        # timer is reset on a fast server clock, independent of the possibly slow
-        # session-resume reply; it is cancelled in the finally on every exit path.
-        # The heartbeat frame's session_id is cosmetic - a client routes a
-        # liveness frame by transport - so a placeholder is fine until the first
-        # inbound envelope binds the real one.
+        # Start the per-connection data heartbeat so the client's inbound-activity timer is reset on
+        # a fast server clock, independent of the possibly slow session-resume reply. Its
+        # session_id is a placeholder (clients route liveness frames by transport).
         heartbeat_task = asyncio.create_task(
             _heartbeat_loop(websocket, "00000000000000000000000000")
         )
@@ -138,10 +134,9 @@ def _make_handler(settings: ModelSettings):
 
                     elif msg_type == "user-message":
                         um = UserMessagePayload.model_validate(payload_dict)
-                        # Structured canvas AOI, read defensively off the raw
-                        # payload. Key-present semantics: a bbox SETS the active
-                        # AOI, an explicit null CLEARS it, an absent key leaves
-                        # the prior AOI.
+                        # Structured canvas AOI, read defensively off the raw payload. Key-present
+                        # semantics: a bbox SETS the active AOI, an explicit null CLEARS it, an
+                        # absent key leaves the prior AOI.
                         if "aoi_bbox" in payload_dict:
                             _set_active_aoi_from_payload(
                                 state, payload_dict.get("aoi_bbox")
@@ -172,12 +167,10 @@ def _make_handler(settings: ModelSettings):
                         ):
                             await _handle_max_turns_reached(websocket, state)
                             continue
-                        # Reset the per-turn accumulators before dispatch, so the
-                        # persisted row captures only this turn's emissions.
-                        # KNOWN LIMIT: the slots are session-shared, so a turn
-                        # running concurrently in ANOTHER Case can interleave
-                        # attribution on the closing row; Case targeting itself
-                        # stays safe through the turn pin.
+                        # Reset the per-turn accumulators before dispatch, so the persisted row
+                        # captures only this turn's emissions. KNOWN LIMIT: the slots are
+                        # session-shared, so a concurrent turn in ANOTHER Case can interleave
+                        # attribution on the closing row; Case targeting stays safe via the pin.
                         state.current_turn_layer_ids = []
                         state.current_turn_pipeline_id = None
                         state.current_turn_map_commands = []
@@ -187,17 +180,15 @@ def _make_handler(settings: ModelSettings):
                         await _prepare_user_turn(
                             websocket, state, um.text, client_case_id=um.case_id
                         )
-                        # Stream-scoped cancellation: only a re-prompt in the
-                        # SAME stream replaces that stream's in-flight turn, and
-                        # an auto-created Case mints a fresh key that cannot
-                        # collide with a running turn.
+                        # Stream-scoped cancellation: only a re-prompt in the SAME stream replaces
+                        # that stream's in-flight turn, and an auto-created Case mints a fresh key
+                        # that cannot collide with a running turn.
                         turn_key = (
                             state.current_turn_case_id or _ROOT_STREAM_KEY
                         )
-                        # A same-stream re-prompt SUPERSEDES the prior turn, even
-                        # one detached to the module registry by an earlier socket
-                        # close, so this connection is checked before the
-                        # session-scoped registry.
+                        # A same-stream re-prompt SUPERSEDES the prior turn, even one detached to
+                        # the module registry by an earlier socket close, so this connection is
+                        # checked before the session-scoped registry.
                         prior = state.inflight_tasks.get(turn_key)
                         if prior is None or prior.done():
                             prior = _find_live_turn(state.session_id, turn_key)
@@ -209,10 +200,9 @@ def _make_handler(settings: ModelSettings):
                             if t.done()
                         ]:
                             state.inflight_tasks.pop(_done_key, None)
-                        # A fresh socket may rebind onto a prior, still-running
-                        # turn of this session, so its progress and terminal
-                        # frames reach the new socket. Harmless when there is
-                        # none.
+                        # A fresh socket may rebind onto a prior, still-running turn of this
+                        # session, so its progress and terminal frames reach the new socket.
+                        # Harmless when there is none.
                         _ensure_emitter(websocket, state)
                         _rebind_live_turns(state.session_id, state.emitter)
                         # In-chat model selector: a non-None model_id overrides
@@ -248,24 +238,19 @@ def _make_handler(settings: ModelSettings):
                             )
                         )
                         state.inflight_tasks[turn_key] = task
-                        # Register this turn in the module registry NOW, not only
-                        # on disconnect, with a self-removing callback: a later
-                        # socket close then drops only the per-connection
-                        # reference while the running task stays durable, and a
+                        # Register this turn in the module registry NOW, not only on disconnect,
+                        # with a self-removing callback: a later socket close then drops only the
+                        # per-connection reference while the running task stays durable and a
                         # reconnect rebinds the recorded emitter's sink.
                         _register_live_turn(
                             state.session_id, turn_key, task, state.emitter
                         )
 
                     elif msg_type == "dev-tool-invoke":
-                        # Direct tool invocation: the client parsed the ``!run``
-                        # line and sent a structured name and args, which run
-                        # OUTSIDE the model loop through the same emission, gate
-                        # and persistence seam. Read defensively off the raw
-                        # dict; the handler validates the wire shape and routes
-                        # an unknown tool through the not-found envelope. The
-                        # code-exec hard gate still fires through the shared
-                        # invoke seam.
+                        # Direct tool invocation: the client parsed the ``!run`` line and sent a
+                        # structured name and args, which run OUTSIDE the model loop through the
+                        # same emission, gate and persistence seam (the code-exec hard gate still
+                        # fires). An unknown tool routes through the not-found envelope.
                         await _handle_dev_tool_invoke(
                             websocket, state, payload_dict
                         )
@@ -306,10 +291,9 @@ def _make_handler(settings: ModelSettings):
                                 if not t.done()
                             ]
                             cancel_task = live[-1] if live else None
-                        # The targeted turn may have been DETACHED to the
-                        # module-level registry by an earlier socket close, and
-                        # the explicit stop must still reach it: try the keyed
-                        # entry, then any live detached turn of the session.
+                        # The targeted turn may have been DETACHED to the module-level registry by
+                        # an earlier socket close, and the explicit stop must still reach it: try
+                        # the keyed entry, then any live detached turn of the session.
                         if cancel_task is None or cancel_task.done():
                             cancel_task = _find_live_turn(
                                 state.session_id, cancel_key
@@ -364,10 +348,9 @@ def _make_handler(settings: ModelSettings):
                         )
 
                     elif msg_type == "spatial-input-response":
-                        # The user finished or cancelled the draw surface, and
-                        # resolving the paused future lets the dispatch parse the
-                        # drawn features into the AOI, points and section line.
-                        # May arrive on a sibling connection of the session.
+                        # The user finished or cancelled the draw surface, and resolving the paused
+                        # future lets the dispatch parse the drawn features into the AOI, points and
+                        # section line. May arrive on a sibling connection of the session.
                         try:
                             spatial_resp = (
                                 SpatialInputResponsePayload.model_validate(
@@ -375,13 +358,10 @@ def _make_handler(settings: ModelSettings):
                                 )
                             )
                         except ValidationError as ve:
-                            # The reply ARRIVED but failed structural
-                            # validation, so besides notifying the user the
-                            # pending future must be FAILED eagerly: otherwise
-                            # the paused turn hangs until its timeout and then
-                            # degrades to a timeout error instead of an in-band
-                            # typed one. The request_id is parsed defensively,
-                            # since a totally malformed envelope may carry none.
+                            # The reply ARRIVED but failed structural validation, so besides
+                            # notifying the user the pending future must be FAILED eagerly:
+                            # otherwise the paused turn hangs until its timeout, then degrades to a
+                            # timeout error. A malformed envelope may carry no request_id.
                             err_msg = ve.errors()[0]["msg"]
                             await _send_error(
                                 websocket,
@@ -471,10 +451,9 @@ def _make_handler(settings: ModelSettings):
                         )
 
                     elif msg_type == "layer-response":
-                        # The session opened a provider layer the daemon
-                        # borrowed and answered; resolving the paused future
-                        # hands the fetch its staged object or the provider's
-                        # own text. May arrive on a sibling connection.
+                        # The session opened a provider layer the daemon borrowed and answered;
+                        # resolving the paused future hands the fetch its staged object or the
+                        # provider's own text. May arrive on a sibling connection.
                         try:
                             layer = LayerResponsePayload.model_validate(
                                 payload_dict
@@ -503,10 +482,9 @@ def _make_handler(settings: ModelSettings):
                         )
 
                     elif msg_type == "tool-choice":
-                        # The user's reply to a pending tool-candidates card,
-                        # parsed defensively as a loose dict; it resolves the
-                        # paused turn's future and may arrive on a sibling
-                        # connection of the session.
+                        # The user's reply to a pending tool-candidates card, parsed defensively as
+                        # a loose dict; it resolves the paused turn's future and may arrive on a
+                        # sibling connection of the session.
                         if not isinstance(payload_dict, dict) or not isinstance(
                             payload_dict.get("request_id"), str
                         ):
@@ -555,10 +533,9 @@ def _make_handler(settings: ModelSettings):
                     )
 
         except (ConnectionClosedError, ConnectionClosedOK) as exc:
-            # A peer close - pong timeout, client exit, network blip - is not a
-            # crash, so it is one quiet line rather than a traceback. The close
-            # code and reason are logged so "why did the socket die?" is
-            # answerable from the journal.
+            # A peer close - pong timeout, client exit, network blip - is not a crash, so it is one
+            # quiet line rather than a traceback. The close code and reason are logged so "why did
+            # the socket die?" is answerable from the journal.
             logger.info(
                 "ws-close session=%s code=%s reason=%r",
                 getattr(state, "session_id", None),
@@ -568,22 +545,18 @@ def _make_handler(settings: ModelSettings):
         except Exception:
             logger.exception("connection handler crashed")
         finally:
-            # Drop this socket from the per-session registry on EVERY exit path,
-            # so the reaper never targets a connection already gone and the
-            # registry cannot grow unbounded. A socket that closed before its
-            # first envelope never bound a session_id; a re-drop is harmless.
+            # Drop this socket from the per-session registry on EVERY exit path, so the reaper never
+            # targets a connection already gone and the registry cannot grow unbounded. A socket
+            # that closed before its first envelope never bound a session_id; a re-drop is harmless.
             if state is not None:
                 _deregister_session_connection(state.session_id, websocket)
-                # Once the session's LAST live socket is gone the cached
-                # case-list digest goes too: otherwise a later reconnect, which
-                # builds a fresh state unaware of the stale digest, could inherit
-                # an emit-skip decision from a connection that no longer exists.
+                # With the LAST socket gone the case-list digest goes too, or a reconnect's fresh
+                # state could inherit an emit-skip decision from a dead connection.
                 if session_connection_count(state.session_id) == 0:
                     _clear_case_list_hash(state.session_id)
-            # Stop the per-connection data heartbeat on EVERY exit path so the
-            # background task never outlives its socket. Cancel and await, so the
-            # cancellation is observed rather than logged as a destroyed pending
-            # task; an already-done task is a harmless no-op.
+            # Stop the per-connection data heartbeat on EVERY exit path so the background task never
+            # outlives its socket. Cancel and await, so the cancellation is observed rather than
+            # logged as a destroyed pending task; an already-done task is a harmless no-op.
             heartbeat_task.cancel()
             try:
                 await heartbeat_task
@@ -591,23 +564,15 @@ def _make_handler(settings: ModelSettings):
                 # CancelledError is the expected clean-stop path; any other error
                 # from the dying task must not mask the disconnect handling below.
                 pass
-            # A socket close must NOT cancel an in-flight turn: on disconnect it
-            # DETACHES instead. Each turn is registered in the module-level
-            # registry at spawn with a self-removing callback, so it survives
-            # this connection; a reconnecting socket rebinds its emitter sink,
-            # and a fully disconnected solve still publishes and persists its
-            # layer. Genuine cancellation - a stop, a same-stream supersede -
-            # still cancels; only the disconnect path stops cancelling.
+            # A socket close must NOT cancel an in-flight turn: it DETACHES, so a disconnected solve
+            # still publishes and persists. Only a stop or a same-stream supersede cancels.
             if state:
                 for _turn_key, _t in list(state.inflight_tasks.items()):
                     if _t.done():
                         continue
-                    # Re-assert the durable registry entry defensively for any
-                    # path that populated inflight_tasks without registering.
-                    # This DETACHES and keeps the turn RUNNING: it never clears
-                    # the emitter, so the live turn keeps driving its own, whose
-                    # sink silently no-ops on the dead socket until a reconnect
-                    # rebinds it.
+                    # Re-assert the durable registry entry defensively for any path that populated
+                    # inflight_tasks without registering. Never clears the emitter: its sink no-ops
+                    # on the dead socket until a reconnect rebinds it.
                     if _find_live_turn(state.session_id, _turn_key) is not _t:
                         _register_live_turn(
                             state.session_id, _turn_key, _t, state.emitter
@@ -647,11 +612,10 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     # loop-bound emitter from a worker thread.
     _assert_sync_offload_safe()
 
-    # Warm the tool-retrieval index off-loop at startup rather than lazily on the
-    # first search: a COLD index fails open to the full registry, which is
-    # harmless for a large-context model but silently truncates a small-context
-    # one, leaving it unable to see tool schemas. Fire-and-forget - a failed warm
-    # just leaves the fail-open behaviour in place and never delays serving.
+    # Warm the tool-retrieval index off-loop at startup rather than lazily on the first search: a
+    # COLD index fails open to the full registry, which is harmless for a large-context model but
+    # silently truncates a small-context one, leaving it unable to see tool schemas. Fire-and-forget:
+    # a failed warm leaves the fail-open in place and never delays serving.
     async def _warm_discover_index() -> None:
         try:
             from trid3nt_server.tools.search.search_tools import search_tools as _dd_warm
@@ -680,18 +644,10 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
         )
 
     try:
-        # EXPLICIT SERVE KEEPALIVE: a bare ``serve(handler, host, port)`` leaves
-        # websockets on its defaults, so the server emits no protocol-level
-        # pings and gives a stalled send the default close grace.
-        # Pin ping_interval/ping_timeout (~20s/20s) so the SERVER actively
-        # probes liveness and reaps a truly-dead peer on its own clock (the
-        # client's app-level session-resume keepalive is the belt; this is the
-        # suspenders), and a sane ``close_timeout`` so a terminal frame written
-        # onto a half-closed socket doesn't hang the handler. These are
-        # deliberately looser than the client's 25s/10s app keepalive so the
-        # two layers don't fight (the client force-reconnects first on a real
-        # stall; the server ping just keeps an otherwise-idle-but-alive socket
-        # from being culled by an intermediary).
+        # EXPLICIT SERVE KEEPALIVE: a bare ``serve(handler, host, port)`` leaves websockets on its
+        # defaults, so the server emits no protocol-level pings and gives a stalled send the default
+        # close grace. Pinned so the server reaps a dead peer on its own clock; deliberately
+        # looser than the client's 25s/10s app keepalive so the two layers do not fight.
         async with serve(
             handler,
             host,

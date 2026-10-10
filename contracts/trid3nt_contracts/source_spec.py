@@ -37,8 +37,7 @@ __all__ = [
     "STYLE_KINDS",
 ]
 
-#: The preset family, closed. A style row naming anything else is a typo, and a
-#: typo that reaches a layer paints it as something it is not.
+#: The preset family, closed: a typo here would paint a layer as something it is not.
 STYLE_KINDS = ("continuous", "classed", "reference", "mesh")
 STYLE_GEOMETRIES = ("point", "line", "polygon")
 
@@ -66,9 +65,7 @@ def _validate_style_row(name: str, row: Any, *, where: str = "output.style") -> 
 
 
 
-#: The ingestion shape that selects the base executor. A HYBRID row declares a
-#: base shape PLUS a transform block that wraps that executor - a raster source
-#: with a mosaic, a vector source with a fan-out.
+#: The base executor shape. A hybrid row declares a base shape plus a transform block wrapping that executor.
 SourceShape = Literal[
     "raster-cog",
     "vector-fgb",
@@ -77,32 +74,19 @@ SourceShape = Literal[
     "animation_frames",
 ]
 
-#: Auth mode. ``none`` = keyless public; ``api_key_env`` = a key from an env var;
 #: ``cds`` = the Copernicus client's own config; ``vault`` / ``token`` are reserved.
 AuthMode = Literal["none", "api_key_env", "cds", "vault", "token"]
 
-#: Request-param declared types. The compound ones, whose Python shape the name
-#: alone does not carry:
-#:
-#: - ``int_range`` = a 2-element ``[start, end]`` int list.
-#: - ``date_compact`` = ``YYYY-MM-DD`` or ``YYYYMMDD``, normalized to ``YYYYMMDD``.
-#: - ``point`` = a 2-element ``[lon, lat]`` float list, coerced and finite-checked
-#:   here; any CONUS or mutual-exclusion gate belongs to the executor.
-#: - ``float_list`` = a scalar float OR a ``list[float]``, checked against
-#:   ``values``, sorted and deduped; a scalar becomes a 1-element list.
-#: - ``str_list`` = a ``list[str]`` filter set with no allowed-set gate; each
-#:   entry stripped, empties dropped, sorted and deduped for cache-key stability.
-#: - ``bool`` = a flag, coerced with ``bool(value)``.
-#: - ``datetime_range`` = a 2-element ISO ``[start, end]`` list; each entry parses
-#:   as a date OR a datetime, coerced to a tuple with ``start <= end`` and echoed
-#:   as isoformat strings for cache-key stability. It carries the sub-day window
-#:   no ``iso_date`` pair can express.
+#: Compound param types: int_range [start, end]; date_compact YYYY-MM-DD or YYYYMMDD normalized to YYYYMMDD;
+#: point [lon, lat], finite-checked here (a CONUS or exclusion gate belongs to the executor); float_list a
+#: scalar or list checked against ``values``, sorted and deduped; str_list stripped, sorted and deduped for
+#: cache-key stability; bool coerced with ``bool(value)``; datetime_range ISO [start, end] with start <= end,
+#: echoed as isoformat strings for cache-key stability - the sub-day window no ``iso_date`` pair can express.
 ParamType = Literal[
     "bbox", "iso_date", "enum", "int", "float", "str", "int_range", "date_compact",
     "point", "float_list", "str_list", "bool", "datetime_range",
 ]
 
-#: Payload-estimate models.
 PayloadModel = Literal["bbox_area", "per_station", "per_feature", "tiled"]
 
 
@@ -130,13 +114,10 @@ class CredentialSpec(ContractModel):
     upstream account state the same name and one entered key serves both."""
 
     name: str = Field(min_length=1, max_length=120)
-    #: What the keys form calls it - the account the user signs into, not the row.
     label: str = Field(min_length=1, max_length=120)
-    #: Where a key is obtained. ``None`` when no public self-serve signup exists;
-    #: a fabricated URL would be indistinguishable from a real one to the reader.
+    #: None when no public self-serve signup exists; a fabricated URL would pass for a real one.
     signup_url: str | None = Field(default=None, max_length=512)
-    #: The env var the key is read from when no session key was pushed. It is the
-    #: SAME name the source's own hook reads, so the form and the code agree.
+    #: Env var read when no session key was pushed; the same name the source's own hook reads.
     env_var: str = Field(min_length=1, max_length=200)
 
 
@@ -144,8 +125,7 @@ class AuthSpec(ContractModel):
     """Auth mode, the shared User-Agent, and the key this source needs."""
 
     mode: AuthMode = "none"
-    #: Set on a KEYED source: the credential the keys form offers and the
-    #: resolver reads. Absent = a public source, which never refuses for a key.
+    #: A keyed source's credential; absent is a public source, which never refuses for a key.
     credential: CredentialSpec | None = None
     user_agent: str = "trid3nt_default"
 
@@ -161,29 +141,19 @@ class ParamSpec(ContractModel):
     values: list[Any] | None = None          # enum only
     quantize: str | None = None              # bbox only: round_6dp | res_<m>
     max_range_days: int | None = None        # iso_date pair ceiling (end param)
-    #: int/float inclusive range gate. Out of range raises a typed input error
-    #: stamped with this param's ``error_suffix``.
+    #: Inclusive range gate; out of range raises a typed input error stamped with ``error_suffix``.
     min: float | None = None
     max: float | None = None
-    #: iso_date COVERAGE bounds. A violation is a typed ``*_NOT_AVAILABLE``,
-    #: which is a different error from the ISO-format and range-days ones.
+    #: iso_date coverage bounds; a violation is a typed ``*_NOT_AVAILABLE``.
     min_date: str | None = None              # static ISO lower coverage bound
     max_future_days: int | None = None       # end <= today + N (future ceiling)
-    #: Per-param input-error suffix override, for a source that stamps a
-    #: different suffix per param. Default (None) = the row-level suffix.
+    #: Per-param input-error suffix; None uses the row-level suffix.
     error_suffix: str | None = None
-    #: Force this None-default param OPTIONAL in the promoted input schema. A
-    #: None default alone is marked required-in-schema, which is right for a
-    #: param annotated ``T`` and wrong for one annotated ``T | None``; this
-    #: expresses the second case. Default False = required-in-schema.
+    #: Force a None-default param optional in the promoted schema (right for ``T | None``, wrong for ``T``).
     schema_optional: bool = False
-    #: str-param alias table. A value is lower-cased and stripped, then mapped
-    #: through this; an UNMAPPED value passes through verbatim rather than
-    #: raising. Default (None) = no aliasing.
+    #: str alias table applied after lower-case and strip; an unmapped value passes through verbatim.
     aliases: dict[str, str] | None = None
-    #: enum only: lower-case and strip BEFORE the allowed-set check, so a
-    #: case-insensitive vocabulary echoes the normalized key. Default False is
-    #: strict match.
+    #: enum only: lower-case and strip before the allowed-set check (default is a strict match).
     lowercase: bool = False
 
 
@@ -191,15 +161,11 @@ class GateSpec(ContractModel):
     """Pre-fetch gates."""
 
     conus_only: bool = False                 # bbox must intersect CONUS
-    #: Per-spec CONUS envelope override ``(west, south, east, north)``. A source
-    #: whose served grid reaches past the shared generic envelope states its own
-    #: REAL bounds here: borrowing an unrelated source's footprint false-refuses
-    #: coverage this source actually has. Absent (None) = the shared envelope.
+    #: CONUS envelope override (west, south, east, north) for a grid reaching past the shared one;
+    #: borrowing another source's footprint false-refuses real coverage.
     conus_bbox: tuple[float, float, float, float] | None = None
     max_bbox_deg2: float | None = None       # hard ceiling, raw degree^2
-    #: Hard ceiling on the bbox area in APPROXIMATE km^2, cos-lat scaled.
-    #: Distinct from ``max_bbox_deg2``: a degree^2 ceiling is not the same
-    #: guardrail at varying latitude. Default (None) = no km^2 ceiling.
+    #: Ceiling on bbox area in approximate km^2 (cos-lat scaled); a deg^2 ceiling is not the same guardrail across latitude.
     max_bbox_km2: float | None = None
     max_stations: int | None = None          # station-timeseries only
     max_features: int | None = None          # vector only (paging cap)
@@ -213,80 +179,41 @@ class NormalizeSpec(ContractModel):
     datum: str | None = None
     quantity: str | None = None
     orientation: str | None = None           # raster only
-    #: Name a request param whose RESOLVED VALUE becomes the emitted units,
-    #: instead of the static ``units``. Default (None) = the static stamp.
+    #: Request param whose resolved value becomes the emitted units instead of ``units``.
     units_from_param: str | None = None
-    #: Per-param MAPPED units: ``{"param": <name>, "map": {<value>: <units>}}``.
-    #: Unlike ``units_from_param``, which stamps the raw value, this maps through
-    #: a table, so a value ABSENT from the map stamps NO units at all - which is
-    #: what a categorical variable beside a scaled one needs. Overrides the
-    #: static ``units``. Default (None) = no per-param mapping.
+    #: ``{param, map}`` maps the param value to units; a value absent from the map stamps no units. Overrides ``units``.
     units_by_param: dict[str, Any] | None = None
 
 
 class OutputSpec(ContractModel):
     """The output surface."""
 
-    #: ``record`` means the source returns a bare JSON dict, NOT a renderable
-    #: layer - a structured lookup or a summary rather than something to draw.
-    #: It pairs with ``shape: record`` and ``ext: json``, and the honesty floor
-    #: holds: the record hook raises typed errors, it never fabricates a dict.
+    #: ``record`` returns a bare JSON dict, not a renderable layer; pairs with ``shape: record`` and
+    #: ``ext: json``, and the record hook raises typed errors, never fabricates a dict.
     layer_type: Literal["raster", "vector", "record"]
     ext: Literal["tif", "fgb", "json"]
     role: Literal["primary", "context", "input"] = "primary"
-    #: HOW THIS DATASET DRAWS ITSELF. A dataset's default rendering is a fact
-    #: about the DATA, so it is declared beside the source rather than mapped to
-    #: it elsewhere. ``{kind: continuous | classed | reference | mesh}`` picks
-    #: one of the four preset shapes and the remaining keys parameterise it
-    #: (``ramp`` / ``units`` / ``label`` / ``scale`` / ``classes`` /
-    #: ``geometry`` / ``color``). ``by_param`` -
-    #: ``{param: <name>, map: {<value>: <partial row>}}`` - overrides those per
-    #: param value, which is how one source serving several variables gives each
-    #: its own ramp and range. Absent (None) = the kind's bare default.
+    #: How this dataset draws itself: ``{kind: continuous | classed | reference | mesh}`` plus that kind's keys
+    #: (``ramp`` / ``units`` / ``label`` / ``scale`` / ``classes`` / ``geometry`` / ``color``).
+    #: ``by_param`` (``{param, map: {value: partial row}}``) overrides them per param value.
     style: dict[str, Any] | None = None
-    #: Per-param MAPPED role: ``{"param": <name>, "map": {<value>: <role>}}``.
-    #: One source can serve both an analytical product and a context basemap; a
-    #: value absent from the map falls back to the static ``role``. Default
-    #: (None) = the static role.
+    #: ``{param, map: {value: role}}``; a value absent from the map falls back to ``role``.
     role_by_param: dict[str, Any] | None = None
-    #: Whether the emitted layer carries the request bbox. Default True.
     emit_bbox: bool = True
-    #: The HUMAN-facing layer name, verbatim. The default stamp is a machine
-    #: identifier and reads as one in a layer tree. Set it wherever the
-    #: product's identity is not obvious from the tool name - a MODELLED product
-    #: must say so here, because this is what a person reads off the map.
-    #: Default (None) = the machine stamp.
+    #: The human-facing layer name, verbatim; a modelled product must say so here.
     display_name: str | None = None
-    #: Stamp the emitted bbox from the EXTENT OF THE FEATURES rather than the
-    #: request bbox: ``{pad: <deg>}``, where ``pad`` widens a degenerate
-    #: single-point axis. The extent is read back from the produced file, which
-    #: exists on cache hit and miss alike, so the stamp does not depend on the
-    #: cache path. Default (None) = ``emit_bbox`` governs the bbox.
+    #: Stamp the emitted bbox from the features' extent (``{pad: <deg>}`` widens a single-point axis),
+    #: read back from the file so cache hit and miss agree.
     bbox_from_features: dict[str, Any] | None = None
-    #: Name a ``LayerURI`` SUBCLASS result model - a key into
-    #: ``execution.LAYER_RESULT_MODELS``. The subclass is built from the base
-    #: layer plus the ``hooks.envelope`` field dict, so a source returning extra
-    #: business fields needs no coded fetcher. Declared TOGETHER with
-    #: ``hooks.envelope``; registration validates both. Default (None) = the
-    #: plain layer.
+    #: A key into ``execution.LAYER_RESULT_MODELS``, built from the base layer plus the ``hooks.envelope``
+    #: dict; declared together with it.
     result_model: str | None = None
-    #: EMPTINESS-DRIVEN output switch: a hook name ``<source>.<point>``, called
-    #: with ``(spec, params)`` when the produced vector file is FEATURE-EMPTY.
-    #: Its dict is returned INSTEAD of the layer, so an AOI with nothing in it
-    #: is not handed a layer that draws nothing - the honesty gate. A non-empty
-    #: fetch is unaffected. Default (None) = the layer is always returned.
+    #: Hook ``<source>.<point>(spec, params)`` whose dict is returned instead of the layer when the vector file is feature-empty.
     variant_by_emptiness: str | None = None
-    #: FETCH-TIME PROVENANCE CHANNEL. True binds a recorder around the fetch so
-    #: the executor can record a small typed dict during a NON-cached fetch; the
-    #: cache persists it as a sidecar and REPLAYS it on a hit. This is how a
-    #: fact that only exists at fetch time - which leg of a composite painted
-    #: which part - survives every cache path, since it is unrecoverable from the
-    #: final bytes. Requires ``hooks.envelope``, its consumer. Default False.
+    #: True binds a fetch-time recorder whose dict the cache persists as a sidecar and replays on a hit;
+    #: needs ``hooks.envelope``.
     provenance: bool = False
-    #: Keep attribute-only (NULL-geometry) features instead of dropping them, so
-    #: a record whose geometry could not be resolved survives as a row with no
-    #: map footprint. Such a file is written with no spatial index, which cannot
-    #: be built over NULL geometry. Default False drops them.
+    #: Keep NULL-geometry features as attribute-only rows; such a file is written without a spatial index.
     keep_null_geometry: bool = False
 
 
@@ -303,25 +230,16 @@ class PayloadEstimateSpec(ContractModel):
 
     model: PayloadModel
     floor_mb: float = 0.01
-    #: Optional upper clip on the estimate. Default (None) = no ceiling.
     ceil_mb: float | None = None
-    # bbox_area / tiled
     mb_per_sq_deg: float | None = None
-    #: Per-param MB/deg^2 table for the ``bbox_area`` model:
-    #: ``{"param": <name>, "map": {<value>: <coefficient>}, "default": <float>}``.
-    #: The same bbox area costs wildly different bytes at different resolutions,
-    #: which one scalar cannot hold. Overrides ``mb_per_sq_deg`` for the resolved
-    #: value; a value absent from the map falls to ``default``, then to
-    #: ``mb_per_sq_deg``, then to 0.01. Default (None) = the scalar.
+    #: ``bbox_area`` MB/deg^2 table ``{param, map, default}``; overrides ``mb_per_sq_deg``, an absent value
+    #: falls to ``default``, then the scalar, then 0.01.
     mb_per_sq_deg_by_param: dict[str, Any] | None = None
-    # per_station
     kb_per_station_per_day: float | None = None
     overhead_kb: float | None = None
     stations_per_sq_deg: float | None = None
-    # per_feature
     kb_per_feature: float | None = None
     features_per_sq_deg: float | None = None
-    # tiled
     mb_per_tile: float | None = None
     tile_deg2: float | None = None
 
@@ -332,146 +250,73 @@ class HookSpec(ContractModel):
     load. A hook only COMPUTES - transport, caching and gates stay router-owned.
     """
 
-    # A field is added here only when a real source cannot be expressed without
-    # it; a speculative point is not added.
+    # A field is added only when a real source cannot be expressed without it.
 
 
-    #: ``(spec, params) -> list[RequestPlan]``. Builds the source-specific
-    #: request(s) - URL, query, headers, and any pre-fetch validation the
-    #: declarative param gates cannot express. Returns 1..N plans: one for a
-    #: single GET, several for a static multi-endpoint set the parse hook joins.
-    #: For a paged source it is called once per page, with the page injected.
+    #: ``(spec, params) -> list[RequestPlan]``; a paged source is called once per page.
     build_request: str | None = None
 
-    #: ``(spec, params, bodies: list[bytes]) -> list[GeoJSON-feature dict]``.
-    #: Decodes the source's payload(s) into features the shared serializer
-    #: writes. Raises the typed EMPTY / RESULT_TOO_LARGE / UPSTREAM errors on the
-    #: honest-empty, over-cap and bad-body paths rather than returning nothing.
+    #: ``(spec, params, bodies) -> list[GeoJSON feature dict]``; raises the typed EMPTY / RESULT_TOO_LARGE /
+    #: UPSTREAM errors rather than returning nothing.
     parse_response: str | None = None
 
-    # Resolve-then-fetch and bounded per-item enrichment: two composable phases,
-    # each declared only by a source that needs it. The router owns the
-    # orchestration, the transport and the bounded, deduped, best-effort detail
-    # loop; these hooks are the PURE compute at each edge.
+    # Resolve and enrich phases are declared only by a source that needs them; the router owns orchestration.
 
-    #: PHASE R (resolve), PRE-cache-key. ``(spec, params) -> list[RequestPlan]``.
-    #: Builds the round-1 request that turns a NAME into an id. Returns ``[]`` to
-    #: say the params already select without a round trip. It runs BEFORE the
-    #: cache read, so the resolved id enters the cache key and a name query and
-    #: its id query collapse to ONE entry.
+    #: Phase R, before the cache key: ``(spec, params) -> list[RequestPlan]`` turns a name into an id;
+    #: ``[]`` means no round trip. The resolved id enters the cache key.
     resolve_build: str | None = None
 
-    #: PHASE R. ``(spec, params, bodies: list[bytes]) -> dict[str, Any]``.
-    #: Decodes the resolution body into a params-MERGE dict folded in before the
-    #: main fetch. Raises the typed INPUT error on an unknown or AMBIGUOUS name -
-    #: an ambiguous match is refused, never silently resolved to one candidate.
+    #: Phase R: ``(spec, params, bodies) -> dict`` merged into params; raises the typed input error on an unknown or ambiguous name.
     resolve_parse: str | None = None
 
-    #: MAIN-FETCH offset paging.
-    #: ``(spec, params, bodies: list[bytes]) -> RequestPlan | None``. Given every
-    #: page so far, returns the NEXT page's request, or ``None`` to STOP - the
-    #: offset, short-page and record-cap loop control a declarative page-count
-    #: pager cannot express. ``build_request`` still builds page 1, and the
-    #: router owns the loop and a hard page ceiling.
+    #: Offset paging: ``(spec, params, bodies) -> RequestPlan | None`` returns the next page or None to stop;
+    #: ``build_request`` builds page 1.
     next_page: str | None = None
 
-    #: PHASE E (enrich).
-    #: ``(spec, params, features: list[dict]) -> list[tuple[str, RequestPlan]]``.
-    #: From the round-1 features, the ORDERED per-item detail requests. The hook
-    #: applies its own per-pass cap by emitting only that many; the router dedupes
-    #: by ref key, bounds the total, and fetches each BEST-EFFORT - a failed ref
-    #: is recorded, never silently dropped.
+    #: Phase E: ``(spec, params, features) -> list[(ref, RequestPlan)]``, the ordered per-item detail requests;
+    #: the hook applies its own per-pass cap and a failed ref is recorded, never dropped.
     enrich_plan: str | None = None
 
-    #: PHASE E. ``(row, params, features, results: dict[str, DetailResult])
-    #: -> list[dict]``. Folds the fetched detail - each result carrying a body OR
-    #: a typed error - back into the features. EVERY input feature survives: one
-    #: whose refs failed keeps its row with null detail.
+    #: Phase E: ``(row, params, features, results) -> list[dict]`` folds the detail back in; every input
+    #: feature survives, one whose refs failed with null detail.
     enrich_merge: str | None = None
 
-    #: POST-EMIT ENVELOPE.
-    #: ``(spec, params, layer: LayerURI, data: bytes) -> dict[str, Any]``. The
-    #: LAST hook called: it gets the assembled base layer plus the produced bytes
-    #: and returns the extra business fields for ``output.result_model``, plus
-    #: any base-field overrides. PURE - it computes over already-fetched bytes and
-    #: performs no transport. The honesty-floor keys (``uri``, ``layer_type``) are
-    #: dropped from its return, so a hook can ADD fields but can never flip an
-    #: error to a success or re-point the layer. Pairs with
-    #: ``output.result_model``, declared together.
+    #: Last hook: ``(spec, params, layer, data) -> dict`` of extra fields for ``output.result_model`` (declared
+    #: together) and base overrides; pure, and ``uri`` / ``layer_type`` are dropped from its return.
     envelope: str | None = None
 
-    #: LIBRARY-DELEGATE call. ``(row, params, *, timeout_s: float)
-    #: -> features | (array, transform, crs)``. The ONE sanctioned impurity: a
-    #: source whose maintained LIBRARY owns both discovery and the socket calls
-    #: that library here, while params, gates, stamps, cache, publish and typed
-    #: errors stay router-owned. The declared timeout is passed in, the call is
-    #: marked library-owned in telemetry, and any library exception the hook did
-    #: not itself map becomes a retryable upstream error. A vector row returns
-    #: features; a raster row returns ``(array, transform, crs)``.
+    #: The one sanctioned impurity: ``(row, params, *, timeout_s) -> features | (array, transform, crs)`` for a
+    #: source whose library owns discovery and sockets; an unmapped library exception becomes a retryable upstream error.
     delegate: str | None = None
 
-    #: LIBRARY-DELEGATE pre-cache input validation. ``(spec, params) -> None``.
-    #: Runs AFTER type and gate validation and BEFORE the cache read, so a
-    #: source-specific input gate the declarative surface cannot express refuses
-    #: pre-cache and pre-network - which also makes it testable offline.
+    #: ``(spec, params) -> None``, after type and gate validation and before the cache read, so the refusal is pre-network.
     delegate_validate: str | None = None
 
-    #: RECORD-RETURN dict builder.
-    #: ``(spec, params, bodies: list[bytes]) -> dict | None``. For a ``record``
-    #: source, this PURE hook shapes fetched bodies into the result dict; the
-    #: router owns the transport and the cache. ``None`` for a plan's body means
-    #: "no usable record here, try the next plan": the plans are walked in order
-    #: and the first non-None dict wins. If EVERY plan yields None the router
-    #: raises the typed empty error - the hook never fabricates a success dict.
+    #: ``(spec, params, bodies) -> dict | None`` for a ``record`` source; the first non-None plan result wins
+    #: and all-None raises the typed empty error.
     record: str | None = None
 
-    #: SOCKETED PRE-CACHE-KEY resolve.
-    #: ``(spec, params, *, timeout_s: float) -> dict``. The library-socket
-    #: sibling of ``resolve_build`` / ``resolve_parse``, which resolve over HTTP.
-    #: Runs after ``delegate_validate`` and BEFORE the cache read, under the same
-    #: delegate constraints, and its dict MERGES into ``params`` so the resolved
-    #: value enters the cache key - without it, a request that asks for "latest"
-    #: computes a non-deterministic key. Pairs with ``hooks.delegate``.
+    #: Library-socket sibling of ``resolve_build`` / ``resolve_parse``: ``(spec, params, *, timeout_s) -> dict``
+    #: merged into params before the cache key, so "latest" keys deterministically. Pairs with ``hooks.delegate``.
     delegate_resolve: str | None = None
 
-    #: GENERIC PRE-CACHE-KEY resolve. ``(spec, params) -> dict``. The MULTI-STEP
-    #: HTTP case that neither the single-round ``resolve_build`` / ``resolve_parse``
-    #: pair nor the socket ``delegate_resolve`` expresses. Runs after type and
-    #: gate validation and BEFORE the cache read; its dict MERGES into ``params``
-    #: so the resolved value enters the cache key - otherwise a "latest available"
-    #: request keys non-deterministically and serves the first cached day forever.
+    #: Multi-step HTTP pre-cache-key resolve ``(spec, params) -> dict``, merged into params so a "latest
+    #: available" request does not key non-deterministically.
     pre_resolve: str | None = None
 
-    #: PER-BAND COLORMAP.
-    #: ``(spec, params) -> dict[int, tuple[int, int, int, int]]``. For a raster
-    #: source whose palette is a PURE function of a request param. The returned
-    #: value -> RGBA table is baked into the emitted file's band-1 palette. PURE:
-    #: it computes over the params, never reads the fetched array, does no I/O.
+    #: ``(spec, params) -> dict[int, RGBA]``, a pure palette baked into band 1 of a raster source.
     colormap: str | None = None
 
-    #: FRAMES-LIST pre-loop RESOLVE. ``(spec, params) -> list[FramePlan]``. An
-    #: ``animation_frames`` source returns an ORDERED list of layers rather than
-    #: one; this hook does the timestamp-index fetch, window, subsample and
-    #: filter, and returns the per-frame plans - each carrying its cache params,
-    #: display name, valid-from/valid-to window, layer id and bbox. Raises the
-    #: typed EMPTY error when the window matches no frames.
+    #: ``animation_frames`` pre-loop plan ``(spec, params) -> list[FramePlan]``; raises the typed EMPTY error
+    #: when the window matches no frames.
     frames_plan: str | None = None
 
-    #: FRAMES-LIST per-frame BUILDER.
-    #: ``(spec, params, frame: FramePlan) -> bytes``. Builds ONE frame's raster
-    #: bytes, and MAY perform that frame's own tile I/O - the second sanctioned
-    #: impurity. Raises ``FrameDegraded`` for a graceful per-frame skip, which the
-    #: executor RECORDS rather than leaving a silent gap; the typed EMPTY error is
-    #: raised only when EVERY frame degrades. Pairs with ``frames_plan``.
+    #: ``(spec, params, frame) -> bytes`` builds one frame and may do its own tile I/O; ``FrameDegraded`` skips
+    #: a frame and is recorded, the EMPTY error only when every frame degrades.
     frame_bytes: str | None = None
 
-    #: TRANSPORT-STATUS classification.
-    #: ``(spec, status: int | None, body: str | None) -> RouterError | None``.
-    #: The shared transport collapses every non-2xx to a retryable UPSTREAM error.
-    #: A source that must split the status into distinct typed errors - 401/403 to
-    #: a credential-shaped one, 404 to a non-retryable input one - names this PURE
-    #: hook, consulted on a transport failure BEFORE the default. ``None`` keeps
-    #: the default. No I/O: the status and body are already in hand.
+    #: ``(spec, status, body) -> RouterError | None`` splits non-2xx into typed errors (401/403 credential,
+    #: 404 non-retryable input) before the default; pure.
     classify_status: str | None = None
 
 
@@ -480,35 +325,16 @@ class DispatchSpec(ContractModel):
     One declared param value serves the request from a NAMED sibling, returning
     that tool's result VERBATIM - its cache prefix, its ids, no double fetch."""
 
-    # The no-composition rule governs the DECLARATIVE surface: what a row states
-    # is one source, and this is the only field on it that names a sibling. A
-    # delegate hook may still reach a sibling tool when that sibling OWNS a
-    # ladder the caller would otherwise have to restate - its source order, its
-    # budget, its user-gated rung - re-raising its typed errors verbatim and
-    # naming the caller's own retry. That reach is code, not data; a declared
-    # ``from_tool`` field waits for a second caller to want the same shape.
-    #
-    # The seam here is DELIBERATELY NARROW:
-    #   - ONE target per condition: ``to`` is a single string, never a list.
-    #   - ROW-DECLARED only: ``to`` and ``equals_any`` are literals, never
-    #     hook-computed.
-    #   - NO CHAINS: a dispatched target must not itself declare a dispatch, so
-    #     the returned result is always exactly one sibling's verbatim output.
-    #   - PRE-FLIGHT: evaluated on the RAW params before validation, gates,
-    #     cache or fetch.
+    # One source per row; this is the only field naming a sibling. Narrow by design: one target string,
+    # row-declared literals, no chains (a target must not itself dispatch), evaluated on the raw params
+    # before validation, gates, cache or fetch.
 
-    #: The request param whose value triggers the dispatch (``source``).
     param: str = Field(min_length=1)
-    #: The normalized param values that MATCH this condition - the alias set.
     equals_any: list[str] = Field(min_length=1)
-    #: How to normalize the raw param value before the ``equals_any`` membership
-    #: check. ``lower_strip`` strips and lower-cases; ``none`` compares
-    #: verbatim.
+    #: ``lower_strip`` normalizes before the ``equals_any`` check; ``none`` compares verbatim.
     normalize: Literal["lower_strip", "none"] = "lower_strip"
-    #: The SINGLE sibling registered-tool name to dispatch to.
     to: str = Field(min_length=1)
-    #: ``target_arg -> this spec's raw param name`` for the dispatched call. The
-    #: RAW value is forwarded; the target validates it under its own contract.
+    #: target_arg -> this spec's raw param name; the target validates it under its own contract.
     pass_args: dict[str, str] = Field(default_factory=dict)
 
 
@@ -521,102 +347,63 @@ class SourceSpec(ContractModel):
 
     schema_version: Literal["v1"] = "v1"
 
-    # --- identity ---
     name: str = Field(min_length=1)          # the registry key
     source_class: str = Field(min_length=1)  # the cache prefix
     shape: SourceShape
     supports_global_query: bool = False
 
-    #: Register at ``tier="internal"``: the promoted tool stays resolvable for
-    #: in-process callers but is EXCLUDED from the declarable pool and the
-    #: retrieval index, so it has no model-facing surface. For a seam a public
-    #: tool resolves internally. Default False = ordinary registration.
+    #: Register at ``tier="internal"``: resolvable in-process but excluded from the declarable pool and the retrieval index.
     internal_only: bool = False
 
-    #: Explicit error-code prefix token. ``source_class`` is the CACHE prefix and
-    #: some sources stamp their error codes from a different token; one field
-    #: cannot carry both, so a row that needs them to differ sets this. Default
-    #: (unset) = ``source_class.upper()``.
+    #: ``source_class`` is the cache prefix; set this when error codes stamp from a different token (default ``source_class.upper()``).
     error_prefix: str | None = None
 
-    #: The input-error SUFFIX; ``error_prefix`` fixes only the prefix. A
-    #: per-param ``error_suffix`` overrides this for that param.
+    #: Input-error suffix; a per-param ``error_suffix`` overrides it.
     input_error_suffix: str = "INPUT_ERROR"
 
-    #: The empty / no-coverage suffix. A source that distinguishes "nothing
-    #: covers this extent" from "nothing matched" stamps ``NO_COVERAGE`` here.
+    #: Empty / no-coverage suffix; ``NO_COVERAGE`` separates nothing-covers from nothing-matched.
     empty_error_suffix: str = "EMPTY"
 
-    #: The LLM-facing tool docstring, verbatim. It is the SOLE source of both the
-    #: promoted tool's declaration description and its retrieval-index document
-    #: text, so a change here moves the tool in both the selector and the
-    #: retriever. ``None`` = synthesize one from the caveats and the corpus.
+    #: The LLM-facing tool docstring, verbatim: the sole source of the tool description and its retrieval text. None synthesizes one.
     docstring: str | None = None
 
-    # --- endpoints + auth ---
     endpoints: dict[str, EndpointSpec] = Field(min_length=1)
     auth: AuthSpec = Field(default_factory=AuthSpec)
 
-    # --- request-param schema, validated BEFORE any network call ---
     params: dict[str, ParamSpec] = Field(default_factory=dict)
     gates: GateSpec = Field(default_factory=GateSpec)
 
-    # --- ingestion: shape-specific, so a flexible dict keyed by shape ---
     ingest: dict[str, Any] = Field(default_factory=dict)
 
-    # --- named pure functions for the ONE irreducible per-source step
     hooks: HookSpec | None = None
 
-    # --- cross-sibling pre-flight dispatch: one param value serves a named
-    # --- sibling tool's result verbatim ---
+
     dispatch: list[DispatchSpec] = Field(default_factory=list)
 
-    # --- named transform: a two-source JOIN on a key ---
     join: dict[str, Any] | None = None
 
-    # --- normalization + output ---
     normalize: NormalizeSpec = Field(default_factory=NormalizeSpec)
     output: OutputSpec
 
-    # --- cache + payload gate ---
     cache: CacheSpec
     payload_estimate: PayloadEstimateSpec
 
-    # --- caveats and the same-data endpoint chain ---
     caveats: list[str] = Field(default_factory=list)
-    #: SAME-DATA ENDPOINT MIRRORS ONLY, in order. Every entry names a KEY in this
-    #: row's own ``endpoints`` block - an alternate service publishing the SAME
-    #: dataset, which the loudness floor lets walk silently. Registration REFUSES
-    #: an entry naming no such key: endpoint resolution indexes ``endpoints`` and
-    #: never the tool registry, so a sibling TOOL name here is a promise no code
-    #: path can keep. A CROSS-DATASET alternative is not this mechanism - it is a
-    #: declared rung on a fallback ladder, gated and stamped.
+    #: Same-data endpoint mirrors only: each entry names a key in this row's ``endpoints``, never a tool, and
+    #: registration refuses otherwise. A cross-dataset alternative is a gated fallback-ladder rung.
     endpoint_fallback: list[str] = Field(default_factory=list)
 
-    # WHAT THIS SOURCE COVERS, as the match reads it: the class of thing it
-    # measures, where, over what time, at what cell, on what zero, and the unit
-    # of each value column. ONE ROW PER DATA CLASS the source serves - a gauge
-    # that reports a discharge and a stage carries two - because a hybrid class
-    # is a word no filter can answer. THE ONLY statement of coverage; prose in
-    # the caveats or the docstring is for a reader, and no filter can read it. A
-    # source with no row here is never matched; it stays model-callable.
+    # What this source covers, as the match reads it: one row per data class served (class, where, time, cell,
+    # zero, value units). The only statement of coverage; a source with no row is never matched but stays model-callable.
     coverage: list[Coverage] = Field(default_factory=list)
 
-    # The vertical reference this source's elevations are counted from. STATED
-    # from the dataset's own documentation, never inferred from the bytes: a
-    # guess would be indistinguishable from a fact to every reader downstream.
-    # A source that cannot state ONE datum carries none, and a consumer refuses
-    # on that rather than assuming zero. A source whose Rows already
-    # state one zero takes it from there rather than restating it.
+    # Vertical reference stated from the dataset's own documentation, never inferred; a source with no single
+    # datum carries none and a consumer refuses rather than assuming zero.
     vertical_datum: str | None = None
 
-    # A HEAVY raster fetcher declares its resolution confirm gate here and the
-    # canonical fetch gate is synthesized onto the promoted tool. A named
-    # template rather than an inline gate keeps the declarations terse and the
-    # provider paths single-sourced. ``None`` = an un-gated fetch.
+    # A heavy raster fetcher declares its resolution confirm gate by named template; None is un-gated.
     confirm_gate: Literal["fetch_resolution"] | None = None
 
-    # --- retrieval phrasings ---
     corpus: list[str] = Field(default_factory=list)
 
     @property
@@ -627,11 +414,7 @@ class SourceSpec(ContractModel):
 
     @model_validator(mode="after")
     def _validate_one_row_per_class(self) -> "SourceSpec":
-        """A source states each class ONCE PER KIND: a gauge that reports a
-        measured series and a predicted one of the same class is answering two
-        different questions, and the sort ranks a record over a prediction; two
-        rows of one class AND one kind are two answers to one question, and
-        nothing chooses between them."""
+        """A source states each class once per kind: two rows of one class and kind are two answers to one question."""
         seen = [(row.data_class, row.kind) for row in self.coverage]
         twice = sorted({f"{name} ({kind})" for name, kind in seen
                         if seen.count((name, kind)) > 1})
@@ -643,13 +426,9 @@ class SourceSpec(ContractModel):
 
     @model_validator(mode="after")
     def _adopt_the_coverage_datum(self) -> "SourceSpec":
-        """The zero a layer carries is the one its row states.
-
-        One fact, one statement: a source that says NAVD88 on its row
-        says it to the match and to every consumer of the layer it publishes."""
+        """The zero a layer carries is the one its row states."""
         if self.vertical_datum is None:
-            # A zero the RECORD carries per feature is not one word for the
-            # source, so it is read off the feature and never adopted here.
+            # A per-feature zero is read off the feature, never adopted here.
             stated = {row.datum for row in self.coverage
                       if row.datum and row.datum != PER_RECORD}
             if len(stated) == 1:
@@ -660,7 +439,6 @@ class SourceSpec(ContractModel):
     def _validate_shape_consistency(self) -> "SourceSpec":
         """Cross-field consistency the router relies on at dispatch time."""
         _validate_style_row(self.name, self.output.style)
-        # A raster shape emits tif; a vector or station shape emits fgb.
         if self.shape == "raster-cog" and self.output.layer_type != "raster":
             raise ValueError(
                 f"shape=raster-cog requires output.layer_type=raster; "
@@ -673,7 +451,6 @@ class SourceSpec(ContractModel):
                 f"shape={self.shape} requires output.layer_type=vector; "
                 f"got {self.output.layer_type!r}"
             )
-        # The record shape and the record layer type imply each other.
         if self.shape == "record" and self.output.layer_type != "record":
             raise ValueError(
                 f"shape=record requires output.layer_type=record; "
@@ -683,9 +460,7 @@ class SourceSpec(ContractModel):
             raise ValueError(
                 f"output.layer_type=record requires shape=record; got {self.shape!r}"
             )
-        # An animation returns an ORDERED list of raster layers, so it must
-        # declare both the pre-loop plan and the per-frame builder: without them
-        # there is nothing to resolve the frame set or build a frame from.
+        # An animation needs both the pre-loop plan and the per-frame builder.
         if self.shape == "animation_frames":
             if self.output.layer_type != "raster":
                 raise ValueError(
@@ -698,7 +473,6 @@ class SourceSpec(ContractModel):
                 raise ValueError(
                     "shape=animation_frames requires hooks.frames_plan + hooks.frame_bytes"
                 )
-        # A join only makes sense over a vector base shape.
         if self.join is not None and self.shape != "vector-fgb":
             raise ValueError(
                 f"join transform requires shape=vector-fgb; got {self.shape!r}"

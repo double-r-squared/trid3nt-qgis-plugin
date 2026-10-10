@@ -48,11 +48,8 @@ def remove_boundary_pinch_points(
     """Drop the triangles that make the mesh boundary non-manifold -> the cells.
 
     A boundary vertex of degree > 2 loses its smallest incident triangle."""
-    # A mesh reader rejects a "pinch"/bowtie boundary vertex - a node whose
-    # element ball has more than one boundary opening - and a coastal TIN can
-    # leave a few where two shoreline strands touch at a single node. Deleting
-    # the smallest-area incident triangle opens the bowtie; the pass iterates
-    # until every boundary node is a simple degree-2 vertex.
+    # A mesh reader rejects a pinch (bowtie) boundary vertex; deleting the smallest incident triangle opens it,
+    # iterating until every boundary node is a simple degree-2 vertex.
     cells = np.asarray(cells, dtype=np.int64)
     for _ in range(max_passes):
         deg = _boundary_degree(cells)
@@ -96,18 +93,13 @@ def extract_boundary_loops(cells: np.ndarray) -> list[list[int]]:
     """Assemble the mesh boundary into ordered node loops (0-indexed).
 
     Longest loop first - the domain exterior; every boundary node appears."""
-    # Boundary EDGES are consumed exactly once - an Eulerian-circuit
-    # decomposition: every boundary node has even boundary degree, so greedy
-    # edge-following closes every loop and covers every edge and node. A naive
-    # node-walk strands nodes at pinch points, where two loops touch, and a
-    # reader's ring check fails on a boundary node no segment lists.
+    # Boundary edges are consumed exactly once (Eulerian decomposition): a naive node-walk strands nodes at pinch points where two loops touch.
     edge_count: dict[tuple[int, int], int] = {}
     for tri in cells:
         for a, b in ((tri[0], tri[1]), (tri[1], tri[2]), (tri[2], tri[0])):
             key = (int(a), int(b)) if a < b else (int(b), int(a))
             edge_count[key] = edge_count.get(key, 0) + 1
 
-    # unused boundary half-edges: node -> multiset of neighbor nodes
     adj: dict[int, list[int]] = {}
     for (a, b), n in edge_count.items():
         if n == 1:
@@ -172,12 +164,8 @@ def boundary_numbering(
     """Number every boundary node along the loops -> ``(ipobo, loops)``.
 
     One count continues across loops, so IPOBO is a permutation of 1..NPTFR."""
-    # TELEMAC's IPOBO is a permutation: one position per boundary node, counted
-    # along the contours without restarting, and a per-loop count breaks it. A
-    # node two loops both walk through would need two positions and gets the
-    # second, which leaves the successor array longer than the boundary and the
-    # numbering silently wrong, so that domain is refused here rather than
-    # written.
+    # TELEMAC's IPOBO is one position per boundary node counted along the contours without restarting; a node two loops both walk
+    # through would need two, so that domain is refused here rather than written.
     loops = extract_boundary_loops(np.asarray(cells, dtype=np.int64))
     seen: dict[int, int] = {}
     for loop in loops:

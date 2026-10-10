@@ -142,9 +142,8 @@ def polyline_set(value: Any, *, label: str = "lines",
         value = coords if geometry.get("type") == "MultiLineString" else [coords]
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)) or not value:
         raise _refuse(f"{label} {value!r} is not a line or a list of lines.", code)
-    # One line is a list of PAIRS; many lines is a list of LISTS of pairs. The
-    # first element decides, which is why an empty value refuses above rather
-    # than reading as "many lines, none of them".
+    # One line is a list of PAIRS; many lines is a list of LISTS of pairs. The first
+    # element decides, which is why an empty value refuses above.
     first = value[0]
     if isinstance(first, Sequence) and not isinstance(first, (str, bytes)) \
             and first and isinstance(first[0], Sequence) \

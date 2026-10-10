@@ -1,8 +1,8 @@
 """Uniform flow over a measured section: the depth a channel conveys a flow at.
 
-ONE derivation, read two ways - at one discharge for a reach outflow, swept over
-a range for a catchment outlet. It is not a measured boundary and imports no
-gauge or datum; every input it cannot measure REFUSES by name."""
+One derivation, read at one discharge for a reach outflow or swept over a range for a catchment
+outlet. It imports no gauge or datum; every input it cannot measure refuses by name.
+"""
 
 from __future__ import annotations
 
@@ -20,20 +20,13 @@ class UniformFlowError(RuntimeError):
         self.error_code = error_code
 
 
-#: The friction laws a uniform-flow depth reads under, as the exponent each puts
-#: on the hydraulic radius and whether its coefficient is a RECIPROCAL
-#: conveyance. Strickler and Manning are one law through reciprocal coefficients;
-#: Chezy is its own, with the radius under a square root. A law outside these
-#: states a coefficient no conveyance here can read, and the stage refuses rather
-#: than being derived under a law nobody wrote.
+# The friction laws a depth reads under: the exponent each puts on the hydraulic radius and whether its coefficient is a reciprocal conveyance. Strickler and Manning are one law; Chezy has the radius under a square root. Any other law refuses.
 _CONVEYANCE: dict[int, tuple[str, float, bool]] = {
     2: ("Chezy", 0.5, False),
     3: ("Strickler", 2.0 / 3.0, False),
     4: ("Manning", 2.0 / 3.0, True),
 }
-#: The bracket the stage is found inside, as depths above the section's lowest
-#: painted node: where the search starts, the floor it never returns, and the
-#: depth past which a section carrying this discharge is not a river reach.
+# The stage bracket, as depths above the section's lowest painted node: search start, the floor never returned, and the depth past which the section is not a river reach.
 _STAGE_SEED_M = 0.1
 _STAGE_FLOOR_M = 1.0e-3
 _STAGE_CEILING_M = 1000.0
@@ -43,10 +36,9 @@ def _wetted(section: Sequence[tuple[float, float]],
             stage: float) -> tuple[float, float]:
     """Wetted area and perimeter of the measured section at a water elevation.
 
-    Panels are trapezoids cut at the waterline; the end points are vertical walls."""
-    # Above the higher of the two end points the section rises vertically rather
-    # than spreading into ground the mesh does not hold, so a stage is defined
-    # everywhere and a flat face is a rectangle rather than a division by zero.
+    Panels are trapezoids cut at the waterline; the end points are vertical walls.
+    """
+    # Above the higher end point the section rises vertically, so a stage is defined everywhere and a flat face is a rectangle, not a division by zero.
     area = perimeter = 0.0
     for (o1, z1), (o2, z2) in zip(section, section[1:]):
         d1, d2 = stage - z1, stage - z2
@@ -66,9 +58,10 @@ def _wetted(section: Sequence[tuple[float, float]],
 
 
 def _conveyance(law: int, coefficient: float) -> tuple[str, float, float]:
-    """``(law name, radius exponent, conveyance)`` for a friction law -> refuses.
+    """``(law name, radius exponent, conveyance)`` for a friction law, or a refusal.
 
-    Conveyance is what discharge is LINEAR in, so callers multiply, never branch."""
+    Discharge is linear in conveyance, so callers multiply, never branch.
+    """
     if law not in _CONVEYANCE:
         raise UniformFlowError(
             "TELEMAC_OUTFLOW_FRICTION_UNREADABLE",
@@ -84,7 +77,8 @@ def _uniform_flow(section: Sequence[tuple[float, float]], *, law: int,
                   coefficient: float, slope: float) -> Callable[[float], float]:
     """The discharge this section conveys at a water elevation, under uniform flow.
 
-    One closure, so solving and evaluating cannot spell conveyance differently."""
+    One closure, so solving and evaluating cannot spell conveyance differently.
+    """
     _name, exponent, conveyance = _conveyance(law, coefficient)
     root_slope = math.sqrt(slope)
 
@@ -99,9 +93,10 @@ def _uniform_flow(section: Sequence[tuple[float, float]], *, law: int,
 
 def _stage_conveying(discharge: Callable[[float], float], thalweg: float,
                      q_m3s: float, *, slope: float) -> float:
-    """The elevation at which ``discharge`` reaches ``q_m3s`` -> refuses.
+    """The elevation at which ``discharge`` reaches ``q_m3s``, or a refusal.
 
-    A channel needing a kilometre of water is not this discharge's channel."""
+    A channel needing a kilometre of water is not this discharge's channel.
+    """
     from scipy.optimize import brentq
 
     top = thalweg + _STAGE_SEED_M
@@ -120,9 +115,10 @@ def _stage_conveying(discharge: Callable[[float], float], thalweg: float,
 
 def normal_depth_stage(bed: Mapping[str, Any], *, law: int,
                        coefficient: float, discharge_q: float) -> dict[str, Any]:
-    """The outflow stage as NORMAL DEPTH -> the elevation and what derived it.
+    """The outflow stage as normal depth -> the elevation and what derived it.
 
-    ``bed`` is the reach measured on the accepted mesh, at THIS deck's roughness."""
+    ``bed`` is the reach measured on the accepted mesh, at this deck's roughness.
+    """
     section = [(float(o), float(z))
                for o, z in (bed.get("outflow_section") or ())]
     if len(section) < 2:
@@ -158,14 +154,7 @@ def normal_depth_stage(bed: Mapping[str, Any], *, law: int,
             "coefficient": coefficient, "q_m3s": discharge_q}
 
 
-#: How many points the derived rating curve carries, spaced uniformly in
-#: DISCHARGE from nothing up to the range's ceiling. Discharge is what the engine
-#: LOOKS the curve up by, so even spacing there bounds the slope of every
-#: interval at the physical dZ/dQ of the channel. Spacing them evenly in stage
-#: instead crushes the low-flow end into a first interval carrying almost no
-#: discharge and several centimetres of stage - measured on the Coweeta outlet,
-#: 4.25 m of level per m3/s - and a boundary that swings metres on a trickle
-#: lifts water back into a catchment that has not started running off yet.
+# Points on the rating curve, spaced evenly in discharge: the engine looks the curve up by discharge, so this bounds each interval's slope at the channel's dZ/dQ. Even stage spacing crushes the low end into an interval of centimetres per trickle (4.25 m per m3/s on one outlet), lifting water back into a catchment not yet running off.
 _RATING_POINTS = 20
 
 
@@ -174,13 +163,9 @@ def derive_rating_curve(section: Sequence[tuple[float, float]], *, law: int,
                         q_ceiling_m3s: float) -> dict[str, Any]:
     """The section's stage-discharge curve under uniform flow -> what derived it.
 
-    Rows are ``(discharge, elevation)`` lowest first, the dry section at zero."""
-    # The same normal-depth derivation a reach's outflow stage is, evaluated over a
-    # range of discharges instead of at one; nothing here is fitted and no gauge is
-    # imported. ``q_ceiling_m3s`` is the top of the range and its BASIS is the
-    # caller's to state: the curve is flat above it because the engine holds the
-    # last point, so a ceiling below the flow that arrives caps the level rather
-    # than extrapolating a channel nobody measured.
+    Rows are ``(discharge, elevation)`` lowest first, the dry section at zero.
+    """
+    # The same normal-depth derivation as a reach's outflow stage, over a range; nothing is fitted. ``q_ceiling_m3s`` is the caller's to base: the curve is flat above it (the engine holds the last point), so a low ceiling caps the level rather than extrapolating.
     import numpy as np
 
     rows = [(float(o), float(z)) for o, z in section]
@@ -199,8 +184,7 @@ def derive_rating_curve(section: Sequence[tuple[float, float]], *, law: int,
     thalweg = min(z for _offset, z in rows)
     stage_max = _stage_conveying(discharge, thalweg, q_ceiling_m3s, slope=slope)
     flows = np.linspace(0.0, float(q_ceiling_m3s), _RATING_POINTS)
-    # The dry section carries no flow, and it is the level the engine holds the
-    # outlet at below the curve, so it is stated rather than solved for.
+    # The dry section carries no flow and is the level the engine holds the outlet at below the curve, so it is stated, not solved.
     return {
         "rows": [(round(float(q), 6),
                   round(thalweg if q <= 0.0 else

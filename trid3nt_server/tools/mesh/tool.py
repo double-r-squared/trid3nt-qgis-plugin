@@ -117,10 +117,7 @@ def resolve_mesh(
                 f"the mesh supplied for this run ({explicit!r}) carries no readable "
                 "mesh artifact record, so what it is cannot be checked against the "
                 "engine; supply a mesh this case built.")
-        # The ``mesh`` row is the TEMPLATE's statement of which supplied meshes
-        # its pipeline was built and tested against, and it is the only question
-        # asked here. Whether the engine can be staged on this one is asked by
-        # that engine's own author, against the files it needs.
+        # The ``mesh`` row states which supplied meshes the template was built against; whether the engine can be staged on one is that engine's author's question.
         _refuse_unaccepted_kind(art, accepts)
         return MeshResolution("explicit", "supplied on the run", artifact=art)
 

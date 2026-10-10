@@ -18,11 +18,8 @@ __all__ = ["retrieve"]
 
 def retrieve(spec: SourceSpec, call: Callable[..., Any], *, input_on_400: bool = True,
              **kwargs: Any) -> Any:
-    """Call one ``dataretrieval`` function under the shared transport's retry: a
-    failed connection (reset, timeout, TLS handshake), a 429 or a 5xx is tried again,
-    any other status is not. What outlasts the retries is a typed upstream error with
-    the provider's own message verbatim, which names its host; an HTTP 400 is the
-    caller's bad request and a non-retryable input error when ``input_on_400``."""
+    """Call one ``dataretrieval`` function under the shared retry (connection failure, 429, 5xx); what outlasts it
+    is a typed upstream error with the provider's message verbatim, and an HTTP 400 is a non-retryable input error when ``input_on_400``."""
     from dataretrieval.exceptions import DataRetrievalError, NetworkError, TransientError
 
     def transient(exc: Exception) -> bool:

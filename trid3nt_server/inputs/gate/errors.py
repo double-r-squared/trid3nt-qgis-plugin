@@ -1,21 +1,18 @@
 """Typed gate refusals: a declined card, an expired card, a bad draw reply.
 
-Each type carries an ``error_code`` and a ``retryable`` flag that the result
-summarizer harvests, so a gate refusal reaches the model as a structured
-function response and the turn completes honestly. A DECLINE is a separate
-class from a failure - ``UserDeclinedError`` marks the user's own answer - and a
-card nobody answered is neither: ``GateConfirmationTimeoutError``."""
+Each carries an ``error_code`` and a ``retryable`` flag the result summarizer harvests.
+A DECLINE (``UserDeclinedError``) is the user's own answer and apart from a failure; a
+card nobody answered is neither (``GateConfirmationTimeoutError``).
+"""
 
 from __future__ import annotations
 
 
 class UserDeclinedError(RuntimeError):
     """The user answered a gate card with cancel, so the tool never ran.
-    ``declined`` is the marker three seams read without importing this module:
-    the pipeline emitter marks the step cancelled rather than failed, the result
-    summarizer hands the model a declined result rather than an error, and the
-    circuit breaker leaves the tool's retry budget alone. ``decline_note`` names
-    the card and what it asked, in the words the model relays."""
+
+    ``declined`` is the marker the emitter, the summarizer and the circuit breaker read
+    without importing this module; ``decline_note`` is the words the model relays."""
 
     declined: bool = True
     retryable: bool = False
@@ -29,8 +26,7 @@ class GateConfirmationTimeoutError(RuntimeError):
     """Raised when a gate card reached its deadline with nobody answering, which
     is not the user's decision: no ``declined`` marker, so the emitter fails the
     step rather than cancelling it and the summarizer hands the model an error.
-    ``retryable=False``: a re-issue parks on another card nobody answers. The
-    message IS the narration, and it never reads as a decline."""
+    ``retryable=False``: a re-issue parks on another card nobody answers."""
 
     error_code: str = "CONFIRMATION_TIMEOUT"
     retryable: bool = False
@@ -86,8 +82,7 @@ class CodeExecConfirmationCancelledError(UserDeclinedError):
 class SolverConfirmationCancelledError(UserDeclinedError):
     """Raised when a solver confirm gate denies the dispatch on the user's own
     answer; a cancel and a narrow_scope the card never offered both fail closed,
-    ``retryable=False``, so the model narrates the decline instead of
-    re-dispatching the same run."""
+    ``retryable=False``, so the model narrates the decline instead of re-dispatching."""
 
     error_code: str = "SOLVER_CONFIRMATION_CANCELLED"
 

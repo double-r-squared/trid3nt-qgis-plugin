@@ -1,8 +1,8 @@
 """A TELEMAC module's keyword surface, as the engine publishes it.
 
-Every assertion is DATA, fixed when the module is imported: a body reads no value
-any fill produced, and every refusal - an unknown keyword, a wrong type, a body
-extending anything but its wrapper - is raised at IMPORT time."""
+Every assertion is data, fixed at import: a body reads no value any fill produced, and every
+refusal (unknown keyword, wrong type, a body extending anything but its wrapper) is raised at import.
+"""
 
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ class _Unset:
 
 UNSET = _Unset()
 
-#: Class attributes a wrapper carries that are never keyword assertions.
+# Class attributes a wrapper carries that are never keyword assertions.
 _RESERVED = frozenset((
     "MODULE", "MODULE_INPUT", "COMPOSITES", "READS", "ASSERTED", "ARMS",
     "ARMS_ON_HOST", "MODULE_OUTPUT", "LISTING", "DERIVED", "PRINTOUTS",
@@ -65,20 +65,15 @@ def module_input_dir() -> Path:
     return Path(__file__).resolve().parent / "module_input"
 
 
-#: PLAUSIBILITY BOUNDS beside the dictionary row, by module and identifier: the
-#: UNIT the keyword is read in and the range a value of it is taken inside, and
-#: refused by name outside. A sidecar rather than a column in the dictionary
-#: itself, because the dictionary is the image's own and is compared to it byte
-#: for byte - and the dictionary carries the unit only in the prose of its help,
-#: which is not a fact a card row can render. One ``[lo, hi]`` bounds every
-#: value the keyword holds; a list of them is one per element, in the keyword's
-#: own order. This is the table calibration reads.
+# Plausibility bounds beside the dictionary row, by module and identifier: the unit the keyword is
+# read in and the range a value is taken inside (refused by name outside). A sidecar because the
+# dictionary is the image's own, compared byte for byte, and carries units only in help prose. One
+# ``[lo, hi]`` bounds every value; a list is one per element in the keyword's order. Calibration reads this table.
 _BOUNDS_FILE = Path(__file__).resolve().parent / "module_bounds.json"
 
 
 @lru_cache(maxsize=None)
 def _bounds(module: str) -> Mapping[str, tuple[str, tuple]]:
-    """The sidecar's ``(unit, bounds)`` rows for one module, by identifier."""
     rows = json.loads(_BOUNDS_FILE.read_text()).get(module) or {}
     return MappingProxyType({
         name: (str(row["unit"]),
@@ -107,42 +102,36 @@ class Slot:
     mnemo: str = ""
     file_role: str = ""
     file_mandatory: bool = False
-    #: The unit this keyword's value is read in, as the bounds sidecar states
-    #: it; empty on a keyword nothing bounds and on a dimensionless one.
+    # The unit this keyword's value is read in, per the bounds sidecar; empty if unbounded or dimensionless.
     unit: str = ""
-    #: The plausibility range each of this keyword's values is taken inside: one
-    #: pair for every value, or one pair per element in the keyword's own order.
+    # The plausibility range per value: one pair for all, or one per element in the keyword's order.
     bounds: tuple[tuple[float, float], ...] = ()
-    #: This keyword's ONE value is a separator-joined selection from its
-    #: choices, so the choices do not name whole values.
+    # This keyword's one value is a separator-joined selection from its choices, so the choices do not name whole values.
     multi_select: bool = False
 
     @property
     def is_list(self) -> bool:
-        """TAILLE is the value's ARITY. Being open-ended says the length is not
-        fixed at it, not that a keyword of arity one carries several values -
-        the engine reads only the first of those and says nothing."""
+        """TAILLE is the value's arity. Open-ended says the length is not fixed at it, not that an arity-one keyword carries several values (the engine reads the first and says nothing)."""
         return (self.size or 1) > 1
 
     @property
     def is_open(self) -> bool:
         """The dictionary gives this keyword no default, so nothing answers it.
 
-        Lists included: an undefaulted list is empty until something states it."""
+        Lists included: an undefaulted list is empty until something states it.
+        """
         return self.engine_default is UNSET
 
     @property
     def is_required(self) -> bool:
         """The engine will not start without this one: an OBLIG file, undefaulted.
 
-        The dictionary's OBLIG mark is the only thing a run refuses on."""
-        # What else the engine demands it demands from its own listing, where
-        # LECDON names the keyword; a required set invented here would be this
-        # code guessing at the Fortran's conditions.
+        The dictionary's OBLIG mark is the only thing a run refuses on.
+        """
+        # Other demands come from the engine's own listing, where LECDON names the keyword; a set invented here would guess at the Fortran's conditions.
         return self.is_file and self.file_mandatory and self.is_open
 
     def check(self, value: Any) -> Any:
-        """``value`` as this slot takes it, or the refusal that says why not."""
         value = self.fits(value, typed=self._typed)
         if self.choices and not self.multi_select and not self.is_list \
                 and str(value) not in self.choices:
@@ -152,8 +141,7 @@ class Slot:
         return value
 
     def fits(self, value: Any, typed: Any = None) -> Any:
-        """``value`` if its ARITY and plausibility range fit this slot - what the
-        engine's own steering-file class does not check."""
+        """``value`` if its arity and plausibility range fit this slot - what the engine's steering-file class does not check."""
         typed = typed or (lambda item: item)
         if not self.is_list:
             return self._bounded(typed(value), 0)
@@ -166,16 +154,15 @@ class Slot:
             raise SlotRefused(
                 f"{self.keyword} takes exactly {self.size} values; "
                 f"got {len(value)}.")
-        # A LIST's choices are the ENGINE'S to check: the dictionary spells a
-        # tracer choice as T*, kSi, T1*, and telapy's reader knows those
-        # spellings.
+        # A list's choices are the engine's to check: the dictionary spells a tracer choice as T*, kSi, T1*, and telapy's reader knows those spellings.
         return [self._bounded(typed(item), position)
                 for position, item in enumerate(value)]
 
     def _bounded(self, value: Any, position: int) -> Any:
         """``value`` if the bounds row takes it, or the refusal that names both.
 
-        A keyword the sidecar rows no bounds for is bounded by the engine alone."""
+        A keyword with no bounds row is bounded by the engine alone.
+        """
         if not self.bounds or self.type == "STRING":
             return value
         low, high = self.bounds[position if len(self.bounds) > 1 else 0]
@@ -188,7 +175,6 @@ class Slot:
         return value
 
     def _typed(self, value: Any) -> Any:
-        """``value`` if it is what the dictionary says this keyword holds."""
         if not isinstance(value, _TYPES[self.type]) \
                 or isinstance(value, bool) != (self.type == "LOGICAL"):
             raise SlotRefused(
@@ -202,8 +188,7 @@ class Slot:
         return ", ".join(str(c) for c in self.choices or ())
 
 
-#: What each dictionary type is in Python. LOGICAL is separated from INTEGER in
-#: ``_scalar`` because a bool IS an int and the two are not interchangeable here.
+# What each dictionary type is in Python; LOGICAL is separated from INTEGER in ``_scalar`` because a bool is an int.
 _TYPES: Mapping[str, Any] = {
     "INTEGER": int, "REAL": (int, float), "LOGICAL": bool, "STRING": str,
 }
@@ -213,17 +198,16 @@ _TYPES: Mapping[str, Any] = {
 class Composite:
     """One value standing for several slots, and the file they name.
 
-    ``expand`` is ``(value) -> (slots, files)``, keyed by identifier and basename;
-    one that also takes ``run`` reads the run's mapping itself. ``reads`` are
-    the arguments that take an input's NAME rather than a literal."""
+    ``expand`` is ``(value) -> (slots, files)``, keyed by identifier and basename; one also taking ``run``
+    reads the run's mapping itself. ``reads`` are the arguments that take an input's name.
+    """
 
     name: str
     expand: Callable[..., tuple[Mapping[str, Any], Mapping[str, Any]]]
     reads: frozenset[str] = frozenset()
 
     def names(self, value: Any) -> list[str]:
-        """Every input name ``value`` states in an argument that takes one; a
-        mapping inside such an argument states its own the same way."""
+        """Every input name ``value`` states in an argument that takes one, including inside a mapping."""
         if not isinstance(value, Mapping):
             return []
         found: list[str] = []
@@ -235,7 +219,6 @@ class Composite:
 
     def apply(self, value: Any, run: Mapping[str, Any]
               ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-        """``value`` expanded, each name its arguments state read off ``run``."""
         if isinstance(value, Mapping):
             value = {key: _read(run, item, self.name) if key in self.reads
                      else item for key, item in value.items()}
@@ -245,8 +228,6 @@ class Composite:
 
 
 def _read(run: Mapping[str, Any], value: Any, composite: str) -> Any:
-    """One argument with each name it states read off ``run``, refused by name
-    where no input of the run is called that."""
     if isinstance(value, (list, tuple)):
         return type(value)(_read(run, item, composite) if isinstance(item, str)
                            else item for item in value)
@@ -260,47 +241,30 @@ def _read(run: Mapping[str, Any], value: Any, composite: str) -> Any:
 
 @dataclass(frozen=True, slots=True)
 class Output:
-    """One variable the module writes: what the result file calls it, the unit it
-    is read in, the style row it draws under, whether it varies in time, and
-    whether it has a visible EDGE.
+    """One variable the module writes: its result-file name, unit, style row, whether it varies in time, and whether it has a visible edge.
 
-    A row that does not vary is painted and never animated. A row with an edge
-    is masked below a fraction of its own magnitude so what is visible reads as
-    the shape it has; a variable the water already carries is everywhere and is
-    drawn whole. ``None`` leaves it to the table the row is read off: a tracer
-    row has an edge, a written variable does not. The edge is about DRAWING and
-    says nothing about whether the deck put the quantity there, which is the
-    row below."""
+    A row that does not vary is painted, never animated. An edge row is masked below a fraction of its
+    magnitude; a variable the water carries everywhere is drawn whole. ``None`` leaves it to the table: a tracer row
+    has an edge, a written variable does not. The edge is about drawing, not whether the deck put the quantity there.
+    """
 
     name: str
     unit: str = ""
     style: Mapping[str, Any] | None = None
     varies: bool = True
     has_edge: bool | None = None
-    #: Did the DECK put this quantity into the domain - a tracer it declared, a
-    #: release, a stated initial value? Only such a row is refused when it is
-    #: nothing everywhere: what the deck put in and the run lost is a broken
-    #: run, while a variable the engine grows - an ice cover, a bed evolution -
-    #: is honestly zero where nothing happened. ``None`` leaves it to the table
-    #: the row is read off, the same way the edge is read.
+    # Did the deck put this quantity into the domain (a declared tracer, a release, a stated initial value)? Only such a row is refused when nothing everywhere: a variable the engine grows (ice cover, bed evolution) is honestly zero. ``None`` leaves it to the table.
     injected: bool | None = None
-    #: The keyword this row EXISTS UNDER, by identifier: the engine allocates
-    #: the variable only with it true, and asking for a variable it did not
-    #: allocate stops the solve rather than dropping the row. Empty on a row
-    #: the module always carries. The DECK decides it, and a deck that leaves it
-    #: unstated decides it at the dictionary's own default, because that is the
-    #: value the engine then reads.
+    # The keyword this row exists under: the engine allocates the variable only with it true, and asking for an unallocated one stops the solve. Empty on a row always carried. A deck leaving it unstated decides it at the dictionary default.
     under: str = ""
 
 
 @dataclass(frozen=True, slots=True)
 class Unwritten:
-    """A slot the ENGINE'S OWN SOURCE marks as never written: the name its result
-    file carries the slot under, in English and where it differs in French, and
-    the source line that makes the mark.
+    """A slot the engine's own source marks as never written: its result-file name in English (and French where it differs), and the source line making the mark.
 
-    The mark is the module speaking, so one entry governs both directions: the
-    slot is never asked of the engine and never published off the file."""
+    One entry governs both directions: never asked of the engine, never published off the file.
+    """
 
     spelling: str
     cited: str
@@ -309,8 +273,7 @@ class Unwritten:
 
 @lru_cache(maxsize=None)
 def load_module_input(module: str) -> Mapping[str, Slot]:
-    """The module's whole keyword surface, keyed by the identifier it is written
-    under. The dictionary's own order is kept: a sheet reads down it."""
+    """The module's whole keyword surface by identifier, in the dictionary's order (a sheet reads down it)."""
     path = module_input_dir() / f"{module}.json"
     if not path.is_file():
         raise SlotRefused(
@@ -337,7 +300,8 @@ def load_module_input(module: str) -> Mapping[str, Slot]:
 class _Body(type):
     """The metaclass every wrapper and every body extending one is made by.
 
-    A body's namespace is checked against the dictionary at import."""
+    A body's namespace is checked against the dictionary at import.
+    """
 
     def __call__(cls, *args: str) -> type:
         if cls is not Module:
@@ -364,8 +328,7 @@ class _Body(type):
 
 
 def _refuse_extended_body(cls: type, bases: tuple) -> None:
-    """A body extends the WRAPPER and nothing else: a value two bodies share is
-    restated in each, under the template that states it."""
+    """A body extends the wrapper and nothing else: a value two bodies share is restated in each."""
     for base in bases:
         if getattr(base, "ASSERTED", None):
             raise SlotRefused(
@@ -375,7 +338,6 @@ def _refuse_extended_body(cls: type, bases: tuple) -> None:
 
 def _asserted(cls: type, namespace: Mapping[str, Any],
               dictionary: Mapping[str, Slot]) -> dict[str, Any]:
-    """This body's own assertions, each checked against the keyword it names."""
     composites = getattr(cls, "COMPOSITES", {})
     asserted: dict[str, Any] = {}
     for key, value in namespace.items():
@@ -389,22 +351,18 @@ def _asserted(cls: type, namespace: Mapping[str, Any],
             raise SlotRefused(
                 f"{cls.__name__} asserts {key!r}, which {cls.MODULE} has no "
                 f"keyword for.{_nearest(key, dictionary, composites)}")
-        # None is not a value any keyword takes, so the one thing it can mean is
-        # that this body states nothing here and the dictionary's default stands.
+        # None is no keyword's value, so it means this body states nothing here and the dictionary default stands.
         asserted[key] = None if value is None else slot.check(value)
     return asserted
 
 
 def _is_method(value: Any) -> bool:
-    """Is this namespace entry the body's own code rather than a slot's value?
-
-    A keyword's value is data; no dictionary spells a keyword as a callable."""
+    """A keyword's value is data; no dictionary spells a keyword as a callable."""
     return isinstance(value, (classmethod, staticmethod, FunctionType))
 
 
 def _nearest(key: str, dictionary: Mapping[str, Slot],
              composites: Mapping[str, Any]) -> str:
-    """The keyword the misspelling was probably reaching for."""
     close = difflib.get_close_matches(key, list(dictionary) + list(composites), n=3)
     return f" Did you mean {', '.join(close)}?" if close else ""
 
@@ -412,91 +370,59 @@ def _nearest(key: str, dictionary: Mapping[str, Slot],
 class Module(metaclass=_Body):
     """A module's dictionary, its composites, what it writes and how it is read.
 
-    There is no hook for a default: the engine's default is the whole position."""
+    There is no hook for a default: the engine's default is the whole position.
+    """
 
-    #: The engine module this wraps, e.g. ``telemac2d``.
+    # The engine module this wraps, e.g. ``telemac2d``.
     MODULE: str = ""
-    #: Every keyword the module has, by identifier.
+    # Every keyword the module has, by identifier.
     MODULE_INPUT: Mapping[str, Slot] = MappingProxyType({})
     COMPOSITES: Mapping[str, Composite] = MappingProxyType({})
-    #: The keywords a run input fills ITSELF, by the input's name: identifier ->
-    #: the value read off what that input holds. A body that states one wins.
+    # Keywords a run input fills itself, by input name: identifier -> value read off what the input holds. A body that states one wins.
     FILLED_BY: Mapping[str, Mapping[str, Callable[[Any], Any]]] = MappingProxyType({})
-    #: What the module WRITES, by the mnemonic its printouts keyword spells: one
-    #: row per variable, and the whole statement - a variable the dictionary
-    #: offers and this table does not row is not written.
+    # What the module writes, by printouts mnemonic: one row per variable; a variable the dictionary offers and this table does not row is not written.
     MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({})
-    #: The primitives over that output: kind -> the read of it off a solved run.
+    # The primitives over that output: kind -> the read off a solved run.
     READS: Mapping[str, Callable[..., Any]] = MappingProxyType({})
-    #: The rows the module PRINTS in its listing rather than writes to its result
-    #: file; a series of one is read off the listing.
+    # Rows the module prints in its listing rather than writing to its result file; a series of one is read off the listing.
     LISTING: frozenset[str] = frozenset()
-    #: The rows the module defines OVER the variables its result carries, each
-    #: ``(solved) -> (name, units, values(nframes, npoin2))``.
+    # Rows defined over the result's variables, each ``(solved) -> (name, units, values(nframes, npoin2))``.
     DERIVED: Mapping[str, Callable[..., Any]] = MappingProxyType({})
-    #: The keyword the table is written into, by identifier; empty on a module
-    #: that writes no result of its own.
+    # The keyword the table is written into, by identifier; empty on a module with no result of its own.
     PRINTOUTS: str = ""
-    #: The keyword saying HOW OFTEN that table is written, by identifier; empty
-    #: on a module that does not march in time, which writes one record. Where a
-    #: module names one, a deck that states no value for it refuses: the
-    #: dictionary's own default is every step, which is an animation nobody sized.
+    # The keyword saying how often the table is written; empty on a module that does not march in time. Where named, a deck stating none refuses: the dictionary default is every step, an animation nobody sized.
     CADENCE: str = ""
-    #: The token a tracer takes in that keyword, which is also the row its style
-    #: is under; empty on a module with no tracer surface.
+    # The token a tracer takes in that keyword, also its style row; empty on a module with no tracer surface.
     TRACER: str = ""
-    #: What this module APPENDS to its carrier's tracers, ``(body) -> rows``;
-    #: ``None`` where it appends none.
+    # What this module appends to its carrier's tracers, ``(body) -> rows``; ``None`` if none.
     APPENDS: Callable[[Any], Any] | None = None
-    #: The rows that hook can append and WHEN, as ``(condition, rows)`` the hook
-    #: itself reads - so what a module may put on its carrier is enumerable
-    #: without a body to run it against.
+    # The rows that hook can append and when, as ``(condition, rows)``, enumerable without a body.
     APPENDABLE: tuple[tuple[str, tuple[Output, ...]], ...] = ()
-    #: Choices the printouts keyword spells that the engine never writes, by
-    #: mnemonic, each citing the engine source line that marks it: never a row
-    #: and never a layer, though a wildcard may reach them in the file.
+    # Choices the printouts keyword spells that the engine never writes, by mnemonic, each citing the source line: never a row or layer, though a wildcard may reach them.
     UNWRITTEN: Mapping[str, Unwritten] = MappingProxyType({})
-    #: The result file the primitives read; empty reads the run's own.
+    # The result file the primitives read; empty reads the run's own.
     RESULT_FILE: str = ""
-    #: The keyword a deck of this module NAMES that result in, by identifier.
-    #: Every module writes one and they do not all spell it alike - TOMAWAC's is
-    #: 2D RESULTS FILE - so the reader that wants the name asks the module for
-    #: the spelling rather than assuming one module's word.
+    # The keyword a deck NAMES that result in; modules spell it differently (TOMAWAC: 2D RESULTS FILE), so readers ask the module.
     RESULT_KEYWORD: str = "RESULTS_FILE"
-    #: How this module spells its run LENGTH, by identifier: the keywords whose
-    #: PRODUCT is the seconds a solve covers - one where the module names the
-    #: window itself, two where it names a step and a count of them. Empty on a
-    #: module that does not march in time, whose run covers no window at all.
+    # How the module spells its run length: keywords whose product is the seconds covered (one for the window, two for a step and a count). Empty on a module that does not march in time.
     CLOCK: tuple[str, ...] = ()
-    #: The OTHER result files a deck of this module may name, by identifier: a
-    #: file the module writes that no primitive of the geographic mesh reads -
-    #: TOMAWAC's spectra over the frequency-direction grid. A deck that names
-    #: one wrote it, so the run declares it, checks it landed and keeps it for
-    #: download; one the deck does not name is not a file of this run.
+    # Other result files a deck may name, no geographic-mesh primitive reading them (TOMAWAC's spectra). A deck that names one wrote it, so the run declares, checks and keeps it.
     RESULT_FILES: tuple[str, ...] = ()
-    #: The keywords a COUPLED body of this module has only under a
-    #: three-dimensional host, by identifier. The host's own coupling composite
-    #: refuses them by name, because a two-dimensional host never builds the
-    #: field they describe and the engine reads them off a deck it then ignores.
+    # Keywords a coupled body has only under a 3D host; the host's coupling composite refuses them by name because a 2D host never builds the field and the engine ignores them.
     ONLY_3D: frozenset[str] = frozenset()
-    #: What THIS body asserts - empty on a wrapper, by law.
+    # What this body asserts - empty on a wrapper, by law.
     ASSERTED: Mapping[str, Any] = MappingProxyType({})
-    #: The keyword whose value ARMS a term, by the switch it turns on. The
-    #: engine reads the value only with the switch true, so a rate stated by
-    #: name and left disarmed is a number nothing reads.
+    # The keyword whose value arms a term, by the switch it turns on; a rate stated and left disarmed is a number nothing reads.
     ARMS: Mapping[str, str] = MappingProxyType({})
-    #: The HOST switches a COUPLED body of this module arms, by identifier. The
-    #: engine reads what the module hands back only with the switch true, so a
-    #: coupling nobody armed is a module the host never feels. The host deck
-    #: keeps whatever it states itself, off included.
+    # Host switches a coupled body arms, by identifier; the engine reads what the module hands back only with the switch true. The host deck keeps whatever it states, off included.
     ARMS_ON_HOST: tuple[str, ...] = ()
 
     @classmethod
     def seconds(cls, stated: Mapping[str, Any]) -> float | None:
         """How long a run of this module covers, off the keywords it spells it in.
 
-        ``None`` where the module states no clock, or where a keyword of it has
-        no number yet: a length read off half a spelling is not a window."""
+        ``None`` where the module states no clock or a keyword has no number yet.
+        """
         if not cls.CLOCK:
             return None
         length = 1.0
@@ -510,8 +436,7 @@ class Module(metaclass=_Body):
     @classmethod
     def composites(cls, reads: Mapping[str, Sequence[str]] | None = None,
                    **expanders: Callable[[Any], Any]) -> None:
-        """Register the module's composites: name -> its expander; ``reads`` is
-        name -> the arguments of it that take an input's name."""
+        """Register the module's composites: name -> expander; ``reads`` is name -> the arguments taking an input's name."""
         cls.COMPOSITES = MappingProxyType({
             **cls.COMPOSITES,
             **{name: Composite(name=name, expand=fn,
@@ -520,8 +445,7 @@ class Module(metaclass=_Body):
 
     @classmethod
     def named(cls) -> list[str]:
-        """Every input name this body's composites read, a coupled body's own
-        among them: what the fill checks against the run's inputs."""
+        """Every input name this body's composites read, a coupled body's among them."""
         from . import wrapper_for
 
         found: list[str] = []
@@ -542,30 +466,27 @@ class Module(metaclass=_Body):
 
     @classmethod
     def reads(cls, **readers: Callable[..., Any]) -> None:
-        """Register the primitives over the module's output: kind -> the read."""
         cls.READS = MappingProxyType({**cls.READS, **dict(_unshadowed(cls, readers))})
 
     @classmethod
     def appends(cls, expand: Callable[[Any], Any]) -> None:
-        """Register what a coupled body of this module appends to its carrier."""
         cls.APPENDS = staticmethod(expand)
 
     @classmethod
     def switched(cls, identifier: str, stated: Mapping[str, Any]) -> bool:
         """Is this keyword TRUE on the deck as it stands?
 
-        A deck that states nothing is a deck the engine reads the dictionary's
-        own default for, so an unstated switch is that default and not a no."""
+        An unstated switch is the dictionary's default, not a no.
+        """
         return stated.get(identifier, cls.slot(identifier).engine_default) is True
 
     @classmethod
     def table(cls, stated: Mapping[str, Any] = MappingProxyType({}),
               ) -> Mapping[str, Output]:
-        """The module's output table as THIS deck carries it, by token.
+        """The module's output table as this deck carries it, by token.
 
-        A row that exists only UNDER a keyword is here where the deck switches
-        that keyword on; a wrapper whose engine numbers rows per class writes
-        those numbered rows here, off the count the deck itself states."""
+        A row existing only under a keyword is here where the deck switches it on; per-class numbered rows follow the deck's count.
+        """
         return MappingProxyType({
             token: row for token, row in cls.MODULE_OUTPUT.items()
             if not row.under or cls.switched(row.under, stated)})
@@ -575,7 +496,8 @@ class Module(metaclass=_Body):
                 ) -> tuple[str, ...]:
         """The tokens the printouts keyword carries, past the run's tracers.
 
-        A row the module prints or derives is published or read, never asked for."""
+        A row the module prints or derives is published or read, never asked for.
+        """
         return tuple(token for token in cls.table(stated)
                      if token not in cls.LISTING and token not in cls.DERIVED
                      and token != cls.TRACER)
@@ -586,9 +508,8 @@ class Module(metaclass=_Body):
                   ) -> Mapping[str, str]:
         """The table as the keyword the engine reads it from, or nothing at all.
 
-        Every token is checked against the dictionary's own choices, so a table
-        the engine would not spell refuses here rather than in the Fortran; a
-        table longer than the engine's own line is spelled in its own wildcard."""
+        Every token is checked against the dictionary's choices so an unspellable table refuses here; one longer than the engine's line is spelled in its wildcard.
+        """
         if not cls.PRINTOUTS:
             return {}
         slot = cls.slot(cls.PRINTOUTS)
@@ -614,7 +535,6 @@ class Module(metaclass=_Body):
 
     @classmethod
     def slot(cls, identifier: str) -> Slot:
-        """One slot by identifier, or the refusal that names the nearest."""
         found = cls.MODULE_INPUT.get(identifier)
         if found is None:
             raise SlotRefused(
@@ -624,9 +544,7 @@ class Module(metaclass=_Body):
 
     @classmethod
     def identify(cls, name: str) -> str:
-        """The identifier a name is written under: raw keyword, identifier or
-        composite. An unknown name refuses, naming the nearest keyword the
-        dictionary itself spells."""
+        """The identifier a name is written under (raw keyword, identifier or composite); an unknown name refuses naming the nearest keyword."""
         wanted = str(name).strip()
         by_keyword = {slot.keyword: identifier
                       for identifier, slot in cls.MODULE_INPUT.items()}
@@ -641,19 +559,15 @@ class Module(metaclass=_Body):
             + (f" Did you mean {', '.join(repr(c) for c in close)}?" if close else ""))
 
 
-#: How a floor name NAMES THE BODY it is resolved against: the module's own
-#: name, then the keyword. Split on the FIRST separator, because a keyword may
-#: carry one and a module name may not.
+# How a floor name names the body it resolves against: the module's name, then the keyword, split on the first separator (a keyword may carry one, a module name may not).
 _QUALIFIER = ":"
 
 
 def identify_on(bodies: Sequence[type], name: str) -> tuple[type, str]:
     """The ``(body, identifier)`` a name is written under, across a run's bodies.
 
-    A qualified ``"waqtel: K2 REAERATION COEFFICIENT"`` resolves against that
-    body alone. A bare name resolves where exactly ONE body spells it; two
-    refuses, naming both qualified spellings, because the carrier and its
-    coupled deck read their same-named keywords apart."""
+    A qualified ``"waqtel: K2 REAERATION COEFFICIENT"`` resolves against that body alone. A bare name resolves where exactly one body spells it; two refuse, naming both.
+    """
     wanted = str(name).strip()
     if _QUALIFIER in wanted:
         module, _, keyword = wanted.partition(_QUALIFIER)
@@ -673,8 +587,7 @@ def identify_on(bodies: Sequence[type], name: str) -> tuple[type, str]:
             + " or ".join(f"{body.MODULE}{_QUALIFIER} {wanted}"
                           for body in spelled) + ".")
     if not spelled:
-        # Resolved against the HOST so the refusal names the nearest keyword it
-        # spells, then says what else this run could have been reaching for.
+        # Resolved against the host so the refusal names the nearest keyword, then what else the run could have meant.
         try:
             return bodies[0], bodies[0].identify(wanted)
         except SlotRefused as refused:
@@ -686,7 +599,6 @@ def identify_on(bodies: Sequence[type], name: str) -> tuple[type, str]:
 
 
 def _spells(body: type, name: str) -> bool:
-    """Does this body have a keyword, an identifier or a composite by this name?"""
     try:
         body.identify(name)
     except SlotRefused:
@@ -694,19 +606,14 @@ def _spells(body: type, name: str) -> bool:
     return True
 
 
-#: How the dictionary spells a NUMBERED token: the index is written ``i``, so
-#: ``T1`` is the choice ``Ti`` and ``TA1`` the choice ``TAi``.
+# The dictionary spells a numbered token with ``i``: ``T1`` is the choice ``Ti``, ``TA1`` is ``TAi``.
 _INDEXED = re.compile(r"\d+$")
 
 
-#: The column a DAMOCLES line is read to, which is also the width the engine
-#: declares the printouts value at: a longer value is TRUNCATED, and a table cut
-#: mid-mnemonic stops the run on a word it cannot spell.
+# The column a DAMOCLES line is read to, also the printouts value's declared width: a longer value is truncated and a table cut mid-mnemonic stops the run.
 _PRINTOUTS_COLUMNS = 72
 
-#: The engine's own wildcard in that keyword: ``~`` stands for the rest of a
-#: mnemonic wherever the character under it is a LETTER, so ``COV_~`` asks for
-#: every mnemonic spelled ``COV_`` and a letter after it.
+# The engine's wildcard: ``~`` stands for the rest of a mnemonic where the character under it is a letter, so ``COV_~`` asks for every ``COV_`` plus a letter.
 _WILDCARD = "~"
 
 
@@ -714,10 +621,8 @@ def _wildcarded(tokens: Sequence[str], slot: Slot,
                 unwritten: Mapping[str, Any] = MappingProxyType({})) -> list[str]:
     """The same table written in the engine's wildcard, where one is safe.
 
-    A prefix is taken only where every mnemonic the keyword spells under it is
-    a token of this table or a slot the engine never writes, so the shorter
-    spelling asks the engine for what the table rows and for nothing else it
-    would read back."""
+    A prefix is taken only where every mnemonic the keyword spells under it is a token of this table or never written.
+    """
     choices = list(slot.choices or ())
     wanted = set(tokens) | set(unwritten)
     spelled: list[str] = []
@@ -738,20 +643,17 @@ def _wildcarded(tokens: Sequence[str], slot: Slot,
 
 
 def _matched(prefix: str, choices: Sequence[str]) -> set[str]:
-    """Every choice ``prefix~`` reaches, by the engine's own matching rule."""
     return {choice for choice in choices
             if choice.startswith(prefix) and len(choice) > len(prefix)
             and choice[len(prefix)].isalpha()}
 
 
 def _spelled(token: str, slot: Slot) -> bool:
-    """Is ``token`` one the keyword's own choices carry, numbered or plain?"""
     choices = slot.choices or ()
     return token in choices or _INDEXED.sub("i", token) in choices
 
 
 def _unshadowed(cls: type, registered: Mapping[str, Any]) -> list[tuple[str, Any]]:
-    """Registrations whose names are the wrapper's own to give."""
     for name in registered:
         if name in cls.MODULE_INPUT:
             raise SlotRefused(
@@ -760,17 +662,15 @@ def _unshadowed(cls: type, registered: Mapping[str, Any]) -> list[tuple[str, Any
     return list(registered.items())
 
 
-#: What a fill states where the engine's own steering-file class cannot be
-#: imported: the keyword is held to this module's copy of the dictionary.
+# A fill states this where the engine's steering-file class cannot be imported: the keyword is held to this module's copy of the dictionary.
 ENGINE_UNAVAILABLE = "the engine check is unavailable at fill; launch runs it"
 
 
 def accept(body: type, name: str, value: Any) -> tuple[str, Any, str]:
     """One keyword at fill -> ``(identifier, value, note)``, or the refusal.
 
-    Name, type and choices are the ENGINE's own steering-file class's to judge;
-    arity and range are ours. Where the engine tree is absent, ours judges all
-    of it and the note says so."""
+    Name, type and choices are the engine's class to judge; arity and range are ours. Without the engine tree, ours judges all and the note says so.
+    """
     identifier = body.identify(name)
     if identifier not in body.MODULE_INPUT:
         return identifier, value, ""
@@ -788,9 +688,7 @@ def accept(body: type, name: str, value: Any) -> tuple[str, Any, str]:
 
 
 def engine_check(module: str) -> Any:
-    """``(keyword, value) -> refusal or ""`` through the engine's own
-    ``TelemacCas``, imported from the tree ``HOMETEL`` names; ``None`` where
-    that tree or its dictionary cannot be reached."""
+    """``(keyword, value) -> refusal or ""`` through the engine's ``TelemacCas`` from the tree ``HOMETEL`` names; ``None`` where that tree or dictionary is unreachable."""
     home = os.environ.get("HOMETEL", "")
     dico = Path(home, "sources", module, f"{module}.dico")
     if not home or not dico.is_file():

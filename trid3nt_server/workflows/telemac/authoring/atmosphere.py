@@ -1,11 +1,9 @@
-"""The weather over the domain as ONE table: the value, and the file it becomes.
+"""The weather over the domain as one table: the value, and the file it becomes.
 
-ONE writer for both hosts: the file is read by ``METEO_TELEMAC``, which sits in
-BIEF rather than in either host, so TELEMAC-2D and TELEMAC-3D open the same
-columns through the same scan - but each host writes only the columns its OWN
-source term reads. A fetched station record is carried into the slots HERE,
-because a unit conversion, a resampling and a station choice that make a record
-fit a slot are that slot's own ingestion."""
+One writer for both hosts: ``METEO_TELEMAC`` (in BIEF) reads the file, but each host writes only
+the columns its own source term reads. A fetched station record is carried into the slots here,
+because unit conversion, resampling and station choice are the slot's own ingestion.
+"""
 
 from __future__ import annotations
 
@@ -28,24 +26,16 @@ __all__ = ["ATMOSPHERE_FILENAME", "ATMOSPHERE_READS", "COLUMNS", "DISPUTED", "RE
            "TELEMAC2D_COLUMNS", "TELEMAC3D_COLUMNS", "Atmosphere",
            "atmospheric_data_file", "expand_atmosphere", "write_atmosphere"]
 
-#: The file a host's ASCII ATMOSPHERIC DATA FILE statement names.
+# The file a host's ASCII ATMOSPHERIC DATA FILE statement names.
 ATMOSPHERE_FILENAME = "river_atmosphere.txt"
 
-#: One row per slot the value carries: the mnemonic the reader searches the
-#: header for, and the unit line's word for it. The reader matches a header
-#: entry by INCLUSION, so no mnemonic may contain another.
-#:
-#: Pressures are written in PASCALS, which is the unit both the reader's own
-#: constants and the thermal source term are in. The host's PRESSURE UNIT
-#: keyword scales PATM and PVAP TOGETHER and scales them whether or not the file
-#: supplied either, so stating it would multiply any constant standing in for an
-#: absent column; Pa leaves that keyword on its engine default.
+# One row per slot: the mnemonic the reader searches the header for, and the unit line's word.
+# The reader matches a header entry by inclusion, so no mnemonic may contain another. Pressures are
+# in pascals: the host's PRESSURE UNIT keyword scales PATM and PVAP together even for an absent
+# column, so it stays on its engine default.
 COLUMNS: Mapping[str, tuple[str, str]] = MappingProxyType({
     "air_temp_c": ("TAIR", "degC"),
-    # The DEW POINT itself, in the degrees Celsius KHIONE's own thermal budget
-    # adds its 273.16 to (``khione/thermal_khione.f`` TDK). Neither host's heat
-    # budget reads it - each takes the humidity in its own form - so it rides
-    # the file for the coupled module that does.
+    # The dew point in Celsius, which KHIONE's thermal budget adds 273.16 to (``thermal_khione.f`` TDK); neither host reads it, it rides the file for the coupled module.
     "dew_point_c": ("TDEW", "degC"),
     "vapour_pressure_pa": ("PVAP", "Pa"),
     "relative_humidity_pct": ("HREL", "%"),
@@ -57,20 +47,13 @@ COLUMNS: Mapping[str, tuple[str, str]] = MappingProxyType({
     "rain_mm": ("RAINI", "mm"),
 })
 
-#: What each host's own heat budget reads. TELEMAC-2D's source term takes the
-#: VAPOUR PRESSURE and TELEMAC-3D's takes the RELATIVE HUMIDITY; neither reads
-#: the other's, so neither host writes a column it would only scan past. The
-#: DEW POINT is in both because a coupled module reads it out of the same file.
+# What each host's heat budget reads: 2D takes vapour pressure, 3D relative humidity. The dew point is in both for a coupled module.
 TELEMAC2D_COLUMNS = tuple(n for n in COLUMNS if n != "relative_humidity_pct")
 TELEMAC3D_COLUMNS = tuple(n for n in COLUMNS if n != "vapour_pressure_pa")
 
-#: The columns of THIS file each module's source terms read, by the keyword the
-#: module reads it under - empty where it always does. A run writes the UNION of
-#: what its own readers read and nothing else: a column nobody reads is a column
-#: the scan passes over, and requiring it of every observation throws away rows
-#: that could have driven the run. A host reads the weather for its own terms
-#: (the wind that pushes the surface, the pressure that tilts it, the rain that
-#: falls on it), each under its switch; a coupled module reads for its budget.
+# The columns each module's source terms read, by the keyword it reads them under (empty where
+# always). A run writes the union of its readers' columns only: requiring an unread column would
+# discard rows that could drive the run.
 READS: Mapping[str, Mapping[str, str]] = MappingProxyType({
     "telemac2d": MappingProxyType({
         "wind_speed_mps": "WIND", "wind_from_deg": "WIND",
@@ -78,75 +61,56 @@ READS: Mapping[str, Mapping[str, str]] = MappingProxyType({
     "telemac3d": MappingProxyType({
         "wind_speed_mps": "WIND", "wind_from_deg": "WIND",
         "pressure_pa": "AIR_PRESSURE", "rain_mm": "RAIN_OR_EVAPORATION"}),
-    # ``waqtel/calcs2d_thermic.f``: the surface budget divides the shortwave by
-    # the depth and takes the air, the vapour, the cloud, the wind and the
-    # pressure with it; the 3D branch takes the relative humidity instead, which
-    # is the host's own column set above.
+    # ``waqtel/calcs2d_thermic.f``: the surface budget divides shortwave by depth and takes air, vapour, cloud, wind, pressure; the 3D branch takes relative humidity.
     "waqtel": MappingProxyType({
         "air_temp_c": "", "vapour_pressure_pa": "", "relative_humidity_pct": "",
         "cloud_octas": "", "solar_radiation_wm2": "", "wind_speed_mps": "",
         "pressure_pa": ""}),
-    # ``khione/source_thermal.f`` passes TAIR, TDEW, CLDC, WINDS and RAINFALL
-    # into its fluxes and computes the shortwave ITSELF from the cloud and the
-    # local longitude, so an ice run needs no solar column at all.
+    # ``khione/source_thermal.f`` takes TAIR, TDEW, CLDC, WINDS, RAINFALL and computes shortwave itself from cloud and longitude, so an ice run needs no solar column.
     "khione": MappingProxyType({
         "air_temp_c": "", "dew_point_c": "", "cloud_octas": "",
         "wind_speed_mps": "", "rain_mm": ""}),
 })
 
-#: The column set each host can carry at all, by module: the humidity its own
-#: budget takes, and not the other's.
+# The column set each host can carry at all, by module.
 _HOST_COLUMNS: Mapping[str, tuple[str, ...]] = MappingProxyType({
     "telemac2d": TELEMAC2D_COLUMNS, "telemac3d": TELEMAC3D_COLUMNS})
 
-#: What a column is written IN where the module reading it takes another unit
-#: than the row above states: the factor off the canonical value and the unit
-#: line's word. Applied only where that module is the column's ONLY reader - two
-#: readers of one column in two units is the refusal below, never a conversion.
+# The unit a column is written in where its module takes another than the row states: factor off
+# the canonical value and the unit word. Applied only where that module is the column's only reader;
+# two readers in two units refuse.
 _IN_ITS_UNIT: Mapping[tuple[str, str], tuple[float, str]] = MappingProxyType({
     ("khione", "cloud_octas"): (1.25, "tenth"),
     ("khione", "rain_mm"): (1.0, "mm/h"),
 })
 
-#: The reader's own name for the time column, which it refuses to start without.
+# The reader's name for the time column, which it refuses to start without.
 _TIME = "T"
 
-#: What the leading comment says when no record named what drove the run.
+# What the leading comment says when no record named what drove the run.
 _PLAIN = "atmospheric data on the run's own clock"
 
-#: One knot in metres per second, and one inch in millimetres.
+# One knot in m/s, one inch in mm.
 _KNOT_MPS = 0.514444
 _INCH_MM = 25.4
 
-#: Magnus over water at the WMO's coefficients: saturation vapour pressure in
-#: hectopascals from a temperature in degrees Celsius. Applied to the DEW POINT
-#: it is the actual vapour pressure, which is what the 2D budget reads - the
-#: engine computes the saturation value at the water's own temperature itself.
+# Magnus over water (WMO coefficients): saturation vapour pressure in hPa from Celsius. On the dew point it is the actual vapour pressure the 2D budget reads.
 _MAGNUS_A, _MAGNUS_B, _MAGNUS_C = 6.112, 17.62, 243.12
 
-#: The shortest record a table the engine interpolates between two rows can be,
-#: and the longest gap between two instants that still describes a diurnal cycle.
-#: What makes a record drivable is that it BRACKETS the run, which the read
-#: below judges; a floor above the two rows the engine reads between would
-#: refuse an hour-long run its own bracketing observations answer.
+# Shortest record and longest gap still describing a diurnal cycle. A record must bracket the run; a floor above the two rows the engine reads between would refuse an hour-long run.
 _MIN_INSTANTS = 2
 _MAX_GAP_S = 6.0 * 3600.0
 
-#: The three slots one reported humidity column states, read together below
-#: because each is the others over the saturation value at the air's own
-#: temperature and none of them is one multiplication.
+# The three slots one humidity column states, read together: each is the others over the saturation value at the air temperature.
 _HUMIDITY = ("vapour_pressure_pa", "relative_humidity_pct", "dew_point_c")
 
-#: One METAR sky-cover code as the octas the reporting convention gives it:
-#: clear, one or two eighths, three or four, five to seven, eight - and an
-#: obscured sky, which is as covered as the observer can see.
+# A METAR sky-cover code as octas: clear, 1-2, 3-4, 5-7, 8, and an obscured sky as fully covered.
 _SKY_OCTAS: Mapping[str, float] = MappingProxyType({
     "CLR": 0.0, "SKC": 0.0, "NCD": 0.0, "NSC": 0.0,
     "FEW": 2.0, "SCT": 4.0, "BKN": 6.0, "OVC": 8.0, "VV": 8.0})
 
 
 def _celsius(value: Any) -> float:
-    """A reported Fahrenheit temperature in the degrees Celsius every slot is in."""
     return round((float(value) - 32.0) / 1.8, 3)
 
 
@@ -155,7 +119,7 @@ def _knots(value: Any) -> float:
 
 
 def _bearing(value: Any) -> float:
-    """A wind direction WRAPS rather than being floored: it is an angle."""
+    """A wind direction wraps; it is an angle."""
     return round(float(value) % 360.0, 1)
 
 
@@ -164,7 +128,6 @@ def _millimetres(value: Any) -> float:
 
 
 def _pascals(value: Any) -> float:
-    """A reported mean sea level pressure, in hectopascals, as pascals."""
     return round(float(value) * 100.0, 1)
 
 
@@ -173,27 +136,21 @@ def _watts(value: Any) -> float:
 
 
 def _octas(value: Any) -> float | None:
-    """A METAR sky-cover code as octas; anything else reports no cloud at all."""
+    """A METAR sky-cover code as octas; anything else reports no cloud."""
     return _SKY_OCTAS.get(str(value).strip().upper()[:3])
 
 
-#: What each station network reports, by the slot the column fills: the
-#: network's own column name and what carries its unit into the slot's. The
-#: humidity slots are read beside these off whichever column the network
-#: carries. A slot no network row names is absent from the file, and the engine
-#: reads its own constant keyword for it.
-#: The fire-weather network: the one hourly record that carries a solar
-#: radiation. Its precipitation column is a SEASON ACCUMULATOR rather than the
-#: depth that fell in the interval, so no rain slot is filled from it.
+# What each station network reports, by slot: the network's column name and what carries its unit.
+# A slot no row names is absent from the file and the engine reads its constant keyword.
+# The fire-weather network is the one hourly record carrying solar radiation; its precipitation is a
+# season accumulator, so no rain slot is filled from it.
 _RAWS: Mapping[str, tuple[str, Any]] = MappingProxyType({
     "air_temp_c": ("tmpf", _celsius),
     "wind_speed_mps": ("sknt", _knots),
     "wind_from_deg": ("drct", _bearing),
     "solar_radiation_wm2": ("solar_rad", _watts),
 })
-#: The airport hourly record: a real dew point, the sky cover an observer coded,
-#: the pressure and the past hour's precipitation. It reports no radiation, and
-#: the module that computes its own is the one this record drives.
+# The airport hourly record: a real dew point, coded sky cover, pressure, past-hour precipitation; no radiation.
 _ASOS: Mapping[str, tuple[str, Any]] = MappingProxyType({
     "air_temp_c": ("tmpf", _celsius),
     "wind_speed_mps": ("sknt", _knots),
@@ -203,9 +160,7 @@ _ASOS: Mapping[str, tuple[str, Any]] = MappingProxyType({
     "rain_mm": ("p01i", _millimetres),
 })
 
-#: Which network a fetched row came from, by the column it stamps its instant
-#: in. The two report different instruments under different names, so what a row
-#: means is read off the network that wrote it.
+# Which network a row came from, by the column its instant is stamped in; the two report different instruments.
 _NETWORKS: Mapping[str, Mapping[str, tuple[str, Any]]] = MappingProxyType({
     "utc_valid": _RAWS, "valid": _ASOS})
 
@@ -219,15 +174,12 @@ def Atmosphere(*, times_s: Any = None, air_temp_c: Any = None,  # noqa: N802
                observed: Any = None, at: Any = None,
                duration_s: Any = None,
                event_time: Any = None) -> Mapping[str, Any]:
-    """The weather over the domain as time series on the run's own clock: what a
-    heat budget reads, plus the rain and the wind beside it.
+    """The weather over the domain as time series on the run's own clock.
 
-    ``observed`` is a fetched station record the nearest usable station is taken
-    from; a series stated here stands over what that record reports, and one
-    left out writes no column, so the host reads its own constant keyword.
-    ``event_time`` is the moment the run opens at, which is the table's t = 0."""
-    # Every series shares one clock, because the file is ONE table - the engine
-    # interpolates every column between the same two rows.
+    ``observed`` is a fetched station record; a series stated here stands over it, and one left out
+    writes no column. ``event_time`` is the table's t = 0.
+    """
+    # One clock: the file is one table and the engine interpolates every column between the same two rows.
     return MappingProxyType({
         "times_s": times_s, "air_temp_c": air_temp_c,
         "dew_point_c": dew_point_c,
@@ -240,18 +192,13 @@ def Atmosphere(*, times_s: Any = None, air_temp_c: Any = None,  # noqa: N802
         "event_time": event_time})
 
 
-#: Every argument of the atmosphere: each takes a value or an input's name.
+# Every argument takes a value or an input's name.
 ATMOSPHERE_READS = tuple(inspect.signature(Atmosphere).parameters)
 
 
-#: The columns whose UNIT two readers of this one file disagree on, by the
-#: mnemonic and the module that reads it in the unit written here. The reader
-#: skips the unit line, so a number is in whatever unit the writer meant, and a
-#: run that couples a module on the other side of one of these rows would feed
-#: it a value off by the conversion nobody applied: KHIONE reads the cloud cover
-#: in TENTHS (``khione/thermal_khione.f``) where WAQTEL's budget divides it by
-#: eight, and reads the rain as a RATE in mm/h where METEO_TELEMAC reads the
-#: metres accumulated over the step.
+# Columns whose unit two readers disagree on, by mnemonic and the module reading it in the unit
+# written here. The reader skips the unit line. KHIONE reads cloud cover in tenths (WAQTEL divides by
+# eight) and rain as mm/h where METEO_TELEMAC reads metres accumulated over the step.
 DISPUTED: Mapping[str, tuple[str, ...]] = MappingProxyType({
     "cloud_octas": ("khione",),
     "rain_mm": ("khione",),
@@ -260,13 +207,11 @@ DISPUTED: Mapping[str, tuple[str, ...]] = MappingProxyType({
 
 def write_atmosphere(body: Any, stated: Mapping[str, Any],
                      files: dict[str, Any]) -> None:
-    """The weather table, written in the columns THIS run's readers read.
+    """The weather table, written in the columns this run's readers read.
 
-    The atmosphere and the coupling reach a sheet in whatever order it was
-    filled in, so the question is answered here, where every reader is on it:
-    the host's own columns under its own switches, each coupled module's, and
-    the unit of whichever module reads a column two modules read differently -
-    which, where both of them are on this run, refuses instead."""
+    Resolved here because the coupling and switches arrive in any order; where two enabled
+    modules read one column in different units, it refuses.
+    """
     value = files.get(ATMOSPHERE_FILENAME)
     if not isinstance(value, Mapping) or "slots" in value:
         return
@@ -294,8 +239,6 @@ def write_atmosphere(body: Any, stated: Mapping[str, Any],
 
 def _readers(body: Any, stated: Mapping[str, Any],
              coupled: Sequence[str]) -> dict[str, list[str]]:
-    """Which modules of this run read each column: the host under its own
-    switches, then every module coupled to it."""
     reading: dict[str, list[str]] = {}
     for name, switch in READS.get(body.MODULE, {}).items():
         if not switch or body.switched(switch, stated):
@@ -307,10 +250,7 @@ def _readers(body: Any, stated: Mapping[str, Any],
 
 
 def _refuse_disputed(readers: Mapping[str, Sequence[str]]) -> None:
-    """A column two readers of this run take in two units, refused by name.
-
-    Nothing converts: one file carries ONE number per instant, and each reader
-    would take it as its own unit."""
+    """A column two readers take in two units refuses; one file carries one number per instant."""
     named = sorted(name for name, modules in DISPUTED.items()
                    if set(modules) & set(readers.get(name, ()))
                    and set(readers.get(name, ())) - set(modules))
@@ -334,9 +274,9 @@ def atmospheric_data_file(value: Mapping[str, Any],
                           = MappingProxyType({})) -> str:
     """The value -> the table the reader scans, or the refusal that says why not.
 
-    A comment naming what drove the run, the header, the units, then one row per
-    instant, separated by single spaces. ``in_unit`` writes a column in the unit
-    its one reader takes rather than in the row's own."""
+    A comment, the header, the units, then one row per instant, single-space separated. ``in_unit``
+    writes a column in the unit its one reader takes.
+    """
     times, stated, note = _resolved(value, columns)
     times = [float(t) for t in times]
     if len(times) < 2:
@@ -366,9 +306,7 @@ def atmospheric_data_file(value: Mapping[str, Any],
         raise TelemacError(
             "an atmosphere with no series this host reads states nothing; omit "
             "it instead.", error_code="TELEMAC_WEATHER_EMPTY")
-    # TABS ARE NOT WRITTEN. The reader's own error path names them as the cause
-    # of a header it cannot split, and its list-directed row read is happier on
-    # blanks; single spaces are what both scans are written against.
+    # No tabs: the reader's error path names them as the cause of an unsplittable header, and its row read prefers blanks.
     rows = [f"#{note or _PLAIN}",
             " ".join([_TIME] + [mnemo for mnemo, _, _ in series]),
             " ".join(["s"] + [unit for _, unit, _ in series])]
@@ -381,13 +319,11 @@ def atmospheric_data_file(value: Mapping[str, Any],
 
 def expand_atmosphere(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                                                          Mapping[str, Any]]:
-    """The atmosphere -> the file statement, and the value the table is written
-    from once the run's readers are all on the sheet.
+    """The atmosphere -> the file statement, and the value the table is written from.
 
-    The host opens that file only when it has a reason to read the weather - a
-    coupled water-quality module, a wind, an air pressure - and WHICH columns go
-    in it is a question about every reader of the run, which is not answerable
-    until the coupling and the switches beside this slot are filled."""
+    The host opens the file only with a reason to read weather (coupled water quality, wind, air
+    pressure); the columns depend on every reader, known once coupling and switches are filled.
+    """
     if value.get("times_s") is None and value.get("observed") is None:
         stated = [name for name in COLUMNS if value.get(name) is not None]
         if stated:
@@ -395,7 +331,6 @@ def expand_atmosphere(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                 f"{', '.join(stated)} came with no clock to read them on; state "
                 "times_s beside the series, or hand the slot a fetched record.",
                 error_code="TELEMAC_WEATHER_INCOMPLETE")
-        # Neither a clock nor a record came, so no weather was resolved.
         return ({}, {})
     return ({"ASCII_ATMOSPHERIC_DATA_FILE": ATMOSPHERE_FILENAME},
             {ATMOSPHERE_FILENAME: value})
@@ -403,10 +338,6 @@ def expand_atmosphere(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
 
 def _resolved(value: Mapping[str, Any], columns: Sequence[str]
               ) -> tuple[Any, dict[str, Any], str]:
-    """The clock, the series under every slot, and what drove them.
-
-    A stated series stands over what a record reports: the record fills what the
-    caller left open, and nothing more."""
     stated = {name: value.get(name) for name in COLUMNS}
     if value.get("observed") is None:
         return value["times_s"], stated, ""
@@ -418,12 +349,11 @@ def _resolved(value: Mapping[str, Any], columns: Sequence[str]
 
 def _from_record(value: Mapping[str, Any], columns: Sequence[str]
                  ) -> tuple[list[float], dict[str, Any], str]:
-    """The fetched station record -> the series on the run's own clock from zero.
+    """The fetched station record -> the series on the run's clock from zero.
 
-    The NEAREST station whose observations can drive the run end to end is the
-    one taken; every station refused is named with its reason. Only the columns
-    THIS run reads are asked of an observation: a row short of one the run does
-    not read is still an instant this run can be driven by."""
+    The nearest station that can drive the run end to end is taken; refused stations are named
+    with reasons. Only the columns this run reads are asked of an observation.
+    """
     from trid3nt_server.inputs.geometry import read_geometry_doc
 
     lon, lat = _lonlat(value["at"])
@@ -457,7 +387,6 @@ def _from_record(value: Mapping[str, Any], columns: Sequence[str]
 
 
 def _lonlat(at: Any) -> tuple[float, float]:
-    """Where the reach is, from a resolved pair, a seed mapping, or a Point."""
     if isinstance(at, (list, tuple)):
         return float(at[0]), float(at[1])
     if isinstance(at, Mapping):
@@ -467,7 +396,6 @@ def _lonlat(at: Any) -> tuple[float, float]:
 
 def _by_station(rows: Sequence[Mapping[str, Any]], lon: float, lat: float
                 ) -> list[tuple[float, str, list[Mapping[str, Any]]]]:
-    """The rows grouped by the site they were read at, nearest the reach first."""
     grouped: dict[str, list[Mapping[str, Any]]] = {}
     where: dict[str, tuple[float, float]] = {}
     for row in rows:
@@ -480,8 +408,7 @@ def _by_station(rows: Sequence[Mapping[str, Any]], lon: float, lat: float
         where[station] = (float(coordinates[0]), float(coordinates[1]))
     ranked = []
     for station, observations in grouped.items():
-        # Degrees to kilometres at this latitude: the ranking only has to ORDER
-        # stations, so the local flat-earth distance is the whole of what it needs.
+        # Flat-earth distance suffices: the ranking only orders stations.
         east = (where[station][0] - lon) * 111.32 * math.cos(math.radians(lat))
         north = (where[station][1] - lat) * 110.57
         ranked.append((math.hypot(east, north), station, observations))
@@ -493,11 +420,9 @@ def _series(observations: Sequence[Mapping[str, Any]], duration_s: Any,
             ) -> tuple[list[float], dict[str, Any], _dt.datetime]:
     """One station's observations -> the slots, on the run's clock from zero.
 
-    t = 0 IS THE MOMENT THE RUN OPENS AT: the record is aligned to it rather
-    than re-anchored on its own first sample, and the table is read between the
-    last observation at or before that moment and the first at or after the
-    close. A run that states no moment opens on the first observation, which is
-    the only honest origin when nothing else is stated."""
+    t = 0 is the moment the run opens at, and the table is read between the last observation at or
+    before it and the first at or after the close. With no moment, the first observation is the origin.
+    """
     kept: dict[_dt.datetime, dict[str, float]] = {}
     for observation in observations:
         reported = _network(observation)
@@ -515,8 +440,7 @@ def _series(observations: Sequence[Mapping[str, Any]], duration_s: Any,
     closes = (opens + _dt.timedelta(seconds=float(duration_s))
               if duration_s is not None else stamps[-1])
     held = _bracketing(stamps, opens, closes)
-    # Each slot is a measured record on this station's clock, and it is judged
-    # where every record is: the hole bound is the alignment's, not this file's.
+    # Each slot is judged as every record is: the hole bound is the alignment's.
     try:
         series = {slot: align(Series.from_samples(
                       [(stamp, kept[stamp][slot]) for stamp in held],
@@ -532,12 +456,10 @@ def _series(observations: Sequence[Mapping[str, Any]], duration_s: Any,
 
 def _bracketing(stamps: Sequence[_dt.datetime], opens: _dt.datetime,
                 closes: _dt.datetime) -> list[_dt.datetime]:
-    """The observations the run is READ BETWEEN: the last at or before it opens
-    and the first at or after it closes.
+    """The observations the run is read between: last at or before the open, first at or after the close.
 
-    The engine STOPS when a requested instant falls outside the table at either
-    end, so a record that does not bracket the run cannot drive it; the refusal
-    names the end the bracket is missing at."""
+    The engine stops when an instant falls outside the table; the refusal names the missing end.
+    """
     if stamps[0] > opens or stamps[-1] < closes:
         raise ValueError(
             f"the record runs {stamps[0]:%Y-%m-%d %H:%M} to "
@@ -553,7 +475,6 @@ def _bracketing(stamps: Sequence[_dt.datetime], opens: _dt.datetime,
 
 
 def _instant(stamp: Any) -> _dt.datetime | None:
-    """One reported timestamp -> an aware UTC datetime, or nothing."""
     if not stamp:
         return None
     try:
@@ -565,7 +486,6 @@ def _instant(stamp: Any) -> _dt.datetime | None:
 
 def _network(observation: Mapping[str, Any]
              ) -> tuple[str, Mapping[str, tuple[str, Any]]] | None:
-    """Which network reported this row, read off the column it is stamped in."""
     for when, network in _NETWORKS.items():
         if observation.get(when):
             return when, network
@@ -574,12 +494,10 @@ def _network(observation: Mapping[str, Any]
 
 def _values(observation: Mapping[str, Any], columns: Sequence[str],
             network: Mapping[str, tuple[str, Any]]) -> dict[str, float] | None:
-    """One observation -> the slot values it carries, or nothing where a column
-    THIS run reads is absent from it.
+    """One observation -> the slot values it carries, or nothing where a column this run reads is absent.
 
-    The file is ONE table, so an observation short of a column the run writes is
-    not an instant; a column the network never reports is absent from the file
-    for every instant and is not asked of any row."""
+    The file is one table, so an observation short of a written column is not an instant.
+    """
     values: dict[str, float] = {}
     for name in columns:
         if name in _HUMIDITY or name not in network:
@@ -608,9 +526,9 @@ def _humidity(air_c: float, dew_f: Any, relative_pct: Any
               ) -> dict[str, float] | None:
     """The two humidity slots, from whichever one the network reported.
 
-    Each is the other over the saturation value at the air's own temperature, so
-    one reported column states both - which is what lets one record drive a 2D
-    run reading the vapour pressure and a 3D run reading the relative humidity."""
+    Each is the other over the saturation value at the air temperature, so one record drives a 2D
+    vapour-pressure run and a 3D relative-humidity run.
+    """
     saturation = _saturation_hpa(air_c)
     if dew_f is not None:
         vapour = _saturation_hpa((float(dew_f) - 32.0) / 1.8)
@@ -624,14 +542,10 @@ def _humidity(air_c: float, dew_f: Any, relative_pct: Any
 
 
 def _saturation_hpa(temp_c: float) -> float:
-    """Magnus over water at ``temp_c``, in hectopascals."""
     return _MAGNUS_A * math.exp(_MAGNUS_B * temp_c / (_MAGNUS_C + temp_c))
 
 
 def _dew_point_c(vapour_hpa: float) -> float:
-    """The temperature this vapour pressure saturates at: Magnus, inverted.
-
-    Taken off the vapour pressure rather than off the reported dew point, so a
-    network that reported the relative humidity instead states this column too."""
+    """The temperature this vapour pressure saturates at (Magnus inverted), so a network reporting relative humidity states this column too."""
     ratio = math.log(max(vapour_hpa, 1.0e-6) / _MAGNUS_A)
     return _MAGNUS_C * ratio / (_MAGNUS_B - ratio)

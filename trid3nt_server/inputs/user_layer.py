@@ -37,10 +37,9 @@ __all__ = [
 #: keeping a single HTTP round trip + in-memory read bounded.
 MAX_INGEST_BYTES: int = 200 * 1024 * 1024
 
-#: Staging prefix the plugin's raw-bytes upload lands under. Content-addressed
-#: cache TTL eviction does NOT apply -- this is a plain object, not a
-#: ``cache/<ttl-class>/...`` key -- but the artifact is copied OUT to the durable
-#: runs bucket before it becomes a case layer.
+#: Staging prefix the plugin's raw-bytes upload lands under. A plain object, not a
+#: ``cache/<ttl-class>/...`` key, so TTL eviction does not apply; the artifact is copied
+#: OUT to the durable runs bucket before it becomes a case layer.
 USER_UPLOAD_PREFIX = "user-uploads"
 
 _VECTOR_KIND = "vector"
@@ -94,9 +93,7 @@ class UnreadableLayerError(ImportLayerError):
 
 
 def _sanitize_filename(filename: str) -> str:
-    """Strip any path components and control chars; keep the extension.
-
-    Defense in depth: the key is minted server-side under a fresh ULID anyway."""
+    """Strip any path components and control chars; keep the extension."""
     base = os.path.basename((filename or "").strip().replace("\\", "/"))
     base = base.strip().strip(".") or "layer"
     # Keep it to a conservative safe charset; anything else becomes "_".
@@ -145,9 +142,7 @@ def _vector_ext(s3_uri: str) -> str:
 
 
 def _read_uploaded_vector_to_gdf(raw_bytes: bytes, ext: str, crs_authid: str | None):
-    """Bytes + extension -> a EPSG:4326 GeoDataFrame. Raises
-    ``UnreadableLayerError`` on any parse failure. SYNC; wrap in
-    ``asyncio.to_thread``."""
+    """Bytes + extension -> a EPSG:4326 GeoDataFrame; SYNC, raises ``UnreadableLayerError``."""
     try:
         import geopandas as gpd  # type: ignore[import-not-found]
     except ImportError as exc:  # pragma: no cover -- hard dep in prod
@@ -258,9 +253,7 @@ async def _ingest_vector(
 def _validate_raster_and_bounds(
     raw_bytes: bytes, crs_authid: str | None
 ) -> tuple[float, float, float, float]:
-    """Validate the bytes are a GDAL-readable raster and return its EPSG:4326
-    bounds. Raises ``UnreadableLayerError`` on any failure. SYNC; wrap in
-    ``asyncio.to_thread``."""
+    """Validate GDAL-readable raster bytes -> EPSG:4326 bounds; SYNC, raises ``UnreadableLayerError``."""
     try:
         import rasterio  # type: ignore[import-not-found]
     except ImportError as exc:  # pragma: no cover -- hard dep in prod
@@ -310,9 +303,8 @@ async def _ingest_raster(
 
     bounds = await asyncio.to_thread(_validate_raster_and_bounds, raw_bytes, crs_authid)
 
-    # Reuse publish_layer VERBATIM -- it owns COG-overview enforcement, style
-    # resolution and registration for an s3:// raster. It is a blocking (sync)
-    # call (boto3 + rasterio internally); run it off the event loop.
+    # Reuse publish_layer VERBATIM -- it owns COG-overview enforcement, style resolution
+    # and registration for an s3:// raster. It blocks (boto3 + rasterio), so it runs off the loop.
     from trid3nt_server.render.publish import PublishLayerError, publish_layer
 
     try:
@@ -327,10 +319,8 @@ async def _ingest_raster(
 
     from trid3nt_server.render.publish import derive_readable_layer_name
 
-    # A user upload declares no quantity: the bytes are a raster of unknown
-    # physical meaning, and its filename is not a measurement. It publishes on
-    # the continuous kind's bare default - the field's own range under a single
-    # ramp - never on a physical band inferred from what the file is called.
+    # A user upload declares no quantity: the bytes are a raster of unknown physical
+    # meaning, and its filename is not a measurement, so no physical band is inferred.
     layer_name = derive_readable_layer_name(name, layer_id, published_uri)
 
     layer = LayerURI(layer_id=layer_id, name=layer_name, layer_type="raster",
@@ -338,10 +328,9 @@ async def _ingest_raster(
     return {"layer": layer, "bbox": list(bounds), "feature_count": None}
 
 
-# Durable persistence is the CONTRACT of an ingest: the layer is registered on
-# the Case itself, so a reopen - cold OR live - always shows the pushed file.
-# This entry point is COLD by design and has no session or emitter of its own,
-# which is why it registers through persistence rather than through a turn.
+# Durable persistence is the CONTRACT of an ingest: the layer is registered on the Case
+# itself, so a reopen - cold OR live - always shows the pushed file. This entry point
+# is COLD: it has no session or emitter, so it registers through persistence.
 
 
 async def _register_on_case(
@@ -376,7 +365,7 @@ async def _register_on_case(
 async def _require_case_exists(case_id: str) -> None:
     """Fail fast before any ingest work for a case that does not exist.
 
-    A cheap early exit: the merge re-reads the case right before its own write."""
+    Only an early exit: the merge re-reads the case right before its own write."""
     from trid3nt_server.server.session.persistence_ref import get_persistence
 
     p = get_persistence()
@@ -390,10 +379,9 @@ async def _require_case_exists(case_id: str) -> None:
 
 
 async def _notify_live_sessions(case_id: str) -> None:
-    """Best-effort nudge to any LIVE session with ``case_id`` open.
+    """Best-effort nudge to any LIVE session with ``case_id`` open; NEVER raises.
 
-    NEVER raises: durable persistence is the contract, and this only makes the
-    repaint sooner than the next reopen would."""
+    Persistence is the contract; this only repaints sooner than a reopen would."""
     try:
         from trid3nt_server.server.protocol import connections as _connections
         from trid3nt_server.server.session import persistence_ref as _persistence_ref
@@ -413,10 +401,9 @@ async def _notify_live_sessions(case_id: str) -> None:
         if p is None:
             return
         cases = await p.list_cases_for_user(LOCAL_SINGLE_USER_ID)
-        # The EXISTING ``case-list`` envelope, the side-channel every other
-        # case-mutating flow uses, and never a fabricated ``session-state``:
-        # this cold entry point has no live emitter to source a truthful chat
-        # history from, and inventing one blanks the chat on the next reopen.
+        # The existing ``case-list`` envelope, never a fabricated ``session-state``: this cold entry
+        # point has no live emitter to source a truthful chat history from, and a
+        # fabricated one blanks the chat on the next reopen.
         payload = CaseListEnvelopePayload(cases=cases)
         for sid in session_ids:
             sockets = list(_connections._SESSION_WS_CONNECTIONS.get(sid, ()) or ())

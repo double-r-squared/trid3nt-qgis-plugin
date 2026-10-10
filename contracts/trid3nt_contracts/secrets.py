@@ -1,10 +1,8 @@
 """Per-Case API-key secret envelopes.
 
-WIRE ISOLATION is the whole point: ``secret-add`` is the ONLY envelope that
-ever carries a raw key value, and it is transient - cached for the session and
-cleared before any log or persistence path. Everything else carries an opaque
-vault reference. A key is scoped by the credential NAME its row declares,
-so the rows are the closed set and this module restates none of them.
+Wire isolation: ``secret-add`` is the only envelope that carries a raw key value, and it is transient - cached for the
+session and cleared before any log or persistence path. Everything else carries an opaque vault reference. A key is
+scoped by the credential name its row declares, so the rows are the closed set.
 """
 
 from __future__ import annotations
@@ -40,29 +38,22 @@ class SecretRecord(ContractModel):
     schema_version: Literal["v1"] = "v1"
 
     secret_id: ULIDStr
-    #: The credential name a row declares in its ``auth.credential``
-    #: block. The rows are the closed set, so nothing is restated here.
+    #: The credential name a row declares in its ``auth.credential`` block.
     provider: str = Field(min_length=1, max_length=120)
-    #: ``None`` makes the record user-level, a cross-Case default; set, it
-    #: scopes the key to a single Case.
+    #: None makes the record user-level, a cross-Case default; set, it scopes the key to one Case.
     case_id: ULIDStr | None = None
-    #: Opaque vault path. The scheme is deliberately NOT validated here, so an
-    #: alternative vault backend needs no contract change.
+    #: Opaque vault path; the scheme is not validated, so another vault backend needs no contract change.
     vault_ref: str = Field(min_length=1, max_length=512)
-    #: Free-text user label. Bounded to keep a stored document tame.
     label: str | None = Field(default=None, max_length=200)
     added_at: UTCDatetime
-    #: Last successful use, ``None`` if never used. Stamped at invocation time.
     last_used_at: UTCDatetime | None = None
-    #: Soft-revoke flag. A revoke flips this and does NOT delete the vault
-    #: entry, so the audit trail survives; lookups filter on True.
+    #: Soft-revoke flag: a revoke does not delete the vault entry, so the audit trail survives; lookups filter on True.
     is_active: bool = True
 
 
 
 
-#: The credential name a ``secret-add`` carries for the language model's own
-#: key. Every other name is one a row declares.
+#: The credential name for the language model's own key; every other name is one a row declares.
 LANGUAGE_MODEL_CREDENTIAL = "llm"
 
 
@@ -85,16 +76,12 @@ class SecretAddEnvelopePayload(ContractModel):
     MESSAGE_TYPE: ClassVar[str] = "secret-add"
 
     envelope_type: Literal["secret-add"] = "secret-add"
-    #: The credential name the key is stored under: the name the rows
-    #: that need this key state, so one push serves every row naming it.
+    #: The credential name the key is stored under; one push serves every row naming it.
     provider: str = Field(min_length=1, max_length=120)
-    #: ``None`` for a user-level secret rather than a Case-scoped one.
     case_id: ULIDStr | None = None
     label: str | None = Field(default=None, max_length=200)
-    # The only field that ever carries a raw secret on the wire. ``repr`` is
-    # elided in ``__repr_args__`` rather than via ``Field(repr=False)``, which
-    # does not reliably suppress repr for a required field. Length-bounded so a
-    # paste-buffer mishap does not ship an entire clipboard.
+    # The only field that carries a raw secret on the wire. ``repr`` is elided in ``__repr_args__`` because
+    # ``Field(repr=False)`` does not reliably suppress repr for a required field. Length-bounded against a paste-buffer mishap.
     key_value: str = Field(default="", max_length=2048)
 
     def __repr_args__(self) -> list[tuple[str | None, object]]:
@@ -108,17 +95,14 @@ class SecretAddEnvelopePayload(ContractModel):
         ]
 
 
-# Client -> server envelopes this module contributes.
 SECRET_CLIENT_TO_AGENT_PAYLOADS: dict[str, type[ContractModel]] = {
     SecretAddEnvelopePayload.MESSAGE_TYPE: SecretAddEnvelopePayload,
 }
 
-# Server -> client envelopes this module contributes.
 SECRET_AGENT_TO_CLIENT_PAYLOADS: dict[str, type[ContractModel]] = {
     SecretsListEnvelopePayload.MESSAGE_TYPE: SecretsListEnvelopePayload,
 }
 
-# Aggregate for downstream consumers that don't care about direction.
 SECRET_PAYLOADS: dict[str, type[ContractModel]] = {
     **SECRET_CLIENT_TO_AGENT_PAYLOADS,
     **SECRET_AGENT_TO_CLIENT_PAYLOADS,

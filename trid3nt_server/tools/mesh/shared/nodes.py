@@ -86,9 +86,8 @@ def sample_raster_at_nodes(raster_path: Any, points_lonlat: Any,
                            fill_holes: bool = True) -> Any:
     """Sample a raster at (N,2) lon/lat nodes -> (N,) values, holes filled.
 
-    ``nearest`` returns a value the grid holds; ``bilinear`` interpolates.
-    ``fill_holes=False`` leaves a node the grid has nothing for as NaN, which is
-    what a caller with a SECOND source to try has to be able to see."""
+    ``nearest`` returns a value the grid holds; ``bilinear`` interpolates. ``fill_holes=False`` leaves a node the grid
+    has nothing for as NaN, which a caller with a SECOND source to try has to see."""
     import numpy as np
     import rasterio
     from rasterio.warp import transform as warp_transform
@@ -99,12 +98,8 @@ def sample_raster_at_nodes(raster_path: Any, points_lonlat: Any,
             "EPSG:4326", src.crs, pts[:, 0].tolist(), pts[:, 1].tolist())
         left, bottom, right, top = src.bounds
         dx, dy = (abs(v) for v in src.res)
-        # A mesh cut from an AOI puts nodes exactly on that AOI's corner
-        # coordinates, where the fetched grid has nothing whole: one row and one
-        # column past it the sample is the untagged zero, and the rim row and
-        # column themselves are resampled from partial source coverage, so both
-        # report sea level along two entire sides of a domain that is metres deep
-        # two pixels in - and neither reads as missing anywhere downstream.
+        # A mesh cut from an AOI has nodes exactly on its corners, where the fetched grid has no whole cell: the rim rows and columns
+        # are resampled from partial coverage and read sea level along two sides, and neither reads as missing downstream.
         xs = np.clip(np.asarray(xs, dtype=float),
                      left + _RIM_PIXELS * dx, right - _RIM_PIXELS * dx)
         ys = np.clip(np.asarray(ys, dtype=float),

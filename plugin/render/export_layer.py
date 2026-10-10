@@ -1,13 +1,8 @@
 """A QGIS layer written out as a file the agent can take.
 
-The one export in the plugin, in both directions across the seam: the case push
-sends the user's layer up, and a materialised layer-request sends the provider
-layer back. It owns the whole ask - the window (absent = the whole layer) and,
-for a raster, the pixel spacing in metres - because only the writer knows the
-grid it is laying down. ``kind`` rides along because the ingest route registers
-a GeoPackage and a GeoTIFF differently, and only the writer knows which it wrote.
-A raster is written through the LAYER's own data provider, so a WCS, WMS or
-ArcGIS layer exports the same way a local GeoTIFF does.
+The one export in the plugin: the case push sends the user's layer up, and a
+materialised layer-request sends the provider layer back. A raster is written
+through the LAYER's own data provider, so a WCS, WMS or ArcGIS layer exports like a GeoTIFF.
 """
 
 from __future__ import annotations
@@ -18,7 +13,6 @@ from typing import Any, Optional, Tuple
 
 __all__ = ["LayerExportError", "export_to_tempfile"]
 
-#: Below this many pixels on an axis there is no grid left to write.
 _MIN_PX = 1
 
 
@@ -32,13 +26,9 @@ def export_to_tempfile(
     bbox: Optional[Tuple[float, float, float, float]] = None,
     resolution_m: Optional[float] = None,
 ) -> Tuple[str, str]:
-    """Export ``layer`` to a temp file, returning ``(local_path, kind)`` with
-    ``kind`` either ``"vector"`` (GeoPackage) or ``"raster"`` (GeoTIFF).
-    ``bbox`` is the asked window in EPSG:4326, or ``None`` for the whole layer;
-    ``resolution_m`` is the pixel spacing a raster is written at. A vector has
-    no pixel grid, so asking one for a spacing is a refusal, never a value
-    quietly dropped. A ``None``, unsupported or unexportable layer raises. The
-    caller owns the file, including deleting it."""
+    """Export ``layer`` to a temp file -> ``(local_path, kind)``, kind ``"vector"`` (GeoPackage) or ``"raster"`` (GeoTIFF).
+    ``bbox`` is EPSG:4326 (None = whole layer); a vector asked for ``resolution_m`` refuses.
+    An unsupported or unexportable layer raises; the caller deletes the file."""
     from qgis.core import QgsRasterLayer, QgsVectorLayer
 
     if layer is None:
@@ -75,7 +65,6 @@ def _export_vector(layer: Any, bbox: Optional[Tuple[float, float, float, float]]
     result = QgsVectorFileWriter.writeAsVectorFormatV3(
         _windowed_vector(layer, bbox), path, transform_context, options
     )
-    # writeAsVectorFormatV3 returns (WriterError, errorMessage[, ...]).
     err = result[0] if isinstance(result, tuple) else result
     if err != QgsVectorFileWriter.NoError:
         detail = result[1] if isinstance(result, tuple) and len(result) > 1 else str(err)
@@ -84,9 +73,7 @@ def _export_vector(layer: Any, bbox: Optional[Tuple[float, float, float, float]]
 
 
 def _windowed_vector(layer: Any, bbox: Optional[Tuple[float, float, float, float]]) -> Any:
-    """The features inside the asked window: a materialised row carries the AOI,
-    never the provider's whole published coverage. A row whose ask IS the whole
-    layer carries no bbox, and then there is no window to cut."""
+    """The features inside the asked window; a row with no bbox carries no window to cut."""
     from qgis.core import QgsProcessing, QgsVectorLayer
 
     import processing
@@ -109,11 +96,7 @@ def _export_raster(
     bbox: Optional[Tuple[float, float, float, float]],
     resolution_m: Optional[float],
 ) -> str:
-    """Write the layer's own pixels over the asked window at the asked spacing.
-
-    The write pulls blocks through the layer's data provider, which is what lets
-    a borrowed WCS or WMS layer export at all: a GDAL command line can only read
-    a datasource GDAL itself opens, and a provider uri is not one."""
+    """Write the layer's own pixels over the asked window at the asked spacing."""
     import tempfile
 
     from qgis.core import Qgis, QgsRasterFileWriter, QgsRasterPipe
@@ -158,8 +141,8 @@ def _window_extent(layer: Any, bbox: Optional[Tuple[float, float, float, float]]
 
 
 def _grid(layer: Any, extent: Any, resolution_m: Optional[float]) -> Tuple[int, int]:
-    """(columns, rows) over ``extent``: the asked spacing when one was asked for,
-    otherwise the layer's own pixel size."""
+    """(columns, rows) over ``extent``: the asked spacing when one was asked for, otherwise the
+    layer's own pixel size."""
     if resolution_m is None:
         x_res = layer.rasterUnitsPerPixelX()
         y_res = layer.rasterUnitsPerPixelY()
@@ -182,12 +165,7 @@ def _grid(layer: Any, extent: Any, resolution_m: Optional[float]) -> Tuple[int, 
 def _target_resolution(
     layer: Any, extent: Any, resolution_m: float
 ) -> Tuple[float, float]:
-    """The asked spacing as ``(x, y)`` in the layer's OWN CRS units. Metres pass
-    through on both axes. A geographic CRS converts each axis at the WINDOW's
-    centre latitude, through the metres in a degree of longitude and a degree of
-    latitude there, so the exported cell is the asked size on the ground rather
-    than square in degrees and wrong in metres. Any other unit refuses by name
-    rather than passing a number that means something else."""
+    """The asked spacing as ``(x, y)`` in the layer's CRS units: metres pass through; a geographic CRS converts each axis at the window's centre latitude; any other unit refuses by name."""
     from qgis.core import QgsUnitTypes
 
     crs = layer.crs()

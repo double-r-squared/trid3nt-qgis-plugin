@@ -11,15 +11,8 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from .. import install_dependencies
 
-# -- guarded matplotlib import ---------------------------------------------- #
-# ``Figure`` plus a Qt canvas class and NO pyplot: pyplot owns global backend
-# state this must not fight QGIS for. backend_qtagg resolves its binding via
-# the already-imported qgis.PyQt; backend_qt5agg is the pre-3.5 fallback.
-#
-# The check is CACHED, because every chart frame and every dock open calls
-# ``matplotlib_available()`` and a repeated failing import must not re-walk
-# sys.path each time. A matplotlib installed afterwards appears on the next
-# QGIS restart, so no in-process cache-bust is needed.
+# ``Figure`` plus a Qt canvas class and NO pyplot (global backend state this must not
+# fight QGIS for). The check is CACHED: every frame calls ``matplotlib_available()``.
 Figure = None  # type: ignore[assignment]
 FigureCanvasQTAgg = None  # type: ignore[assignment]
 _MATPLOTLIB_ERROR: Optional[str] = None
@@ -62,10 +55,7 @@ def matplotlib_error() -> Optional[str]:
     return _MATPLOTLIB_ERROR
 
 
-# Per-OS "how do I get matplotlib" command builders. Pure: no Qt and no
-# subprocess -- every command is for the USER to paste into a real terminal,
-# and nothing here is ever run in-process. The values come from
-# ``install_dependencies``, which is the one source of truth for them.
+# Per-OS install command builders: pure, for the USER to paste into a terminal; values come from ``install_dependencies``.
 
 
 def linux_install_command(pip_names: Sequence[str] = ("matplotlib",)) -> str:
@@ -109,7 +99,6 @@ def mac_wheel_recipe(
     )
 
 
-# Default series colors (matplotlib tab10 order) for color-field grouping.
 _SERIES_COLORS = [
     "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
     "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf",
@@ -170,15 +159,11 @@ def _is_log(channel: dict) -> bool:
 
 
 def _as_float(value: Any) -> Optional[float]:
-    """A plottable float, or None. REJECTS bools and non-finite values, which
-    would poison a matplotlib auto-range into a degenerate extent; a
-    non-finite point is dropped exactly like a non-numeric one."""
+    """A plottable float, or None."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
     v = float(value)
     return v if math.isfinite(v) else None
-
-
 
 
 def render_spec(figure, spec: dict) -> Dict[str, Any]:
@@ -210,9 +195,7 @@ def render_spec(figure, spec: dict) -> Dict[str, Any]:
             elif mark == "bar" and rows and xf and yf:
                 summary["bars"] += _draw_bars(ax, rows, xf, yf, view)
             elif mark in ("rect", "point", "circle", "square") and rows and xf and yf:
-                # rect (the seawater-intrusion heatmap) degrades to a colored
-                # scatter -- honest approximation, cell geometry is not
-                # reconstructed. point/circle/square are literal scatters.
+                # rect degrades to a colored scatter; cell geometry is not reconstructed.
                 _draw_scatter(ax, rows, xf, yf, view)
             else:
                 summary["skipped"] += 1
@@ -220,7 +203,6 @@ def render_spec(figure, spec: dict) -> Dict[str, Any]:
         except Exception:  # noqa: BLE001 -- one bad view must not kill the card
             summary["skipped"] += 1
             continue
-        # Axes chrome from the first view that carries the channel.
         if _is_log(xch) and not summary["x_log"]:
             ax.set_xscale("log")
             summary["x_log"] = True
@@ -240,8 +222,7 @@ def render_spec(figure, spec: dict) -> Dict[str, Any]:
         summary["legend_labels"] = list(labels)
         ax.legend(fontsize=7, framealpha=0.6)
     try:
-        # pad=0.3 against a 1.08 default: the axes title is already small,
-        # so the plot area, not whitespace above it, dominates the dock.
+        # pad=0.3 against a 1.08 default so the plot area dominates the dock.
         figure.tight_layout(pad=0.3)
     except Exception:  # noqa: BLE001 -- tight_layout can fail on odd extents
         pass
@@ -249,9 +230,7 @@ def render_spec(figure, spec: dict) -> Dict[str, Any]:
 
 
 def _draw_line(ax, rows, xf, yf, view, props, summary) -> int:
-    """Line mark, one plotted series per colour-field group, or one unlabeled
-    series without one. A non-numeric x falls back to category positions with
-    thinned tick labels, so no date parsing can go wrong."""
+    """Line mark, one plotted series per colour-field group, or one unlabeled series without one."""
     color_field = _channel(view, "color").get("field")
     numeric_x = all(
         _as_float(row.get(xf)) is not None for row in rows if xf in row
@@ -288,7 +267,6 @@ def _draw_line(ax, rows, xf, yf, view, props, summary) -> int:
         summary["points"] += len(pts)
         n += 1
     if categories:
-        # Thin the categorical ticks to at most 8 so timestamps stay legible.
         step = max(1, len(categories) // 8)
         ticks = list(range(0, len(categories), step))
         ax.set_xticks(ticks)
@@ -299,9 +277,8 @@ def _draw_line(ax, rows, xf, yf, view, props, summary) -> int:
 
 
 def _draw_rules(ax, rows, xf, yf, props, summary) -> None:
-    """Rule mark: one constant reference line per row, HORIZONTAL when the y
-    channel carries the field and vertical for an x-channel rule.
-    ``strokeDash`` draws it dashed; a row ``label`` becomes a legend entry."""
+    """Rule mark: one constant reference line per row, HORIZONTAL when the y channel carries
+    the field and vertical for an x-channel rule."""
     linestyle = "--" if props.get("strokeDash") else "-"
     color = props.get("color") or "#c1121f"
     for row in rows:
@@ -324,9 +301,7 @@ def _draw_rules(ax, rows, xf, yf, props, summary) -> None:
 
 
 def _draw_bars(ax, rows, xf, yf, view) -> int:
-    """Bar mark over a categorical x (histogram bins, damage states, budget
-    terms). ``encoding.color.field`` maps categories onto the series
-    palette. Returns the bar count."""
+    """Bar mark over a categorical x (histogram bins, damage states, budget terms)."""
     color_field = _channel(view, "color").get("field")
     labels: List[str] = []
     heights: List[float] = []

@@ -1,8 +1,8 @@
-"""THE WALKED BOUNDARY of a harbour: which stretch of the outline is open water.
+"""The walked boundary of a harbour: which stretch of the outline is open water.
 
-The walk over the mesh's own connectivity, with the structure's own segments and
-the basin's deepest column measured off it, so the boundary file prescribes the
-incident wave exactly where the sea reaches and a solid face nowhere else."""
+The walk over the mesh's connectivity, with the structure's segments and the basin's deepest
+column measured off it, so the incident wave prescribes only where the sea reaches.
+"""
 
 from __future__ import annotations
 
@@ -31,9 +31,7 @@ def _harbour_mesh_missing(message: str) -> Exception:
 
 def _boundary_file(files: Mapping[str, Any], *,
                    missing: Callable[[str], Exception]) -> tuple[str, list[int]]:
-    """The pair's own ``.cli`` text and the boundary nodes it numbers, in rank order.
-
-    The file written from this geometry's IPOBO is the ONE record of the walk."""
+    """The pair's ``.cli`` text and boundary nodes in rank order; the file from this IPOBO is the one record of the walk."""
     from trid3nt_server.tools.cache import read_object_bytes_s3
 
     uri = boundary_uri(files, missing=missing)
@@ -52,7 +50,6 @@ def _boundary_file(files: Mapping[str, Any], *,
 
 def _nodes_near(segments: Any, points_utm: Any, candidates: Sequence[int],
                 tolerance_m: float) -> list[int]:
-    """The candidate nodes lying within ``tolerance_m`` of any declared segment."""
     import numpy as np
 
     segs = np.asarray(segments, dtype=float).reshape(-1, 4)
@@ -71,17 +68,11 @@ def _nodes_near(segments: Any, points_utm: Any, candidates: Sequence[int],
 
 def _settled_walk(walk: Sequence[int], structure: set[int], liquid: set[int]
                   ) -> tuple[list[int], list[int]]:
-    """The two roles as RUNS of the boundary walk, not as scatters of nodes.
-
-    The structure wins where the two overlap, the way the stamp reads it."""
+    """The two roles as runs of the boundary walk; the structure wins where they overlap."""
     order = [int(n) for n in walk]
     kind = ["structure" if n in structure else
             ("liquid" if n in liquid else "shore") for n in order]
-    # A node standing alone between two of another kind is not a face. front2.f
-    # says so itself - it refuses "a solid point between two liquid points" and the
-    # reverse by name - so a lone node whose two walk neighbours agree with each
-    # other and not with it takes their role. Settled until nothing moves, because
-    # closing one hole can expose the next.
+    # A lone node between two of another kind is not a face (front2.f refuses a solid point between two liquid points and the reverse), so it takes its neighbours' role; iterated until stable.
     for _pass in range(len(order)):
         moved = False
         for i in range(1, len(kind) - 1):
@@ -95,7 +86,6 @@ def _settled_walk(walk: Sequence[int], structure: set[int], liquid: set[int]
 
 
 def _segments_utm(polylines: Sequence[Any], utm_epsg: int) -> list[list[float]]:
-    """Declared lon/lat polylines -> their segments in the mesh's own zone."""
     from pyproj import Transformer
 
     forward = Transformer.from_crs(4326, int(utm_epsg), always_xy=True)
@@ -123,7 +113,8 @@ async def settle_harbour(
 ) -> dict[str, Any]:
     """What the accepted harbour mesh measures -> what the harbour sheet reads.
 
-    A mesh naming no liquid boundary refuses: a wave has no edge to enter by."""
+    A mesh naming no liquid boundary refuses.
+    """
     from trid3nt_server.inputs.shape import polylines as _lines, shape
 
     facts = mesh_facts(mesh, missing=_harbour_mesh_missing)
@@ -143,17 +134,11 @@ async def settle_harbour(
                  if drawn is not None else [])
     segments = await asyncio.to_thread(
         _segments_utm, polylines, utm_epsg) if polylines else []
-    # ONE NUMBER decides where the structure is, and it is the one the mesher
-    # punched with: the footprint is the centreline buffered by HALF the declared
-    # width, so the punched outline stands at that half-width and the water
-    # inside it was removed. What a boundary node is measured against is that
-    # outline plus the mesh's OWN edge, because a relaxation places a node on a
-    # locked outline to within the edge it was built at - measured on this
-    # harbour, the outline holds one population of nodes at 9-11 m off a 20 m
-    # structure with nothing at all between 11 and 12 m, so an equality at
-    # 10.000 m cuts that one population in half.
-    # A structure face WINS a contested node: a barrier that imposed the incident
-    # wave would radiate the sheltering away from inside the lee.
+    # The structure footprint is the centreline buffered by half the declared width, the outline the
+    # mesher punched with. Boundary nodes are measured against that outline plus the mesh's own edge:
+    # relaxation places nodes on a locked outline only to within the edge (e.g. one population at 9-11 m
+    # off a 20 m structure), so an exact-equality cut would split it. A structure face wins a contested
+    # node: an incident-wave barrier would radiate the sheltering away from the lee.
     band_m = float(structure_width_m) / 2.0 + float(facts["mesh_size_m"])
     on_structure = set(_nodes_near(segments, points_utm, boundary_nodes, band_m))
     structure_nodes, open_nodes = _settled_walk(

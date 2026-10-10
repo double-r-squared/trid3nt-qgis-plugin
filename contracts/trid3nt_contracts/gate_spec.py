@@ -15,10 +15,8 @@ from .common import ContractModel
 __all__ = ["GateKind", "GateSpec", "LeverSpec"]
 
 
-#: What KIND of consequence the gate guards. ``"solver"`` - a consequential engine
-#: run: a model-supplied ``confirmed`` is STRIPPED before gating and re-injected
-#: only on an explicit proceed. ``"fetch"`` - a heavy raster download or merge:
-#: ``confirmed`` is not in play at all, only the resolution lever is pinned.
+#: What the gate guards. ``"solver"``: a model-supplied ``confirmed`` is stripped before gating and re-injected only
+#: on an explicit proceed. ``"fetch"``: ``confirmed`` is not in play, only the resolution lever is pinned.
 GateKind = Literal["solver", "fetch"]
 
 
@@ -27,31 +25,21 @@ class LeverSpec(ContractModel):
     A DECLARATION only - the engine-specific pinning arithmetic stays in the
     tool's pin provider, so rendering and enforcement can be uniform."""
 
-    #: Human label for the lever. Card copy only.
     name: str = Field(min_length=1)
-    #: The approved-params key the pin WRITES. A ``narrow_scope`` override's
-    #: revised value is routed to the pin provider under this key.
+    #: The approved-params key the pin writes; a ``narrow_scope`` override is routed to the pin provider under it.
     param: str = Field(min_length=1)
-    #: Value unit - ``"m"`` for a resolution lever, ``"min"`` for a cadence,
-    #: ``"hr"`` for a window.
     unit: str = "m"
-    #: A DISCRETE value ladder, offered as chips. Mutually exclusive with the
-    #: range window; ``None`` when the lever is a continuous free edit.
+    #: A discrete value ladder, offered as chips; exclusive with the range window.
     rungs: tuple[float, ...] | None = None
-    #: A continuous override window, FINEST / COARSEST inclusive, that the pin
-    #: provider clamps a chosen value into. ``None`` leaves that side unbounded.
+    #: A continuous override window, finest / coarsest inclusive, that the pin provider clamps into; None leaves a side unbounded.
     range_min: float | None = None
     range_max: float | None = None
-    #: True pins the SUGGESTED value the card showed on a plain ``proceed``, so
-    #: the run matches the card the user saw. False leaves the lever inert until
-    #: an explicit ``narrow_scope`` override.
+    #: True pins the suggested value on a plain ``proceed``, so the run matches the card; False leaves the lever inert until an explicit ``narrow_scope``.
     pin_on_proceed: bool = True
 
     @model_validator(mode="after")
     def _validate_lever(self) -> LeverSpec:
-        """A lever declares a discrete ladder XOR a continuous window, or neither.
-        Neither is legitimate - a free-edit lever whose bounds the deck itself
-        enforces. With both range bounds set, ``min <= max``."""
+        """A lever declares a discrete ladder xor a continuous window, or neither (a free-edit lever); with both bounds, ``min <= max``."""
         has_window = self.range_min is not None or self.range_max is not None
         if self.rungs is not None and has_window:
             raise ValueError(
@@ -76,28 +64,17 @@ class GateSpec(ContractModel):
     signal the gate engine reads - there is no name set to join."""
 
     kind: GateKind
-    #: Dotted import path to a PURE builder ``(params: dict) -> CardEstimate``
-    #: exported from the tool's OWN module; a coroutine is awaited. An estimate
-    #: whose envelope is ``None`` means "no gate needed, dispatch as-is".
+    #: Dotted path to a pure estimate builder ``(params) -> CardEstimate`` in the tool's own module (a coroutine is awaited); an envelope of None means no gate needed.
     estimate_provider: str = Field(min_length=1)
-    #: Dotted import path to a PURE decision tail
-    #: ``(decision, revised_args, params, tail_state) -> dict`` returning the
-    #: approved-params DELTA to merge. ``None`` for a lever-less gate, where the
-    #: generic tail injects ``confirmed`` for a solver and nothing for a fetch.
+    #: Dotted path to a pure decision tail ``(decision, revised_args, params, tail_state) -> dict`` returning the approved-params delta; None for a lever-less gate.
     pin_provider: str | None = None
-    #: The declared levers. Empty for a plain proceed/cancel gate.
     levers: tuple[LeverSpec, ...] = ()
-    #: Card copy naming the gate. The user-facing caption is still the
-    #: recommendation the estimate provider bakes into the envelope; these two
-    #: are metadata for the audit surface.
     title: str = ""
     rationale: str = ""
 
     @model_validator(mode="after")
     def _validate_gate(self) -> GateSpec:
-        """A gate WITH levers must name a pin provider to enforce them.
-        A lever offered with nothing to honour a ``narrow_scope`` override is a
-        dead knob, so the inconsistency is refused at declaration time."""
+        """A gate with levers must name a pin provider: a lever with nothing to honour ``narrow_scope`` is a dead knob."""
         if self.levers and self.pin_provider is None:
             raise ValueError(
                 "GateSpec: a gate declaring levers must name a pin_provider to honour a "

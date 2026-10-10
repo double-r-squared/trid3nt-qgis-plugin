@@ -1,10 +1,8 @@
 """The FORMAT SET, and the publish of one outputs list into it.
 
-A raster arrives as a COG already in the store, a vector as the GeoJSON its
-producer shaped, a mesh as the MDAL file its engine wrote plus the dataset files
-written beside it, a series or a profile as a chart payload. Nothing here reads
-an engine's result or paints a field: a product arrives in the set or it does
-not arrive, and every product carries the style row its producer declared."""
+A raster arrives as a COG already in the store, a vector as GeoJSON, a mesh as the MDAL file its engine wrote plus its
+dataset files, a series or profile as a chart payload. Nothing here reads an engine's result or paints a field;
+every product carries the style row its producer declared."""
 
 from __future__ import annotations
 
@@ -34,7 +32,6 @@ class Vector:
 
     features: Mapping[str, Any]
     units: str | None = None
-    #: Written under the run prefix as ``<stem>.geojson``.
     stem: str | None = None
 
 
@@ -50,9 +47,7 @@ class Mesh:
     group: str
     epsg: int
     datasets: tuple[str, ...] = ()
-    #: The lon/lat box the MESH ITSELF spans - what the camera flies to. MDAL
-    #: derives the layer's own extent from the file; this is the run stating it
-    #: before the file is staged.
+    #: The lon/lat box the mesh itself spans, what the camera flies to; the run states it before the file is staged.
     bbox: tuple[float, float, float, float] | None = None
     reference_time: str | None = None
     frames: int | None = None
@@ -60,9 +55,7 @@ class Mesh:
     plane: str | None = None
     units: str | None = None
     value_range: tuple[float, float] | None = None
-    #: Where the field stops being drawn. The group written beside the mesh
-    #: carries nothing below it; the RESULT FILE's own group carries the values,
-    #: so the style row is what masks them.
+    #: Where the field stops being drawn; the style row masks it, since the result file's own group carries the values.
     floor: float | None = None
 
 
@@ -81,8 +74,7 @@ class Deliverable:
     product: Raster | Vector | Mesh | Chart
     caption: str
     style: Mapping[str, Any] | None = None
-    #: WHICH tracer of the run this is, counted from 1 in the deck's own order.
-    #: A tracer's name is the run's, so its position is what a reader asks by.
+    #: Which tracer, counted from 1 in the deck's order; a tracer's name is the run's, so position is what a reader asks by.
     tracer: int | None = None
 
 
@@ -154,10 +146,7 @@ def record_run_outputs(layers: Sequence[LayerURI]) -> None:
 
 
 def _one_row_per_quantity(items: Sequence[Deliverable]) -> list[Deliverable]:
-    """A product that declared no style takes the row its QUANTITY declared.
-
-    One quantity is read on one ramp as well as one range: two products of it on
-    two ramps is a picture of two variables."""
+    """A product with no declared style takes its quantity's row; one quantity reads on one ramp as well as one range."""
     declared: dict[str, Mapping[str, Any]] = {}
     for item in items:
         if item.style:
@@ -169,10 +158,7 @@ def _one_row_per_quantity(items: Sequence[Deliverable]) -> list[Deliverable]:
 
 def _shared_ranges(items: Sequence[Deliverable]
                    ) -> dict[str, tuple[float, float] | None]:
-    """ONE range per quantity, over every product that measured one.
-
-    Two planes of one variable read on one ramp, because the colour has to mean
-    the same value on both of them."""
+    """One range per quantity over every product that measured it, so the colour means the same value on every plane."""
     from trid3nt_server.render import presets
 
     found: dict[str, list[tuple[float, float] | None]] = {}
@@ -198,8 +184,7 @@ def _title(item: Deliverable, *, name: str) -> str:
     t = getattr(product, "t", None)
     if t is not None:
         return f"{measured} at t = {float(t):g} s{where}"
-    # A field with no instant is the ENVELOPE over the run; a vector is what it
-    # is, and calling a track a peak would name a reading nobody took.
+    # A field with no instant is the envelope over the run; calling a track a peak would name a reading nobody took.
     if isinstance(product, Mesh):
         return f"Peak {caption}{where}"
     return f"{label}{where}"
@@ -209,13 +194,8 @@ def _style_row(item: Deliverable, *, kind: str,
                value_range: tuple[float, float] | None,
                dataset_group: str | None = None,
                floor: float | None = None) -> dict[str, Any]:
-    """The declared row, shaped for the format the product arrived in.
-
-    The producer declares the ramp, the units and where the legend is ranged
-    from; the FORMAT decides which of the four shapes draws it."""
-    # The declared row's ``center`` / ``floor`` / ``range`` are instructions for
-    # MEASURING a range and the measurement is already done; ``floor`` here is
-    # the edge the PRODUCT measured, which the renderer still has to mask on.
+    """The declared row shaped for the format the product arrived in; the format decides which of the four shapes draws it."""
+    # The declared ``center`` / ``floor`` / ``range`` instruct measuring a range, which is done; ``floor`` here is the edge the product measured, which the renderer still masks on.
     row = {k: v for k, v in dict(item.style or {}).items()
            if k not in ("center", "floor", "range")}
     row["kind"] = kind
@@ -239,9 +219,7 @@ def _mesh_layer(item: Deliverable, *, run_id: str, engine: str, name: str,
     quantity = quantity_of(item.caption)
     title = _title(item, name=name)
     stem = quantity if mesh.plane is None else f"{quantity}_{quantity_of(mesh.plane)}"
-    # WHICH group of one quantity this layer paints, in its id: the file's own
-    # over time, or a group written beside it for one instant or an envelope.
-    # Two layers of one file and one quantity are two products, not one.
+    # Which group of one quantity this layer paints, in its id: two layers of one file and quantity are two products.
     which = ("-over-time" if mesh.frames
              else "" if mesh.t is None else f"-t{int(mesh.t)}")
     return LayerURI(
@@ -296,8 +274,7 @@ def _vector_layer(item: Deliverable, *, run_id: str, engine: str,
         bbox=_features_bbox(vector.features))
 
 
-#: How far a zero-extent geometry's declared bbox reaches, in degrees: a point
-#: reads as no extent to the camera, so it gets a small honest box.
+#: Degrees a zero-extent geometry's declared bbox reaches; a point reads as no extent to the camera.
 _POINT_PAD_DEG = 0.002
 
 

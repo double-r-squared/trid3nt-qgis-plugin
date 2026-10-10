@@ -95,40 +95,21 @@ def _role_of(content: Any) -> str | None:
 
 
 def _turn_index(contents: Any) -> int:
-    """The index of the NEXT assistant turn = count of ``model``-role contents.
-    One script turn advances per agent-loop iteration as tool results feed back;
-    robust to dict- or object-shaped contents."""
+    """The index of the NEXT assistant turn = count of ``model``-role contents; one script turn
+    advances per loop iteration, and dict- or object-shaped contents both work."""
     if not isinstance(contents, (list, tuple)):
         return 0
     return sum(1 for c in contents if _role_of(c) == "model")
 
 
-# Test-harness (fake-provider) seam.
-#
-# The agent-loop test suite drives the REAL server dispatch under
+# Test-harness (fake-provider) seam. The agent-loop test suite drives the REAL server dispatch under
 # ``MODEL_PROVIDER=scripted`` and feeds fake model turns through this harness.
-# A test installs a turn source, drives the loop, then inspects
-# ``harness_calls()`` for the ``contents`` the server built between turns.
-#
-# A fake turn is a plain dict (the JSON-transcript shape, extended):
-#   {"text": "..."}                         -- one narration delta
-#   {"tool_call": {"name","args","call_id"?}}
-#   {"tool_calls": [ {..}, {..} ]}           -- parallel calls in ONE round
-#   {"raise": <BaseException>}               -- inject a model-stream error
-#   {"usage": {"total_token_count": ...}}    -- emit a UsageMetadataEvent
-# A turn may combine text + call(s) + usage. Absent keys emit nothing, so a bare
-# ``{}`` is a genuinely empty round (the qwen3 empty-completion shape) and
-# ``None`` (a fixed list run past its end) yields a terminal narration so the
-# loop stops. Usage is emitted ONLY when a turn carries a ``usage`` key -- the
-# direct-adapter tests assert exact event counts, so no phantom UsageMetadataEvent
-# is injected.
-#
-# The turn SOURCE is either a list of turn dicts (advanced by an internal
-# per-call counter) or a callable ``(call_index:int, contents) -> turn`` for
-# dynamic tests. Advance is CALL-SEQUENCED (one turn per stream_scripted call),
-# which -- unlike the production transcript path's contents-model-role counting
-# -- correctly handles a round that emits MULTIPLE tool calls (the loop appends
-# more than one model Content for such a round).
+# A turn dict may combine "text", "tool_call"/"tool_calls" (parallel calls in ONE round), "raise"
+# (inject a stream error) and "usage"; absent keys emit nothing, so ``{}`` is a genuinely empty
+# round and ``None`` (a list run past its end) yields a terminal narration. Usage is emitted ONLY
+# when a turn carries it: direct-adapter tests assert exact event counts. The source is a list or
+# a callable ``(call_index, contents) -> turn``. Advance is CALL-sequenced, not contents-model-
+# role counted, so a round with several tool calls still advances once.
 
 #: Installed fake-turn source (list of turn dicts OR a (index, contents)->turn
 #: callable). ``None`` => harness inactive (production transcript path runs).
@@ -207,9 +188,8 @@ def _usage_event_from(usage: dict[str, Any]) -> UsageMetadataEvent:
 
 
 def _events_from_turn(turn: Any, index: int) -> list[StreamEvent]:
-    """Resolve a fake turn dict into the ordered ``StreamEvent`` list it emits.
-    A ``{"raise": exc}`` turn raises before any event; a ``None`` turn yields one
-    terminal narration so the agent loop stops."""
+    """Resolve a fake turn dict into the ordered ``StreamEvent`` list it emits. A ``{"raise": exc}`` turn raises before any event; ``None`` yields one
+    terminal narration so the loop stops."""
     if turn is None:
         return [TextDeltaEvent(delta="[scripted harness] transcript exhausted.")]
     # Escape hatch: a turn already expressed as a list of StreamEvents.
@@ -265,11 +245,9 @@ async def stream_scripted(
         global _HARNESS_INDEX
         index = _HARNESS_INDEX
         _HARNESS_INDEX += 1
-        # Shallow-snapshot ``contents`` at CALL time: the server loop appends new
-        # Content objects to the SAME list in place between turns, so storing the
-        # live reference would make every recorded call show the final mutated
-        # list. The Content objects themselves are not mutated, so a shallow copy
-        # captures each turn's state faithfully.
+        # Shallow-snapshot ``contents`` at CALL time: the server loop appends new Content objects to
+        # the SAME list in place between turns, so storing the live reference would make every
+        # recorded call show the final mutated list.
         _HARNESS_CALLS.append(
             {
                 "contents": list(contents)

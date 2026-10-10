@@ -24,14 +24,11 @@ from .common import (
 __all__ = [
     "Envelope",
     "ErrorCode",
-    # client -> agent
     "DrawnGeometry",
     "UserMessagePayload",
     "CancelPayload",
     "SessionResumePayload",
-    # client -> agent, user-input replies
     "SpatialInputResponsePayload",
-    # agent -> client
     "AgentMessageChunkPayload",
     "AgentThinkingChunkPayload",
     "PipelineStepState",
@@ -46,17 +43,14 @@ __all__ = [
     "ReferenceLayer",
     "SuggestedView",
     "SpatialInputRequestPayload",
-    # the tool-selection picker
     "ToolChoiceMode",
     "ToolCandidatesReason",
     "ToolCandidate",
     "ToolCandidatesPayload",
     "ToolChoicePayload",
-    # the borrowed-provider pair
     "LayerMode",
     "LayerRequestPayload",
     "LayerResponsePayload",
-    # registry
     "CLIENT_TO_AGENT_PAYLOADS",
     "AGENT_TO_CLIENT_PAYLOADS",
     "ALL_PAYLOADS",
@@ -76,11 +70,8 @@ class Envelope(ContractModel, Generic[PayloadT]):
     id: ULIDStr = Field(default_factory=new_ulid)
     ts: UTCDatetime = Field(default_factory=now_utc)
     session_id: ULIDStr
-    # The Case that OWNS the turn this envelope belongs to, when one is bound.
-    # A client routes a live envelope to that Case's stream: "the stream the
-    # user last messaged" misattributes a still-running turn the moment the user
-    # switches Cases. ``None`` is no Case context - a root turn, a lifecycle
-    # envelope - and a client falls back to submit-time routing.
+    # The Case owning this turn; None is no Case context and a client falls
+    # back to submit-time routing.
     case_id: ULIDStr | None = None
     payload: PayloadT
 
@@ -90,8 +81,7 @@ ErrorCode = Literal[
     "AUTH_FAILED",
     "RATE_LIMITED",
     "INTERNAL_ERROR",
-    # An upstream data provider failed past the fetch's retries. Its own
-    # message rides verbatim; it is the provider's fault, never ours.
+    # The provider's own message rides verbatim.
     "UPSTREAM_API_ERROR",
     "LLM_UNAVAILABLE",
     "TOOL_NOT_FOUND",
@@ -105,31 +95,18 @@ ErrorCode = Literal[
     "CLARIFICATION_TIMEOUT",
     "USER_INPUT_CANCELLED",
     "CANCELLED",
-    # A gate CARD the user answered with cancel. A decline is the user's
-    # decision and NOT a failure, so each gate carries its own code rather than
-    # one generic cancellation: a client reads which card was declined and
-    # renders that step cancelled rather than failed.
+    # A declined gate card is the user's decision, not a failure; each gate has its own code.
     "PAYLOAD_WARNING_CANCELLED",
     "CODE_EXEC_CANCELLED",
     "SOLVER_CONFIRMATION_CANCELLED",
-    # A prompt that stayed over the model's context window even after one
-    # recompaction and retry. DISTINCT from LLM_UNAVAILABLE: a genuinely
-    # oversized Case, not a transient outage, so the honest guidance is to start
-    # a new case or switch models rather than to retry.
+    # Distinct from LLM_UNAVAILABLE: still over the context window after one recompaction and retry.
     "CONTEXT_WINDOW_EXCEEDED",
 ]
 
 
 
-# The ROUTING-VISIBILITY mode for a turn. It governs ONLY whether tool
-# selection is surfaced as a picker card. The CONSENT surface - payload
-# warnings, granularity, solver confirm, code-exec approval, credential entry,
-# region choice, spatial input - is NEVER mode-dependent: a gate answers "may I
-# do this", a mode answers "which tool", and the two layers never mix.
-#
-# - ``"auto"``: selection is autonomous, with no pick card EXCEPT on a MEASURED
-#   ambiguity signal, where a card may still surface.
-# - ``"ask"``: selection is surfaced as a card, staged along the analysis flow.
+# Routing-visibility mode only: "auto" selects tools autonomously (a card may surface on a measured
+# ambiguity), "ask" surfaces a picker card. Consent gates are never mode-dependent.
 ToolChoiceMode = Literal["auto", "ask"]
 
 
@@ -161,31 +138,19 @@ class UserMessagePayload(ContractModel):
     MESSAGE_TYPE: ClassVar[str] = "user-message"
 
     text: str
-    # The model chosen for THIS turn. ``None`` uses the server default. Sent on
-    # every message, so the model can change between turns with no restart.
+    # None uses the server default; sent on every message.
     model_id: str | None = None
-    # The Case the CLIENT is currently in. It is the AUTHORITY for turn
-    # binding, so a turn runs in the Case the user is looking at rather than
-    # against a stale server-side pointer. ``None`` falls back to that pointer.
+    # The client's current Case is the authority for turn binding; None falls back to the server pointer.
     case_id: str | None = None
-    # True enables the model's reasoning channel for this turn, and the server
-    # forwards its deltas as thinking chunks. ``None`` suppresses it. Only an
-    # adapter with a reasoning channel reads this; the rest ignore it.
+    # True forwards the reasoning channel's deltas as thinking chunks; adapters without one ignore it.
     show_thinking: bool | None = None
-    # The client's current AOI, ``[min_lon, min_lat, max_lon, max_lat]`` in
-    # EPSG:4326 - a STRUCTURED knob rather than a prose line inside ``text``.
-    # ``None`` leaves the server to infer location from the text. A plain
-    # 4-float list, not a ``BBox``, so a consumer reads the wire shape directly.
-    # This is the PER-TURN AOI; the persistent Case bbox has its own message.
+    # The per-turn AOI as [min_lon, min_lat, max_lon, max_lat] in EPSG:4326; the persistent Case bbox
+    # has its own message. None leaves the server to infer location from the text.
     aoi_bbox: list[float] | None = None
-    # The routing-visibility mode for THIS turn. There is no session-config
-    # message: the per-message carrier IS the config path. ``None`` is treated
-    # as auto, and consent gates are unaffected either way.
+    # None is auto; consent gates are unaffected either way.
     tool_choice_mode: ToolChoiceMode | None = None
-    # A geometry drawn for THIS turn, distinct from ``aoi_bbox``: the AOI is
-    # the analysis extent, this is a sub-region KNOB an input-review gate takes
-    # as user-supplied. ``None`` leaves a composer on its own proposal. One
-    # rectangle, one turn - a client clears it on send.
+    # A sub-region knob an input-review gate takes as user-supplied, distinct from aoi_bbox.
+    # One rectangle, one turn - a client clears it on send.
     drawn_geometry: DrawnGeometry | None = None
 
     @field_validator("aoi_bbox")
@@ -217,11 +182,7 @@ class SessionResumePayload(ContractModel):
 
     MESSAGE_TYPE: ClassVar[str] = "session-resume"
 
-    # The Case the CLIENT is currently in, stamped on reconnect. The server
-    # RE-BINDS its active-Case pointer to this before replaying layers, so a
-    # reconnect replays the Case the user is actually in: a selection tapped
-    # mid-reconnect never reaches the server, and a resume carrying nothing
-    # would replay a stale one. ``None`` keeps the server's own pointer.
+    # The server re-binds its active-Case pointer to this before replaying layers; None keeps its own.
     case_id: str | None = None
 
 
@@ -233,8 +194,7 @@ class SpatialInputResponsePayload(ContractModel):
     sets a role-tagged ``features``, a cancellation sets neither. A point pick
     also carries the ``name`` the user gave it."""
 
-    # No payload-size gate applies here: a drawn collection is kilobytes by
-    # construction, and the warn/block discipline governs TOOL OUTPUT.
+    # No payload-size gate: a drawn collection is kilobytes by construction.
 
     MESSAGE_TYPE: ClassVar[str] = "spatial-input-response"
 
@@ -242,7 +202,6 @@ class SpatialInputResponsePayload(ContractModel):
     geometry_type: Literal["point", "bbox", "vector_draw"] | None = None
     coordinates: list[float] | None = None
     features: dict[str, Any] | None = None
-    #: What the user called the picked point; the slot that asked carries it on.
     name: str | None = None
     cancelled: bool = False
 
@@ -272,8 +231,7 @@ def _validate_spatial_input_feature_collection(
     feats = fc.get("features")
     if not isinstance(feats, list):
         raise ValueError("features.features must be a list")
-    # "line" is a NEUTRAL elevation or section LineString - it carries no
-    # barrier semantics.
+    # "line" is a neutral elevation or section LineString with no barrier semantics.
     valid_roles = {"aoi", "point", "line"}
     for idx, feat in enumerate(feats):
         if not isinstance(feat, dict) or feat.get("type") != "Feature":
@@ -291,8 +249,6 @@ def _validate_spatial_input_feature_collection(
                 f"{sorted(valid_roles)}, got {role!r}"
             )
         if role == "line":
-            # A plain LineString with at least two positions. No barrier type
-            # is required or read.
             if geom.get("type") != "LineString":
                 raise ValueError(
                     f"features.features[{idx}] role='line' geometry must be a "
@@ -331,9 +287,7 @@ class AgentThinkingChunkPayload(ContractModel):
     done: bool = False
 
 
-# pipeline-state ------------------------------------------------------------ #
 
-# ``cancelled`` is a distinct terminal state, never folded into failed.
 PipelineStepState = Literal["pending", "running", "complete", "failed", "cancelled"]
 
 
@@ -350,34 +304,19 @@ class PipelineStep(ContractModel):
     started_at: UTCDatetime | None = None
     completed_at: UTCDatetime | None = None
     progress_percent: int | None = Field(default=None, ge=0, le=100)
-    # WHY a step ended red. A failed step names its cause on the frame a client
-    # reads, so a reader holding this snapshot alone can say what stopped the
-    # run without the persisted summary beside it. The code set is open - a
-    # workflow registers its own - and the message is capped so a stack trace
-    # cannot ride out here.
+    # Why a step ended red; the code set is open and the message is capped so a stack trace cannot ride out.
     error_code: str | None = None
     error_message: str | None = Field(default=None, max_length=512)
-    # The AUTHORITATIVE wall-clock elapsed time, stamped on the terminal
-    # transition and derived from the two stamps above. ``None`` while pending
-    # or running, so a client may tick cosmetically until this lands and then
-    # locks to it. Milliseconds, so a sub-second tool reads honestly.
+    # Authoritative elapsed milliseconds from the two stamps; None while pending or running.
     duration_ms: int | None = Field(default=None, ge=0)
-    # The card KIND. ``"tool"`` is an on-box tool card; ``"compute"`` is the
-    # off-box solver card, bound to a batch job whose status is mirrored
-    # VERBATIM from the control plane rather than interpreted.
+    # "compute" is the off-box solver card; its status is mirrored verbatim from the control plane.
     role: Literal["tool", "compute"] = "tool"
     batch_job_id: str | None = None
     batch_status: str | None = None
-    # WHICH engine, and which of its modules, the compute card is a run of. A
-    # run is identified by these two and never by the question it answered; both
-    # are ``None`` on a plain tool card, which is a run of nothing.
+    # Engine and module of a compute card; both None on a plain tool card.
     engine: str | None = None
     module: str | None = None
-    # The nested sub-step timeline. ``parent_step_id`` is set on a CHILD, and a
-    # client NESTS such a step instead of rendering it top-level. The three
-    # substep fields are set on the PARENT and describe the currently-running
-    # child for a live breadcrumb; they are cleared when the parent terminates.
-    # ``substep_total`` is ``None`` when the child count is not yet known.
+    # parent_step_id marks a child a client nests; the substep fields sit on the parent and clear when it terminates.
     parent_step_id: ULIDStr | None = None
     substep_label: str | None = None
     substep_index: int | None = Field(default=None, ge=1)
@@ -395,7 +334,6 @@ class PipelineStatePayload(ContractModel):
     steps: list[PipelineStep] = Field(default_factory=list)
 
 
-# solve-progress ------------------------------------------------------------ #
 
 
 class SolveProgressPayload(ContractModel):
@@ -412,12 +350,10 @@ class SolveProgressPayload(ContractModel):
     vcpus: int | None = None
     elapsed_seconds: float = Field(ge=0)
     eta_seconds: float | None = Field(default=None, ge=0)
-    # The batch status this tick reflects, mirrored VERBATIM from the control
-    # plane. ``None`` for a tick not bound to a batch job.
+    # Mirrored verbatim from the control plane; None when not bound to a batch job.
     phase: str | None = None
 
 
-# tool-io ------------------------------------------------------------------- #
 
 
 class ToolIoPayload(ContractModel):
@@ -427,34 +363,23 @@ class ToolIoPayload(ContractModel):
 
     MESSAGE_TYPE: ClassVar[str] = "tool-io"
 
-    #: Server-side truncation cap per field (bytes). Keeps the chat light; the
-    #: expander is a debugging affordance, not a data-transfer channel.
+    #: Per-field truncation cap in bytes.
     MAX_FIELD_BYTES: ClassVar[int] = 32_768
 
-    #: Matches the step of the dispatch's own card, so a client merges this
-    #: onto the right card by id.
     step_id: ULIDStr
     tool_name: str
-    #: Pre-serialized JSON STRINGS: a non-serializable value degrades to a
-    #: string rather than breaking the envelope.
+    #: Pre-serialized JSON strings; a non-serializable value degrades to a string.
     raw_args: str = ""
     function_response: str = ""
-    #: Mirrors the honesty signal, so the response block can be styled without
-    #: re-parsing the JSON.
     is_error: bool = False
-    #: A truncation flag with the ORIGINAL byte length beside it, so a reader
-    #: can say honestly how much is missing.
+    #: Original byte length beside the truncation flag.
     args_truncated: bool = False
     response_truncated: bool = False
 
     @classmethod
     def json_field(cls, value: Any) -> tuple[str, bool, int]:
-        """One field serialized to ``(json_string, truncated, orig_bytes)``.
-        Never raises: an unserializable value degrades to ``str()``.
-        ``orig_bytes`` is the ORIGINAL UTF-8 length, so a truncation is reported
-        honestly. The cut is on the UTF-8 byte boundary and a split multibyte
-        tail is dropped, so the prefix stays valid TEXT - it need not remain
-        valid JSON, because a reader shows it raw beside the truncation note."""
+        """One field serialized to ``(json_string, truncated, orig_bytes)``; never raises (an unserializable value
+        degrades to ``str()``). The cut is on a UTF-8 byte boundary, so the prefix stays valid text but need not be valid JSON."""
         import json
 
         try:
@@ -470,10 +395,8 @@ class ToolIoPayload(ContractModel):
     response_bytes: int = Field(default=0, ge=0)
 
 
-# map-command --------------------------------------------------------------- #
 
 
-# map-command command vocabulary (open enum).
 MapCommand = Literal[
     "load-layer",
     "zoom-to",
@@ -524,7 +447,6 @@ class ErrorPayload(ContractModel):
     retry_after_seconds: int | None = None
 
 
-# spatial-input-request ----------------------------------------------------- #
 
 
 class ReferenceLayer(ContractModel):
@@ -553,47 +475,28 @@ class SpatialInputRequestPayload(ContractModel):
     mode: Literal["point", "bbox", "vector_draw"]
     title: str
     description: str
-    # Selects the draw affordance and its semantics, on a draw request only.
-    #
-    # - ``"aoi"`` - region selection: only the area tools are offered and submit
-    #   gates on at least one polygon, returned tagged as an aoi.
-    # - ``"line"`` - a NEUTRAL elevation or section line, returned tagged as a
-    #   line. It carries no barrier semantics.
-    # - ``"domain"`` - the closed outline a run is solved over: the area tools,
-    #   returned tagged as an aoi.
-    # - ``"boundary run"`` - a stretch of that outline carrying a boundary
-    #   condition: the line tools, returned tagged as a line.
+    # Draw affordance, on a draw request only: aoi, line (neutral, no barrier semantics), domain (the
+    # closed run outline, tagged aoi), boundary run (a stretch of it, tagged line).
     purpose: Literal["aoi", "line", "domain", "boundary run"] = "aoi"
     suggested_view: SuggestedView | None = None
     reference_layers: list[ReferenceLayer] = Field(default_factory=list)
     default_timeout_seconds: int = 300
 
 
-# A routing tie is a real error species: a plausible-but-wrong tool sends the
-# turn down a path one click could have prevented. The request is emitted either
-# because the turn runs in ask mode or because auto mode MEASURED a retrieval
-# near-tie, and ``reason`` says which.
-#
-# FAIL-OPEN: an unanswered request times out server-side and the turn proceeds
-# with the top-ranked pick. The workflow never blocks on the card.
+# Emitted in ask mode or on a measured retrieval near-tie. Fail-open: an unanswered request times
+# out and the turn proceeds with the top pick.
 
 
-#: Why the picker surfaced: a MEASURED retrieval near-tie, or ask mode
-#: surfacing every staged selection.
 ToolCandidatesReason = Literal["ambiguity", "ask_mode"]
 
 
 class ToolCandidate(ContractModel):
     """One ranked tool candidate inside a ``tool-candidates`` request."""
 
-    #: The registry tool name, echoed VERBATIM by the reply. The tool is
-    #: re-resolved from it, so a client never invents one.
+    #: Registry tool name echoed verbatim; the tool is re-resolved from it.
     tool_name: str = Field(min_length=1, max_length=200)
-    #: A one-line summary rendered beside the name. May be empty.
     summary: str = Field(default="", max_length=500)
-    #: The retrieval ranker's own score, verbatim, never an estimate.
-    #: UNCONSTRAINED: backends differ and a similarity may be negative.
-    #: Candidates arrive best-first, so this only shows the margin.
+    #: The ranker's own score, verbatim and unconstrained (may be negative).
     score: float = 0.0
 
 
@@ -603,18 +506,11 @@ class ToolCandidatesPayload(ContractModel):
 
     MESSAGE_TYPE: ClassVar[str] = "tool-candidates"
 
-    #: Correlates the request, the reply and the paused selection. Echoed
-    #: verbatim.
     request_id: ULIDStr
-    #: The analysis-flow stage this pick belongs to, so staged waves read as a
-    #: narrative rather than a flood.
     stage_label: str = Field(min_length=1, max_length=120)
-    #: Ranked best-first. MAY be EMPTY when retrieval degraded: the card then
-    #: offers only free text and let-the-agent-decide - an honest degrade rather
-    #: than an invented list.
+    #: Best-first; may be empty when retrieval degraded, leaving only free text.
     candidates: list[ToolCandidate] = Field(default_factory=list)
     reason: ToolCandidatesReason
-    #: How long the SERVER waits before proceeding with its own top pick.
     timeout_s: float = Field(default=60.0, gt=0)
 
 
@@ -623,8 +519,7 @@ class ToolChoicePayload(ContractModel):
     One of three shapes: a ``tool_name`` pick echoed verbatim, ``free_text``
     guidance instead, or both ``None`` for let-the-agent-decide."""
 
-    # The two should not both arrive; ``tool_name`` wins if they do, being the
-    # stronger signal.
+    # tool_name wins if both arrive.
 
     MESSAGE_TYPE: ClassVar[str] = "tool-choice"
 
@@ -634,16 +529,10 @@ class ToolChoicePayload(ContractModel):
 
 
 
-# layer-request / layer-response --------------------------------------------- #
 
-# The twin of the processing pair: the daemon borrows the session's QGIS data
-# providers for a source QGIS can open, exactly as it borrows Processing. The
-# daemon keeps the journal, the store and the packet; the session only opens the
-# provider layer and, for a materialised row, exports and uploads it.
+# The daemon borrows the session's QGIS data providers; the session only opens the layer and, for a
+# materialised row, exports and uploads it.
 
-#: What the session does with the opened layer. ``open`` leaves it on the map as
-#: context and answers at once; ``materialise`` exports it and uploads it, so the
-#: daemon can land it in the store as any fetch does.
 LayerMode = Literal["open", "materialise"]
 
 
@@ -654,30 +543,18 @@ class LayerRequestPayload(ContractModel):
 
     MESSAGE_TYPE: ClassVar[str] = "layer-request"
 
-    #: The row-shaped cache key. It names the uploaded object and correlates the
-    #: pair, so a response can only answer the request that asked.
+    #: Names the uploaded object and correlates the pair.
     key: str = Field(min_length=1, max_length=200)
-    #: The QGIS data provider by its registry name (arcgisfeatureserver, wms,
-    #: wcs, gdal, ...).
     provider: str = Field(min_length=1, max_length=64)
-    #: The datasource string that provider takes, verbatim.
     uri: str = Field(min_length=1, max_length=8192)
-    #: What the layer is called on the map.
     name: str = Field(min_length=1, max_length=200)
-    #: What was asked about: the camera on an opened overlay, the export window
-    #: on a materialised row. ``None`` is the whole published layer, which is
-    #: what a row declaring a global query asks for.
+    #: Camera on an opened overlay, export window on a materialised row; None is the whole layer.
     bbox: BBox | None = None
-    #: The pixel spacing the row asked for, in metres; ``None`` is the layer's
-    #: own grid. A user lever, so the export honours it rather than serving the
-    #: native grid under the asked name.
+    #: Pixel spacing in metres; None is the layer's grid. The export honours it.
     resolution_m: float | None = Field(default=None, gt=0.0)
     mode: LayerMode
-    #: The credential the row needs, by the NAME its source states. The session
-    #: resolves it in its own auth store and attaches the stored config as
-    #: ``authcfg=`` on the uri, so the key never reaches the daemon. ``None`` is
-    #: a public row; a named credential nothing has stored is a refusal, never a
-    #: request the provider would reject.
+    #: Credential by name; the session attaches authcfg= so the key never reaches the daemon.
+    #: A name nothing has stored is a refusal.
     credential: str | None = Field(default=None, min_length=1, max_length=120)
 
 
@@ -702,14 +579,11 @@ CLIENT_TO_AGENT_PAYLOADS: dict[str, type[ContractModel]] = {
     LayerResponsePayload.MESSAGE_TYPE: LayerResponsePayload,
 }
 
-# The per-module payload fragments are splatted into the routing dicts HERE:
-# each module owns its typed payloads, and this module owns the registry.
 from .secrets import (  # noqa: E402 - imported below the dict literals
     SECRET_AGENT_TO_CLIENT_PAYLOADS,
     SECRET_CLIENT_TO_AGENT_PAYLOADS,
 )
 
-# The payload warning is agent -> client; its confirmation is client -> agent.
 from .payload_warning import (  # noqa: E402
     PayloadConfirmationEnvelopePayload,
     PayloadWarningEnvelopePayload,
@@ -738,16 +612,12 @@ AGENT_TO_CLIENT_PAYLOADS[
     PayloadWarningEnvelopePayload.MESSAGE_TYPE
 ] = PayloadWarningEnvelopePayload
 
-# The chart emission is agent -> client.
 from .chart_contracts import (  # noqa: E402
     CHART_AGENT_TO_CLIENT_PAYLOADS,
 )
 
 AGENT_TO_CLIENT_PAYLOADS.update(CHART_AGENT_TO_CLIENT_PAYLOADS)
 
-# The session processing pair: the request (and the code approval card in
-# front of it) is agent -> client, the response is client -> agent; the
-# approval REPLY rides the existing payload-confirmation message.
 from .processing_contracts import (  # noqa: E402
     PROCESSING_AGENT_TO_CLIENT_PAYLOADS,
     PROCESSING_CLIENT_TO_AGENT_PAYLOADS,

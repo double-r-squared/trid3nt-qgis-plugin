@@ -20,10 +20,8 @@ __all__ = [
     "merc_to_lonlat",
 ]
 
-#: Guard: maximum extent side (degrees) still attached as an AOI.
 AOI_MAX_DEG = 2.0
 
-# Spherical-mercator constants (EPSG:3857).
 _EARTH_RADIUS_M = 6378137.0
 _MERC_MAX = math.pi * _EARTH_RADIUS_M  # ~20037508.34
 
@@ -54,7 +52,6 @@ def extent_to_bbox4326(
     if authid in ("EPSG:4326", "OGC:CRS84"):
         lon_min, lat_min, lon_max, lat_max = xmin, ymin, xmax, ymax
     elif authid == "EPSG:3857":
-        # Clamp to the mercator world square before inverting.
         cx0 = max(-_MERC_MAX, min(_MERC_MAX, xmin))
         cx1 = max(-_MERC_MAX, min(_MERC_MAX, xmax))
         cy0 = max(-_MERC_MAX, min(_MERC_MAX, ymin))

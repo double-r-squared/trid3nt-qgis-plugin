@@ -29,9 +29,7 @@ __all__ = [
 class MeshArtifact:
     """A computational mesh built into a case, and the files built from it.
 
-    Whether a run can be staged on it is the ENGINE's question, asked by the
-    author that reads this record and answered against what that engine needs;
-    a mesh is not unsolvable in the abstract and states no such verdict."""
+    Whether a run can be staged on it is the ENGINE's question; the mesh states no verdict."""
 
     mesh_id: str
     name: str
@@ -47,21 +45,13 @@ class MeshArtifact:
     utm_epsg: int | None = None
     #: The ``mesh_recipe.jsonl`` (spec + ordered edit chain) this mesh replays from.
     recipe_uri: str | None = None
-    #: What was MEASURED on the accepted topology - what the gate card quotes:
-    #: counts, the edge-length band, min angle, boundary segments, plus whatever
-    #: the mesher measured about its own build. A consumer that needs the finest
-    #: edge reads it here rather than re-deriving it from the ask, which is only
-    #: what was requested.
+    #: What was MEASURED on the accepted topology (counts, edge-length band, min angle, boundary segments, mesher-specific measures);
+    #: consumers read the finest edge here, not from the ask.
     probes: dict[str, Any] = field(default_factory=dict)
-    #: The files an ENGINE asked this mesh for, keyed by the name that engine
-    #: uses for each. The mesh knows nothing about what any of them hold: an
-    #: engine's author step writes them from this geometry and records them here
-    #: under its own name, so a second run on the same mesh reads them back
-    #: rather than writing them again.
+    #: Files an ENGINE asked this mesh for, by that engine's own name. The mesh knows nothing of their content;
+    #: a second run on the same mesh reads them back instead of rewriting.
     engine_files: dict[str, str] = field(default_factory=dict)
-    #: The named stretches of the boundary walk - role -> node indices into this
-    #: mesh's own numbering. What a geometry file cannot state, and what an
-    #: engine's author reads to know which edge the water crosses.
+    #: Named boundary stretches: role -> node indices in this mesh's numbering; what an engine's author reads to know which edge the water crosses.
     boundary_roles: dict[str, list[int]] = field(default_factory=dict)
     outlet_lonlat: tuple[float, float] | None = None
     pour_point_lonlat: tuple[float, float] | None = None

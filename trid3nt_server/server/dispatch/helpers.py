@@ -29,9 +29,9 @@ _PROGRESS_RESULT_KEYS: tuple[str, ...] = (
 
 
 def _dispatch_made_progress(result: Any) -> bool:
-    """True iff one dispatch produced a real artifact: any ``LayerURI``, or a
-    dict carrying a layer, handle or feature signal. A bare ack, ``None``, a
-    primitive or an empty dict is the no-op-repeat shape the watchdog catches."""
+    """True iff one dispatch produced a real artifact: any ``LayerURI``, or a dict carrying a
+    layer, handle or feature signal. A bare ack, None, primitive or empty dict is the no-op-repeat
+    shape the watchdog catches."""
     if isinstance(result, LayerURI):
         return True
     if isinstance(result, dict):
@@ -109,10 +109,9 @@ def _default_declarable_registry() -> dict[str, Any]:
 
 
 def _gate_expander_tool_names() -> frozenset[str]:
-    """The gate-expanders: calling one widens the turn's visible gate with the
-    tool names its result names. A fetcher with a row is never
-    described to the model, so the match is an expander beside the tool search:
-    the sources it names are how that fetcher's schema reaches the turn."""
+    """The gate-expanders: calling one widens the turn's visible gate with the tool names its
+    result names. A fetcher with a row is never described to the model, so a match is an expander
+    beside the tool search: the sources it names carry that fetcher's schema into the turn."""
     from trid3nt_server.tools.search.find_sources.find_sources import FIND_SOURCES
 
     return _tool_search_tool_names() | {FIND_SOURCES}
@@ -146,10 +145,9 @@ def _is_terminal_composer(tool_name: str) -> bool:
     entry = TOOL_REGISTRY.get(tool_name)
     if entry is None:
         return False
-    # Engine templates carry deliverable-producing names that do not start with
-    # ``run_``, and a completed template IS a turn-ending deliverable, so the
-    # template tier latches too; otherwise the wrap-up never fires and the turn
-    # spins to the loop cap.
+    # Engine templates carry deliverable-producing names that do not start with ``run_``, and a
+    # completed template IS a turn-ending deliverable, so the template tier latches too; otherwise
+    # the wrap-up never fires and the turn spins to the loop cap.
     is_workflow_dispatch = (
         getattr(entry.metadata, "source_class", None) == "workflow_dispatch"
     )

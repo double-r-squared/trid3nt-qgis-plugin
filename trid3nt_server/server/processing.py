@@ -1,10 +1,7 @@
 """The session request seam: a tool that runs in the user's QGIS session emits a
-``processing-request`` on the plugin wire and waits for the ``processing-response``.
-
-The wait is bounded and owner-checked like every other card gate. No live
-session, a wait that runs out, and a response carrying an error are each a
-typed refusal the model narrates; nothing here invents a result.
-"""
+``processing-request`` on the plugin wire and waits for the ``processing-response``. The wait is
+bounded and owner-checked like every other card gate. No live session, a wait that runs out, and
+a response carrying an error are each a typed refusal the model narrates; nothing invents a result."""
 
 from __future__ import annotations
 

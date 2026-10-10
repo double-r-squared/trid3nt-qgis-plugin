@@ -1,11 +1,9 @@
 """``find_sources`` - what measures one class of thing at one place, ranked.
 
-The model's face on THE MATCH: the same filter, the same sort and the same ask
-a template's need row resolves through, so a free run and a template run never
-disagree about the world. What comes back is the ranked list the card renders
-plus, per survivor, the arguments that fetcher is ready to be called with -
-the caller reads the top row, calls the fetcher it names, and states the
-values nothing measures.
+The model's face on THE MATCH: the same filter, sort and ask a template's need row resolves through, so a free run and a
+template run never disagree about the world. What comes back is the ranked list the card renders plus, per survivor, the
+arguments that fetcher is ready to be called with; the caller reads the top row, calls the fetcher it names, and states
+the values nothing measures.
 """
 from __future__ import annotations
 
@@ -122,11 +120,8 @@ def _row(choice: SourceChoice, row: SourceOption, purpose: str,
          opens: str | None, until: str | None) -> dict[str, Any]:
     """One survivor: the facts it was ranked on, and the call it is ready for.
 
-    The ask is built for THIS row rather than for the pick, because a caller
-    reading a tie has to be able to call either one without asking again. The
-    list is narrowed to the row as well as the name: a source serving a measured
-    and a predicted series of one class is on it twice, and each is called with
-    what ITS row says to pass."""
+    The ask is built for THIS row, not the pick, so a caller reading a tie can call either; the list is narrowed to the row
+    as well as the name, since a source serving a measured and a predicted series of one class is on it twice."""
     picked = choice.model_copy(update={"picked": row.fetcher, "rows": [row]})
     ask = ask_for(picked, base_ask(picked, purpose, bbox, lon, lat,
                                    opens, until), lon, lat)
@@ -138,12 +133,10 @@ def _row(choice: SourceChoice, row: SourceOption, purpose: str,
 
 async def _place(value: Any) -> tuple[list[float] | None, float | None,
                                       float | None]:
-    """The place as the box a source is called with and the point it is ranked
-    against.
+    """The place as the box a source is called with and the point it is ranked against.
 
-    Four numbers, a drawn area or a GeoJSON document is a box; anything a point
-    arrives as is the ground it stands on, which is a box a source called by one
-    can answer. Nothing given is no place, and the match ranks on class alone."""
+    Four numbers, a drawn area or GeoJSON is a box; a point is the ground it stands on, a box a source called by one can answer.
+    Nothing given is no place, and the match ranks on class alone."""
     if value is None or (isinstance(value, str) and not value.strip()):
         return (None, None, None)
     if _is_pair(value):
@@ -171,8 +164,7 @@ def _is_pair(value: Any) -> bool:
 def _window(value: Any) -> tuple[str | None, str | None]:
     """The moment a series has to cover, as the instant it opens and closes at.
 
-    One value is a moment; two are a span. Nothing given is no window, and a
-    series source is then ranked on how current it is rather than filtered."""
+    One value is a moment; two are a span. Nothing given is no window, and a series source is then ranked on currency, not filtered."""
     if value is None or (isinstance(value, str) and not value.strip()):
         return (None, None)
     if isinstance(value, Mapping):

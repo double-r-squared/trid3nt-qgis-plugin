@@ -25,9 +25,7 @@ from . import charts
 from ._style import CompactTitleBar
 from ..net.trid3nt_client import parse_chart_payload
 
-# Navigation toolbar for (c) -- guarded exactly like the canvas class in
-# ``charts``: absent matplotlib means no toolbar, and the window falls back to
-# the text list anyway.
+# Navigation toolbar, guarded like the canvas class in ``charts``: absent matplotlib means no toolbar.
 _NAV_TOOLBAR = None
 if charts.matplotlib_available():
     try:
@@ -42,12 +40,8 @@ if charts.matplotlib_available():
         except Exception:  # noqa: BLE001 -- no toolbar, canvas still renders
             _NAV_TOOLBAR = None
 
-# A compact nav toolbar. The stock ``NavigationToolbar2QT`` draws its full
-# button set with text-under-icon labels at retina icon sizes -- a tall row for
-# a dock that is meant to be short and wide. This keeps only the subset a chart
-# dock needs, icon-only, at a small fixed icon size, with the coordinate
-# readout OFF because the window's own hover label already shows x and y.
-# Guarded like ``_NAV_TOOLBAR``: None when the toolbar backend is absent.
+# A compact icon-only nav toolbar (the stock one is tall for a short, wide dock), coordinate
+# readout OFF because the hover label shows x and y. None when the toolbar backend is absent.
 _COMPACT_TOOLITEMS = {"Home", "Pan", "Zoom", "Save"}
 _TOOLBAR_ICON_SIZE = QSize(16, 16)
 _CompactNavToolbar = None
@@ -98,11 +92,8 @@ class MissingMatplotlibPanel(QWidget):
     """The guided fix shown in place of the chart canvas when matplotlib is
     unavailable, with ONE copy-able command derived at render time for the
     platform actually running. This panel NEVER runs anything itself."""
-    # There is nothing for it to run: QGIS 4's bundled python on macOS has no
-    # pip at all, and a QProcess launch of a QGIS-derived interpreter does not
-    # even start inside the app bundle. matplotlib installed from a real
-    # terminal is picked up on the next QGIS restart, when Python's module
-    # cache is fresh, so there is no in-app recheck action either.
+    # Nothing to run: QGIS 4's bundled python on macOS has no pip and a QProcess launch of it fails
+    # in the app bundle; a terminal install is picked up on the next restart.
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -150,8 +141,6 @@ class MissingMatplotlibPanel(QWidget):
         root.addWidget(self.status_label)
         root.addStretch(1)
 
-    # -- copy ------------------------------------------------------------- #
-
     def _on_copy(self) -> None:
         clipboard = QGuiApplication.clipboard()
         if clipboard is not None:
@@ -175,12 +164,9 @@ class ChartsWindow(QDockWidget):
         self._charts: List[dict] = []
         self._index = 0
         self._locate_callback = locate_callback
-        #: Render summary of the currently shown chart (``render_spec``
-        #: output, or ``{"fallback": True}`` without matplotlib) -- the
-        #: offscreen harness asserts series/rule/scale counts on it.
+        #: Render summary of the shown chart (``{"fallback": True}`` without matplotlib); the offscreen harness asserts counts on it.
         self.last_render_summary: Optional[Dict[str, Any]] = None
-        #: The matplotlib axes of the current chart (for hover / click-inspect
-        #: geometry); None without matplotlib or before the first chart.
+        #: The matplotlib axes of the current chart; None without matplotlib or before the first chart.
         self._ax = None
         self._figure = None
         self._canvas = None
@@ -192,21 +178,17 @@ class ChartsWindow(QDockWidget):
         self._build_ui()
         self.setVisible(False)
 
-    # -- UI scaffold ---------------------------------------------------------- #
-
     def _build_ui(self) -> None:
         body = QWidget()
         root = QHBoxLayout(body)
         root.setContentsMargins(4, 4, 4, 4)
         root.setSpacing(6)
 
-        # Left: the thin chart-switcher strip (the session's charts by title).
         self.chart_list = QListWidget()
         self.chart_list.setFixedWidth(_LIST_WIDTH)
         self.chart_list.currentRowChanged.connect(self._on_list_row)
         root.addWidget(self.chart_list)
 
-        # Right: nav toolbar (top) + canvas (centre) + status + caption + paging.
         right = QVBoxLayout()
         right.setContentsMargins(0, 0, 0, 0)
         right.setSpacing(2)
@@ -220,7 +202,6 @@ class ChartsWindow(QDockWidget):
         self._canvas_host.setContentsMargins(0, 0, 0, 0)
         right.addLayout(self._canvas_host, 1)
 
-        # Status row: hover readout (left) + Locate-on-map (right).
         status_row = QHBoxLayout()
         status_row.setContentsMargins(0, 0, 0, 0)
         self.hover_label = QLabel("")
@@ -237,7 +218,6 @@ class ChartsWindow(QDockWidget):
         status_row.addWidget(self.locate_btn)
         right.addLayout(status_row)
 
-        # Click-inspect readout (nearest-vertex value + series label).
         self.inspect_label = QLabel("")
         self.inspect_label.setStyleSheet("font-size: 8pt;")
         self.inspect_label.setTextInteractionFlags(
@@ -245,7 +225,6 @@ class ChartsWindow(QDockWidget):
         )
         right.addWidget(self.inspect_label)
 
-        # Caption (chart's one-line interpretation).
         self.caption_label = QLabel("")
         self.caption_label.setWordWrap(True)
         self.caption_label.setTextInteractionFlags(
@@ -254,8 +233,7 @@ class ChartsWindow(QDockWidget):
         self.caption_label.setVisible(False)
         right.addWidget(self.caption_label)
 
-        # Paging row (prev / N-of-M / next) -- redundant with the list but kept
-        # per the directive; steps the same current index.
+        # Paging row; steps the same current index as the list.
         paging = QHBoxLayout()
         paging.setContentsMargins(0, 0, 0, 0)
         self.prev_btn = QToolButton()
@@ -276,8 +254,6 @@ class ChartsWindow(QDockWidget):
         root.addLayout(right, 1)
         self.setWidget(body)
 
-    # -- public state --------------------------------------------------------- #
-
     @property
     def count(self) -> int:
         return len(self._charts)
@@ -286,8 +262,6 @@ class ChartsWindow(QDockWidget):
         if 0 <= self._index < len(self._charts):
             return self._charts[self._index].get("chart_id")
         return None
-
-    # -- dock-facing API ------------------------------------------------------ #
 
     def set_charts(self, payloads: list) -> int:
         """Replace-all for the case-open replay, which arrives oldest-first.
@@ -326,8 +300,6 @@ class ChartsWindow(QDockWidget):
         self._index = 0
         self._refresh()
 
-    # -- internals ------------------------------------------------------------ #
-
     def _on_list_row(self, row: int) -> None:
         if 0 <= row < len(self._charts) and row != self._index:
             self._index = row
@@ -341,7 +313,6 @@ class ChartsWindow(QDockWidget):
 
     def _refresh(self) -> None:
         n = len(self._charts)
-        # Rebuild the switcher strip (block signals -- we drive the index).
         self.chart_list.blockSignals(True)
         self.chart_list.clear()
         for chart in self._charts:
@@ -375,16 +346,15 @@ class ChartsWindow(QDockWidget):
         caption = chart.get("caption")
         self.caption_label.setText(caption if isinstance(caption, str) else "")
         self.caption_label.setVisible(bool(caption))
-        # (d) Locate-on-map only when the chart carries a source layer AND the
-        # dock wired a callback (headless has neither).
+        # Locate-on-map only when the chart has a source layer AND the dock wired a callback.
         source_uri = chart.get("source_layer_uri")
         self.locate_btn.setEnabled(
             bool(source_uri) and self._locate_callback is not None
         )
 
     def _teardown_canvas(self) -> None:
-        """Drop the current canvas and toolbar and disconnect its event
-        callbacks: a fresh chart gets a fresh canvas bound to its own axes."""
+        """Drop the current canvas and toolbar and disconnect its event callbacks: a fresh
+        chart gets a fresh canvas bound to its own axes."""
         for cid_attr in ("_motion_cid", "_press_cid", "_scroll_cid"):
             cid = getattr(self, cid_attr)
             if cid is not None and self._canvas is not None:
@@ -408,9 +378,8 @@ class ChartsWindow(QDockWidget):
         self._highlight = None
 
     def _build_canvas(self, chart: dict) -> None:
-        """The rendered chart + its interactivity, or the guided
-        ``MissingMatplotlibPanel`` fix when matplotlib is unavailable in
-        this QGIS python."""
+        """The rendered chart + its interactivity, or the guided ``MissingMatplotlibPanel`` fix
+        when matplotlib is unavailable in this QGIS python."""
         if not charts.matplotlib_available():
             self.last_render_summary = {"fallback": True}
             panel = MissingMatplotlibPanel()
@@ -428,13 +397,11 @@ class ChartsWindow(QDockWidget):
         self._canvas = canvas
         self._ax = figure.axes[0] if figure.axes else None
 
-        # (c) navigation toolbar (pan / rubber-band zoom / home) -- the
-        # compact Home/Pan/Zoom/Save subset, small icon-only buttons.
+        # Compact Home/Pan/Zoom/Save navigation toolbar.
         if _CompactNavToolbar is not None:
             self._toolbar = _CompactNavToolbar(canvas, self)
             self._toolbar_host.addWidget(self._toolbar)
 
-        # (a)/(b)/(c) mpl event callbacks bound to THIS canvas.
         self._motion_cid = canvas.mpl_connect(
             "motion_notify_event", self._on_motion
         )
@@ -445,8 +412,6 @@ class ChartsWindow(QDockWidget):
             "scroll_event", self._on_scroll
         )
 
-    # -- interactivity: hover ------------------------------------------------ #
-
     def _on_motion(self, event) -> None:
         if event.inaxes is None or event.xdata is None or event.ydata is None:
             self.hover_label.setText("")
@@ -454,8 +419,6 @@ class ChartsWindow(QDockWidget):
         self.hover_label.setText(
             f"x = {event.xdata:.4g}    y = {event.ydata:.4g}"
         )
-
-    # -- interactivity: click-to-inspect ------------------------------------- #
 
     def nearest_vertex(self, x_pixel: float, y_pixel: float):
         """Nearest plotted vertex to a DISPLAY-space point, across every line
@@ -504,7 +467,6 @@ class ChartsWindow(QDockWidget):
         xd, yd, label = hit
         prefix = f"{label}: " if label else ""
         self.inspect_label.setText(f"{prefix}x = {xd:.6g}, y = {yd:.6g}")
-        # Highlight the picked vertex (drop the previous marker first).
         if self._highlight is not None:
             try:
                 self._highlight.remove()
@@ -520,12 +482,9 @@ class ChartsWindow(QDockWidget):
         except Exception:  # noqa: BLE001 -- highlight is best-effort chrome
             pass
 
-    # -- interactivity: wheel x-zoom ----------------------------------------- #
-
     def _on_scroll(self, event) -> None:
         if event.inaxes is None or self._ax is None or event.xdata is None:
             return
-        # Zoom the x-axis about the cursor: wheel up = in, down = out.
         scale = 0.8 if event.button == "up" else 1.25
         x0, x1 = self._ax.get_xlim()
         left = event.xdata - (event.xdata - x0) * scale
@@ -535,8 +494,6 @@ class ChartsWindow(QDockWidget):
             self._canvas.draw_idle()
         except Exception:  # noqa: BLE001
             pass
-
-    # -- interactivity: map linkage ------------------------------------------ #
 
     def _on_locate(self) -> None:
         chart = (

@@ -37,18 +37,14 @@ Policy = Literal["data", "fixed"]
 Transform = Literal["linear", "log", "sqrt", "percentile"]
 Geometry = Literal["point", "line", "polygon"]
 
-#: The whole family. A product that is none of these has no picture.
+#: The whole family; a product that is none of these has no picture.
 KINDS: tuple[Kind, ...] = ("continuous", "classed", "reference", "mesh")
 
 DEFAULT_RAMP = "viridis"
 
-#: QGIS reads a ramp as explicit stops, so the paint travels IN the document
-#: and no reader needs a ramp library of its own. Five stops at t = 0, .25,
-#: .5, .75, 1 of the matplotlib / ColorBrewer ramp of that name; ``hsv`` is
-#: closed deliberately (a compass bearing wraps, so 0 and 360 are one colour).
-#: ``terrain`` is the exception: relief needs more than five stops, and its low
-#: end is land rather than the sub-sea blue matplotlib's own terrain opens on,
-#: so it is that ramp's LAND range (t = .25 to 1) at eight stops.
+#: QGIS reads a ramp as explicit stops, so the paint travels in the document. Five stops at t = 0, .25, .5, .75, 1 of
+#: the matplotlib / ColorBrewer ramp; ``hsv`` is closed (a bearing wraps, so 0 and 360 are one colour). ``terrain`` is
+#: that ramp's land range (t = .25 to 1) at eight stops, since relief needs more and its low end is land, not sub-sea blue.
 _RAMP_STOPS: dict[str, tuple[str, ...]] = {
     "viridis": ("#440154", "#3b528b", "#21918c", "#5ec962", "#fde725"),
     "magma": ("#000004", "#51127c", "#b73779", "#fc8961", "#fcfdbf"),
@@ -125,28 +121,20 @@ class Preset:
     scale: Scale = Scale()
     #: ``(lower, upper, "#rrggbb", label)`` breaks - what makes a preset classed.
     classes: tuple[tuple[float, float, str, str], ...] = ()
-    #: The symbol shape a vector kind needs. Its PRESENCE is what says the layer
-    #: is a vector: a classed row without one is a classed RASTER, drawn as
-    #: discrete bands rather than as graduated symbols.
+    #: The symbol shape a vector kind needs; its presence says the layer is a vector (a classed row without one is a classed raster).
     geometry: Geometry | None = None
     color: str = "#3b7dd8"
-    #: The vector field a ``classed`` preset classifies on.
     attribute: str | None = None
-    #: The MDAL group a mesh preset paints. QGIS binds it by NAME; an index does
-    #: not survive the load.
+    #: The MDAL group a mesh preset paints; QGIS binds it by name, an index does not survive the load.
     dataset_group: str | None = None
-    #: Where the field STOPS BEING DRAWN. A floored field is ranged from here
-    #: and nothing below it is painted, so the still and the animation of one
-    #: quantity show the same absent region.
+    #: Where the field stops being drawn: a floored field is ranged from here, so a still and an animation of one quantity show the same absent region.
     floor: float | None = None
 
 _BARE: dict[Kind, Preset] = {
     "continuous": Preset(kind="continuous"),
     "classed": Preset(kind="classed"),
-    # A reference layer is an outline a reader locates themselves by - a gauge,
-    # a flowline, an administrative edge - so it is drawn, not measured, and it
-    # declares no scale. Its geometry is undeclared by default: a symbol of the
-    # wrong shape draws nothing, so an undeclared one leaves QGIS's own default.
+    # A reference layer is an outline a reader locates by, drawn not measured, with no scale. Its geometry is undeclared by
+    # default: a wrong-shaped symbol draws nothing, so an undeclared one leaves QGIS's default.
     "reference": Preset(kind="reference", scale=Scale(policy="fixed", range=None)),
     "mesh": Preset(kind="mesh"),
 }
@@ -201,8 +189,7 @@ def from_row(row: Any) -> Preset:
     )
 
 
-#: Where the concrete range came from. The legend says which, because the
-#: colours cannot.
+#: Where the concrete range came from; the legend says which, because the colours cannot.
 FIXED, FROM_DATA, SHARED, FALLBACK = "fixed", "data", "shared", "fallback"
 
 _SAFE_RANGE = (0.0, 1.0)
@@ -231,9 +218,7 @@ class Resolved:
         how = {
             FIXED: "fixed domain scale",
             FROM_DATA: f"scaled to this run ({_percentile_phrase(self.preset.scale)})",
-            # A shared range was HANDED IN, so this preset's clip did not
-            # produce it and naming those percentiles would describe a read
-            # nobody made.
+            # A shared range was handed in, so naming this preset's percentiles would describe a read nobody made.
             SHARED: "one range shared across the compared set",
             FALLBACK: "declared fallback range (the run's own values were unreadable)",
         }.get(self.source, self.source)
@@ -276,11 +261,8 @@ def resolve(
         return Resolved(spec, shared, SHARED)
     if scale.policy == "fixed" and scale.range is not None:
         return Resolved(spec, scale.range, FIXED)
-    # ``read_range`` is asked for the layer's own range ONLY under policy ``data``
-    # with no ``shared`` range handed in, so a fixed-scale preset never pays for a
-    # band read and a comparison set never re-reads a range it was given. The
-    # scope of that read is the RUN, never one frame: a per-frame range makes the
-    # same colour mean a different value in the next frame.
+    # ``read_range`` is asked only under policy ``data`` with no ``shared`` range, so a fixed-scale preset never pays for a
+    # band read. The scope is the run, never one frame: a per-frame range makes one colour mean different values.
     found = read_range(scale) if read_range is not None else None
     if found is not None:
         return Resolved(spec, _widen(found), FROM_DATA)
@@ -309,26 +291,19 @@ def shared_range(
     return _widen((min(r[0] for r in found), max(r[1] for r in found)))
 
 
-#: A style row's ``range`` names the percentile the legend's top is capped at.
 _PERCENTILE_CAP = re.compile(r"p(\d+(?:\.\d+)?)")
 
 
 def _legend_end(value: float, *, up: bool) -> float:
-    """Six decimals, rounded AWAY from the field.
-
-    A legend end rounded INTO the data labels a colour as the extreme while
-    values run past it - and where the shader clips, those values are not drawn
-    at all, so the field's own peak disappears."""
+    """Six decimals, rounded away from the field: rounding into the data would label a colour as the extreme while values run past it."""
     step = 1e6
     return (math.ceil(value * step) if up else math.floor(value * step)) / step
 
 
 def declared_peak(values: Any, row: Any = None) -> float:
-    """How large a row says its own field gets: the ``p<q>`` percentile of what
-    was read where it caps the range, the maximum otherwise.
-
-    The legend's top and a field's visible edge are both this number, so a
-    record maximum a drying node carries moves neither."""
+    """How large a row says its own field gets: the ``p<q>`` percentile where it caps the range, the maximum otherwise.
+    
+    The legend top and the field's visible edge are both this number."""
     import numpy as np
 
     finite = np.asarray(values, dtype="float64").ravel()
@@ -343,11 +318,9 @@ def declared_peak(values: Any, row: Any = None) -> float:
 def measured_range(values: Any, row: Any = None, *, floor: float | None = None
                    ) -> tuple[float, float]:
     """The legend range a producer measured while it held the field.
-
-    A row that declares a ``center`` is a diverging ramp, ranged symmetrically
-    about it so the centre colour means the centre value on every run; one that
-    declares a ``floor`` pins the bottom there, and one that declares a
-    ``range`` of ``p<q>`` caps the top at that percentile of the field."""
+    
+    A ``center`` row is diverging and ranged symmetrically about it; a ``floor`` pins the bottom; a ``range`` of ``p<q>``
+    caps the top at that percentile."""
     import numpy as np
 
     finite = np.asarray(values, dtype="float64").ravel()
@@ -363,11 +336,8 @@ def measured_range(values: Any, row: Any = None, *, floor: float | None = None
     if declared.get("floor") is not None:
         lo = float(declared["floor"])
     elif floor is not None:
-        # A FLOORED field is read FROM its floor: below it the field is not
-        # drawn at all, so a ramp that started lower would spend colours on an
-        # absent region and the legend would read its bottom as a value. The
-        # bottom is the floor EXACTLY, because that identity is what says the
-        # shader may clip there.
+        # A floored field is read from its floor: below it nothing is drawn, so a lower ramp start would spend colours on an
+        # absent region. The bottom is the floor exactly, because that identity says the shader may clip there.
         return (float(floor), _legend_end(max(hi, float(floor)), up=True))
     return (_legend_end(lo, up=False), _legend_end(hi, up=True))
 
@@ -413,8 +383,7 @@ _HEADER = ("<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n"
            '<qgis version="3.40.6" styleCategories="Symbology">\n')
 _FOOTER = "</qgis>\n"
 
-#: QGIS symbol class per geometry. A symbol whose class does not match the
-#: layer's geometry loads and then draws nothing, so the writer picks it.
+#: QGIS symbol class per geometry; a symbol not matching the layer's geometry loads and draws nothing.
 _SYMBOL: dict[Geometry, tuple[str, str, str]] = {
     "point": ("marker", "SimpleMarker", "color"),
     "line": ("line", "SimpleLine", "line_color"),
@@ -553,12 +522,7 @@ def _reference_qml(resolved: Resolved) -> str:
 
 
 def _clips_below_floor(resolved: Resolved) -> bool:
-    """Does this resolution range FROM the field's floor, and so clip below it?
-
-    QGIS's clip drops values on both sides of the range, so it is set only when
-    the range's bottom IS the floor - a range resolved from anything else (a
-    fallback, a span shared with another product) would clip live values away.
-    """
+    """True when the range's bottom is the field's floor; QGIS's clip drops values on both sides, so any other range would clip live values."""
     floor = resolved.preset.floor
     return (floor is not None and resolved.range is not None
             and resolved.range[0] == floor)
@@ -567,8 +531,7 @@ def _clips_below_floor(resolved: Resolved) -> bool:
 def _mesh_qml(resolved: Resolved) -> str:
     lo, hi = resolved.range or _SAFE_RANGE
     group = resolved.preset.dataset_group or ""
-    # QGIS remaps the settings' group index through this name on load; without
-    # the row the whole mesh-renderer-settings block is silently dropped.
+    # QGIS remaps the settings' group index through this name on load; without the row the mesh-renderer-settings block is silently dropped.
     binding = (f'  <name-to-global-index global-index="0" name={quoteattr(group)}/>\n'
                if group else "")
     return (
@@ -587,13 +550,9 @@ def qml(resolved: Resolved) -> str | None:
 
     ``None`` when the preset has nothing it can honestly say about THIS layer.
     """
-    # Three refusals, each because the document would draw worse than QGIS's own
-    # default: a mesh preset with no named dataset group (QGIS binds a group by
-    # name, and an unbound block is silently dropped); a reference preset whose
-    # geometry was never declared (a symbol of the wrong shape loads and then
-    # draws nothing); a classed preset with no breaks (a shader with no items
-    # paints the whole raster one flat colour, which is what a paletted file
-    # carrying its own class table gets when a document is written over it).
+    # Three refusals, each because the document would draw worse than QGIS's default: a mesh preset with no named dataset
+    # group, a reference preset with undeclared geometry, a classed preset with no breaks (an item-less shader paints the
+    # raster one flat colour).
     if resolved.preset.kind == "mesh" and not resolved.preset.dataset_group:
         return None
     if resolved.preset.kind == "reference" and resolved.preset.geometry is None:

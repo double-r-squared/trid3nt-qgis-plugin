@@ -28,9 +28,7 @@ def _short_hash(text: str) -> str:
 def input_layer_name(
     spec: SourceSpec, params: dict[str, Any], purpose: str | None
 ) -> str:
-    """Build ``Input: <what> (<source>[, <datum>])``, where ``<what>``
-    is the caller's ``purpose`` word, else the resolved ``variable`` / ``product``
-    param, else the source class. A declared VERTICAL DATUM always rides here."""
+    """Build ``Input: <what> (<source>[, <datum>])``; ``<what>`` is ``purpose``, else ``variable`` / ``product``, else the source class."""
     variable = params.get("variable") or params.get("product") or spec.source_class
     if isinstance(purpose, str) and purpose.strip():
         what = purpose.strip()
@@ -43,9 +41,7 @@ def input_layer_name(
 
 
 def _drive_emit(emitter: Any, coro_factory: Callable[[], Any]) -> None:
-    """Drive an async emit coroutine onto the emitter's bound loop from any thread.
-    A worker thread schedules and WAITS (ordering and framing hold, because the
-    caller is parked); the loop thread fires-and-forgets, since waiting deadlocks."""
+    """Drive an async emit onto the emitter's bound loop from any thread: a worker thread WAITS, the loop thread fires-and-forgets (waiting deadlocks)."""
     try:
         running = asyncio.get_running_loop()
     except RuntimeError:
@@ -67,7 +63,6 @@ def _drive_emit(emitter: Any, coro_factory: Callable[[], Any]) -> None:
         fut.result(timeout=60)
         return
 
-    # No bracketing loop (verify/CI/pure-sync direct call): run inline.
     asyncio.run(coro_factory())
 
 
@@ -79,12 +74,9 @@ def maybe_emit_input_on_fetch(
     visualize: Any,
     purpose: str | None,
 ) -> None:
-    """Surface ``layer`` as a role=context input IFF in composer mode: a no-op that
-    NEVER raises unless every gate passes -- an emitter is bound, this is not the
-    fetcher's own direct dispatch, output is renderable, and the uri is new."""
+    """Surface ``layer`` as a role=context input IFF an emitter is bound, this is not the fetcher's direct dispatch, output is renderable and the uri is new; NEVER raises."""
     try:
-        # visualize=False is the per-CALL suppression, for a PROBE fetch of otherwise
-        # visualizable data (an AOI candidate scan); the row itself carries no flag.
+        # visualize=False suppresses a PROBE fetch of otherwise visualizable data.
         if visualize is False:
             return
         from trid3nt_server.render.pipeline_emitter import (
@@ -95,13 +87,9 @@ def maybe_emit_input_on_fetch(
         emitter = current_emitter()
         if emitter is None:
             return
-        # DIRECT chat dispatch: the tool-wrapper (emit_tool_call) already emits
-        # the returned LayerURI as its declared role. Only the IN-COMPOSER nested
-        # calling mode is the gap this seam closes.
+        # A DIRECT chat dispatch is already emitted by the tool wrapper; only the nested mode is this seam's.
         if dispatched_tool_name() == spec.name:
             return
-        # Render declaration present == a renderable LayerURI was built. A record
-        # source returned its dict before this point (no visual form, no attempt).
         if spec.output.layer_type not in ("raster", "vector"):
             return
         uri = (layer.uri or "").strip()

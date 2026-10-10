@@ -19,44 +19,27 @@ __all__ = [
 ]
 
 
-#
-# These RuntimeError subclasses carry a stable ``error_code`` for the error frame
-# the agent surface emits when a fetch fails. Nothing in this module catches them:
-# the ``read_through`` contract is "re-raise on fetcher failure; no sentinel".
-
-
 class FetchError(RuntimeError):
-    """Base class for data-fetch failures; ``error_code`` is the stable wire code.
-    ``actionability`` is closed over ``{"agent", "user", "operator"}`` and defaults
-    to "agent"; a subclass raised for a missing credential overrides it to "user"."""
+    """Base class for data-fetch failures; ``error_code`` is the stable wire code, ``actionability`` defaults to "agent" ("user" for a missing credential)."""
 
     error_code: str = "UPSTREAM_API_ERROR"
     retryable: bool = True
     actionability: str = "agent"
 
 class UpstreamAPIError(FetchError):
-    """An upstream public-data API returned an error or timed out."""
-
     error_code = "UPSTREAM_API_ERROR"
     retryable = True
 
 class BboxInvalidError(FetchError):
-    """The bbox failed validation (degenerate, out of CRS range, too large)."""
-
     error_code = "BBOX_INVALID"
     retryable = False
 
 class PixelBudgetExceededError(FetchError):
-    """The asked resolution over this bbox needs more pixels per axis than the source
-    serves. A fetcher never coarsens on its own, so the request REFUSES naming the
-    budget and the resolution that fits, and the caller chooses the grid it gets."""
+    """The asked resolution over this bbox needs more pixels per axis than the source serves; a fetcher never coarsens, so the request REFUSES."""
 
     error_code = "PIXEL_BUDGET_EXCEEDED"
     retryable = False
 
-# Nominatim usage policy requires a descriptive User-Agent identifying the
-# application + a contact. We bake the project name + repo URL; override the
-# contact email via env var ``TRID3NT_NOMINATIM_USER_AGENT`` for ops.
 _DEFAULT_USER_AGENT = (
     "trid3nt/0.1 (Hazard Modeling Agent; "
     "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
@@ -65,9 +48,7 @@ _DEFAULT_USER_AGENT = (
 
 
 def _validate_bbox(bbox: tuple[float, float, float, float]) -> None:
-    """Raise ``BboxInvalidError`` unless ``bbox`` is ``(min_lon, min_lat, max_lon,
-    max_lat)`` in EPSG:4326 with min < max on both axes, lons in ``[-180, 180]``
-    and lats in ``[-90, 90]``."""
+    """Raise ``BboxInvalidError`` unless ``bbox`` is ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326 with min < max."""
     if len(bbox) != 4:
         raise BboxInvalidError(
             f"bbox must be a 4-tuple (min_lon, min_lat, max_lon, max_lat); got {bbox!r}"
@@ -88,19 +69,14 @@ def round_bbox_to_resolution(
     bbox: tuple[float, float, float, float],
     resolution_m: int,
 ) -> tuple[float, float, float, float]:
-    """Quantize an EPSG:4326 bbox to a ``resolution_m`` grid before cache-keying:
-    mins snap down and maxes up, so the result always covers the input. The
-    degrees-per-metre conversion is taken at the bbox centre latitude."""
+    """Quantize an EPSG:4326 bbox to a ``resolution_m`` grid before cache-keying: mins snap down, maxes up; degrees-per-metre taken at the centre latitude."""
     _validate_bbox(bbox)
     if resolution_m <= 0:
         raise BboxInvalidError(f"resolution_m must be positive; got {resolution_m!r}")
 
     min_lon, min_lat, max_lon, max_lat = bbox
-    # Stabilize mid_lat by rounding to 4 decimals (~11m) so two callers whose bbox
-    # edges differ by sub-meter floats don't get different m_per_deg_lon factors,
-    # which would defeat the dedup property: same grid cell, same snap result.
+    # mid_lat is rounded to 4 decimals (~11 m) so sub-meter edge differences give the same snap result.
     mid_lat = round(0.5 * (min_lat + max_lat), 4)
-    # 1 degree of latitude ~ 111_320 m; 1 degree of longitude ~ 111_320 * cos(lat) m.
     m_per_deg_lat = 111_320.0
     m_per_deg_lon = 111_320.0 * math.cos(math.radians(mid_lat))
     if m_per_deg_lon < 1e-6:  # near a pole -- fall back to deg-lat
@@ -114,8 +90,7 @@ def round_bbox_to_resolution(
     snapped_min_lat = math.floor(min_lat / deg_lat_per_step) * deg_lat_per_step
     snapped_max_lat = math.ceil(max_lat / deg_lat_per_step) * deg_lat_per_step
 
-    # Round to a reasonable number of digits so the JSON canonicalization
-    # produces stable strings (float repr quirks otherwise leak into the key).
+    # Rounded so JSON canonicalization yields stable strings.
     return (
         round(snapped_min_lon, 9),
         round(snapped_min_lat, 9),
@@ -124,9 +99,7 @@ def round_bbox_to_resolution(
     )
 
 def _bbox_area_km2(bbox: tuple[float, float, float, float]) -> float:
-    """Geodesic area of a WGS84 bbox in square kilometres. The ring is densified
-    first: a bbox's top and bottom edges are PARALLELS, and an undensified geodesic
-    cuts the corner poleward. Over half the globe is degenerate as a ring here."""
+    """Geodesic area of a WGS84 bbox in km2; the ring is densified because top and bottom edges are PARALLELS."""
     import shapely
     from pyproj import Geod
 
@@ -135,8 +108,6 @@ def _bbox_area_km2(bbox: tuple[float, float, float, float]) -> float:
 
 
 def _bbox_axes_m(bbox: tuple[float, float, float, float]) -> tuple[float, float]:
-    """Geodesic ``(width_m, height_m)`` of a WGS84 bbox, the width measured along the
-    mid-latitude parallel and the height along the western meridian."""
     min_lon, min_lat, max_lon, max_lat = (float(v) for v in bbox)
     mid_lat = 0.5 * (min_lat + max_lat)
     from pyproj import Geod
@@ -155,9 +126,7 @@ def bbox_pixel_dims(
     px_min: int = 16,
     px_max: int = 4096,
 ) -> tuple[int, int]:
-    """``(width_px, height_px)`` for ``bbox`` at ``native_cell_m``. Each axis is
-    clamped to ``[px_min, px_max]``, so a large AOI never materializes an unbounded
-    grid."""
+    """``(width_px, height_px)`` for ``bbox`` at ``native_cell_m``, each axis clamped to ``[px_min, px_max]``."""
     width_m, height_m = _bbox_axes_m(bbox)
     width_px = max(px_min, min(px_max, int(round(width_m / native_cell_m)) or px_min))
     height_px = max(px_min, min(px_max, int(round(height_m / native_cell_m)) or px_min))
@@ -171,11 +140,8 @@ def enforce_pixel_budget(
     budget_px: int,
     source: str,
 ) -> None:
-    """Raise ``PixelBudgetExceededError`` unless ``bbox`` at ``resolution_m`` fits
-    ``budget_px`` pixels on its long axis. The resolution asked is the resolution
-    fetched, so a request past the budget refuses rather than coarsening: the message
-    names the budget, the asked resolution and the resolution that fits this bbox, and
-    the caller re-asks."""
+    """Raise ``PixelBudgetExceededError`` unless ``bbox`` at ``resolution_m`` fits ``budget_px`` on its long axis;
+    the message names the budget, the asked resolution and the one that fits."""
     long_axis_m = max(_bbox_axes_m(bbox))
     fits_res = int(math.ceil(long_axis_m / budget_px))
     if resolution_m >= fits_res:

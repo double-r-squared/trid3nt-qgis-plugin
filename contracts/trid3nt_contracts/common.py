@@ -50,13 +50,11 @@ def new_ulid() -> str:
 
 def _validate_ulid(value: str) -> str:
     """Reject anything that is not a syntactically valid ULID string."""
-    # ULID.from_str raises ValueError on malformed input, which surfaces as a
-    # pydantic validation error.
+    # A malformed id raises ValueError, surfacing as a pydantic validation error.
     ULID.from_str(value)
     return value
 
 
-#: A string id that must be a valid ULID. Stored/serialized as a plain string.
 ULIDStr = Annotated[str, AfterValidator(_validate_ulid)]
 
 
@@ -68,10 +66,7 @@ def now_utc() -> datetime:
 
 
 def _serialize_dt_z(value: datetime) -> str:
-    """Serialize a datetime to ISO-8601 with a ``Z`` suffix (UTC).
-
-    Naive datetimes are treated as UTC. Aware datetimes are converted to UTC.
-    """
+    """Serialize a datetime to ISO-8601 with a ``Z`` suffix; naive datetimes are treated as UTC."""
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
     else:
@@ -80,7 +75,6 @@ def _serialize_dt_z(value: datetime) -> str:
     return value.isoformat().replace("+00:00", "Z")
 
 
-#: A datetime that always serializes to an ISO-8601 ``Z`` string on the wire.
 UTCDatetime = Annotated[datetime, PlainSerializer(_serialize_dt_z, return_type=str)]
 
 
@@ -103,7 +97,6 @@ def _validate_bbox(value: tuple[float, float, float, float]) -> tuple[float, flo
     return value
 
 
-#: Bounding box, always [minLon, minLat, maxLon, maxLat] in EPSG:4326.
 BBox = Annotated[tuple[float, float, float, float], AfterValidator(_validate_bbox)]
 
 
@@ -132,17 +125,12 @@ class TimeRange(ContractModel):
 
 
 
-#: The run's temporal solve mode. ``"steady"`` is a single stationary solve;
-#: ``"transient"`` a time-stepping solve that emits an animation. Growth is by
-#: an additive Literal member plus an alias, never by arbitrary keys.
+#: Growth is by an additive Literal member plus an alias, never by arbitrary keys.
 TemporalMode = Literal["steady", "transient"]
 
 
-#: Synonyms mapped onto the canonical ``TemporalMode`` BEFORE the Literal check,
-#: so the FIRST attempt validates instead of costing a retry. An UNKNOWN string
-#: passes through UNCHANGED, so a genuinely invalid value still raises.
+#: Synonyms mapped before the Literal check so the first attempt validates; an unknown string passes through unchanged.
 _TEMPORAL_MODE_ALIASES: dict[str, str] = {
-    # steady-state / stationary synonyms.
     "steady": "steady",
     "steady-state": "steady",
     "steady_state": "steady",
@@ -150,7 +138,6 @@ _TEMPORAL_MODE_ALIASES: dict[str, str] = {
     "stationary": "steady",
     "static": "steady",
     "equilibrium": "steady",
-    # transient / time-varying synonyms.
     "transient": "transient",
     "nonstationary": "transient",
     "non-stationary": "transient",
@@ -172,10 +159,8 @@ class EngineRunArgsMixin(ContractModel):
     """
 
     temporal_mode: TemporalMode = "steady"
-    #: Evenly spaced animation output frames.
     output_frames: int = Field(default=24, ge=1)
-    #: Per-engine physics overrides. ``None`` is no overrides; what validates
-    #: the keys is the engine's own keyword catalog, not this model.
+    #: None is no overrides; the engine's own keyword catalog validates the keys.
     advanced_physics: dict[str, Any] | None = None
 
     @field_validator("temporal_mode", mode="before")
@@ -191,46 +176,26 @@ class EngineRunArgsMixin(ContractModel):
 
 
 
-#: Where a single physical model input came from. A demo default is NOT the same
-#: thing as a value fetched from real data, supplied by the user, interpreted
-#: from the request, or computed from other inputs, and this is the distinction
-#: that keeps the two from being narrated alike.
+#: Where a model input came from; a demo default is never narrated like fetched, user-supplied, interpreted or computed data.
 InputBasis = Literal[
     "fetched",
     "user",
     "prompt_interpreted",
     "default_demo",
     "derived",
-    # a MEASURED published inversion (e.g. a USGS finite-fault slip model) -- the
-    # strongest site-specific class: real measured data, not a scaling law/default.
+    # A measured published inversion (e.g. a USGS finite-fault slip model): the strongest site-specific class.
     "measured_inversion",
-    # a SCENARIO source built on REAL published geometry but a HYPOTHETICAL rupture
-    # (e.g. a USGS Slab2 subduction-interface + a target-Mw tapered slip) -- LOUDLY a
-    # "what if", never confusable with a real event. The interface geometry is real;
-    # the earthquake is not.
+    # A scenario on real published geometry but a hypothetical rupture: a loud "what if", never confusable with a real event.
     "scenario_slab2",
 ]
 
 
-#: What a demo default's WRONGNESS costs. The discriminator the input-review
-#: gate keys on to decide whether an unresolved ``default_demo`` value may
-#: proceed or must REFUSE in auto mode:
-#:   - ``physics``: a physics-consequential world value (material property,
-#:     forcing magnitude, boundary/source term, friction/decay, invented terrain
-#:     or geometry). A ``default_demo`` with this consequence REFUSES in auto - a
-#:     wrong value silently ruins the simulation, so it never runs on an invention.
-#:   - ``scenario``: the user's QUESTION (magnitude, return period, source
-#:     location, a what-if forcing, a duration). A demo default here is a starting
-#:     assumption, not a claim about the world - it proceeds, labeled.
-#:   - ``numerical``: a solver setting (resolution, timestep, turbulence closure,
-#:     calibration constant). Not a world-claim - proceeds, labeled.
-#:   - ``aoi``: a default area/domain extent when the user named no place. Not a
-#:     physics invention - proceeds, labeled.
+#: What a demo default's wrongness costs; the input-review gate keys on it. ``physics``: a world value, REFUSES in
+#: auto (a wrong one silently ruins the sim). ``scenario``: the user's question, proceeds labeled. ``numerical``: a
+#: solver setting, proceeds labeled. ``aoi``: a default extent when no place was named, proceeds labeled.
 InputConsequence = Literal["physics", "scenario", "numerical", "aoi"]
 
-#: Stamped on an older persisted entry that carried ``basis="default_demo"``
-#: with no ``consequence``: a tolerant read coerces it to ``scenario`` - proceed,
-#: never a spurious refusal on history - and records why here.
+#: Stamped on an older entry with ``basis="default_demo"`` and no ``consequence``: a tolerant read coerces it to ``scenario`` and records why.
 _HISTORY_CONSEQUENCE_NOTE = "consequence backfilled=scenario (pre-law-9 record)"
 
 
@@ -240,17 +205,12 @@ class SyntheticInput(ContractModel):
     NEVER "all real".
     """
 
-    #: The canonical parameter name.
     param: str
-    #: The value actually used. ``None`` when it is not surfaced.
     value: float | int | str | None = None
     units: str | None = None
     basis: InputBasis
-    #: REQUIRED when ``basis == "default_demo"``: the gate cannot decide
-    #: refuse-vs-proceed from ``basis`` alone, because a demo default may be an
-    #: invented physics value or a harmless scenario assumption.
+    #: Required when ``basis == "default_demo"``: the gate cannot decide refuse-vs-proceed from ``basis`` alone.
     consequence: InputConsequence | None = None
-    #: The fetcher or dataset name, for a fetched or derived basis.
     real_source_if_any: str | None = None
     note: str | None = None
 

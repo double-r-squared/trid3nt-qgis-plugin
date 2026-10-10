@@ -1,10 +1,8 @@
 """One pydantic model per source, built at row load, over ``spec.params``.
 
-The model is the ONE place a param type is stated: its Python annotation, which
-the promoted tool's signature and its inputSchema are synthesized from, and its
-coercion onto the quantized value the executor and the cache key share. A bad
-input raises the source-stamped router error from inside the validator, which is
-a RuntimeError and so reaches the caller untouched by pydantic's own machinery."""
+The model is the ONE place a param type is stated: the annotation the promoted tool's signature
+and inputSchema derive from, and the coercion onto the quantized value the executor and cache key
+share. Bad input raises the source-stamped router error (a RuntimeError, untouched by pydantic)."""
 
 from __future__ import annotations
 
@@ -21,13 +19,10 @@ from .errors import router_input_error, router_not_available_error
 
 __all__ = ["annotation_for", "params_model", "validated"]
 
-#: id(row) -> the model built for it, alongside the row itself so the id stays
-#: live. A row object is immutable once loaded, so its model is built once with
-#: it and a re-loaded row gets its own.
+#: id(row) -> the model built for it, beside the row so the id stays live.
 _MODELS: dict[int, tuple[SourceSpec, type[BaseModel]]] = {}
 
-#: param type -> the schema-compatible Python annotation. Every string-ish type
-#: (iso_date / enum / str / date_compact) is a str.
+#: param type -> schema-compatible Python annotation (every string-ish type is a str).
 _ANNOTATIONS: dict[str, Any] = {
     "bbox": list[float],
     "point": list[float],
@@ -42,14 +37,9 @@ _ANNOTATIONS: dict[str, Any] = {
 
 
 def annotation_for(pspec: Any) -> Any:
-    """The annotation a param is promoted under. The adapter reads a None-default
-    NON-Optional annotation as required-in-schema, so an OPTIONAL param declared
-    ``T | None = None`` states ``schema_optional`` and is annotated ``X | None``
-    to stay out of the schema's required set."""
+    """The annotation a param is promoted under; ``schema_optional`` states ``X | None`` to stay out of the required set."""
     if pspec.type == "enum":
-        # An enum is promoted under the type of the set it names: the SLR levels
-        # are floats, and a caller handed a signature saying str would be right to
-        # send one.
+        # An enum is promoted under the type of the set it names (the SLR levels are floats).
         values = pspec.values or []
         ann = type(values[0]) if values and not isinstance(values[0], str) else str
     else:
@@ -62,7 +52,6 @@ def annotation_for(pspec: Any) -> Any:
 
 def _quantize_bbox(bbox: tuple[float, ...], directive: str | None) -> tuple[float, ...]:
     if directive == "round_4dp":
-        # climate_normals keys and filters on a 4dp bbox.
         return tuple(round(v, 4) for v in bbox)
     if directive and directive.startswith("res_"):
         try:
@@ -74,7 +63,6 @@ def _quantize_bbox(bbox: tuple[float, ...], directive: str | None) -> tuple[floa
 
 
 def _range_checked(sc: str, pname: str, pspec: Any, value: float, sfx: str) -> None:
-    """Inclusive int/float range gate (esri year [2017,2023] -> YEAR_INVALID)."""
     if pspec.min is not None and value < pspec.min:
         raise router_input_error(sc, f"{pname}={value} below min {pspec.min}", sfx)
     if pspec.max is not None and value > pspec.max:
@@ -82,10 +70,7 @@ def _range_checked(sc: str, pname: str, pspec: Any, value: float, sfx: str) -> N
 
 
 def _coerce(spec: SourceSpec, pname: str, pspec: Any, value: Any) -> Any:
-    """One declared param onto the value the executor and the cache key share."""
     sc = spec.error_code_prefix
-    # Per-param input-error suffix: the param's override else the row default
-    # (INPUT_ERROR, INPUT_INVALID, bbox->BBOX_INVALID / year->YEAR_INVALID).
     sfx = pspec.error_suffix or spec.input_error_suffix
     ptype = pspec.type
 
@@ -109,9 +94,7 @@ def _coerce(spec: SourceSpec, pname: str, pspec: Any, value: Any) -> Any:
             raise router_input_error(sc, f"{pname}={value!r} is not ISO YYYY-MM-DD", sfx)
 
     if ptype == "enum":
-        # Case-insensitive enum and the alias table both normalize BEFORE the
-        # allowed-set check, echoing the canonical key (landsat band_combo accepts
-        # rgb/natural/cir/lst aliases). Both are no-ops when unset.
+        # Case-insensitive enum and alias table both normalize BEFORE the allowed-set check.
         if getattr(pspec, "lowercase", False) and isinstance(value, str):
             value = value.strip().lower()
         if getattr(pspec, "aliases", None) and isinstance(value, str):
@@ -131,9 +114,7 @@ def _coerce(spec: SourceSpec, pname: str, pspec: Any, value: Any) -> Any:
         return num
 
     if ptype == "int_range":
-        # A 2-element [start, end] int list (mtbs year_range). Element bounds:
-        # `min` floors start, `max` ceils end; start must be <= end. A bool is
-        # rejected (True/False are ints in Python but never a valid year).
+        # A 2-element [start, end] int list: `min` floors start, `max` ceils end, start <= end; a bool is rejected.
         if isinstance(value, bool) or not isinstance(value, (list, tuple)) or len(value) != 2:
             raise router_input_error(sc, f"{pname} must be a 2-element [start, end] list; got {value!r}", sfx)
         if isinstance(value[0], bool) or isinstance(value[1], bool):
@@ -151,9 +132,7 @@ def _coerce(spec: SourceSpec, pname: str, pspec: Any, value: Any) -> Any:
         return [a, b]
 
     if ptype == "datetime_range":
-        # A 2-element [start, end] ISO datetime-pair, each an ISO date OR
-        # datetime, echoed as isoformat strings for cache stability; a build hook
-        # re-parses to the source's wire format.
+        # A 2-element [start, end] ISO date/datetime pair, echoed as isoformat for cache stability.
         if isinstance(value, bool) or not isinstance(value, (list, tuple)) or len(value) != 2:
             raise router_input_error(sc, f"{pname} must be a 2-element [start, end] list; got {value!r}", sfx)
 
@@ -173,9 +152,7 @@ def _coerce(spec: SourceSpec, pname: str, pspec: Any, value: Any) -> Any:
         return [a_dt.isoformat(), b_dt.isoformat()]
 
     if ptype == "point":
-        # A 2-element [lon, lat] float list (nldi seed_point). The CONUS +
-        # seed/comid mutual-exclusion gate is the delegating executor's (it stamps
-        # the source's own error code).
+        # A 2-element [lon, lat] float list; the CONUS and seed/comid gates belong to the delegating executor.
         if isinstance(value, bool) or not isinstance(value, (list, tuple)) or len(value) != 2:
             raise router_input_error(sc, f"{pname} must be a 2-element [lon, lat] list; got {value!r}", sfx)
         try:
@@ -191,15 +168,13 @@ def _coerce(spec: SourceSpec, pname: str, pspec: Any, value: Any) -> Any:
         return [lon, lat]
 
     if ptype == "float_list":
-        # A scalar float OR a list[float] (slr_scenarios scenario_ft), sorted and
-        # deduped for cache-key stability.
+        # A scalar float OR list[float], sorted and deduped for cache-key stability.
         if isinstance(value, bool):
             raise router_input_error(sc, f"{pname}={value!r} must be a float or list[float]", sfx)
         if isinstance(value, (int, float)):
             levels = [float(value)]
         elif isinstance(value, (list, tuple)):
             if not value:
-                # An empty list falls back to the declared default.
                 dv = pspec.default
                 levels = [float(v) for v in dv] if isinstance(dv, (list, tuple)) else []
             else:
@@ -217,8 +192,7 @@ def _coerce(spec: SourceSpec, pname: str, pspec: Any, value: Any) -> Any:
         return sorted(set(levels))
 
     if ptype == "str_list":
-        # A scalar string OR a list[str] free-text filter (nws_event event_types),
-        # stripped, empties dropped, sorted and deduped for cache-key stability.
+        # A scalar string OR list[str] filter, stripped, empties dropped, sorted and deduped for cache-key stability.
         if isinstance(value, str):
             items: list[str] = [value]
         elif isinstance(value, (list, tuple)):
@@ -232,12 +206,10 @@ def _coerce(spec: SourceSpec, pname: str, pspec: Any, value: Any) -> Any:
         return sorted({s.strip() for s in items if s.strip()})
 
     if ptype == "bool":
-        # A JSON false/true, a 0/1 and a python bool all normalize the same way.
         return bool(value)
 
     if ptype == "date_compact":
-        # 'YYYY-MM-DD' or 'YYYYMMDD' onto the 8-digit compact form, checked as a
-        # real calendar date (us_drought_monitor).
+        # 'YYYY-MM-DD' or 'YYYYMMDD' onto the 8-digit compact form, checked as a real calendar date.
         if not isinstance(value, str):
             raise router_input_error(sc, f"{pname} must be a string date; got {type(value).__name__}", sfx)
         compact = value.strip().replace("-", "")
@@ -249,8 +221,6 @@ def _coerce(spec: SourceSpec, pname: str, pspec: Any, value: Any) -> Any:
             raise router_input_error(sc, f"{pname}={value!r} is not a real calendar date", sfx)
         return compact
 
-    # str: alias-or-passthrough (wqp characteristic). Lower/strip onto the table,
-    # else verbatim; a no-op when the row declares no aliases.
     text = str(value)
     if pspec.aliases:
         return pspec.aliases.get(text.strip().lower(), text.strip())
@@ -258,8 +228,6 @@ def _coerce(spec: SourceSpec, pname: str, pspec: Any, value: Any) -> Any:
 
 
 def _presence(spec: SourceSpec, raw: dict[str, Any]) -> dict[str, Any]:
-    """The declared params that are actually being asked for: a default fills an
-    absent one, an absent optional is left out, and an absent required refuses."""
     sc = spec.error_code_prefix
     asked: dict[str, Any] = {}
     for pname, pspec in spec.params.items():
@@ -270,7 +238,6 @@ def _presence(spec: SourceSpec, raw: dict[str, Any]) -> dict[str, Any]:
             asked[pname] = pspec.default
         elif pspec.required:
             sfx = pspec.error_suffix or spec.input_error_suffix
-            # bbox=None global-query policy: honest typed error.
             if pspec.type == "bbox" and not spec.supports_global_query:
                 raise router_input_error(sc, f"{pname} is required (bbox); global query not supported", sfx)
             raise router_input_error(sc, f"required param {pname!r} missing", sfx)
@@ -278,9 +245,8 @@ def _presence(spec: SourceSpec, raw: dict[str, Any]) -> dict[str, Any]:
 
 
 def _date_gates(spec: SourceSpec, out: dict[str, Any]) -> None:
-    """Order, coverage and range-days gates over the declared iso_date params.
-    Order and over-cap are INPUT errors; coverage bounds are NOT_AVAILABLE, a
-    distinct class. "start" is the FIRST declared iso_date and "end" the LAST."""
+    """Order, coverage and range-days gates over the declared iso_date params; order and over-cap are INPUT,
+    coverage bounds NOT_AVAILABLE. "start" is the FIRST declared iso_date, "end" the LAST."""
     sc = spec.error_code_prefix
     names = [n for n, p in spec.params.items() if p.type == "iso_date" and n in out]
     if not names:
@@ -288,8 +254,7 @@ def _date_gates(spec: SourceSpec, out: dict[str, Any]) -> None:
     dates = {n: _dt.date.fromisoformat(out[n]) for n in names}
     start = dates[names[0]]
 
-    # ORDER (INPUT) before COVERAGE (NOT_AVAILABLE) before RANGE (INPUT), so a
-    # doubly-invalid date -- order-violated AND out-of-coverage -- stamps ORDER.
+    # ORDER before COVERAGE before RANGE, so a date both order-violated and out of coverage stamps ORDER.
     if len(names) >= 2 and start > dates[names[-1]]:
         raise router_input_error(
             sc, f"start_date must be <= end_date; got start={start}, end={dates[names[-1]]}",
@@ -323,7 +288,6 @@ def _date_gates(spec: SourceSpec, out: dict[str, Any]) -> None:
 
 
 def params_model(spec: SourceSpec) -> type[BaseModel]:
-    """The row's own params model, built once and kept beside it."""
     held = _MODELS.get(id(spec))
     if held is not None:
         return held[1]
@@ -348,7 +312,5 @@ def params_model(spec: SourceSpec) -> type[BaseModel]:
 
 
 def validated(spec: SourceSpec, raw: dict[str, Any]) -> dict[str, Any]:
-    """The request's params through the row's model, as the quantized dict the
-    executor and the cache key share."""
     asked = _presence(spec, raw)
     return params_model(spec)(**asked).model_dump(exclude_none=True)

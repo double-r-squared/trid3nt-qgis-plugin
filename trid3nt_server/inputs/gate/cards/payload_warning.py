@@ -49,9 +49,7 @@ def _get_hard_cap_mb() -> float:
 
 
 def _resolve_payload_estimator(tool_name: str, estimator_name: str) -> Any | None:
-    """Look up the named estimator callable on the tool's module.
-
-    ``None`` when the module or attribute lookup fails, and the gate skips."""
+    """Look up the named estimator callable on the tool's module; ``None`` skips the gate."""
     # The metadata carries a Python IDENTIFIER rather than the callable, so the
     # metadata stays serializable; resolution happens here, at gate time.
     try:

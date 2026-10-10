@@ -25,19 +25,11 @@ from ..net.auth_broker import AuthBroker
 from ..net.tasks import _KeyedSourcesTask, _ModelListTask, _ProviderConfigTask
 
 
-
-#: The ``secret-add`` credential name of the language model's own key; every
-#: other name is one a data-source row declares.
+#: The ``secret-add`` credential name of the language model's own key; other names come from data-source rows.
 LANGUAGE_MODEL_CREDENTIAL = "llm"
 
-# Static provider preset table: label -> the provider's base_url, a curated
-# model shortlist, and the num_ctx the agent should set so the context-clip
-# guard does not false-trip.
-#
-# ``models`` is a shortlist only -- the model combo is EDITABLE, so any id the
-# provider serves is typeable. The agent is tool-heavy and many free models
-# ignore tools and narrate a fake answer instead, so the shortlist sticks to
-# ids known to honor tool-calling.
+# Provider presets: label -> base_url, a model shortlist and the num_ctx the agent should set.
+# The model combo is EDITABLE; the shortlist sticks to ids known to honor tool-calling.
 PROVIDER_PRESETS: dict = {
     "local-ollama": {
         "base_url": "http://127.0.0.1:11434/v1",
@@ -87,11 +79,7 @@ PROVIDER_PRESETS: dict = {
 
 
 class SettingsDialog(QDialog):
-    """The server URL and token, the basemap, the model controls and the key.
-
-    Nothing applies until Save: every field, line edits and checkboxes alike,
-    copies into ``settings`` in ``accept()``, and a typed key goes to
-    QgsAuthManager there."""
+    """The server URL and token, the basemap, the model controls and the key."""
 
     def __init__(
         self,
@@ -105,18 +93,14 @@ class SettingsDialog(QDialog):
     ):
         super().__init__(parent)
         self._settings = settings
-        # Keep-alive refs for the live model-list fetch tasks, initialised
-        # BEFORE _reload_model_choices runs below.
+        # Keep-alive refs for model-list fetch tasks; set BEFORE _reload_model_choices runs.
         self._model_list_tasks: List["_ModelListTask"] = []
         self._keys_task: Optional["_KeyedSourcesTask"] = None
         self._broker = AuthBroker()
         self.setWindowTitle("TRID3NT settings")
         form = QFormLayout(self)
 
-        # "Server" section: the agent runs locally or on a tailnet peer,
-        # reached over ws://. One "Server URL" row, plus the server token -
-        # REQUIRED, because the daemon refuses every connection that presents
-        # no token; it mints one into its config file at first start.
+        # The server token is REQUIRED: the daemon refuses connections that present none.
         self.local_url_edit = QLineEdit(settings.local_url)
         self.local_url_edit.setPlaceholderText("ws://127.0.0.1:8765/ws")
         form.addRow("Server URL", self.local_url_edit)
@@ -128,10 +112,7 @@ class SettingsDialog(QDialog):
         )
         form.addRow("Server token", self.token_edit)
 
-        # There is NEVER a second data-endpoint field. Pointing this one URL at
-        # a tailnet peer is the whole remote-daemon story: the agent's :8766
-        # base and the object store's endpoint are DERIVED from the handshake,
-        # with a WS-host fallback, never configured by hand.
+        # NEVER a second data-endpoint field: the :8766 base and the store endpoint are DERIVED from the handshake.
 
         from ..render.layers import BASEMAP_PRESETS
         self.basemap_combo = QComboBox()
@@ -147,8 +128,7 @@ class SettingsDialog(QDialog):
         basemap_row.addWidget(self.auto_basemap_checkbox, 1)
         form.addRow("Basemap", basemap_row)
 
-        # Only the MODEL rides the user-message live; the provider is pushed
-        # to the agent on Save.
+        # Only the MODEL rides the user-message live; the provider is pushed on Save.
         self.provider_combo = QComboBox()
         for preset_label in PROVIDER_PRESETS:
             self.provider_combo.addItem(preset_label)
@@ -156,15 +136,11 @@ class SettingsDialog(QDialog):
         self.provider_combo.setCurrentIndex(p_idx if p_idx >= 0 else 0)
         form.addRow("Provider", self.provider_combo)
 
-        # EDITABLE combo, so any model id is typeable. Empty text means the
-        # agent's own env default, and a model switch applies on the NEXT
-        # message with no restart.
+        # An empty model means the agent's env default; a switch applies on the NEXT message.
         self.model_combo = QComboBox()
         self.model_combo.setEditable(True)
         self._reload_model_choices(settings.provider)
         self.model_combo.setCurrentText(settings.model_id)
-        # Repopulate the shortlist when the provider changes (keeps whatever
-        # the user has typed -- only the dropdown items swap).
         self.provider_combo.currentTextChanged.connect(self._reload_model_choices)
         form.addRow("Model id", self.model_combo)
 
@@ -172,9 +148,7 @@ class SettingsDialog(QDialog):
         self.show_thinking_checkbox.setChecked(settings.show_thinking)
         form.addRow("", self.show_thinking_checkbox)
 
-        # "auto" is autonomous tool selection, with a picker only on a
-        # measured near-tie; "ask" surfaces every staged selection as a picker
-        # card. Consent gates are NEVER mode-dependent.
+        # "auto" is autonomous selection with a picker only on a near-tie; "ask" picks every staged selection. Consent gates are NEVER mode-dependent.
         self.tool_choice_combo = QComboBox()
         self.tool_choice_combo.addItems(["auto", "ask"])
         self.tool_choice_combo.setCurrentText(settings.tool_choice_mode)
@@ -184,11 +158,7 @@ class SettingsDialog(QDialog):
         )
         form.addRow("Tool selection", self.tool_choice_combo)
 
-        # Connect and disconnect live HERE rather than on the header row: ONE
-        # toggle button whose text and action depend on the connection
-        # state at build time. Either way it closes the dialog WITHOUT saving:
-        # this is an action, not a settings edit, so it must not also push
-        # provider config.
+        # One connect/disconnect toggle; it closes the dialog WITHOUT saving (an action, not a settings edit).
         self.conn_toggle_btn = QPushButton()
         if connected:
             self.conn_toggle_btn.setText("Disconnect from agent")
@@ -204,8 +174,7 @@ class SettingsDialog(QDialog):
                 lambda: self._act_and_close(on_connect))
         form.addRow("Connection", self.conn_toggle_btn)
 
-        # The dock's views open from here so its header stays uncrowded; each
-        # entry is an action and closes the dialog WITHOUT saving.
+        # Each entry is an action and closes the dialog WITHOUT saving.
         self.charts_entry_btn = QPushButton("Display charts")
         self.charts_entry_btn.setEnabled(on_charts is not None)
         self.charts_entry_btn.clicked.connect(lambda: self._act_and_close(on_charts))
@@ -217,9 +186,7 @@ class SettingsDialog(QDialog):
         views_row.addWidget(self.library_entry_btn)
         form.addRow("Views", views_row)
 
-        # ONE key entry over QgsAuthManager. The combo states which credential
-        # the key is for: the language model's, or one a data-source row
-        # declares. A stored key is reported as stored and NEVER read back.
+        # A stored key is reported as stored and NEVER read back.
         self.key_for_combo = QComboBox()
         self.key_for_combo.addItem("language model", LANGUAGE_MODEL_CREDENTIAL)
         self.key_edit = QLineEdit()
@@ -245,12 +212,9 @@ class SettingsDialog(QDialog):
         self._settings.auto_basemap = self.auto_basemap_checkbox.isChecked()
         self._settings.basemap_preset = self.basemap_combo.currentText()
         self._settings.show_thinking = self.show_thinking_checkbox.isChecked()
-        # The tool-selection mode rides the next user-message; no restart and
-        # no push.
+        # The tool-selection mode rides the next user-message; no push.
         self._settings.tool_choice_mode = self.tool_choice_combo.currentText()
-        # Provider and model persist, then the live config is PUSHED to the
-        # agent, so a provider switch applies on the next message with no
-        # restart.
+        # Provider and model persist, then the live config is PUSHED to the agent.
         self._settings.provider = self.provider_combo.currentText()
         self._settings.model_id = self.model_combo.currentText()
         self._push_provider_config()
@@ -258,8 +222,8 @@ class SettingsDialog(QDialog):
         super().accept()
 
     def _load_keyed_sources(self) -> None:
-        """Add the credentials the daemon's rows declare to the entry's
-        choices, off-thread so a dead agent never freezes the dialog."""
+        """Add the credentials the daemon's rows declare to the entry's choices, off-thread so
+        a dead agent never freezes the dialog."""
         task = _KeyedSourcesTask(self._resolve_http_base(), self)
         self._keys_task = task
         task.finished.connect(self._on_keyed_sources)
@@ -291,9 +255,9 @@ class SettingsDialog(QDialog):
             "stored - type to replace" if stored else "not set")
 
     def _save_key(self) -> None:
-        """Store a typed key in QgsAuthManager and push it to the agent now;
-        every later connect pushes it again. An empty field changes nothing.
-        SECURITY: the value goes to the auth manager and ``secret-add`` only."""
+        """Store a typed key in QgsAuthManager and push it to the agent now; every later
+        connect pushes it again. SECURITY: the value goes to the auth manager and ``secret-
+        add`` only."""
         value = self.key_edit.text().strip()
         if not value:
             return
@@ -305,16 +269,14 @@ class SettingsDialog(QDialog):
             bridge.push_secret(name, value)
 
     def _act_and_close(self, action) -> None:
-        """Run one of the dock's actions, then close WITHOUT saving: an action
-        is not a settings edit."""
+        """Run one of the dock's actions, then close WITHOUT saving: an action is not a
+        settings edit."""
         if action is not None:
             action()
         self.reject()
 
     def _resolve_http_base(self) -> str:
-        """The agent's HTTP base for this dialog's two calls. The PARENT dock
-        owns the derivation; a standalone dialog with no dock falls back to the
-        stored ``export_api``."""
+        """The agent's HTTP base for this dialog's two calls."""
         dock = self.parent()
         effective = getattr(dock, "_effective_http_base", None)
         if callable(effective):
@@ -322,8 +284,8 @@ class SettingsDialog(QDialog):
         return self._settings.export_api
 
     def _push_provider_config(self) -> None:
-        """POST the persisted provider config OFF-THREAD, so a dead agent
-        never freezes Save. The key never rides it: keys go over ``secret-add``."""
+        """POST the persisted provider config OFF-THREAD, so a dead agent never freezes Save.
+        The key never rides it: keys go over ``secret-add``."""
         preset = PROVIDER_PRESETS.get(self._settings.provider) or {}
         payload = {
             "base_url": preset.get("base_url", ""),
@@ -332,8 +294,7 @@ class SettingsDialog(QDialog):
         }
         dock = self.parent()
         task = _ProviderConfigTask(self._resolve_http_base(), payload, dock)
-        # Own the task on the DOCK, not on this closing dialog, so the daemon
-        # thread and its QObject outlive ``accept()``.
+        # Own the task on the DOCK so its thread outlives ``accept()``.
         if dock is not None and hasattr(dock, "_provider_config_tasks"):
             dock._provider_config_tasks.append(task)
             task.finished.connect(dock._on_provider_config_finished)
@@ -341,8 +302,8 @@ class SettingsDialog(QDialog):
         task.start()
 
     def _reload_model_choices(self, provider: str) -> None:
-        """Swap the model combo's dropdown to ``provider``'s shortlist WITHOUT
-        clobbering whatever the user has typed: only the item list changes."""
+        """Swap the model combo's dropdown to ``provider``'s shortlist WITHOUT clobbering
+        whatever the user has typed: only the item list changes."""
         preset = PROVIDER_PRESETS.get(provider) or {}
         current_text = self.model_combo.currentText()
         self.model_combo.blockSignals(True)
@@ -351,9 +312,7 @@ class SettingsDialog(QDialog):
             self.model_combo.addItem(model)
         self.model_combo.setCurrentText(current_text)
         self.model_combo.blockSignals(False)
-        # For an OpenRouter preset, fetch the LIVE model list off the UI
-        # thread and swap it in on success; the static shortlist above is the
-        # honest fallback on any error or timeout.
+        # For OpenRouter, fetch the LIVE list off-thread; the static shortlist is the fallback.
         preset_base_url = (preset.get("base_url") or "").lower()
         if "openrouter.ai" in preset_base_url:
             task = _ModelListTask(self._resolve_http_base(), provider, self)
@@ -363,9 +322,7 @@ class SettingsDialog(QDialog):
             task.start()
 
     def _on_model_list_finished(self, ids: list, provider: str) -> None:
-        """Repopulate the model combo with the LIVE ids. STALE-GUARDED: the
-        user may have switched provider mid-fetch, so this applies only for the
-        provider still selected."""
+        """Repopulate the model combo with the LIVE ids."""
         try:
             if self.provider_combo.currentText() != provider or not ids:
                 return
@@ -377,12 +334,9 @@ class SettingsDialog(QDialog):
             self.model_combo.setCurrentText(current_text)
             self.model_combo.blockSignals(False)
         except RuntimeError:
-            # Underlying combo was destroyed (dialog closed mid-fetch) -- the
-            # static shortlist already shipped, nothing more to do.
+            # Combo destroyed (dialog closed mid-fetch).
             return
 
     def _on_model_list_errored(self, message: str) -> None:
-        # The static PROVIDER_PRESETS shortlist is already in the combo as the
-        # honest fallback -- a live-fetch failure is silent by design (no UI to
-        # repaint on a possibly-closed dialog).
+        # A live-fetch failure is silent by design: the static shortlist is already in the combo.
         return

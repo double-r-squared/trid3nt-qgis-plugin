@@ -14,20 +14,15 @@ from pydantic import BaseModel
 
 from . import collections, execution, message, tool_registry, ws
 
-# (filename stem, model) for every top-level contract we export.
 _EXPORTS: list[tuple[str, type[BaseModel]]] = [
-    # collections
     ("session_document", collections.SessionDocument),
     # Exported standalone as well as inside its parent, so a client mirroring
     # the step surface can type against it on its own.
     ("pipeline_step_summary", collections.PipelineStepSummary),
-    # solver shapes
     ("execution_handle", execution.ExecutionHandle),
     ("run_result", execution.RunResult),
     ("layer_uri", execution.LayerURI),
-    # atomic-tool registration metadata
     ("atomic_tool_metadata", tool_registry.AtomicToolMetadata),
-    # the adapters' message IR; Part, ToolCall and ToolResponse ride Message
     ("message", message.Message),
     ("tool_declaration", message.ToolDeclaration),
 ]
@@ -37,7 +32,6 @@ def _ws_message_exports() -> list[tuple[str, type[BaseModel]]]:
     """One schema per WebSocket message payload."""
     out: list[tuple[str, type[BaseModel]]] = []
     for msg_type, model in sorted(ws.ALL_PAYLOADS.items()):
-        # ws_<kebab-with-underscores>.json
         stem = "ws_" + msg_type.replace("-", "_")
         out.append((stem, model))
     return out
@@ -55,13 +49,10 @@ REGEN_COMMAND = "./venvs/agent/bin/python -m trid3nt_contracts.export_schemas"
 
 
 def render_schemas() -> dict[str, str]:
-    """Serialize every contract's JSON Schema IN MEMORY: filename -> file text.
-    The one serialization path, and a pure one - no I/O, no mkdir - so a drift
-    gate can compare committed bytes against it without touching the disk."""
+    """Serialize every contract's JSON Schema in memory: filename -> file text; pure, no I/O."""
     rendered: dict[str, str] = {}
     for stem, model in [*_EXPORTS, *_ws_message_exports()]:
         schema = model.model_json_schema()
-        # sort_keys + trailing newline => stable, diff-friendly output.
         rendered[f"{stem}.json"] = json.dumps(schema, indent=2, sort_keys=True) + "\n"
     return rendered
 

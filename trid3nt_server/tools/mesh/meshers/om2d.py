@@ -52,12 +52,9 @@ _MAX_ITER = 40
 #: Metres per degree of latitude, for the extent's own span.
 _M_PER_DEG = 111_320.0
 
-#: How far an element's apex may sit off the line of its longest side, as a
-#: fraction of that side, before the three nodes are ONE LINE. Such an element has
-#: no area to invert and no orientation to read, and the boundary walk that
-#: numbers a TELEMAC geometry counts its edges as a second rim - which is the
-#: "pinched" domain a solver refuses the whole mesh over. Measured on the element
-#: itself, so a graded mesh's finest elements are not judged against its coarsest.
+#: How far an apex may sit off its longest side, as a fraction of that side, before the three nodes are ONE LINE: no area to invert,
+#: and the boundary walk counts it as a second rim (the "pinched" domain a solver refuses). Relative, so a graded mesh's finest
+#: elements are not judged against its coarsest.
 _COLLAPSED_HEIGHT_FRAC = 1e-3
 
 #: How close two nodes may sit before a single-precision geometry file writes them
@@ -70,11 +67,8 @@ _COINCIDENT_TOLERANCE_M = 1.0
 #: what the coordinates themselves round away.
 _ON_BOX_TOLERANCE_M = 1.0
 
-#: The oceanmesh functions an op may name, by the phase each runs in. Declared as
-#: a ROSTER rather than read off the module: the library is installed only inside
-#: the GPL-isolated image, so this process cannot import it to introspect. The
-#: kwargs of an op from this namespace are bound in the container, against the
-#: real signature, and the library's own error surfaces verbatim.
+#: The oceanmesh functions an op may name, by phase. A roster, not introspection: the library is installed only in the GPL-isolated image.
+#: Kwargs bind in the container against the real signature and the library's own error surfaces verbatim.
 _OCEANMESH_SIZING = (
     "bathymetric_gradient_sizing_function",
     "compute_minimum",
@@ -99,36 +93,15 @@ _OCEANMESH_ON_A_MESH = (
     "mesh_clean",
 )
 
-#: om2d's OWN pre-generation primitives, under their real driver ``def`` names.
-#: All three impose state on the DOMAIN the library triangulates, which the
-#: library has no single word for: ``om.Difference`` subtracts a shape but says
-#: nothing about locking its outline in, a sizing lattice has no function that
-#: writes a target edge inside a drawn polygon, and every sizing function the
-#: library has measures the SHORELINE - none of them the extent's own rim.
+#: om2d's own pre-generation primitives, under their driver ``def`` names. Each imposes state on the domain the library has no single
+#: word for: locking an outline in, sizing inside a drawn polygon, sizing the extent's own rim.
 _OM2D_PRIMITIVES = ("set_obstacle", "set_region_size", "set_rim_size")
 
-#: The ops list an undeclared ask gets. Hard-baked and visible: the rim at the
-#: size word, then the library's clean passes. It sizes no INTERIOR - what a
-#: domain should be sized toward is the ask's own knowledge. The RIM is the
-#: one exception: no sizing function the library has measures the extent's own
-#: outline, so an ask that names none comes back with the boundary a solver forces
-#: its open condition on running an order of magnitude past the size word. A
-#: declared recipe replaces this list wholesale.
-#:
-#: NO BED. Which measurement is the bed under this water is the BED SLOT's answer
-#: - the class a question states, ranked and laid rung by rung by the bed
-#: ingestion - so a mesher that named a source here would be a second place
-#: deciding it. A recipe hands the merged surface to ``set_bed``; an ask that
-#: declares none comes back unbedded, and the artifact says so.
-#:
-#: NO SMOOTHING PASS. ``laplacian2`` moves every interior node to the average of
-#: its neighbours with no test that the elements around it stay unfolded, and a
-#: node beside a rim locked at one spacing has most of its neighbours strung along
-#: that rim: the average lands past its own opposite edges and two elements end up
-#: covering the same ground - each still counter-clockwise, so nothing that reads
-#: signed area sees it, and the boundary walk that numbers the geometry meets the
-#: unpaired edges as extra rims. The generator already relaxed these positions
-#: against the sizing lattice.
+#: The ops an undeclared ask gets: the rim at the size word, then the library's clean passes. It sizes no interior. The rim is the exception:
+#: no library sizing function measures the extent's outline, so the open boundary would run far past the size word. A declared recipe replaces this list wholesale.
+#: No bed: the bed slot's ingestion decides the source; a recipe hands the merged surface to ``set_bed`` and an undeclared ask is unbedded.
+#: No smoothing pass: ``laplacian2`` can fold elements beside a locked rim, each still counter-clockwise, so signed-area checks miss it
+#: and the boundary walk meets the unpaired edges as extra rims.
 _DEFAULT_OPS = (
     mesh_op("set_rim_size"),
     mesh_op("delete_boundary_faces"),
@@ -351,11 +324,8 @@ def _resampleable_lines(doc: Mapping[str, Any], resolution_m: float,
     for holder, geometry in entries:
         if _is_line(geometry):
             walks = _line_parts(geometry)
-            # A sizing function walks each line at the min edge, so a line
-            # shorter than one edge is not a coarse input - it is a resample the
-            # library dies inside rather than refuses. Geodesic length on the
-            # WGS84 ellipsoid, per PART: a multi-line whose parts are each below
-            # the edge crashes the same walk a short single line does.
+            # A sizing function walks each line at the min edge; a line shorter than one edge makes the library die in a resample.
+            # Length is geodesic (WGS84) per PART: a multi-line of short parts crashes the same walk.
             kept = [walk for walk in walks
                     if _walk_length_m(geod, walk) >= resolution_m]
             total += len(walks)
@@ -472,11 +442,7 @@ def _open_faces(extent: Any, polygons: list[dict[str, Any]],
                 bbox: tuple[float, ...]) -> list[dict[str, Any]]:
     """Every stretch of this domain's edge that is NOT shoreline, as GeoJSON faces.
 
-    The mesher's sizing functions read this list and measure the shoreline as the
-    edge MINUS it: what the water crosses is not where it meets land. Two kinds go
-    in the one list - the runs an extent declares as inflow, outflow or open, and
-    each boundary segment lying on the box the domain was cut out of, which stands
-    in open water and draws no detail."""
+    Sizing measures the shoreline as the edge MINUS this list: declared inflow/outflow/open runs plus each boundary segment on the cut box."""
     from trid3nt_server.inputs.boundary import OPEN_TYPES
 
     declared = [{"type": "Feature", "properties": {"type": run.type},
@@ -490,12 +456,8 @@ def _box_faces(polygons: list[dict[str, Any]],
                bbox: tuple[float, ...]) -> list[dict[str, Any]]:
     """The boundary segments that lie ON ``bbox``, one face each.
 
-    A face names its stretch by the shorter way round the ring between its two
-    ends, and a straight segment is never the longer way - so the segment is the
-    unit here, never the run it belongs to. A boundary whose OUTER ring lies on
-    the box the whole way round was DRAWN as that box rather than cut out of one:
-    it is all shore, and nothing is taken from it. Island holes stand inside the
-    box and say nothing about how the outer ring got there."""
+    The segment is the unit, never its run (a face names the shorter way round the ring). An OUTER ring on the box the whole way
+    round was DRAWN as that box, so it is all shore; island holes say nothing about how the outer ring got there."""
     west, south, east, north = (float(v) for v in bbox)
     lat_tol = _ON_BOX_TOLERANCE_M / 111_320.0
     lon_tol = lat_tol / max(0.15, math.cos(math.radians(0.5 * (south + north))))
@@ -534,11 +496,8 @@ def _rings(polygons: list[dict[str, Any]]
 def _lonlat_bounds(bbox: tuple[float, ...], source: str) -> tuple[float, ...]:
     """``bbox`` if it is lon/lat, else the refusal that names what it is instead."""
     west, south, east, north = (float(v) for v in bbox)
-    # Every sizing number this mesher works in is degrees converted at the
-    # domain's own latitude, so an extent handed over in projected metres does
-    # not read as a wrong answer - it reads as a lattice millions of cells wide,
-    # which surfaces as an allocation failure inside the triangulator rather
-    # than as the CRS mismatch it is.
+    # Sizing numbers are degrees converted at the domain's latitude; an extent in projected metres would read as a lattice millions of cells wide
+    # and fail as an allocation error in the triangulator rather than as a CRS mismatch.
     if -180.0 <= west <= 180.0 and -180.0 <= east <= 180.0 \
             and -90.0 <= south <= 90.0 and -90.0 <= north <= 90.0:
         return (west, south, east, north)
@@ -681,12 +640,8 @@ def _merge_coincident(points: Any, cells: Any,
 def _unfolded(points: Any, cells: Any) -> tuple[Any, int]:
     """The elements, less any that COVER GROUND another already covers.
 
-    Two counter-clockwise triangles that traverse one edge in the SAME direction
-    both lie on that edge's left: they overlap. Nothing that reads signed area
-    sees it, and the boundary walk that numbers a TELEMAC geometry meets their
-    unpaired edges as a second rim - the "pinched" domain a solver refuses the
-    whole mesh over. The smaller of an overlapping pair is the fold, because the
-    fold is a sliver laid back over its own neighbours."""
+    Two counter-clockwise triangles traversing one edge in the SAME direction overlap, which signed area cannot see.
+    The smaller of the pair is the fold."""
     import numpy as np
 
     tri = np.asarray(cells, dtype=np.int64)
@@ -755,10 +710,7 @@ def _conformal_probe(points_m: Any, pfix: Any, utm_epsg: int) -> dict[str, Any]:
 
 def _emitted(mesh: Mesh, rundir: Path, domain: _Domain,
              stats: Mapping[str, Any], notes: list[str]) -> Mesh:
-    """Segment the boundary ONCE and measure what the walk holds -> the mesh.
-
-    Every named stretch and every count here is read off this mesh's own nodes
-    and cells; what an engine needs written out of them is that engine's."""
+    """Segment the boundary ONCE and measure what the walk holds -> the mesh."""
     from trid3nt_server.tools.mesh.shared.nodes import boundary_contours
 
     roles = {role: list(nodes) for role, nodes
@@ -807,9 +759,7 @@ def _open_sections(mesh: Mesh) -> list[dict[str, Any]]:
     """The contiguous ocean-boundary sections the library identified, if asked.
 
     A recipe that never named ``identify_ocean_boundary_sections`` has none."""
-    # EVERY section identified is open: which of them a compass name would have
-    # picked is a choice the library never made, and dropping the rest silently
-    # numbered a multi-mouth estuary as a single-mouth one.
+    # EVERY identified section is open: a compass name would pick one, and dropping the rest numbered a multi-mouth estuary as single-mouth.
     found = (mesh.meta.get("op_results") or {}).get(
         "identify_ocean_boundary_sections")
     return [dict(section) for section in (found or [])]
@@ -825,11 +775,7 @@ OM2D = register_mesher(
         OpNamespace(origin="om2d", phase=PRE, names=_OM2D_PRIMITIVES),
     ),
     default_ops=_DEFAULT_OPS,
-    # Measured, not assumed: five in-container rebuilds from one identical config
-    # return one mesh, on the domain classes the drift was measured on - a
-    # shoreline-cut coastal domain and a harbour domain sized by feature. The
-    # constraint that makes it hold is the driver's seeding of the library's own
-    # medial-axis tie-break; without it the sizing lattice differs per process and
-    # every domain whose recipe names a sizing op drifts.
+    # Five in-container rebuilds from one config return one mesh (shoreline-cut coastal and feature-sized harbour domains);
+    # the driver's seeding of the library's medial-axis tie-break makes it hold, else a sizing op drifts per process.
     deterministic=True,
 )

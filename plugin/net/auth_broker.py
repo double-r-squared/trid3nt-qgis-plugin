@@ -1,10 +1,8 @@
 """QgsAuthManager credential broker (plugin side).
 
-QgsAuthManager is the credential HOME; the settings key entry writes into it,
-and every connect moves each key to the daemon over ``secret-add``, one envelope
-per credential, NEVER logged. A provider row's key never leaves here at all - its stored
-config id rides the datasource uri as ``authcfg=``. With no master password, or
-no QGIS, every call is a no-op rather than a raise."""
+QgsAuthManager is the credential home; every connect moves each stored key to the
+daemon over ``secret-add``, never logged. A provider row's key stays here: its
+config id rides the datasource uri as ``authcfg=``. Without a master password or QGIS every call no-ops."""
 
 from __future__ import annotations
 
@@ -13,8 +11,7 @@ from typing import Callable, Dict, Optional, Protocol
 
 logger = logging.getLogger("trid3nt.auth_broker")
 
-# Name prefix for the plugin's own QgsAuthManager entries. The credential name
-# a row declares is appended, so one entry maps 1:1 to one credential.
+# Name prefix for the plugin's QgsAuthManager entries; the credential name is appended.
 _NAME_PREFIX = "trid3nt-cred:"
 
 

@@ -30,10 +30,9 @@ __all__ = [
 
 
 class MissingCredentialError(RuntimeError):
-    """A keyed source was asked for with no key anywhere to serve it.
-
-    The refusal names the credential and the one place a key is entered; the
-    chat is never that place, so it points at the plugin's keys form."""
+    """A keyed source was asked for with no key anywhere to serve it. The refusal names the
+    credential and the one place a key is entered; the chat is never that place, so it points at
+    the plugin's keys form."""
 
     error_code: str = "CREDENTIAL_MISSING"
     retryable: bool = False

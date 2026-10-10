@@ -4,14 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-# Module-level live-turn registry keyed by session and stream, so an in-flight
-# turn OUTLIVES the per-connection state: a closing connection drops only that
-# connection's references instead of cancelling, and a cheap turn finishes.
-#
-# Each entry carries the running task AND the emitter it drives, so a
-# reconnecting socket can rebind that emitter's sink and receive the live
-# solve's progress and terminal frames. A done-callback removes the entry on
-# completion, so nothing leaks, and the registry is bounded by session count.
+# Live-turn registry keyed by session and stream: an in-flight turn OUTLIVES its connection. Each
+# entry holds the task and the emitter it drives, so a reconnect can rebind the sink; a done-callback
+# removes the entry on completion.
 @dataclass
 class _LiveTurn:
     """An in-flight turn detached from its launching connection; the emitter it
@@ -91,12 +86,8 @@ def _rebind_live_turns(
             continue
         if lt.emitter is not None and lt.emitter is not emitter:
             lt.emitter.rebind_sink(emitter._sink)
-            # Rebinding the sink recovers only FUTURE frames, not a session
-            # state emitted onto the now-dead launch socket before this
-            # reconnect. Seeding this emitter from the live turn's accumulated
-            # layers makes the caller's emit carry the full snapshot; the union
-            # is by identity, so nothing duplicates and the live turn's later
-            # superset emits never regress it.
+            # Rebinding recovers only FUTURE frames. Seeding this emitter from the live turn's
+            # layers makes the caller's emit carry the full snapshot; the union is by identity.
             emitter.merge_loaded_layers_from(lt.emitter)
             rebound += 1
     if not bucket:

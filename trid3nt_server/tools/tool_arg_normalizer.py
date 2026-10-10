@@ -28,11 +28,7 @@ __all__ = [
 ]
 
 
-#: Bidirectional alias pairs. If a tool accepts the canonical (left) form and
-#: the LLM provided the alias (right), we rename; and vice-versa. The pairs are
-#: matched on **exact** name equality, not substring -- keeps the table tight.
-#:
-#: Add a new entry here whenever logs show a recurring kwarg-name miss.
+#: Bidirectional alias pairs, matched on exact name equality: a tool accepting one side, sent the other, renames.
 _BIDIRECTIONAL_ALIASES: tuple[tuple[str, str], ...] = (
     ("return_period_years", "return_period_yr"),
     ("duration_hours", "duration_hr"),
@@ -47,18 +43,12 @@ def _build_alias_map() -> dict[str, str]:
     """Flatten the bidirectional pairs into a directed alias -> canonical map."""
     m: dict[str, str] = {}
     for canon, alias in _BIDIRECTIONAL_ALIASES:
-        # Both directions land in the map keyed by the "wrong" name pointing at
-        # the "right" name. At normalize time we look up params[alias] and
-        # rename if the tool's signature accepts the canonical form.
         m[alias] = canon
         m[canon] = alias
     return m
 
 
-#: Per-tool override aliases that don't fit the generic bidirectional table.
-#:
-#: Shape: ``{tool_name: {wrong_kwarg: right_kwarg}}``. Tool-specific entries
-#: win over the generic alias map.
+#: Per-tool aliases ``{tool_name: {wrong: right}}``; they win over the generic map.
 _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
     "sfincs_flood": {
         # The model reaches for "place" / "location_name" instead of
@@ -67,10 +57,7 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "location_name": "location_query",
         "location": "location_query",
     },
-    # NWS alert tools: the LLM names the state freely ("state",
-    # "state_code", "location", "region") -- all land on the canonical "area"
-    # param so the precise server-side ?area= filter engages instead of the
-    # unscoped CONUS sweep.
+    # The LLM names the state freely; all land on "area" so the server-side ?area= filter engages instead of the CONUS sweep.
     "fetch_nws_alerts_conus": {
         "state": "area",
         "state_code": "area",
@@ -87,21 +74,15 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "fips": "area",
         "county_fips": "area",
     },
-    # endpoint aliases.
-    # For each new tool: param-name variants the model is likely to invent based
-    # on (a) common GIS/API terminology, (b) naming patterns in adjacent tools,
-    # (c) docstring prose that names related concepts.
     "fetch_fema_nfhl_zones": {
         # bbox aliases (common across all spatial tools)
         "bounding_box": "bbox",
         "extent": "bbox",
         "bounds": "bbox",
-        # sfha_only aliases -- the model may expand the acronym or use noun form
         "sfha": "sfha_only",
         "special_flood_hazard": "sfha_only",
         "sfha_filter": "sfha_only",
         "flood_hazard_only": "sfha_only",
-        # zone_filter aliases -- the model may use plural or shorter names
         "zones": "zone_filter",
         "flood_zones": "zone_filter",
         "zone_codes": "zone_filter",
@@ -109,23 +90,19 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "zone_types": "zone_filter",
     },
     "fetch_hrrr_forecast": {
-        # bbox aliases
         "bounding_box": "bbox",
         "extent": "bbox",
         "bounds": "bbox",
-        # variable aliases -- the model may use "vars", "fields", or shortened forms
         "vars": "variable",
         "fields": "variable",
         "variables": "variable",
         "field": "variable",
-        # forecast_hour aliases -- common meteorological shorthand
         "fcst_hr": "forecast_hour",
         "fhr": "forecast_hour",
         "hour": "forecast_hour",
         "lead_hour": "forecast_hour",
         "lead_time": "forecast_hour",
         "forecast_lead": "forecast_hour",
-        # cycle aliases -- the model may use ISO or descriptive names
         "cycle_iso": "cycle",
         "run_time": "cycle",
         "init_time": "cycle",
@@ -133,34 +110,28 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "model_run": "cycle",
     },
     "fetch_noaa_nwm_streamflow": {
-        # bbox aliases
         "bounding_box": "bbox",
         "extent": "bbox",
         "bounds": "bbox",
-        # product / configuration aliases
         "configuration": "product",
         "model_run": "product",
         "cfg": "product",
         "run_type": "product",
         "model_config": "product",
-        # valid_time aliases -- the model may use datetime / date / time
         "datetime": "valid_time",
         "date": "valid_time",
         "time": "valid_time",
         "timestamp": "valid_time",
         "valid_datetime": "valid_time",
-        # forecast_hour aliases
         "fcst_hr": "forecast_hour",
         "fhr": "forecast_hour",
         "hour": "forecast_hour",
         "lead_hour": "forecast_hour",
     },
     "fetch_usace_levees": {
-        # bbox aliases
         "bounding_box": "bbox",
         "extent": "bbox",
         "bounds": "bbox",
-        # layer aliases -- the model may use "type", "layer_type", or specific layer names
         "layer_type": "layer",
         "geometry_type": "layer",
         "levee_type": "layer",
@@ -168,17 +139,14 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "dataset": "layer",
     },
     "fetch_usace_dams": {
-        # bbox aliases
         "bounding_box": "bbox",
         "extent": "bbox",
         "bounds": "bbox",
         "region": "bbox",
         "area": "bbox",
-        # hazard_potential aliases
         "hazard": "hazard_potential",
         "hazard_class": "hazard_potential",
         "hazard_classification": "hazard_potential",
-        # min_height_ft aliases - LLMs invent min_height / height variants
         "min_height": "min_height_ft",
         "minimum_height": "min_height_ft",
         "min_dam_height": "min_height_ft",
@@ -186,7 +154,6 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "height_min": "min_height_ft",
     },
     "fetch_usace_nsi": {
-        # bbox is the only param
         "bounding_box": "bbox",
         "extent": "bbox",
         "bounds": "bbox",
@@ -194,18 +161,15 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "area": "bbox",
     },
     "fetch_asos_metar": {
-        # bbox aliases
         "bounding_box": "bbox",
         "extent": "bbox",
         "bounds": "bbox",
-        # start_time aliases -- the model often invents start_date / begin / from
         "start_date": "start_time",
         "begin": "start_time",
         "start": "start_time",
         "from_time": "start_time",
         "datetime_start": "start_time",
         "time_start": "start_time",
-        # end_time aliases
         "end_date": "end_time",
         "end": "end_time",
         "stop": "end_time",
@@ -214,24 +178,20 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "time_end": "end_time",
     },
     "fetch_gridmet": {
-        # bbox aliases
         "bounding_box": "bbox",
         "extent": "bbox",
         "bounds": "bbox",
-        # variable aliases
         "vars": "variable",
         "field": "variable",
         "variables": "variable",
         "param": "variable",
         "metric": "variable",
-        # start_date aliases
         "start": "start_date",
         "begin": "start_date",
         "from_date": "start_date",
         "datetime_start": "start_date",
         "start_time": "start_date",
         "date_start": "start_date",
-        # end_date aliases
         "end": "end_date",
         "stop": "end_date",
         "to_date": "end_date",
@@ -240,36 +200,30 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "date_end": "end_date",
     },
     "fetch_noaa_coops_tides": {
-        # bbox aliases
         "bounding_box": "bbox",
         "extent": "bbox",
         "bounds": "bbox",
-        # start_date aliases
         "start": "start_date",
         "begin": "start_date",
         "from_date": "start_date",
         "start_time": "start_date",
         "datetime_start": "start_date",
         "date_start": "start_date",
-        # end_date aliases
         "end": "end_date",
         "stop": "end_date",
         "to_date": "end_date",
         "end_time": "end_date",
         "datetime_end": "end_date",
         "date_end": "end_date",
-        # product aliases -- the model may use "data_type", "observation_type"
         "data_type": "product",
         "observation_type": "product",
         "tide_product": "product",
         "measurement": "product",
     },
     "fetch_noaa_slr_scenarios": {
-        # bbox aliases
         "bounding_box": "bbox",
         "extent": "bbox",
         "bounds": "bbox",
-        # scenario_ft aliases -- the model may use scenario, sea_level_rise, slr
         "scenario": "scenario_ft",
         "scenarios": "scenario_ft",
         "sea_level_rise": "scenario_ft",
@@ -279,23 +233,19 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "feet": "scenario_ft",
     },
     "fetch_gtsm_tide_surge": {
-        # bbox aliases
         "bounding_box": "bbox",
         "extent": "bbox",
         "bounds": "bbox",
-        # start_date aliases
         "start": "start_date",
         "begin": "start_date",
         "from_date": "start_date",
         "start_time": "start_date",
         "datetime_start": "start_date",
-        # end_date aliases
         "end": "end_date",
         "stop": "end_date",
         "to_date": "end_date",
         "end_time": "end_date",
         "datetime_end": "end_date",
-        # output aliases -- the model may use "variable", "product", "data_type"
         "variable": "output",
         "product": "output",
         "data_type": "output",
@@ -303,18 +253,15 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "field": "output",
     },
     "fetch_raws_weather": {
-        # bbox aliases
         "bounding_box": "bbox",
         "extent": "bbox",
         "bounds": "bbox",
-        # start_time aliases
         "start_date": "start_time",
         "begin": "start_time",
         "start": "start_time",
         "from_time": "start_time",
         "datetime_start": "start_time",
         "time_start": "start_time",
-        # end_time aliases
         "end_date": "end_time",
         "end": "end_time",
         "stop": "end_time",
@@ -323,25 +270,21 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "time_end": "end_time",
     },
     "fetch_nhdplus_nldi_navigate": {
-        # seed_point aliases -- the model may use "point", "location", "coordinate"
         "point": "seed_point",
         "location": "seed_point",
         "coordinate": "seed_point",
         "coordinates": "seed_point",
         "lat_lon": "seed_point",
         "latlon": "seed_point",
-        # comid aliases -- the model may use "reach_id", "nhd_id", "feature_id"
         "reach_id": "comid",
         "nhd_id": "comid",
         "feature_id": "comid",
         "nhdplus_id": "comid",
         "nhd_comid": "comid",
-        # direction aliases
         "nav_direction": "direction",
         "navigation": "direction",
         "navigate": "direction",
         "upstream_downstream": "direction",
-        # distance_km aliases
         "distance": "distance_km",
         "km": "distance_km",
         "length_km": "distance_km",
@@ -349,40 +292,33 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "max_distance_km": "distance_km",
     },
     "fetch_statsgo_soils": {
-        # bbox aliases
         "bounding_box": "bbox",
         "extent": "bbox",
         "bounds": "bbox",
-        # field aliases -- the model may use "attribute", "variable", "soil_property"
         "attribute": "field",
         "variable": "field",
         "soil_property": "field",
         "property": "field",
         "soil_attribute": "field",
         "soil_field": "field",
-        # timeout_s aliases -- the model may omit the _s suffix or use different forms
         "timeout": "timeout_s",
         "timeout_seconds": "timeout_s",
         "http_timeout": "timeout_s",
         "request_timeout": "timeout_s",
     },
     "fetch_hrrr_smoke": {
-        # bbox aliases
         "bounding_box": "bbox",
         "extent": "bbox",
         "bounds": "bbox",
-        # variable aliases -- same as fetch_hrrr_forecast
         "vars": "variable",
         "field": "variable",
         "variables": "variable",
         "smoke_variable": "variable",
-        # forecast_hour aliases
         "fcst_hr": "forecast_hour",
         "fhr": "forecast_hour",
         "hour": "forecast_hour",
         "lead_hour": "forecast_hour",
         "lead_time": "forecast_hour",
-        # cycle aliases -- same as fetch_hrrr_forecast
         "cycle_iso": "cycle",
         "run_time": "cycle",
         "init_time": "cycle",
@@ -390,33 +326,27 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "model_run": "cycle",
     },
     "fetch_3dep_extra": {
-        # bbox aliases
         "bounding_box": "bbox",
         "extent": "bbox",
         "bounds": "bbox",
-        # resolution aliases -- the model may use "res", "cell_size", "pixel_size"
         "res": "resolution",
         "cell_size": "resolution",
         "pixel_size": "resolution",
         "spatial_resolution": "resolution",
         "grid_resolution": "resolution",
-        # max_tiles aliases
         "tile_limit": "max_tiles",
         "max_tile_count": "max_tiles",
         "tiles": "max_tiles",
         "num_tiles": "max_tiles",
-        # timeout_s aliases
         "timeout": "timeout_s",
         "timeout_seconds": "timeout_s",
         "http_timeout": "timeout_s",
         "request_timeout": "timeout_s",
     },
     "fetch_usfs_canopy_fuels": {
-        # bbox aliases
         "bounding_box": "bbox",
         "extent": "bbox",
         "bounds": "bbox",
-        # layer aliases -- the model may use "variable", "fuel_layer", "product"
         "variable": "layer",
         "fuel_layer": "layer",
         "product": "layer",
@@ -443,7 +373,6 @@ _SILENT_DROP: frozenset[str] = frozenset(
         "note",
     }
 )
-
 
 
 _CAMEL_RE = re.compile(r"(?<!^)(?=[A-Z])")
@@ -482,8 +411,7 @@ def parse_forcing_string(s: str) -> dict[str, int]:
 
 def _accepted_params(fn: Callable[..., Any]) -> tuple[set[str], bool]:
     """``(accepted_param_names, accepts_var_keyword)`` for ``fn``. A ``**kwargs``
-    declaration sets the flag, and the normalizer then leaves unknown kwargs
-    alone."""
+    declaration sets the flag, and the normalizer then leaves unknown kwargs alone."""
     try:
         sig = inspect.signature(fn)
     except (TypeError, ValueError):
@@ -500,7 +428,6 @@ def _accepted_params(fn: Callable[..., Any]) -> tuple[set[str], bool]:
             continue
         accepted.add(name)
     return accepted, accepts_var_keyword
-
 
 
 #: Param names treated as "bbox-like" for the auto-fill. Only
@@ -572,17 +499,8 @@ def autofill_missing_bbox(
     return out if out is not None else params
 
 
-# A string arg that fails a ``Literal[...]`` schema ("truecolour" for
-# Literal["truecolor", "ndvi"], "Flood-Depth" for "flood_depth") would
-# otherwise fall straight through to the tool's typed error and burn a full
-# model round on a near-miss the harness can fix deterministically. At the
-# normalize seam we difflib-match the bad value against the param's
-# declared Literal choices (cutoff 0.8, case/sep-insensitive) and substitute
-# the canonical choice with one log line; anything under the cutoff is left
-# untouched so the tool's own typed error still owns genuine mismatches.
-#
-# Kill-switch: ``TRID3NT_ENUM_FUZZY=0`` (or ``off``/``false``) disables the
-# correction entirely (default ON).
+# A string failing a ``Literal[...]`` schema is difflib-matched (cutoff 0.8, case/sep-insensitive) against the declared choices and substituted
+# with one log line; below the cutoff the tool's own typed error owns it. Kill-switch ``TRID3NT_ENUM_FUZZY=0`` / off / false.
 
 #: difflib similarity cutoff for an enum correction (assignment-fixed).
 _ENUM_FUZZY_CUTOFF = 0.8
@@ -595,8 +513,7 @@ def _enum_fuzzy_enabled() -> bool:
 
 def _literal_values(annotation: Any) -> tuple[str, ...]:
     """The STRING choices of a ``Literal`` annotation, through one level of union
-    nesting. A non-string literal member disqualifies the param entirely - only
-    strings are ever corrected."""
+    nesting. A non-string literal member disqualifies the param entirely."""
     origin = typing.get_origin(annotation)
     if origin is typing.Literal:
         vals = typing.get_args(annotation)
@@ -615,9 +532,7 @@ def _literal_values(annotation: Any) -> tuple[str, ...]:
 
 
 def _literal_choices(fn: Callable[..., Any]) -> dict[str, tuple[str, ...]]:
-    """``{param_name: (choice, ...)}`` for every string-Literal param of ``fn``.
-    Best-effort: an un-introspectable signature or unresolvable annotations return
-    ``{}``, never an error."""
+    """``{param_name: (choice, ...)}`` for every string-Literal param of ``fn``; best-effort, ``{}`` on an unresolvable signature."""
     try:
         sig = inspect.signature(fn)
     except (TypeError, ValueError):
@@ -685,8 +600,6 @@ def fuzzy_correct_enum_args(
     return out if out is not None else params
 
 
-
-
 def normalize_args(
     tool_name: str,
     raw_args: dict[str, Any],
@@ -707,9 +620,7 @@ def normalize_args(
     for key, value in raw_args.items():
         target = key
 
-        # Step 1: camelCase -> snake_case. Always normalize the case form so
-        # subsequent alias chains can match. If the snake form is in accepted
-        # OR in the alias map, the rename is useful; otherwise leave alone.
+        # camelCase -> snake_case first so alias chains can match.
         if target not in accepted:
             snake = snake_case(target)
             if snake != target and (
@@ -725,7 +636,6 @@ def normalize_args(
                 )
                 target = snake
 
-        # Step 2: tool-specific alias.
         if target not in accepted and target in tool_aliases:
             mapped = tool_aliases[target]
             if mapped in accepted:
@@ -737,7 +647,6 @@ def normalize_args(
                 )
                 target = mapped
 
-        # Step 3: generic bidirectional alias.
         if target not in accepted:
             cand = generic_alias_map.get(target)
             if cand and cand in accepted and cand not in out and cand not in raw_args:
@@ -749,26 +658,18 @@ def normalize_args(
                 )
                 target = cand
 
-        # Step 4 helper: string-form forcing parsing handled after the loop so
-        # we have the final mapped set. Track originals for that step.
-
-        # Final placement decision.
         if target in accepted:
-            # Don't overwrite an already-mapped canonical value with an alias's
-            # value (canonical wins on conflict).
+            # Canonical wins over an alias on conflict.
             if target not in out:
                 out[target] = value
         elif accepts_var_keyword:
-            # Function explicitly absorbs unknowns -- pass through.
             out[key] = value
         elif key in _SILENT_DROP or target in _SILENT_DROP:
             dropped_silent.append(key)
         else:
             dropped_unknown.append(key)
 
-    # Step 4: string-form forcing parsing. If the model sent ``forcing=...`` or
-    # ``rainfall_event=...`` AND the tool accepts the canonical year/hour fields,
-    # extract them. Don't overwrite explicit fields the LLM also supplied.
+    # String-form forcing: extract year/hour only where the tool accepts them and the LLM sent no explicit field.
     forcing_str = raw_args.get("forcing") or raw_args.get("rainfall_event")
     if isinstance(forcing_str, str) and (
         "return_period_years" in accepted or "duration_hours" in accepted
@@ -785,12 +686,7 @@ def normalize_args(
                 )
                 out[parsed_key] = parsed_val
 
-    # Step 4b: bbox value coercion. The LLM routinely emits ``bbox`` as a
-    # STRING ("[-81.9, 26.5, -81.7, 26.6]" / "-81.9,26.5,...") even when the
-    # tool wants a list of 4 floats; tools then reject it (``len(bbox) != 4``
-    # on the char count, or a type error). Coerce in place when the tool
-    # accepts ``bbox`` and the value is a recognizable 4-number bbox; leave it
-    # untouched otherwise so the tool's own validator surfaces a clear error.
+    # The LLM emits ``bbox`` as a STRING; coerce when the tool accepts bbox and the value is a recognizable 4-number box, else leave it for the tool's validator.
     if "bbox" in accepted and "bbox" in out and not (
         isinstance(out["bbox"], (list, tuple))
         and len(out["bbox"]) == 4
@@ -808,7 +704,6 @@ def normalize_args(
 
     out = fuzzy_correct_enum_args(tool_name, out, fn)
 
-    # Logging tail.
     if dropped_silent:
         logger.debug(
             "tool_arg_normalizer[%s]: silently dropped %s (convenience kwargs)",

@@ -1,8 +1,7 @@
 """Source-spec loader: schema validation, co-located corpus pickup, tree walk.
 
-``fetchers/**/source.yaml`` validates into a :class:`SourceSpec` keyed by name. A
-row MAY carry its retrieval ``corpus`` phrasings inline; when it does not, the
-loader lifts them verbatim from the sibling ``corpus.yaml`` under the row name."""
+``fetchers/**/source.yaml`` validates into a :class:`SourceSpec` keyed by name; a row without
+inline ``corpus`` phrasings has them lifted from the sibling ``corpus.yaml``."""
 
 from __future__ import annotations
 
@@ -31,7 +30,6 @@ __all__ = [
     "served_frames",
 ]
 
-#: The fetch whose frames ARE the vocabulary a row states its zero in.
 _OFFSET_FETCH = "fetch_vertical_datum_offset"
 
 
@@ -40,14 +38,10 @@ class SpecLoadError(ValueError):
 
 
 def _fetchers_root() -> Path:
-    """Return the ``fetchers/`` package root this module lives under."""
-    # _router/spec.py -> _router -> fetchers
     return Path(__file__).resolve().parents[1]
 
 
 def _read_sibling_corpus(source_yaml: Path, name: str) -> list[str]:
-    """Lift retrieval phrasings for ``name`` from the sibling ``corpus.yaml``,
-    returning ``[]`` when that file is absent, malformed, or lacks the key."""
     corpus_path = source_yaml.parent / "corpus.yaml"
     if not corpus_path.exists():
         return []
@@ -65,10 +59,7 @@ def _read_sibling_corpus(source_yaml: Path, name: str) -> list[str]:
 
 @lru_cache(maxsize=1)
 def served_frames() -> frozenset[str]:
-    """The vertical frames the offset fetch converts between, lower-cased.
-
-    Read off that row's own params, because a second list of frame names here
-    would drift from the one service that has to answer for them."""
+    """The vertical frames the offset fetch converts between, lower-cased, read off that row's own params."""
     for path in sorted(_fetchers_root().rglob("source.yaml")):
         with path.open() as fh:
             raw = yaml.safe_load(fh) or {}
@@ -80,7 +71,6 @@ def served_frames() -> frozenset[str]:
 
 @lru_cache(maxsize=None)
 def _module_bytes(path: str) -> bytes:
-    """One hook module's source, or empty for a module with no readable file."""
     try:
         return Path(path).read_bytes()
     except OSError:
@@ -88,7 +78,6 @@ def _module_bytes(path: str) -> bytes:
 
 
 def _hook_sources(spec: SourceSpec) -> list[str]:
-    """The source files of the hooks this row names, deduped and in one order."""
     from .hooks import HOOK_REGISTRY
 
     named = spec.hooks.model_dump(exclude_none=True).values() if spec.hooks else ()
@@ -97,18 +86,8 @@ def _hook_sources(spec: SourceSpec) -> list[str]:
 
 
 def record_shape(spec: SourceSpec) -> str:
-    """The digest of what shapes a record this source lands: its rows -
-    the columns, the vocabulary they are asked by, their units and the zero they
-    are counted from - its ingestion block, its normalization, and the bytes of
-    every hook that decodes the body.
-
-    It salts the cache key, because the cached artifact was shaped by the
-    statements standing at the fetch: a correction landed here would otherwise be
-    invisible to every AOI already cached until the TTL bucket turned over, which
-    is a fixed source still answering with the wrong record. A declarative row
-    states in ``ingest`` what a hook used to carry in code - the provider, the
-    datasource it opens, the columns it keeps - so the block is read here for the
-    same reason the hook bytes are."""
+    """The digest of what shapes a record this source lands (rows, ``ingest``, normalization and hook bytes).
+    It salts the cache key so a correction here is not hidden by already-cached AOIs until the TTL turns over."""
     stated = {
         "coverage": [row.model_dump(mode="json") for row in spec.coverage],
         "ingest": spec.ingest,
@@ -123,11 +102,7 @@ def record_shape(spec: SourceSpec) -> str:
 
 
 def _validate_row_datums(spec: SourceSpec, source_hint: str) -> None:
-    """Every row states its zero as a frame, per record, or not at all.
-
-    A row's datum is what the match reads and what the offset row is asked in, so
-    prose here is a zero nothing can convert: the source is unplaceable against
-    every other surface and nothing downstream can say why."""
+    """Every row states its zero as a frame, per record, or not at all; prose is a zero nothing can convert."""
     frames = served_frames()
     for row in spec.coverage:
         stated = (row.datum or "").strip()
@@ -142,15 +117,12 @@ def _validate_row_datums(spec: SourceSpec, source_hint: str) -> None:
             "surface nothing can bring another onto.")
 
 
-#: The longest an extent note may be. A note is the SENTENCE a reader checks the
-#: outline against, and the match quotes it whole behind a prefix inside a wire
-#: field of 300 - a paragraph here makes every excluded row unsendable. What the
-#: sentence leaves out belongs in the caveats, which no wire field carries.
+#: Longest extent note: the match quotes it whole behind a prefix inside a 300-char wire field;
+#: what the sentence leaves out belongs in the caveats.
 _NOTE_LIMIT = 200
 
 
 def _validate_row_notes(spec: SourceSpec, source_hint: str) -> None:
-    """Every row's extent note is one sentence, not a paragraph."""
     for row in spec.coverage:
         note = row.extent.note or ""
         if len(note) <= _NOTE_LIMIT:
@@ -165,11 +137,8 @@ def _validate_row_notes(spec: SourceSpec, source_hint: str) -> None:
 
 
 def load_spec(data: dict, *, source_hint: str = "<dict>") -> SourceSpec:
-    """Validate an already-parsed row mapping into a :class:`SourceSpec`.
-    Raises :class:`SpecLoadError` wrapping the pydantic ``ValidationError``, so one
-    exception type covers both parse and validation failures - and on the one
-    invariant pydantic cannot state alone: a source carrying a row is
-    never ``internal_only``."""
+    """Validate a parsed row mapping into a :class:`SourceSpec`, raising :class:`SpecLoadError`;
+    a source carrying a row is never ``internal_only``."""
     if not isinstance(data, dict):
         raise SpecLoadError(f"{source_hint}: row must be a mapping, got {type(data).__name__}")
     try:
@@ -189,8 +158,7 @@ def load_spec(data: dict, *, source_hint: str = "<dict>") -> SourceSpec:
 
 
 def load_spec_from_path(path: Path) -> SourceSpec:
-    """Load and validate one ``source.yaml``, filling corpus from the sibling file:
-    an omitted or empty ``corpus`` is lifted from ``corpus.yaml`` under the row name."""
+    """Load and validate one ``source.yaml``; an omitted or empty ``corpus`` is lifted from the sibling ``corpus.yaml``."""
     path = Path(path)
     try:
         with path.open() as fh:
@@ -212,9 +180,7 @@ def load_spec_from_path(path: Path) -> SourceSpec:
 
 
 def compose_specs_from_tree(root: Path | None = None) -> dict[str, SourceSpec]:
-    """Walk ``fetchers/**/source.yaml`` and return ``{name: SourceSpec}``.
-    A malformed row is logged and skipped, never aborting the walk; a duplicate
-    ``name`` is last-wins with a warning, deterministic by sorted iteration."""
+    """Walk ``fetchers/**/source.yaml`` and return ``{name: SourceSpec}``; a malformed row is logged and skipped, a duplicate ``name`` is last-wins."""
     base = Path(root) if root is not None else _fetchers_root()
     composed: dict[str, SourceSpec] = {}
     for spath in sorted(base.rglob("source.yaml")):

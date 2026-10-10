@@ -33,30 +33,21 @@ __all__ = [
 ]
 
 
-#: Param names that consume layer/raster/vector URIs and therefore resolve
-#: through the registry at dispatch. Names, not tools -- the same param name
-#: means the same thing across the catalog. DESTINATION params (where the
-#: tool *writes*) and server-owned params (``project_qgs_uri``) must NOT be
-#: listed: branch 4 would reject a not-yet-existing output path.
+#: Param names that consume layer/raster/vector URIs and resolve through the registry at dispatch. Destination params
+#: (where a tool writes) and server-owned params (``project_qgs_uri``) must not be listed: branch 4 would reject a not-yet-existing output path.
 RESOLVABLE_URI_PARAMS: frozenset[str] = frozenset({"layer_uri", "model_setup_uri"})
 
 
-#: The short per-case layer-handle shape the registry mints at the
-#: emit seam (``L1``, ``L2``, ...). Case-insensitive on resolve (``l3`` works);
-#: leading zeros normalize (``L07`` == ``L7``).
+#: The short per-case layer-handle shape minted at the emit seam; case-insensitive on resolve, leading zeros normalize (``L07`` == ``L7``).
 SHORT_HANDLE_RE = re.compile(r"^[Ll](\d+)$")
 
-#: Guard against pathological mint growth (a session cannot realistically
-#: produce this many distinct layer URIs; records themselves cap at 1024).
+#: Guard against pathological mint growth; records themselves cap at 1024.
 _SHORT_HANDLES_CAP = 4096
 
-#: Minimum shared basename-stem prefix (chars) for the hash-prefix fuzzy
-#: branch. The evidence shows ~14 hex chars survive before the tail
-#: hallucination starts; 12 keeps headroom while staying collision-safe for
-#: 32-hex cache keys.
+#: Minimum shared basename-stem prefix (chars) for the hash-prefix fuzzy branch: ~14 hex chars survive before the
+#: tail hallucination starts; 12 keeps headroom while staying collision-safe for 32-hex cache keys.
 _HASH_PREFIX_MIN = 12
 
-#: Caps -- registries per process / records per registry / walk guards.
 _REGISTRY_STORE_CAP = 4096
 _RECORDS_PER_SESSION_CAP = 1024
 _WALK_MAX_DEPTH = 8
@@ -97,34 +88,24 @@ class UriRecord:
     dataset: str | None = None  # the fetch source class; None for a produced layer
     cache_key: str | None = None  # the fetch key; None for a produced layer
     seq: int = 0  # registration order (recency tie-breaks)
-    #: What the layer SAYS about its values - its datum, its quantity, the
-    #: inputs its band 2 names - as its producer returned it, so a layer named
-    #: by id carries them to whatever reads it next.
+    #: What the layer says about its values (datum, quantity, band-2 inputs) as its producer returned it, so a layer named by id carries them onward.
     summary: dict[str, Any] = field(default_factory=dict)
 
 
-#: The fields of a returned layer its record keeps.
 _SUMMARY = ("name", "quantity", "vertical_datum", "units", "sources",
             "datum_offset_m", "datum_offset_frame")
 
 
 def _is_object_store(value: str) -> bool:
-    """True for a store uri.
-
-    An unknown one in a layer-consuming param is a typed reject, not a pass-through.
-    """
+    """An unknown one in a layer-consuming param is a typed reject, not a pass-through."""
     return value.startswith("s3://")
 
 
-#: Any RFC-3986-ish scheme prefix (s3://, http://, https://, file://, ...).
 _URI_SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://")
 
 
 def _is_uri_shaped(value: str) -> bool:
-    """True when ``value`` carries a URI scheme or a GDAL ``/vsi`` prefix.
-
-    A uri-shaped value is NEVER placeholder-resolved.
-    """
+    """A uri-shaped value is never placeholder-resolved."""
     return bool(_URI_SCHEME_RE.match(value)) or value.startswith("/vsi")
 
 
@@ -170,10 +151,8 @@ class SessionUriRegistry:
     _pending_announcements: OrderedDict[str, str] = field(
         default_factory=OrderedDict
     )
-    # Short per-case layer handles (``L<n>``), minted monotonically the moment a
-    # record gains a DATA uri and persisted with the Case, so a reconnect resolves
-    # the SAME handles the model already saw. ``_short_to_uri`` keys are canonical
-    # ``L<n>``: uppercase, no zero padding.
+    # Short per-case layer handles (``L<n>``), minted monotonically when a record gains a DATA uri and persisted with the
+    # Case so a reconnect resolves the handles the model already saw. ``_short_to_uri`` keys are canonical: uppercase, no zero padding.
     _short_to_uri: OrderedDict[str, str] = field(default_factory=OrderedDict)
     _uri_to_short: dict[str, str] = field(default_factory=dict)
     _short_seq: int = 0
@@ -198,9 +177,7 @@ class SessionUriRegistry:
             self._records[handle] = rec
             self._evict_if_needed()
         if uri:
-            # The fetch that landed this layer addressed its bytes by a cache key,
-            # and the uri IS that address, so the key a repeat fetch would compute
-            # is matchable here without the producer threading it through.
+            # The uri IS the cache-key address of the fetch that landed it, so the key a repeat fetch computes is matchable here.
             # Imported here: the tool package pulls the server in at import time.
             from trid3nt_server.tools.cache import parse_cache_path
 
@@ -215,8 +192,7 @@ class SessionUriRegistry:
                     rec.uri,
                     uri,
                 )
-            # A layer published again under another id is the same layer, and
-            # what its producer said about it rides along.
+            # A layer published again under another id is the same layer; what its producer said rides along.
             prior = self._records.get(self._uri_to_handle.get(uri, ""))
             if prior is not None and not rec.summary:
                 rec.summary = dict(prior.summary)
@@ -235,9 +211,7 @@ class SessionUriRegistry:
             evicted_handle, evicted = self._records.popitem(last=False)
             if evicted.uri and self._uri_to_handle.get(evicted.uri) == evicted_handle:
                 self._uri_to_handle.pop(evicted.uri, None)
-            # Short handles deliberately SURVIVE record eviction --
-            # an already-announced L<n> must keep resolving for the life of
-            # the Case (the map is tiny: two strings per layer).
+            # Short handles survive record eviction: an announced L<n> must keep resolving for the life of the Case.
 
 
     def _mint_short(self, uri: str) -> str | None:
@@ -359,7 +333,7 @@ class SessionUriRegistry:
     def _walk(self, node: Any, tool_name: str, depth: int, seen: set[int]) -> None:
         if depth > _WALK_MAX_DEPTH or node is None:
             return
-        # Pydantic models (LayerURI, …) → dict.
+        # Pydantic models to dict.
         if hasattr(node, "model_dump") and callable(node.model_dump):
             try:
                 node = node.model_dump(mode="json")
@@ -391,15 +365,11 @@ class SessionUriRegistry:
                 self._walk(item, tool_name, depth + 1, seen)
 
     def _register_bare_string(self, value: str, tool_name: str) -> None:
-        """Register a bare store uri under a minted handle.
-        So a verbatim echo resolves, a mangled one fuzzy-matches, and the emit
-        rewrite has a short handle to hand over.
-        """
+        """So a verbatim echo resolves, a mangled one fuzzy-matches, and the emit rewrite has a short handle."""
         value = value.strip()
         if not value or not _is_object_store(value) or value in self._uri_to_handle:
             return
-        # Mint a stable handle from the basename stem; if that stem is already
-        # a layer handle, attach the URI there instead.
+        # Mint a stable handle from the basename stem; a stem that is already a layer handle gets the URI attached there.
         stem = _stem(value)
         if stem in self._records:
             self.record(stem, uri=value, tool_name=tool_name, announce=False)
@@ -431,14 +401,10 @@ class SessionUriRegistry:
 
         REPLACES, never merges: the registry reflects only the now-active Case.
         """
-        # A registry is keyed by session, not by Case, so a case switch reuses
-        # this same object. A merge would leak across it - a handle from the old
-        # Case satisfying a call in the new one, or a stale uri winning a fuzzy
-        # match over the right one.
+        # A registry is keyed by session, not Case, so a case switch reuses this object; a merge would leak a
+        # handle or stale uri across Cases.
         self.clear()
-        # The persisted map is imported BEFORE the layer seed, so already-
-        # announced handles keep their numbers and fresh layers mint past the
-        # persisted maximum.
+        # The persisted map is imported before the layer seed so announced handles keep their numbers.
         self.import_short_handles(short_handles)
         try:
             self._walk(layers, "case-rehydration", depth=0, seen=set())
@@ -480,19 +446,16 @@ class SessionUriRegistry:
     def _resolve_one(self, tool_name: str, param_name: str, value: str) -> str:
         v = value.strip()
 
-        # Branch 2a -- value IS a registered handle (the desired steady state).
+        # Branch 2a: value IS a registered handle.
         rec = self._records.get(v)
         if rec is not None and rec.uri:
             return rec.uri
 
-        # Branch 1 -- exact URI known: pass through verbatim.
+        # Branch 1: exact URI known, pass through verbatim.
         if v in self._uri_to_handle:
             return v
 
-        # Branch 2b -- a SHORT layer handle (L<n>, case-insensitive).
-        # The desired steady state after the emit rewrite: the LLM passes the
-        # short handle it was shown; an UNKNOWN short handle is a typed reject
-        # carrying the real inventory so the retry self-corrects.
+        # Branch 2b: a short layer handle (L<n>, case-insensitive); an unknown one is a typed reject carrying the real inventory so the retry self-corrects.
         m = SHORT_HANDLE_RE.match(v)
         if m is not None:
             short_uri = self._short_to_uri.get(f"L{int(m.group(1))}")
@@ -500,13 +463,9 @@ class SessionUriRegistry:
                 return short_uri
             raise UriResolutionError(param_name, value, self._inventory_text(tool_name))
 
-        # PLACEHOLDER resolution, for a model that emits a producer and its
-        # consumer in the same iteration and passes a stand-in like
-        # 'LayerURI_from_fetch_dem' as the uri param. Tool calls dispatch
-        # SEQUENTIALLY, so the producer's real uri is registered by the time the
-        # consumer resolves. Conservative by construction: only a non-uri-shaped,
-        # non-path string naming exactly ONE producing tool with exactly ONE
-        # distinct registered uri resolves; everything else falls through.
+        # Placeholder resolution for a model that emits producer and consumer in one iteration with a stand-in like
+        # 'LayerURI_from_fetch_dem'. Calls dispatch sequentially, so the producer's uri is registered by then; only a
+        # non-uri-shaped, non-path string naming exactly one producing tool with exactly one distinct uri resolves.
         placeholder_hit = self._resolve_placeholder(v)
         if placeholder_hit is not None:
             resolved_uri, producer = placeholder_hit
@@ -522,23 +481,17 @@ class SessionUriRegistry:
             )
             return resolved_uri
 
-        # Non-store strings (plain https COG, local path, opaque token):
-        # fail-open -- external links / user-pasted sources must never be
-        # blocked; the consuming tool's own typed error follows.
+        # Non-store strings (https COG, local path, opaque token) fail open; the consuming tool's own typed error follows.
         if not _is_object_store(v):
             return value
 
-        # Branch 3 -- unknown store URI: fuzzy-match the mangle classes.
+        # Branch 3: unknown store URI, fuzzy-match the mangle classes.
         substituted = self._fuzzy_match(v)
         if substituted is not None:
             return substituted
 
-        # Branch 4 -- unknown store URI with no plausible
-        # match where a LAYER is expected: TYPED REJECT. The session never
-        # produced this path, so passing it through can only 404 downstream
-        # (or worse, read the wrong object) -- raising here with the handle
-        # inventory makes URI hallucination structurally impossible and feeds
-        # the retry loop a self-correcting message.
+        # Branch 4: unknown store URI with no plausible match where a LAYER is expected is a typed reject. The session never
+        # produced the path, so passing it through can only 404 or read the wrong object; the handle inventory feeds the retry.
         logger.warning(
             "uri_registry[%s]: rejecting unregistered store uri "
             "%s.%s=%r",
@@ -550,17 +503,10 @@ class SessionUriRegistry:
         raise UriResolutionError(param_name, value, self._inventory_text(tool_name))
 
     def _resolve_placeholder(self, value: str) -> tuple[str, str] | None:
-        """Resolve a placeholder string to a producer's layer URI.
-
-        ``(uri, producer)`` only on an unambiguous match, else ``None``.
-        """
-        # Three conditions, all required. The value is NOT uri-shaped and not a
-        # filesystem path, because a well-formed unknown uri must keep the
-        # fuzzy-match and typed-reject treatment rather than be substituted
-        # silently. It textually contains the name of exactly ONE tool that
-        # registered a uri this session, the longest name winning when two nest.
-        # And that tool registered exactly ONE distinct uri - two candidates are
-        # ambiguous, and an ambiguity is never guessed at.
+        """``(uri, producer)`` only on an unambiguous match, else ``None``."""
+        # All required: not uri-shaped and not a path (a well-formed unknown uri keeps the fuzzy/typed-reject treatment); it
+        # contains the name of exactly one tool that registered a uri this session (longest name wins when two nest); and that
+        # tool registered exactly one distinct uri - an ambiguity is never guessed at.
         if _is_uri_shaped(value) or value.startswith(("/", "\\")):
             return None
         lowered = value.lower()
@@ -570,8 +516,7 @@ class SessionUriRegistry:
                 by_producer.setdefault(rec.tool_name, []).append(rec)
         matched = [name for name in by_producer if name.lower() in lowered]
         if len(matched) > 1:
-            # Nested tool names: drop any match that is a substring of a
-            # longer matched name ('fetch_dem' loses to 'fetch_dem_hires').
+            # Nested tool names: drop a match that is a substring of a longer one ('fetch_dem' loses to 'fetch_dem_hires').
             matched = [
                 n
                 for n in matched
@@ -586,10 +531,7 @@ class SessionUriRegistry:
         return next(iter(uris)), producer
 
     def _fuzzy_match(self, v: str) -> str | None:
-        """Match an unknown store URI against the registered inventory.
-        Every sub-branch below needs a UNIQUE winner; an ambiguity is never
-        guessed at and falls through to the typed reject.
-        """
+        """Every sub-branch needs a unique winner; an ambiguity falls through to the typed reject."""
         known = [
             rec.uri
             for rec in self._records.values()
@@ -645,10 +587,7 @@ class SessionUriRegistry:
 
 
     def _inventory_text(self, tool_name: str | None = None) -> str:
-        """Compact handle inventory for the branch-4 error message.
-        Tool-aware only when the registry genuinely has no layers; otherwise the
-        handle listing, capped at ``_ERROR_HANDLES_CAP``.
-        """
+        """Tool-aware only when the registry has no layers; otherwise the handle listing, capped at ``_ERROR_HANDLES_CAP``."""
         layer_recs = [
             r
             for r in self._records.values()
@@ -661,8 +600,7 @@ class SessionUriRegistry:
                 "tool that produces the layer first."
             )
         def _one(r: UriRecord) -> str:
-            # Lead with the short handle when one exists so the
-            # retry passes ``L<n>`` (the cheapest, unmangleable form).
+            # Lead with the short handle so the retry passes ``L<n>``, the cheapest unmangleable form.
             short = self._uri_to_short.get(r.uri) if r.uri else None
             base = f"{r.handle} (from {r.tool_name or 'unknown'})"
             return f"{short} = {base}" if short else base
@@ -682,8 +620,7 @@ class SessionUriRegistry:
         return None
 
 
-# Module-level session store: survives reconnects, and is shared across a
-# session's sibling WebSocket connections
+# Module-level session store: survives reconnects and is shared across a session's sibling WebSocket connections.
 
 _SESSION_URI_REGISTRIES: OrderedDict[str, SessionUriRegistry] = OrderedDict()
 

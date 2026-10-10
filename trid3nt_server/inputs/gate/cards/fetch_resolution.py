@@ -15,22 +15,15 @@ from .estimate import CardEstimate
 logger = logging.getLogger("trid3nt_server.inputs.gate.cards.fetch_resolution")
 
 
-#: hard px-grid ceiling for the fetch-resolution gate. A fine
-#: rung on a huge AOI would materialize an enormous raster; finest_allowed_m is
-#: floored at max(ladder_floor, max(width_m, height_m) / MAX_FETCH_PX) so the
-#: finest selectable rung keeps the grid bounded to ~8192 px on the long axis.
+#: hard px-grid ceiling for the fetch-resolution gate: finest_allowed_m is floored at
+#: the long-axis extent / MAX_FETCH_PX so a fine rung on a huge AOI stays bounded.
 MAX_FETCH_PX: int = 8192
 
 
-# Per-fetcher resolution ladders for the fetch-resolution gate. Finer = smaller
-# metres. fetch_dem reaches 1 m (3DEP); fetch_cudem floors at 3 m, its tiles'
-# own cell; both default to 10 m. fetch_landcover's native NLCD grid is 30 m and
-# its 60/120/300/600 m rungs are what a large bbox can be ASKED for so the MRLC
-# WCS GetCoverage stays under 4000 px per axis. fetch_dem's 90/300/900 m rungs
-# exist because a state-scale AOI needs roughly 150 m to stay under the tool's
-# own 4000 px/axis budget; without them the ladder-filtered choices collapse to
-# the computed finest_allowed_m alone, with no coarser alternative. The rungs
-# are the ask the user picks: past the budget the fetcher refuses, never coarsens.
+# Per-fetcher resolution ladders for the fetch-resolution gate; finer = smaller metres.
+# fetch_cudem floors at its tiles' own 3 m cell. The coarse landcover rungs and fetch_dem's
+# 90/300/900 m rungs are what a large bbox can be ASKED for within the 4000 px/axis
+# budget; the fetcher refuses past it, never coarsens.
 _FETCH_RES_LADDERS: dict[str, list[float]] = {
     "fetch_dem": [1.0, 3.0, 10.0, 30.0, 90.0, 300.0, 900.0],
     "fetch_cudem": [3.0, 10.0, 30.0],
@@ -41,12 +34,8 @@ _FETCH_DEFAULT_RES_M: float = 10.0
 # fetch_landcover: native NLCD resolution doubles as the tool's resolution_m
 # default (there is no finer rung, so the coarse default IS the native grid).
 _LANDCOVER_DEFAULT_RES_M: float = 30.0
-# Per-tool px-grid ceiling override for the fetch-resolution gate. The MRLC WCS
-# server rejects or times out a GetCoverage beyond roughly 4096 px per axis, so
-# the fetch_landcover card bounds its finest selectable rung to 4000 px rather
-# than the generic MAX_FETCH_PX; otherwise the card would offer a rung the tool
-# refuses. fetch_dem refuses past its own 4000 px/axis budget, and the ceiling
-# is identical here so the card's suggested rung is one the fetch will serve.
+# Per-tool px-grid ceiling override: the MRLC WCS rejects GetCoverage beyond ~4096 px
+# per axis and fetch_dem refuses past 4000, so the card must not offer a finer rung.
 _FETCH_MAX_PX_BY_TOOL: dict[str, int] = {
     "fetch_landcover": 4000,
     "fetch_dem": 4000,
@@ -54,11 +43,9 @@ _FETCH_MAX_PX_BY_TOOL: dict[str, int] = {
 
 
 def _clamp_fetch_resolution(chosen_m: float, finest_allowed_m: float) -> float:
-    """The spacing a fetch runs at: the one asked, or the finest the source
-    serves over this extent where the one asked is finer, said on the record.
+    """The spacing a fetch runs at: the one asked, or the finest the source serves over this extent.
 
-    Finer = SMALLER metres, so the px-grid bound is a LOWER bound on the rung;
-    a coarser request than ``finest_allowed_m`` is honoured exactly."""
+    Finer = SMALLER metres, so the px-grid bound is a LOWER bound; a coarser request is honoured exactly."""
     from trid3nt_server.workflows.runtime import journal_note
 
     # A request finer than the bound would materialize a grid past MAX_FETCH_PX
@@ -76,8 +63,8 @@ async def _build_fetch_resolution_envelope(
 ) -> tuple[Any, Any]:
     """Build the fetch-resolution confirm card for a heavy raster fetcher.
 
-    PURE arithmetic: no DEM read and no network. Raises on a missing or invalid
-    bbox so the caller fails OPEN rather than blocking the fetch on a gate error."""
+    PURE arithmetic: no DEM read, no network. Raises on a missing or invalid bbox so the
+    caller fails OPEN rather than blocking the fetch on a gate error."""
     from trid3nt_contracts.payload_warning import (
         GranularitySuggestion,
         PayloadWarningEnvelopePayload,
@@ -112,9 +99,6 @@ async def _build_fetch_resolution_envelope(
         requested = coarse_default
 
     # bbox extent in metres (approx, mid-latitude) -> the finest selectable rung.
-    # A fine rung on a huge AOI would materialize an enormous raster; floor the
-    # finest allowed cell size at the long-axis extent / MAX_FETCH_PX so the grid
-    # stays bounded. Coarser than the ladder floor never gets finer than allowed.
     min_lon, min_lat, max_lon, max_lat = bbox
     mid_lat = 0.5 * (min_lat + max_lat)
     m_per_deg_lon = 111_320.0 * max(0.05, math.cos(math.radians(mid_lat)))
@@ -132,10 +116,9 @@ async def _build_fetch_resolution_envelope(
         else finest_allowed_m
     )
 
-    # The selectable ladder = rungs at/above finest_allowed_m (a fine rung on a
-    # huge AOI is dropped), plus the user's requested rung (if it clears the
-    # bound) AND the suggested rung (always selectable), ascending. Always keep
-    # at least one rung (the suggested fallback) so the card is never empty.
+    # The selectable ladder = rungs at/above finest_allowed_m (a fine rung on a huge AOI
+    # is dropped), plus the user's requested rung (if it clears the bound) AND the
+    # suggested rung (always selectable), ascending; never empty.
     candidate = sorted(
         {r for r in ladder if r >= finest_allowed_m - 1e-9}
         | ({requested} if requested >= finest_allowed_m - 1e-9 else set())
@@ -213,13 +196,11 @@ async def _build_fetch_resolution_envelope(
 def _gate_memory_key(tool_name: str, params: dict[str, Any]) -> tuple[str, str]:
     """Turn-memory key for the solver-confirm / fetch-resolution gate.
 
-    Keyed on ``(tool_name, rounded bbox)``, or on the FULL normalized args when
-    the call carries no bbox."""
-    # The bbox rounds to ~6 decimal degrees, the same quantization the fetch
-    # tools use for cache-key stability, so a retry of the SAME tool over the
-    # SAME AOI with a corrected non-bbox arg reuses the earlier decision instead
-    # of re-gating. Without a bbox-shaped AOI the full-args key is the
-    # conservative default: any arg change gates fresh.
+    The rounded bbox with the tool name, or the FULL normalized args when there is no bbox."""
+    # The bbox rounds to ~6 decimal degrees, the same quantization the fetch tools use
+    # for cache-key stability, so a retry of the SAME tool over the SAME AOI with a
+    # corrected non-bbox arg reuses the earlier decision instead of re-gating. Without a
+    # bbox the full-args key is the conservative default: any arg change gates fresh.
     bbox = params.get("bbox")
     if isinstance(bbox, (list, tuple)) and len(bbox) == 4:
         try:

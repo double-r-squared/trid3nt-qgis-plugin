@@ -27,26 +27,18 @@ __all__ = ["execute", "fetch_bodies"]
 
 
 def _plans(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan]:
-    """The request plans: the build hook when the row names one, else the declared
-    ``ingest.request`` over the resolved endpoint chain."""
     if spec.hooks is not None and spec.hooks.build_request:
         return resolve_hook(spec.hooks.build_request)(spec, params)
     return declared_plans(spec, params)
 
 
 def _features(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]) -> list[dict[str, Any]]:
-    """The decoded features: the parse hook when the row names one, else the declared
-    ``ingest.body`` -- decode, walk to the row list, build the geometry, and hand the
-    raw row to the column map the serializer already applies."""
     if spec.hooks is not None and spec.hooks.parse_response:
         return resolve_hook(spec.hooks.parse_response)(spec, params, bodies)
     return declared_features(spec, params, bodies)
 
 
 def _get_raw(plan: RequestPlan) -> bytes:
-    """Execute one plan through the shared transport, letting ``TransportError``
-    propagate. GET by default; ``plan.method == "POST"`` sends ``plan.json_body`` as
-    JSON or ``plan.data`` form-encoded. The transport owns the retry authority."""
     if plan.method == "POST":
         body, _ct, _url = post_bytes(
             get_client(), plan.url, headers=plan.headers, params=plan.params,
@@ -58,10 +50,8 @@ def _get_raw(plan: RequestPlan) -> bytes:
 
 
 def _get(spec: SourceSpec, plan: RequestPlan) -> bytes:
-    """Execute one plan, mapping a ``TransportError`` to the source-stamped router
-    error. A declared ``hooks.classify_status`` is consulted FIRST and returns either
-    a typed error to raise or None, which falls through to an upstream error
-    carrying the transport's own retryable verdict."""
+    """Execute one plan, mapping a ``TransportError`` to the source-stamped router error; a declared
+    ``hooks.classify_status`` is consulted FIRST (a typed error to raise, or None to fall through)."""
     try:
         return _get_raw(plan)
     except TransportError as exc:
@@ -79,9 +69,7 @@ def _get(spec: SourceSpec, plan: RequestPlan) -> bytes:
 
 
 def _fetch_endpoint_fallback(spec: SourceSpec, plans: list[RequestPlan]) -> list[bytes]:
-    """Try ``plans`` as a data-source fallback CHAIN, first success wins: a non-429 4xx
-    short-circuits (the request itself is bad), a 5xx / 429 / timeout advances to the
-    next mirror, and every mirror failing raises a retryable upstream error."""
+    """Try ``plans`` as a fallback CHAIN, first success wins: a non-429 4xx short-circuits, a 5xx / 429 / timeout advances."""
     sc = spec.error_code_prefix
     last_exc: Exception | None = None
     for i, plan in enumerate(plans):
@@ -89,8 +77,7 @@ def _fetch_endpoint_fallback(spec: SourceSpec, plans: list[RequestPlan]) -> list
             return [_get_raw(plan)]
         except TransportError as exc:
             status = getattr(exc, "status", None)
-            # A non-429 4xx (bad query) will not succeed on another mirror -- fail
-            # fast rather than hammer every sibling.
+            # A non-429 4xx (bad query) will not succeed on another mirror.
             if status is not None and 400 <= status < 500 and status != 429:
                 raise router_upstream_error(
                     sc, f"{type(exc).__name__}: {exc}", exc.retryable)
@@ -106,9 +93,7 @@ def _fetch_endpoint_fallback(spec: SourceSpec, plans: list[RequestPlan]) -> list
 
 
 def _probe_total_pages(spec: SourceSpec, paging: dict[str, Any], body: bytes, max_pages: int) -> int:
-    """Read the declared page count off page 1. It is loop control only -- the decode
-    over every body stays authoritative -- and a count past the cap refuses up front
-    rather than after walking the pages."""
+    """Read the declared page count off page 1 (loop control only); a count past the cap refuses up front."""
     sc = spec.error_code_prefix
     try:
         obj = json.loads(body.decode("utf-8"))
@@ -132,9 +117,7 @@ def _probe_total_pages(spec: SourceSpec, paging: dict[str, Any], body: bytes, ma
 
 
 def _fetch_paginated(spec: SourceSpec, params: dict[str, Any], paging: dict[str, Any]) -> list[bytes]:
-    """Walk pages in the declared style. ``page`` counts to the page count the first
-    body reports; ``offset`` counts rows and stops on a short page or the row cap. The
-    page value enters ``params``, so a build hook and a declared request page alike."""
+    """Walk pages in the declared style: ``page`` counts to the first body's page count; ``offset`` stops on a short page or the row cap."""
     sc = spec.error_code_prefix
     style = str(paging.get("style", "page"))
     max_pages = int(paging.get("max_pages", 25))
@@ -170,9 +153,7 @@ def _fetch_paginated(spec: SourceSpec, params: dict[str, Any], paging: dict[str,
 
 
 def _fetch_constant_cache(spec: SourceSpec, plans: list[RequestPlan], cc: dict[str, Any]) -> list[bytes]:
-    """Fetch each plan through an INNER constant-key ``read_through``, so a source that
-    downloads ONE whole-world file and filters it per AOI caches that download under an
-    AOI-independent key while the outer read_through still caches per AOI."""
+    """Fetch each plan through an INNER constant-key ``read_through``, so a whole-world download caches AOI-independently."""
     from ....cache import read_through
     from ..router import synthesize_metadata
     from ..spec import record_shape
@@ -195,9 +176,7 @@ def _fetch_constant_cache(spec: SourceSpec, plans: list[RequestPlan], cc: dict[s
 
 
 def fetch_bodies(spec: SourceSpec, params: dict[str, Any]) -> list[bytes]:
-    """Resolve the request plans and GET the bodies. ``ingest.pagination`` walks pages,
-    ``ingest.http_source.endpoint_fallback`` is a first-success mirror chain, and the
-    default joins every plan at parse."""
+    """Resolve the request plans and GET the bodies: ``ingest.pagination`` walks pages, ``endpoint_fallback`` is a mirror chain."""
     ingest = spec.ingest or {}
     http_source = ingest.get("http_source") or {}
     paging = ingest.get("pagination")
@@ -213,9 +192,7 @@ def fetch_bodies(spec: SourceSpec, params: dict[str, Any]) -> list[bytes]:
 
 
 def _execute_parse_fallback(spec: SourceSpec, params: dict[str, Any]) -> bytes:
-    """PARSE-driven fallback chain: parse EACH plan's body on its own and stop at the
-    first yielding >= 1 feature, so an empty body degrades to the next plan. Every plan
-    empty raises the source's typed EMPTY, never a fabricated header-only layer."""
+    """PARSE-driven fallback chain: stop at the first plan yielding >= 1 feature; every plan empty raises the typed EMPTY."""
     plans = _plans(spec, params)
     for plan in plans:
         body = _get(spec, plan)
@@ -230,7 +207,6 @@ def _execute_parse_fallback(spec: SourceSpec, params: dict[str, Any]) -> bytes:
 
 
 def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
-    """Fetch and serialize the parsed features to FGB (the fetch_fn body)."""
     if ((spec.ingest or {}).get("http_source") or {}).get("parse_fallback"):
         return _execute_parse_fallback(spec, params)
     bodies = fetch_bodies(spec, params)

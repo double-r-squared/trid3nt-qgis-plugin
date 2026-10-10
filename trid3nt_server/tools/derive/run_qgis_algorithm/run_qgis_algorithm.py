@@ -1,10 +1,8 @@
 """``run_qgis_algorithm`` - one QGIS Processing algorithm run in the user's session.
 
-The body is a request on the plugin wire: a case layer named by its id rides as
-its store uri, which the session opens the way the dock does; the session runs
-``processing.run`` over those layers and writes each output to a file. Each
-file becomes a case layer the way a fetch output does - in the store, returned
-as a ``LayerURI`` - so the next call names it by its layer id.
+The body is a request on the plugin wire: a case layer named by its id rides as its store uri, which the session opens the way
+the dock does; the session runs ``processing.run`` and writes each output to a file. Each file becomes a case layer
+(in the store, returned as a ``LayerURI``), so the next call names it by its layer id.
 """
 
 from __future__ import annotations
@@ -57,9 +55,8 @@ def _inherited(params: dict[str, Any]) -> dict[str, Any]:
 
 
 def _readable(params: dict[str, Any]) -> dict[str, Any]:
-    """``params`` with every case layer named by its id, a multi-layer list
-    included, swapped for its store uri: the session opens a layer by that uri,
-    never by an id it may not hold."""
+    """``params`` with every case layer named by its id, a multi-layer list included,
+    swapped for its store uri: the session opens a layer by that uri."""
     from trid3nt_server.render.uri_registry import lookup_uri_for_handle
 
     def readable(value: Any) -> Any:

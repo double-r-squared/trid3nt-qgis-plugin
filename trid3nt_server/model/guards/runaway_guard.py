@@ -8,18 +8,11 @@ from __future__ import annotations
 import math
 import os
 
-# The three guards these defaults arm:
-#   1. STEP CAP -- a hard cap on model<->tool ROUNDS within one user turn; the
-#      primary bound.
-#   2. WALL-CLOCK -- a per-turn deadline, so a turn whose rounds are individually
-#      slow aborts even while it is under the step cap.
-#   3. LOOP WATCHDOG -- the SAME tool with the SAME args, or the SAME round
-#      signature, repeated N rounds running. This catches the runaway that stays
-#      UNDER the step cap by re-issuing one identical call.
-# Chosen to leave NORMAL turns untouched: the turn driver takes the min of its
-# own iteration bound and this step cap, and that bound is the binding one for
-# full-tier models, so the default step cap only bites a genuinely runaway turn
-# -- while the cheap-model halving does tighten the loop-prone tier.
+# The three guards these defaults arm: 1. STEP CAP -- a hard cap on model<->tool ROUNDS within one
+# user turn; the primary bound. 2. WALL-CLOCK -- a per-turn deadline, so a turn whose rounds are
+# individually slow aborts even while it is under the step cap. 3. LOOP WATCHDOG -- the same
+# tool+args (or round signature) N rounds running, which stays under the step cap. The turn driver
+# takes the min of its own bound and the step cap, so the default step cap only bites a runaway.
 
 #: Hard cap on model<->tool ROUNDS within a single user turn (full-tier models).
 MAX_AGENT_STEPS_DEFAULT: int = 30
@@ -48,8 +41,7 @@ _CHEAP_MODEL_SUBSTRINGS: tuple[str, ...] = (
     "lite",
 )
 
-# Abort reason codes surfaced honestly to the user (honesty floor). Distinct
-# codes so the UI / telemetry can tell WHY a turn was force-stopped.
+# Abort reason codes surfaced honestly to the user; distinct so UI and telemetry can tell WHY.
 ABORT_STEP_CAP = "AGENT_STEP_LIMIT_REACHED"
 ABORT_WALL_CLOCK = "AGENT_TURN_TIMEOUT"
 ABORT_LOOP_WATCHDOG = "AGENT_LOOP_DETECTED"
@@ -155,19 +147,12 @@ class LoopWatchdog:
     def record_round(
         self, calls: list[tuple[str, str]], *, made_progress: bool = False
     ) -> str | None:
-        """Record one round's ``(tool_name, args_hash)`` calls.
-
-        Returns the abort reason code when this round trips, else ``None``."""
-        # A round resets the no-progress streak when it emitted no calls (a
-        # text-only / terminal round: narration is progress), and when it MADE
-        # PROGRESS. ``made_progress`` is True when at least one call produced a
-        # real artifact -- a model producing NEW output each round is advancing
-        # the Case, so it runs on to the step cap rather than being
-        # watchdog-aborted -- and ALSO when every call this round failed or was
-        # short-circuited, because the circuit breaker already owns the
-        # failing-tool case and the watchdog must not pre-empt it. So the streak
-        # counts only a round that had calls, repeated the prior signature, and
-        # made no progress: the re-issued successful no-op call.
+        """Record one round's ``(tool_name, args_hash)`` calls; returns the abort code when this
+        round trips, else ``None``."""
+        # A round resets the streak when it had no calls (narration is progress) or made progress.
+        # ``made_progress`` is True when a call produced a real artifact, and also when every call
+        # failed or was short-circuited: the circuit breaker owns that case and the watchdog must
+        # not pre-empt it. Only repeated, call-bearing, no-progress rounds count.
         if not calls or made_progress:
             # ``_last_signature`` is cleared so the NEXT repeat starts a fresh
             # count rather than resuming an interrupted streak.

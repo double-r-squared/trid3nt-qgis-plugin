@@ -25,10 +25,7 @@ __all__ = [
 
 
 def is_structurally_valid_vega_lite_spec(spec: dict[str, Any]) -> bool:
-    """True when ``spec`` LOOKS like a Vega-Lite spec: a ``$schema`` key, or
-    BOTH a ``mark`` and an ``encoding``. Not a grammar check - it catches an
-    empty dict, a list, a scalar or an unrelated dict, and nothing finer.
-    """
+    """True when ``spec`` looks like a Vega-Lite spec (a ``$schema`` key, or both ``mark`` and ``encoding``); no grammar check."""
     if not isinstance(spec, dict):
         return False
     if "$schema" in spec:
@@ -47,18 +44,14 @@ class ChartEmissionPayload(ContractModel):
     MESSAGE_TYPE: ClassVar[str] = "chart-emission"
 
     envelope_type: Literal["chart-emission"] = "chart-emission"
-    #: The de-dupe key a consumer keys the chart on across a replay.
     chart_id: ULIDStr
     #: The full spec, opaque. Structurally checked, not grammar-validated.
     vega_lite_spec: dict[str, Any]
     title: str = Field(min_length=1)
-    #: One-line interpretation under the chart. Capped to stay a caption.
     caption: str | None = Field(default=None, max_length=512)
-    #: The layer the chart was computed from, when there is a single one. A
-    #: chart assembled from several sources has none.
+    #: The layer the chart was computed from when there is a single one.
     source_layer_uri: str | None = None
-    #: The ONLY stack-grouping signal: charts sharing a value render as one
-    #: stack. ``None`` makes the chart its own stack. Timing is never inferred.
+    #: The only stack-grouping signal: charts sharing a value render as one stack; None is its own stack.
     created_turn_id: str | None = None
 
     @field_validator("vega_lite_spec")
@@ -85,12 +78,9 @@ class SessionChartRecord(ContractModel):
 
     schema_version: Literal["v1"] = "v1"
 
-    #: Carried on the record so a chart read back outside its parent document
-    #: is still self-contained.
+    #: Keeps a chart read back outside its parent document self-contained.
     session_id: ULIDStr
-    #: Stored WHOLE, so a replay reconstructs the identical envelope.
     payload: ChartEmissionPayload
-    #: The replay sort key and the explicit within-array ordering authority.
     emitted_at: UTCDatetime = Field(...)
 
 

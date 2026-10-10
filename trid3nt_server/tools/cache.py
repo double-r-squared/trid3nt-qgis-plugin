@@ -37,20 +37,15 @@ __all__ = [
 
 logger = logging.getLogger("trid3nt_server.tools.cache")
 
-#: Production cache bucket name (AWS S3). Override via env var
-#: ``TRID3NT_CACHE_BUCKET`` for non-prod runs.
+#: Override via ``TRID3NT_CACHE_BUCKET`` for non-prod runs.
 CACHE_BUCKET = "trid3nt-cache"
 
-#: Truncation length for the sha256 hex digest. 32 hex chars = 128 bits, so the
-#: birthday-bound collision probability is negligible at this key volume; a longer
-#: prefix narrows it further at the cost of path length.
+#: 32 hex chars = 128 bits; collision probability is negligible at this key volume.
 CACHE_KEY_HEX_LEN = 32
 
 
 def _canonicalize_params(params: dict[str, Any]) -> str:
-    """Deterministic JSON for the params dict: sorted, ``None`` pruned, compact.
-    ``default=str`` is deliberate - an unserializable value gets a stable string
-    form rather than a TypeError; the contract is determinism, not type purity."""
+    """Deterministic JSON for the params dict: sorted, ``None`` pruned, compact; an unserializable value gets a stable string form."""
     pruned = {k: v for k, v in params.items() if v is not None}
     return json.dumps(pruned, sort_keys=True, separators=(",", ":"), default=str)
 
@@ -82,17 +77,10 @@ def compute_cache_key(
     now: datetime | None = None,
     record_shape: str = "",
 ) -> str:
-    """A 32-hex-char SHA-256 prefix over source id, canonical params, the TTL
-    vintage and the shape of the record. ``params`` must already be domain-quantized
-    by the CALLER (bbox to source-native resolution, dates to the TTL boundary) -
-    the shim never does.
-
-    ``record_shape`` is the digest of the statements that decide what a fetched
-    record HOLDS - its columns, their units, the zero they are counted from, the
-    code that decodes the body. It is in the key because the cached bytes were
-    shaped by the statements standing when they were fetched, so without it a
-    landed correction never reaches an AOI already cached. An empty string is a
-    caller stating none, which keys exactly as it did before."""
+    """A 32-hex-char SHA-256 prefix over source id, canonical params, the TTL vintage
+    and ``record_shape``. ``params`` must already be domain-quantized by the CALLER (bbox to source resolution, dates to the TTL boundary).
+    ``record_shape`` digests what decides a record's content (columns, units, zero, decoder), so a correction reaches cached AOIs;
+    an empty one leaves the key unchanged."""
     vintage = ttl_bucket_vintage(ttl_class, now=now)
     canonical = _canonicalize_params(params)
     raw = f"{source_id}||{canonical}||{vintage}"
@@ -158,22 +146,9 @@ def is_cacheable(metadata: AtomicToolMetadata) -> bool:
     return metadata.cacheable and metadata.ttl_class != "live-no-cache"
 
 
-# Fetch-time provenance channel: a cache-replayable sidecar from fetch to envelope.
-#
-# Some fetch-time facts are UNRECOVERABLE from the cached bytes - which of a
-# composite's legs actually painted a merged COG, how many tiles contributed,
-# whether a leg silently degraded. A single-band float32 COG carries no per-source
-# attribution, and on a cache HIT ``read_through`` never calls ``fetch_fn``, so
-# nothing recomputes them. During a NON-cached fetch the executor records a small
-# typed dict via :func:`record_provenance`; ``read_through`` persists it as a
-# SIBLING object (``<key>.provenance.json``) and replays it on every later hit, so
-# a fresh return and a hit carry the SAME provenance. The dict must stay small and
-# never secret-bearing.
-#
-# The sidecar carries ``PROVENANCE_SCHEMA``. A cached artifact whose sidecar
-# predates it is a MISS: an artifact's honesty lives in its provenance, so a stale
-# sidecar would keep serving a stale account of the bytes for the rest of the TTL
-# bucket - the exact way a landed fix fails to reach an already-cached AOI.
+# Fetch-time facts unrecoverable from cached bytes (which legs painted a composite, tiles used, a silent degrade)
+# ride a sibling ``<key>.provenance.json``, persisted on miss and replayed on every hit. Small, never secret-bearing.
+# A sidecar older than ``PROVENANCE_SCHEMA`` is a MISS: a stale one keeps serving a stale account of the bytes for the TTL bucket.
 
 
 class ProvenanceRecorder:
@@ -187,16 +162,13 @@ class ProvenanceRecorder:
         self.data: dict[str, Any] | None = None
 
 
-#: The recorder bound for the CURRENT fetch (contextvar so a nested delegate call
-#: reaches it without threading it through the ``fetch_fn`` byte-only signature).
+#: The recorder bound for the current fetch; a contextvar so nested delegates reach it without changing ``fetch_fn``'s signature.
 _ACTIVE_RECORDER: contextvars.ContextVar[ProvenanceRecorder | None] = (
     contextvars.ContextVar("trid3nt_provenance_recorder", default=None)
 )
 
 
-#: Stamped into every recorded provenance dict and REQUIRED of every replayed
-#: sidecar; an older-schema sidecar makes the cached object a MISS. BUMP whenever
-#: a provenance field becomes load-bearing for honesty.
+#: Stamped into recorded provenance and required of replayed sidecars; BUMP when a provenance field becomes load-bearing for honesty.
 PROVENANCE_SCHEMA = 3
 
 #: The sidecar key carrying :data:`PROVENANCE_SCHEMA`.
@@ -238,8 +210,6 @@ def _sidecar_key(obj_key: str) -> str:
     """The provenance sidecar object key sitting next to ``<key>.<ext>``."""
     stem = obj_key.rsplit(".", 1)[0]
     return f"{stem}.provenance.json"
-
-
 
 
 class ReadThroughResult:
@@ -327,9 +297,8 @@ def _read_through_s3(
     ext: str,
     provenance: "ProvenanceRecorder | None" = None,
 ) -> "ReadThroughResult":
-    """S3 read-through via boto3; any storage failure degrades to
-    fetch-fresh-uncached rather than raising. With a :class:`ProvenanceRecorder`
-    the sidecar is replayed on a hit and written on a miss; without one, no-op."""
+    """S3 read-through via boto3; any storage failure degrades to fetch-fresh-uncached
+    rather than raising. With a :class:`ProvenanceRecorder` the sidecar is replayed on a hit and written on a miss."""
     from botocore.exceptions import ClientError
 
     from trid3nt_server.store import objects as storage
@@ -342,11 +311,7 @@ def _read_through_s3(
             data = resp["Body"].read()
             prov = _read_sidecar_s3(s3, bucket, obj_key) if provenance is not None else None
             if provenance is not None and not sidecar_is_current(prov):
-                # A provenance-bearing source whose sidecar predates the current
-                # schema: REFETCH. Replaying it would hand back the stale fetch's
-                # own claims about the bytes (which legs painted, which warning
-                # was owed) for the rest of the TTL bucket, so a fix to those
-                # claims would not reach a cached AOI at all.
+                # A sidecar older than the current schema is a MISS: replaying it would serve the stale fetch's own claims for the rest of the TTL bucket.
                 logger.warning(
                     "read_through provenance sidecar STALE (schema %r != %d) "
                     "tool=%s key=%s -- treating the cached object as a MISS",
@@ -403,16 +368,11 @@ def read_through(
     always misses and returns ``uri=None``; a ``fetch_fn`` failure is RE-RAISED,
     never cached as a sentinel. ``storage_client`` is accepted and ignored."""
     del storage_client
-    # The env override WINS over a caller-supplied bucket: several tools pass the
-    # CACHE_BUCKET constant explicitly, and an explicit wrong bucket degrades every
-    # cache write silently. Tests run with the env unset, so explicit-bucket
-    # fixtures are unaffected.
+    # The env override WINS over a caller-supplied bucket: an explicit wrong bucket silently degrades every cache write.
     bucket = os.environ.get("TRID3NT_CACHE_BUCKET") or bucket or CACHE_BUCKET
     source_id = source_id or (metadata.source_class or metadata.name)
 
-    # Uncacheable-tools short-circuit: they never touch the bucket. The
-    # provenance recorder still binds around the fetch so an uncacheable source can
-    # populate result-model fields (no sidecar persisted -- nothing to replay).
+    # Uncacheable tools never touch the bucket; the recorder still binds so result-model fields populate (no sidecar).
     if not is_cacheable(metadata):
         with _bind_recorder(provenance):
             data = fetch_fn()
@@ -422,8 +382,6 @@ def read_through(
         prov = provenance.data if provenance is not None else None
         return ReadThroughResult(uri=None, data=data, hit=False, provenance=prov)
 
-    # source_class is guaranteed non-empty for a cacheable tool by the
-    # AtomicToolMetadata cross-field validator; assert defensively.
     if not metadata.source_class:
         raise ValueError(
             f"cacheable tool {metadata.name!r} has no source_class — model_validator "

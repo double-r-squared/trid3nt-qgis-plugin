@@ -89,12 +89,7 @@ def transect(value: Any, *, bearing_deg: Any, length_m: Any,
     """THE LINE a reading across a structure is taken along: through the
     structure's centroid, along a stated direction, half its length each way.
 
-    A read that runs ACROSS a built thing has no line of its own - the domain's
-    centerline runs down the water, not through the breakwater - so the line is
-    measured off the structure the question is about. Laid in the structure's own
-    UTM zone, so the length is metres on the ground, and returned as the one
-    GeoJSON geometry every placed read is measured along.
-    """
+    Laid in the structure's own UTM zone, so the length is metres on the ground."""
     from pyproj import Transformer
     from shapely.geometry import shape as _shape
     from shapely.ops import unary_union

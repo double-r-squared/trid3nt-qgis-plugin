@@ -157,8 +157,6 @@ def compute_budget_tokens(num_ctx: int) -> int:
     return max(budget, 256)
 
 
-
-
 def estimate_tokens(text: str | None) -> int:
     if not text:
         return 0
@@ -192,7 +190,6 @@ def estimate_tokens_for_tools(tools: list[dict[str, Any]] | None) -> int:
     return estimate_tokens(json.dumps(tools, default=str))
 
 
-
 _SUFFIX_RE = re.compile(r"-(\d+)k$", re.IGNORECASE)
 
 # Matches a "num_ctx <int>" line inside Ollama /api/show's ``parameters``
@@ -217,16 +214,13 @@ def num_ctx_from_suffix(model_name: str | None) -> int | None:
 
 
 def _parse_num_ctx_from_show_response(payload: dict[str, Any]) -> int | None:
-    """Extract the runtime ``num_ctx`` from an Ollama ``/api/show`` response body.
-
-    ``None`` when the model has no baked override, and the caller falls through."""
+    """Extract the runtime ``num_ctx`` from an Ollama ``/api/show`` response body; ``None`` when
+    the model has no baked override, and the caller falls through."""
     if not isinstance(payload, dict):
         return None
-    # The RUNTIME override baked via ``PARAMETER num_ctx <n>`` shows up as a
-    # line inside the top-level ``parameters`` free-text field. Its neighbour
-    # ``model_info.<family>.context_length`` is a DIFFERENT, much larger number
-    # -- the architecture's max TRAINED context, regardless of the runtime
-    # window -- and must NOT be read here.
+    # The RUNTIME override baked via ``PARAMETER num_ctx <n>`` shows up as a line inside the top-
+    # level ``parameters`` free-text field. Its neighbour ``model_info.<family>.context_length`` is
+    # the architecture's max TRAINED context, a different and much larger number: do NOT read it.
     params_text = payload.get("parameters")
     if not isinstance(params_text, str) or not params_text.strip():
         return None
@@ -261,11 +255,8 @@ def _reset_num_ctx_cache_for_tests() -> None:
     reset_num_ctx_cache()
 
 
-# 1b. PROVIDER-AGNOSTIC CONTEXT-WINDOW DISCOVERY
-#
-# The context window is a PER-MODEL FACT DISCOVERED AT RUNTIME. It is never
-# hardcoded, and a value we could not discover is never passed off as one we
-# did -- ``ContextWindow.source`` records where every number came from, and an
+# 1b. PROVIDER-AGNOSTIC CONTEXT-WINDOW DISCOVERY. The window is a per-model fact discovered at
+# runtime, never hardcoded; ``ContextWindow.source`` records where each number came from, and an
 # undiscovered window logs a WARNING and carries narration for the user.
 
 #: Where a resolved window came from. Carried on every ``ContextWindow`` so a
@@ -351,14 +342,12 @@ _WINDOW_CACHE: dict[tuple[str, str], ContextWindow] = {}
 async def _resolve_window_tokens(
     provider: str, model_name: str, base_url: str | None
 ) -> tuple[int, str] | None:
-    """Per-provider discovery ladder -> ``(tokens, source)``, or None.
-
-    Each branch asks the provider for its OWN metadata and gives up honestly."""
+    """Per-provider discovery ladder -> ``(tokens, source)``, or None. Each branch asks the
+    provider for its OWN metadata and gives up honestly."""
     from trid3nt_server.model.adapters import model_discovery
 
-    # openai-compatible: OpenRouter's ``/models.context_length`` when the base
-    # URL is OpenRouter, else Ollama's native ``/api/show`` runtime ``num_ctx``,
-    # then a ``-<N>k`` name suffix.
+    # openai-compatible: OpenRouter's ``/models.context_length`` when the base URL is OpenRouter,
+    # else Ollama's native ``/api/show`` runtime ``num_ctx``, then a ``-<N>k`` name suffix.
     # anthropic: the Models API ``max_input_tokens`` field.
     if provider == "openai":
         if model_discovery.is_openrouter_base_url(base_url):
@@ -456,8 +445,6 @@ async def discover_context_window(
     return window
 
 
-
-
 @dataclass
 class CompactionResult:
     contents: list[Message]
@@ -470,23 +457,18 @@ class CompactionResult:
 
 
 def _protected_tail_len(contents: list[Message]) -> int:
-    """The rows that must NEVER be dropped, hardened or folded.
-
-    Always the LAST <= 2: the case-state note and the terminal user message."""
-    # Protecting the tail STRUCTURALLY, rather than text-sniffing for the note's
-    # exact wording, is correct even on a turn where no note was built: it then
-    # protects one extra real history row, which is harmless.
+    """The rows that must NEVER be dropped, hardened or folded: always the LAST <= 2 (the case-state
+    note and the terminal user message). Protecting the tail structurally is correct even when no
+    note was built; it then protects one extra real history row, harmlessly."""
     return min(2, len(contents))
 
 
 def _is_droppable_row(content: Message) -> bool:
-    """True for a plain narration row: text only, no call or response Part.
-
-    Step (a) drops only these; a tool row is hardened by (b), never deleted."""
-    # A tool call and its matching response live in SEPARATE rows, so dropping
-    # one side without the other leaves an orphaned tool_call/tool_result
-    # pairing once the rows are converted to the OpenAI wire format -- an
-    # API-breaking shape.
+    """True for a plain narration row: text only, no call or response Part. Step (a) drops only
+    these; a tool row is hardened by (b), never deleted."""
+    # A tool call and its matching response live in SEPARATE rows, so dropping one side without the
+    # other leaves an orphaned tool_call/tool_result pairing once the rows are converted to the
+    # OpenAI wire format -- an API-breaking shape.
     for part in content.parts:
         if part.call is not None or part.response is not None:
             return False
@@ -513,9 +495,8 @@ def _harden_function_response_part(
 def _harden_content(
     content: Message, max_chars: int
 ) -> tuple[Message, bool]:
-    """Re-summarize any long ``function_response`` Part down to ``max_chars``.
-
-    Only tool RESULTS are hardened; text and call Parts are left untouched."""
+    """Re-summarize any long ``function_response`` Part down to ``max_chars``; text and call Parts
+    are left untouched."""
     changed = False
     new_parts: list[Part] = []
     for part in content.parts:
@@ -530,9 +511,8 @@ def _harden_content(
 def _cap_text_parts(
     content: Message, max_chars: int
 ) -> tuple[Message, bool]:
-    """Truncate any oversized ``text`` Part to ``max_chars``, ellipsis-marked.
-
-    What shrinks a giant AGENT NARRATION row, alone or beside a call Part."""
+    """Truncate any oversized ``text`` Part to ``max_chars``, ellipsis-marked; this shrinks a giant
+    AGENT NARRATION row, alone or beside a call Part."""
     changed = False
     new_parts: list[Part] = []
     for part in content.parts:
@@ -563,9 +543,7 @@ def normalize_contents_row_sizes(
 
 
 def _protected_row_labels(n: int) -> list[str]:
-    """Human-readable names for the protected tail, in order, for the step (d) log.
-
-    The last <= 2 rows are [case-state note, terminal user message]."""
+    """Human-readable names for the protected tail, in order, for the step (d) log."""
     if n == 2:
         return ["case-state note (protected)", "terminal user message (protected)"]
     if n == 1:
@@ -587,9 +565,8 @@ def _digest_line_for_content(content: Message) -> str | None:
 
 
 def _build_digest_row(contents: list[Message]) -> Message:
-    """One extractive line per surviving row, folded into a single row.
-
-    The ``user`` role is what makes it read as durable context, not a live turn."""
+    """One extractive line per surviving row, folded into a single row. The ``user`` role is what
+    makes it read as durable context, not a live turn."""
     lines = [ln for ln in (_digest_line_for_content(c) for c in contents) if ln]
     body = "\n".join(f"- {ln}" for ln in lines) if lines else "(no further detail)"
     text = "Earlier in this case: " + body
@@ -660,10 +637,8 @@ def compact_contents(
                 working[i] = new_content
                 hardened += 1
 
-    # (b, continued) cap any remaining oversized narration text directly. A row
-    # carrying a function_call/function_response Part alongside its text is one
-    # (a) must not drop and the response-only harden above cannot shrink,
-    # because its bulk is in a ``text`` Part rather than in the response.
+    # (b, continued) cap oversized narration text directly: a row carrying a call/response Part
+    # beside its text is one (a) must not drop and the response harden cannot shrink.
     if working and _current_tokens() > target:
         for i in range(len(working)):
             if _current_tokens() <= target:
@@ -679,13 +654,10 @@ def compact_contents(
         working = [_build_digest_row(working)]
         folded = True
 
-    # (d) The excess can live entirely in the PROTECTED tail: (a) drains
-    # ``working`` (or it started empty) while the tail alone still exceeds
-    # target, and both (b) and (c) then no-op on their ``if working`` guard. A
-    # narration row is never STRUCTURALLY protected from a defensive text cap
-    # the way it is from DROP and FOLD, so cap any oversized text Part left in
-    # ``protected`` and log loudly naming which block was too big. This is the
-    # ONLY circumstance under which a protected row is ever mutated.
+    # (d) The excess can live entirely in the PROTECTED tail: (a) drains ``working`` (or it started
+    # empty) while the tail alone still exceeds target, and both (b) and (c) then no-op on their
+    # ``if working`` guard. A protected narration row is not structurally safe from a text cap, so
+    # cap oversized text there and log loudly: the ONLY case where a protected row is mutated.
     if _current_tokens() > target:
         labels = _protected_row_labels(len(protected))
         any_capped = False
@@ -729,12 +701,9 @@ def compact_contents(
     )
 
 
-#
-# The adapter yields typed compaction start / complete events, and the dispatch
-# loop mints and completes a durable pipeline card from them using the two
-# labels below -- the running-tool-card treatment, animated live and persisted
-# so it survives a Case reopen. No new envelope type: the card rides the
-# EXISTING wire shape every atomic-tool card already uses.
+# The adapter yields compaction start / complete events; the dispatch loop mints and completes a
+# durable pipeline card from them with the two labels below, riding the existing tool-card wire
+# shape (no new envelope type) and persisted so it survives a Case reopen.
 
 #: The running card's label, from the instant compaction starts until it
 #: completes (mint time only -- never shown again once renamed).
@@ -776,12 +745,9 @@ def build_context_window_abort_note(*, fabricated_claim: bool) -> str:
     return CONTEXT_WINDOW_ABORT_NOTE
 
 
-
-
 class ContextWindowExceededError(RuntimeError):
-    """Raised when a round's reported usage proves the prompt was clipped.
-
-    Surfaced as its own typed envelope, never the provider-unavailable bucket."""
+    """Raised when a round's reported usage proves the prompt was clipped. Surfaced as its own
+    typed envelope, never the provider-unavailable bucket."""
 
     def __init__(self, num_ctx: int):
         self.num_ctx = num_ctx
@@ -801,10 +767,8 @@ def is_prompt_clipped(prompt_tokens: int | None, num_ctx: int) -> bool:
     return prompt_tokens >= num_ctx
 
 
-
-# Completed-action verbs (past tense only -- "I can compute a hillshade" /
-# "fetching the DEM now" are capability/in-progress statements, not claims of
-# a finished action, and must NOT trigger this).
+# Completed-action verbs, past tense only: "I can compute a hillshade" or "fetching the DEM now"
+# are capability or in-progress statements and must NOT trigger the backstop.
 _ACTION_VERBS = (
     "computed", "published", "created", "fetched", "generated", "produced",
     "built", "rendered", "completed", "ran", "retrieved", "downloaded",
@@ -849,24 +813,13 @@ def looks_like_fabricated_action_claim(text: str | None) -> bool:
     return bool(_FABRICATION_RE.search(text))
 
 
-# THE SHARED BUDGET SEAM (one strategy, every provider)
-#
-# TWO FAILURE MODES, one seam. Ollama silently CLIPS an over-long prompt rather
-# than erroring, so the model never sees its own tool contract, can emit ZERO
-# tool calls, and can narrate a fabricated success as if the work had happened.
-# Hosted providers instead REJECT it with a 400. Either way the fix is the same
-# and it is ours: history management is CLIENT-SIDE, trimming BEFORE the
-# provider has to react. What to trim, when, and what is untouchable lives HERE,
-# once -- adapters only translate the planned ``contents`` into their own wire
-# shape and emit the compaction events. Provider-side compaction is an opt-in
-# EXTRA layered on top, never a replacement for this.
-#
-# CACHE-PREFIX SAFETY: the plan only ever rewrites ``contents`` -- the
-# conversation. Prompt-cache breakpoints on every provider sit on the TOOL
-# catalog and the SYSTEM block, which render BEFORE messages (tools -> system
-# -> messages), so trimming the conversation cannot move or invalidate them.
-# Adapters therefore MUST run the plan BEFORE building request kwargs, so the
-# cached prefix is rebuilt byte-identically each turn.
+# Cache-prefix safety: the plan rewrites only ``contents``. Cache breakpoints sit on the TOOL
+# catalog and SYSTEM block, which render BEFORE messages, so adapters MUST run the plan BEFORE
+# building request kwargs to keep the cached prefix byte-identical each turn. History trimming is
+# client-side; provider-side compaction is only an opt-in extra on top.
+# THE SHARED BUDGET SEAM (one strategy, every provider) TWO FAILURE MODES, one seam. Ollama silently
+# CLIPS an over-long prompt rather than erroring, so the model never sees its own tool contract, can
+# emit ZERO tool calls, and can narrate a fabricated success as if the work had happened.
 
 
 @dataclass
@@ -903,21 +856,18 @@ def plan_turn(
         target_ratio = (
             reactive_target_ratio() if phase != "proactive" else proactive_target_ratio()
         )
-    # The reply has to FIT IN THE SAME WINDOW as the prompt, so the budget must
-    # reserve exactly what THIS request is allowed to generate. Defaults to the
-    # OpenAI-path cap; the Anthropic adapter passes its own
-    # ``max_tokens``, which is far larger -- reserving the wrong one would let
-    # a long reply overflow a prompt we had declared safe.
+    # The reply has to FIT IN THE SAME WINDOW as the prompt, so the budget must reserve exactly what
+    # THIS request is allowed to generate (the Anthropic adapter passes its own, far larger,
+    # ``max_tokens``; reserving the wrong one lets a long reply overflow the prompt).
     reserve = output_reserve if output_reserve is not None else reserve_output_tokens()
     budget = max(window.tokens - reserve - safety_tokens(), 256)
     # Budget available to the CONTENT rows: tool schemas and the system prompt
     # are fixed overhead the ladder cannot touch.
     content_budget = max(budget - tool_tokens - system_tokens, 256)
 
-    # ``wire_tokens``, when given, is the COMPLETE prompt count (conversation +
-    # tools + system) -- measured off the real wire payload, or returned by the
-    # provider's own token counter. It is AUTHORITATIVE: nothing is added on top
-    # of it. Absent one, fall back to the stated chars/4 heuristic per piece.
+    # ``wire_tokens``, when given, is the COMPLETE prompt count (conversation + tools + system) --
+    # measured off the real wire payload, or returned by the provider's own token counter. It is
+    # AUTHORITATIVE: nothing is added on top of it.
     if wire_tokens is not None:
         est_tokens = wire_tokens
         conversation_tokens = max(wire_tokens - tool_tokens - system_tokens, 0)
@@ -926,14 +876,10 @@ def plan_turn(
         est_tokens = conversation_tokens + tool_tokens + system_tokens
 
     if phase != "proactive":
-        # THE REJECTED PROMPT IS ITSELF AN UPPER BOUND. A reactive pass runs
-        # because the provider said the prompt did not fit -- which means our
-        # window fact, our estimator, or both were wrong. Budgeting off the
-        # (evidently wrong) window can leave the ladder believing there is
-        # nothing to do, and we would resend a byte-identical prompt and burn
-        # the one retry. Clamping to what we just sent forces real shrinkage:
-        # compact_contents targets ``budget_tokens * target_ratio``, so this
-        # guarantees the retry is strictly smaller than the rejected request.
+        # THE REJECTED PROMPT IS ITSELF AN UPPER BOUND. A reactive pass runs because the provider
+        # said the prompt did not fit -- which means our window fact, our estimator, or both were
+        # wrong. Clamping to what was just sent forces the retry to be strictly smaller than the
+        # rejected request instead of resending a byte-identical prompt.
         actual_content_tokens = estimate_tokens_for_contents(contents)
         content_budget = max(min(content_budget, actual_content_tokens), 256)
 
@@ -952,9 +898,8 @@ def plan_turn(
         phase,
     )
 
-    # Proactive: only pay for the ladder when the estimate says we must.
-    # Reactive: the provider has ALREADY rejected this prompt, so run it
-    # unconditionally -- our estimate was wrong by definition.
+    # Proactive: only pay for the ladder when the estimate says we must. A reactive pass runs
+    # unconditionally: the provider already rejected the prompt, so our estimate was wrong.
     if phase == "proactive" and est_tokens <= budget:
         return TurnPlan(
             contents=list(contents),

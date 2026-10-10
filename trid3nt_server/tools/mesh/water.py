@@ -57,10 +57,7 @@ def _box(extent: Any) -> tuple[float, float, float, float]:
 
 
 def _walks(coastline: Any) -> list[list[tuple[float, float]]]:
-    """The coastline as coordinate walks, IN THE DIRECTION IT WAS DRAWN.
-
-    The direction is the datum here, so a reader that reorders the vertices would
-    swap land for water."""
+    """The coastline as coordinate walks, IN THE DIRECTION IT WAS DRAWN; reordering the vertices would swap land for water."""
     walks: list[list[tuple[float, float]]] = []
     for geometry in _geometries(coastline):
         kind = str(geometry.get("type") or "")
@@ -144,10 +141,8 @@ def _sides(walks: Sequence[Sequence[tuple[float, float]]],
 def water_polygon(coastline: Any, extent: Any) -> dict[str, Any]:
     """The water inside ``extent`` that ``coastline`` leaves, as one GeoJSON geometry.
 
-    ``coastline`` is a line layer, a uri or inline GeoJSON whose ways are read in
-    the direction they were drawn; ``extent`` is a lon/lat box or any shape whose
-    bounds are that box. A way that ends inside the box divides nothing and
-    refuses; a box with no water in it refuses too."""
+    ``coastline`` is a line layer, uri or inline GeoJSON read in the direction its ways were drawn; ``extent`` is a lon/lat box
+    or a shape with those bounds. A way that ends inside the box divides nothing and refuses; a box with no water refuses too."""
     from shapely.geometry import mapping
     from shapely.ops import unary_union
 

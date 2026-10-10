@@ -31,8 +31,7 @@ async def publish_for_emission(layer: LayerURI) -> LayerURI:
 
     Only a raw ``s3://`` COG raster is published; a failed publish degrades to unstyled.
     """
-    # Vectors render inline from their producing tool's GeoJSON and an http(s)
-    # raster is already a rendered face, so neither has anything to publish.
+    # Vectors render inline and an http(s) raster is already a rendered face, so neither has anything to publish.
     uri = layer.uri or ""
     if layer.layer_type != "raster" or not uri.startswith("s3://"):
         return layer
@@ -40,8 +39,7 @@ async def publish_for_emission(layer: LayerURI) -> LayerURI:
     from .publish import PublishLayerError, publish_layer
 
     try:
-        # OFFLOAD: publish runs rasterio / GDAL over the COG. Keep it off the
-        # event loop so the WS keepalive stays responsive.
+        # Offloaded: publish runs rasterio / GDAL over the COG and must not block the event loop.
         published = await asyncio.to_thread(
             publish_layer,
             layer_uri=uri,
@@ -87,10 +85,7 @@ def emit_layer_uri(layer: LayerURI) -> LayerURI | None:
     """
     uri = layer.uri or ""
 
-    # The guardrail: a renderable raster carrying a uri nothing can fetch is
-    # dropped - gs:// has no reachable face on this stack, file:// names a path
-    # the plugin cannot reach, and an empty uri renders nothing. A raster s3://
-    # COG PASSES (the plugin reads it via /vsis3), and so does every vector.
+    # The guardrail drops a renderable raster whose uri nothing can fetch (gs://, file://, empty); an s3:// COG passes, as does every vector.
     if layer.layer_type == "raster" and (
         not uri or uri.startswith("gs://") or uri.startswith("file://")
     ):
@@ -107,17 +102,12 @@ def emit_layer_uri(layer: LayerURI) -> LayerURI | None:
     return _resolve_non_raster_legend(layer)
 
 
-#: The preset shape a layer TYPE implies when its row names none. A vector is
-#: drawn, not measured; a mesh paints one of its own dataset groups. Neither can
-#: be the raster default, whose resolution reads bands the object does not have.
+#: The preset shape a layer type implies when its row names none; neither a vector nor a mesh can take the raster default, which reads bands they lack.
 _KIND_BY_LAYER_TYPE = {"vector": "reference", "mesh": "mesh"}
 
 
 def _resolve_non_raster_legend(layer: LayerURI) -> LayerURI:
-    """Resolve a VECTOR or MESH layer's declared row into its render key.
-    A vector and a mesh have no band to read, so the row resolves here rather
-    than against bytes; a layer that already carries a legend is left untouched.
-    """
+    """A vector or mesh has no band to read, so its declared row resolves here; a layer already carrying a legend is untouched."""
     kind = _KIND_BY_LAYER_TYPE.get(layer.layer_type)
     if kind is None or layer.legend is not None:
         return layer
@@ -155,16 +145,12 @@ async def publish_input_layer(
     if emitter is None or layer_uri is None:
         return False
     try:
-        # Force the surfacing invariants: the caller's role, because a product of
-        # the solve declared as an input misstates what the run computed; and
-        # bbox=None, so this row emits no zoom-to that fights the result camera.
-        # Copy only when a field actually differs so the common path is a no-op.
+        # Force the caller's role (a solve product declared as an input misstates the run) and bbox=None (no zoom-to fighting the result camera); copy only when a field differs.
         if layer_uri.role != role or layer_uri.bbox is not None:
             layer_uri = layer_uri.model_copy(update={"role": role, "bbox": None})
         safe = emit_layer_uri(layer_uri)
         if safe is None:
-            # The guardrail dropped it (e.g. a raw-object-store raster that never
-            # round-tripped through publish_layer). Honest no-surface, not fatal.
+            # The guardrail dropped it: an honest no-surface, not fatal.
             logger.warning(
                 "publish_input_layer: emit_layer_uri DROPPED input layer_id=%s "
                 "(not surfaced; the solve is unaffected).",
@@ -188,10 +174,7 @@ async def publish_input_layer(
 
 
 def _cog_object_exists(cog_uri: str) -> bool:
-    """True when ``cog_uri`` names an object physically present in the store.
-    Any lookup failure reads as absent and never raises, so a fabricated uri is
-    only ever registered once the store has confirmed it real.
-    """
+    """Any lookup failure reads as absent, so a fabricated uri registers only once the store confirms it."""
     from trid3nt_server.store import objects as storage
 
     try:
@@ -228,7 +211,7 @@ async def publish_raster_input_cog(
         )
         return False
     try:
-        # Late import: keep this module free of a load-time rasterio dependency.
+        # Late import: no load-time rasterio dependency.
         from trid3nt_server.render.publish import (
             PublishLayerError,
             publish_layer,
@@ -241,8 +224,7 @@ async def publish_raster_input_cog(
         )
         return False
     try:
-        # OFFLOAD: publish_layer runs a sync worker-poll / rasterio path -- keep
-        # it off the event loop so the WS keepalive stays responsive.
+        # Offloaded: publish_layer runs a sync worker-poll / rasterio path and must not block the event loop.
         renderable = await asyncio.to_thread(
             publish_layer,
             layer_uri=cog_uri,

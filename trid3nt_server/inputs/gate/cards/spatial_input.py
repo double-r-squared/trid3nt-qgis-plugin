@@ -23,8 +23,7 @@ def _build_spatial_input_request_payload(
 ) -> "SpatialInputRequestPayload | None":
     """Build a validated ``spatial-input-request`` from the LLM tool args.
 
-    ``None`` when the args cannot form a valid payload, and the caller surfaces a
-    typed param error rather than emitting a malformed prompt."""
+    ``None`` when the args cannot form one; the caller surfaces a typed param error."""
     mode = call_args.get("mode") or "vector_draw"
     title = str(call_args.get("title") or "Draw on the map")
     description = str(
@@ -42,7 +41,7 @@ def _build_spatial_input_request_payload(
     # for compute_terrain_profile). Only forwarded when non-default.
     if call_args.get("purpose") == "line":
         payload_kwargs["purpose"] = "line"
-    # suggested_view: {bbox: [..4..], zoom: float} — optional camera hint.
+    # suggested_view: {bbox: [..4..], zoom: float} - optional camera hint.
     sv = call_args.get("suggested_view")
     if isinstance(sv, dict) and isinstance(sv.get("bbox"), (list, tuple)):
         bbox = sv["bbox"]
@@ -78,8 +77,7 @@ def _spatial_response_to_result(
 ) -> dict[str, Any]:
     """Translate a ``spatial-input-response`` into the tool result the LLM reads.
 
-    Honesty floor: a structurally invalid drawn FeatureCollection becomes a TYPED
-    error result, never a silent success."""
+    A structurally invalid drawn FeatureCollection becomes a TYPED error, never a silent success."""
     if response is None:
         return {
             "status": "error",
@@ -149,11 +147,10 @@ def _spatial_response_to_result(
         if parsed.aoi_bbox is not None:
             result["aoi_bbox"] = list(parsed.aoi_bbox)
         if parsed.line_coords is not None:
-            # A NEUTRAL drawn elevation/section line (purpose="line"): surface the
-            # plain LineString vertices so the LLM can pass them straight to
-            # compute_terrain_profile(line=...) / compute_cross_section(line=...).
-            # `line` is the bare [[lon,lat],...] vertex list; `linestring` is the
-            # GeoJSON LineString geometry -- both resolve via _resolve_line_coords.
+            # A NEUTRAL drawn elevation/section line (purpose="line"): surface the plain
+            # LineString vertices so the LLM can pass them straight to
+            # compute_terrain_profile(line=...) / compute_cross_section(line=...); ``linestring``
+            # is the same line as GeoJSON.
             result["line"] = [list(pt) for pt in parsed.line_coords]
             result["linestring"] = {
                 "type": "LineString",
@@ -171,9 +168,8 @@ def _spatial_response_to_result(
 
 
 def _drawn_constraints(parsed: Any) -> dict[str, Any]:
-    """What a drawing states beyond an area, a point or a section: the mesh
-    constraints as the ``mesh_op`` calls that impose them, and each breach line
-    for the TELEMAC-2D ``breach`` composite to write."""
+    """What a drawing states beyond an area, a point or a section: the mesh constraints as
+    ``mesh_op`` calls, and each breach line for the TELEMAC-2D ``breach`` composite."""
     from trid3nt_server.tools.mesh.op_tool import drawn_ops
 
     out: dict[str, Any] = {}

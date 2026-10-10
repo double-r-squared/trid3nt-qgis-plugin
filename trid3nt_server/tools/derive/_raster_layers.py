@@ -193,11 +193,10 @@ _COVERAGE_CELLS = 4_000_000
 
 def over_the_cut(won: Any, crs: Any, transform: Any, polygon: Any
                  ) -> tuple[Any, Any]:
-    """``won`` on a grid reaching over the raster AND the polygon -> ``(won,
-    wet)``, ``wet`` ``None`` where the polygon carries none.
+    """``won`` on a grid reaching over the raster AND the polygon -> ``(won, wet)``,
+    ``wet`` ``None`` where the polygon carries none.
 
-    Ground inside the polygon past the raster's own edge is ground nothing
-    measured, so it counts as UNMEASURED rather than out of sight."""
+    Ground inside the polygon past the raster's edge was never measured, so it counts as UNMEASURED."""
     import math
 
     import numpy as np

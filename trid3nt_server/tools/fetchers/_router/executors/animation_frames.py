@@ -28,15 +28,7 @@ __all__ = ["execute"]
 def execute(
     spec: SourceSpec, params: dict[str, Any], metadata: AtomicToolMetadata
 ) -> list[LayerURI]:
-    """Drive the per-frame read_through loop and emit an ordered ``list[LayerURI]``."""
 
-    # The two source hooks own the source-specific steps and nothing else:
-    # ``frames_plan`` is the pre-loop resolve (fetch the timestamp index, window,
-    # subsample, filter) returning the ordered per-frame plans, and raising the
-    # source's typed EMPTY when the window matched no frames; ``frame_bytes`` builds
-    # ONE frame's COG bytes and raises ``FrameDegraded`` to skip a single transparent,
-    # off-swath or upstream-failed frame. The executor owns the loop, the cache, the
-    # per-frame degrade and the LayerURI emission.
     frames_plan = resolve_hook(spec.hooks.frames_plan)  # type: ignore[union-attr]
     frame_bytes = resolve_hook(spec.hooks.frame_bytes)  # type: ignore[union-attr]
 
@@ -55,8 +47,7 @@ def execute(
                 record_shape=record_shape(spec),
             )
         except FrameDegraded as exc:
-            # A single degraded frame (transparent / off-swath / upstream-failed) is
-            # recorded and dropped -- never a silent gap, never fatal on its own.
+            # A degraded frame is recorded and dropped: never a silent gap, never fatal alone.
             n_degraded += 1
             last_note = str(exc)
             logger.warning(
@@ -73,23 +64,17 @@ def execute(
                 name=frame.name,
                 layer_type=spec.output.layer_type,
                 uri=result.uri,
-                # A frame MAY override the row-level preset (the archive
-                # source's per-band goes_rgb_animation vs goes_fire_hotspots_rgba);
-                # None falls back to the row preset (no-op for single-preset sources).
+                # A frame MAY override the row-level preset; None falls back to it.
                 style=frame.style or spec.output.style,
                 role=spec.output.role,
                 units=spec.normalize.units,
                 bbox=frame.bbox,
-                # The frame's own validity window, declared by the plan that
-                # already held the instants: the map stamps it as this layer's
-                # fixed temporal range and the temporal controller plays the
-                # sequence with no name to parse.
+                # The frame's own validity window becomes the layer's fixed temporal range.
                 valid_from=frame.valid_from,
                 valid_to=frame.valid_to,
             )
         )
 
-    # Honesty floor: a run that produced NO frames is not success.
     if not layers:
         raise router_empty_error(
             spec.error_code_prefix,

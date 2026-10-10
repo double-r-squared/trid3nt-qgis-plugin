@@ -24,11 +24,8 @@ __all__ = ["set_bed", "set_boundary_roles"]
 #: what a bed has to be when the raster is already finer than the elements.
 _INTERPOLATIONS = ("nearest", "bilinear")
 
-#: The one conditioning a bed source is put through on the way in, named by the
-#: ask: the watershed delineator's own pit/depression/flat chain. A catchment
-#: whose basin was delineated on a filled surface but whose bed carries the raw
-#: sinks ponds in pits the routing does not believe in, and the deepest water in
-#: the run is then a terrain artifact.
+#: The one conditioning a bed source is put through: the watershed delineator's pit/depression/flat chain. A basin delineated on a
+#: filled surface over a raw-sink bed ponds in pits the routing does not believe in.
 _PIT_FILL = "pit_fill"
 
 #: How far past the mesh's own extent the bed is fetched, as a fraction of each
@@ -39,11 +36,8 @@ def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
             condition: str | None = None) -> Mesh:
     """Paint every node's elevation from the bed slot -> the mesh, bedded.
 
-    ``source`` is ONE surface - a raster fetcher's name, an object-store uri, a
-    raster layer, or a depth in metres below the free surface. A
-    bed composed of several surfaces is composed BEFORE here, by merge_rasters
-    and fill_nodata, and arrives as the one layer they produced. A node
-    the surface has nothing for refuses: nothing is put there on its behalf."""
+    ``source`` is ONE surface (fetcher name, object-store uri, raster layer, or a depth in metres below the free surface);
+    a bed of several is composed BEFORE here by merge_rasters and fill_nodata. A node the surface has nothing for refuses."""
     import numpy as np
 
     if str(interp) not in _INTERPOLATIONS:
@@ -62,10 +56,8 @@ def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
         bed_source=painted,
         bed_sources=[provenance],
         bed_notes=notes or None,
-        # A bed STATED as a depth is counted from the free surface itself, so
-        # this mesh knows the elevation that surface stands at and a run over it
-        # needs no gauge. A bed measured on a datum states nothing about the
-        # water, and a run over it opens at the level somebody read.
+        # A bed STATED as a depth is counted from the free surface, so the mesh knows the elevation that surface stands at and a run needs no gauge.
+        # A bed measured on a datum states nothing about the water.
         **({"free_surface_m": 0.0} if _stated_depth(source) else {}),
         synthetic_inputs=[
             *(mesh.meta.get("synthetic_inputs") or []),
@@ -76,12 +68,7 @@ def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
 
 
 def _reached(source: Any, values: Any, lonlat: Any, provenance: str) -> None:
-    """REFUSE a mesh with a node no value reached, naming how many and where.
-
-    A node standing on a cell nothing measured has no elevation, and a number
-    put there on its behalf is a bed nobody surveyed. The refusal carries the
-    count, the box those nodes stand in and the surface's own coverage feedback,
-    because what would cover them is the thing the person has to act on."""
+    """REFUSE a mesh with a node no value reached, naming how many and where."""
     import numpy as np
 
     blank = ~np.isfinite(np.asarray(values, dtype=float))
@@ -100,10 +87,7 @@ def _reached(source: Any, values: Any, lonlat: Any, provenance: str) -> None:
 
 
 def _feedback(source: Any) -> str:
-    """The coverage feedback the bed surface STATES about itself, or "".
-
-    Said again in the refusal because a person reading why a run stopped is
-    exactly the person the feedback was written for."""
+    """The coverage feedback the bed surface STATES about itself, or ""."""
     from trid3nt_server.inputs.bed import bed as read_bed
 
     slot = read_bed(source, label="bed")
@@ -112,11 +96,7 @@ def _feedback(source: Any) -> str:
 
 
 def _journal_bed(source: Any, provenance: str, lonlat: Any, nodes: int) -> None:
-    """What the run SAYS about the bed its nodes were painted from.
-
-    On the run journal and not in a log line: which dataset reached each node is
-    part of the answer, and a composed bed is several datasets whose shares of
-    the NODES a reader has to be able to see."""
+    """What the run SAYS about the bed its nodes were painted from."""
     from trid3nt_server.workflows.runtime import journal_note
 
     shares = _node_shares(source, lonlat)
@@ -128,11 +108,7 @@ def _journal_bed(source: Any, provenance: str, lonlat: Any, nodes: int) -> None:
 
 
 def _node_shares(source: Any, lonlat: Any) -> list[tuple[str, float]] | None:
-    """The share of the NODES each input of a composed bed painted, or ``None``
-    on a bed nothing composed.
-
-    The merge's band 2 names which input won each CELL; a node takes the cell it
-    stands in, so the shares a run reports are the ones its own solve reads."""
+    """The share of the NODES each input of a composed bed painted (merge band 2 names each cell's winner), or ``None``."""
     import numpy as np
     import rasterio
     from rasterio.warp import transform as warp_transform
@@ -169,10 +145,7 @@ def _stated_depth(source: Any) -> bool:
 def _painted(source: Any, lonlat: Any, box: tuple[float, float, float, float],
              interp: str, condition: str | None, edge_m: Any = None
              ) -> tuple[Any, str, list[str]]:
-    """One bed source sampled at the nodes -> ``(values, provenance, notes)``.
-
-    A node the source has nothing for comes back NaN, which is what lets the
-    refusal above name it; a STATED DEPTH covers every node by construction."""
+    """One bed source sampled at the nodes -> ``(values, provenance, notes)``; a node it has nothing for is NaN."""
     import numpy as np
 
     from trid3nt_server.inputs.bed import DEPTH, bed as read_bed
@@ -207,23 +180,9 @@ def _painted(source: Any, lonlat: Any, box: tuple[float, float, float, float],
 def set_boundary_roles(mesh: Mesh, runs: Any = None, **roles: Any) -> Mesh:
     """Which CONTIGUOUS runs of the boundary carry which role -> the mesh, roled.
 
-    ``runs`` is the BOUNDARY RUNS the domain slot carries - two points on the
-    edge and a type each, from a template, a producer or the user's drawing -
-    and stating none is an answer: a closed body's edge is solid wall whole.
-
-    ``roles`` is ``{role: face}`` or ``{role: [face, ...]}`` - ``inflow``,
-    ``outflow``, ``open``, ``rating_curve``, ``free_exit`` - each face a geometry
-    the chain measured, or the two ends of one. Every boundary node on the run a
-    face names takes that role; the rest are solid wall.
-
-    A role is a RUN, not a node set: a declared TRANSECT names the run between
-    the contour nodes nearest its two ends, a declared POINT the run standing
-    within the mesh's own mean boundary edge of it, and a declared RING the whole
-    stretch it stands along.
-
-    SEVERAL FACES, ONE ROLE: each face lands its own run and the role carries
-    their union, with the number of runs riding back on the mesh. A node two
-    faces both claim refuses, and so does a face NO boundary node lies on."""
+    ``runs`` are the domain slot's boundary runs; ``roles`` is ``{role: face | [face, ...]}``. Boundary nodes on a face's run take
+    the role, the rest are wall: a transect is the run between the contour nodes nearest its ends, a point the run within the mean
+    boundary edge, a ring the stretch it stands along. Several faces union per role; a node two faces claim, or a face no node lies on, refuses."""
     import numpy as np
     from pyproj import Transformer
     from shapely.geometry import shape as _shape
@@ -251,10 +210,7 @@ def set_boundary_roles(mesh: Mesh, runs: Any = None, **roles: Any) -> Mesh:
     faces = {role: [_transform(tr.transform, _shape(face)) for face in value]
              for role, value in declared.items()}
     xy = np.asarray(points_m, dtype=float)
-    # The tolerance is measured off the mesh and gates the FACE, not its anchors:
-    # a triangulator conforms to a polygon within an edge along its sides and
-    # cuts its corners by more, so a tolerance on the two end anchors would
-    # reject the very reach whose middle the boundary follows exactly.
+    # The tolerance is measured off the mesh and gates the FACE, not its anchors: a triangulator cuts polygon corners by more than its sides.
     tolerance = _mean_boundary_edge_m(xy, contours)
     matched = _runs(xy, contours, faces, tolerance_m=tolerance)
     unmatched = [f"{role}[{i}]" for role, declared in faces.items()
@@ -291,10 +247,7 @@ def set_boundary_roles(mesh: Mesh, runs: Any = None, **roles: Any) -> Mesh:
 
 def _declared_faces(runs: Any, roles: Mapping[str, Any]
                     ) -> dict[str, list[dict[str, Any]]]:
-    """Every face this call prescribes, by role: the runs and the named roles.
-
-    A run of type ``wall`` prescribes nothing - the edge is already wall where
-    nothing names it - so a body whose runs are all walls declares no face."""
+    """Every face this call prescribes, by role; a ``wall`` run prescribes nothing."""
     from trid3nt_server.inputs.boundary import boundary_runs, roles_from_runs
 
     out: dict[str, list[dict[str, Any]]] = {}
@@ -329,11 +282,7 @@ def _bed_raster(source: Any, bbox: tuple[float, float, float, float]
             "set_bed was given no source, so the mesh has no elevation to carry.")
     if name in TOOL_REGISTRY:
         _refuse_undated_source(name)
-        # The NAMED source and nothing else: no second row is permitted from
-        # here. A bed is TOPOBATHY - the channel bottom and the sea floor - and a
-        # standard DEM measures the water SURFACE, so which substitutions a bed
-        # tolerates is the DATA row's declaration; a row this op permitted on
-        # the author's behalf would be a cross-dataset bed nobody wrote down.
+        # The NAMED source only: a bed is TOPOBATHY and a standard DEM measures the water SURFACE, so substitutions are the DATA row's declaration.
         layer = TOOL_REGISTRY[name].fn(bbox=bbox, target_crs="EPSG:4326")
         return (op_raster(layer), _provenance(name, layer),
                 fetch_notes(layer))

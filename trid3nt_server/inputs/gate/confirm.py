@@ -36,33 +36,25 @@ CODE_EXEC_CONFIRM_TIMEOUT_SECONDS: int = int(
 
 
 def _code_exec_approval_timeout_s() -> float:
-    """The code-exec gate's own approval window in every lane
-    (``TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S``, default 180); an expired card
-    raises ``CodeExecApprovalTimeoutError`` so the turn completes honestly."""
+    """The code-exec gate's approval window (``TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S``, default 180).
+
+    An expired card raises ``CodeExecApprovalTimeoutError`` so the turn completes honestly."""
     return _env_float("TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S", 180.0)
 
-# Confirm-gate membership is DERIVED from tool metadata: a tool declares a
-# ``GateSpec`` on its ``AtomicToolMetadata`` and that PRESENCE is the one
-# membership signal. ``kind`` on the spec ('solver' | 'fetch') splits the two
-# lanes: a solver strips a model-supplied ``confirmed`` before gating and injects
-# it only on an explicit proceed; a fetch does not, since fetchers ignore it. The
-# named sets survive ONLY as registry-derived views (see ``__getattr__`` below)
-# -- the specs are the source of truth.
+# Gate membership is DERIVED: a tool's ``GateSpec`` on its ``AtomicToolMetadata`` is the
+# one signal, and ``kind`` ('solver' | 'fetch') splits the two lanes: a solver strips a
+# model-supplied ``confirmed`` before gating and injects it only on an explicit proceed.
 
 
 def _gate_spec_for(tool_name: str) -> "GateSpec | None":
-    """The declared :class:`GateSpec` for ``tool_name``, or ``None`` if un-gated.
-
-    The ONE membership check: a tool is confirm-gated iff its metadata has one."""
+    """The declared :class:`GateSpec` for ``tool_name``, or ``None`` if un-gated."""
     entry = TOOL_REGISTRY.get(tool_name)
     if entry is None:
         return None
     return entry.metadata.gate_spec
 
 def _confirm_tools_by_kind(kind: str) -> "frozenset[str]":
-    """Registry-derived confirm-gate membership for one ``kind``.
-
-    Computed on read, so import order cannot leave it partly populated."""
+    """Registry-derived confirm-gate membership for one ``kind``, computed on read so import order cannot leave it partial."""
     return frozenset(
         name
         for name, entry in TOOL_REGISTRY.items()
@@ -70,22 +62,17 @@ def _confirm_tools_by_kind(kind: str) -> "frozenset[str]":
         and entry.metadata.gate_spec.kind == kind
     )
 
-# User-decision gates must NOT expire in the TRID3NT local build: the user
-# OWNS the machine and the LLM, so a gate card should wait for them
-# indefinitely. "Effectively unbounded" = 24h -- long enough that no human
-# session ever hits it, finite so an abandoned process still unwinds its
-# futures.
+# User-decision gates must NOT expire: the user owns the machine, so a gate waits
+# indefinitely; 24h is the finite stand-in, so an abandoned process still unwinds its futures.
 _LOCAL_GATE_TIMEOUT_SECONDS: int = 24 * 3600
 
-# Test seam: a headless suite exercises the gate-park machinery with no client
-# to answer the card, so the local-lane 24h wait would hang the run. With
-# ``TRID3NT_GATE_WAIT_CAP_S`` set, ``_gate_wait_timeout`` returns
-# ``min(configured, cap)`` for every gate, and the wait deterministically
-# reaches the honest timeout path.
+# Test seam: a headless suite exercises the gate-park machinery with no client to answer
+# the card, so the local-lane 24h wait would hang the run. With ``TRID3NT_GATE_WAIT_CAP_S``
+# set, every gate waits ``min(configured, cap)`` and reaches the honest timeout path.
 def _gate_wait_cap_s() -> "float | None":
     """Optional hard ceiling (seconds) applied to EVERY gate wait window.
 
-    Read LIVE; unset, malformed or non-positive all leave every wait unchanged."""
+    Read LIVE; unset, malformed or non-positive leave every wait unchanged."""
     raw = os.environ.get("TRID3NT_GATE_WAIT_CAP_S")
     if raw is None:
         return None
@@ -115,12 +102,11 @@ async def _gate_on_confirm(
 ) -> tuple[bool, dict]:
     """The ONE gate engine, driven by a tool's declared ``GateSpec``.
 
-    Fail-OPEN on an estimate fault or a ``None`` envelope; fail-CLOSED on an
-    explicit cancel, and on a deadline nobody answered, which RAISES."""
-    # Build the confirm card via the tool's declared ESTIMATE provider, a pure
-    # function named by dotted path and imported lazily. Any failure fails OPEN:
-    # the gate must never mask a parameter problem behind a confusing confirm
-    # card, and the composer then raises its own typed error.
+    Fail-OPEN on an estimate fault or a ``None`` envelope; fail-CLOSED on an explicit
+    cancel, and on a deadline nobody answered, which RAISES."""
+    # Build the confirm card via the tool's declared ESTIMATE provider, a pure function
+    # named by dotted path and imported lazily. Any failure fails OPEN: the gate must
+    # never mask a parameter problem behind a confusing card.
     try:
         estimate = await call_provider(
             gate_spec.estimate_provider,
@@ -148,10 +134,9 @@ async def _gate_on_confirm(
     envelope = estimate.envelope
     warning_id = envelope.warning_id
     if _warning_id_out is not None:
-        # A real gate is about to be sent, so the caller may memoize whatever
-        # decision comes back (proceed/narrow_scope only; a cancel raises before
-        # the caller's write site is reached). It stays unset on every fail-open
-        # early return above, where no gate was emitted.
+        # A real gate is about to be sent, so the caller may memoize whatever decision
+        # comes back (proceed/narrow_scope only; a cancel raises before the caller's
+        # write site is reached). Unset on every fail-open return above.
         _warning_id_out["warning_id"] = warning_id
     logger.info(
         "confirm gate emitted session=%s tool=%s warning_id=%s kind=%s",
@@ -210,12 +195,10 @@ async def _gate_on_confirm(
         )
         return False, params
 
-    # proceed / narrow_scope. The declared PIN provider, when present, owns the
-    # approved-params DELTA -- the engine's own tail arithmetic. A pin provider
-    # returning None fails closed: that is a narrow_scope answering a card that
-    # never advertised an override. A gate with NO pin provider is a plain
-    # proceed/cancel, where a narrow_scope fails closed and a proceed injects
-    # ``confirmed`` for a solver (a fetch reads nothing).
+    # proceed / narrow_scope. The declared PIN provider owns the approved-params DELTA;
+    # one returning None fails closed (a narrow_scope on a card that offered no override).
+    # With NO pin provider a narrow_scope fails closed and a proceed injects ``confirmed``
+    # for a solver.
     if gate_spec.pin_provider is not None:
         delta = await call_provider(
             gate_spec.pin_provider,
@@ -258,9 +241,7 @@ async def _gate_on_solver_confirm(
     params: dict,
     _warning_id_out: dict[str, str] | None = None,
 ) -> tuple[bool, dict]:
-    """Resolve the tool's ``GateSpec`` and run the engine.
-
-    An un-gated tool fails open; the dispatch site never routes one here."""
+    """Resolve the tool's ``GateSpec`` and run the engine; an un-gated tool fails open."""
     gate_spec = _gate_spec_for(tool_name)
     if gate_spec is None:
         return True, params
@@ -277,8 +258,7 @@ async def _gate_with_turn_memory(
 ) -> tuple[bool, dict]:
     """``_gate_on_solver_confirm`` wrapped with per-turn decision memory.
 
-    A remembered decision replays its DELTA with no new card; a different tool
-    or a different bbox is a different key and gates normally."""
+    A remembered decision replays its DELTA with no new card; another tool or bbox gates normally."""
     gate_key = _gate_memory_key(tool_name, params)
     remembered = state.gate_decisions_this_turn.get(gate_key)
     if remembered is not None:
@@ -302,13 +282,10 @@ async def _gate_with_turn_memory(
 
     prior_warning_id = warning_id_box.get("warning_id")
     if prior_warning_id is not None:
-        # A real gate was sent and answered proceed/narrow_scope (a cancel
-        # returns should_run=False above and is never memoized, so a
-        # corrected retry after a cancel still gates fresh). Remember only
-        # the DELTA the gate applied to params - not the whole approved
-        # dict - so a later retry keeps ITS OWN corrected non-bbox args
-        # (e.g. a fixed `dataset`) and only inherits what the gate itself
-        # decided (e.g. `resolution_m`).
+        # A real gate was sent and answered proceed/narrow_scope (a cancel returns
+        # should_run=False above and is never memoized, so a corrected retry after a
+        # cancel still gates fresh). Only the DELTA the gate applied is remembered, so a
+        # later retry keeps its own corrected non-bbox args.
         overrides = {
             k: v
             for k, v in approved.items()
@@ -330,14 +307,12 @@ async def _maybe_gate_on_payload_warning(
 ) -> tuple[bool, dict]:
     """Run the payload-warning gate before dispatching ``tool_name``.
 
-    A gate FAULT never raises: it logs and falls through to dispatch, the gate
-    being a UX nudge that must not break the tool it guards. A card nobody
-    answers raises the typed timeout."""
-    # Returns (should_dispatch, effective_params): (True, params) when no
-    # warning is needed or the user proceeds; (True, revised_args) on
-    # narrow_scope; (False, params) on cancel, where the caller surfaces a typed
-    # decline to chat. An audit entry is appended to
-    # ``state.payload_warning_audit_log`` on both emission AND decision.
+    A gate FAULT never raises: it logs and falls through, the gate being a UX nudge. A
+    card nobody answers raises the typed timeout."""
+    # Returns (should_dispatch, effective_params): (True, params) when no warning is
+    # needed or the user proceeds; (True, revised_args) on narrow_scope; (False, params)
+    # on cancel, where the caller surfaces a typed decline to chat. An audit entry is
+    # appended to ``state.payload_warning_audit_log`` on emission AND decision.
     entry = TOOL_REGISTRY.get(tool_name)
     if entry is None:
         return True, params
@@ -377,10 +352,9 @@ async def _maybe_gate_on_payload_warning(
         f"({hard_cap_mb if over_hard_cap else threshold_mb:.0f} MB). "
         "Consider narrowing bbox or other scope parameters."
     )
-    # An OPTIONAL ``<estimator>_detail`` companion returns a one-line human
-    # string carrying the measured-vs-analytic kind plus a concrete coarsening
-    # suggestion. It is appended to the recommendation so the card quotes real
-    # numbers, with no new envelope field and no new WS event. Best-effort.
+    # An OPTIONAL ``<estimator>_detail`` companion returns a one-line human string
+    # carrying the measured-vs-analytic kind plus a concrete coarsening suggestion; it is
+    # appended to the recommendation. Best-effort.
     detail_fn = _resolve_payload_estimator(tool_name, f"{estimator_name}_detail")
     if detail_fn is not None:
         try:
@@ -496,13 +470,11 @@ async def _gate_on_code_exec(
 ) -> tuple[bool, dict]:
     """Confirm gate for ``run_pyqgis`` -- MANDATORY, fail-closed.
 
-    The user must approve the EXACT code before the session runs it;
-    ``narrow_scope`` is not offered for a code snippet and is treated as a
-    cancel, and a card nobody answers raises the typed timeout."""
+    The user approves the EXACT code first; ``narrow_scope`` is not offered and is a cancel,
+    and a card nobody answers raises the typed timeout."""
     # Returns (should_dispatch, effective_params): on approval, params plus
-    # ``confirmed`` and the ``code_exec_id`` the request card carried, so the
-    # request and result cards correlate. On cancel, (False, params), and the
-    # caller raises a typed non-retryable error the model narrates.
+    # ``confirmed`` and the ``code_exec_id`` the request card carried, so the request
+    # and result cards correlate. On cancel the caller raises a typed non-retryable error.
     python_code = params.get("code")
     if not isinstance(python_code, str) or not python_code.strip():
         # No code to confirm -- let the tool body raise its own params error.
@@ -549,10 +521,8 @@ async def _gate_on_code_exec(
             f"run_pyqgis {code_exec_id!r} approval card was not answered "
             f"within {approval_timeout_s:.0f}s; the code did not run",
         )
-        # Typed resolution of the parked tool call: propagates to the tool
-        # dispatch except-handler -> summarize_tool_result(error=...) -> a
-        # structured function_response the LLM narrates -- the turn COMPLETES,
-        # reading the card as expired rather than as a refusal to run the code.
+        # Typed resolution of the parked tool call: the turn COMPLETES, reading the card
+        # as expired rather than as a refusal to run the code.
         raise GateConfirmationTimeoutError(
             "code-approval card", f"run_pyqgis {code_exec_id}", approval_timeout_s
         ) from None
@@ -595,8 +565,7 @@ async def _inject_secret_ref(
 ) -> dict:
     """Thread the resolved credential VALUE into a keyed tool's ``secret_ref``.
 
-    A no-op for a public tool and for an explicit caller-supplied ref; a keyed
-    tool with no key anywhere raises the refusal that names the keys form."""
+    A no-op for a public tool or an explicit ref; a keyed tool with no key raises the refusal naming the keys form."""
     # ``case_id`` is unused: the credential cache is session-scoped, not
     # per-Case.
     credential = credential_for_tool(tool_name)
@@ -619,11 +588,9 @@ async def _inject_secret_ref(
     )
     return params
 
-#
-# The LLM-facing tool returns a sentinel result that the turn loop replaces with
-# the parsed, role-split drawn geometry: the tool surface stays catalog-clean
-# while the websocket pause/resume lives here, where the live socket and the
-# session future registry are reachable.
+# The LLM-facing tool returns a sentinel the turn loop replaces with the parsed drawn
+# geometry; the websocket pause/resume lives here, where the live socket and the session
+# future registry are reachable.
 
 async def _emit_spatial_input_and_wait(
     websocket: ServerConnection,
@@ -632,7 +599,7 @@ async def _emit_spatial_input_and_wait(
 ) -> "SpatialInputResponsePayload | None":
     """Emit a ``spatial-input-request`` and await ``spatial-input-response``.
 
-    ``None`` on timeout, and the caller turns that into a typed "nothing drawn"."""
+    ``None`` on timeout; the caller turns that into a typed "nothing drawn"."""
     logger.info(
         "spatial-input-request emitted session=%s mode=%s request_id=%s",
         state.session_id,
@@ -657,10 +624,9 @@ async def _emit_spatial_input_and_wait(
         )
         return None
     except SpatialInputInvalidResponseError:
-        # The user's reply ARRIVED but failed structural validation (e.g. a
-        # feature carrying an unknown role). The inbound handler failed the future
-        # eagerly so we wake here IN-BAND -- NOT after the read TTL. Re-raise so
-        # _handle_request_spatial_input surfaces the typed error result.
+        # The user's reply ARRIVED but failed structural validation (e.g. a feature
+        # carrying an unknown role). The inbound handler failed the future eagerly, so this
+        # wakes in-band, not after the read TTL; re-raised for the typed error result.
         logger.info(
             "spatial-input-request invalid-response session=%s request_id=%s; "
             "resolving turn with typed error (not timeout path)",
@@ -686,8 +652,7 @@ async def _handle_request_spatial_input(
 ) -> dict[str, Any]:
     """Drive one ``request_spatial_input`` turn-pause and return the LLM result.
 
-    Never raises: no client, a validation or parse failure, a timeout and a
-    cancellation all become a typed result the LLM narrates honestly."""
+    Never raises: no client, an invalid reply, a timeout and a cancellation all become a typed result."""
     if state.emitter is None:
         # No interactive surface bound (e.g. headless eval). Honest typed error.
         return {
@@ -717,11 +682,8 @@ async def _handle_request_spatial_input(
     except asyncio.CancelledError:
         raise
     except SpatialInputInvalidResponseError as exc:
-        # The reply arrived but was structurally invalid (honesty floor: a
-        # malformed drawn FeatureCollection -- e.g. a feature carrying an
-        # unknown role -- degrades to a TYPED error result, NOT a silent success
-        # and NOT a hung turn that drains default_timeout_seconds then reads as
-        # SPATIAL_INPUT_TIMEOUT). The user already saw TOOL_PARAMS_INVALID.
+        # A malformed drawn FeatureCollection degrades to a TYPED error result, never a
+        # silent success and never a hung turn that reads as a timeout.
         logger.info(
             "spatial-input invalid-response session=%s request_id=%s code=%s",
             state.session_id,

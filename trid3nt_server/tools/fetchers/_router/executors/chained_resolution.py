@@ -1,8 +1,7 @@
 """chained_resolution executor: resolve-then-fetch with bounded detail enrichment.
 
-ONE mode, two composable phases, and a source declares only the phase it needs. The
-router owns all orchestration -- the round trips, both loops, the per-ref error
-aggregation -- and the source-specific PURE compute lives in hooks at each edge."""
+Two composable phases, each declared only when needed; the router owns the round trips, both
+loops and the per-ref error aggregation, and source-specific PURE compute lives in hooks."""
 
 from __future__ import annotations
 
@@ -24,20 +23,16 @@ logger = logging.getLogger(
 
 __all__ = ["DetailResult", "pre_resolve", "execute", "fetch_detail_set"]
 
-#: Hard safety ceiling on the offset-paging loop (per-source stop logic lives in the
-#: ``next_page`` hook; this only guards a pathological non-terminating response).
+#: Ceiling on the offset-paging loop against a non-terminating response.
 _MAX_PAGES = 200
 
-#: Default global cap on distinct detail fetches when a row omits
-#: ``ingest.chained.max_detail_fetches`` (generous; per-pass caps live in enrich_plan).
+#: Default cap on distinct detail fetches when ``ingest.chained.max_detail_fetches`` is omitted.
 _DEFAULT_MAX_DETAIL_FETCHES = 3000
 
 
 @dataclass(frozen=True)
 class DetailResult:
-    """One resolved detail ref: a body OR a typed error, never both meaningful. The
-    merge hook reads whichever is set and keeps the owning feature regardless, which
-    is the never-silent-drop rule."""
+    """One resolved detail ref: a body OR a typed error; the merge keeps the owning feature regardless."""
 
     body: bytes | None = None
     error: str | None = None
@@ -47,17 +42,12 @@ def _chained_block(spec: SourceSpec) -> dict[str, Any]:
     return (spec.ingest or {}).get("chained") or {}
 
 
-# PHASE R -- resolve (name -> id), pre-cache-key, runs in route().
-#
-# The ``resolve_build`` hook builds the resolution requests (or [] to skip), the
-# router GETs them, and ``resolve_parse`` returns a params-merge dict the router
-# folds into params, so a name query and its id query collapse to one cache entry.
+# Resolve phase (pre-cache-key, runs in route()): ``resolve_parse`` returns a params-merge dict so
+# a name query and its id query collapse to one cache entry.
 
 
 def pre_resolve(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
-    """Run the resolve phase and return ``params`` with the resolved id merged in, or
-    unchanged when no ``resolve_build`` hook is declared. Called BEFORE read_through,
-    so the resolved id is part of the cache key."""
+    """Run the resolve phase and return ``params`` with the resolved id merged in; called BEFORE read_through."""
     if spec.hooks is None or not spec.hooks.resolve_build:
         return params
     build = resolve_hook(spec.hooks.resolve_build)
@@ -72,15 +62,7 @@ def pre_resolve(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
     return {**params, **update}
 
 
-# MAIN FETCH -- ``build_request`` builds page 1; the optional ``next_page`` hook
-# drives offset paging (the next page's plan given the pages so far, or None to
-# stop); ``parse_response`` decodes the bodies into features.
-
-
 def _fetch_main(spec: SourceSpec, params: dict[str, Any]) -> list[bytes]:
-    """Fetch the round-1 body/bodies. With no ``next_page`` hook this is the http_json
-    fetch verbatim -- the declared pagination block included -- so paging has one home
-    whichever executor the row's enrichment routes it to."""
     if not (spec.hooks and spec.hooks.next_page):
         return fetch_bodies(spec, params)
     bodies = [_get(spec, plan) for plan in _plans(spec, params)]
@@ -101,19 +83,14 @@ def _fetch_main(spec: SourceSpec, params: dict[str, Any]) -> list[bytes]:
     return bodies
 
 
-# PHASE E -- enrich (list -> per-item detail). The ``enrich_plan`` hook emits the
-# ordered (ref_key, RequestPlan) detail set already sliced to the source's per-pass
-# cap; the router dedupes by ref_key, bounds by ingest.chained.max_detail_fetches,
-# and fetches each best-effort; ``enrich_merge`` folds the {ref_key: DetailResult}
-# map back into the features, and every feature survives.
+# Enrich phase: ``enrich_plan`` emits the ordered detail set; the router dedupes by ref_key, bounds
+# by ``ingest.chained.max_detail_fetches`` and fetches best-effort; every feature survives the merge.
 
 
 def fetch_detail_set(
     spec: SourceSpec, ref_plans: list[tuple[str, Any]], cap: int
 ) -> dict[str, DetailResult]:
-    """Fetch the ``(ref_key, RequestPlan)`` set, deduped by key and bounded by ``cap``.
-    First occurrence wins and order is preserved; past the cap an unseen ref records a
-    ``cap_reached`` error, and a per-ref failure records its error and proceeds."""
+    """Fetch the ``(ref_key, RequestPlan)`` set deduped by key and bounded by ``cap``; a per-ref failure records its error and proceeds."""
     results: dict[str, DetailResult] = {}
     fetched = 0
     capped = False
@@ -142,9 +119,6 @@ def fetch_detail_set(
 
 
 def _enrich(spec: SourceSpec, params: dict[str, Any], features: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """The detail pass: the enrich hook pair when the row names one, else the declared
-    ``ingest.enrich`` keyed join. Either way the router owns the deduped, bounded,
-    best-effort fetch between them."""
     if spec.hooks is not None and spec.hooks.enrich_plan:
         plan_for = resolve_hook(spec.hooks.enrich_plan)
         merge = resolve_hook(spec.hooks.enrich_merge)  # type: ignore[arg-type]
@@ -160,7 +134,6 @@ def _enrich(spec: SourceSpec, params: dict[str, Any], features: list[dict[str, A
 
 
 def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
-    """Main fetch (+ paging) -> parse -> optional detail enrichment -> FGB bytes."""
     bodies = _fetch_main(spec, params)
     features = _features(spec, params, bodies)
     if (spec.hooks and spec.hooks.enrich_plan) or (spec.ingest or {}).get("enrich"):

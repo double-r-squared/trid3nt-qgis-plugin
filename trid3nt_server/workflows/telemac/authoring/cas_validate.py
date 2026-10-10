@@ -1,8 +1,8 @@
-"""Every authored steering file, read by the engine's OWN parser before staging.
+"""Every authored steering file, read by the engine's own parser before staging.
 
-The file-existence check is OFF: the geometry and boundary files a steering file
-names are staged after this, by the launcher, so their absence is the normal
-case. What is checked is the grammar and the vocabulary."""
+File-existence checking is off: geometry and boundary files are staged later by the launcher.
+Only grammar and vocabulary are checked.
+"""
 
 from __future__ import annotations
 
@@ -31,9 +31,10 @@ class CasParseError(RuntimeError):
 
 def run_cas_driver(rundir: Path | str, config: Mapping[str, Any], *,
                    what: str) -> None:
-    """Shell the steering driver over ``rundir``. The ONE door to the image.
+    """Shell the steering driver over ``rundir``. The one door to the image.
 
-    Both directions go through it, so a refusal carries the container's words."""
+    A refusal carries the container's words.
+    """
     image = os.environ.get("TRID3NT_TELEMAC_IMAGE") or _TELEMAC_IMAGE_DEFAULT
     name = "telemac_cas_config.json"
     (Path(rundir) / name).write_text(json.dumps(dict(config)))
@@ -47,16 +48,13 @@ def run_cas_driver(rundir: Path | str, config: Mapping[str, Any], *,
             f"{cp.stdout[-2000:]}\n{cp.stderr[-2000:]}")
 
 
-# DAMOCLES is unforgiving in a way a diff does not show: a keyword one character
-# off its dictionary spelling, a value of the wrong type, or a line past the
-# 72-character limit each surface as a solve that started and then stopped inside
-# Fortran, blaming a keyword nobody wrote. Parsing where the dictionary is, at
-# authoring time, is what turns those three into a refusal by name.
+# DAMOCLES surfaces a misspelt keyword, a wrongly typed value or a line past 72 characters as a solve that dies inside Fortran blaming a keyword nobody wrote; parsing here refuses by name.
 def validate_authored_steering(rundir: Path | str,
                                steering: Mapping[str, str]) -> dict[str, dict]:
     """Parse every ``{basename: module}`` file in ``rundir`` -> what was read.
 
-    One container round trip for the whole authoring, never one per file."""
+    One container round trip for the whole authoring.
+    """
     rundir = Path(rundir)
     present = {name: module for name, module in steering.items()
                if (rundir / name).is_file()}

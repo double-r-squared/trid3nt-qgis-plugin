@@ -23,10 +23,7 @@ __all__ = ["append_record", "bind_choices", "bind_coverage", "bind_notes",
            "journal_path", "read_records", "run_choices", "run_coverage",
            "run_origin", "run_outputs", "slot_choice"]
 
-#: The notes the step now running has written for THIS run's record. Bound by the
-#: run for its length, the way the domain is: a producer deep in
-#: a chain measures something the reader has to know about and has no result field
-#: to say it in, and a note that only reached a log line dies with the process.
+#: Notes from the step now running for THIS run's record; a note that only reached a log line dies with the process.
 _NOTES: contextvars.ContextVar[list[str] | None] = contextvars.ContextVar(
     "trid3nt_run_notes", default=None)
 
@@ -41,9 +38,7 @@ def journal_note(text: str) -> None:
         notes.append(str(text))
 
 
-#: The layers the run in progress has published. Bound beside the notes and
-#: drained into the record, which is what makes the record the ONE place a run's
-#: outputs are read back from once the session that saw them is gone.
+#: Layers the run has published, drained into the record: the one place outputs are read back from.
 _OUTPUTS: contextvars.ContextVar[list[dict[str, Any]] | None] = contextvars.ContextVar(
     "trid3nt_run_outputs", default=None)
 
@@ -78,11 +73,7 @@ def drain_notes(token: contextvars.Token) -> list[str]:
     _NOTES.reset(token)
     return list(notes)
 
-#: WHAT THE CUT COVERS - the share of the water and of the land each row
-#: painted, and what nothing measured. Bound beside the notes because the card
-#: is built inside the run and the journal is written after it: a share a person
-#: would refuse at is a number to weigh BEFORE the solve, and a number only the
-#: journal carried would be read after the run it was about.
+#: What the cut covers (share of water and land painted, what nothing measured); the card reads it before the solve, the journal after.
 _COVERAGE: contextvars.ContextVar[list[str] | None] = contextvars.ContextVar(
     "trid3nt_run_coverage", default=None)
 
@@ -112,9 +103,7 @@ def drain_coverage(token: contextvars.Token) -> list[str]:
     return list(covered)
 
 
-#: The RANKED LIST each matched slot was filled from. Bound beside the notes for
-#: the same reason: the card is built inside the run, the record is written after
-#: it, and both read ONE object rather than two renderings of the same facts.
+#: The ranked list each matched slot was filled from; card and record read one object.
 _CHOICES: contextvars.ContextVar[list[Any] | None] = contextvars.ContextVar(
     "trid3nt_run_choices", default=None)
 
@@ -143,9 +132,7 @@ def drain_choices(token: contextvars.Token) -> list[Any]:
     return list(chosen)
 
 
-#: The env var a DRIVER sets to label its runs. A canary and a person asking a
-#: question produce the same shaped record, and telemetry that learns a default
-#: from a canary's pinned 600 s window would be learning from a test fixture.
+#: Env var a DRIVER sets to label its runs, so telemetry never learns a default from a canary's pinned window.
 ORIGIN_ENV = "TRID3NT_RUN_ORIGIN"
 
 _FILENAME = "run_journal.jsonl"
@@ -221,30 +208,20 @@ def build_record(*, run_id: str | None, engine: str | None,
         "module": module,
         "origin": origin,
         "sheet": [_row(row) for row in sheet],
-        # THE RAW KEYWORD FLOOR this run was pinned by. It is not a Param, so it
-        # is on no sheet row - and a reproduction driven from the arguments alone
-        # would run a different deck.
+        # The raw keyword floor is no Param and on no sheet row; a reproduction from arguments alone would run a different deck.
         "keywords": {k: _small(v) for k, v in (keywords or {}).items()},
-        # THE SLOTS THIS RUN WAS HANDED, by the slot's own name. Like the floor
-        # it is part of the INVOCATION and on no param sheet, so a reproduction
-        # driven from the arguments alone would run over a different world.
+        # Slots handed to the run are part of the invocation and on no param sheet.
         "supplied": {k: _small(v) for k, v in (supplied or {}).items()},
-        # WHICH SOURCE FILLED EACH MATCHED SLOT, and why it was the one. The
-        # sheet's own view of the ranked list: the pick and its reason, in the
-        # same sentence the card showed and the model was given.
+        # Which source filled each matched slot and why: the pick and its reason as the card showed them.
         "sources": {choice.slot: {"picked": choice.picked,
                                   "reason": choice.sentence}
                     for choice in sources},
         "provenance": [_provenance(row) for row in provenance],
-        # EACH SLOT OF THE SOLVED DECK: the value it was solved at, and where it
-        # came from in the closed vocabulary the card renders. A run is recorded
-        # under its engine and its module; the template it started in survives
-        # here and nowhere else on the line.
+        # Each slot of the solved deck: value and origin; the template survives here and nowhere else on the line.
         "fill": {name: {"value": _small(row.get("value")), "from": row.get("from")}
                  for name, row in (fill or {}).items()},
         "correct_end": correct_end,
-        # THE MESH'S CONTENT KEY, and on a reuse the run that built it, so a
-        # rebuild of an unchanged mesh is read off two lines side by side.
+        # The mesh content key, and on a reuse the run that built it.
         "mesh": {"mesh_size_m": getattr(result, "mesh_size_m", None),
                  **{k: mesh.get(k) if isinstance(mesh, Mapping) else None
                     for k in ("key", "built_by")}},
@@ -252,17 +229,13 @@ def build_record(*, run_id: str | None, engine: str | None,
                        if getattr(r, "name", "") == "cores"), None),
         "wall_seconds": wall_seconds,
         "notes": list(notes),
-        # WHAT THE RUN PUT ON THE MAP, as the publish stage emitted it. The one
-        # place a finished run's outputs are read back from: the artifacts are
-        # delete-on-whim and the session that saw the layers ends.
+        # What the run put on the map: the one place outputs are read back once artifacts and session are gone.
         "outputs": [dict(layer) for layer in outputs],
     }
 
 
 def _row(row: Any) -> dict[str, Any]:
-    """One resolved param, WITH its door and basis - the sheet, not just the values.
-    A value the user pinned and one a dataset answered are the same number and
-    different evidence, and the record has to keep them apart."""
+    """One resolved param with its door and basis; a pinned value and a dataset-answered one are different evidence."""
     return {
         "name": getattr(row, "name", None),
         "value": _small(getattr(row, "value", None)),
@@ -285,9 +258,7 @@ def _provenance(row: Any) -> dict[str, Any]:
     }
 
 
-#: How many elements of a list-valued field the record keeps. A sag curve is
-#: hundreds of points; the journal wants the FACT that there was one and its
-#: shape, not a second copy of the product.
+#: Elements of a list-valued field the record keeps: the fact and shape of a curve, not a copy.
 _LIST_CAP = 32
 
 
@@ -299,10 +270,7 @@ def _small(value: Any) -> Any:
         return [_small(v) for v in value]
     if isinstance(value, (str, int, float, bool)) or value is None:
         return value
-    # A row the record carries is a row a reader can HAND BACK, so a slot's own
-    # value is written as the shape that slot ingests rather than as a repr
-    # nothing takes - at full precision, because the record is what a new run
-    # is read from and a rounded coordinate is a different place.
+    # A slot's value is written as the shape that slot ingests, at full precision: a rounded coordinate is a different place.
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         return {key: _small(field) for key, field
                 in dataclasses.asdict(value).items()}

@@ -1,9 +1,5 @@
-# TRID3NT QGIS plugin -- package entry point.
-#
-# QGIS calls ``classFactory(iface)`` on plugin load. Keep this module free of
-# heavy imports: the real plugin module (and everything Qt) is imported lazily
-# inside the factory so a broken optional dependency cannot brick plugin
-# discovery.
+# Package entry point. Keep heavy imports out of this module: they happen
+# lazily inside the factory so a broken optional dependency cannot brick discovery.
 
 
 def classFactory(iface):  # noqa: N802 -- QGIS-mandated name

@@ -114,18 +114,15 @@ class _ServerFacade(_ModuleType):
             if name in _mod.__dict__:
                 setattr(_mod, name, value)
                 found = True
-        # Always mirror onto the facade instance: mock.patch restores a
-        # facade-resolved attribute via setattr only when the name is locally
-        # present; without the mirror its exit path delattr's the name out of
-        # the owning leaf permanently.
+        # Always mirror onto the facade instance: mock.patch restores a facade-resolved attribute
+        # via setattr only when the name is locally present; without the mirror its exit path
+        # delattr's the name out of the owning leaf permanently.
         object.__setattr__(self, name, value)
 
     def __delattr__(self, name: str) -> None:
-        # mock.patch restores a facade-resolved name with delattr when it
-        # judged the attribute non-local at enter. Deleting the name out of
-        # the owning leaf would break every later reader of that module's
-        # globals - so a facade delete RESTORES each leaf to its import-time
-        # binding instead (and drops any facade mirror).
+        # mock.patch restores a facade-resolved name with delattr when it judged the attribute
+        # non-local at enter. Deleting out of the owning leaf would break every later reader of its
+        # globals, so a facade delete RESTORES each leaf to its import-time binding.
         if name in self.__dict__:
             object.__delattr__(self, name)
         for _mod in _LEAF_MODULES:

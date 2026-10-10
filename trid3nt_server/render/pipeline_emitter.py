@@ -55,11 +55,8 @@ __all__ = [
 ]
 
 
-#
-# The turn's pinned Case is bound here at task entry, and EVERY envelope
-# constructed inside the turn stamps ``Envelope.case_id`` from it, so the client
-# routes live envelopes to the OWNING Case even when the user has since switched
-# Cases. A ContextVar is per-task: concurrent turns cannot cross-tag.
+# The turn's pinned Case, bound at task entry; every envelope built inside the turn stamps ``case_id`` from it so
+# the client routes to the owning Case after a switch. Per-task, so concurrent turns cannot cross-tag.
 
 _TURN_CASE: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "trid3nt_turn_case", default=None
@@ -76,33 +73,19 @@ def current_turn_case() -> str | None:
     return _TURN_CASE.get()
 
 
-#
-# The user's rubber-band rectangle rides ``user-message`` as ``drawn_geometry``
-# and is bound here per task, so a gate reads it without a new kwarg threaded
-# down every dispatch path. Where one is present it is a ``basis="user"`` spatial
-# knob and overrides the model's prompt-interpreted proposal. ``None`` means
-# nothing was drawn this turn, which is the common case.
+# The user's rubber-band rectangle (``drawn_geometry``), bound per task so a gate reads it without a new kwarg on every
+# dispatch path; a ``basis="user"`` knob that overrides the model's proposal. None when nothing was drawn.
 
-#
-# ``emit_tool_call`` binds the active ``PipelineEmitter`` here for the lifetime of
-# one tool or workflow invocation, so a workflow body can fire a transient map
-# verb - a zoom-to the moment a geocode resolves, long before the solve returns.
-# A ContextVar, because several sessions service tool calls concurrently in one
-# process and a per-task binding never leaks across asyncio tasks.
+# The active emitter for one tool or workflow invocation, so a workflow body can fire a transient map verb mid-run.
+# A ContextVar: sessions run concurrently and a per-task binding never leaks across tasks.
 
 _CURRENT_EMITTER: contextvars.ContextVar["PipelineEmitter | None"] = (
     contextvars.ContextVar("trid3nt_current_emitter", default=None)
 )
 
-#: The name of the TOP-LEVEL tool ``emit_tool_call`` is currently dispatching.
-#: Bound alongside ``_CURRENT_EMITTER`` for the lifetime of one invocation so the
-#: emit-on-fetch router seam can tell its two calling modes apart: a
-#: DIRECT chat fetch is dispatched AS the tool (``dispatched_tool_name()`` == the
-#: fetcher's own name -> the tool-wrapper already emits the returned LayerURI, so
-#: the seam stays silent), whereas an IN-COMPOSER bare fetch runs nested under a
-#: COMPOSER dispatch (``dispatched_tool_name()`` is the composer's name != the
-#: fetcher -> the seam surfaces the fetched data as a role="context" input). A
-#: bare/CI/direct call outside ``emit_tool_call`` leaves this ``None``.
+#: The top-level tool ``emit_tool_call`` is dispatching. The emit-on-fetch seam compares it to the fetcher's name: equal
+#: is a direct chat fetch (the tool wrapper already emits the layer, the seam stays silent), different is an in-composer
+#: fetch (surfaced as a role="context" input). None outside ``emit_tool_call``.
 _DISPATCHED_TOOL: contextvars.ContextVar[str | None] = (
     contextvars.ContextVar("trid3nt_dispatched_tool", default=None)
 )
@@ -167,12 +150,8 @@ async def emit_chart_payloads(payloads: Any) -> None:
 logger = logging.getLogger("trid3nt_server.render.pipeline_emitter")
 
 
-#
-# The TERMINAL pipeline-state send can raise ConnectionClosed* on a dead or
-# mid-cycling socket, which would abort the transition and LOSE the red/green
-# card. ONLY the connection-closed class is swallowed on that path, never a real
-# logic error, so the state transition itself always completes. The import is
-# defensive (an empty tuple) so this module stays importable without websockets.
+# The terminal pipeline-state send can raise ConnectionClosed* on a dead socket; only that class is swallowed so the
+# transition completes. The import is defensive (an empty tuple) so the module imports without websockets.
 try:  # pragma: no cover -- import shape, not behavior
     from websockets.exceptions import (
         ConnectionClosedError,
@@ -187,26 +166,16 @@ except Exception:  # pragma: no cover -- websockets absent in a minimal env
     _CONNECTION_CLOSED_EXC = ()
 
 
-#
-# A tool or workflow can FAIL or be CANCELLED and still RETURN a value rather
-# than raise - a killed solver run comes back as a terminal RunResult, and a
-# composer that saw one returns a typed failed envelope. Without inspecting the
-# RETURN value the wrapper falls through to mark_complete and paints a GREEN card
-# on a dead solve, so the shapes below are recognised before that happens.
+# A tool can fail or be cancelled and still return a value (a killed solver run returns a terminal RunResult); the
+# return value is inspected so a dead solve does not paint a green card.
 
 _FAILED_DICT_STATUSES = frozenset({"error", "failed", "cancelled"})
 
 
 def _classify_tool_return(result: Any) -> tuple[str, str, str] | None:
-    """Inspect a tool RETURN value for a non-success terminal outcome.
-    ``(terminal_state, error_code, error_message)``, or ``None`` for a healthy
-    shape. Deliberately conservative: anything ambiguous reads as success.
-    """
-    # Every shape below keys off STRUCTURE, never off a raised exception.
-
-    # --- Shape 1: a RunResult, or any object with the same terminal fields.
-    # A non-"complete" status is the solver poll returning a killed or timed-out
-    # run; "cancelled" maps to the cancelled card rather than the failed one.
+    """Returns ``(terminal_state, error_code, error_message)`` or ``None`` for a healthy shape; anything ambiguous reads as success."""
+    # Every shape keys off structure, never a raised exception. Shape 1: a RunResult-like object; non-"complete" is a
+    # killed or timed-out run and "cancelled" maps to the cancelled card.
     status = getattr(result, "status", None)
     if (
         isinstance(status, str)
@@ -228,7 +197,7 @@ def _classify_tool_return(result: Any) -> tuple[str, str, str] | None:
         terminal = "cancelled" if status == "cancelled" else "failed"
         return (terminal, str(code), str(message))
 
-    # --- Shape 2: a dict whose ``status`` is one of the failed statuses.
+    # Shape 2: a dict whose ``status`` is a failed status.
     if isinstance(result, dict):
         dstatus = result.get("status")
         if isinstance(dstatus, str) and dstatus.lower() in _FAILED_DICT_STATUSES:
@@ -254,11 +223,7 @@ class StepNotFoundError(EmitterError):
 
 
 class NamelessFailureError(EmitterError):
-    """A step was to be marked failed carrying no code or no sentence.
-
-    A run that stops in silence says nothing the packet can read, so the name is
-    not optional: the failure with no name is refused here rather than painted
-    red and left mute."""
+    """A step marked failed with no code or sentence: a failure with no name is refused rather than painted red and mute."""
 
 
 def _named(step_id: str, error_code: str, error_message: str) -> tuple[str, str]:
@@ -274,22 +239,15 @@ def _named(step_id: str, error_code: str, error_message: str) -> tuple[str, str]
     return code, sentence
 
 
-#: Type of the per-session sink the emitter pushes frames to. The sink is
-#: ``async`` so the emitter can await ``websocket.send``; tests pass a sync
-#: capture closure wrapped in an async lambda.
+#: The per-session sink the emitter pushes frames to; async so it can await ``websocket.send``.
 EmissionSink = Callable[[str], Awaitable[None]]
 
-#: type of the optional chart-persistence hook ``server`` wires into
-#: the emitter so a composer-side ``emit_chart`` persists a SessionChartRecord
-#: through the SAME ``server._persist_chart_record(state, payload)`` the tool
-#: path uses (the hook closes over ``state``; the emitter does not hold it).
+#: Optional chart-persistence hook, closing over ``state``, so a composer-side ``emit_chart`` persists through the
+#: same ``server._persist_chart_record`` the tool path uses.
 ChartPersistHook = Callable[[dict], Awaitable[None]]
 
-#: type of the optional sim/compute-card
-#: Persistence hook for a terminal ``compute`` card, so the solve card persists
-#: as a ``role="tool"`` chat row through the SAME path a plain tool card takes.
-#: Without it a reconnect or Case reopen replays an empty pipeline and the
-#: green/red solve card vanishes. ``None`` on a send-only path.
+#: Optional hook persisting a terminal ``compute`` card as a ``role="tool"`` chat row through the same path a plain
+#: tool card takes, so a reconnect replays the solve card. None on a send-only path.
 ToolCardPersistHook = Callable[..., Awaitable[None]]
 
 
@@ -299,10 +257,7 @@ def _now() -> datetime:
 
 
 def _elapsed_ms(started_at: datetime | None, completed_at: datetime | None) -> int | None:
-    """Wall-clock elapsed time in whole milliseconds.
-    ``None`` without both endpoints, and clamped at 0 so clock skew never puts a
-    negative duration on the wire.
-    """
+    """Whole milliseconds; ``None`` without both endpoints, clamped at 0 so clock skew never goes negative."""
     if started_at is None or completed_at is None:
         return None
     delta = (completed_at - started_at).total_seconds() * 1000.0
@@ -324,40 +279,27 @@ def summary_of(layer: LayerURI) -> ProjectLayerSummary:
         role=layer.role,
         origin=getattr(layer, "origin", None),
         temporal=layer.valid_from is not None,
-        # RESOLVED STYLE carry-over, so the range, the ramp and the .qml reach
-        # the client: a layer may carry its legend directly, and where a publish
-        # returned a bare uri the legend is lifted out of the stash by that uri.
-        # ``None`` means the layer reaches the map unstyled.
+        # Resolved style carry-over: the layer's own legend, else lifted from the stash by uri; None reaches the map unstyled.
         legend=getattr(layer, "legend", None) or _legend_for_layer_uri(layer.uri),
-        # The quantity travels with the layer: a title is prose a producer may
-        # rewrite, and matching one field's still to its animation by prose is
-        # how two scales for one quantity get shipped.
+        # The quantity travels with the layer: matching a still to its animation by prose title ships two scales for one quantity.
         quantity=getattr(layer, "quantity", None),
-        # And WHICH tracer it is: a named release renames the tracer, so the
-        # quantity moves with the name and the position is what stays askable.
+        # And which tracer: position stays askable when a named release renames it.
         tracer=getattr(layer, "tracer", None),
-        # Mesh CRS: an MDAL mesh reports an empty native crs(), so the plugin's
-        # _add_mesh needs the run to state it. None for raster/vector.
+        # Mesh CRS: an MDAL mesh reports an empty native crs(). None for raster/vector.
         crs_authid=getattr(layer, "crs_authid", None),
-        # The dataset files a mesh row's derived groups were written to, beside
-        # the mesh they are measured over, and WHICH group this row paints.
+        # The dataset files a mesh row's derived groups were written to, and which group this row paints.
         dataset_uris=list(getattr(layer, "dataset_uris", None) or ()),
         dataset_group=(getattr(layer, "style", None) or {}).get("dataset_group"),
-        # The instant the mesh's seconds are counted from, so the plugin's
-        # temporal stamp reads the run's own clock.
+        # The instant the mesh's seconds are counted from.
         reference_time=getattr(layer, "reference_time", None),
-        # One frame of a sequence states its own validity window, so the map
-        # stamps a fixed temporal range without reading it back out of a name.
+        # One frame states its own validity window so the map stamps a fixed temporal range.
         valid_from=getattr(layer, "valid_from", None),
         valid_to=getattr(layer, "valid_to", None),
     )
 
 
 def _legend_for_layer_uri(uri: str | None) -> Any:
-    """Lift the stashed ``LegendKey`` for a layer's uri, or ``None``.
-    A publish returns a bare uri, so the legend travels beside it and is lifted
-    back here. Fail-open: any error leaves the layer unstyled rather than absent.
-    """
+    """Lift the stashed legend for a layer's uri; fail-open, an error leaves the layer unstyled rather than absent."""
     if not uri:
         return None
     try:
@@ -370,10 +312,7 @@ def _legend_for_layer_uri(uri: str | None) -> Any:
 
 @dataclass
 class _StepState:
-    """Internal mutable record for one step.
-    Materialized into the wire and persistence shapes on demand, and kept private
-    so the public API exposes only the immutable snapshot models.
-    """
+    """Mutable record for one step, materialized into the wire and persistence shapes on demand."""
 
     step_id: str
     name: str
@@ -384,44 +323,26 @@ class _StepState:
     progress_percent: int | None = None
     error_code: str | None = None
     error_message: str | None = None
-    #: Authoritative wall-clock elapsed time in milliseconds.
-    #: Stamped on the terminal transition from ``started_at``→``completed_at``;
-    #: ``None`` while pending/running. Deterministic -- never an LLM estimate.
+    #: Authoritative elapsed milliseconds stamped on the terminal transition; None while pending/running.
     duration_ms: int | None = None
-    #: Two-card sim observability: card-kind discriminator + solver-run
-    #: binding. ``role`` defaults to ``"tool"`` (the plain atomic-tool card --
-    #: every existing step); ``"compute"`` is the solver card bound to a
-    #: dispatched run. ``batch_job_id`` is the solver-dispatch backend's run id
-    #: the compute card tracks; ``batch_status`` mirrors that backend's
-    #: last-polled run status verbatim - never an LLM estimate. Both ids are
-    #: ``None`` for a plain tool card, so the wire shape is unchanged.
+    #: Card kind: ``"tool"`` is the plain atomic-tool card, ``"compute"`` the solver card bound to a dispatched run.
+    #: ``batch_status`` mirrors the backend's last-polled status verbatim. Both ids are None on a plain card.
     role: str = "tool"
     batch_job_id: str | None = None
     batch_status: str | None = None
-    #: WHICH engine and which of its modules this compute card is a run of. Both
-    #: ``None`` on a plain tool card, which is a run of nothing.
+    #: Engine and module this compute card is a run of; both None on a plain tool card.
     engine: str | None = None
     module: str | None = None
-    #: Durable-card lifecycle: the STABLE persisted
-    #: ``message_id`` (a ULID) of this step's tool-card row. Set on a compute
-    #: SOLVE step at mint so the card persisted ``running`` and the
-    #: later terminal write target the SAME row (upsert in place -- no duplicate).
-    #: ``None`` for a plain tool card (which persists once, at terminal, with a
-    #: fresh appended id).
+    #: The stable persisted ``message_id`` of this step's card row: set on a compute step at mint so the running write and
+    #: the terminal write upsert the same row. None for a plain card, which persists once at terminal.
     card_message_id: str | None = None
-    #: Nested sub-step timeline. ``parent_step_id`` is set on a CHILD
-    #: step (a composer's internal atomic-tool call surfaced as a nested row);
-    #: when set, the client nests this step under the parent and never renders it
-    #: as a top-level card. ``substep_label`` / ``substep_index`` /
-    #: ``substep_total`` are set on the PARENT and drive the live breadcrumb
-    #: ("fetching topobathy 2/7"); they are CLEARED on the parent's terminal
-    #: transition. All default None so a plain step is byte-identical on the wire.
+    #: Nested sub-step timeline: ``parent_step_id`` marks a child the client nests under the parent; the ``substep_*``
+    #: fields sit on the parent for the live breadcrumb ("fetching topobathy 2/7") and clear at its terminal transition.
     parent_step_id: str | None = None
     substep_label: str | None = None
     substep_index: int | None = None
     substep_total: int | None = None
-    #: PARENT-only running tally of how many substeps have STARTED. Internal
-    #: bookkeeping that drives ``substep_index``; never serialized directly.
+    #: Parent-only count of substeps started; drives ``substep_index``, never serialized directly.
     substep_started_count: int = 0
 
 
@@ -431,8 +352,7 @@ class PipelineEmitter:
     FULL current snapshot, and there is no partial-update method to call instead.
     """
 
-    #: Maximum length of an error_message. The schema enforces it; the emitter
-    #: truncates defensively so a call site does not have to.
+    #: Maximum error_message length; the schema enforces it and the emitter truncates defensively.
     ERROR_MESSAGE_MAX_LEN = 512
 
     #: Time factory; patched by tests for deterministic timestamps.
@@ -452,71 +372,46 @@ class PipelineEmitter:
         self.session_id = session_id
         self._sink = sink
 
-        #: Optional async hook so a composer-side ``emit_chart`` persists its
-        #: record through the SAME path a tool-result chart takes, keeping the
-        #: persist logic in one place. ``None`` on a send-only path.
+        #: Optional async hook so a composer-side ``emit_chart`` persists through the tool path's record. None on a send-only path.
         self._chart_persist: "ChartPersistHook | None" = chart_persist
 
-        #: Optional async hook so a terminal compute card persists as a
-        #: ``role="tool"`` chat row, matching a tool card's shape exactly, and
-        #: therefore round-trips through the existing chat-history replay on both
-        #: a case reopen and a bare reconnect. ``None`` on a send-only path.
+        #: Optional async hook persisting a terminal compute card as a ``role="tool"`` chat row, so it round-trips the chat-history replay.
         self._tool_card_persist: "ToolCardPersistHook | None" = tool_card_persist
 
-        #: Current pipeline id; ``None`` when no pipeline is running.
         self._pipeline_id: str | None = None
         self._pipeline_started_at: datetime | None = None
 
-        #: Internal ordered store of steps, keyed by step_id for fast updates.
         self._steps: dict[str, _StepState] = {}
         self._step_order: list[str] = []
 
-        #: Session-state mirror fields (passed-through from the session record).
         self._chat_history: list[dict] = list(chat_history or [])
         self._pipeline_history: list[dict] = list(pipeline_history or [])
         self._map_view: dict | None = map_view
 
-        #: Accumulated layers -- appended each time a tool returns a ``LayerURI``.
         self._loaded_layers: list[ProjectLayerSummary] = []
 
-        #: The asyncio loop this emitter is bracketed on, captured at dispatch so
-        #: an async surfacing coroutine can be driven from the worker thread an
-        #: off-loaded sync fetcher runs in. ``None`` until the first dispatch.
+        #: The loop this emitter is bracketed on, so a coroutine can be driven from an off-loaded sync fetcher's worker thread; None until the first dispatch.
         self._bound_loop: "asyncio.AbstractEventLoop | None" = None
 
-        #: Session-level dedup of already-surfaced input uris: a fetched
-        #: input is surfaced ONCE per session even if several composers re-fetch it.
+        #: Input uris already surfaced this session; a fetched input is surfaced once even if several composers re-fetch it.
         self._emitted_input_uris: set[str] = set()
 
-        #: Monotonic stacking-order counter: every NEW layer is stamped with it,
-        #: so layers carry a stable top-of-stack-is-highest order on the wire
-        #: rather than an order the client has to invent. An in-place REPLACE
-        #: reuses the superseded layer's z_index, so a re-publish keeps its slot
-        #: instead of jumping to the top, and a reseed advances this counter past
-        #: every seeded z_index so a later append cannot collide with one.
+        #: Monotonic stacking counter stamped on every new layer. An in-place replace reuses the superseded layer's
+        #: z_index; a reseed advances the counter past every seeded z_index.
         self._next_z: int = 0
 
-        #: Terminal summary of the most recent dispatched step. Carries the
-        #: AUTHORITATIVE ``started_at``/``duration_ms``, so a persisted card
-        #: records exactly the duration the live card displayed and no second
-        #: clock is ever consulted. Read-only outside the terminal transitions.
+        #: Terminal summary of the most recent dispatched step, carrying the authoritative ``started_at``/``duration_ms`` so a
+        #: persisted card records the live card's duration. Read-only outside terminal transitions.
         self.last_tool_step: PipelineStepSummary | None = None
 
-        #: The ordered CHILD substeps of the most-recent parent step, captured at
-        #: the same terminal points as ``last_tool_step`` and while the children
-        #: still exist: the pipeline is cleared BEFORE the persist hook runs, so
-        #: this snapshot is the only durable copy of the nested timeline. ``[]``
-        #: for a top-level dispatch with no children.
+        #: Ordered child substeps of the most recent parent, captured at the terminal points while they still exist: the
+        #: pipeline is cleared before the persist hook runs. [] with no children.
         self.last_tool_children: list[PersistedSubStepRecord] = []
 
-        #: The step_id of the top-level step currently bracketing a dispatch. A
-        #: substep mints its child against THIS id and stamps the parent's live
-        #: breadcrumb. ``None`` outside a dispatched body.
+        #: The top-level step bracketing a dispatch; a substep mints its child against it. None outside a dispatched body.
         self._current_parent_step_id: str | None = None
 
-        #: The most recent TERMINAL pipeline-state payload, replayed onto a
-        #: reconnected socket so a rendered card survives a WS blip. ``None``
-        #: until the first terminal transition.
+        #: The most recent terminal pipeline-state payload, replayed onto a reconnected socket; None until the first terminal transition.
         self._last_terminal_pipeline_payload: PipelineStatePayload | None = None
 
 
@@ -533,53 +428,32 @@ class PipelineEmitter:
         Never raises out of the rebind: the replay is best-effort, because the new
         socket may itself have just cycled.
         """
-        # One emitter drives a long-running turn, and its sink closes over the
-        # socket that LAUNCHED it; when that socket dies the sink silently drops
-        # every later frame. Rebinding puts the still-running turn's progress and
-        # its terminal frame back on the user's live connection.
-        #
-        # A replay is needed as well as the swap: a terminal frame already emitted
-        # onto the dead socket is never repainted by a turn that emits nothing
-        # further. An OPEN pipeline replays a FULL snapshot of every step in its
-        # current state, because the single terminal stash carries only the last
-        # terminal card and would leave a dropped running card unpainted; the
-        # stash is the fallback when no pipeline is open.
+        # The sink closes over the socket that launched the turn and silently drops frames once it dies; rebinding puts progress
+        # and the terminal frame back on the live connection. An open pipeline replays a full snapshot of every step (the
+        # terminal stash holds only the last terminal card); the stash is the fallback when none is open.
         self._sink = sink
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
-            # No running loop, so nothing to schedule. The snapshot stays stashed;
-            # a later emit still carries the full view, and a loop-bound rebind
-            # replays it.
+            # No running loop: the snapshot stays stashed and a loop-bound rebind replays it.
             return
         if self._pipeline_id is not None and self._step_order:
-            # An OPEN pipeline: replay the FULL live snapshot so any dropped
-            # SETUP/dispatch running cards (the non-terminal frame a dead sink
-            # would swallow in ``_emit_pipeline_state``) repaint on the new
-            # socket. Built the
-            # SAME way the terminal payload is built -- _to_wire_step over the
-            # whole _step_order -- so every step ships in its CURRENT state
-            # (pending / running / complete / failed).
+            # An open pipeline: replay the full snapshot via _to_wire_step over _step_order so dropped running cards repaint on the new socket.
             snapshot = PipelineStatePayload(
                 pipeline_id=self._pipeline_id,
                 steps=[self._to_wire_step(sid) for sid in self._step_order],
             )
             loop.create_task(self._send_pipeline_state(snapshot))
             return
-        # No open pipeline: fall back to the last terminal stash
-        # so a RENDERED/terminal card still survives a WS blip.
+        # No open pipeline: fall back to the last terminal stash.
         terminal = self._last_terminal_pipeline_payload
         if terminal is None:
             return
         loop.create_task(self._send_pipeline_state(terminal))
 
     async def _send_pipeline_state(self, payload: PipelineStatePayload) -> None:
-        """Send one pipeline-state frame, live emit and rebind replay alike.
-        ONLY a closed socket is swallowed: the step state is already recorded and
-        a sink rebind replays the full snapshot, so a dead socket never aborts a
-        transition. The client replaces a pipeline wholesale by ``pipeline_id``,
-        which is what makes a replay idempotent with any later one.
-        """
+        """Send one pipeline-state frame; only a closed socket is swallowed, since the state is recorded and a rebind replays
+        the snapshot (the client replaces a pipeline by ``pipeline_id``, so a replay is idempotent)."""
         try:
             await self._send("pipeline-state", payload)
         except _CONNECTION_CLOSED_EXC:  # type: ignore[misc]
@@ -590,7 +464,6 @@ class PipelineEmitter:
                 self._pipeline_id,
             )
 
-    # Snapshot accessors (read-only views; tests + integrations introspect)
 
     @property
     def loaded_layers(self) -> list[ProjectLayerSummary]:
@@ -598,10 +471,7 @@ class PipelineEmitter:
         return list(self._loaded_layers)
 
     async def _patch_layer(self, layer_id: str, field: str, value: Any) -> bool:
-        """Set one field on a published layer row, emitting only on a change.
-        False when this session never loaded that layer - patching what nobody
-        published is a refusal rather than a no-op.
-        """
+        """False when this session never loaded that layer: patching what nobody published is a refusal."""
         for summary in self._loaded_layers:
             if summary.layer_id == layer_id:
                 if getattr(summary, field) != value:
@@ -640,9 +510,7 @@ class PipelineEmitter:
                 )
                 continue
         self._loaded_layers = seeded
-        # Resume the monotonic counter PAST any seeded slot so a later append
-        # cannot collide with a persisted layer's z_index. A snapshot carrying no
-        # z_index at all leaves the counter at 0.
+        # Resume the counter past any seeded slot so a later append cannot collide with a persisted z_index; no z_index leaves it at 0.
         _seeded_z = [s.z_index for s in seeded if s.z_index is not None]
         self._next_z = (max(_seeded_z) + 1) if _seeded_z else 0
 
@@ -651,12 +519,8 @@ class PipelineEmitter:
         Union by uri and ``layer_id``, so a layer this emitter already holds is
         never duplicated. Returns the count of newly-merged layers.
         """
-        # A rebind replays the pipeline CARDS but not the loaded-layers frame, so
-        # a layer published after the launch socket died and before the reconnect
-        # went out onto a dead sink and was dropped, while the new connection's
-        # emitter is fresh and empty. Seeding from the live turn's emitter makes
-        # the reconnect's own session-state carry the full live snapshot, so the
-        # terminal layer survives the blip whatever the persist timing.
+        # A rebind replays pipeline cards but not the loaded-layers frame, so a layer published while the launch socket was
+        # dead was dropped; seeding from the live turn's emitter makes the reconnect's session-state carry it.
         if other is self or not other._loaded_layers:
             return 0
         existing_keys = {l.uri for l in self._loaded_layers}
@@ -678,12 +542,9 @@ class PipelineEmitter:
         return merged
 
     def current_snapshot(self) -> PipelineSnapshot | None:
-        """The current ``PipelineSnapshot``, or ``None`` when none is running.
-
-        A whole snapshot every time - there is no partial view of a pipeline.
-        The verdict refuses to read ``failed`` off a step that names no cause: a
-        packet that cannot say what stopped the run has no verdict to state.
-        """
+        """The current ``PipelineSnapshot``, or ``None`` when none is running; always whole.
+        
+        The verdict refuses to read ``failed`` off a step that names no cause."""
         if self._pipeline_id is None or not self._step_order:
             return None
         final_state: str | None = None
@@ -770,8 +631,6 @@ class PipelineEmitter:
         step.progress_percent = self._coerce_progress(progress_percent)
         await self._emit_pipeline_state()
 
-    # Nested sub-step timeline -- composer-internal atomic-tool
-    # calls surfaced as CHILD rows nested under the parent workflow card.
 
     def begin_substeps(self, total: int | None) -> None:
         """Declare the planned child count for the live breadcrumb.
@@ -797,7 +656,6 @@ class PipelineEmitter:
         """
         parent_id = self._current_parent_step_id
         if parent_id is None:
-            # No parent bound -> no-op: yield None, mint nothing.
             yield None
             return
         parent = self._steps.get(parent_id)
@@ -805,29 +663,24 @@ class PipelineEmitter:
             yield None
             return
 
-        # Mint the child against the parent and stamp the parent breadcrumb.
         child_id = await self.add_step(name=raw_name, tool_name=raw_name)
         child = self._steps[child_id]
         child.parent_step_id = parent_id
         parent.substep_started_count += 1
         parent.substep_label = raw_name
         parent.substep_index = parent.substep_started_count
-        # This emits a fresh pipeline-state carrying BOTH the running child and
-        # the parent's updated breadcrumb - the frame is never split in two.
+        # One pipeline-state frame carries both the running child and the parent's breadcrumb, never split in two.
         await self.mark_running(child_id)
 
         try:
             yield child_id
         except asyncio.CancelledError:
-            # Cancelled is distinct from failed. The CHILD is marked cancelled
-            # and the error re-raised; the parent's breadcrumb stands while the
-            # control flow unwinds to the parent's own terminal transition.
+            # Cancelled is distinct from failed: the child is marked cancelled and the error re-raised; the parent's breadcrumb stands.
             await self.mark_cancelled(child_id)
             raise
         except Exception as exc:  # noqa: BLE001 -- classify-and-re-raise
             code, message = self._classify_exception(exc)
-            # A failed child is RED and the parent is NOT touched: only the
-            # parent's own terminal transition may colour the parent.
+            # A failed child is red; only the parent's own terminal transition may colour the parent.
             await self.mark_failed(child_id, error_code=code, error_message=message)
             raise
         else:
@@ -855,9 +708,7 @@ class PipelineEmitter:
         step.batch_status = batch_status
         step.engine = engine
         step.module = module
-        # Pin a STABLE persisted row id NOW, so the row written at mint and the
-        # later terminal write upsert the SAME row - running to terminal in place,
-        # never as two cards.
+        # Pin the stable row id now so the running write and the terminal write upsert the same row.
         step.card_message_id = new_ulid()
         await self.mark_running(step_id)
         return step_id
@@ -869,8 +720,7 @@ class PipelineEmitter:
         """
         step_id = await self.add_step(name=name, tool_name=tool_name)
         step = self._require_step(step_id)
-        # Pin a STABLE persisted row id NOW so the running write and the later
-        # terminal write upsert the SAME row.
+        # Pin the stable row id now so the running write and the terminal write upsert the same row.
         step.card_message_id = new_ulid()
         await self.mark_running(step_id)
         return step_id
@@ -886,21 +736,13 @@ class PipelineEmitter:
         step.name = name
 
     def _clear_parent_breadcrumb(self, step: _StepState) -> None:
-        """Clear the live-breadcrumb fields on a PARENT's terminal transition.
-        Only the parent's own breadcrumb line clears: its child rows keep their
-        state, and a step that ran no substeps has nothing set to clear.
-        """
         step.substep_label = None
         step.substep_index = None
         step.substep_total = None
 
     def _mark_terminal(self, step_id: str, state: str) -> _StepState:
-        """Flip ``step_id`` to a terminal state and stamp its close-out.
-        ``duration_ms`` is the AUTHORITATIVE wall-clock figure: the client locks
-        its cosmetic ticker to it, so nothing downstream measures the step again.
-        ``started_at`` is None for a step that failed before it ever ran, and the
-        duration is then None too.
-        """
+        """Flip ``step_id`` to a terminal state; ``duration_ms`` is the authoritative figure the client locks its ticker to,
+        ``None`` for a step that failed before it ran."""
         step = self._require_step(step_id)
         step.state = state
         step.completed_at = self._now_fn()
@@ -916,11 +758,7 @@ class PipelineEmitter:
     async def mark_failed(
         self, step_id: str, error_code: str, error_message: str
     ) -> None:
-        """Flip ``step_id`` to ``failed``; record error_code and error_message.
-        The message is truncated; the code's shape is enforced where the summary
-        is built, not again here.
-        A failure carrying no code or no sentence is REFUSED, never recorded.
-        """
+        """Flip ``step_id`` to ``failed`` with a truncated message; a failure with no code or no sentence is refused."""
         code, sentence = _named(step_id, error_code, error_message)
         step = self._mark_terminal(step_id, "failed")
         step.error_code = code
@@ -938,14 +776,8 @@ class PipelineEmitter:
     async def _persist_step_card(
         self, step_id: str, *, states: tuple[str, ...]
     ) -> None:
-        """Persist ``step_id``'s tool-card row IFF its state is in ``states``.
-        A no-op when no persist hook is bound, the step is unknown, or its state
-        is not listed; a hook failure is swallowed and never raises.
-        """
-        # ``card_message_id``, where a step carries one, is the STABLE row id, so
-        # the running write and the later terminal write UPSERT the SAME row -
-        # running to terminal in place, never two cards. A step without one is
-        # appended fresh, which is the persist-once-at-terminal shape.
+        """Persist the step's tool-card row iff its state is in ``states``; a hook failure is swallowed."""
+        # ``card_message_id`` is the stable row id so running and terminal writes upsert one row; a step without one is appended.
         if self._tool_card_persist is None:
             return
         step = self._steps.get(step_id)
@@ -996,29 +828,20 @@ class PipelineEmitter:
 
 
     def _alloc_z(self) -> int:
-        """Return the next monotonic ``z_index`` and advance the counter.
-        The single source of new stacking slots, so no in-use slot is reissued.
-        """
+        """The single source of new stacking slots, so no in-use slot is reissued."""
         z = self._next_z
         self._next_z += 1
         return z
 
     async def add_loaded_layer(self, layer: LayerURI) -> None:
-        """Append a ``LayerURI`` to ``loaded_layers`` and emit a fresh frame.
-        DEDUP BY WHAT THE ROW PAINTS: one store and one scheme mean two publishes
-        of the same COG name the same uri, so the fresher row REPLACES the older
-        in place. A mesh file carries many dataset groups and a run publishes one
-        row per group it wants read, so a mesh row is its uri AND its group.
-        """
+        """Append a ``LayerURI`` to ``loaded_layers`` and emit a fresh frame, deduped by what the row paints.
+        
+        Two publishes of one COG name the same uri, so the fresher row replaces the older; a mesh row is its uri and its group."""
         summary = summary_of(layer)
         for i, existing in enumerate(self._loaded_layers):
             if (existing.uri, existing.dataset_group) == (summary.uri,
                                                           summary.dataset_group):
-                # REUSE the superseded layer's slot so a re-publish (a styled
-                # row superseding a styleless one) keeps its stacking position
-                # instead of jumping to the top. Falls back to a fresh slot only
-                # if the old row never carried one (a persisted layer seeded
-                # without a z_index).
+                # Reuse the superseded layer's slot so a re-publish keeps its stacking position; a fresh slot only if the old row carried none.
                 summary.z_index = (
                     existing.z_index
                     if existing.z_index is not None
@@ -1027,12 +850,10 @@ class PipelineEmitter:
                 self._loaded_layers[i] = summary
                 break
         else:
-            # A brand-new layer takes the next monotonic slot --
-            # top of the stack (highest z_index) is the most-recently-added.
+            # A new layer takes the next slot; highest z_index is the most recently added.
             summary.z_index = self._alloc_z()
             self._loaded_layers.append(summary)
         await self.emit_session_state()
-        # Emit zoom-to map-command when the LayerURI carries a bbox.
         if layer.bbox is not None:
             await self.emit_map_command(
                 "zoom-to",
@@ -1083,9 +904,7 @@ class PipelineEmitter:
         payload = dict(chart_payload)
         if not payload.get("created_turn_id"):
             payload["created_turn_id"] = self._pipeline_id or self.session_id
-        # A hand-built dict, not the typed envelope: that envelope's payload is a
-        # model with extra="forbid", which rejects a raw chart payload. Byte-
-        # identical to the tool path's send, plus the owning-Case tag.
+        # A hand-built dict: the typed envelope's payload is extra="forbid" and rejects a raw chart payload. Byte-identical to the tool path's send plus the Case tag.
         frame = {
             "type": "chart-emission",
             "session_id": self.session_id,
@@ -1107,8 +926,7 @@ class PipelineEmitter:
                 payload.get("chart_id"),
                 exc_info=True,
             )
-        # Persist best-effort so the chart replays on rehydration, through the
-        # SAME record the tool path writes.
+        # Best-effort persist so the chart replays on rehydration, through the tool path's record.
         if self._chart_persist is not None:
             try:
                 await self._chart_persist(payload)
@@ -1180,21 +998,14 @@ class PipelineEmitter:
         """
         step_id = await self.add_step(name=name, tool_name=tool_name)
         await self.mark_running(step_id)
-        # This dispatch's children accumulate fresh, so a prior dispatch's
-        # substeps cannot leak onto this card. Set to the real snapshot at each
-        # terminal point below, while the children still exist.
+        # Children accumulate fresh per dispatch so a prior dispatch's substeps cannot leak onto this card.
         self.last_tool_children = []
-        # Bind self as the active emitter for the lifetime of the invoke, so a
-        # workflow body can fire a transient map verb. The token unwinds the
-        # binding exactly once, on the cancellation and exception paths too.
+        # Bind self as the active emitter; the token unwinds the binding exactly once, on cancellation and exception paths too.
         token = _CURRENT_EMITTER.set(self)
-        # Bind the dispatched tool name and capture the running loop, so a nested
-        # seam can tell a direct dispatch from an in-composer one and can drive an
-        # async coroutine back onto THIS loop from an off-loaded worker thread.
+        # Bind the dispatched tool name and the running loop, so a nested seam can tell direct from in-composer dispatch and drive coroutines back onto this loop.
         _disp_token = _DISPATCHED_TOOL.set(tool_name)
         self._bound_loop = asyncio.get_running_loop()
-        # Remember the previous parent so a nested invocation restores it; a
-        # substep mints its children against this id.
+        # Restore the previous parent on nested invocation exit.
         _prev_parent = self._current_parent_step_id
         self._current_parent_step_id = step_id
         try:
@@ -1204,16 +1015,12 @@ class PipelineEmitter:
                     result = await result
             except asyncio.CancelledError:
                 await self.mark_cancelled(step_id)
-                # Record the terminal step even on a cancel: the accessor must
-                # never carry a STALE prior step past this dispatch.
+                # Record the terminal step even on a cancel, so the accessor never carries a stale prior step.
                 self.last_tool_step = self._to_summary(step_id)
-                # And its children, for the same reason.
                 self.last_tool_children = self._collect_children(step_id)
                 raise
             except Exception as exc:  # noqa: BLE001 -- classify-and-re-raise
-                # A gate card the user declined carries ``declined``: that is a
-                # decision, not a fault, so the card ends cancelled and no error
-                # code is stamped on it.
+                # A declined gate card is a decision, not a fault: the card ends cancelled with no error code.
                 if getattr(exc, "declined", False):
                     await self.mark_cancelled(step_id)
                 else:
@@ -1222,18 +1029,11 @@ class PipelineEmitter:
                         step_id, error_code=code, error_message=message
                     )
                 self.last_tool_step = self._to_summary(step_id)
-                # A FAILED parent card IS persisted, so its children are
-                # snapshotted and the replayed card still nests its timeline.
+                # A failed parent card is persisted, so its children are snapshotted for the replayed card's nested timeline.
                 self.last_tool_children = self._collect_children(step_id)
                 raise
-            # The terminal pipeline-state frame goes out BEFORE the layer's
-            # session-state emission: the classification depends only on the tool
-            # RESULT, so the card flips first and the layer frame then carries the
-            # terminal state rather than a card still marked running.
-            #
-            # A tool can FAIL or be CANCELLED and still RETURN, so the return
-            # value decides: a non-success terminal outcome flips the card to
-            # cancelled or failed instead of green.
+            # The terminal frame goes out before the layer's session-state emission so that frame carries the terminal state.
+            # A tool can fail or be cancelled and still return, so the return value decides the card state.
             terminal = _classify_tool_return(result)
             if terminal is not None:
                 state, error_code, error_message = terminal
@@ -1253,27 +1053,12 @@ class PipelineEmitter:
             else:
                 await self.mark_complete(step_id)
             self.last_tool_step = self._to_summary(step_id)
-            # Snapshot the ordered children of this top-level card BEFORE the
-            # pipeline is closed and the steps cleared; the persisted card carries
-            # them, so a reopened Case rebuilds the nested timeline read-only.
+            # Snapshot the ordered children before the pipeline is closed and the steps cleared; the persisted card carries them.
             self.last_tool_children = self._collect_children(step_id)
-            # Honor LayerURI return shape -- append to loaded_layers + emit
-            # session-state. This runs AFTER the terminal frame above so the
-            # session-state snapshot captures the step as complete/failed, never
-            # "running" (the stuck-card bug). route through the single
-            # emission seam first. The seam drops (returns None) a renderable
-            # raster carrying a raw gs:// uri (the publish-failure degraded path)
-            # so it never paints a broken layer row; vector
-            # LayerURIs and WMS-URL rasters pass untouched. The tool
-            # result is unaffected -- a dropped layer is still narrated honestly
-            # and the retry loop can act.
-            #
-            # AUTO-EMIT: a raster the tool returned as a raw
-            # s3:// COG is PUBLISHED here - overviews, style params, legend -
-            # before the guardrail sees it. Every raster-producing tool gets
-            # that by returning a LayerURI; there is no publish call site per
-            # tool and no opt-out, intermediates included. A list of layers
-            # (frame series) is each layer's own trip through the same seam.
+            # LayerURI returns append to loaded_layers and emit session-state after the terminal frame, so the snapshot never shows
+            # the step running. The emission seam drops a renderable raster with a raw gs:// uri (the publish-failure path) so no
+            # broken layer row paints; the tool result is unaffected. Auto-emit: a raw s3:// COG raster is published here
+            # (overviews, style, legend) with no per-tool call site and no opt-out; a list of layers takes the same trip per layer.
             if isinstance(result, LayerURI):
                 await self._emit_one_layer(result)
             elif isinstance(result, list) and any(
@@ -1286,24 +1071,19 @@ class PipelineEmitter:
         finally:
             _CURRENT_EMITTER.reset(token)
             _DISPATCHED_TOOL.reset(_disp_token)
-            # restore the previous parent pointer. On the normal
-            # single-top-level-step path this returns it to None.
+            # Restore the previous parent pointer; None on the single top-level path.
             self._current_parent_step_id = _prev_parent
 
 
     def _classify_exception(self, exc: Exception) -> tuple[str, str]:
-        """Map a tool exception to an ``(error_code, error_message)`` pair.
-        Deliberately conservative: an ambiguous shape buckets into
-        ``INTERNAL_ERROR`` rather than fabricate a more specific code.
-        """
+        """Deliberately conservative: an ambiguous shape buckets into ``INTERNAL_ERROR`` rather than a fabricated code."""
         from trid3nt_server.tools.fetchers._fetch_common import UpstreamAPIError
 
         message = str(exc) or exc.__class__.__name__
-        # An upstream provider's failure is never ours: it keeps the upstream
-        # code, the source's own code leading the provider's message.
+        # An upstream provider's failure keeps the upstream code, the source's code leading the provider's message.
         if isinstance(exc, UpstreamAPIError):
             return ("UPSTREAM_API_ERROR", f"[{exc.error_code}] {message}")
-        # Subclass-aware bucketing. Order matters -- most specific first.
+        # Order matters: most specific subclass first.
         if isinstance(exc, ValueError) and "bbox" in message.lower():
             return ("BBOX_INVALID", message)
         if isinstance(exc, TimeoutError) or isinstance(
@@ -1343,12 +1123,7 @@ class PipelineEmitter:
         return message[: cls.ERROR_MESSAGE_MAX_LEN]
 
     def _step_fields(self, step_id: str) -> dict[str, Any]:
-        """The fields a wire step and a persisted summary BOTH carry: identity,
-        state, timing, the named cause of a red step, the card-kind
-        discriminator with its solver-run binding, and the nested-substep trio -
-        ``parent_step_id`` rides a CHILD while the live-breadcrumb trio rides the
-        PARENT and is None while it is idle.
-        """
+        """The fields a wire step and a persisted summary both carry; ``parent_step_id`` rides a child, the breadcrumb trio the parent."""
         s = self._steps[step_id]
         return {
             "step_id": s.step_id,
@@ -1380,14 +1155,9 @@ class PipelineEmitter:
         return PipelineStepSummary(**self._step_fields(step_id))
 
     def _collect_children(self, parent_step_id: str) -> list[PersistedSubStepRecord]:
-        """Snapshot the TERMINAL child substeps of ``parent_step_id``.
-        Complete and failed children only, in start order; ``[]`` when the parent
-        had none. MUST be called while the children still exist.
-        """
-        # A cancelled or still-running child persists NOTHING, which is the same
-        # contract the parent card follows. A failed child carries its code and
-        # message, so a replayed child reads red WITH its reason. Child tool-io is
-        # not captured, so those fields stay None rather than being invented.
+        """Terminal (complete and failed) children in start order; must be called while they still exist."""
+        # A cancelled or still-running child persists nothing, like the parent card; a failed child carries its code and
+        # message. Child tool-io is not captured, so those fields stay None.
         out: list[PersistedSubStepRecord] = []
         for sid in self._step_order:
             child = self._steps.get(sid)
@@ -1410,12 +1180,7 @@ class PipelineEmitter:
         return out
 
     async def _emit_pipeline_state(self, *, terminal: bool = False) -> None:
-        """Send the full snapshot for one step transition. A TERMINAL transition
-        also stashes the payload, so a rendered card stays surfaced across a
-        socket blip and replays on the next rebind. An emit with no open pipeline
-        is a programming error at the call site, and is not papered over with an
-        empty snapshot.
-        """
+        """Send the full snapshot for a step transition; a terminal one is also stashed for replay. No open pipeline is a call-site error, not papered over with an empty snapshot."""
         if self._pipeline_id is None:
             raise EmitterError(
                 "_emit_pipeline_state called with no open pipeline; "
@@ -1440,8 +1205,7 @@ class PipelineEmitter:
         env = Envelope(
             type=message_type,
             session_id=self.session_id,
-            # Stamp the owning Case, so the client routes this to the right
-            # stream even after a mid-turn Case switch.
+            # Stamp the owning Case so the client routes to the right stream after a mid-turn switch.
             case_id=current_turn_case(),
             payload=payload,
         )

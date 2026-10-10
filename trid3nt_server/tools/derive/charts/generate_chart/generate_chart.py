@@ -25,7 +25,6 @@ from trid3nt_server.render.charts import (
 __all__ = ["generate_chart"]
 
 
-
 _GENERATE_CHART_META = AtomicToolMetadata(
     name="generate_chart",
     ttl_class="dynamic-1h",
@@ -57,8 +56,6 @@ def _normalize_mark(view: dict[str, Any]) -> None:
             "(rasterized PNG) mark is not allowed. Use a real mark (bar / line "
             "/ point / rect / area / rule) with encodings.",
         )
-    # A caller-supplied truthy tooltip (True or a richer {"content": ...} config)
-    # is preserved rather than overwritten.
     if not mark.get("tooltip"):
         mark["tooltip"] = True
     view["mark"] = mark
@@ -169,7 +166,6 @@ def generate_chart(
 
     spec = dict(vega_lite_spec)
 
-    # --- Resolve inline data: explicit records win over a layer read. ---------
     resolved: list[dict[str, Any]] | None = None
     source_uri: str | None = None
     if records is not None:
@@ -185,7 +181,6 @@ def generate_chart(
     if resolved is not None:
         spec["data"] = {"values": resolved}
 
-    # --- Guarantee an interactive, drawable spec. -----------------------------
     if not _ensure_interactive(spec):
         raise ChartToolError(
             "NO_MARK",

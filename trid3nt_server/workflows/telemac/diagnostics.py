@@ -19,8 +19,7 @@ from .modules.listing import worst_closure
 __all__ = ["parse_telemac"]
 
 def _listing_mass_balance_pct(text: str) -> float | None:
-    """The worst closure the listing printed - water, tracer or sediment - as an
-    absolute percent."""
+    """The worst closure the listing printed (water, tracer or sediment) as an absolute percent."""
     worst = worst_closure(text)
     return None if worst is None else round(abs(worst["relative_error"]) * 100.0, 6)
 
@@ -41,7 +40,6 @@ def parse_telemac(art: RunArtifacts, status: str) -> EngineDiagnostics:
     warnings: list[str] = []
     diagnostics_files: list[str] = []
 
-    # Fallback metrics source (only read if a completion extra is missing).
     metrics: dict[str, Any] | None = None
     metrics_uri, metrics_bytes = art.read_output_optional(
         basename="telemac_metrics.json"
@@ -59,7 +57,6 @@ def parse_telemac(art: RunArtifacts, status: str) -> EngineDiagnostics:
     nelem = _completion_or_metrics(art, "nelem", metrics)
     wall_s = _completion_or_metrics(art, "wall_s", metrics)
 
-    # -- listing mass balance (optional). ---------------------------------- #
     listing_uri, listing_bytes = art.read_output_optional(basename="full_listing.log")
     listing_text: str | None = None
     if listing_bytes is not None:
@@ -88,7 +85,6 @@ def parse_telemac(art: RunArtifacts, status: str) -> EngineDiagnostics:
     if metrics_uri is not None:
         diagnostics_files.append(metrics_uri)
 
-    # -- warnings. --------------------------------------------------------- #
     if correct_end is False:
         warnings.append("TELEMAC did not reach CORRECT END OF RUN.")
 
@@ -97,7 +93,7 @@ def parse_telemac(art: RunArtifacts, status: str) -> EngineDiagnostics:
         "not reach CORRECT END OF RUN is unhealthy)."
     )
 
-    # -- healthy roll-up (keys off correct_end). --------------------------- #
+    # healthy keys off correct_end.
     healthy: bool | None
     if correct_end is False or status != "ok":
         healthy = False

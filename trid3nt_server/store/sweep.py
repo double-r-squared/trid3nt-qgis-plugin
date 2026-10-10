@@ -1,10 +1,8 @@
 """Retention over the object store: what a live Case pins, and what ages out.
 
-An object a run consumed is pinned by that run's journal record for as long as a
-Case still holds one of the layers the run published; a Case deleted releases
-what it held. Everything else follows its own TTL class - past its window the key
-that addressed it can no longer be computed, so the bytes are unreachable and go.
-Only the read-through cache is swept: a run product carries no TTL class to age by.
+A run's journal record pins the objects it consumed while a Case holds one of its published layers.
+Everything else follows its TTL class: past its window the key can no longer be computed, so the
+bytes go. Only the read-through cache is swept; a run product carries no TTL class.
 """
 
 from __future__ import annotations
@@ -85,19 +83,13 @@ async def pinned_uris(client: Any = None) -> set[str]:
 
 
 def _family(key: str) -> str:
-    """The object key stripped of its extension, and of the sidecar's second one.
-    An object and its provenance sidecar are one thing to retention: a pinned
-    object whose sidecar is gone is a cache MISS, so keeping one without the
-    other pins nothing."""
+    """The object key stripped of its extension and the sidecar's second one: an object without its provenance sidecar is a cache miss."""
     stem = key.rsplit(".", 1)[0]
     return stem[: -len(_SIDECAR)] if stem.endswith(_SIDECAR) else stem
 
 
 def _spent(key: str, modified: datetime, now: datetime) -> bool:
-    """Has this object's TTL window rolled? The window is hashed into the key, so
-    once a fetch computes the next one nothing can address these bytes again.
-    A path whose class cannot be read is never spent - the reaper deletes only
-    what it can date."""
+    """Has this object's TTL window rolled? The window is hashed into the key; a path whose class cannot be read is never spent."""
     parts = key.split("/")
     if len(parts) != 4:
         return False

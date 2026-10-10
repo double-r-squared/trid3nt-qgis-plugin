@@ -25,9 +25,7 @@ __all__ = [
 
 
 class RouterError(FetchError):
-    """Base for router-driven fetch failures, carrying a dynamic ``error_code``.
-    Every router error is the upstream 4xx-arg/429/5xx/timeout class, so
-    ``actionability`` stays "agent"; no router error carries a credential concept."""
+    """Base for router-driven fetch failures, carrying a dynamic ``error_code``; ``actionability`` stays "agent"."""
 
     error_code: str = "ROUTER_ERROR"
     retryable: bool = True
@@ -35,30 +33,23 @@ class RouterError(FetchError):
 
 
 class RouterInputError(RouterError):
-    """Bad inputs (malformed bbox, unknown enum, bad dates, gate rejection)."""
-
     error_code = "ROUTER_INPUT_ERROR"
     retryable = False
 
 
 class RouterUpstreamError(RouterError, UpstreamAPIError):
-    """Upstream endpoint open / read / parse / serialize failed (retryable)."""
-
     error_code = "ROUTER_UPSTREAM_ERROR"
     retryable = True
 
 
 class RouterEmptyError(RouterError):
-    """The request produced no finite data where empty is a typed error: raster,
-    station and tiled sources. A vector source emits a header-only FGB instead."""
+    """The request produced no finite data where empty is a typed error (raster, station, tiled); a vector source emits a header-only FGB instead."""
 
     error_code = "ROUTER_EMPTY"
     retryable = False
 
 
 class RouterNotAvailableError(RouterError):
-    """Requested extent/window falls outside the published source coverage."""
-
     error_code = "ROUTER_NOT_AVAILABLE"
     retryable = False
 
@@ -66,11 +57,8 @@ class RouterNotAvailableError(RouterError):
 
 
 def _stamp(cls: type[RouterError], code_prefix: str, suffix: str, message: str) -> RouterError:
-    """Build a RouterError whose ``error_code`` is ``<PREFIX>_<SUFFIX>``, the prefix
-    being ``SourceSpec.error_code_prefix``: the surfaced token, NOT necessarily the
-    cache ``source_class``, which diverges from it."""
+    """Build a RouterError whose ``error_code`` is ``<PREFIX>_<SUFFIX>`` with ``SourceSpec.error_code_prefix``, which may differ from the cache ``source_class``."""
     exc = cls(message)
-    # Instance-level override wins over the class attribute the server reads.
     exc.error_code = f"{code_prefix.upper()}_{suffix}"
     exc.retryable = cls.retryable
     return exc
@@ -79,17 +67,14 @@ def _stamp(cls: type[RouterError], code_prefix: str, suffix: str, message: str) 
 def router_input_error(
     code_prefix: str, message: str, suffix: str = "INPUT_ERROR"
 ) -> RouterInputError:
-    """Typed bad-input error. ``suffix`` defaults to ``INPUT_ERROR``; a source may
-    stamp its own (``INPUT_INVALID``, per-param ``BBOX_INVALID`` / ``YEAR_INVALID``)."""
+    """Typed bad-input error; ``suffix`` defaults to ``INPUT_ERROR``."""
     return _stamp(RouterInputError, code_prefix, suffix, message)  # type: ignore[return-value]
 
 
 def router_upstream_error(
     code_prefix: str, message: str, retryable: bool = True
 ) -> RouterUpstreamError:
-    """Typed upstream failure. ``retryable`` carries the TRANSPORT's own verdict
-    where the failure came from one: a 404 is not worth a second call, a 429 /
-    5xx / timeout is. A failure with no transport behind it stays retryable."""
+    """Typed upstream failure; ``retryable`` carries the TRANSPORT's verdict (a 404 is not worth a second call), else True."""
     exc = _stamp(RouterUpstreamError, code_prefix, "UPSTREAM_ERROR", message)
     exc.retryable = retryable
     return exc  # type: ignore[return-value]
@@ -98,8 +83,7 @@ def router_upstream_error(
 def router_empty_error(
     code_prefix: str, message: str, suffix: str = "EMPTY"
 ) -> RouterEmptyError:
-    """Typed empty/no-coverage error. ``suffix`` defaults to ``EMPTY``; a source may
-    stamp its own, e.g. ``NO_COVERAGE``."""
+    """Typed empty/no-coverage error; ``suffix`` defaults to ``EMPTY``."""
     return _stamp(RouterEmptyError, code_prefix, suffix, message)  # type: ignore[return-value]
 
 
@@ -108,9 +92,7 @@ def router_not_available_error(code_prefix: str, message: str) -> RouterNotAvail
 
 
 def bbox_error_suffix(spec: Any) -> str:
-    """The input-error suffix for a bbox-class failure (gate or malformed bbox):
-    the bbox param's ``error_suffix`` when it pins one, else the row-level
-    ``input_error_suffix``. Duck-typed over SourceSpec to stay import-cycle free."""
+    """The input-error suffix for a bbox failure: the bbox param's ``error_suffix``, else the row's ``input_error_suffix``. Duck-typed to avoid an import cycle."""
     for pspec in getattr(spec, "params", {}).values():
         if getattr(pspec, "type", None) == "bbox" and getattr(pspec, "error_suffix", None):
             return pspec.error_suffix

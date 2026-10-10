@@ -1,16 +1,8 @@
-"""qgis-provider executor: a source the session's QGIS opens through its OWN data
-provider, borrowed over the wire the way Processing already is.
+"""qgis-provider executor: a source the session's QGIS opens through its OWN data provider.
 
-The row states the provider, the datasource uri it takes and what to do with the
-layer, and the row's own ask rides with it: the window (absent when the row's ask
-IS the whole published layer) and the pixel spacing the row's resolution lever
-states. ``mode: open`` leaves an overlay on the user's map and returns a record, so
-nothing enters the store and no packet row is published; ``mode: materialise``
-has the session export and upload the layer, and the bytes come back through the
-read-through under the row-shaped cache key like any other fetch. A row may name
-a ``credential``: the session attaches its own stored config to the uri, so a
-keyed provider's key never reaches the daemon at all.
-"""
+``mode: open`` leaves an overlay on the user's map and returns a record (nothing enters the
+store); ``mode: materialise`` has the session export and upload the layer, read back under the
+row-shaped cache key. A named ``credential`` is attached by the session, never reaching the daemon."""
 
 from __future__ import annotations
 
@@ -42,9 +34,6 @@ _NO_WHERE = "1=1"
 
 
 def _block(spec: SourceSpec) -> dict[str, Any]:
-    """The row's ``ingest.qgis_provider`` block: provider, uri, mode, the optional
-    credential name the session resolves in its own auth store, and the optional
-    per-axis pixel budget the service serves."""
     block = (spec.ingest or {}).get("qgis_provider") or {}
     missing = [k for k in ("provider", "uri", "mode") if not block.get(k)]
     if missing:
@@ -72,9 +61,7 @@ def _block(spec: SourceSpec) -> dict[str, Any]:
 
 
 def build_uri(spec: SourceSpec, params: dict[str, Any]) -> str:
-    """The provider's datasource string for this call: the row's template over the
-    resolved endpoint, the bbox and the asked params, with the row's declared WHERE
-    appended as the provider's subset clause."""
+    """The provider's datasource string: the row's template over the endpoint, bbox and params, plus the declared WHERE."""
     endpoint = resolve_endpoints(spec, params)[0]
     url = endpoint.url or endpoint.url_template or ""
     bbox = params.get("bbox")
@@ -95,8 +82,7 @@ def build_uri(spec: SourceSpec, params: dict[str, Any]) -> str:
 
 
 def row_key(spec: SourceSpec, params: dict[str, Any]) -> str:
-    """The row-shaped cache key this call lands under: it names the uploaded object
-    and correlates the request with its answer."""
+    """The row-shaped cache key this call lands under; it names the uploaded object."""
     from ..router import synthesize_metadata
     from ..spec import record_shape
     from trid3nt_server.tools.cache import cache_key_for
@@ -107,7 +93,6 @@ def row_key(spec: SourceSpec, params: dict[str, Any]) -> str:
 
 
 async def _ask(emitter: Any, payload: LayerRequestPayload, timeout_s: float):
-    """Emit the request on the session and wait for its answer."""
     from trid3nt_server.server.processing import SessionProcessingTimeoutError
 
     loop = asyncio.get_running_loop()
@@ -132,9 +117,8 @@ async def _ask(emitter: Any, payload: LayerRequestPayload, timeout_s: float):
 def ask_session_for_layer(payload: LayerRequestPayload) -> LayerResponsePayload:
     """Ask the bound session to open one provider layer and WAIT for its answer.
 
-    The executor body is sync and off-loaded, so the coroutine is driven onto the
-    emitter's bound loop from the worker thread; on the loop thread itself a
-    blocking wait would deadlock, so that refuses instead of hanging."""
+    The body runs off-loop, so the coroutine is driven onto the emitter's bound loop; on the
+    loop thread itself a blocking wait would deadlock, so that refuses."""
     from trid3nt_server.render.pipeline_emitter import current_emitter
     from trid3nt_server.server.processing import (
         SessionUnavailableError,
@@ -170,8 +154,6 @@ def ask_session_for_layer(payload: LayerRequestPayload) -> LayerResponsePayload:
 
 
 def _store_bytes(uri: str) -> bytes:
-    """The uploaded object's bytes, read back from the store the session staged
-    them in."""
     from trid3nt_server.store import objects as storage
 
     _scheme, bucket, key = storage.split_object_uri(uri)
@@ -181,10 +163,7 @@ def _store_bytes(uri: str) -> bytes:
 def _within_pixel_budget(
     spec: SourceSpec, block: dict[str, Any], bbox: Any, resolution_m: Any
 ) -> None:
-    """A service that serves at most so many pixels per axis states ``max_px`` on
-    its block. Past it the row REFUSES, naming the spacing that fits, the way the
-    resolution lever refuses everywhere else; the session is never asked to
-    quietly hand back a coarser grid under the asked name."""
+    """A service stating ``max_px`` serves at most that many pixels per axis; past it the row REFUSES, naming the spacing that fits."""
     from ..._fetch_common import enforce_pixel_budget
 
     budget = block.get("max_px")
@@ -199,11 +178,8 @@ def _within_pixel_budget(
 
 
 def _exported_raster_to_cog(spec: SourceSpec, raw: bytes) -> bytes:
-    """The session's GeoTIFF as the COG the publish seam reads, carrying the two
-    value treatments a row states about its OWN dataset: everything at or below
-    ``nodata_sentinel`` is the dataset's own no-data, and the ``serialize`` block
-    is the nodata and dtype it is written with. An export that is ENTIRELY the
-    dataset's no-data is honest no-coverage, not a layer."""
+    """The session's GeoTIFF as the COG the publish seam reads: values at or below ``nodata_sentinel``
+    are no-data, ``serialize`` sets nodata and dtype, and an all-no-data export is no-coverage."""
     import numpy as np
     import rasterio
 
@@ -240,9 +216,6 @@ def _exported_raster_to_cog(spec: SourceSpec, raw: bytes) -> bytes:
 
 
 def _exported_to_output(spec: SourceSpec, params: dict[str, Any], raw: bytes) -> bytes:
-    """The session's export in the row's own output format: a GeoPackage read back
-    through the row's declared ingest transforms into FlatGeobuf, a GeoTIFF
-    reserialized as the COG the publish seam reads."""
     if spec.output.layer_type == "raster":
         return _exported_raster_to_cog(spec, raw)
 
@@ -273,11 +246,8 @@ def _exported_to_output(spec: SourceSpec, params: dict[str, Any], raw: bytes) ->
 
 
 def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
-    """Ask the session for the provider layer (the ``fetch_fn`` body).
-
-    Mode open returns the record of what was put on the map; mode materialise
-    returns the exported bytes, which the read-through lands under the row-shaped
-    cache key - so a later call is a cache hit that never asks QGIS again."""
+    """Ask the session for the provider layer (the ``fetch_fn`` body); ``open`` returns the
+    on-map record, ``materialise`` the exported bytes landed under the row-shaped cache key."""
     from trid3nt_server.workflows.runtime.journal import journal_note
 
     block = _block(spec)

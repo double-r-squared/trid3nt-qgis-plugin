@@ -1,11 +1,10 @@
-"""NESTOR's three input files, as content: the actions, the polygons that name
-the fields they operate on, and the surface reference their levels are read from.
+"""NESTOR's three input files, as content: the actions, the polygons naming their fields, and the
+surface reference their levels are read from.
 
-The readers are strict about shape rather than about meaning: a field is
-identified by the three leading numerals of its name ALONE and may be named once
-across the whole file, the polygon file closes with ENDFILE at column one and the
-reference file with END, and every time is an absolute date differenced against
-the host deck's own time origin."""
+A field is identified by its name's three leading numerals alone and named once file-wide; the
+polygon file closes with ENDFILE at column one, the reference with END; times are absolute dates
+differenced against the host deck's time origin.
+"""
 
 from __future__ import annotations
 
@@ -15,28 +14,21 @@ from typing import Any, Mapping, Sequence
 
 __all__ = ["ACTION_FILENAME", "POLYGON_FILENAME", "REFERENCE_FILENAME", "files"]
 
-#: What the run directory holds NESTOR's three inputs under - the names the GAIA
-#: deck's own NESTOR ACTION / POLYGON / SURFACE REFERENCE FILE statements carry.
+# The GAIA deck's NESTOR ACTION / POLYGON / SURFACE REFERENCE FILE statements carry these names.
 ACTION_FILENAME = "nestor_actions.dat"
 POLYGON_FILENAME = "nestor_polygons.dat"
 REFERENCE_FILENAME = "nestor_reference.dat"
 
-#: The only clock the action reader takes: exactly 19 characters, differenced
-#: against the host deck's ORIGINAL DATE OF TIME / ORIGINAL HOUR OF TIME.
+# The only clock the action reader takes: exactly 19 characters, against ORIGINAL DATE/HOUR OF TIME.
 _STAMP = "%Y.%m.%d-%H:%M:%S"
 
-#: The first three characters of a field name must be numerals, so the ids start
-#: past the two-digit space and leave room for the eight hundred a file could
-#: hold; nothing else about a field's name is read.
+# A field name's first three characters must be numerals; ids start past the two-digit space.
 _FIRST_FIELD_ID = 101
 
-#: The reader needs more than one profile line, and the fields it interpolates
-#: over lie between them.
+# The reader needs more than one profile line.
 _MIN_PROFILES = 2
 
-#: Every field the engine reads per action type, in the order the examples write
-#: them: the value key on the action -> the keyword the reader spells it by. An
-#: action states the keys of its own type and nothing else.
+# Every field the engine reads per action type, in the examples' order: value key -> the reader's keyword. An action states only its own type's keys.
 _ACTION_KEYS: Mapping[str, tuple[tuple[str, str], ...]] = {
     "Dig_by_time": (
         ("type", "ActionType"), ("field", "FieldDig"), ("start", "TimeStart"), ("end", "TimeEnd"),
@@ -60,9 +52,9 @@ _ACTION_KEYS: Mapping[str, tuple[tuple[str, str], ...]] = {
         ("type", "ActionType"), ("start", "TimeStart"), ("level", "ReferenceLevel")),
 }
 
-#: The keys whose value is an INSTANT, stamped as a date against the run's origin.
+# Keys whose value is an instant, stamped as a date against the run's origin.
 _TIMES = frozenset(("start", "end"))
-#: The keys whose value is a FIELD, written as the name the polygon file gives it.
+# Keys whose value is a field, written as the name the polygon file gives it.
 _FIELDS = frozenset(("field", "dump"))
 
 
@@ -75,8 +67,8 @@ def files(actions: Sequence[Mapping[str, Any]], *,
           origin: Sequence[int]) -> dict[str, str]:
     """The three files a dredge is, by basename -> content.
 
-    Written together so the names the action file references and the names the
-    polygon file declares cannot disagree."""
+    Written together so action and polygon names cannot disagree.
+    """
     named = _named_fields(actions)
     return {ACTION_FILENAME: _action_text(actions, named=named, origin=origin),
             POLYGON_FILENAME: _polygon_text(named),
@@ -85,10 +77,7 @@ def files(actions: Sequence[Mapping[str, Any]], *,
 
 def _named_fields(actions: Sequence[Mapping[str, Any]]
                   ) -> list[tuple[str, Mapping[str, Any]]]:
-    """Every field the actions name, as ``(name, field)`` in the order they appear.
-
-    A field may be named ONCE across the file - the reader refuses a repeat, as
-    dig or as dump - so a label used twice refuses here, by label."""
+    """A field may be named once across the file (the reader refuses a repeat, as dig or dump); a repeated label refuses by label."""
     named: list[tuple[str, Mapping[str, Any]]] = []
     seen: set[str] = set()
     for action in actions:
@@ -114,9 +103,7 @@ def _named_fields(actions: Sequence[Mapping[str, Any]]
 
 
 def _slug(label: str) -> str:
-    """A field label as the polygon file spells it: the name reads, nothing parses.
-
-    Only the leading numerals are read, so the rest just has to survive a line."""
+    """Only the leading numerals are read."""
     cleaned = re.sub(r"[^A-Za-z0-9]+", "_", str(label)).strip("_")
     return cleaned or "field"
 
@@ -124,12 +111,9 @@ def _slug(label: str) -> str:
 def _action_text(actions: Sequence[Mapping[str, Any]], *,
                  named: Sequence[tuple[str, Mapping[str, Any]]],
                  origin: Sequence[int]) -> str:
-    """The action file: one ACTION block per action, in the order stated."""
     names = {id(field): name for name, field in named}
     start = _origin(origin)
-    # RESTART is demanded at least once and is FALSE because this composite
-    # writes no restart file: a TRUE would send the reader to a file nobody
-    # authored and a NESTOR RESTART FILE the deck does not state.
+    # RESTART is demanded at least once and is FALSE: no restart file is authored, and TRUE would send the reader to a file the deck does not state.
     lines = ["/ NESTOR actions", "RESTART = FALSE"]
     for action in actions:
         kind = str(action["type"])
@@ -149,7 +133,6 @@ def _action_text(actions: Sequence[Mapping[str, Any]], *,
 
 def _value(key: str, value: Any, names: Mapping[int, str],
            start: _dt.datetime) -> str:
-    """One action field, as the reader takes it."""
     if key == "type":
         return str(value)
     if key in _FIELDS:
@@ -162,15 +145,12 @@ def _value(key: str, value: Any, names: Mapping[int, str],
 
 
 def _origin(origin: Sequence[int]) -> _dt.datetime:
-    """The run's own time origin as the instant every action is dated from."""
     year, month, day, hour, minute, second = (int(v) for v in origin)
     return _dt.datetime(year, month, day, hour, minute, second)
 
 
 def _polygon_text(named: Sequence[tuple[str, Mapping[str, Any]]]) -> str:
-    """The polygon file: one NAME: block per field, its vertices under it.
-
-    The name is read from column six, so nothing pads the keyword."""
+    """The name is read from column six, so nothing pads the keyword."""
     lines: list[str] = []
     for name, field in named:
         lines.append(f"NAME:{name}")
@@ -185,18 +165,14 @@ def _polygon_text(named: Sequence[tuple[str, Mapping[str, Any]]]) -> str:
 
 
 def _reference_text(reference: Sequence[Sequence[float]]) -> str:
-    """The surface reference file: seven reals per profile, END under the last.
-
-    Read unconditionally by the criterion dig and the backfill, whatever
-    reference level the action names."""
+    """Read unconditionally by the criterion dig and the backfill."""
     rows = [[float(v) for v in row] for row in reference or ()]
     if len(rows) < _MIN_PROFILES or any(len(row) != 7 for row in rows):
         raise NestorRefused(
             f"the surface reference carries {len(rows)} profile(s) of "
             f"{sorted({len(row) for row in rows})} value(s); the reader takes "
             "more than one line of seven reals (xL yL zL xR yR zR km).")
-    # The reader skips a line opening with '#', which is where the column names
-    # go: nothing parses them and a person opening the file has no other legend.
+    # The reader skips lines opening with '#'; the column names go there.
     lines = ["#-- xL yL zL xR yR zR km"]
     lines += [" ".join(f"{v:16.4f}" for v in row) for row in rows]
     lines.append("END")

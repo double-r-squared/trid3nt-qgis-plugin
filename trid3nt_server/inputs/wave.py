@@ -1,12 +1,8 @@
 """A WAVE: the sea state at an open boundary, in the words a wave deck states it.
 
-A moored buoy reports a height, a period and a direction over one window, and a
-spectral deck forces its open edge with the three as scalars - so this is where
-a record's columns become the boundary keywords, and where the two conversions
-between them live. A PEAK FREQUENCY is one over the period the buoy reported; a
-deck's MAIN DIRECTION is the bearing the waves run toward, while a met record
-publishes the one they come from. Both are said on the run journal rather than
-folded silently into a number.
+A PEAK FREQUENCY is one over the buoy's period; a deck's MAIN DIRECTION is the bearing
+the waves run toward, while a met record publishes where they come from. Both
+conversions are said on the run journal, never folded silently into a number.
 """
 
 from __future__ import annotations
@@ -25,19 +21,16 @@ logger = logging.getLogger("trid3nt_server.inputs.wave")
 
 _CODE = "WAVE_INVALID"
 
-#: The unit each of the three quantities a sea state is is reported in, and what
-#: the deck reads it as. A source states the unit of EVERY column it carries, so
-#: the column a quantity is read from is the one reported in that quantity's own
-#: unit - a record that carries none of them measures no sea state, and one that
-#: carries two refuses rather than picking.
+#: The unit each of the three quantities a sea state is is reported in, and what the
+#: deck reads it as. A source states the unit of EVERY column, so a quantity is read
+#: from the column in its own unit; a record with none measures no sea state and one
+#: with two refuses rather than picking.
 _HEIGHT = ("m", "a wave height")
 _PERIOD = ("s", "a wave period")
 _BEARING = ("degT", "a wave direction")
 
-#: What every source in this tree writes into the name of the column carrying a
-#: WINDOW rather than a single reading. A row names the pair its own reading is
-#: taken from and nothing else, so the window behind another of its columns is
-#: found by that word.
+#: What every source in this tree writes into the name of the column carrying a WINDOW
+#: rather than a single reading.
 _WINDOW = "series"
 
 
@@ -65,11 +58,8 @@ def wave(source: Any, *, near: Any = None, at: Any = None,
          label: str = "wave", code: str = _CODE) -> Wave | None:
     """THE ingestion: a fetched sea-state record -> the boundary keywords' values.
 
-    ``column_units`` is the source's own statement of what each of its columns
-    is reported in, which is what says which column carries which quantity;
-    ``near`` ranks the candidates, ``at`` is the moment the run opens at and
-    ``window_s`` how long it covers, so the sea state read is the one measured
-    when the run is about."""
+    ``column_units`` says which column carries which quantity; ``near`` ranks the
+    candidates and ``at``/``window_s`` pick the sea state measured when the run is about."""
     if source is None:
         return None
     columns = dict(column_units or {})
@@ -115,10 +105,7 @@ def _column(columns: Mapping[str, str], unit: str, measures: str, label: str,
             code: str) -> tuple[str, str]:
     """The column carrying one quantity, and the one carrying its window.
 
-    A source states the unit of every column it publishes, so a quantity is
-    read off the column reported in that quantity's unit; where the source also
-    publishes the window behind it, the reading is taken at the moment the run
-    opens at rather than at whatever the record last held."""
+    Where the window is published, the reading is taken at the moment the run opens."""
     named = [name for name, stated in columns.items()
              if spelling(stated) == spelling(unit)]
     windows = [name for name in named if _WINDOW in name]
@@ -137,10 +124,7 @@ def _column(columns: Mapping[str, str], unit: str, measures: str, label: str,
 
 
 def _journal(found: Wave, *, caption: str) -> None:
-    """Say on the run journal what sea state the boundary was forced at, and
-    under which conventions the two numbers beside it were turned.
-
-    Off a run there is no journal and nothing is said."""
+    """Say on the run journal what sea state forced the boundary and the conventions applied; off a run, nothing."""
     from trid3nt_server.workflows.runtime import journal_note
 
     where = found.site_name or found.site_id or "an unnamed buoy"

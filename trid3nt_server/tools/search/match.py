@@ -1,14 +1,9 @@
 """THE MATCH: a slot asks, a fetcher answers, nobody writes the ladder.
 
-A slot states a NEED - a data class, the place off the domain, the window off
-the run, the frame off the lever - and every fetcher states its COVERAGE. The
-filter is mechanical and hard on class and place; the window is hard for a
-series and a sort key for a surface; a differing datum is FLAGGED here and
-refused at the offset row. The sort reads facts in one order: how the numbers
-were come by, how far the place is from them, the cell against the mesh, how
-current the record is, the zero it counts from. What comes back is one ranked
-list: the card renders it, the tool result carries it on a tie, the sheet
-stores the pick.
+A slot states a NEED (class, place, window, frame) and every fetcher states its COVERAGE. The filter is hard on class and place;
+the window is hard for a series and a sort key for a surface; a differing datum is FLAGGED here and refused at the offset row.
+The sort reads facts in order: how the numbers were come by, distance, cell against the mesh, recency, the zero counted from.
+What comes back is one ranked list: the card renders it, the tool result carries it on a tie, the sheet stores the pick.
 """
 
 from __future__ import annotations
@@ -43,9 +38,7 @@ RANKED_ROWS = 5
 class Need:
     """What one slot asks the world for.
 
-    Every field but the class is read off the run rather than the question: the
-    place is the domain's, the window is the run's and the frame is the lever's,
-    which is why a template states none of them."""
+    Every field but the class is read off the run: the place is the domain's, the window the run's, the frame the lever's."""
 
     slot: str
     data_class: str
@@ -58,11 +51,8 @@ class Need:
     until: str | None = None
     #: The vertical frame the run is solved on, off the lever.
     frame: str | None = None
-    #: WHAT OF THE CLASS the slot asks for, "" where any of it will do: the
-    #: published variable an observation is a measurement of, the feature a map
-    #: is read for. A source states its own word for it on its row, so
-    #: a source with no word for this one publishes something else and is
-    #: excluded.
+    #: WHAT OF THE CLASS the slot asks for, "" for any: the published variable or feature. A source states its own word on its row;
+    #: one with no word for this is excluded.
     of: str = ""
     #: The cell the mesh resolves, which is what a source's own cell is ranked
     #: against - finer than the mesh is detail the mesh cannot carry.
@@ -73,10 +63,8 @@ class Need:
     #: The source the run NAMES for this slot, "" where it names none. A named
     #: source the filters excluded is a refusal, not a pick.
     pick: str = ""
-    #: THE SHAPE the slot reads this class as, "" where any shape it is measured
-    #: in will do. A class measured in more than one - hydrography as a coastline
-    #: LINE and as a waterbody POLYGON - has sources publishing each, and a step
-    #: that cuts a box with a line cannot be handed a polygon.
+    #: THE SHAPE the slot reads this class as, "" for any. A class published as both a coastline LINE and a waterbody POLYGON
+    #: cannot hand a polygon to a step that cuts with a line.
     geometry: str = ""
     #: THE DOMAIN'S OWN WATER: the outline a gauge has to stand on for its flow
     #: to be this run's flow, with the note saying whether the run drew the
@@ -101,10 +89,8 @@ LOOSEN_DATUM = "datum"
 def sources_with_coverage() -> list[tuple[str, Coverage]]:
     """Every row every registered fetcher states, by source name.
 
-    ONE PAIR PER ROW: a source serving two classes is two candidates, and each
-    is filtered on the class it actually serves. A source with no row is never
-    matched - it stays model-callable and nothing here can say whether it
-    reaches this place."""
+    ONE PAIR PER ROW: a source serving two classes is two candidates, filtered on the class each serves.
+    A source with no row is never matched."""
     from trid3nt_server.tools.fetchers._router.registration import _SPEC_REGISTRY
 
     return sorted(((name, row) for name, spec in _SPEC_REGISTRY.items()
@@ -113,11 +99,7 @@ def sources_with_coverage() -> list[tuple[str, Coverage]]:
 
 
 def covered_sources() -> frozenset[str]:
-    """The fetchers a row speaks for: the ones the match can reach.
-
-    A covered fetcher is found by asking the world for a class rather than by
-    reading its description, so this set is what discovery routes THROUGH
-    ``find_sources`` instead of ranking by phrasing."""
+    """The fetchers a row speaks for: the ones the match can reach."""
     return frozenset(name for name, _row in sources_with_coverage())
 
 
@@ -154,11 +136,7 @@ def match(need: Need,
 
 def _named_first(need: Need, survivors: Sequence[SourceOption],
                  dropped: Sequence[SourceOption]) -> list[SourceOption]:
-    """The list with the source the RUN named at its head.
-
-    The ranked list stays whole - what the sort would have taken is still on it
-    - and only the pick moves, because a user's choice is a choice among the
-    survivors and not a way past the filters."""
+    """The list with the RUN's named source at its head; the list stays whole, the pick is never a way past the filters."""
     named = next((row for row in survivors if row.fetcher == need.pick), None)
     if named is None:
         excluded = next((row.excluded for row in dropped
@@ -185,17 +163,12 @@ def dropped_from(choice: SourceChoice, fetcher: str, why: str) -> SourceChoice:
         "sentence": _probe_sentence(choice, rows, fetcher, nxt)})
 
 
-#: What the probe can supply a source off the run itself: the domain's box, its
-#: seed, and the window. Anything else a source requires is askable only where
-#: its own row says what to pass - the row's ask block, or, for the
-#: station a source is called by name, the stations the row lists.
+#: What the probe can supply off the run: box, seed and window. Anything else a source requires is askable only where its row says what to pass.
 _ASKABLE = frozenset({"bbox", "seed_point", "start_date", "end_date",
                       "valid_time"})
 
-#: THE CLASS WHOSE PLACE FILTER IS THE DOMAIN ITSELF. A level propagates up a
-#: reach, so a gauge within reach of this water speaks for it; a discharge is the
-#: water passing ONE section, so a gauge that does not stand on this domain's
-#: water measures another river's flow however near it is.
+#: THE CLASS WHOSE PLACE FILTER IS THE DOMAIN ITSELF: a level propagates up a reach, but a discharge is one section's water,
+#: so a gauge not on this domain's water measures another river's flow.
 _ON_THE_WATER = "discharge series"
 
 #: The param a station-addressed source is called by. A row whose extent lists
@@ -236,11 +209,7 @@ _SHAPE_WORD: Mapping[str, str] = {"polyline": "line"}
 
 
 def _unaskable(name: str, coverage: Coverage, need: Need) -> str:
-    """Why the probe could not call this source at all, or "" where it can.
-
-    A param is askable only where this NEED actually holds the value: a source
-    addressed by a seed point cannot serve a question that states a box and no
-    point, and dropping it here is what keeps the refusal off the run."""
+    """Why the probe could not call this source at all, or "" where it can; a param is askable only where the NEED holds its value."""
     asked = set(_ASKABLE) | set(coverage.ask)
     if need.lon is None or need.lat is None:
         asked.discard("seed_point")
@@ -259,12 +228,7 @@ _LISTED: dict[str, list[CoveragePoint]] = {}
 
 
 def _station_set(coverage: Coverage) -> CoverageExtent:
-    """This row's extent with its listed stations read in.
-
-    A row that names a listing carries the stations themselves once the listing
-    has answered; a listing that cannot be read leaves the extent as declared,
-    so the region's rings still say where the source is and the probe answers
-    for the rest."""
+    """This row's extent with its listed stations read in; an unreadable listing leaves the extent as declared."""
     hook = coverage.extent.read_from
     if not hook or coverage.extent.points:
         return coverage.extent
@@ -282,10 +246,8 @@ def _station_set(coverage: Coverage) -> CoverageExtent:
         else coverage.extent
 
 
-#: The two params a source states its window in, by the spelling it uses, and
-#: how much of the instant that spelling carries: a DATE pair is a day, a TIME
-#: pair is the moment, so a window shorter than a day still opens and closes at
-#: two different values. A source that spells neither is asked over none.
+#: The two params a source states its window in, by spelling and instant resolution: a DATE pair is a day, a TIME pair is the moment.
+#: A source that spells neither is asked over none.
 _WINDOW_PARAMS = ((("start_date", "end_date"), 10),
                   (("start_time", "end_time"), None))
 
@@ -308,13 +270,7 @@ _A_DAY = dt.timedelta(days=1)
 def base_ask(choice: SourceChoice, purpose: str, bbox: Sequence[float] | None,
              lon: float | None, lat: float | None, opens: str | None,
              until: str | None) -> dict[str, Any]:
-    """The place and the window in the params THIS source states them in.
-
-    Every source says where it wants the place - a box or a seed - and a series
-    source says the window as two dates or one instant; what the matched ROW
-    adds to that is ``ask_for``'s to say, so this is only the half the caller
-    knows. The window a SERIES row is asked over BRACKETS the run: one cadence
-    before it opens and one after it closes."""
+    """The place and the window in the params THIS source states them in; a SERIES window BRACKETS the run by one cadence each side."""
     from trid3nt_server.tools.fetchers._router.registration import _SPEC_REGISTRY
 
     spec = _SPEC_REGISTRY.get(choice.picked)
@@ -337,11 +293,7 @@ def base_ask(choice: SourceChoice, purpose: str, bbox: Sequence[float] | None,
 
 
 def _cadence(row: Coverage | None) -> dt.timedelta:
-    """One step of the record this row publishes, off the words IT states it in.
-
-    The LEADING word is the interval; what follows it is a latency, a second
-    product or a caveat, none of which is a step. A surface is not a series, so
-    it is asked over the window itself."""
+    """One step of the record this row publishes, off the LEADING word of its cadence; a surface is asked over the window itself."""
     if row is None or not row.window.series:
         return dt.timedelta(0)
     stated = row.window.cadence.strip().lower().split()
@@ -353,12 +305,7 @@ def _cadence(row: Coverage | None) -> dt.timedelta:
 
 
 def _moved(stamp: str, step: dt.timedelta, cut: int | None) -> str:
-    """One end of the asked window, moved one cadence OUTWARD.
-
-    A window asked instant for instant is answered with the first sample INSIDE
-    it, which leaves the run's own opening and close unmeasured; the sample
-    before the opening and the one after the close are what the run is read
-    between."""
+    """One end of the asked window, moved one cadence OUTWARD so the run's own opening and close are measured, not just inside it."""
     moment = instant(stamp)
     if moment is None:
         return str(stamp)[:cut]
@@ -371,11 +318,7 @@ def _moved(stamp: str, step: dt.timedelta, cut: int | None) -> str:
 _FROM_NEED = "need:"
 
 def _asked(value: str, needs: Mapping[str, Any]) -> Any:
-    """One ask value: the need attribute it names, or the literal it is.
-
-    ``None`` where the row maps a param to an attribute this run states nothing
-    for, and the param is then left off the call so the source's own default
-    answers."""
+    """One ask value: the need attribute it names, or the literal it is; ``None`` leaves the param off so the source's default answers."""
     text = str(value)
     if not text.startswith(_FROM_NEED):
         return value
@@ -385,13 +328,10 @@ def _asked(value: str, needs: Mapping[str, Any]) -> Any:
 def ask_for(choice: SourceChoice, base: Mapping[str, Any], lon: float | None,
             lat: float | None, needs: Mapping[str, Any] | None = None
             ) -> dict[str, Any]:
-    """What the PICKED source is called with: the run's own facts, plus what the
-    matched ROW says it takes.
+    """What the PICKED source is called with: the run's own facts, plus what the matched ROW says it takes.
 
-    The row, not the row's default, is what the match weighed, so the values
-    that make the source answer with that row travel with it; a source called by
-    a station name is given the nearest station the row lists, and a row that
-    maps a param to one of the need's generic attributes is given that."""
+    The row, not the source's default, is what the match weighed. A source called by station name gets the nearest listed
+    station; a param mapped to a need attribute is given that."""
     ask = dict(base)
     row = _picked_row(choice)
     if row is None:
@@ -417,11 +357,7 @@ def ask_for(choice: SourceChoice, base: Mapping[str, Any], lon: float | None,
 
 
 def _reaching(bbox: Any, station: CoveragePoint) -> list[float]:
-    """The run's own box, widened to REACH the station the row was ranked on.
-
-    A source called by a box rather than by a name is still ranked on its
-    nearest listed station, and the reach the row states is what put it on the
-    list; a box that stops at the domain's edge asks it a different question."""
+    """The run's own box, widened to REACH the station the row was ranked on."""
     west, south, east, north = (float(v) for v in bbox)
     return [min(west, station.lon - _AROUND_STATION),
             min(south, station.lat - _AROUND_STATION),
@@ -435,9 +371,8 @@ _AROUND_STATION = 0.001
 
 
 def _picked_row(choice: SourceChoice) -> Coverage | None:
-    """The row the pick was ranked on: this source's row of the class asked for
-    AND of the kind the ranked list shows, since a source serving a measured and
-    a predicted series of one class is two candidates and only one was picked."""
+    """The row the pick was ranked on: this source's row of the class asked for AND of
+    the kind the ranked list shows."""
     from trid3nt_server.tools.fetchers._router.registration import _SPEC_REGISTRY
 
     spec = _SPEC_REGISTRY.get(choice.picked)
@@ -451,11 +386,7 @@ def _picked_row(choice: SourceChoice) -> Coverage | None:
 
 
 def _excluded(need: Need, coverage: Coverage) -> str:
-    """Why a filter drops this source, or "" where it survives.
-
-    Class is already answered. Place is hard; the window is hard for a SERIES
-    and never for a surface, which a run outside simply ranks lower. The datum
-    is not a filter - it is flagged on the row and refused at the offset row."""
+    """Why a filter drops this source, or "" where it survives; the window is hard for a SERIES only, the datum is never a filter."""
     unpublished = _unpublished(need, coverage)
     if unpublished:
         return unpublished
@@ -487,11 +418,7 @@ NO_MOMENT = "no moment was stated"
 
 
 def _no_moment(need: Need, coverage: Coverage) -> str:
-    """Why a SERIES source is not asked when the run states no moment, or "".
-
-    A series is a reading AT A TIME. A run that stated none has no window to put,
-    and a source asked over none answers with its latest record - a reading
-    nobody asked about, taken for the one the question is about."""
+    """Why a SERIES source is not asked when the run states no moment, or ""; asked over none it answers with its latest record."""
     if not coverage.window.series or need.opens:
         return ""
     return (f"{NO_MOMENT}, so it is not asked: a series source reached over no "
@@ -499,14 +426,7 @@ def _no_moment(need: Need, coverage: Coverage) -> str:
 
 
 def _unpublished(need: Need, coverage: Coverage) -> str:
-    """Why a source publishing none of what the slot asked for leaves the list, or "".
-
-    A row's vocabulary is WHAT IT PUBLISHES, under the name a question asks for
-    it by: the characteristic a gauge measures, the feature a map draws. A row
-    with no word for what was asked publishes something else, and taking it
-    would fill the slot with another thing under the right name. Where the row
-    also maps ``need:of`` onto one of its params, the word here is what the
-    source is called by."""
+    """Why a source publishing none of what the slot asked for leaves the list, or ""; a row with no word for it publishes something else."""
     if not need.of or coverage.word_for(need.of):
         return ""
     known = ", ".join(sorted(coverage.vocabulary)) or "nothing"
@@ -515,12 +435,7 @@ def _unpublished(need: Need, coverage: Coverage) -> str:
 
 
 def _off_the_water(need: Need, extent: CoverageExtent) -> str:
-    """Why this source's stations do not stand on the domain's own water, or "".
-
-    A LISTED set is answered station by station: one station inside the outline,
-    or within the cell the mesh resolves of it, is this domain's flow. A network
-    with no listing states no station here, so the probe searches the domain's
-    own box and the world answers for it."""
+    """Why this source's stations do not stand on the domain's own water, or ""; a network with no listing states no station here."""
     water = need.water
     if water is None:
         return ""
@@ -576,16 +491,9 @@ def instant(value: str | None) -> dt.datetime | None:
 
 
 def _rank(need: Need, coverage: Coverage) -> tuple[float, ...]:
-    """The sort key, on FACTS, in the order they decide: how the numbers were
-    come by, how far away they are, the cell against the mesh, recency, datum.
+    """The sort key, on FACTS, in the order they decide: provenance kind, distance, cell against the mesh, recency, datum.
 
-    An instrument record at the place answers what a prediction estimates and a
-    model grid computes, so the kind leads; among records of one kind the
-    nearest speaks for the place. A source coarser than the mesh cannot answer
-    what the mesh resolves, so it ranks below every source that can, and the
-    least coarse of those comes first. Among the sources that resolve the mesh
-    the FINER one measured the ground more closely, so it ranks first. Lower
-    sorts earlier throughout."""
+    A source coarser than the mesh ranks below every source that resolves it; among those the finer ranks first. Lower sorts earlier."""
     return (float(PROVENANCE_KINDS.index(coverage.kind)),
             _distance_km(need, coverage), _cell_rank(need, coverage),
             -_recency(coverage), 0.0 if _on_frame(need, coverage) else 1.0)
@@ -609,19 +517,13 @@ def _cell_rank(need: Need, coverage: Coverage) -> float:
 
 
 def _recency(coverage: Coverage) -> float:
-    """How current this source's records are, as a sortable instant.
-
-    A source that reports TO NOW states no ``latest`` and is the most current
-    thing there is."""
+    """How current this source's records are, as a sortable instant; a source reporting TO NOW states no ``latest`` and is infinite."""
     latest = instant(coverage.window.latest)
     return latest.timestamp() if latest is not None else float("inf")
 
 
 def _on_frame(need: Need, coverage: Coverage) -> bool:
-    """Is this source already counted from the run's own frame?
-
-    A differing or unstated datum is not excluded here - it is a fact on the row
-    and a shift the offset row measures."""
+    """Is this source already counted from the run's own frame? A differing or unstated datum is a flag, not an exclusion."""
     from trid3nt_server.inputs.vertical_datum import names_frame
 
     if not need.frame or not coverage.datum:
@@ -665,10 +567,7 @@ def _currency(coverage: Coverage) -> str:
 
 def _sentence(need: Need, survivors: Sequence[SourceOption],
               dropped: Sequence[SourceOption]) -> str:
-    """ONE sentence: what the model is told and what the card shows.
-
-    Authored here so the two cannot drift - a second rendering of the same facts
-    is a second chance to say something the run did not do."""
+    """ONE sentence: what the model is told and what the card shows."""
     if not survivors:
         if dropped and all(row.excluded.startswith(NO_MOMENT) for row in dropped):
             return (f"{need.slot}: {NO_MOMENT}, so no source was asked for "
@@ -692,11 +591,7 @@ def _sentence(need: Need, survivors: Sequence[SourceOption],
 
 def _probe_sentence(choice: SourceChoice, rows: Sequence[SourceOption],
                     fetcher: str, nxt: str) -> str:
-    """What the run says once the world has answered.
-
-    With a survivor left the line names the drop and who took its turn; with
-    none left it names EVERY source and what each one had to say, which is the
-    refusal a reader can act on."""
+    """What the run says once the world has answered."""
     if nxt:
         return f"{choice.slot}: {fetcher} held nothing, so {nxt} fills the slot."
     named = "; ".join(f"{row.fetcher} {row.excluded}" for row in rows

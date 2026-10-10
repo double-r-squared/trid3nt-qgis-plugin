@@ -4,15 +4,9 @@ OSMnx owns the query, the socket, the pre-request pause and the geometry decode.
 things it does not own ride here: the mirror chain, since it holds ONE url, and the
 refusal it returns AS DATA when a non-OK body parses as JSON."""
 
-# MIRRORS. OSMnx wants the API BASE and appends ``/interpreter`` itself, while a
-# row names the interpreter URL its callers would use, so the suffix comes off
-# here; the chain is set, call, catch, next, restore.
-#
-# MEASURED AND ACCEPTED for this family: on a 429 or a 504 OSMnx pauses a hardcoded
-# 55 s rather than the server's ``Retry-After``. It recovers; it just does not obey
-# the server's number. What is NOT accepted is that it retries by RECURSION with no
-# ceiling, so a mirror that keeps refusing would hang the fetch forever: the wrapped
-# post counts those refusals and lets the mirror chain move on.
+# Mirrors: OSMnx wants the API BASE and appends ``/interpreter``, so the suffix comes off a row's URL.
+# OSMnx pauses a hardcoded 55 s on 429/504 instead of obeying ``Retry-After`` (accepted), but retries
+# by unbounded RECURSION, so the wrapped post counts refusals and lets the mirror chain move on.
 
 from __future__ import annotations
 
@@ -28,18 +22,14 @@ logger = logging.getLogger("trid3nt_server.tools.fetchers._router.hooks.osm")
 
 __all__ = ["overpass_features", "osm_id_of", "clip_to_bbox"]
 
-#: OSMnx settings are module globals, so one source's mirror is every caller's.
 _settings_lock = threading.Lock()
 
 
-#: How many times one mirror may answer 429/504 before the chain gives up on it.
-#: The library's own retry is a bare recursion, so the ceiling has to be here.
+#: Per-mirror ceiling on 429/504 answers; the library's own retry is a bare recursion.
 _MAX_THROTTLED = 3
 
 
 class _RaiseOnStatus:
-    """A ``requests`` stand-in whose post refuses to hand back a failed response."""
-
     def __init__(self, real: Any) -> None:
         self._real = real
         self.throttled = 0
@@ -51,7 +41,6 @@ class _RaiseOnStatus:
         resp = self._real.post(url, *args, **kwargs)
         if resp.ok:
             return resp
-        # 429 and 504 are the library's own retry path, bounded here.
         if resp.status_code in (429, 504):
             self.throttled += 1
             if self.throttled > _MAX_THROTTLED:
@@ -61,8 +50,6 @@ class _RaiseOnStatus:
 
 
 class _OverpassStatus(RuntimeError):
-    """The upstream status and body, both verbatim."""
-
     def __init__(self, status: int, url: str, body: str) -> None:
         super().__init__(f"Overpass {status} from {url}\nBODY: {body}")
 
@@ -74,13 +61,10 @@ def overpass_features(
     *,
     timeout_s: float,
 ) -> Any:
-    """Every OSM feature in the ``(west, south, east, north)`` bbox carrying ``tags``,
-    whole geometries kept where they intersect. An area with no such feature is an
-    EMPTY frame, an answer; every mirror failing is a typed upstream error."""
+    """Every OSM feature in the ``(west, south, east, north)`` bbox carrying ``tags``; no match is an EMPTY frame, every mirror failing is a typed upstream error."""
     import osmnx as ox
     from osmnx import _overpass, settings
 
-    # The row names the interpreter URL; the library appends that itself.
     mirrors = [
         (ep.url or ep.url_template or "").rstrip("/").removesuffix("/interpreter")
         for ep in spec.endpoints.values()
@@ -93,11 +77,9 @@ def overpass_features(
         real_requests = _overpass.requests
         wrapper = _RaiseOnStatus(real_requests)
         _overpass.requests = wrapper
-        # The router owns the cache tier and the provenance that rides with it; a
-        # second cache under it would age on its own rules.
+        # The router owns the cache tier; a second cache under it would age on its own rules.
         settings.use_cache = False
-        # The timeout is also the QL's own [timeout:N] directive, which Overpass
-        # parses as an integer number of seconds.
+        # The timeout is also the QL's [timeout:N] directive, which Overpass parses as integer seconds.
         settings.requests_timeout = int(timeout_s)
         try:
             for i, url in enumerate(mirrors):
@@ -106,7 +88,6 @@ def overpass_features(
                 try:
                     return ox.features_from_bbox(bbox, tags)
                 except ox._errors.InsufficientResponseError:
-                    # OSMnx's word for "no element matched", which is an answer.
                     import geopandas as gpd
 
                     return gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
@@ -128,14 +109,11 @@ def overpass_features(
 
 
 def osm_id_of(index_value: Any) -> int:
-    """The element's OSM id from the frame's ``(element_type, osmid)`` index."""
     return int(index_value[1] if isinstance(index_value, tuple) else index_value)
 
 
 def clip_to_bbox(geom: Any, bbox: tuple[float, float, float, float]) -> list[list[list[float]]]:
-    """A way's vertices cut to the bbox, one coordinate list per in-AOI segment: a way
-    crossing the boundary several times is several segments of the same way with the
-    same attributes, and anything left under two vertices is not a line."""
+    """A way's vertices cut to the bbox, one coordinate list per in-AOI segment; fewer than two vertices is not a line."""
     from shapely import clip_by_rect
 
     if geom is None or geom.is_empty:

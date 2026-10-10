@@ -26,9 +26,7 @@ _CODE = "BOUNDARY_RUN_INVALID"
 #: prescribed: it is what the edge already is where no run names it.
 WALL = "wall"
 #: The run whose level is read off a STAGE-DISCHARGE CURVE rather than held at a
-#: constant - a catchment outlet, where the level rises and falls with whatever
-#: the domain delivers to it. Spelled as the engine role it prescribes, so a run
-#: type IS the role and no vocabulary translates into another.
+#: constant - a catchment outlet. Spelled as the engine role it prescribes.
 RATING = "rating_curve"
 RUN_TYPES: tuple[str, ...] = (WALL, "inflow", "outflow", "open", RATING)
 #: The runs the water CROSSES. Their stretches of the edge are not shoreline: a
@@ -88,11 +86,8 @@ def boundary_runs(value: Any, *, label: str = "boundary runs",
         return boundary_runs(declared, label=label, code=code)
     if isinstance(value, Mapping):
         if value.get("type") == "FeatureCollection":
-            # A run is a stretch of the EDGE. A domain's own collection carries
-            # its polygon and the companions its producer measured beside the
-            # runs, and neither a polygon nor a named centerline is a stretch of
-            # an edge - so a row is a run when it is a line the producer either
-            # named by a run type or did not name at all.
+            # A run is a line the producer named by a run type or did not name; a
+            # domain's polygon and its named centerlines are not stretches of the edge.
             return tuple(_row(f, label, code)
                          for f in (value.get("features") or ())
                          if _is_run(f))
@@ -122,8 +117,7 @@ def roles_from_runs(runs: Iterable[BoundaryRun]) -> dict[str, list[dict[str, Any
 
 
 def _is_run(feature: Any) -> bool:
-    """Whether a feature is a stretch of the domain's edge rather than a
-    companion its producer wrote beside them."""
+    """Whether a feature is a stretch of the domain's edge, not a companion beside it."""
     if not isinstance(feature, Mapping):
         return True
     geometry = feature.get("geometry") or {}
@@ -150,9 +144,9 @@ def _row(value: Any, label: str, code: str) -> BoundaryRun:
     geometry = value.get("geometry")
     kind = str(props.get("type") or value.get("type") or WALL)
     if kind == "Feature":
-        # A drawn feature's own GeoJSON ``type`` is "Feature"; the run's type is
-        # a property on it, and an unnamed one is the wall the edge already is.
-        # Any OTHER word is a type somebody meant, and it is refused by name.
+        # A drawn feature's own GeoJSON ``type`` is "Feature"; the run's type is a
+        # property on it, and an unnamed one is the wall the edge already is; any
+        # other word is refused by name.
         kind = WALL
     name = props.get("name") or value.get("name")
     if isinstance(geometry, Mapping):
