@@ -37,7 +37,8 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
 - `plugin/` - the QGIS dock (installs as `trid3nt`). `tests/` - the
   offline suite, mirroring the product tree; the six slices are its
   directories, named by the `make test-*` targets law 1 lists.
-  `scripts/` - the entry points you type, plus the model checker.
+  `scripts/` - the entry points you type, plus the model checker and the
+  dictionary extractor.
   `dev/` - the dev tools, which git does not carry and the remote never
   sees: `lint/` (the prose guards), `instruments/` (measure + render
   the generated pages), `packet/` (the delivery renderers), `drivers/`

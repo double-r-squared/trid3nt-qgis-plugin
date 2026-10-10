@@ -13,12 +13,7 @@ from pathlib import Path
 
 import pytest
 
-DEV = Path(__file__).resolve().parents[2] / "dev"
-_SCRIPT = DEV / "instruments" / "extract_telemac_dictionary.py"
-
-if not DEV.is_dir():
-    pytest.skip("dev/ is absent: the dev tools are not on the remote",
-                allow_module_level=True)
+_SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "extract_telemac_dictionary.py"
 
 #: What the seven exposed dictionaries hold together.
 _TOTAL_KEYWORDS = 1444
@@ -29,7 +24,7 @@ _UNDESCRIBED = 25
 
 
 def _extractor():
-    """The script, imported by path - ``dev/instruments/`` is not a package."""
+    """The script, imported by path - ``scripts/`` is not a package."""
     spec = importlib.util.spec_from_file_location("extract_telemac_dictionary", _SCRIPT)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -77,4 +72,4 @@ def test_the_committed_dictionary_is_what_the_image_says_today(tmp_path):
         committed = (extractor.module_input_dir() / f"{module}.json").read_text()
         assert (tmp_path / f"{module}.json").read_text() == committed, (
             f"{module}.json has drifted from the image's dictionary; re-run "
-            "dev/instruments/extract_telemac_dictionary.py and read the diff")
+            "scripts/extract_telemac_dictionary.py and read the diff")

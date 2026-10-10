@@ -1,7 +1,7 @@
 # `modules/module_input/` - the module's input vocabulary
 
 One JSON per exposed module, extracted IN-IMAGE from the module's dico by
-`dev/instruments/extract_telemac_dictionary.py` and committed. Never hand edited: a
+`scripts/extract_telemac_dictionary.py` and committed. Never hand edited: a
 transcribed keyword table is a second answer to a question the engine already
 answers, and `tests/scripts/test_telemac_dictionary_drift.py` re-extracts from the image
 when one is present and fails on any difference.
