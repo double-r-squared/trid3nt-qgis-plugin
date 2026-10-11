@@ -796,6 +796,11 @@ async def fill(state: Fill, values: Mapping[str, Any]) -> Fill:
     tokens = (journal.bind_notes(), journal.bind_choices(),
               journal.bind_coverage())
     try:
+        # Every stated row is registered before any is produced: producing one
+        # forces the domain, which must already see the caller's own.
+        if state.params is not None:
+            for name, value in sourced.items():
+                _stated(production(state), rows[name], value)
         for name, value in sourced.items():
             await _row(state, rows[name], value)
         # EVERY ROW THE TEMPLATE NAMES is produced here, before anything
@@ -909,6 +914,14 @@ def production(state: Fill) -> _Env:
     return state.env
 
 
+def _stated(env: _Env, decl: DataDecl, value: Any) -> None:
+    if isinstance(value, Mapping) and "source" in value:
+        env.picks[decl.name] = str(value["source"])
+    elif value is not None:
+        env.supplied[decl.name] = (value.get("layer")
+                                   if isinstance(value, Mapping) else value)
+
+
 async def _row(state: Fill, decl: DataDecl, value: Any) -> None:
     """A sourced input: fetched or read, and ingested, BEFORE it answers."""
     if state.params is None:
@@ -918,11 +931,7 @@ async def _row(state: Fill, decl: DataDecl, value: Any) -> None:
             "was refused.")
         return
     env = production(state)
-    if isinstance(value, Mapping) and "source" in value:
-        env.picks[decl.name] = str(value["source"])
-    elif value is not None:
-        env.supplied[decl.name] = (value.get("layer")
-                                   if isinstance(value, Mapping) else value)
+    _stated(env, decl, value)
     try:
         if decl.role not in (DOMAIN, EXTENT):
             await _place_first(env)
