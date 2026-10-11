@@ -83,7 +83,6 @@ def _cache_bucket() -> str:
 
 def _upload_authored(rundir: Path, run_tag: str, names: Sequence[str],
                      prefix: str) -> list[dict[str, str]]:
-    """Upload every file this authoring wrote -> the manifest rows staging them."""
     from trid3nt_server.store import objects as storage
 
     bucket = _cache_bucket()

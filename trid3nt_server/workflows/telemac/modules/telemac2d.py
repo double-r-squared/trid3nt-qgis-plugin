@@ -182,7 +182,6 @@ def _engine_bearing(from_deg: Any) -> float:
 
 
 def _oil(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-    """The oil module: its steering file, per-run Fortran, and the float files written to and from."""
     from ..authoring.oil import release_routine, steering_text
 
     presets = value["presets"]

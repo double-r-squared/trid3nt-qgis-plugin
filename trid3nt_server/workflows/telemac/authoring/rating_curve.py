@@ -93,7 +93,6 @@ def _outlet_manning(landcover: Any, lonlat: Any, roughness: Mapping[Any, Any],
 def _measured_outlet(topology: Mapping[str, Any], node_xy: Any, node_bed: Any,
                      cells: Any, manning: Any, *, law: int,
                      q_ceiling_m3s: float, q_ceiling_basis: str) -> dict[str, Any]:
-    """Section, slope and roughness measured off the accepted mesh at the outlet's nodes."""
     import numpy as np
 
     nodes = _outlet_nodes(topology)

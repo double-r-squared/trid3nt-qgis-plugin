@@ -784,7 +784,6 @@ def read_field(primitive: Primitive, solved: Solved) -> Read:
 
 
 def _point(at: Any) -> Any:
-    """The Point a primitive was anchored at, whatever shape the anchor took."""
     from trid3nt_server.inputs import Point
 
     if isinstance(at, Point):
