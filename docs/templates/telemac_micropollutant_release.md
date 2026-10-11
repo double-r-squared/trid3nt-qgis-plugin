@@ -18,6 +18,7 @@ A SORBING substance released into water: how much stays DISSOLVED and how much e
 | `bed` | matched on a need for bathymetry | what the domain's nodes carry for elevation: a DEM, a bathymetry or survey raster, a layer of soundings, or a depth in metres below the free surface; unfilled, the run matches a source of bathymetry. | - |
 | `discharge` | matched on a need for discharge series | the discharge series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of discharge series. | - |
 | `level` | matched on a need for water level series | the water level series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of water level series. | - |
+| `mesh` | supplied by the caller | a mesh this case already built, as its uri or its layer name, solved on in place of the one the run would build; unfilled, the run builds its own. | - |
 
 ## The inputs
 

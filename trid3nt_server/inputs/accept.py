@@ -1,6 +1,6 @@
 """THE ACCEPT RULE of one input of a registered tool, and the values it would take.
 
-An input named for a slot accepts what that slot's ingestion reads; an input
+An input a workflow types as a slot accepts what that slot's ingestion reads; an input
 whose annotation enumerates its values accepts one of them; a typed input
 accepts what parses as its type. What a dropdown lists is every case layer and
 every choice that same rule accepts, so nothing is written per tool.
@@ -13,7 +13,7 @@ import inspect
 import json
 from typing import Any, Literal, Mapping, Sequence, Union, get_args, get_origin, get_type_hints
 
-from .slots import SLOTS, ingest_slot
+from .slots import Slot, ingest_slot
 from .user_input import UserInputError
 
 __all__ = ["InputRefused", "accept", "choices_of", "inputs_of", "offers"]
@@ -55,6 +55,12 @@ def choices_of(fn: Any, name: str) -> tuple[Any, ...] | None:
     return tuple(get_args(found)) if get_origin(found) is Literal else None
 
 
+def _slot(fn: Any, name: str) -> Slot | None:
+    """The type the workflow behind ``fn`` declares for its row ``name``, or ``None``."""
+    rows = getattr(getattr(fn, "workflow", None), "data", ())
+    return next((row.slot for row in rows if row.name == name), None)
+
+
 def _layer(value: Any, layers: Sequence[Mapping[str, Any]]) -> Mapping[str, Any] | None:
     key = value.get("layer") if isinstance(value, Mapping) else value
     return next((row for row in layers if isinstance(key, str)
@@ -75,10 +81,10 @@ def accept(fn: Any, name: str, value: Any,
         if value not in choices:
             raise InputRefused(f"{name} takes one of {list(choices)}; got {value!r}.")
         return value
-    slot = SLOTS.get(name)
+    slot = _slot(fn, name)
     if slot is not None and slot.ingest is not None:
         try:
-            ingest_slot(name, value, label=name)
+            ingest_slot(slot, value, label=name)
         except Exception as exc:  # noqa: BLE001 - the ingestion's refusal is the verdict
             raise InputRefused(
                 f"{name} does not take {layer.get('name') if layer else value!r}: "
@@ -120,7 +126,7 @@ def offers(fn: Any, name: str,
     choices = choices_of(fn, name)
     if choices is not None:
         return [(choice, str(choice)) for choice in choices]
-    slot = SLOTS.get(name)
+    slot = _slot(fn, name)
     if slot is None or slot.ingest is None:
         return None
     taken = []

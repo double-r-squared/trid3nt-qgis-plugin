@@ -5,8 +5,9 @@ from __future__ import annotations
 import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Accepts, Param, lever,
+    Data, register_workflow, Param, lever,
 )
 from trid3nt_server.tools.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.telemac.authoring.accepted_mesh import (
@@ -18,12 +19,10 @@ from trid3nt_server.workflows.telemac.modules.artemis import (
 )
 from trid3nt_server.workflows.telemac.workflow import Measured, TelemacWorkflow
 
-__all__ = ["ACCEPTS", "CAPTIONS", "DATA", "DEFAULT_BARRIER_WIDTH_M",
+__all__ = ["CAPTIONS", "DATA", "DEFAULT_BARRIER_WIDTH_M",
            "DEFAULT_GRADE", "DEFAULT_OPEN_DEPTH_M", "DOC", "MESH", "OUTPUTS",
            "PARAMS", "STEERING", "artemis_harbor_agitation"]
 
-
-ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
 DEFAULT_GRADE: float = 0.2
 
@@ -80,11 +79,10 @@ _STEERING_FILE = "art_agitation.cas"
 
 
 class DATA:
-    extent = Data.supplied(geometry="rectangle")
-    domain = Data.need("hydrography", kind="coastline", geometry="polyline")
-    bed = Data.need("bathymetry")
+    extent = Data(EXTENT).supplied(geometry="rectangle")
+    domain = Data(DOMAIN).need("hydrography", kind="coastline", geometry="polyline")
+    bed = Data(BED).need("bathymetry")
     structure = Data.supplied(geometry="polyline")
-    mesh = Data.supplied(geometry="mesh").optional()
 
 
 _FOOTPRINT = Measured(
@@ -163,7 +161,6 @@ _ARTEMIS_METADATA = AtomicToolMetadata(
 )
 
 MESH_ON = "domain"
-SUPPLIED_MESH = "mesh"
 
 RESULTS = (_RESULT,)
 

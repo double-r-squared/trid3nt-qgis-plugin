@@ -24,9 +24,10 @@ from trid3nt_server.render.pipeline_emitter import current_emitter, substep
 from trid3nt_server.tools.search.match import (
     Need, ask_for, base_ask, dropped_from, instant, match, sources_with_coverage)
 
-from .data import CoversAOI, DataDecl, Producer
+from .data import DataDecl, Producer
 
-from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, EXTENT, LEVEL, LINE
+from trid3nt_server.inputs.slots import (
+    BED, DISCHARGE, DOMAIN, EXTENT, LEVEL, LINE, Slot)
 from trid3nt_server.inputs.bound_domain import Domain, bind_domain, current_domain
 from .errors import (DeclarativeError, StepFailedError,
                      SuppliedCoverageError, said)
@@ -85,9 +86,9 @@ class _Env:
     #: How long the solve runs, in seconds, off the deck this run writes: the WINDOW a
     #: matched series source must cover, or the run refuses.
     window_s: float | None = None
-    #: The UNIT each slot's value is converted to, by role - the unit of the
-    #: keyword that role fills, which the transform fixes. No row states one.
-    slot_units: Mapping[str, str] = field(default_factory=dict)
+    #: The UNIT each slot's value is converted to, by type - the unit of the
+    #: keyword that type fills, which the transform fixes. No row states one.
+    slot_units: Mapping[Slot, str] = field(default_factory=dict)
     #: What the template CALLS each thing it publishes or measures, by published
     #: variable and by DATA row name; a measured row's caption is the noun its refusals
     #: and journal line are written about.
@@ -107,15 +108,10 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
     An artifact nothing reads costs no fetch; a CONTEXT row is asked regardless."""
     handed_in = env.supplied.get(decl.name)
     if handed_in is not None:
-        # A MARKED producer states the check the value handed to its row is held
-        # to: a table of weather has no extent, so it is not a coverage question,
-        # and the row that carries the mark is what knows that.
-        _validate_supplied(env, decl, handed_in,
-                           decl.producer.supplied_validate if decl.is_supplied
-                           else decl.supplied_validate)
+        _validate_supplied(env, decl, handed_in)
         return await _ingested(env, decl, handed_in)
     producer = decl.producer
-    if producer is None and decl.role == LINE:
+    if producer is None and decl.slot is LINE:
         # THE DOMAIN'S PRODUCER measured this beside the polygon it cut - a reach's
         # centerline rides on the artifact it returned. A body whose producer measured
         # none is asked on the canvas next.
@@ -127,13 +123,13 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
         # and the runtime declares the row it picked, so the pick earns a
         # journal line like any other producer.
         return await _matched(env, decl)
-    if producer is None and decl.role:
+    if producer is None and decl.slot is not None:
         # A SLOT the caller did not fill and no producer answers is asked for on the
         # canvas, where the user has one. A declined drawing is not a value: the slot's
         # own refusal below is what a reader sees.
         from trid3nt_server.inputs.slots import ask_on_canvas
 
-        drawn = await ask_on_canvas(decl.role, tool=env.workflow,
+        drawn = await ask_on_canvas(decl.slot, tool=env.workflow,
                                     param=decl.name, input_mode=env.input_mode)
         if drawn is not None:
             return drawn
@@ -152,10 +148,6 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
             "supply a layer, a file uri, or declare it .optional().",
             error_code="DATA_SLOT_UNSATISFIED", step=_data_step_label(decl.name),
         )
-    if producer.supplied_uri:
-        _validate_supplied(env, decl, producer.supplied_uri,
-                           producer.supplied_validate)
-        return await _ingested(env, decl, producer.supplied_uri)
     label = _data_step_label(decl.name)
     if decl.is_context:
         return await _context(env, decl, label)
@@ -170,7 +162,7 @@ async def _matched(env: _Env, decl: DataDecl) -> Any:
     Every slot takes the ONE source its class matched, the bed included; what covers
     the rest is a layer the person composes and hands the slot, never this fill's."""
     await _somewhere_to_ask(env)
-    if decl.role == BED:
+    if decl.slot is BED:
         return await _ingested(env, decl, await _bed_surface(env, decl))
     # The INGESTION rides INSIDE the probe: a source whose rows the slot finds nothing
     # usable in held nothing for this run, so the next survivor takes its turn.
@@ -200,9 +192,9 @@ async def _beside(env: _Env, decl: DataDecl) -> dict[str, Any]:
 
     seed = await _seed(env, decl)
     held: dict[str, Any] = {}
-    for name, word, geometry in needs_of(decl.role, _asked_of(decl, seed)):
+    for name, word, geometry in needs_of(decl.slot, _asked_of(decl, seed)):
         aside = dataclasses.replace(decl, name=f"{decl.name}_{name}", kind="",
-                                    observes=word, geometry=geometry)
+                                    slot=None, observes=word, geometry=geometry)
         _choice, value = await _probe(env, aside, decl.data_class, aside.name)
         if value is None:
             raise StepFailedError(
@@ -337,7 +329,7 @@ def _asked_of(decl: DataDecl, seed: Any) -> str:
     read off the seed because which water a place is is a fact of the place."""
     from trid3nt_server.inputs.domain import place_kind
 
-    if decl.role == DOMAIN:
+    if decl.slot is DOMAIN:
         return decl.kind or place_kind(seed)
     return str(decl.observes or "")
 
@@ -348,7 +340,7 @@ async def _somewhere_to_ask(env: _Env) -> None:
     A domain CUT out of a box has no polygon until the cut runs, so the extent slot fills first."""
     if current_domain() is not None:
         return
-    row = next((r for r in env.data.values() if r.role == EXTENT), None)
+    row = next((r for r in env.data.values() if r.slot is EXTENT), None)
     if row is not None:
         await _produce(env, row)
 
@@ -458,7 +450,7 @@ async def _domain_companion(env: _Env, named: str) -> Any:
     """One geometry the DOMAIN's producer measured beside its polygon, or ``None``.
 
     Read on demand, so a question that never needs the companion never asks for the domain."""
-    row = next((r for r in env.data.values() if r.role == DOMAIN), None)
+    row = next((r for r in env.data.values() if r.slot is DOMAIN), None)
     if row is None:
         return None
     bound = await read(env, row.name)
@@ -468,10 +460,10 @@ async def _domain_companion(env: _Env, named: str) -> Any:
 async def _ingested(env: _Env, decl: DataDecl, value: Any,
                     row: Any = None, beside: Mapping[str, Any] | None = None
                     ) -> Any:
-    """A SLOT's value through the one ingestion its role reads; a plain row's value as it came.
+    """A SLOT's value through the one ingestion its type reads; a plain row's value as it came.
 
     Runs off the loop: reading a layer's geometry is object-store IO."""
-    if not decl.role:
+    if decl.slot is None:
         return value
     from trid3nt_server.inputs.slots import ingest_slot
 
@@ -488,20 +480,20 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any,
     coercion.update(dict(beside or {}))
     if beside:
         coercion["span_km"] = decl.span_km
-    if decl.role == BED:
+    if decl.slot is BED:
         # THE CUT IS WHERE THE WATER IS: the bed states its coverage over it and
         # refuses a wet hole, and an empty one says the run was cut with none.
         coercion["water"] = _cut_polygon() or {}
-    ingested = await asyncio.to_thread(ingest_slot, decl.role, value,
+    ingested = await asyncio.to_thread(ingest_slot, decl.slot, value,
                                        label=decl.name, **coercion)
-    if decl.role == DOMAIN and ingested is not None:
+    if decl.slot is DOMAIN and ingested is not None:
         # THE DOMAIN a run solves over IS the run's domain from the moment its
         # slot is filled: what a supplied artifact is checked against, and what
         # a later fetch is bounded by. Nothing else has to acquire an AOI first.
         bind_domain(Domain(bbox=tuple(ingested.bbox),
                            geometry=dict(ingested.geometry),
                            label=ingested.name))
-    elif decl.role == EXTENT and ingested is not None and current_domain() is None:
+    elif decl.slot is EXTENT and ingested is not None and current_domain() is None:
         # A QUESTION WHOSE DOMAIN IS CUT OUT OF A BOX has no polygon until the cut runs,
         # and the cut's own sources have to be asked somewhere: the window the question
         # was asked in is that place until the domain slot supersedes it.
@@ -514,7 +506,7 @@ def _the_window_it_is_cut_from(decl: DataDecl) -> dict[str, Any]:
     """The BOX a domain slot cuts a land-water edge against, where the run has one.
 
     Empty once a polygon is bound: a domain that arrived closed is cut against nothing."""
-    if decl.role != DOMAIN:
+    if decl.slot is not DOMAIN:
         return {}
     dom = current_domain()
     if dom is None or dom.geometry or not dom.bbox:
@@ -531,7 +523,7 @@ def _what_the_run_calls_it(env: _Env, decl: DataDecl,
     told: dict[str, Any] = {}
     unit = (_observed_unit(env, decl, observed)
             if observed and decl.slot.record
-            else env.slot_units.get(decl.role))
+            else env.slot_units.get(decl.slot))
     if unit:
         told["to_units"] = unit
     caption = env.captions.get(decl.name)
@@ -578,7 +570,7 @@ def _what_the_record_reports(env: _Env, decl: DataDecl,
     from trid3nt_server.inputs.series import quantity_class
 
     told["quantity"] = (quantity_class(row.data_class) if row is not None
-                        else RATE if decl.role == DISCHARGE else STATE)
+                        else RATE if decl.slot is DISCHARGE else STATE)
     if env.params is not None:
         told["at"] = env.params.value_of("event_time")
     return told
@@ -592,10 +584,10 @@ async def _on_the_run_s_frame(env: _Env, decl: DataDecl,
     datum of a temperature. A source on ANOTHER frame is bridged by the offset row."""
     from .levers import run_frame
 
-    if decl.role not in (BED, LEVEL):
+    if decl.slot not in (BED, LEVEL):
         return {}
     frame = run_frame(env.params)
-    told = {"frame": frame} if decl.role == BED else {"to_datum": frame}
+    told = {"frame": frame} if decl.slot is BED else {"to_datum": frame}
     measured = await _offset_row(env, decl.name, value, frame)
     return told if measured is None else {**told, "offset": measured}
 
@@ -614,7 +606,7 @@ async def _question_seed(env: _Env) -> Any:
     Another row's own point ranks a reporting site and is not the question's place."""
     from trid3nt_server.inputs.point import lonlat_of
 
-    row = next((r for r in env.data.values() if r.role in (DOMAIN, EXTENT)
+    row = next((r for r in env.data.values() if r.slot in (DOMAIN, EXTENT)
                 and r.coercion.get("near") is not None), None)
     if row is None:
         return None
@@ -686,22 +678,19 @@ async def _produced(env: _Env, producer: Producer, label: str) -> Any:
         return await _call_runner(producer.runner, kwargs, label)
 
 
-def _validate_supplied(env: _Env, decl: DataDecl, supplied: Any,
-                      validate: Any) -> None:
+def _validate_supplied(env: _Env, decl: DataDecl, supplied: Any) -> None:
     """Two checks and no third before a supplied artifact is adopted: the slot's declared
-    SHAPE against its class, and under ``CoversAOI`` that a domain with an extent is bound."""
+    SHAPE against its class, and that a domain is bound or declared; the artifact's own extent is never read."""
     decl.refuse_wrong_shape(supplied)
     if isinstance(supplied, (int, float)) and not isinstance(supplied, bool):
         # A NUMBER is not an artifact: a stated depth or a stated reading has no
         # extent for a coverage check to be about, and it covers the domain by
         # construction - which is why a slot takes one at all.
         return
-    if validate is not CoversAOI:
-        return
     dom = current_domain()
     if dom is not None and dom.bbox is not None:
         return
-    if any(row.role == DOMAIN for row in env.data.values()):
+    if any(row.slot is DOMAIN for row in env.data.values()):
         # A workflow that DECLARES a domain slot carries its own: the slot binds it the
         # moment it is filled, so a row produced before it is adopted for its declared shape.
         return
@@ -935,7 +924,7 @@ async def _row(state: Fill, decl: DataDecl, value: Any) -> None:
     env = production(state)
     _stated(env, decl, value)
     try:
-        if decl.role not in (DOMAIN, EXTENT):
+        if decl.slot not in (DOMAIN, EXTENT):
             await _place_first(env)
         held = env.run[decl.name] = await _produce(env, decl)
     except asyncio.CancelledError:
@@ -969,7 +958,7 @@ async def _place_first(env: _Env) -> None:
 
     Producing a row may register runtime rows, so the loop is over the rows as they stood."""
     for row in list(env.data.values()):
-        if row.role == DOMAIN and row.name not in env.run:
+        if row.slot is DOMAIN and row.name not in env.run:
             env.run[row.name] = await _produce(env, row)
 
 

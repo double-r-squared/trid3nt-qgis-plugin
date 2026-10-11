@@ -28,6 +28,7 @@ from trid3nt_server.workflows.telemac.modules.khione import (
 from trid3nt_server.workflows.telemac.templates.ice_cover import (
     ice_cover as template,
 )
+from trid3nt_server.inputs.slots import BED, DISCHARGE, OBSERVE
 
 #: The week the deck states as DURATION, as the hourly record that has to span
 #: it: the engine stops at an instant outside the table, so a week-long run is
@@ -77,7 +78,7 @@ def test_the_water_opens_on_one_reading_ranked_from_where_it_is_read():
     the published TEMPERATURE variable it observes - the unit KHIONE's own
     tracer carries, not a stated one."""
     row = _rows()["observe"]
-    assert row.role == "observe"
+    assert row.slot is OBSERVE
     assert row.data_class == "water quality sample"
     assert row.observes == "TEMPERATURE"
     assert row.producer is None
@@ -92,7 +93,7 @@ def test_the_discharge_is_one_reading_the_channel_step_can_open_on():
     Its ROLE is what the workflow reads: a discharge is what makes this an open
     channel, and the step that measures one is listed off that."""
     row = _rows()["discharge"]
-    assert row.role == "discharge"
+    assert row.slot is DISCHARGE
     assert row.data_class == "discharge series"
     assert row.producer is None
     assert row.is_context
@@ -104,7 +105,7 @@ def test_the_bed_is_one_need_row_the_match_composes():
     the rest, composed by the match's own bed rule - never a producer or a merge
     stated on the template."""
     rows = _rows()
-    assert [name for name, row in rows.items() if row.role == "bed"] == ["bed"]
+    assert [name for name, row in rows.items() if row.slot is BED] == ["bed"]
     assert rows["bed"].data_class == "bathymetry"
     assert rows["bed"].producer is None
 
@@ -165,6 +166,7 @@ def _sheet(monkeypatch, **floor):
                     "outflow_stage_m": 3.1},
         "station": _STATION,
         "observe": Observation(value=3.2, units="degC"),
+        OBSERVE: Observation(value=3.2, units="degC"),
         "weather": "s3://cache/asos.fgb"})
 
 

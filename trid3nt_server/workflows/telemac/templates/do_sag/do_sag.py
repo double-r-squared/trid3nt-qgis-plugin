@@ -5,8 +5,9 @@ from __future__ import annotations
 import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LEVEL, LINE
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Accepts, Param,
+    Data, register_workflow, Param,
 )
 from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.instant import event_time
@@ -18,11 +19,8 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
 from trid3nt_server.workflows.telemac.templates.do_sag import streeter_phelps
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["ACCEPTS", "CAPTIONS", "DATA", "DOC", "OUTPUTS", "PARAMS",
+__all__ = ["CAPTIONS", "DATA", "DOC", "OUTPUTS", "PARAMS",
            "STEERING", "telemac_do_sag"]
-
-
-ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
 
 class PARAMS:
@@ -69,14 +67,14 @@ _SATURATION_MGL = 9.022
 
 
 class DATA:
-    domain = Data.need("hydrography", at="outfall_coords",
-                       span_km=_REACH_LENGTH_KM)
-    line = Data.supplied(geometry="polyline")
-    bed = Data.need("bathymetry")
-    discharge = Data.need("discharge series").context(
+    domain = Data(DOMAIN).need("hydrography", at="outfall_coords",
+                               span_km=_REACH_LENGTH_KM)
+    line = Data(LINE).supplied(geometry="polyline")
+    bed = Data(BED).need("bathymetry")
+    discharge = Data(DISCHARGE).need("discharge series").context(
         "the National Water Model published no streamflow over this domain "
         "at that cycle")
-    level = Data.need("water level series").optional()
+    level = Data(LEVEL).need("water level series").optional()
 
 
 class STEERING(T2D):

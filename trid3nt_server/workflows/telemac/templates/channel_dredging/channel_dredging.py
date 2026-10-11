@@ -5,8 +5,9 @@ from __future__ import annotations
 import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LEVEL, LINE
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Accepts, Param,
+    Data, register_workflow, Param,
 )
 from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.instant import event_time
@@ -17,11 +18,8 @@ from trid3nt_server.workflows.telemac.modules.gaia import (
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
 from trid3nt_server.workflows.telemac.workflow import Measured, TelemacWorkflow
 
-__all__ = ["ACCEPTS", "CAPTIONS", "DATA", "DOC", "OUTPUTS", "PARAMS",
+__all__ = ["CAPTIONS", "DATA", "DOC", "OUTPUTS", "PARAMS",
            "STEERING", "telemac_channel_dredging"]
-
-
-ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
 
 class PARAMS:
@@ -104,16 +102,16 @@ _REFERENCE_LEVEL = "SECTIONS"
 
 
 class DATA:
-    domain = Data.need("hydrography", at="seed_point",
-                       span_km=_REACH_LENGTH_KM)
-    line = Data.supplied(geometry="polyline")
-    bed = Data.need("channel survey")
-    discharge = Data.need("discharge series").context(
+    domain = Data(DOMAIN).need("hydrography", at="seed_point",
+                               span_km=_REACH_LENGTH_KM)
+    line = Data(LINE).supplied(geometry="polyline")
+    bed = Data(BED).need("channel survey")
+    discharge = Data(DISCHARGE).need("discharge series").context(
         "the National Water Model published no streamflow over this domain "
         "at that cycle")
     dredge_area = Data.supplied(geometry="polygon")
     dump_area = Data.supplied(geometry="polygon")
-    level = Data.need("water level series").optional()
+    level = Data(LEVEL).need("water level series").optional()
 
 
 _DREDGE = Measured(

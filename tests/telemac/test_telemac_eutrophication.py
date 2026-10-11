@@ -20,6 +20,7 @@ from trid3nt_server.workflows.telemac.modules.outputs import (
     OutputEmpty,
     Solved,
 )
+from trid3nt_server.inputs.slots import BED, DISCHARGE, LINE, OBSERVE
 #: The two algal processes, their rows and the body, read off the wrapper that
 #: carries them.
 APPENDED = waqtel._APPENDED
@@ -393,9 +394,9 @@ def test_the_bed_is_a_class_the_match_composes():
     covers the banks; which of each reaches this domain, and the merge between
     them, is the match's and the runtime's, not a row this template states."""
     rows = {row.name: row for row in _plan().data}
-    assert rows["bed"].role == "bed"
+    assert rows["bed"].slot is BED
     assert rows["bed"].data_class == "bathymetry"
-    assert [name for name, row in rows.items() if row.role == "bed"] == ["bed"]
+    assert [name for name, row in rows.items() if row.slot is BED] == ["bed"]
     assert {"survey", "surveyed_bed", "terrain"} & set(rows) == set()
 
 
@@ -405,7 +406,7 @@ def test_the_water_temperature_record_is_one_reading_off_the_nearest_site():
     choice, ranked from inside the domain, and the journal carries the site and
     the date because a sample is a moment."""
     row = {r.name: r for r in _plan().data}["observe"]
-    assert row.role == "observe"
+    assert row.slot is OBSERVE
     assert row.data_class == "water quality sample"
     # This run publishes no temperature variable, so the record is read in
     # the unit it was measured in and the row states none.
@@ -452,7 +453,7 @@ def test_the_carrier_flow_is_one_reading_the_open_channel_step_can_read():
     matches this domain, read as ONE value - the step that opens the channel
     refuses a record nobody chose a site from - and its absence is legal."""
     row = {r.name: r for r in _plan().data}["discharge"]
-    assert row.role == "discharge"
+    assert row.slot is DISCHARGE
     assert row.data_class == "discharge series"
     assert row.is_optional
 
@@ -466,7 +467,7 @@ def test_the_longitudinal_reads_are_taken_along_the_line_slot():
     along = {p.along for p in template.OUTPUTS if p.kind == "profile"}
     assert along == {"line"}
     assert "centerline" not in {row.name for row in _plan().data}
-    assert {row.name for row in _plan().data if row.role == "line"} == {"line"}
+    assert {row.name for row in _plan().data if row.slot is LINE} == {"line"}
 
 
 def test_the_stretch_the_producer_walks_is_the_templates_own_number():

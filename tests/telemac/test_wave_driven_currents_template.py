@@ -47,9 +47,9 @@ def _sheet(**floor):
                     "opening": "CONSTANT ELEVATION", "depth_m": None,
                     "level_m": 0.4, "outflow_stage_m": 0.4},
         "station": _STATION,
-        "wave": Wave(height_m=1.6, peak_frequency_hz=0.125,
-                     direction_deg=40.0, peak_period_s=8.0,
-                     from_direction_deg=220.0),
+        WAVE: Wave(height_m=1.6, peak_frequency_hz=0.125,
+                   direction_deg=40.0, peak_period_s=8.0,
+                   from_direction_deg=220.0),
         "level": 0.4})
 
 
@@ -59,14 +59,14 @@ def test_the_world_is_the_water_a_coastline_leaves_inside_the_window():
     the tide. The level is NOT optional here - the seaward rim is a prescribed
     elevation, so a run nobody measured a tide for has nothing to hold it at."""
     rows = _rows()
-    assert rows["extent"].role == EXTENT and rows["extent"].supplied
-    assert rows["domain"].role == DOMAIN
+    assert rows["extent"].slot == EXTENT and rows["extent"].supplied
+    assert rows["domain"].slot == DOMAIN
     assert rows["domain"].data_class == "hydrography"
     assert rows["domain"].kind == "coastline"
-    assert rows["bed"].role == BED and rows["bed"].data_class == "bathymetry"
-    assert rows["wave"].role == WAVE and rows["wave"].data_class == "wave series"
+    assert rows["bed"].slot == BED and rows["bed"].data_class == "bathymetry"
+    assert rows["wave"].slot == WAVE and rows["wave"].data_class == "wave series"
     assert rows["wave"].coercion["near"] == "seed"
-    assert rows["level"].role == LEVEL and not rows["level"].is_optional
+    assert rows["level"].slot == LEVEL and not rows["level"].is_optional
 
 
 def test_the_sea_state_forces_the_wave_deck_and_never_the_host():
@@ -187,7 +187,7 @@ def test_the_tide_reaches_the_rim_as_the_series_the_record_served():
                     "outflow_stage_series": tide, "time_step_s": 1.0,
                     "start_time_s": 0.0, "until_s": _HOUR_S},
         "station": _STATION,
-        "wave": Wave(height_m=1.6, peak_frequency_hz=0.125,
+        WAVE: Wave(height_m=1.6, peak_frequency_hz=0.125,
                      direction_deg=40.0, peak_period_s=8.0,
                      from_direction_deg=220.0),
         "level": tide})

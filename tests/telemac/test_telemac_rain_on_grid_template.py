@@ -15,6 +15,7 @@ from trid3nt_server.workflows.telemac.authoring.selafin_io import (
 
 import numpy as np
 import pytest
+from trid3nt_server.inputs.slots import BED, DOMAIN
 
 
 def test_registered_on_the_model_surface():
@@ -54,7 +55,7 @@ def test_the_catchment_is_one_need_row_asked_at_the_pour_point():
     slot."""
     rows = _rows()
     domain = rows["domain"]
-    assert domain.role == "domain" and domain.data_class == "hydrography"
+    assert domain.slot is DOMAIN and domain.data_class == "hydrography"
     assert domain.kind == "basin"
     assert domain.coercion["near"] == "pour_point"
     assert domain.span_km == 15.0
@@ -83,10 +84,10 @@ def test_the_bed_is_one_need_row_the_whole_surface_over_a_catchment():
     is the terrain itself, not a measurement laid over something else."""
     rows = _rows()
     bed = rows["bed"]
-    assert bed.role == "bed" and bed.data_class == "terrain"
+    assert bed.slot is BED and bed.data_class == "terrain"
     assert bed.producer is None
     # exactly one bed row: the workflow's own stages refuse a second.
-    assert [r.name for r in _rows().values() if r.role == "bed"] == ["bed"]
+    assert [r.name for r in _rows().values() if r.slot is BED] == ["bed"]
 
 
 def test_the_outlet_rides_on_the_domain_since_no_runs_row_exists():
@@ -189,11 +190,7 @@ def test_every_declared_param_and_the_two_slots_are_on_the_wire():
     wire = set(inspect.signature(fn).parameters)
     assert {p.name for p in fn.workflow.params} <= wire
     assert {"pour_point", "mesh_resolution_m", "design_storm_mm_per_day",
-            "rain_series_mm", "domain", "bed"} <= wire
-    # No "mesh" slot: a supplied mesh reaches a run through the mesh ROUTER at
-    # the build door, not through a template's own context slot - a second
-    # resolver inside a model template is the silent-adoption defect D-9 forbids.
-    assert "mesh" not in wire
+            "rain_series_mm", "domain", "bed", "mesh"} <= wire
 
 
 def test_no_domain_twin_or_keyword_twin_is_declared():

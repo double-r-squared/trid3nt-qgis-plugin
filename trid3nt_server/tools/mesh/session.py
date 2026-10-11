@@ -22,7 +22,6 @@ from trid3nt_server.render.mesh_display import mesh_display_path, write_2dm
 from trid3nt_server.tools.mesh.grid_geometry import M_PER_DEG_LAT
 from trid3nt_server.tools.mesh.artifact import (
     MeshArtifact,
-    stash_mesh_artifact,
     write_mesh_artifact_sidecar,
 )
 from trid3nt_server.tools.mesh.meshers import (
@@ -218,7 +217,6 @@ class MeshSession:
             utm_epsg=mesh.meta.get("utm_epsg"), provenance=provenance,
             probes=self.probes(),
             recipe_uri=recipe_uri, case_id=self.case_id, **declared)
-        stash_mesh_artifact(self.case_id, art)
         if str(display_uri).startswith("s3://"):
             write_mesh_artifact_sidecar(art, _s3_client())
         logger.info("build_mesh: %s mesh %s -> %d nodes %d elements %s (bed=%s)",

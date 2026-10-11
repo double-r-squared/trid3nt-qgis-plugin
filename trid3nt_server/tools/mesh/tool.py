@@ -7,20 +7,13 @@ builds now, and both take the same validation: an unknown op refuses by name."""
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
 from typing import Any, Literal
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
 from trid3nt_server.inputs.extent import as_bbox
-from trid3nt_server.workflows.runtime.accepts import Accepts
 from trid3nt_server.workflows.runtime.data import tool
-from trid3nt_server.tools.mesh.artifact import (
-    MeshArtifact,
-    find_case_mesh_artifacts,
-    read_mesh_artifact_sidecar,
-)
 from trid3nt_server.tools.mesh.meshers import (
     MeshOp,
     MeshToolError,
@@ -47,20 +40,14 @@ MesherName = Literal[registered_meshers()]
 __all__ = [
     "MeshOp",
     "MeshRecipe",
-    "MeshResolution",
     "MeshTool",
     "MeshToolError",
-    "accepts_for",
     "build_mesh",
     "build_recipe",
     "jsonable",
-    "kind_accepted",
-    "mesh_kind",
     "mesh_op",
     "recipe_from_plan_value",
     "recipe_plan_value",
-    "resolve_mesh",
-    "supplied_mesh_artifact",
     "tool",
 ]
 
@@ -75,136 +62,6 @@ class MeshTool:
         """Declare a mesh ask -> a frozen :class:`MeshRecipe`. Builds nothing."""
         return build_recipe(mesher=mesher, kind=kind, extent=extent,
                             resolution_m=resolution_m, ops=ops)
-
-
-@dataclass(frozen=True)
-class MeshResolution:
-    """Which mesh a run uses, and why: ``explicit`` | ``discovered`` | ``declared``."""
-
-    source: str
-    reason: str
-    artifact: MeshArtifact | None = None
-    recipe: MeshRecipe | None = None
-
-
-def resolve_mesh(
-    recipe: MeshRecipe | None = None, *,
-    explicit: Any = None,
-    accepts: Accepts | None = None,
-    case_id: str | None = None,
-    loaded_mesh_uris: list[str] | None = None,
-    s3_client: Any = None,
-) -> MeshResolution:
-    """Pick the mesh a run uses: explicit first, then the case, then the recipe.
-
-    An explicit mesh never falls through: unreadable or unaccepted refuses."""
-    if explicit is not None:
-        if isinstance(explicit, MeshArtifact):
-            art: MeshArtifact | None = explicit
-        elif s3_client is None:
-            # Naming the caller's missing reader rather than blaming the mesh: the
-            # two are different failures and only one is the user's to fix.
-            raise MeshToolError(
-                "MESH_EXPLICIT_UNREADABLE",
-                f"the mesh supplied for this run ({explicit!r}) is a uri and no "
-                "object-store reader was supplied to resolve it, so what it is "
-                "cannot be checked against the engine.")
-        else:
-            art = read_mesh_artifact_sidecar(str(explicit), s3_client)
-        if art is None:
-            raise MeshToolError(
-                "MESH_EXPLICIT_UNREADABLE",
-                f"the mesh supplied for this run ({explicit!r}) carries no readable "
-                "mesh artifact record, so what it is cannot be checked against the "
-                "engine; supply a mesh this case built.")
-        # The ``mesh`` row states which supplied meshes the template was built against; whether the engine can be staged on one is that engine's author's question.
-        _refuse_unaccepted_kind(art, accepts)
-        return MeshResolution("explicit", "supplied on the run", artifact=art)
-
-    for art in reversed(find_case_mesh_artifacts(
-            case_id=case_id, loaded_mesh_uris=loaded_mesh_uris,
-            s3_client=s3_client)):
-        if not kind_accepted(art, accepts):
-            continue
-        return MeshResolution(
-            "discovered", f"mesh {art.name!r} already authored in this case",
-            artifact=art)
-
-    if recipe is None:
-        raise MeshToolError(
-            "MESH_UNRESOLVED",
-            "no mesh was supplied, none compatible was found in this case, and no "
-            "mesh was declared, so there is nothing to build or adopt.")
-    # The build path is untouched by ``accepts``: a run with nothing supplied and
-    # nothing to adopt builds the kind it declared.
-    return MeshResolution(
-        "declared", f"the declared {recipe.mesher!r} build", recipe=recipe)
-
-
-def accepts_for(tool_name: str) -> Accepts | None:
-    """The supply contract the REGISTERED workflow ``tool_name`` declares.
-
-    ``None`` for a name with no registered workflow - the absence that refuses."""
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    entry = TOOL_REGISTRY.get(str(tool_name))
-    workflow = getattr(getattr(entry, "fn", None), "workflow", None)
-    return getattr(workflow, "accepts", None)
-
-
-def supplied_mesh_artifact(explicit: Any, *,
-                           tool_name: str) -> MeshArtifact | None:
-    """The mesh a run was HANDED, resolved and checked against the calling row.
-
-    ``None`` for an unfilled slot; a refusal, never a fall-through, otherwise."""
-    from trid3nt_server.store import objects as storage
-
-    if explicit is None or not str(explicit).strip():
-        return None
-    return resolve_mesh(explicit=explicit,
-                        accepts=accepts_for(tool_name),
-                        s3_client=storage.client()).artifact
-
-
-def mesh_kind(art: MeshArtifact) -> Any:
-    """The KIND of mesh this is, as the build that made it recorded its own ask.
-
-    ``None`` for a record that states none, which is not a failed match."""
-    provenance = getattr(art, "provenance", None) or {}
-    return (provenance.get("recipe") or {}).get("kind")
-
-
-def kind_accepted(art: MeshArtifact, accepts: Accepts | None) -> bool:
-    """Is ``art``'s kind a member of the declared ``mesh`` row? -> nothing more.
-
-    No row and an unstated kind both answer False: neither is a permission."""
-    if accepts is None:
-        return False
-    return accepts.accepts("mesh", mesh_kind(art))
-
-
-def _refuse_unaccepted_kind(art: MeshArtifact, accepts: Accepts | None) -> None:
-    """Refuse a supplied mesh the template's ``mesh`` row does not name, by name."""
-    kinds = accepts.kinds("mesh") if accepts is not None else None
-    if kinds is None:
-        raise MeshToolError(
-            "MESH_SUPPLY_UNDECLARED",
-            "this template declares no supplied-mesh compatibility, so the mesh "
-            f"handed to it ({art.name!r}, built by {art.mode!r}) has nothing to be: "
-            "the mesh row of an Accepts(...) declaration is what states which kinds "
-            "of mesh a pipeline was built and tested against, and there is no "
-            "tested supplied-mesh path without one.")
-    if kind_accepted(art, accepts):
-        return
-    got = mesh_kind(art)
-    is_a = repr(got) if got is not None else "of no recorded kind"
-    raise MeshToolError(
-        "MESH_KIND_MISMATCH",
-        f"this template accepts {list(kinds)!r} meshes; the mesh "
-        f"supplied for it ({art.name!r}, built by {art.mode!r}) is {is_a}. The "
-        "mesh row a template declares is what its pipeline was built and tested "
-        "against, so a mesh outside it is not a domain it can solve on - build or "
-        f"supply one of {list(kinds)!r} instead.")
 
 
 _METADATA = AtomicToolMetadata(

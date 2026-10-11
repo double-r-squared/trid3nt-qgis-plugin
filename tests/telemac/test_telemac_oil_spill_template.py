@@ -47,7 +47,7 @@ def test_the_domain_is_the_class_it_needs_and_a_supplied_polygon_still_wins():
     """A river question needs a water body; which source cuts one here is the
     match's. The row carries a role, so it reaches the wire as an argument."""
     domain = _rows()["domain"]
-    assert domain.role == DOMAIN
+    assert domain.slot == DOMAIN
     assert domain.producer is None
     assert domain.data_class == "hydrography"
     # The seed is the release POINT; a place name is geocoded before the call.
@@ -59,7 +59,7 @@ def test_the_bed_is_one_row_stating_the_class_it_needs():
     """ONE bed row, stating bathymetry - the measurement where it measured, the
     terrain under the rest, which is the RUNTIME's rule and not a question's."""
     rows = _rows()
-    assert [name for name, row in rows.items() if row.role == BED] == ["bed"]
+    assert [name for name, row in rows.items() if row.slot == BED] == ["bed"]
     bed = rows["bed"]
     assert bed.producer is None
     assert bed.data_class == "bathymetry"
@@ -78,7 +78,7 @@ def test_the_discharge_is_one_reading_and_never_the_grid_it_came_from():
     """The step that opens the channel takes an ingested Observation: which site
     reports the flow and how old the sample is are the slot's to decide."""
     discharge = _rows()["discharge"]
-    assert discharge.role == DISCHARGE
+    assert discharge.slot == DISCHARGE
     assert discharge.producer is None
     assert discharge.data_class == "discharge series"
     assert discharge.coercion["near"] is None

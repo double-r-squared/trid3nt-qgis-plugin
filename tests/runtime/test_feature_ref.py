@@ -19,10 +19,11 @@ from trid3nt_server.workflows.runtime import fill
 from trid3nt_server.workflows.runtime import Data
 from seated import resolve_params
 from trid3nt_server.workflows.runtime.errors import DeclarationError
+from trid3nt_server.inputs.slots import DOMAIN, OBSERVE
 
 
 def _row(**need):
-    return dataclasses.replace(Data.need("hydrography", **need), name="domain")
+    return dataclasses.replace(Data(DOMAIN).need("hydrography", **need), name="domain")
 
 
 async def _env():
@@ -30,7 +31,7 @@ async def _env():
 
 
 def test_a_stated_variable_is_what_a_record_row_asks_for() -> None:
-    row = dataclasses.replace(Data.need("water quality sample",
+    row = dataclasses.replace(Data(OBSERVE).need("water quality sample",
                                         of="TEMPERATURE"), name="observe")
     assert fill._asked_of(row, None) == "TEMPERATURE"
 
@@ -54,7 +55,7 @@ def test_the_kind_a_template_states_is_not_overruled_by_the_place() -> None:
 def test_only_the_domain_has_a_kind_to_state() -> None:
     """A kind is the water the equations are solved over, so a row that is not
     the domain refuses one at the line that wrote it."""
-    with pytest.raises(DeclarationError, match="is not the domain"):
+    with pytest.raises(DeclarationError, match="is not a domain"):
         class DATA:
             rivers = Data.need("hydrography", kind="flowline")
 

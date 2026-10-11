@@ -7,8 +7,9 @@ import sys
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.instant import event_time
+from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT, LEVEL, WAVE
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Accepts, Param, lever,
+    Data, register_workflow, Param, lever,
 )
 from trid3nt_server.tools.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.telemac.modules import T2D, WAC, series
@@ -16,12 +17,10 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
 from trid3nt_server.workflows.telemac.modules.tomawac import RESULT_FILENAME
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["ACCEPTS", "CAPTIONS", "DATA", "DEFAULT_OPEN_DEPTH_M", "DOC",
+__all__ = ["CAPTIONS", "DATA", "DEFAULT_OPEN_DEPTH_M", "DOC",
            "MESH", "OUTPUTS", "PARAMS", "STEERING",
            "tomawac_wave_driven_currents"]
 
-
-ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
 # every boundary stretch at least this deep opens
 DEFAULT_OPEN_DEPTH_M: float = -12.0
@@ -83,12 +82,11 @@ _STATION = Placed("station", point="station", label="Current station")
 
 
 class DATA:
-    extent = Data.supplied(geometry="rectangle")
-    domain = Data.need("hydrography", kind="coastline", geometry="polyline")
-    bed = Data.need("bathymetry")
-    wave = Data.need("wave series", at="seed")
-    level = Data.need("water level series")
-    mesh = Data.supplied(geometry="mesh").optional()
+    extent = Data(EXTENT).supplied(geometry="rectangle")
+    domain = Data(DOMAIN).need("hydrography", kind="coastline", geometry="polyline")
+    bed = Data(BED).need("bathymetry")
+    wave = Data(WAVE).need("wave series", at="seed")
+    level = Data(LEVEL).need("water level series")
 
 
 class STEERING(T2D):
@@ -172,7 +170,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 MESH_ON = "domain"
-SUPPLIED_MESH = "mesh"
 
 RESULTS = (_RESULT, RESULT_FILENAME)
 

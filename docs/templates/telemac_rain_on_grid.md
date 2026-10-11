@@ -19,6 +19,7 @@ How much RUNOFF a storm produces from the catchment a point drains, as an outlet
 | `rivers` | matched on a need for hydrography | the hydrography this run reads, as a uri or a layer name; unfilled, the run matches a source of hydrography. | - |
 | `landcover` | matched on a need for land cover | the land cover this run reads, as a uri or a layer name; unfilled, the run matches a source of land cover. | - |
 | `rain` | matched on a need for precipitation series | the precipitation series this run reads, as a uri or a layer name; unfilled, the run matches a source of precipitation series. | - |
+| `mesh` | supplied by the caller | a mesh this case already built, as its uri or its layer name, solved on in place of the one the run would build; unfilled, the run builds its own. | - |
 
 ## The inputs
 

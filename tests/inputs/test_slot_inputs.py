@@ -21,7 +21,7 @@ from trid3nt_server.inputs.boundary import (
 from trid3nt_server.inputs.domain import domain, domain_ring
 from trid3nt_server.inputs.user_input import UserInputError
 from trid3nt_server.inputs.slots import (
-    BED, DOMAIN, EXTENT, LEVEL, LINE, SLOTS, ingest_slot, role_of)
+    BED, DISCHARGE, DOMAIN, EXTENT, LEVEL, LINE, OBSERVE, Slot, ingest_slot)
 
 _RING = [[-123.0, 45.0], [-122.9, 45.0], [-122.9, 45.1], [-123.0, 45.1]]
 
@@ -134,8 +134,8 @@ def test_a_depth_no_water_body_holds_refuses_rather_than_being_meshed():
 def test_each_slot_reads_through_the_ingestion_its_role_names():
     assert ingest_slot(DOMAIN, _RING).bbox == (-123.0, 45.0, -122.9, 45.1)
     assert ingest_slot(BED, 2.0).kind == DEPTH
-    # a role nothing here reads leaves the value as it came
-    assert ingest_slot("", "x") == "x"
+    # a plain row states no type, and its value is left as it came
+    assert ingest_slot(None, "x") == "x"
 
 
 def test_an_extent_slot_reads_a_box_however_the_caller_named_it():
@@ -169,32 +169,35 @@ def test_a_domain_says_its_own_name_when_it_is_read_as_text():
 
 def test_only_the_slots_a_user_can_draw_are_offered_on_the_canvas():
     """A bed is a survey or a number, so there is nothing to draw for it."""
-    assert {name for name, slot in SLOTS.items() if slot.draw} == {
-        DOMAIN, EXTENT, LINE}
-    assert SLOTS[DOMAIN].draw[:2] == ("polygon", "domain")
-    assert SLOTS[LINE].draw[:2] == ("polyline", "line")
+    from trid3nt_server.inputs import slots
+
+    assert {slot for slot in vars(slots).values()
+            if isinstance(slot, Slot) and slot.draw} == {DOMAIN, EXTENT, LINE}
+    assert DOMAIN.draw[:2] == ("polygon", "domain")
+    assert LINE.draw[:2] == ("polyline", "line")
     # a box rides the pick mode, which offers no vector tool to choose between
-    assert SLOTS[EXTENT].draw[:2] == ("rectangle", "")
+    assert EXTENT.draw[:2] == ("rectangle", "")
 
 
-def test_a_rows_name_is_its_slot_and_every_other_name_is_a_plain_row():
-    """The reserved names ARE this registry's keys: one list, so a row called
-    ``bed`` is the bed slot however it was declared, and a row called anything
-    else is read by whatever declared it."""
-    assert role_of("bed") == "bed"
-    assert role_of("discharge") == "discharge"
-    assert role_of("observe") == "observe"
-    assert role_of("carrier") == ""
-    assert role_of("surveyed_bed") == ""
+def test_a_row_states_its_slot_and_its_name_is_free():
+    """A row is the slot it STATES: one called ``bed`` that states none is a
+    plain row, and one called anything at all that states BED is the bed."""
+    from trid3nt_server.workflows.runtime import Data, DataDecl
+
+    assert DataDecl(name="bed").slot is None
+    assert DataDecl(name="surveyed_bed", slot=BED).slot is BED
+    assert Data(LEVEL).need("water level series").slot is LEVEL
 
 
-def test_a_reserved_name_states_which_classes_its_role_serves():
-    """The bed reads a measurement or the ground; a level reads a level. The
-    lint refuses a reserved name under a class its slot does not serve."""
-    assert SLOTS[BED].classes == frozenset(
+def test_a_slot_states_which_classes_it_serves_and_a_row_outside_them_refuses():
+    """The bed reads a measurement or the ground; a level reads a level."""
+    from trid3nt_server.workflows.runtime import Data, DeclarationError
+
+    assert BED.classes == frozenset(
         {"bathymetry", "terrain", "channel survey"})
-    assert SLOTS[LEVEL].classes == frozenset({"water level series"})
-    assert "discharge series" not in SLOTS[BED].classes
+    assert LEVEL.classes == frozenset({"water level series"})
+    with pytest.raises(DeclarationError, match="as a bed"):
+        Data(BED).need("discharge series")
 
 
 def test_a_domain_producer_hands_over_the_runs_it_cut_the_polygon_between():
@@ -316,9 +319,10 @@ def test_each_slot_module_imports_first_in_a_fresh_interpreter(module):
     assert ran.returncode == 0, ran.stderr[-2000:]
 
 
-@pytest.mark.parametrize("role", ["bed", "level", "discharge", "observe"])
-def test_a_slot_that_takes_a_number_states_one_on_the_wire(role):
+@pytest.mark.parametrize("slot", [BED, LEVEL, DISCHARGE, OBSERVE],
+                         ids=lambda slot: slot.name)
+def test_a_slot_that_takes_a_number_states_one_on_the_wire(slot):
     from trid3nt_server.workflows.runtime.data import DataDecl
 
-    assert DataDecl(role).wire_annotation == (str | float | None)
-    assert DataDecl("domain").wire_annotation != (str | float | None)
+    assert DataDecl("x", slot=slot).wire_annotation == (str | float | None)
+    assert DataDecl("x", slot=DOMAIN).wire_annotation != (str | float | None)

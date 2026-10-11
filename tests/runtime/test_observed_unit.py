@@ -18,6 +18,7 @@ from trid3nt_server.inputs.observation import convert, observation
 from trid3nt_server.workflows.runtime import Data
 from trid3nt_server.workflows.runtime import fill
 from trid3nt_server.workflows.runtime.errors import DeclarationError, StepFailedError
+from trid3nt_server.inputs.slots import LEVEL, OBSERVE
 
 _METADATA = SimpleNamespace(name="t", description="", tags=())
 
@@ -25,7 +26,7 @@ _METADATA = SimpleNamespace(name="t", description="", tags=())
 def _row(name: str, **need):
     import dataclasses
 
-    return dataclasses.replace(Data.need("water quality sample", **need),
+    return dataclasses.replace(Data(OBSERVE).need("water quality sample", **need),
                                name=name)
 
 
@@ -72,12 +73,12 @@ def test_a_variable_with_no_unit_anywhere_refuses_rather_than_reading_the_record
     assert "observes 'TEMPERATURE'" in said and "H" in said
 
 
-def test_a_row_that_observes_nothing_published_is_read_by_its_role() -> None:
+def test_a_row_that_observes_nothing_published_is_read_by_its_type() -> None:
     env = _env(TEMPERATURE="DEGC")
-    env.slot_units = {"level": "m"}
+    env.slot_units = {LEVEL: "m"}
     import dataclasses
 
-    row = dataclasses.replace(Data.need("water level series"), name="level")
+    row = dataclasses.replace(Data(LEVEL).need("water level series"), name="level")
     assert fill._what_the_run_calls_it(
         env, row, "")["to_units"] == "m"
 

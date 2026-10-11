@@ -19,7 +19,6 @@ import pytest
 from pydantic import BaseModel
 
 from trid3nt_server.workflows.runtime import (
-    CoversAOI,
     Data,
     DataDecl,
     Param,
@@ -310,7 +309,6 @@ def test_one_author_word_declares_every_producer():
 
     fetcher, builder = tool("fetch_dem"), tool("build_mesh")
     assert type(fetcher) is type(builder) is Producer
-    assert fetcher.supplied("s3://mine/dem.tif").supplied_uri == "s3://mine/dem.tif"
 
 
 def _params():
@@ -428,12 +426,9 @@ def test_a_context_slot_refuses_a_shape_nobody_declares():
         DataDecl("structure").supplied(geometry="squiggle")
 
 
-def test_supplied_on_a_slot_and_supplied_on_a_producer_are_different_asks():
-    """A producer that can be SUPERSEDED says so on the producer, not on the slot."""
+def test_a_produced_row_is_not_also_supplied():
     with pytest.raises(DeclarationError, match="declares a producer AND"):
-        DataDecl("mesh", tool(f"{_HERE}.stub_producer")).supplied(geometry="mesh")
-    producer = tool(f"{_HERE}.stub_producer").supplied("s3://mine/m.slf")
-    assert DataDecl("mesh", producer).is_supplied is True
+        DataDecl("walls", tool(f"{_HERE}.stub_producer")).supplied(geometry="polyline")
 
 
 async def stub_refine(**kwargs):

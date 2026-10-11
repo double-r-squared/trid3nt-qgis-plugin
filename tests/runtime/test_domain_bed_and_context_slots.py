@@ -20,7 +20,7 @@ from trid3nt_server.workflows.runtime import (
     data_rows,
     tool,
 )
-from trid3nt_server.inputs.slots import BED, DOMAIN
+from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LINE, OBSERVE
 from trid3nt_server.workflows.runtime.levers import (
     LEVER_NAMES,
     LEVERS,
@@ -32,13 +32,13 @@ def test_a_domain_row_is_one_slot_however_it_is_filled():
     """A drawn polygon, the user's layer and a producer fill ONE row: the slot is
     on the wire AND names its producer, and nothing downstream reads which."""
     class DRAWN:
-        domain = Data.supplied(geometry="polygon")
+        domain = Data(DOMAIN).supplied(geometry="polygon")
 
     class FETCHED:
-        domain = Data(tool("fetch_nhd_waterbody_at_point", seed_point=[1.0, 2.0]))
+        domain = Data(DOMAIN)(tool("fetch_nhd_waterbody_at_point", seed_point=[1.0, 2.0]))
 
     drawn, fetched = data_rows(DRAWN)[0], data_rows(FETCHED)[0]
-    assert drawn.role == fetched.role == DOMAIN
+    assert drawn.slot == fetched.slot == DOMAIN
     # BOTH are on the wire: what the user hands in supersedes the producer.
     assert drawn.fills_from_user and fetched.fills_from_user
     assert fetched.producer.runner == "fetch_nhd_waterbody_at_point"
@@ -46,10 +46,10 @@ def test_a_domain_row_is_one_slot_however_it_is_filled():
 
 def test_a_bed_row_takes_every_source_a_survey_arrives_in_but_a_mesh():
     class DATA:
-        bed = Data.need("bathymetry")
+        bed = Data(BED).need("bathymetry")
 
     row = data_rows(DATA)[0]
-    assert row.role == BED and row.fills_from_user
+    assert row.slot == BED and row.fills_from_user
     # A bathymetry is measured as a raster AND as soundings, so both are the
     # class handed in; a stated depth is the number itself and has no shape.
     for supplied in ("s3://b/k/survey.tif", "s3://b/k/soundings.geojson", 2.0):
@@ -62,7 +62,7 @@ def test_a_terrain_row_refuses_the_shape_no_source_of_terrain_publishes():
     """The supplied twin is the CLASS's: terrain is measured as a surface and
     nothing publishes it as a point layer, so soundings are not a terrain."""
     class DATA:
-        bed = Data.need("terrain")
+        bed = Data(BED).need("terrain")
 
     row = data_rows(DATA)[0]
     row.refuse_wrong_shape("s3://b/k/ground.tif")
@@ -130,8 +130,8 @@ class _RIVER:
     """A question whose domain producer measures the edge it cuts between and
     the line down the middle of what it cut."""
 
-    domain = Data(tool("fetch_river_reach", seed_point=[0.5, 0.5]))
-    line = Data.supplied(geometry="polyline")
+    domain = Data(DOMAIN)(tool("fetch_river_reach", seed_point=[0.5, 0.5]))
+    line = Data(LINE).supplied(geometry="polyline")
 
 
 def _env_over(value, monkeypatch, body=_RIVER):
@@ -290,7 +290,7 @@ _SITES = {"type": "FeatureCollection", "features": [
 class _OBSERVED:
     """A row whose PRODUCER is a record and whose VALUE is one reading."""
 
-    observe = Data(tool("fetch_usgs_water_quality",
+    observe = Data(OBSERVE)(tool("fetch_usgs_water_quality",
                         characteristic="temperature"))
 
 
@@ -314,7 +314,7 @@ def test_an_observation_row_yields_the_reading_not_the_record(monkeypatch):
     # NO ROW STATES A UNIT: what this slot reads is the unit of the keyword its
     # ROLE fills, which the workflow answers for.
     env = fill._Env(params=None, data={}, run={"station": (0.11, 0.1)},
-                           slot_units={"observe": "degC"})
+                           slot_units={OBSERVE: "degC"})
     found = asyncio.run(fill._produce(env, data_rows(_OBSERVED)[0]))
     assert found.value == pytest.approx(10.0)
     assert found.units == "degC" and found.site_id == "NEAR"
@@ -324,7 +324,7 @@ def test_the_coercion_a_row_declares_is_bound_before_the_ingestion_runs():
     """``near`` is a late-bound read like any producer kwarg: the point the
     nearest site is ranked against is measured by a step, not written by hand."""
     class RANKED:
-        observe = Data.need("water quality sample", at="station")
+        observe = Data(OBSERVE).need("water quality sample", at="station")
 
     row = data_rows(RANKED)[0]
     assert row.coercion["near"] == "station"
@@ -334,7 +334,7 @@ def test_a_supplied_number_supersedes_the_record_through_the_same_slot(monkeypat
     from trid3nt_server.workflows.runtime import fill
 
     env = fill._Env(params=None, data={}, run={"station": (0.11, 0.1)},
-                           slot_units={"observe": "degC"},
+                           slot_units={OBSERVE: "degC"},
                            supplied={"observe": 11.5})
     found = asyncio.run(fill._produce(env, data_rows(_OBSERVED)[0]))
     assert found.value == pytest.approx(11.5) and found.units == "degC"
@@ -378,7 +378,7 @@ def test_a_required_series_need_with_no_moment_stated_refuses_naming_the_slot():
     from trid3nt_server.tools.search.match import NO_MOMENT
 
     class DATA:
-        discharge = Data.need("discharge series")
+        discharge = Data(DISCHARGE).need("discharge series")
 
     env = _no_moment_env()
     with pytest.raises(StepFailedError) as caught:
@@ -394,11 +394,11 @@ def _standing_on(bbox=(-123.22, 45.48, -123.19, 45.50)):
     return bind_domain(Domain(bbox=tuple(bbox), geometry={}, label="the lake"))
 
 
-def _elevation_slot(role: str):
-    """A row whose NAME is the slot it plays - which is the only way to be one."""
+def _elevation_slot(slot):
+    """A row that STATES the slot it is - which is the only way to be one."""
     from trid3nt_server.workflows.runtime.data import DataDecl
 
-    return DataDecl(name=role)
+    return DataDecl(name=slot.name, slot=slot)
 
 
 def test_every_elevation_slot_is_read_on_the_runs_own_vertical_frame():
@@ -441,7 +441,7 @@ def test_the_runtime_declares_the_offset_row_a_differing_source_owes(monkeypatch
     monkeypatch.setattr(fill, "_call_runner", _call)
     _standing_on()
     seeded = dataclasses.replace(
-        Data.need("hydrography", at=[_MEASURED_EAST_OF + 0.005, 45.49]),
+        Data(DOMAIN).need("hydrography", at=[_MEASURED_EAST_OF + 0.005, 45.49]),
         name="domain")
     env = fill._Env(params=_Params({"vertical_frame": "EGM2008"}),
                            data={"domain": seeded})
@@ -474,7 +474,7 @@ def test_an_offset_row_is_asked_where_the_source_measured_not_at_the_seed(
     monkeypatch.setattr(fill, "_call_runner", _call)
     _standing_on()
     seeded = dataclasses.replace(
-        Data.need("hydrography", at=[_MEASURED_EAST_OF - 0.01, 45.49]),
+        Data(DOMAIN).need("hydrography", at=[_MEASURED_EAST_OF - 0.01, 45.49]),
         name="domain")
     env = fill._Env(params=_Params({"vertical_frame": "EGM2008"}),
                            data={"domain": seeded})

@@ -22,6 +22,7 @@ from trid3nt_server.workflows.runtime.levers import (
 )
 from trid3nt_server.workflows.telemac.modules import T2D
 from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
+from trid3nt_server.inputs.slots import BED, DOMAIN
 
 _METADATA = AtomicToolMetadata(
     name="telemac_water_temperature", ttl_class="live-no-cache",
@@ -45,8 +46,8 @@ class PARAMS:
 
 
 class DATA:
-    domain = Data.need("hydrography", at="seed")
-    bed = Data.need("bathymetry")
+    domain = Data(DOMAIN).need("hydrography", at="seed")
+    bed = Data(BED).need("bathymetry")
 
 
 def _template(data: type = DATA, params: type = PARAMS) -> SimpleNamespace:
@@ -86,15 +87,78 @@ def workflow_wire(workflow: TelemacWorkflow) -> set[str]:
 
 def test_a_template_with_no_domain_refuses_at_import():
     class NO_DOMAIN:
-        bed = Data.need("bathymetry")
+        bed = Data(BED).need("bathymetry")
 
-    with pytest.raises(DeclarationError, match="declares no domain"):
+    with pytest.raises(DeclarationError, match="declares 0 domain rows"):
         _workflow(data=NO_DOMAIN)
 
 
 def test_a_template_with_no_bed_refuses_at_import():
     class NO_BED:
-        domain = Data.need("hydrography")
+        domain = Data(DOMAIN).need("hydrography")
 
-    with pytest.raises(DeclarationError, match="declares no bed"):
+    with pytest.raises(DeclarationError, match="declares 0 bed rows"):
         _workflow(data=NO_BED)
+
+
+def _built(kind: str):
+    from trid3nt_server.tools.mesh.artifact import MeshArtifact
+
+    return MeshArtifact(
+        mesh_id="01MINE", name="ring", mode="om2d",
+        display_uri="s3://m/01MINE/mesh.2dm", crs_authid="EPSG:32610",
+        has_bathymetry=True, node_count=4, element_count=2,
+        bbox=(-122.68, 45.51, -122.66, 45.52), engine_files={},
+        provenance={"recipe": {"mesher": "om2d", "kind": kind}})
+
+
+def _filled_with(monkeypatch, mesh):
+    import asyncio
+
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows.runtime.fill import Fill, fill
+
+    workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
+    # Only what the call states is filled: the rows the template names go out to sources.
+    monkeypatch.setattr(workflow, "named_rows", lambda: ())
+    ring = [[-122.6769, 45.5153], [-122.6615, 45.5153],
+            [-122.6615, 45.5198], [-122.6769, 45.5198]]
+    return asyncio.run(fill(Fill(workflow=workflow),
+                            {"domain": ring, "mesh": mesh}))
+
+
+def test_a_template_that_writes_no_mesh_row_fills_with_a_supplied_mesh(monkeypatch):
+    """The engine seats the mesh row, so the mesh a caller hands in is the run's
+    mesh before any stage builds one."""
+    mine = _built("unstructured_tri")
+    state = _filled_with(monkeypatch, mine)
+    assert state.inputs["mesh"].state == "accepted"
+    assert state.env.run["mesh"]["artifact"] is mine
+    assert state.env.run["mesh"]["mesh_id"] == "01MINE"
+
+
+def test_a_supplied_mesh_of_a_kind_the_engine_does_not_solve_on_is_refused(
+        monkeypatch):
+    state = _filled_with(monkeypatch, _built("structured_grid"))
+    assert state.inputs["mesh"].state == "rejected"
+    assert state.inputs["mesh"].code == "MESH_KIND_MISMATCH"
+
+
+def test_two_level_rows_are_legal_and_two_bed_rows_refuse():
+    from trid3nt_server.inputs.slots import LEVEL
+
+    class TWO_LEVELS:
+        domain = Data(DOMAIN).need("hydrography", at="seed")
+        bed = Data(BED).need("bathymetry")
+        upstream = Data(LEVEL).need("water level series").optional()
+        downstream = Data(LEVEL).need("water level series").optional()
+
+    assert _workflow(data=TWO_LEVELS)._slots()[LEVEL] == "upstream"
+
+    class TWO_BEDS:
+        domain = Data(DOMAIN).need("hydrography", at="seed")
+        bed = Data(BED).need("bathymetry")
+        survey = Data(BED).need("channel survey")
+
+    with pytest.raises(DeclarationError, match="declares 2 bed rows"):
+        _workflow(data=TWO_BEDS)

@@ -5,8 +5,9 @@ from __future__ import annotations
 import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LEVEL, LINE, OBSERVE
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Accepts, Param, lever,
+    Data, register_workflow, Param, lever,
 )
 from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.instant import event_time
@@ -17,11 +18,8 @@ from trid3nt_server.workflows.telemac.modules.outputs import (
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
 from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
-__all__ = ["ACCEPTS", "CAPTIONS", "DATA", "DOC", "OUTPUTS", "PARAMS",
+__all__ = ["CAPTIONS", "DATA", "DOC", "OUTPUTS", "PARAMS",
            "STEERING", "telemac_eutrophication"]
-
-
-ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
 
 class PARAMS:
@@ -80,18 +78,18 @@ _PHYTO_IN, _PO4_IN, _NO3_IN = _ENTERING[0], _ENTERING[1], _ENTERING[3]
 
 
 class DATA:
-    domain = Data.need("hydrography", at="seed",
-                       span_km=_REACH_LENGTH_KM)
-    line = Data.supplied(geometry="polyline")
+    domain = Data(DOMAIN).need("hydrography", at="seed",
+                               span_km=_REACH_LENGTH_KM)
+    line = Data(LINE).supplied(geometry="polyline")
 
-    bed = Data.need("bathymetry")
+    bed = Data(BED).need("bathymetry")
 
-    discharge = Data.need("discharge series").optional()
+    discharge = Data(DISCHARGE).need("discharge series").optional()
 
-    observe = Data.need("water quality sample").context(
+    observe = Data(OBSERVE).need("water quality sample").context(
         "no water-quality site near this domain reports a water "
         "temperature; the stated value stands")
-    level = Data.need("water level series").optional()
+    level = Data(LEVEL).need("water level series").optional()
 
 
 class STEERING(T2D):

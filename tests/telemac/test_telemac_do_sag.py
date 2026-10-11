@@ -92,12 +92,12 @@ def test_the_data_rows_are_the_engine_neutral_slots_this_run_stands_on():
     assert [d.name for d in rows] == ["domain", "line", "bed", "discharge",
                                       "level"]
     by_name = {d.name: d for d in rows}
-    assert by_name["domain"].role == DOMAIN
+    assert by_name["domain"].slot == DOMAIN
     assert by_name["domain"].data_class == "hydrography"
     assert by_name["domain"].producer is None
     assert by_name["domain"].span_km == 12.0
-    assert by_name["line"].role == LINE
-    assert by_name["bed"].role == BED
+    assert by_name["line"].slot == LINE
+    assert by_name["bed"].slot == BED
     assert by_name["bed"].data_class == "bathymetry"
     assert by_name["bed"].producer is None
     # Both slots reach the wire: what the user supplies supersedes the match.
@@ -112,7 +112,7 @@ def test_the_carrier_is_one_reading_ranked_against_the_domain():
     from trid3nt_server.inputs.slots import DISCHARGE
 
     carrier = {d.name: d for d in data_rows(_template().DATA)}["discharge"]
-    assert carrier.role == DISCHARGE
+    assert carrier.slot == DISCHARGE
     assert carrier.data_class == "discharge series"
     assert carrier.producer is None
     assert carrier.is_context

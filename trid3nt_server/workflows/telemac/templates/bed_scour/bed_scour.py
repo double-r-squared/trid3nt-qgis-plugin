@@ -5,8 +5,9 @@ from __future__ import annotations
 import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LEVEL
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Accepts, Param,
+    Data, register_workflow, Param,
 )
 from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.instant import event_time
@@ -17,7 +18,7 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["ACCEPTS", "CAPTIONS", "DATA", "DOC", "GRADATION_PRESETS",
+__all__ = ["CAPTIONS", "DATA", "DOC", "GRADATION_PRESETS",
            "OUTPUTS", "PARAMS", "STEERING", "telemac_bed_scour"]
 
 
@@ -27,8 +28,6 @@ GRADATION_PRESETS: dict[str, list[list[float]]] = {
     "sand_gravel_bimodal": [[200.0, 0.5], [1800.0, 0.5]],
     "fine_coarse_sand": [[120.0, 0.5], [800.0, 0.5]],
 }
-
-ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
 
 class PARAMS:
@@ -80,13 +79,13 @@ _FRICTION_COEFFICIENT = 33.0
 
 
 class DATA:
-    domain = Data.need("hydrography", at="release",
-                       span_km=_REACH_LENGTH_KM)
-    bed = Data.need("bathymetry")
-    discharge = Data.need("discharge series").context(
+    domain = Data(DOMAIN).need("hydrography", at="release",
+                               span_km=_REACH_LENGTH_KM)
+    bed = Data(BED).need("bathymetry")
+    discharge = Data(DISCHARGE).need("discharge series").context(
         "the National Water Model published no streamflow over this domain "
         "at that cycle")
-    level = Data.need("water level series").optional()
+    level = Data(LEVEL).need("water level series").optional()
 
 
 class STEERING(T2D):

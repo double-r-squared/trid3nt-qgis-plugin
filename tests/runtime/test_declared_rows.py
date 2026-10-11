@@ -16,14 +16,14 @@ import dataclasses
 import pytest
 
 from trid3nt_server.inputs.point import Point
-from trid3nt_server.inputs.slots import needs_of
+from trid3nt_server.inputs.slots import BED, DOMAIN, needs_of
 from trid3nt_server.workflows.runtime import fill
 from trid3nt_server.workflows.runtime import Data
 from seated import resolve_params
 
 
 def _row(**need):
-    return dataclasses.replace(Data.need("hydrography", **need), name="domain")
+    return dataclasses.replace(Data(DOMAIN).need("hydrography", **need), name="domain")
 
 
 async def _env():
@@ -31,10 +31,10 @@ async def _env():
 
 
 def test_only_the_domain_declares_rows_beside_its_own() -> None:
-    assert needs_of("domain", "flowline") == (("banks", "water surface",
+    assert needs_of(DOMAIN, "flowline") == (("banks", "water surface",
                                                "polygon"),)
-    assert needs_of("bed", "flowline") == ()
-    assert needs_of("domain", "waterbody") == ()
+    assert needs_of(BED, "flowline") == ()
+    assert needs_of(DOMAIN, "waterbody") == ()
 
 
 @pytest.mark.asyncio

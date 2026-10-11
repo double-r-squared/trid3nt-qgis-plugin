@@ -20,6 +20,7 @@ ICE COVER under a cold snap: when water freezes over, and how thick.
 | `level` | matched on a need for water level series | the water level series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of water level series. | - |
 | `weather` | matched on a need for weather forcing | the weather forcing this run reads, as a uri or a layer name; unfilled, the run matches a source of weather forcing. | - |
 | `observe` | matched on a need for water quality sample | the water quality sample this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of water quality sample. | - |
+| `mesh` | supplied by the caller | a mesh this case already built, as its uri or its layer name, solved on in place of the one the run would build; unfilled, the run builds its own. | - |
 
 ## The inputs
 

@@ -7,8 +7,9 @@ import sys
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.instant import event_time
+from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LEVEL, OBSERVE, WEATHER
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Accepts, Param, lever,
+    Data, register_workflow, Param, lever,
 )
 from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, series
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
@@ -16,11 +17,8 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["ACCEPTS", "CAPTIONS", "DATA", "DOC", "OUTPUTS", "PARAMS",
+__all__ = ["CAPTIONS", "DATA", "DOC", "OUTPUTS", "PARAMS",
            "STEERING", "telemac_water_temperature"]
-
-
-ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
 
 class PARAMS:
@@ -66,19 +64,19 @@ _STATION = Placed("station", point="station", fraction=_STATION_FRAC,
 
 
 class DATA:
-    domain = Data.need("hydrography", at="seed",
-                       span_km=_REACH_LENGTH_KM)
+    domain = Data(DOMAIN).need("hydrography", at="seed",
+                               span_km=_REACH_LENGTH_KM)
 
-    bed = Data.need("bathymetry")
+    bed = Data(BED).need("bathymetry")
 
-    discharge = Data.need("discharge series").context(
+    discharge = Data(DISCHARGE).need("discharge series").context(
         "the National Water Model published no streamflow over this "
         "domain at that cycle")
-    level = Data.need("water level series").optional()
+    level = Data(LEVEL).need("water level series").optional()
 
-    weather = Data.need("weather forcing")
-    observe = Data.need("water quality sample", of="TEMPERATURE",
-                        at="station")
+    weather = Data(WEATHER).need("weather forcing")
+    observe = Data(OBSERVE).need("water quality sample", of="TEMPERATURE",
+                                 at="station")
 
 
 class STEERING(T2D):

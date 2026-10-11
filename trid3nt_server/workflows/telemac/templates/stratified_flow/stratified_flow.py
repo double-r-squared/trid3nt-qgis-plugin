@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_server.inputs.slots import BED, DOMAIN, LEVEL
 from trid3nt_server.workflows.runtime import (
     Data, register_workflow, Param, lever,
 )
@@ -69,9 +70,9 @@ _LISTING_PERIOD = 100
 
 
 class DATA:
-    domain = Data.need("hydrography", at="seed")
-    bed = Data.need("bathymetry")
-    level = Data.need("water level series").context(
+    domain = Data(DOMAIN).need("hydrography", at="seed")
+    bed = Data(BED).need("bathymetry")
+    level = Data(LEVEL).need("water level series").context(
         "no water-level gauge published a reading over this domain that day; "
         "the free surface opens at the zero the bed is counted from")
 

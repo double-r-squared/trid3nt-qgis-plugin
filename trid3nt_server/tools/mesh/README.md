@@ -18,12 +18,11 @@ carrying that recipe as its provenance - is what the solve reads.
 | `gate.py` | The mesh's face on the ONE gate (`inputs/gate/input_review.py`): it builds the round's card - the probes, the numbered recipe, the editable layer, and the rows for the size word, the revert and a hand-edited layer - and applies the reply back onto the session. One card path for every mesher, and no gate machine of its own. |
 | `grid_geometry.py` | Regular-grid domain math - a geographic bbox plus a metre resolution to the canonical origin, spans, cell size and row/col counts. |
 | `inputs.py` | The ONE typed conversion a data-valued op kwarg passes through: a typed slot value -> its own collection, raster -> the readable raster, layer -> the geometry document. Nothing is guessed. |
-| `kinds.py` | The mesh KIND vocabulary: the shapes a mesher in this tree builds, and what a template may declare it accepts. |
 | `op_tool.py` | `mesh_op` - the runtime face of the word a recipe is written in: append, alter by index or remove one call on the open session's recipe, then regenerate. |
 | `recipe.py` | `MeshRecipe` - the one mesh-defining object, its editing methods, its JSON form and the plain mapping a plan step carries it as. |
 | `session.py` | `MeshSession` - the mesh under construction: it holds THE recipe, regenerates on every change, and journals the edit events to `mesh_recipe.jsonl`. |
 | `step.py` | The declared MESH step: the template's frozen recipe, built under the gate, as the one step every plan puts before its author stage. |
-| `tool.py` | `build_mesh` - the router. Builds a validated recipe, and is the author word `tool.build_mesh` reaches; also the supplied-mesh resolution order. |
+| `tool.py` | `build_mesh` - the router. Builds a validated recipe, and is the author word `tool.build_mesh` reaches. |
 | `water.py` | `water_polygon` - the water a mapped coastline leaves inside a box, which is the polygon a mesh is cut from: OSM draws land on the LEFT of a way, so the ways split the box into faces and what no way calls land is what is meshed. |
 
 ## Subfolders

@@ -288,7 +288,7 @@ def fill(source: type | Sheet, *, template: str = "",
 def filled_by(body: type, produced: Mapping[str, Any],
               only: Sequence[str] = ()) -> list[tuple[str, str, Any]]:
     """``(input, identifier, value)`` for every keyword an input of this run fills on ``body``; an absent input or None value fills nothing."""
-    return [(source, name, value)
+    return [(getattr(source, "name", source), name, value)
             for source, keywords in body.FILLED_BY.items()
             if (not only or source in only) and produced.get(source) is not None
             for name, read in keywords.items()

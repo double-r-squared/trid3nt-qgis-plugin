@@ -5,9 +5,7 @@ A fill puts a value into every input; a run writes, solves and reads.
 
 from __future__ import annotations
 
-from .accepts import Accepts, AcceptsDeclarationError
 from .data import (
-    CoversAOI,
     Data,
     DataDecl,
     Producer,
@@ -44,8 +42,6 @@ from .resolver import (
 )
 
 __all__ = [
-    "Accepts", "AcceptsDeclarationError",
-    "CoversAOI",
     "Data", "DataDecl", "DeclarativeError",
     "GateRefusedError",
     "Param",

@@ -19,6 +19,7 @@ from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
 from trid3nt_server.workflows.telemac.templates.channel_dredging import (
     channel_dredging,
 )
+from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN
 
 _WORKFLOW = channel_dredging.telemac_channel_dredging.workflow
 _STEERING = channel_dredging.STEERING
@@ -49,7 +50,7 @@ def test_the_domain_is_one_need_row_asked_at_the_seed_point():
     fetcher answers - a reach walked downstream, a waterbody at a point - is the
     match's, ranked in the coverage order."""
     domain = _rows()["domain"]
-    assert domain.role == "domain" and domain.data_class == "hydrography"
+    assert domain.slot is DOMAIN and domain.data_class == "hydrography"
     assert domain.coercion["near"] == "seed_point"
     assert domain.span_km == channel_dredging._REACH_LENGTH_KM
 
@@ -60,16 +61,16 @@ def test_the_bed_is_one_need_row_the_stricter_class_the_match_composes():
     it measured, the terrain under the rest, never a producer or a merge stated
     on the template."""
     bed = _rows()["bed"]
-    assert bed.role == "bed" and bed.data_class == "channel survey"
+    assert bed.slot is BED and bed.data_class == "channel survey"
     assert bed.producer is None
-    assert [row.name for row in _WORKFLOW.data if row.role == "bed"] == ["bed"]
+    assert [row.name for row in _WORKFLOW.data if row.slot is BED] == ["bed"]
 
 
 def test_the_flow_the_channel_is_dredged_under_is_a_need_row_not_a_record():
     """The inflow carries ONE number: a NEED row, absent-is-context, and the
     user's own number wins over any record."""
     discharge = _rows()["discharge"]
-    assert discharge.role == "discharge" and discharge.data_class == "discharge series"
+    assert discharge.slot is DISCHARGE and discharge.data_class == "discharge series"
     assert discharge.is_context
     assert "National Water Model" in discharge.context_sentence
     assert discharge.producer is None
@@ -110,7 +111,7 @@ def test_every_slot_a_user_can_fill_reaches_the_wire():
     are supplied and the line names none either."""
     assert {row.name for row in _WORKFLOW.data if row.fills_from_user} == {
         "domain", "line", "bed", "discharge", "level", "dredge_area",
-        "dump_area"}
+        "dump_area", "mesh"}
 
 
 def test_the_two_areas_name_no_source_and_take_polygons():

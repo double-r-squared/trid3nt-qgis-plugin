@@ -47,14 +47,23 @@ A seated value carries ONE origin - user, derived, producer or template
 (`Origin`, in the contracts) - and the card row, the provenance entry and the
 journal row all write that word.
 
-`DATA` (`workflows/runtime/data.py`) - one declared ARTIFACT per row. The row's
-NAME is its slot (`inputs/slots.py`), and a row is filled one of four ways:
+`DATA` (`workflows/runtime/data.py`) - one declared ARTIFACT per row. A row
+STATES its slot as its type - `Data(BED)`, one of the types in
+`inputs/slots.py` - and is named freely; a row that states none is a plain one,
+read by whatever declared it. A class the stated slot does not read refuses
+where it is written. A row is filled one of three ways:
 
-    bed       = Data.need("bathymetry")                   a class the match fills
+    bed       = Data(BED).need("bathymetry")              a class the match fills
+    gauge     = Data(LEVEL).need("water level series").optional()
     rivers    = Data.need("hydrography", geometry="polyline")
     structure = Data.supplied(geometry="polyline")        the person hands it in
-    mesh      = Data.supplied(geometry="mesh").optional() absence is legal
     rain      = Data.need("precipitation series").context("...")
+
+A run solves over exactly one `DOMAIN` row and one `BED` row; a record type
+(`LEVEL`, `OBSERVE`) may be stated more than once, and a stage that reads one
+by type reads the first. The `MESH` row is the engine's: every template of the
+engine carries `mesh` without writing it, a supplied mesh is held to the kind
+the engine states once and becomes the run's mesh in place of the build.
 
 `.need` names a CLASS of the coverage vocabulary, never a fetcher; `geometry=`
 is which SHAPE of that class is asked for, a filter on the match, never a

@@ -31,8 +31,9 @@ package MeshSeam {
 
     part def MeshRouter {
         doc /*
-        The one door a mesh ask enters. Validates the ask into a recipe, and
-        answers WHICH mesh a run uses - supplied, discovered in the case, or the
+        The one door a mesh ask enters. Validates the ask into a recipe. A mesh
+        a caller already has does not enter here: it is a MESH-typed input of
+        the run, held to the kind the engine states and taken in place of the
         declared build.
         */
     }
@@ -124,9 +125,8 @@ package MeshSeam {
 
     part def MeshArtifactStore {
         doc /*
-        The accepted mesh's record and the seams a later run rediscovers it
-        through - the case-scoped stash and the durable sidecar beside the mesh
-        objects.
+        The accepted mesh's record and the seam a later run rediscovers it
+        through - the durable sidecar beside the mesh objects.
         */
     }
 

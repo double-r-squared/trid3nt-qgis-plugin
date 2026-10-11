@@ -7,8 +7,9 @@ import sys
 from typing import Any
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LEVEL
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Accepts, Param,
+    Data, register_workflow, Param,
 )
 from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.instant import event_time
@@ -19,7 +20,7 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["ACCEPTS", "CAPTIONS", "DATA", "DOC", "OIL_PRESETS", "OUTPUTS",
+__all__ = ["CAPTIONS", "DATA", "DOC", "OIL_PRESETS", "OUTPUTS",
            "PARAMS", "STEERING", "telemac_oil_spill"]
 
 
@@ -37,8 +38,6 @@ OIL_PRESETS: dict[str, dict[str, Any]] = {
         hap=[(0.05, 800.0, 0.001, 5.0e-6, 1.0e-5)],
         rho=960.0, eta=5.0e-4, voldev=30.0, tamb=288.0, etal=1),
 }
-
-ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
 
 class PARAMS:
@@ -91,11 +90,11 @@ _FRICTION_COEFFICIENT = 33.0
 
 
 class DATA:
-    domain = Data.need("hydrography", at="release",
-                       span_km=_REACH_LENGTH_KM)
-    bed = Data.need("bathymetry")
-    discharge = Data.need("discharge series")
-    level = Data.need("water level series").optional()
+    domain = Data(DOMAIN).need("hydrography", at="release",
+                               span_km=_REACH_LENGTH_KM)
+    bed = Data(BED).need("bathymetry")
+    discharge = Data(DISCHARGE).need("discharge series")
+    level = Data(LEVEL).need("water level series").optional()
 
 
 class STEERING(T2D):

@@ -25,8 +25,7 @@ speak it and the one file that specializes the executor to it.
 | file | what it is |
 | --- | --- |
 | `runtime/__init__.py` | The runtime's public surface, and the only import a template needs. |
-| `runtime/accepts.py` | `Accepts` - what a template takes when something is SUPPLIED to it, role by role. |
-| `runtime/data.py` | The `DATA` class body: one declared artifact per row, its producer or the CLASS it needs, the CONTEXT row whose absence continues the run, and the modifiers that ride the declaration. |
+| `runtime/data.py` | The `DATA` class body: one declared artifact per row, the slot it states as its TYPE, its producer or the CLASS it needs, the CONTEXT row whose absence continues the run, and the modifiers that ride the declaration. |
 | `runtime/docstring.py` | The registered tool's model-facing docstring, rendered from the declarations in two views (routing, full). |
 | `runtime/errors.py` | The runtime's typed errors, each carrying the code the emitter renders. |
 | `runtime/fill.py` | The fill: each input accepts, rejects with its remedies, is missing, or takes the module's own default; a sourced input is fetched and ingested before it accepts or rejects, and a name the template writes that nothing of the run is called is refused. Filling never launches. The run's ONE mapping - params, fetched rows, stage products, keywords - and `read`, its one read by plain name. |

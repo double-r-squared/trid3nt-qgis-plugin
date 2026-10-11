@@ -172,14 +172,14 @@ def _place_registers_a_row(monkeypatch):
     from trid3nt_server.inputs.slots import DOMAIN
 
     async def _produce(env, decl):
-        if decl.role == DOMAIN:
+        if decl.slot == DOMAIN:
             fill_mod._runtime_row(env, f"{decl.name}_datum_offset", "x", {})
         return "held"
 
     monkeypatch.setattr(fill_mod, "_produce", _produce)
     wf = _wf()
-    decl = next(d for d in wf.data if d.data_class and d.role != DOMAIN)
-    assert any(d.role == DOMAIN for d in wf.data)
+    decl = next(d for d in wf.data if d.data_class and d.slot != DOMAIN)
+    assert any(d.slot == DOMAIN for d in wf.data)
     return wf, decl
 
 

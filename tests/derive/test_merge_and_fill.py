@@ -330,7 +330,8 @@ def test_no_slot_reads_an_op():
     from trid3nt_server.inputs import slots
 
     assert not hasattr(slots, "takes_op")
-    reading = sorted(name for name, slot in slots.SLOTS.items() if slot.ingest
+    reading = sorted(slot.name for slot in vars(slots).values()
+                     if isinstance(slot, slots.Slot) and slot.ingest
                      and "op" in inspect.signature(slot.ingest).parameters)
     assert reading == []
 

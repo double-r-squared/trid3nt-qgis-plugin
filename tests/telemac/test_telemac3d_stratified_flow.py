@@ -40,14 +40,14 @@ def test_the_data_rows_are_the_engine_neutral_slots_this_run_stands_on():
     rows = data_rows(_module().DATA)
     assert [d.name for d in rows] == ["domain", "bed", "level"]
     by_name = {d.name: d for d in rows}
-    assert by_name["domain"].role == DOMAIN
+    assert by_name["domain"].slot == DOMAIN
     assert by_name["domain"].data_class == "hydrography"
     assert by_name["domain"].producer is None
     assert by_name["domain"].span_km is None
-    assert by_name["bed"].role == BED
+    assert by_name["bed"].slot == BED
     assert by_name["bed"].data_class == "bathymetry"
     assert by_name["bed"].producer is None
-    assert by_name["level"].role == LEVEL
+    assert by_name["level"].slot == LEVEL
     assert by_name["level"].data_class == "water level series"
     assert by_name["level"].producer is None
     # Both slots reach the wire: what the user supplies supersedes the match.

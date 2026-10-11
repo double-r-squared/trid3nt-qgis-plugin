@@ -1,7 +1,7 @@
 """Offline tests for the mesh router, the mesh session and the reg_grid mesher.
 
 The PURE surfaces, with no container, no object store and no live session: the
-router's typed refusals, the explicit / discovered / declared resolution order,
+router's typed refusals, what a supplied mesh's row takes and refuses,
 the laziness of a declared recipe, the journal's replay determinism, the reset
 back to the declaration, and the hand-edit record that refuses to replay."""
 
@@ -13,10 +13,7 @@ import json
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.mesh.artifact import (
-    MeshArtifact,
-    stash_mesh_artifact,
-)
+from trid3nt_server.tools.mesh.artifact import MeshArtifact
 from trid3nt_server.tools.mesh.meshers import MeshToolError, get_mesher
 from trid3nt_server.render.mesh_display import write_2dm
 from trid3nt_server.tools.mesh.session import (
@@ -24,35 +21,14 @@ from trid3nt_server.tools.mesh.session import (
     mesh_digest,
     replay_recipe,
 )
-from trid3nt_server.workflows.runtime import Accepts, AcceptsDeclarationError
+from trid3nt_server.inputs.mesh import mesh as supplied_mesh
 from trid3nt_server.tools.mesh.tool import (
     MeshRecipe,
-    accepts_for,
     mesh_op,
-    resolve_mesh,
     tool,
-)
-from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import ACCEPTS as _DO_SAG
-from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
-    ACCEPTS as _RIVER_DYE,
 )
 
 _AOI = (-83.50, 35.00, -83.40, 35.09)
-
-#: The contract the resolution-order cases declare. A template's mesh row is its
-#: statement of what a SUPPLIED mesh may be, and a run that states none accepts
-#: none - so every case that expects a supplied or discovered mesh to be adopted
-#: names the row that admits it.
-_GRID = Accepts(mesh=("structured_grid",))
-
-#: The registered template whose contract every ARTEMIS door reads off the
-#: registry, by this name. It is read at CALL time, not here: the registry fills
-#: as the templates import, which is still under way while this module imports.
-#: The reach family (``_DO_SAG`` / ``_RIVER_DYE`` above) is PARKED - unregistered
-#: pending the mesher ruling - so the registry has nothing to hand back for it and
-#: what it DECLARES is read from where it is authored.
-_AGITATION = "artemis_harbor_agitation"
-
 
 def _recipe(**over):
     ask = {"mesher": "reg_grid", "kind": "structured_grid",
@@ -143,40 +119,29 @@ def test_ops_that_are_not_recipe_entries_refuse():
     assert excinfo.value.error_code == "MESH_OPS_MALFORMED"
 
 
-def test_explicit_mesh_wins_over_a_discovered_one():
-    stash_mesh_artifact("case-explicit", _artifact(name="discovered"))
-    supplied = _artifact(mesh_id="01OTHER", name="supplied")
-    resolution = resolve_mesh(_recipe(), explicit=supplied, accepts=_GRID,
-                              case_id="case-explicit")
-    assert resolution.source == "explicit"
-    assert resolution.artifact is supplied
+def _tri_artifact(**over) -> MeshArtifact:
+    return _artifact(
+        mode="om2d", name="Point Judith Harbor of Refuge",
+        provenance={"recipe": {"mesher": "om2d", "kind": "unstructured_tri"}},
+        **over)
 
 
-def test_explicit_mesh_carrying_no_engine_file_is_taken_rather_than_judged():
-    """A mesh is not unsolvable in the abstract: the door checks the template's
-    own mesh row and nothing else, and what an engine needs staged is refused by
-    that engine's author against the files it names."""
+def test_a_supplied_mesh_carrying_no_engine_file_is_taken_rather_than_judged():
+    """A mesh is not unsolvable in the abstract: its row checks the kind and
+    nothing else, and what an engine needs staged is refused by that engine's
+    author against the files it names."""
     bare = _artifact(has_bathymetry=False, engine_files={})
-    resolution = resolve_mesh(_recipe(), explicit=bare, accepts=_GRID)
-    assert resolution.source == "explicit"
-    assert resolution.artifact is bare
+    assert supplied_mesh(bare, kinds=("structured_grid",))["artifact"] is bare
 
 
-def test_explicit_mesh_with_no_readable_record_refuses():
-    reader = _FailingReader()
+def test_a_supplied_mesh_with_no_readable_record_refuses(monkeypatch):
+    from trid3nt_server.store import objects as storage
+
+    monkeypatch.setattr(storage, "client", _FailingReader)
     with pytest.raises(MeshToolError) as excinfo:
-        resolve_mesh(_recipe(), explicit="s3://cache/mesh/unknown/mesh.2dm",
-                     s3_client=reader)
+        supplied_mesh("s3://cache/mesh/unknown/mesh.2dm")
     assert excinfo.value.error_code == "MESH_EXPLICIT_UNREADABLE"
     assert "no readable mesh artifact record" in str(excinfo.value)
-
-
-def test_explicit_mesh_uri_with_no_reader_names_the_missing_reader():
-    """The caller's missing reader is not the supplied mesh's fault."""
-    with pytest.raises(MeshToolError) as excinfo:
-        resolve_mesh(_recipe(), explicit="s3://cache/mesh/unknown/mesh.2dm")
-    assert excinfo.value.error_code == "MESH_EXPLICIT_UNREADABLE"
-    assert "no object-store reader was supplied" in str(excinfo.value)
 
 
 class _FailingReader:
@@ -186,152 +151,40 @@ class _FailingReader:
         raise KeyError("no such object")
 
 
-def test_case_discovery_beats_the_declared_default():
-    art = _artifact()
-    stash_mesh_artifact("case-discovery", art)
-    resolution = resolve_mesh(_recipe(), accepts=_GRID, case_id="case-discovery")
-    assert resolution.source == "discovered"
-    assert resolution.artifact is art
-
-
-def test_case_discovery_takes_a_mesh_of_the_accepted_kind_carrying_no_files():
-    bare = _artifact(has_bathymetry=False, engine_files={})
-    stash_mesh_artifact("case-bare", bare)
-    resolution = resolve_mesh(_recipe(), accepts=_GRID, case_id="case-bare")
-    assert resolution.source == "discovered"
-    assert resolution.artifact is bare
-
-
-def test_declared_default_when_the_case_holds_nothing():
-    recipe = _recipe()
-    resolution = resolve_mesh(recipe, case_id="case-empty")
-    assert resolution.source == "declared"
-    assert resolution.recipe is recipe
-
-
-def test_nothing_supplied_declared_or_discovered_refuses():
+def test_a_supplied_mesh_of_another_kind_refuses_by_name():
+    """A lattice is not what a triangle engine solves on, so it is refused at its
+    row rather than trusted and narrated several steps later."""
     with pytest.raises(MeshToolError) as excinfo:
-        resolve_mesh(None, case_id="case-empty-2")
-    assert excinfo.value.error_code == "MESH_UNRESOLVED"
-
-
-# The declared contract is ROLE-KEYED: membership per role, checked at the door.
-#
-# The contract is a standalone Accepts declaration in the template's own
-# file, reached here the way every door reaches it - off the registry
-# by tool name - rather than restated. The MESH block states what the DEFAULT
-# BUILD produces and is not consulted here.
-def _tri_artifact(**over) -> MeshArtifact:
-    return _artifact(
-        mode="om2d", name="Point Judith Harbor of Refuge",
-        provenance={"recipe": {"mesher": "om2d", "kind": "unstructured_tri"}},
-        **over)
-
-
-def test_the_registry_is_where_a_door_reads_a_templates_contract():
-    """ONE HOME: the door names the tool, the registry hands back what that tool
-    registered - and a name this build knows no workflow under yields nothing."""
-    assert accepts_for(_AGITATION) is not None
-    assert accepts_for("no_such_tool") is None
-
-
-def test_the_proven_mesh_rows_are_what_the_templates_declare():
-    assert _RIVER_DYE.kinds("mesh") == ("unstructured_tri",)
-    assert _DO_SAG.kinds("mesh") == ("unstructured_tri",)
-    # An elliptic mild-slope solve reads a TRIANGULATION and nothing else: the
-    # lattice the worker used to lay for itself is superseded by the om2d domain.
-    assert accepts_for(_AGITATION).kinds("mesh") == ("unstructured_tri",)
-
-
-def test_an_accept_set_naming_nothing_refuses_where_it_is_written():
-    """An EMPTY declaration is authored nonsense, not a stricter absence: it
-    explodes at import rather than at a door nobody would reach."""
-    with pytest.raises(AcceptsDeclarationError):
-        Accepts()
-    with pytest.raises(AcceptsDeclarationError) as excinfo:
-        Accepts(mesh=())
-    assert "mesh=()" in str(excinfo.value)
-
-
-def test_a_supplied_mesh_outside_the_mesh_row_refuses_by_name():
-    """A lattice is not in the river-tracer's mesh row, so it is refused at the door
-    rather than trusted and narrated several steps later."""
-    with pytest.raises(MeshToolError) as excinfo:
-        resolve_mesh(explicit=_artifact(), accepts=_RIVER_DYE)
+        supplied_mesh(_artifact(), kinds=("unstructured_tri",))
     assert excinfo.value.error_code == "MESH_KIND_MISMATCH"
     message = str(excinfo.value)
     assert "'unstructured_tri'" in message and "'structured_grid'" in message
 
 
-def test_a_supplied_mesh_in_the_mesh_row_is_accepted():
-    """The BYO rematch: an om2d triangulation is a member of what ARTEMIS reads,
-    even though the template's own default build is a lattice."""
+def test_a_supplied_mesh_of_the_engines_kind_is_the_record_a_built_one_is():
     supplied = _tri_artifact()
-    resolution = resolve_mesh(explicit=supplied, accepts=accepts_for(_AGITATION))
-    assert resolution.source == "explicit"
-    assert resolution.artifact is supplied
-
-
-@pytest.mark.asyncio
-async def test_a_supplied_mesh_is_adopted_instead_of_built(monkeypatch):
-    """The step that builds a mesh is the step that ADOPTS one, so a run solves on the
-    mesh it was handed. The session and the gate are asserted UNREACHED: re-gating a
-    mesh nobody changed asks the same question twice."""
-    from trid3nt_server.tools.mesh import gate as gate_mod
-    from trid3nt_server.tools.mesh import session as session_mod
-    from trid3nt_server.tools.mesh import step as mesh_step
-    from trid3nt_server.tools.mesh import tool as tool_mod
-
-    supplied = _tri_artifact()
-
-    def _no_session(*_a, **_k):
-        raise AssertionError("a supplied mesh must not open a session")
-
-    monkeypatch.setattr(session_mod, "MeshSession", _no_session)
-    monkeypatch.setattr(gate_mod, "gate_mesh_build", _no_session)
-    monkeypatch.setattr(tool_mod, "supplied_mesh_artifact",
-                        lambda explicit, *, tool_name: supplied)
-
-    record = await mesh_step.build_declared_mesh(
-        mesh={"mesher": "om2d", "kind": "unstructured_tri", "extent": _AOI,
-              "resolution_m": 20.0, "ops": []},
-        supplied="s3://cache/mesh/01MESH/mesh.2dm", tool=_AGITATION)
-
+    record = supplied_mesh(supplied, kinds=("unstructured_tri",))
     assert record["artifact"] is supplied
     assert record["engine_files"] == supplied.engine_files
     assert record["node_count"] == supplied.node_count
 
 
-def test_a_template_that_declares_no_mesh_row_refuses_the_supply():
-    """ABSENCE IS A REFUSAL: no mesh row means no tested supplied-mesh path."""
-    with pytest.raises(MeshToolError) as excinfo:
-        resolve_mesh(explicit=_tri_artifact())
-    assert excinfo.value.error_code == "MESH_SUPPLY_UNDECLARED"
-    assert "no supplied-mesh compatibility" in str(excinfo.value)
-
-
 def test_a_supplied_mesh_that_states_no_kind_refuses():
-    """Membership in a declared row is not answerable about an unstated shape."""
+    """Membership is not answerable about an unstated shape."""
     with pytest.raises(MeshToolError) as excinfo:
-        resolve_mesh(explicit=_artifact(provenance={}),
-                     accepts=accepts_for(_AGITATION))
+        supplied_mesh(_artifact(provenance={}), kinds=("unstructured_tri",))
     assert excinfo.value.error_code == "MESH_KIND_MISMATCH"
     assert "no recorded kind" in str(excinfo.value)
 
 
-def test_case_discovery_offers_only_members_of_the_mesh_row():
-    """The same membership test, in the arm where a non-member is simply not a
-    candidate: the run builds its declared mesh instead."""
-    stash_mesh_artifact("case-wrong-kind", _artifact())
-    resolution = resolve_mesh(_recipe(), accepts=_RIVER_DYE,
-                              case_id="case-wrong-kind")
-    assert resolution.source == "declared"
+def test_every_template_of_the_engine_takes_a_supplied_mesh():
+    from trid3nt_server.inputs.slots import MESH
 
-
-def test_case_discovery_offers_nothing_without_a_mesh_row():
-    stash_mesh_artifact("case-no-set", _artifact())
-    resolution = resolve_mesh(_recipe(), case_id="case-no-set")
-    assert resolution.source == "declared"
+    for name in ("artemis_harbor_agitation", "telemac_dye_release",
+                 "telemac_rain_on_grid", "telemac3d_stratified_flow"):
+        rows = TOOL_REGISTRY[name].fn.workflow.data
+        assert [row.coercion["kinds"] for row in rows if row.slot is MESH] == [
+            ("unstructured_tri",)]
 
 
 def test_a_recipe_builds_nothing(tmp_path):
@@ -465,10 +318,6 @@ def test_accept_freezes_the_recipe_as_the_artifacts_provenance(tmp_path):
     assert art.recipe_uri == str(session.recipe_path)
     assert art.provenance["recipe"] == session.recipe.to_json()
     assert art.provenance["recipe"]["kind"] == "structured_grid"
-
-    from trid3nt_server.tools.mesh.artifact import stashed_mesh_artifacts
-
-    assert stashed_mesh_artifacts("case-accept")[-1] is art
 
 
 def test_snapshot_is_the_display_face(tmp_path):

@@ -13,7 +13,7 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_server.inputs.observation import ObservationError
-from trid3nt_server.inputs.slots import SLOTS, ingest_slot
+from trid3nt_server.inputs.slots import ingest_slot
 from trid3nt_server.inputs.wave import wave
 from trid3nt_server.inputs.slots import WAVE
 
@@ -119,9 +119,9 @@ def test_a_period_of_zero_is_not_a_sea_state_a_boundary_can_be_forced_at():
 def test_the_slot_reserves_the_name_and_reads_the_class_the_buoys_publish():
     """A row's NAME is its role: a row called wave is a sea state, and the one
     class that fills it is the one a buoy network states coverage of."""
-    assert SLOTS[WAVE].classes == frozenset({"wave series"})
-    assert SLOTS[WAVE].ingest is wave
-    assert SLOTS[WAVE].draw is None
+    assert WAVE.classes == frozenset({"wave series"})
+    assert WAVE.ingest is wave
+    assert WAVE.draw is None
     found = ingest_slot(WAVE, _fc(_buoy("44056", -75.71, 36.20)),
                         label="wave", column_units=_UNITS)
     assert found.height_m == pytest.approx(3.0)
@@ -137,6 +137,6 @@ def test_the_wave_row_is_told_the_record_s_own_columns_and_the_run_s_window():
                           series_column="wave_height_series_csv",
                           above_column="", data_class="wave series")
     told = _what_the_record_reports(SimpleNamespace(window_s=7200.0, params=None),
-                                    DataDecl(WAVE), row)
+                                    DataDecl("wave", slot=WAVE), row)
     assert told["column_units"] == _UNITS
     assert told["window_s"] == 7200.0

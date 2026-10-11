@@ -15,10 +15,7 @@ import pytest
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.mesh.artifact import (
     MeshArtifact,
-    find_case_mesh_artifacts,
     sidecar_key_for_mesh_uri,
-    stash_mesh_artifact,
-    stashed_mesh_artifacts,
 )
 from trid3nt_server.render.mesh_display import write_2dm_arrays
 from trid3nt_server.tools.mesh.meshers import (
@@ -197,20 +194,6 @@ def test_sidecar_key_derivation():
 
 def test_sidecar_key_non_s3_is_none():
     assert sidecar_key_for_mesh_uri("/local/mesh.2dm") is None
-
-
-def test_case_stash_roundtrip():
-    stash_mesh_artifact("caseX", _artifact(mesh_id="m1"))
-    stash_mesh_artifact("caseX", _artifact(mesh_id="m2"))
-    got = stashed_mesh_artifacts("caseX")
-    assert [a.mesh_id for a in got] == ["m1", "m2"]  # most-recent last
-    assert stashed_mesh_artifacts("noSuchCase") == []
-
-
-def test_find_case_mesh_artifacts_stash_first():
-    stash_mesh_artifact("caseY", _artifact(mesh_id="mY"))
-    got = find_case_mesh_artifacts(case_id="caseY")
-    assert [a.mesh_id for a in got] == ["mY"]
 
 
 def test_mesh_artifact_json_roundtrip():

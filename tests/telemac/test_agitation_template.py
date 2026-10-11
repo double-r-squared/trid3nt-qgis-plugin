@@ -34,7 +34,7 @@ def test_the_domain_is_asked_for_as_the_land_water_edge():
     a template states a need, and the cut is the slot's ingestion."""
     rows = _rows()
     domain = rows["domain"]
-    assert domain.role == DOMAIN
+    assert domain.slot == DOMAIN
     assert domain.fills_from_user
     assert domain.producer is None
     assert (domain.data_class, domain.kind, domain.geometry) == (
@@ -60,13 +60,11 @@ def test_the_extent_is_a_slot_the_canvas_offers_a_rectangle_for():
     """The window the cut is made in is the slot with the canvas ask: one EXTENT
     row, read as four numbers by whatever takes a box, and the domain slot is
     told it rather than the deck stating a box twice."""
-    from trid3nt_server.inputs.slots import SLOTS
-
     rows = _rows()
     extent = rows["extent"]
-    assert (extent.role, extent.geometry, extent.producer) == (EXTENT, "rectangle",
+    assert (extent.slot, extent.geometry, extent.producer) == (EXTENT, "rectangle",
                                                                 None)
-    assert SLOTS[EXTENT].draw[0] == "rectangle"
+    assert EXTENT.draw[0] == "rectangle"
 
 
 def test_the_bed_is_the_class_it_is_defined_over():
@@ -76,7 +74,7 @@ def test_the_bed_is_the_class_it_is_defined_over():
     reaches this domain. A survey the user holds is the same slot."""
     rows = _rows()
     bed = rows["bed"]
-    assert bed.role == BED and bed.fills_from_user
+    assert bed.slot == BED and bed.fills_from_user
     assert bed.data_class == "bathymetry"
     assert bed.producer is None
 

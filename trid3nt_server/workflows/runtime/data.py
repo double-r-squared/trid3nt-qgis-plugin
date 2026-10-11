@@ -13,13 +13,12 @@ from typing import Any, Mapping
 from trid3nt_contracts.coverage import DATA_CLASSES
 
 from trid3nt_server.inputs.geometry import artifact_class
-from trid3nt_server.inputs.slots import BED, DOMAIN, SLOTS, Slot, role_of
+from trid3nt_server.inputs.slots import BED, DOMAIN, MESH, Slot
 
 from .errors import DeclarationError, SuppliedGeometryError
 from .params import declarations, take_name
 
 __all__ = [
-    "CoversAOI",
     "Data",
     "DataDecl",
     "Producer",
@@ -32,22 +31,13 @@ __all__ = [
 # A row states the class it needs, never a fetcher: the match reads cell, coverage, window and datum
 # off every fetcher's own row, which a named fetcher would freeze against one source.
 
-class _CoversAOI:
-    """Validator sentinel: a domain must be BOUND; the artifact's own extent is never read."""
-
-    def __repr__(self) -> str:
-        return "CoversAOI"
-
-
-CoversAOI = _CoversAOI()
-
 _GEOMETRIES: frozenset[str] = frozenset(
-    {"point", "polyline", "polygon", "rectangle", "raster", "mesh"})
+    {"point", "polyline", "polygon", "rectangle", "raster"})
 
 #: Vector shapes collapse to one class: a file name cannot tell a point layer from a line layer.
 _GEOMETRY_CLASS: Mapping[str, str] = MappingProxyType({
     "point": "vector", "polyline": "vector", "polygon": "vector",
-    "rectangle": "vector", "raster": "raster", "mesh": "mesh"})
+    "rectangle": "vector", "raster": "raster"})
 
 def shapes_of(data_class: str) -> frozenset[str]:
     """The artifact CLASSES one data class arrives in, off the sources that measure it.
@@ -63,16 +53,10 @@ def shapes_of(data_class: str) -> frozenset[str]:
 
 @dataclass(frozen=True, slots=True)
 class Producer:
-    """How an artifact comes into being: a runner name plus its declared args.
-
-    ``.supplied()`` supersedes the build with an artifact the caller already has."""
+    """How an artifact comes into being: a runner name plus its declared args."""
 
     runner: str
     kwargs: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
-    supplied_uri: str | None = None
-    supplied_validate: Any = None
-    #: Marked ``.supplied()``: the caller's own artifact stands in place of the build.
-    is_supplied: bool = False
     row: str = ""
 
     def __set_name__(self, owner: type, name: str) -> None:
@@ -82,14 +66,6 @@ class Producer:
         if not self.runner:
             raise DeclarationError("Producer declares no runner path.")
         object.__setattr__(self, "kwargs", MappingProxyType(dict(self.kwargs)))
-
-    def supplied(self, uri: str | None = None, *,
-                 validate: Any = CoversAOI) -> "Producer":
-        """Take the artifact the caller supplied instead of building one.
-
-        ``CoversAOI`` checks only that a domain is bound, never the extent."""
-        return replace(self, supplied_uri=uri, supplied_validate=validate,
-                       is_supplied=True)
 
 
 class ToolWord:
@@ -122,10 +98,10 @@ class DataDecl:
     producer: Producer | None = None
     #: Absence is legal only on a producer-less slot; a producer either produces or fails.
     is_optional: bool = False
-    #: The geometry a producer-less slot accepts (point | polyline | polygon | rectangle | raster | mesh).
+    #: The TYPE this row states - the slot whose ingestion reads its value; ``None`` is a plain row, read by whatever declared it.
+    slot: Slot | None = None
+    #: The geometry a producer-less slot accepts (point | polyline | polygon | rectangle | raster).
     geometry: str | None = None
-    #: Bound-domain-only under ``CoversAOI``; not a coverage test.
-    supplied_validate: Any = CoversAOI
     #: CONTEXT row: it names a producer, and its absence continues the run under the sentence below.
     is_context: bool = False
     #: What the sheet says when a context row came back empty.
@@ -140,18 +116,6 @@ class DataDecl:
     span_km: float | None = None
     #: The point a nearest-site query ranks against: ``near`` names the run input holding it.
     coercion: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
-
-    @property
-    def role(self) -> str:
-        """The engine-neutral SLOT this row is, or ``""`` for a plain row.
-
-        The row's name is its slot: a reserved name plays its role however it is filled."""
-        return role_of(self.name)
-
-    @property
-    def slot(self) -> Slot:
-        """The facts of the slot this row is; a plain row's are all empty."""
-        return SLOTS.get(self.role) or Slot()
 
     def __post_init__(self) -> None:
         if self.name and not self.name.isidentifier():
@@ -184,6 +148,16 @@ class DataDecl:
                 f"Data {self.name!r} states span_km and needs no class: how far "
                 "a question reaches is what the match asks a source for, and a "
                 "row that names its own producer states the reach on the call.")
+        if self.data_class and self.slot is not None \
+                and self.data_class not in self.slot.classes:
+            raise DeclarationError(
+                f"Data states need={self.data_class!r} as a {self.slot.name}, "
+                f"which reads {sorted(self.slot.classes)}.")
+        if self.kind and self.slot is not DOMAIN:
+            raise DeclarationError(
+                f"Data states kind={self.kind!r} and is not a domain: a kind is "
+                "the DOMAIN'S own - the water the equations are solved over - "
+                "and no other row has one to state.")
         if self.is_context and not (self.producer is not None or self.data_class):
             raise DeclarationError(
                 f"Data {self.name!r} declares .context() and states neither a need "
@@ -193,30 +167,20 @@ class DataDecl:
             )
 
     def __set_name__(self, owner: type, name: str) -> None:
-        """The row's name IS its slot, so what only one slot may state is refused here."""
         take_name(self, "name", name)
-        if self.kind and self.role != DOMAIN:
-            raise DeclarationError(
-                f"Data {name!r} states kind={self.kind!r} and is not the "
-                "domain: a kind is the DOMAIN'S own - the water the equations "
-                "are solved over - and no other row has one to state.")
-
-    @property
-    def is_supplied(self) -> bool:
-        return bool(getattr(self.producer, "is_supplied", False))
 
     @property
     def fills_from_user(self) -> bool:
         """Is this row on the WIRE for a caller to fill?
 
-        True for every producer-less row, a slot naming a producer, and a ``.supplied()`` producer."""
-        return self.producer is None or bool(self.role) or self.is_supplied
+        True for every producer-less row and every typed one."""
+        return self.producer is None or self.slot is not None
 
     @property
     def wire_annotation(self) -> Any:
         """This slot's declared type on the generated tool's signature.
         Always a string: the declared shape does not narrow the type."""
-        if self.slot.number:
+        if self.slot is not None and self.slot.number:
             # A schema advertising only a layer name would refuse a known level or a one-number pond.
             return str | float | None
         return str | None
@@ -226,18 +190,22 @@ class DataDecl:
         """What the model reads about this slot: the shape it takes, and whether
         absence is legal. A plain slot names no source, so the shape is all it can
         say; a SLOT that names a producer says what standing a supplied value has."""
-        if self.role == DOMAIN:
+        if self.slot is DOMAIN:
             return ("the closed polygon this run solves over, as a uri, a layer "
                     "name or a drawn shape"
                     + ("; unfilled, the template's own producer finds one."
                        if self.producer is not None else self._unfilled))
-        if self.role == BED:
+        if self.slot is BED:
             return ("what the domain's nodes carry for elevation: a DEM, a "
                     "bathymetry or survey raster, a layer of soundings, or a "
                     "depth in metres below the free surface"
                     + ("; unfilled, the template's own producer supplies it."
                        if self.producer is not None else self._unfilled))
-        if self.slot.record and self.slot.number:
+        if self.slot is MESH:
+            return ("a mesh this case already built, as its uri or its layer "
+                    "name, solved on in place of the one the run would build"
+                    "; unfilled, the run builds its own.")
+        if self.slot is not None and self.slot.record and self.slot.number:
             return (f"the {self.data_class or 'value'} this run opens on: a "
                     "layer of sites that report it, or the number itself"
                     + ("; unfilled, the template's own producer looks for one."
@@ -287,35 +255,36 @@ class DataDecl:
             "Supply the shape the slot declares, or leave it unfilled."
         )
 
-    def supplied(self, *, geometry: str | None = None,
-                 validate: Any = CoversAOI) -> "DataDecl":
+    def supplied(self, *, geometry: str | None = None) -> "DataDecl":
         """This slot is filled by something the caller SUPPLIES, not by a producer.
         On a producer-less slot this is the whole declaration: the shape it
         accepts, and nothing about where the thing comes from."""
         if self.producer is not None:
             raise DeclarationError(
-                f"Data {self.name!r} declares a producer AND .supplied(): a producer "
-                "that can be superseded says so on the producer "
-                "(tool(...).supplied(...)), not on the slot."
-            )
+                f"Data {self.name!r} declares a producer AND .supplied(): a row "
+                "is satisfied one way.")
         if geometry is not None and geometry not in _GEOMETRIES:
             raise DeclarationError(
                 f"Data {self.name!r}: .supplied(geometry={geometry!r}) is not a "
                 f"declared shape (known: {sorted(_GEOMETRIES)})."
             )
-        return replace(self, geometry=geometry, supplied_validate=validate)
+        return replace(self, geometry=geometry)
 
     def optional(self) -> "DataDecl":
         """Absence is legal, and LABELLED: the run says the slot went unfilled."""
         return replace(self, is_optional=True)
 
-    def __call__(self, producer: Producer) -> "DataDecl":
-        """This row, produced by ``producer``: what ``Data(tool(...))`` declares.
-        The row shape ``Data(tool(...)).context()`` modifiers are written on."""
+    def __call__(self, head: "Slot | Producer") -> "DataDecl":
+        """This row, typed or produced: ``Data(BED)`` states the slot that reads it,
+        ``Data(tool(...))`` what produces it. The row shape modifiers are written on."""
+        if isinstance(head, Slot):
+            return replace(self, slot=head)
+        producer = head
         if not isinstance(producer, Producer):
             raise DeclarationError(
-                f"Data(...) takes a producer - tool(name, **kwargs) - and was "
-                f"given {type(producer).__name__} ({producer!r}).")
+                f"Data(...) takes a type - BED, DOMAIN ... - or a producer - "
+                f"tool(name, **kwargs) - and was given {type(producer).__name__} "
+                f"({producer!r}).")
         if self.producer is not None:
             raise DeclarationError(
                 f"Data {self.name!r} already names a producer; a row is produced "

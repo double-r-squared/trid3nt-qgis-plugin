@@ -378,8 +378,8 @@ class Module(metaclass=_Body):
     # Every keyword the module has, by identifier.
     MODULE_INPUT: Mapping[str, Slot] = MappingProxyType({})
     COMPOSITES: Mapping[str, Composite] = MappingProxyType({})
-    # Keywords a run input fills itself, by input name: identifier -> value read off what the input holds. A body that states one wins.
-    FILLED_BY: Mapping[str, Mapping[str, Callable[[Any], Any]]] = MappingProxyType({})
+    # Keywords a run input fills itself, by the row's TYPE or a placement's name: identifier -> value read off what the input holds. A body that states one wins.
+    FILLED_BY: Mapping[Any, Mapping[str, Callable[[Any], Any]]] = MappingProxyType({})
     # What the module writes, by printouts mnemonic: one row per variable; a variable the dictionary offers and this table does not row is not written.
     MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({})
     # The primitives over that output: kind -> the read off a solved run.

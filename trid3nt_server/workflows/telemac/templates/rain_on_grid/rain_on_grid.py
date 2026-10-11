@@ -9,6 +9,7 @@ from __future__ import annotations
 import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_server.inputs.slots import BED, DOMAIN
 from trid3nt_server.workflows.runtime import (
     Data, register_workflow, tool, Param, lever,
 )
@@ -125,9 +126,9 @@ RAINDEF3_USER_FORTRAN = "/opt/trid3nt/user_fortran/raindef3"
 
 
 class DATA:
-    domain = Data.need("hydrography", kind="basin", at="pour_point",
-                       span_km=_BASIN_WINDOW_KM)
-    bed = Data.need("terrain")
+    domain = Data(DOMAIN).need("hydrography", kind="basin", at="pour_point",
+                               span_km=_BASIN_WINDOW_KM)
+    bed = Data(BED).need("terrain")
     rivers = Data.need("hydrography", geometry="polyline")
     landcover = Data.need("land cover")
     rain = Data.need("precipitation series").context(

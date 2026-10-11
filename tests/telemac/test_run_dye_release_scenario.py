@@ -12,6 +12,7 @@ import asyncio
 from typing import Any
 
 import pytest
+from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN
 
 _PORTLAND = (-122.6735, 45.5175)  # the Willamette at USGS 14211720
 
@@ -133,7 +134,7 @@ def test_the_inflow_flow_is_the_discharge_slots_value_and_not_a_param():
 
     assert "discharge_m3s" not in {p.name for p in param_rows(PARAMS)}
     discharge = next(d for d in data_rows(DATA) if d.name == "discharge")
-    assert discharge.role == "discharge"
+    assert discharge.slot is DISCHARGE
     assert discharge.producer is None
     assert discharge.data_class == "discharge series"
     # The unit is the PRESCRIBED FLOWRATES list's, which the transform fixes;
@@ -182,17 +183,17 @@ def test_the_data_body_is_the_slots_and_the_classes_they_need():
     rows = data_rows(DATA)
     assert [d.name for d in rows] == ["domain", "bed", "discharge", "level"]
     by_name = {d.name: d for d in rows}
-    assert by_name["domain"].role == "domain"
+    assert by_name["domain"].slot is DOMAIN
     assert by_name["domain"].producer is None
     assert by_name["domain"].data_class == "hydrography"
     # THE BED is one class and the runtime owns the merge between the two.
-    assert by_name["bed"].role == "bed"
+    assert by_name["bed"].slot is BED
     assert by_name["bed"].producer is None
     assert by_name["bed"].data_class == "bathymetry"
     # ONE READING, not the published grid: the step that opens the channel
     # refuses a record nobody chose a site from, so the flow arrives ingested.
     discharge = by_name["discharge"]
-    assert discharge.role == "discharge"
+    assert discharge.slot is DISCHARGE
     assert discharge.data_class == "discharge series"
     # No point stated: the place a nearest reporting site is ranked against is
     # the domain's own centre.
@@ -200,10 +201,8 @@ def test_the_data_body_is_the_slots_and_the_classes_they_need():
     # The level is matched too, and its absence is legal.
     assert by_name["level"].data_class == "water level series"
     assert by_name["level"].is_optional
-    # No row here is superseded by a supplied artifact, and no row falls to a
-    # second source of its own: degrading between sources is the MATCH's.
-    assert all(d.producer is None or d.producer.supplied_uri is None
-               for d in rows)
+    # No row names a source of its own: degrading between sources is the MATCH's.
+    assert all(d.producer is None for d in rows)
 
 
 def test_the_release_point_seeds_the_domain_producer():

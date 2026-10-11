@@ -138,7 +138,7 @@ def test_a_point_and_a_drawn_slot_ask_through_the_one_canvas_ask(monkeypatch):
     monkeypatch.setattr(slots, "draw_on_canvas", _draw)
     coerce = point_arg("release", tool="t", prompt="click")
     assert asyncio.run(coerce({"input_mode": "user_gated"})) == {"release": None}
-    assert asyncio.run(slots.ask_on_canvas("domain", tool="t", param="domain")) is None
+    assert asyncio.run(slots.ask_on_canvas(slots.DOMAIN, tool="t", param="domain")) is None
     assert asked == [("point", "release"), ("polygon", "domain")]
 
 

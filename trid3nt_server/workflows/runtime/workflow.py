@@ -19,10 +19,10 @@ from trid3nt_contracts.coverage import SourceChoice
 from trid3nt_server.inputs.bound_domain import bind_domain, reset_domain
 from trid3nt_server.inputs.run_notes import (
     bind_coverage, bind_notes, drain_coverage, drain_notes)
+from trid3nt_server.inputs.slots import Slot
 from trid3nt_server.inputs.user_input import WireArgsError
 
 from . import journal
-from .accepts import Accepts
 from .data import DataDecl, data_rows
 from .errors import DeclarativeError, said
 from .levers import with_levers
@@ -64,6 +64,9 @@ class Workflow:
     #: The SOLVE step's name; the skeleton reads the run prefix off it when the result carries none.
     solve_step: str = ""
 
+    #: The rows every template of this engine carries without restating them.
+    seated: tuple[DataDecl, ...] = ()
+
     @classmethod
     def levers(cls) -> tuple[str, ...]:
         """WHICH runtime levers a declaration of this workflow takes without
@@ -75,15 +78,12 @@ class Workflow:
                  template: Any, data: Any = (),
                  sensitivity: Sequence[tuple[str, str]] | SensitivityDecl = (),
                  coerce: Sequence[Callable[[dict], Mapping[str, Any]]] = (),
-                 accepts: Accepts | None = None,
                  levers: Sequence[str] = ()) -> None:
         self.metadata = metadata
         self.name = metadata.name
         #: Declared PARAMS rows in class-body order, plus each runtime lever taken rather than restated.
         self.params = with_levers(param_rows(params), levers)
-        self.data = data_rows(data)
-        #: What this template accepts when SUPPLIED, per role; absence is a refusal.
-        self.accepts = accepts
+        self.data = data_rows(data) + self.seated
         #: The template MODULE: STEERING, OUTPUTS, CAPTIONS and its files are read off its own names.
         self.template = template
         #: What the template calls every published variable and every DATA row it reads into; one dict.
@@ -122,9 +122,9 @@ class Workflow:
         that fills none claims none."""
         return None
 
-    def slot_units(self) -> Mapping[str, str]:
-        """The UNIT each slot's value is converted to, by role.
-        Fixed by the engine's transform for the keyword the role fills; a runtime writing no keywords states none."""
+    def slot_units(self) -> Mapping[Slot, str]:
+        """The UNIT each slot's value is converted to, by type.
+        Fixed by the engine's transform for the keyword the type fills; a runtime writing no keywords states none."""
         return {}
 
     def published_units(self) -> Mapping[str, str]:
@@ -343,7 +343,7 @@ def register_workflow(
     **register_kwargs: Any,
 ) -> Callable[..., Any]:
     """Generate and register the tool for a declared workflow.
-    The template module is the declaration (PARAMS, DATA, ACCEPTS, DOC); the signature is synthesized from the
+    The template module is the declaration (PARAMS, DATA, DOC); the signature is synthesized from the
     declared params, so the model-facing schema comes from the declaration the run resolves."""
     from trid3nt_server.tools import register_tool
 
@@ -355,7 +355,7 @@ def register_workflow(
         levers = facade.levers()
     workflow = facade(metadata=metadata, params=params, template=template,
                       data=data, sensitivity=sensitivity, coerce=coerce,
-                      accepts=getattr(template, "ACCEPTS", None), levers=levers)
+                      levers=levers)
     params = workflow.params
 
     async def _run(**wire: Any) -> Any:

@@ -15,6 +15,7 @@ from trid3nt_server.workflows.telemac.workflow import stated
 from trid3nt_server.workflows.telemac.templates.sediment_plume import (
     sediment_plume as template,
 )
+from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN
 
 _TOOL = "telemac_sediment_plume"
 def _workflow():
@@ -44,7 +45,7 @@ def test_the_domain_is_one_need_row_asked_at_the_release_point():
     fetcher answers - a reach walked downstream, a waterbody at a point - is
     the match's, ranked in the coverage order."""
     domain = _rows()["domain"]
-    assert domain.role == "domain" and domain.data_class == "hydrography"
+    assert domain.slot is DOMAIN and domain.data_class == "hydrography"
     assert domain.coercion["near"] == "release"
     assert domain.span_km == 6.0
     assert domain.fills_from_user
@@ -55,9 +56,9 @@ def test_the_bed_is_one_need_row_the_match_composes():
     under the rest, composed by the match's own bed rule - never a producer or
     a merge stated on the template."""
     bed = _rows()["bed"]
-    assert bed.role == "bed" and bed.data_class == "bathymetry"
+    assert bed.slot is BED and bed.data_class == "bathymetry"
     assert bed.producer is None
-    assert [row.name for row in _workflow().data if row.role == "bed"] == ["bed"]
+    assert [row.name for row in _workflow().data if row.slot is BED] == ["bed"]
 
 
 def test_the_discharge_is_a_need_row_the_match_ranks_against_the_domain():
@@ -65,7 +66,7 @@ def test_the_discharge_is_a_need_row_the_match_ranks_against_the_domain():
     not a layer: a NEED row, absent-is-context, and the user's own number wins
     over any record."""
     discharge = _rows()["discharge"]
-    assert (discharge.role == "discharge"
+    assert (discharge.slot is DISCHARGE
             and discharge.data_class == "discharge series")
     assert discharge.is_context
     assert "National Water Model" in discharge.context_sentence
@@ -188,7 +189,7 @@ def test_every_slot_a_user_can_fill_reaches_the_wire():
     supersedes the matched bed, so both slots are arguments though both name a
     class."""
     assert {row.name for row in _workflow().data if row.fills_from_user} == {
-        "domain", "bed", "discharge", "level"}
+        "domain", "bed", "discharge", "level", "mesh"}
 
 
 def test_every_published_read_carries_its_caption():

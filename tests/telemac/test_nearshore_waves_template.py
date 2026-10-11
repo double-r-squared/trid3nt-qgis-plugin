@@ -42,13 +42,13 @@ def test_the_world_is_the_water_a_coastline_leaves_inside_the_window():
     a polygon: the question asks for the EDGE and the slot cuts the drawn window
     with it, exactly as the harbour question does."""
     rows = _rows()
-    assert rows["extent"].role == EXTENT
+    assert rows["extent"].slot == EXTENT
     assert rows["extent"].geometry == "rectangle"
     domain = rows["domain"]
-    assert (domain.role, domain.data_class, domain.kind, domain.geometry) \
+    assert (domain.slot, domain.data_class, domain.kind, domain.geometry) \
         == (DOMAIN, "hydrography", "coastline", "polyline")
     assert domain.producer is None
-    assert rows["bed"].role == BED
+    assert rows["bed"].slot == BED
     assert rows["bed"].data_class == "bathymetry"
 
 
@@ -57,7 +57,7 @@ def test_the_sea_state_is_a_row_on_the_reserved_wave_slot():
     of the class a buoy network publishes, ranked at the point the question names
     - not a number the template states."""
     wave = _rows()["wave"]
-    assert wave.role == WAVE
+    assert wave.slot == WAVE
     assert wave.data_class == "wave series"
     assert wave.producer is None
     assert wave.coercion["near"] == "seed"
@@ -90,7 +90,7 @@ def test_the_boundary_keywords_read_the_slot_by_name():
     assert "BOUNDARY_MAIN_DIRECTION_1" not in deck.ASSERTED
     # The water the depths are counted down from is the tide slot's, as one
     # value: TOMAWAC carries no free surface of its own.
-    assert _rows()["level"].role == LEVEL
+    assert _rows()["level"].slot == LEVEL
     assert "INITIAL_STILL_WATER_LEVEL" not in deck.ASSERTED
 
 

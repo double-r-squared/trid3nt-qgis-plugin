@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from types import SimpleNamespace
 from typing import Any, Literal
 
 import pytest
@@ -13,11 +14,17 @@ from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
 from trid3nt_server.inputs.gate import pending
 from trid3nt_server.inputs.gate.cards.run_inputs import (
     RunInputsDeclinedError, review_run_inputs)
+from trid3nt_server.inputs.slots import EXTENT
+from trid3nt_server.workflows.runtime import DataDecl
 
 
 def _tool(mesher: Literal["om2d", "reg_grid"] = "reg_grid", extent: Any = None,
           resolution_m: float | None = None, input_mode: str | None = None) -> None:
-    """A tool with an enumerated input, a slot-named input and a typed one."""
+    """A tool with an enumerated input, a slot-typed input and a typed one."""
+
+
+# The slot an input reads through is what the workflow behind the tool declares for it.
+_tool.workflow = SimpleNamespace(data=(DataDecl("extent", slot=EXTENT),))
 
 
 class _Emitter:

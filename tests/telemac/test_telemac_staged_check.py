@@ -256,12 +256,11 @@ async def test_a_run_staged_against_a_clause_refuses_before_the_manifest(
 def test_a_supplied_mesh_with_no_pair_is_taken_and_the_run_refuses_by_name(tmp_path):
     """The guarantee the artifact stopped stating, standing where it is measured.
 
-    A mesh carrying no pair is taken by the door - a mesh is not unsolvable in
+    A mesh carrying no pair is taken by its row - a mesh is not unsolvable in
     the abstract - and the run authored on it refuses here, naming the steering
     keyword and the file nobody staged."""
     from trid3nt_server.tools.mesh.artifact import MeshArtifact
-    from trid3nt_server.tools.mesh.tool import resolve_mesh
-    from trid3nt_server.workflows.runtime.accepts import Accepts
+    from trid3nt_server.inputs.mesh import mesh
 
     bare = MeshArtifact(
         mesh_id="01BARE", name="square", mode="om2d",
@@ -269,8 +268,8 @@ def test_a_supplied_mesh_with_no_pair_is_taken_and_the_run_refuses_by_name(tmp_p
         has_bathymetry=True, node_count=4, element_count=2,
         bbox=(0.0, 0.0, 1.0, 1.0), engine_files={},
         provenance={"recipe": {"mesher": "om2d", "kind": "unstructured_tri"}})
-    taken = resolve_mesh(explicit=bare, accepts=Accepts(mesh=("unstructured_tri",)))
-    assert taken.artifact is bare and not bare.engine_files
+    taken = mesh(bare, kinds=("unstructured_tri",))
+    assert taken["artifact"] is bare and not bare.engine_files
 
     (tmp_path / _DECK).write_text("/// the deck\n" + _deck())
     refusal = _refusal(tmp_path)

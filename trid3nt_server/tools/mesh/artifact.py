@@ -1,8 +1,8 @@
 """Case-scoped mesh artifact record + discovery seam.
 
 The facts a run reads to decide whether it can solve on a built mesh. They ride
-two existing seams and never a parallel store: a case-keyed same-process stash,
-and a ``mesh_artifact.json`` sidecar written beside the mesh objects."""
+one seam and never a parallel store: a ``mesh_artifact.json`` sidecar written
+beside the mesh objects."""
 
 from __future__ import annotations
 
@@ -15,12 +15,9 @@ logger = logging.getLogger("trid3nt_server.tools.mesh.artifact")
 
 __all__ = [
     "MeshArtifact",
-    "stash_mesh_artifact",
-    "stashed_mesh_artifacts",
     "sidecar_key_for_mesh_uri",
     "write_mesh_artifact_sidecar",
     "read_mesh_artifact_sidecar",
-    "find_case_mesh_artifacts",
     "measured_min_edge_m",
 ]
 
@@ -89,32 +86,6 @@ def measured_min_edge_m(art: MeshArtifact | None) -> float | None:
     return value if value > 0.0 else None
 
 
-_MAX_CASES: int = 64
-_MAX_PER_CASE: int = 16
-_CASE_MESH_ARTIFACTS: dict[str, list[MeshArtifact]] = {}
-
-
-def stash_mesh_artifact(case_id: str | None, art: MeshArtifact) -> None:
-    """Record a just-built mesh artifact under its case (FIFO-bounded).
-
-    An empty ``case_id`` is dropped: nothing case-scoped could discover it."""
-    if not case_id:
-        return
-    bucket = _CASE_MESH_ARTIFACTS.setdefault(case_id, [])
-    bucket.append(art)
-    while len(bucket) > _MAX_PER_CASE:
-        bucket.pop(0)
-    while len(_CASE_MESH_ARTIFACTS) > _MAX_CASES:
-        _CASE_MESH_ARTIFACTS.pop(next(iter(_CASE_MESH_ARTIFACTS)))
-
-
-def stashed_mesh_artifacts(case_id: str | None) -> list[MeshArtifact]:
-    """Same-process mesh artifacts for a case (most-recent last)."""
-    if not case_id:
-        return []
-    return list(_CASE_MESH_ARTIFACTS.get(case_id, []))
-
-
 def sidecar_key_for_mesh_uri(mesh_uri: str) -> tuple[str, str] | None:
     """``s3://bucket/prefix/mesh.2dm`` -> ``(bucket, prefix/mesh_artifact.json)``.
 
@@ -167,32 +138,5 @@ def read_mesh_artifact_sidecar(mesh_uri: str, s3_client: Any) -> MeshArtifact | 
     except Exception as exc:  # noqa: BLE001 -- absent/unreadable sidecar
         logger.debug("mesh artifact sidecar read miss for %s: %s", mesh_uri, exc)
         return None
-
-
-def find_case_mesh_artifacts(
-    *, case_id: str | None = None, loaded_mesh_uris: list[str] | None = None,
-    s3_client: Any = None,
-) -> list[MeshArtifact]:
-    """Discover mesh artifacts available in the active case (most-recent last).
-
-    ``case_id=None`` means the active turn's case."""
-    if case_id is None:
-        try:
-            from trid3nt_server.render.pipeline_emitter import current_turn_case
-            case_id = current_turn_case()
-        except Exception:  # noqa: BLE001
-            case_id = None
-
-    out: list[MeshArtifact] = list(stashed_mesh_artifacts(case_id))
-    covered = {a.display_uri for a in out}
-    if loaded_mesh_uris and s3_client is not None:
-        for uri in loaded_mesh_uris:
-            if uri in covered:
-                continue
-            art = read_mesh_artifact_sidecar(uri, s3_client)
-            if art is not None:
-                out.append(art)
-                covered.add(uri)
-    return out
 
 

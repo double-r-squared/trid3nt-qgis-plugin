@@ -35,31 +35,18 @@ _NAMING = frozenset({"name", "label", "layer_id", "title"})
 
 
 async def build_declared_mesh(*, mesh: dict[str, Any], name: Any = None,
-                              supplied: Any = None,
-                              tool: Any = None,
                               input_mode: str | None = None,
                               fresh: bool = False) -> dict[str, Any]:
     """The mesh a solve runs on -> the accepted mesh's record, with its ``key``.
 
-    A SUPPLIED mesh is adopted whole; one KEPT under this recipe's content key
-    is reused unless ``fresh``; otherwise one is built, gated in the run's mode."""
+    One KEPT under this recipe's content key is reused unless ``fresh``;
+    otherwise one is built, gated in the run's mode."""
     from trid3nt_server.render.pipeline_emitter import current_turn_case
     from trid3nt_server.tools.mesh.gate import gate_mesh_build
     from trid3nt_server.tools.mesh.session import MeshSession
-    from trid3nt_server.tools.mesh.tool import (
-        recipe_from_plan_value,
-        supplied_mesh_artifact,
-    )
+    from trid3nt_server.tools.mesh.tool import recipe_from_plan_value
     from trid3nt_server.inputs.run_notes import journal_note
 
-    art = None
-    if supplied:
-        art = await asyncio.to_thread(supplied_mesh_artifact, supplied,
-                                      tool_name=str(tool or ""))
-    if art is not None:
-        logger.info("mesh supplied: %s -> %d nodes / %d elements",
-                    art.mesh_id, art.node_count, art.element_count)
-        return mesh_record(art)
     key = await asyncio.to_thread(mesh_key, mesh)
     kept = await _kept(key)
     if kept is not None:

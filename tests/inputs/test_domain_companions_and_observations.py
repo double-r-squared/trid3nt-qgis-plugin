@@ -137,10 +137,10 @@ def test_the_row_declares_the_slot_and_what_the_model_reads_off_it():
     from trid3nt_server.workflows.runtime.data import data_rows
 
     class DATA:
-        observe = Data.need("water quality sample", at=(-122.65, 45.53))
+        observe = Data(OBSERVE).need("water quality sample", at=(-122.65, 45.53))
 
     (row,) = data_rows(DATA)
-    assert row.role == OBSERVE
+    assert row.slot == OBSERVE
     assert row.data_class == "water quality sample"
     assert row.coercion == {"near": (-122.65, 45.53)}
     # A reading is a record to read it off, OR the number itself.

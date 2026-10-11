@@ -228,9 +228,9 @@ def test_the_four_slots_are_the_world_this_run_stands_on():
 
     data = {decl.name: decl for decl in
             _template().telemac_micropollutant_release.workflow.data}
-    assert data["domain"].role == DOMAIN
+    assert data["domain"].slot == DOMAIN
     assert data["domain"].data_class == "hydrography"
-    assert data["bed"].role == BED
+    assert data["bed"].slot == BED
     assert data["bed"].data_class == "bathymetry"
     assert "runs" not in data and "survey" not in data
     assert "surveyed_bed" not in data and "terrain" not in data
@@ -244,7 +244,7 @@ def test_the_discharge_reaches_the_channel_as_ONE_reading_never_the_record():
     data = {decl.name: decl for decl in
             _template().telemac_micropollutant_release.workflow.data}
     discharge = data["discharge"]
-    assert discharge.role == DISCHARGE and discharge.is_context
+    assert discharge.slot == DISCHARGE and discharge.is_context
     assert discharge.data_class == "discharge series"
 
 

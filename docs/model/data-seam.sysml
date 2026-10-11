@@ -1004,8 +1004,12 @@ package DataSeam {
     requirement def ASlotStatesANeedAndTheMatchFillsIt {
         doc /*
         A RUNTIME SLOT STATES THE CLASS IT NEEDS AND NAMES NO FETCHER. The slot
-        is the ROW'S NAME - one reserved list, the runtime slot registry's keys -
-        and the modifiers are absence and the sentence an absence carries. A need
+        is the TYPE THE ROW STATES - one list of types, each with its ingestion
+        and the classes it reads - and the row is named freely: a class the
+        stated type does not read refuses where it is written, a row that
+        states no type is a plain one, a run solves over exactly one domain and
+        one bed, and a record type may be stated more than once. The
+        modifiers are absence and the sentence an absence carries. A need
         is one class of the coarse data-class vocabulary; the window and the
         frame it is matched under are the RUN's - the deck's own duration from
         the moment the run asks at, the vertical lever - and the place is the
@@ -1083,10 +1087,10 @@ package DataSeam {
 
     requirement def ASeaStateIsAReservedSlot {
         doc /*
-        THE SEA STATE AT AN OPEN BOUNDARY IS A RESERVED SLOT, not a composite
+        THE SEA STATE AT AN OPEN BOUNDARY IS A SLOT OF ITS OWN, not a composite
         and not an observation under another name. It is the same kind of thing
         as the weather over a domain - one record of several measured columns -
-        so it is a name on the reserved list, serving one class, and the match
+        so it is a type on the one list, serving one class, and the match
         fills it the way it fills every other need.
 
         What makes it its own slot is what its INGESTION does: every column of
@@ -1525,6 +1529,14 @@ package DataSeam {
         "tests/runtime/test_matched_slots.py::test_the_next_survivor_takes_its_turn_when_the_top_one_held_nothing";
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
         "tests/runtime/test_matched_slots.py::test_a_need_and_a_producer_on_one_row_is_refused_at_declaration";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/inputs/test_slot_inputs.py::test_a_row_states_its_slot_and_its_name_is_free";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/inputs/test_slot_inputs.py::test_a_slot_states_which_classes_it_serves_and_a_row_outside_them_refuses";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/telemac/test_workflow_owns_its_stages.py::test_two_level_rows_are_legal_and_two_bed_rows_refuse";
+    verify requirement ASlotStatesANeedAndTheMatchFillsIt by
+        "tests/telemac/test_workflow_owns_its_stages.py::test_a_template_that_writes_no_mesh_row_fills_with_a_supplied_mesh";
 
     satisfy requirement TheRankedListIsOneObjectInThreeViews by rankedListCard;
     satisfy requirement TheRankedListIsOneObjectInThreeViews by rankedListRecord;

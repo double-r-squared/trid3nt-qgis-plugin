@@ -17,8 +17,10 @@ from trid3nt_contracts.common import Origin, SyntheticInput
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
 
+from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LEVEL, MESH
 from trid3nt_server.render.formats import publish
 from trid3nt_server.workflows.runtime import (
+    DataDecl,
     DeclarationError,
     RunResult,
     Workflow,
@@ -769,6 +771,9 @@ class TelemacWorkflow(Workflow):
 
     engine = "telemac"
     solve_step = "solve"
+    # The kind is stated here once: every module of this engine solves on triangles, so a supplied mesh of another kind refuses at its row.
+    seated = (DataDecl(name="mesh", slot=MESH, is_optional=True,
+                       coercion=MappingProxyType({"kinds": (_MESH_KIND,)})),)
 
     @classmethod
     def levers(cls) -> tuple[str, ...]:
@@ -794,11 +799,9 @@ class TelemacWorkflow(Workflow):
         """One declaration read off the template module, or the default beside it."""
         return getattr(self.template, name, default)
 
-    def slot_units(self) -> Mapping[str, str]:
+    def slot_units(self) -> Mapping[Any, str]:
         """What the two series slots convert to: the unit of the PRESCRIBED list
         each one's value is written into, which the transform fixes."""
-        from trid3nt_server.inputs.slots import DISCHARGE, LEVEL
-
         from .modules.telemac2d import PRESCRIBED_UNITS
 
         return {DISCHARGE: PRESCRIBED_UNITS["flowrate"],
@@ -832,8 +835,6 @@ class TelemacWorkflow(Workflow):
         """Refuse at import what this template cannot run on: a domain, one bed,
         the deck's own clock, a function for every measurement it asks for and
         a caption for every output it lists."""
-        from trid3nt_server.inputs.slots import DISCHARGE
-
         slots = self._slots()
         self._clock()
         if DISCHARGE in slots:
@@ -843,29 +844,23 @@ class TelemacWorkflow(Workflow):
             _signature(_MEASURES[ask.kind][0])
         self._outputs()
 
-    def _slots(self) -> dict[str, str]:
-        """The row this question declares for each role a stage reads."""
-        from trid3nt_server.inputs.slots import BED, DOMAIN
-
-        slots: dict[str, list[str]] = {}
+    def _slots(self) -> dict[Any, str]:
+        """The row this question declares for each type a stage reads: the first of each, and exactly one domain and one bed."""
+        slots: dict[Any, list[str]] = {}
         for row in self.data:
-            if row.role:
-                slots.setdefault(row.role, []).append(row.name)
-        if not slots.get(DOMAIN):
-            raise DeclarationError(
-                f"{self.name} declares no domain: a run solves over a polygon, so "
-                "the DATA body needs a row named domain.")
-        beds = slots.get(BED) or []
-        if not beds:
-            raise DeclarationError(
-                f"{self.name} declares no bed: every node carries an elevation, so "
-                "the DATA body needs a row named bed.")
-        if len(beds) > 1:
-            raise DeclarationError(
-                f"{self.name} declares {len(beds)} bed rows ({beds}); the bed is "
-                "ONE source. A survey over a wider surface is composed by the "
-                "merge derive into the one row this slot takes.")
-        return {role: names[0] for role, names in slots.items()}
+            if row.slot is not None:
+                slots.setdefault(row.slot, []).append(row.name)
+        for slot, why in ((DOMAIN, "a run solves over one polygon"),
+                          (BED, "every node carries one elevation; a survey "
+                                "over a wider surface is composed by the merge "
+                                "derive into the one row")):
+            rows = slots.get(slot) or []
+            if len(rows) != 1:
+                raise DeclarationError(
+                    f"{self.name} declares {len(rows)} {slot.name} rows "
+                    f"({rows}): {why}, so the DATA body needs exactly one "
+                    f"Data({slot.name.upper()}) row.")
+        return {slot: names[0] for slot, names in slots.items()}
 
     async def launch(self, state: Fill) -> RunResult:
         """The run, in order: the world, the mesh and its files, what the run places and measures, the settle, the sheet, the solve, the outputs.
@@ -874,7 +869,6 @@ class TelemacWorkflow(Workflow):
         from trid3nt_server.render.pipeline_emitter import (begin_substeps,
                                                             current_emitter,
                                                             substep)
-        from trid3nt_server.inputs.slots import DISCHARGE, DOMAIN, LEVEL
         from trid3nt_server.workflows.runtime.fill import (_load, _produce, call,
                                                            production, read)
         from .authoring.mesh_files import telemac_mesh_files
@@ -892,7 +886,8 @@ class TelemacWorkflow(Workflow):
         asks = self._declared(Measured)
         placed = self._declared(Placed)
         emitter = current_emitter()
-        begin_substeps(emitter, 6 + len(asks) + len(placed) + bool(inflow))
+        begin_substeps(emitter, 5 + ("mesh" not in run) + len(asks) + len(placed)
+                       + bool(inflow))
 
         async def given(value: Any) -> Any:
             return await read(env, value) if isinstance(value, str) else value
@@ -916,12 +911,13 @@ class TelemacWorkflow(Workflow):
         run.update(stated(steering=self.steering, keywords=keywords))
         await measure("world")
         mesh = recipe if recipe is not None else self._mesh(domain, slots)
-        await stage("mesh", build_declared_mesh,
-                    mesh=await self._recipe(env, mesh),
-                    name=await read(env, self._states("MESH_ON", "") or domain),
-                    supplied=await given(self._states("SUPPLIED_MESH", None)),
-                    tool=self.name, input_mode=env.input_mode,
-                    fresh=bool(state.carried.get("restart_clean")))
+        # A supplied mesh is already the run's mesh: its row's ingestion wrote the record the build would have.
+        if "mesh" not in run:
+            await stage("mesh", build_declared_mesh,
+                        mesh=await self._recipe(env, mesh),
+                        name=await read(env, self._states("MESH_ON", "") or domain),
+                        input_mode=env.input_mode,
+                        fresh=bool(state.carried.get("restart_clean")))
         # The files this engine asks the accepted mesh for are written from it before anything reads one: its boundary numbering says which face carries what.
         await stage("mesh_files", telemac_mesh_files, mesh=run["mesh"])
         await keep_mesh(run["mesh"])
@@ -960,7 +956,9 @@ class TelemacWorkflow(Workflow):
             await read(env, name)
         declared = {prm.name for prm in self.params}
         await stage("sheet", fill_sheet, steering=self.steering,
-                    produced=run,
+                    # A module fills keywords from a row by its TYPE, so each type's row is held under the type beside its name.
+                    produced={**run, **{slot: run[name] for slot, name
+                                        in slots.items() if name in run}},
                     params={name: run[name] for name in declared},
                     settled=run[_SETTLED].get("keywords") or {},
                     workflow=self.name,
@@ -1002,7 +1000,7 @@ class TelemacWorkflow(Workflow):
         for body in self.steering.ASSERTED.get("coupling") or ():
             if isinstance(body, Mapping):
                 wanted |= set(body.get("filled_by", ()))
-        return [row.name for row in self.data if row.name in wanted]
+        return [name for slot, name in self._slots().items() if slot in wanted]
 
     def unnamed(self) -> tuple[str, ...]:
         """Every input the template names as a plain string - in a placement, a
@@ -1064,7 +1062,6 @@ class TelemacWorkflow(Workflow):
     def _mesh(self, domain: str, slots: Mapping[str, str]) -> Any:
         """The mesh this workflow asks for where the template declares none."""
         from trid3nt_server.tools.mesh.tool import mesh_op, tool
-        from trid3nt_server.inputs.slots import BED
 
         return tool.build_mesh(
             mesher=_MESHER, kind=_MESH_KIND, extent=domain,
