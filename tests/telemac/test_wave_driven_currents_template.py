@@ -173,7 +173,7 @@ def test_the_tide_reaches_the_rim_as_the_series_the_record_served():
     the record reported as the boundary's own column: a rim held at one number
     is a sea standing still for the whole run, which a wave-driven current is
     measured against."""
-    from trid3nt_server.workflows.runtime.temporal import Series
+    from trid3nt_server.inputs.temporal import Series
 
     tide = Series([0.0, 1800.0, 3600.0], [0.25, 0.40, 0.52], units="m")
     rows = _rows()

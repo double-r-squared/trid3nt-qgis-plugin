@@ -13,7 +13,7 @@ from bisect import bisect_right
 from dataclasses import dataclass
 from typing import Any, Sequence
 
-from .errors import DeclarativeError
+from trid3nt_server.errors import DeclarativeError
 
 __all__ = [
     "CATEGORICAL",

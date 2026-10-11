@@ -16,10 +16,12 @@ from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.coverage import SourceChoice
 
+from trid3nt_server.inputs.bound_domain import bind_domain, reset_domain
+from trid3nt_server.inputs.user_input import WireArgsError
+
 from . import journal
 from .accepts import Accepts
 from .data import DataDecl, data_rows
-from .domain import bind_domain, reset_domain
 from .errors import DeclarativeError, GateRefusedError, said
 from .levers import with_levers
 from .params import Param, ResolvedParams, doors, param_rows
@@ -27,7 +29,7 @@ from .resolution import SensitivityDecl, sensitivity_notes
 from .resolver import merge_provenance, provenance_entries
 
 if TYPE_CHECKING:
-    from ...inputs.fill import Fill
+    from .fill import Fill
 
 __all__ = ["RunResult", "Workflow", "WireArgsError", "register_workflow"]
 
@@ -48,12 +50,6 @@ class RunResult:
     outputs: list[dict[str, Any]] = field(default_factory=list)
     choices: list[SourceChoice] = field(default_factory=list)
     keywords: dict[str, Any] = field(default_factory=dict)
-
-
-class WireArgsError(DeclarativeError):
-    """The wire arguments cannot be coerced into a sheet the workflow can run."""
-
-    error_code = "WIRE_ARGS_INVALID"
 
 
 class Workflow:
@@ -157,7 +153,7 @@ class Workflow:
 
     async def run(self, wire: Mapping[str, Any]) -> Any:
         """The absorbed tool body: fill every input, then launch when READY."""
-        from ...inputs.fill import Fill, fill
+        from .fill import Fill, fill
 
         try:
             state = await fill(Fill(workflow=self), wire)
@@ -197,7 +193,7 @@ class Workflow:
 
     async def _launched(self, state: Fill) -> RunResult:
         """Launch under the run's own domain and collectors; notes ride out on the run or on the failure."""
-        from ...inputs.fill import production, restate
+        from .fill import production, restate
 
         env = production(state)
         entries = provenance_entries(state.params, self.params)

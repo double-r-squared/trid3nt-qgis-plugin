@@ -10,7 +10,7 @@ from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
 from trid3nt_server.inputs.series import align
-from trid3nt_server.workflows.runtime.temporal import RATE, STATE, Series
+from trid3nt_server.inputs.temporal import RATE, STATE, Series
 
 from ..authoring.atmosphere import (ATMOSPHERE_READS, Atmosphere,
                                      expand_atmosphere)

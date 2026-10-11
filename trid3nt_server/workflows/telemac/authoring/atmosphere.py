@@ -15,7 +15,7 @@ from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
 from trid3nt_server.inputs.series import align
-from trid3nt_server.workflows.runtime.temporal import (
+from trid3nt_server.inputs.temporal import (
     Series,
     TemporalGapError,
 )

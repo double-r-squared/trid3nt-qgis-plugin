@@ -46,7 +46,7 @@ def _clamp_fetch_resolution(chosen_m: float, finest_allowed_m: float) -> float:
     """The spacing a fetch runs at: the one asked, or the finest the source serves over this extent.
 
     Finer = SMALLER metres, so the px-grid bound is a LOWER bound; a coarser request is honoured exactly."""
-    from trid3nt_server.workflows.runtime import journal_note
+    from trid3nt_server.inputs.run_notes import journal_note
 
     # A request finer than the bound would materialize a grid past MAX_FETCH_PX
     # on the long axis, so it runs at the bound instead.

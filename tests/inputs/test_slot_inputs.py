@@ -309,7 +309,7 @@ def test_an_empty_artifact_and_an_absent_producer_refuse_DIFFERENTLY(tmp_path):
 
 @pytest.mark.parametrize("module", ["trid3nt_server.inputs.slots",
                                     "trid3nt_server.workflows.runtime.data",
-                                    "trid3nt_server.inputs.fill"])
+                                    "trid3nt_server.workflows.runtime.fill"])
 def test_each_slot_module_imports_first_in_a_fresh_interpreter(module):
     ran = subprocess.run([sys.executable, "-c", f"import {module}"],
                          capture_output=True, text=True, timeout=240)

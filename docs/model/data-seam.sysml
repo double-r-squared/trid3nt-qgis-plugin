@@ -582,7 +582,7 @@ package DataSeam {
 
     part matchedSlot : SourceMatch {
         doc /*
-        code: trid3nt_server/inputs/fill.py
+        code: trid3nt_server/workflows/runtime/fill.py
         */
     }
 
@@ -606,7 +606,7 @@ package DataSeam {
 
     part seriesOnTheRunsClock : FreeSurfaceReader {
         doc /*
-        code: trid3nt_server/workflows/runtime/temporal.py
+        code: trid3nt_server/inputs/temporal.py
         */
     }
 
@@ -648,7 +648,7 @@ package DataSeam {
 
     part offsetRowDeclaration : VerticalFrame {
         doc /*
-        code: trid3nt_server/inputs/fill.py
+        code: trid3nt_server/workflows/runtime/fill.py
         */
     }
 

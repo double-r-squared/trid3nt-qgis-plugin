@@ -77,7 +77,7 @@ def bed(value: Any, *, frame: Any = None, offset: Any = None,
         return Bed(kind=DEPTH, depth_m=depth)
     if isinstance(value, Mapping) and "depth_m" in value:
         return bed(value["depth_m"], label=label, code=code)
-    from trid3nt_server.workflows.runtime.data import artifact_class
+    from .geometry import artifact_class
 
     value = _by_id(value)
     # A source that arrives as GeoJSON is already READ, and a geometry document
@@ -116,7 +116,7 @@ def _covered(surface: Any, water: Any, label: str) -> None:
     from trid3nt_server.tools.derive._raster_layers import (
         UNMEASURED, coverage, label_of, over_the_cut, percent, read,
         sources_of, staged, stated)
-    from trid3nt_server.workflows.runtime import cut_coverage
+    from .run_notes import cut_coverage
 
     with tempfile.TemporaryDirectory(prefix="bed-coverage-") as scratch:
         values, won, crs, transform = read(staged(surface, label, scratch))
@@ -198,7 +198,7 @@ def elevations(layer: Any, *, frame: Any, offset: Any = None,
 
 def _journal(label: str, layer: Any, aligned: Any, depths: bool) -> None:
     """Say the flip and the shift on the run's journal, where a packet reader sees them."""
-    from trid3nt_server.workflows.runtime import journal_note
+    from .run_notes import journal_note
     from .vertical_datum import datum_of
 
     zero = datum_of(layer) or "its own datum"

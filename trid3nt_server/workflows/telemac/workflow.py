@@ -46,7 +46,7 @@ from trid3nt_server.workflows.telemac.modules.sheet import fill_coupled
 from trid3nt_server.workflows.telemac.modules.sheet import run as run_sheet_
 
 if TYPE_CHECKING:
-    from trid3nt_server.inputs.fill import Fill
+    from trid3nt_server.workflows.runtime.fill import Fill
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.workflow")
 
@@ -140,7 +140,7 @@ def _names(value: Any) -> list[str]:
 
 async def _read_named(env: Any, value: Any) -> Any:
     """A ``reads`` mapping with every name replaced by what the run holds."""
-    from trid3nt_server.inputs.fill import read
+    from trid3nt_server.workflows.runtime.fill import read
 
     if isinstance(value, str):
         return await read(env, value)
@@ -888,7 +888,7 @@ class TelemacWorkflow(Workflow):
                                                             current_emitter,
                                                             substep)
         from trid3nt_server.inputs.slots import DISCHARGE, DOMAIN, LEVEL
-        from trid3nt_server.inputs.fill import (_load, _produce, call,
+        from trid3nt_server.workflows.runtime.fill import (_load, _produce, call,
                                                            production, read)
         from .authoring.mesh_files import telemac_mesh_files
         from .authoring.opening import open_channel, open_water
@@ -1060,7 +1060,7 @@ class TelemacWorkflow(Workflow):
         """The mesh ask with every input it names read off the run: the extent,
         a resolution stated as a name, and each op argument that takes one."""
         from trid3nt_server.tools.mesh.recipe import recipe_plan_value, takes_name
-        from trid3nt_server.inputs.fill import read
+        from trid3nt_server.workflows.runtime.fill import read
 
         asked = recipe_plan_value(recipe)
         for key in ("extent", "resolution_m"):
@@ -1090,7 +1090,7 @@ class TelemacWorkflow(Workflow):
     async def _opening(self, env: Any, domain: str, level: str,
                        inflow: str) -> dict[str, Any]:
         """What the open water is settled from, read off this run."""
-        from trid3nt_server.inputs.fill import read
+        from trid3nt_server.workflows.runtime.fill import read
 
         run = env.run
         declared = {prm.name for prm in self.params}
@@ -1123,7 +1123,7 @@ class TelemacWorkflow(Workflow):
                      takes: frozenset[str]) -> dict[str, Any]:
         """What a measurement is taken against, read off this run, cut to what
         its function takes."""
-        from trid3nt_server.inputs.fill import read
+        from trid3nt_server.workflows.runtime.fill import read
 
         run = env.run
         world: dict[str, Any] = {}

@@ -17,7 +17,7 @@ import pytest
 
 from trid3nt_server.inputs.point import Point
 from trid3nt_server.inputs.slots import needs_of
-from trid3nt_server.inputs import fill
+from trid3nt_server.workflows.runtime import fill
 from trid3nt_server.workflows.runtime import Data
 from seated import resolve_params
 

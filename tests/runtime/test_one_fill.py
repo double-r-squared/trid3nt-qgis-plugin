@@ -7,8 +7,8 @@ import types
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.inputs import fill as fill_mod
-from trid3nt_server.inputs.fill import (
+from trid3nt_server.workflows.runtime import fill as fill_mod
+from trid3nt_server.workflows.runtime.fill import (
     ACCEPTED,
     DEFAULTED,
     MISSING,

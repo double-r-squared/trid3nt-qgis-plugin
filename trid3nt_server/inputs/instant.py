@@ -10,7 +10,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import Any, Mapping
 
-from trid3nt_server.workflows.runtime import WireArgsError
+from .user_input import WireArgsError
 
 __all__ = ["event_time", "instant"]
 

@@ -6,7 +6,7 @@ from bisect import bisect_left
 from dataclasses import dataclass
 from typing import Any, Sequence
 
-from trid3nt_server.workflows.runtime.temporal import (
+from .temporal import (
     CATEGORICAL,
     RATE,
     STATE,

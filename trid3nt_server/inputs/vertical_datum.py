@@ -52,7 +52,7 @@ def record_datum(source: Any) -> str:
     stated = datum_of(source)
     if stated or source is None:
         return stated
-    from trid3nt_server.workflows.runtime.data import artifact_class
+    from .geometry import artifact_class
 
     # A zero carried per FEATURE is a vector record's fact. A surface has no
     # features, and reading one for them is a vector reader over a raster.
@@ -363,7 +363,7 @@ def _seed_shape(at: Any) -> Any:
     seeded = lonlat_of(at)
     if seeded is not None:
         return _Point(*seeded)
-    from trid3nt_server.workflows.runtime.domain import current_domain
+    from .bound_domain import current_domain
 
     domain = current_domain()
     if domain is None:
@@ -380,7 +380,7 @@ def _footprint(source: Any) -> Any:
     from shapely.geometry import shape
     from shapely.ops import unary_union
 
-    from trid3nt_server.workflows.runtime.data import artifact_class
+    from .geometry import artifact_class
 
     from .geometry import flatten_geometries, read_geometry_doc, source_uri
     from .user_input import UserInputError

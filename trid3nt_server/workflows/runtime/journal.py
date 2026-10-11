@@ -15,6 +15,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from trid3nt_server.inputs.run_notes import (
+    bind_coverage, bind_notes, cut_coverage, drain_coverage, drain_notes,
+    journal_note, run_coverage)
+
 logger = logging.getLogger("trid3nt_server.workflows.runtime.journal")
 
 __all__ = ["append_record", "bind_choices", "bind_coverage", "bind_notes",
@@ -22,21 +26,6 @@ __all__ = ["append_record", "bind_choices", "bind_coverage", "bind_notes",
            "drain_notes", "drain_outputs", "journal_note", "journal_outputs",
            "journal_path", "read_records", "run_choices", "run_coverage",
            "run_origin", "run_outputs", "slot_choice"]
-
-#: Notes from the step now running for THIS run's record; a note that only reached a log line dies with the process.
-_NOTES: contextvars.ContextVar[list[str] | None] = contextvars.ContextVar(
-    "trid3nt_run_notes", default=None)
-
-
-def journal_note(text: str) -> None:
-    """Record ``text`` on the run in progress. Outside a run it only logs.
-    For what a run has to SAY rather than return; the note travels to the journal
-    and onto the published layer beside the run's own fallback notes."""
-    logger.info("run note: %s", text)
-    notes = _NOTES.get()
-    if notes is not None:
-        notes.append(str(text))
-
 
 #: Layers the run has published, drained into the record: the one place outputs are read back from.
 _OUTPUTS: contextvars.ContextVar[list[dict[str, Any]] | None] = contextvars.ContextVar(
@@ -60,47 +49,6 @@ def drain_outputs(token: contextvars.Token) -> list[dict[str, Any]]:
     published = _OUTPUTS.get() or []
     _OUTPUTS.reset(token)
     return list(published)
-
-
-def bind_notes() -> contextvars.Token:
-    """Open a note channel for one run -> the token that closes it."""
-    return _NOTES.set([])
-
-
-def drain_notes(token: contextvars.Token) -> list[str]:
-    """Close the channel and return what was written into it."""
-    notes = _NOTES.get() or []
-    _NOTES.reset(token)
-    return list(notes)
-
-#: What the cut covers (share of water and land painted, what nothing measured); the card reads it before the solve, the journal after.
-_COVERAGE: contextvars.ContextVar[list[str] | None] = contextvars.ContextVar(
-    "trid3nt_run_coverage", default=None)
-
-
-def cut_coverage(text: str) -> None:
-    """State what the cut covers, on the journal AND on the run's own card."""
-    journal_note(text)
-    covered = _COVERAGE.get()
-    if covered is not None:
-        covered.append(str(text))
-
-
-def run_coverage() -> list[str]:
-    """What the run in progress has said its cut covers, in the order it said it."""
-    return list(_COVERAGE.get() or ())
-
-
-def bind_coverage() -> contextvars.Token:
-    """Open a coverage channel for one run -> the token that closes it."""
-    return _COVERAGE.set([])
-
-
-def drain_coverage(token: contextvars.Token) -> list[str]:
-    """Close the channel and return what was written into it."""
-    covered = _COVERAGE.get() or []
-    _COVERAGE.reset(token)
-    return list(covered)
 
 
 #: The ranked list each matched slot was filled from; card and record read one object.

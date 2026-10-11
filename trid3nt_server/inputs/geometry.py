@@ -9,10 +9,11 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from types import MappingProxyType
 from typing import Any, Mapping
 
-__all__ = ["GeometryReadError", "covered_fraction", "flatten_geometries",
-           "read_geometry_doc", "source_uri", "utm_epsg_for"]
+__all__ = ["GeometryReadError", "artifact_class", "covered_fraction",
+           "flatten_geometries", "read_geometry_doc", "source_uri", "utm_epsg_for"]
 
 
 class GeometryReadError(RuntimeError):
@@ -191,3 +192,25 @@ def covered_fraction(line: Any, within: Any,
             f"about.{remedy}")
     return {"fraction": round(fraction, 6), "covered_m": round(covered, 2),
             "length_m": round(length, 2), "of": kind, "epsg": epsg, "note": note}
+
+
+#: An unlisted suffix is unclassifiable and adopted, never refused: a refusal must not rest on a guess.
+_CLASS_BY_SUFFIX: Mapping[str, str] = MappingProxyType({
+    ".tif": "raster", ".tiff": "raster", ".vrt": "raster", ".img": "raster",
+    ".asc": "raster", ".jp2": "raster",
+    ".slf": "mesh", ".sel": "mesh", ".med": "mesh", ".2dm": "mesh",
+    ".gr3": "mesh", ".msh": "mesh",
+    ".fgb": "vector", ".geojson": "vector", ".json": "vector", ".shp": "vector",
+    ".gpkg": "vector", ".kml": "vector", ".gml": "vector"})
+
+
+def artifact_class(value: Any) -> str | None:
+    """``raster`` | ``mesh`` | ``vector`` for a supplied artifact, or ``None``.
+    Read off the URI SUFFIX only. ``None`` means unclassifiable and is never
+    grounds for a refusal."""
+    uri = getattr(value, "uri", None) or (value if isinstance(value, str) else None)
+    if not isinstance(uri, str):
+        return None
+    stem = uri.split("?", 1)[0].rstrip("/")
+    dot = stem.rfind(".")
+    return _CLASS_BY_SUFFIX.get(stem[dot:].lower()) if dot >= 0 else None

@@ -12,6 +12,7 @@ from typing import Any, Mapping
 
 from trid3nt_contracts.coverage import DATA_CLASSES
 
+from trid3nt_server.inputs.geometry import artifact_class
 from trid3nt_server.inputs.slots import BED, DOMAIN, SLOTS, Slot, role_of
 
 from .errors import DeclarationError, SuppliedGeometryError
@@ -48,28 +49,6 @@ _GEOMETRIES: frozenset[str] = frozenset(
 _GEOMETRY_CLASS: Mapping[str, str] = MappingProxyType({
     "point": "vector", "polyline": "vector", "polygon": "vector",
     "rectangle": "vector", "raster": "raster", "mesh": "mesh"})
-
-#: An unlisted suffix is unclassifiable and adopted, never refused: a refusal must not rest on a guess.
-_CLASS_BY_SUFFIX: Mapping[str, str] = MappingProxyType({
-    ".tif": "raster", ".tiff": "raster", ".vrt": "raster", ".img": "raster",
-    ".asc": "raster", ".jp2": "raster",
-    ".slf": "mesh", ".sel": "mesh", ".med": "mesh", ".2dm": "mesh",
-    ".gr3": "mesh", ".msh": "mesh",
-    ".fgb": "vector", ".geojson": "vector", ".json": "vector", ".shp": "vector",
-    ".gpkg": "vector", ".kml": "vector", ".gml": "vector"})
-
-
-def artifact_class(value: Any) -> str | None:
-    """``raster`` | ``mesh`` | ``vector`` for a supplied artifact, or ``None``.
-    Read off the URI SUFFIX only. ``None`` means unclassifiable and is never
-    grounds for a refusal."""
-    uri = getattr(value, "uri", None) or (value if isinstance(value, str) else None)
-    if not isinstance(uri, str):
-        return None
-    stem = uri.split("?", 1)[0].rstrip("/")
-    dot = stem.rfind(".")
-    return _CLASS_BY_SUFFIX.get(stem[dot:].lower()) if dot >= 0 else None
-
 
 def shapes_of(data_class: str) -> frozenset[str]:
     """The artifact CLASSES one data class arrives in, off the sources that measure it.

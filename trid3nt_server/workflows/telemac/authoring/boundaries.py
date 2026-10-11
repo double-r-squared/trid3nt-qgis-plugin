@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
 
-from trid3nt_server.workflows.runtime.temporal import Series
+from trid3nt_server.inputs.temporal import Series
 
 from ..errors import TelemacError
 

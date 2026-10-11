@@ -214,7 +214,7 @@ def _half_measured(tmp_path) -> dict[str, str]:
 
 
 def _standing_on_the_box(monkeypatch: pytest.MonkeyPatch) -> None:
-    from trid3nt_server.workflows.runtime import domain as runtime_domain
+    from trid3nt_server.inputs import bound_domain as runtime_domain
 
     monkeypatch.setattr(runtime_domain, "current_domain",
                         lambda: runtime_domain.Domain(bbox=_DOMAIN_BOX))

@@ -130,7 +130,7 @@ def test_the_slot_reserves_the_name_and_reads_the_class_the_buoys_publish():
 def test_the_wave_row_is_told_the_record_s_own_columns_and_the_run_s_window():
     from types import SimpleNamespace
 
-    from trid3nt_server.inputs.fill import _what_the_record_reports
+    from trid3nt_server.workflows.runtime.fill import _what_the_record_reports
     from trid3nt_server.workflows.runtime.data import DataDecl
 
     row = SimpleNamespace(units=_UNITS, value_column="wave_height_m",

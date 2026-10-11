@@ -16,7 +16,7 @@ from .data import (
     tool,
 )
 from .docstring import render_docstring
-from .domain import Domain, current_domain
+from trid3nt_server.inputs.bound_domain import Domain, current_domain
 from .errors import (
     SuppliedCoverageError,
     SuppliedGeometryError,
@@ -42,7 +42,7 @@ from .workflow import (
     Workflow,
     register_workflow,
 )
-from .temporal import (
+from trid3nt_server.inputs.temporal import (
     CATEGORICAL,
     RATE,
     STATE,

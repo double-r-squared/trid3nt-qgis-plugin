@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_server.inputs.series import align, quantity_class
-from trid3nt_server.workflows.runtime.temporal import (
+from trid3nt_server.inputs.temporal import (
     CATEGORICAL,
     RATE,
     STATE,

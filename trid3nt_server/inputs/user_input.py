@@ -13,6 +13,7 @@ from trid3nt_server.errors import DeclarativeError
 __all__ = [
     "PlaceNameError",
     "UserInputError",
+    "WireArgsError",
     "lonlat_bbox",
     "polygon_ring",
     "polyline_coords",
@@ -201,3 +202,9 @@ def lonlat_bbox(value: Any, *, label: str = "extent",
     if not (_on_earth(west, south) and _on_earth(east, north)):
         raise _refuse(f"{label} {tuple(nums)} is off the earth.", code)
     return (min(west, east), min(south, north), max(west, east), max(south, north))
+
+
+class WireArgsError(DeclarativeError):
+    """The wire arguments cannot be coerced into a sheet the workflow can run."""
+
+    error_code = "WIRE_ARGS_INVALID"

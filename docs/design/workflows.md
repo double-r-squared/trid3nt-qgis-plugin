@@ -87,7 +87,7 @@ Four rules decide every call:
   mm/h->mm/day", "native 1h kept"), so a manufactured value is distinguishable
   from an observed one.
 
-Unit conversion rides an EXPLICIT table in `workflows/runtime/temporal.py`, not
+Unit conversion rides an EXPLICIT table in `inputs/temporal.py`, not
 a units engine: a conversion nobody declared is one nobody can check, and a
 cross-dimension request refuses rather than guessing.
 

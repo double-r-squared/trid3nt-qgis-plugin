@@ -13,7 +13,7 @@ flowchart LR
     composite["Composite<br/>trid3nt_server/workflows/telemac/modules/telemac2d.py"]
     dictionaryExtractor["Dictionary<br/>workers/telemac/scripts/dico.py"]
     engineWorkflow["EngineWorkflow<br/>trid3nt_server/workflows/telemac/workflow.py"]
-    fill["Fill<br/>trid3nt_server/inputs/fill.py"]
+    fill["Fill<br/>trid3nt_server/workflows/runtime/fill.py"]
     messageIR["MessageIR<br/>contracts/trid3nt_contracts/message.py"]
     observationSlot["ObservationSlot<br/>trid3nt_server/inputs/observation.py"]
     output["Output<br/>trid3nt_server/workflows/telemac/modules/telemac2d.py"]
@@ -25,7 +25,7 @@ flowchart LR
     stager["Stager<br/>trid3nt_server/workflows/telemac/authoring/staging.py"]
     steeringDriver["SteeringDriver<br/>workers/telemac/scripts/cas.py"]
     steeringGate["SteeringGate<br/>trid3nt_server/workflows/telemac/authoring/cas_validate.py"]
-    temporalValue["TemporalValue<br/>trid3nt_server/workflows/runtime/temporal.py"]
+    temporalValue["TemporalValue<br/>trid3nt_server/inputs/temporal.py"]
     wrapper["Module<br/>trid3nt_server/workflows/telemac/modules/module.py"]
     canvasGate -- "DrawnValue" --> fill
     dictionaryExtractor -- "KeywordDictionary" --> slot

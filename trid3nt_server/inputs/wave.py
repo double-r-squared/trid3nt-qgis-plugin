@@ -11,7 +11,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-from trid3nt_server.workflows.runtime.temporal import spelling
+from .temporal import spelling
 
 from .observation import Observation, ObservationError, observation
 
@@ -125,7 +125,7 @@ def _column(columns: Mapping[str, str], unit: str, measures: str, label: str,
 
 def _journal(found: Wave, *, caption: str) -> None:
     """Say on the run journal what sea state forced the boundary and the conventions applied; off a run, nothing."""
-    from trid3nt_server.workflows.runtime import journal_note
+    from .run_notes import journal_note
 
     where = found.site_name or found.site_id or "an unnamed buoy"
     how_far = (f", {found.distance_km:.1f} km away" if found.distance_km is not None

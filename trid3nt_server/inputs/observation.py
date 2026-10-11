@@ -14,7 +14,7 @@ import math
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-from trid3nt_server.workflows.runtime.temporal import (
+from .temporal import (
     Series,
     convert_units,
     spelling,
@@ -417,7 +417,7 @@ def _journal(found: Observation, *, opens: str, stated: bool) -> None:
     """Say on the run journal what this run opened on; off a run there is no journal."""
     if not opens:
         return
-    from trid3nt_server.workflows.runtime import journal_note
+    from .run_notes import journal_note
 
     units = f" {found.units}" if found.units else ""
     on = f" on {found.datum}" if found.datum else ""

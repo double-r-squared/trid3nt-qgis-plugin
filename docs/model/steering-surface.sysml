@@ -383,7 +383,7 @@ package SteeringSurface {
 
     part temporalValue : TemporalValue {
         doc /*
-        code: trid3nt_server/workflows/runtime/temporal.py
+        code: trid3nt_server/inputs/temporal.py
         */
     }
 
@@ -417,7 +417,7 @@ package SteeringSurface {
 
     part fill : Fill {
         doc /*
-        code: trid3nt_server/inputs/fill.py
+        code: trid3nt_server/workflows/runtime/fill.py
         */
         port drawIn : DrawIn;
     }
