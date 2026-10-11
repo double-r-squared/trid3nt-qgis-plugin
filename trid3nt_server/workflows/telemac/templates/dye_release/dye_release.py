@@ -6,7 +6,7 @@ import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Accepts, Param, doors,
+    Data, register_workflow, Accepts, Param,
 )
 from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.instant import event_time
@@ -42,8 +42,8 @@ ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
 class PARAMS:
     release = Param(
-        door=doors.USER, optional=True,
-        consequence="scenario", type=Point,
+        optional=True,
+        type=Point,
         derived_when_absent=(
             "the release sits at spill_fraction along the domain the mesh was "
             "built over; the travelled distance is measured from there"),
@@ -55,17 +55,16 @@ class PARAMS:
              "reach is walked downstream from")
 
     spill_fraction = Param(
-        door=doors.SCENARIO, default=0.25, bounds=(0.05, 0.9),
-        consequence="scenario",
+        default=0.25, bounds=(0.05, 0.9),
         desc="Along-domain release position, 0=inflow..1=outflow; the source "
              "must sit strictly INSIDE the domain, never on a boundary")
     spill_duration_s = Param(
-        door=doors.SCENARIO, default=300.0,
-        bounds=(1.0, 86400.0), units="s", consequence="scenario",
+        default=300.0,
+        bounds=(1.0, 86400.0), units="s",
         desc="Finite pulse injection window")
 
     decaying_substance = Param(
-        door=doors.QUESTION, optional=True, consequence="scenario",
+        optional=True,
         derived_when_absent=(
             "the tracer is CONSERVATIVE - it dilutes and advects and nothing "
             "removes it"),

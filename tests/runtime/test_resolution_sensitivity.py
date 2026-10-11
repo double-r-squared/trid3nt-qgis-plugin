@@ -22,8 +22,8 @@ from trid3nt_server.workflows.runtime.resolution import (
 
 
 class _Row:
-    def __init__(self, name: str, basis: str) -> None:
-        self.name, self.basis = name, basis
+    def __init__(self, name: str, origin: str) -> None:
+        self.name, self.origin = name, origin
 
 
 _DECL = SensitivityDecl((("water_depth", "extent"),
@@ -80,7 +80,7 @@ def test_a_refined_run_says_refined_is_not_converged() -> None:
                                     **{_LEVER: 25.0})
 
     row = next(r for r in rows if r.name == _LEVER)
-    assert row.basis == "user" and row.value == 25.0
+    assert row.origin == "user" and row.value == 25.0
 
     notes = sensitivity_notes(
         workflow.sensitivity, {_QUANTITY}, rows,

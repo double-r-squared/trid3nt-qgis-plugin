@@ -59,5 +59,5 @@ re-presents, cancel refuses the run.
   narration says the card expired unanswered.
 - The rule that validates an input is the rule that fills its dropdown; nothing
   is listed per tool.
-- The model never invents physics for an input nothing measures: an auto run
-  carrying a demo default with no real source refuses.
+- The model never invents physics for an input nothing measures: such an input
+  declares no default, and the fill refuses it unstated before any card opens.

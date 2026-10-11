@@ -8,7 +8,7 @@ from typing import Any
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Accepts, Param, doors,
+    Data, register_workflow, Accepts, Param,
 )
 from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.instant import event_time
@@ -43,8 +43,8 @@ ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
 class PARAMS:
     release = Param(
-        door=doors.USER, optional=True,
-        consequence="scenario", type=Point,
+        optional=True,
+        type=Point,
         derived_when_absent=(
             "the release sits at spill_fraction along the domain the mesh was "
             "built over; the slick's drift is measured from there"),
@@ -56,24 +56,22 @@ class PARAMS:
              "reach is walked downstream from")
 
     spill_fraction = Param(
-        door=doors.SCENARIO, default=0.25, bounds=(0.05, 0.9),
-        consequence="scenario",
+        default=0.25, bounds=(0.05, 0.9),
         desc="Along-domain release position, 0=inflow..1=outflow; the source "
              "must sit strictly INSIDE the domain, never on a boundary")
     spill_duration_s = Param(
-        door=doors.SCENARIO, default=300.0,
-        bounds=(1.0, 86400.0), units="s", consequence="scenario",
+        default=300.0,
+        bounds=(1.0, 86400.0), units="s",
         desc="Finite pulse injection window")
 
     oil_type = Param(
-        door=doors.QUESTION, default="light_crude", consequence="scenario",
+        default="light_crude",
         desc="Which preset was spilled: light_crude | diesel | heavy_fuel - the "
              "module's own composition, density and viscosity. Crude runs as "
              "light_crude, gasoline and petrol as diesel, bunker as heavy_fuel")
 
     oil_release_step = Param(
-        door=doors.SCENARIO, default=600, bounds=(1.0, 1.0e6), type=int,
-        consequence="scenario",
+        default=600, bounds=(1.0, 1.0e6), type=int,
         desc="The solver step the floats are released at, compiled into the "
              "module's own release routine; it lets the flow field establish "
              "before the slick is put on it")

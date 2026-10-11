@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.telemac.modules.sheet import Origin
+from trid3nt_contracts.common import Origin
 
 #: Every registered TELEMAC template, and the module its steering body fills.
 TEMPLATE_MODULES: tuple[tuple[str, str], ...] = (
@@ -44,8 +44,8 @@ def test_every_template_is_values_over_a_module_of_the_one_engine(tool_name, mod
 
 
 def test_the_vocabulary_is_the_four_the_card_renders():
-    assert [origin.value for origin in Origin] == [
-        "template", "user", "producer", "derived"]
+    assert sorted(origin.value for origin in Origin) == [
+        "derived", "producer", "template", "user"]
 
 
 @pytest.mark.parametrize("tool_name,_module", TEMPLATE_MODULES)
@@ -67,17 +67,18 @@ def test_every_slot_of_a_template_s_default_fill_carries_one_of_the_four(
 @pytest.mark.parametrize("tool_name,_module", TEMPLATE_MODULES)
 def test_a_card_names_the_origin_of_every_set_row_and_of_no_other(
         tool_name, _module):
-    """The chip is rendered off the sheet: a SET row always has one, and an open
-    or engine-default row has none to claim."""
+    """The chip is rendered off the sheet: a SET row always has one, and a row
+    holding no filled value - open, or left to the engine - has none to claim."""
     from trid3nt_server.workflows.telemac.modules.sheet import Sheet, _standing
     from trid3nt_server.workflows.telemac.workflow import card_rows
 
     body = _steering(tool_name)
     _body, standing, _pending = _standing(body)
     for row in card_rows(Sheet(body=body, filled=standing)):
-        expected = row.name in standing
-        assert (row.origin in {origin.value for origin in Origin}) is expected, \
-            row.name
+        if row.name in standing:
+            assert isinstance(row.origin, Origin), row.name
+        if row.advanced or row.value is None:
+            assert row.origin is None, row.name
 
 
 def test_the_run_record_carries_the_engine_and_the_module_and_no_template():
@@ -119,7 +120,7 @@ def test_a_template_s_own_name_is_what_its_slots_are_stamped_with(
     """The detail beside the ``template`` origin is the template, not the body
     class: eight templates share the class names, and a page that selects its own
     runs by the provenance needs the name that tells them apart."""
-    from trid3nt_server.workflows.telemac.modules.sheet import Origin, _standing
+    from trid3nt_server.workflows.telemac.modules.sheet import _standing
 
     _body, standing, pending = _standing(_steering(tool_name), tool_name)
     stamped = [row.provenance for row in standing.values()]

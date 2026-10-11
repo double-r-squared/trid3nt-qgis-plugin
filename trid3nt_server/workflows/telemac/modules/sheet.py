@@ -8,31 +8,23 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, replace
-from enum import Enum
 from types import MappingProxyType
 from typing import Any, Callable, Mapping, Sequence
 
+from trid3nt_contracts.common import Origin
+
 from .module import Output, Slot, SlotRefused
 
-__all__ = ["CONTINUATION", "Filled", "Origin", "Provenance", "Sheet", "SheetIncomplete",
+__all__ = ["CONTINUATION", "Filled", "Provenance", "Sheet", "SheetIncomplete",
            "fill", "fill_coupled", "filled_by", "run", "solve_cores",
            "tracer_text"]
-
-
-class Origin(str, Enum):
-    """Where a filled slot's value came from. A closed set; nothing downstream branches on it."""
-
-    TEMPLATE = "template"
-    USER = "user"
-    PRODUCER = "producer"
-    DERIVED = "derived"
 
 
 @dataclass(frozen=True, slots=True)
 class Provenance:
     """One slot's origin, and the name that makes it checkable.
 
-    ``detail`` is the template, producer, source slot or calibration run the origin points at.
+    ``detail`` is the template, producer or source slot the origin points at.
     """
 
     origin: Origin

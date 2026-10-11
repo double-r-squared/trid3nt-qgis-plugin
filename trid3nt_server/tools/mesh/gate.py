@@ -10,8 +10,7 @@ import asyncio
 import logging
 from typing import Any, Mapping
 
-from trid3nt_server.inputs.gate.input_review import (PHYSICS_INPUT_REQUIRED, GateCard,
-                                               gate_input_review)
+from trid3nt_server.inputs.gate.input_review import GateCard, gate_input_review
 from trid3nt_server.tools.mesh.artifact import MeshArtifact
 from trid3nt_server.tools.mesh.meshers import MeshToolError
 from trid3nt_server.tools.mesh.session import MeshSession
@@ -104,11 +103,10 @@ def render_probe_lines(probes: Mapping[str, Any]) -> list[str]:
     return lines
 
 
-#: The cancel a gate reports -> the code a refused build raises under. A
-#: physics refusal keeps its own code; a cancel with no row here is a gate this
-#: map has not learned, and fails by its key rather than posing as a decline.
+#: The cancel a gate reports -> the code a refused build raises under. A cancel
+#: with no row here is a gate this map has not learned, and fails by its key
+#: rather than posing as a decline.
 _REFUSALS = {
-    "physics": PHYSICS_INPUT_REQUIRED,
     "timeout": "MESH_GATE_TIMEOUT",
     "declined": "MESH_GATE_DECLINED",
     "not_approved": "MESH_GATE_NOT_APPROVED",
@@ -222,28 +220,26 @@ def _mesh_param_sheet(session: MeshSession, *, tool_name: str) -> Any:
         name="resolution_m",
         value=(None if recipe.resolution_m is None
                else str(recipe.resolution_m)),
-        door="gate", basis="user",
         desc="the finest cell or triangle edge, in metres - the one size word "
              "every mesher reads. Leave blank to keep this mesh",
-        source_badge=f"{recipe.mesher} recipe", user_lever=True)]
+        source_badge=f"{recipe.mesher} recipe")]
     for index, line in enumerate(recipe.numbered()):
         rows.append(ParamSheetRow(
             name=f"{_OP_ROW}[{index}]", value=line.split(": ", 1)[-1][:512],
-            door="gate", basis="user",
             desc="one step of the program that produced this mesh; append, alter "
                  f"or remove it by index with mesh_op"[:512],
-            source_badge="recipe op", user_lever=False))
+            source_badge="recipe op"))
     rows.append(ParamSheetRow(
-        name=_RESET_ROW, value="no", door="gate", basis="user",
+        name=_RESET_ROW, value="no",
         desc="type yes to put the recipe back to the way it was declared and "
              "rebuild",
-        source_badge="loop action", user_lever=True))
+        source_badge="loop action"))
     rows.append(ParamSheetRow(
-        name=_ADOPT_ROW, value=None, door="gate", basis="user",
+        name=_ADOPT_ROW, value=None,
         desc="path to a .2dm this mesh was reshaped into by hand; the mesh is "
              "flagged, so any later recipe edit refuses rather than regenerating "
              "the edit away",
-        source_badge="loop action", user_lever=True))
+        source_badge="loop action"))
     return ParamSheet(
         workflow=tool_name,
         title=f"Review the {recipe.mesher} mesh"[:200],

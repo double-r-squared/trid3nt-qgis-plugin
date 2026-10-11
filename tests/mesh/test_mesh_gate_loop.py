@@ -380,7 +380,7 @@ def test_the_ops_are_numbered_on_the_card_because_an_index_is_what_targets_one(
     sheet = mesh_gate._mesh_param_sheet(session, tool_name="build_mesh")
     row = next(r for r in sheet.rows if r.name == "op[0]")
     assert "enforce_mesh_gradation" in row.value
-    assert row.user_lever is False
+    assert row.origin is None and row.source_badge == "recipe op"
     assert "mesh_op" in row.desc
 
 
@@ -468,33 +468,25 @@ async def test_the_shipped_client_parses_the_card_and_its_reply_routes_home(
     assert replayed.recipe.resolution_m == 900.0
 
 
-def _gate_answering(cancel_code, *, physics):
-    """The real review gate, handed one physics demo default when ``physics``, or
-    an outcome a person's own cancel produces."""
-    from trid3nt_server.inputs.gate import input_review
+def _gate_answering(cancel_code):
+    """A review gate that answers with the outcome a cancel of this code produces."""
     from trid3nt_server.inputs.gate.input_review import ReviewOutcome
-    from trid3nt_contracts.common import SyntheticInput
 
     async def _gate(**kwargs):
-        if physics:
-            return await input_review.gate_input_review(**{
-                **kwargs, "mode": "auto", "entries": [SyntheticInput(
-                    param="p", value=None, basis="default_demo",
-                    consequence="physics", note="no real source")]})
         return ReviewOutcome(proceed=False, entries=[], params={}, cancelled=True,
                              cancel_reason="declined", cancel_code=cancel_code)
     return _gate
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("cancel_code,physics,code", [
-    ("physics", True, "PHYSICS_INPUT_REQUIRED"),
-    ("declined", False, "MESH_GATE_DECLINED"),
+@pytest.mark.parametrize("cancel_code,code", [
+    ("no_session", "MESH_GATE_NO_SESSION"),
+    ("declined", "MESH_GATE_DECLINED"),
 ])
 async def test_a_refusal_keeps_the_code_of_its_reason_through_the_mesh_gate(
-        tmp_path, monkeypatch, cancel_code, physics, code):
+        tmp_path, monkeypatch, cancel_code, code):
     monkeypatch.setattr(mesh_gate, "gate_input_review",
-                        _gate_answering(cancel_code, physics=physics))
+                        _gate_answering(cancel_code))
 
     with pytest.raises(MeshToolError) as caught:
         await mesh_gate.gate_mesh_build(
@@ -507,7 +499,7 @@ async def test_a_refusal_keeps_the_code_of_its_reason_through_the_mesh_gate(
 async def test_a_cancel_the_refusal_map_has_not_learned_fails_by_its_key(
         tmp_path, monkeypatch):
     monkeypatch.setattr(mesh_gate, "gate_input_review",
-                        _gate_answering("expired", physics=False))
+                        _gate_answering("expired"))
 
     with pytest.raises(KeyError, match="expired"):
         await mesh_gate.gate_mesh_build(

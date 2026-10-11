@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Literal
 
 from trid3nt_contracts import new_ulid
-from trid3nt_contracts.common import SyntheticInput
+from trid3nt_contracts.common import ORIGIN_LABELS, Origin, SyntheticInput
 from trid3nt_contracts.payload_warning import ParamSheet, PayloadWarningEnvelopePayload
 
 logger = logging.getLogger("trid3nt_server.inputs.gate.input_review")
@@ -22,14 +22,8 @@ __all__ = [
     "ReviewOutcome",
     "resolve_input_gate_mode",
     "render_input_review_lines",
-    "physics_refusal_reason",
     "gate_input_review",
-    "PHYSICS_INPUT_REQUIRED",
 ]
-
-#: The one code a physics-default refusal carries, whichever caller raises it: a refusal
-#: keeps the code of its reason, and only a person's own cancel is a decline.
-PHYSICS_INPUT_REQUIRED = "PHYSICS_INPUT_REQUIRED"
 
 #: Run-mode lever for every gated thing. ``auto``
 #: proceeds immediately with labeled inputs; ``user_gated`` pauses for review.
@@ -54,79 +48,21 @@ def _entry_field(e: Any, name: str) -> Any:
 
 
 def render_input_review_lines(entries: Any) -> list[str]:
-    """One compact line per resolved input: ``param = value [basis, source]``.
+    """One compact line per resolved input: ``param = value [origin, source]``.
 
-    ``basis`` is spelled human-readably; ``source`` names the fetcher or dataset
-    only where there is one."""
-    basis_label = {
-        "fetched": "site-derived",
-        "derived": "derived",
-        "user": "user-supplied",
-        "prompt_interpreted": "from prompt",
-        "default_demo": "demo default",
-    }
+    ``source`` names the fetcher or dataset only where there is one."""
     lines: list[str] = []
     for e in entries or []:
-        param = _entry_field(e, "param")
         value = _entry_field(e, "value")
         units = _entry_field(e, "units")
-        basis = _entry_field(e, "basis")
         source = _entry_field(e, "real_source_if_any")
         val_txt = "?" if value is None else f"{value}"
         if units:
             val_txt = f"{val_txt} {units}"
-        tag = basis_label.get(str(basis), str(basis))
+        tag = ORIGIN_LABELS[Origin(_entry_field(e, "basis"))]
         src = f", {source}" if source else ""
-        lines.append(f"{param} = {val_txt} [{tag}{src}]")
+        lines.append(f"{_entry_field(e, 'param')} = {val_txt} [{tag}{src}]")
     return lines
-
-
-def _physics_demo_entries(entries: Any) -> list[Any]:
-    """The entries that must REFUSE in auto: ``consequence="physics"`` demo defaults.
-
-    Scenario, numerical and aoi demo defaults are not world inventions and are excluded."""
-    out = []
-    for e in entries or []:
-        if (_entry_field(e, "basis") == "default_demo"
-                and _entry_field(e, "consequence") == "physics"):
-            out.append(e)
-    return out
-
-
-def physics_refusal_reason(tool_name: str, entries: Any, *,
-                           no_session: bool = False,
-                           no_review_surface: bool = False) -> str | None:
-    """The typed ``*_PHYSICS_INPUT_REQUIRED`` refusal text, or None if none refuse.
-
-    ``no_session`` (nothing live to present on) and ``no_review_surface`` (a
-    workflow with no card and no self-reviewing step) each pick their remedy."""
-    refusing = _physics_demo_entries(entries)
-    if not refusing:
-        return None
-    needs = []
-    for e in refusing:
-        param = _entry_field(e, "param")
-        note = _entry_field(e, "note")
-        need = f" ({note})" if note else ""
-        needs.append(f"{param}{need}")
-    if no_review_surface:
-        where = "cannot run: nothing in this workflow reviews these values"
-        remedy = ("Supply real values, ensure a fetcher can resolve them, or give "
-                  "the workflow a review surface (a form gate, or a step that "
-                  "reviews its own inputs).")
-    elif no_session:
-        where = "cannot run without a live session to approve these on"
-        remedy = "Supply real values, or ensure a fetcher can resolve them."
-    else:
-        where = "cannot run in auto mode"
-        remedy = ("Supply real values, ensure a fetcher can resolve them, or re-run "
-                  "in user_gated mode to approve the demo defaults explicitly.")
-    return (
-        f"{PHYSICS_INPUT_REQUIRED}: {tool_name} {where} -- these "
-        "physics-consequential inputs have no real data source and fell back to "
-        "invented demo defaults, which would silently ruin the simulation (law 9): "
-        + "; ".join(needs) + ". " + remedy
-    )
 
 
 def _build_review_envelope(
@@ -178,7 +114,7 @@ def _apply_revision(
 ) -> tuple[list[SyntheticInput], dict[str, Any]]:
     """Merge a ``provide values`` revision into the params + provenance entries.
 
-    A revised value is re-stamped ``basis="user"``, units preserved; an unknown key becomes a new entry."""
+    A revised value is re-stamped as the user's, units preserved; an unknown key becomes a new entry."""
     revised = revised_args or {}
     if not revised:
         return entries, params
@@ -191,7 +127,7 @@ def _apply_revision(
         if existing is not None:
             units = _entry_field(existing, "units")
             new_entry = SyntheticInput(
-                param=str(key), value=val, units=units, basis="user",
+                param=str(key), value=val, units=units, basis=Origin.USER,
                 note="user-revised at review",
             )
             merged_entries = [
@@ -200,7 +136,7 @@ def _apply_revision(
             ]
         else:
             merged_entries.append(
-                SyntheticInput(param=str(key), value=val, basis="user",
+                SyntheticInput(param=str(key), value=val, basis=Origin.USER,
                                note="user-supplied at review")
             )
     return merged_entries, merged_params
@@ -230,8 +166,8 @@ class ReviewOutcome:
     params: dict[str, Any]
     cancelled: bool = False
     cancel_reason: str | None = None
-    #: Which cancel this is - ``physics``, ``no_session``, ``timeout``,
-    #: ``declined`` or ``not_approved`` - so a caller can raise its own typed error by it.
+    #: Which cancel this is - ``no_session``, ``timeout``, ``declined`` or
+    #: ``not_approved`` - so a caller can raise its own typed error by it.
     cancel_code: str | None = None
     mode: InputGateMode = "auto"
     rounds_used: int = 0
@@ -253,22 +189,10 @@ async def gate_input_review(
 ) -> ReviewOutcome:
     """Present what is under review before it runs, and ask.
 
-    ``auto`` proceeds at once unless a physics demo default is present; ``user_gated`` with no
-    live session REFUSES. ``present``/``apply_revision``/``blocked`` let a caller that owns the
+    ``auto`` proceeds at once; ``user_gated`` with no live session REFUSES. ``present``/``apply_revision``/``blocked`` let a caller that owns the
     thing reviewed build the card, take a reply as a change, and name what blocks a proceed."""
     resolved_mode = resolve_input_gate_mode(mode)
-    physics_refusal = physics_refusal_reason(tool_name, entries)
     if resolved_mode == "auto":
-        if physics_refusal is not None:
-            logger.info(
-                "input-review gate REFUSE (auto) tool=%s -- physics demo default(s) "
-                "with no real source", tool_name,
-            )
-            return ReviewOutcome(
-                proceed=False, entries=list(entries), params=dict(params),
-                cancelled=True, cancel_reason=physics_refusal, mode="auto",
-                cancel_code="physics",
-            )
         return ReviewOutcome(proceed=True, entries=list(entries),
                              params=dict(params), mode="auto")
 
@@ -281,14 +205,11 @@ async def gate_input_review(
     if emitter is None:
         logger.info("input-review gate REFUSE (user_gated, no session) tool=%s",
                     tool_name)
-        physics = physics_refusal_reason(tool_name, entries, no_session=True)
         return ReviewOutcome(
             proceed=False, entries=list(entries), params=dict(params),
-            cancelled=True, mode="user_gated",
-            cancel_code="physics" if physics else "no_session",
+            cancelled=True, mode="user_gated", cancel_code="no_session",
             cancel_reason=(
-                physics
-                or f"NO_SESSION: {tool_name} did not run - it waits for a person "
+                f"NO_SESSION: {tool_name} did not run - it waits for a person "
                 "to proceed on its review card and no session is open. Open a "
                 "session to review and launch it, or state input_mode='auto' on "
                 "the call to launch it at once."))

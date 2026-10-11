@@ -158,13 +158,10 @@ class ParamRow:
     value: object = None
     units: Optional[str] = None
     desc: str = ""
-    door: str = "scenario"
-    basis: str = "default_demo"
     # One word of the server's closed set; empty on a row that is not a filled slot (no chip).
     origin: str = ""
     source_badge: str = ""
     bounds: Optional[tuple] = None
-    user_lever: bool = False
     editable: bool = True
     advanced: bool = False
     group: str = ""
@@ -254,12 +251,9 @@ def _parse_param_row(raw: dict) -> Optional[ParamRow]:
         value=raw.get("value"),
         units=raw.get("units") if isinstance(raw.get("units"), str) else None,
         desc=str(raw.get("desc") or ""),
-        door=str(raw.get("door") or "scenario"),
-        basis=str(raw.get("basis") or "default_demo"),
         origin=str(raw.get("origin") or ""),
         source_badge=str(raw.get("source_badge") or ""),
         bounds=pair,
-        user_lever=bool(raw.get("user_lever")),
         editable=bool(raw.get("editable", True)),
         advanced=bool(raw.get("advanced")),
         group=str(raw.get("group") or ""),

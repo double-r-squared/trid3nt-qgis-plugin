@@ -183,16 +183,13 @@ def build_record(*, run_id: str | None, engine: str | None,
 
 
 def _row(row: Any) -> dict[str, Any]:
-    """One resolved param with its door and basis; a pinned value and a dataset-answered one are different evidence."""
+    """One resolved param with its origin; a stated value and the template's own are different evidence."""
     return {
         "name": getattr(row, "name", None),
         "value": _small(getattr(row, "value", None)),
-        "door": getattr(row, "door", None),
-        "basis": getattr(row, "basis", None),
+        "origin": getattr(row, "origin", None),
         "units": getattr(row, "units", None),
-        "consequence": getattr(row, "consequence", None),
         "note": getattr(row, "note", "") or None,
-        "real_source": getattr(row, "real_source", None),
     }
 
 
@@ -202,7 +199,7 @@ def _provenance(row: Any) -> dict[str, Any]:
         "value": _small(getattr(row, "value", None)),
         "basis": getattr(row, "basis", None),
         "note": getattr(row, "note", None),
-        "real_source": getattr(row, "real_source", None),
+        "real_source": getattr(row, "real_source_if_any", None),
     }
 
 

@@ -6,7 +6,7 @@ import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Accepts, Param, doors,
+    Data, register_workflow, Accepts, Param,
 )
 from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.instant import event_time
@@ -25,8 +25,8 @@ ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
 class PARAMS:
     release = Param(
-        door=doors.USER, optional=True,
-        consequence="scenario", type=Point,
+        optional=True,
+        type=Point,
         derived_when_absent=(
             "the release sits at release_fraction along the domain the mesh was "
             "built over; the travelled distance is measured from there"),
@@ -35,20 +35,19 @@ class PARAMS:
              "point layer. Geocode a place name first. On a river with no domain "
              "it is also the seed the reach is walked downstream from")
     release_fraction = Param(
-        door=doors.SCENARIO, default=0.1, bounds=(0.05, 0.9),
-        consequence="scenario",
+        default=0.1, bounds=(0.05, 0.9),
         desc="Along-domain release position, 0=inflow..1=outflow; the source "
              "must sit strictly INSIDE the domain, never on a boundary. It sits "
              "near the top so the substance has water left to sorb and settle in")
     release_duration_s = Param(
-        door=doors.SCENARIO, default=3600.0,
-        bounds=(1.0, 86400.0), units="s", consequence="scenario",
+        default=3600.0,
+        bounds=(1.0, 86400.0), units="s",
         desc="Finite injection window; the substance is released over it and the "
              "rest of the run is what happens to what was released")
 
     monitoring_point = Param(
-        door=doors.USER, optional=True,
-        consequence="scenario", type=Point,
+        optional=True,
+        type=Point,
         derived_when_absent=(
             "the history is read at monitoring_fraction along the domain the "
             "mesh was built over"),
@@ -56,8 +55,7 @@ class PARAMS:
              "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
              "point layer. Geocode a place name first")
     monitoring_fraction = Param(
-        door=doors.SCENARIO, default=0.85, bounds=(0.1, 0.95),
-        consequence="scenario",
+        default=0.85, bounds=(0.1, 0.95),
         desc="Along-domain position the history is read at when no point was "
              "given, 0=inflow..1=outflow")
 

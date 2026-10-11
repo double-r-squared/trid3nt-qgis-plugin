@@ -61,8 +61,8 @@ def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
         **({"free_surface_m": 0.0} if _stated_depth(source) else {}),
         synthetic_inputs=[
             *(mesh.meta.get("synthetic_inputs") or []),
-            {"param": "mesh_bed", "value": painted, "basis": "fetched",
-             "consequence": "physics", "real_source_if_any": painted,
+            {"param": "mesh_bed", "value": painted, "basis": "producer",
+             "real_source_if_any": painted,
              "note": "the elevation every node carries; a solver reads it as the "
                      "domain's bathymetry"}])
 

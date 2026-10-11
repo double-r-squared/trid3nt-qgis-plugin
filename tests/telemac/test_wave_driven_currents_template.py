@@ -144,7 +144,7 @@ def test_the_seaward_rim_is_opened_so_the_tide_and_the_spectrum_both_enter():
     assert stated == "open_depth_threshold_m"
     param = next(p for p in _workflow().params
                  if p.name == "open_depth_threshold_m")
-    assert (param.default, param.door) == (-12.0, "scenario")
+    assert param.default == -12.0
 
 
 def test_what_the_template_places_is_the_two_modules_own_rows():

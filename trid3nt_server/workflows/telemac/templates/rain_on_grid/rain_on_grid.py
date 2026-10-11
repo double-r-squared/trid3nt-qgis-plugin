@@ -10,7 +10,7 @@ import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, tool, Param, doors, lever,
+    Data, register_workflow, tool, Param, lever,
 )
 from trid3nt_server.tools.mesh.tool import mesh_op
 from trid3nt_server.inputs import point_arg, Point
@@ -52,7 +52,7 @@ LANDCOVER_UNMAPPED: tuple[float, float, str] = (75.0, 0.050, "open-land")
 
 class PARAMS:
     pour_point = Param(
-        door=doors.USER, consequence="scenario", type=Point,
+        type=Point,
         desc="The catchment OUTLET, as a Point: the pick's {coordinates, name} "
              "verbatim, a (lon, lat) pair, 'lat,lon' or a point layer (geocode "
              "a place name first) - the point the runoff drains to. It decides "
@@ -62,11 +62,11 @@ class PARAMS:
              "channel, so a click beside the stream still delineates its basin")
 
     rain_series_mm = Param(
-        door=doors.USER, optional=True, type=list[float] | None,
-        units="mm", consequence="physics",
+        optional=True, type=list[float] | None,
+        units="mm",
         derived_when_absent=(
-            "the constant design storm below drives the run, labeled as the "
-            "hypothetical it is"),
+            "the rainfall record fetched over the run's own window drives it, "
+            "else the design storm stated below"),
         desc="A MEASURED storm, as hourly GROSS millimetres in the order the "
              "record reported them - what fetch_aorc_precip returns over this "
              "catchment under `precip_mm` for any CONUS window since 1979. It is "
@@ -75,25 +75,24 @@ class PARAMS:
              "run too, so the recession limb appears. State event_time instead to "
              "have the run look the record up over its own window")
     design_storm_mm_per_day = Param(
-        door=doors.SCENARIO, default=600.0,
-        bounds=(2.4, 12000.0), units="mm/day", consequence="physics",
+        optional=True, bounds=(2.4, 12000.0), units="mm/day",
         desc="Constant design-storm intensity, used when no measured series is "
              "given, in the engine's own unit - millimetres per DAY, so a "
-             "24 mm/h cloudburst is 576. A hypothetical storm, labeled as one. "
+             "24 mm/h cloudburst is 576. A hypothetical storm, so it is stated "
+             "and never assumed: with no series, no fetched record and no "
+             "design storm the run refuses for want of rain. "
              "How long it rains for, and how wet the ground already is, are the "
              "deck's own keywords")
 
     curve_number = Param(
-        door=doors.USER, optional=True, bounds=(30.0, 100.0),
-        consequence="physics",
+        optional=True, bounds=(30.0, 100.0),
         derived_when_absent=(
             "curve numbers are distributed PER NODE from the land-cover raster"),
         desc="A UNIFORM SCS curve number over the whole catchment, overriding the "
              "land-cover-distributed field. Roughness stays per-node either way - "
              "Manning n is a separate physical property, not the CN knob")
     steep_slope_correction = Param(
-        door=doors.SCENARIO, default=False,
-        consequence="physics",
+        default=False,
         desc="Apply the Huang (2006) steep-slope correction to the curve numbers "
              "using the mesh's own bed gradients. The engine's native branch is "
              "compiled off in the installed 9.0.0 build, so the correction is "
@@ -106,8 +105,8 @@ class PARAMS:
              "extent are resolution-bound classes and a coarse mesh reads both "
              "low")
     mesh_max_edge_m = Param(
-        door=doors.SCENARIO, default=300.0,
-        bounds=(20.0, 5000.0), units="m", consequence="numerical",
+        default=300.0,
+        bounds=(20.0, 5000.0), units="m",
         desc="Coarsest triangle edge, reached far from the channels on the "
              "hillslopes")
 

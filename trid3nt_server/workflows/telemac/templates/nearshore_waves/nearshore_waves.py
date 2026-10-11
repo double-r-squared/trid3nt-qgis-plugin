@@ -8,7 +8,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Accepts, Param, doors, lever,
+    Data, register_workflow, Accepts, Param, lever,
 )
 from trid3nt_server.tools.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.telemac.modules import WAC, series, spectrum
@@ -27,7 +27,7 @@ DEFAULT_OPEN_DEPTH_M: float = -12.0
 
 class PARAMS:
     seed = Param(
-        door=doors.USER, optional=True, consequence="aoi", type=Point,
+        optional=True, type=Point,
         derived_when_absent=(
             "the buoy nearest the centre of the water the window was cut to "
             "is the one the open edge is forced at"),
@@ -37,7 +37,7 @@ class PARAMS:
              "buoy to it is the record the open boundary is forced at, so put "
              "it on the water the swell arrives across")
     station = Param(
-        door=doors.USER, consequence="scenario", type=Point,
+        type=Point,
         desc="Where INSHORE the waves are read over time, as a Point: the "
              "pick's {coordinates, name} verbatim, a (lon, lat) pair, "
              "'lat,lon', a point layer. Geocode a place name first. The height, "
@@ -51,8 +51,8 @@ class PARAMS:
              "has to resolve is the slope of the bed across the surf zone")
 
     open_depth_threshold_m = Param(
-        door=doors.SCENARIO, default=DEFAULT_OPEN_DEPTH_M,
-        bounds=(-200.0, -1.0), units="m", consequence="physics",
+        default=DEFAULT_OPEN_DEPTH_M,
+        bounds=(-200.0, -1.0), units="m",
         desc="How deep a boundary stretch must reach for it to be designated "
              "the OPEN edge the measured sea state enters through; every "
              "stretch that reaches it opens, and a window where none does has "

@@ -365,18 +365,18 @@ def test_default_thresholds_are_sane() -> None:
 
 def _row(**over) -> ParamSheetRow:
     base = dict(name="water_temp_c", value=20.0, units="C",
-                desc="Water temperature", door="scenario", basis="default_demo",
-                source_badge="labeled default", bounds=(0.0, 40.0))
+                desc="Water temperature", origin="template",
+                source_badge="template: telemac_do_sag", bounds=(0.0, 40.0))
     base.update(over)
     return ParamSheetRow(**base)
 
 
 def test_param_sheet_row_defaults_to_editable_and_unfolded() -> None:
-    """Every row is editable (a derived row warns through its badge, never locks);
-    only a constant is folded under the advanced section."""
+    """Every row is editable (a derived row warns through its badge, never locks)
+    and unfolded until its builder says otherwise."""
     row = _row()
     assert row.editable is True
-    assert row.advanced is False and row.user_lever is False
+    assert row.advanced is False
 
 
 def test_param_sheet_row_rejects_inverted_bounds() -> None:
@@ -385,9 +385,15 @@ def test_param_sheet_row_rejects_inverted_bounds() -> None:
         _row(bounds=(40.0, 0.0))
 
 
-def test_param_sheet_row_rejects_an_unknown_door() -> None:
+def test_param_sheet_row_takes_one_of_the_four_origins_or_none() -> None:
+    assert [_row(origin=word).origin.value for word in
+            ("user", "derived", "producer", "template")] == [
+        "user", "derived", "producer", "template"]
+    assert _row(origin=None).origin is None
     with pytest.raises(ValidationError):
-        _row(door="telepathy")
+        _row(origin="telepathy")
+    with pytest.raises(ValidationError):
+        _row(door="user")
 
 
 def test_param_sheet_rejects_duplicate_rows() -> None:
@@ -404,7 +410,7 @@ def test_param_sheet_rejects_an_empty_sheet() -> None:
 def test_param_sheet_round_trips_through_json() -> None:
     sheet = ParamSheet(workflow="telemac_do_sag", title="Review the inputs",
                        rows=[_row(), _row(name="sim_s", value=3600.0, units="s",
-                                          door="constant", advanced=True,
+                                          advanced=True,
                                           bounds=None)])
     again = ParamSheet.model_validate(json.loads(sheet.model_dump_json()))
     assert again == sheet

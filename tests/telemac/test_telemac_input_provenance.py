@@ -59,7 +59,7 @@ def test_unsupplied_cores_provenance_row_is_not_user(tool_name: str,
 
 
 def test_a_supplied_count_still_reads_as_the_users() -> None:
-    """The abstention is about ABSENCE only: a sent count is still door=user."""
+    """The abstention is about ABSENCE only: a sent count is still the user's."""
     from trid3nt_server.tools import TOOL_REGISTRY
     from seated import resolve_params
 
@@ -68,7 +68,7 @@ def test_a_supplied_count_still_reads_as_the_users() -> None:
         {"location": "the Wabash River", "cores": 2}))
     assert err is None, err
     row = asyncio.run(resolve_params(workflow.params, supplied)).row("cores")
-    assert (row.value, row.door, row.basis) == (2, "user", "user")
+    assert (row.value, row.origin) == (2, "user")
 
 
 async def _normalized(workflow, args):

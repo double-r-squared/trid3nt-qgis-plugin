@@ -6,7 +6,7 @@ import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Param, doors, lever,
+    Data, register_workflow, Param, lever,
 )
 from trid3nt_server.workflows.runtime.resolution import SensitivityDecl
 from trid3nt_server.inputs import point_arg, Point
@@ -26,8 +26,8 @@ __all__ = ["CAPTIONS", "DATA", "DOC", "OUTPUTS", "PARAMS", "STEERING",
 
 class PARAMS:
     seed = Param(
-        door=doors.USER, optional=True,
-        consequence="scenario", type=Point,
+        optional=True,
+        type=Point,
         derived_when_absent=(
             "the domain polygon supplied on the call is the body of water the "
             "run solves over"),
@@ -39,19 +39,16 @@ class PARAMS:
              "directly supersedes it, and a body nobody mapped is drawn")
 
     warm_temp_c = Param(
-        door=doors.SCENARIO, default=25.0, bounds=(-2.0, 40.0),
-        units="C", consequence="physics",
+        bounds=(-2.0, 40.0), units="C",
         desc="Epilimnion (warm surface layer) temperature the column OPENS at. "
              "The run exchanges no heat with the atmosphere, so what happens to "
              "this difference is the whole answer")
     cold_temp_c = Param(
-        door=doors.SCENARIO, default=15.0, bounds=(-2.0, 40.0),
-        units="C", consequence="physics",
+        bounds=(-2.0, 40.0), units="C",
         desc="Hypolimnion (cold bottom layer) temperature; the initial "
              "top-to-bottom difference is what the run either keeps or mixes away")
     thermocline_depth_m = Param(
-        door=doors.SCENARIO, default=8.0,
-        bounds=(0.5, 200.0), units="m", consequence="physics",
+        bounds=(0.5, 200.0), units="m",
         desc="Depth of the thermocline below the free surface. The vertical grid "
              "is planned to HOLD it and REFUSES when no admissible sigma stretch "
              "over the domain's deepest column can")

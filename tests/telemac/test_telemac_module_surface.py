@@ -808,7 +808,7 @@ def _filled(produced=None, **keywords):
 def test_a_raw_keyword_on_the_wire_fills_the_slot_it_names():
     """The dictionary's own spelling reaches the sheet, and the row says the user
     put it there - not the template, which said something else about it."""
-    from trid3nt_server.workflows.telemac.modules.sheet import Origin
+    from trid3nt_contracts.common import Origin
 
     sheet = _filled(**{"LAW OF BOTTOM FRICTION": 4})
     row = sheet.filled["LAW_OF_BOTTOM_FRICTION"]
@@ -1182,7 +1182,8 @@ class _CARD(T2D):
     storm = Storm(mm_per_day="storm_mm_per_day", hours=None)
 
 
-def _card_run(monkeypatch, *replies, spent=(), input_mode=None, seat=None):
+def _card_run(monkeypatch, *replies, spent=(), input_mode=None, seat=None,
+              rate=6.0, user=()):
     import asyncio
 
     from trid3nt_server.render import pipeline_emitter as pe
@@ -1195,9 +1196,9 @@ def _card_run(monkeypatch, *replies, spent=(), input_mode=None, seat=None):
         answering = asyncio.create_task(_answer(emitter, *replies))
         try:
             return await fill_sheet(
-                steering=_CARD, produced=_SETTLED, params={"storm_mm_per_day": 6.0},
+                steering=_CARD, produced=_SETTLED, params={"storm_mm_per_day": rate},
                 workflow="probe", title="", keywords={}, input_mode=input_mode,
-                spent=spent, seat=seat)
+                spent=spent, seat=seat, user=user)
         finally:
             answering.cancel()
 
@@ -1234,7 +1235,40 @@ def test_a_param_edited_on_the_card_reaches_the_chart_reference(monkeypatch):
     _card_run(monkeypatch, ("narrow_scope", {"storm_mm_per_day": 9.0}),
               ("proceed", None), seat=_seat_on(env))
     assert env.run == {"storm_mm_per_day": 9.0}
-    assert env.params.row("storm_mm_per_day").basis == "user"
+    assert env.params.row("storm_mm_per_day").origin == "user"
+
+
+@pytest.mark.parametrize("supplied,origin", [
+    ({"storm_mm_per_day": 9.0}, "user"),
+    ({}, "template"),
+])
+def test_the_card_the_provenance_and_the_journal_say_one_origin(
+        monkeypatch, supplied, origin):
+    """One word for where a value came from, wherever it is written: a stated
+    param and a defaulted one each read the same on all three."""
+    import asyncio
+
+    from seated import resolve_params
+    from trid3nt_server.workflows.runtime import journal, provenance_entries
+    from trid3nt_server.workflows.runtime.params import Param
+
+    class _P:
+        storm_mm_per_day = Param(desc="The storm rate the run is forced with.",
+                                 default=6.0, bounds=(0.0, 60.0))
+
+    params = asyncio.run(resolve_params(_P, supplied))
+    _sheet, emitter = _card_run(
+        monkeypatch, ("proceed", None), rate=params.value_of("storm_mm_per_day"),
+        user=[row.name for row in params.rows() if row.origin == "user"])
+    card = next(row for row in emitter.sent[0].param_sheet.rows
+                if row.name == "storm_mm_per_day")
+    entry = provenance_entries(params, _P)[0]
+    record = journal.build_record(
+        run_id="R", engine="telemac", module="telemac2d", sheet=params.rows(),
+        provenance=[entry], result=None, wall_seconds=0.0, origin="headless",
+        notes=[])
+    assert (card.origin.value, entry.basis.value, record["sheet"][0]["origin"].value,
+            record["provenance"][0]["basis"].value) == (origin,) * 4
 
 
 def test_a_keyword_edited_on_the_card_lands(monkeypatch):

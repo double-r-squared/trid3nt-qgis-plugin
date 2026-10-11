@@ -33,7 +33,6 @@ from .params import (
     Param,
     ResolvedParam,
     ResolvedParams,
-    doors,
     param_rows,
 )
 from .workflow import (
@@ -78,7 +77,7 @@ __all__ = [
     "WireArgsError",
     "Workflow", "convert_units",
     "current_domain",
-    "data_rows", "doors",
+    "data_rows",
     "cut_coverage", "journal_note", "lever", "run_coverage",
     "merge_provenance", "param_rows", "provenance_entries",
     "register_workflow",

@@ -118,8 +118,11 @@ def test_every_template_names_only_what_its_run_is_called():
 
 
 #: The inputs a bare call has to state before its fill is ready.
+# Every REQUIRED input of every template: a point each, and the world values no template starts from.
 _STATED = {"location": "Lake Huron", "pour_point": [-82.42, 43.0],
-           "station": [-82.42, 43.0]}
+           "station": [-82.42, 43.0], "wave_height_m": 1.0,
+           "reflection_coef": 0.5, "warm_temp_c": 25.0, "cold_temp_c": 15.0,
+           "thermocline_depth_m": 8.0}
 
 
 def _filled_with(monkeypatch, workflow, produce):

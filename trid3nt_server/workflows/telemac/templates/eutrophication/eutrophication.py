@@ -6,7 +6,7 @@ import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Accepts, Param, doors, lever,
+    Data, register_workflow, Accepts, Param, lever,
 )
 from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.instant import event_time
@@ -26,7 +26,7 @@ ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
 class PARAMS:
     seed = Param(
-        door=doors.USER, optional=True, consequence="aoi", type=Point,
+        optional=True, type=Point,
         derived_when_absent=(
             "nothing is fetched and the domain is the polygon the caller "
             "supplied or drew"),
@@ -37,7 +37,7 @@ class PARAMS:
              "the domain polygon instead and this is not read")
 
     station = Param(
-        door=doors.USER, optional=True, consequence="scenario",
+        optional=True,
         type=Point,
         derived_when_absent=(
             "the two history charts are read as the domain-wide maximum at each "
@@ -48,8 +48,8 @@ class PARAMS:
              "profiles are all longitudinal and do not move with it")
 
     do_standard_mgl = Param(
-        door=doors.SCENARIO, default=5.0, bounds=(0.0, 15.0),
-        units="mg/L", consequence="scenario",
+        default=5.0, bounds=(0.0, 15.0),
+        units="mg/L",
         desc="The DO water-quality standard the water is judged against; 5 is a "
              "common warm-water aquatic-life criterion. It never reaches the "
              "deck: no keyword names a standard, and the oxygen profile carries "

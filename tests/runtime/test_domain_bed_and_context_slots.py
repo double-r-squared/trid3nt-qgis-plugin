@@ -18,7 +18,6 @@ from trid3nt_server.workflows.runtime import (
     Param,
     DeclarationError,
     data_rows,
-    doors,
     tool,
 )
 from trid3nt_server.inputs.slots import BED, DOMAIN
@@ -251,7 +250,7 @@ def test_the_runtime_declares_the_levers_a_template_no_longer_restates():
 
 
 def test_a_templates_own_row_wins_over_the_lever_of_that_name():
-    own = Param(name="mesh_resolution_m", door=doors.SCENARIO, default=25.0,
+    own = Param(name="mesh_resolution_m", default=25.0,
                 bounds=(3.0, 500.0), desc="coarser: this answer is reach-scale")
     seated = with_levers((own,), LEVER_NAMES)
     assert [p.name for p in seated] == ["mesh_resolution_m", "event_time",
@@ -265,8 +264,7 @@ def test_a_lever_states_only_this_questions_opinion_of_it():
     from trid3nt_server.workflows.runtime import lever
 
     own = lever("mesh_resolution_m", default=25.0, bounds=(3.0, 500.0))
-    assert (own.name, own.units, own.consequence) == ("mesh_resolution_m", "m",
-                                                      "numerical")
+    assert (own.name, own.units) == ("mesh_resolution_m", "m")
     assert (own.default, own.bounds) == (25.0, (3.0, 500.0))
     assert own.desc == next(row.desc for row in LEVERS
                             if row.name == "mesh_resolution_m")

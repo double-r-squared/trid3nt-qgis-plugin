@@ -255,6 +255,20 @@ def test_the_flow_range_is_the_gross_rain_rate_on_the_meshed_area():
     assert peak == pytest.approx(0.0125 / 3600.0 * 1.0e6)
 
 
+def test_a_catchment_with_no_rain_stated_fetched_or_designed_refuses_by_name():
+    """A design storm is stated and never assumed: with no series, no fetched
+    record and no design rate there is nothing for the outlet to carry."""
+    import asyncio
+
+    with pytest.raises(TelemacError) as excinfo:
+        asyncio.run(CURVE.settle_outlet_rating(
+            mesh={}, files={}, landcover=None, roughness={}, unmapped=None,
+            friction_law=4))
+    assert excinfo.value.error_code == "TELEMAC_STORM_EMPTY"
+    assert "no rainfall series" in str(excinfo.value)
+    assert "no design rate" in str(excinfo.value)
+
+
 def test_the_curve_is_spaced_EVENLY_IN_DISCHARGE_so_the_low_end_is_not_a_cliff():
     """The engine looks the curve up BY discharge and interpolates linearly, so a first
     interval carrying almost no flow and centimetres of stage makes the boundary swing

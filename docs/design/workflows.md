@@ -34,10 +34,14 @@ Three things are not operations and stay:
 
 ## The two bodies
 
-`PARAMS` (`workflows/runtime/params.py`) - one declared VALUE per row: where it may
-come from (USER, QUESTION, SCENARIO, CONSTANT, read in that order), its bounds and
-its consequence tag. A value outside the bounds refuses by name. A CONSTANT is
-not on the model-facing wire; it stays on the review card for the person.
+`PARAMS` (`workflows/runtime/params.py`) - one declared VALUE per row: its
+default, its bounds and its unit. A value outside the bounds refuses by name.
+Every row is on the model-facing wire. A row with no default that is not
+optional is REQUIRED: left unstated, the fill refuses it in every mode, so a
+world value nothing measures is stated by the caller and never started from.
+A seated value carries ONE origin - user, derived, producer or template
+(`Origin`, in the contracts) - and the card row, the provenance entry and the
+journal row all write that word.
 
 `DATA` (`workflows/runtime/data.py`) - one declared ARTIFACT per row. The row's
 NAME is its slot (`inputs/slots.py`), and a row is filled one of four ways:

@@ -309,7 +309,7 @@ def test_the_bed_is_painted_at_the_nodes_and_the_row_it_came_from_is_named(tmp_p
     assert str(raster) in bedded.meta["bed_source"]
     row = [r for r in bedded.meta["synthetic_inputs"] if r["param"] == "mesh_bed"]
     assert row and str(raster) in row[0]["value"]
-    assert row[0]["consequence"] == "physics"
+    assert row[0]["basis"] == "producer"
 
 
 def test_the_interpolation_is_a_visible_default_off_a_declared_roster(tmp_path):

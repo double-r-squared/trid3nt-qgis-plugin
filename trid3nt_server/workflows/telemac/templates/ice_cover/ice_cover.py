@@ -8,7 +8,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Accepts, Param, doors, lever,
+    Data, register_workflow, Accepts, Param, lever,
 )
 from trid3nt_server.workflows.telemac.modules import KHIONE, T2D, series
 from trid3nt_server.workflows.telemac.modules.khione import RESULT_FILENAME
@@ -27,7 +27,7 @@ ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
 class PARAMS:
     seed = Param(
-        door=doors.USER, optional=True, consequence="aoi", type=Point,
+        optional=True, type=Point,
         derived_when_absent=(
             "nothing is fetched and the domain is the polygon the caller "
             "supplied or drew"),
@@ -37,7 +37,7 @@ class PARAMS:
              "domain is cut from; supply the domain polygon - a lake, a pond, a "
              "reservoir - instead and this is not read")
     station = Param(
-        door=doors.USER, optional=True, consequence="scenario",
+        optional=True,
         type=Point,
         derived_when_absent=(
             "the series is read at the point 98% of the way down the modelled "
@@ -46,8 +46,8 @@ class PARAMS:
              "Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, "
              "'lat,lon' or a point layer. Geocode a place name first")
     cover_threshold = Param(
-        door=doors.QUESTION, optional=True, default=0.5,
-        consequence="scenario", type=float,
+        optional=True, default=0.5,
+        type=float,
         desc="Fraction of the surface under ice, 0 to 1, that counts as frozen "
              "over - the cover chart draws it as a reference line beside the "
              "series. A reporting threshold, not a physical constant: half the "

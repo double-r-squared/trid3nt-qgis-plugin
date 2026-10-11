@@ -158,6 +158,13 @@ async def settle_outlet_rating(
     Section, slope and roughness are measured off the accepted mesh; the flow range is the gross
     rain on it. ``friction_law`` is the deck's, so the curve matches the roughness the run solves at.
     """
+    measured = series if series is not None else record
+    if not measured and mm_per_day is None:
+        raise TelemacError(
+            "no rain reaches this run: no rainfall series was stated, no "
+            "rainfall record was fetched for its window, and no design rate "
+            "in mm per day was stated. State one of them.",
+            error_code="TELEMAC_STORM_EMPTY")
     topology, outlet_boundary, outlet_prescribes, n_liquid = _outlet_boundary(files)
     if outlet_prescribes != "elevation":
         raise TelemacError(
@@ -168,7 +175,6 @@ async def settle_outlet_rating(
             error_code="TELEMAC_BOUNDARY_PRESCRIBES_NOTHING")
     points_utm, cells, node_bed, lonlat = await asyncio.to_thread(
         accepted_mesh_nodes, mesh)
-    measured = series if series is not None else record
     storm = ({"kind": "hyetograph", "series": list(measured)} if measured
              else {"kind": "design_storm", "mm_per_day": mm_per_day})
     q_ceiling, q_ceiling_basis = _rain_ceiling(storm, cells, points_utm)

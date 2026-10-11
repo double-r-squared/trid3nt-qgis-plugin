@@ -1,4 +1,4 @@
-"""The PARAMS class body - a declared VALUE per row: a form cell, a door, bounds.
+"""The PARAMS class body - a declared VALUE per row: a form cell, a default, bounds.
 
 The attribute name IS the param name, so ``PARAMS.spill_fraction`` is attribute
 access and a typo is an ``AttributeError`` at import.
@@ -7,60 +7,34 @@ access and a typo is an ``AttributeError`` at import.
 from __future__ import annotations
 
 import dataclasses
-from dataclasses import dataclass, replace
-from typing import Any, Literal, Sequence
+from dataclasses import dataclass
+from typing import Any, Sequence
+
+from trid3nt_contracts.common import Origin
 
 from .errors import DeclarationError
 
 __all__ = [
-    "Door",
     "Param",
     "ResolvedParam",
     "ResolvedParams",
-    "doors",
     "param_rows",
     "refuse_duplicate_params",
     "wire_value",
 ]
 
 
-Door = Literal["user", "question", "scenario", "constant"]
-
-
-class doors:  # noqa: N801 - a namespace of door constants, not a type
-    """The four doors, in resolution order."""
-
-    USER = "user"
-    QUESTION = "question"
-    SCENARIO = "scenario"
-    CONSTANT = "constant"
-
-
-_ORDER: tuple[str, ...] = (
-    doors.USER, doors.QUESTION, doors.SCENARIO, doors.CONSTANT,
-)
-
-_BASIS_FOR_DOOR: dict[str, str] = {
-    doors.USER: "user",
-    doors.QUESTION: "prompt_interpreted",
-    doors.SCENARIO: "default_demo",
-    doors.CONSTANT: "default_demo",
-}
-
-
 @dataclass(frozen=True, slots=True)
 class Param:
-    """One declared value: its door, its bounds, its consequence tag.
-    The attribute name it is written under IS ``name``."""
+    """One declared value: its default, its bounds, its unit.
+    The attribute name it is written under IS ``name``; one with no default that is not optional is REQUIRED."""
 
     name: str = ""
     desc: str = ""
-    door: Door = doors.SCENARIO
     default: Any = None
     bounds: tuple[float, float] | None = None
     units: str | None = None
     optional: bool = False
-    consequence: Literal["physics", "scenario", "numerical", "aoi"] = "scenario"
     derived_when_absent: str | None = None
     #: The declared wire type; unset is inferred (bounded -> float, bool default -> bool, else str).
     #: An unbounded NUMERIC default is refused rather than inferred: see __post_init__.
@@ -74,14 +48,6 @@ class Param:
             raise DeclarationError(f"Param name {self.name!r} is not an identifier.")
         if not self.desc:
             raise DeclarationError(f"Param {self.name!r} declares no desc.")
-        if self.door not in _ORDER:
-            raise DeclarationError(f"Param {self.name!r} door {self.door!r} unknown.")
-        if self.door in (doors.SCENARIO, doors.CONSTANT) and self.default is None \
-                and not self.optional:
-            raise DeclarationError(
-                f"Param {self.name!r} is door={self.door} but declares no default "
-                "(a labeled default IS the door; declare optional=True if absence is legal)."
-            )
         if self.bounds is not None:
             lo, hi = self.bounds
             if float(lo) > float(hi):
@@ -103,10 +69,6 @@ class Param:
                 "as a STRING. Declare bounds=(lo, hi) - the physical range - or "
                 "type=float/int if the value is genuinely unbounded."
             )
-
-    @property
-    def basis(self) -> str:
-        return _BASIS_FOR_DOOR[self.door]
 
     @property
     def wire_type(self) -> Any:
@@ -162,23 +124,15 @@ def refuse_duplicate_params(declared: "Sequence[Param]") -> None:
 
 @dataclass(frozen=True, slots=True)
 class ResolvedParam:
-    """One param after resolution: the value, the door it came through, the note."""
+    """One param after resolution: the value, where it came from, the note."""
 
     name: str
     value: Any
-    door: Door
-    basis: str
+    #: None while the row holds no value.
+    origin: Origin | None
     units: str | None = None
-    consequence: str = "scenario"
     note: str = ""
-    real_source: str | None = None
     required_missing: bool = False
-
-    def with_value(self, value: Any, *, basis: str | None = None,
-                   note: str | None = None) -> "ResolvedParam":
-        return replace(self, value=value,
-                       basis=basis if basis is not None else self.basis,
-                       note=note if note is not None else self.note)
 
 
 class ResolvedParams:

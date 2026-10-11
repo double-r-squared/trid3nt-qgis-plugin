@@ -30,7 +30,8 @@ from .common import (
     BBox,
     EngineRunArgsMixin,
     ContractModel,
-    InputBasis,
+    ORIGIN_LABELS,
+    Origin,
     Lat,
     Lon,
     SyntheticInput,
@@ -58,7 +59,7 @@ from .processing_contracts import (
     ProcessingResponsePayload,
 )
 
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 SCHEMA_VERSION = "v1"
 
 __all__ = [
@@ -97,7 +98,8 @@ __all__ = [
     "TimeRange",
     "TemporalMode",
     "EngineRunArgsMixin",
-    "InputBasis",
+    "ORIGIN_LABELS",
+    "Origin",
     "SyntheticInput",
     "render_assumptions_line",
     "new_ulid",

@@ -12,7 +12,7 @@ from dataclasses import replace
 from typing import Any, Sequence
 
 from .errors import CoresUnavailable, DeclarationError
-from .params import Param, doors
+from .params import Param
 
 __all__ = ["BOX_CORES", "LEVERS", "LEVER_NAMES", "VERTICAL_FRAME",
            "cores_asked", "lever", "run_frame", "with_levers"]
@@ -25,8 +25,8 @@ BOX_CORES: int = os.cpu_count() or 1
 
 #: The declared levers, in the order a card reads them.
 LEVERS: tuple[Param, ...] = (
-    Param(name="mesh_resolution_m", door=doors.SCENARIO, optional=True,
-          type=float, units="m", consequence="numerical",
+    Param(name="mesh_resolution_m", optional=True,
+          type=float, units="m",
           derived_when_absent=(
               "the finest edge is the finest cell of the input data the mesh "
               "is built over - the bed raster's own cell"),
@@ -34,8 +34,7 @@ LEVERS: tuple[Param, ...] = (
                "The granularity is the USER's lever and nothing refuses one: "
                "absent, the mesh resolves the finest data it stands on, and "
                "the card states the node count it comes to"),
-    Param(name="event_time", door=doors.QUESTION, optional=True,
-          consequence="scenario",
+    Param(name="event_time", optional=True,
           derived_when_absent=(
               "a surface is read at the most recent cycle its own source has "
               "published, and no series source is asked at all - a record is a "
@@ -44,8 +43,8 @@ LEVERS: tuple[Param, ...] = (
                "(YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like "
                "'during last Tuesday's storm'. Each source keeps its own "
                "retention, and a request deeper than one refuses typed"),
-    Param(name="cores", door=doors.CONSTANT, optional=True, type=int,
-          bounds=(1.0, float(BOX_CORES)), consequence="numerical",
+    Param(name="cores", optional=True, type=int,
+          bounds=(1.0, float(BOX_CORES)),
           derived_when_absent=(
               "the solve is partitioned across the number of processors the "
               "engine's own dictionary states for this module"),
@@ -53,10 +52,9 @@ LEVERS: tuple[Param, ...] = (
                "module's own processors keyword stands; a count past this "
                "box's cores is refused rather than cut down, and an engine "
                "that solves on one core says so on the card"),
-    # NUMERICAL, not physics: the axis elevations are placed on, with a published national default;
+    # The axis elevations are placed on, with a published national default;
     # a source that cannot reach this frame refuses by name.
-    Param(name="vertical_frame", door=doors.CONSTANT, default=VERTICAL_FRAME,
-          consequence="numerical",
+    Param(name="vertical_frame", default=VERTICAL_FRAME,
           desc="Vertical datum this run counts every elevation from - the bed "
                "under it and the level over it. A source published on another "
                "frame reaches this one through a measured offset, and a pair "

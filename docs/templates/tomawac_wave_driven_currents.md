@@ -25,13 +25,13 @@ WAVE-DRIVEN CURRENTS: the current breaking waves drive along the shore - how fas
 
 The values the template declares. `desc` is what the model reads when it fills one.
 
-| input | comes from | units | default | desc |
-|---|---|---|---|---|
-| `seed` | user | - | optional | Where OFFSHORE the incoming sea state is measured, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. The nearest buoy to it is the record the wave boundary is forced at, so put it on the water the swell arrives across |
-| `station` | user | - | - | Where INSHORE the current is read over time, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. The speed and the wave height are charted at the node of the mesh it settles onto, so put it in the surf zone you are asking about |
-| `mesh_resolution_m` | scenario | m | optional | Target element edge length the water is triangulated at; the longshore current is driven across the surf zone, so what this has to resolve is the width of the breaking band |
-| `open_depth_threshold_m` | scenario | m | -12.0 | How deep a boundary stretch must reach for it to be designated the OPEN edge the measured sea state enters through; every stretch that reaches it opens, and a window where none does has no edge for the spectrum and refuses |
-| `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
-| `cores` | constant | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
-| `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
+| input | units | default | desc |
+|---|---|---|---|
+| `seed` | - | optional | Where OFFSHORE the incoming sea state is measured, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. The nearest buoy to it is the record the wave boundary is forced at, so put it on the water the swell arrives across |
+| `station` | - | required | Where INSHORE the current is read over time, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. The speed and the wave height are charted at the node of the mesh it settles onto, so put it in the surf zone you are asking about |
+| `mesh_resolution_m` | m | optional | Target element edge length the water is triangulated at; the longshore current is driven across the surf zone, so what this has to resolve is the width of the breaking band |
+| `open_depth_threshold_m` | m | -12.0 | How deep a boundary stretch must reach for it to be designated the OPEN edge the measured sea state enters through; every stretch that reaches it opens, and a window where none does has no edge for the spectrum and refuses |
+| `event_time` | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
+| `cores` | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
+| `vertical_frame` | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
 

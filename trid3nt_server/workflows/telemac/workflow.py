@@ -13,7 +13,7 @@ from types import MappingProxyType
 from importlib import import_module
 from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
-from trid3nt_contracts.common import SyntheticInput
+from trid3nt_contracts.common import Origin, SyntheticInput
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
 
@@ -37,7 +37,6 @@ from trid3nt_server.workflows.telemac.modules.outputs import (
 )
 from trid3nt_server.workflows.telemac.modules.sheet import (
     PROCESSORS,
-    Origin,
     Sheet,
     CONTINUATION,
 )
@@ -433,12 +432,13 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
                      settled: Mapping[str, Any] | None = None,
                      workflow: str, title: str, keywords: Mapping[str, Any],
                      input_mode: str | None, spent: Sequence[str] = (),
-                     seat: Callable[[Mapping[str, Any]], None] | None = None
-                     ) -> Sheet:
+                     seat: Callable[[Mapping[str, Any]], None] | None = None,
+                     user: Sequence[str] = ()) -> Sheet:
     """Set the body's slots against what the run measured -> the sheet, HELD.
 
     The raw ``keywords`` floor is filled last and therefore beats a template
-    value. ``seat`` takes the param values the person proceeded on."""
+    value. ``seat`` takes the param values the person proceeded on; ``user``
+    names the params the call stated."""
     stated, coupled = _floor(steering, keywords)
 
     async def fill(values: Mapping[str, Any], edits: Mapping[str, Any]) -> Sheet:
@@ -451,7 +451,7 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
 
     sheet = await _review(fill, params, steering=steering, workflow=workflow,
                           title=title, input_mode=input_mode, spent=spent,
-                          seat=seat)
+                          seat=seat, user=user)
     logger.info("telemac sheet filled: %s states %d keywords, %d open "
                 "(%d required)", sheet.body.__name__, len(sheet.filled),
                 len(sheet.open()), len(sheet.required()))
@@ -487,16 +487,6 @@ async def run_sheet(*, sheet: Sheet, settled: Mapping[str, Any],
             "tracer_names": dict(sheet.resolved()).get("NAMES OF TRACERS")}
 
 
-#: How a slot's ORIGIN reads on the card: which door served the value and its basis. The row's name is the keyword's
-#: identifier; an edit of it is another fill.
-_ORIGIN_DOORS: Mapping[Origin, tuple[str, str]] = {
-    Origin.TEMPLATE: ("scenario", "derived"),
-    Origin.USER: ("user", "user"),
-    Origin.PRODUCER: ("derived", "derived"),
-    Origin.DERIVED: ("derived", "derived"),
-}
-
-
 def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
     """The sheet as the card renders it: what is SET, what the run WRITES, what
     is OPEN, then the rest.
@@ -528,7 +518,7 @@ def _source_rows() -> list[ParamSheetRow]:
         name=f"{choice.slot} source", value=choice.picked or "nothing matched",
         desc=f"Which source filled the {choice.slot} slot, matched on "
              f"{choice.need}.",
-        door="scenario", basis="derived", origin="producer", editable=False,
+        origin=Origin.PRODUCER, editable=False,
         source_badge=(f"{len(choice.rows)} sources weighed"
                       if choice.tie else "matched on the rows"),
         note=choice.sentence, choices=choice, group="Sources")
@@ -542,7 +532,7 @@ def _coverage_rows() -> list[ParamSheetRow]:
 
     return [ParamSheetRow(
         name=f"coverage {index}", value=line[:200], desc=line[:512],
-        door="scenario", basis="derived", origin="derived", editable=False,
+        origin=Origin.DERIVED, editable=False,
         source_badge="measured on the grid the rows were merged at",
         group="Sources")
         for index, line in enumerate(run_coverage(), start=1)]
@@ -578,8 +568,7 @@ def _coupled_rows(sheet: Sheet) -> list[ParamSheetRow]:
                 value=value if isinstance(value, (int, float, str, bool, list))
                 else str(value),
                 desc=slot.desc[:512],
-                door="user" if identifier in user else "scenario",
-                basis="user" if identifier in user else "derived",
+                origin=Origin.USER if identifier in user else Origin.TEMPLATE,
                 units=slot.unit or None, bounds=_editor_bounds(slot),
                 editable=False, group=f"{module}: {_group(slot)}",
                 source_badge=(f"stated on this run as {module}: {slot.keyword}"
@@ -600,8 +589,7 @@ def _written_rows(sheet: Sheet) -> list[ParamSheetRow]:
         rows.append(ParamSheetRow(
             name=f"{body.MODULE}.{slot.identifier}",
             value=[table[token].name for token in body.written(stated)] + tracers,
-            desc=slot.desc[:512], door="scenario", basis="derived",
-            editable=False, group=_group(slot),
+            desc=slot.desc[:512], editable=False, group=_group(slot),
             source_badge=f"the {body.MODULE} module's own variable table"))
     return rows
 
@@ -612,8 +600,7 @@ def _serial_rows(sheet: Sheet) -> list[ParamSheetRow]:
     return [ParamSheetRow(
         name=f"{body.MODULE}.cores", value="serial: this engine runs on one core",
         desc="How many cores this module's solve is partitioned across.",
-        door="scenario", basis="derived", editable=False,
-        source_badge="the module's own dictionary")
+        editable=False, source_badge="the module's own dictionary")
         for body, _tracers, _stated in _decks(sheet)
         if PROCESSORS not in body.MODULE_INPUT]
 
@@ -622,25 +609,25 @@ async def _review(fill: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
                   params: Mapping[str, Any], *, steering: type, workflow: str,
                   title: str, input_mode: str | None,
                   spent: Sequence[str],
-                  seat: Callable[[Mapping[str, Any]], None] | None = None
-                  ) -> Sheet:
+                  seat: Callable[[Mapping[str, Any]], None] | None = None,
+                  user: Sequence[str] = ()) -> Sheet:
     """Show the filled sheet and HOLD -> the sheet the person proceeded on.
 
     An edit re-fills its input and redraws the card, or refuses by name."""
     from trid3nt_server.inputs.gate.input_review import (
-        PHYSICS_INPUT_REQUIRED,
         GateCard,
         gate_input_review,
         render_input_review_lines,
     )
 
-    values, edits = dict(params), {}
+    values, edits, user = dict(params), {}, set(user)
     own = {name for name in _strings(steering.ASSERTED)
            if name in values} - set(spent)
     sheet = await fill(values, edits)
 
     def rows() -> list[ParamSheetRow]:
-        return [_param_row(name, values[name]) for name in sorted(own)] \
+        return [_param_row(name, values[name], name in user)
+                for name in sorted(own)] \
             + card_rows(sheet)
 
     async def card() -> GateCard:
@@ -668,6 +655,7 @@ async def _review(fill: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
                         f"is named so, and {exc}") from exc
         for name, value in revised.items():
             (values if name in own else edits)[name] = value
+        user.update(own & set(revised))
         sheet = await fill(values, edits)
 
     outcome = await gate_input_review(
@@ -677,8 +665,8 @@ async def _review(fill: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
         # A refusal keeps its reason's code; only a person's own cancel is the decline code every gate cancels under.
         raise TelemacError(
             outcome.cancel_reason or f"{workflow} was cancelled at the review.",
-            error_code={"physics": PHYSICS_INPUT_REQUIRED, "no_session": "NO_SESSION"}
-            .get(str(outcome.cancel_code), "USER_INPUT_CANCELLED"))
+            error_code="NO_SESSION" if outcome.cancel_code == "no_session"
+            else "USER_INPUT_CANCELLED")
     if seat is not None:
         seat(values)
     return sheet
@@ -696,9 +684,11 @@ def _strings(value: Any) -> set[str]:
 
 
 def _entries(rows: Sequence[ParamSheetRow]) -> list[SyntheticInput]:
-    """The card's rows as provenance lines; a list value is narrated whole."""
+    """The card's rows as provenance lines; a list value is narrated whole.
+    A row stating what the deck writes holds no filled value and reads as derived."""
     return [SyntheticInput(
-                param=row.name, basis=row.basis, note=row.source_badge,
+                param=row.name, basis=row.origin or Origin.DERIVED,
+                note=row.source_badge,
                 value=(row.value if isinstance(row.value, (int, float, str, bool))
                        else "; ".join(str(v) for v in row.value)))
             for row in rows if row.value is not None and not row.advanced]
@@ -711,33 +701,33 @@ def _seat_on(env: Any) -> Callable[[Mapping[str, Any]], None]:
         edited = {name: value for name, value in values.items()
                   if name in env.params and value != env.params.value_of(name)}
         env.params = env.params.replacing({
-            name: env.params.row(name).with_value(value, basis="user")
+            name: replace(env.params.row(name), value=value, origin=Origin.USER)
             for name, value in edited.items()})
         env.run.update(edited)
     return seat
 
 
-def _param_row(name: str, value: Any) -> ParamSheetRow:
+def _param_row(name: str, value: Any, user: bool) -> ParamSheetRow:
     """One template param a keyword of this sheet reads, editable by its name."""
     return ParamSheetRow(
         name=name, value=(value if isinstance(value, (int, float, str, bool, list))
                           or value is None else str(value)),
         desc=f"The template param {name}; an edit re-fills every keyword that "
              "reads it.",
-        door="scenario", basis="derived", origin="template",
+        origin=(Origin.USER if user else
+                None if value is None else Origin.TEMPLATE),
         source_badge="this run's template param", group="Template")
 
 
 def _slot_row(name: str, row: Any) -> ParamSheetRow:
     """One SET slot, as the card renders it: the value, the unit it is read in,
     the range it is taken inside, and where it came from."""
-    door, basis = _ORIGIN_DOORS[row.provenance.origin]
     value = row.value if isinstance(row.value, (int, float, str, bool, list)) \
         else str(row.value)
     return ParamSheetRow(
-        name=name, value=value, desc=row.slot.desc[:512], door=door, basis=basis,
+        name=name, value=value, desc=row.slot.desc[:512],
         units=row.slot.unit or None, bounds=_editor_bounds(row.slot),
-        origin=row.provenance.origin.value, source_badge=str(row.provenance),
+        origin=row.provenance.origin, source_badge=str(row.provenance),
         group=_group(row.slot))
 
 
@@ -750,8 +740,8 @@ def _editor_bounds(slot: Any) -> tuple[float, float] | None:
 def _open_row(slot: Any) -> ParamSheetRow:
     """One OPEN MANDATORY slot: an empty the run cannot begin without."""
     return ParamSheetRow(
-        name=slot.identifier, value=None, desc=slot.desc[:512], door="user",
-        basis="derived", editable=True, group=_group(slot),
+        name=slot.identifier, value=None, desc=slot.desc[:512],
+        editable=True, group=_group(slot),
         source_badge="required: the dictionary marks this file OBLIG")
 
 
@@ -759,13 +749,10 @@ def _default_row(slot: Any) -> ParamSheetRow:
     """One slot this run leaves to the engine, under the advanced fold.
 
     Carries the value the engine will use rather than an empty."""
-    # A slot the dictionary answers for carries a DEFAULT basis; one it answers for nobody carries the open-mandatory basis, as there is no default.
     return ParamSheetRow(
         name=slot.identifier,
         value=None if slot.is_open else slot.engine_default,
-        desc=slot.desc[:512], door="scenario",
-        basis="derived" if slot.is_open else "default_demo",
-        editable=True, advanced=True, group=_group(slot),
+        desc=slot.desc[:512], editable=True, advanced=True, group=_group(slot),
         source_badge=("open: the dictionary gives it no default"
                       if slot.is_open else "engine default"))
 
@@ -981,7 +968,9 @@ class TelemacWorkflow(Workflow):
                     input_mode=env.input_mode,
                     spent=sorted(({"cores"} & declared)
                                  | {mark.name for mark in placed}),
-                    seat=_seat_on(env))
+                    seat=_seat_on(env),
+                    user=[row.name for row in env.params.rows()
+                          if row.origin is Origin.USER])
         listed = tuple(self._states("RESULTS", ()))
         solved = await stage(
             "solve", run_sheet, sheet=run["sheet"], settled=run[_SETTLED],

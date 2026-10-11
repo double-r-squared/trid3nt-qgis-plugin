@@ -1103,7 +1103,7 @@ package DataSeam {
 
         A PRESCRIBED SEA STATE NEEDS AN EDGE TO ENTER BY. The deck that imposes
         one states the depth a boundary stretch has to reach for it to be
-        designated open, on the scenario door, and every stretch that reaches it
+        designated open, as its own starting value, and every stretch that reaches it
         opens; no deck inherits the meshing library's own default, which is set
         for a shelf-scale domain and is deeper than every node of a nearshore
         window. A mesh where nothing reaches the stated depth is sealed, and one

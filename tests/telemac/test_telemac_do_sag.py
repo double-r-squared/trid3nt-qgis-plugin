@@ -428,8 +428,8 @@ def test_the_card_groups_the_coupled_deck_under_its_own_body():
     row = rows["waqtel.K2_REAERATION_COEFFICIENT"]
     assert row.value == pytest.approx(6.0)
     assert row.group.startswith("waqtel:")
-    assert row.basis == "user"
-    assert rows["waqtel.WATER_SALINITY"].basis == "derived"
+    assert row.origin == "user"
+    assert rows["waqtel.WATER_SALINITY"].origin == "template"
 
 
 async def _normalized(workflow, args):

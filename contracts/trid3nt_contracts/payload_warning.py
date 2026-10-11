@@ -12,7 +12,7 @@ from typing import Any, ClassVar, Literal
 
 from pydantic import Field, field_validator, model_validator
 
-from .common import ContractModel, InputBasis, SyntheticInput, ULIDStr
+from .common import ContractModel, Origin, SyntheticInput, ULIDStr
 from .coverage import SourceChoice
 
 __all__ = [
@@ -21,7 +21,6 @@ __all__ = [
     "PayloadConfirmationDecision",
     "PayloadConfirmationEnvelopePayload",
     "GranularitySuggestion",
-    "ParamDoor",
     "ParamOption",
     "ParamSheet",
     "ParamSheetRow",
@@ -203,10 +202,6 @@ class TimeScaleSuggestion(ContractModel):
         return value
 
 
-#: Which resolution door a declared param came through, in the resolver's order; the form card folds ``constant`` under advanced.
-ParamDoor = Literal["user", "question", "derived", "scenario", "constant", "gate"]
-
-
 class ParamOption(ContractModel):
     """One value an input would ACCEPT: what a pick sends back, and what the
     dropdown shows. A case layer is sent by its id and shown by its name."""
@@ -225,16 +220,12 @@ class ParamSheetRow(ContractModel):
     value: float | int | str | bool | list[Any] | None = None
     units: str | None = None
     desc: str = Field(default="", max_length=512)
-    door: ParamDoor
-    basis: InputBasis
-    #: Where the value came from, one word of a closed set; nothing branches on it.
-    origin: Literal["template", "user", "model", "producer", "derived",
-                    "calibrated"] | None = None
-    #: Rendered, never re-derived by a client from the basis and door.
+    #: Where the value came from; None on a row that holds no filled value.
+    origin: Origin | None = None
+    #: Rendered, never re-derived by a client from the origin.
     source_badge: str = Field(default="", max_length=200)
     #: The declared range; a card clamps to it and the server re-clamps on submit.
     bounds: tuple[float, float] | None = None
-    user_lever: bool = False
     #: Editing a derived row is warned through the badge, not locked.
     editable: bool = True
     advanced: bool = False
@@ -257,7 +248,7 @@ class ParamSheetRow(ContractModel):
 
 class ParamSheet(ContractModel):
     """The resolved sheet a step reviewing its own inputs presents.
-    Rows arrive in RENDER order, owned by whoever owns the doors. A
+    Rows arrive in RENDER order, owned by whoever builds the sheet. A
     submit-with-edits IS the approval - the whole sheet was visible."""
 
     workflow: str = Field(min_length=1)

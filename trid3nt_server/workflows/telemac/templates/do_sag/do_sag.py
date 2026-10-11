@@ -6,7 +6,7 @@ import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Accepts, Param, doors,
+    Data, register_workflow, Accepts, Param,
 )
 from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.instant import event_time
@@ -27,7 +27,7 @@ ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
 class PARAMS:
     outfall_coords = Param(
-        door=doors.USER, optional=True, consequence="scenario",
+        optional=True,
         type=Point,
         derived_when_absent=(
             "with a domain supplied the outfall sits near the top of its "
@@ -40,8 +40,8 @@ class PARAMS:
              "supplied it is also the seed the reach is walked downstream from")
 
     do_standard_mgl = Param(
-        door=doors.SCENARIO, default=5.0, bounds=(0.0, 15.0),
-        units="mg/L", consequence="scenario",
+        default=5.0, bounds=(0.0, 15.0),
+        units="mg/L",
         desc="The DO water-quality standard the sag is judged against; 5 is a "
              "common warm-water aquatic-life criterion")
 

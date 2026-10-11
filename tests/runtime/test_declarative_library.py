@@ -1,4 +1,4 @@
-"""Declarative library v1: value types, doors, validator, interpreter, ledger.
+"""Declarative library v1: value types, params, validator, interpreter, ledger.
 
 Offline only - every runner here is a local stub; no solve, no network.
 """
@@ -30,7 +30,6 @@ from trid3nt_server.workflows.runtime import (
     SuppliedGeometryError,
     Workflow,
     tool,
-    doors,
     merge_provenance,
     provenance_entries,
     render_docstring,
@@ -207,11 +206,6 @@ def derive_broken(params):
 
 
 # --- Param declarations ------------------------------------------------------ #
-def test_scenario_param_needs_a_labeled_default():
-    with pytest.raises(DeclarationError):
-        Param("x", desc="d", door=doors.SCENARIO)
-
-
 def test_inverted_bounds_refused():
     with pytest.raises(DeclarationError):
         Param("x", desc="d", default=1.0, bounds=(9.0, 1.0))
@@ -221,7 +215,7 @@ def test_inverted_bounds_refused():
 async def test_a_value_outside_its_bounds_refuses_by_name_and_never_clamps():
     """The lever is the user's: a value moved onto the bound would run a question
     nobody asked and say nothing while it did it."""
-    declared = [Param("a", desc="d", door=doors.SCENARIO, default=1.0,
+    declared = [Param("a", desc="d", default=1.0,
                       bounds=(0.0, 5.0), units="m")]
     with pytest.raises(Exception) as exc:
         await resolve_params(declared, {"a": 99.0})
@@ -237,7 +231,7 @@ async def test_the_bound_compares_numbers_and_does_not_retype_the_param():
     The bound reads its ends as numbers, which is right; handing back what it
     read makes an engine keyword refuse later and name the KEYWORD, not the
     declaration."""
-    declared = Param("levels", desc="d", door=doors.SCENARIO, default=13,
+    declared = Param("levels", desc="d", default=13,
                      bounds=(5.0, 30.0), type=int)
     for supplied, expected in (({"levels": 13}, 13), ({}, 13),
                                ({"levels": 30}, 30), ({"levels": 5}, 5)):
@@ -250,7 +244,7 @@ async def test_the_bound_compares_numbers_and_does_not_retype_the_param():
 async def test_non_numeric_bounded_value_refuses_never_defaults():
     with pytest.raises(Exception) as exc:
         await resolve_params(
-            [Param("a", desc="d", door=doors.SCENARIO, default=1.0, bounds=(0.0, 5.0))],
+            [Param("a", desc="d", default=1.0, bounds=(0.0, 5.0))],
             {"a": "nonsense"},
         )
     assert "not a number" in str(exc.value)
@@ -262,7 +256,7 @@ async def test_a_bool_is_refused_for_a_bounded_param():
     for flag in (True, False):
         with pytest.raises(Exception, match="not a number"):
             await resolve_params(
-                [Param("a", desc="d", door=doors.SCENARIO, default=1.0,
+                [Param("a", desc="d", default=1.0,
                        bounds=(0.0, 5.0))],
                 {"a": flag},
             )
@@ -270,23 +264,22 @@ async def test_a_bool_is_refused_for_a_bounded_param():
 
 @pytest.mark.asyncio
 async def test_optional_absent_param_resolves_to_none():
-    p = await resolve_params([Param("a", desc="d", door=doors.USER, optional=True)], {})
+    p = await resolve_params([Param("a", desc="d", optional=True)], {})
     assert p.value_of("a") is None
 
 
 @pytest.mark.asyncio
-async def test_a_user_door_default_is_stamped_as_a_default_not_as_the_user():
-    decl = [Param("a", desc="d", door=doors.USER, default=3.0, type=float)]
+async def test_a_default_is_stamped_as_the_templates_not_as_the_user():
+    decl = [Param("a", desc="d", default=3.0, type=float)]
     p = await resolve_params(decl, {})
-    assert p.value_of("a") == 3.0 and p.row("a").basis == "default_demo"
+    assert p.value_of("a") == 3.0 and p.row("a").origin == "template"
     p2 = await resolve_params(decl, {"a": 4.0})
-    assert p2.row("a").basis == "user"
+    assert p2.row("a").origin == "user"
 
 
 @pytest.mark.asyncio
 async def test_an_absent_param_with_a_derived_stand_in_still_leaves_a_row():
-    decl = [Param("outfall", desc="where it enters", door=doors.USER, optional=True,
-                  consequence="scenario",
+    decl = [Param("outfall", desc="where it enters", optional=True,
                   derived_when_absent="seeded at the derived reach point")]
     p = await resolve_params(decl, {})
     rows = provenance_entries(p, decl)
@@ -298,16 +291,14 @@ async def test_an_absent_param_with_a_derived_stand_in_still_leaves_a_row():
 def test_the_composites_own_provenance_row_wins():
     from trid3nt_contracts.common import SyntheticInput
 
-    own = SyntheticInput(param="bed_source", value="nhd_area", basis="fetched",
-                         consequence="physics", note="real NHDArea banks")
+    own = SyntheticInput(param="bed_source", value="nhd_area", basis="producer",
+                         note="real NHDArea banks")
     declared = SyntheticInput(param="bed_source", value="nhd_area",
-                              basis="default_demo", consequence="scenario",
-                              note="declared constant default")
-    other = SyntheticInput(param="k1", value=0.3, basis="default_demo",
-                           consequence="numerical")
+                              basis="template", note="declared default")
+    other = SyntheticInput(param="k1", value=0.3, basis="template")
     merged = merge_provenance([own], [declared, other])
     assert [r.param for r in merged] == ["bed_source", "k1"]
-    assert merged[0].basis == "fetched"
+    assert merged[0].basis == "producer"
 
 
 # --- modifier legality ------------------------------------------------------- #
@@ -323,14 +314,14 @@ def test_one_author_word_declares_every_producer():
 
 
 def _params():
-    return [Param("base", desc="d", door=doors.SCENARIO, default=1.0, type=float),
-            Param("pt", desc="d", door=doors.USER, optional=True)]
+    return [Param("base", desc="d", default=1.0, type=float),
+            Param("pt", desc="d", optional=True)]
 
 
 @pytest.mark.asyncio
 async def test_resolver_refuses_a_param_declared_twice():
-    decl = [Param("base", desc="d", door=doors.SCENARIO, default=1.0, type=float),
-            Param("base", desc="other", door=doors.SCENARIO, default=2.0,
+    decl = [Param("base", desc="d", default=1.0, type=float),
+            Param("base", desc="other", default=2.0,
                   type=float)]
     with pytest.raises(DeclarationError, match="declared twice"):
         await resolve_params(decl, {})
@@ -379,9 +370,9 @@ def test_the_params_body_names_its_rows_and_keeps_their_order():
     from trid3nt_server.workflows.runtime import param_rows
 
     class PARAMS:
-        depth_m = Param(door=doors.SCENARIO, default=1.0, bounds=(0.0, 9.0),
+        depth_m = Param(default=1.0, bounds=(0.0, 9.0),
                         desc="a depth")
-        armed = Param(door=doors.USER, optional=True, type=bool, desc="a flag")
+        armed = Param(optional=True, type=bool, desc="a flag")
 
     rows = param_rows(PARAMS)
     assert [p.name for p in rows] == ["depth_m", "armed"]
@@ -392,7 +383,7 @@ def test_an_unknown_param_on_the_body_is_an_attribute_error():
     """A typo is caught by Python at the line that wrote it, and another template's
     param name cannot be written at all - there is no body carrying it."""
     class PARAMS:
-        depth_m = Param(door=doors.SCENARIO, default=1.0, bounds=(0.0, 9.0),
+        depth_m = Param(default=1.0, bounds=(0.0, 9.0),
                         desc="a depth")
 
     with pytest.raises(AttributeError):
@@ -402,7 +393,7 @@ def test_an_unknown_param_on_the_body_is_an_attribute_error():
 def test_one_declaration_cannot_be_bound_to_two_names():
     """A row is one declaration in one body; sharing the object would make the
     second name silently the first."""
-    shared = Param(door=doors.SCENARIO, default=1.0, bounds=(0.0, 9.0), desc="d")
+    shared = Param(default=1.0, bounds=(0.0, 9.0), desc="d")
 
     with pytest.raises(DeclarationError, match="declared again"):
         class PARAMS:
@@ -412,7 +403,7 @@ def test_one_declaration_cannot_be_bound_to_two_names():
 
 # --- the branch the INTERPRETER decides --------------------------------------- #
 def _flagged(**overrides):
-    return [Param("flag", desc="run the extra step", door=doors.SCENARIO,
+    return [Param("flag", desc="run the extra step",
                   default=False, **overrides)]
 
 
@@ -492,11 +483,11 @@ def test_do_sag_publishes_both_docstring_views():
 def test_docstring_reports_bounds_units_and_labeled_defaults():
     doc = render_docstring(
         summary="S.", routing="R.",
-        params=[Param("a", desc="the knob", door=doors.SCENARIO, default=2.0,
+        params=[Param("a", desc="the knob", default=2.0,
                       bounds=(1.0, 3.0), units="mg/L")],
         returns="a layer")
     assert "mg/L" in doc and "range 1-3" in doc
-    assert "labeled scenario default" in doc
+    assert "default 2.0 (the template's starting value, not a site measurement)" in doc
 
 
 # --- late binding: a plan DESCRIBES, the interpreter SUBSTITUTES -------------- #
@@ -561,29 +552,6 @@ def test_the_store_cycle_is_locked_across_processes(tmp_path):
 async def stub_dem(**kwargs):
     _CALLS.append("stub_dem")
     return {"uri": f"s3://b/dem-{kwargs['res']}.tif", "dem": f"dem@{kwargs['res']}"}
-
-
-# --- R3-4 / R4-3: the law-9 floor needs a review SURFACE, not just a session -- #
-
-
-def _physics_only():
-    return [Param("aquifer_k_ms", desc="hydraulic conductivity",
-                  door=doors.SCENARIO, default=1e-4, type=float, units="m/s",
-                  consequence="physics")]
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("mode", ["auto", None, "user_gated"])
-async def test_the_law9_floor_refuses_in_every_mode_without_a_live_session(mode):
-    """user_gated with NO emitter is the headless direct call: the caller asked for
-    review and there is nobody to review. That is not a licence to invent."""
-    from trid3nt_server.workflows.runtime.workflow import _refuse_invented_physics
-
-    entries = provenance_entries(await resolve_params(_physics_only(), {}),
-                                 _physics_only())
-    with pytest.raises(Exception) as exc:
-        _refuse_invented_physics(entries, "t", mode)
-    assert exc.value.error_code == "PHYSICS_INPUT_REQUIRED"
 
 
 # --- observation 6: a binding fault is a typed plan error -------------------- #

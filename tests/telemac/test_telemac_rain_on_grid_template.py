@@ -176,26 +176,18 @@ def test_the_outputs_are_the_flux_across_the_outlet_the_user_placed():
     assert quantity_of(CAPTIONS["FLUX"]) == "outlet_hydrograph"
 
 
-def test_constant_door_params_off_wire_and_the_two_slots_on_it():
-    """CONSTANT-door params never reach the model-facing schema; the question's
-    own scenario and user rows do, and so do the domain and bed slots - a basin
+def test_every_declared_param_and_the_two_slots_are_on_the_wire():
+    """Every declared param reaches the model-facing schema, and so do the domain and bed slots - a basin
     the user draws and a survey they own supersede the producers this template
     prefers."""
     import inspect
 
-    from trid3nt_server.workflows.runtime import doors
     from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
         telemac_rain_on_grid as fn,
     )
 
-    constants = {p.name for p in fn.workflow.params if p.door == doors.CONSTANT}
-    assert constants, "telemac_rain_on_grid declares no constants; the check is vacuous"
     wire = set(inspect.signature(fn).parameters)
-    assert not (constants & wire), f"puts {constants & wire} on the model-facing wire"
-
-    scenario_or_user = {p.name for p in fn.workflow.params
-                        if p.door in (doors.SCENARIO, doors.USER)}
-    assert scenario_or_user <= wire
+    assert {p.name for p in fn.workflow.params} <= wire
     assert {"pour_point", "mesh_resolution_m", "design_storm_mm_per_day",
             "rain_series_mm", "domain", "bed"} <= wire
     # No "mesh" slot: a supplied mesh reaches a run through the mesh ROUTER at

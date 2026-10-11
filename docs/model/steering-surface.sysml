@@ -887,7 +887,11 @@ package SteeringSurface {
         under its engine and its module, with no template field; every filled
         slot carries the value it was solved at beside one of the four origins
         the card renders, and the record carries the solver's own correct-end
-        flag. The adapters
+        flag. The four - user, derived, producer, template - are ONE set: a
+        template param's card row, its provenance entry and its journal row
+        write the same word, and nothing declares where a value may come from.
+        A param that declares no default and is not optional is REQUIRED, and
+        left unstated the fill refuses it in every mode. The adapters
         build a turn from the contracts IR and import no provider SDK for it.
 
         ONE wrapper serves every role its module has: a template's own steering
@@ -1386,6 +1390,10 @@ package SteeringSurface {
         "tests/runtime/test_run_journal.py::test_the_run_s_own_line_carries_the_fill_and_the_correct_end_its_solve_step_said";
     verify requirement ModuleIsTheUnit by
         "tests/telemac/test_telemac_run_identity.py::test_the_vocabulary_is_the_four_the_card_renders";
+    verify requirement ModuleIsTheUnit by
+        "tests/telemac/test_telemac_module_surface.py::test_the_card_the_provenance_and_the_journal_say_one_origin";
+    verify requirement ModuleIsTheUnit by
+        "tests/runtime/test_one_fill.py::test_a_required_param_left_unstated_refuses_in_every_mode";
     verify requirement ModuleIsTheUnit by
         "tests/telemac/test_telemac_run_identity.py::test_every_slot_of_a_template_s_default_fill_carries_one_of_the_four";
     verify requirement ModuleIsTheUnit by

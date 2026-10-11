@@ -26,19 +26,19 @@ MAINTENANCE DREDGING of a navigation channel: how much comes out, and what the b
 
 The values the template declares. `desc` is what the model reads when it fills one.
 
-| input | comes from | units | default | desc |
-|---|---|---|---|---|
-| `seed_point` | question | - | optional | A point ON the channel the dredge works in, as the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer. Geocode a place name first; the channel is fetched downstream of it and the levels every dredging action reads are stationed along the centerline that comes back with it |
-| `design_depth_m` | scenario | m | 3.0 | Depth the fairway is dredged TO, under the reference water surface the run opens at - the design draught plus its overdepth |
-| `trigger_depth_m` | scenario | m | 3.0 | Depth at which a node is dredged: the bed is worked wherever it sits shallower than this under the reference surface. Equal to design_depth_m keeps the channel exactly at grade; SMALLER than it lets the channel shoal before the dredger returns, and a trigger DEEPER than the grade would mark a node for a cut that is above its own bed |
-| `dredge_start_s` | scenario | s | 0.0 | When the first dredging pass begins, in seconds of the BED's own clock - the run's morphological time, DURATION x MORPHOLOGICAL FACTOR |
-| `dredge_end_s` | scenario | s | 3000.0 | When the campaign stops, on the same bed clock: no further pass begins after it, and a pass already cutting runs on until it reaches grade |
-| `dredge_repeat_s` | scenario | s | 1800.0 | Maintenance interval on the bed clock: how long after a pass starts the next one begins, if the channel has shoaled past trigger_depth_m again |
-| `dig_rate_m_per_s` | scenario | m/s | 0.002 | How fast the dredger lowers the bed, as metres of bed per second of SOLVER time at a working node - the plant's capacity, not a physical rate. A pass reports its volume only once it has reached grade, so this and the cut it has to make are what decide whether the run sees a completed pass at all |
-| `dump_rate_m_per_s` | scenario | m/s | 0.002 | How fast the spoil is laid into the dump area, as metres of bed per second of solver time at a receiving node; a pass is not finished until its spoil is placed |
-| `min_volume_m3` | scenario | m^3 | 0.0 | Least volume worth moving around a node before it is dredged at all; 0 works every node past the trigger |
-| `mesh_resolution_m` | scenario | m | optional | Target element edge or cell length the domain is resolved at. The granularity is the USER's lever and nothing refuses one: absent, the mesh resolves the finest data it stands on, and the card states the node count it comes to |
-| `event_time` | question | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
-| `cores` | constant | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
-| `vertical_frame` | constant | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
+| input | units | default | desc |
+|---|---|---|---|
+| `seed_point` | - | optional | A point ON the channel the dredge works in, as the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer. Geocode a place name first; the channel is fetched downstream of it and the levels every dredging action reads are stationed along the centerline that comes back with it |
+| `design_depth_m` | m | 3.0 | Depth the fairway is dredged TO, under the reference water surface the run opens at - the design draught plus its overdepth |
+| `trigger_depth_m` | m | 3.0 | Depth at which a node is dredged: the bed is worked wherever it sits shallower than this under the reference surface. Equal to design_depth_m keeps the channel exactly at grade; SMALLER than it lets the channel shoal before the dredger returns, and a trigger DEEPER than the grade would mark a node for a cut that is above its own bed |
+| `dredge_start_s` | s | 0.0 | When the first dredging pass begins, in seconds of the BED's own clock - the run's morphological time, DURATION x MORPHOLOGICAL FACTOR |
+| `dredge_end_s` | s | 3000.0 | When the campaign stops, on the same bed clock: no further pass begins after it, and a pass already cutting runs on until it reaches grade |
+| `dredge_repeat_s` | s | 1800.0 | Maintenance interval on the bed clock: how long after a pass starts the next one begins, if the channel has shoaled past trigger_depth_m again |
+| `dig_rate_m_per_s` | m/s | 0.002 | How fast the dredger lowers the bed, as metres of bed per second of SOLVER time at a working node - the plant's capacity, not a physical rate. A pass reports its volume only once it has reached grade, so this and the cut it has to make are what decide whether the run sees a completed pass at all |
+| `dump_rate_m_per_s` | m/s | 0.002 | How fast the spoil is laid into the dump area, as metres of bed per second of solver time at a receiving node; a pass is not finished until its spoil is placed |
+| `min_volume_m3` | m^3 | 0.0 | Least volume worth moving around a node before it is dredged at all; 0 works every node past the trigger |
+| `mesh_resolution_m` | m | optional | Target element edge or cell length the domain is resolved at. The granularity is the USER's lever and nothing refuses one: absent, the mesh resolves the finest data it stands on, and the card states the node count it comes to |
+| `event_time` | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
+| `cores` | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
+| `vertical_frame` | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
 

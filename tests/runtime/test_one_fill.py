@@ -47,13 +47,30 @@ def test_a_value_outside_its_range_is_rejected_with_its_remedy():
 def test_a_required_input_nothing_filled_is_missing_and_not_ready():
     from trid3nt_server.workflows.runtime import Param
 
-    wf = types.SimpleNamespace(params=(Param(name="depth", desc="d", door="user", type=float),),
+    wf = types.SimpleNamespace(params=(Param(name="depth", desc="d", type=float),),
                                coercions=(), data=(), unnamed=lambda: (),
                                named_rows=lambda: ())
     state = asyncio.run(fill(Fill(workflow=wf), {}))
     assert state.inputs["depth"].state == MISSING and not state.ready
     state = asyncio.run(fill(state, {"depth": 3.0}))
     assert state.inputs["depth"].state == ACCEPTED and state.ready
+
+
+@pytest.mark.parametrize("mode", ["auto", "user_gated"])
+def test_a_required_param_left_unstated_refuses_in_every_mode(mode):
+    """No default and not optional is the whole floor: the fill refuses before
+    any launch, and no mode shows the input to anybody to approve instead."""
+    from trid3nt_server.workflows.runtime import Param
+
+    wf = types.SimpleNamespace(
+        params=(Param(name="wave_height_m", desc="d", bounds=(0.01, 10.0)),
+                Param(name="grade", desc="d", default=0.2, bounds=(0.05, 0.5))),
+        coercions=(), data=(), unnamed=lambda: (), named_rows=lambda: ())
+    state = asyncio.run(fill(Fill(workflow=wf), {"input_mode": mode}))
+    assert state.inputs["wave_height_m"].state == MISSING and not state.ready
+    code, sentence = state.refusal()
+    assert code == "GATE_REFUSED"
+    assert "wave_height_m was not supplied and has no default" in sentence
 
 
 def test_a_sourced_input_is_fetched_before_it_answers(monkeypatch):
@@ -187,18 +204,16 @@ def test_an_untyped_fault_is_refused_and_its_trace_logged(monkeypatch, caplog):
     assert any(r.exc_info and r.levelname == "WARNING" for r in caplog.records)
 
 
-@pytest.mark.parametrize("physics,code", [
-    (True, "PHYSICS_INPUT_REQUIRED"),
-    (False, "USER_INPUT_CANCELLED"),
+@pytest.mark.parametrize("cancel_code,code", [
+    ("no_session", "NO_SESSION"),
+    ("declined", "USER_INPUT_CANCELLED"),
 ])
 def test_a_refusal_keeps_the_code_of_its_reason_through_the_review(
-        monkeypatch, physics, code):
-    from trid3nt_contracts.common import SyntheticInput
+        monkeypatch, cancel_code, code):
     from trid3nt_server.inputs.gate import input_review
     from trid3nt_server.inputs.gate.input_review import ReviewOutcome
     from trid3nt_server.workflows.telemac import workflow as tw
 
-    real = input_review.gate_input_review
     monkeypatch.setattr(tw, "card_rows", lambda sheet: [])
 
     async def _fill(values, edits):
@@ -206,12 +221,8 @@ def test_a_refusal_keeps_the_code_of_its_reason_through_the_review(
                                      filled={}, files={})
 
     async def _gate(**kwargs):
-        if physics:
-            return await real(**{**kwargs, "mode": "auto", "entries": [SyntheticInput(
-                param="p", value=None, basis="default_demo",
-                consequence="physics", note="no real source")]})
         return ReviewOutcome(proceed=False, entries=[], params={}, cancelled=True,
-                             cancel_reason="declined", cancel_code="declined")
+                             cancel_reason="declined", cancel_code=cancel_code)
 
     monkeypatch.setitem(input_review.__dict__, "gate_input_review", _gate)
     with pytest.raises(tw.TelemacError) as caught:
@@ -247,3 +258,20 @@ def test_what_producing_said_at_the_fill_is_restated_on_the_run(monkeypatch):
     assert run.notes[:4] == [
         "the domain covers the cut", "the domain came from a stub",
         "the weather covers the cut", "the weather came from a stub"]
+
+
+_RING = [[-122.6769, 45.5153], [-122.6615, 45.5153],
+         [-122.6615, 45.5198], [-122.6769, 45.5198]]
+_STATED = {"structure": [[-122.6700, 45.5160], [-122.6700, 45.5190]],
+           "domain": _RING, "bed": 8.0, "wave_height_m": 1.0,
+           "reflection_coef": 0.5, "mesh_resolution_m": 35.0}
+
+
+@pytest.mark.parametrize("order", [("structure", "domain"), ("domain", "structure")])
+def test_the_order_inputs_are_stated_in_does_not_decide_the_fill(order):
+    wf = TOOL_REGISTRY["artemis_harbor_agitation"].fn.workflow
+    values = {name: _STATED[name] for name in order}
+    values.update(_STATED)
+    state = asyncio.run(fill(Fill(workflow=wf), values))
+    assert state.ready, {n: v.reason for n, v in state.inputs.items()
+                         if v.state == REJECTED}

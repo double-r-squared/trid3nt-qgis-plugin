@@ -109,40 +109,23 @@
       "title": "LegendKey",
       "type": "object"
     },
+    "Origin": {
+      "description": "Where a run input's value came from. A closed set; the name that makes it checkable rides beside it.",
+      "enum": [
+        "user",
+        "derived",
+        "producer",
+        "template"
+      ],
+      "title": "Origin",
+      "type": "string"
+    },
     "SyntheticInput": {
       "additionalProperties": false,
       "description": "One structured provenance entry for a physical model input.\nADDITIVE and default-empty: an empty list means \"no declared provenance\",\nNEVER \"all real\".",
       "properties": {
         "basis": {
-          "enum": [
-            "fetched",
-            "user",
-            "prompt_interpreted",
-            "default_demo",
-            "derived",
-            "measured_inversion",
-            "scenario_slab2"
-          ],
-          "title": "Basis",
-          "type": "string"
-        },
-        "consequence": {
-          "anyOf": [
-            {
-              "enum": [
-                "physics",
-                "scenario",
-                "numerical",
-                "aoi"
-              ],
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Consequence"
+          "$ref": "#/$defs/Origin"
         },
         "note": {
           "anyOf": [

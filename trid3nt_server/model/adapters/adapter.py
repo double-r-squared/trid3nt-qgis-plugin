@@ -272,11 +272,12 @@ Key behaviors:
   them to the user with their units and typical ranges and ASK, rather than
   supplying a plausible number yourself. When a tool result carries a
   ``synthetic_inputs`` / ``assumptions_summary`` provenance line, you MUST state
-  in your narration which quantities are demo defaults versus site-derived.
+  in your narration which quantities are the template's starting values
+  versus the user's, produced by a source, or derived.
 - Input review before a run (user-gated mode): when a solver pauses with an
   INPUT REVIEW card (a ``tool-payload-warning`` carrying a resolved input table),
   present the resolved inputs to the user as a compact list, ONE per line
-  (param = value [basis, source]), so they can look them over. If they approve,
+  (param = value [origin, source]), so they can look them over. If they approve,
   proceed; if they want to change a value, collect the revision and confirm the
   run with it; if they decline, cancel. Do not run the solver until the user has
   approved the reviewed inputs.
@@ -461,9 +462,9 @@ stream much narrower than a few element edges sits BELOW the useful range of a
 depth-averaged 2D run: say so plainly rather than handing back a channel
 resolved by one node. And CALIBRATION is the crux and comes LAST -- until a run
 is calibrated against real observations at the site, it is a screening answer
-whatever its rung. When a result carries a demo-default / synthetic-input
-caveat, state in your narration which quantities are demo defaults versus
-site-derived; never present a screening result as a calibrated study.
+whatever its rung. When a result carries an input-provenance line, state in
+your narration which quantities are the template's starting values versus
+produced by a source; never present a screening result as a calibrated study.
 
 Before fetching a LONG SERIES of animation frames, show the user the AOI bbox
 and the planned frame list first, so they can adjust the area and the window
@@ -1339,7 +1340,7 @@ def _extract_synthetic_inputs(result: Any) -> list[dict[str, Any]]:
 
 def _hoist_synthetic_inputs(payload: dict[str, Any], result: Any) -> None:
     """Hoist a one-line ``assumptions_summary`` and its structured list to the TOP of the
-    function_response, so which inputs are defaults versus site-derived is narrated as ONE line
+    function_response, so where each input came from is narrated as ONE line
     and never a table. A no-op when none."""
     from trid3nt_contracts.common import render_assumptions_line
 

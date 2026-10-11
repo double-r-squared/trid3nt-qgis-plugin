@@ -8,7 +8,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Accepts, Param, doors, lever,
+    Data, register_workflow, Accepts, Param, lever,
 )
 from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, series
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
@@ -25,7 +25,7 @@ ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
 class PARAMS:
     seed = Param(
-        door=doors.USER, optional=True, consequence="aoi", type=Point,
+        optional=True, type=Point,
         derived_when_absent=(
             "nothing is fetched and the domain is the polygon the caller "
             "supplied or drew"),
@@ -35,7 +35,7 @@ class PARAMS:
              "the domain is cut from; supply the domain polygon - a lake, a "
              "pond, a harbour - instead and this is not read")
     station = Param(
-        door=doors.USER, optional=True, consequence="scenario",
+        optional=True,
         type=Point,
         derived_when_absent=(
             "the series is read at the point 98% of the way down the modelled "

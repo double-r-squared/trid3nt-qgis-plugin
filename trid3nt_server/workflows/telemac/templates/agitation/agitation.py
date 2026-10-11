@@ -6,7 +6,7 @@ import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Accepts, Param, doors, lever,
+    Data, register_workflow, Accepts, Param, lever,
 )
 from trid3nt_server.tools.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.telemac.authoring.accepted_mesh import (
@@ -36,13 +36,11 @@ DEFAULT_OPEN_DEPTH_M: float = -12.0
 
 class PARAMS:
     wave_height_m = Param(
-        door=doors.SCENARIO, default=1.0, bounds=(0.01, 10.0),
-        units="m", consequence="physics",
+        bounds=(0.01, 10.0), units="m",
         desc="Incident wave height H0 on the designated liquid boundary; Kd is "
              "measured against it, so it sets the scale of every narrated height")
     reflection_coef = Param(
-        door=doors.SCENARIO, default=0.5, bounds=(0.0, 1.0),
-        consequence="physics",
+        bounds=(0.0, 1.0),
         desc="The declared structure's reflection coefficient: 1 fully reflecting "
              "(a vertical quay), 0 fully absorbing (a rubble slope). Every other "
              "solid face is the absorbing shore")
@@ -54,24 +52,23 @@ class PARAMS:
              "several nodes per WAVELENGTH and Kd peaks inside a diffraction "
              "fringe, so a coarse mesh reads the peaks low")
     mesh_grade = Param(
-        door=doors.CONSTANT, default=DEFAULT_GRADE, bounds=(0.05, 0.5),
-        consequence="numerical",
+        default=DEFAULT_GRADE, bounds=(0.05, 0.5),
         desc="Mesh gradation: how fast the edge may grow from the structure band "
              "out to the open approach")
     barrier_width_m = Param(
-        door=doors.SCENARIO, default=DEFAULT_BARRIER_WIDTH_M,
-        bounds=(1.0, 200.0), units="m", consequence="numerical",
+        default=DEFAULT_BARRIER_WIDTH_M,
+        bounds=(1.0, 200.0), units="m",
         desc="The width the mapped structure centreline is cut at; a survey maps "
              "a mound as a line and a line removes no water from the domain")
     transect_length_m = Param(
-        door=doors.SCENARIO, default=1500.0, bounds=(100.0, 20000.0),
-        units="m", consequence="scenario",
+        default=1500.0, bounds=(100.0, 20000.0),
+        units="m",
         desc="The whole length of the transect the agitation is read along: a "
              "straight line through the structure's centroid along the incident "
              "wave direction, half of it on the exposed side and half in the lee")
     open_depth_threshold_m = Param(
-        door=doors.SCENARIO, default=DEFAULT_OPEN_DEPTH_M,
-        bounds=(-200.0, -1.0), units="m", consequence="physics",
+        default=DEFAULT_OPEN_DEPTH_M,
+        bounds=(-200.0, -1.0), units="m",
         desc="How deep a boundary stretch must reach for it to be designated the "
              "OPEN edge the incident wave enters through; every stretch that "
              "reaches it opens")

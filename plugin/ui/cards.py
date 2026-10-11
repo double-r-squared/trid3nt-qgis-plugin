@@ -2070,7 +2070,7 @@ class FormCard(QFrame):
         if row.bounds is not None:
             bits.append(f"allowed range {row.bounds[0]:g} to {row.bounds[1]:g}"
                         f"{' ' + row.units if row.units else ''}")
-        if row.basis == "derived":
+        if row.origin in ("derived", "producer"):
             bits.append("editing this overrides the derivation; the values "
                         "computed from it are re-derived server-side")
         if row.note:

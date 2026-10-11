@@ -110,10 +110,10 @@ def test_a_polyline_answer_is_a_linestring():
 # --- the FORM card ----------------------------------------------------------- #
 _SHEET = {"workflow": "w", "title": "Review", "rows": [
     {"name": "dye_concentration_mgl", "value": 100.0, "units": "mg/L",
-     "door": "scenario", "basis": "default_demo", "source_badge": "labeled default",
+     "source_badge": "labeled default",
      "bounds": [0.0, 1000000.0], "advanced": False, "note": ""},
-    {"name": "sim_duration_s", "value": 3600.0, "units": "s", "door": "constant",
-     "basis": "default_demo", "source_badge": "labeled default",
+    {"name": "sim_duration_s", "value": 3600.0, "units": "s",
+     "source_badge": "labeled default",
      "bounds": [60.0, 864000.0], "advanced": True, "note": ""},
 ]}
 

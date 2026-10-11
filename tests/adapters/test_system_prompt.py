@@ -258,10 +258,10 @@ def test_system_prompt_forbids_inventing_physical_inputs() -> None:
     """The ask-dont-invent rule for physical MODEL INPUTS must be present.
 
     The model asks for a physical parameter it cannot fetch or derive, and names
-    demo-default versus site-derived provenance in its narration."""
+    template-value versus user, produced or derived provenance in its narration."""
     assert "Never invent PHYSICAL MODEL INPUTS" in SYSTEM_PROMPT
     assert "synthetic_inputs" in SYSTEM_PROMPT
-    assert "demo defaults versus site-derived" in SYSTEM_PROMPT
+    assert "the template's starting values" in SYSTEM_PROMPT
 
 
 def test_system_prompt_has_input_review_instruction() -> None:
@@ -269,7 +269,7 @@ def test_system_prompt_has_input_review_instruction() -> None:
     handle a user-gated INPUT REVIEW card -- present the resolved input table,
     collect edits, confirm before running."""
     assert "INPUT REVIEW card" in SYSTEM_PROMPT
-    assert "param = value [basis, source]" in SYSTEM_PROMPT
+    assert "param = value [origin, source]" in SYSTEM_PROMPT
     # "Do not run the solver until the user has approved" -- fragment avoids the
     # source line-wrap between "has" and "approved".
     flat = " ".join(SYSTEM_PROMPT.split())

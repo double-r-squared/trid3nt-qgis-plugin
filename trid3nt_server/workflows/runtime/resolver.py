@@ -6,18 +6,16 @@ refuses by name rather than being moved quietly onto the bound.
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Sequence
+from typing import Any, Sequence
 
-from trid3nt_contracts.common import SyntheticInput
+from trid3nt_contracts.common import Origin, SyntheticInput
 
 from .errors import GateRefusedError
 from .params import (
     Param,
     ResolvedParam,
     ResolvedParams,
-    doors,
     param_rows,
-    refuse_duplicate_params,
     wire_value,
 )
 
@@ -28,24 +26,17 @@ def seat_param(param: Param, value: Any) -> ResolvedParam:
     """One param: the stated value, else its declared default, else REQUIRED
     and missing - never invented. A value outside its bounds refuses by name."""
     if value is not None:
-        return _finish(param, value, doors.USER, "supplied on this invocation")
+        return _finish(param, value, Origin.USER, "supplied on this invocation")
     if param.default is not None:
-        return _finish(param, param.default, param.door,
-                       f"declared {param.door} default", basis=_BASIS_DEFAULT)
+        return _finish(param, param.default, Origin.TEMPLATE, "declared default")
     return ResolvedParam(
-        name=param.name, value=None, door=param.door, basis=param.basis,
-        units=param.units, consequence=param.consequence,
+        name=param.name, value=None, origin=None, units=param.units,
         note=("not supplied (declared optional)" if param.optional
               else "REQUIRED and not supplied"),
         required_missing=not param.optional)
 
 
-#: A value seated from its declared default is a labeled default whatever door it hangs under.
-_BASIS_DEFAULT = "default_demo"
-
-
-def _finish(param: Param, value: Any, door: str, note: str, *,
-            basis: str | None = None) -> ResolvedParam:
+def _finish(param: Param, value: Any, origin: Origin, note: str) -> ResolvedParam:
     if param.bounds is not None:
         coerced = _as_float(value)
         if coerced is None:
@@ -63,18 +54,8 @@ def _finish(param: Param, value: Any, door: str, note: str, *,
             )
         # The bound compares numbers without retyping: an int param resolved to float would reach an INTEGER keyword and refuse far from here.
         value = int(coerced) if param.type is int else coerced
-    if basis is None:
-        basis = "user" if door == doors.USER else _basis(param, door)
-    return ResolvedParam(
-        name=param.name, value=value, door=door, basis=basis,
-        units=param.units, consequence=param.consequence, note=note,
-    )
-
-
-def _basis(param: Param, door: str) -> str:
-    if door == doors.QUESTION:
-        return "prompt_interpreted"
-    return param.basis
+    return ResolvedParam(name=param.name, value=value, origin=origin,
+                         units=param.units, note=note)
 
 
 def _as_float(value: Any) -> float | None:
@@ -89,9 +70,8 @@ def _as_float(value: Any) -> float | None:
 
 def provenance_entries(resolved: ResolvedParams,
                        declared: Any) -> list[SyntheticInput]:
-    """The run's provenance rows - what the input-review gate and the layer carry.
-    A ``default_demo`` + ``physics`` row is what makes the gate refuse in auto mode;
-    an absent param declaring ``derived_when_absent`` still leaves a derived row."""
+    """The run's provenance rows - what the layer and the journal carry.
+    An absent param declaring ``derived_when_absent`` still leaves a derived row."""
     by_name = {p.name: p for p in param_rows(declared)}
     out: list[SyntheticInput] = []
     for row in resolved.rows():
@@ -102,7 +82,7 @@ def provenance_entries(resolved: ResolvedParams,
             if param.derived_when_absent:
                 out.append(SyntheticInput(
                     param=row.name, value="derived", units=row.units,
-                    basis="derived", consequence=row.consequence,
+                    basis=Origin.DERIVED,
                     note=f"not supplied; {param.derived_when_absent}",
                 ))
             continue
@@ -110,9 +90,7 @@ def provenance_entries(resolved: ResolvedParams,
             param=row.name,
             value=_provenance_value(row.value),
             units=row.units,
-            basis=row.basis,
-            consequence=row.consequence,
-            real_source_if_any=row.real_source,
+            basis=row.origin,
             note=(f"{param.desc} [{row.note}]" if row.note else param.desc),
         ))
     return out

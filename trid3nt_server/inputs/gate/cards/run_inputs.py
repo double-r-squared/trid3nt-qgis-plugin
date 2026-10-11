@@ -126,7 +126,6 @@ def _row(name: str, value: Any, listed: list[tuple[Any, str]] | None,
     shown = value if isinstance(value, (int, float, str, bool, list)) \
         or value is None else str(value)
     return ParamSheetRow(
-        name=name, value=shown, door="user", basis="user",
-        note=refusal, source_badge=(refusal or "")[:200],
+        name=name, value=shown, note=refusal, source_badge=(refusal or "")[:200],
         options=None if listed is None else [
             ParamOption(value=option, label=label) for option, label in listed])

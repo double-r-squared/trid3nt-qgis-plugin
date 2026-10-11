@@ -94,6 +94,17 @@
       "title": "GranularitySuggestion",
       "type": "object"
     },
+    "Origin": {
+      "description": "Where a run input's value came from. A closed set; the name that makes it checkable rides beside it.",
+      "enum": [
+        "user",
+        "derived",
+        "producer",
+        "template"
+      ],
+      "title": "Origin",
+      "type": "string"
+    },
     "ParamOption": {
       "additionalProperties": false,
       "description": "One value an input would ACCEPT: what a pick sends back, and what the\ndropdown shows. A case layer is sent by its id and shown by its name.",
@@ -131,7 +142,7 @@
     },
     "ParamSheet": {
       "additionalProperties": false,
-      "description": "The resolved sheet a step reviewing its own inputs presents.\nRows arrive in RENDER order, owned by whoever owns the doors. A\nsubmit-with-edits IS the approval - the whole sheet was visible.",
+      "description": "The resolved sheet a step reviewing its own inputs presents.\nRows arrive in RENDER order, owned by whoever builds the sheet. A\nsubmit-with-edits IS the approval - the whole sheet was visible.",
       "properties": {
         "rows": {
           "items": {
@@ -168,19 +179,6 @@
           "default": false,
           "title": "Advanced",
           "type": "boolean"
-        },
-        "basis": {
-          "enum": [
-            "fetched",
-            "user",
-            "prompt_interpreted",
-            "default_demo",
-            "derived",
-            "measured_inversion",
-            "scenario_slab2"
-          ],
-          "title": "Basis",
-          "type": "string"
         },
         "bounds": {
           "anyOf": [
@@ -219,18 +217,6 @@
           "default": "",
           "maxLength": 512,
           "title": "Desc",
-          "type": "string"
-        },
-        "door": {
-          "enum": [
-            "user",
-            "question",
-            "derived",
-            "scenario",
-            "constant",
-            "gate"
-          ],
-          "title": "Door",
           "type": "string"
         },
         "editable": {
@@ -279,22 +265,13 @@
         "origin": {
           "anyOf": [
             {
-              "enum": [
-                "template",
-                "user",
-                "model",
-                "producer",
-                "derived",
-                "calibrated"
-              ],
-              "type": "string"
+              "$ref": "#/$defs/Origin"
             },
             {
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Origin"
+          "default": null
         },
         "source_badge": {
           "default": "",
@@ -313,11 +290,6 @@
           ],
           "default": null,
           "title": "Units"
-        },
-        "user_lever": {
-          "default": false,
-          "title": "User Lever",
-          "type": "boolean"
         },
         "value": {
           "anyOf": [
@@ -346,9 +318,7 @@
         }
       },
       "required": [
-        "name",
-        "door",
-        "basis"
+        "name"
       ],
       "title": "ParamSheetRow",
       "type": "object"
@@ -474,35 +444,7 @@
       "description": "One structured provenance entry for a physical model input.\nADDITIVE and default-empty: an empty list means \"no declared provenance\",\nNEVER \"all real\".",
       "properties": {
         "basis": {
-          "enum": [
-            "fetched",
-            "user",
-            "prompt_interpreted",
-            "default_demo",
-            "derived",
-            "measured_inversion",
-            "scenario_slab2"
-          ],
-          "title": "Basis",
-          "type": "string"
-        },
-        "consequence": {
-          "anyOf": [
-            {
-              "enum": [
-                "physics",
-                "scenario",
-                "numerical",
-                "aoi"
-              ],
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Consequence"
+          "$ref": "#/$defs/Origin"
         },
         "note": {
           "anyOf": [

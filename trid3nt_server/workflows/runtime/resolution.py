@@ -1,6 +1,6 @@
 """RESOLUTION SENSITIVITY: which of a run's published reads a coarse mesh gets wrong, and which way.
 
-A label is conditioned on the run's own resolution lever: only a lever row with BOTH a user basis and a seated value counts as refined.
+A label is conditioned on the run's own resolution lever: only a lever the user stated counts as refined.
 The note names what the run PUBLISHED and says nothing about what the numbers mean.
 """
 
@@ -67,10 +67,7 @@ def sensitivity_notes(decl: SensitivityDecl,
 
     lever = decl.lever
     row = next((r for r in sheet if getattr(r, "name", None) == lever), None)
-    # BOTH halves are load-bearing: an optional USER-door lever carries a user basis on an unsupplied row,
-    # so the seated value says a spacing was put through; basis alone labels a default run as refined.
-    refined = (getattr(row, "basis", None) == "user"
-               and getattr(row, "value", None) is not None)
+    refined = getattr(row, "origin", None) == "user"
     # A keyword lever has no param row: the fill records who stated it, and a user set it deliberately.
     stated = str(((fill or {}).get(lever) or {}).get("from") or "")
     refined = refined or stated.startswith("user")

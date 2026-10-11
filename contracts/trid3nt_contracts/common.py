@@ -9,6 +9,7 @@ wire and storage form.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Annotated, Any, Literal
 
 from pydantic import (
@@ -17,9 +18,7 @@ from pydantic import (
     ConfigDict,
     Field,
     PlainSerializer,
-    ValidationInfo,
     field_validator,
-    model_validator,
 )
 from ulid import ULID
 
@@ -34,8 +33,8 @@ __all__ = [
     "TimeRange",
     "TemporalMode",
     "EngineRunArgsMixin",
-    "InputBasis",
-    "InputConsequence",
+    "ORIGIN_LABELS",
+    "Origin",
     "SyntheticInput",
     "render_assumptions_line",
 ]
@@ -176,27 +175,22 @@ class EngineRunArgsMixin(ContractModel):
 
 
 
-#: Where a model input came from; a demo default is never narrated like fetched, user-supplied, interpreted or computed data.
-InputBasis = Literal[
-    "fetched",
-    "user",
-    "prompt_interpreted",
-    "default_demo",
-    "derived",
-    # A measured published inversion (e.g. a USGS finite-fault slip model): the strongest site-specific class.
-    "measured_inversion",
-    # A scenario on real published geometry but a hypothetical rupture: a loud "what if", never confusable with a real event.
-    "scenario_slab2",
-]
+class Origin(str, Enum):
+    """Where a run input's value came from. A closed set; the name that makes it checkable rides beside it."""
+
+    USER = "user"
+    DERIVED = "derived"
+    PRODUCER = "producer"
+    TEMPLATE = "template"
 
 
-#: What a demo default's wrongness costs; the input-review gate keys on it. ``physics``: a world value, REFUSES in
-#: auto (a wrong one silently ruins the sim). ``scenario``: the user's question, proceeds labeled. ``numerical``: a
-#: solver setting, proceeds labeled. ``aoi``: a default extent when no place was named, proceeds labeled.
-InputConsequence = Literal["physics", "scenario", "numerical", "aoi"]
-
-#: Stamped on an older entry with ``basis="default_demo"`` and no ``consequence``: a tolerant read coerces it to ``scenario`` and records why.
-_HISTORY_CONSEQUENCE_NOTE = "consequence backfilled=scenario (pre-law-9 record)"
+#: How each origin reads in a narration line and on a review card.
+ORIGIN_LABELS: dict[Origin, str] = {
+    Origin.USER: "user",
+    Origin.PRODUCER: "produced",
+    Origin.DERIVED: "derived",
+    Origin.TEMPLATE: "template value, not a site measurement",
+}
 
 
 class SyntheticInput(ContractModel):
@@ -208,38 +202,15 @@ class SyntheticInput(ContractModel):
     param: str
     value: float | int | str | None = None
     units: str | None = None
-    basis: InputBasis
-    #: Required when ``basis == "default_demo"``: the gate cannot decide refuse-vs-proceed from ``basis`` alone.
-    consequence: InputConsequence | None = None
+    basis: Origin
     real_source_if_any: str | None = None
     note: str | None = None
-
-    @model_validator(mode="after")
-    def _require_consequence_for_demo(self, info: ValidationInfo) -> "SyntheticInput":
-        """A ``default_demo`` entry MUST carry a ``consequence``: an untagged
-        invented default is one the gate cannot refuse. A read opting in to
-        tolerant history backfills instead of raising, so history still loads."""
-        if self.basis == "default_demo" and self.consequence is None:
-            tolerant = bool(info.context and info.context.get("tolerant_history"))
-            if tolerant:
-                object.__setattr__(self, "consequence", "scenario")
-                note = (self.note + "; " if self.note else "") + _HISTORY_CONSEQUENCE_NOTE
-                object.__setattr__(self, "note", note)
-                return self
-            raise ValueError(
-                "SyntheticInput(basis='default_demo') requires an explicit "
-                "consequence tag (physics|scenario|numerical|aoi): an unresolved "
-                "demo default must be classified so the input-review gate can "
-                "refuse an invented physics value in auto mode (law 9). "
-                f"param={self.param!r}"
-            )
-        return self
 
 
 def render_assumptions_line(entries: Any) -> str | None:
     """Render a ``synthetic_inputs`` list into ONE narration line, ``None`` when
-    empty. Grouped by provenance so demo defaults are named plainly rather than
-    tabulated. Takes ``SyntheticInput`` objects or their ``model_dump`` dicts."""
+    empty. Grouped by origin so a template's starting value is named plainly
+    rather than tabulated. Takes ``SyntheticInput`` objects or their ``model_dump`` dicts."""
     if not entries:
         return None
 
@@ -247,47 +218,14 @@ def render_assumptions_line(entries: Any) -> str | None:
         return e.get(name) if isinstance(e, dict) else getattr(e, name, None)
 
     def _one(e: Any) -> str:
-        param = _field(e, "param")
-        value = _field(e, "value")
-        units = _field(e, "units")
-        val_txt = ""
-        if value is not None:
-            val_txt = f"={value}" + (f" {units}" if units else "")
-        return f"{param}{val_txt}"
+        value, units = _field(e, "value"), _field(e, "units")
+        source = _field(e, "real_source_if_any")
+        stated = "" if value is None else f"={value}" + (f" {units}" if units else "")
+        return f"{_field(e, 'param')}{stated}" + (f" (by {source})" if source else "")
 
-    fetched, demo, scenario, other = [], [], [], []
-    for e in entries:
-        basis = _field(e, "basis")
-        if basis == "scenario_slab2":
-            scenario.append(e)
-        elif basis in ("fetched", "derived", "measured_inversion"):
-            fetched.append(e)
-        elif basis == "default_demo":
-            demo.append(e)
-        else:
-            other.append(e)
-
-    segments: list[str] = []
-    if fetched:
-        srcs = sorted({
-            str(_field(e, "real_source_if_any"))
-            for e in fetched
-            if _field(e, "real_source_if_any")
-        })
-        src_txt = f" (via {', '.join(srcs)})" if srcs else ""
-        segments.append(
-            "site-derived: " + ", ".join(_one(e) for e in fetched) + src_txt
-        )
-    if scenario:
-        segments.append(
-            "SCENARIO (hypothetical rupture on real published geometry, NOT a real "
-            "event): " + ", ".join(_one(e) for e in scenario)
-        )
-    if demo:
-        segments.append(
-            "demo defaults (NOT site-specific): "
-            + ", ".join(_one(e) for e in demo)
-        )
-    if other:
-        segments.append("user/prompt: " + ", ".join(_one(e) for e in other))
+    segments = [
+        f"{label}: " + ", ".join(_one(e) for e in entries
+                                 if Origin(_field(e, "basis")) is origin)
+        for origin, label in ORIGIN_LABELS.items()
+        if any(Origin(_field(e, "basis")) is origin for e in entries)]
     return "Input provenance -- " + "; ".join(segments) + "."

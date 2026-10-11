@@ -18,7 +18,6 @@ from trid3nt_server.workflows.runtime import (
     Param,
     DeclarationError,
     Workflow,
-    doors,
 )
 
 
@@ -93,16 +92,16 @@ def test_the_generated_signature_is_the_declaration_plus_controls():
     from trid3nt_server.workflows.runtime.workflow import _wire_signature
 
     params = (
-        Param("location", door=doors.QUESTION, optional=True, desc="a place"),
-        Param("depth_m", door=doors.SCENARIO, default=1.0, bounds=(0.0, 9.0),
+        Param("location", optional=True, desc="a place"),
+        Param("depth_m", default=1.0, bounds=(0.0, 9.0),
               desc="a bounded value"),
-        Param("armed", door=doors.USER, optional=True, type=bool, desc="a flag"),
-        Param("solver_dt_s", door=doors.CONSTANT, default=1.0, bounds=(0.1, 60.0),
-              desc="non-question numerics the model is never asked for"),
+        Param("armed", optional=True, type=bool, desc="a flag"),
+        Param("solver_dt_s", default=1.0, bounds=(0.1, 60.0),
+              desc="a solver setting"),
     )
     sig, annotations = _wire_signature(params)
     assert list(sig.parameters) == ["location", "depth_m", "armed",
-                                    "input_mode", "restart_clean", "keywords",
+                                    "solver_dt_s", "input_mode", "restart_clean", "keywords",
                                     "picks", "_extra_ignored"]
     assert annotations["depth_m"] == (float | None)      # bounded -> float
     assert annotations["armed"] == (bool | None)         # declared type wins
@@ -114,38 +113,18 @@ def test_the_generated_signature_is_the_declaration_plus_controls():
     assert sig.parameters["_extra_ignored"].kind is inspect.Parameter.VAR_KEYWORD
 
 
-def test_a_declared_param_the_wire_does_not_expose_stays_off_the_real_tool():
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    wf = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
-    declared = {p.name for p in wf.params}
-    constants = {p.name for p in wf.params if p.door == doors.CONSTANT}
-    wire = set(inspect.signature(TOOL_REGISTRY["telemac_dye_release"].fn).parameters)
-    assert declared - constants <= wire
-
-
-def test_constant_door_params_are_off_the_model_facing_wire_and_docstring():
-    """The door is a BINDING AUTHORITY contract: a constant is nobody's question.
-
-    A constant is neither an argument the model may fill nor a row the prose sheet
-    advertises; it lives its whole life on the ``ParamSheet``."""
+def test_every_declared_param_is_on_the_real_tools_wire_and_docstring():
     from trid3nt_server.tools import TOOL_REGISTRY
 
     for name in ("telemac_do_sag", "telemac_dye_release"):
         fn = TOOL_REGISTRY[name].fn
-        constants = {p.name for p in fn.workflow.params if p.door == doors.CONSTANT}
-        assert constants, f"{name} declares no constants; the check is vacuous"
-        wire = set(inspect.signature(fn).parameters)
-        assert not (constants & wire), f"{name} puts {constants & wire} on the wire"
-        listed = {c for c in constants if f"    {c}:" in (fn.__doc__ or "")}
-        assert not listed, f"{name} documents {listed}, which its schema refuses"
+        declared = {p.name for p in fn.workflow.params}
+        assert "cores" in declared
+        assert declared <= set(inspect.signature(fn).parameters)
+        assert all(f"    {p}:" in fn.__doc__ for p in declared)
 
 
-def test_a_constant_supplied_off_the_model_wire_still_reaches_the_sheet():
-    """The exclusion is the SCHEMA's, so the form-edit lane keeps its lever.
-
-    That lane hands the workflow a sheet rather than a model tool call, so the value
-    is seated through the USER door and the row reads ``basis=user``."""
+def test_a_stated_lever_reaches_the_sheet_as_the_users():
     import asyncio
 
     from trid3nt_server.tools import TOOL_REGISTRY
@@ -161,7 +140,33 @@ def test_a_constant_supplied_off_the_model_wire_still_reaches_the_sheet():
     assert supplied["mesh_resolution_m"] == 30.0
     sheet = asyncio.run(resolve_params(wf.params, supplied))
     assert sheet.value_of("cores") == 2
-    assert sheet.row("cores").basis == "user"
+    assert sheet.row("cores").origin == "user"
+
+
+def test_a_param_edited_on_the_review_card_is_what_the_run_records():
+    """The record and the provenance are read after the launch, so a value a
+    person changed on the card is written as the user's and never as the
+    template's starting one."""
+    import asyncio
+
+    from trid3nt_server.workflows.runtime import RunResult
+    from trid3nt_server.workflows.runtime.fill import Fill, fill
+    from trid3nt_server.workflows.telemac.workflow import _seat_on
+
+    class Edited(_Stub):
+        async def launch(self, state):
+            _seat_on(state.env)({"rate": 9.0})
+            return RunResult(value=_Layer())
+
+    wf = Edited(metadata=_metadata("skeleton_probe"), template=_module(lambda o: ()),
+                params=(Param("rate", desc="a rate", default=6.0, bounds=(0.0, 60.0)),))
+
+    async def _run():
+        return await wf._launched(await fill(Fill(workflow=wf), {}))
+
+    run = asyncio.run(_run())
+    row, entry = run.params.row("rate"), run.entries[0]
+    assert (row.value, row.origin, entry.value, entry.basis) == (9.0, "user", 9.0, "user")
 
 
 # --- (4) a chart builder is the function, with no string fallback ----------- #
@@ -223,16 +228,16 @@ async def test_a_BUG_in_a_coercion_reads_as_internal_never_as_the_caller_s_fault
 # --- (8) a declaration whose wire type would be guessed wrong refuses -------- #
 def test_an_unbounded_numeric_default_refuses_rather_than_advertising_a_string():
     with pytest.raises(DeclarationError) as ei:
-        Param("k_per_day", door=doors.SCENARIO, default=0.3, desc="a rate")
+        Param("k_per_day", default=0.3, desc="a rate")
     assert "STRING" in str(ei.value)
     # ... and both offered fixes are accepted
-    assert Param("k_per_day", door=doors.SCENARIO, default=0.3,
+    assert Param("k_per_day", default=0.3,
                  bounds=(0.01, 20.0), desc="a rate").wire_type is float
-    assert Param("k_per_day", door=doors.SCENARIO, default=0.3,
+    assert Param("k_per_day", default=0.3,
                  type=float, desc="a rate").wire_type is float
 
 
 def test_a_bool_default_is_not_a_numeric_default():
     """bool IS an int in Python; a flag infers bool correctly and must not refuse."""
-    assert Param("armed", door=doors.SCENARIO, default=False,
+    assert Param("armed", default=False,
                  desc="a flag").wire_type is bool

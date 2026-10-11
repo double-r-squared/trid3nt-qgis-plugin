@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from .params import Param, doors, param_rows
+from .params import Param, param_rows
 
 __all__ = ["render_docstring"]
 
@@ -60,10 +60,9 @@ def render_docstring(
 
 
 def _ordered(params: Any) -> list[Param]:
-    """Question-bearing params first, constants last; takes a sequence or a whole ``PARAMS`` body."""
-    rank = {doors.QUESTION: 0, doors.USER: 1,
-            doors.SCENARIO: 2, doors.CONSTANT: 4}
-    return sorted(param_rows(params), key=lambda p: (rank.get(p.door, 5), p.name))
+    """Required params first, then defaulted, then optional, each in class-body order; takes a sequence or a whole ``PARAMS`` body."""
+    return sorted(param_rows(params),
+                  key=lambda p: 1 if p.default is not None else 2 * p.optional)
 
 
 def _param_line(p: Param) -> str:
@@ -73,9 +72,8 @@ def _param_line(p: Param) -> str:
     if p.bounds is not None:
         bits.append(f"range {p.bounds[0]:g}-{p.bounds[1]:g}")
     if p.default is not None:
-        bits.append(f"default {p.default!r}"
-                    + (" (labeled scenario default, not a site measurement)"
-                       if p.door == doors.SCENARIO else ""))
+        bits.append(f"default {p.default!r} (the template's starting value, "
+                    "not a site measurement)")
     elif p.optional:
         bits.append("optional")
     return ", ".join(bits) + "."

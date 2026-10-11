@@ -22,9 +22,9 @@ from trid3nt_server.inputs.user_input import WireArgsError
 from . import journal
 from .accepts import Accepts
 from .data import DataDecl, data_rows
-from .errors import DeclarativeError, GateRefusedError, said
+from .errors import DeclarativeError, said
 from .levers import with_levers
-from .params import Param, ResolvedParams, doors, param_rows
+from .params import Param, ResolvedParams, param_rows
 from .resolution import SensitivityDecl, sensitivity_notes
 from .resolver import merge_provenance, provenance_entries
 
@@ -196,8 +196,6 @@ class Workflow:
         from .fill import production, restate
 
         env = production(state)
-        entries = provenance_entries(state.params, self.params)
-        _refuse_invented_physics(entries, self.name, env.input_mode)
         token = bind_domain(state.domain)
         notes, outputs = journal.bind_notes(), journal.bind_outputs()
         choices, coverage = journal.bind_choices(), journal.bind_coverage()
@@ -216,7 +214,9 @@ class Workflow:
             for note in [*said_notes, *env.absences]:
                 exc.add_note(f"also missing from this run: {note}")
             raise
-        run.entries, run.params = entries, state.params
+        # Read after the launch: a param a person edited on the review card is seated on the run's own params.
+        run.entries = provenance_entries(env.params, self.params)
+        run.params = env.params
         run.keywords = dict(state.keywords)
         run.notes += [*said_notes, *env.absences]
         run.outputs += published
@@ -318,28 +318,6 @@ class Workflow:
         ))
 
 
-#: The code the invented-physics floor refuses under, so callers route on the reason.
-_PHYSICS_INPUT_REQUIRED = "PHYSICS_INPUT_REQUIRED"
-
-
-def _refuse_invented_physics(entries: Sequence[SyntheticInput], tool_name: str,
-                             input_mode: str | None) -> None:
-    """Only a live user_gated session, whose review card shows the values to a person, opens the floor."""
-    from trid3nt_server.inputs.gate.input_review import (physics_refusal_reason,
-                                                   resolve_input_gate_mode)
-    from trid3nt_server.render.pipeline_emitter import current_emitter
-
-    headless = resolve_input_gate_mode(input_mode) != "auto"
-    live = current_emitter() is not None
-    if headless and live:
-        return
-    reason = physics_refusal_reason(tool_name, entries,
-                                    no_session=headless and not live,
-                                    no_review_surface=False)
-    if reason:
-        raise GateRefusedError(reason, error_code=_PHYSICS_INPUT_REQUIRED)
-
-
 #: Controls every workflow carries: whether the run pauses, whether a kept mesh is rebuilt, the raw keyword floor,
 #: and the source a caller names for a matched slot. None is a physical value, so none is a Param.
 _CONTROLS: tuple[tuple[str, Any, Any], ...] = (
@@ -394,7 +372,7 @@ def register_workflow(
         # The sheet describes THIS wire, so it renders from the params the signature carries (the factory narrows
         # ``params=PARAMS``); the SHEET line is the workflow's own, so a template cannot drift from it.
         sheet = workflow.sheet_doc()
-        doc = {**doc, "params": _wire_params(params),
+        doc = {**doc, "params": params,
                **({} if sheet is None else {"sheet": sheet}),
                **_context_doc(workflow.data,
                               doc.get("controls", ()))}
@@ -423,20 +401,12 @@ def _context_doc(data: Sequence[DataDecl],
     }
 
 
-def _wire_params(params: Sequence[Param]) -> tuple[Param, ...]:
-    """The declared params the model-facing wire carries; signature and docstring both read it."""
-    # Excluded: CONSTANT-door params (non-question physics the schema must not invite).
-    return tuple(prm for prm in params if prm.door != doors.CONSTANT)
-
-
 def _wire_signature(params: Sequence[Param],
                     data: Sequence[DataDecl] = ()) -> tuple[inspect.Signature, dict]:
     """The generated tool's signature: declared params, context slots, aliases, controls.
     A ``**`` absorber keeps an unknown key from dead-ending a call."""
-    # CONSTANT-door params are absent here and from the docstring; the body still takes ``**wire`` and seats a stray
-    # value through the USER door with ``basis=user``, which keeps the row a user lever on the form card.
     entries: list[tuple[str, Any, Any]] = [
-        (prm.name, prm.wire_type | None, None) for prm in _wire_params(params)
+        (prm.name, prm.wire_type | None, None) for prm in params
     ]
     # A producer-less Data slot is on the wire - a caller naming the layer is the only way it is filled.
     entries += [(decl.name, decl.wire_annotation, None) for decl in data

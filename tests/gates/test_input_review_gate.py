@@ -38,10 +38,10 @@ class _FakeEmitter:
 def _entries() -> list[SyntheticInput]:
     return [
         SyntheticInput(param="dam_break_depth_m", value=44.2, units="m",
-                       basis="fetched",
+                       basis="producer",
                        real_source_if_any="fetch_usace_dams"),
         SyntheticInput(param="source_magnitude", value=8.0, units="Mw",
-                       basis="default_demo", consequence="scenario"),
+                       basis="template"),
     ]
 
 
@@ -87,8 +87,8 @@ def test_only_the_call_states_auto(monkeypatch) -> None:
 def test_render_lines_one_per_input() -> None:
     lines = render_input_review_lines(_entries())
     assert lines == [
-        "dam_break_depth_m = 44.2 m [site-derived, fetch_usace_dams]",
-        "source_magnitude = 8.0 Mw [demo default]",
+        "dam_break_depth_m = 44.2 m [produced, fetch_usace_dams]",
+        "source_magnitude = 8.0 Mw [template value, not a site measurement]",
     ]
 
 
@@ -109,30 +109,14 @@ async def test_auto_mode_is_noop(monkeypatch) -> None:
 @pytest.mark.parametrize("mode", ["user_gated", None])
 async def test_user_gated_no_session_refuses_by_name(monkeypatch, mode) -> None:
     monkeypatch.setattr(pe, "current_emitter", lambda: None)
-    entries = [e for e in _entries() if e.basis != "default_demo"]
     out = await gate_input_review(
         tool_name="geoclaw_inundation", mode=mode,
-        entries=entries, params={"dam_break_depth_m": 44.2},
+        entries=_entries(), params={"dam_break_depth_m": 44.2},
     )
     assert out.proceed is False and out.cancelled is True
     assert out.mode == "user_gated" and out.cancel_code == "no_session"
     assert out.cancel_reason.startswith("NO_SESSION: geoclaw_inundation did not run")
     assert "input_mode='auto'" in out.cancel_reason
-
-
-@pytest.mark.asyncio
-async def test_user_gated_no_session_over_a_physics_default_refuses_as_physics(
-        monkeypatch) -> None:
-    monkeypatch.setattr(pe, "current_emitter", lambda: None)
-    physics = SyntheticInput(param="manning_n", value=0.03, basis="default_demo",
-                             consequence="physics")
-    out = await gate_input_review(
-        tool_name="geoclaw_inundation", mode="user_gated",
-        entries=[*_entries(), physics], params={"dam_break_depth_m": 44.2},
-    )
-    assert out.proceed is False and out.cancelled is True
-    assert out.cancel_code == "physics"
-    assert out.cancel_reason.startswith("PHYSICS_INPUT_REQUIRED: geoclaw_inundation")
 
 
 @pytest.mark.asyncio
@@ -191,8 +175,7 @@ async def test_provide_values_then_proceed(monkeypatch) -> None:
     entries = [
         SyntheticInput(param="injection_rate_m3_day", value=500.0,
                        units="m^3/day", basis="user"),
-        SyntheticInput(param="aquifer_k_ms", value=None, basis="default_demo",
-                       consequence="physics"),
+        SyntheticInput(param="aquifer_k_ms", value=None, basis="template"),
     ]
     out = await gate_input_review(
         tool_name="modflow_asr", mode="user_gated",

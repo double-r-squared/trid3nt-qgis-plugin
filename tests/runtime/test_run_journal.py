@@ -26,12 +26,9 @@ def _tmp_persistence(tmp_path, monkeypatch):
 
 def _row(name, value, **kw):
     """A resolved sheet row, in the shape ``ResolvedParams.rows()`` hands over."""
-    return SimpleNamespace(name=name, value=value, door=kw.get("door", "scenario"),
-                           basis=kw.get("basis", "default_demo"),
-                           units=kw.get("units"), consequence=kw.get("consequence",
-                                                                    "scenario"),
-                           note=kw.get("note", ""),
-                           real_source=kw.get("real_source"))
+    return SimpleNamespace(name=name, value=value,
+                           origin=kw.get("origin", "template"),
+                           units=kw.get("units"), note=kw.get("note", ""))
 
 
 def _record(**overrides):
@@ -40,13 +37,11 @@ def _record(**overrides):
         fill={"DURATION": {"value": 7200.0, "from": "template: telemac_do_sag"},
               "FRICTION_COEFFICIENT": {"value": 33.0,
                                        "from": "producer: friction"}},
-        sheet=[_row("reach_length_km", 15.0, door="user", basis="user", units="km",
-                    consequence="physics", real_source="nhd"),
-               _row("cores", 2, door="constant",
-                    consequence="numerical")],
+        sheet=[_row("reach_length_km", 15.0, origin="user", units="km"),
+               _row("cores", 2)],
         provenance=[SimpleNamespace(param="discharge_cms", value=12.5,
-                                    basis="fetched", note="NWM cycle 2026-08-19T00Z",
-                                    real_source="national_water_model")],
+                                    basis="producer", note="NWM cycle 2026-08-19T00Z",
+                                    real_source_if_any="national_water_model")],
         result=SimpleNamespace(mesh_size_m=30.0),
         wall_seconds=91.4, origin="session",
         notes=[],
@@ -83,20 +78,18 @@ def test_the_record_carries_the_slots_the_run_was_supplied():
     assert _record()["supplied"] == {}
 
 
-def test_a_sheet_row_carries_its_door_and_its_basis_not_just_the_number():
-    """Which door a value came through is the whole point: a discharge the user
-    pinned and one the National Water Model answered are the same number and
-    different evidence."""
+def test_a_sheet_row_carries_its_origin_not_just_the_number():
+    """Where a value came from is the whole point: a length the user pinned and
+    one the template started on are the same number and different evidence."""
     row = _record()["sheet"][0]
-    assert row == {"name": "reach_length_km", "value": 15.0, "door": "user",
-                   "basis": "user", "units": "km", "consequence": "physics",
-                   "note": None, "real_source": "nhd"}
+    assert row == {"name": "reach_length_km", "value": 15.0, "origin": "user",
+                   "units": "km", "note": None}
 
 
 def test_the_record_carries_the_provenance_the_mesh_and_the_wall_time():
     rec = _record()
     assert rec["provenance"] == [{"param": "discharge_cms", "value": 12.5,
-                                  "basis": "fetched",
+                                  "basis": "producer",
                                   "note": "NWM cycle 2026-08-19T00Z",
                                   "real_source": "national_water_model"}]
     assert rec["mesh"] == {"mesh_size_m": 30.0, "key": None, "built_by": None}

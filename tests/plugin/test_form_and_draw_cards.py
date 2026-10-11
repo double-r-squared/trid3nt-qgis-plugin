@@ -18,12 +18,12 @@ from plugin.ui import gate  # noqa: E402
 
 _DEFAULT_ROWS = [
     {"name": "outfall", "value": [-124.1, 40.5], "desc": "Where it enters",
-     "door": "user", "basis": "user", "source_badge": "you supplied this"},
+     "source_badge": "you supplied this"},
     {"name": "water_temp_c", "value": 20.0, "units": "C",
-     "desc": "Water temperature", "door": "scenario", "basis": "default_demo",
+     "desc": "Water temperature",
      "source_badge": "labeled default", "bounds": [0.0, 40.0]},
     {"name": "sim_seconds", "value": 3600.0, "units": "s",
-     "desc": "Simulated time", "door": "constant", "basis": "default_demo",
+     "desc": "Simulated time",
      "source_badge": "labeled default", "bounds": [60.0, 86400.0],
      "advanced": True},
 ]
@@ -58,7 +58,6 @@ class ParamSheetParseTests(unittest.TestCase):
         heading per section. A sheet that groups nothing carries an empty one."""
         rows = [*_DEFAULT_ROWS,
                 {"name": "TIDAL_FLATS", "value": True, "desc": "Tidal flats",
-                 "door": "scenario", "basis": "default_demo",
                  "source_badge": "engine default", "advanced": True,
                  "group": "HYDRO"}]
         sheet = gate.parse_param_sheet(_sheet_payload(rows=rows))
@@ -78,7 +77,7 @@ class ParamSheetParseTests(unittest.TestCase):
         not a filled slot names none, and the card leaves it as plain prose."""
         rows = [*_DEFAULT_ROWS,
                 {"name": "TIME_STEP", "value": 2.5, "desc": "Time step",
-                 "door": "derived", "basis": "derived", "origin": "derived",
+                 "origin": "derived",
                  "source_badge": "derived: settled.time_step_s"}]
         sheet = gate.parse_param_sheet(_sheet_payload(rows=rows))
         self.assertEqual(sheet.rows[-1].origin, "derived")
@@ -100,7 +99,7 @@ class ParamSheetParseTests(unittest.TestCase):
 
     def test_inverted_bounds_are_dropped_not_rendered(self) -> None:
         sheet = gate.parse_param_sheet(_sheet_payload(rows=[
-            {"name": "a", "value": 1.0, "door": "scenario", "basis": "default_demo",
+            {"name": "a", "value": 1.0,
              "bounds": ["nonsense", 2.0]}]))
         self.assertIsNone(sheet.rows[0].bounds)
 
@@ -130,8 +129,7 @@ class ParamSheetEditTests(unittest.TestCase):
 
     def test_a_text_edit_travels_verbatim(self) -> None:
         rows = gate.parse_param_sheet(_sheet_payload(rows=[
-            {"name": "runoff_path", "value": "nhd_area", "door": "constant",
-             "basis": "default_demo"}])).rows
+            {"name": "runoff_path", "value": "nhd_area"}])).rows
         self.assertEqual(
             gate.resolve_param_sheet_edits(rows, {"runoff_path": "drawn_polygon"}),
             {"runoff_path": "drawn_polygon"})
@@ -153,13 +151,13 @@ class PickedRowTests(unittest.TestCase):
 
     def setUp(self) -> None:
         self.rows = gate.parse_param_sheet(_sheet_payload(rows=[
-            {"name": "extent", "door": "user", "basis": "user",
+            {"name": "extent",
              "options": [{"value": "L-poly", "label": "harbour outline"}]},
-            {"name": "mesher", "door": "user", "basis": "user",
+            {"name": "mesher",
              "options": [{"value": "om2d", "label": "om2d"},
                          {"value": "reg_grid", "label": "reg_grid"}]},
-            {"name": "bed", "door": "user", "basis": "user", "options": []},
-            {"name": "ops", "door": "user", "basis": "user"}])).rows
+            {"name": "bed", "options": []},
+            {"name": "ops"}])).rows
 
     def test_a_row_carries_exactly_its_listed_values(self) -> None:
         by_name = {r.name: r for r in self.rows}
