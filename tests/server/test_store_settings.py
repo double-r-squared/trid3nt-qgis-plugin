@@ -38,7 +38,7 @@ def test_a_chart_spec_persists_on_the_store_s_settings_not_ambient_credentials(
         wrong_ambient, monkeypatch):
     from botocore.stub import ANY, Stubber
 
-    from trid3nt_server.workflows.runtime import run_products
+    from trid3nt_server.workflows.runtime import run_output
 
     wrong_ambient.write_text(_MINIO, encoding="utf-8")
     built = storage.client()
@@ -52,7 +52,7 @@ def test_a_chart_spec_persists_on_the_store_s_settings_not_ambient_credentials(
         "ContentType": "application/json"})
     monkeypatch.setattr(storage, "client", lambda: built)
     with stub:
-        uris = asyncio.run(run_products.persist_run_products(
+        uris = asyncio.run(run_output.persist_run_products(
             "RID", charts={"ice_cover_fraction": {"title": "cover"}}))
     assert uris == ["s3://trid3nt-runs/RID/chart_spec.json"]
     stub.assert_no_pending_responses()

@@ -8,13 +8,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
-from typing import Annotated, Any, Mapping
+from typing import Any, Mapping
 
 from trid3nt_contracts.coverage import DATA_CLASSES
 
 from trid3nt_server.inputs.slots import BED, DOMAIN, SLOTS, Slot, role_of
 
-from .errors import PlanValidationError, SuppliedGeometryError
+from .errors import DeclarationError, SuppliedGeometryError
 from .params import declarations, take_name
 
 __all__ = [
@@ -22,7 +22,6 @@ __all__ = [
     "Data",
     "DataDecl",
     "Producer",
-    "SuppliedGeometry",
     "ToolWord",
     "artifact_class",
     "data_rows",
@@ -58,18 +57,6 @@ _CLASS_BY_SUFFIX: Mapping[str, str] = MappingProxyType({
     ".gr3": "mesh", ".msh": "mesh",
     ".fgb": "vector", ".geojson": "vector", ".json": "vector", ".shp": "vector",
     ".gpkg": "vector", ".kml": "vector", ".gml": "vector"})
-
-
-@dataclass(frozen=True, slots=True)
-class SuppliedGeometry:
-    """The shape a context slot accepts, carried ON the generated argument's type.
-    Annotation metadata, not the type: ``typing.get_type_hints`` drops it before
-    any model-facing schema is built."""
-
-    shape: str
-
-    def __repr__(self) -> str:
-        return f"geometry={self.shape}"
 
 
 def artifact_class(value: Any) -> str | None:
@@ -115,7 +102,7 @@ class Producer:
 
     def __post_init__(self) -> None:
         if not self.runner:
-            raise PlanValidationError("Producer declares no runner path.")
+            raise DeclarationError("Producer declares no runner path.")
         object.__setattr__(self, "kwargs", MappingProxyType(dict(self.kwargs)))
 
     def supplied(self, uri: str | None = None, *,
@@ -190,9 +177,9 @@ class DataDecl:
 
     def __post_init__(self) -> None:
         if self.name and not self.name.isidentifier():
-            raise PlanValidationError(f"Data name {self.name!r} is not an identifier.")
+            raise DeclarationError(f"Data name {self.name!r} is not an identifier.")
         if self.is_optional and self.producer is not None:
-            raise PlanValidationError(
+            raise DeclarationError(
                 f"Data {self.name!r} declares a producer AND .optional(): a producer "
                 "either produces the artifact or fails typed, so there is no absence "
                 "for optional to describe. Drop the producer to make it a context "
@@ -200,27 +187,27 @@ class DataDecl:
                 "when the source is empty."
             )
         if self.data_class and self.producer is not None:
-            raise PlanValidationError(
+            raise DeclarationError(
                 f"Data {self.name!r} names a producer AND states "
                 f"need={self.data_class!r}: a row is satisfied one way. Drop the "
                 "producer to state a need.")
         if self.data_class and self.data_class not in DATA_CLASSES:
-            raise PlanValidationError(
+            raise DeclarationError(
                 f"Data {self.name!r} states need={self.data_class!r}, which is "
                 f"not one of the classes a row is written in "
                 f"({', '.join(DATA_CLASSES)}).")
         if self.observes and not self.data_class:
-            raise PlanValidationError(
+            raise DeclarationError(
                 f"Data {self.name!r} states of={self.observes!r} and needs no "
                 "class: of= names what OF a class this row asks the world for, "
                 "so a row that goes out for nothing asks for nothing.")
         if self.span_km is not None and not self.data_class:
-            raise PlanValidationError(
+            raise DeclarationError(
                 f"Data {self.name!r} states span_km and needs no class: how far "
                 "a question reaches is what the match asks a source for, and a "
                 "row that names its own producer states the reach on the call.")
         if self.is_context and not (self.producer is not None or self.data_class):
-            raise PlanValidationError(
+            raise DeclarationError(
                 f"Data {self.name!r} declares .context() and states neither a need "
                 "nor a producer: a context row is a row that goes out and looks, "
                 "whose absence is legal. A row nothing goes out for already says "
@@ -231,7 +218,7 @@ class DataDecl:
         """The row's name IS its slot, so what only one slot may state is refused here."""
         take_name(self, "name", name)
         if self.kind and self.role != DOMAIN:
-            raise PlanValidationError(
+            raise DeclarationError(
                 f"Data {name!r} states kind={self.kind!r} and is not the "
                 "domain: a kind is the DOMAIN'S own - the water the equations "
                 "are solved over - and no other row has one to state.")
@@ -248,22 +235,13 @@ class DataDecl:
         return self.producer is None or bool(self.role) or self.is_supplied
 
     @property
-    def producer_kwargs(self) -> Mapping[str, Any]:
-        """Every read this slot's producer declares; empty for a producer-less
-        slot."""
-        return {} if self.producer is None else dict(self.producer.kwargs)
-
-    @property
     def wire_annotation(self) -> Any:
         """This slot's declared type on the generated tool's signature.
-        Always a string: the declared shape rides along as :class:`SuppliedGeometry`
-        metadata rather than narrowing the type."""
+        Always a string: the declared shape does not narrow the type."""
         if self.slot.number:
             # A schema advertising only a layer name would refuse a known level or a one-number pond.
             return str | float | None
-        if self.geometry is None:
-            return str | None
-        return Annotated[str | None, SuppliedGeometry(self.geometry)]
+        return str | None
 
     @property
     def doc_line(self) -> str:
@@ -337,13 +315,13 @@ class DataDecl:
         On a producer-less slot this is the whole declaration: the shape it
         accepts, and nothing about where the thing comes from."""
         if self.producer is not None:
-            raise PlanValidationError(
+            raise DeclarationError(
                 f"Data {self.name!r} declares a producer AND .supplied(): a producer "
                 "that can be superseded says so on the producer "
                 "(tool(...).supplied(...)), not on the slot."
             )
         if geometry is not None and geometry not in _GEOMETRIES:
-            raise PlanValidationError(
+            raise DeclarationError(
                 f"Data {self.name!r}: .supplied(geometry={geometry!r}) is not a "
                 f"declared shape (known: {sorted(_GEOMETRIES)})."
             )
@@ -357,11 +335,11 @@ class DataDecl:
         """This row, produced by ``producer``: what ``Data(tool(...))`` declares.
         The row shape ``Data(tool(...)).context()`` modifiers are written on."""
         if not isinstance(producer, Producer):
-            raise PlanValidationError(
+            raise DeclarationError(
                 f"Data(...) takes a producer - tool(name, **kwargs) - and was "
                 f"given {type(producer).__name__} ({producer!r}).")
         if self.producer is not None:
-            raise PlanValidationError(
+            raise DeclarationError(
                 f"Data {self.name!r} already names a producer; a row is produced "
                 "one way.")
         return replace(self, producer=producer)
@@ -373,7 +351,7 @@ class DataDecl:
         ``at`` names the run input holding the asked point; ``of`` the variable; ``kind`` the domain's own kind
         (wins over the seed's); ``span_km`` the reach; ``geometry`` the shape the row is read as."""
         if geometry is not None and geometry not in _GEOMETRIES:
-            raise PlanValidationError(
+            raise DeclarationError(
                 f"Data {self.name!r}: .need(geometry={geometry!r}) is not a "
                 f"declared shape; the shapes are {sorted(_GEOMETRIES)}.")
         return replace(self, data_class=str(data_class),

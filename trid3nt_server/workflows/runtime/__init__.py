@@ -24,7 +24,7 @@ from .errors import (
     GateRefusedError,
     NamelessFailureError,
     ParamOutOfRangeError,
-    PlanValidationError,
+    DeclarationError,
     StepFailedError,
 )
 from .journal import cut_coverage, journal_note, run_coverage
@@ -66,7 +66,7 @@ __all__ = [
     "GateRefusedError",
     "Param",
     "ParamOutOfRangeError",
-    "PlanValidationError", "Producer", "RATE",
+    "DeclarationError", "Producer", "RATE",
     "ResolvedParam",
     "ResolvedParams",
     "RunResult", "Series",

@@ -39,12 +39,12 @@ class PARAMS:
 
     design_depth_m = Param(
         door=doors.SCENARIO, default=3.0, bounds=(0.1, 40.0), units="m",
-        user_lever=True, consequence="scenario",
+        consequence="scenario",
         desc="Depth the fairway is dredged TO, under the reference water "
              "surface the run opens at - the design draught plus its overdepth")
     trigger_depth_m = Param(
         door=doors.SCENARIO, default=3.0, bounds=(0.1, 40.0), units="m",
-        user_lever=True, consequence="scenario",
+        consequence="scenario",
         desc="Depth at which a node is dredged: the bed is worked wherever it "
              "sits shallower than this under the reference surface. Equal to "
              "design_depth_m keeps the channel exactly at grade; SMALLER than "
@@ -73,7 +73,7 @@ class PARAMS:
 
     dig_rate_m_per_s = Param(
         door=doors.SCENARIO, default=0.002, bounds=(1.0e-6, 1.0), units="m/s",
-        user_lever=True, consequence="scenario",
+        consequence="scenario",
         desc="How fast the dredger lowers the bed, as metres of bed per second "
              "of SOLVER time at a working node - the plant's capacity, not a "
              "physical rate. A pass reports its volume only once it has reached "
@@ -81,7 +81,7 @@ class PARAMS:
              "the run sees a completed pass at all")
     dump_rate_m_per_s = Param(
         door=doors.SCENARIO, default=0.002, bounds=(1.0e-6, 1.0), units="m/s",
-        user_lever=True, consequence="scenario",
+        consequence="scenario",
         desc="How fast the spoil is laid into the dump area, as metres of bed "
              "per second of solver time at a receiving node; a pass is not "
              "finished until its spoil is placed")

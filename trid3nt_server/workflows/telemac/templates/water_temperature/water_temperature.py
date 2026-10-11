@@ -36,7 +36,7 @@ class PARAMS:
              "pond, a harbour - instead and this is not read")
     station = Param(
         door=doors.USER, optional=True, consequence="scenario",
-        user_lever=True, type=Point,
+        type=Point,
         derived_when_absent=(
             "the series is read at the point 98% of the way down the modelled "
             "domain, which is the water that has been exposed to the weather "

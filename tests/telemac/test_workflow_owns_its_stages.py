@@ -13,7 +13,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.workflows.runtime import (
     Data,
-    PlanValidationError,
+    DeclarationError,
     tool,
 )
 from trid3nt_server.workflows.runtime.levers import (
@@ -88,7 +88,7 @@ def test_a_template_with_no_domain_refuses_at_import():
     class NO_DOMAIN:
         bed = Data.need("bathymetry")
 
-    with pytest.raises(PlanValidationError, match="declares no domain"):
+    with pytest.raises(DeclarationError, match="declares no domain"):
         _workflow(data=NO_DOMAIN)
 
 
@@ -96,5 +96,5 @@ def test_a_template_with_no_bed_refuses_at_import():
     class NO_BED:
         domain = Data.need("hydrography")
 
-    with pytest.raises(PlanValidationError, match="declares no bed"):
+    with pytest.raises(DeclarationError, match="declares no bed"):
         _workflow(data=NO_BED)

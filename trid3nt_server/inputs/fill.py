@@ -28,7 +28,7 @@ from ..workflows.runtime.data import CoversAOI, DataDecl, Producer
 
 from .slots import BED, DISCHARGE, DOMAIN, EXTENT, LEVEL, LINE
 from ..workflows.runtime.domain import Domain, bind_domain, current_domain
-from ..workflows.runtime.errors import (DeclarativeError, PlanValidationError, StepFailedError,
+from ..workflows.runtime.errors import (DeclarativeError, StepFailedError,
                      SuppliedCoverageError, said)
 from ..workflows.runtime import journal
 from ..workflows.runtime.journal import journal_note, slot_choice
@@ -390,10 +390,10 @@ def _pick(env: _Env, decl: DataDecl, data_class: str) -> str:
     if not named:
         return ""
     if not any(getattr(_spec_of(named), "coverage", ())):
-        raise PlanValidationError(
+        raise StepFailedError(
             f"the run picks {named!r} for the {decl.name!r} slot and it states "
             "no coverage at all: a source the match never weighs cannot be "
-            "picked out of its list.")
+            "picked out of its list.", error_code="DATA_NEED_UNMATCHED")
     return named if _fetcher_row(named, data_class) is not None else ""
 
 
@@ -546,13 +546,14 @@ def _observed_unit(env: _Env, decl: DataDecl, observed: str) -> str:
     unit = str(env.published_units.get(observed) or "")
     if unit:
         return unit
-    raise PlanValidationError(
+    raise StepFailedError(
         f"Data {decl.name!r} observes {observed!r}, and this run publishes "
         f"no unit under that name (it publishes "
         f"{', '.join(sorted(n for n, u in env.published_units.items() if u)) or 'nothing named'}). "
         "A record read in its own unit against a variable written in another is "
         "a difference nobody measured: name the variable the run publishes, or "
-        "state the unit where that variable is declared.")
+        "state the unit where that variable is declared.",
+        error_code="DATA_NEED_UNMATCHED")
 
 
 def _what_the_record_reports(env: _Env, decl: DataDecl,
@@ -719,12 +720,11 @@ _CARRIED = ("input_mode", "restart_clean")
 
 @dataclass(frozen=True)
 class Verdict:
-    """One input's answer on arrival: its state, the value and where it came
-    from, or the reason it was refused and what would be taken instead."""
+    """One input's answer on arrival: its state and the value taken, or
+    the reason it was refused and what would be taken instead."""
 
     state: str
     value: Any = None
-    origin: str = ""
     reason: str = ""
     remedies: tuple[str, ...] = ()
     code: str = ""
@@ -792,7 +792,7 @@ async def fill(state: Fill, values: Mapping[str, Any]) -> Fill:
         state.inputs[name] = Verdict(
             REJECTED, name, code="INPUT_UNNAMED",
             reason=f"the template names {name!r} as an input, and no param, "
-            "row or product of this run is called that.")
+            "row or output of this run is called that.")
     tokens = (journal.bind_notes(), journal.bind_choices(),
               journal.bind_coverage())
     try:
@@ -836,7 +836,7 @@ def _keyword(state: Fill, name: str, value: Any) -> None:
     if note and note not in state.notes:
         state.notes.append(note)
     state.keywords[name] = value
-    state.inputs[name] = Verdict(ACCEPTED, taken, origin="user")
+    state.inputs[name] = Verdict(ACCEPTED, taken)
 
 
 async def _seat(state: Fill) -> None:
@@ -890,8 +890,7 @@ async def _seat(state: Fill) -> None:
                 code="GATE_REFUSED")
         elif row.value is not None:
             state.inputs[prm.name] = Verdict(
-                DEFAULTED if value is None else ACCEPTED, row.value,
-                origin="default" if value is None else "user")
+                DEFAULTED if value is None else ACCEPTED, row.value)
     state.params = ResolvedParams(rows) if len(rows) == len(wf.params) else None
 
 
@@ -919,10 +918,8 @@ async def _row(state: Fill, decl: DataDecl, value: Any) -> None:
             "was refused.")
         return
     env = production(state)
-    origin = "user" if value is not None else "produced"
     if isinstance(value, Mapping) and "source" in value:
-        env.picks[decl.name] = origin = str(value["source"])
-        origin = f"source:{origin}"
+        env.picks[decl.name] = str(value["source"])
     elif value is not None:
         env.supplied[decl.name] = (value.get("layer")
                                    if isinstance(value, Mapping) else value)
@@ -944,7 +941,7 @@ async def _row(state: Fill, decl: DataDecl, value: Any) -> None:
             remedies=await _instead(env, decl, picked) if picked else ())
         return
     state.domain = current_domain()
-    state.inputs[decl.name] = Verdict(ACCEPTED, held, origin=origin)
+    state.inputs[decl.name] = Verdict(ACCEPTED, held)
 
 
 def _refusal_code(exc: BaseException, name: str) -> str:

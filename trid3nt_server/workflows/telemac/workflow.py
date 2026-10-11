@@ -19,7 +19,7 @@ from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
 
 from trid3nt_server.render.formats import publish
 from trid3nt_server.workflows.runtime import (
-    PlanValidationError,
+    DeclarationError,
     RunResult,
     Workflow,
 )
@@ -122,7 +122,7 @@ class Measured:
 
     def __post_init__(self) -> None:
         if self.kind not in _MEASURES:
-            raise PlanValidationError(
+            raise DeclarationError(
                 f"{self.name}: there is no {self.kind!r} measurement; the "
                 f"workflow takes {tuple(_MEASURES)}.")
         object.__setattr__(self, "reads", MappingProxyType(dict(self.reads)))
@@ -492,10 +492,8 @@ async def run_sheet(*, sheet: Sheet, settled: Mapping[str, Any],
 _ORIGIN_DOORS: Mapping[Origin, tuple[str, str]] = {
     Origin.TEMPLATE: ("scenario", "derived"),
     Origin.USER: ("user", "user"),
-    Origin.MODEL: ("user", "user"),
     Origin.PRODUCER: ("derived", "derived"),
     Origin.DERIVED: ("derived", "derived"),
-    Origin.CALIBRATED: ("derived", "derived"),
 }
 
 
@@ -867,16 +865,16 @@ class TelemacWorkflow(Workflow):
             if row.role:
                 slots.setdefault(row.role, []).append(row.name)
         if not slots.get(DOMAIN):
-            raise PlanValidationError(
+            raise DeclarationError(
                 f"{self.name} declares no domain: a run solves over a polygon, so "
                 "the DATA body needs a row named domain.")
         beds = slots.get(BED) or []
         if not beds:
-            raise PlanValidationError(
+            raise DeclarationError(
                 f"{self.name} declares no bed: every node carries an elevation, so "
                 "the DATA body needs a row named bed.")
         if len(beds) > 1:
-            raise PlanValidationError(
+            raise DeclarationError(
                 f"{self.name} declares {len(beds)} bed rows ({beds}); the bed is "
                 "ONE source. A survey over a wider surface is composed by the "
                 "merge derive into the one row this slot takes.")
@@ -966,7 +964,7 @@ class TelemacWorkflow(Workflow):
             await stage(_SETTLED, open_water, **await self._opening(
                 env, domain, level, inflow), continue_from=previous)
         await measure("derive")
-        # A CONTEXT row's product is the SENTENCE, so one nothing read is asked once everything it could stand on is in hand;
+        # A CONTEXT row's output is the SENTENCE, so one nothing read is asked once everything it could stand on is in hand;
         # a row a module fills a keyword from is read here, before the sheet.
         for row in self.data:
             if row.is_context and row.name not in run:
@@ -1020,7 +1018,7 @@ class TelemacWorkflow(Workflow):
     def unnamed(self) -> tuple[str, ...]:
         """Every input the template names as a plain string - in a placement, a
         measurement, a row, an output, the mesh recipe or a composite - that no
-        param, row, product or keyword of this run is called."""
+        param, row, output or keyword of this run is called."""
         known = ({prm.name for prm in self.params} | {row.name for row in self.data}
                  | self._marks()
                  | {"mesh", "mesh_files", "channel", _SETTLED, "line"}
@@ -1150,7 +1148,7 @@ class TelemacWorkflow(Workflow):
         """One value the DECK itself states, read at RUN time off the floor.
         The floor may move the number before the deck writes it, so the stage reads it rather than being built from it; the deck must state it (refused at import)."""
         if self.steering.ASSERTED.get(keyword) is None:
-            raise PlanValidationError(
+            raise DeclarationError(
                 f"the workflow settles this question's run on the {keyword} its "
                 f"deck states, and this deck states none.")
         return None if run is None else run[keyword]
@@ -1202,13 +1200,13 @@ class TelemacWorkflow(Workflow):
         captions = dict(self._states("CAPTIONS", {}))
         for primitive in outputs:
             if primitive.publish is None:
-                raise PlanValidationError(
+                raise DeclarationError(
                     f"OUTPUTS lists {primitive.kind}({primitive.variable!r}) with "
                     "no .layer(), .chart(), .animate() or .note(); a listed "
                     "primitive is published.")
             named = primitive.variable or primitive.kind
             if named not in captions:
-                raise PlanValidationError(
+                raise DeclarationError(
                     f"OUTPUTS publishes {named!r} and CAPTIONS names no caption "
                     "for it.")
         return outputs, captions
@@ -1232,7 +1230,7 @@ def _signature(runner: str) -> frozenset[str]:
     module, _, name = runner.rpartition(".")
     op = getattr(import_module(module), name, None)
     if not callable(op):
-        raise PlanValidationError(
+        raise DeclarationError(
             f"{module} carries no {name!r} that takes a measurement; a "
             "measurement names the runner that takes it.")
     return frozenset(signature(op).parameters)

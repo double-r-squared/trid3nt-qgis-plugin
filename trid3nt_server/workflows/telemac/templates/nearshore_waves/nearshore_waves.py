@@ -37,7 +37,7 @@ class PARAMS:
              "buoy to it is the record the open boundary is forced at, so put "
              "it on the water the swell arrives across")
     station = Param(
-        door=doors.USER, user_lever=True, consequence="scenario", type=Point,
+        door=doors.USER, consequence="scenario", type=Point,
         desc="Where INSHORE the waves are read over time, as a Point: the "
              "pick's {coordinates, name} verbatim, a (lon, lat) pair, "
              "'lat,lon', a point layer. Geocode a place name first. The height, "

@@ -285,9 +285,9 @@ def test_a_run_series_is_asked_for_the_window_the_deck_will_solve(world):
 
 
 def test_a_need_and_a_producer_on_one_row_is_refused_at_declaration():
-    from trid3nt_server.workflows.runtime import PlanValidationError, tool
+    from trid3nt_server.workflows.runtime import DeclarationError, tool
 
-    with pytest.raises(PlanValidationError, match="a row is satisfied one way"):
+    with pytest.raises(DeclarationError, match="a row is satisfied one way"):
         class DATA:
             bed = Data(tool("fetch_dem")).need("bathymetry")
 

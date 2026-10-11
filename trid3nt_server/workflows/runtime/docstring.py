@@ -61,7 +61,7 @@ def render_docstring(
 
 def _ordered(params: Any) -> list[Param]:
     """Question-bearing params first, constants last; takes a sequence or a whole ``PARAMS`` body."""
-    rank = {doors.QUESTION: 0, doors.USER: 1, doors.GATE: 1,
+    rank = {doors.QUESTION: 0, doors.USER: 1,
             doors.SCENARIO: 2, doors.CONSTANT: 4}
     return sorted(param_rows(params), key=lambda p: (rank.get(p.door, 5), p.name))
 

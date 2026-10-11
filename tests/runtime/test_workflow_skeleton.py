@@ -16,7 +16,7 @@ import pytest
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.workflows.runtime import (
     Param,
-    PlanValidationError,
+    DeclarationError,
     Workflow,
     doors,
 )
@@ -73,7 +73,7 @@ def test_the_hooks_are_silent_by_default():
 @pytest.mark.asyncio
 async def test_a_filled_check_hook_reaches_the_result_as_a_note(monkeypatch):
     from trid3nt_server.workflows.runtime import RunResult
-    from trid3nt_server.workflows.runtime import run_products
+    from trid3nt_server.workflows.runtime import run_output
 
     class Checked(_Stub):
         def checks(self, run):
@@ -82,7 +82,7 @@ async def test_a_filled_check_hook_reaches_the_result_as_a_note(monkeypatch):
     async def _no_persist(run_id, *, charts):
         return []
 
-    monkeypatch.setattr(run_products, "persist_run_products", _no_persist)
+    monkeypatch.setattr(run_output, "persist_run_products", _no_persist)
     wf = _workflow(Checked)
     out = await wf._publish(RunResult(value=_Layer()))
     assert "depth 1.5 m is a screening figure" in out.notes
@@ -97,8 +97,6 @@ def test_the_generated_signature_is_the_declaration_plus_controls():
         Param("depth_m", door=doors.SCENARIO, default=1.0, bounds=(0.0, 9.0),
               desc="a bounded value"),
         Param("armed", door=doors.USER, optional=True, type=bool, desc="a flag"),
-        Param("derived_only", door=doors.USER, optional=True, wire=False,
-              desc="resolved by a coercion, never sent"),
         Param("solver_dt_s", door=doors.CONSTANT, default=1.0, bounds=(0.1, 60.0),
               desc="non-question numerics the model is never asked for"),
     )
@@ -224,7 +222,7 @@ async def test_a_BUG_in_a_coercion_reads_as_internal_never_as_the_caller_s_fault
 
 # --- (8) a declaration whose wire type would be guessed wrong refuses -------- #
 def test_an_unbounded_numeric_default_refuses_rather_than_advertising_a_string():
-    with pytest.raises(PlanValidationError) as ei:
+    with pytest.raises(DeclarationError) as ei:
         Param("k_per_day", door=doors.SCENARIO, default=0.3, desc="a rate")
     assert "STRING" in str(ei.value)
     # ... and both offered fixes are accepted

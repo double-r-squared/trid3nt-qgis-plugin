@@ -26,7 +26,7 @@ __all__ = ["CAPTIONS", "DATA", "DOC", "OUTPUTS", "PARAMS", "STEERING",
 
 class PARAMS:
     seed = Param(
-        door=doors.USER, optional=True, user_lever=True,
+        door=doors.USER, optional=True,
         consequence="scenario", type=Point,
         derived_when_absent=(
             "the domain polygon supplied on the call is the body of water the "

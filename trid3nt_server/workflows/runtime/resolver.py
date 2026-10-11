@@ -37,20 +37,15 @@ def seat_param(param: Param, value: Any) -> ResolvedParam:
         units=param.units, consequence=param.consequence,
         note=("not supplied (declared optional)" if param.optional
               else "REQUIRED and not supplied"),
-        real_source=param.real_source, required_missing=not param.optional)
+        required_missing=not param.optional)
 
 
 #: A value seated from its declared default is a labeled default whatever door it hangs under.
 _BASIS_DEFAULT = "default_demo"
 
 
-#: The only two bases with a real source; a typed or defaulted value did not come from the declared data.
-_SOURCED_BASES = frozenset({"derived", "fetched"})
-
-
 def _finish(param: Param, value: Any, door: str, note: str, *,
-            basis: str | None = None,
-            real_source: str | None = None) -> ResolvedParam:
+            basis: str | None = None) -> ResolvedParam:
     if param.bounds is not None:
         coerced = _as_float(value)
         if coerced is None:
@@ -69,12 +64,10 @@ def _finish(param: Param, value: Any, door: str, note: str, *,
         # The bound compares numbers without retyping: an int param resolved to float would reach an INTEGER keyword and refuse far from here.
         value = int(coerced) if param.type is int else coerced
     if basis is None:
-        basis = "user" if door in (doors.USER, doors.GATE) else _basis(param, door)
-    source = real_source if real_source is not None else param.real_source
+        basis = "user" if door == doors.USER else _basis(param, door)
     return ResolvedParam(
         name=param.name, value=value, door=door, basis=basis,
         units=param.units, consequence=param.consequence, note=note,
-        real_source=source if basis in _SOURCED_BASES else None,
     )
 
 
@@ -127,7 +120,7 @@ def provenance_entries(resolved: ResolvedParams,
 
 def merge_provenance(existing: Sequence[SyntheticInput],
                      declared: Sequence[SyntheticInput]) -> list[SyntheticInput]:
-    """Merge a composite step's own provenance rows with the plan's declared rows.
+    """Merge a composite step's own provenance rows with the declared rows.
     The composite's row WINS on a name collision - it stamped what actually
     resolved, while the declaration only knows what was asked for."""
     kept = list(existing)

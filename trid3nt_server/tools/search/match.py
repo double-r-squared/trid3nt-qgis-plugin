@@ -20,7 +20,7 @@ from trid3nt_contracts.coverage import (
     PROVENANCE_KINDS, Coverage, CoverageExtent, CoveragePoint, SourceChoice,
     SourceOption)
 
-from trid3nt_server.workflows.runtime.errors import PlanValidationError
+from trid3nt_server.workflows.runtime.errors import DeclarationError
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ class Need:
 
     def __post_init__(self) -> None:
         if not self.data_class:
-            raise PlanValidationError(
+            raise DeclarationError(
                 f"the {self.slot!r} slot declares a need with no data class: a "
                 "match filters on the class first, and a need without one asks "
                 "the whole catalogue for anything.")
@@ -141,7 +141,7 @@ def _named_first(need: Need, survivors: Sequence[SourceOption],
     if named is None:
         excluded = next((row.excluded for row in dropped
                          if row.fetcher == need.pick), "")
-        raise PlanValidationError(
+        raise DeclarationError(
             f"the run picks {need.pick!r} for the {need.slot!r} slot and it is "
             "not a survivor of the match: "
             + (excluded or f"no row on it serves {need.data_class}")

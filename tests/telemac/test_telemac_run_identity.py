@@ -43,17 +43,17 @@ def test_every_template_is_values_over_a_module_of_the_one_engine(tool_name, mod
     assert _steering(tool_name).MODULE == module
 
 
-def test_the_vocabulary_is_the_six_the_card_renders():
+def test_the_vocabulary_is_the_four_the_card_renders():
     assert [origin.value for origin in Origin] == [
-        "template", "user", "model", "producer", "derived", "calibrated"]
+        "template", "user", "producer", "derived"]
 
 
 @pytest.mark.parametrize("tool_name,_module", TEMPLATE_MODULES)
-def test_every_slot_of_a_template_s_default_fill_carries_one_of_the_six(
+def test_every_slot_of_a_template_s_default_fill_carries_one_of_the_four(
         tool_name, _module):
     """The default fill is what the body states before a run measures anything:
     the values that stand, and the assertions still waiting on a read. A writer
-    that invented a seventh word is caught here, not on a card nobody can read."""
+    that invented a fifth word is caught here, not on a card nobody can read."""
     from trid3nt_server.workflows.telemac.modules.sheet import _standing
 
     _body, standing, pending = _standing(_steering(tool_name))

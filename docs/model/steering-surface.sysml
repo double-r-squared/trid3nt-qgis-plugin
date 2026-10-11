@@ -8,9 +8,8 @@
 // it IS, ``forbid:`` states a dependency rule, ``constructor:`` names a
 // function that builds a contract.
 //
-// This is the runtime system's first modeled seam. The plan language beside it
-// - steps, gates, the interpreter that walks them - is unmodeled and stated so
-// in the index, because it is the half this surface is replacing.
+// This is the runtime system's first modeled seam. The fill and the run beside it
+// are unmodeled and stated so in the index.
 
 package SteeringSurface {
 
@@ -38,7 +37,7 @@ package SteeringSurface {
     it PLACES, captions - and nothing below it knows the question exists. What a
     run WRITES is the module's own output table, and the reads over it are
     primitives named from that table; the run record carries the engine and the
-    module, every filled slot carries one of six origins, and the adapters build
+    module, every filled slot carries one of four origins, and the adapters build
     their turns from an IR of this repo's own. A point anywhere in the system is
     one typed Point.
     */
@@ -169,9 +168,9 @@ package SteeringSurface {
         doc /*
         The engine's own workflow class, which reads a template MODULE by its
         own names - the STEERING body, the data rows, the outputs and the
-        answer - and builds the plan off them. It decides nothing: the sequence
+        answer - and builds the run off them. It decides nothing: the sequence
         it builds is the same for every question, and no object stands between
-        the declaration and the plan.
+        the declaration and the run.
         */
     }
 
@@ -794,9 +793,9 @@ package SteeringSurface {
 
     requirement def ProvenanceNamesTheLayerThatAnswered {
         doc /*
-        A filled slot says which of the six layers answered it. Engine default
+        A filled slot says which of the five layers answered it. Engine default
         is ABSENCE - the slot is not on the sheet at all and the card badges it
-        under the advanced fold. The other five are on the row: a template
+        under the advanced fold. The other four are on the row: a template
         names itself, a fill names the user, a
         composite names the producer that expanded it, and a value the RUN
         MEASURED reads DERIVED.
@@ -844,7 +843,7 @@ package SteeringSurface {
         fill. An edit to ANY input of the run - a template param a keyword reads,
         a keyword, a composite - re-fills that input and redraws the card, or
         refuses BY NAME with the reason; nothing is filtered away in silence. No
-        gate concept survives in the plan: a card in front of the fill would
+        gate concept survives in the workflow: a card in front of the fill would
         revise a sheet the fill never reads.
 
         What is SET and what is OPEN AND MANDATORY are the review; the whole
@@ -886,7 +885,7 @@ package SteeringSurface {
         tracer is two on the fill. A wrapper's reads are primitives named from
         the module's own output table and never from a question. A run is recorded
         under its engine and its module, with no template field; every filled
-        slot carries the value it was solved at beside one of the six origins
+        slot carries the value it was solved at beside one of the four origins
         the card renders, and the record carries the solver's own correct-end
         flag. The adapters
         build a turn from the contracts IR and import no provider SDK for it.
@@ -1386,9 +1385,9 @@ package SteeringSurface {
     verify requirement ModuleIsTheUnit by
         "tests/runtime/test_run_journal.py::test_the_run_s_own_line_carries_the_fill_and_the_correct_end_its_solve_step_said";
     verify requirement ModuleIsTheUnit by
-        "tests/telemac/test_telemac_run_identity.py::test_the_vocabulary_is_the_six_the_card_renders";
+        "tests/telemac/test_telemac_run_identity.py::test_the_vocabulary_is_the_four_the_card_renders";
     verify requirement ModuleIsTheUnit by
-        "tests/telemac/test_telemac_run_identity.py::test_every_slot_of_a_template_s_default_fill_carries_one_of_the_six";
+        "tests/telemac/test_telemac_run_identity.py::test_every_slot_of_a_template_s_default_fill_carries_one_of_the_four";
     verify requirement ModuleIsTheUnit by
         "tests/telemac/test_telemac_module_surface.py::test_a_fill_with_two_tracers_is_a_two_tracer_deck";
     verify requirement ModuleIsTheUnit by

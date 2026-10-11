@@ -235,7 +235,7 @@ class Workflow:
                             f"{name!r} is not an input of it.")
 
     def _error(self, code: str, exc: BaseException) -> dict[str, Any]:
-        """The failure, plus whatever auxiliary products the run also lost on the way."""
+        """The failure, plus whatever auxiliary outputs the run also lost on the way."""
         notes = getattr(exc, "__notes__", ()) or ()
         # An exception that stringifies to nothing reports its type; the sentence is all a card prints.
         return {"status": "error", "error_code": code,
@@ -429,9 +429,8 @@ def _context_doc(data: Sequence[DataDecl],
 
 def _wire_params(params: Sequence[Param]) -> tuple[Param, ...]:
     """The declared params the model-facing wire carries; signature and docstring both read it."""
-    # Excluded: ``wire=False`` (a coercion resolves it) and CONSTANT-door params (non-question physics the schema must not invite).
-    return tuple(prm for prm in params
-                 if prm.wire and prm.door != doors.CONSTANT)
+    # Excluded: CONSTANT-door params (non-question physics the schema must not invite).
+    return tuple(prm for prm in params if prm.door != doors.CONSTANT)
 
 
 def _wire_signature(params: Sequence[Param],
@@ -443,7 +442,7 @@ def _wire_signature(params: Sequence[Param],
     entries: list[tuple[str, Any, Any]] = [
         (prm.name, prm.wire_type | None, None) for prm in _wire_params(params)
     ]
-    # A producer-less Data slot is on the wire - a caller naming the layer is the only way it is filled; its shape travels on the annotation.
+    # A producer-less Data slot is on the wire - a caller naming the layer is the only way it is filled.
     entries += [(decl.name, decl.wire_annotation, None) for decl in data
                 if decl.fills_from_user]
     entries += list(_CONTROLS)

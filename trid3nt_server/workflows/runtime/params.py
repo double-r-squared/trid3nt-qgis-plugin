@@ -10,7 +10,7 @@ import dataclasses
 from dataclasses import dataclass, replace
 from typing import Any, Literal, Sequence
 
-from .errors import PlanValidationError
+from .errors import DeclarationError
 
 __all__ = [
     "Door",
@@ -24,21 +24,20 @@ __all__ = [
 ]
 
 
-Door = Literal["user", "question", "scenario", "constant", "gate"]
+Door = Literal["user", "question", "scenario", "constant"]
 
 
 class doors:  # noqa: N801 - a namespace of door constants, not a type
-    """The five doors, in resolution order."""
+    """The four doors, in resolution order."""
 
     USER = "user"
     QUESTION = "question"
     SCENARIO = "scenario"
     CONSTANT = "constant"
-    GATE = "gate"
 
 
 _ORDER: tuple[str, ...] = (
-    doors.USER, doors.QUESTION, doors.SCENARIO, doors.CONSTANT, doors.GATE,
+    doors.USER, doors.QUESTION, doors.SCENARIO, doors.CONSTANT,
 )
 
 _BASIS_FOR_DOOR: dict[str, str] = {
@@ -46,7 +45,6 @@ _BASIS_FOR_DOOR: dict[str, str] = {
     doors.QUESTION: "prompt_interpreted",
     doors.SCENARIO: "default_demo",
     doors.CONSTANT: "default_demo",
-    doors.GATE: "user",
 }
 
 
@@ -61,41 +59,37 @@ class Param:
     default: Any = None
     bounds: tuple[float, float] | None = None
     units: str | None = None
-    user_lever: bool = False
     optional: bool = False
     consequence: Literal["physics", "scenario", "numerical", "aoi"] = "scenario"
-    real_source: str | None = None
     derived_when_absent: str | None = None
     #: The declared wire type; unset is inferred (bounded -> float, bool default -> bool, else str).
     #: An unbounded NUMERIC default is refused rather than inferred: see __post_init__.
     type: Any = None
-    #: False marks a value a coercion resolves from other wire args; the model never sends it.
-    wire: bool = True
 
     def __set_name__(self, owner: type, name: str) -> None:
         take_name(self, "name", name)
 
     def __post_init__(self) -> None:
         if self.name and not self.name.isidentifier():
-            raise PlanValidationError(f"Param name {self.name!r} is not an identifier.")
+            raise DeclarationError(f"Param name {self.name!r} is not an identifier.")
         if not self.desc:
-            raise PlanValidationError(f"Param {self.name!r} declares no desc.")
+            raise DeclarationError(f"Param {self.name!r} declares no desc.")
         if self.door not in _ORDER:
-            raise PlanValidationError(f"Param {self.name!r} door {self.door!r} unknown.")
+            raise DeclarationError(f"Param {self.name!r} door {self.door!r} unknown.")
         if self.door in (doors.SCENARIO, doors.CONSTANT) and self.default is None \
                 and not self.optional:
-            raise PlanValidationError(
+            raise DeclarationError(
                 f"Param {self.name!r} is door={self.door} but declares no default "
                 "(a labeled default IS the door; declare optional=True if absence is legal)."
             )
         if self.bounds is not None:
             lo, hi = self.bounds
             if float(lo) > float(hi):
-                raise PlanValidationError(
+                raise DeclarationError(
                     f"Param {self.name!r} bounds {self.bounds} are inverted."
                 )
         if self.derived_when_absent and not self.optional:
-            raise PlanValidationError(
+            raise DeclarationError(
                 f"Param {self.name!r} declares derived_when_absent but is not optional; "
                 "a required param has no absence to describe."
             )
@@ -103,7 +97,7 @@ class Param:
                 and isinstance(self.default, (int, float)) \
                 and not isinstance(self.default, bool):
             # A number advertised as str is a schema that lies; declare bounds or an explicit type - guessing is not this class's call.
-            raise PlanValidationError(
+            raise DeclarationError(
                 f"Param {self.name!r} has the numeric default {self.default!r} but "
                 "declares neither bounds nor type, so the wire would advertise it "
                 "as a STRING. Declare bounds=(lo, hi) - the physical range - or "
@@ -149,7 +143,7 @@ def take_name(row: Any, attr: str, name: str) -> None:
     declaration under two names refuses."""
     held = getattr(row, attr, "")
     if held and held != name:
-        raise PlanValidationError(
+        raise DeclarationError(
             f"{held!r} is declared again as {name!r}: a declaration is one row "
             "in one body. Write a fresh declaration for the second row.")
     object.__setattr__(row, attr, name)
@@ -160,7 +154,7 @@ def refuse_duplicate_params(declared: "Sequence[Param]") -> None:
     seen: set[str] = set()
     for param in declared:
         if param.name in seen:
-            raise PlanValidationError(
+            raise DeclarationError(
                 f"param {param.name!r} is declared twice; one name, one declaration."
             )
         seen.add(param.name)

@@ -28,7 +28,7 @@ ACCEPTS = Accepts(mesh=("unstructured_tri",))
 class PARAMS:
     outfall_coords = Param(
         door=doors.USER, optional=True, consequence="scenario",
-        user_lever=True, type=Point,
+        type=Point,
         derived_when_absent=(
             "with a domain supplied the outfall sits near the top of its "
             "centerline and the sag distance is measured downstream from there; "

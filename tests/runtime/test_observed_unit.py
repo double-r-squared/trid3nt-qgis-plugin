@@ -17,7 +17,7 @@ import pytest
 from trid3nt_server.inputs.observation import convert, observation
 from trid3nt_server.workflows.runtime import Data
 from trid3nt_server.inputs import fill
-from trid3nt_server.workflows.runtime.errors import PlanValidationError
+from trid3nt_server.workflows.runtime.errors import DeclarationError, StepFailedError
 
 _METADATA = SimpleNamespace(name="t", description="", tags=())
 
@@ -65,7 +65,7 @@ def test_a_fahrenheit_record_reaches_the_tracer_s_own_scale() -> None:
 def test_a_variable_with_no_unit_anywhere_refuses_rather_than_reading_the_record()\
         -> None:
     env = _env(TEMPERATURE="", H="m")
-    with pytest.raises(PlanValidationError) as raised:
+    with pytest.raises(StepFailedError) as raised:
         fill._what_the_run_calls_it(
             env, _row("observe", of="TEMPERATURE"), "TEMPERATURE")
     said = str(raised.value)
@@ -89,7 +89,7 @@ def test_the_row_states_no_unit_at_all() -> None:
 
 
 def test_a_row_observes_only_what_it_went_out_and_measured() -> None:
-    with pytest.raises(PlanValidationError):
+    with pytest.raises(DeclarationError):
         Data.need("", of="TEMPERATURE")
 
 

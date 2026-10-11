@@ -25,7 +25,7 @@ ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
 class PARAMS:
     release = Param(
-        door=doors.USER, optional=True, user_lever=True,
+        door=doors.USER, optional=True,
         consequence="scenario", type=Point,
         derived_when_absent=(
             "the release sits at release_fraction along the domain the mesh was "
@@ -47,7 +47,7 @@ class PARAMS:
              "rest of the run is what happens to what was released")
 
     monitoring_point = Param(
-        door=doors.USER, optional=True, user_lever=True,
+        door=doors.USER, optional=True,
         consequence="scenario", type=Point,
         derived_when_absent=(
             "the history is read at monitoring_fraction along the domain the "

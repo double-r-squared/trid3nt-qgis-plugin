@@ -71,9 +71,9 @@ def sensitivity_notes(decl: SensitivityDecl,
     # so the seated value says a spacing was put through; basis alone labels a default run as refined.
     refined = (getattr(row, "basis", None) == "user"
                and getattr(row, "value", None) is not None)
-    # A keyword lever has no param row: the fill records who stated it, and a user or model set it deliberately.
+    # A keyword lever has no param row: the fill records who stated it, and a user set it deliberately.
     stated = str(((fill or {}).get(lever) or {}).get("from") or "")
-    refined = refined or stated.startswith(("user", "model"))
+    refined = refined or stated.startswith("user")
     at = f" at {float(mesh_size_m):g} m" if mesh_size_m is not None else ""
 
     classes = sorted({cls for _, cls in present})

@@ -35,6 +35,6 @@ speak it and the one file that specializes the executor to it.
 | `runtime/params.py` | The `PARAMS` class body: one declared value per row, where its value may come from, its bounds and its consequence tag; plus the seated values a run reads by name. |
 | `runtime/resolution.py` | Resolution sensitivity: which of a run's published reads a coarse mesh gets wrong, and which way. |
 | `runtime/resolver.py` | The param seating: a stated value or the declared default, held to its bounds - a value outside them refuses by name - with a provenance row per seating. |
-| `runtime/run_products.py` | The run's persisted chart spec and metrics, written under its own prefix so the products outlive the turn that emitted them. |
+| `runtime/run_output.py` | The run's persisted chart spec and metrics, written under its own prefix so the output outlives the turn that emitted them. |
 | `runtime/temporal.py` | `Series` - a measured record as the runtime holds it, frozen: instants on the run's own clock, values and a unit - the quantity classes, and the explicit unit table a record is read in, where a unit nobody listed refuses by name. |
 | `runtime/workflow.py` | The workflow SKELETON and the registration factory: fill, launch a READY fill, post, publish, and the synthesized tool signature. |

@@ -11,7 +11,7 @@ __all__ = [
     "GateRefusedError",
     "NamelessFailureError",
     "ParamOutOfRangeError",
-    "PlanValidationError",
+    "DeclarationError",
     "said",
     "StepFailedError",
     "SuppliedCoverageError",
@@ -19,8 +19,8 @@ __all__ = [
 ]
 
 
-class PlanValidationError(DeclarativeError):
-    error_code = "PLAN_INVALID"
+class DeclarationError(DeclarativeError):
+    error_code = "DECLARATION_INVALID"
 
 
 class CoresUnavailable(DeclarativeError):

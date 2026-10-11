@@ -103,7 +103,7 @@ async def publish(*, run_id: str, engine: str, name: str,
         current_emitter,
         emit_chart_payloads,
     )
-    from trid3nt_server.workflows.runtime.run_products import persist_run_products
+    from trid3nt_server.workflows.runtime.run_output import persist_run_products
 
     shared = _shared_ranges(items)
     items = _one_row_per_quantity(items)

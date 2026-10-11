@@ -113,7 +113,7 @@ package SolveSeam {
 
     part def SolveStep {
         doc /*
-        The plan's consequential node: stage, dispatch, wait, and read the run
+        The run's consequential node: stage, dispatch, wait, and read the run
         report back off the run prefix.
         */
     }

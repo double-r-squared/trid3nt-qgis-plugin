@@ -16,7 +16,7 @@ import pytest
 from trid3nt_server.workflows.runtime import (
     Data,
     Param,
-    PlanValidationError,
+    DeclarationError,
     data_rows,
     doors,
     tool,
@@ -84,10 +84,10 @@ def test_a_context_row_states_what_the_sheet_says_when_its_source_is_empty():
 
 
 def test_context_needs_something_to_ask_and_optional_still_refuses_a_producer():
-    with pytest.raises(PlanValidationError,
+    with pytest.raises(DeclarationError,
                        match=r"states neither a need nor a producer"):
         Data.context()
-    with pytest.raises(PlanValidationError, match=r"declares a producer AND \.optional"):
+    with pytest.raises(DeclarationError, match=r"declares a producer AND \.optional"):
         class DATA:
             row = Data(tool("fetch_x")).optional()
 
@@ -270,16 +270,16 @@ def test_a_lever_states_only_this_questions_opinion_of_it():
     assert (own.default, own.bounds) == (25.0, (3.0, 500.0))
     assert own.desc == next(row.desc for row in LEVERS
                             if row.name == "mesh_resolution_m")
-    with pytest.raises(PlanValidationError, match="is not a runtime lever"):
+    with pytest.raises(DeclarationError, match="is not a runtime lever"):
         lever("friction_law", default=3)
     # The clock was a lever until the module's own DURATION was read as what it
     # is; asking for it by the old name says so rather than answering.
-    with pytest.raises(PlanValidationError, match="is not a runtime lever"):
+    with pytest.raises(DeclarationError, match="is not a runtime lever"):
         lever("sim_duration_s", default=600.0)
 
 
 def test_a_lever_the_runtime_does_not_declare_refuses_by_name():
-    with pytest.raises(PlanValidationError, match="is not a runtime lever"):
+    with pytest.raises(DeclarationError, match="is not a runtime lever"):
         with_levers((), ("friction_law",))
 
 

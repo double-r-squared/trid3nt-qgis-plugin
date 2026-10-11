@@ -12,7 +12,7 @@ import pytest
 from trid3nt_contracts.coverage import (
     Coverage, CoverageExtent, CoveragePoint, CoverageWindow)
 
-from trid3nt_server.workflows.runtime.errors import PlanValidationError
+from trid3nt_server.workflows.runtime.errors import DeclarationError
 from trid3nt_server.tools.search.match import (
     LOOSEN_WINDOW,
     Need,
@@ -164,7 +164,7 @@ def test_a_probe_that_exhausts_every_survivor_says_so():
 
 
 def test_a_need_with_no_data_class_is_refused_at_declaration():
-    with pytest.raises(PlanValidationError):
+    with pytest.raises(DeclarationError):
         Need(slot="bed", data_class="")
 
 
@@ -242,7 +242,7 @@ def test_a_run_that_picks_a_survivor_takes_it_as_the_user_s_choice():
 
 
 def test_a_run_that_picks_a_source_the_filters_excluded_is_refused():
-    with pytest.raises(PlanValidationError) as caught:
+    with pytest.raises(DeclarationError) as caught:
         match(level_need(pick="fetch_europe"), [
             ("fetch_europe", gauges(data_class="water level series",
                                     rings=EUROPE, note="Europe only",

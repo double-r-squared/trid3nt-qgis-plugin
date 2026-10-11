@@ -30,7 +30,7 @@ ACCEPTS = Accepts(mesh=("unstructured_tri",))
 
 class PARAMS:
     release = Param(
-        door=doors.USER, optional=True, user_lever=True,
+        door=doors.USER, optional=True,
         consequence="scenario", type=Point,
         derived_when_absent=(
             "the release sits at spill_fraction along the domain the mesh was "

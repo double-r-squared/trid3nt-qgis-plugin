@@ -35,7 +35,7 @@ Three things are not operations and stay:
 ## The two bodies
 
 `PARAMS` (`workflows/runtime/params.py`) - one declared VALUE per row: where it may
-come from (USER, QUESTION, SCENARIO, CONSTANT, GATE, read in that order), its bounds and
+come from (USER, QUESTION, SCENARIO, CONSTANT, read in that order), its bounds and
 its consequence tag. A value outside the bounds refuses by name. A CONSTANT is
 not on the model-facing wire; it stays on the review card for the person.
 

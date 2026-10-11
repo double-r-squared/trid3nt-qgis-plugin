@@ -38,7 +38,7 @@ class PARAMS:
 
     station = Param(
         door=doors.USER, optional=True, consequence="scenario",
-        user_lever=True, type=Point,
+        type=Point,
         derived_when_absent=(
             "the two history charts are read as the domain-wide maximum at each "
             "instant rather than at one place"),

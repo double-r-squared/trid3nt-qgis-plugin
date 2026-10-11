@@ -38,7 +38,7 @@ class PARAMS:
              "reservoir - instead and this is not read")
     station = Param(
         door=doors.USER, optional=True, consequence="scenario",
-        user_lever=True, type=Point,
+        type=Point,
         derived_when_absent=(
             "the series is read at the point 98% of the way down the modelled "
             "domain, which is the water that has been under the cold longest"),
@@ -47,7 +47,7 @@ class PARAMS:
              "'lat,lon' or a point layer. Geocode a place name first")
     cover_threshold = Param(
         door=doors.QUESTION, optional=True, default=0.5,
-        consequence="scenario", user_lever=True, type=float,
+        consequence="scenario", type=float,
         desc="Fraction of the surface under ice, 0 to 1, that counts as frozen "
              "over - the cover chart draws it as a reference line beside the "
              "series. A reporting threshold, not a physical constant: half the "

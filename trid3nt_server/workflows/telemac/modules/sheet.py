@@ -24,10 +24,8 @@ class Origin(str, Enum):
 
     TEMPLATE = "template"
     USER = "user"
-    MODEL = "model"
     PRODUCER = "producer"
     DERIVED = "derived"
-    CALIBRATED = "calibrated"
 
 
 @dataclass(frozen=True, slots=True)

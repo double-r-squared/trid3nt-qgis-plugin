@@ -141,7 +141,7 @@ def test_a_row_only_a_composite_reads_is_in_the_mapping_after_the_fill(
     monkeypatch.setattr(fill_mod, "_matched", _fetched)
     workflow = _workflow("telemac_ice_cover")
     state = asyncio.run(fill(Fill(workflow=workflow), dict(_STATED)))
-    assert state.ready and state.inputs["weather"].origin == "produced"
+    assert state.ready
     run = state.env.run
     assert run["weather"] == "the weather record"
     assert _read(run, "weather", "atmosphere") == "the weather record"

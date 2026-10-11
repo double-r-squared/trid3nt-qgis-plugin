@@ -24,7 +24,7 @@ from trid3nt_server.workflows.runtime import (
     DataDecl,
     Domain,
     Param,
-    PlanValidationError,
+    DeclarationError,
     ResolvedParams,
     StepFailedError,
     SuppliedGeometryError,
@@ -208,12 +208,12 @@ def derive_broken(params):
 
 # --- Param declarations ------------------------------------------------------ #
 def test_scenario_param_needs_a_labeled_default():
-    with pytest.raises(PlanValidationError):
+    with pytest.raises(DeclarationError):
         Param("x", desc="d", door=doors.SCENARIO)
 
 
 def test_inverted_bounds_refused():
-    with pytest.raises(PlanValidationError):
+    with pytest.raises(DeclarationError):
         Param("x", desc="d", default=1.0, bounds=(9.0, 1.0))
 
 
@@ -332,7 +332,7 @@ async def test_resolver_refuses_a_param_declared_twice():
     decl = [Param("base", desc="d", door=doors.SCENARIO, default=1.0, type=float),
             Param("base", desc="other", door=doors.SCENARIO, default=2.0,
                   type=float)]
-    with pytest.raises(PlanValidationError, match="declared twice"):
+    with pytest.raises(DeclarationError, match="declared twice"):
         await resolve_params(decl, {})
 
 
@@ -404,7 +404,7 @@ def test_one_declaration_cannot_be_bound_to_two_names():
     second name silently the first."""
     shared = Param(door=doors.SCENARIO, default=1.0, bounds=(0.0, 9.0), desc="d")
 
-    with pytest.raises(PlanValidationError, match="declared again"):
+    with pytest.raises(DeclarationError, match="declared again"):
         class PARAMS:
             first = shared
             second = shared
@@ -421,7 +421,7 @@ def _flagged(**overrides):
 
 def test_a_producer_backed_data_may_not_be_optional():
     """A producer either produces or fails typed, so there is no absence to describe."""
-    with pytest.raises(PlanValidationError, match="optional"):
+    with pytest.raises(DeclarationError, match="optional"):
         DataDecl("mesh", tool(f"{_HERE}.stub_producer")).optional()
 
 
@@ -433,13 +433,13 @@ def test_a_context_slot_declares_the_shape_it_accepts():
 
 
 def test_a_context_slot_refuses_a_shape_nobody_declares():
-    with pytest.raises(PlanValidationError, match="not a declared shape"):
+    with pytest.raises(DeclarationError, match="not a declared shape"):
         DataDecl("structure").supplied(geometry="squiggle")
 
 
 def test_supplied_on_a_slot_and_supplied_on_a_producer_are_different_asks():
     """A producer that can be SUPERSEDED says so on the producer, not on the slot."""
-    with pytest.raises(PlanValidationError, match="declares a producer AND"):
+    with pytest.raises(DeclarationError, match="declares a producer AND"):
         DataDecl("mesh", tool(f"{_HERE}.stub_producer")).supplied(geometry="mesh")
     producer = tool(f"{_HERE}.stub_producer").supplied("s3://mine/m.slf")
     assert DataDecl("mesh", producer).is_supplied is True

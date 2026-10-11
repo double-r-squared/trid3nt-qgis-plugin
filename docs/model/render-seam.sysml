@@ -549,7 +549,7 @@ package RenderSeam {
     requirement def PresentationNeverInDeclarations {
         doc /*
         A workflow declaration carries no presentation. A ramp, a range, a
-        title and a visibility change nothing a solver computes, so a plan that
+        title and a visibility change nothing a solver computes, so a declaration that
         stated them would be describing the picture instead of the run - and
         the picture would then be frozen at authoring time, where the reader
         who wants it different is not.
@@ -565,7 +565,7 @@ package RenderSeam {
 
         The preset family knowing nothing about workflows is the structural
         half: a style writer that could reach the declaration machinery is one
-        import away from a plan that styles.
+        import away from a declaration that styles.
 
         forbid: trid3nt_server.render.presets -> trid3nt_server.workflows
         */

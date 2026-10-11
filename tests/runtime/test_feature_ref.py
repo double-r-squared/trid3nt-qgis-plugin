@@ -18,7 +18,7 @@ from trid3nt_server.inputs.point import Point
 from trid3nt_server.inputs import fill
 from trid3nt_server.workflows.runtime import Data
 from seated import resolve_params
-from trid3nt_server.workflows.runtime.errors import PlanValidationError
+from trid3nt_server.workflows.runtime.errors import DeclarationError
 
 
 def _row(**need):
@@ -54,7 +54,7 @@ def test_the_kind_a_template_states_is_not_overruled_by_the_place() -> None:
 def test_only_the_domain_has_a_kind_to_state() -> None:
     """A kind is the water the equations are solved over, so a row that is not
     the domain refuses one at the line that wrote it."""
-    with pytest.raises(PlanValidationError, match="is not the domain"):
+    with pytest.raises(DeclarationError, match="is not the domain"):
         class DATA:
             rivers = Data.need("hydrography", kind="flowline")
 

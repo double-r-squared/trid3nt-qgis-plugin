@@ -51,7 +51,7 @@ def journal_outputs(layers: Sequence[Mapping[str, Any]]) -> None:
 
 
 def bind_outputs() -> contextvars.Token:
-    """Open an outputs channel for one plan run -> the token that closes it."""
+    """Open an outputs channel for one run -> the token that closes it."""
     return _OUTPUTS.set([])
 
 
@@ -63,7 +63,7 @@ def drain_outputs(token: contextvars.Token) -> list[dict[str, Any]]:
 
 
 def bind_notes() -> contextvars.Token:
-    """Open a note channel for one plan run -> the token that closes it."""
+    """Open a note channel for one run -> the token that closes it."""
     return _NOTES.set([])
 
 
@@ -92,7 +92,7 @@ def run_coverage() -> list[str]:
 
 
 def bind_coverage() -> contextvars.Token:
-    """Open a coverage channel for one plan run -> the token that closes it."""
+    """Open a coverage channel for one run -> the token that closes it."""
     return _COVERAGE.set([])
 
 
@@ -121,7 +121,7 @@ def run_choices() -> list[Any]:
 
 
 def bind_choices() -> contextvars.Token:
-    """Open a choices channel for one plan run -> the token that closes it."""
+    """Open a choices channel for one run -> the token that closes it."""
     return _CHOICES.set([])
 
 
@@ -156,7 +156,7 @@ def run_origin(*, live_session: bool) -> str:
 
 def append_record(record: Mapping[str, Any]) -> Path | None:
     """Append one run record. Best-effort: a journal write never fails a run,
-    because the run already happened and its products already exist."""
+    because the run already happened and its outputs already exist."""
     path = journal_path()
     try:
         path.parent.mkdir(parents=True, exist_ok=True)

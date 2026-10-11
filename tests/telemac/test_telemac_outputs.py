@@ -363,15 +363,15 @@ def test_a_field_at_an_instant_carries_its_spread(solved):
 def test_a_published_variable_with_no_caption_refuses_at_import():
     """A template publishes what it LISTS and names each one; the plan is built
     at import, so a listing nothing captions never reaches a run."""
-    from trid3nt_server.workflows.runtime import PlanValidationError
+    from trid3nt_server.workflows.runtime import DeclarationError
     from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
         telemac_dye_release,
     )
 
     workflow = telemac_dye_release.workflow
-    with pytest.raises(PlanValidationError, match="no caption"):
+    with pytest.raises(DeclarationError, match="no caption"):
         _replanned(workflow, CAPTIONS={})
-    with pytest.raises(PlanValidationError, match="no .layer"):
+    with pytest.raises(DeclarationError, match="no .layer"):
         _replanned(workflow, OUTPUTS=[max_over_time("T1")])
 
 

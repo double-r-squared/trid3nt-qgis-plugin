@@ -34,9 +34,7 @@ def test_a_stated_value_is_accepted_and_the_rest_default():
     state = _filled({"location": "the Wabash River", "cores": 2})
     assert state.inputs["cores"].state == ACCEPTED
     assert state.inputs["cores"].value == 2
-    assert state.inputs["cores"].origin == "user"
-    assert any(v.state == DEFAULTED and v.origin == "default"
-               for v in state.inputs.values())
+    assert any(v.state == DEFAULTED for v in state.inputs.values())
 
 
 def test_a_value_outside_its_range_is_rejected_with_its_remedy():
@@ -72,7 +70,6 @@ def test_a_sourced_input_is_fetched_before_it_answers(monkeypatch):
                                                   decl.name: {"source": "stub"}}))
     assert (decl.name, "stub") in asked
     assert state.inputs[decl.name].state == ACCEPTED
-    assert state.inputs[decl.name].origin == "source:stub"
 
 
 def test_a_layer_by_id_is_supplied_and_ingested_before_it_answers(monkeypatch):

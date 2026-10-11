@@ -11,7 +11,7 @@ import os
 from dataclasses import replace
 from typing import Any, Sequence
 
-from .errors import CoresUnavailable, PlanValidationError
+from .errors import CoresUnavailable, DeclarationError
 from .params import Param, doors
 
 __all__ = ["BOX_CORES", "LEVERS", "LEVER_NAMES", "VERTICAL_FRAME",
@@ -26,7 +26,7 @@ BOX_CORES: int = os.cpu_count() or 1
 #: The declared levers, in the order a card reads them.
 LEVERS: tuple[Param, ...] = (
     Param(name="mesh_resolution_m", door=doors.SCENARIO, optional=True,
-          type=float, units="m", consequence="numerical", user_lever=True,
+          type=float, units="m", consequence="numerical",
           derived_when_absent=(
               "the finest edge is the finest cell of the input data the mesh "
               "is built over - the bed raster's own cell"),
@@ -95,7 +95,7 @@ def lever(name: str, **stated: Any) -> Param:
     A question states only the difference; the lever carries the rest."""
     found = next((row for row in LEVERS if row.name == name), None)
     if found is None:
-        raise PlanValidationError(
+        raise DeclarationError(
             f"{name!r} is not a runtime lever; the runtime declares "
             f"{list(LEVER_NAMES)}. Declare the value as a Param of the question "
             "that asks it.")
@@ -117,7 +117,7 @@ def with_levers(declared: Sequence[Param],
     wanted = set(taken)
     unknown = sorted(wanted - {lever.name for lever in LEVERS})
     if unknown:
-        raise PlanValidationError(
+        raise DeclarationError(
             f"{unknown} is not a runtime lever; the runtime declares "
             f"{list(LEVER_NAMES)}. Declare the value as a Param of the question "
             "that asks it.")
