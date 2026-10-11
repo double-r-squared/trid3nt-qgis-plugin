@@ -85,7 +85,7 @@ def filled(layer: Any, within: Any, seed: float, *,
 
     import numpy as np
 
-    from trid3nt_server.workflows.runtime import journal_note
+    from trid3nt_server.inputs.run_notes import journal_note
 
     label = label_of(layer, 0)
     with tempfile.TemporaryDirectory(prefix="fill-nodata-") as scratch:

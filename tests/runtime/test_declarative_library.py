@@ -22,7 +22,6 @@ from trid3nt_server.workflows.runtime import (
     CoversAOI,
     Data,
     DataDecl,
-    Domain,
     Param,
     DeclarationError,
     ResolvedParams,
@@ -34,6 +33,7 @@ from trid3nt_server.workflows.runtime import (
     provenance_entries,
     render_docstring,
 )
+from trid3nt_server.inputs.bound_domain import Domain
 from seated import resolve_params
 
 _HERE = "tests.runtime.test_declarative_library"
@@ -95,7 +95,7 @@ async def stub_producer(**kwargs):
 async def stub_noting(**kwargs):
     """A step that MEASURES something the reader has to know and has no result
     field to say it in - the note channel's whole reason to exist."""
-    from trid3nt_server.workflows.runtime import journal_note
+    from trid3nt_server.inputs.run_notes import journal_note
 
     _CALLS.append("stub_noting")
     journal_note("measured 42.0% coverage")

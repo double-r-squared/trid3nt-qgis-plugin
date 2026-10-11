@@ -27,6 +27,7 @@ from trid3nt_server.workflows.runtime import fill
 from trid3nt_server.inputs.bound_domain import (
     Domain,
     bind_domain,
+    current_domain,
     reset_domain,
 )
 from trid3nt_server.workflows.runtime.journal import (
@@ -467,7 +468,7 @@ def test_the_cut_domain_is_what_the_rest_of_the_run_is_bound_to(coastline):
 
     async def _fill_then_read():
         await fill._matched(env, row)
-        return fill.current_domain()
+        return current_domain()
 
     bound = asyncio.run(_fill_then_read())
     assert bound.geometry["type"] in ("Polygon", "MultiPolygon")

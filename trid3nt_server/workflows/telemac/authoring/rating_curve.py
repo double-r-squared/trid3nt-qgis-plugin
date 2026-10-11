@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Mapping, Sequence
 
-from trid3nt_server.workflows.runtime import journal_note
+from trid3nt_server.inputs.run_notes import journal_note
 from trid3nt_server.tools.mesh.shared.nodes import (
     accepted_mesh_nodes,
     sample_layer_at_nodes,

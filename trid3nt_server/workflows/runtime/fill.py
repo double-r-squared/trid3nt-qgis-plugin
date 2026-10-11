@@ -31,7 +31,9 @@ from trid3nt_server.inputs.bound_domain import Domain, bind_domain, current_doma
 from .errors import (DeclarativeError, StepFailedError,
                      SuppliedCoverageError, said)
 from . import journal
-from .journal import journal_note, slot_choice
+from .journal import slot_choice
+from trid3nt_server.inputs.run_notes import (
+    bind_coverage, bind_notes, cut_coverage, drain_coverage, drain_notes, journal_note)
 from .params import ResolvedParams
 from trid3nt_server.inputs.temporal import RATE, STATE
 
@@ -793,8 +795,8 @@ async def fill(state: Fill, values: Mapping[str, Any]) -> Fill:
             REJECTED, name, code="INPUT_UNNAMED",
             reason=f"the template names {name!r} as an input, and no param, "
             "row or output of this run is called that.")
-    tokens = (journal.bind_notes(), journal.bind_choices(),
-              journal.bind_coverage())
+    tokens = (bind_notes(), journal.bind_choices(),
+              bind_coverage())
     try:
         # Every stated row is registered before any is produced: producing one
         # forces the domain, which must already see the caller's own.
@@ -811,8 +813,8 @@ async def fill(state: Fill, values: Mapping[str, Any]) -> Fill:
                 await _row(state, rows[name], None)
     finally:
         for held, drain, token in zip(state.said, (
-                journal.drain_notes, journal.drain_choices,
-                journal.drain_coverage), tokens):
+                drain_notes, journal.drain_choices,
+                drain_coverage), tokens):
             held += drain(token)
     return state
 
@@ -821,7 +823,7 @@ def restate(state: Fill) -> None:
     """Say on the run in progress what producing its inputs said at the fill."""
     notes, choices, covered = state.said
     for text in notes:
-        (journal.cut_coverage if text in covered else journal_note)(text)
+        (cut_coverage if text in covered else journal_note)(text)
     for choice in choices:
         slot_choice(choice)
 

@@ -364,7 +364,7 @@ def _journal(surveys: list[dict[str, Any]]) -> None:
 
     A reach is often covered only by a pass several years old, so the age of the
     measurement under each part of the domain is part of the answer."""
-    from trid3nt_server.workflows.runtime import journal_note
+    from trid3nt_server.inputs.run_notes import journal_note
 
     named = ", ".join(
         f"{(f.get('properties') or {}).get('surveyjobidpk')} "
@@ -451,7 +451,7 @@ def _one_shift(spec: SourceSpec, shifts: list[tuple[float, str]]
     metres = [value for value, _frame in shifts]
     mean = round(sum(metres) / len(metres), 4)
     if len(set(metres)) > 1:
-        from trid3nt_server.workflows.runtime import journal_note
+        from trid3nt_server.inputs.run_notes import journal_note
 
         journal_note(
             f"{len(metres)} surveys publish their datum's shift onto {frames[0]} - "

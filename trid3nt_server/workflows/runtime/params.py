@@ -71,6 +71,11 @@ class Param:
             )
 
     @property
+    def required(self) -> bool:
+        """No default and not optional: the fill refuses the run while it is unstated."""
+        return self.default is None and not self.optional
+
+    @property
     def wire_type(self) -> Any:
         """The declared type, or the one the declaration implies.
         A Point slot is typed by the value it holds; what the WIRE takes for it is

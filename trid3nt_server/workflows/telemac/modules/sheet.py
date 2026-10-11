@@ -377,7 +377,7 @@ def _partitioned(body: type, filled: dict[str, Filled],
 
     The launcher is handed the same number, so the partition told to the engine is the one it gets.
     """
-    from trid3nt_server.workflows.runtime import journal_note
+    from trid3nt_server.inputs.run_notes import journal_note
     from trid3nt_server.workflows.runtime.levers import cores_asked
 
     if PROCESSORS in filled or PROCESSORS not in body.MODULE_INPUT:

@@ -100,7 +100,7 @@ def test_the_settle_s_keywords_go_straight_to_the_sheet(monkeypatch):
 
 def test_a_launch_that_raises_carries_its_own_error_and_its_notes(monkeypatch):
     from trid3nt_server.workflows.runtime.errors import StepFailedError
-    from trid3nt_server.workflows.runtime.journal import journal_note
+    from trid3nt_server.inputs.run_notes import journal_note
 
     class Refused(Exception):
         """The run's own failure, which nothing may replace."""

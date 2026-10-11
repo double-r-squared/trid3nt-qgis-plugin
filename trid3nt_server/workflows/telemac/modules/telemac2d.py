@@ -299,7 +299,7 @@ def _tracer_note(per_tracer: Sequence[Any]) -> None:
 
     A question decided by an inflow tracer is decided by that difference.
     """
-    from trid3nt_server.workflows.runtime import journal_note
+    from trid3nt_server.inputs.run_notes import journal_note
 
     driven = [n for n, v in enumerate(per_tracer, start=1) if isinstance(v, Series)]
     if driven:
@@ -332,7 +332,7 @@ def _checked(name: str, values: Any, *, above: float,
              usual: tuple[float, float]) -> Any:
     import numpy as np
 
-    from trid3nt_server.workflows.runtime import journal_note
+    from trid3nt_server.inputs.run_notes import journal_note
 
     array = np.asarray(values, dtype=float)
     impossible = ~np.isfinite(array) | (array <= above)

@@ -113,6 +113,23 @@ def test_the_generated_signature_is_the_declaration_plus_controls():
     assert sig.parameters["_extra_ignored"].kind is inspect.Parameter.VAR_KEYWORD
 
 
+def test_a_required_param_is_required_on_the_schema_and_says_so_on_its_line():
+    """What the fill refuses unstated is what the model is told it must state:
+    the schema's ``required`` and the docstring line read the same predicate."""
+    from trid3nt_server.model.adapters.adapter import _tool_schema
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    fn = TOOL_REGISTRY["telemac_rain_on_grid"].fn
+    required = [p.name for p in fn.workflow.params if p.required]
+    assert "pour_point" in required
+    assert _tool_schema(fn)["required"] == required
+    lines = [line for line in fn.__doc__.splitlines() if line.startswith("    ")]
+    params = lines[:len(fn.workflow.params)]
+    assert [line.endswith(", required.") for line in params] == \
+        [index < len(required) for index in range(len(params))]
+    assert [line.split(":")[0].strip() for line in params[:len(required)]] == required
+
+
 def test_every_declared_param_is_on_the_real_tools_wire_and_docstring():
     from trid3nt_server.tools import TOOL_REGISTRY
 
@@ -204,7 +221,7 @@ async def test_a_retryable_coercion_failure_propagates_with_its_suggestions():
 
 @pytest.mark.asyncio
 async def test_a_typed_coercion_refusal_keeps_its_own_error_code():
-    from trid3nt_server.workflows.runtime import WireArgsError
+    from trid3nt_server.inputs.user_input import WireArgsError
 
     def _typed(args):
         raise WireArgsError("needs a location", error_code="TELEMAC_PARAMS_INCOMPLETE")

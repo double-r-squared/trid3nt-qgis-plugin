@@ -234,17 +234,18 @@ def test_a_refusal_keeps_the_code_of_its_reason_through_the_review(
 def test_what_producing_said_at_the_fill_is_restated_on_the_run(monkeypatch):
     """The fill runs before the run's channels open, so a station a row chose
     and what a cut covers reach the run only because the launch restates them."""
+    from trid3nt_server.inputs import run_notes
     from trid3nt_server.workflows.runtime import journal
     from trid3nt_server.workflows.runtime.workflow import RunResult
 
     async def _produce(env, decl):
-        journal.cut_coverage(f"the {decl.name} covers the cut")
-        journal.journal_note(f"the {decl.name} came from a stub")
+        run_notes.cut_coverage(f"the {decl.name} covers the cut")
+        run_notes.journal_note(f"the {decl.name} came from a stub")
         journal.slot_choice(decl.name)
         return decl.name
 
     async def _launch(self, state):
-        covered.extend(journal.run_coverage())
+        covered.extend(run_notes.run_coverage())
         return RunResult(value=None)
 
     covered = []

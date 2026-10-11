@@ -97,7 +97,7 @@ def _feedback(source: Any) -> str:
 
 def _journal_bed(source: Any, provenance: str, lonlat: Any, nodes: int) -> None:
     """What the run SAYS about the bed its nodes were painted from."""
-    from trid3nt_server.workflows.runtime import journal_note
+    from trid3nt_server.inputs.run_notes import journal_note
 
     shares = _node_shares(source, lonlat)
     journal_note(f"bed: {provenance} painted all {nodes} nodes."

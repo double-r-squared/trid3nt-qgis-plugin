@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_server.inputs.instant import event_time, instant
-from trid3nt_server.workflows.runtime import WireArgsError
+from trid3nt_server.inputs.user_input import WireArgsError
 
 
 def test_a_bare_date_is_midnight_utc() -> None:

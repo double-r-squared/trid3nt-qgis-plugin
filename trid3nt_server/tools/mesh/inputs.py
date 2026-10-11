@@ -43,7 +43,7 @@ def _cells(op: Any, bbox: tuple[float, float, float, float]
            ) -> Iterable[tuple[float, str]]:
     """The cell, in metres, of every raster one recipe op names."""
     from trid3nt_server.tools.mesh.shared.primitives import bed_raster_of
-    from trid3nt_server.workflows.runtime.data import artifact_class
+    from trid3nt_server.inputs.geometry import artifact_class
 
     for name, value in dict(op.kwargs).items():
         if op.fn == "set_bed" and name == "source":
@@ -70,7 +70,7 @@ def raster_cell_m(path: Path) -> float:
 
 def op_input(value: Any) -> Any:
     """One op kwarg as the concrete thing the op is defined over."""
-    from trid3nt_server.workflows.runtime.data import artifact_class
+    from trid3nt_server.inputs.geometry import artifact_class
 
     if isinstance(value, Mapping) and "type" in value:
         return dict(value)

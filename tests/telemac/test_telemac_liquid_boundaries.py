@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.runtime import Series
+from trid3nt_server.inputs.temporal import Series
 from trid3nt_server.workflows.telemac.authoring.boundaries import (
     LIQUID_BOUNDARIES_FILENAME,
     column_name,

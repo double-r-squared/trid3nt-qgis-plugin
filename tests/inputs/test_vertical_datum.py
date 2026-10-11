@@ -214,10 +214,10 @@ def _half_measured(tmp_path) -> dict[str, str]:
 
 
 def _standing_on_the_box(monkeypatch: pytest.MonkeyPatch) -> None:
-    from trid3nt_server.inputs import bound_domain as runtime_domain
+    from trid3nt_server.inputs import bound_domain
 
-    monkeypatch.setattr(runtime_domain, "current_domain",
-                        lambda: runtime_domain.Domain(bbox=_DOMAIN_BOX))
+    monkeypatch.setattr(bound_domain, "current_domain",
+                        lambda: bound_domain.Domain(bbox=_DOMAIN_BOX))
 
 
 def test_a_footprint_missing_the_box_centre_is_asked_at_the_seed(

@@ -225,15 +225,15 @@ def _surfacing(monkeypatch, surfaced=None) -> list[Any]:
 
 
 def _notes(run) -> list[str]:
-    from trid3nt_server.workflows.runtime import journal
+    from trid3nt_server.inputs import run_notes
     from trid3nt_server.workflows.telemac import workflow as door
 
-    token = journal.bind_notes()
+    token = run_notes.bind_notes()
     try:
         asyncio.run(door.publish_outputs(run=run, outputs=[], captions={},
                                          params={}))
     finally:
-        notes = journal.drain_notes(token)
+        notes = run_notes.drain_notes(token)
     return notes
 
 
@@ -344,7 +344,7 @@ def test_a_spelling_two_result_files_carry_is_one_layer_under_one_label():
 
     from trid3nt_contracts.execution import LayerURI as Layer
 
-    from trid3nt_server.workflows.runtime import journal
+    from trid3nt_server.inputs import run_notes
     from trid3nt_server.workflows.telemac import workflow as door
 
     files = {"telemac2d": ("r2d.slf", ["WATER DEPTH", "FRAZIL"]),
@@ -370,13 +370,13 @@ def test_a_spelling_two_result_files_carry_is_one_layer_under_one_label():
     echo = [w for w in written if w.first is not None]
     assert [(w.file, w.spelling, w.first) for w in echo] == [
         ("khione.slf", "FRAZIL", "r2d.slf")]
-    token = journal.bind_notes()
+    token = run_notes.bind_notes()
     try:
         door._account(written, [Layer(layer_id="F", name="Frazil",
                                       layer_type="mesh", uri="s3://r/x.slf",
                                       quantity="frazil")], {})
     finally:
-        notes = journal.drain_notes(token)
+        notes = run_notes.drain_notes(token)
     assert [n for n in notes if n.startswith("khione.slf wrote 'FRAZIL', which "
                                              "r2d.slf wrote as well")]
 

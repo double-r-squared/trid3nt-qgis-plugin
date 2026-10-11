@@ -278,7 +278,7 @@ def test_clamp_fetch_resolution_helper() -> None:
 
 def test_a_spacing_finer_than_the_source_serves_is_stated_as_the_one_used() -> None:
     from trid3nt_server import server
-    from trid3nt_server.workflows.runtime.journal import bind_notes, drain_notes
+    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
 
     token = bind_notes()
     server._clamp_fetch_resolution(1.0, 5.0)

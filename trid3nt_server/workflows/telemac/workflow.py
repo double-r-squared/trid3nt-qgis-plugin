@@ -236,7 +236,7 @@ def _account(written: Sequence[_Written], layers: Sequence[LayerURI],
              why: Mapping[Primitive, str]) -> None:
     """Journal what became of every variable a result file carries, read off the layers the publish SURFACED."""
     from trid3nt_server.render.formats import quantity_of
-    from trid3nt_server.workflows.runtime.journal import journal_note
+    from trid3nt_server.inputs.run_notes import journal_note
 
     landed = {layer.quantity for layer in layers}
     for entry in written:
@@ -371,7 +371,7 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
 
 def _note(caption: str, read: Any) -> None:
     """A measured read, said on the run's record in the figures it measured."""
-    from trid3nt_server.workflows.runtime.journal import journal_note
+    from trid3nt_server.inputs.run_notes import journal_note
 
     figures = "; ".join(f"{name} = {value}" for name, value in read.measures.items())
     journal_note(f"{caption}: {figures or 'the run measured nothing for it'}")
@@ -528,7 +528,7 @@ def _source_rows() -> list[ParamSheetRow]:
 def _coverage_rows() -> list[ParamSheetRow]:
     """WHAT THE CUT COVERS, over the water and over the land, one row each.
     On the card so the unmeasured share is weighed BEFORE the solve. Not editable: an op or supplying the slot changes it."""
-    from trid3nt_server.workflows.runtime.journal import run_coverage
+    from trid3nt_server.inputs.run_notes import run_coverage
 
     return [ParamSheetRow(
         name=f"coverage {index}", value=line[:200], desc=line[:512],

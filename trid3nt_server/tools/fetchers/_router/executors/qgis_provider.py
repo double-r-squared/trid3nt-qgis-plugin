@@ -248,7 +248,7 @@ def _exported_to_output(spec: SourceSpec, params: dict[str, Any], raw: bytes) ->
 def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
     """Ask the session for the provider layer (the ``fetch_fn`` body); ``open`` returns the
     on-map record, ``materialise`` the exported bytes landed under the row-shaped cache key."""
-    from trid3nt_server.workflows.runtime.journal import journal_note
+    from trid3nt_server.inputs.run_notes import journal_note
 
     block = _block(spec)
     uri = build_uri(spec, params)

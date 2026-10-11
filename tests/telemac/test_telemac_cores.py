@@ -111,7 +111,7 @@ def test_the_direct_solver_runs_serial_whatever_was_asked_for():
 def test_the_run_says_why_the_cores_it_asked_for_are_not_used():
     """The caption is the run's, not a log line: a reader who asked for every
     core on the box and got one reads WHY on the record."""
-    from trid3nt_server.workflows.runtime.journal import bind_notes, drain_notes
+    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
 
     token = bind_notes()
     try:

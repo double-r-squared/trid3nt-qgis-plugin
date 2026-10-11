@@ -81,12 +81,12 @@ def test_the_journal_states_the_share_of_nodes_each_input_painted_off_band_2(
         tmp_path, monkeypatch):
     """The per-node shares of a composed bed are read off the merge's own band 2
     and named by the inputs it lists, so the journal says which painted what."""
-    import trid3nt_server.workflows.runtime as runtime
+    from trid3nt_server.inputs import run_notes
     from trid3nt_contracts.execution import LayerURI
     from trid3nt_server.tools.derive.merge_rasters.merge_rasters import merged
 
     said: list[str] = []
-    monkeypatch.setattr(runtime, "journal_note", said.append)
+    monkeypatch.setattr(run_notes, "journal_note", said.append)
     survey = np.full((5, 5), np.nan, dtype="float32")
     survey[:, :2] = -9.0
 

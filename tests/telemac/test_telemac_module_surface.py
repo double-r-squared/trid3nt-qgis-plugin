@@ -1408,7 +1408,7 @@ def test_a_negative_manning_is_refused_by_name_before_any_run():
 
 
 def test_an_unusual_manning_is_used_as_stated_with_a_note():
-    from trid3nt_server.workflows.runtime.journal import bind_notes, drain_notes
+    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
     from trid3nt_server.workflows.telemac.modules.telemac2d import Friction
 
     token = bind_notes()

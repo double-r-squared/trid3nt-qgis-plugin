@@ -17,6 +17,8 @@ from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.coverage import SourceChoice
 
 from trid3nt_server.inputs.bound_domain import bind_domain, reset_domain
+from trid3nt_server.inputs.run_notes import (
+    bind_coverage, bind_notes, drain_coverage, drain_notes)
 from trid3nt_server.inputs.user_input import WireArgsError
 
 from . import journal
@@ -31,7 +33,7 @@ from .resolver import merge_provenance, provenance_entries
 if TYPE_CHECKING:
     from .fill import Fill
 
-__all__ = ["RunResult", "Workflow", "WireArgsError", "register_workflow"]
+__all__ = ["RunResult", "Workflow", "register_workflow"]
 
 logger = logging.getLogger("trid3nt_server.workflows.runtime.workflow")
 
@@ -197,8 +199,8 @@ class Workflow:
 
         env = production(state)
         token = bind_domain(state.domain)
-        notes, outputs = journal.bind_notes(), journal.bind_outputs()
-        choices, coverage = journal.bind_choices(), journal.bind_coverage()
+        notes, outputs = bind_notes(), journal.bind_outputs()
+        choices, coverage = journal.bind_choices(), bind_coverage()
         restate(state)
         # The drain lives only in the finally so a second reset never replaces the run's own error.
         try:
@@ -206,10 +208,10 @@ class Workflow:
                 run = await self.launch(state)
             finally:
                 reset_domain(token)
-                said_notes = journal.drain_notes(notes)
+                said_notes = drain_notes(notes)
                 published = journal.drain_outputs(outputs)
                 matched = journal.drain_choices(choices)
-                journal.drain_coverage(coverage)
+                drain_coverage(coverage)
         except Exception as exc:
             for note in [*said_notes, *env.absences]:
                 exc.add_note(f"also missing from this run: {note}")
@@ -405,8 +407,10 @@ def _wire_signature(params: Sequence[Param],
                     data: Sequence[DataDecl] = ()) -> tuple[inspect.Signature, dict]:
     """The generated tool's signature: declared params, context slots, aliases, controls.
     A ``**`` absorber keeps an unknown key from dead-ending a call."""
+    # A required param's annotation admits no None, which is what lists it in the tool schema's ``required``.
     entries: list[tuple[str, Any, Any]] = [
-        (prm.name, prm.wire_type | None, None) for prm in params
+        (prm.name, prm.wire_type if prm.required else prm.wire_type | None, None)
+        for prm in params
     ]
     # A producer-less Data slot is on the wire - a caller naming the layer is the only way it is filled.
     entries += [(decl.name, decl.wire_annotation, None) for decl in data

@@ -437,7 +437,7 @@ def test_every_restored_output_can_be_asked_for_on_a_run_and_publishes(
     closure publish what they measured as notes on the run's record."""
     from trid3nt_contracts.execution import LayerURI
 
-    from trid3nt_server.workflows.runtime.journal import bind_notes, drain_notes
+    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
     from trid3nt_server.workflows.telemac import workflow as door
 
     seen: dict[str, Any] = {}
@@ -721,7 +721,7 @@ def test_a_bed_that_did_not_move_states_what_it_was_measured_against():
     the engine's own shear stress, which the threshold of motion is a value of."""
     import numpy as np
 
-    from trid3nt_server.workflows.runtime.journal import bind_notes, drain_notes
+    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
     from trid3nt_server.workflows.telemac.modules import gaia
 
     class _Solved:

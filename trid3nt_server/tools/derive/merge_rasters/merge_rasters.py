@@ -194,7 +194,7 @@ def merged(layers: list[Any], name: str, offsets: list[Any] = (),
 
     from trid3nt_server.inputs.bed import on_the_frame
     from trid3nt_server.inputs.vertical_datum import datum_of, published_offset
-    from trid3nt_server.workflows.runtime import journal_note
+    from trid3nt_server.inputs.run_notes import journal_note
 
     zero = datum_of(layers[-1])
     published = published_offset(layers[-1])

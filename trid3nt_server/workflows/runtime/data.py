@@ -24,7 +24,6 @@ __all__ = [
     "DataDecl",
     "Producer",
     "ToolWord",
-    "artifact_class",
     "data_rows",
     "shapes_of",
     "tool",

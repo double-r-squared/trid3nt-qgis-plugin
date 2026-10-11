@@ -133,8 +133,7 @@ def test_a_template_s_own_name_is_what_its_slots_are_stamped_with(
 def test_what_the_cut_covers_is_on_the_card_before_the_solve():
     """R82's whole answer: a share the person would refuse at is stated where
     they meet the fill, not discovered on the journal after the run."""
-    from trid3nt_server.workflows.runtime.journal import (
-        bind_coverage, cut_coverage, drain_coverage)
+    from trid3nt_server.inputs.run_notes import bind_coverage, cut_coverage, drain_coverage
     from trid3nt_server.workflows.telemac.workflow import _coverage_rows
 
     token = bind_coverage()

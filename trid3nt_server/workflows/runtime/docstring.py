@@ -62,7 +62,7 @@ def render_docstring(
 def _ordered(params: Any) -> list[Param]:
     """Required params first, then defaulted, then optional, each in class-body order; takes a sequence or a whole ``PARAMS`` body."""
     return sorted(param_rows(params),
-                  key=lambda p: 1 if p.default is not None else 2 * p.optional)
+                  key=lambda p: 0 if p.required else 1 if p.default is not None else 2)
 
 
 def _param_line(p: Param) -> str:
@@ -74,6 +74,6 @@ def _param_line(p: Param) -> str:
     if p.default is not None:
         bits.append(f"default {p.default!r} (the template's starting value, "
                     "not a site measurement)")
-    elif p.optional:
-        bits.append("optional")
+    else:
+        bits.append("required" if p.required else "optional")
     return ", ".join(bits) + "."

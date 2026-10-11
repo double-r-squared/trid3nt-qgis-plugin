@@ -11,7 +11,7 @@ import asyncio
 import math
 from typing import Any, Mapping, Sequence
 
-from trid3nt_server.workflows.runtime import journal_note
+from trid3nt_server.inputs.run_notes import journal_note
 from trid3nt_server.workflows.runtime.journal import run_choices
 from ..errors import TelemacError
 from ..helpers.time_step import MESH_H_FLOOR_M, suggest_time_step_s

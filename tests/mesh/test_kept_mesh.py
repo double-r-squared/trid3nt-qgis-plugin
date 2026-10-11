@@ -9,7 +9,7 @@ import pytest
 from trid3nt_server.inputs.domain import Domain
 from trid3nt_server.tools.mesh import step as mesh_step
 from trid3nt_server.tools.mesh.artifact import MeshArtifact
-from trid3nt_server.workflows.runtime import journal
+from trid3nt_server.inputs import run_notes
 
 
 def _recipe(bed: str, *, resolution_m: float = 20.0):
@@ -90,16 +90,16 @@ def test_the_second_run_reuses_the_kept_mesh_and_says_which(built, tmp_path):
     bed = _file(tmp_path, "bed.tif", b"elevations")
     first = _build(_recipe(bed))
     asyncio.run(mesh_step.keep_mesh(first, "RUN1"))
-    token = journal.bind_notes()
+    token = run_notes.bind_notes()
     again = _build(_recipe(_file(tmp_path, "bed_again.tif", b"elevations")))
-    notes = journal.drain_notes(token)
+    notes = run_notes.drain_notes(token)
     assert built == [1] and again["mesh_id"] == "m1"
     assert again["built_by"] == "RUN1"
     assert any(first["key"] in note and "RUN1" in note for note in notes)
     asyncio.run(mesh_step.keep_mesh(again, "RUN2"))
-    token = journal.bind_notes()
+    token = run_notes.bind_notes()
     _build(_recipe(bed))
-    assert any("RUN1" in note for note in journal.drain_notes(token))
+    assert any("RUN1" in note for note in run_notes.drain_notes(token))
 
 
 def _run_recipe(monkeypatch, bed: str, friction: float) -> dict:
@@ -136,8 +136,8 @@ def test_a_friction_change_leaves_the_key_and_restart_clean_rebuilds(
     asyncio.run(mesh_step.keep_mesh(first, "RUN1"))
     assert _build(_run_recipe(monkeypatch, bed, 45.0))["key"] == first["key"]
     assert built == [1]
-    token = journal.bind_notes()
+    token = run_notes.bind_notes()
     _build(recipe, fresh=True)
     assert built == [1, 1]
     assert any(first["key"] in note and "restart_clean" in note
-               for note in journal.drain_notes(token))
+               for note in run_notes.drain_notes(token))

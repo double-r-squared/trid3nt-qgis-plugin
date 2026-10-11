@@ -39,6 +39,10 @@ default, its bounds and its unit. A value outside the bounds refuses by name.
 Every row is on the model-facing wire. A row with no default that is not
 optional is REQUIRED: left unstated, the fill refuses it in every mode, so a
 world value nothing measures is stated by the caller and never started from.
+The model reads the same fact twice off `Param.required`: the row is listed in
+the tool schema's `required`, and its docstring line ends `required`. A `DATA`
+row is never listed - one left unfilled is matched, measured or asked for on
+the canvas before it refuses.
 A seated value carries ONE origin - user, derived, producer or template
 (`Origin`, in the contracts) - and the card row, the provenance entry and the
 journal row all write that word.

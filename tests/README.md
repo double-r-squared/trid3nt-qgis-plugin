@@ -46,7 +46,7 @@ Six slices by subsystem, each its own foreground invocation, from the repo root:
 
     make test-fetchers        # tests/fetchers                                                                              2119
     make test-spatial         # tests/derive tests/render tests/mesh                                                         698
-    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                      1357
+    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                      1360
     make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts           1085
     make test-model-surface   # tests/adapters tests/tools                                                                   617
     make test-packages        # tests/contracts tests/plugin                                                                  749

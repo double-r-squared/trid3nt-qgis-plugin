@@ -11,7 +11,7 @@ from typing import Any
 
 from trid3nt_server.render import presets
 from trid3nt_server.render.presets import Resolved, Scale
-from trid3nt_server.workflows.runtime.journal import journal_note
+from trid3nt_server.inputs.run_notes import journal_note
 
 logger = logging.getLogger("trid3nt_server.render.restyle")
 

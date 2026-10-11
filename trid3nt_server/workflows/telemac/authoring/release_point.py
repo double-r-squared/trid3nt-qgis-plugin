@@ -11,7 +11,7 @@ import asyncio
 import logging
 from typing import Any, Mapping
 
-from trid3nt_server.workflows.runtime import journal_note
+from trid3nt_server.inputs.run_notes import journal_note
 from trid3nt_server.tools.mesh.shared.nodes import (
     accepted_mesh_nodes,
     read_centerline_utm,

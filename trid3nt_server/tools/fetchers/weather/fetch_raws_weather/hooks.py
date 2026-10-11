@@ -330,7 +330,7 @@ def _faulty(row: dict[str, Any]) -> bool:
 
 def _note_faults(faults: int, kept: int) -> None:
     """What the record lost to sensor faults, onto the run journal."""
-    from trid3nt_server.workflows.runtime.journal import journal_note
+    from trid3nt_server.inputs.run_notes import journal_note
 
     text = (f"RAWS: {faults} readings were dropped as sensor faults - a relative "
             f"humidity over saturation or a dew point above the air it was "

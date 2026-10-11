@@ -50,7 +50,7 @@ async def build_declared_mesh(*, mesh: dict[str, Any], name: Any = None,
         recipe_from_plan_value,
         supplied_mesh_artifact,
     )
-    from trid3nt_server.workflows.runtime import journal_note
+    from trid3nt_server.inputs.run_notes import journal_note
 
     art = None
     if supplied:
@@ -191,7 +191,7 @@ def _live(uri: str) -> bool:
 def _mesh_coverage(extent: Any, art: Any) -> None:
     """Say how much of the domain's own centerline the built cells actually hold; a drawn outline has none, so nothing is said."""
     from trid3nt_server.inputs.geometry import covered_fraction
-    from trid3nt_server.workflows.runtime import journal_note
+    from trid3nt_server.inputs.run_notes import journal_note
 
     line = (getattr(extent, "companions", None) or {}).get("centerline")
     if not line or not art.display_uri:

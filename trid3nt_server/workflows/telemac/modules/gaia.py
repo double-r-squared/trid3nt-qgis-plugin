@@ -288,7 +288,7 @@ def _state_the_zero(read: Any, solved: Any) -> None:
     """
     import numpy as np
 
-    from trid3nt_server.workflows.runtime import journal_note
+    from trid3nt_server.inputs.run_notes import journal_note
 
     values = np.asarray(getattr(read, "values", ()), dtype=float)
     if not values.size or bool(np.any(values != 0.0)):

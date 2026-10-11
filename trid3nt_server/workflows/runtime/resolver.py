@@ -31,9 +31,9 @@ def seat_param(param: Param, value: Any) -> ResolvedParam:
         return _finish(param, param.default, Origin.TEMPLATE, "declared default")
     return ResolvedParam(
         name=param.name, value=None, origin=None, units=param.units,
-        note=("not supplied (declared optional)" if param.optional
-              else "REQUIRED and not supplied"),
-        required_missing=not param.optional)
+        note=("REQUIRED and not supplied" if param.required
+              else "not supplied (declared optional)"),
+        required_missing=param.required)
 
 
 def _finish(param: Param, value: Any, origin: Origin, note: str) -> ResolvedParam:

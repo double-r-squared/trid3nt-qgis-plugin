@@ -10,7 +10,7 @@ import asyncio
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
-from trid3nt_server.workflows.runtime import journal_note
+from trid3nt_server.inputs.run_notes import journal_note
 from ..errors import TelemacError
 from .accepted_mesh import (
     HARBOUR_GEOMETRY,

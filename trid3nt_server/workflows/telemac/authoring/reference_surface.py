@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Mapping, Sequence
 
-from trid3nt_server.workflows.runtime import journal_note
+from trid3nt_server.inputs.run_notes import journal_note
 from trid3nt_server.tools.mesh.shared.nodes import read_centerline_utm
 from ..errors import TelemacError
 from .accepted_mesh import mesh_nodes, to_utm
