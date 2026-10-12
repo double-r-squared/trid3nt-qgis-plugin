@@ -63,7 +63,13 @@ A run solves over exactly one `DOMAIN` row and one `BED` row; a record type
 (`LEVEL`, `OBSERVE`) may be stated more than once, and a stage that reads one
 by type reads the first. The `MESH` row is the engine's: every template of the
 engine carries `mesh` without writing it, a supplied mesh is held to the kind
-the engine states once and becomes the run's mesh in place of the build.
+the engine states once and becomes the run's mesh in place of the build. Its
+ingestion refuses one with no bed painted on it (`MESH_BED_UNPAINTED`) and one
+whose own extent shares no ground with the run's domain
+(`SUPPLIED_COVERAGE_MISMATCH`); the launch journals one note naming each input
+the caller stated that only the mesh build reads, since it went unused.
+A row's value that is a mapping naming no `layer` and no `source` is the value
+itself - a drawn geometry is taken whole.
 
 `.need` names a CLASS of the coverage vocabulary, never a fetcher; `geometry=`
 is which SHAPE of that class is asked for, a filter on the match, never a

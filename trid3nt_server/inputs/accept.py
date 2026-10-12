@@ -1,6 +1,6 @@
 """THE ACCEPT RULE of one input of a registered tool, and the values it would take.
 
-An input a workflow types as a slot accepts what that slot's ingestion reads; an input
+An input a workflow types as a slot, or a tool annotates with one, accepts what that slot's ingestion reads; an input
 whose annotation enumerates its values accepts one of them; a typed input
 accepts what parses as its type. What a dropdown lists is every case layer and
 every choice that same rule accepts, so nothing is written per tool.
@@ -55,10 +55,22 @@ def choices_of(fn: Any, name: str) -> tuple[Any, ...] | None:
     return tuple(get_args(found)) if get_origin(found) is Literal else None
 
 
-def _slot(fn: Any, name: str) -> Slot | None:
-    """The type the workflow behind ``fn`` declares for its row ``name``, or ``None``."""
+def _slot(fn: Any, name: str) -> tuple[Slot | None, Mapping[str, Any]]:
+    """The type of ``name`` and what its row states for the ingestion.
+
+    The workflow behind ``fn`` declares it on a row; a tool with none annotates the
+    parameter with the Slot itself (``Annotated[Any, EXTENT]``)."""
     rows = getattr(getattr(fn, "workflow", None), "data", ())
-    return next((row.slot for row in rows if row.name == name), None)
+    row = next((row for row in rows if row.name == name), None)
+    if row is not None:
+        # "near" names a place only the run resolves; the rest is stated outright.
+        return row.slot, {k: v for k, v in row.coercion.items() if k != "near"}
+    try:
+        noted = getattr(get_type_hints(fn, include_extras=True).get(name),
+                        "__metadata__", ())
+    except Exception:  # noqa: BLE001 - an unresolvable annotation states nothing
+        noted = ()
+    return next((note for note in noted if isinstance(note, Slot)), None), {}
 
 
 def _layer(value: Any, layers: Sequence[Mapping[str, Any]]) -> Mapping[str, Any] | None:
@@ -81,10 +93,10 @@ def accept(fn: Any, name: str, value: Any,
         if value not in choices:
             raise InputRefused(f"{name} takes one of {list(choices)}; got {value!r}.")
         return value
-    slot = _slot(fn, name)
+    slot, stated = _slot(fn, name)
     if slot is not None and slot.ingest is not None:
         try:
-            ingest_slot(slot, value, label=name)
+            ingest_slot(slot, value, label=name, **stated)
         except Exception as exc:  # noqa: BLE001 - the ingestion's refusal is the verdict
             raise InputRefused(
                 f"{name} does not take {layer.get('name') if layer else value!r}: "
@@ -126,7 +138,7 @@ def offers(fn: Any, name: str,
     choices = choices_of(fn, name)
     if choices is not None:
         return [(choice, str(choice)) for choice in choices]
-    slot = _slot(fn, name)
+    slot, _stated = _slot(fn, name)
     if slot is None or slot.ingest is None:
         return None
     taken = []

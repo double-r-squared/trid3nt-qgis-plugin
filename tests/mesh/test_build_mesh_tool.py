@@ -128,9 +128,9 @@ def _tri_artifact(**over) -> MeshArtifact:
 
 def test_a_supplied_mesh_carrying_no_engine_file_is_taken_rather_than_judged():
     """A mesh is not unsolvable in the abstract: its row checks the kind and
-    nothing else, and what an engine needs staged is refused by that engine's
-    author against the files it names."""
-    bare = _artifact(has_bathymetry=False, engine_files={})
+    that a bed is painted on it, and what an engine needs staged is refused by
+    that engine's author against the files it names."""
+    bare = _artifact(engine_files={})
     assert supplied_mesh(bare, kinds=("structured_grid",))["artifact"] is bare
 
 

@@ -918,6 +918,8 @@ class TelemacWorkflow(Workflow):
                         name=await read(env, self._states("MESH_ON", "") or domain),
                         input_mode=env.input_mode,
                         fresh=bool(state.carried.get("restart_clean")))
+        else:
+            self._say_what_no_build_read(env, mesh)
         # The files this engine asks the accepted mesh for are written from it before anything reads one: its boundary numbering says which face carries what.
         await stage("mesh_files", telemac_mesh_files, mesh=run["mesh"])
         await keep_mesh(run["mesh"])
@@ -1027,7 +1029,27 @@ class TelemacWorkflow(Workflow):
         return ({mark.name for mark in self._declared(Placed)}
                 | {ask.name for ask in self._declared(Measured)})
 
-    def _named(self) -> list[Any]:
+    def _say_what_no_build_read(self, env: Any, recipe: Any) -> None:
+        """One note naming each input the caller stated that only the mesh build reads: a supplied mesh leaves it unused."""
+        from trid3nt_server.inputs.run_notes import journal_note
+        from trid3nt_server.tools.mesh.recipe import input_names
+
+        slots = self._slots()
+        # The settle reads the designating depth off the run as well as the build.
+        elsewhere = {*self._named(mesh=False), *self._fills(), slots[DOMAIN],
+                     slots.get(LEVEL), slots.get(DISCHARGE),
+                     "open_depth_threshold_m"}
+        stated = ({row.name for row in env.params.rows()
+                   if row.origin is Origin.USER} | set(env.supplied) | set(env.picks))
+        unused = [name for name in dict.fromkeys(input_names(recipe))
+                  if name in stated and name not in elsewhere]
+        if unused:
+            journal_note(
+                "a mesh was supplied, so this run built none and "
+                f"{', '.join(unused)} went unused: only the mesh build reads "
+                f"{'it' if len(unused) == 1 else 'them'}.")
+
+    def _named(self, mesh: bool = True) -> list[Any]:
         from trid3nt_server.tools.mesh.recipe import input_names
 
         named = [mark.point for mark in self._declared(Placed)]
@@ -1038,7 +1060,7 @@ class TelemacWorkflow(Workflow):
         named += [value for p in self._states("OUTPUTS", ())
                   for value in (p.at, p.along, p.within)]
         recipe = self._states("MESH", None)
-        if recipe is not None:
+        if mesh and recipe is not None:
             named += input_names(recipe)
         named += self.steering.named()
         return named

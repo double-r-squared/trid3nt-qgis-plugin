@@ -101,18 +101,22 @@ def test_a_template_with_no_bed_refuses_at_import():
         _workflow(data=NO_BED)
 
 
-def _built(kind: str):
+def _built(kind: str, **fields):
     from trid3nt_server.tools.mesh.artifact import MeshArtifact
 
-    return MeshArtifact(
+    return MeshArtifact(**{**dict(
         mesh_id="01MINE", name="ring", mode="om2d",
         display_uri="s3://m/01MINE/mesh.2dm", crs_authid="EPSG:32610",
         has_bathymetry=True, node_count=4, element_count=2,
         bbox=(-122.68, 45.51, -122.66, 45.52), engine_files={},
-        provenance={"recipe": {"mesher": "om2d", "kind": kind}})
+        provenance={"recipe": {"mesher": "om2d", "kind": kind}}), **fields})
 
 
-def _filled_with(monkeypatch, mesh):
+_RING = [[-122.6769, 45.5153], [-122.6615, 45.5153],
+         [-122.6615, 45.5198], [-122.6769, 45.5198]]
+
+
+def _filled_with(monkeypatch, mesh, **stated):
     import asyncio
 
     from trid3nt_server.tools import TOOL_REGISTRY
@@ -121,10 +125,8 @@ def _filled_with(monkeypatch, mesh):
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
     # Only what the call states is filled: the rows the template names go out to sources.
     monkeypatch.setattr(workflow, "named_rows", lambda: ())
-    ring = [[-122.6769, 45.5153], [-122.6615, 45.5153],
-            [-122.6615, 45.5198], [-122.6769, 45.5198]]
     return asyncio.run(fill(Fill(workflow=workflow),
-                            {"domain": ring, "mesh": mesh}))
+                            {"domain": _RING, "mesh": mesh, **stated}))
 
 
 def test_a_template_that_writes_no_mesh_row_fills_with_a_supplied_mesh(monkeypatch):
@@ -142,6 +144,64 @@ def test_a_supplied_mesh_of_a_kind_the_engine_does_not_solve_on_is_refused(
     state = _filled_with(monkeypatch, _built("structured_grid"))
     assert state.inputs["mesh"].state == "rejected"
     assert state.inputs["mesh"].code == "MESH_KIND_MISMATCH"
+
+
+def test_a_supplied_mesh_nobody_painted_a_bed_onto_is_refused(monkeypatch):
+    state = _filled_with(monkeypatch,
+                         _built("unstructured_tri", has_bathymetry=False))
+    assert state.inputs["mesh"].state == "rejected"
+    assert state.inputs["mesh"].code == "MESH_BED_UNPAINTED"
+    assert "Paint the bed onto the mesh" in state.inputs["mesh"].reason
+
+
+def test_a_supplied_mesh_that_shares_no_ground_with_the_domain_is_refused(
+        monkeypatch):
+    state = _filled_with(monkeypatch, _built(
+        "unstructured_tri", bbox=(-71.52, 41.37, -71.50, 41.39)))
+    assert state.inputs["mesh"].state == "rejected"
+    assert state.inputs["mesh"].code == "SUPPLIED_COVERAGE_MISMATCH"
+    assert "share no ground" in state.inputs["mesh"].reason
+
+
+def test_what_only_the_mesh_build_reads_is_named_when_a_mesh_is_supplied(
+        monkeypatch):
+    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+
+    state = _filled_with(monkeypatch, _built("unstructured_tri"),
+                         mesh_resolution_m=15.0, spill_fraction=0.25)
+    workflow, token = state.workflow, bind_notes()
+    workflow._say_what_no_build_read(
+        state.env, workflow._mesh("domain", workflow._slots()))
+    said = drain_notes(token)
+    assert len(said) == 1 and "mesh_resolution_m went unused" in said[0]
+    assert "spill_fraction" not in said[0] and "domain" not in said[0]
+
+
+def test_a_drawn_geometry_handed_to_a_row_is_the_rows_value(monkeypatch):
+    """A mapping that names no layer is not a layer reference: the ring a
+    canvas drew is taken whole, never dropped for a fetch."""
+    import asyncio
+
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows.runtime.fill import Fill, fill
+
+    workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
+    monkeypatch.setattr(workflow, "named_rows", lambda: ())
+    drawn = {"type": "Polygon", "coordinates": [[*_RING, _RING[0]]]}
+    state = asyncio.run(fill(Fill(workflow=workflow),
+                             {"domain": drawn, "mesh": _built("unstructured_tri")}))
+    assert state.env.supplied["domain"] is drawn
+    assert state.inputs["domain"].state == "accepted"
+
+
+def test_the_card_holds_a_mesh_to_the_kind_the_engine_states():
+    from trid3nt_server.inputs.accept import InputRefused, accept
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    fn = TOOL_REGISTRY["telemac_dye_release"].fn
+    accept(fn, "mesh", _built("unstructured_tri"))
+    with pytest.raises(InputRefused, match="solves on"):
+        accept(fn, "mesh", _built("structured_grid"))
 
 
 def test_two_level_rows_are_legal_and_two_bed_rows_refuse():

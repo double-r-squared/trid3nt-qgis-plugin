@@ -27,7 +27,10 @@ one its accept rule refuses, opens the inputs card (`cards/run_inputs.py`):
 
 - One row per open input. A row's dropdown lists EXACTLY what that input's
   accept rule takes (`inputs/accept.py`): the case layers the input's own
-  ingestion accepts, shown by name and keyed by id; an enumerated input's own
+  ingestion accepts, shown by name and keyed by id - the ingestion of the slot
+  a workflow row states, held to what that row states for it (the engine's
+  mesh kinds), or of the slot a tool with no workflow annotates the parameter
+  with (`build_mesh`'s `extent: Annotated[Any, EXTENT]`); an enumerated input's own
   values - `build_mesh`'s mesher lists the registered mesher roster; a typed
   input is a text field.
 - A pick is a fill of that one input: it goes through the same accept rule and

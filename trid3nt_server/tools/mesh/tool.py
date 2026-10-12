@@ -7,12 +7,13 @@ builds now, and both take the same validation: an unknown op refuses by name."""
 from __future__ import annotations
 
 import os
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
 from trid3nt_server.inputs.extent import as_bbox
+from trid3nt_server.inputs.slots import EXTENT
 from trid3nt_server.workflows.runtime.data import tool
 from trid3nt_server.tools.mesh.meshers import (
     MeshOp,
@@ -83,7 +84,7 @@ async def build_mesh(
     kind: str | None = None,
     location: str | None = None,
     bbox: tuple[float, float, float, float] | list[float] | str | None = None,
-    extent: Any = None,
+    extent: Annotated[Any, EXTENT] = None,
     resolution_m: float | None = None,
     ops: list[dict] | None = None,
     input_mode: str | None = None,

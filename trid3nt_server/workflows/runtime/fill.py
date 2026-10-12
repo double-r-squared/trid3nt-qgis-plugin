@@ -27,7 +27,7 @@ from trid3nt_server.tools.search.match import (
 from .data import DataDecl, Producer
 
 from trid3nt_server.inputs.slots import (
-    BED, DISCHARGE, DOMAIN, EXTENT, LEVEL, LINE, Slot)
+    BED, DISCHARGE, DOMAIN, EXTENT, LEVEL, LINE, MESH, Slot)
 from trid3nt_server.inputs.bound_domain import Domain, bind_domain, current_domain
 from .errors import (DeclarativeError, StepFailedError,
                      SuppliedCoverageError, said)
@@ -484,6 +484,9 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any,
         # THE CUT IS WHERE THE WATER IS: the bed states its coverage over it and
         # refuses a wet hole, and an empty one says the run was cut with none.
         coercion["water"] = _cut_polygon() or {}
+    if decl.slot is MESH:
+        # The domain is filled before any other row, so a supplied mesh is held to the ground this run solves over.
+        coercion["over"] = getattr(current_domain(), "bbox", None)
     ingested = await asyncio.to_thread(ingest_slot, decl.slot, value,
                                        label=decl.name, **coercion)
     if decl.slot is DOMAIN and ingested is not None:
@@ -909,8 +912,9 @@ def _stated(env: _Env, decl: DataDecl, value: Any) -> None:
     if isinstance(value, Mapping) and "source" in value:
         env.picks[decl.name] = str(value["source"])
     elif value is not None:
-        env.supplied[decl.name] = (value.get("layer")
-                                   if isinstance(value, Mapping) else value)
+        # A mapping that names no layer IS the value: a drawn geometry arrives as one.
+        env.supplied[decl.name] = (value["layer"] if isinstance(value, Mapping)
+                                   and "layer" in value else value)
 
 
 async def _row(state: Fill, decl: DataDecl, value: Any) -> None:

@@ -34,7 +34,9 @@ package MeshSeam {
         The one door a mesh ask enters. Validates the ask into a recipe. A mesh
         a caller already has does not enter here: it is a MESH-typed input of
         the run, held to the kind the engine states and taken in place of the
-        declared build.
+        declared build. One with no bed painted on it refuses, one whose extent
+        shares no ground with the run's domain refuses, and what the caller
+        stated that only the build reads is named unused on the run's journal.
         */
     }
 

@@ -264,3 +264,13 @@ def test_build_mesh_lists_the_registered_meshers() -> None:
     assert [value for value, _label in offers(fn, "mesher", [])] == list(roster)
     with pytest.raises(InputRefused):
         accept(fn, "mesher", "tri")
+
+
+def test_build_mesh_types_its_extent_so_the_card_lists_what_it_takes(layers) -> None:
+    """A tool no workflow stands behind states the slot on the parameter itself."""
+    from trid3nt_server.inputs.accept import offers
+    from trid3nt_server.tools.mesh.tool import build_mesh
+
+    fn = getattr(build_mesh, "__wrapped__", build_mesh)
+    assert offers(fn, "extent", layers) == [("L-poly", "harbour outline")]
+    assert offers(fn, "resolution_m", layers) is None
