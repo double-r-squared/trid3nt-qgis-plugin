@@ -656,7 +656,8 @@ def deactivate_registry(token: Token) -> None:
 
 
 def lookup_uri_for_handle(handle: str) -> str | None:
-    """The DATA uri a layer handle stands for - a short ``L<n>`` or a full layer id.
+    """The DATA uri a layer handle stands for - a short ``L<n>``, a full layer id,
+    or the uri itself, which names its layer as well as either.
 
     ``None`` outside an active dispatch, or for a handle nothing published.
     """
@@ -664,6 +665,8 @@ def lookup_uri_for_handle(handle: str) -> str | None:
     if reg is None or not handle:
         return None
     key = handle.strip()
+    if key in reg._uri_to_handle or key in reg._uri_to_short:
+        return key
     short = reg._short_to_uri.get(key.upper())
     if short:
         return short

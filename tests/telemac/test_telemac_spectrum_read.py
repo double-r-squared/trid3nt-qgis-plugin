@@ -9,6 +9,7 @@ and the refusals when the deck named no file or the file is not polar.
 from __future__ import annotations
 
 import math
+import struct
 from typing import Any
 
 import numpy as np
@@ -88,7 +89,7 @@ def _solved(monkeypatch, spectra: dict[str, Any] | None,
         lambda run_id, basename, error_code=None: f"/tmp/{basename}")
     monkeypatch.setattr(
         "trid3nt_server.workflows.telemac.modules.outputs.read_selafin",
-        lambda path: spectra if str(path).endswith(".spe") else _wave_field())
+        lambda path, **_kw: spectra if str(path).endswith(".spe") else _wave_field())
     filled = ({"PUNCTUAL_RESULTS_FILE": {"keyword": "PUNCTUAL RESULTS FILE",
                                          "value": named, "provenance": "template"}}
               if named else {})
@@ -187,3 +188,60 @@ def test_no_module_whose_result_is_a_mesh_reads_a_spectrum():
     assert "spectrum" in WAC.READS
     assert "spectrum" not in T2D.READS
     assert "spectrum" not in T3D.READS
+
+
+def _record(payload: bytes) -> bytes:
+    size = struct.pack(">i", len(payload))
+    return size + payload + size
+
+
+def _punctual_file(path) -> None:
+    """SYNTHETIC - a punctual file written here, not one an engine wrote: the
+    polar grid above as the QUADRANGLES the engine joins it into, one printout
+    point, the stated cell of energy in its second frame."""
+    x, y = _polar()
+    cells = np.asarray([[ring * _DIRECTIONS + sector,
+                         ring * _DIRECTIONS + (sector + 1) % _DIRECTIONS,
+                         (ring + 1) * _DIRECTIONS + (sector + 1) % _DIRECTIONS,
+                         (ring + 1) * _DIRECTIONS + sector]
+                        for ring in range(_FREQUENCIES - 1)
+                        for sector in range(_DIRECTIONS)])
+    name = f"F01PT2D{_NEAR_NODE:06d}".encode().ljust(16) + b"UNITE SI".ljust(16)
+    frames = b"".join(
+        _record(struct.pack(">f", at)) + _record(frame.astype(">f4").tobytes())
+        for at, frame in ((0.0, _density(0.0)), (600.0, _density(4.0))))
+    path.write_bytes(
+        _record(b"SYNTHETIC SPECTRUM".ljust(72) + b"SERAFIN ")
+        + _record(struct.pack(">2i", 1, 0)) + _record(name)
+        + _record(struct.pack(">10i", 1, *[0] * 9))
+        + _record(struct.pack(">4i", len(cells), x.size, 4, 1))
+        + _record((cells + 1).astype(">i4").tobytes())
+        + _record(np.arange(1, x.size + 1, dtype=">i4").tobytes())
+        + _record(x.astype(">f4").tobytes()) + _record(y.astype(">f4").tobytes())
+        + frames)
+
+
+def test_the_punctual_file_s_quadrangles_are_read_and_a_result_s_are_refused(
+        monkeypatch, tmp_path):
+    """The engine joins the polar grid into quadrangles, which no result mesh is
+    made of: the spectrum read opens them, and the result read still refuses a
+    file whose elements are not the triangles or prisms a mesh has."""
+    from trid3nt_server.workflows.telemac.authoring.selafin_io import (
+        SelafinReadError, read_selafin)
+
+    written = tmp_path / "resWac.spe"
+    _punctual_file(written)
+    with pytest.raises(SelafinReadError):
+        read_selafin(written)
+    solved = _solved(monkeypatch, None)
+    monkeypatch.setattr(
+        "trid3nt_server.workflows.solver.solver.download_result",
+        lambda run_id, basename, error_code=None: str(tmp_path / basename))
+    monkeypatch.setattr(
+        "trid3nt_server.workflows.telemac.modules.outputs.read_selafin",
+        lambda path, **stated: (read_selafin(path, **stated)
+                                if str(path).endswith(".spe") else _wave_field()))
+    read = _read(solved, spectrum())
+    assert read.density.shape == (_FREQUENCIES, _DIRECTIONS)
+    assert read.density[_PEAK_FREQUENCY, _PEAK_DIRECTION] == pytest.approx(4.0)
+    assert read.measures["t"] == 600.0

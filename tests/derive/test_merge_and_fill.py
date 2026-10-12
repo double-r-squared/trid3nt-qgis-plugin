@@ -381,6 +381,42 @@ def test_layers_named_by_id_carry_the_offset_through_the_tool_and_the_datum_thro
         deactivate_registry(token)
 
 
+def test_a_layer_named_by_its_uri_is_the_layer_its_id_names(tmp_path, monkeypatch):
+    """An input card hands a derive the uri of the layer picked on it, for the
+    layer to fill and for 'within' alike, and the uri brings what the id does."""
+    import json
+    import sys
+
+    from trid3nt_server.render.uri_registry import (
+        activate_registry, deactivate_registry, get_uri_registry)
+
+    fill_mod = sys.modules[filled.__module__]
+    monkeypatch.setattr(fill_mod, "filled", lambda layer, within, seed: filled(
+        layer, within, seed, _output_dir=str(tmp_path)))
+    water = tmp_path / "water.geojson"
+    water.write_text(json.dumps({"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {}, "geometry": _WEST}]}))
+    ring = LayerURI(layer_id="water", name="water", uri=str(water),
+                    layer_type="vector")
+    bed = _holed()
+    registry = get_uri_registry("fill-by-uri")
+    registry.register_tool_result("merge_rasters", bed)
+    registry.register_tool_result("run_qgis_algorithm", ring)
+    token = activate_registry(registry)
+    try:
+        held = case_layer(bed.uri, "layer")
+        assert held["vertical_datum"] == "NAVD88"
+        out = asyncio.run(fill_nodata(layer=bed.uri, within=ring.uri,
+                                      seed=176.582))
+        assert out.vertical_datum == "NAVD88"
+        assert out.sources == ["bed", "filled"]
+        with pytest.raises(RasterLayerError) as refused:
+            case_layer("s3://nowhere/unpublished.tif", "layer")
+        assert refused.value.error_code == "RASTER_LAYER_UNKNOWN"
+    finally:
+        deactivate_registry(token)
+
+
 def test_the_datum_quantity_and_shift_survive_fetch_qgis_merge_and_fill(
         tmp_path, monkeypatch, fake_s3):
     """The three fields ride the layer record from the fetch through QGIS's

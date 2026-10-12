@@ -285,19 +285,26 @@ def write_telemac_pair(rundir: Path | str, *, x: Any, y: Any, cells: Any,
     return {"geo_slf": geo_slf, "cli": cli, "stats": walk["stats"]}
 
 
-def read_selafin(path: str | Path) -> dict[str, Any]:
+def read_selafin(path: str | Path, *, quadrangles: bool = False) -> dict[str, Any]:
     """A result file -> its mesh and per-variable time series.
 
     ``varnames`` carry no unit (``varunits`` does), ``ikle`` is 0-based, origins are not applied.
+    ``quadrangles`` reads a file whose elements are not triangles or prisms - a polar spectral grid.
     """
     # ``x``/``y`` stay as the file stores them: a reader placing a local-coordinate mesh adds the origin itself, and applying it here would double the offset.
-    from serafin import SerafinReader
+    from serafin import SerafinHeader, SerafinReader
 
     slf = Path(path).resolve()
     try:
         reader = SerafinReader(str(slf), "en")
         reader.__enter__()
-        reader.read_header()
+        if quadrangles:
+            # The library's header refuses four nodes an element, and frames are read by position, which needs the header alone.
+            reader.header = SerafinHeader()
+            reader.header._check_dim = lambda: None
+            reader.header.from_file(reader.file, reader.file_size)
+        else:
+            reader.read_header()
         reader.get_time()
     except Exception as failure:
         raise SelafinReadError(

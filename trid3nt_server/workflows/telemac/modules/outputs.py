@@ -498,7 +498,8 @@ class Solved:
         if basename not in self._beside:
             local = download_result(self.run_id, basename)
             try:
-                self._beside[basename] = read_selafin(local)
+                # Every file a module writes beside its result is a spectrum, over quadrangles.
+                self._beside[basename] = read_selafin(local, quadrangles=True)
             finally:
                 Path(local).unlink(missing_ok=True)
         return self._beside[basename]
