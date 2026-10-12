@@ -29,10 +29,10 @@ from trid3nt_server.inputs.slots import BED, DISCHARGE, OBSERVE
 #: The week the deck states as DURATION, as the hourly record that has to span
 #: it: the engine stops at an instant outside the table, so a week-long run is
 #: only authorable against a week of observations.
-_WEEK_HOURS = 7 * 24 + 1
+_WEEK_HOURS = 7 * 24 + 2
 
 #: The moment the run opens at, which is the weather table's t = 0: the record
-#: has to hold an observation at or before it and one at or after the close.
+#: has to hold an observation at or before it and one after the close.
 _OPENS = "2026-09-01T00:00:00Z"
 _STATION = {"lon": -122.72, "lat": 45.57, "name": "Temperature station"}
 
@@ -200,7 +200,7 @@ def test_the_weather_is_asked_over_a_window_bracketing_the_deck():
     """No date Param twins the run's window: the record is asked for from ONE
     CADENCE before the moment the run opens at to one cadence after the instant
     the deck's own DURATION closes it, so it holds an observation at or before
-    the opening and one at or after the close - in the two params the matched
+    the opening and one after the close - in the two params the matched
     source spells that window under, and a source that spells them as INSTANTS
     is asked at the instant, so a window shorter than a day is not two of the
     same day."""
@@ -231,7 +231,7 @@ def test_a_stated_duration_sizes_the_weather_record(monkeypatch):
     instant outside its table, and the refusal names both numbers."""
     with pytest.raises(ObservationError) as caught:
         _sheet(monkeypatch, DURATION=1209600.0)
-    assert "168 h" in str(caught.value) and "336 h" in str(caught.value)
+    assert "169 h" in str(caught.value) and "336 h" in str(caught.value)
 
 
 def test_the_deck_names_the_atmospheric_file_and_the_run_directory_holds_it(

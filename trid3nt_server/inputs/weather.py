@@ -185,7 +185,7 @@ def _series(observations: Sequence[Mapping[str, Any]], at: Any, window_s: Any
     """One station's observations -> a series per quantity, on the run's clock from zero.
 
     t = 0 is the moment the run opens at, and each series is read between its last reading at or
-    before it and its first at or after the close. With no moment, the first observation is the origin.
+    before it and its first after the close. With no moment, the first observation is the origin.
     """
     kept: dict[str, dict[_dt.datetime, float]] = {}
     reports: set[str] = set()
@@ -207,7 +207,7 @@ def _series(observations: Sequence[Mapping[str, Any]], at: Any, window_s: Any
         raise ValueError(f"{len(stamps)} observations in the window")
     opens = _moment(at) or stamps[0]
     closes = (opens + _dt.timedelta(seconds=float(window_s))
-              if window_s is not None else stamps[-1])
+              if window_s is not None else None)
     _bracketing(stamps, opens, closes)
     columns: dict[str, Series] = {}
     short: dict[str, str] = {}
@@ -225,14 +225,19 @@ def _series(observations: Sequence[Mapping[str, Any]], at: Any, window_s: Any
 
 
 def _bracketing(stamps: Sequence[_dt.datetime], opens: _dt.datetime,
-                closes: _dt.datetime) -> list[_dt.datetime]:
-    """The readings the run is read between: last at or before the open, first at or after the close.
+                closes: _dt.datetime | None) -> list[_dt.datetime]:
+    """The readings the run is read between: last at or before the open, first after the close.
 
-    A reader stops when an instant falls outside its table; the refusal names the missing end.
+    A reader stops when an instant falls outside its table, and a solve can step just past its
+    close, so a record ending on the close is short; the refusal names the missing end. With no
+    close stated the record is read to its own end.
     """
     if not stamps:
         raise ValueError("it holds no reading at all")
-    if stamps[0] > opens or stamps[-1] < closes:
+    late = closes is not None and stamps[-1] <= closes
+    if closes is None:
+        closes = stamps[-1]
+    if stamps[0] > opens or late:
         raise ValueError(
             f"the record runs {stamps[0]:%Y-%m-%d %H:%M} to "
             f"{stamps[-1]:%Y-%m-%d %H:%M} UTC "
@@ -240,10 +245,10 @@ def _bracketing(stamps: Sequence[_dt.datetime], opens: _dt.datetime,
             f"the run opens at {opens:%Y-%m-%d %H:%M} and closes at "
             f"{closes:%Y-%m-%d %H:%M} "
             f"({(closes - opens).total_seconds() / 3600.0:.0f} h): it holds no "
-            "observation at or "
-            + ("before the opening" if stamps[0] > opens else "after the close"))
+            "observation "
+            + ("at or before the opening" if stamps[0] > opens else "after the close"))
     return list(stamps[bisect.bisect_right(stamps, opens) - 1:
-                       bisect.bisect_left(stamps, closes) + 1])
+                       bisect.bisect_right(stamps, closes) + 1])
 
 
 def _network(observation: Mapping[str, Any]

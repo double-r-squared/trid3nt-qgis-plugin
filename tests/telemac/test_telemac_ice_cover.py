@@ -33,10 +33,10 @@ from trid3nt_server.inputs.slots import BED, DISCHARGE, OBSERVE
 #: The week the deck states as DURATION, as the hourly record that has to span
 #: it: the engine stops at an instant outside the table, so a week-long run is
 #: only authorable against a week of observations.
-_WEEK_HOURS = 7 * 24 + 1
+_WEEK_HOURS = 7 * 24 + 2
 
 #: The moment the run opens at, which is the weather table's t = 0: the record
-#: has to hold an observation at or before it and one at or after the close.
+#: has to hold an observation at or before it and one after the close.
 _OPENS = "2024-01-11T00:00:00Z"
 _STATION = {"lon": -122.67, "lat": 45.52, "name": "Ice station"}
 
@@ -236,7 +236,7 @@ def test_the_clock_is_the_decks_own_keyword_and_the_weather_table_spans_it(
 def test_a_stated_duration_sizes_the_weather_record(monkeypatch):
     with pytest.raises(ObservationError) as caught:
         _sheet(monkeypatch, DURATION=1209600.0)
-    assert "168 h" in str(caught.value) and "336 h" in str(caught.value)
+    assert "169 h" in str(caught.value) and "336 h" in str(caught.value)
 
 
 def test_the_weather_file_carries_what_the_ice_reads_and_no_solar_column(

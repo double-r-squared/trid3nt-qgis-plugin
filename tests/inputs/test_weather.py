@@ -56,7 +56,7 @@ def test_every_series_reads_zero_at_the_moment_the_run_opens_at():
                     at="2026-09-01T12:00:00Z", window_s=6.0 * _HOUR)
     assert found.opens.isoformat() == "2026-09-01T12:00:00+00:00"
     assert found.columns["air_temp_c"].times_s == tuple(
-        hour * _HOUR for hour in range(7))
+        hour * _HOUR for hour in range(8))
 
 
 def test_the_nearest_station_bracketing_the_window_is_the_one_taken():
@@ -77,7 +77,7 @@ def test_a_bracketing_station_short_of_one_quantity_is_still_the_station():
     assert found.site_id == "NEAR"
     assert "solar_radiation_wm2" not in found.columns
     assert "after the close" in found.short["solar_radiation_wm2"]
-    assert len(found.columns["air_temp_c"]) == 21
+    assert len(found.columns["air_temp_c"]) == 22
 
 
 def test_a_reading_one_instrument_missed_leaves_the_other_series_whole():
@@ -98,6 +98,13 @@ def test_a_record_shorter_than_the_run_refuses_rather_than_extrapolating():
         weather(_fc([_raws(hour) for hour in range(0, 12)]), near=_SEED,
                 window_s=20.0 * _HOUR)
     assert refused.value.error_code == "WEATHER_INVALID"
+
+
+def test_a_record_ending_on_the_close_refuses_naming_the_close():
+    """A solve can step just past its close, so the closing reading is strictly after it."""
+    with pytest.raises(ObservationError, match="no observation after the close"):
+        weather(_fc([_raws(hour) for hour in range(12, 19)]), near=_SEED,
+                at="2026-09-01T12:00:00Z", window_s=6.0 * _HOUR)
 
 
 def test_a_record_holding_no_station_refuses():
