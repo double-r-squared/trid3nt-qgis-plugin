@@ -186,7 +186,8 @@ def test_every_row_a_template_reads_is_in_the_mapping_after_the_fill(
                  if hasattr(getattr(tool.fn, "workflow", None), "named_rows")]
     missed = {}
     for workflow in workflows:
-        rows = {row.name: row for row in workflow.data}
+        rows = {row.name: row for row in workflow.data
+                if row not in workflow.seated}
         recipe = workflow._states("MESH", None)
         read = set(workflow.steering.named()) | set(
             input_names(recipe) if recipe is not None else ())

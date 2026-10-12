@@ -1020,7 +1020,9 @@ class TelemacWorkflow(Workflow):
         """Every declared row the template names, but one asked near a point the
         run places: that point is a node of the mesh, so the row is produced
         once the point is placed, before the sheet."""
-        rows, marks = {row.name: row for row in self.data}, tuple(self._marks())
+        # A seated row is produced only when stated: a composite names the mesh stage's output by the same word.
+        rows = {row.name: row for row in self.data if row not in self.seated}
+        marks = tuple(self._marks())
         return tuple(dict.fromkeys(
             name for name in self._named() if isinstance(name, str)
             and name in rows and rows[name].coercion.get("near") not in marks))

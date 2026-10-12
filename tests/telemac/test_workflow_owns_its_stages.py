@@ -222,3 +222,13 @@ def test_two_level_rows_are_legal_and_two_bed_rows_refuse():
 
     with pytest.raises(DeclarationError, match="declares 2 bed rows"):
         _workflow(data=TWO_BEDS)
+
+
+def test_a_composite_naming_the_mesh_stage_does_not_fill_the_seated_mesh_row():
+    """Infiltration reads the mesh the stage builds; were the unstated seat
+    filled for it, the launch would find a mesh key and build none."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    workflow = TOOL_REGISTRY["telemac_rain_on_grid"].fn.workflow
+    assert "mesh" in workflow._named()
+    assert "mesh" not in workflow.named_rows()
