@@ -185,4 +185,5 @@ include = ["trid3nt_server*"]
 trid3nt_server = [
     "tools/tool_query_corpus.yaml",
     "tools/README.md",
+    "workflows/telemac/authoring/*/*.f",
 ]

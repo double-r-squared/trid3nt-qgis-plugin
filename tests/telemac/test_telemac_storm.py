@@ -14,8 +14,7 @@ from trid3nt_server.workflows.telemac.modules import telemac2d as T
 
 
 def _storm(**over):
-    ask = {"mm_per_day": 288.0, "hours": 2.0,
-           "tracers": 0, "fortran": "/opt/trid3nt/user_fortran/raindef3"}
+    ask = {"mm_per_day": 288.0, "hours": 2.0, "tracers": 0}
     ask.update(over)
     until_s = ask.pop("until_s", 36000.0)
     return T.T2D.COMPOSITES["storm"].apply(T.Storm(**ask),
@@ -49,7 +48,9 @@ def test_a_measured_record_becomes_the_blocks_the_engine_reads_per_timestep():
     file the routine reads out."""
     keywords, files = _storm(series=[1.5, 4.0, 0.25], until_s=18000.0)
     assert keywords["FORMATTED_DATA_FILE_1"] == T.HYETOGRAPH_FILENAME
-    assert keywords["FORTRAN_FILE"].endswith("raindef3")
+    # The routine that reads the blocks is staged beside them, in the directory the keyword names.
+    assert keywords["FORTRAN_FILE"] == T.USER_FORTRAN_DIR
+    assert "RAINDEF=3" in files[f"{T.USER_FORTRAN_DIR}/runoff_scs_cn.f"]
     rows = [line.split() for line in files[T.HYETOGRAPH_FILENAME].splitlines()
             if line and not line.startswith("#") and " " in line]
     assert rows[0] == ["3600.000", "1.50000"]
@@ -76,6 +77,22 @@ def test_an_ingested_record_is_written_at_its_own_cadence_from_the_run_s_zero():
                         ["2700.000", "0.25000"]]
 
 
+def test_a_block_open_across_the_run_s_zero_gives_the_share_that_falls_after_it():
+    """A run opening off the record's stamps starts inside an interval: a third
+    of that quarter hour is this run's, so a third of its depth is."""
+    from trid3nt_server.inputs.rain import rain
+
+    record = rain({"times": ["2020-06-01T00:00", "2020-06-01T00:15",
+                             "2020-06-01T00:30"],
+                   "precip_mm": [9.0, 1.5, 4.0], "units": "mm"},
+                  at="2020-06-01T00:10:00Z")
+    _keywords, files = _storm(record=record, until_s=3600.0)
+    rows = [line.split() for line in files[T.HYETOGRAPH_FILENAME].splitlines()
+            if line and not line.startswith("#") and " " in line]
+    assert rows[:3] == [["300.000", "3.00000"], ["1200.000", "1.50000"],
+                        ["2100.000", "4.00000"]]
+
+
 def test_a_measured_record_leaves_the_constant_branch_alone():
     keywords, _files = _storm(series=[1.0, 2.0], until_s=7200.0)
     assert "RAIN_OR_EVAPORATION_IN_MM_PER_DAY" not in keywords
@@ -84,11 +101,6 @@ def test_a_measured_record_leaves_the_constant_branch_alone():
 def test_a_record_of_one_interval_is_not_a_shape_and_refuses():
     with pytest.raises(ValueError, match="at least two"):
         _storm(series=[3.0], until_s=7200.0)
-
-
-def test_a_measured_storm_with_no_routine_to_read_it_refuses_by_name():
-    with pytest.raises(ValueError, match="user Fortran"):
-        _storm(series=[1.0, 2.0], until_s=7200.0, fortran=None)
 
 
 def test_a_run_that_states_no_rain_at_all_writes_no_keyword():

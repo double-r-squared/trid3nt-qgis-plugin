@@ -121,9 +121,6 @@ _BASIN_WINDOW_KM = 15.0
 
 _MESH_GRADE = 0.20
 
-# the stock runoff_scs_cn.f hardcodes RAINDEF=1; this is the baked RAINDEF=3
-RAINDEF3_USER_FORTRAN = "/opt/trid3nt/user_fortran/raindef3"
-
 
 class DATA:
     domain = Data(DOMAIN).need("hydrography", kind="basin", at="pour_point",
@@ -193,7 +190,7 @@ class STEERING(T2D):
                   hours=6.0,
                   series="rain_series_mm",
                   record="rain",
-                  tracers=0, fortran=RAINDEF3_USER_FORTRAN)
+                  tracers=0)
     infiltration = Infiltration(
         landcover="landcover",
         table=LANDCOVER_CN_MANNING, unmapped=LANDCOVER_UNMAPPED,

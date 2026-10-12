@@ -545,16 +545,15 @@ _STORM_INTERVAL_S = 3600.0
 
 
 def Storm(*, mm_per_day: Any, hours: Any,  # noqa: N802
-          series: Any = None, record: Any = None, tracers: Any = 0,
-          fortran: Any = None) -> Mapping[str, Any]:
+          series: Any = None, record: Any = None,
+          tracers: Any = 0) -> Mapping[str, Any]:
     """The storm over the domain: a measured record, or a constant design rate.
 
     A stated hourly gross-mm ``series`` wins, else the ingested ``record``; with neither, the constant rate over ``hours`` (RAIN OR EVAPORATION IN MM PER DAY's unit).
     """
     return MappingProxyType({"mm_per_day": mm_per_day, "hours": hours,
                              "settled": "settled", "series": series,
-                             "record": record, "tracers": tracers,
-                             "fortran": fortran})
+                             "record": record, "tracers": tracers})
 
 
 def storm_rain(series: Any, record: Rain | None) -> Rain | None:
@@ -588,20 +587,23 @@ def _storm(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                     >= float(value["settled"]["until_s"])
                     else {"DURATION_OF_RAIN_OR_EVAPORATION_IN_HOURS":
                           float(value["hours"])})}, {})
-    # A block is written by the instant it CLOSES at; one closed before the run opens is not this run's rain.
-    blocks = [(opens + rain.interval_s, max(0.0, depth))
+    # A block is written by the instant it CLOSES at; one closed before the run opens is not this run's rain, and one open across the run's zero gives the share that falls after it.
+    blocks = [(opens + rain.interval_s,
+               max(0.0, depth) * min(1.0, (opens + rain.interval_s) / rain.interval_s))
               for opens, depth in zip(rain.series.times_s, rain.series.values)
               if opens + rain.interval_s > 0.0]
-    keywords, files = _blocks_file(blocks, value["settled"]["until_s"], value["fortran"])
+    keywords, files = _blocks_file(blocks, value["settled"]["until_s"])
     return ({**keywords, **_rain_tracers(value["tracers"])}, files)
 
 
-def _blocks_file(blocks: Any, until_s: Any,
-                 fortran: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+def _blocks_file(blocks: Any,
+                 until_s: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     """Gross rain per interval -> the block file and the routine that reads it.
 
     Blocks are ``[t_end_s, gross_mm]``; the tail past the last instant is dry.
     """
+    from ..authoring.storm import BLOCK_ROUTINE_FILENAME, block_routine
+
     rows: list[tuple[float, float]] = []
     previous = 0.0
     for t_end, millimetres in blocks:
@@ -619,11 +621,6 @@ def _blocks_file(blocks: Any, until_s: Any,
     tail = float(until_s) + _STORM_INTERVAL_S
     if rows[-1][0] < tail:
         rows.append((tail, 0.0))
-    if not fortran:
-        raise ValueError(
-            "a measured storm is read per timestep by a user Fortran routine and "
-            "this run names none; state the routine the image bakes, or drive the "
-            "run with a design rate.")
     lines = ["#HYETOGRAPH FILE (block type; mm per interval)",
              "#T (s) RAINFALL (mm)", "0.",
              *(f"{t:.3f} {mm:.5f}" for t, mm in rows)]
@@ -633,9 +630,9 @@ def _blocks_file(blocks: Any, until_s: Any,
     return ({
              "RAIN_OR_EVAPORATION": True,
              "FORMATTED_DATA_FILE_1": HYETOGRAPH_FILENAME,
-             # Quoted by the writer: a value opening on '/' is a DAMOCLES comment, erasing the keyword and swallowing the next line.
-             "FORTRAN_FILE": str(fortran)},
-            {HYETOGRAPH_FILENAME: "\n".join(lines) + "\n"})
+             "FORTRAN_FILE": USER_FORTRAN_DIR},
+            {HYETOGRAPH_FILENAME: "\n".join(lines) + "\n",
+             f"{USER_FORTRAN_DIR}/{BLOCK_ROUTINE_FILENAME}": block_routine()})
 
 
 def _rain_tracers(tracers: Any) -> Mapping[str, Any]:

@@ -395,14 +395,11 @@ async def test_a_measured_series_drives_the_run_through_the_block_file(rog_run):
     """A record is hourly gross millimetres as it was reported; the blocks and
     the routine that reads them per timestep are the module's, not a step of
     this template's own."""
-    from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
-        RAINDEF3_USER_FORTRAN,
-    )
-
     settled, sheet = await rog_run(rain_series_mm=[3.0, 12.5, 0.0],
                                    duration_s=10800.0)
     deck = dict(sheet.resolved())
-    assert deck["FORTRAN FILE"] == RAINDEF3_USER_FORTRAN
+    assert deck["FORTRAN FILE"] == "user_fortran"
+    assert "RAINDEF=3" in sheet.files["user_fortran/runoff_scs_cn.f"]
     assert deck["FORMATTED DATA FILE 1"] == "rog_hyeto.txt"
     rows = [line.split() for line in sheet.files["rog_hyeto.txt"].splitlines()
             if line[:1].isdigit() and " " in line]
@@ -417,6 +414,40 @@ async def test_a_measured_series_drives_the_run_through_the_block_file(rog_run):
     assert deck["RAIN OR EVAPORATION"] is True
     assert "DURATION OF RAIN OR EVAPORATION IN HOURS" not in deck
     assert "RAIN OR EVAPORATION IN MM PER DAY" not in deck
+
+
+@pytest.mark.asyncio
+async def test_a_measured_storm_s_routine_is_staged_and_passes_the_staged_check(
+        rog_run, tmp_path):
+    """The routine the block file is read by is a file of the run directory, so
+    the deck names a directory the staged check finds beside it."""
+    from trid3nt_server.workflows.telemac.authoring import selafin_io, staged_check
+
+    _settled, sheet = await rog_run(rain_series_mm=[3.0, 12.5, 0.0],
+                                    duration_s=10800.0)
+    deck = dict(sheet.resolved())
+    rundir = tmp_path / "staged"
+    rundir.mkdir()
+    for name, content in sheet.files.items():
+        (rundir / name).parent.mkdir(parents=True, exist_ok=True)
+        (rundir / name).write_text(content)
+    xy, cells, bed, _lonlat = _NODES
+    selafin_io.write_telemac_pair(
+        rundir, x=xy[:, 0], y=xy[:, 1], cells=cells, bed=bed,
+        roles={"rating_curve": [1, 3]})
+    (rundir / "mesh.slf").rename(rundir / deck["GEOMETRY FILE"])
+    (rundir / "mesh.cli").rename(rundir / deck["BOUNDARY CONDITIONS FILE"])
+    (rundir / "t2d_rog.cas").write_text("".join(
+        f"{keyword} = '{value}'\n" for keyword, value in deck.items()
+        if keyword.endswith(" FILE")) + "TIME STEP = 1.0\nDURATION = 10800.0\n")
+
+    read = staged_check.check_staged_run(
+        rundir, steering="t2d_rog.cas", inputs=[],
+        written_by_the_engine=[deck["RESULTS FILE"]], duration_s=10800.0, cores=1)
+
+    assert deck["FORTRAN FILE"] == "user_fortran"
+    assert (rundir / "user_fortran" / "runoff_scs_cn.f").is_file()
+    assert read["decks"] == ["t2d_rog.cas"]
 
 
 @pytest.mark.asyncio

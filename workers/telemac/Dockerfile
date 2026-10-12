@@ -56,28 +56,7 @@ print('geo deps OK numpy', numpy.__version__, 'rasterio', rasterio.__version__)"
     && python -c "import numpy; assert numpy.__version__=='1.26.4', 'numpy pin drifted: '+numpy.__version__" \
     && python -c "from data_manip.extraction.telemac_file import TelemacFile; print('TELEMAC _hermes import OK')"
 
-# --- the RAINDEF=3 user fortran, baked once from the installed engine source --
-# The engine's own runoff_scs_cn.f already implements the block-type hyetograph
-# branch but fixes RAINDEF as a compile-time PARAMETER, which no steering keyword
-# can reach; the engine's user-fortran door is the only way in, and a run that
-# wants it names this directory as FORTRAN FILE so telemac2d recompiles the copy
-# over the library symbol. The copy changes that ONE parameter and nothing else.
-# The expected line must be present VERBATIM or the build stops here: an
-# unpatched copy would solve constant rain while the run reports a hyetograph.
 USER root
-RUN gate='      INTEGER, PARAMETER ::RAINDEF=1'; \
-    src="$HOMETEL/sources/telemac2d/runoff_scs_cn.f"; \
-    n=$(grep -cxF "$gate" "$src" || true); \
-    if [ "$n" != "1" ]; then \
-        echo "RAINDEF BAKE REFUSED: $src carries $n copies of '$gate' (expected exactly 1). The installed engine source has drifted and the baked user fortran would be a mis-patch." >&2; \
-        exit 1; \
-    fi; \
-    mkdir -p /opt/trid3nt/user_fortran/raindef3; \
-    sed "s|^${gate}\$|      INTEGER, PARAMETER ::RAINDEF=3|" "$src" \
-        > /opt/trid3nt/user_fortran/raindef3/runoff_scs_cn.f; \
-    grep -qxF '      INTEGER, PARAMETER ::RAINDEF=3' \
-        /opt/trid3nt/user_fortran/raindef3/runoff_scs_cn.f; \
-    echo "raindef3 user fortran baked from $src"
 
 # --- the launcher's dictionary gate, taught the engine's own wildcard --------
 # A variable table longer than the 72 columns DAMOCLES reads a line to has one
@@ -109,10 +88,9 @@ WORKDIR /data
 
 # Build-time smoke: the entrypoint imports under the activated env, the four
 # telapy classes a case may name resolve, every one of them carries the per-step
-# call the runner's loop drives, the dispatch is the ONE case section, and the
-# baked user fortran is on disk. A path/import/pin mistake surfaces at BUILD time
-# instead of mid-solve, and so does a telapy that stopped exposing the step the
-# loop is written against.
+# call the runner's loop drives, and the dispatch is the ONE case section. A
+# path/import/pin mistake surfaces at BUILD time instead of mid-solve, and so
+# does a telapy that stopped exposing the step the loop is written against.
 RUN python -c "\
 import sys, pathlib;\
 sys.path.insert(0, '/opt/trid3nt/workers/telemac');\
@@ -124,10 +102,9 @@ from telapy.api.art import Artemis;\
 assert sorted(E._MODULES) == ['artemis', 'telemac2d', 'telemac3d', 'tomawac'];\
 assert sorted(E._DISPATCH) == ['case'], E._DISPATCH;\
 assert all(callable(getattr(c, 'run_one_time_step', None)) for c in (Telemac2d, Telemac3d, Tomawac, Artemis));\
-assert pathlib.Path('/opt/trid3nt/user_fortran/raindef3/runoff_scs_cn.f').is_file();\
 assert E._measure_ntimestep(pathlib.Path('/tmp'), '') == {};\
 assert E._measure_ntimestep(pathlib.Path('/tmp'), 'nothing_here.slf') == {};\
-print('telemac worker OK: parser', E._PARSER_VERSION, '| telapy modules step-capable, one case dispatch and baked raindef3 all present')"
+print('telemac worker OK: parser', E._PARSER_VERSION, '| telapy modules step-capable and one case dispatch present')"
 
 # The frame-count reader, exercised on a REAL SELAFIN written in this image. The
 # guard above proves it stays quiet on nothing; this proves it can count, which
