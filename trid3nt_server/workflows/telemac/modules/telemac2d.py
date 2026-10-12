@@ -9,6 +9,7 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
+from trid3nt_server.inputs.rain import Rain
 from trid3nt_server.inputs.series import align
 from trid3nt_server.inputs.slots import OBSERVE
 from trid3nt_server.inputs.temporal import RATE, STATE, Series
@@ -539,7 +540,7 @@ def _rating(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
             {RATING_FILENAME: "\n".join(lines) + "\n"})
 
 
-# The interval a measured rainfall record is accumulated over: gross-rain products publish hourly totals, and a block file is read as the total over the block.
+# The interval a rainfall series STATED on the call is accumulated over; a fetched record carries its own.
 _STORM_INTERVAL_S = 3600.0
 
 
@@ -548,12 +549,23 @@ def Storm(*, mm_per_day: Any, hours: Any,  # noqa: N802
           fortran: Any = None) -> Mapping[str, Any]:
     """The storm over the domain: a measured record, or a constant design rate.
 
-    A stated hourly gross-mm ``series`` wins, else ``record``; with neither, the constant rate over ``hours`` (RAIN OR EVAPORATION IN MM PER DAY's unit).
+    A stated hourly gross-mm ``series`` wins, else the ingested ``record``; with neither, the constant rate over ``hours`` (RAIN OR EVAPORATION IN MM PER DAY's unit).
     """
     return MappingProxyType({"mm_per_day": mm_per_day, "hours": hours,
                              "settled": "settled", "series": series,
                              "record": record, "tracers": tracers,
                              "fortran": fortran})
+
+
+def storm_rain(series: Any, record: Rain | None) -> Rain | None:
+    """The measured storm of a run: the series stated on the call over the record ingested for its window, or neither."""
+    if series is None:
+        return record
+    if len(series) < 2:
+        raise ValueError(f"a measured storm carries {len(series)} interval(s); "
+                         "a hyetograph needs at least two. Widen the window, or "
+                         "state a design rate.")
+    return Rain.every(_STORM_INTERVAL_S, series)
 
 
 def _storm(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
@@ -562,12 +574,8 @@ def _storm(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
 
     A record is ``[t_end_s, gross_mm]`` blocks with a dry tail past the last instant so the recession limb can fall; a design rate is the engine's constant branch.
     """
-    series = value.get("series")
-    if series is None:
-        record = value.get("record")
-        series = (record.get("precip_mm") if isinstance(record, Mapping)
-                  else getattr(record, "precip_mm", None))
-    if series is None:
+    rain = storm_rain(value.get("series"), value.get("record"))
+    if rain is None:
         rate = value["mm_per_day"]
         if rate is None:
             return ({}, {})
@@ -580,13 +588,10 @@ def _storm(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                     >= float(value["settled"]["until_s"])
                     else {"DURATION_OF_RAIN_OR_EVAPORATION_IN_HOURS":
                           float(value["hours"])})}, {})
-    millimetres = [max(0.0, float(v)) for v in series]
-    if len(millimetres) < 2:
-        raise ValueError(f"a measured storm carries {len(millimetres)} interval(s); "
-                         "a hyetograph needs at least two. Widen the window, or "
-                         "state a design rate.")
-    blocks = [(float((i + 1) * _STORM_INTERVAL_S), millimetres[i])
-              for i in range(len(millimetres))]
+    # A block is written by the instant it CLOSES at; one closed before the run opens is not this run's rain.
+    blocks = [(opens + rain.interval_s, max(0.0, depth))
+              for opens, depth in zip(rain.series.times_s, rain.series.values)
+              if opens + rain.interval_s > 0.0]
     keywords, files = _blocks_file(blocks, value["settled"]["until_s"], value["fortran"])
     return ({**keywords, **_rain_tracers(value["tracers"])}, files)
 

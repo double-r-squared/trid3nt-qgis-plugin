@@ -10,6 +10,7 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Any, Mapping
 
+from trid3nt_server.inputs.run_notes import journal_note
 from trid3nt_server.inputs.slots import LEVEL, WAVE
 
 from .module import Module, Output, Unwritten
@@ -147,6 +148,20 @@ class _Tomawac(Module("tomawac")):  # type: ignore[misc]
                           "ED_RESULTS_FILE": RESULT_FILENAME, **keywords}}
 
 
+def _toward(wave: Any) -> float:
+    """The bearing a measured sea state runs TOWARD, which is what MAIN DIRECTION states.
+
+    A record publishes where the waves come from and a period; both turns are said on the journal.
+    """
+    toward = (wave.from_direction_deg + 180.0) % 360.0
+    journal_note(
+        f"the deck is forced at a peak frequency of {1.0 / wave.peak_period_s:.4f} "
+        f"Hz - one over the {wave.peak_period_s:.1f} s the record reports - "
+        f"running TOWARD {toward:.0f} deg, which is the bearing the record's "
+        "own is turned through 180 to reach.")
+    return toward
+
+
 WAC = _Tomawac
 WAC.MODULE_OUTPUT = MODULE_OUTPUT
 WAC.PRINTOUTS = PRINTOUTS
@@ -172,8 +187,8 @@ WAC.reads(**PRIMITIVES, spectrum=read_spectrum)
 # The sea state at the open edge fills the JONSWAP numbers; the gauged level is the still water depths are read under; a settled station is where the spectrum is printed. A coupled body takes only the sea state.
 WAC.FILLED_BY = MappingProxyType({
     WAVE: {"BOUNDARY_SIGNIFICANT_WAVE_HEIGHT": lambda wave: wave.height_m,
-           "BOUNDARY_PEAK_FREQUENCY": lambda wave: wave.peak_frequency_hz,
-           "BOUNDARY_MAIN_DIRECTION_1": lambda wave: wave.direction_deg},
+           "BOUNDARY_PEAK_FREQUENCY": lambda wave: 1.0 / wave.peak_period_s,
+           "BOUNDARY_MAIN_DIRECTION_1": _toward},
     LEVEL: {"INITIAL_STILL_WATER_LEVEL": lambda level: level.value},
     "station": {
         "ABSCISSAE_OF_SPECTRUM_PRINTOUT_POINTS": lambda placed: [placed["at"][0]],

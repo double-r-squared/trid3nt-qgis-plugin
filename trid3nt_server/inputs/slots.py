@@ -15,8 +15,8 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 __all__ = ["BED", "DISCHARGE", "DOMAIN", "EXTENT", "LEVEL", "LINE", "MESH",
-           "OBSERVE", "Slot", "WAVE", "WEATHER", "ask_on_canvas", "draw_on_canvas",
-           "ingest_slot", "needs_of"]
+           "OBSERVE", "RAIN", "Slot", "WAVE", "WEATHER", "ask_on_canvas",
+           "draw_on_canvas", "ingest_slot", "needs_of"]
 
 logger = logging.getLogger("trid3nt_server.inputs.slots")
 
@@ -92,12 +92,16 @@ EXTENT = Slot("extent", ingestion="extent",
               draw=("rectangle", "",
                     "Draw the box this question is asked inside"))
 
-#: The record of the air over the domain, read by the composite that puts it on the
-#: run's own clock. Nothing ingests it on the way in.
-WEATHER = Slot("weather", classes=frozenset({"weather forcing"}))
+#: The record of the air over the domain: one station's series, every quantity its
+#: network reports. Which of them a solve reads is its engine's.
+WEATHER = Slot("weather", ingestion="weather",
+               classes=frozenset({"weather forcing"}), record=True)
 
-#: The sea state at the open edge: one record, several columns, measured somewhere near;
-#: its ingestion turns those columns into the keywords a spectral deck forces.
+#: The rain that falls on the domain: the depth per interval a record reports.
+RAIN = Slot("rain", ingestion="rain",
+            classes=frozenset({"precipitation series"}), record=True)
+
+#: The sea state at the open edge: one record, several columns, measured somewhere near.
 WAVE = Slot("wave", ingestion="wave", classes=frozenset({"wave series"}), record=True)
 
 #: A MESH the caller already has, taken in place of the one the run would build.

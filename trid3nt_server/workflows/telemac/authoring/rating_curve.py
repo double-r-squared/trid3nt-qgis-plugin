@@ -112,7 +112,7 @@ def _measured_outlet(topology: Mapping[str, Any], node_xy: Any, node_bed: Any,
     }
 
 
-def _rain_ceiling(rain: Mapping[str, Any], cells: Any,
+def _rain_ceiling(peak_m_per_s: float, cells: Any,
                   node_xy: Any) -> tuple[float, str]:
     """The most the outlet can discharge: gross rain on the meshed area (infiltration only removes water)."""
     import numpy as np
@@ -122,10 +122,6 @@ def _rain_ceiling(rain: Mapping[str, Any], cells: Any,
     a, b, c = xy[tri[:, 0]], xy[tri[:, 1]], xy[tri[:, 2]]
     area_m2 = float(0.5 * np.abs((b[:, 0] - a[:, 0]) * (c[:, 1] - a[:, 1])
                                  - (b[:, 1] - a[:, 1]) * (c[:, 0] - a[:, 0])).sum())
-    # A measured record is gross mm per hourly block; a design storm is the engine's keyword in mm/day. Both become depth per second over the meshed area.
-    peak_m_per_s = (max(float(v) for v in rain["series"]) / 1000.0 / 3600.0
-                    if rain.get("kind") == "hyetograph"
-                    else float(rain["mm_per_day"] or 0.0) / 1000.0 / 86400.0)
     peak_mm_hr = peak_m_per_s * 1000.0 * 3600.0
     if not (peak_m_per_s > 0.0 and area_m2 > 0.0):
         raise TelemacError(
@@ -158,8 +154,10 @@ async def settle_outlet_rating(
     Section, slope and roughness are measured off the accepted mesh; the flow range is the gross
     rain on it. ``friction_law`` is the deck's, so the curve matches the roughness the run solves at.
     """
-    measured = series if series is not None else record
-    if not measured and mm_per_day is None:
+    from ..modules.telemac2d import storm_rain
+
+    measured = storm_rain(series, record)
+    if measured is None and mm_per_day is None:
         raise TelemacError(
             "no rain reaches this run: no rainfall series was stated, no "
             "rainfall record was fetched for its window, and no design rate "
@@ -175,9 +173,10 @@ async def settle_outlet_rating(
             error_code="TELEMAC_BOUNDARY_PRESCRIBES_NOTHING")
     points_utm, cells, node_bed, lonlat = await asyncio.to_thread(
         accepted_mesh_nodes, mesh)
-    storm = ({"kind": "hyetograph", "series": list(measured)} if measured
-             else {"kind": "design_storm", "mm_per_day": mm_per_day})
-    q_ceiling, q_ceiling_basis = _rain_ceiling(storm, cells, points_utm)
+    # A measured storm is gross mm per interval; a design storm is the engine's keyword in mm/day. Both become depth per second over the meshed area.
+    q_ceiling, q_ceiling_basis = _rain_ceiling(
+        measured.peak_mm_per_s / 1000.0 if measured is not None
+        else float(mm_per_day) / 1000.0 / 86400.0, cells, points_utm)
     manning = await asyncio.to_thread(
         _outlet_manning, landcover, lonlat[_outlet_nodes(topology)], roughness,
         unmapped)

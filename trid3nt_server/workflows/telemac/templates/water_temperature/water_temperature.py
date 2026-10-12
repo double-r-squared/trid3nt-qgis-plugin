@@ -111,9 +111,7 @@ class STEERING(T2D):
 
     boundaries = Boundaries(tracers="INITIAL_VALUES_OF_TRACERS")
 
-    atmosphere = Atmosphere(observed="weather", at="station",
-                            duration_s="DURATION",
-                            event_time="event_time")
+    atmosphere = Atmosphere(observed="weather")
 
     coupling = [WAQTEL.thermal()]
 

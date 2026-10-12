@@ -141,11 +141,29 @@ package DataSeam {
 
     part def SeaStateReader {
         doc /*
-        The slot ingestion that turns a buoy's record into the scalars a
-        spectral deck forces its open edge with: the column stated in each
-        quantity's own unit, a peak frequency off the period reported and the
-        bearing the waves run toward off the one they come from, both said on
-        the run journal.
+        The slot ingestion that turns a buoy's record into the one sea state it
+        measured: the column stated in each quantity's own unit, read at the
+        moment the run opens at - a height, a peak period and the bearing the
+        waves come from, with the buoy that reported them.
+        */
+    }
+
+    part def WeatherReader {
+        doc /*
+        The slot ingestion that turns a station record into one station's
+        series: the nearest station whose record brackets the run's window,
+        every quantity its network reports as a series of its own in the unit
+        its name states, on a clock that reads zero where the run opens, and
+        the reason beside any quantity that station is short of.
+        */
+    }
+
+    part def RainReader {
+        doc /*
+        The slot ingestion that turns a rainfall record into the depth that
+        fell in each interval, in millimetres, on the run's clock: the instants
+        and the cadence are the record's own, the column and its unit the
+        matched row's statement.
         */
     }
 
@@ -646,6 +664,18 @@ package DataSeam {
         */
     }
 
+    part weatherReader : WeatherReader {
+        doc /*
+        code: trid3nt_server/inputs/weather.py
+        */
+    }
+
+    part rainReader : RainReader {
+        doc /*
+        code: trid3nt_server/inputs/rain.py
+        */
+    }
+
     part offsetRowDeclaration : VerticalFrame {
         doc /*
         code: trid3nt_server/workflows/runtime/fill.py
@@ -1093,17 +1123,10 @@ package DataSeam {
         so it is a type on the one list, serving one class, and the match
         fills it the way it fills every other need.
 
-        What makes it its own slot is what its INGESTION does: every column of
-        the record becomes a KEYWORD the deck states, so the turn from the
-        record's words to the engine's lives there and nowhere else. A quantity
-        is read off the column stated in that quantity's own unit - a record
-        stating two columns in one unit refuses rather than taking the first -
-        and the two conversions a spectral deck needs are made at that one
-        place: the peak FREQUENCY is one over the period reported, and the
-        deck's MAIN DIRECTION is the bearing the waves run TOWARD, which a met
-        record's own is turned through 180 to reach. Neither is folded silently
-        into a number: the journal says the buoy, how far off it stands, the
-        moment, what it reported, and both turns.
+        A quantity is read off the column stated in that quantity's own unit -
+        a record stating two columns in one unit refuses rather than taking the
+        first - and the journal says the buoy, how far off it stands, the
+        moment and what it reported.
 
         A PRESCRIBED SEA STATE NEEDS AN EDGE TO ENTER BY. The deck that imposes
         one states the depth a boundary stretch has to reach for it to be
@@ -1114,6 +1137,32 @@ package DataSeam {
         settle refuses it for every deck that prescribes a sea state, naming the
         deck and the depth it stated - a sealed domain solves green with every
         wave answer zero, which is the one failure a reader cannot see.
+        */
+    }
+
+    requirement def ARecordSlotHoldsWhatWasMeasured {
+        doc /*
+        THE WEATHER, THE RAIN AND THE SEA STATE ARE INGESTED AS WHAT WAS
+        MEASURED, in words no engine owns: which station or buoy, the quantity,
+        its unit, its instants. Nothing under inputs/ names a keyword, a file
+        or a module, and nothing there imports a workflow.
+
+        The weather is ONE STATION: the nearest whose record brackets the
+        run's window - nearest to the point its row names, else to the middle
+        of the run's domain - and no station further off is tried for what
+        that one lacks. Every quantity its network reports is kept as a series
+        of its own, so an hour one instrument missed costs the others nothing;
+        a quantity the station is short of over the window is named with why.
+        The rain is the depth per interval at the record's OWN cadence, each
+        instant opening the interval its depth fell over. The sea state is a
+        height, a period and the bearing the waves come FROM.
+
+        THE ENGINE holds only its reading of them: which quantities this run's
+        modules read, the mnemonic or keyword each becomes, and the one clock
+        its table is written on. It refuses BY NAME a column it reads that the
+        station is short of, reads its own constant for one the network does
+        not report and says so, and says on the journal each turn it makes of
+        a measured value - a frequency off a period, a bearing run toward.
         */
     }
 
@@ -1554,8 +1603,29 @@ package DataSeam {
         "tests/inputs/test_wave.py::test_each_quantity_is_read_off_the_column_stated_in_its_own_unit";
     verify requirement ASeaStateIsAReservedSlot by
         "tests/inputs/test_wave.py::test_two_columns_in_one_unit_refuse_rather_than_the_first_being_taken";
-    verify requirement ASeaStateIsAReservedSlot by
-        "tests/inputs/test_wave.py::test_the_two_conversions_a_deck_needs_are_made_here";
+    satisfy requirement ARecordSlotHoldsWhatWasMeasured by weatherReader;
+    satisfy requirement ARecordSlotHoldsWhatWasMeasured by rainReader;
+    satisfy requirement ARecordSlotHoldsWhatWasMeasured by seaStateReader;
+    verify requirement ARecordSlotHoldsWhatWasMeasured by
+        "tests/inputs/test_weather.py::test_a_bracketing_station_short_of_one_quantity_is_still_the_station";
+    verify requirement ARecordSlotHoldsWhatWasMeasured by
+        "tests/inputs/test_weather.py::test_a_reading_one_instrument_missed_leaves_the_other_series_whole";
+    verify requirement ARecordSlotHoldsWhatWasMeasured by
+        "tests/inputs/test_weather.py::test_a_row_naming_no_point_ranks_from_the_middle_of_the_run_s_domain";
+    verify requirement ARecordSlotHoldsWhatWasMeasured by
+        "tests/telemac/test_telemac_atmosphere.py::test_a_column_the_run_reads_and_the_station_is_short_of_refuses_by_name";
+    verify requirement ARecordSlotHoldsWhatWasMeasured by
+        "tests/telemac/test_telemac_atmosphere.py::test_a_reading_one_column_missed_is_read_between_that_column_s_neighbours";
+    verify requirement ARecordSlotHoldsWhatWasMeasured by
+        "tests/inputs/test_rain.py::test_the_interval_is_the_record_s_own_cadence";
+    verify requirement ARecordSlotHoldsWhatWasMeasured by
+        "tests/telemac/test_telemac_storm.py::test_an_ingested_record_is_written_at_its_own_cadence_from_the_run_s_zero";
+    verify requirement ARecordSlotHoldsWhatWasMeasured by
+        "tests/telemac/test_telemac_outflow_stage.py::test_the_flow_range_is_the_gross_rain_rate_on_the_meshed_area";
+    verify requirement ARecordSlotHoldsWhatWasMeasured by
+        "tests/inputs/test_wave.py::test_the_sea_state_carries_no_engine_s_reading_of_it";
+    verify requirement ARecordSlotHoldsWhatWasMeasured by
+        "tests/telemac/test_inputs_fill_their_keywords.py::test_the_engine_says_the_two_turns_it_makes_of_a_measured_sea_state";
     verify requirement ASeaStateIsAReservedSlot by
         "tests/telemac/test_nearshore_waves_template.py::test_the_seaward_edge_is_opened_so_the_spectrum_has_somewhere_to_enter";
     verify requirement ASeaStateIsAReservedSlot by

@@ -60,6 +60,22 @@ def test_a_measured_record_becomes_the_blocks_the_engine_reads_per_timestep():
     assert rows[-1] == ["21600.000", "0.00000"]
 
 
+def test_an_ingested_record_is_written_at_its_own_cadence_from_the_run_s_zero():
+    """The record states its instants, so a quarter-hourly one is four blocks an
+    hour and one that closed before the run opened is not this run's rain."""
+    from trid3nt_server.inputs.rain import rain
+
+    record = rain({"times": ["2020-06-01T00:00", "2020-06-01T00:15",
+                             "2020-06-01T00:30", "2020-06-01T00:45"],
+                   "precip_mm": [9.0, 1.5, 4.0, 0.25], "units": "mm"},
+                  at="2020-06-01T00:15:00Z")
+    _keywords, files = _storm(record=record, until_s=3600.0)
+    rows = [line.split() for line in files[T.HYETOGRAPH_FILENAME].splitlines()
+            if line and not line.startswith("#") and " " in line]
+    assert rows[:3] == [["900.000", "1.50000"], ["1800.000", "4.00000"],
+                        ["2700.000", "0.25000"]]
+
+
 def test_a_measured_record_leaves_the_constant_branch_alone():
     keywords, _files = _storm(series=[1.0, 2.0], until_s=7200.0)
     assert "RAIN_OR_EVAPORATION_IN_MM_PER_DAY" not in keywords

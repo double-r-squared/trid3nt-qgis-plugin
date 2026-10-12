@@ -57,7 +57,7 @@ where it is written. A row is filled one of three ways:
     gauge     = Data(LEVEL).need("water level series").optional()
     rivers    = Data.need("hydrography", geometry="polyline")
     structure = Data.supplied(geometry="polyline")        the person hands it in
-    rain      = Data.need("precipitation series").context("...")
+    rain      = Data(RAIN).need("precipitation series").context("...")
 
 A run solves over exactly one `DOMAIN` row and one `BED` row; a record type
 (`LEVEL`, `OBSERVE`) may be stated more than once, and a stage that reads one
@@ -70,6 +70,16 @@ whose own extent shares no ground with the run's domain
 the caller stated that only the mesh build reads, since it went unused.
 A row's value that is a mapping naming no `layer` and no `source` is the value
 itself - a drawn geometry is taken whole.
+
+`WEATHER`, `RAIN` and `WAVE` are ingested as WHAT WAS MEASURED, in words no
+engine owns. The weather is one station - the nearest whose record brackets the
+run's window, ranked from the point the row names or else the middle of the
+domain - with a series per quantity its network reports and the reason beside
+any it is short of; the rain is the depth per interval at the record's own
+cadence; the sea state is a height, a period and the bearing the waves come
+from. The engine keeps only its reading of them: which quantities its modules
+read, the mnemonic or keyword each becomes, the one clock its table is written
+on, and the refusal by name of a column it reads that the station is short of.
 
 `.need` names a CLASS of the coverage vocabulary, never a fetcher; `geometry=`
 is which SHAPE of that class is asked for, a filter on the match, never a
@@ -114,8 +124,8 @@ Unit conversion rides an EXPLICIT table in `inputs/temporal.py`, not
 a units engine: a conversion nobody declared is one nobody can check, and a
 cross-dimension request refuses rather than guessing.
 
-Four callers, and no fifth: the Atmosphere ingestion putting a station's report
-on the run's clock, the observation coercion reading a gauge in the unit its
+Four callers, and no fifth: the atmosphere composite holding each column of a
+station's record to the gap one day's cycle survives, the observation coercion reading a gauge in the unit its
 slot reads, the model-vs-observation pairing reading the model AT the moment the
 gauge reported, and the liquid-boundaries author writing a window at the
 engine's own time step.

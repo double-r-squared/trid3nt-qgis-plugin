@@ -14,8 +14,8 @@ import inspect
 
 import pytest
 
-from trid3nt_server.inputs import geometry as geometry_reader
-from trid3nt_server.inputs.observation import Observation
+from trid3nt_server.inputs.weather import weather
+from trid3nt_server.inputs.observation import Observation, ObservationError
 from trid3nt_server.workflows.runtime import data_rows
 from trid3nt_server.workflows.telemac.authoring.atmosphere import (
     ATMOSPHERE_FILENAME,
@@ -140,10 +140,10 @@ def _observation(hour: int):
 
 def _sheet(monkeypatch, **floor):
     """The template's own steering body, filled with what its refs resolve to."""
-    monkeypatch.setattr(
-        geometry_reader, "read_geometry_doc",
-        lambda layer: {"features": [_observation(hour)
-                                    for hour in range(_WEEK_HOURS)]})
+    record = weather(
+        {"type": "FeatureCollection",
+         "features": [_observation(hour) for hour in range(_WEEK_HOURS)]},
+        near=_STATION, at=_OPENS, window_s=floor.get("DURATION", 604800.0))
     return fill(template.STEERING, **floor,
                 params={"event_time": _OPENS}, settled={
         "TITLE": "DOMAIN", "TIME_STEP": 5.0, "INITIAL_CONDITIONS": "CONSTANT DEPTH",
@@ -157,7 +157,7 @@ def _sheet(monkeypatch, **floor):
         "station": _STATION,
         "observe": Observation(value=16.4, units="degC"),
         OBSERVE: Observation(value=16.4, units="degC"),
-        "weather": "s3://cache/raws.fgb"})
+        "weather": record})
 
 
 def test_the_deck_declares_the_temperature_tracer_and_the_process_adopts_it(
@@ -226,12 +226,10 @@ def test_the_weather_is_asked_over_a_window_bracketing_the_deck():
 
 
 def test_a_stated_duration_sizes_the_weather_record(monkeypatch):
-    """The weather table is placed on the DURATION keyword, so a run that states
-    a longer window is measured against THAT window: the engine stops at an
-    instant outside the table, and the refusal names both numbers."""
-    from trid3nt_server.workflows.telemac.errors import TelemacError
-
-    with pytest.raises(TelemacError) as caught:
+    """The weather record is ingested over the run's own window, so a run that
+    states a longer one is measured against THAT window: a reader stops at an
+    instant outside its table, and the refusal names both numbers."""
+    with pytest.raises(ObservationError) as caught:
         _sheet(monkeypatch, DURATION=1209600.0)
     assert "168 h" in str(caught.value) and "336 h" in str(caught.value)
 

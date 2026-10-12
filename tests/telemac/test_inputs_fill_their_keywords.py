@@ -44,8 +44,8 @@ def test_a_measured_sample_fills_the_opening_tracer():
 
 
 def test_the_fetched_level_and_sea_state_fill_a_wave_deck():
-    wave = SimpleNamespace(height_m=1.25, peak_frequency_hz=0.1,
-                           direction_deg=270.0)
+    wave = SimpleNamespace(height_m=1.25, peak_period_s=10.0,
+                           from_direction_deg=90.0)
     sheet = fill(WAC, produced={WAVE: wave,
                                 LEVEL: SimpleNamespace(value=0.4)})
     assert sheet.filled["BOUNDARY_SIGNIFICANT_WAVE_HEIGHT"].value == 1.25
@@ -54,13 +54,29 @@ def test_the_fetched_level_and_sea_state_fill_a_wave_deck():
     assert sheet.filled["INITIAL_STILL_WATER_LEVEL"].value == 0.4
 
 
+def test_the_engine_says_the_two_turns_it_makes_of_a_measured_sea_state():
+    """A record reports a period and where the waves come FROM; the deck states
+    a frequency and where they run TOWARD, and the run's journal says so."""
+    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+
+    token = bind_notes()
+    try:
+        sheet = fill(WAC, produced={WAVE: SimpleNamespace(
+            height_m=2.0, peak_period_s=8.0, from_direction_deg=200.0)})
+    finally:
+        notes = drain_notes(token)
+    assert sheet.filled["BOUNDARY_PEAK_FREQUENCY"].value == 0.125
+    assert sheet.filled["BOUNDARY_MAIN_DIRECTION_1"].value == 20.0
+    assert any("0.1250 Hz" in note and "TOWARD 20 deg" in note for note in notes)
+
+
 def test_a_coupled_wave_body_takes_the_sea_state_and_not_the_level():
     from trid3nt_server.workflows.telemac.modules.sheet import _coupled_filled
 
     body = WAC.wave(geometry="g.slf", boundary="b.cli",
                     BOUNDARY_PEAK_FREQUENCY=0.2)
-    wave = SimpleNamespace(height_m=1.25, peak_frequency_hz=0.1,
-                           direction_deg=270.0)
+    wave = SimpleNamespace(height_m=1.25, peak_period_s=10.0,
+                           from_direction_deg=90.0)
     slots = _coupled_filled(body, {WAVE: wave,
                                    LEVEL: SimpleNamespace(value=0.4)})["slots"]
     assert slots["BOUNDARY_SIGNIFICANT_WAVE_HEIGHT"] == 1.25

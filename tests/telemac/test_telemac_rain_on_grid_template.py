@@ -15,6 +15,7 @@ from trid3nt_server.workflows.telemac.authoring.selafin_io import (
 
 import numpy as np
 import pytest
+from trid3nt_server.inputs.rain import rain
 from trid3nt_server.inputs.slots import BED, DOMAIN
 
 
@@ -422,14 +423,16 @@ async def test_a_measured_series_drives_the_run_through_the_block_file(rog_run):
 async def test_the_published_record_drives_the_run_where_the_ask_states_none(rog_run):
     """Two ways to state one storm: a series the caller states WINS, and where
     they state none the hours the record published drive the run."""
-    _settled, sheet = await rog_run(rain_record={"precip_mm": [1.0, 4.0, 2.0]},
-                                    duration_s=10800.0)
+    record = rain({"times": ["2020-06-01T00:00", "2020-06-01T01:00",
+                             "2020-06-01T02:00"],
+                   "precip_mm": [1.0, 4.0, 2.0], "units": "mm"})
+    _settled, sheet = await rog_run(rain_record=record, duration_s=10800.0)
     rows = [line.split() for line in sheet.files["rog_hyeto.txt"].splitlines()
             if line[:1].isdigit() and " " in line]
     assert rows[:3] == [["3600.000", "1.00000"], ["7200.000", "4.00000"],
                         ["10800.000", "2.00000"]]
 
-    _settled, stated = await rog_run(rain_record={"precip_mm": [1.0, 4.0, 2.0]},
+    _settled, stated = await rog_run(rain_record=record,
                                      rain_series_mm=[9.0, 9.0],
                                      duration_s=10800.0)
     rows = [line.split() for line in stated.files["rog_hyeto.txt"].splitlines()

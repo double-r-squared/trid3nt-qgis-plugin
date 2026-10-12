@@ -3,9 +3,9 @@
 Offline: the atmospheric data file is TEXT the composite writes, so what is
 proved here is the grammar that reader demands - the time column it refuses to
 start without, the mnemonics it searches for, the units line it skips - the
-columns each host's own source term reads, the carriage of a fetched station
-record into those columns, and what the thermal process puts on the carrier's
-result."""
+columns each host's own source term reads, the carriage of an ingested station
+record onto one clock under those columns, and what the thermal process puts on
+the carrier's result."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import math
 
 import pytest
 
-from trid3nt_server.inputs import geometry as geometry_reader
+from trid3nt_server.inputs.weather import weather
 from trid3nt_server.workflows.telemac.authoring.atmosphere import (
     ATMOSPHERE_FILENAME,
     TELEMAC2D_COLUMNS as _T2D_COLUMNS,
@@ -154,14 +154,13 @@ def _rows(hours=range(0, 24), **overrides):
     return [_feature(_observation(hour, **overrides)) for hour in hours]
 
 
-def _observed(monkeypatch, rows, *, duration_s=20.0 * _HOUR, event_time=None,
-              **overrides):
-    """The fetched record answers with ``rows`` and nothing reaches the network."""
-    monkeypatch.setattr(geometry_reader, "read_geometry_doc",
-                        lambda layer: {"features": rows})
-    return atmospheric_data_file(Atmosphere(
-        observed="s3://cache/raws.fgb", at=_SEED, duration_s=duration_s,
-        event_time=event_time, **overrides))
+def _observed(rows, *, duration_s=20.0 * _HOUR, event_time=None,
+              columns=_T2D_COLUMNS, **overrides):
+    """The table written from ``rows`` as the weather slot ingests them."""
+    record = weather({"type": "FeatureCollection", "features": rows},
+                     near=_SEED, at=event_time, window_s=duration_s)
+    return atmospheric_data_file(Atmosphere(observed=record, **overrides),
+                                 columns)
 
 
 def _column(text: str, mnemonic: str) -> list[float]:
@@ -170,104 +169,89 @@ def _column(text: str, mnemonic: str) -> list[float]:
     return [float(row.split()[index]) for row in lines[3:]]
 
 
-def test_a_run_stating_no_moment_opens_its_clock_at_the_first_observation(
-        monkeypatch):
+def test_a_run_stating_no_moment_opens_its_clock_at_the_first_observation():
     """The record's own first sample is the only honest origin when the run
     names no moment, and the table stops at the first observation at or after
     the run closes."""
-    text = _observed(monkeypatch, _rows())
+    text = _observed(_rows())
     assert _column(text, "T") == [hour * _HOUR for hour in range(21)]
     assert "SCOC1" in text.splitlines()[0] and "2026-09-01 00:00" in text.splitlines()[0]
 
 
-def test_the_table_opens_at_the_moment_the_run_opens_at(monkeypatch):
+def test_the_table_opens_at_the_moment_the_run_opens_at():
     """t = 0 IS the run's own opening: an hourly record bracketing a six-hour
     run is read from that moment rather than re-anchored on its first sample."""
-    text = _observed(monkeypatch, _rows(range(11, 20)), duration_s=6.0 * _HOUR,
+    text = _observed(_rows(range(11, 20)), duration_s=6.0 * _HOUR,
                      event_time="2026-09-01T12:00:00Z")
     assert _column(text, "T") == [hour * _HOUR for hour in range(7)]
     assert "2026-09-01 12:00" in text.splitlines()[0]
 
 
-def test_a_record_opening_after_the_run_does_refuses_naming_the_opening(
-        monkeypatch):
-    """A record whose first sample falls inside the run would be read flat back
-    to it, which is a forcing nobody measured."""
-    with pytest.raises(TelemacError, match="no observation at or before the opening"):
-        _observed(monkeypatch, _rows(range(13, 20)), duration_s=6.0 * _HOUR,
-                  event_time="2026-09-01T12:00:00Z")
-
-
-def test_every_reported_unit_is_carried_into_the_unit_its_slot_names(monkeypatch):
-    text = _observed(monkeypatch, _rows())
+def test_every_reported_unit_is_carried_into_the_unit_its_slot_names():
+    text = _observed(_rows())
     assert _column(text, "TAIR")[0] == pytest.approx(20.0, abs=1e-3)
     assert _column(text, "WINDS")[0] == pytest.approx(5.0 * 0.514444, abs=1e-3)
     assert _column(text, "WINDD")[0] == 270.0
     assert _column(text, "RAY3")[0] == 400.0
 
 
-def test_the_fire_network_fills_no_rain_column_because_its_own_is_a_total(
-        monkeypatch):
+def test_the_fire_network_fills_no_rain_column_because_its_own_is_a_total():
     """Its precipitation column accumulates over the season rather than
     reporting the depth that fell in the interval, so no rain rides from it."""
-    assert "RAINI" not in _observed(monkeypatch, _rows()).splitlines()[1]
+    assert "RAINI" not in _observed(_rows()).splitlines()[1]
 
 
-def test_the_vapour_pressure_is_magnus_over_the_reported_dew_point(monkeypatch):
+def test_the_vapour_pressure_is_magnus_over_the_reported_dew_point():
     dew_c = (50.0 - 32.0) / 1.8
     expected = 100.0 * 6.112 * math.exp(17.62 * dew_c / (243.12 + dew_c))
-    assert _column(_observed(monkeypatch, _rows()), "PVAP")[0] == pytest.approx(
+    assert _column(_observed(_rows()), "PVAP")[0] == pytest.approx(
         expected, abs=0.1)
 
 
-def test_one_reported_humidity_column_states_both_slots(monkeypatch):
+def test_one_reported_humidity_column_states_both_slots():
     """The 2D budget reads the vapour pressure and the 3D one the relative
     humidity, so a record carrying either drives either host."""
     from trid3nt_server.workflows.telemac.authoring.atmosphere import (
         TELEMAC3D_COLUMNS,
     )
 
-    monkeypatch.setattr(geometry_reader, "read_geometry_doc",
-                        lambda layer: {"features": _rows()})
-    text = atmospheric_data_file(
-        Atmosphere(observed="s3://cache/raws.fgb", at=_SEED,
-                   duration_s=20.0 * _HOUR), TELEMAC3D_COLUMNS)
     # 10 C dew point under 20 C air is about 52% relative humidity, which is the
     # same measurement the vapour pressure is.
-    assert _column(text, "HREL")[0] == pytest.approx(52.0, abs=1.0)
+    assert _column(_observed(_rows(), columns=TELEMAC3D_COLUMNS),
+                   "HREL")[0] == pytest.approx(52.0, abs=1.0)
 
 
-def test_a_row_missing_one_column_is_not_an_instant_at_all(monkeypatch):
-    """The file is ONE table: a gap in any column is a gap in the row."""
+def test_a_column_the_run_reads_and_the_station_is_short_of_refuses_by_name():
+    """The station is the nearest whose record brackets the run, and no other is
+    tried: one of its columns stopping early is that column's refusal."""
     rows = _rows(range(0, 6)) + [_feature(_observation(hour, solar_rad=None))
                                  for hour in range(6, 24)]
-    with pytest.raises(TelemacError, match="no weather station"):
-        _observed(monkeypatch, rows)
-
-
-def test_a_record_shorter_than_the_run_refuses_rather_than_extrapolating(monkeypatch):
-    with pytest.raises(TelemacError, match="the record runs"):
-        _observed(monkeypatch, _rows(range(0, 12)))
-
-
-def test_a_gap_too_long_to_describe_a_day_refuses(monkeypatch):
-    with pytest.raises(TelemacError, match="hole ending at"):
-        _observed(monkeypatch, _rows([0, 1, 2, 20, 21, 22, 23]),
-                  duration_s=22.0 * _HOUR)
-
-
-def test_the_nearest_station_that_can_drive_the_run_is_the_one_taken(monkeypatch):
-    near = [_feature({**_observation(hour), "station": "NEAR"}, lon=-124.11,
-                     lat=40.48) for hour in range(0, 6)]
     far = [_feature({**_observation(hour), "station": "FAR"}, lon=-124.5,
                     lat=40.8) for hour in range(0, 24)]
-    assert "FAR" in _observed(monkeypatch, near + far).splitlines()[0]
+    with pytest.raises(TelemacError, match=r"SCOC1.*RAY3 \(the record runs"):
+        _observed(rows + far)
 
 
-def test_a_series_stated_beside_a_record_stands_over_what_the_record_reports(
-        monkeypatch):
-    text = _observed(monkeypatch, _rows(), duration_s=23.0 * _HOUR,
-                     cloud_octas=[2.0] * 24)
+def test_a_reading_one_column_missed_is_read_between_that_column_s_neighbours():
+    """Each column is its own series: an hour one instrument missed is still an
+    instant of the table, and that column is read across it."""
+    rows = [_feature(_observation(hour, tmpf=None if hour == 3 else 50.0 + hour,
+                                  drct=None if hour == 3 else 10.0 * hour))
+            for hour in range(0, 24)]
+    text = _observed(rows)
+    assert _column(text, "T")[3] == 3.0 * _HOUR
+    assert _column(text, "TAIR")[3] == pytest.approx((53.0 - 32.0) / 1.8, abs=1e-3)
+    # A bearing has no value between two readings but the nearer one.
+    assert _column(text, "WINDD")[3] in (20.0, 40.0)
+
+
+def test_a_gap_too_long_to_describe_a_day_refuses_naming_the_column():
+    with pytest.raises(TelemacError, match="TAIR.*hole ending at"):
+        _observed(_rows([0, 1, 2, 20, 21, 22, 23]), duration_s=22.0 * _HOUR)
+
+
+def test_a_series_stated_beside_a_record_stands_over_what_the_record_reports():
+    text = _observed(_rows(), duration_s=23.0 * _HOUR, cloud_octas=[2.0] * 24)
     # The network reports no cloud at all, so the stated column is the only one
     # there is - and the run reads a cloud rather than the engine's constant.
     assert _column(text, "CLDC") == [2.0] * 24
@@ -287,15 +271,11 @@ def _ice_columns():
     return tuple(name for name in _T2D_COLUMNS if name in READS["khione"])
 
 
-def test_the_airport_record_carries_every_column_an_ice_run_reads(monkeypatch):
+def test_the_airport_record_carries_every_column_an_ice_run_reads():
     """The dew point is measured rather than inverted out of a humidity, the sky
     cover is an observer's code, and neither is a column the fire network has."""
-    rows = [_feature(_airport(hour)) for hour in range(0, 24)]
-    monkeypatch.setattr(geometry_reader, "read_geometry_doc",
-                        lambda layer: {"features": rows})
-    text = atmospheric_data_file(
-        Atmosphere(observed="s3://cache/asos.fgb", at=_SEED,
-                   duration_s=20.0 * _HOUR), _ice_columns())
+    text = _observed([_feature(_airport(hour)) for hour in range(0, 24)],
+                     columns=_ice_columns())
     assert text.splitlines()[1].split() == ["T", "TAIR", "TDEW", "WINDS",
                                             "CLDC", "RAINI"]
     assert _column(text, "TAIR")[0] == pytest.approx(-6.111, abs=1e-3)
@@ -304,22 +284,12 @@ def test_the_airport_record_carries_every_column_an_ice_run_reads(monkeypatch):
     assert _column(text, "RAINI")[0] == pytest.approx(0.254, abs=1e-3)
 
 
-def test_an_airport_row_short_of_a_column_the_run_does_not_read_is_an_instant(
-        monkeypatch):
-    """A column no reader of this run takes is not asked of an observation, so
-    a record with no radiation in it still drives a module computing its own."""
-    rows = [_feature(_airport(hour, mslp=None)) for hour in range(0, 24)]
-    monkeypatch.setattr(geometry_reader, "read_geometry_doc",
-                        lambda layer: {"features": rows})
-    text = atmospheric_data_file(
-        Atmosphere(observed="s3://cache/asos.fgb", at=_SEED,
-                   duration_s=20.0 * _HOUR), _ice_columns())
+def test_a_station_short_of_a_column_the_run_does_not_read_still_drives_it():
+    """A column no reader of this run takes is not asked of the record, so a
+    station reporting no pressure still drives a module that reads none."""
+    text = _observed([_feature(_airport(hour, mslp=None))
+                      for hour in range(0, 24)], columns=_ice_columns())
     assert len(text.splitlines()) == 3 + 21
-
-
-def test_a_record_holding_no_station_refuses_by_name(monkeypatch):
-    with pytest.raises(TelemacError, match="no station observation"):
-        _observed(monkeypatch, [])
 
 
 # -- the heat budget --------------------------------------------------------- #

@@ -1,8 +1,8 @@
-"""A WAVE: the sea state at an open boundary, in the words a wave deck states it.
+"""A WAVE: the sea state measured near an open edge, as the record reports it.
 
-A PEAK FREQUENCY is one over the buoy's period; a deck's MAIN DIRECTION is the bearing
-the waves run toward, while a met record publishes where they come from. Both
-conversions are said on the run journal, never folded silently into a number.
+A height, a peak period and the bearing the waves come FROM, each in its own unit.
+What an engine forces its boundary at - a frequency, a bearing run toward - is that
+engine's reading of these three.
 """
 
 from __future__ import annotations
@@ -21,8 +21,8 @@ logger = logging.getLogger("trid3nt_server.inputs.wave")
 
 _CODE = "WAVE_INVALID"
 
-#: The unit each of the three quantities a sea state is is reported in, and what the
-#: deck reads it as. A source states the unit of EVERY column, so a quantity is read
+#: The unit each of the three quantities a sea state is is reported in, and what it
+#: measures. A source states the unit of EVERY column, so a quantity is read
 #: from the column in its own unit; a record with none measures no sea state and one
 #: with two refuses rather than picking.
 _HEIGHT = ("m", "a wave height")
@@ -36,16 +36,11 @@ _WINDOW = "series"
 
 @dataclass(frozen=True, slots=True)
 class Wave:
-    """One measured sea state, as the values a boundary spectrum is stated at."""
+    """One measured sea state: its height, its peak period, and where it comes from."""
 
-    #: BOUNDARY SIGNIFICANT WAVE HEIGHT, in metres.
     height_m: float
-    #: BOUNDARY PEAK FREQUENCY, in hertz - one over the period reported.
-    peak_frequency_hz: float
-    #: BOUNDARY MAIN DIRECTION 1, as the bearing the waves run TOWARD.
-    direction_deg: float
-    #: What the record itself reported, before the two conversions above.
     peak_period_s: float
+    #: The bearing the waves come FROM, in degrees true.
     from_direction_deg: float
     site_id: str | None = None
     site_name: str | None = None
@@ -56,7 +51,7 @@ class Wave:
 def wave(source: Any, *, near: Any = None, at: Any = None,
          column_units: Any = None, window_s: Any = None, caption: str = "",
          label: str = "wave", code: str = _CODE) -> Wave | None:
-    """THE ingestion: a fetched sea-state record -> the boundary keywords' values.
+    """THE ingestion: a fetched sea-state record -> the one sea state measured.
 
     ``column_units`` says which column carries which quantity; ``near`` ranks the
     candidates and ``at``/``window_s`` pick the sea state measured when the run is about."""
@@ -73,12 +68,9 @@ def wave(source: Any, *, near: Any = None, at: Any = None,
     if period.value <= 0.0:
         raise ObservationError(
             code,
-            f"{label} reports a wave period of {period.value:g} s, and a peak "
-            "FREQUENCY is one over it: a period of zero or less is not a sea "
-            "state a boundary can be forced at.")
+            f"{label} reports a wave period of {period.value:g} s: a period of "
+            "zero or less is not a sea state.")
     found = Wave(height_m=float(height.value),
-                 peak_frequency_hz=1.0 / float(period.value),
-                 direction_deg=(float(heading.value) + 180.0) % 360.0,
                  peak_period_s=float(period.value),
                  from_direction_deg=float(heading.value),
                  site_id=height.site_id, site_name=height.site_name,
@@ -124,7 +116,7 @@ def _column(columns: Mapping[str, str], unit: str, measures: str, label: str,
 
 
 def _journal(found: Wave, *, caption: str) -> None:
-    """Say on the run journal what sea state forced the boundary and the conventions applied; off a run, nothing."""
+    """Say on the run journal what sea state was read and who reported it; off a run, nothing."""
     from .run_notes import journal_note
 
     where = found.site_name or found.site_id or "an unnamed buoy"
@@ -134,7 +126,4 @@ def _journal(found: Wave, *, caption: str) -> None:
     journal_note(
         f"{caption} is {found.height_m:.2f} m at {found.peak_period_s:.1f} s "
         f"from {found.from_direction_deg:.0f} deg true, which {where}{how_far} "
-        f"reported{when}. The deck is forced at a peak frequency of "
-        f"{found.peak_frequency_hz:.4f} Hz - one over that period - running "
-        f"TOWARD {found.direction_deg:.0f} deg, which is the bearing the "
-        "record's own is turned through 180 to reach.")
+        f"reported{when}.")

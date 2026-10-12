@@ -1,9 +1,9 @@
-"""Unit tests for the WAVE typed input: a buoy's record -> the boundary keywords.
+"""Unit tests for the WAVE typed input: a buoy's record -> the sea state it measured.
 
 Covered: the three columns found by the units the source states them in, the
 reading taken at the moment the run opens at rather than at the record's last
-sample, the two conversions a deck needs (a peak FREQUENCY off a period, a
-direction turned TOWARD), the nearest buoy when the source was not narrowed,
+sample, the record's own period and from-bearing kept as reported (what a deck
+makes of them is its engine's), the nearest buoy when the source was not narrowed,
 and the refusals - a record that measures none of the three, one that states two
 columns in a quantity's unit, and a period of zero.
 """
@@ -70,17 +70,17 @@ def test_the_sea_state_read_is_the_one_measured_when_the_run_opens():
     assert found.sampled == "2026-02-10T01:00:00Z"
 
 
-def test_the_two_conversions_a_deck_needs_are_made_here():
-    """BOUNDARY PEAK FREQUENCY is one over the period, and BOUNDARY MAIN
-    DIRECTION is the bearing the waves run TOWARD while the record publishes the
-    one they come from - a sea wave has to run landward."""
+def test_the_sea_state_carries_no_engine_s_reading_of_it():
+    """A frequency and a bearing run TOWARD are what one engine's boundary
+    states; the type holds what the buoy measured and nothing derived from it."""
+    import dataclasses
+
     found = wave(_fc(_buoy("44056", -75.71, 36.20)), column_units=_UNITS,
                  at="2026-02-10T00:00:00Z")
-    assert found.peak_frequency_hz == pytest.approx(1.0 / 8.0)
-    assert found.direction_deg == pytest.approx(270.0)
-    turned = wave(_fc(_buoy("X", -75.71, 36.20, heading=(200.0,) * 3)),
-                  column_units=_UNITS)
-    assert turned.direction_deg == pytest.approx(20.0)
+    assert {field.name for field in dataclasses.fields(found)} == {
+        "height_m", "peak_period_s", "from_direction_deg", "site_id",
+        "site_name", "sampled", "distance_km"}
+    assert (found.peak_period_s, found.from_direction_deg) == (8.0, 90.0)
 
 
 def test_the_nearest_buoy_answers_when_the_source_was_not_narrowed():
@@ -113,7 +113,7 @@ def test_a_period_of_zero_is_not_a_sea_state_a_boundary_can_be_forced_at():
     with pytest.raises(ObservationError) as refused:
         wave(_fc(_buoy("44056", -75.71, 36.20, period=(0.0,) * 3)),
              column_units=_UNITS)
-    assert "peak FREQUENCY is one over it" in str(refused.value)
+    assert "zero or less is not a sea state" in str(refused.value)
 
 
 def test_the_slot_reserves_the_name_and_reads_the_class_the_buoys_publish():

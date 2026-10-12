@@ -245,14 +245,20 @@ def test_the_flow_range_is_the_gross_rain_rate_on_the_meshed_area():
     storage only delays it, so nothing can leave faster than the rain arrives."""
     xy = np.array([[0.0, 0.0], [1000.0, 0.0], [0.0, 1000.0], [1000.0, 1000.0]])
     cells = np.array([[0, 1, 2], [1, 3, 2]])  # 1 km2
-    ceiling, basis = CURVE._rain_ceiling(
-        {"kind": "design_storm", "mm_per_day": 864.0}, cells, xy)
+    ceiling, basis = CURVE._rain_ceiling(864.0 / 1000.0 / 86400.0, cells, xy)
     assert ceiling == pytest.approx(0.036 / 3600.0 * 1.0e6)
     assert "1.000 km2" in basis and "36 mm/h" in basis
 
-    peak, _basis = CURVE._rain_ceiling(
-        {"kind": "hyetograph", "series": [3.0, 12.5, 0.0]}, cells, xy)
+    from trid3nt_server.inputs.rain import Rain
+    from trid3nt_server.workflows.telemac.modules.telemac2d import storm_rain
+
+    # A stated series is hourly; a record's rate is over its OWN interval.
+    stated = storm_rain([3.0, 12.5, 0.0], Rain.every(900.0, [1.0, 1.0]))
+    peak, _basis = CURVE._rain_ceiling(stated.peak_mm_per_s / 1000.0, cells, xy)
     assert peak == pytest.approx(0.0125 / 3600.0 * 1.0e6)
+    record = storm_rain(None, Rain.every(900.0, [3.0, 12.5, 0.0]))
+    peak, _basis = CURVE._rain_ceiling(record.peak_mm_per_s / 1000.0, cells, xy)
+    assert peak == pytest.approx(0.0125 / 900.0 * 1.0e6)
 
 
 def test_a_catchment_with_no_rain_stated_fetched_or_designed_refuses_by_name():

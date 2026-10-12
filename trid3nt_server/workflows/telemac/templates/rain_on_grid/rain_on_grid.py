@@ -9,7 +9,7 @@ from __future__ import annotations
 import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
-from trid3nt_server.inputs.slots import BED, DOMAIN
+from trid3nt_server.inputs.slots import BED, DOMAIN, RAIN
 from trid3nt_server.workflows.runtime import (
     Data, register_workflow, tool, Param, lever,
 )
@@ -131,7 +131,7 @@ class DATA:
     bed = Data(BED).need("terrain")
     rivers = Data.need("hydrography", geometry="polyline")
     landcover = Data.need("land cover")
-    rain = Data.need("precipitation series").context(
+    rain = Data(RAIN).need("precipitation series").context(
         "no hourly rainfall record over this catchment for that window; the "
         "design storm drives the run")
 

@@ -123,9 +123,7 @@ class STEERING(T2D):
 
     boundaries = Boundaries(tracers=["observe", *_INFLOW_ICE])
 
-    atmosphere = Atmosphere(observed="weather", at="station",
-                            duration_s="DURATION",
-                            event_time="event_time")
+    atmosphere = Atmosphere(observed="weather")
 
     coupling = [KHIONE.ice(
         geometry=GEOMETRY_FILE, boundary=BOUNDARY_CONDITIONS_FILE,
