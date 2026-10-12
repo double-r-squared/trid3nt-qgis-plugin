@@ -1,31 +1,29 @@
-"""The cores lever's ONE consequence: how many cores a solve runs on.
+"""How many cores a solve runs on is the module's own PARALLEL PROCESSORS keyword.
 
-Covered: the module's own processors keyword standing as the default, a count
-past this box refusing by name rather than being cut down, the keyword the
-engine reads a stated count under, the same number reaching the case the
-worker's launcher partitions on, the card sentence a module that spells no
-processor keyword carries, and the DECK'S OWN numerics answering the lever -
-a direct solver is factorised whole and runs serial whatever was asked.
+Covered: the dictionary's value standing as the default, a count past this box
+refusing by name rather than being cut down, no `cores` argument on any
+template, the same number reaching the case the worker's launcher partitions
+on, and the DECK'S OWN numerics answering the count - a direct solver is
+factorised whole and runs serial whatever was stated.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.runtime.errors import CoresUnavailable
-from trid3nt_server.workflows.runtime.levers import BOX_CORES, cores_asked
+from trid3nt_server.workflows.telemac.authoring.staged_check import BOX_CORES
 from trid3nt_server.workflows.telemac.authoring.staging import case_section
 from trid3nt_server.workflows.telemac.modules import T2D
 from trid3nt_server.workflows.telemac.modules.artemis import ART
+from trid3nt_server.workflows.telemac.modules.module import PROCESSORS, SlotRefused
 from trid3nt_server.workflows.telemac.modules.sheet import (
-    PROCESSORS,
     SOLVER,
     fill,
     solve_cores,
 )
 
 #: A partition every box this runs on can seat, so the assertions are about the
-#: lever and not about the machine the suite happens to run on.
+#: keyword and not about the machine the suite happens to run on.
 PARTITIONED = min(2, BOX_CORES)
 
 
@@ -34,36 +32,56 @@ def test_a_run_that_states_no_count_leaves_the_modules_own_keyword_standing():
     a scalar computation - so nothing is written and the solve runs on one."""
     assert T2D.MODULE_INPUT[PROCESSORS].engine_default == 0
     assert PROCESSORS not in fill(T2D).filled
-    assert solve_cores(T2D, {}, None) == 1
+    assert solve_cores(T2D, {}) == 1
 
 
 def test_a_count_past_this_box_refuses_by_name():
     """Refused, never clamped: a partition cut down to fit is one the caller
-    was never told about."""
-    with pytest.raises(CoresUnavailable) as raised:
-        cores_asked(BOX_CORES + 1)
-    assert "cores" in str(raised.value) and str(BOX_CORES) in str(raised.value)
+    was never told about - on the sheet, and on the call before any stage."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+    import trid3nt_server.workflows.telemac.templates  # noqa: F401
+
+    with pytest.raises(SlotRefused) as raised:
+        fill(T2D, **{PROCESSORS: BOX_CORES + 1})
+    assert "PARALLEL PROCESSORS" in str(raised.value)
+    assert str(BOX_CORES) in str(raised.value)
+    workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
+    with pytest.raises(SlotRefused):
+        workflow.accept_keyword("PARALLEL PROCESSORS", BOX_CORES + 1)
 
 
-def test_a_count_that_is_not_a_whole_number_of_cores_refuses():
-    with pytest.raises(CoresUnavailable):
-        cores_asked("large")
-    with pytest.raises(CoresUnavailable):
-        cores_asked(0)
+def test_no_template_takes_a_cores_argument():
+    """The count is stated once, under the engine's own name for it."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+    import trid3nt_server.workflows.telemac.templates  # noqa: F401
+
+    templates = [tool.fn.workflow for tool in TOOL_REGISTRY.values()
+                 if hasattr(tool.fn, "workflow")]
+    assert templates
+    for workflow in templates:
+        assert "cores" not in {prm.name for prm in workflow.params}
+        assert "PARALLEL PROCESSORS" in workflow.sheet_doc()
 
 
-def test_the_stated_count_states_the_keyword_the_engine_reads_it_under():
-    sheet = fill(T2D, params={"cores": PARTITIONED})
-    if PARTITIONED < 2:
-        assert PROCESSORS not in sheet.filled
-        return
+def test_a_coupled_run_states_the_count_once_and_it_is_the_carriers():
+    """The launcher partitions a run once, so the bare keyword on a coupled
+    run is the carrier's and asks for no body to be named."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+    import trid3nt_server.workflows.telemac.templates  # noqa: F401
+    from trid3nt_server.workflows.telemac.workflow import run_bodies
+
+    workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
+    assert len(run_bodies(workflow.steering)) > 1
+    identifier, value, _note = workflow.accept_keyword("PARALLEL PROCESSORS",
+                                                       PARTITIONED)
+    assert (identifier, value) == (PROCESSORS, PARTITIONED)
+
+
+def test_the_stated_count_is_the_count_the_solve_runs_on():
+    sheet = fill(T2D, **{PROCESSORS: PARTITIONED})
     assert sheet.filled[PROCESSORS].value == PARTITIONED
-    assert sheet.filled[PROCESSORS].provenance.origin.value == "producer"
-
-
-def test_the_deck_a_run_edited_by_keyword_keeps_the_number_it_stated():
-    sheet = fill(T2D, params={"cores": PARTITIONED}, **{PROCESSORS: 3})
-    assert sheet.filled[PROCESSORS].value == 3
+    assert sheet.filled[PROCESSORS].provenance.origin.value == "user"
+    assert solve_cores(T2D, sheet.filled) == PARTITIONED
 
 
 def test_the_case_carries_the_same_count_the_steering_file_states():
@@ -75,37 +93,14 @@ def test_the_case_carries_the_same_count_the_steering_file_states():
         server_facts={}, cores=1)
 
 
-def test_a_module_that_spells_no_processor_keyword_says_so_on_the_card():
-    from trid3nt_server.workflows.telemac.workflow import _serial_rows
-
-    class _Serial(type(T2D)):
-        MODULE = "serial_probe"
-        MODULE_INPUT = {}
-        PRINTOUTS = ""
-
-    class _Sheet:
-        body = _Serial
-        coupled = ()
-        filled = {}
-        tracers = ()
-
-        def stated(self):
-            return {}
-
-    row, = _serial_rows(_Sheet())
-    assert row.name == "serial_probe.cores"
-    assert row.value == "serial: this engine runs on one core"
-    assert not row.editable
-
-
 def test_the_direct_solver_runs_serial_whatever_was_asked_for():
     """ARTEMIS's dictionary defaults SOLVER to the direct one, which factorises
     the whole system rather than partitioning it. The deck states no solver, so
     the default IS what the engine will do, and the run is serial."""
-    sheet = fill(ART, params={"cores": BOX_CORES})
+    sheet = fill(ART, **{PROCESSORS: max(2, BOX_CORES)})
     assert ART.MODULE_INPUT[SOLVER].engine_default == 8
     assert PROCESSORS not in sheet.filled
-    assert solve_cores(ART, sheet.filled, BOX_CORES) == 1
+    assert solve_cores(ART, sheet.filled) == 1
 
 
 def test_the_run_says_why_the_cores_it_asked_for_are_not_used():
@@ -115,7 +110,7 @@ def test_the_run_says_why_the_cores_it_asked_for_are_not_used():
 
     token = bind_notes()
     try:
-        fill(ART, params={"cores": BOX_CORES})
+        fill(ART, **{PROCESSORS: max(2, BOX_CORES)})
         notes = drain_notes(token)
     except BaseException:
         drain_notes(token)
@@ -127,22 +122,22 @@ def test_a_deck_that_states_the_parallel_direct_solver_keeps_its_cores():
     """The model never chooses numerics, so SOLVER 9 - the parallel direct
     solver - is a deck author's statement, and a deck that makes it is
     partitioned like any other."""
-    sheet = fill(ART, params={"cores": PARTITIONED}, **{SOLVER: 9})
-    assert solve_cores(ART, sheet.filled, PARTITIONED) == PARTITIONED
+    sheet = fill(ART, **{PROCESSORS: PARTITIONED, SOLVER: 9})
+    assert solve_cores(ART, sheet.filled) == PARTITIONED
 
 
 def test_an_iterative_deck_is_partitioned_on_the_count_it_asked_for():
     """The rule is the SOLVER's, not the module's: a deck stating an iterative
     solver is partitioned whatever the dictionary's own default was."""
-    sheet = fill(ART, params={"cores": PARTITIONED}, **{SOLVER: 1})
-    assert solve_cores(ART, sheet.filled, PARTITIONED) == PARTITIONED
+    sheet = fill(ART, **{PROCESSORS: PARTITIONED, SOLVER: 1})
+    assert solve_cores(ART, sheet.filled) == PARTITIONED
 
 
 def test_the_launcher_is_handed_the_number_the_deck_resolved_to():
     """The engine and the launcher read ONE count: a deck the engine solves
     serially must not be launched under mpirun on every core the box has."""
-    serial = fill(ART, params={"cores": BOX_CORES})
+    serial = fill(ART, **{PROCESSORS: max(2, BOX_CORES)})
     case = case_section(module="artemis", steering="art.cas",
                         results=["r.slf"], server_facts={},
-                        cores=solve_cores(ART, serial.filled, BOX_CORES))
+                        cores=solve_cores(ART, serial.filled))
     assert "cores" not in case

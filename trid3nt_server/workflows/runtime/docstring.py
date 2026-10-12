@@ -31,7 +31,7 @@ def render_docstring(
 ) -> str:
     """Build the docstring: summary, routing, negative routing, params, returns.
     ``sheet``, ``controls`` and ``context`` document the engine surface, the run
-    levers that are not params, and the producer-less Data slots on the same wire."""
+    controls that are not params, and the producer-less Data slots on the same wire."""
     head = [summary.strip(), "", routing.strip()]
     if not_for:
         head += ["", f"Do NOT use this for: {not_for.strip()}"]

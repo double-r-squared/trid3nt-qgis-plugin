@@ -38,7 +38,7 @@ RANKED_ROWS = 5
 class Need:
     """What one slot asks the world for.
 
-    Every field but the class is read off the run: the place is the domain's, the window the run's, the frame the lever's."""
+    Every field but the class is read off the run: the place is the domain's, the window the run's, the frame the bed's."""
 
     slot: str
     data_class: str
@@ -49,7 +49,7 @@ class Need:
     #: asks no series source at all - a record has to be a record OF something.
     opens: str | None = None
     until: str | None = None
-    #: The vertical frame the run is solved on, off the lever.
+    #: The vertical frame the run is solved on, as the bed states it.
     frame: str | None = None
     #: WHAT OF THE CLASS the slot asks for, "" for any: the published variable or feature. A source states its own word on its row;
     #: one with no word for this is excluded.

@@ -104,8 +104,7 @@ def test_the_published_table_is_the_deck_s_own_text_and_its_coupled_rows() -> No
     for template, unit in ((warmed, "DEGC"), (frozen, "oC")):
         published = TelemacWorkflow(
             metadata=_METADATA, params=template.PARAMS, template=template,
-            data=template.DATA,
-            levers=TelemacWorkflow.levers()).published_units()
+            data=template.DATA).published_units()
         # The deck names its own tracer and keeps its unit; KHIONE appends one
         # behind a deck that names none, and the unit is the module's.
         assert published["TEMPERATURE"] == unit

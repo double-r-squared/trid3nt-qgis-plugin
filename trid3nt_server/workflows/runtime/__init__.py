@@ -24,7 +24,6 @@ from .errors import (
     DeclarationError,
     StepFailedError,
 )
-from .levers import lever
 from .params import (
     Param,
     ResolvedParam,
@@ -56,7 +55,6 @@ __all__ = [
     "ToolWord",
     "Workflow",
     "data_rows",
-    "lever",
     "merge_provenance", "param_rows", "provenance_entries",
     "register_workflow",
     "render_docstring",

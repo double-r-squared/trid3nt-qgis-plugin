@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs import point_arg, Point
-from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LEVEL, OBSERVE, WEATHER
+from trid3nt_server.tools.mesh.recipe import RESOLUTION
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Param, lever,
+    Data, register_workflow, Param,
 )
 from trid3nt_server.workflows.telemac.modules import KHIONE, T2D, series
 from trid3nt_server.workflows.telemac.modules.khione import RESULT_FILENAME
@@ -51,8 +52,8 @@ class PARAMS:
              "series. A reporting threshold, not a physical constant: half the "
              "surface by default")
 
-    mesh_resolution_m = lever(
-        "mesh_resolution_m",
+    mesh_resolution_m = replace(
+        RESOLUTION,
         desc="Target element edge length the domain is triangulated at; the "
              "budget that makes the ice is divided by the local DEPTH, and the "
              "border ice grows from the BANK, so what this has to resolve is "
@@ -211,6 +212,5 @@ telemac_ice_cover = register_workflow(
         point_arg("station", tool="telemac_ice_cover",
                   prompt="Click on the water where the ice should be read",
                   code="TELEMAC_PARAMS_INVALID"),
-        event_time(),
     ),
 )

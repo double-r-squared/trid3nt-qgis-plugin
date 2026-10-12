@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs.slots import BED, DOMAIN, LEVEL
+from trid3nt_server.tools.mesh.recipe import RESOLUTION
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Param, lever,
+    Data, register_workflow, Param,
 )
 from trid3nt_server.workflows.runtime.resolution import SensitivityDecl
 from trid3nt_server.inputs import point_arg, Point
-from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.telemac.authoring.accepted_mesh import (
     BASIN_BOUNDARY, BASIN_GEOMETRY,
 )
@@ -54,8 +55,8 @@ class PARAMS:
              "is planned to HOLD it and REFUSES when no admissible sigma stretch "
              "over the domain's deepest column can")
 
-    mesh_resolution_m = lever(
-        "mesh_resolution_m",
+    mesh_resolution_m = replace(
+        RESOLUTION,
         desc="Target triangle edge the water body's interior is meshed at. The "
              "horizontal spends its budget on COVERING the body rather than on "
              "detail; the 3D node count is this mesh's nodes times the planes "
@@ -196,6 +197,5 @@ telemac3d_stratified_flow = register_workflow(
         point_arg("seed", tool="telemac3d_stratified_flow",
                   prompt="Click on the body of water this run solves over",
                   code="TELEMAC3D_PARAMS_INVALID"),
-        event_time(),
     ),
 )

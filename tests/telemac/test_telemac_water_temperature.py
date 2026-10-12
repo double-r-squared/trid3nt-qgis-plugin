@@ -117,7 +117,7 @@ def test_no_keyword_twin_and_no_domain_twin_is_declared_here():
     # The two levers the template does not declare are SEATED on it by the
     # runtime, so the card still carries them.
     seated = {p.name for p in _workflow().params}
-    assert {"event_time", "cores"} <= seated - own
+    assert {"event_time", "vertical_frame"} <= seated - own
 
 
 def test_the_granularity_row_states_no_default_and_refuses_no_edge():

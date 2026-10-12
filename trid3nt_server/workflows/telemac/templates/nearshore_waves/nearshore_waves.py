@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs import point_arg, Point
-from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT, LEVEL, WAVE
+from trid3nt_server.tools.mesh.recipe import RESOLUTION
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Param, lever,
+    Data, register_workflow, Param,
 )
 from trid3nt_server.tools.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.telemac.modules import WAC, series, spectrum
@@ -43,8 +44,8 @@ class PARAMS:
              "the period and the direction are charted at the node of the mesh "
              "it settles onto, so put it on the water you are asking about")
 
-    mesh_resolution_m = lever(
-        "mesh_resolution_m",
+    mesh_resolution_m = replace(
+        RESOLUTION,
         desc="Target element edge length the water is triangulated at; the "
              "waves shoal and then break where the DEPTH falls, so what this "
              "has to resolve is the slope of the bed across the surf zone")
@@ -202,6 +203,5 @@ tomawac_nearshore_waves = register_workflow(
         point_arg("station", tool="tomawac_nearshore_waves",
                   prompt="Click on the water where the waves should be read",
                   code="TELEMAC_PARAMS_INVALID"),
-        event_time(),
     ),
 )

@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN
-from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
+from seated import SEATED
 from trid3nt_server.workflows.telemac.modules import T2D
 from trid3nt_server.workflows.telemac.workflow import stated
 from trid3nt_server.workflows.telemac.templates.oil_spill import (
@@ -86,8 +86,8 @@ def test_the_discharge_is_one_reading_and_never_the_grid_it_came_from():
 
 
 def test_the_baseline_params_are_the_runtimes_and_are_not_restated():
-    """A template declares no domain twin, no keyword twin and no lever of its
-    own; the three levers are seated on it because the workflow owns its stages."""
+    """A template declares no domain twin, no keyword twin and no seated input of its
+    own; the mesh ask's, the engine's and the bed's are seated on it."""
     declared = [prm.name for prm in _workflow().params]
     for gone in ("location", "bbox", "river_geometry_uri", "reach_length_km",
                  "friction_law", "friction_coefficient", "output_interval_min",
@@ -95,14 +95,14 @@ def test_the_baseline_params_are_the_runtimes_and_are_not_restated():
                  "sim_duration_s", "n_drogues", "drogues_period_s",
                  "wind_speed_mps", "wind_direction_deg", "rainfall_mm_per_day"):
         assert gone not in declared, gone
-    assert set(LEVER_NAMES) <= set(declared)
-    # Every lever is on the sheet; the ones this question does not state for
-    # itself are seated at the end, in the order the runtime declares them, and
+    assert set(SEATED) <= set(declared)
+    # Every seated input is on the sheet; the ones this question does not state for
+    # itself are seated at the end, in the order the engine seats them, and
     # one it differs on keeps its own place and its own opinion of the value.
     own = [prm.name for prm in template.PARAMS.__dict__.values()
            if getattr(prm, "name", None)]
     assert declared[:len(own)] == own
-    seated = [name for name in LEVER_NAMES if name not in own]
+    seated = [name for name in SEATED if name not in own]
     assert declared[len(own):] == seated
 
 

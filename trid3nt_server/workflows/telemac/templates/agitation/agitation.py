@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT
+from trid3nt_server.tools.mesh.recipe import RESOLUTION
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Param, lever,
+    Data, register_workflow, Param,
 )
 from trid3nt_server.tools.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.telemac.authoring.accepted_mesh import (
@@ -44,8 +46,8 @@ class PARAMS:
              "(a vertical quay), 0 fully absorbing (a rubble slope). Every other "
              "solid face is the absorbing shore")
 
-    mesh_resolution_m = lever(
-        "mesh_resolution_m",
+    mesh_resolution_m = replace(
+        RESOLUTION,
         desc="Finest triangle edge, used at the shoreline and around the "
              "structure. THE granularity lever: a phase-resolving solve needs "
              "several nodes per WAVELENGTH and Kd peaks inside a diffraction "
@@ -71,7 +73,6 @@ class PARAMS:
         desc="How deep a boundary stretch must reach for it to be designated the "
              "OPEN edge the incident wave enters through; every stretch that "
              "reaches it opens")
-    cores = lever("cores")
 
 
 _RESULT = "res_agitation.slf"
@@ -239,6 +240,5 @@ DOC = dict(
 
 artemis_harbor_agitation = register_workflow(
     TelemacWorkflow, _ARTEMIS_METADATA, sys.modules[__name__],
-    levers=(),
     sensitivity=(("agitation_coefficient", "peak"),),
 )

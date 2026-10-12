@@ -7,15 +7,16 @@ so there is no subsurface return flow and no baseflow."""
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs.slots import BED, DOMAIN, RAIN
+from trid3nt_server.tools.mesh.recipe import RESOLUTION
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, tool, Param, lever,
+    Data, register_workflow, tool, Param,
 )
 from trid3nt_server.tools.mesh.tool import mesh_op
 from trid3nt_server.inputs import point_arg, Point
-from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.telemac.modules import T2D, series
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Infiltration, Rating, Storm,
@@ -99,8 +100,8 @@ class PARAMS:
              "compiled off in the installed 9.0.0 build, so the correction is "
              "applied to the CN field before it is written")
 
-    mesh_resolution_m = lever(
-        "mesh_resolution_m",
+    mesh_resolution_m = replace(
+        RESOLUTION,
         desc="Finest triangle edge, reached where the mesh refines toward the "
              "channel network. THE granularity lever: peak depth and flooded "
              "extent are resolution-bound classes and a coarse mesh reads both "
@@ -270,6 +271,5 @@ telemac_rain_on_grid = register_workflow(
         point_arg("pour_point", tool="telemac_rain_on_grid",
                   prompt="Click the catchment outlet the runoff drains to",
                   code="TELEMAC_ROG_PARAMS_INVALID"),
-        event_time(),
     ),
 )

@@ -13,7 +13,8 @@ from typing import Any, Callable, Mapping, Sequence
 
 from trid3nt_contracts.common import Origin
 
-from .module import Output, Slot, SlotRefused
+from ..authoring.staged_check import BOX_CORES
+from .module import PROCESSORS, Output, Slot, SlotRefused
 
 __all__ = ["CONTINUATION", "Filled", "Provenance", "Sheet", "SheetIncomplete",
            "fill", "fill_coupled", "filled_by", "run", "solve_cores",
@@ -278,7 +279,7 @@ def fill(source: type | Sheet, *, template: str = "",
             files[basename] = _coupled_filled(content, run_)
     _arm(body, filled, files)
     _continued(body, filled, run_)
-    _partitioned(body, filled, run_)
+    _partitioned(body, filled)
     write_atmosphere(body, {name: row.value for name, row in filled.items()},
                      files)
     return Sheet(body=body, filled=MappingProxyType(filled),
@@ -328,39 +329,29 @@ def _continued(body: type, filled: dict[str, Filled],
         provenance=Provenance(Origin.PRODUCER, "the run this one continues"))
 
 
-# The keyword every TELEMAC module spells for the processor count its domain is partitioned across; its default is one machine with no parallel library, so a serial run states nothing.
-PROCESSORS = "PARALLEL_PROCESSORS"
-
-
 # The matrix-solver keyword and the one value that is not partitioned: a DIRECT factorisation is solved whole on a single core whatever was asked; the parallel direct solver is another value and keeps the partition.
 SOLVER = "SOLVER"
 _DIRECT_SOLVER = 8
 
 
-def solve_cores(body: type, filled: Mapping[str, Filled], cores: Any) -> int:
-    """How many cores this deck's solve runs on.
-
-    A deck resolving to the direct solver, stated or by default, runs serial whatever the run asked for.
-    """
-    from trid3nt_server.workflows.runtime.levers import cores_asked
-
-    asked = cores_asked(cores)
-    if asked is None:
-        asked = _engine_cores(body)
-    return 1 if asked > 1 and _solver(body, filled) == _DIRECT_SOLVER else asked
-
-
-def _engine_cores(body: type) -> int:
-    """The partition the module's own dictionary states, as a core count.
+def solve_cores(body: type, filled: Mapping[str, Filled]) -> int:
+    """How many cores this deck's solve runs on: the processors keyword as the deck resolves it.
 
     The dictionary spells a scalar computation as zero processors; it still runs on one core.
     """
+    if PROCESSORS in filled:
+        return max(1, int(filled[PROCESSORS].value))
     slot = body.MODULE_INPUT.get(PROCESSORS)
-    stated = None if slot is None or slot.is_open else slot.engine_default
-    try:
-        return max(1, int(stated))
-    except (TypeError, ValueError):
-        return 1
+    return 1 if slot is None or slot.is_open else max(1, int(slot.engine_default))
+
+
+def fits_the_box(count: Any) -> None:
+    """Refuse a processor count past this box's cores; a count cut down to fit is a partition the caller was never told about."""
+    if int(count) > BOX_CORES:
+        raise SlotRefused(
+            f"PARALLEL PROCESSORS {int(count)} is past the {BOX_CORES} cores this "
+            f"box has. State {BOX_CORES} or fewer - a count this box cannot seat "
+            "is refused rather than cut down to fit.")
 
 
 def _solver(body: type, filled: Mapping[str, Filled]) -> Any:
@@ -371,33 +362,24 @@ def _solver(body: type, filled: Mapping[str, Filled]) -> Any:
     return filled[SOLVER].value if SOLVER in filled else slot.engine_default
 
 
-def _partitioned(body: type, filled: dict[str, Filled],
-                 params: Mapping[str, Any]) -> None:
-    """State how many cores this run is solved on, where the body spells it.
+def _partitioned(body: type, filled: dict[str, Filled]) -> None:
+    """Hold the stated processor count to what this deck is solved on.
 
-    The launcher is handed the same number, so the partition told to the engine is the one it gets.
+    The launcher is handed the same number, so a count the direct solver cannot use leaves the deck with the run's note.
     """
     from trid3nt_server.inputs.run_notes import journal_note
-    from trid3nt_server.workflows.runtime.levers import cores_asked
 
-    if PROCESSORS in filled or PROCESSORS not in body.MODULE_INPUT:
+    if PROCESSORS not in filled:
         return
-    asked = cores_asked(params.get("cores"))
-    if asked is None:
-        return
-    cores = solve_cores(body, filled, asked)
-    if cores < asked:
+    asked = filled[PROCESSORS].value
+    fits_the_box(asked)
+    if int(asked) > 1 and _solver(body, filled) == _DIRECT_SOLVER:
         journal_note(
             f"{body.MODULE} solves this deck with the direct solver "
             f"({SOLVER} {_DIRECT_SOLVER}), which factorises the whole system "
             f"rather than partitioning it, so the run is serial and the "
-            f"{asked} cores it was asked for are not used.")
-    if cores < 2:
-        return
-    slot = body.slot(PROCESSORS)
-    filled[PROCESSORS] = Filled(slot=slot, value=slot.check(cores),
-                                 provenance=Provenance(Origin.PRODUCER,
-                                                       "the run's cores lever"))
+            f"{int(asked)} processors it states are not used.")
+        del filled[PROCESSORS]
 
 
 def _arm(body: type, filled: dict[str, Filled],
@@ -473,7 +455,6 @@ async def run(sheet: Sheet, *, dispatch: Callable[..., Any],
               mesh_inputs: Sequence[Mapping[str, str]],
               outputs: Sequence[str], results: Sequence[str], prefix: str,
               server_facts: Mapping[str, Any], steering: str | None = None,
-              cores: int | None = None,
               coupling: str | None = None,
               continue_from: str | None = None) -> Any:
     """A complete sheet: serialize, stage, hand it to the box.
@@ -499,7 +480,7 @@ async def run(sheet: Sheet, *, dispatch: Callable[..., Any],
     # Files the decks name past the one read from are declared so the worker's success convention checks each landed.
     kept = [name for name in sheet.kept() if name not in results]
     run_tag, rundir = new_rundir()
-    partition = solve_cores(sheet.body, sheet.filled, cores)
+    partition = solve_cores(sheet.body, sheet.filled)
     # The serialization is a container round trip, so it runs off the loop.
     written = await asyncio.to_thread(serialize, sheet, rundir, steering=steering)
     staged = await stage_run(

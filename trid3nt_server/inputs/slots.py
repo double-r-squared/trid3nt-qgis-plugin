@@ -49,6 +49,9 @@ class Slot:
     #: The one shape this type's ingestion reads a matched source as, "" for any: a
     #: source publishing its class in another shape is never asked.
     reads: str = ""
+    #: What a row of this type declares beside itself, each ``(name, default,
+    #: description)``: a value the run states once and every reader of it shares.
+    states: tuple[tuple[str, Any, str], ...] = ()
 
     @property
     def ingest(self) -> Callable[..., Any] | None:
@@ -65,10 +68,18 @@ DOMAIN = Slot("domain", ingestion="domain", classes=frozenset({"hydrography"}),
               draw=("polygon", "domain",
                     "Draw the outline of the water body this run solves over"))
 
-#: What every node of the domain carries for elevation.
+#: What every node of the domain carries for elevation, and the vertical frame it is
+#: counted from: NAVD88 is what the national terrain, bathymetry and gauges this
+#: substrate reaches are published on, and a source that cannot reach the run's
+#: frame refuses by name.
 BED = Slot("bed", ingestion="bed",
            classes=frozenset({"bathymetry", "terrain", "channel survey"}),
-           number=True)
+           number=True,
+           states=(("vertical_frame", "NAVD88",
+                    "Vertical datum the bed's elevations are counted from, and "
+                    "with them the level over it. A source published on another "
+                    "frame reaches this one through a measured offset, and a pair "
+                    "nobody publishes an offset between refuses by name"),))
 
 #: The LINE a placed read is measured along.
 LINE = Slot("line", ingestion="line",

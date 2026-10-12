@@ -46,7 +46,7 @@ def _finish(param: Param, value: Any, origin: Origin, note: str) -> ResolvedPara
             )
         lo, hi = float(param.bounds[0]), float(param.bounds[1])
         if not lo <= coerced <= hi:
-            # The lever is the user's; a value moved onto the bound runs an unasked question silently.
+            # The value is the user's; one moved onto the bound runs an unasked question silently.
             units = f" {param.units}" if param.units else ""
             raise GateRefusedError(
                 f"{param.name}={coerced:g}{units} is outside the declared range "

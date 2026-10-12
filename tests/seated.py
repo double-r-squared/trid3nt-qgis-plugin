@@ -12,6 +12,11 @@ from trid3nt_server.workflows.runtime.params import (
 from trid3nt_server.workflows.runtime.resolver import seat_param
 
 
+#: The inputs a TELEMAC template carries without restating them, in the order its
+#: sheet reads them: the mesh ask's edge, the engine's moment, the bed's frame.
+SEATED = ("mesh_resolution_m", "event_time", "vertical_frame")
+
+
 async def resolve_params(declared: Any, supplied: Mapping[str, Any]) -> ResolvedParams:
     declared = param_rows(declared)
     refuse_duplicate_params(declared)

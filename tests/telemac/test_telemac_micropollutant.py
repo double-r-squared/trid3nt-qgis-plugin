@@ -194,21 +194,21 @@ def test_the_declared_params_resolve():
 
 
 def test_the_template_declares_none_of_the_runtime_s_own_rows():
-    """The domain, the bed, the granularity, the moment and the sizing class are
-    the runtime's; the deck's clock, roughness and cadence are keywords the
+    """The domain, the bed, the granularity, the moment and the frame are
+    declared by whoever reads them; the deck's clock, roughness and cadence are keywords the
     dictionary describes. What is left is the question's own."""
-    from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
+    from seated import SEATED
 
     from trid3nt_server.workflows.runtime import param_rows
 
     workflow = _template().telemac_micropollutant_release.workflow
     declared = [prm.name for prm in workflow.params]
-    # Every lever is on the sheet; the ones this question does not state for
-    # itself are seated at the end, in the order the runtime declares them, and
+    # Every seated input is on the sheet; the ones this question does not state for
+    # itself are seated at the end, in the order the engine seats them, and
     # one it differs on keeps its own place and its own opinion of the value.
     own = {prm.name for prm in param_rows(_template().PARAMS)}
-    assert set(LEVER_NAMES) <= set(declared)
-    seated = [name for name in LEVER_NAMES if name not in own]
+    assert set(SEATED) <= set(declared)
+    seated = [name for name in SEATED if name not in own]
     assert declared[-len(seated):] == seated
     for gone in ("location", "bbox", "river_geometry_uri", "reach_length_km",
                  "friction_law", "friction_coefficient", "output_interval_min",

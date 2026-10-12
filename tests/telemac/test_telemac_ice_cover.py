@@ -116,7 +116,7 @@ def test_no_keyword_twin_and_no_domain_twin_is_declared_here():
     own = {p.name for p in param_rows(template.PARAMS)}
     assert _NOT_DECLARED.isdisjoint(own)
     seated = {p.name for p in _workflow().params}
-    assert {"event_time", "cores"} <= seated - own
+    assert {"event_time", "vertical_frame"} <= seated - own
 
 
 def test_the_only_params_are_the_questions_own_inputs():

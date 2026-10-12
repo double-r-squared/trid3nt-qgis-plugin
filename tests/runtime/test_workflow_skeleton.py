@@ -136,12 +136,12 @@ def test_every_declared_param_is_on_the_real_tools_wire_and_docstring():
     for name in ("telemac_do_sag", "telemac_dye_release"):
         fn = TOOL_REGISTRY[name].fn
         declared = {p.name for p in fn.workflow.params}
-        assert "cores" in declared
+        assert {"event_time", "vertical_frame"} <= declared
         assert declared <= set(inspect.signature(fn).parameters)
         assert all(f"    {p}:" in fn.__doc__ for p in declared)
 
 
-def test_a_stated_lever_reaches_the_sheet_as_the_users():
+def test_a_stated_seated_input_reaches_the_sheet_as_the_users():
     import asyncio
 
     from trid3nt_server.tools import TOOL_REGISTRY
@@ -150,14 +150,14 @@ def test_a_stated_lever_reaches_the_sheet_as_the_users():
     wf = TOOL_REGISTRY["telemac_do_sag"].fn.workflow
     from trid3nt_server.workflows.runtime.fill import ACCEPTED, Fill, fill
 
-    state = asyncio.run(fill(Fill(workflow=wf), {"location": "x", "cores": 2,
+    state = asyncio.run(fill(Fill(workflow=wf), {"location": "x", "vertical_frame": "IGLD85",
                                                   "mesh_resolution_m": 30.0}))
     supplied = {n: v.value for n, v in state.inputs.items() if v.state == ACCEPTED}
-    assert supplied["cores"] == 2
+    assert supplied["vertical_frame"] == "IGLD85"
     assert supplied["mesh_resolution_m"] == 30.0
     sheet = asyncio.run(resolve_params(wf.params, supplied))
-    assert sheet.value_of("cores") == 2
-    assert sheet.row("cores").origin == "user"
+    assert sheet.value_of("vertical_frame") == "IGLD85"
+    assert sheet.row("vertical_frame").origin == "user"
 
 
 def test_a_param_edited_on_the_review_card_is_what_the_run_records():

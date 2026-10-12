@@ -167,8 +167,6 @@ def build_record(*, run_id: str | None, engine: str | None,
         "mesh": {"mesh_size_m": getattr(result, "mesh_size_m", None),
                  **{k: mesh.get(k) if isinstance(mesh, Mapping) else None
                     for k in ("key", "built_by")}},
-        "cores": next((r.value for r in sheet
-                       if getattr(r, "name", "") == "cores"), None),
         "wall_seconds": wall_seconds,
         "notes": list(notes),
         # What the run put on the map: the one place outputs are read back once artifacts and session are gone.

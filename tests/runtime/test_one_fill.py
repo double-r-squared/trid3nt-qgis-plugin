@@ -31,16 +31,16 @@ def _filled(values):
 
 
 def test_a_stated_value_is_accepted_and_the_rest_default():
-    state = _filled({"location": "the Wabash River", "cores": 2})
-    assert state.inputs["cores"].state == ACCEPTED
-    assert state.inputs["cores"].value == 2
+    state = _filled({"location": "the Wabash River", "spill_fraction": 0.4})
+    assert state.inputs["spill_fraction"].state == ACCEPTED
+    assert state.inputs["spill_fraction"].value == 0.4
     assert any(v.state == DEFAULTED for v in state.inputs.values())
 
 
 def test_a_value_outside_its_range_is_rejected_with_its_remedy():
-    state = _filled({"location": "the Wabash River", "cores": 999})
-    verdict = state.inputs["cores"]
-    assert verdict.state == REJECTED and "cores" in verdict.reason
+    state = _filled({"location": "the Wabash River", "spill_fraction": 9.0})
+    verdict = state.inputs["spill_fraction"]
+    assert verdict.state == REJECTED and "spill_fraction" in verdict.reason
     assert verdict.remedies and not state.ready
 
 

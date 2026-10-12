@@ -28,6 +28,7 @@ __all__ = [
     "Slot",
     "SlotRefused",
     "Unwritten",
+    "PROCESSORS",
     "identify_on",
     "load_module_input",
     "module_input_dir",
@@ -562,11 +563,15 @@ class Module(metaclass=_Body):
 # How a floor name names the body it resolves against: the module's name, then the keyword, split on the first separator (a keyword may carry one, a module name may not).
 _QUALIFIER = ":"
 
+# The keyword every TELEMAC module spells for the processor count its domain is partitioned across; its default is one machine with no parallel library, so a serial run states nothing.
+PROCESSORS = "PARALLEL_PROCESSORS"
+
 
 def identify_on(bodies: Sequence[type], name: str) -> tuple[type, str]:
     """The ``(body, identifier)`` a name is written under, across a run's bodies.
 
     A qualified ``"waqtel: K2 REAERATION COEFFICIENT"`` resolves against that body alone. A bare name resolves where exactly one body spells it; two refuse, naming both.
+    The processor count is the exception: a run is partitioned once, across the carrier's, so the bare name is the carrier's.
     """
     wanted = str(name).strip()
     if _QUALIFIER in wanted:
@@ -579,6 +584,8 @@ def identify_on(bodies: Sequence[type], name: str) -> tuple[type, str]:
                 f"{', '.join(b.MODULE for b in bodies)}.")
         return body, body.identify(keyword)
     spelled = [body for body in bodies if _spells(body, wanted)]
+    if spelled[:1] == [bodies[0]] and bodies[0].identify(wanted) == PROCESSORS:
+        return bodies[0], PROCESSORS
     if len(spelled) > 1:
         raise SlotRefused(
             f"{wanted!r} is a keyword of "

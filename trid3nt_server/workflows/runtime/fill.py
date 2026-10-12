@@ -303,21 +303,26 @@ def _mesh_m(env: _Env) -> float | None:
     return env.params.value_of("mesh_resolution_m") if env.params else None
 
 
+def _frame(env: _Env) -> str:
+    """The vertical frame this run counts elevations from: the one the bed states, for every reader of it."""
+    (name, default, _desc), = BED.states
+    stated = env.params.value_of(name) if env.params else None
+    return str(stated or default)
+
+
 async def _need(env: _Env, decl: DataDecl, data_class: str,
                 label: str) -> Need:
     """What this slot asks the world for, assembled off the RUN.
 
     The class is the slot's; the place is the domain's or the row's own point; the
-    window is the run's and the frame is the lever's."""
-    from .levers import run_frame
-
+    window is the run's and the frame is the bed's."""
     seed = await _seed(env, decl)
     lon, lat = _place(seed)
     opens = env.params.value_of("event_time") if env.params else None
     return Need(slot=label, data_class=data_class, lon=lon, lat=lat,
                 geometry=decl.geometry or getattr(decl.slot, "reads", ""),
                 opens=str(opens) if opens else None,
-                until=_closes(opens, env.window_s), frame=run_frame(env.params),
+                until=_closes(opens, env.window_s), frame=_frame(env),
                 mesh_m=_mesh_m(env), pick=_pick(env, decl, data_class),
                 of=_asked_of(decl, seed), water=_water())
 
@@ -585,11 +590,9 @@ async def _on_the_run_s_frame(env: _Env, decl: DataDecl,
 
     Only the bed and the level are elevations; another slot handed a frame would demand a
     datum of a temperature. A source on ANOTHER frame is bridged by the offset row."""
-    from .levers import run_frame
-
     if decl.slot not in (BED, LEVEL):
         return {}
-    frame = run_frame(env.params)
+    frame = _frame(env)
     told = {"frame": frame} if decl.slot is BED else {"to_datum": frame}
     measured = await _offset_row(env, decl.name, value, frame)
     return told if measured is None else {**told, "offset": measured}

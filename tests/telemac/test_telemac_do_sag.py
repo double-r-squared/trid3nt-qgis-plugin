@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 from trid3nt_server.workflows.telemac.templates.do_sag.streeter_phelps import do_profile
-from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
+from seated import SEATED
 from trid3nt_server.workflows.telemac.workflow import stated
 from trid3nt_server.workflows.telemac.modules.outputs import (
     Line,
@@ -76,7 +76,7 @@ def _resolve(**supplied):
 
 def test_declared_params_resolve():
     wf = _workflow()
-    assert [p.name for p in wf.params if p.name not in LEVER_NAMES] == [
+    assert [p.name for p in wf.params if p.name not in SEATED] == [
         "outfall_coords", "do_standard_mgl"]
     assert _resolve().value_of("do_standard_mgl") == 5.0
 

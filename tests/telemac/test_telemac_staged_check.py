@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from trid3nt_server.workflows.telemac.authoring import selafin_io as IO
-from trid3nt_server.workflows.runtime.levers import BOX_CORES
+from trid3nt_server.workflows.telemac.authoring.staged_check import BOX_CORES
 from trid3nt_server.workflows.telemac.authoring import staged_check as C
 from trid3nt_server.workflows.telemac.errors import TelemacError
 

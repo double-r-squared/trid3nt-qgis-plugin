@@ -6,6 +6,7 @@ template gets when it states only what differs from the base.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
@@ -16,10 +17,8 @@ from trid3nt_server.workflows.runtime import (
     DeclarationError,
     tool,
 )
-from trid3nt_server.workflows.runtime.levers import (
-    LEVER_NAMES,
-    lever,
-)
+from seated import SEATED
+from trid3nt_server.tools.mesh.recipe import RESOLUTION
 from trid3nt_server.workflows.telemac.modules import T2D
 from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 from trid3nt_server.inputs.slots import BED, DOMAIN
@@ -42,7 +41,7 @@ class STEERING(T2D):
 
 
 class PARAMS:
-    mesh_resolution_m = lever("mesh_resolution_m", default=25.0)
+    mesh_resolution_m = replace(RESOLUTION, default=25.0)
 
 
 class DATA:
@@ -58,20 +57,55 @@ def _template(data: type = DATA, params: type = PARAMS) -> SimpleNamespace:
 
 def _workflow(data: type = DATA, params: type = PARAMS) -> TelemacWorkflow:
     return TelemacWorkflow(metadata=_METADATA, params=params,
-                           template=_template(data, params), data=data,
-                           levers=TelemacWorkflow.levers())
+                           template=_template(data, params), data=data)
 
 
 def _mesh(workflow: TelemacWorkflow):
     return _step(workflow, "mesh")
 
 
-def test_the_runtime_levers_are_seated_so_the_template_states_none_of_them():
+def test_the_engine_seats_its_inputs_so_the_template_states_none_of_them():
     workflow = _workflow()
-    # The template's own row for a lever keeps its place; every lever it does
-    # not state is seated after it, in the order the runtime declares them.
+    # The template's own row for the mesh edge keeps its place; every input it
+    # does not state is seated after it, in the order the engine seats them.
     assert [prm.name for prm in workflow.params] == [
-        "mesh_resolution_m", *(n for n in LEVER_NAMES if n != "mesh_resolution_m")]
+        "mesh_resolution_m", *(n for n in SEATED if n != "mesh_resolution_m")]
+    assert "cores" not in {prm.name for prm in workflow.params}
+
+
+def test_the_mesh_edge_is_seated_only_where_the_mesh_ask_names_it():
+    """The edge is the mesh ask's input: an ask built at a stated number names
+    no run input, so no row is seated for one."""
+    class _NONE:
+        pass
+
+    named = _workflow(params=_NONE)
+    assert named.params[0] is RESOLUTION
+    fixed = SimpleNamespace(
+        STEERING=STEERING, PARAMS=_NONE, DATA=DATA,
+        MESH=tool.build_mesh(mesher="om2d", kind="unstructured_tri",
+                             extent="domain", resolution_m=40.0))
+    workflow = TelemacWorkflow(metadata=_METADATA, params=_NONE,
+                               template=fixed, data=DATA)
+    assert [prm.name for prm in workflow.params] == ["event_time",
+                                                     "vertical_frame"]
+
+
+def test_the_frame_is_the_beds_and_every_reader_reads_that_one():
+    """The bed's type declares the frame; the match's need and the level read
+    the value the run stated for it, and the bed's own default without one."""
+    from trid3nt_server.workflows.runtime import fill
+    from trid3nt_server.workflows.runtime.params import (ResolvedParam,
+                                                         ResolvedParams)
+
+    (name, default, _desc), = BED.states
+    assert (name, default) == ("vertical_frame", "NAVD88")
+    frame = next(prm for prm in _workflow().params if prm.name == name)
+    assert frame.default == default
+    assert fill._frame(fill._Env(params=None, data={})) == "NAVD88"
+    stated = ResolvedParams({name: ResolvedParam(name=name, value="IGLD85",
+                                                 origin=None)})
+    assert fill._frame(fill._Env(params=stated, data={})) == "IGLD85"
 
 
 def test_the_domain_and_the_bed_reach_the_wire_as_the_slots_they_are():
@@ -232,3 +266,28 @@ def test_a_composite_naming_the_mesh_stage_does_not_fill_the_seated_mesh_row():
     workflow = TOOL_REGISTRY["telemac_rain_on_grid"].fn.workflow
     assert "mesh" in workflow._named()
     assert "mesh" not in workflow.named_rows()
+
+
+def test_the_moment_is_the_engines_input_and_no_template_seats_or_coerces_it():
+    """The skeleton declares no moment; the engine seats the row and reads it
+    through its own coercion, so a template with no coercion still pins one."""
+    from trid3nt_server.workflows.runtime import Workflow
+
+    bare = Workflow(metadata=_METADATA, params=(), template=_template(), data=DATA)
+    assert "event_time" not in {prm.name for prm in bare.params}
+    workflow = _workflow()
+    assert "event_time" in {prm.name for prm in workflow.params}
+    pinned = workflow.coercions[-1]({"event_time": "2026-03-04"})
+    assert str(pinned["event_time"]).startswith("2026-03-04T00:00:00")
+
+
+def test_every_registered_template_carries_the_moment_and_the_beds_frame():
+    """Agitation among them: it has a bed, so it has the bed's frame."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+    import trid3nt_server.workflows.telemac.templates  # noqa: F401
+
+    templates = [tool.fn.workflow for tool in TOOL_REGISTRY.values()
+                 if hasattr(tool.fn, "workflow")]
+    assert len(templates) == 15
+    for workflow in templates:
+        assert {"event_time", "vertical_frame"} <= {p.name for p in workflow.params}

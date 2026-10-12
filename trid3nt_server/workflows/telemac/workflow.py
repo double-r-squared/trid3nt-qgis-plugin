@@ -17,17 +17,20 @@ from trid3nt_contracts.common import Origin, SyntheticInput
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
 
+from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LEVEL, MESH
 from trid3nt_server.render.formats import publish
 from trid3nt_server.workflows.runtime import (
     DataDecl,
     DeclarationError,
+    Param,
     RunResult,
     Workflow,
 )
 from trid3nt_server.workflows.telemac.errors import TelemacError
 from trid3nt_server.workflows.telemac.modules import wrapper_for
-from trid3nt_server.workflows.telemac.modules.module import (SlotRefused, accept,
+from trid3nt_server.workflows.telemac.modules.module import (PROCESSORS,
+                                                              SlotRefused, accept,
                                                               identify_on)
 from trid3nt_server.workflows.telemac.modules.outputs import (
     Line,
@@ -38,9 +41,9 @@ from trid3nt_server.workflows.telemac.modules.outputs import (
     deliver,
 )
 from trid3nt_server.workflows.telemac.modules.sheet import (
-    PROCESSORS,
     Sheet,
     CONTINUATION,
+    fits_the_box,
 )
 from trid3nt_server.workflows.telemac.modules.sheet import fill as fill_slots
 from trid3nt_server.workflows.telemac.modules.sheet import fill_coupled
@@ -66,6 +69,18 @@ _MESHER, _MESH_KIND = "om2d", "unstructured_tri"
 
 #: The dispatch a staged run goes to, by the path it is resolved at CALL time.
 _DISPATCH = f"{_TELEMAC}.engine.solve_case"
+
+#: The moment a run of this engine opens at: what every dated source is asked for and every record is read at.
+EVENT_TIME = Param(
+    name="event_time", optional=True,
+    derived_when_absent=(
+        "a surface is read at the most recent cycle its own source has "
+        "published, and no series source is asked at all - a record is a "
+        "reading at a time, and this run stated none"),
+    desc="The moment the scenario is read at - an ISO date or datetime "
+         "(YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like "
+         "'during last Tuesday's storm'. Each source keeps its own "
+         "retention, and a request deeper than one refuses typed")
 
 #: What the settle is called: what the deck and every later stage read it as.
 _SETTLED = "settled"
@@ -462,7 +477,7 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
 
 async def run_sheet(*, sheet: Sheet, settled: Mapping[str, Any],
                     results: Sequence[str], steering: str, prefix: str,
-                    dispatch: str, cores: Any,
+                    dispatch: str,
                     display: str = "") -> dict[str, Any]:
     """A complete sheet: serialize, stage, hand it to the box -> the run handle.
     The handle names every variable the deck asked for; what the run wrote is decided here, where the coupled bodies and declared tracers are in hand."""
@@ -475,7 +490,6 @@ async def run_sheet(*, sheet: Sheet, settled: Mapping[str, Any],
         sheet, dispatch=to_the_box, mesh_inputs=settled["mesh_inputs"],
         outputs=outputs, results=list(results), prefix=prefix,
         server_facts=settled["server_facts"], steering=steering,
-        cores=cores,
         coupling=None if not coupled else str(coupled).split(";")[0].lower(),
         continue_from=settled.get("continue_from"))
     return {**settled, **handle, "module": sheet.module,
@@ -499,7 +513,6 @@ def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
                                                in sheet.filled.items()]
     rows += _coupled_rows(sheet)
     rows += _written_rows(sheet)
-    rows += _serial_rows(sheet)
     rows += [_open_row(slot) for slot in sheet.required()]
     # The advanced fold reads down the dictionary's RUBRIQUES and, inside one, its own order. A keyword the sheet GENERATES
     # is already a written row above; the fold is engine DEFAULTS only.
@@ -594,17 +607,6 @@ def _written_rows(sheet: Sheet) -> list[ParamSheetRow]:
             desc=slot.desc[:512], editable=False, group=_group(slot),
             source_badge=f"the {body.MODULE} module's own variable table"))
     return rows
-
-
-def _serial_rows(sheet: Sheet) -> list[ParamSheetRow]:
-    """What a deck the engine cannot partition says about the run's sizing class.
-    A body with no processor keyword runs on one core whatever class was asked, and the card says so."""
-    return [ParamSheetRow(
-        name=f"{body.MODULE}.cores", value="serial: this engine runs on one core",
-        desc="How many cores this module's solve is partitioned across.",
-        editable=False, source_badge="the module's own dictionary")
-        for body, _tracers, _stated in _decks(sheet)
-        if PROCESSORS not in body.MODULE_INPUT]
 
 
 async def _review(fill: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
@@ -775,13 +777,17 @@ class TelemacWorkflow(Workflow):
     seated = (DataDecl(name="mesh", slot=MESH, is_optional=True,
                        coercion=MappingProxyType({"kinds": (_MESH_KIND,)})),)
 
-    @classmethod
-    def levers(cls) -> tuple[str, ...]:
-        """Every runtime lever, because the stages that read them are this
-        class's own and no template seats one on its own behalf."""
-        from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
+    def __init__(self, *, coerce: Sequence[Any] = (), **declared: Any) -> None:
+        super().__init__(coerce=(*coerce, event_time()), **declared)
 
-        return LEVER_NAMES
+    def inputs(self) -> tuple[Param, ...]:
+        """The edge the mesh ask names, the moment the run opens at, then what
+        the types of its rows state."""
+        from trid3nt_server.tools.mesh.recipe import RESOLUTION, input_names
+
+        recipe = self._states("MESH", None)
+        asked = recipe is None or RESOLUTION.name in input_names(recipe)
+        return ((RESOLUTION,) if asked else ()) + (EVENT_TIME,) + super().inputs()
 
     @property
     def steering(self) -> type:
@@ -793,7 +799,10 @@ class TelemacWorkflow(Workflow):
         """One keyword on whichever of this run's bodies it names, through that
         module's own accept rule."""
         body, identifier = identify_on(run_bodies(self.steering), name)
-        return accept(body, identifier, value)
+        accepted = accept(body, identifier, value)
+        if accepted[0] == PROCESSORS:
+            fits_the_box(accepted[1])
+        return accepted
 
     def _states(self, name: str, default: Any) -> Any:
         """One declaration read off the template module, or the default beside it."""
@@ -966,8 +975,7 @@ class TelemacWorkflow(Workflow):
                     workflow=self.name,
                     title=self._states("REVIEW_TITLE", ""), keywords=keywords,
                     input_mode=env.input_mode,
-                    spent=sorted(({"cores"} & declared)
-                                 | {mark.name for mark in placed}),
+                    spent=sorted(mark.name for mark in placed),
                     seat=_seat_on(env),
                     user=[row.name for row in env.params.rows()
                           if row.origin is Origin.USER])
@@ -978,8 +986,7 @@ class TelemacWorkflow(Workflow):
             steering=(self._states("STEERING_FILE", "")
                       or f"{self.steering.MODULE}_{self.name}.cas"),
             prefix=self._states("PREFIX", "telemac"), dispatch=_DISPATCH,
-            display=self._states("DISPLAY_FILE", ""),
-            cores=run.get("cores") if "cores" in declared else None)
+            display=self._states("DISPLAY_FILE", ""))
         await keep_mesh(run["mesh"], solved.get("run_id"))
         outputs, captions = self._outputs()
         # A primitive's point, line and band name run inputs; each is read here and rejoins its primitive at publish.
@@ -1113,7 +1120,7 @@ class TelemacWorkflow(Workflow):
             "boundary": self._file("BOUNDARY_CONDITIONS_FILE", "boundary.cli"),
             "result": self._result(),
             "mesh_resolution_m": run["mesh_resolution_m"],
-            # THE CLOCK IS THE MODULE'S: the settle reads the seconds the deck was written for, not a lever restating them.
+            # THE CLOCK IS THE MODULE'S: the settle reads the seconds the deck was written for, not a param restating them.
             "duration_s": self._clock(run),
             # A deck that STATES the depth an open edge is designated at prescribes the sea state across it, so a mesh where nothing reaches it is sealed.
             **({"deck": self.name,
@@ -1188,7 +1195,9 @@ class TelemacWorkflow(Workflow):
             f"other keyword is the engine's own default and is set on the call - "
             f"keywords={{\"LAW OF BOTTOM FRICTION\": 4}} - after "
             f"describe_keywords(module=\"{body.MODULE}\", query=...) names it "
-            f"with its help, its choices and that default.\n"
+            f"with its help, its choices and that default. The solve is "
+            f"partitioned across PARALLEL PROCESSORS, stated the same way; a "
+            f"count past this box's cores is refused.\n"
             f"Stated by this deck (override any of them by name): "
             f"{self._stated_keywords()}.")
 

@@ -25,7 +25,7 @@ def _workflow():
 
 def _norm(**kw):
     base: dict[str, Any] = {
-        "release": None, "cores": None, "input_mode": "auto",
+        "release": None, "input_mode": "auto",
     }
     base.update(kw)
     return asyncio.run(_normalized(_workflow(), base))
@@ -96,11 +96,10 @@ def test_a_malformed_release_point_refuses_it_never_falls_back():
 
 def test_a_core_count_past_the_box_refuses_by_name():
     """Refused, never cut down to fit: the caller is told the box's own count."""
-    from trid3nt_server.workflows.runtime.levers import BOX_CORES
+    from trid3nt_server.workflows.telemac.authoring.staged_check import BOX_CORES
 
-    supplied, err = _norm(cores=BOX_CORES + 1)
-    assert "cores" not in supplied
-    assert "cores" in err and str(BOX_CORES) in err
+    _supplied, err = _norm(keywords={"PARALLEL PROCESSORS": BOX_CORES + 1})
+    assert "PARALLEL PROCESSORS" in err and str(BOX_CORES) in err
 
 
 def test_declared_bounds_keep_the_source_inside_the_domain():
@@ -144,11 +143,11 @@ def test_the_inflow_flow_is_the_discharge_slots_value_and_not_a_param():
 
 
 def test_the_params_are_the_questions_own_and_the_deck_states_the_keywords():
-    """No keyword twin, no domain twin, no lever restated: the dictionary
-    describes the clock, the roughness, the cadence, the wind and the rain, the
-    slots describe the water, and the runtime declares the granularity, the
-    moment and the box."""
-    from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
+    """No keyword twin and no domain twin: the dictionary describes the clock,
+    the roughness, the cadence, the wind, the rain and the processors, the slots
+    describe the water, the mesh ask declares the granularity, the engine the
+    moment and the bed its frame."""
+    from seated import SEATED
     from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
         PARAMS,
     )
@@ -168,10 +167,10 @@ def test_the_params_are_the_questions_own_and_the_deck_states_the_keywords():
     # The window this question is asked over is the module's own keyword, in the
     # seconds it reads, and the settle is built off the same statement.
     assert STEERING.ASSERTED["DURATION"] == 3600.0
-    # No lever is restated here, so all four are seated at the end, in the order
-    # the runtime declares them.
+    # None is restated here, so all three are seated at the end, in the order
+    # the engine seats them.
     seated = [p.name for p in _workflow().params]
-    assert seated[-len(LEVER_NAMES):] == list(LEVER_NAMES)
+    assert seated[-len(SEATED):] == list(SEATED)
 
 
 def test_the_data_body_is_the_slots_and_the_classes_they_need():

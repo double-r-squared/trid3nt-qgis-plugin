@@ -13,7 +13,8 @@ A template states NO MESH RECIPE either, unless the question cannot be asked
 over the one the workflow builds from those slots: `rain_on_grid` triangulates a
 catchment as a band, `agitation` punches a structure out of the water, and those
 two state their own. Every other package lets the workflow own its stages - the
-recipe, the seated settle, the runtime levers - and states only what differs.
+recipe, the seated settle, the inputs the mesh ask, the engine and the bed
+declare - and states only what differs.
 
 NAMED FOR THE QUESTION, NEVER FOR THE BODY. A template solves over any water:
 drawn, picked, fetched or purely surveyed, with a river reach as ONE way to fill

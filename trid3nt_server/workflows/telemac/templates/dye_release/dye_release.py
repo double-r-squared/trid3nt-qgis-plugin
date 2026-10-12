@@ -10,7 +10,6 @@ from trid3nt_server.workflows.runtime import (
     Data, register_workflow, Param,
 )
 from trid3nt_server.inputs import point_arg, Point
-from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, series
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Boundaries, Sources, TracerNames,
@@ -200,6 +199,5 @@ telemac_dye_release = register_workflow(
         point_arg("release", tool="telemac_dye_release",
                   prompt="Click on the water where the substance enters it",
                   code="TELEMAC_PARAMS_INVALID"),
-        event_time(),
     ),
 )

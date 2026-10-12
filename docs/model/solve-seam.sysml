@@ -623,21 +623,20 @@ package SolveSeam {
 
     requirement def OnePartitionStatedTwice {
         doc /*
-        A solve is sized in CORES and nothing else: one runtime lever holding
-        the number itself, whose default is the module's own PARALLEL
-        PROCESSORS value and which refuses by name past the cores this box has
-        rather than being cut down to fit. The engine is told the number by
-        that same keyword and the worker's launcher is handed it too, because a
-        count the launcher partitions on that the steering file does not state
-        is a run whose deck describes a partition it never had.
+        A solve is sized in CORES and nothing else, and the count is the
+        module's own PARALLEL PROCESSORS keyword: no template carries a second
+        name for it, the dictionary's value is the default, and a count past
+        the cores this box has refuses by name rather than being cut down to
+        fit. A coupled run is partitioned once, so the bare keyword is the
+        carrier's. The worker's launcher is handed the number the deck states,
+        because a count the launcher partitions on that the steering file does
+        not state is a run whose deck describes a partition it never had.
 
         A partitioned case therefore takes the module's own CLI launcher, which
         runs the partitioner and mpirun: the stepped telapy arm drives one
         process with no partitioner behind it, so a core count on that arm
         would be a number the deck states and the run never gets. One core is
-        the keyword's own default and states nothing at all, and a module whose
-        dictionary spells no processor keyword says on the card that it runs
-        serial rather than leaving the lever looking like it did something.
+        the keyword's own default and states nothing at all.
         */
     }
 
@@ -986,11 +985,9 @@ package SolveSeam {
     verify requirement OnePartitionStatedTwice by
         "tests/telemac/test_telemac_cores.py::test_a_count_past_this_box_refuses_by_name";
     verify requirement OnePartitionStatedTwice by
-        "tests/telemac/test_telemac_cores.py::test_the_stated_count_states_the_keyword_the_engine_reads_it_under";
+        "tests/telemac/test_telemac_cores.py::test_the_stated_count_is_the_count_the_solve_runs_on";
     verify requirement OnePartitionStatedTwice by
         "tests/telemac/test_telemac_cores.py::test_the_case_carries_the_same_count_the_steering_file_states";
-    verify requirement OnePartitionStatedTwice by
-        "tests/telemac/test_telemac_cores.py::test_a_module_that_spells_no_processor_keyword_says_so_on_the_card";
     verify requirement OnePartitionStatedTwice by
         "tests/telemac/test_telemac_cores.py::test_the_direct_solver_runs_serial_whatever_was_asked_for";
     verify requirement OnePartitionStatedTwice by

@@ -10,7 +10,6 @@ from trid3nt_server.workflows.runtime import (
     Data, register_workflow, Param,
 )
 from trid3nt_server.inputs import point_arg, Point
-from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, series
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Boundaries, Sources,
@@ -192,6 +191,5 @@ telemac_micropollutant_release = register_workflow(
         point_arg("monitoring_point", tool="telemac_micropollutant_release",
                   prompt="Click where downstream to read the dissolved history",
                   code="TELEMAC_PARAMS_INVALID"),
-        event_time(),
     ),
 )

@@ -636,7 +636,7 @@ package DataSeam {
 
     part frameLever : VerticalFrame {
         doc /*
-        code: trid3nt_server/workflows/runtime/levers.py
+        code: trid3nt_server/inputs/slots.py
         */
     }
 
@@ -911,8 +911,9 @@ package DataSeam {
     requirement def TheRunHasOneVerticalFrame {
         doc /*
         A run counts every elevation it ingests from ONE zero, and that zero is
-        the RUNTIME's: a lever beside the core count, NAVD88 by default,
-        never a row a question writes. A template that named its own datum would
+        the BED's: its type declares the frame beside its row, NAVD88 by
+        default, and the level and every matched need read that one - never a
+        row a question writes. A template that named its own datum would
         make the frame a property of the question rather than of the run, and
         two questions over one water body would then answer on two axes.
 
@@ -1042,7 +1043,7 @@ package DataSeam {
         modifiers are absence and the sentence an absence carries. A need
         is one class of the coarse data-class vocabulary; the window and the
         frame it is matched under are the RUN's - the deck's own duration from
-        the moment the run asks at, the vertical lever - and the place is the
+        the moment the run asks at, the frame the bed states - and the place is the
         domain's centre unless the row states the point it is asked at.
         WHAT OF THE CLASS the row asks for is the word the answering
         source publishes it under: the published variable a record is a

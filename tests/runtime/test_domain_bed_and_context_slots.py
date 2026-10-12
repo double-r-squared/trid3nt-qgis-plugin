@@ -21,11 +21,6 @@ from trid3nt_server.workflows.runtime import (
     tool,
 )
 from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LINE, OBSERVE
-from trid3nt_server.workflows.runtime.levers import (
-    LEVER_NAMES,
-    LEVERS,
-    with_levers,
-)
 
 
 def test_a_domain_row_is_one_slot_however_it_is_filled():
@@ -238,47 +233,30 @@ def test_a_hard_producer_row_still_refuses_when_its_source_is_empty(monkeypatch)
         asyncio.run(fill._produce(env, data_rows(DATA)[0]))
 
 
-def test_the_runtime_declares_the_levers_a_template_no_longer_restates():
-    # The CLOCK is not among them: DURATION is a keyword telemac2d and telemac3d
-    # both carry, so the deck states it and the user overrides it by that name.
-    assert LEVER_NAMES == ("mesh_resolution_m", "event_time", "cores",
-                           "vertical_frame")
-    seated = with_levers((), LEVER_NAMES)
-    assert [p.name for p in seated] == list(LEVER_NAMES)
-    # a lever nothing takes is never seated: a param with no reader is not one
-    assert with_levers(()) == ()
+def _skeleton(params: Any = (), data: Any = ()) -> Any:
+    from types import SimpleNamespace
+
+    from trid3nt_server.workflows.runtime import Workflow
+
+    return Workflow(metadata=SimpleNamespace(name="probe", engine=""),
+                    params=params, template=SimpleNamespace(), data=data)
 
 
-def test_a_templates_own_row_wins_over_the_lever_of_that_name():
-    own = Param(name="mesh_resolution_m", default=25.0,
-                bounds=(3.0, 500.0), desc="coarser: this answer is reach-scale")
-    seated = with_levers((own,), LEVER_NAMES)
-    assert [p.name for p in seated] == ["mesh_resolution_m", "event_time",
-                                        "cores", "vertical_frame"]
-    assert seated[0].default == 25.0
+def test_the_runtime_declares_no_input_of_its_own():
+    """A skeleton run with no typed row carries exactly what its template wrote."""
+    assert _skeleton().params == ()
+    own = Param(name="depth_m", default=2.0, bounds=(0.1, 50.0), desc="a depth")
+    assert _skeleton(params=(own,)).params == (own,)
 
 
-def test_a_lever_states_only_this_questions_opinion_of_it():
-    """The row a question writes for a lever it differs on is the DIFFERENCE:
-    the type, the unit and the help are the runtime's and are not restated."""
-    from trid3nt_server.workflows.runtime import lever
+def test_a_bed_row_declares_the_frame_and_a_templates_own_row_wins():
+    class DATA:
+        bed = Data(BED).need("bathymetry")
 
-    own = lever("mesh_resolution_m", default=25.0, bounds=(3.0, 500.0))
-    assert (own.name, own.units) == ("mesh_resolution_m", "m")
-    assert (own.default, own.bounds) == (25.0, (3.0, 500.0))
-    assert own.desc == next(row.desc for row in LEVERS
-                            if row.name == "mesh_resolution_m")
-    with pytest.raises(DeclarationError, match="is not a runtime lever"):
-        lever("friction_law", default=3)
-    # The clock was a lever until the module's own DURATION was read as what it
-    # is; asking for it by the old name says so rather than answering.
-    with pytest.raises(DeclarationError, match="is not a runtime lever"):
-        lever("sim_duration_s", default=600.0)
-
-
-def test_a_lever_the_runtime_does_not_declare_refuses_by_name():
-    with pytest.raises(DeclarationError, match="is not a runtime lever"):
-        with_levers((), ("friction_law",))
+    seated, = _skeleton(data=DATA).params
+    assert (seated.name, seated.default) == ("vertical_frame", "NAVD88")
+    own = Param(name="vertical_frame", default="IGLD85", desc="the lakes' datum")
+    assert _skeleton(params=(own,), data=DATA).params == (own,)
 
 
 _SITES = {"type": "FeatureCollection", "features": [

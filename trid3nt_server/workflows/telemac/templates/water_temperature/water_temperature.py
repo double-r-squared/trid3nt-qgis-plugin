@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs import point_arg, Point
-from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LEVEL, OBSERVE, WEATHER
+from trid3nt_server.tools.mesh.recipe import RESOLUTION
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Param, lever,
+    Data, register_workflow, Param,
 )
 from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, series
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
@@ -43,8 +44,8 @@ class PARAMS:
              "Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, "
              "'lat,lon' or a point layer. Geocode a place name first")
 
-    mesh_resolution_m = lever(
-        "mesh_resolution_m",
+    mesh_resolution_m = replace(
+        RESOLUTION,
         desc="Target element edge length the domain is triangulated at; a "
              "surface heat budget is divided by the local DEPTH, so what this "
              "has to resolve is how deep the water is rather than its planform")
@@ -184,6 +185,5 @@ telemac_water_temperature = register_workflow(
         point_arg("station", tool="telemac_water_temperature",
                   prompt="Click on the water where the temperature should be read",
                   code="TELEMAC_PARAMS_INVALID"),
-        event_time(),
     ),
 )

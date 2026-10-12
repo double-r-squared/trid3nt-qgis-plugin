@@ -31,8 +31,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `spill_duration_s` | s | 300.0 | Finite pulse injection window |
 | `oil_type` | - | light_crude | Which preset was spilled: light_crude \| diesel \| heavy_fuel - the module's own composition, density and viscosity. Crude runs as light_crude, gasoline and petrol as diesel, bunker as heavy_fuel |
 | `oil_release_step` | - | 600 | The solver step the floats are released at, compiled into the module's own release routine; it lets the flow field establish before the slick is put on it |
-| `mesh_resolution_m` | m | optional | Target element edge or cell length the domain is resolved at. The granularity is the USER's lever and nothing refuses one: absent, the mesh resolves the finest data it stands on, and the card states the node count it comes to |
+| `mesh_resolution_m` | m | optional | Target element edge or cell length the mesh is built at. The granularity is the USER's and nothing refuses one: absent, the mesh resolves the finest data it stands on, and the card states the node count it comes to |
 | `event_time` | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
-| `cores` | - | optional | How many cores the solve is partitioned across. Absent, the module's own processors keyword stands; a count past this box's cores is refused rather than cut down, and an engine that solves on one core says so on the card |
-| `vertical_frame` | - | NAVD88 | Vertical datum this run counts every elevation from - the bed under it and the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
+| `vertical_frame` | - | NAVD88 | Vertical datum the bed's elevations are counted from, and with them the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
 

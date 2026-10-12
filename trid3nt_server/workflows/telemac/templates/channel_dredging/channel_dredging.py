@@ -10,7 +10,6 @@ from trid3nt_server.workflows.runtime import (
     Data, register_workflow, Param,
 )
 from trid3nt_server.inputs import point_arg, Point
-from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.telemac.modules import GAIA, T2D, mass_balance
 from trid3nt_server.workflows.telemac.modules.gaia import (
     Dig, Dredging, RESULT_FILENAME,
@@ -239,6 +238,5 @@ telemac_channel_dredging = register_workflow(
         point_arg("seed_point", tool="telemac_channel_dredging",
                   prompt="Click on the channel this dredge works in",
                   code="TELEMAC_PARAMS_INVALID"),
-        event_time(),
     ),
 )

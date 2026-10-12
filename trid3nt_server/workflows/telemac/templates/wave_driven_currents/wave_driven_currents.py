@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs import point_arg, Point
-from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT, LEVEL, WAVE
+from trid3nt_server.tools.mesh.recipe import RESOLUTION
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Param, lever,
+    Data, register_workflow, Param,
 )
 from trid3nt_server.tools.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.telemac.modules import T2D, WAC, series
@@ -45,8 +46,8 @@ class PARAMS:
              "and the wave height are charted at the node of the mesh it "
              "settles onto, so put it in the surf zone you are asking about")
 
-    mesh_resolution_m = lever(
-        "mesh_resolution_m",
+    mesh_resolution_m = replace(
+        RESOLUTION,
         desc="Target element edge length the water is triangulated at; the "
              "longshore current is driven across the surf zone, so what this "
              "has to resolve is the width of the breaking band")
@@ -231,6 +232,5 @@ tomawac_wave_driven_currents = register_workflow(
         point_arg("station", tool="tomawac_wave_driven_currents",
                   prompt="Click on the water where the current should be read",
                   code="TELEMAC_PARAMS_INVALID"),
-        event_time(),
     ),
 )

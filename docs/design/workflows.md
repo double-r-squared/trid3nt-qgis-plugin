@@ -47,6 +47,16 @@ A seated value carries ONE origin - user, derived, producer or template
 (`Origin`, in the contracts) - and the card row, the provenance entry and the
 journal row all write that word.
 
+The runtime declares no row of its own. A template carries, without restating
+them, the rows whoever reads them declares: `mesh_resolution_m` is the mesh
+ask's (`RESOLUTION`, `tools/mesh/recipe.py`), seated where the ask names it;
+`event_time` is the engine's, read through the engine's own coercion;
+`vertical_frame` is the bed's, stated on its type (`Slot.states`). A template's
+own row of the same name wins and keeps its place. How many cores a solve is
+partitioned across is no row at all: it is the module's own PARALLEL PROCESSORS
+keyword, stated on the call like any other, the carrier's on a coupled run, and
+a count past the box's cores refuses by name.
+
 `DATA` (`workflows/runtime/data.py`) - one declared ARTIFACT per row. A row
 STATES its slot as its type - `Data(BED)`, one of the types in
 `inputs/slots.py` - and is named freely; a row that states none is a plain one,
@@ -90,8 +100,9 @@ the weather reads station points and the rain a record, so a gridded product
 serving the same class is excluded before it is fetched. The match (`tools/search/match.py`) filters the rows on
 class and place, holds a series source to the run's window, ranks on the cell
 against the mesh, on recency and on the native datum, and calls the survivors
-in rank order. The window comes off `event_time` and the frame off the vertical
-lever, so a template states neither.
+in rank order. The window comes off `event_time`, which the engine declares,
+and the frame off `vertical_frame`, which the bed declares, so a template states
+neither.
 
 ## The alignment - one record onto a reader's clock
 
@@ -137,9 +148,9 @@ engine's own time step.
 
 ## The vertical frame
 
-A run counts every elevation it ingests from ONE zero: a runtime lever
-beside the compute class, NAVD88 by default, never a row a question
-writes. The two ELEVATION slots - the bed under the water and the level
+A run counts every elevation it ingests from ONE zero: `vertical_frame`,
+which the bed's type declares beside its row, NAVD88 by default, never a
+row a question writes; the level and every matched need read the bed's. The two ELEVATION slots - the bed under the water and the level
 over it - are read on it. A source published on another frame reaches it
 through a shift somebody MEASURED, in one order: the shift the source
 publishes about itself (a district's project datum is stated in the

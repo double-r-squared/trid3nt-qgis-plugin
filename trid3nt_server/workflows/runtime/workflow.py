@@ -25,7 +25,6 @@ from trid3nt_server.inputs.user_input import WireArgsError
 from . import journal
 from .data import DataDecl, data_rows
 from .errors import DeclarativeError, said
-from .levers import with_levers
 from .params import Param, ResolvedParams, param_rows
 from .resolution import SensitivityDecl, sensitivity_notes
 from .resolver import merge_provenance, provenance_entries
@@ -67,25 +66,28 @@ class Workflow:
     #: The rows every template of this engine carries without restating them.
     seated: tuple[DataDecl, ...] = ()
 
-    @classmethod
-    def levers(cls) -> tuple[str, ...]:
-        """WHICH runtime levers a declaration of this workflow takes without
-        restating them: the stages that READ a lever are this class's, so a
-        workflow that builds none seats none."""
-        return ()
+    def inputs(self) -> tuple[Param, ...]:
+        """The params a declaration of this workflow carries without restating
+        them: what the type of each of its rows states beside itself. An engine
+        adds its own; the skeleton declares none."""
+        return tuple(Param(name=name, default=default, desc=desc)
+                     for slot in dict.fromkeys(row.slot for row in self.data
+                                               if row.slot is not None)
+                     for name, default, desc in slot.states)
 
     def __init__(self, *, metadata: Any, params: Any,
                  template: Any, data: Any = (),
                  sensitivity: Sequence[tuple[str, str]] | SensitivityDecl = (),
-                 coerce: Sequence[Callable[[dict], Mapping[str, Any]]] = (),
-                 levers: Sequence[str] = ()) -> None:
+                 coerce: Sequence[Callable[[dict], Mapping[str, Any]]] = ()) -> None:
         self.metadata = metadata
         self.name = metadata.name
-        #: Declared PARAMS rows in class-body order, plus each runtime lever taken rather than restated.
-        self.params = with_levers(param_rows(params), levers)
         self.data = data_rows(data) + self.seated
         #: The template MODULE: STEERING, OUTPUTS, CAPTIONS and its files are read off its own names.
         self.template = template
+        #: Declared PARAMS rows in class-body order, then each input a row's type or the engine declares; a template's own row wins.
+        self.params = param_rows(params)
+        stated = {prm.name for prm in self.params}
+        self.params += tuple(prm for prm in self.inputs() if prm.name not in stated)
         #: What the template calls every published variable and every DATA row it reads into; one dict.
         self.captions = dict(getattr(template, "CAPTIONS", {}) or {})
         #: Published reads in a resolution-sensitive class; see ``resolution.py``.
@@ -339,7 +341,6 @@ def register_workflow(
     *,
     sensitivity: Sequence[tuple[str, str]] | SensitivityDecl = (),
     coerce: Sequence[Callable[[dict], Mapping[str, Any]]] = (),
-    levers: Sequence[str] | None = None,
     **register_kwargs: Any,
 ) -> Callable[..., Any]:
     """Generate and register the tool for a declared workflow.
@@ -350,12 +351,8 @@ def register_workflow(
     params = param_rows(getattr(template, "PARAMS"))
     data = getattr(template, "DATA", ())
     doc = getattr(template, "DOC", None)
-    # Which runtime levers the declaration takes without restating them; the workflow class answers.
-    if levers is None:
-        levers = facade.levers()
     workflow = facade(metadata=metadata, params=params, template=template,
-                      data=data, sensitivity=sensitivity, coerce=coerce,
-                      levers=levers)
+                      data=data, sensitivity=sensitivity, coerce=coerce)
     params = workflow.params
 
     async def _run(**wire: Any) -> Any:

@@ -10,7 +10,6 @@ from trid3nt_server.workflows.runtime import (
     Data, register_workflow, Param,
 )
 from trid3nt_server.inputs import point_arg, Point
-from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.workflows.telemac.modules import GAIA, T2D, series
 from trid3nt_server.workflows.telemac.modules.gaia import RESULT_FILENAME
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
@@ -185,6 +184,5 @@ telemac_sediment_plume = register_workflow(
         point_arg("release", tool="telemac_sediment_plume",
                   prompt="Click on the water where the sediment enters it",
                   code="TELEMAC_PARAMS_INVALID"),
-        event_time(),
     ),
 )

@@ -15,7 +15,7 @@ from pathlib import Path
 import yaml
 
 from trid3nt_server.workflows.telemac.workflow import stated
-from trid3nt_server.workflows.runtime.levers import LEVER_NAMES
+from seated import SEATED
 from trid3nt_server.workflows.telemac.templates.channel_dredging import (
     channel_dredging,
 )
@@ -90,16 +90,16 @@ def test_the_bed_the_dredger_cuts_is_stated_as_the_module_s_own_keywords():
     assert slots["bed"] == {"gradation": None, "presets": None}
 
 
-def test_the_runtime_levers_are_seated_and_no_baseline_param_is_restated():
+def test_the_seated_inputs_are_carried_and_no_baseline_param_is_restated():
     declared = [prm.name for prm in _WORKFLOW.params]
-    # Every lever is on the sheet; the ones this question does not state for
-    # itself are seated at the end, in the order the runtime declares them, and
+    # Every seated input is on the sheet; the ones this question does not state for
+    # itself are seated at the end, in the order the engine seats them, and
     # one it differs on keeps its own place and its own opinion of the value.
     from trid3nt_server.workflows.runtime import param_rows
 
     own = [prm.name for prm in param_rows(channel_dredging.PARAMS)]
-    assert set(LEVER_NAMES) <= set(declared)
-    seated = [name for name in LEVER_NAMES if name not in own]
+    assert set(SEATED) <= set(declared)
+    seated = [name for name in SEATED if name not in own]
     assert declared[-len(seated):] == seated
     assert _DISSOLVED.isdisjoint(declared)
 

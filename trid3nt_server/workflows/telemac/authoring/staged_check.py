@@ -7,18 +7,20 @@ solve that stops inside Fortran. Every clause reads the staged artifacts and ref
 from __future__ import annotations
 
 import logging
+import os
 import re
 import tempfile
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from trid3nt_server.workflows.runtime.levers import BOX_CORES
-
 from ..errors import TelemacError
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.staged_check")
 
-__all__ = ["check_staged_run", "read_steering"]
+__all__ = ["BOX_CORES", "check_staged_run", "read_steering"]
+
+#: Cores this box can partition a solve across; a count past it is refused by name.
+BOX_CORES: int = os.cpu_count() or 1
 
 # The keyword a partitioned run states its core count under.
 _PROCESSORS = "PARALLEL PROCESSORS"

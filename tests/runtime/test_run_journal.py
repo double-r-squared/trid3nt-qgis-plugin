@@ -38,8 +38,7 @@ def _record(**overrides):
         fill={"DURATION": {"value": 7200.0, "from": "template: telemac_do_sag"},
               "FRICTION_COEFFICIENT": {"value": 33.0,
                                        "from": "producer: friction"}},
-        sheet=[_row("reach_length_km", 15.0, origin="user", units="km"),
-               _row("cores", 2)],
+        sheet=[_row("reach_length_km", 15.0, origin="user", units="km")],
         provenance=[SimpleNamespace(param="discharge_cms", value=12.5,
                                     basis="producer", note="NWM cycle 2026-08-19T00Z",
                                     real_source_if_any="national_water_model")],
@@ -104,12 +103,10 @@ def test_the_mesh_field_carries_the_content_key_and_the_run_that_built_it():
     assert rec["wall_seconds"] == 91.4
 
 
-def test_the_core_count_is_lifted_off_the_sheet_row_that_declares_it():
-    assert _record()["cores"] == 2
-
-
-def test_a_run_with_no_cores_row_records_none_rather_than_guessing():
-    assert _record(sheet=[_row("reach_length_km", 15.0)])["cores"] is None
+def test_the_record_restates_no_core_count_beside_the_decks_own_keyword():
+    """The count a run was partitioned across is a keyword of the solved deck,
+    so the record's ``fill`` carries it and no second field does."""
+    assert "cores" not in _record()
 
 
 # --- a long list is summarized, never copied --------------------------------- #
