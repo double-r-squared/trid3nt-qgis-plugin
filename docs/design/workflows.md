@@ -76,14 +76,18 @@ engine owns. The weather is one station - the nearest whose record brackets the
 run's window, ranked from the point the row names or else the middle of the
 domain - with a series per quantity its network reports and the reason beside
 any it is short of; the rain is the depth per interval at the record's own
-cadence; the sea state is a height, a period and the bearing the waves come
+cadence - the median gap between its stamps - and a gap of one and a half
+cadences or more is a hole the slot refuses, naming the stamps either side; the
+sea state is a height, a period and the bearing the waves come
 from. The engine keeps only its reading of them: which quantities its modules
 read, the mnemonic or keyword each becomes, the one clock its table is written
 on, and the refusal by name of a column it reads that the station is short of.
 
 `.need` names a CLASS of the coverage vocabulary, never a fetcher; `geometry=`
 is which SHAPE of that class is asked for, a filter on the match, never a
-conversion. The match (`tools/search/match.py`) filters the rows on
+conversion. A slot whose ingestion reads one shape states it once (`reads=`):
+the weather reads station points and the rain a record, so a gridded product
+serving the same class is excluded before it is fetched. The match (`tools/search/match.py`) filters the rows on
 class and place, holds a series source to the run's window, ranks on the cell
 against the mesh, on recency and on the native datum, and calls the survivors
 in rank order. The window comes off `event_time` and the frame off the vertical

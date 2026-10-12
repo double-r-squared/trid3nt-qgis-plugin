@@ -12,7 +12,7 @@ import datetime as dt
 import logging
 import math
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from .temporal import (
     Series,
@@ -144,11 +144,15 @@ def _samples(csv_text: str) -> list[tuple[str, float]]:
 
 def _cadence(rows: list[tuple[str, float]]) -> dt.timedelta:
     """The spacing a record SPEAKS at: the median gap, so one hole does not coarsen it."""
-    stamps = [taken for taken in (_moment(stamp) for stamp, _ in rows)
-              if taken is not None]
-    gaps = sorted(later - earlier for earlier, later in zip(stamps, stamps[1:])
+    return _median_gap([taken for taken in (_moment(stamp) for stamp, _ in rows)
+                        if taken is not None]) or _LONE_CADENCE
+
+
+def _median_gap(instants: Sequence[Any]) -> Any:
+    """The median spacing of instants in order, ``None`` where no two differ."""
+    gaps = sorted(later - earlier for earlier, later in zip(instants, instants[1:])
                   if later > earlier)
-    return gaps[len(gaps) // 2] if gaps else _LONE_CADENCE
+    return gaps[len(gaps) // 2] if gaps else None
 
 
 def _pick(rows: list[tuple[str, float]],

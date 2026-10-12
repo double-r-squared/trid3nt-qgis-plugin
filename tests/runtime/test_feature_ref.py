@@ -19,7 +19,7 @@ from trid3nt_server.workflows.runtime import fill
 from trid3nt_server.workflows.runtime import Data
 from seated import resolve_params
 from trid3nt_server.workflows.runtime.errors import DeclarationError
-from trid3nt_server.inputs.slots import DOMAIN, OBSERVE
+from trid3nt_server.inputs.slots import DOMAIN, OBSERVE, RAIN, WEATHER
 
 
 def _row(**need):
@@ -76,3 +76,27 @@ async def test_the_need_carries_the_kind_the_template_stated() -> None:
     need = await fill._need(env, _row(kind="basin"), "hydrography",
                                    "domain")
     assert need.of == "basin"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("slot, data_class, reads", [
+    (WEATHER, "weather forcing", {"fetch_asos_metar", "fetch_raws_weather"}),
+    (RAIN, "precipitation series", {"fetch_aorc_precip"}),
+])
+async def test_a_slot_asks_only_the_sources_its_ingestion_reads(
+        slot, data_class, reads) -> None:
+    """A gridded product serving the class is excluded before it is fetched: the
+    station reader takes points and the hyetograph reader a record."""
+    import trid3nt_server.tools  # noqa: F401 - registers the fetcher rows
+    from trid3nt_server.tools.search.match import match, sources_with_coverage
+
+    row = dataclasses.replace(Data(slot).need(data_class), name="row")
+    need = dataclasses.replace(
+        await fill._need(await _env(), row, data_class, "row"),
+        lon=-122.72, lat=45.57, opens="2024-01-10T00:00:00Z",
+        until="2024-01-11T00:00:00Z")
+    ranked = match(need, sources_with_coverage())
+    assert {option.fetcher for option in ranked.rows
+            if not option.excluded} == reads
+    assert any("this slot reads its class as" in option.excluded
+               for option in ranked.rows)

@@ -46,6 +46,9 @@ class Slot:
     #: The caller may state the value as the NUMBER itself - the level the
     #: water opens at, the depth of a pond - rather than a layer to read it off.
     number: bool = False
+    #: The one shape this type's ingestion reads a matched source as, "" for any: a
+    #: source publishing its class in another shape is never asked.
+    reads: str = ""
 
     @property
     def ingest(self) -> Callable[..., Any] | None:
@@ -95,11 +98,13 @@ EXTENT = Slot("extent", ingestion="extent",
 #: The record of the air over the domain: one station's series, every quantity its
 #: network reports. Which of them a solve reads is its engine's.
 WEATHER = Slot("weather", ingestion="weather",
-               classes=frozenset({"weather forcing"}), record=True)
+               classes=frozenset({"weather forcing"}), record=True,
+               reads="point")
 
 #: The rain that falls on the domain: the depth per interval a record reports.
 RAIN = Slot("rain", ingestion="rain",
-            classes=frozenset({"precipitation series"}), record=True)
+            classes=frozenset({"precipitation series"}), record=True,
+            reads="record")
 
 #: The sea state at the open edge: one record, several columns, measured somewhere near.
 WAVE = Slot("wave", ingestion="wave", classes=frozenset({"wave series"}), record=True)

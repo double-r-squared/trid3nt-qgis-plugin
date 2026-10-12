@@ -1153,9 +1153,15 @@ package DataSeam {
         that one lacks. Every quantity its network reports is kept as a series
         of its own, so an hour one instrument missed costs the others nothing;
         a quantity the station is short of over the window is named with why.
-        The rain is the depth per interval at the record's OWN cadence, each
-        instant opening the interval its depth fell over. The sea state is a
-        height, a period and the bearing the waves come FROM.
+        The rain is the depth per interval at the record's OWN cadence - the
+        median gap between its stamps - each instant opening the interval its
+        depth fell over; a gap of one and a half cadences or more is a HOLE,
+        refused naming the stamps either side. The sea state is a height, a
+        period and the bearing the waves come FROM.
+
+        A SLOT ASKS ONLY THE SOURCES ITS INGESTION READS: the weather reads
+        station points and the rain a record, so a gridded product serving the
+        same class is excluded by the match and never fetched.
 
         THE ENGINE holds only its reading of them: which quantities this run's
         modules read, the mnemonic or keyword each becomes, and the one clock
@@ -1618,6 +1624,10 @@ package DataSeam {
         "tests/telemac/test_telemac_atmosphere.py::test_a_reading_one_column_missed_is_read_between_that_column_s_neighbours";
     verify requirement ARecordSlotHoldsWhatWasMeasured by
         "tests/inputs/test_rain.py::test_the_interval_is_the_record_s_own_cadence";
+    verify requirement ARecordSlotHoldsWhatWasMeasured by
+        "tests/inputs/test_rain.py::test_the_interval_is_the_median_gap_and_a_hole_refuses_naming_its_stamps";
+    verify requirement ARecordSlotHoldsWhatWasMeasured by
+        "tests/runtime/test_feature_ref.py::test_a_slot_asks_only_the_sources_its_ingestion_reads";
     verify requirement ARecordSlotHoldsWhatWasMeasured by
         "tests/telemac/test_telemac_storm.py::test_an_ingested_record_is_written_at_its_own_cadence_from_the_run_s_zero";
     verify requirement ARecordSlotHoldsWhatWasMeasured by

@@ -9,12 +9,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
-from .observation import ObservationError, convert
+from .observation import ObservationError, _median_gap, convert
 from .temporal import Series, TemporalShapeError
 
 __all__ = ["Rain", "rain"]
 
 _CODE = "RAIN_INVALID"
+
+#: How many cadences a gap between two stamps spans before it is a HOLE: at one and a
+#: half a report is missing, whatever jitter the stamps carry.
+_HOLE = 1.5
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,5 +65,16 @@ def rain(source: Any, *, series_field: str = "precip_mm", column_units: Any = No
                      strict=True)), units="mm", at=at)
     except (ValueError, TemporalShapeError) as why:
         raise ObservationError(code, f"{label} states no hyetograph: {why}") from why
-    return Rain(series, min(b - a for a, b in zip(series.times_s,
-                                                  series.times_s[1:])))
+    import pandas as pd
+
+    cadence = _median_gap(series.times_s)
+    stamps = sorted(pd.to_datetime(list(source["times"]), utc=True))
+    for before, after in zip(stamps, stamps[1:]):
+        if (after - before).total_seconds() >= _HOLE * cadence:
+            raise ObservationError(
+                code, f"{label} has a hole: it reports every {cadence:g} s and "
+                f"states nothing between {before:%Y-%m-%d %H:%M} and "
+                f"{after:%Y-%m-%d %H:%M} UTC. A depth nobody reported is not a "
+                "dry interval; narrow the window to one side of the hole or "
+                "pick a source that covers it.")
+    return Rain(series, cadence)

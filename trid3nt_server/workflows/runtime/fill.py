@@ -315,7 +315,7 @@ async def _need(env: _Env, decl: DataDecl, data_class: str,
     lon, lat = _place(seed)
     opens = env.params.value_of("event_time") if env.params else None
     return Need(slot=label, data_class=data_class, lon=lon, lat=lat,
-                geometry=decl.geometry or "",
+                geometry=decl.geometry or getattr(decl.slot, "reads", ""),
                 opens=str(opens) if opens else None,
                 until=_closes(opens, env.window_s), frame=run_frame(env.params),
                 mesh_m=_mesh_m(env), pick=_pick(env, decl, data_class),

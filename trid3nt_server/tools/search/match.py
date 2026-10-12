@@ -197,7 +197,10 @@ def _wrong_shape(name: str, need: Need) -> str:
 
     spec = _SPEC_REGISTRY.get(name)
     output = getattr(spec, "output", None)
-    published = str((getattr(output, "style", None) or {}).get("geometry") or "")
+    # A raster or a record has no geometry to state: what it publishes is its layer type.
+    kind = str(getattr(output, "layer_type", "") or "")
+    published = str((getattr(output, "style", None) or {}).get("geometry")
+                    or (kind if kind != "vector" else ""))
     if not published or published == _SHAPE_WORD.get(need.geometry, need.geometry):
         return ""
     return (f"publishes a {published} layer and this slot reads its class as a "

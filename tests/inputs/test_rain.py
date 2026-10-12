@@ -25,6 +25,18 @@ def test_the_interval_is_the_record_s_own_cadence():
     assert found.peak_mm_per_s == pytest.approx(4.0 / 900.0)
 
 
+def test_the_interval_is_the_median_gap_and_a_hole_refuses_naming_its_stamps():
+    stamps = [f"2020-06-01T{hour:02d}:00" for hour in (0, 1, 2, 3, 4)]
+    stamps[2] = "2020-06-01T01:50"
+    jittered = rain({"times": stamps, "precip_mm": [1.0] * 5, "units": "mm"})
+    assert jittered.interval_s == 3600.0
+    with pytest.raises(ObservationError,
+                       match="2020-06-01 01:00 and 2020-06-01 04:00") as refused:
+        rain({"times": [stamps[0], stamps[1], *stamps[4:], "2020-06-01T05:00"],
+              "precip_mm": [1.0] * 4, "units": "mm"})
+    assert refused.value.error_code == "RAIN_INVALID"
+
+
 def test_every_series_reads_zero_at_the_moment_the_run_opens_at():
     found = rain({"times": _QUARTERS, "precip_mm": [1.0, 4.0, 2.0],
                   "units": "mm"}, at="2020-06-01T00:15:00Z")
