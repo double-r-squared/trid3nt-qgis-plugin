@@ -403,7 +403,7 @@ def _context_doc(data: Sequence[DataDecl],
 def _wire_signature(params: Sequence[Param],
                     data: Sequence[DataDecl] = ()) -> tuple[inspect.Signature, dict]:
     """The generated tool's signature: declared params, context slots, aliases, controls.
-    A ``**`` absorber keeps an unknown key from dead-ending a call."""
+    The ``**`` absorber carries an unknown key to the fill, which refuses it by name; without it the dispatch drops the key unsaid."""
     # A required param's annotation admits no None, which is what lists it in the tool schema's ``required``.
     entries: list[tuple[str, Any, Any]] = [
         (prm.name, prm.wire_type if prm.required else prm.wire_type | None, None)

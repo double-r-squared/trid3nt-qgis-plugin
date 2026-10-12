@@ -1060,6 +1060,20 @@ package SteeringSurface {
         still water, a settled station the spectrum printout point. The module
         states which, no template line routes them, a value the template
         states wins, and an absent input fills nothing.
+
+        The MOMENT a run opens at is one of them, in each module's own
+        spelling and in UTC: the date and hour triples of the hydrodynamic
+        modules, the wave module's one real, nothing where a module spells no
+        date. A module that reads the hour on a reference meridian has that
+        meridian placed so the UTC hour reads as the domain's solar hour - the
+        minutes the engine drops ride on it - and the latitude its sun is
+        computed at is the domain's. The engine tests that hour against
+        sunrise and sunset unfolded, so such a run compiles the engine's own
+        thermal module into its host with the solar hour folded onto one day,
+        and nothing else changed. A keyword the engine's two readers spell
+        apart is never written and refuses by name when stated, and so does
+        the sign the meridian was placed against when it is stated alone. A run that states no moment writes none of
+        them, and a date on the deck arms no term that was off.
         */
     }
 
@@ -1072,7 +1086,9 @@ package SteeringSurface {
         own inputs. Every name a template writes - in a mesh recipe, a
         measurement, a placement or a composite argument - is checked at the
         fill, and one nothing of the run is called is refused there, by name,
-        before anything runs. The fill PRODUCES every declared row a template
+        before anything runs. An ARGUMENT a call states that the tool does not
+        declare is refused the same way, naming the nearest input: it never
+        runs as if unstated. The fill PRODUCES every declared row a template
         names into the mapping before anything expands, so a composite only
         looks up and a row that cannot be produced is refused at the fill by
         name; a row asked near a point the run places is produced once that
@@ -1105,6 +1121,8 @@ package SteeringSurface {
         "tests/telemac/test_one_mapping.py::test_every_row_a_template_reads_is_in_the_mapping_after_the_fill";
     verify requirement TheRunHoldsOneMapping by
         "tests/runtime/test_one_fill.py::test_what_producing_said_at_the_fill_is_restated_on_the_run";
+    verify requirement TheRunHoldsOneMapping by
+        "tests/runtime/test_workflow_skeleton.py::test_an_argument_the_tool_does_not_declare_is_refused_by_name";
 
     satisfy requirement AnInputFillsItsOwnKeywords by sheet;
     verify requirement AnInputFillsItsOwnKeywords by
@@ -1115,6 +1133,22 @@ package SteeringSurface {
         "tests/telemac/test_inputs_fill_their_keywords.py::test_a_coupled_wave_body_takes_the_sea_state_and_not_the_level";
     verify requirement AnInputFillsItsOwnKeywords by
         "tests/telemac/test_inputs_fill_their_keywords.py::test_the_run_reads_the_input_a_coupled_body_fills_itself_from";
+    verify requirement AnInputFillsItsOwnKeywords by
+        "tests/telemac/test_the_deck_carries_the_moment.py::test_a_hydrodynamic_deck_states_the_date_and_the_utc_hour";
+    verify requirement AnInputFillsItsOwnKeywords by
+        "tests/telemac/test_the_deck_carries_the_moment.py::test_the_wave_deck_states_its_one_real_to_the_minute";
+    verify requirement AnInputFillsItsOwnKeywords by
+        "tests/telemac/test_the_deck_carries_the_moment.py::test_the_ice_deck_reads_the_utc_hour_as_the_domains_solar_hour_at_its_latitude";
+    verify requirement AnInputFillsItsOwnKeywords by
+        "tests/telemac/test_the_deck_carries_the_moment.py::test_a_stated_keyword_wins_over_the_moment";
+    verify requirement AnInputFillsItsOwnKeywords by
+        "tests/telemac/test_the_deck_carries_the_moment.py::test_a_run_that_states_no_moment_writes_none_of_them";
+    verify requirement AnInputFillsItsOwnKeywords by
+        "tests/telemac/test_the_deck_carries_the_moment.py::test_the_staged_routine_is_the_engines_own_but_for_the_fold";
+    verify requirement AnInputFillsItsOwnKeywords by
+        "tests/telemac/test_the_deck_carries_the_moment.py::test_a_dated_ice_run_compiles_the_folded_routine_into_its_host";
+    verify requirement AnInputFillsItsOwnKeywords by
+        "tests/telemac/test_the_deck_carries_the_moment.py::test_a_stated_sign_without_the_meridian_is_refused_by_name";
 
     satisfy requirement EngineDefaultSurfaced by sheet;
     satisfy requirement EngineDefaultSurfaced by engineWorkflow;

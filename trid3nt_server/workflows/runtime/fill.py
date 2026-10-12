@@ -36,6 +36,7 @@ from .journal import slot_choice
 from trid3nt_server.inputs.run_notes import (
     bind_coverage, bind_notes, cut_coverage, drain_coverage, drain_notes, journal_note)
 from .params import ResolvedParams
+from trid3nt_server.inputs.user_input import nearest
 from trid3nt_server.inputs.temporal import RATE, STATE
 
 logger = logging.getLogger("trid3nt_server.workflows.runtime.fill")
@@ -783,6 +784,16 @@ async def fill(state: Fill, values: Mapping[str, Any]) -> Fill:
         _keyword(state, str(name), value)
     rows = {decl.name: decl for decl in wf.data}
     sourced = {n: values.pop(n) for n in list(values) if n in rows}
+    known = {prm.name for prm in wf.params}
+    unknown = [n for n in values if n not in known]
+    for name in unknown:
+        # An invented field resembles no input, so only a near spelling is offered; the keywords sentence is said once, on the last.
+        state.inputs[name] = Verdict(
+            REJECTED, values.pop(name), code="INPUT_UNNAMED",
+            reason=f"{name!r} is not an input of {wf.name} "
+            f"({nearest(name, sorted(known | set(rows)), cutoff=0.6)})."
+            + (" An engine keyword is stated by its own name inside keywords."
+               if name == unknown[-1] else ""))
     state.stated.update(values)
     await _seat(state)
     for name in state.workflow.unnamed():

@@ -28,7 +28,7 @@ def _resolve_bare(tool_name: str, location: str):
     from seated import resolve_params
 
     workflow = TOOL_REGISTRY[tool_name].fn.workflow
-    supplied, err = asyncio.run(_normalized(workflow, {"location": location}))
+    supplied, err = asyncio.run(_normalized(workflow, {}))
     assert err is None, f"{tool_name} refused a bare location: {err}"
     return workflow, asyncio.run(resolve_params(workflow.params, supplied))
 
@@ -64,7 +64,7 @@ def test_a_supplied_moment_still_reads_as_the_users() -> None:
 
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
     supplied, err = asyncio.run(_normalized(workflow, 
-        {"location": "the Wabash River", "event_time": "2026-03-04"}))
+        {"event_time": "2026-03-04"}))
     assert err is None, err
     row = asyncio.run(resolve_params(workflow.params, supplied)).row("event_time")
     assert (row.value[:10], row.origin) == ("2026-03-04", "user")

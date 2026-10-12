@@ -301,11 +301,27 @@ def _coupled_filled(content: Mapping[str, Any],
     from . import wrapper_for
 
     wrapper = wrapper_for(content["module"])
-    slots = dict(content["slots"])
-    for _source, name, value in filled_by(wrapper, produced,
-                                          content["filled_by"]):
-        slots.setdefault(name, wrapper.slot(name).check(value))
-    return {**content, "slots": slots}
+    stated = dict(content["slots"])
+    derived = {name: wrapper.slot(name).check(value)
+               for _source, name, value in filled_by(wrapper, produced,
+                                                     content["filled_by"])
+               if name not in stated}
+    return _placed(wrapper, {
+        **content, "slots": {**stated, **derived},
+        "derived": sorted({*content.get("derived", ()), *derived})})
+
+
+def _placed(wrapper: type, body: dict[str, Any]) -> dict[str, Any]:
+    """``body``, refused where it states a keyword a still-derived one was placed against at the dictionary's value."""
+    for derived, reads in wrapper.PLACED_AGAINST.items():
+        for name in reads:
+            if derived in body["derived"] and name in body["slots"]:
+                raise SlotRefused(
+                    f"{wrapper.slot(name).keyword} is stated and "
+                    f"{wrapper.slot(derived).keyword} is not: the run derives "
+                    "the second against the dictionary's value of the first. "
+                    "State both to place it yourself.")
+    return body
 
 
 # What a continuing run states, by the keyword the engine reads its initial state from. Naming the file is the continuation: the engine opens at that file's LAST RECORD and ignores the deck's initial-condition statements. The format and record number are dictionary choices a deck states by name.
@@ -429,7 +445,8 @@ def fill_coupled(sheet: Sheet, stated: Mapping[str, Mapping[str, Any]]) -> Sheet
                          **{name: wrapper.slot(name).check(value)
                             for name, value in slots.items()}}
         body["stated"] = sorted(set(body.get("stated", ())) | set(slots))
-        files[basename] = body
+        body["derived"] = sorted(set(body.get("derived", ())) - set(slots))
+        files[basename] = _placed(wrapper, body)
     return replace(sheet, files=MappingProxyType(files))
 
 

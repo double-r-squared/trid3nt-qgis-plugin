@@ -11,7 +11,7 @@ from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
 
-from .module import Module, Output
+from .module import MOMENT, ORIGIN_OF_TIME, Module, Output
 from .outputs import PRIMITIVES
 
 __all__ = ["ART", "BOUNDARY_FILENAME", "IncidentWave", "MODULE_OUTPUT",
@@ -148,3 +148,4 @@ ART.composites(reads={"incident_wave": ("measured", "height_m",
                                          "reflection_coef")},
                incident_wave=_incident_wave)
 ART.reads(**PRIMITIVES)
+ART.FILLED_BY = MappingProxyType({MOMENT: ORIGIN_OF_TIME})

@@ -110,7 +110,28 @@ def test_the_generated_signature_is_the_declaration_plus_controls():
     assert all(sig.parameters[n].default is None
                for n in ("location", "depth_m", "armed", "input_mode",
                          "keywords"))
+    # The absorber is the channel, not a tolerance: what it carries is refused.
     assert sig.parameters["_extra_ignored"].kind is inspect.Parameter.VAR_KEYWORD
+
+
+def test_an_argument_the_tool_does_not_declare_is_refused_by_name():
+    """Never run as if unstated: a misspelling names its nearest input, a name
+    nothing is close to says so, and nothing is launched."""
+    import asyncio
+
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    out = asyncio.run(TOOL_REGISTRY["telemac_dye_release"].fn(
+        spill_fracton=0.4, cores=8, description="a dye run"))
+    said = out["error_message"]
+    assert out["status"] == "error" and out["error_code"] == "INPUT_UNNAMED"
+    assert "'spill_fracton' is not an input of telemac_dye_release " \
+        "(nearest: spill_fraction" in said
+    assert "'cores' is not an input of telemac_dye_release (none is close)." in said
+    # A field the model invented resembles no input, so none is suggested for it.
+    assert "'description' is not an input of telemac_dye_release " \
+        "(none is close)." in said
+    assert said.count("inside keywords") == 1
 
 
 def test_a_required_param_is_required_on_the_schema_and_says_so_on_its_line():
@@ -150,7 +171,7 @@ def test_a_stated_seated_input_reaches_the_sheet_as_the_users():
     wf = TOOL_REGISTRY["telemac_do_sag"].fn.workflow
     from trid3nt_server.workflows.runtime.fill import ACCEPTED, Fill, fill
 
-    state = asyncio.run(fill(Fill(workflow=wf), {"location": "x", "vertical_frame": "IGLD85",
+    state = asyncio.run(fill(Fill(workflow=wf), {"vertical_frame": "IGLD85",
                                                   "mesh_resolution_m": 30.0}))
     supplied = {n: v.value for n, v in state.inputs.items() if v.state == ACCEPTED}
     assert supplied["vertical_frame"] == "IGLD85"

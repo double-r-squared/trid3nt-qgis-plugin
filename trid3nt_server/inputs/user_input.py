@@ -6,6 +6,7 @@ vocabularies cannot drift; a malformed value REFUSES typed, under ``code``.
 
 from __future__ import annotations
 
+import difflib
 from typing import Any, Iterable, Mapping, Sequence
 
 from trid3nt_server.errors import DeclarativeError
@@ -15,6 +16,7 @@ __all__ = [
     "UserInputError",
     "WireArgsError",
     "lonlat_bbox",
+    "nearest",
     "polygon_ring",
     "polyline_coords",
     "polyline_set",
@@ -22,6 +24,13 @@ __all__ = [
 ]
 
 _DEFAULT_CODE = "USER_INPUT_INVALID"
+
+
+def nearest(asked: str, known: Iterable[str], cutoff: float = 0.5) -> str:
+    """The closest spellings of ``asked`` among ``known``, for a refusal."""
+    close = difflib.get_close_matches(asked, list(known), n=3, cutoff=cutoff)
+    return ("nearest: " + ", ".join(close)) if close else (
+        "none is close")
 
 
 class UserInputError(DeclarativeError):

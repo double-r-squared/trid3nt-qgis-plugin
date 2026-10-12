@@ -119,17 +119,23 @@ def test_every_template_names_only_what_its_run_is_called():
 
 #: The inputs a bare call has to state before its fill is ready.
 # Every REQUIRED input of every template: a point each, and the world values no template starts from.
-_STATED = {"location": "Lake Huron", "pour_point": [-82.42, 43.0],
+_STATED = {"pour_point": [-82.42, 43.0],
            "station": [-82.42, 43.0], "wave_height_m": 1.0,
            "reflection_coef": 0.5, "warm_temp_c": 25.0, "cold_temp_c": 15.0,
            "thermocline_depth_m": 8.0}
+
+
+def _stated(workflow):
+    """The share of them this template declares: one it does not is refused."""
+    declared = {prm.name for prm in workflow.params}
+    return {name: value for name, value in _STATED.items() if name in declared}
 
 
 def _filled_with(monkeypatch, workflow, produce):
     from trid3nt_server.workflows.runtime import fill as fill_mod
 
     monkeypatch.setattr(fill_mod, "_produce", produce)
-    return asyncio.run(fill(Fill(workflow=workflow), dict(_STATED)))
+    return asyncio.run(fill(Fill(workflow=workflow), _stated(workflow)))
 
 
 def test_a_row_only_a_composite_reads_is_in_the_mapping_after_the_fill(
@@ -143,7 +149,7 @@ def test_a_row_only_a_composite_reads_is_in_the_mapping_after_the_fill(
 
     monkeypatch.setattr(fill_mod, "_matched", _fetched)
     workflow = _workflow("telemac_ice_cover")
-    state = asyncio.run(fill(Fill(workflow=workflow), dict(_STATED)))
+    state = asyncio.run(fill(Fill(workflow=workflow), _stated(workflow)))
     assert state.ready
     run = state.env.run
     assert run["weather"] == "the weather record"
@@ -168,7 +174,7 @@ def test_a_row_its_producer_fails_is_refused_at_fill_before_any_stage(
     launched = []
     monkeypatch.setattr(type(workflow), "launch",
                         lambda self, state: launched.append(state))
-    out = asyncio.run(workflow.run(dict(_STATED)))
+    out = asyncio.run(workflow.run(_stated(workflow)))
     assert out["error_code"] == "DATA_NEED_UNMATCHED" and launched == []
 
 

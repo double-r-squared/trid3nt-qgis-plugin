@@ -50,12 +50,22 @@ journal row all write that word.
 The runtime declares no row of its own. A template carries, without restating
 them, the rows whoever reads them declares: `mesh_resolution_m` is the mesh
 ask's (`RESOLUTION`, `tools/mesh/recipe.py`), seated where the ask names it;
-`event_time` is the engine's, read through the engine's own coercion;
+`event_time` is the engine's, read through the engine's own coercion, and each
+module writes it into its deck in its own date keywords, in UTC, with the
+meridian and latitude a solar clock reads taken off the domain (`MOMENT` in a
+module's `FILLED_BY`; a stated keyword wins, no moment writes none). The ice
+module tests its solar hour unfolded, so a dated ice run stages the engine's
+thermal module with that hour folded (`authoring/solar.py`,
+`Module.CODE_ON_HOST`), compiled as the host's user Fortran;
 `vertical_frame` is the bed's, stated on its type (`Slot.states`). A template's
 own row of the same name wins and keeps its place. How many cores a solve is
 partitioned across is no row at all: it is the module's own PARALLEL PROCESSORS
 keyword, stated on the call like any other, the carrier's on a coupled run, and
 a count past the box's cores refuses by name.
+
+An argument a call states that the tool declares neither as a param, a row nor
+a control is refused at the fill by name (`INPUT_UNNAMED`), with the nearest
+declared names; the generated signature's `**` is how it reaches the fill.
 
 `DATA` (`workflows/runtime/data.py`) - one declared ARTIFACT per row. A row
 STATES its slot as its type - `Data(BED)`, one of the types in

@@ -11,7 +11,8 @@ from dataclasses import replace
 from types import MappingProxyType
 from typing import Any, Mapping
 
-from .module import Module, Output, Unwritten
+from ..authoring.solar import SOLAR_ROUTINE_FILENAME, solar_routine
+from .module import MOMENT, Module, Output, Unwritten
 from .outputs import PRIMITIVES
 
 __all__ = ["KHIONE", "MODULE_OUTPUT", "RESULT_FILENAME", "STEERING_FILENAME"]
@@ -216,7 +217,7 @@ class _Khione(Module("khione")):  # type: ignore[misc]
 
 def _body(slots: Mapping[str, Any]) -> Mapping[str, Any]:
     return {"module": "khione", "steering": STEERING_FILENAME,
-            "slots": dict(slots)}
+            "filled_by": (MOMENT,), "slots": dict(slots)}
 
 
 KHIONE = _Khione
@@ -242,3 +243,23 @@ KHIONE.APPENDABLE = (
 )
 KHIONE.appends(_appended)
 KHIONE.reads(**PRIMITIVES)
+def _meridian(moment: Mapping[str, Any]) -> float:
+    """The global meridian that makes a UTC deck hour the domain's solar hour.
+
+    The solar clock shifts the host's hour by -EAST OR WEST * (global - local) / 15 hours, and only that difference is read.
+    The local longitude cannot be stated, so the global one is placed against the dictionary's own local value and sign.
+    """
+    local = KHIONE.MODULE_INPUT["LOCAL_LONGITUDE__IN__DEGREES"].engine_default
+    sign = KHIONE.MODULE_INPUT[_SIGN].engine_default
+    # The clock reads the deck's hour and drops its minutes and seconds, so they ride on the meridian at fifteen degrees an hour.
+    past_the_hour = moment["at"].minute / 4.0 + moment["at"].second / 240.0
+    return float(local) - (float(moment["lon"]) + past_the_hour) / float(sign)
+
+
+_SIGN = "EAST_OR_WEST_LONGITUDE"
+KHIONE.FILLED_BY = MappingProxyType({MOMENT: {
+    "GLOBAL_LONGITUDE__IN_DEGREES": _meridian}})
+KHIONE.PLACED_AGAINST = MappingProxyType({
+    "GLOBAL_LONGITUDE__IN_DEGREES": (_SIGN,)})
+KHIONE.CODE_ON_HOST = MappingProxyType({MOMENT: {
+    SOLAR_ROUTINE_FILENAME: solar_routine}})

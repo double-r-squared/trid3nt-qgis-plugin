@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field, replace
+from datetime import datetime
 from types import MappingProxyType
 from importlib import import_module
 from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
@@ -29,7 +30,7 @@ from trid3nt_server.workflows.runtime import (
 )
 from trid3nt_server.workflows.telemac.errors import TelemacError
 from trid3nt_server.workflows.telemac.modules import wrapper_for
-from trid3nt_server.workflows.telemac.modules.module import (PROCESSORS,
+from trid3nt_server.workflows.telemac.modules.module import (MOMENT, PROCESSORS,
                                                               SlotRefused, accept,
                                                               identify_on)
 from trid3nt_server.workflows.telemac.modules.outputs import (
@@ -583,11 +584,15 @@ def _coupled_rows(sheet: Sheet) -> list[ParamSheetRow]:
                 value=value if isinstance(value, (int, float, str, bool, list))
                 else str(value),
                 desc=slot.desc[:512],
-                origin=Origin.USER if identifier in user else Origin.TEMPLATE,
+                origin=(Origin.USER if identifier in user
+                        else Origin.DERIVED if identifier in body.get("derived", ())
+                        else Origin.TEMPLATE),
                 units=slot.unit or None, bounds=_editor_bounds(slot),
                 editable=False, group=f"{module}: {_group(slot)}",
                 source_badge=(f"stated on this run as {module}: {slot.keyword}"
                               if identifier in user
+                              else "read off this run's inputs"
+                              if identifier in body.get("derived", ())
                               else f"the {module} deck this run couples")))
     return rows
 
@@ -965,6 +970,11 @@ class TelemacWorkflow(Workflow):
                 run[row.name] = await _produce(env, row)
         for name in self._fills():
             await read(env, name)
+        if run.get(EVENT_TIME.name):
+            # The deck's clock is UTC, so a module that reads the sun needs where on the earth the run is.
+            lon, lat = (await read(env, domain)).centroid
+            run[MOMENT] = {"at": datetime.fromisoformat(run[EVENT_TIME.name]),
+                           "lon": lon, "lat": lat}
         declared = {prm.name for prm in self.params}
         await stage("sheet", fill_sheet, steering=self.steering,
                     # A module fills keywords from a row by its TYPE, so each type's row is held under the type beside its name.

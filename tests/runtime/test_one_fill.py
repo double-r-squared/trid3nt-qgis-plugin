@@ -31,14 +31,14 @@ def _filled(values):
 
 
 def test_a_stated_value_is_accepted_and_the_rest_default():
-    state = _filled({"location": "the Wabash River", "spill_fraction": 0.4})
+    state = _filled({"spill_fraction": 0.4})
     assert state.inputs["spill_fraction"].state == ACCEPTED
     assert state.inputs["spill_fraction"].value == 0.4
     assert any(v.state == DEFAULTED for v in state.inputs.values())
 
 
 def test_a_value_outside_its_range_is_rejected_with_its_remedy():
-    state = _filled({"location": "the Wabash River", "spill_fraction": 9.0})
+    state = _filled({"spill_fraction": 9.0})
     verdict = state.inputs["spill_fraction"]
     assert verdict.state == REJECTED and "spill_fraction" in verdict.reason
     assert verdict.remedies and not state.ready
@@ -83,8 +83,7 @@ def test_a_sourced_input_is_fetched_before_it_answers(monkeypatch):
     monkeypatch.setattr(fill_mod, "_produce", _produce)
     wf = _wf()
     decl = next(d for d in wf.data if d.data_class)
-    state = asyncio.run(fill(Fill(workflow=wf), {"location": "the Wabash River",
-                                                  decl.name: {"source": "stub"}}))
+    state = asyncio.run(fill(Fill(workflow=wf), {decl.name: {"source": "stub"}}))
     assert (decl.name, "stub") in asked
     assert state.inputs[decl.name].state == ACCEPTED
 
@@ -99,8 +98,7 @@ def test_a_layer_by_id_is_supplied_and_ingested_before_it_answers(monkeypatch):
     monkeypatch.setattr(fill_mod, "_produce", _produce)
     wf = _wf()
     decl = next(d for d in wf.data if d.data_class)
-    state = asyncio.run(fill(Fill(workflow=wf), {"location": "x",
-                                                  decl.name: {"layer": "L1"}}))
+    state = asyncio.run(fill(Fill(workflow=wf), {decl.name: {"layer": "L1"}}))
     assert "L1" in seen and state.inputs[decl.name].value == "ingested"
 
 
@@ -121,13 +119,12 @@ def test_an_absent_engine_tree_is_stated_and_ours_judges(monkeypatch):
     t2d = wrapper_for("telemac2d")
     assert module_mod.accept(t2d, "LAW OF BOTTOM FRICTION", 4)[2] == \
         module_mod.ENGINE_UNAVAILABLE
-    state = _filled({"location": "x",
-                     "keywords": {"LAW OF BOTTOM FRICTION": 4}})
+    state = _filled({"keywords": {"LAW OF BOTTOM FRICTION": 4}})
     assert module_mod.ENGINE_UNAVAILABLE in state.notes
 
 
 def test_a_keyword_the_module_refuses_is_rejected_by_name():
-    state = _filled({"location": "x", "keywords": {"LAW OF BOTTOM FRICTON": 4}})
+    state = _filled({"keywords": {"LAW OF BOTTOM FRICTON": 4}})
     assert state.inputs["LAW OF BOTTOM FRICTON"].state == REJECTED
     assert not state.ready
 
@@ -185,8 +182,7 @@ def _place_registers_a_row(monkeypatch):
 
 def test_a_place_that_registers_a_row_while_it_runs_still_answers(monkeypatch):
     wf, decl = _place_registers_a_row(monkeypatch)
-    state = asyncio.run(fill(Fill(workflow=wf), {"location": "x",
-                                                  decl.name: {"source": "stub"}}))
+    state = asyncio.run(fill(Fill(workflow=wf), {decl.name: {"source": "stub"}}))
     assert state.inputs[decl.name].state == ACCEPTED, state.inputs[decl.name]
 
 
@@ -199,7 +195,7 @@ def test_an_untyped_fault_is_refused_and_its_trace_logged(monkeypatch, caplog):
     decl = next(d for d in wf.data if d.data_class)
     with caplog.at_level("WARNING", logger=fill_mod.logger.name):
         state = asyncio.run(fill(Fill(workflow=wf), {
-            "location": "x", decl.name: {"layer": "L1"}}))
+            decl.name: {"layer": "L1"}}))
     assert state.inputs[decl.name].code == "INPUT_REFUSED"
     assert any(r.exc_info and r.levelname == "WARNING" for r in caplog.records)
 
@@ -252,7 +248,7 @@ def test_what_producing_said_at_the_fill_is_restated_on_the_run(monkeypatch):
     monkeypatch.setattr(fill_mod, "_produce", _produce)
     wf = TOOL_REGISTRY["telemac_ice_cover"].fn.workflow
     monkeypatch.setattr(type(wf), "launch", _launch)
-    state = asyncio.run(fill(Fill(workflow=wf), {"location": "Lake Huron"}))
+    state = asyncio.run(fill(Fill(workflow=wf), {}))
     run = asyncio.run(wf._launched(state))
     assert run.choices == ["domain", "weather"]
     assert covered == ["the domain covers the cut", "the weather covers the cut"]

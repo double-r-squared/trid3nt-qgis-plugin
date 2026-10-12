@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Mapping
 
-from .module import SlotRefused
+from .module import USER_FORTRAN_DIR, SlotRefused
 
 __all__ = ["couples"]
 
@@ -42,6 +42,11 @@ def couples(*, water_column: bool) -> Expander:
             if "process" in body:
                 slots["WATER_QUALITY_PROCESS"] = body["process"]
             files[body["steering"]] = body
+            for held, code in wrapper.CODE_ON_HOST.items():
+                if run.get(held) is not None:
+                    slots["FORTRAN_FILE"] = USER_FORTRAN_DIR
+                    files.update({f"{USER_FORTRAN_DIR}/{name}": text()
+                                  for name, text in code.items()})
         return slots, files
 
     return _coupling

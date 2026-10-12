@@ -7,12 +7,12 @@ with a keyword it learns is state it on a fill, through the
 
 from __future__ import annotations
 
-import difflib
 import re
-from typing import Any, Iterable, Mapping
+from typing import Any, Mapping
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
+from trid3nt_server.inputs.user_input import nearest
 from trid3nt_server.tools import register_tool
 from trid3nt_server.workflows.telemac.modules.module import (
     load_module_input, module_input_dir)
@@ -46,14 +46,6 @@ class DescribeKeywordsError(RuntimeError):
 
 def _exposed() -> list[str]:
     return sorted(path.stem for path in module_input_dir().glob("*.json"))
-
-
-def _nearest(asked: str, known: Iterable[str]) -> str:
-    """The closest spellings of ``asked`` among ``known``, for a refusal."""
-    known = list(known)
-    close = difflib.get_close_matches(asked, known, n=3, cutoff=0.5)
-    return ("nearest: " + ", ".join(close)) if close else (
-        "none is close")
 
 
 def _words(text: str) -> list[str]:
@@ -137,7 +129,7 @@ def describe_keywords(module: str = "", keyword: str = "", query: str = "",
     if name not in carried:
         raise DescribeKeywordsError(
             "UNKNOWN_MODULE",
-            f"there is no keyword dictionary for {module!r} ({_nearest(name, carried)}); "
+            f"there is no keyword dictionary for {module!r} ({nearest(name, carried)}); "
             f"the carried modules are {', '.join(carried)}.")
     dictionary = load_module_input(name)
     asked = str(keyword or "").strip()
@@ -149,7 +141,7 @@ def describe_keywords(module: str = "", keyword: str = "", query: str = "",
             raise DescribeKeywordsError(
                 "UNKNOWN_KEYWORD",
                 f"{name} has no keyword {asked!r} "
-                f"({_nearest(asked.upper(), [s.keyword for s in dictionary.values()])}).")
+                f"({nearest(asked.upper(), [s.keyword for s in dictionary.values()])}).")
         return {"module": name, "keyword_count": len(dictionary), "entry": _row(slot)}
     if not str(query or "").strip():
         sections: dict[str, int] = {}

@@ -14,7 +14,8 @@ from trid3nt_server.workflows.runtime import DeclarativeError
 from ..authoring.atmosphere import (ATMOSPHERE_READS, Atmosphere,
                                      expand_atmosphere)
 from .coupling import couples
-from .module import Module, Output
+from .module import (MOMENT, ORIGIN_OF_TIME, USER_FORTRAN_DIR, Module,
+                     Output)
 from .outputs import PRIMITIVES, read_column
 
 __all__ = ["T3D", "Atmosphere", "Column", "MODULE_OUTPUT", "USER_FORTRAN_DIR",
@@ -40,8 +41,6 @@ class VerticalGridUnresolved(DeclarativeError):
     error_code = "TELEMAC3D_VERTICAL_UNRESOLVED"
 
 
-# The directory the engine compiles for patched Fortran; the keyword names a directory, so manifest and steering statement share the word.
-USER_FORTRAN_DIR = "user_fortran"
 _CONDI_SOURCE = f"{USER_FORTRAN_DIR}/user_condi3d_trac.f"
 
 # Bottom stretching coefficient, held fixed: a thermocline is a surface feature, so freedom goes to the surface coefficient with mild bed clustering.
@@ -280,3 +279,4 @@ T3D.composites(reads={
                atmosphere=expand_atmosphere,
                coupling=couples(water_column=True))
 T3D.reads(**PRIMITIVES, column=read_column)
+T3D.FILLED_BY = MappingProxyType({MOMENT: ORIGIN_OF_TIME})

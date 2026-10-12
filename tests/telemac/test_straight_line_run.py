@@ -136,3 +136,28 @@ def test_what_the_card_seats_is_the_value_the_outputs_stage_binds(monkeypatch):
                  params=asyncio.run(resolve_params(workflow.params, {})))
     asyncio.run(workflow.launch(state))
     assert dict(calls)["outputs"]["params"][name] == "edited on the card"
+
+
+def test_a_stated_moment_reaches_the_sheet_with_the_domains_own_point(monkeypatch):
+    """UTC, and where on the earth: what a module needs to place the sun. A
+    run that states no moment hands the sheet none."""
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+
+    workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
+    calls: list = []
+    _faked(monkeypatch, calls)
+
+    async def _row(env, decl):
+        return SimpleNamespace(centroid=(-122.67, 45.52))
+
+    monkeypatch.setattr(fill_mod, "_produce", _row)
+    stated = {"event_time": "2024-01-14T12:00:00+00:00"}
+    state = Fill(workflow=workflow, carried={},
+                 params=asyncio.run(resolve_params(workflow.params, stated)))
+    asyncio.run(workflow.launch(state))
+    assert dict(calls)["sheet"]["produced"]["moment"] == {
+        "at": datetime(2024, 1, 14, 12, tzinfo=timezone.utc),
+        "lon": -122.67, "lat": 45.52}
+    _run, calls = _launched(monkeypatch)
+    assert "moment" not in dict(calls)["sheet"]["produced"]

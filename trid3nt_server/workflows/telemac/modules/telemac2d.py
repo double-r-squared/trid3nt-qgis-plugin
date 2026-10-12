@@ -17,7 +17,8 @@ from trid3nt_server.inputs.temporal import RATE, STATE, Series
 from ..authoring.atmosphere import (ATMOSPHERE_READS, Atmosphere,
                                      expand_atmosphere)
 from .coupling import couples
-from .module import Module, Output, SlotRefused
+from .module import (MOMENT, ORIGIN_OF_TIME, USER_FORTRAN_DIR, Module, Output,
+                     SlotRefused)
 from .outputs import PRIMITIVES, read_drogues
 
 __all__ = ["T2D", "Atmosphere", "Boundaries", "Breach", "Friction", "Infiltration",
@@ -63,8 +64,6 @@ FRICTION_LAWS_FILENAME = "rog_friction.tbl"
 ZONES_FILENAME = "rog_zones.dat"
 HYETOGRAPH_FILENAME = "rog_hyeto.txt"
 RATING_FILENAME = "rog_rating.txt"
-# The directory the engine compiles for patched Fortran; the keyword names a directory, so manifest and steering statement share the word.
-USER_FORTRAN_DIR = "user_fortran"
 OIL_STEERING_FILENAME = "oil_spill.txt"
 DROGUES_FILENAME = "drogues.txt"
 
@@ -679,4 +678,7 @@ T2D.reads(**PRIMITIVES, drogues=read_drogues)
 T2D.FILLED_BY = MappingProxyType({
     "source": {"ABSCISSAE_OF_SOURCES": lambda placed: [placed["at"][0]],
                "ORDINATES_OF_SOURCES": lambda placed: [placed["at"][1]]},
-    OBSERVE: {"INITIAL_VALUES_OF_TRACERS": lambda sample: [sample.value]}})
+    OBSERVE: {"INITIAL_VALUES_OF_TRACERS": lambda sample: [sample.value]},
+    # The latitude is what a coupled ice module computes the sun at; no other term of a cartesian, tide-free deck reads it.
+    MOMENT: {**ORIGIN_OF_TIME,
+             "LATITUDE_OF_ORIGIN_POINT": lambda moment: moment["lat"]}})

@@ -13,7 +13,7 @@ from typing import Any, Mapping
 from trid3nt_server.inputs.run_notes import journal_note
 from trid3nt_server.inputs.slots import LEVEL, WAVE
 
-from .module import Module, Output, Unwritten
+from .module import MOMENT, Module, Output, Unwritten
 from .outputs import PRIMITIVES, read_spectrum
 
 __all__ = ["MODULE_OUTPUT", "RESULT_FILENAME", "STEERING_FILENAME", "WAC"]
@@ -142,7 +142,7 @@ class _Tomawac(Module("tomawac")):  # type: ignore[misc]
         for name in keywords:
             cls.slot(name)
         return {"module": "tomawac", "steering": STEERING_FILENAME,
-                "filled_by": (WAVE,),
+                "filled_by": (WAVE, MOMENT),
                 "slots": {"GEOMETRY_FILE": geometry,
                           "BOUNDARY_CONDITIONS_FILE": boundary,
                           "ED_RESULTS_FILE": RESULT_FILENAME, **keywords}}
@@ -192,4 +192,7 @@ WAC.FILLED_BY = MappingProxyType({
     LEVEL: {"INITIAL_STILL_WATER_LEVEL": lambda level: level.value},
     "station": {
         "ABSCISSAE_OF_SPECTRUM_PRINTOUT_POINTS": lambda placed: [placed["at"][0]],
-        "ORDINATES_OF_SPECTRUM_PRINTOUT_POINTS": lambda placed: [placed["at"][1]]}})
+        "ORDINATES_OF_SPECTRUM_PRINTOUT_POINTS": lambda placed: [placed["at"][1]]},
+    # One real, yyyymmddhhmm, to the minute.
+    MOMENT: {"DATE_OF_COMPUTATION_BEGINNING":
+             lambda moment: float(moment["at"].strftime("%Y%m%d%H%M"))}})

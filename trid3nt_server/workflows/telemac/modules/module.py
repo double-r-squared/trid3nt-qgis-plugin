@@ -28,7 +28,10 @@ __all__ = [
     "Slot",
     "SlotRefused",
     "Unwritten",
+    "MOMENT",
+    "ORIGIN_OF_TIME",
     "PROCESSORS",
+    "USER_FORTRAN_DIR",
     "identify_on",
     "load_module_input",
     "module_input_dir",
@@ -56,6 +59,7 @@ _RESERVED = frozenset((
     "ARMS_ON_HOST", "MODULE_OUTPUT", "LISTING", "DERIVED", "PRINTOUTS",
     "CADENCE", "CLOCK", "TRACER", "APPENDS", "APPENDABLE", "ONLY_3D",
     "UNWRITTEN", "RESULT_FILE", "RESULT_FILES", "RESULT_KEYWORD", "FILLED_BY",
+    "CODE_ON_HOST", "PLACED_AGAINST",
     "composites",
     "reads", "appends", "printouts", "seconds", "slot",
 ))
@@ -143,6 +147,12 @@ class Slot:
 
     def fits(self, value: Any, typed: Any = None) -> Any:
         """``value`` if its arity and plausibility range fit this slot - what the engine's steering-file class does not check."""
+        if self.keyword in _UNREADABLE:
+            raise SlotRefused(
+                f"{self.keyword} cannot be stated: the engine's dictionary "
+                "spells it with a doubled space, which its launcher's reader "
+                "collapses and its Fortran reader does not, so no steering "
+                "file states it and gets past both.")
         typed = typed or (lambda item: item)
         if not self.is_list:
             return self._bounded(typed(value), 0)
@@ -188,6 +198,9 @@ class Slot:
             return ", ".join(f"{k} ({v})" for k, v in self.choices.items())
         return ", ".join(str(c) for c in self.choices or ())
 
+
+# Keywords neither spelling of which both of the engine's readers take; a deck stating one stops before the solve.
+_UNREADABLE = frozenset({"LOCAL LONGITUDE, IN DEGREES"})
 
 # What each dictionary type is in Python; LOGICAL is separated from INTEGER in ``_scalar`` because a bool is an int.
 _TYPES: Mapping[str, Any] = {
@@ -415,6 +428,10 @@ class Module(metaclass=_Body):
     ASSERTED: Mapping[str, Any] = MappingProxyType({})
     # The keyword whose value arms a term, by the switch it turns on; a rate stated and left disarmed is a number nothing reads.
     ARMS: Mapping[str, str] = MappingProxyType({})
+    # User Fortran a coupled body compiles into its HOST while the run holds an input: input -> file name -> its text. The launcher compiles the host deck's directory only.
+    CODE_ON_HOST: Mapping[Any, Mapping[str, Callable[[], str]]] = MappingProxyType({})
+    # A derived keyword and the keywords its derivation reads at the dictionary's value; one of those stated while it is still derived refuses.
+    PLACED_AGAINST: Mapping[str, tuple[str, ...]] = MappingProxyType({})
     # Host switches a coupled body arms, by identifier; the engine reads what the module hands back only with the switch true. The host deck keeps whatever it states, off included.
     ARMS_ON_HOST: tuple[str, ...] = ()
 
@@ -562,6 +579,17 @@ class Module(metaclass=_Body):
 
 # How a floor name names the body it resolves against: the module's name, then the keyword, split on the first separator (a keyword may carry one, a module name may not).
 _QUALIFIER = ":"
+
+# The directory the engine compiles for patched Fortran; the keyword names a directory, so manifest and steering statement share the word.
+USER_FORTRAN_DIR = "user_fortran"
+# What a run holds once it states the moment it opens at: ``at`` the UTC datetime, ``lon`` and ``lat`` the domain's own point. A module names the keywords it spells them in under this in FILLED_BY; a run stating no moment holds none.
+MOMENT = "moment"
+# The hydrodynamic modules' spelling: the date and the UTC hour, each a triple.
+ORIGIN_OF_TIME: Mapping[str, Callable[[Any], Any]] = MappingProxyType({
+    "ORIGINAL_DATE_OF_TIME": lambda moment: [
+        moment["at"].year, moment["at"].month, moment["at"].day],
+    "ORIGINAL_HOUR_OF_TIME": lambda moment: [
+        moment["at"].hour, moment["at"].minute, moment["at"].second]})
 
 # The keyword every TELEMAC module spells for the processor count its domain is partitioned across; its default is one machine with no parallel library, so a serial run states nothing.
 PROCESSORS = "PARALLEL_PROCESSORS"
