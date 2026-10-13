@@ -15,7 +15,7 @@ from types import SimpleNamespace
 import pytest
 
 from trid3nt_server.inputs.observation import convert, observation
-from trid3nt_server.workflows.runtime import Data
+from trid3nt_server.inputs.input import Input
 from trid3nt_server.workflows.runtime import fill
 from trid3nt_server.workflows.runtime.errors import DeclarationError, StepFailedError
 from trid3nt_server.inputs.slots import LEVEL, OBSERVE
@@ -26,12 +26,12 @@ _METADATA = SimpleNamespace(name="t", description="", tags=())
 def _row(name: str, **need):
     import dataclasses
 
-    return dataclasses.replace(Data(OBSERVE).need("water quality sample", **need),
+    return dataclasses.replace(Input(OBSERVE).need("water quality sample", **need),
                                name=name)
 
 
 def _env(**published):
-    return fill._Env(params=None, data={},
+    return fill._Env(data={},
                             published_units=dict(published))
 
 
@@ -78,20 +78,20 @@ def test_a_row_that_observes_nothing_published_is_read_by_its_type() -> None:
     env.slot_units = {LEVEL: "m"}
     import dataclasses
 
-    row = dataclasses.replace(Data(LEVEL).need("water level series"), name="level")
+    row = dataclasses.replace(Input(LEVEL).need("water level series"), name="level")
     assert fill._what_the_run_calls_it(
         env, row, "")["to_units"] == "m"
 
 
 def test_the_row_states_no_unit_at_all() -> None:
     with pytest.raises(TypeError):
-        Data.need("water quality sample", units="degC")
-    assert "to_units" not in Data.need("water quality sample", of="T1").coercion
+        Input().need("water quality sample", units="degC")
+    assert "to_units" not in Input().need("water quality sample", of="T1").coercion
 
 
 def test_a_row_observes_only_what_it_went_out_and_measured() -> None:
     with pytest.raises(DeclarationError):
-        Data.need("", of="TEMPERATURE")
+        Input().need("", of="TEMPERATURE")
 
 
 def test_the_published_table_is_the_deck_s_own_text_and_its_coupled_rows() -> None:
@@ -103,8 +103,8 @@ def test_the_published_table_is_the_deck_s_own_text_and_its_coupled_rows() -> No
 
     for template, unit in ((warmed, "DEGC"), (frozen, "oC")):
         published = TelemacWorkflow(
-            metadata=_METADATA, params=template.PARAMS, template=template,
-            data=template.DATA).published_units()
+            metadata=_METADATA, inputs=template.INPUTS,
+            template=template).published_units()
         # The deck names its own tracer and keeps its unit; KHIONE appends one
         # behind a deck that names none, and the unit is the module's.
         assert published["TEMPERATURE"] == unit

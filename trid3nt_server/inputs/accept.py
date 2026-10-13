@@ -60,7 +60,7 @@ def _slot(fn: Any, name: str) -> tuple[Slot | None, Mapping[str, Any]]:
 
     The workflow behind ``fn`` declares it on a row; a tool with none annotates the
     parameter with the Slot itself (``Annotated[Any, EXTENT]``)."""
-    rows = getattr(getattr(fn, "workflow", None), "data", ())
+    rows = getattr(getattr(fn, "workflow", None), "inputs", ())
     row = next((row for row in rows if row.name == name), None)
     if row is not None:
         # "near" names a place only the run resolves; the rest is stated outright.

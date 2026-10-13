@@ -9,8 +9,9 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT, LEVEL, WAVE
 from trid3nt_server.tools.mesh.recipe import RESOLUTION
+from trid3nt_server.inputs.input import Input
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Param,
+    register_workflow,
 )
 from trid3nt_server.tools.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.telemac.modules import T2D, WAC, series
@@ -18,47 +19,13 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
 from trid3nt_server.workflows.telemac.modules.tomawac import RESULT_FILENAME
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DATA", "DEFAULT_OPEN_DEPTH_M", "DOC",
-           "MESH", "OUTPUTS", "PARAMS", "STEERING",
+__all__ = ["CAPTIONS", "DEFAULT_OPEN_DEPTH_M", "DOC",
+           "MESH", "OUTPUTS", "INPUTS", "STEERING",
            "tomawac_wave_driven_currents"]
 
 
 # every boundary stretch at least this deep opens
 DEFAULT_OPEN_DEPTH_M: float = -12.0
-
-
-class PARAMS:
-    seed = Param(
-        optional=True, type=Point,
-        derived_when_absent=(
-            "the buoy nearest the centre of the water the window was cut to "
-            "is the one the wave deck's open edge is forced at"),
-        desc="Where OFFSHORE the incoming sea state is measured, as a Point: "
-             "the pick's {coordinates, name} verbatim, a (lon, lat) pair, "
-             "'lat,lon', a point layer. Geocode a place name first. The nearest "
-             "buoy to it is the record the wave boundary is forced at, so put "
-             "it on the water the swell arrives across")
-    station = Param(
-        type=Point,
-        desc="Where INSHORE the current is read over time, as a Point: the "
-             "pick's {coordinates, name} verbatim, a (lon, lat) pair, "
-             "'lat,lon', a point layer. Geocode a place name first. The speed "
-             "and the wave height are charted at the node of the mesh it "
-             "settles onto, so put it in the surf zone you are asking about")
-
-    mesh_resolution_m = replace(
-        RESOLUTION,
-        desc="Target element edge length the water is triangulated at; the "
-             "longshore current is driven across the surf zone, so what this "
-             "has to resolve is the width of the breaking band")
-
-    open_depth_threshold_m = Param(
-        default=DEFAULT_OPEN_DEPTH_M,
-        bounds=(-200.0, -1.0), units="m",
-        desc="How deep a boundary stretch must reach for it to be designated "
-             "the OPEN edge the measured sea state enters through; every "
-             "stretch that reaches it opens, and a window where none does has "
-             "no edge for the spectrum and refuses")
 
 
 _GEOMETRY = "coast.slf"
@@ -82,12 +49,43 @@ _FRICTION_COEFFICIENT = 0.05
 _STATION = Placed("station", point="station", label="Current station")
 
 
-class DATA:
-    extent = Data(EXTENT).supplied(geometry="rectangle")
-    domain = Data(DOMAIN).need("hydrography", kind="coastline", geometry="polyline")
-    bed = Data(BED).need("bathymetry")
-    wave = Data(WAVE).need("wave series", at="seed")
-    level = Data(LEVEL).need("water level series")
+class INPUTS:
+    seed = Input(
+        type=Point,
+        desc="Where OFFSHORE the incoming sea state is measured, as a Point: "
+             "the pick's {coordinates, name} verbatim, a (lon, lat) pair, "
+             "'lat,lon', a point layer. Geocode a place name first. The nearest "
+             "buoy to it is the record the wave boundary is forced at, so put "
+             "it on the water the swell arrives across").optional(
+        "the buoy nearest the centre of the water the window was cut to "
+        "is the one the wave deck's open edge is forced at")
+    station = Input(
+        type=Point,
+        desc="Where INSHORE the current is read over time, as a Point: the "
+             "pick's {coordinates, name} verbatim, a (lon, lat) pair, "
+             "'lat,lon', a point layer. Geocode a place name first. The speed "
+             "and the wave height are charted at the node of the mesh it "
+             "settles onto, so put it in the surf zone you are asking about")
+
+    mesh_resolution_m = replace(
+        RESOLUTION,
+        desc="Target element edge length the water is triangulated at; the "
+             "longshore current is driven across the surf zone, so what this "
+             "has to resolve is the width of the breaking band")
+
+    open_depth_threshold_m = Input(
+        default=DEFAULT_OPEN_DEPTH_M,
+        bounds=(-200.0, -1.0), units="m",
+        desc="How deep a boundary stretch must reach for it to be designated "
+             "the OPEN edge the measured sea state enters through; every "
+             "stretch that reaches it opens, and a window where none does has "
+             "no edge for the spectrum and refuses")
+
+    extent = Input(EXTENT).supplied(geometry="rectangle")
+    domain = Input(DOMAIN).need("hydrography", kind="coastline", geometry="polyline")
+    bed = Input(BED).need("bathymetry")
+    wave = Input(WAVE).need("wave series", at="seed")
+    level = Input(LEVEL).need("water level series")
 
 
 class STEERING(T2D):
@@ -200,7 +198,6 @@ DOC = dict(
         "(`tomawac_nearshore_waves`); agitation behind a breakwater "
         "(`artemis_harbor_agitation`); a current with no waves in it"
     ),
-    params=PARAMS,
     controls=(
         ("input_mode",
          '"user_gated" presents the resolved sea state, the tide and the mesh '

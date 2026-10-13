@@ -21,6 +21,7 @@ from trid3nt_server.workflows.telemac.modules.sheet import (
     fill,
     solve_cores,
 )
+from seated import value_inputs
 
 #: A partition every box this runs on can seat, so the assertions are about the
 #: keyword and not about the machine the suite happens to run on.
@@ -47,7 +48,7 @@ def test_a_count_past_this_box_refuses_by_name():
     assert str(BOX_CORES) in str(raised.value)
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
     with pytest.raises(SlotRefused):
-        workflow.accept_keyword("PARALLEL PROCESSORS", BOX_CORES + 1)
+        workflow.input("PARALLEL PROCESSORS").accept(BOX_CORES + 1)
 
 
 def test_no_template_takes_a_cores_argument():
@@ -59,7 +60,7 @@ def test_no_template_takes_a_cores_argument():
                  if hasattr(tool.fn, "workflow")]
     assert templates
     for workflow in templates:
-        assert "cores" not in {prm.name for prm in workflow.params}
+        assert "cores" not in {prm.name for prm in value_inputs(workflow)}
         assert "PARALLEL PROCESSORS" in workflow.sheet_doc()
 
 
@@ -72,9 +73,9 @@ def test_a_coupled_run_states_the_count_once_and_it_is_the_carriers():
 
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
     assert len(run_bodies(workflow.steering)) > 1
-    identifier, value, _note = workflow.accept_keyword("PARALLEL PROCESSORS",
-                                                       PARTITIONED)
-    assert (identifier, value) == (PROCESSORS, PARTITIONED)
+    held = workflow.input("PARALLEL PROCESSORS")
+    assert held.body is workflow.steering
+    assert (held.name, held.accept(PARTITIONED)) == (PROCESSORS, PARTITIONED)
 
 
 def test_the_stated_count_is_the_count_the_solve_runs_on():

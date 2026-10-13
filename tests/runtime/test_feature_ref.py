@@ -16,22 +16,22 @@ import pytest
 
 from trid3nt_server.inputs.point import Point
 from trid3nt_server.workflows.runtime import fill
-from trid3nt_server.workflows.runtime import Data
+from trid3nt_server.inputs.input import Input
 from seated import resolve_params
 from trid3nt_server.workflows.runtime.errors import DeclarationError
 from trid3nt_server.inputs.slots import DOMAIN, OBSERVE, RAIN, WEATHER
 
 
 def _row(**need):
-    return dataclasses.replace(Data(DOMAIN).need("hydrography", **need), name="domain")
+    return dataclasses.replace(Input(DOMAIN).need("hydrography", **need), name="domain")
 
 
 async def _env():
-    return fill._Env(params=await resolve_params((), {}), data={})
+    return fill._Env(data={})
 
 
 def test_a_stated_variable_is_what_a_record_row_asks_for() -> None:
-    row = dataclasses.replace(Data(OBSERVE).need("water quality sample",
+    row = dataclasses.replace(Input(OBSERVE).need("water quality sample",
                                         of="TEMPERATURE"), name="observe")
     assert fill._asked_of(row, None) == "TEMPERATURE"
 
@@ -57,7 +57,7 @@ def test_only_the_domain_has_a_kind_to_state() -> None:
     the domain refuses one at the line that wrote it."""
     with pytest.raises(DeclarationError, match="is not a domain"):
         class DATA:
-            rivers = Data.need("hydrography", kind="flowline")
+            rivers = Input().need("hydrography", kind="flowline")
 
 
 @pytest.mark.asyncio
@@ -90,7 +90,7 @@ async def test_a_slot_asks_only_the_sources_its_ingestion_reads(
     import trid3nt_server.tools  # noqa: F401 - registers the fetcher rows
     from trid3nt_server.tools.search.match import match, sources_with_coverage
 
-    row = dataclasses.replace(Data(slot).need(data_class), name="row")
+    row = dataclasses.replace(Input(slot).need(data_class), name="row")
     need = dataclasses.replace(
         await fill._need(await _env(), row, data_class, "row"),
         lon=-122.72, lat=45.57, opens="2024-01-10T00:00:00Z",

@@ -15,7 +15,7 @@ from trid3nt_server.inputs.gate import pending
 from trid3nt_server.inputs.gate.cards.run_inputs import (
     RunInputsDeclinedError, review_run_inputs)
 from trid3nt_server.inputs.slots import EXTENT
-from trid3nt_server.workflows.runtime import DataDecl
+from trid3nt_server.inputs.input import Input
 
 
 def _tool(mesher: Literal["om2d", "reg_grid"] = "reg_grid", extent: Any = None,
@@ -24,7 +24,7 @@ def _tool(mesher: Literal["om2d", "reg_grid"] = "reg_grid", extent: Any = None,
 
 
 # The slot an input reads through is what the workflow behind the tool declares for it.
-_tool.workflow = SimpleNamespace(data=(DataDecl("extent", slot=EXTENT),))
+_tool.workflow = SimpleNamespace(inputs=(Input(EXTENT, name="extent"),))
 
 
 class _Emitter:

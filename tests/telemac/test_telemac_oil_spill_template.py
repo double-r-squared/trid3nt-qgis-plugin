@@ -17,6 +17,7 @@ from trid3nt_server.workflows.telemac.workflow import stated
 from trid3nt_server.workflows.telemac.templates.oil_spill import (
     oil_spill as template,
 )
+from seated import value_inputs, row_inputs
 
 _TOOL = "telemac_oil_spill"
 
@@ -26,7 +27,7 @@ def _workflow():
 
 
 def _rows():
-    return {row.name: row for row in _workflow().data}
+    return {row.name: row for row in row_inputs(_workflow())}
 
 
 def test_registered_on_the_model_surface():
@@ -88,7 +89,7 @@ def test_the_discharge_is_one_reading_and_never_the_grid_it_came_from():
 def test_the_baseline_params_are_the_runtimes_and_are_not_restated():
     """A template declares no domain twin, no keyword twin and no seated input of its
     own; the mesh ask's, the engine's and the bed's are seated on it."""
-    declared = [prm.name for prm in _workflow().params]
+    declared = [prm.name for prm in value_inputs(_workflow())]
     for gone in ("location", "bbox", "river_geometry_uri", "reach_length_km",
                  "friction_law", "friction_coefficient", "output_interval_min",
                  "evaporation_mm_per_day", "rainfall_gridmet_window",
@@ -99,8 +100,7 @@ def test_the_baseline_params_are_the_runtimes_and_are_not_restated():
     # Every seated input is on the sheet; the ones this question does not state for
     # itself are seated at the end, in the order the engine seats them, and
     # one it differs on keeps its own place and its own opinion of the value.
-    own = [prm.name for prm in template.PARAMS.__dict__.values()
-           if getattr(prm, "name", None)]
+    own = [prm.name for prm in value_inputs(template.INPUTS)]
     assert declared[:len(own)] == own
     seated = [name for name in SEATED if name not in own]
     assert declared[len(own):] == seated
@@ -110,7 +110,7 @@ def test_the_question_keeps_only_its_own_inputs():
     """What an oil question asks: where the oil went in, which oil, how much
     dissolved and how the slick is drawn. The flow that carries it is the inflow
     run's value, which is the discharge ROW's, so it is no param of this one."""
-    declared = {prm.name for prm in _workflow().params}
+    declared = {prm.name for prm in value_inputs(_workflow())}
     assert "discharge_m3s" not in declared
     assert {"release", "spill_fraction", "spill_duration_s", "oil_type",
             "oil_release_step"} <= declared
@@ -156,7 +156,7 @@ def test_the_ex_release_params_are_gone_from_the_declared_wire():
 
     from trid3nt_server.tools import TOOL_REGISTRY
 
-    declared = {p.name for p in _workflow().params}
+    declared = {p.name for p in value_inputs(_workflow())}
     wire = set(inspect.signature(TOOL_REGISTRY[_TOOL].fn).parameters)
     gone = {"source_q_m3s", "oil_concentration_mgl"}
     assert not (declared & gone) and not (wire & gone)

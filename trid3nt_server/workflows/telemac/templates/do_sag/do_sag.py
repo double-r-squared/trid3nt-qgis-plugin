@@ -6,8 +6,9 @@ import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LEVEL, LINE
+from trid3nt_server.inputs.input import Input
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Param,
+    register_workflow,
 )
 from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL
@@ -18,29 +19,8 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
 from trid3nt_server.workflows.telemac.templates.do_sag import streeter_phelps
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DATA", "DOC", "OUTPUTS", "PARAMS",
+__all__ = ["CAPTIONS", "DOC", "OUTPUTS", "INPUTS",
            "STEERING", "telemac_do_sag"]
-
-
-class PARAMS:
-    outfall_coords = Param(
-        optional=True,
-        type=Point,
-        derived_when_absent=(
-            "with a domain supplied the outfall sits near the top of its "
-            "centerline and the sag distance is measured downstream from there; "
-            "with no domain either, the run refuses rather than inventing where "
-            "a permitted discharge is"),
-        desc="Where the discharge enters the water, as a Point: the pick's "
-             "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
-             "point layer. Geocode a place name first. On a river with no domain "
-             "supplied it is also the seed the reach is walked downstream from")
-
-    do_standard_mgl = Param(
-        default=5.0, bounds=(0.0, 15.0),
-        units="mg/L",
-        desc="The DO water-quality standard the sag is judged against; 5 is a "
-             "common warm-water aquatic-life criterion")
 
 
 _RESULT = "r2d_domain.slf"
@@ -65,15 +45,32 @@ _K2_PER_DAY = 0.9
 _SATURATION_MGL = 9.022
 
 
-class DATA:
-    domain = Data(DOMAIN).need("hydrography", at="outfall_coords",
-                               span_km=_REACH_LENGTH_KM)
-    line = Data(LINE).supplied(geometry="polyline")
-    bed = Data(BED).need("bathymetry")
-    discharge = Data(DISCHARGE).need("discharge series").context(
+class INPUTS:
+    outfall_coords = Input(
+        type=Point,
+        desc="Where the discharge enters the water, as a Point: the pick's "
+             "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
+             "point layer. Geocode a place name first. On a river with no domain "
+             "supplied it is also the seed the reach is walked downstream from").optional(
+        "with a domain supplied the outfall sits near the top of its "
+        "centerline and the sag distance is measured downstream from there; "
+        "with no domain either, the run refuses rather than inventing where "
+        "a permitted discharge is")
+
+    do_standard_mgl = Input(
+        default=5.0, bounds=(0.0, 15.0),
+        units="mg/L",
+        desc="The DO water-quality standard the sag is judged against; 5 is a "
+             "common warm-water aquatic-life criterion")
+
+    domain = Input(DOMAIN).need("hydrography", at="outfall_coords",
+                                span_km=_REACH_LENGTH_KM)
+    line = Input(LINE).supplied(geometry="polyline")
+    bed = Input(BED).need("bathymetry")
+    discharge = Input(DISCHARGE).need("discharge series").context(
         "the National Water Model published no streamflow over this domain "
         "at that cycle")
-    level = Data(LEVEL).need("water level series").optional()
+    level = Input(LEVEL).need("water level series").optional()
 
 
 class STEERING(T2D):
@@ -160,7 +157,6 @@ DOC = dict(
         "(`telemac_rain_on_grid`); a closed body with no through-flow, which "
         "has no sag"
     ),
-    params=PARAMS,
     controls=(
         ("input_mode",
          '"user_gated" presents the resolved carrier discharge and bed source for '

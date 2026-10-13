@@ -3,31 +3,19 @@
 
 from __future__ import annotations
 
-from trid3nt_server.errors import DeclarativeError
+from trid3nt_server.errors import (DeclarationError, DeclarativeError,
+                                   GateRefusedError)
 
 __all__ = [
     "DeclarativeError",
     "GateRefusedError",
     "NamelessFailureError",
-    "ParamOutOfRangeError",
     "DeclarationError",
     "said",
     "StepFailedError",
     "SuppliedCoverageError",
     "SuppliedGeometryError",
 ]
-
-
-class DeclarationError(DeclarativeError):
-    error_code = "DECLARATION_INVALID"
-
-
-class ParamOutOfRangeError(DeclarativeError):
-    error_code = "PARAM_OUT_OF_RANGE"
-
-
-class GateRefusedError(DeclarativeError):
-    error_code = "GATE_INPUT_REQUIRED"
 
 
 class SuppliedCoverageError(DeclarativeError):

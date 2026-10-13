@@ -10,6 +10,7 @@ from trid3nt_server.inputs.domain import Domain
 from trid3nt_server.tools.mesh import step as mesh_step
 from trid3nt_server.tools.mesh.artifact import MeshArtifact
 from trid3nt_server.inputs import run_notes
+from seated import value_inputs
 
 
 def _recipe(bed: str, *, resolution_m: float = 20.0):
@@ -115,8 +116,13 @@ def _run_recipe(monkeypatch, bed: str, friction: float) -> dict:
         seen.append(mesh)
         raise LookupError("the recipe is all this test reads")
 
-    state = Fill(workflow=workflow, keywords={"FRICTION_COEFFICIENT": friction},
-                 params=asyncio.run(resolve_params(workflow.params, {})))
+    from trid3nt_contracts.common import Origin
+    from trid3nt_server.workflows.runtime.fill import ACCEPTED, Verdict
+
+    state = Fill(workflow=workflow,
+                 inputs=asyncio.run(resolve_params(value_inputs(workflow), {})))
+    state.inputs["FRICTION_COEFFICIENT"] = Verdict(ACCEPTED, friction,
+                                                   origin=Origin.USER)
     env = production(state)
     env.run.update(domain=_cut(bed), bed=bed)
     with monkeypatch.context() as patch:

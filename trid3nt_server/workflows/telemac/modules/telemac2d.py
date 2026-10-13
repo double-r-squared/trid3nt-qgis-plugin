@@ -11,7 +11,6 @@ from typing import Any, Mapping, Sequence
 
 from trid3nt_server.inputs.rain import Rain
 from trid3nt_server.inputs.series import align
-from trid3nt_server.inputs.slots import OBSERVE
 from trid3nt_server.inputs.temporal import RATE, STATE, Series
 
 from ..authoring.atmosphere import (ATMOSPHERE_READS, Atmosphere,
@@ -678,7 +677,7 @@ T2D.reads(**PRIMITIVES, drogues=read_drogues)
 T2D.FILLED_BY = MappingProxyType({
     "source": {"ABSCISSAE_OF_SOURCES": lambda placed: [placed["at"][0]],
                "ORDINATES_OF_SOURCES": lambda placed: [placed["at"][1]]},
-    OBSERVE: {"INITIAL_VALUES_OF_TRACERS": lambda sample: [sample.value]},
+    "observe": {"INITIAL_VALUES_OF_TRACERS": lambda sample: [sample.value]},
     # The latitude is what a coupled ice module computes the sun at; no other term of a cartesian, tide-free deck reads it.
     MOMENT: {**ORIGIN_OF_TIME,
              "LATITUDE_OF_ORIGIN_POINT": lambda moment: moment["lat"]}})

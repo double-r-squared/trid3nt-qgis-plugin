@@ -131,15 +131,11 @@ def read_records(path: Path | None = None) -> list[dict[str, Any]]:
 
 def build_record(*, run_id: str | None, engine: str | None,
                  module: str | None,
-                 sheet: Sequence[Any],
+                 inputs: Mapping[str, Mapping[str, Any]],
                  provenance: Sequence[Any], result: Any,
                  wall_seconds: float | None, origin: str,
                  notes: Sequence[str],
-                 fill: Mapping[str, Mapping[str, Any]] | None = None,
                  correct_end: bool | None = None,
-                 keywords: Mapping[str, Any] | None = None,
-                 supplied: Mapping[str, Any] | None = None,
-                 sources: Sequence[Any] = (),
                  outputs: Sequence[Mapping[str, Any]] = (),
                  mesh: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """One run record, from what the publish stage already holds."""
@@ -149,19 +145,13 @@ def build_record(*, run_id: str | None, engine: str | None,
         "engine": engine,
         "module": module,
         "origin": origin,
-        "sheet": [_row(row) for row in sheet],
-        # The raw keyword floor is no Param and on no sheet row; a reproduction from arguments alone would run a different deck.
-        "keywords": {k: _small(v) for k, v in (keywords or {}).items()},
-        # Slots handed to the run are part of the invocation and on no param sheet.
-        "supplied": {k: _small(v) for k, v in (supplied or {}).items()},
-        # Which source filled each matched slot and why: the pick and its reason as the card showed them.
-        "sources": {choice.slot: {"picked": choice.picked,
-                                  "reason": choice.sentence}
-                    for choice in sources},
+        # THE ONE MAP: every input of the run by name - a stated value, a keyword of the solved deck, a supplied or
+        # matched row - with who stated it and the source that names it. A reproduction reads the arguments here.
+        "inputs": {name: {"value": _small(row.get("value")),
+                          "origin": row.get("origin"),
+                          "source": row.get("source")}
+                   for name, row in inputs.items()},
         "provenance": [_provenance(row) for row in provenance],
-        # Each slot of the solved deck: value and origin; the template survives here and nowhere else on the line.
-        "fill": {name: {"value": _small(row.get("value")), "from": row.get("from")}
-                 for name, row in (fill or {}).items()},
         "correct_end": correct_end,
         # The mesh content key, and on a reuse the run that built it.
         "mesh": {"mesh_size_m": getattr(result, "mesh_size_m", None),
@@ -171,17 +161,6 @@ def build_record(*, run_id: str | None, engine: str | None,
         "notes": list(notes),
         # What the run put on the map: the one place outputs are read back once artifacts and session are gone.
         "outputs": [dict(layer) for layer in outputs],
-    }
-
-
-def _row(row: Any) -> dict[str, Any]:
-    """One resolved param with its origin; a stated value and the template's own are different evidence."""
-    return {
-        "name": getattr(row, "name", None),
-        "value": _small(getattr(row, "value", None)),
-        "origin": getattr(row, "origin", None),
-        "units": getattr(row, "units", None),
-        "note": getattr(row, "note", "") or None,
     }
 
 

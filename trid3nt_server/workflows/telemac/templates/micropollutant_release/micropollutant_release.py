@@ -6,8 +6,9 @@ import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LEVEL
+from trid3nt_server.inputs.input import Input
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Param,
+    register_workflow,
 )
 from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, series
@@ -16,45 +17,8 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DATA", "DOC", "OUTPUTS", "PARAMS",
+__all__ = ["CAPTIONS", "DOC", "OUTPUTS", "INPUTS",
            "STEERING", "telemac_micropollutant_release"]
-
-
-class PARAMS:
-    release = Param(
-        optional=True,
-        type=Point,
-        derived_when_absent=(
-            "the release sits at release_fraction along the domain the mesh was "
-            "built over; the travelled distance is measured from there"),
-        desc="Where the substance enters the water, as a Point: the pick's "
-             "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
-             "point layer. Geocode a place name first. On a river with no domain "
-             "it is also the seed the reach is walked downstream from")
-    release_fraction = Param(
-        default=0.1, bounds=(0.05, 0.9),
-        desc="Along-domain release position, 0=inflow..1=outflow; the source "
-             "must sit strictly INSIDE the domain, never on a boundary. It sits "
-             "near the top so the substance has water left to sorb and settle in")
-    release_duration_s = Param(
-        default=3600.0,
-        bounds=(1.0, 86400.0), units="s",
-        desc="Finite injection window; the substance is released over it and the "
-             "rest of the run is what happens to what was released")
-
-    monitoring_point = Param(
-        optional=True,
-        type=Point,
-        derived_when_absent=(
-            "the history is read at monitoring_fraction along the domain the "
-            "mesh was built over"),
-        desc="Where the dissolved history is read, as a Point: the pick's "
-             "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
-             "point layer. Geocode a place name first")
-    monitoring_fraction = Param(
-        default=0.85, bounds=(0.1, 0.95),
-        desc="Along-domain position the history is read at when no point was "
-             "given, 0=inflow..1=outflow")
 
 
 _RELEASE = Placed("source", point="release", fraction="release_fraction",
@@ -74,14 +38,45 @@ _FRICTION_COEFFICIENT = 33.0
 _DISSOLVED = "MICRO POLLUTANT MG/L"
 
 
-class DATA:
-    domain = Data(DOMAIN).need("hydrography", at="release",
-                               span_km=_REACH_LENGTH_KM)
-    bed = Data(BED).need("bathymetry")
-    discharge = Data(DISCHARGE).need("discharge series").context(
+class INPUTS:
+    release = Input(
+        type=Point,
+        desc="Where the substance enters the water, as a Point: the pick's "
+             "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
+             "point layer. Geocode a place name first. On a river with no domain "
+             "it is also the seed the reach is walked downstream from").optional(
+        "the release sits at release_fraction along the domain the mesh was "
+        "built over; the travelled distance is measured from there")
+    release_fraction = Input(
+        default=0.1, bounds=(0.05, 0.9),
+        desc="Along-domain release position, 0=inflow..1=outflow; the source "
+             "must sit strictly INSIDE the domain, never on a boundary. It sits "
+             "near the top so the substance has water left to sorb and settle in")
+    release_duration_s = Input(
+        default=3600.0,
+        bounds=(1.0, 86400.0), units="s",
+        desc="Finite injection window; the substance is released over it and the "
+             "rest of the run is what happens to what was released")
+
+    monitoring_point = Input(
+        type=Point,
+        desc="Where the dissolved history is read, as a Point: the pick's "
+             "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
+             "point layer. Geocode a place name first").optional(
+        "the history is read at monitoring_fraction along the domain the "
+        "mesh was built over")
+    monitoring_fraction = Input(
+        default=0.85, bounds=(0.1, 0.95),
+        desc="Along-domain position the history is read at when no point was "
+             "given, 0=inflow..1=outflow")
+
+    domain = Input(DOMAIN).need("hydrography", at="release",
+                                span_km=_REACH_LENGTH_KM)
+    bed = Input(BED).need("bathymetry")
+    discharge = Input(DISCHARGE).need("discharge series").context(
         "the National Water Model published no streamflow over this "
         "domain at that cycle")
-    level = Data(LEVEL).need("water level series").optional()
+    level = Input(LEVEL).need("water level series").optional()
 
 
 class STEERING(T2D):
@@ -160,7 +155,6 @@ DOC = dict(
         "suspended SEDIMENT plume carrying nothing (`telemac_sediment_plume`); "
         "a dissolved-oxygen sag (`telemac_do_sag`); groundwater contamination"
     ),
-    params=PARAMS,
     controls=(
         ("input_mode",
          '"user_gated" presents the resolved scenario sheet for review/edit and asks '

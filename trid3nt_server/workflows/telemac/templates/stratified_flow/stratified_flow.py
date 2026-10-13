@@ -8,8 +8,9 @@ from dataclasses import replace
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs.slots import BED, DOMAIN, LEVEL
 from trid3nt_server.tools.mesh.recipe import RESOLUTION
+from trid3nt_server.inputs.input import Input
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Param,
+    register_workflow,
 )
 from trid3nt_server.workflows.runtime.resolution import SensitivityDecl
 from trid3nt_server.inputs import point_arg, Point
@@ -22,34 +23,39 @@ from trid3nt_server.workflows.telemac.modules.telemac3d import (
 )
 from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DATA", "DOC", "OUTPUTS", "PARAMS", "STEERING",
+__all__ = ["CAPTIONS", "DOC", "OUTPUTS", "INPUTS", "STEERING",
            "telemac3d_stratified_flow"]
 
 
-class PARAMS:
-    seed = Param(
-        optional=True,
+_RESULT_3D = "res3d_basin.slf"
+_RESULT_2D = "res2d_basin.slf"
+
+# in solver steps, not seconds
+_LISTING_PERIOD = 100
+
+
+class INPUTS:
+    seed = Input(
         type=Point,
-        derived_when_absent=(
-            "the domain polygon supplied on the call is the body of water the "
-            "run solves over"),
         desc="A point ON or beside the body of water this question is about, "
              "as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) "
              "pair, 'lat,lon' or a point layer (geocode a place name first). "
              "The mapped "
              "outline that point names becomes the domain; a domain supplied "
-             "directly supersedes it, and a body nobody mapped is drawn")
+             "directly supersedes it, and a body nobody mapped is drawn").optional(
+        "the domain polygon supplied on the call is the body of water the "
+        "run solves over")
 
-    warm_temp_c = Param(
+    warm_temp_c = Input(
         bounds=(-2.0, 40.0), units="C",
         desc="Epilimnion (warm surface layer) temperature the column OPENS at. "
              "The run exchanges no heat with the atmosphere, so what happens to "
              "this difference is the whole answer")
-    cold_temp_c = Param(
+    cold_temp_c = Input(
         bounds=(-2.0, 40.0), units="C",
         desc="Hypolimnion (cold bottom layer) temperature; the initial "
              "top-to-bottom difference is what the run either keeps or mixes away")
-    thermocline_depth_m = Param(
+    thermocline_depth_m = Input(
         bounds=(0.5, 200.0), units="m",
         desc="Depth of the thermocline below the free surface. The vertical grid "
              "is planned to HOLD it and REFUSES when no admissible sigma stretch "
@@ -62,18 +68,9 @@ class PARAMS:
              "detail; the 3D node count is this mesh's nodes times the planes "
              "the deck states")
 
-
-_RESULT_3D = "res3d_basin.slf"
-_RESULT_2D = "res2d_basin.slf"
-
-# in solver steps, not seconds
-_LISTING_PERIOD = 100
-
-
-class DATA:
-    domain = Data(DOMAIN).need("hydrography", at="seed")
-    bed = Data(BED).need("bathymetry")
-    level = Data(LEVEL).need("water level series").context(
+    domain = Input(DOMAIN).need("hydrography", at="seed")
+    bed = Input(BED).need("bathymetry")
+    level = Input(LEVEL).need("water level series").context(
         "no water-level gauge published a reading over this domain that day; "
         "the free surface opens at the zero the bed is counted from")
 
@@ -165,7 +162,6 @@ DOC = dict(
         "(`artemis_harbor_agitation`); a salinity intrusion up an estuary, "
         "which needs a tidal liquid boundary a closed body has none of"
     ),
-    params=PARAMS,
     controls=(
         ("input_mode",
          '"user_gated" presents the resolved column, the deck it is solved '

@@ -27,15 +27,15 @@ The discipline for both (project norms):
 
 ## Pattern A - a new template on an existing engine
 
-A template is VALUES over one engine module, not a function: `PARAMS` and `DATA`
-class bodies, the module's keywords, the mesh ask, the placed reads and the
+A template is VALUES over one engine module, not a function: one `INPUTS`
+class body, the module's keywords, the mesh ask, the placed reads and the
 outputs (`docs/design/workflows.md`). It reuses the engine's facade, its module
 wrappers and its worker. A template declares no data operation: data that does
 not fit a slot is refused by name, naming the step that makes it fit. The seam
 list, from the TELEMAC templates:
 
 1. **The declarations** -- `workflows/<engine>/<template>/declarations.py`: the
-   `PARAMS` rows (each with where its value may come from, bounds, units and
+   value `Input` rows (each with where its value may come from, bounds, units and
    consequence tag) and the model-facing `DOC`. Nothing here executes.
 
 2. **The template** -- `workflows/<engine>/<template>/<template>.py`: the `DATA`

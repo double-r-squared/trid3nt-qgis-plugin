@@ -20,8 +20,10 @@ from trid3nt_server.inputs.observation import (
     observation,
 )
 from trid3nt_server.inputs.user_input import UserInputError
-from trid3nt_server.workflows.runtime.data import Data, tool
+from trid3nt_server.inputs.input import Input
+from trid3nt_server.workflows.runtime.data import tool
 from trid3nt_server.inputs.slots import OBSERVE, ingest_slot
+from seated import row_inputs
 
 _POLYGON = {"type": "Polygon", "coordinates": [[
     [-122.70, 45.50], [-122.60, 45.50], [-122.60, 45.56], [-122.70, 45.56],
@@ -134,16 +136,15 @@ def test_the_row_declares_the_slot_and_what_the_model_reads_off_it():
     """The row states the CLASS and the point it is asked at, and nothing else:
     the slot is its name, the unit is the keyword's and the two sentences are
     the template's captions."""
-    from trid3nt_server.workflows.runtime.data import data_rows
 
     class DATA:
-        observe = Data(OBSERVE).need("water quality sample", at=(-122.65, 45.53))
+        observe = Input(OBSERVE).need("water quality sample", at=(-122.65, 45.53))
 
-    (row,) = data_rows(DATA)
+    (row,) = row_inputs(DATA)
     assert row.slot == OBSERVE
     assert row.data_class == "water quality sample"
     assert row.coercion == {"near": (-122.65, 45.53)}
     # A reading is a record to read it off, OR the number itself.
-    assert row.wire_annotation == (str | float | None)
+    assert row.wire_type == (str | float | None)
     assert "the number itself" in row.doc_line
     assert "water quality sample" in row.doc_line

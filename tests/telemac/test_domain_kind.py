@@ -12,6 +12,7 @@ rather than fourteen times in fourteen files.
 from __future__ import annotations
 
 import pytest
+from seated import row_inputs
 
 #: The questions whose domain is the water their SEED stands on.
 SEEDED_QUESTIONS = (
@@ -50,7 +51,7 @@ def _picked(of: str) -> str:
 def _domain(tool: str):
     from trid3nt_server.tools import TOOL_REGISTRY
 
-    rows = {row.name: row for row in TOOL_REGISTRY[tool].fn.workflow.data}
+    rows = {row.name: row for row in row_inputs(TOOL_REGISTRY[tool].fn.workflow)}
     return rows["domain"]
 
 

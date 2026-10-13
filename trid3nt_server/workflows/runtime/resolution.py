@@ -52,12 +52,11 @@ class SensitivityDecl:
 
 def sensitivity_notes(decl: SensitivityDecl,
                       published: Collection[str],
-                      sheet: Sequence[Any],
-                      fill: Mapping[str, Mapping[str, Any]] | None = None,
+                      inputs: Mapping[str, Mapping[str, Any]],
                       mesh_size_m: Any = None) -> tuple[str, ...]:
     """The honesty note(s) this run carries about its own fidelity, or ``()``.
-    One note per run; a declared quantity the run did not publish is dropped. ``fill`` is the solved deck's
-    slots with origins (a keyword lever is read there); ``mesh_size_m`` is the published mesh edge."""
+    One note per run; a declared quantity the run did not publish is dropped. ``inputs`` is the run's inputs
+    by name with their origins - the lever is read there, a value or a keyword alike; ``mesh_size_m`` is the published mesh edge."""
     if not decl:
         return ()
     present = [(quantity, cls) for quantity, cls in decl.rows
@@ -66,11 +65,8 @@ def sensitivity_notes(decl: SensitivityDecl,
         return ()
 
     lever = decl.lever
-    row = next((r for r in sheet if getattr(r, "name", None) == lever), None)
-    refined = getattr(row, "origin", None) == "user"
-    # A keyword lever has no param row: the fill records who stated it, and a user set it deliberately.
-    stated = str(((fill or {}).get(lever) or {}).get("from") or "")
-    refined = refined or stated.startswith("user")
+    # A lever a user stated was set deliberately.
+    refined = (inputs.get(lever) or {}).get("origin") == "user"
     at = f" at {float(mesh_size_m):g} m" if mesh_size_m is not None else ""
 
     classes = sorted({cls for _, cls in present})

@@ -8,8 +8,9 @@ from dataclasses import replace
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LEVEL, LINE, OBSERVE
 from trid3nt_server.tools.mesh.recipe import RESOLUTION
+from trid3nt_server.inputs.input import Input
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Param,
+    register_workflow,
 )
 from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, series
@@ -19,46 +20,8 @@ from trid3nt_server.workflows.telemac.modules.outputs import (
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
 from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DATA", "DOC", "OUTPUTS", "PARAMS",
+__all__ = ["CAPTIONS", "DOC", "OUTPUTS", "INPUTS",
            "STEERING", "telemac_eutrophication"]
-
-
-class PARAMS:
-    seed = Param(
-        optional=True, type=Point,
-        derived_when_absent=(
-            "nothing is fetched and the domain is the polygon the caller "
-            "supplied or drew"),
-        desc="Where on the channel the modelled stretch STARTS, as a Point: the "
-             "pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', "
-             "a point layer. Geocode a place name first. The stretch walked "
-             "downstream of it is the water one pass is measured over; supply "
-             "the domain polygon instead and this is not read")
-
-    station = Param(
-        optional=True,
-        type=Point,
-        derived_when_absent=(
-            "the two history charts are read as the domain-wide maximum at each "
-            "instant rather than at one place"),
-        desc="Where to watch the biomass and the oxygen over time, as a Point: "
-             "the pick's {coordinates, name} verbatim, a (lon, lat) pair, "
-             "'lat,lon' or a point layer (geocode a place name first). The "
-             "profiles are all longitudinal and do not move with it")
-
-    do_standard_mgl = Param(
-        default=5.0, bounds=(0.0, 15.0),
-        units="mg/L",
-        desc="The DO water-quality standard the water is judged against; 5 is a "
-             "common warm-water aquatic-life criterion. It never reaches the "
-             "deck: no keyword names a standard, and the oxygen profile carries "
-             "it as a reference line")
-
-    mesh_resolution_m = replace(
-        RESOLUTION,
-        desc="Target element edge length the domain is triangulated at; it also "
-             "sets the CFL time step, so it is what decides whether a long "
-             "window finishes")
 
 
 # Strickler; the outflow stage is derived at this same roughness
@@ -78,19 +41,52 @@ _ENTERING = [2.0, 0.05, 0.02, 1.0, 0.5, 0.05, 2.0, 8.667]
 _PHYTO_IN, _PO4_IN, _NO3_IN = _ENTERING[0], _ENTERING[1], _ENTERING[3]
 
 
-class DATA:
-    domain = Data(DOMAIN).need("hydrography", at="seed",
-                               span_km=_REACH_LENGTH_KM)
-    line = Data(LINE).supplied(geometry="polyline")
+class INPUTS:
+    seed = Input(
+        type=Point,
+        desc="Where on the channel the modelled stretch STARTS, as a Point: the "
+             "pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', "
+             "a point layer. Geocode a place name first. The stretch walked "
+             "downstream of it is the water one pass is measured over; supply "
+             "the domain polygon instead and this is not read").optional(
+        "nothing is fetched and the domain is the polygon the caller "
+        "supplied or drew")
 
-    bed = Data(BED).need("bathymetry")
+    station = Input(
+        type=Point,
+        desc="Where to watch the biomass and the oxygen over time, as a Point: "
+             "the pick's {coordinates, name} verbatim, a (lon, lat) pair, "
+             "'lat,lon' or a point layer (geocode a place name first). The "
+             "profiles are all longitudinal and do not move with it").optional(
+        "the two history charts are read as the domain-wide maximum at each "
+        "instant rather than at one place")
 
-    discharge = Data(DISCHARGE).need("discharge series").optional()
+    do_standard_mgl = Input(
+        default=5.0, bounds=(0.0, 15.0),
+        units="mg/L",
+        desc="The DO water-quality standard the water is judged against; 5 is a "
+             "common warm-water aquatic-life criterion. It never reaches the "
+             "deck: no keyword names a standard, and the oxygen profile carries "
+             "it as a reference line")
 
-    observe = Data(OBSERVE).need("water quality sample").context(
+    mesh_resolution_m = replace(
+        RESOLUTION,
+        desc="Target element edge length the domain is triangulated at; it also "
+             "sets the CFL time step, so it is what decides whether a long "
+             "window finishes")
+
+    domain = Input(DOMAIN).need("hydrography", at="seed",
+                                span_km=_REACH_LENGTH_KM)
+    line = Input(LINE).supplied(geometry="polyline")
+
+    bed = Input(BED).need("bathymetry")
+
+    discharge = Input(DISCHARGE).need("discharge series").optional()
+
+    observe = Input(OBSERVE).need("water quality sample").context(
         "no water-quality site near this domain reports a water "
         "temperature; the stated value stands")
-    level = Data(LEVEL).need("water level series").optional()
+    level = Input(LEVEL).need("water level series").optional()
 
 
 class STEERING(T2D):
@@ -175,7 +171,6 @@ DOC = dict(
         "conservative plume that only dilutes (`telemac_dye_release`); a SEASONAL "
         "bloom in standing water - this measures ONE PASS. Nutrients are STATED"
     ),
-    params=PARAMS,
     controls=(
         ("input_mode",
          '"user_gated" presents the resolved carrier discharge and the deck the '

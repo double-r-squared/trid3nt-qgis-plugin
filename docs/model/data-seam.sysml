@@ -570,7 +570,7 @@ package DataSeam {
 
     part contextRow : ContextRow {
         doc /*
-        code: trid3nt_server/workflows/runtime/data.py
+        code: trid3nt_server/inputs/input.py
         */
     }
 
@@ -588,7 +588,7 @@ package DataSeam {
 
     part needDeclaration : SlotNeed {
         doc /*
-        code: trid3nt_server/workflows/runtime/data.py
+        code: trid3nt_server/inputs/input.py
         */
     }
 

@@ -18,12 +18,9 @@ from types import MappingProxyType, SimpleNamespace
 import pytest
 from pydantic import BaseModel
 
+from trid3nt_server.inputs.input import Input
 from trid3nt_server.workflows.runtime import (
-    Data,
-    DataDecl,
-    Param,
     DeclarationError,
-    ResolvedParams,
     StepFailedError,
     SuppliedGeometryError,
     Workflow,
@@ -207,20 +204,20 @@ def derive_broken(params):
 # --- Param declarations ------------------------------------------------------ #
 def test_inverted_bounds_refused():
     with pytest.raises(DeclarationError):
-        Param("x", desc="d", default=1.0, bounds=(9.0, 1.0))
+        Input(name="x", desc="d", default=1.0, bounds=(9.0, 1.0))
 
 
 @pytest.mark.asyncio
 async def test_a_value_outside_its_bounds_refuses_by_name_and_never_clamps():
     """The lever is the user's: a value moved onto the bound would run a question
     nobody asked and say nothing while it did it."""
-    declared = [Param("a", desc="d", default=1.0,
+    declared = [Input(name="a", desc="d", default=1.0,
                       bounds=(0.0, 5.0), units="m")]
     with pytest.raises(Exception) as exc:
         await resolve_params(declared, {"a": 99.0})
     assert "a=99 m is outside the declared range 0 to 5 m" in str(exc.value)
     p = await resolve_params(declared, {"a": 5.0})
-    assert p.value_of("a") == 5.0 and "outside" not in p.row("a").note
+    assert p["a"].value == 5.0
 
 
 @pytest.mark.asyncio
@@ -230,12 +227,12 @@ async def test_the_bound_compares_numbers_and_does_not_retype_the_param():
     The bound reads its ends as numbers, which is right; handing back what it
     read makes an engine keyword refuse later and name the KEYWORD, not the
     declaration."""
-    declared = Param("levels", desc="d", default=13,
+    declared = Input(name="levels", desc="d", default=13,
                      bounds=(5.0, 30.0), type=int)
     for supplied, expected in (({"levels": 13}, 13), ({}, 13),
                                ({"levels": 30}, 30), ({"levels": 5}, 5)):
         resolved = await resolve_params([declared], supplied)
-        value = resolved.value_of("levels")
+        value = resolved["levels"].value
         assert value == expected and isinstance(value, int), (supplied, value)
 
 
@@ -243,7 +240,7 @@ async def test_the_bound_compares_numbers_and_does_not_retype_the_param():
 async def test_non_numeric_bounded_value_refuses_never_defaults():
     with pytest.raises(Exception) as exc:
         await resolve_params(
-            [Param("a", desc="d", default=1.0, bounds=(0.0, 5.0))],
+            [Input(name="a", desc="d", default=1.0, bounds=(0.0, 5.0))],
             {"a": "nonsense"},
         )
     assert "not a number" in str(exc.value)
@@ -255,7 +252,7 @@ async def test_a_bool_is_refused_for_a_bounded_param():
     for flag in (True, False):
         with pytest.raises(Exception, match="not a number"):
             await resolve_params(
-                [Param("a", desc="d", default=1.0,
+                [Input(name="a", desc="d", default=1.0,
                        bounds=(0.0, 5.0))],
                 {"a": flag},
             )
@@ -263,23 +260,23 @@ async def test_a_bool_is_refused_for_a_bounded_param():
 
 @pytest.mark.asyncio
 async def test_optional_absent_param_resolves_to_none():
-    p = await resolve_params([Param("a", desc="d", optional=True)], {})
-    assert p.value_of("a") is None
+    p = await resolve_params([Input(name="a", desc="d").optional()], {})
+    assert "a" not in p
 
 
 @pytest.mark.asyncio
 async def test_a_default_is_stamped_as_the_templates_not_as_the_user():
-    decl = [Param("a", desc="d", default=3.0, type=float)]
+    decl = [Input(name="a", desc="d", default=3.0, type=float)]
     p = await resolve_params(decl, {})
-    assert p.value_of("a") == 3.0 and p.row("a").origin == "template"
+    assert p["a"].value == 3.0 and p["a"].origin == "template"
     p2 = await resolve_params(decl, {"a": 4.0})
-    assert p2.row("a").origin == "user"
+    assert p2["a"].origin == "user"
 
 
 @pytest.mark.asyncio
 async def test_an_absent_param_with_a_derived_stand_in_still_leaves_a_row():
-    decl = [Param("outfall", desc="where it enters", optional=True,
-                  derived_when_absent="seeded at the derived reach point")]
+    decl = [Input(name="outfall", desc="where it enters").optional(
+        "seeded at the derived reach point")]
     p = await resolve_params(decl, {})
     rows = provenance_entries(p, decl)
     assert [r.param for r in rows] == ["outfall"]
@@ -312,97 +309,71 @@ def test_one_author_word_declares_every_producer():
 
 
 def _params():
-    return [Param("base", desc="d", default=1.0, type=float),
-            Param("pt", desc="d", optional=True)]
+    return [Input(name="base", desc="d", default=1.0, type=float),
+            Input(name="pt", desc="d").optional()]
 
 
-@pytest.mark.asyncio
-async def test_resolver_refuses_a_param_declared_twice():
-    decl = [Param("base", desc="d", default=1.0, type=float),
-            Param("base", desc="other", default=2.0,
-                  type=float)]
-    with pytest.raises(DeclarationError, match="declared twice"):
-        await resolve_params(decl, {})
+def test_the_wire_refuses_an_input_declared_twice():
+    from trid3nt_server.inputs.user_input import WireArgsError
+    from trid3nt_server.workflows.runtime.workflow import _wire_signature
 
-
-# --- the interpreter ---------------------------------------------------------- #
-def _env(plan, p, data=(), *, input_mode=None, keywords=None, supplied=None):
-    from trid3nt_server.workflows.runtime.fill import _Env
-
-    return _Env(params=p, data={d.name: d for d in data},
-                input_mode=input_mode, keywords=dict(keywords or {}),
-                supplied=dict(supplied or {}), workflow=plan.name)
+    decl = [Input(name="base", desc="d", default=1.0, type=float),
+            Input(name="base", desc="other", default=2.0, type=float)]
+    with pytest.raises(WireArgsError, match="twice"):
+        _wire_signature(decl)
 
 
 # --- a ref tail is refused at BINDING, never bound to a silent None ----------- #
 
 
-# --- the DATA class body ------------------------------------------------------ #
-def test_the_class_body_names_its_rows_and_keeps_their_order():
-    """The attribute name IS the row name and the body's order IS the row order."""
-    from trid3nt_server.workflows.runtime import data_rows
+# --- the ONE class body -------------------------------------------------------- #
+def test_one_body_names_values_and_rows_alike_and_keeps_their_order():
+    """The attribute name IS the input's name and the body's order IS the order;
+    a value and a row are one class, told apart by what each states."""
+    from trid3nt_server.inputs.input import declared
 
-    class DATA:
+    class INPUTS:
+        depth_m = Input(default=1.0, bounds=(0.0, 9.0), desc="a depth")
+        armed = Input(type=bool, desc="a flag").optional()
         dem = tool("fetch_dem", source="3dep")
-        walls = Data.supplied(geometry="polyline").optional()
+        walls = Input().supplied(geometry="polyline").optional()
 
-    rows = data_rows(DATA)
-    assert [r.name for r in rows] == ["dem", "walls"]
-    assert rows[0].producer.kwargs["source"] == "3dep"
-    assert rows[1].producer is None and rows[1].geometry == "polyline"
-    assert rows[1].is_optional is True
-
-
-def test_an_unknown_row_on_the_body_is_an_attribute_error():
-    class DATA:
-        dem = tool("fetch_dem")
-
+    rows = declared(INPUTS)
+    assert all(type(row) is Input for row in rows)
+    assert [r.name for r in rows] == ["depth_m", "armed", "dem", "walls"]
+    assert [r.is_row for r in rows] == [False, False, True, True]
+    assert rows[0].bounds == (0.0, 9.0) and not rows[0].required
+    assert rows[2].producer.kwargs["source"] == "3dep"
+    assert rows[3].producer is None and rows[3].geometry == "polyline"
+    assert rows[3].is_optional is True
     with pytest.raises(AttributeError):
-        DATA.demm
+        INPUTS.deth_m
 
 
-# --- the PARAMS class body ---------------------------------------------------- #
-def test_the_params_body_names_its_rows_and_keeps_their_order():
-    """The attribute name IS the param name and the body's order IS the order
-    the card lists them in."""
-    from trid3nt_server.workflows.runtime import param_rows
+def test_the_old_declaration_names_are_gone():
+    import trid3nt_server.workflows.runtime as runtime
 
-    class PARAMS:
-        depth_m = Param(default=1.0, bounds=(0.0, 9.0),
-                        desc="a depth")
-        armed = Param(optional=True, type=bool, desc="a flag")
-
-    rows = param_rows(PARAMS)
-    assert [p.name for p in rows] == ["depth_m", "armed"]
-    assert rows[0].bounds == (0.0, 9.0)
+    for gone in ("Param", "Data", "DataDecl", "param_rows", "data_rows",
+                 "ResolvedParams"):
+        assert not hasattr(runtime, gone)
 
 
-def test_an_unknown_param_on_the_body_is_an_attribute_error():
-    """A typo is caught by Python at the line that wrote it, and another template's
-    param name cannot be written at all - there is no body carrying it."""
-    class PARAMS:
-        depth_m = Param(default=1.0, bounds=(0.0, 9.0),
-                        desc="a depth")
+def test_a_value_with_no_desc_refuses_the_declaration():
+    from trid3nt_server.inputs.input import declared
 
-    with pytest.raises(AttributeError):
-        PARAMS.deth_m
+    with pytest.raises(DeclarationError, match="declares no desc"):
+        declared([Input(name="depth_m", default=1.0, bounds=(0.0, 9.0))])
 
 
 def test_one_declaration_cannot_be_bound_to_two_names():
     """A row is one declaration in one body; sharing the object would make the
     second name silently the first."""
-    shared = Param(default=1.0, bounds=(0.0, 9.0), desc="d")
+    shared = Input(default=1.0, bounds=(0.0, 9.0), desc="d")
 
     with pytest.raises(DeclarationError, match="declared again"):
         class PARAMS:
             first = shared
             second = shared
-
-
-# --- the branch the INTERPRETER decides --------------------------------------- #
-def _flagged(**overrides):
-    return [Param("flag", desc="run the extra step",
-                  default=False, **overrides)]
 
 
 # --- a producer-less Data slot: context handed in, or labelled absence -------- #
@@ -411,24 +382,24 @@ def _flagged(**overrides):
 def test_a_producer_backed_data_may_not_be_optional():
     """A producer either produces or fails typed, so there is no absence to describe."""
     with pytest.raises(DeclarationError, match="optional"):
-        DataDecl("mesh", tool(f"{_HERE}.stub_producer")).optional()
+        Input(name="mesh", producer=tool(f"{_HERE}.stub_producer")).optional()
 
 
 def test_a_context_slot_declares_the_shape_it_accepts():
     """A slot names no source - the SHAPE is the only thing it can honestly say."""
-    slot = DataDecl("structure").supplied(geometry="polyline").optional()
+    slot = Input(name="structure").supplied(geometry="polyline").optional()
     assert slot.producer is None
     assert slot.geometry == "polyline" and slot.is_optional is True
 
 
 def test_a_context_slot_refuses_a_shape_nobody_declares():
     with pytest.raises(DeclarationError, match="not a declared shape"):
-        DataDecl("structure").supplied(geometry="squiggle")
+        Input(name="structure").supplied(geometry="squiggle")
 
 
 def test_a_produced_row_is_not_also_supplied():
     with pytest.raises(DeclarationError, match="declares a producer AND"):
-        DataDecl("walls", tool(f"{_HERE}.stub_producer")).supplied(geometry="polyline")
+        Input(name="walls", producer=tool(f"{_HERE}.stub_producer")).supplied(geometry="polyline")
 
 
 async def stub_refine(**kwargs):
@@ -442,7 +413,7 @@ async def stub_refine(**kwargs):
 # --- generated docstring ------------------------------------------------------ #
 def test_docstring_front_loads_routing_within_the_truncation_budget():
     doc = render_docstring(
-        summary="S.", routing="R " * 100, params=_params(), returns="a layer",
+        summary="S.", routing="R " * 100, inputs=_params(), returns="a layer",
     )
     assert doc.index("\nParams:") < 1000
     assert doc.startswith("S.")
@@ -450,14 +421,14 @@ def test_docstring_front_loads_routing_within_the_truncation_budget():
 
 def test_docstring_refuses_a_routing_block_over_the_budget():
     with pytest.raises(ValueError, match="truncation budget"):
-        render_docstring(summary="S.", routing="x" * 1200, params=_params(),
+        render_docstring(summary="S.", routing="x" * 1200, inputs=_params(),
                          returns="a layer")
 
 
 def test_the_routing_view_stops_before_the_param_sheet():
     """Two views, one declaration: a surface that only helps someone CHOOSE the
     tool takes the routing block; the model filling the params takes the sheet."""
-    kwargs = dict(summary="S.", routing="R.", params=_params(), returns="a layer",
+    kwargs = dict(summary="S.", routing="R.", inputs=_params(), returns="a layer",
                   not_for="something else")
     routing = render_docstring(**kwargs, view="routing")
     full = render_docstring(**kwargs)
@@ -478,7 +449,7 @@ def test_do_sag_publishes_both_docstring_views():
 def test_docstring_reports_bounds_units_and_labeled_defaults():
     doc = render_docstring(
         summary="S.", routing="R.",
-        params=[Param("a", desc="the knob", default=2.0,
+        inputs=[Input(name="a", desc="the knob", default=2.0,
                       bounds=(1.0, 3.0), units="mg/L")],
         returns="a layer")
     assert "mg/L" in doc and "range 1-3" in doc
@@ -486,13 +457,6 @@ def test_docstring_reports_bounds_units_and_labeled_defaults():
 
 
 # --- late binding: a plan DESCRIBES, the interpreter SUBSTITUTES -------------- #
-
-
-@pytest.mark.asyncio
-async def test_an_undeclared_param_read_refuses_at_construction():
-    p = await resolve_params(_params(), {})
-    with pytest.raises(AttributeError):
-        _ = p.ghost
 
 
 # --- the form gate's revision REACHES the run -------------------------------- #
@@ -569,46 +533,7 @@ def _deep_clean(depth):
     return node
 
 
-# --- the read-recording machinery is GONE: a read is just a read ------------- #
-@pytest.mark.asyncio
-async def test_a_concrete_read_is_value_of_and_nothing_watches_it():
-    """A param's value is read by its name and nothing records the read."""
-    for gone in ("get", "concrete_reads", "freeze_reads"):
-        assert not hasattr(ResolvedParams, gone)
-    p = await resolve_params(_params(), {})
-    assert p.value_of("base") == 1.0
-    assert p.value_of("ghost", "fallback") == "fallback"
-    assert p.row("base").value == 1.0
-    assert p.values_dict()["base"] == 1.0
-    assert [r.name for r in p.rows()] == ["base", "pt"]
-
-
 # --- the chart PAYLOAD is the surface, not the node's return dict ------------ #
-
-
-class _StubFacade(Workflow):
-    """A workflow the plan can be declared against, so registration reaches the
-    thing under test: the plan built and validated in ``__init__``. Its template
-    states the steps under STEPS, the way a real one states them under the names
-    its own engine reads."""
-
-    engine = "stub"
-
-    def steps(self):
-        return self.template.STEPS(self)
-
-
-async def _noop():
-    return None
-
-
-def _declare(params, plan_decl, data=(), name="declared_w"):
-    """Declare a workflow the way ``register_workflow`` does: the plan is built
-    inside ``__init__``."""
-    return _StubFacade(metadata=SimpleNamespace(name=name, engine="stub"),
-                       params=params, data=data,
-                       template=SimpleNamespace(PARAMS=params, DATA=data,
-                                                STEPS=plan_decl))
 
 
 # --- a context slot's declared SHAPE is checked at the front door ------------- #

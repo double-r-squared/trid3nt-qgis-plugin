@@ -21,6 +21,7 @@ from trid3nt_server.workflows.telemac.modules import (
 from trid3nt_server.workflows.telemac.modules.module import (
     SlotRefused,
 )
+from seated import value_inputs, row_inputs
 
 #: The process, its rows and its body, read off the wrapper that carries them.
 PROCESS = 7
@@ -190,7 +191,7 @@ def test_the_declared_params_resolve():
     from seated import resolve_params
 
     workflow = _template().telemac_micropollutant_release.workflow
-    asyncio.run(resolve_params(workflow.params, {}))
+    asyncio.run(resolve_params(value_inputs(workflow), {}))
 
 
 def test_the_template_declares_none_of_the_runtime_s_own_rows():
@@ -199,14 +200,13 @@ def test_the_template_declares_none_of_the_runtime_s_own_rows():
     dictionary describes. What is left is the question's own."""
     from seated import SEATED
 
-    from trid3nt_server.workflows.runtime import param_rows
 
     workflow = _template().telemac_micropollutant_release.workflow
-    declared = [prm.name for prm in workflow.params]
+    declared = [prm.name for prm in value_inputs(workflow)]
     # Every seated input is on the sheet; the ones this question does not state for
     # itself are seated at the end, in the order the engine seats them, and
     # one it differs on keeps its own place and its own opinion of the value.
-    own = {prm.name for prm in param_rows(_template().PARAMS)}
+    own = {prm.name for prm in value_inputs(_template().INPUTS)}
     assert set(SEATED) <= set(declared)
     seated = [name for name in SEATED if name not in own]
     assert declared[-len(seated):] == seated
@@ -227,7 +227,7 @@ def test_the_four_slots_are_the_world_this_run_stands_on():
     from trid3nt_server.inputs.slots import BED, DOMAIN
 
     data = {decl.name: decl for decl in
-            _template().telemac_micropollutant_release.workflow.data}
+            row_inputs(_template().telemac_micropollutant_release.workflow)}
     assert data["domain"].slot == DOMAIN
     assert data["domain"].data_class == "hydrography"
     assert data["bed"].slot == BED
@@ -242,7 +242,7 @@ def test_the_discharge_reaches_the_channel_as_ONE_reading_never_the_record():
     from trid3nt_server.inputs.slots import DISCHARGE
 
     data = {decl.name: decl for decl in
-            _template().telemac_micropollutant_release.workflow.data}
+            row_inputs(_template().telemac_micropollutant_release.workflow)}
     discharge = data["discharge"]
     assert discharge.slot == DISCHARGE and discharge.is_context
     assert discharge.data_class == "discharge series"
@@ -252,7 +252,7 @@ def test_an_unsurveyed_domain_still_runs_on_the_terrain_alone():
     """The bed is ONE need row now; the survey-then-terrain composition is the
     matched bed's own affair, not a second CONTEXT row on this template."""
     data = {decl.name: decl for decl in
-            _template().telemac_micropollutant_release.workflow.data}
+            row_inputs(_template().telemac_micropollutant_release.workflow)}
     assert data["bed"].is_context is False
 
 
@@ -260,9 +260,8 @@ def test_the_ambient_sediment_is_a_stated_deck_opinion_not_a_param():
     """Nothing fetches suspended sediment; ambient_spm_kg_m3 was a straight twin
     of INITIAL VALUES OF TRACERS position 2, so it is the keyword's own stated
     value now, like FRICTION_COEFFICIENT above it, and carries no Param."""
-    from trid3nt_server.workflows.runtime import param_rows
 
-    declared = {prm.name for prm in param_rows(_template().PARAMS)}
+    declared = {prm.name for prm in value_inputs(_template().INPUTS)}
     assert "ambient_spm_kg_m3" not in declared
     assert "source_q_m3s" not in declared
     assert "source_concentration_mgl" not in declared

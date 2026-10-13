@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT
+from seated import value_inputs, row_inputs
 
 
 def _declared():
@@ -24,7 +25,7 @@ def _rows():
     from trid3nt_server.tools import TOOL_REGISTRY
 
     return {row.name: row
-            for row in TOOL_REGISTRY["artemis_harbor_agitation"].fn.workflow.data}
+            for row in row_inputs(TOOL_REGISTRY["artemis_harbor_agitation"].fn.workflow)}
 
 
 def test_the_domain_is_asked_for_as_the_land_water_edge():
@@ -96,7 +97,7 @@ def test_the_template_declares_no_domain_twin():
     from trid3nt_server.tools import TOOL_REGISTRY
 
     params = {p.name for p in
-              TOOL_REGISTRY["artemis_harbor_agitation"].fn.workflow.params}
+              value_inputs(TOOL_REGISTRY["artemis_harbor_agitation"].fn.workflow)}
     assert params.isdisjoint({"location", "bbox", "river_geometry_uri",
                               "reach_length_km"})
 

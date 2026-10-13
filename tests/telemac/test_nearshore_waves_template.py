@@ -21,6 +21,7 @@ from trid3nt_server.workflows.telemac.modules import WAC, fill
 from trid3nt_server.workflows.telemac.modules.tomawac import (
     RESULT_FILENAME,
 )
+from seated import value_inputs, row_inputs
 
 _TOOL = "tomawac_nearshore_waves"
 #: The hour the deck marches, as the two keywords the module spells it in.
@@ -34,7 +35,7 @@ def _workflow():
 
 
 def _rows():
-    return {row.name: row for row in _workflow().data}
+    return {row.name: row for row in row_inputs(_workflow())}
 
 
 def test_the_world_is_the_water_a_coastline_leaves_inside_the_window():
@@ -108,7 +109,7 @@ def test_the_seaward_edge_is_opened_so_the_spectrum_has_somewhere_to_enter():
     # window, so inheriting it opens nothing and walls the whole rim.
     stated = ops["identify_ocean_boundary_sections"].kwargs["depth_threshold"]
     assert stated == "open_depth_threshold_m"
-    param = next(p for p in _workflow().params
+    param = next(p for p in value_inputs(_workflow())
                  if p.name == "open_depth_threshold_m")
     assert param.default == -12.0
 
@@ -235,4 +236,4 @@ def _deck():
 @pytest.mark.parametrize("named", ["seed", "station", "mesh_resolution_m",
                                    "event_time", "vertical_frame"])
 def test_the_question_declares_the_levers_a_caller_reaches_it_through(named):
-    assert named in {param.name for param in _workflow().params}
+    assert named in {param.name for param in value_inputs(_workflow())}

@@ -33,7 +33,7 @@ package SteeringSurface {
     read straight back by the engine's own parser, staged, and handed to the box.
 
     The module is the unit the whole surface is built around. A question is a
-    template: values over one module - a body of keywords, DATA rows, the reads
+    template: values over one module - a body of keywords, one body of inputs, the reads
     it PLACES, captions - and nothing below it knows the question exists. What a
     run WRITES is the module's own output table, and the reads over it are
     primitives named from that table; the run record carries the engine and the
@@ -63,7 +63,7 @@ package SteeringSurface {
         Beside the dictionary's own row it carries the PLAUSIBILITY BOUNDS a
         value of the keyword is taken inside, read from a sidecar because the
         dictionary itself is the image's and is compared to it byte for byte.
-        Those bounds are where a deleted Param's own range went: one range for
+        Those bounds are the keyword's own range: one range for
         every value the keyword holds, or one per element in the keyword's order,
         and a value outside refuses by the keyword's name at fill. It is the one
         table a calibration reads its priors and its ranges from.
@@ -128,9 +128,11 @@ package SteeringSurface {
 
     part def Fill {
         doc /*
-        What puts a value into an input: each input answers on arrival -
-        accepted, rejected with its remedies, missing, or defaulted - and a
-        value drawn on the canvas is one more fill of one input.
+        What puts a value into an input: ONE loop over the workflow's one
+        lookup, in which each input answers on arrival - accepted, rejected with
+        its remedies, missing, or defaulted - and leaves one verdict carrying
+        the value taken, who stated it and the source that names it. A value
+        drawn on the canvas is one more fill of one input.
         */
     }
 
@@ -183,10 +185,11 @@ package SteeringSurface {
 
     part def RunRecord {
         doc /*
-        One line per completed run: the engine and the module it ran under, the
-        sheet with its provenance, the raw keyword floor it was pinned by, the
-        answer. The template is not a field of the line; it survives as the
-        provenance of the slots it filled.
+        One line per completed run: the engine and the module it ran under and
+        ONE map of its inputs by name - a stated value, a keyword of the solved
+        deck, a supplied or matched row - each with its value, its origin and
+        its source. The template is not a field of the line; it survives as the
+        source of the keywords it stated.
         */
     }
 
@@ -753,7 +756,7 @@ package SteeringSurface {
         itself is the engine image's and is compared to it byte for byte, so
         nothing of ours may be written into it.
 
-        The bounds are where a deleted Param's own range went - one range for
+        The bounds are the keyword's own range - one range for
         the value the keyword holds, or one per element in the keyword's own
         order - and a value outside them REFUSES at fill by the KEYWORD's name,
         because that is the name the user set it under. It is the one table a
@@ -888,9 +891,9 @@ package SteeringSurface {
         slot carries the value it was solved at beside one of the four origins
         the card renders, and the record carries the solver's own correct-end
         flag. The four - user, derived, producer, template - are ONE set: a
-        template param's card row, its provenance entry and its journal row
+        template value's card row, its provenance entry and its journal entry
         write the same word, and nothing declares where a value may come from.
-        A param that declares no default and is not optional is REQUIRED, and
+        A value that declares no default and is not optional is REQUIRED, and
         left unstated the fill refuses it in every mode. The adapters
         build a turn from the contracts IR and import no provider SDK for it.
 
@@ -1058,8 +1061,9 @@ package SteeringSurface {
         release point the source coordinates, a measured sample the opening
         tracer, the fetched sea state and level a wave deck's open edge and
         still water, a settled station the spectrum printout point. The module
-        states which, no template line routes them, a value the template
-        states wins, and an absent input fills nothing.
+        states which - a row by the NAME of its type, a placement by its own -
+        no template line routes them, a value the template states wins, and an
+        absent input fills nothing.
 
         The MOMENT a run opens at is one of them, in each module's own
         spelling and in UTC: the date and hour triples of the hydrodynamic
@@ -1077,11 +1081,57 @@ package SteeringSurface {
         */
     }
 
+    requirement def AnInputIsOneDeclaration {
+        doc /*
+        A run is handed everything through ONE declaration. A template's value
+        and its typed row are the same class in one body, told apart by what
+        each states; the engine's keyword keeps its dictionary row and is
+        answered as an input is - its name, the one range that bounds it, its
+        accept rule. The workflow has ONE lookup - the template's own input,
+        then one the engine or a row's type declares, then the keyword - and
+        the fill ONE loop over it, so every input leaves one verdict with one
+        origin. The two doors of the wire keep their own sets: an argument is a
+        declared input, a name inside the keyword container is the engine's,
+        and each refuses the other's by name. What a row's type declares beside itself is an input like
+        any other, and the mesh ask's edge is the mesher's own. Values and rows
+        are documented to the model in one section, required first, and the run
+        record carries one map of them by name.
+        */
+    }
+
+    satisfy requirement AnInputIsOneDeclaration by fill;
+    satisfy requirement AnInputIsOneDeclaration by engineWorkflow;
+    satisfy requirement AnInputIsOneDeclaration by runRecord;
+    verify requirement AnInputIsOneDeclaration by
+        "tests/runtime/test_declarative_library.py::test_one_body_names_values_and_rows_alike_and_keeps_their_order";
+    verify requirement AnInputIsOneDeclaration by
+        "tests/runtime/test_declarative_library.py::test_the_old_declaration_names_are_gone";
+    verify requirement AnInputIsOneDeclaration by
+        "tests/runtime/test_workflow_skeleton.py::test_values_and_rows_are_documented_in_one_section_in_wire_order";
+    verify requirement AnInputIsOneDeclaration by
+        "tests/runtime/test_one_fill.py::test_one_loop_answers_a_value_a_keyword_and_a_row_with_one_origin_stamp";
+    verify requirement AnInputIsOneDeclaration by
+        "tests/runtime/test_one_fill.py::test_a_keyword_is_answered_as_an_input_is_through_the_one_lookup";
+    verify requirement AnInputIsOneDeclaration by
+        "tests/runtime/test_one_fill.py::test_beside_keywords_only_a_declared_input_is_taken";
+    verify requirement AnInputIsOneDeclaration by
+        "tests/runtime/test_one_fill.py::test_inside_keywords_a_declared_input_refuses_naming_where_it_belongs";
+    verify requirement AnInputIsOneDeclaration by
+        "tests/runtime/test_run_journal.py::test_a_keyword_stated_on_a_coupled_body_keeps_its_own_entry";
+    verify requirement AnInputIsOneDeclaration by
+        "tests/runtime/test_domain_bed_and_context_slots.py::test_one_lookup_answers_for_a_value_and_a_row_and_refuses_the_rest";
+    verify requirement AnInputIsOneDeclaration by
+        "tests/runtime/test_domain_bed_and_context_slots.py::test_a_bed_row_declares_the_frame_and_a_templates_own_row_wins";
+    verify requirement AnInputIsOneDeclaration by
+        "tests/telemac/test_inputs_fill_their_keywords.py::test_the_fetched_level_and_sea_state_fill_a_wave_deck";
+    verify requirement AnInputIsOneDeclaration by
+        "tests/runtime/test_run_journal.py::test_the_record_carries_one_map_of_inputs_by_name";
+
     requirement def TheRunHoldsOneMapping {
         doc /*
-        The run holds ONE mapping - its params, the rows it fetched, what each
-        stage produced and the keywords so far - and every consumer reads it by
-        plain name. A composite reads what it needs off the mapping itself when
+        The run holds ONE mapping, keyed by name and by nothing else - its
+        stated values, the rows it fetched, what each stage produced and the
+        keywords so far - and every consumer reads it by plain name. A composite reads what it needs off the mapping itself when
         it expands, so a template passes only literals and the names of its
         own inputs. Every name a template writes - in a mesh recipe, a
         measurement, a placement or a composite argument - is checked at the
@@ -1214,7 +1264,7 @@ package SteeringSurface {
     verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_module_surface.py::test_a_floor_that_is_not_a_mapping_refuses_by_name";
     verify requirement EverythingOverridable by
-        "tests/runtime/test_run_journal.py::test_the_record_carries_the_raw_keyword_floor_the_run_was_pinned_by";
+        "tests/runtime/test_run_journal.py::test_the_record_carries_one_map_of_inputs_by_name";
     verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_module_surface.py::test_resolution_order_is_engine_then_template_then_fill";
     verify requirement EverythingOverridable by
@@ -1233,8 +1283,6 @@ package SteeringSurface {
         "tests/telemac/test_telemac_water_temperature.py::test_a_stated_duration_sizes_the_weather_record";
     verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_module_surface.py::test_a_rate_stated_by_name_arms_the_term_that_reads_it";
-    verify requirement EverythingOverridable by
-        "tests/runtime/test_run_journal.py::test_the_record_carries_the_slots_the_run_was_supplied";
     verify requirement EverythingOverridable by
         "tests/telemac/test_telemac_khione.py::test_the_qualified_floor_reaches_the_coupled_body";
     verify requirement EverythingOverridable by
@@ -1417,11 +1465,11 @@ package SteeringSurface {
     verify requirement ModuleIsTheUnit by
         "tests/telemac/test_telemac_run_identity.py::test_the_run_record_carries_the_engine_and_the_module_and_no_template";
     verify requirement ModuleIsTheUnit by
-        "tests/runtime/test_run_journal.py::test_a_slot_is_recorded_with_its_value_and_where_it_came_from";
+        "tests/runtime/test_run_journal.py::test_the_record_carries_one_map_of_inputs_by_name";
     verify requirement ModuleIsTheUnit by
         "tests/runtime/test_run_journal.py::test_the_solver_s_correct_end_is_read_off_the_solve_step_and_recorded";
     verify requirement ModuleIsTheUnit by
-        "tests/runtime/test_run_journal.py::test_the_run_s_own_line_carries_the_fill_and_the_correct_end_its_solve_step_said";
+        "tests/runtime/test_run_journal.py::test_the_run_s_own_line_carries_every_input_and_the_correct_end_its_solve_step_said";
     verify requirement ModuleIsTheUnit by
         "tests/telemac/test_telemac_run_identity.py::test_the_vocabulary_is_the_four_the_card_renders";
     verify requirement ModuleIsTheUnit by

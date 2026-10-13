@@ -9,8 +9,9 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LEVEL, OBSERVE, WEATHER
 from trid3nt_server.tools.mesh.recipe import RESOLUTION
+from trid3nt_server.inputs.input import Input
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Param,
+    register_workflow,
 )
 from trid3nt_server.workflows.telemac.modules import KHIONE, T2D, series
 from trid3nt_server.workflows.telemac.modules.khione import RESULT_FILENAME
@@ -20,44 +21,8 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DATA", "DOC", "ICE_THICKNESS", "OUTPUTS",
-           "PARAMS", "STEERING", "telemac_ice_cover"]
-
-
-class PARAMS:
-    seed = Param(
-        optional=True, type=Point,
-        derived_when_absent=(
-            "nothing is fetched and the domain is the polygon the caller "
-            "supplied or drew"),
-        desc="Where on the water the modelled stretch STARTS, as a Point: the "
-             "pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', "
-             "a point layer. Geocode a place name first. It seeds the reach the "
-             "domain is cut from; supply the domain polygon - a lake, a pond, a "
-             "reservoir - instead and this is not read")
-    station = Param(
-        optional=True,
-        type=Point,
-        derived_when_absent=(
-            "the series is read at the point 98% of the way down the modelled "
-            "domain, which is the water that has been under the cold longest"),
-        desc="Where the ice cover and its thickness are read over time, as a "
-             "Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, "
-             "'lat,lon' or a point layer. Geocode a place name first")
-    cover_threshold = Param(
-        optional=True, default=0.5,
-        type=float,
-        desc="Fraction of the surface under ice, 0 to 1, that counts as frozen "
-             "over - the cover chart draws it as a reference line beside the "
-             "series. A reporting threshold, not a physical constant: half the "
-             "surface by default")
-
-    mesh_resolution_m = replace(
-        RESOLUTION,
-        desc="Target element edge length the domain is triangulated at; the "
-             "budget that makes the ice is divided by the local DEPTH, and the "
-             "border ice grows from the BANK, so what this has to resolve is "
-             "how deep the water is and where its edge runs")
+__all__ = ["CAPTIONS", "DOC", "ICE_THICKNESS", "OUTPUTS",
+           "INPUTS", "STEERING", "telemac_ice_cover"]
 
 
 # total thickness: the border ice and the dynamic cover over it
@@ -79,20 +44,51 @@ _STATION = Placed("station", point="station", fraction=_STATION_FRAC,
 _INFLOW_ICE = [0.0, 0.0, 0.0]
 
 
-class DATA:
-    domain = Data(DOMAIN).need("hydrography", at="seed",
-                               span_km=_REACH_LENGTH_KM)
+class INPUTS:
+    seed = Input(
+        type=Point,
+        desc="Where on the water the modelled stretch STARTS, as a Point: the "
+             "pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', "
+             "a point layer. Geocode a place name first. It seeds the reach the "
+             "domain is cut from; supply the domain polygon - a lake, a pond, a "
+             "reservoir - instead and this is not read").optional(
+        "nothing is fetched and the domain is the polygon the caller "
+        "supplied or drew")
+    station = Input(
+        type=Point,
+        desc="Where the ice cover and its thickness are read over time, as a "
+             "Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, "
+             "'lat,lon' or a point layer. Geocode a place name first").optional(
+        "the series is read at the point 98% of the way down the modelled "
+        "domain, which is the water that has been under the cold longest")
+    cover_threshold = Input(
+        default=0.5,
+        type=float,
+        desc="Fraction of the surface under ice, 0 to 1, that counts as frozen "
+             "over - the cover chart draws it as a reference line beside the "
+             "series. A reporting threshold, not a physical constant: half the "
+             "surface by default").optional()
 
-    bed = Data(BED).need("bathymetry")
+    mesh_resolution_m = replace(
+        RESOLUTION,
+        desc="Target element edge length the domain is triangulated at; the "
+             "budget that makes the ice is divided by the local DEPTH, and the "
+             "border ice grows from the BANK, so what this has to resolve is "
+             "how deep the water is and where its edge runs")
 
-    discharge = Data(DISCHARGE).need("discharge series").context(
+    domain = Input(DOMAIN).need("hydrography", at="seed",
+                                span_km=_REACH_LENGTH_KM)
+
+    bed = Input(BED).need("bathymetry")
+
+    discharge = Input(DISCHARGE).need("discharge series").context(
         "the National Water Model published no streamflow over this "
         "domain at that cycle")
-    level = Data(LEVEL).need("water level series").optional()
+    level = Input(LEVEL).need("water level series").optional()
 
-    weather = Data(WEATHER).need("weather forcing")
-    observe = Data(OBSERVE).need("water quality sample", of="TEMPERATURE",
-                                 at="station").context(
+    weather = Input(WEATHER).need("weather forcing")
+    observe = Input(OBSERVE).need("water quality sample", of="TEMPERATURE",
+                                  at="station").context(
         "no sample near this domain in this window; the stated value stands")
 
 
@@ -179,7 +175,6 @@ DOC = dict(
         "(`telemac_water_temperature`); snow or ice on LAND; air temperature "
         "or a forecast, which the weather fetchers answer"
     ),
-    params=PARAMS,
     controls=(
         ("input_mode",
          '"user_gated" presents the resolved discharge, the weather station and '

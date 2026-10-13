@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 from trid3nt_server.workflows.telemac.templates.do_sag.streeter_phelps import do_profile
-from seated import SEATED
+from seated import SEATED, row_inputs, value_inputs, values_of
 from trid3nt_server.workflows.telemac.workflow import stated
 from trid3nt_server.workflows.telemac.modules.outputs import (
     Line,
@@ -22,6 +22,7 @@ from trid3nt_server.workflows.telemac.modules.outputs import (
 from trid3nt_server.workflows.telemac.templates.do_sag.streeter_phelps import (
     overlay,
 )
+from seated import value_inputs, values_of
 
 _FIXTURE = Path(__file__).parents[1] / "fixtures" / "telemac_o2_sp_idealized_profile.json"
 
@@ -71,24 +72,23 @@ def _template():
 def _resolve(**supplied):
     from seated import resolve_params
 
-    return asyncio.run(resolve_params(_workflow().params, dict(supplied)))
+    return asyncio.run(resolve_params(value_inputs(_workflow()), dict(supplied)))
 
 
 def test_declared_params_resolve():
     wf = _workflow()
-    assert [p.name for p in wf.params if p.name not in SEATED] == [
+    assert [p.name for p in value_inputs(wf) if p.name not in SEATED] == [
         "outfall_coords", "do_standard_mgl"]
-    assert _resolve().value_of("do_standard_mgl") == 5.0
+    assert _resolve()["do_standard_mgl"].value == 5.0
 
 
 def test_the_data_rows_are_the_engine_neutral_slots_this_run_stands_on():
     """One domain needing a hydrography class, one bed the match composes, and
     the line the domain's own producer measures beside it - no ladder, no
     fetcher named on a row."""
-    from trid3nt_server.workflows.runtime import data_rows
     from trid3nt_server.inputs.slots import BED, DOMAIN, LINE
 
-    rows = data_rows(_template().DATA)
+    rows = row_inputs(_template().INPUTS)
     assert [d.name for d in rows] == ["domain", "line", "bed", "discharge",
                                       "level"]
     by_name = {d.name: d for d in rows}
@@ -108,10 +108,9 @@ def test_the_carrier_is_one_reading_ranked_against_the_domain():
     """The dilution the whole sag rests on is a NUMBER, so the row is the
     discharge slot: whichever record the match ranks nearest the water, with a
     stated number standing over any record."""
-    from trid3nt_server.workflows.runtime import data_rows
     from trid3nt_server.inputs.slots import DISCHARGE
 
-    carrier = {d.name: d for d in data_rows(_template().DATA)}["discharge"]
+    carrier = {d.name: d for d in row_inputs(_template().INPUTS)}["discharge"]
     assert carrier.slot == DISCHARGE
     assert carrier.data_class == "discharge series"
     assert carrier.producer is None
@@ -125,9 +124,8 @@ def test_the_outfall_seeds_the_domain_match():
     import inspect
 
     from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.runtime import data_rows
 
-    domain = data_rows(_template().DATA)[0]
+    domain = row_inputs(_template().INPUTS)[0]
     assert domain.coercion["near"] == "outfall_coords"
     wire = set(inspect.signature(TOOL_REGISTRY["telemac_do_sag"].fn).parameters)
     assert "outfall_coords" in wire
@@ -144,7 +142,7 @@ def test_the_ex_release_params_are_gone_from_the_declared_wire():
 
     from trid3nt_server.tools import TOOL_REGISTRY
 
-    declared = {p.name for p in _workflow().params}
+    declared = {p.name for p in value_inputs(_workflow())}
     wire = set(inspect.signature(TOOL_REGISTRY["telemac_do_sag"].fn).parameters)
     gone = {"effluent_q_m3s", "effluent_do_mgl", "effluent_bod_mgl"}
     assert not (declared & gone) and not (wire & gone)
@@ -179,7 +177,7 @@ def test_an_absent_outfall_leaves_a_derived_provenance_row():
     """The user has to see what the sag distance is measured FROM."""
     from trid3nt_server.workflows.runtime import provenance_entries
 
-    row = next(r for r in provenance_entries(_resolve(), _workflow().params)
+    row = next(r for r in provenance_entries(_resolve(), value_inputs(_workflow()))
                if r.param == "outfall_coords")
     assert row.basis == "derived"
     assert "centerline" in (row.note or "")
@@ -193,7 +191,7 @@ def test_a_supplied_outfall_is_carried_as_a_user_row():
         _normalized(_workflow(), {"outfall_coords": ["-122.6735", "45.5175"]}))
     assert err is None and supplied["outfall_coords"] == Point(*_PORTLAND)
     row = next(r for r in provenance_entries(_resolve(**supplied),
-                                             _workflow().params)
+                                             value_inputs(_workflow()))
                if r.param == "outfall_coords")
     assert row.basis == "user"
 
@@ -245,8 +243,7 @@ def _filled(*, keywords=None, **supplied):
         steering=_template().STEERING, settled=_SETTLED["keywords"],
         produced={"settled": _SETTLED,
                   "source": {"at": [0.0, 0.0], "name": None}},
-        params={row.name: resolved.value_of(row.name)
-                for row in _workflow().params},
+        params=values_of(resolved, value_inputs(_workflow())),
         workflow="telemac_do_sag", title="",
         keywords=dict(keywords or {}), input_mode="auto"))
 
@@ -445,7 +442,7 @@ async def _normalized(workflow, args):
 
     with patch.object(fill_mod, "_produce", _held):
         state = await fill(Fill(workflow=workflow), args)
-    declared = {prm.name for prm in workflow.params}
+    declared = {prm.name for prm in value_inputs(workflow)}
     refused = [v.reason for v in state.inputs.values() if v.state == REJECTED]
     return ({n: v.value for n, v in state.inputs.items()
              if v.state == ACCEPTED and n in declared},

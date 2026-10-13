@@ -136,6 +136,12 @@ class Slot:
         # Other demands come from the engine's own listing, where LECDON names the keyword; a set invented here would guess at the Fortran's conditions.
         return self.is_file and self.file_mandatory and self.is_open
 
+    @property
+    def whole_bounds(self) -> tuple[float, float] | None:
+        """The ONE pair that bounds the whole value - what a card clamps an editor to and a refusal offers as its remedy.
+        A keyword with a pair per element has no single range, and the fill's refusal names the element."""
+        return self.bounds[0] if len(self.bounds) == 1 else None
+
     def check(self, value: Any) -> Any:
         value = self.fits(value, typed=self._typed)
         if self.choices and not self.multi_select and not self.is_list \
@@ -392,8 +398,8 @@ class Module(metaclass=_Body):
     # Every keyword the module has, by identifier.
     MODULE_INPUT: Mapping[str, Slot] = MappingProxyType({})
     COMPOSITES: Mapping[str, Composite] = MappingProxyType({})
-    # Keywords a run input fills itself, by the row's TYPE or a placement's name: identifier -> value read off what the input holds. A body that states one wins.
-    FILLED_BY: Mapping[Any, Mapping[str, Callable[[Any], Any]]] = MappingProxyType({})
+    # Keywords a run input fills itself, by the NAME of the row's type or of a placement: identifier -> value read off what the input holds. A body that states one wins.
+    FILLED_BY: Mapping[str, Mapping[str, Callable[[Any], Any]]] = MappingProxyType({})
     # What the module writes, by printouts mnemonic: one row per variable; a variable the dictionary offers and this table does not row is not written.
     MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({})
     # The primitives over that output: kind -> the read off a solved run.

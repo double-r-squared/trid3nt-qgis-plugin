@@ -17,17 +17,16 @@ from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.coverage import SourceChoice
 
 from trid3nt_server.inputs.bound_domain import bind_domain, reset_domain
+from trid3nt_server.inputs.input import Input, declared
 from trid3nt_server.inputs.run_notes import (
     bind_coverage, bind_notes, drain_coverage, drain_notes)
 from trid3nt_server.inputs.slots import Slot
 from trid3nt_server.inputs.user_input import WireArgsError
 
 from . import journal
-from .data import DataDecl, data_rows
 from .errors import DeclarativeError, said
-from .params import Param, ResolvedParams, param_rows
 from .resolution import SensitivityDecl, sensitivity_notes
-from .resolver import merge_provenance, provenance_entries
+from .provenance import merge_provenance, provenance_entries
 
 if TYPE_CHECKING:
     from .fill import Fill
@@ -47,10 +46,10 @@ class RunResult:
     results: dict[str, Any] = field(default_factory=dict)
     entries: list[SyntheticInput] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
-    params: ResolvedParams | None = None
+    #: Every input's verdict by name, as the fill and the launch stamped them.
+    inputs: dict[str, Any] = field(default_factory=dict)
     outputs: list[dict[str, Any]] = field(default_factory=list)
     choices: list[SourceChoice] = field(default_factory=list)
-    keywords: dict[str, Any] = field(default_factory=dict)
 
 
 class Workflow:
@@ -63,32 +62,30 @@ class Workflow:
     #: The SOLVE step's name; the skeleton reads the run prefix off it when the result carries none.
     solve_step: str = ""
 
-    #: The rows every template of this engine carries without restating them.
-    seated: tuple[DataDecl, ...] = ()
-
-    def inputs(self) -> tuple[Param, ...]:
-        """The params a declaration of this workflow carries without restating
+    def seated(self) -> tuple[Input, ...]:
+        """The inputs a declaration of this workflow carries without restating
         them: what the type of each of its rows states beside itself. An engine
         adds its own; the skeleton declares none."""
-        return tuple(Param(name=name, default=default, desc=desc)
-                     for slot in dict.fromkeys(row.slot for row in self.data
-                                               if row.slot is not None)
-                     for name, default, desc in slot.states)
+        return tuple(stated for slot in dict.fromkeys(
+            row.slot for row in self.inputs if row.slot is not None)
+            for stated in slot.states)
 
-    def __init__(self, *, metadata: Any, params: Any,
-                 template: Any, data: Any = (),
+    def __init__(self, *, metadata: Any, inputs: Any, template: Any,
                  sensitivity: Sequence[tuple[str, str]] | SensitivityDecl = (),
                  coerce: Sequence[Callable[[dict], Mapping[str, Any]]] = ()) -> None:
         self.metadata = metadata
         self.name = metadata.name
-        self.data = data_rows(data) + self.seated
         #: The template MODULE: STEERING, OUTPUTS, CAPTIONS and its files are read off its own names.
         self.template = template
-        #: Declared PARAMS rows in class-body order, then each input a row's type or the engine declares; a template's own row wins.
-        self.params = param_rows(params)
-        stated = {prm.name for prm in self.params}
-        self.params += tuple(prm for prm in self.inputs() if prm.name not in stated)
-        #: What the template calls every published variable and every DATA row it reads into; one dict.
+        #: THE ONE BODY: the template's inputs, then each one a row's type or the engine declares; a template's own wins.
+        #: Values lead the wire and rows follow, each in body order.
+        self.inputs = declared(inputs)
+        stated = {row.name for row in self.inputs}
+        self.inputs = tuple(sorted(
+            self.inputs + tuple(row for row in self.seated()
+                                if row.name not in stated),
+            key=lambda row: row.is_row))
+        #: What the template calls every published variable and every row it reads into; one dict.
         self.captions = dict(getattr(template, "CAPTIONS", {}) or {})
         #: Published reads in a resolution-sensitive class; see ``resolution.py``.
         self.sensitivity = (sensitivity if isinstance(sensitivity, SensitivityDecl)
@@ -97,6 +94,14 @@ class Workflow:
         self.error_prefix = str(getattr(metadata, "engine", "") or "workflow").upper()
         self.check()
 
+    def input(self, name: str) -> Any:
+        """THE ONE LOOKUP: the input a name states - the template's own, then one the
+        engine or a row's type declares; an engine answers for its keywords after
+        them, and a name nothing declares refuses."""
+        found = next((row for row in self.inputs if row.name == name), None)
+        if found is None:
+            raise WireArgsError(f"{name!r} is not an input of {self.name}.")
+        return found
 
     def check(self) -> None:
         """Refuse at import what this template's declarations cannot run; the
@@ -139,15 +144,12 @@ class Workflow:
         The engine's deck states it; a runtime knowing no engine states none."""
         return None
 
-    def checks(self, run: RunResult) -> tuple[str, ...]:
+    def checks(self, run: RunResult,
+               inputs: Mapping[str, Mapping[str, Any]]) -> tuple[str, ...]:
         """Validation checks over the finished run, as NOTES the caller narrates.
         A template that declares no sensitivity classes produces no note, and a
         check reports - it never retracts a solved run."""
-        params = getattr(run, "params", None)
-        sheet = params.rows() if params is not None else ()
-        return sensitivity_notes(self.sensitivity,
-                                 self._published(run), sheet,
-                                 fill=self._fill(run),
+        return sensitivity_notes(self.sensitivity, self._published(run), inputs,
                                  mesh_size_m=self._mesh_size_m(run))
 
     def _published(self, run: RunResult) -> set[str]:
@@ -218,21 +220,13 @@ class Workflow:
             for note in [*said_notes, *env.absences]:
                 exc.add_note(f"also missing from this run: {note}")
             raise
-        # Read after the launch: a param a person edited on the review card is seated on the run's own params.
-        run.entries = provenance_entries(env.params, self.params)
-        run.params = env.params
-        run.keywords = dict(state.keywords)
+        # Read after the launch: a value a person edited on the review card and a row first read by a stage are stamped by then.
+        run.entries = provenance_entries(env.inputs, self.inputs)
+        run.inputs = dict(env.inputs)
         run.notes += [*said_notes, *env.absences]
         run.outputs += published
         run.choices += matched
         return run
-
-    def accept_keyword(self, name: str, value: Any) -> tuple[str, Any, str]:
-        """One engine keyword at fill -> ``(identifier, value, note)``.
-
-        A skeleton that writes no engine input takes none."""
-        raise WireArgsError(f"{self.name} writes no engine keywords; "
-                            f"{name!r} is not an input of it.")
 
     def _error(self, code: str, exc: BaseException) -> dict[str, Any]:
         """The failure, plus whatever auxiliary outputs the run also lost on the way."""
@@ -245,7 +239,8 @@ class Workflow:
     async def _publish(self, run: RunResult, wall_seconds: float = 0.0, *,
                        supplied: Mapping[str, Any] | None = None) -> Any:
         result = run.value
-        notes = list(run.notes) + [n for n in self.checks(run) if n]
+        inputs = self._inputs(run, supplied or {})
+        notes = list(run.notes) + [n for n in self.checks(run, inputs) if n]
         # The tie view: sources ranked equal on every fact travel as rows so the model or user picks; a clear winner carries no table.
         notes += [_ranked_rows(choice) for choice in run.choices if choice.tie]
         update: dict[str, Any] = {
@@ -259,7 +254,7 @@ class Workflow:
         run_id = self._run_id(result, run)
         # The journal takes the MERGED notes: a label only on the layer would vanish with it.
         await asyncio.to_thread(self._journal, run_id, run, result,
-                                wall_seconds, notes, dict(supplied or {}))
+                                wall_seconds, notes, inputs)
         logger.info("%s complete layer_id=%s stages=%s notes=%s",
                     self.name, getattr(result, "layer_id", None),
                     list(run.results), notes)
@@ -284,14 +279,30 @@ class Workflow:
             return None
         return (run.results.get(self.solve_step) or {}).get("module")
 
-    def _fill(self, run: RunResult) -> dict[str, dict[str, Any]]:
-        """Every slot of the solved deck -> value and origin, off the solve step's sheet."""
-        if not self.solve_step:
-            return {}
-        sheet = (run.results.get(self.solve_step) or {}).get("sheet") or {}
-        return {name: {"value": row.get("value"),
-                       "from": str(row.get("provenance") or "")}
-                for name, row in (sheet.get("filled") or {}).items()}
+    def _inputs(self, run: RunResult,
+                supplied: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+        """THE RUN'S INPUTS BY NAME - value, origin, source: every keyword of the solved deck off the
+        solve step's sheet, then every input the fill answered that the deck does not already carry.
+        A row's value is what the caller supplied for it; a matched one holds none and names its source."""
+        sheet = (run.results.get(self.solve_step) or {}).get("sheet") or {} \
+            if self.solve_step else {}
+        inputs: dict[str, dict[str, Any]] = {}
+        for name, row in (sheet.get("filled") or {}).items():
+            origin, _, source = str(row.get("provenance") or "").partition(": ")
+            inputs[name] = {"value": row.get("value"), "origin": origin,
+                            "source": source or None}
+        for name, verdict in run.inputs.items():
+            if verdict.origin is None:
+                continue
+            held = self.input(name)
+            # A keyword of the carrier's deck is that deck's own row; one stated on a coupled body keeps the name it was stated under.
+            if getattr(held, "carried", False) and held.name in inputs:
+                continue
+            inputs[name] = {
+                "value": (supplied.get(name) if getattr(held, "is_row", False)
+                          else verdict.value),
+                "origin": verdict.origin.value, "source": verdict.source or None}
+        return inputs
 
     def _correct_end(self, run: RunResult) -> bool | None:
         """Did the solver reach its own correct end? None where the metrics say nothing."""
@@ -302,28 +313,25 @@ class Workflow:
         return None if flag is None else bool(flag)
 
     def _journal(self, run_id: str | None, run: RunResult, result: Any,
-                 wall_seconds: float,
-                 notes: Sequence[str] = (),
-                 supplied: Mapping[str, Any] | None = None) -> None:
-        """Append this run to the run journal, from publish where sheet, provenance and wall time are all in hand."""
+                 wall_seconds: float, notes: Sequence[str],
+                 inputs: Mapping[str, Mapping[str, Any]]) -> None:
+        """Append this run to the run journal, from publish where the inputs, provenance and wall time are all in hand."""
         from trid3nt_server.render.pipeline_emitter import current_emitter
 
-        sheet = run.params.rows() if run.params is not None else ()
         journal.append_record(journal.build_record(
             run_id=run_id, engine=self.engine or None,
-            module=self._module(run), fill=self._fill(run),
-            correct_end=self._correct_end(run), sheet=sheet,
+            module=self._module(run), inputs=inputs,
+            correct_end=self._correct_end(run),
             provenance=getattr(result, "synthetic_inputs", None) or [],
             result=result, wall_seconds=round(wall_seconds, 3),
             origin=journal.run_origin(live_session=current_emitter() is not None),
-            notes=list(notes), outputs=run.outputs, keywords=run.keywords,
-            supplied=dict(supplied or {}), sources=run.choices,
+            notes=list(notes), outputs=run.outputs,
             mesh=run.results.get("mesh"),
         ))
 
 
 #: Controls every workflow carries: whether the run pauses, whether a kept mesh is rebuilt, the raw keyword floor,
-#: and the source a caller names for a matched slot. None is a physical value, so none is a Param.
+#: and the source a caller names for a matched slot. None is a physical value, so none is an Input.
 _CONTROLS: tuple[tuple[str, Any, Any], ...] = (
     ("input_mode", str | None, None),
     ("restart_clean", bool, False),
@@ -344,16 +352,13 @@ def register_workflow(
     **register_kwargs: Any,
 ) -> Callable[..., Any]:
     """Generate and register the tool for a declared workflow.
-    The template module is the declaration (PARAMS, DATA, DOC); the signature is synthesized from the
-    declared params, so the model-facing schema comes from the declaration the run resolves."""
+    The template module is the declaration (INPUTS, DOC); the signature is synthesized from the
+    declared inputs, so the model-facing schema comes from the declaration the run resolves."""
     from trid3nt_server.tools import register_tool
 
-    params = param_rows(getattr(template, "PARAMS"))
-    data = getattr(template, "DATA", ())
     doc = getattr(template, "DOC", None)
-    workflow = facade(metadata=metadata, params=params, template=template,
-                      data=data, sensitivity=sensitivity, coerce=coerce)
-    params = workflow.params
+    workflow = facade(metadata=metadata, inputs=getattr(template, "INPUTS"),
+                      template=template, sensitivity=sensitivity, coerce=coerce)
 
     async def _run(**wire: Any) -> Any:
         return await workflow.run(wire)
@@ -361,20 +366,18 @@ def register_workflow(
     _run.__name__ = workflow.name
     _run.__qualname__ = workflow.name
     _run.__module__ = getattr(template, "__name__", __name__)
-    sig, annotations = _wire_signature(params, workflow.data)
+    sig, annotations = _wire_signature(workflow.inputs)
     _run.__signature__ = sig  # type: ignore[attr-defined]
     _run.__annotations__ = dict(annotations)
     _run.workflow = workflow  # type: ignore[attr-defined]
     if doc:
         from .docstring import render_docstring
 
-        # The sheet describes THIS wire, so it renders from the params the signature carries (the factory narrows
-        # ``params=PARAMS``); the SHEET line is the workflow's own, so a template cannot drift from it.
+        # The doc describes THIS wire, so it renders from the inputs the signature carries; the SHEET line is the
+        # workflow's own, so a template cannot drift from it.
         sheet = workflow.sheet_doc()
-        doc = {**doc, "params": params,
-               **({} if sheet is None else {"sheet": sheet}),
-               **_context_doc(workflow.data,
-                              doc.get("controls", ()))}
+        doc = {**doc, "inputs": workflow.inputs,
+               **({} if sheet is None else {"sheet": sheet})}
         _run.__doc__ = render_docstring(**doc)
         _run.routing_doc = render_docstring(**doc, view="routing")  # type: ignore[attr-defined]
 
@@ -385,33 +388,14 @@ def register_workflow(
     return register_tool(metadata, **register_kwargs)(_run)
 
 
-def _context_doc(data: Sequence[DataDecl],
-                 controls: Sequence[tuple[str, str]]) -> dict[str, Any]:
-    """The docstring's ``context`` rows and the ``controls`` with slots removed; a caller-fillable slot is documented once."""
-    slots = tuple(decl for decl in data if decl.fills_from_user)
-    names = {decl.name for decl in slots}
-    written = dict(controls)
-    return {
-        "controls": tuple((n, text) for n, text in controls if n not in names),
-        "context": tuple(
-            (decl.name, " ".join(p for p in (decl.doc_line, written.get(decl.name))
-                                 if p))
-            for decl in slots),
-    }
-
-
-def _wire_signature(params: Sequence[Param],
-                    data: Sequence[DataDecl] = ()) -> tuple[inspect.Signature, dict]:
-    """The generated tool's signature: declared params, context slots, aliases, controls.
+def _wire_signature(inputs: Sequence[Input]) -> tuple[inspect.Signature, dict]:
+    """The generated tool's signature: every input on the wire, then the controls.
     The ``**`` absorber carries an unknown key to the fill, which refuses it by name; without it the dispatch drops the key unsaid."""
-    # A required param's annotation admits no None, which is what lists it in the tool schema's ``required``.
+    # A required input's annotation admits no None, which is what lists it in the tool schema's ``required``;
+    # a producer-less row is on the wire because a caller naming the layer is the only way it is filled.
     entries: list[tuple[str, Any, Any]] = [
-        (prm.name, prm.wire_type if prm.required else prm.wire_type | None, None)
-        for prm in params
-    ]
-    # A producer-less Data slot is on the wire - a caller naming the layer is the only way it is filled.
-    entries += [(decl.name, decl.wire_annotation, None) for decl in data
-                if decl.fills_from_user]
+        (row.name, row.wire_type if row.required else row.wire_type | None, None)
+        for row in inputs if row.fills_from_user]
     entries += list(_CONTROLS)
     seen: set[str] = set()
     sig_params: list[inspect.Parameter] = []

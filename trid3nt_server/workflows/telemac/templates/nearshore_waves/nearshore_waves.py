@@ -9,34 +9,42 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT, LEVEL, WAVE
 from trid3nt_server.tools.mesh.recipe import RESOLUTION
+from trid3nt_server.inputs.input import Input
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Param,
+    register_workflow,
 )
 from trid3nt_server.tools.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.telemac.modules import WAC, series, spectrum
 from trid3nt_server.workflows.telemac.modules.tomawac import RESULT_FILENAME
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DATA", "DEFAULT_OPEN_DEPTH_M", "DOC",
-           "MESH", "OUTPUTS", "PARAMS", "STEERING", "tomawac_nearshore_waves"]
+__all__ = ["CAPTIONS", "DEFAULT_OPEN_DEPTH_M", "DOC",
+           "MESH", "OUTPUTS", "INPUTS", "STEERING", "tomawac_nearshore_waves"]
 
 
 # every boundary stretch at least this deep opens
 DEFAULT_OPEN_DEPTH_M: float = -12.0
 
 
-class PARAMS:
-    seed = Param(
-        optional=True, type=Point,
-        derived_when_absent=(
-            "the buoy nearest the centre of the water the window was cut to "
-            "is the one the open edge is forced at"),
+_GEOMETRY = "coast.slf"
+_BOUNDARY = "coast.cli"
+_STEERING_FILE = "tom_nearshore.cas"
+_SPECTRA = "tom_nearshore.spe"
+
+_STATION = Placed("station", point="station", label="Wave station")
+
+
+class INPUTS:
+    seed = Input(
+        type=Point,
         desc="Where OFFSHORE the incoming sea state is measured, as a Point: "
              "the pick's {coordinates, name} verbatim, a (lon, lat) pair, "
              "'lat,lon', a point layer. Geocode a place name first. The nearest "
              "buoy to it is the record the open boundary is forced at, so put "
-             "it on the water the swell arrives across")
-    station = Param(
+             "it on the water the swell arrives across").optional(
+        "the buoy nearest the centre of the water the window was cut to "
+        "is the one the open edge is forced at")
+    station = Input(
         type=Point,
         desc="Where INSHORE the waves are read over time, as a Point: the "
              "pick's {coordinates, name} verbatim, a (lon, lat) pair, "
@@ -50,7 +58,7 @@ class PARAMS:
              "waves shoal and then break where the DEPTH falls, so what this "
              "has to resolve is the slope of the bed across the surf zone")
 
-    open_depth_threshold_m = Param(
+    open_depth_threshold_m = Input(
         default=DEFAULT_OPEN_DEPTH_M,
         bounds=(-200.0, -1.0), units="m",
         desc="How deep a boundary stretch must reach for it to be designated "
@@ -58,21 +66,11 @@ class PARAMS:
              "stretch that reaches it opens, and a window where none does has "
              "no edge for the spectrum and refuses")
 
-
-_GEOMETRY = "coast.slf"
-_BOUNDARY = "coast.cli"
-_STEERING_FILE = "tom_nearshore.cas"
-_SPECTRA = "tom_nearshore.spe"
-
-_STATION = Placed("station", point="station", label="Wave station")
-
-
-class DATA:
-    extent = Data(EXTENT).supplied(geometry="rectangle")
-    domain = Data(DOMAIN).need("hydrography", kind="coastline", geometry="polyline")
-    bed = Data(BED).need("bathymetry")
-    wave = Data(WAVE).need("wave series", at="seed")
-    level = Data(LEVEL).need("water level series").optional()
+    extent = Input(EXTENT).supplied(geometry="rectangle")
+    domain = Input(DOMAIN).need("hydrography", kind="coastline", geometry="polyline")
+    bed = Input(BED).need("bathymetry")
+    wave = Input(WAVE).need("wave series", at="seed")
+    level = Input(LEVEL).need("water level series").optional()
 
 
 class STEERING(WAC):
@@ -171,7 +169,6 @@ DOC = dict(
         "(`artemis_harbor_agitation`); storm surge or the water level itself; "
         "the buoy record alone (`fetch_ndbc_buoys`)"
     ),
-    params=PARAMS,
     controls=(
         ("input_mode",
          '"user_gated" presents the resolved sea state, the tide and the mesh '

@@ -6,7 +6,7 @@ importing any workflows module registers the TELEMAC solver and would close an i
 
 from __future__ import annotations
 
-__all__ = ["DeclarativeError"]
+__all__ = ["DeclarationError", "DeclarativeError", "GateRefusedError"]
 
 
 class DeclarativeError(RuntimeError):
@@ -18,3 +18,11 @@ class DeclarativeError(RuntimeError):
         super().__init__(message)
         if error_code:
             self.error_code = error_code
+
+
+class DeclarationError(DeclarativeError):
+    error_code = "DECLARATION_INVALID"
+
+
+class GateRefusedError(DeclarativeError):
+    error_code = "GATE_INPUT_REQUIRED"

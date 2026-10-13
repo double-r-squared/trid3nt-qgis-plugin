@@ -29,6 +29,7 @@ from trid3nt_server.workflows.telemac.modules.outputs import (
     OutputEmpty,
     Solved,
 )
+from seated import value_inputs
 
 
 def _reach(telemac_result, *, tracer_name: str = "DYE") -> dict[str, Any]:
@@ -380,8 +381,8 @@ def _replanned(workflow: Any, **over: Any) -> Any:
     from types import SimpleNamespace
 
     module = SimpleNamespace(**{**vars(workflow.template), **over})
-    return type(workflow)(metadata=workflow.metadata, params=workflow.params,
-                          template=module, data=workflow.data)
+    return type(workflow)(metadata=workflow.metadata, inputs=workflow.inputs,
+                          template=module)
 
 
 def test_publish_outputs_reads_once_and_publishes_each(monkeypatch, solved):
@@ -496,9 +497,9 @@ def _run_of(workflow: Any) -> Any:
 
     from seated import resolve_params
 
-    params = asyncio.run(resolve_params(workflow.params,
+    params = asyncio.run(resolve_params(value_inputs(workflow),
                                         {"location": "X", "mesh_resolution_m": 9.0}))
-    return SimpleNamespace(params=params, results={}, notes=[], entries=[])
+    return SimpleNamespace(inputs=params, results={}, notes=[], entries=[])
 
 
 # -- the primitives past the dye: appended tracers, instants, profiles, tracks - #

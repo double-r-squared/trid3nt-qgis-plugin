@@ -16,6 +16,7 @@ from trid3nt_server.workflows.telemac.templates.sediment_plume import (
     sediment_plume as template,
 )
 from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN
+from seated import value_inputs, row_inputs
 
 _TOOL = "telemac_sediment_plume"
 def _workflow():
@@ -23,7 +24,7 @@ def _workflow():
 
 
 def _rows():
-    return {row.name: row for row in _workflow().data}
+    return {row.name: row for row in row_inputs(_workflow())}
 
 
 def test_registered_on_the_model_surface():
@@ -58,7 +59,7 @@ def test_the_bed_is_one_need_row_the_match_composes():
     bed = _rows()["bed"]
     assert bed.slot is BED and bed.data_class == "bathymetry"
     assert bed.producer is None
-    assert [row.name for row in _workflow().data if row.slot is BED] == ["bed"]
+    assert [row.name for row in row_inputs(_workflow()) if row.slot is BED] == ["bed"]
 
 
 def test_the_discharge_is_a_need_row_the_match_ranks_against_the_domain():
@@ -76,7 +77,7 @@ def test_the_discharge_is_a_need_row_the_match_ranks_against_the_domain():
 def test_the_baseline_params_are_the_runtimes_and_are_not_restated():
     """A template declares no domain twin, no keyword twin and no seated input of its
     own; the mesh ask's, the engine's and the bed's are seated on it."""
-    declared = [prm.name for prm in _workflow().params]
+    declared = [prm.name for prm in value_inputs(_workflow())]
     for gone in ("location", "bbox", "river_geometry_uri", "reach_length_km",
                  "friction_law", "friction_coefficient", "output_interval_min",
                  "evaporation_mm_per_day", "rainfall_gridmet_window"):
@@ -85,8 +86,7 @@ def test_the_baseline_params_are_the_runtimes_and_are_not_restated():
     # Every seated input is on the sheet; the ones this question does not state for
     # itself are seated at the end, in the order the engine seats them, and
     # one it differs on keeps its own place and its own opinion of the value.
-    own = [prm.name for prm in template.PARAMS.__dict__.values()
-           if getattr(prm, "name", None)]
+    own = [prm.name for prm in value_inputs(template.INPUTS)]
     assert declared[:len(own)] == own
     seated = [name for name in SEATED if name not in own]
     assert declared[len(own):] == seated
@@ -96,7 +96,7 @@ def test_the_question_keeps_only_its_own_inputs():
     """What a settling-plume question asks: where the sediment went in and how
     concentrated. The flow that carries it is the inflow run's value, which is
     the discharge ROW's, so it is no param of this one."""
-    declared = {prm.name for prm in _workflow().params}
+    declared = {prm.name for prm in value_inputs(_workflow())}
     assert "discharge_m3s" not in declared
     assert {"release", "spill_fraction", "spill_duration_s"} <= declared
     # source strength and concentration are the deck's own fixed keyword
@@ -108,7 +108,7 @@ def test_no_param_restates_a_keyword_the_module_already_carries():
     """The clock, the class, the transport and the two forcings are keywords the
     dictionary describes, so the deck states each with its reason and the user
     overrides it by the keyword's own name."""
-    declared = {prm.name for prm in _workflow().params}
+    declared = {prm.name for prm in value_inputs(_workflow())}
     assert not declared & {"sim_duration_s", "grain_size_um", "wind_speed_mps",
                            "wind_direction_deg", "rainfall_mm_per_day"}
 
@@ -157,12 +157,12 @@ def test_the_deleted_release_params_are_refused():
     import inspect
 
     signature = inspect.signature(getattr(template, _TOOL))
-    declared = {prm.name for prm in _workflow().params}
+    declared = {prm.name for prm in value_inputs(_workflow())}
     for gone in ("source_q_m3s", "sediment_concentration_mgl"):
         assert gone not in signature.parameters, gone
         assert gone not in declared, gone
         with pytest.raises(AttributeError):
-            getattr(template.PARAMS, gone)
+            getattr(template.INPUTS, gone)
 
 
 def test_a_calm_dry_deck_states_no_wind_and_no_rain_at_all():
@@ -188,7 +188,7 @@ def test_every_slot_a_user_can_fill_reaches_the_wire():
     """A supplied polygon supersedes the matched reach and a supplied raster
     supersedes the matched bed, so both slots are arguments though both name a
     class."""
-    assert {row.name for row in _workflow().data if row.fills_from_user} == {
+    assert {row.name for row in row_inputs(_workflow()) if row.fills_from_user} == {
         "domain", "bed", "discharge", "level", "mesh"}
 
 

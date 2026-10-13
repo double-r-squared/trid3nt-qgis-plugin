@@ -10,7 +10,7 @@ import inspect
 from dataclasses import dataclass, replace
 from typing import Any, Iterable, Mapping
 
-from trid3nt_server.workflows.runtime.params import Param
+from trid3nt_server.inputs.input import Input
 from trid3nt_server.tools.mesh.meshers import (
     MeshOp,
     MeshToolError,
@@ -35,15 +35,14 @@ __all__ = [
 
 #: The edge a mesh ask is built at, as the run input an ask names it by; a
 #: template restates it only to say what the edge has to resolve for its question.
-RESOLUTION = Param(
-    name="mesh_resolution_m", optional=True, type=float, units="m",
-    derived_when_absent=(
-        "the finest edge is the finest cell of the input data the mesh "
-        "is built over - the bed raster's own cell"),
+RESOLUTION = Input(
+    name="mesh_resolution_m", type=float, units="m",
     desc="Target element edge or cell length the mesh is built at. The "
          "granularity is the USER's and nothing refuses one: absent, the "
          "mesh resolves the finest data it stands on, and the card states "
-         "the node count it comes to")
+         "the node count it comes to").optional(
+    "the finest edge is the finest cell of the input data the mesh "
+    "is built over - the bed raster's own cell")
 
 
 def jsonable(value: Any) -> Any:

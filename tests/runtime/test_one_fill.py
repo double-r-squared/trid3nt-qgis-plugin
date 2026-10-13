@@ -30,6 +30,97 @@ def _filled(values):
     return asyncio.run(fill(Fill(workflow=_wf()), values))
 
 
+def _skeleton(*inputs):
+    from trid3nt_server.workflows.runtime import Workflow
+
+    return Workflow(metadata=types.SimpleNamespace(name="probe", engine=""),
+                    inputs=inputs, template=types.SimpleNamespace())
+
+
+def test_one_loop_answers_a_value_a_keyword_and_a_row_with_one_origin_stamp(
+        monkeypatch):
+    """Every kind of input comes off the workflow's one lookup and leaves one
+    verdict: the value taken, who stated it and the source that names it."""
+    from trid3nt_contracts.common import Origin
+
+    async def _produce(env, decl):
+        env.sources[decl.name] = "fetch_stub"
+        return "held"
+
+    monkeypatch.setattr(fill_mod, "_produce", _produce)
+    monkeypatch.delenv("HOMETEL", raising=False)
+    wf = _wf()
+    row = next(d for d in wf.inputs if d.data_class)
+    state = asyncio.run(fill(Fill(workflow=wf), {
+        "spill_fraction": 0.4, row.name: {"source": "fetch_stub"},
+        "keywords": {"LAW OF BOTTOM FRICTION": 4}}))
+    stated, keyword, sourced = (state.inputs[n] for n in (
+        "spill_fraction", "LAW OF BOTTOM FRICTION", row.name))
+    assert (stated.value, stated.origin) == (0.4, Origin.USER)
+    assert (keyword.value, keyword.origin) == (4, Origin.USER)
+    assert (sourced.origin, sourced.source) == (Origin.PRODUCER, "fetch_stub")
+    assert state.keywords == {"LAW OF BOTTOM FRICTION": 4}
+    defaulted = next(v for v in state.inputs.values() if v.state == DEFAULTED)
+    assert defaulted.origin is Origin.TEMPLATE
+    for gone in ("_seat", "_keyword"):
+        assert not hasattr(fill_mod, gone)
+
+
+def test_a_keyword_is_answered_as_an_input_is_through_the_one_lookup():
+    """The lookup hands back the engine's own keyword after the body's inputs: its
+    name, the one range that bounds it and the module's accept rule."""
+    held = _wf().input("LAW OF BOTTOM FRICTION")
+    assert held.name == "LAW_OF_BOTTOM_FRICTION" and not held.is_row
+    assert held.bounds == held.body.MODULE_INPUT[held.name].whole_bounds
+    assert held.carried and held.accept(4) == 4
+    assert _wf().input("spill_fraction").bounds == (0.05, 0.9)
+
+
+@pytest.mark.parametrize("name", ["wind", "sources", "LAW OF BOTTOM FRICTION",
+                                  "LAW_OF_BOTTOM_FRICTION"])
+def test_beside_keywords_only_a_declared_input_is_taken(name):
+    """A composite, a keyword or its identifier stated as an argument is not an
+    input of the tool: it refuses by name and says where a keyword is stated."""
+    state = _filled({name: 1})
+    verdict = state.inputs[name]
+    assert (verdict.state, verdict.code) == (REJECTED, "INPUT_UNNAMED")
+    assert f"{name!r} is not an input of telemac_dye_release" in verdict.reason
+    assert "inside keywords" in verdict.reason and not state.ready
+
+
+def test_inside_keywords_a_declared_input_refuses_naming_where_it_belongs():
+    state = _filled({"keywords": {"spill_fraction": 0.4}})
+    verdict = state.inputs["spill_fraction"]
+    assert (verdict.state, verdict.code) == (REJECTED, "KEYWORD_REFUSED")
+    assert "beside keywords" in verdict.reason and not state.ready
+
+
+def test_a_misspelled_keyword_names_the_nearest_spelling():
+    verdict = _filled({"keywords": {"LAW OF BOTTOM FRICTON": 4}}).inputs[
+        "LAW OF BOTTOM FRICTON"]
+    assert verdict.code == "KEYWORD_REFUSED"
+    assert "LAW OF BOTTOM FRICTION" in verdict.reason
+
+
+def test_a_failed_launch_does_not_say_the_engine_check_was_out_of_reach(monkeypatch):
+    """The note rides a run that launches; a launch that raises reads its own
+    error and nothing about the fill's check."""
+    monkeypatch.delenv("HOMETEL", raising=False)
+
+    async def _launch(self, state):
+        raise module_mod.SlotRefused("the deck refused")
+
+    async def _produce(env, decl):
+        return decl.name
+
+    monkeypatch.setattr(fill_mod, "_produce", _produce)
+    wf = _wf()
+    monkeypatch.setattr(type(wf), "launch", _launch)
+    out = asyncio.run(wf.run({"keywords": {"LAW OF BOTTOM FRICTION": 4}}))
+    assert out["status"] == "error" and "the deck refused" in out["error_message"]
+    assert module_mod.ENGINE_UNAVAILABLE not in out["error_message"]
+
+
 def test_a_stated_value_is_accepted_and_the_rest_default():
     state = _filled({"spill_fraction": 0.4})
     assert state.inputs["spill_fraction"].state == ACCEPTED
@@ -45,11 +136,9 @@ def test_a_value_outside_its_range_is_rejected_with_its_remedy():
 
 
 def test_a_required_input_nothing_filled_is_missing_and_not_ready():
-    from trid3nt_server.workflows.runtime import Param
+    from trid3nt_server.inputs.input import Input
 
-    wf = types.SimpleNamespace(params=(Param(name="depth", desc="d", type=float),),
-                               coercions=(), data=(), unnamed=lambda: (),
-                               named_rows=lambda: ())
+    wf = _skeleton(Input(name="depth", desc="d", type=float))
     state = asyncio.run(fill(Fill(workflow=wf), {}))
     assert state.inputs["depth"].state == MISSING and not state.ready
     state = asyncio.run(fill(state, {"depth": 3.0}))
@@ -60,12 +149,10 @@ def test_a_required_input_nothing_filled_is_missing_and_not_ready():
 def test_a_required_param_left_unstated_refuses_in_every_mode(mode):
     """No default and not optional is the whole floor: the fill refuses before
     any launch, and no mode shows the input to anybody to approve instead."""
-    from trid3nt_server.workflows.runtime import Param
+    from trid3nt_server.inputs.input import Input
 
-    wf = types.SimpleNamespace(
-        params=(Param(name="wave_height_m", desc="d", bounds=(0.01, 10.0)),
-                Param(name="grade", desc="d", default=0.2, bounds=(0.05, 0.5))),
-        coercions=(), data=(), unnamed=lambda: (), named_rows=lambda: ())
+    wf = _skeleton(Input(name="wave_height_m", desc="d", bounds=(0.01, 10.0)),
+                   Input(name="grade", desc="d", default=0.2, bounds=(0.05, 0.5)))
     state = asyncio.run(fill(Fill(workflow=wf), {"input_mode": mode}))
     assert state.inputs["wave_height_m"].state == MISSING and not state.ready
     code, sentence = state.refusal()
@@ -82,10 +169,35 @@ def test_a_sourced_input_is_fetched_before_it_answers(monkeypatch):
 
     monkeypatch.setattr(fill_mod, "_produce", _produce)
     wf = _wf()
-    decl = next(d for d in wf.data if d.data_class)
+    decl = next(d for d in wf.inputs if d.data_class)
     state = asyncio.run(fill(Fill(workflow=wf), {decl.name: {"source": "stub"}}))
     assert (decl.name, "stub") in asked
     assert state.inputs[decl.name].state == ACCEPTED
+
+
+def test_a_stated_row_the_template_names_is_produced_once_and_a_refused_one_stops_the_rest(
+        monkeypatch):
+    """A row the caller states AND the template names is read once, and a stated
+    row that is refused leaves the rows the template names unasked."""
+    asked = []
+
+    async def _produce(env, decl):
+        asked.append(decl.name)
+        if decl.name == refused:
+            raise fill_mod.StepFailedError("held nothing", error_code="STUB")
+        return "held"
+
+    monkeypatch.setattr(fill_mod, "_produce", _produce)
+    wf = TOOL_REGISTRY["telemac_channel_dredging"].fn.workflow
+    assert wf.named_rows() == ("dredge_area", "dump_area")
+    refused = None
+    state = asyncio.run(fill(Fill(workflow=wf), {"dredge_area": "L1", "bed": 3.0}))
+    assert state.ready and sorted(asked) == ["bed", "domain", "dredge_area", "dump_area"]
+    asked.clear()
+    refused = "bed"
+    state = asyncio.run(fill(Fill(workflow=wf), {"dredge_area": "L1", "bed": 3.0}))
+    assert state.inputs["bed"].code == "STUB" and "dump_area" not in asked
+    assert asked.count("dredge_area") == 1
 
 
 def test_a_layer_by_id_is_supplied_and_ingested_before_it_answers(monkeypatch):
@@ -97,7 +209,7 @@ def test_a_layer_by_id_is_supplied_and_ingested_before_it_answers(monkeypatch):
 
     monkeypatch.setattr(fill_mod, "_produce", _produce)
     wf = _wf()
-    decl = next(d for d in wf.data if d.data_class)
+    decl = next(d for d in wf.inputs if d.data_class)
     state = asyncio.run(fill(Fill(workflow=wf), {decl.name: {"layer": "L1"}}))
     assert "L1" in seen and state.inputs[decl.name].value == "ingested"
 
@@ -120,7 +232,8 @@ def test_an_absent_engine_tree_is_stated_and_ours_judges(monkeypatch):
     assert module_mod.accept(t2d, "LAW OF BOTTOM FRICTION", 4)[2] == \
         module_mod.ENGINE_UNAVAILABLE
     state = _filled({"keywords": {"LAW OF BOTTOM FRICTION": 4}})
-    assert module_mod.ENGINE_UNAVAILABLE in state.notes
+    assert state.notes == [module_mod.ENGINE_UNAVAILABLE]
+    assert module_mod.ENGINE_UNAVAILABLE not in state.said[0]
 
 
 def test_a_keyword_the_module_refuses_is_rejected_by_name():
@@ -175,8 +288,8 @@ def _place_registers_a_row(monkeypatch):
 
     monkeypatch.setattr(fill_mod, "_produce", _produce)
     wf = _wf()
-    decl = next(d for d in wf.data if d.data_class and d.slot != DOMAIN)
-    assert any(d.slot == DOMAIN for d in wf.data)
+    decl = next(d for d in wf.inputs if d.data_class and d.slot != DOMAIN)
+    assert any(d.slot == DOMAIN for d in wf.inputs)
     return wf, decl
 
 
@@ -192,7 +305,7 @@ def test_an_untyped_fault_is_refused_and_its_trace_logged(monkeypatch, caplog):
 
     monkeypatch.setattr(fill_mod, "_produce", _produce)
     wf = _wf()
-    decl = next(d for d in wf.data if d.data_class)
+    decl = next(d for d in wf.inputs if d.data_class)
     with caplog.at_level("WARNING", logger=fill_mod.logger.name):
         state = asyncio.run(fill(Fill(workflow=wf), {
             decl.name: {"layer": "L1"}}))

@@ -15,12 +15,13 @@ from pathlib import Path
 import yaml
 
 from trid3nt_server.workflows.telemac.workflow import stated
-from seated import SEATED
+from seated import SEATED, row_inputs, value_inputs
 from trid3nt_server.workflows.telemac.modules import T2D
 from trid3nt_server.workflows.telemac.templates.bed_scour import (
     bed_scour,
 )
 from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN
+from seated import value_inputs, row_inputs
 
 _MODULE = bed_scour
 #: The registered tool, found by what it CARRIES rather than by its name, so the
@@ -43,7 +44,7 @@ _DISSOLVED = {"location", "bbox", "river_geometry_uri", "reach_length_km",
 
 
 def _rows() -> dict:
-    return {row.name: row for row in _WORKFLOW.data}
+    return {row.name: row for row in row_inputs(_WORKFLOW)}
 
 
 def _recipe():
@@ -69,7 +70,7 @@ def test_the_bed_is_one_need_row_the_match_composes():
     bed = _rows()["bed"]
     assert bed.slot is BED and bed.data_class == "bathymetry"
     assert bed.producer is None
-    assert [row.name for row in _WORKFLOW.data if row.slot is BED] == ["bed"]
+    assert [row.name for row in row_inputs(_WORKFLOW) if row.slot is BED] == ["bed"]
 
 
 def test_the_discharge_is_a_need_row_the_match_ranks_against_the_domain():
@@ -93,13 +94,12 @@ def test_the_deck_names_its_own_files_and_the_door_does_not_restate_them():
 
 
 def test_the_seated_inputs_are_carried_and_no_baseline_param_is_restated():
-    declared = [prm.name for prm in _WORKFLOW.params]
+    declared = [prm.name for prm in value_inputs(_WORKFLOW)]
     # Every seated input is on the sheet; the ones this question does not state for
     # itself are seated at the end, in the order the engine seats them, and
     # one it differs on keeps its own place and its own opinion of the value.
-    from trid3nt_server.workflows.runtime import param_rows
 
-    own = [prm.name for prm in param_rows(_MODULE.PARAMS)]
+    own = [prm.name for prm in value_inputs(_MODULE.INPUTS)]
     assert set(SEATED) <= set(declared)
     seated = [name for name in SEATED if name not in own]
     assert declared[-len(seated):] == seated
@@ -170,7 +170,7 @@ def test_every_slot_a_user_can_fill_reaches_the_wire():
     """A drawn estuary supersedes the matched reach and a supplied raster
     supersedes the matched bed, so both slots are arguments though both name a
     class."""
-    assert {row.name for row in _WORKFLOW.data if row.fills_from_user} == {
+    assert {row.name for row in row_inputs(_WORKFLOW) if row.fills_from_user} == {
         "domain", "bed", "discharge", "level", "mesh"}
 
 

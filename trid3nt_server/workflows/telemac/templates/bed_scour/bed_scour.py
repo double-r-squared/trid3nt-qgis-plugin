@@ -6,8 +6,9 @@ import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LEVEL
+from trid3nt_server.inputs.input import Input
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Param,
+    register_workflow,
 )
 from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.workflows.telemac.modules import GAIA, T2D, series
@@ -17,8 +18,8 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DATA", "DOC", "GRADATION_PRESETS",
-           "OUTPUTS", "PARAMS", "STEERING", "telemac_bed_scour"]
+__all__ = ["CAPTIONS", "DOC", "GRADATION_PRESETS",
+           "OUTPUTS", "INPUTS", "STEERING", "telemac_bed_scour"]
 
 
 GRADATION_PRESETS: dict[str, list[list[float]]] = {
@@ -27,40 +28,6 @@ GRADATION_PRESETS: dict[str, list[list[float]]] = {
     "sand_gravel_bimodal": [[200.0, 0.5], [1800.0, 0.5]],
     "fine_coarse_sand": [[120.0, 0.5], [800.0, 0.5]],
 }
-
-
-class PARAMS:
-    release = Param(
-        optional=True,
-        type=Point,
-        derived_when_absent=(
-            "the marker sits at spill_fraction along the domain the mesh was "
-            "built over"),
-        desc="Where the marker enters the water, as a Point: the pick's "
-             "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
-             "point layer. Geocode a place name first. Its name becomes the "
-             "marker's name, "
-             "and on a river with no domain supplied it is also the seed the "
-             "reach is walked downstream from")
-
-    spill_fraction = Param(
-        default=0.25, bounds=(0.05, 0.9),
-        desc="Along-domain release position, 0=inflow..1=outflow; the source "
-             "must sit strictly INSIDE the domain, never on a boundary")
-    spill_duration_s = Param(
-        default=300.0,
-        bounds=(1.0, 86400.0), units="s",
-        desc="Finite pulse injection window")
-
-    sediment_gradation = Param(
-        optional=True,
-        type=list | str,
-        derived_when_absent=(
-            "the bed is ONE class at the CLASSES SEDIMENT DIAMETERS the deck "
-            "states, which is uniform by construction and cannot sort"),
-        desc="Multi-class GRADED sediment: a preset name (graded_sand | "
-             "poorly_sorted | sand_gravel_bimodal | fine_coarse_sand) or a list "
-             "of [d50_um, fraction] pairs; a mixture sorts under a hiding factor")
 
 
 _RELEASE = Placed("source", point="release", fraction="spill_fraction",
@@ -77,14 +44,42 @@ _FRICTION_LAW = 3
 _FRICTION_COEFFICIENT = 33.0
 
 
-class DATA:
-    domain = Data(DOMAIN).need("hydrography", at="release",
-                               span_km=_REACH_LENGTH_KM)
-    bed = Data(BED).need("bathymetry")
-    discharge = Data(DISCHARGE).need("discharge series").context(
+class INPUTS:
+    release = Input(
+        type=Point,
+        desc="Where the marker enters the water, as a Point: the pick's "
+             "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
+             "point layer. Geocode a place name first. Its name becomes the "
+             "marker's name, "
+             "and on a river with no domain supplied it is also the seed the "
+             "reach is walked downstream from").optional(
+        "the marker sits at spill_fraction along the domain the mesh was "
+        "built over")
+
+    spill_fraction = Input(
+        default=0.25, bounds=(0.05, 0.9),
+        desc="Along-domain release position, 0=inflow..1=outflow; the source "
+             "must sit strictly INSIDE the domain, never on a boundary")
+    spill_duration_s = Input(
+        default=300.0,
+        bounds=(1.0, 86400.0), units="s",
+        desc="Finite pulse injection window")
+
+    sediment_gradation = Input(
+        type=list | str,
+        desc="Multi-class GRADED sediment: a preset name (graded_sand | "
+             "poorly_sorted | sand_gravel_bimodal | fine_coarse_sand) or a list "
+             "of [d50_um, fraction] pairs; a mixture sorts under a hiding factor").optional(
+        "the bed is ONE class at the CLASSES SEDIMENT DIAMETERS the deck "
+        "states, which is uniform by construction and cannot sort")
+
+    domain = Input(DOMAIN).need("hydrography", at="release",
+                                span_km=_REACH_LENGTH_KM)
+    bed = Input(BED).need("bathymetry")
+    discharge = Input(DISCHARGE).need("discharge series").context(
         "the National Water Model published no streamflow over this domain "
         "at that cycle")
-    level = Data(LEVEL).need("water level series").optional()
+    level = Input(LEVEL).need("water level series").optional()
 
 
 class STEERING(T2D):
@@ -172,7 +167,6 @@ DOC = dict(
         "(`telemac_do_sag`); rainfall-runoff flood depth "
         "(`telemac_rain_on_grid`)"
     ),
-    params=PARAMS,
     controls=(
         ("input_mode",
          '"user_gated" presents the filled sheet for review/edit before the solve '

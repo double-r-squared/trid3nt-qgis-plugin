@@ -19,6 +19,7 @@ from trid3nt_server.workflows.telemac.modules.module import SlotRefused, _read
 from trid3nt_server.workflows.telemac.modules.telemac2d import Sources
 from trid3nt_server.workflows.telemac.workflow import (Measured, _names,
                                                     _read_named)
+from seated import value_inputs, row_inputs
 
 
 def _workflow(name: str):
@@ -91,8 +92,8 @@ def test_a_measurement_reads_a_template_input_by_name():
         channel_dredging as template)
 
     workflow = _workflow("telemac_channel_dredging")
-    state = Fill(workflow=workflow, params=asyncio.run(
-        resolve_params(workflow.params, {"design_depth_m": 7.5})))
+    state = Fill(workflow=workflow, inputs=asyncio.run(
+        resolve_params(value_inputs(workflow), {"design_depth_m": 7.5})))
     env = production(state)
     env.run.update(dredge_area="the fairway", dump_area="the dump site")
     read = asyncio.run(_read_named(env, dict(template._DREDGE.reads)))
@@ -127,7 +128,7 @@ _STATED = {"pour_point": [-82.42, 43.0],
 
 def _stated(workflow):
     """The share of them this template declares: one it does not is refused."""
-    declared = {prm.name for prm in workflow.params}
+    declared = {prm.name for prm in value_inputs(workflow)}
     return {name: value for name, value in _STATED.items() if name in declared}
 
 
@@ -192,8 +193,8 @@ def test_every_row_a_template_reads_is_in_the_mapping_after_the_fill(
                  if hasattr(getattr(tool.fn, "workflow", None), "named_rows")]
     missed = {}
     for workflow in workflows:
-        rows = {row.name: row for row in workflow.data
-                if row not in workflow.seated}
+        rows = {row.name: row for row in row_inputs(workflow)
+                if row.name != "mesh"}
         recipe = workflow._states("MESH", None)
         read = set(workflow.steering.named()) | set(
             input_names(recipe) if recipe is not None else ())

@@ -136,11 +136,11 @@ def test_a_row_naming_no_point_ranks_from_the_middle_of_the_run_s_domain():
 def test_the_weather_row_is_told_the_run_s_window_and_the_moment_it_opens_at():
     from types import SimpleNamespace
 
-    from trid3nt_server.workflows.runtime.data import DataDecl
+    from trid3nt_server.inputs.input import Input
     from trid3nt_server.workflows.runtime.fill import _what_the_record_reports
 
-    params = SimpleNamespace(value_of=lambda name: "2026-09-01T12:00:00Z")
     told = _what_the_record_reports(
-        SimpleNamespace(window_s=7200.0, params=params),
-        DataDecl("weather", slot=WEATHER), None)
+        SimpleNamespace(window_s=7200.0,
+                        run={"event_time": "2026-09-01T12:00:00Z"}),
+        Input(name="weather", slot=WEATHER), None)
     assert (told["window_s"], told["at"]) == (7200.0, "2026-09-01T12:00:00Z")

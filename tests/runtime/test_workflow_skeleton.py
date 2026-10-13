@@ -14,11 +14,8 @@ from typing import Any
 import pytest
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
-from trid3nt_server.workflows.runtime import (
-    Param,
-    DeclarationError,
-    Workflow,
-)
+from trid3nt_server.inputs.input import Input
+from trid3nt_server.workflows.runtime import DeclarationError, Workflow
 
 
 # --- (2) hooks: silent by default, effective when filled --------------------- #
@@ -58,7 +55,7 @@ def _module(plan, **names):
 
 
 def _workflow(cls=_Stub, **kw):
-    return cls(metadata=_metadata("skeleton_probe"), params=(),
+    return cls(metadata=_metadata("skeleton_probe"), inputs=(),
                template=_module(lambda o: ()), **kw)
 
 
@@ -66,7 +63,7 @@ def test_the_hooks_are_silent_by_default():
     wf = _workflow()
     from trid3nt_server.workflows.runtime.workflow import RunResult
 
-    assert wf.checks(RunResult(value=_Layer())) == ()
+    assert wf.checks(RunResult(value=_Layer()), {}) == ()
 
 
 @pytest.mark.asyncio
@@ -75,7 +72,7 @@ async def test_a_filled_check_hook_reaches_the_result_as_a_note(monkeypatch):
     from trid3nt_server.workflows.runtime import run_output
 
     class Checked(_Stub):
-        def checks(self, run):
+        def checks(self, run, inputs):
             return (f"depth {run.value.depth_max_m} m is a screening figure",)
 
     async def _no_persist(run_id, *, charts):
@@ -92,11 +89,11 @@ def test_the_generated_signature_is_the_declaration_plus_controls():
     from trid3nt_server.workflows.runtime.workflow import _wire_signature
 
     params = (
-        Param("location", optional=True, desc="a place"),
-        Param("depth_m", default=1.0, bounds=(0.0, 9.0),
+        Input(name="location", desc="a place").optional(),
+        Input(name="depth_m", default=1.0, bounds=(0.0, 9.0),
               desc="a bounded value"),
-        Param("armed", optional=True, type=bool, desc="a flag"),
-        Param("solver_dt_s", default=1.0, bounds=(0.1, 60.0),
+        Input(name="armed", type=bool, desc="a flag").optional(),
+        Input(name="solver_dt_s", default=1.0, bounds=(0.1, 60.0),
               desc="a solver setting"),
     )
     sig, annotations = _wire_signature(params)
@@ -141,14 +138,37 @@ def test_a_required_param_is_required_on_the_schema_and_says_so_on_its_line():
     from trid3nt_server.tools import TOOL_REGISTRY
 
     fn = TOOL_REGISTRY["telemac_rain_on_grid"].fn
-    required = [p.name for p in fn.workflow.params if p.required]
+    wired = [p for p in fn.workflow.inputs if p.fills_from_user]
+    required = [p.name for p in wired if p.required]
     assert "pour_point" in required
     assert _tool_schema(fn)["required"] == required
     lines = [line for line in fn.__doc__.splitlines() if line.startswith("    ")]
-    params = lines[:len(fn.workflow.params)]
+    params = lines[:len(wired)]
     assert [line.endswith(", required.") for line in params] == \
         [index < len(required) for index in range(len(params))]
     assert [line.split(":")[0].strip() for line in params[:len(required)]] == required
+
+
+def test_values_and_rows_are_documented_in_one_section_in_wire_order():
+    """One body, one section: required values, defaulted ones, then the optional
+    values and the rows in the order the wire carries them, each row's line still
+    saying what a supplied layer is and how the run fills it otherwise."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    fn = TOOL_REGISTRY["telemac_rain_on_grid"].fn
+    doc = fn.__doc__
+    assert "Context layers:" not in doc and doc.count("\nParams:\n") == 1
+    block = doc[doc.index("\nParams:\n"):doc.index("\nSheet: ")]
+    named = [line.split(":")[0].strip() for line in block.splitlines()
+             if line.startswith("    ")]
+    wired = [p for p in fn.workflow.inputs if p.fills_from_user]
+    order = sorted(wired, key=lambda p: 0 if p.required else
+                   1 if p.default is not None else 2)
+    assert named == [p.name for p in order]
+    assert [p.is_row for p in order] == sorted(p.is_row for p in order)
+    bed = fn.workflow.input("bed")
+    assert f"    bed: {bed.doc_line}" in block
+    assert "unfilled, the run matches a source of terrain" in bed.doc_line
 
 
 def test_every_declared_param_is_on_the_real_tools_wire_and_docstring():
@@ -156,7 +176,7 @@ def test_every_declared_param_is_on_the_real_tools_wire_and_docstring():
 
     for name in ("telemac_do_sag", "telemac_dye_release"):
         fn = TOOL_REGISTRY[name].fn
-        declared = {p.name for p in fn.workflow.params}
+        declared = {p.name for p in fn.workflow.inputs}
         assert {"event_time", "vertical_frame"} <= declared
         assert declared <= set(inspect.signature(fn).parameters)
         assert all(f"    {p}:" in fn.__doc__ for p in declared)
@@ -176,9 +196,9 @@ def test_a_stated_seated_input_reaches_the_sheet_as_the_users():
     supplied = {n: v.value for n, v in state.inputs.items() if v.state == ACCEPTED}
     assert supplied["vertical_frame"] == "IGLD85"
     assert supplied["mesh_resolution_m"] == 30.0
-    sheet = asyncio.run(resolve_params(wf.params, supplied))
-    assert sheet.value_of("vertical_frame") == "IGLD85"
-    assert sheet.row("vertical_frame").origin == "user"
+    sheet = asyncio.run(resolve_params(wf.inputs, supplied))
+    assert sheet["vertical_frame"].value == "IGLD85"
+    assert sheet["vertical_frame"].origin == "user"
 
 
 def test_a_param_edited_on_the_review_card_is_what_the_run_records():
@@ -197,13 +217,13 @@ def test_a_param_edited_on_the_review_card_is_what_the_run_records():
             return RunResult(value=_Layer())
 
     wf = Edited(metadata=_metadata("skeleton_probe"), template=_module(lambda o: ()),
-                params=(Param("rate", desc="a rate", default=6.0, bounds=(0.0, 60.0)),))
+                inputs=(Input(name="rate", desc="a rate", default=6.0, bounds=(0.0, 60.0)),))
 
     async def _run():
         return await wf._launched(await fill(Fill(workflow=wf), {}))
 
     run = asyncio.run(_run())
-    row, entry = run.params.row("rate"), run.entries[0]
+    row, entry = run.inputs["rate"], run.entries[0]
     assert (row.value, row.origin, entry.value, entry.basis) == (9.0, "user", 9.0, "user")
 
 
@@ -266,16 +286,16 @@ async def test_a_BUG_in_a_coercion_reads_as_internal_never_as_the_caller_s_fault
 # --- (8) a declaration whose wire type would be guessed wrong refuses -------- #
 def test_an_unbounded_numeric_default_refuses_rather_than_advertising_a_string():
     with pytest.raises(DeclarationError) as ei:
-        Param("k_per_day", default=0.3, desc="a rate")
+        Input(name="k_per_day", default=0.3, desc="a rate")
     assert "STRING" in str(ei.value)
     # ... and both offered fixes are accepted
-    assert Param("k_per_day", default=0.3,
+    assert Input(name="k_per_day", default=0.3,
                  bounds=(0.01, 20.0), desc="a rate").wire_type is float
-    assert Param("k_per_day", default=0.3,
+    assert Input(name="k_per_day", default=0.3,
                  type=float, desc="a rate").wire_type is float
 
 
 def test_a_bool_default_is_not_a_numeric_default():
     """bool IS an int in Python; a flag infers bool correctly and must not refuse."""
-    assert Param("armed", default=False,
+    assert Input(name="armed", default=False,
                  desc="a flag").wire_type is bool

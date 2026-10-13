@@ -17,6 +17,7 @@ import numpy as np
 import pytest
 from trid3nt_server.inputs.rain import rain
 from trid3nt_server.inputs.slots import BED, DOMAIN
+from seated import value_inputs, row_inputs
 
 
 def test_registered_on_the_model_surface():
@@ -41,12 +42,11 @@ def test_registered_on_the_model_surface():
 
 
 def _rows():
-    from trid3nt_server.workflows.runtime import data_rows
     from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
-        DATA,
+        INPUTS,
     )
 
-    return {row.name: row for row in data_rows(DATA)}
+    return {row.name: row for row in row_inputs(INPUTS)}
 
 
 def test_the_catchment_is_one_need_row_asked_at_the_pour_point():
@@ -189,7 +189,7 @@ def test_every_declared_param_and_the_two_slots_are_on_the_wire():
     )
 
     wire = set(inspect.signature(fn).parameters)
-    assert {p.name for p in fn.workflow.params} <= wire
+    assert {p.name for p in value_inputs(fn.workflow)} <= wire
     assert {"pour_point", "mesh_resolution_m", "design_storm_mm_per_day",
             "rain_series_mm", "domain", "bed", "mesh"} <= wire
 
@@ -203,7 +203,7 @@ def test_no_domain_twin_or_keyword_twin_is_declared():
         telemac_rain_on_grid as fn,
     )
 
-    declared = {p.name for p in fn.workflow.params}
+    declared = {p.name for p in value_inputs(fn.workflow)}
     assert not (declared & {"location", "bbox", "output_interval_min",
                             "time_step_s", "mesh_min_edge_m", "mesh_grade",
                             "bed_dem_resolution_m", "river_source",

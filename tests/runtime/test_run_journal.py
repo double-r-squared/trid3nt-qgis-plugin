@@ -25,20 +25,13 @@ def _tmp_persistence(tmp_path, monkeypatch):
     yield
 
 
-def _row(name, value, **kw):
-    """A resolved sheet row, in the shape ``ResolvedParams.rows()`` hands over."""
-    return SimpleNamespace(name=name, value=value,
-                           origin=kw.get("origin", "template"),
-                           units=kw.get("units"), note=kw.get("note", ""))
-
-
 def _record(**overrides):
     base = dict(
         run_id="RUN9", engine="telemac", module="telemac2d",
-        fill={"DURATION": {"value": 7200.0, "from": "template: telemac_do_sag"},
-              "FRICTION_COEFFICIENT": {"value": 33.0,
-                                       "from": "producer: friction"}},
-        sheet=[_row("reach_length_km", 15.0, origin="user", units="km")],
+        inputs={"DURATION": {"value": 7200.0, "origin": "template",
+                             "source": "telemac_do_sag"},
+                "reach_length_km": {"value": 15.0, "origin": "user",
+                                    "source": None}},
         provenance=[SimpleNamespace(param="discharge_cms", value=12.5,
                                     basis="producer", note="NWM cycle 2026-08-19T00Z",
                                     real_source_if_any="national_water_model")],
@@ -62,28 +55,23 @@ def test_a_run_record_carries_the_run_its_engine_and_where_it_came_from():
     assert rec["recorded_at"].endswith("+00:00")
 
 
-def test_the_record_carries_the_raw_keyword_floor_the_run_was_pinned_by():
-    """The floor is not a Param, so it is on no sheet row - and a reproduction
-    driven from the arguments alone would solve a different deck."""
-    rec = _record(keywords={"LAW OF BOTTOM FRICTION": 4, "DURATION": 7200.0})
-    assert rec["keywords"] == {"LAW OF BOTTOM FRICTION": 4, "DURATION": 7200.0}
-    assert _record()["keywords"] == {}
-
-
-def test_the_record_carries_the_slots_the_run_was_supplied():
-    """A supplied slot is on no param sheet either, so a Reproduce block driven
-    from the arguments alone would run over a different world."""
-    rec = _record(supplied={"domain": "s3://cache/basin.fgb"})
-    assert rec["supplied"] == {"domain": "s3://cache/basin.fgb"}
-    assert _record()["supplied"] == {}
-
-
-def test_a_sheet_row_carries_its_origin_not_just_the_number():
-    """Where a value came from is the whole point: a length the user pinned and
-    one the template started on are the same number and different evidence."""
-    row = _record()["sheet"][0]
-    assert row == {"name": "reach_length_km", "value": 15.0, "origin": "user",
-                   "units": "km", "note": None}
+def test_the_record_carries_one_map_of_inputs_by_name():
+    """A stated value, a keyword of the deck and a supplied or matched row sit in
+    ONE map, each with who stated it and the source that names it; the three maps
+    a record once split them across are gone."""
+    rec = _record(inputs={
+        "reach_length_km": {"value": 15.0, "origin": "user", "source": None},
+        "LAW_OF_BOTTOM_FRICTION": {"value": 4, "origin": "user", "source": None},
+        "domain": {"value": "s3://cache/basin.fgb", "origin": "user",
+                   "source": None},
+        "bed": {"value": None, "origin": "producer", "source": "fetch_bed"}})
+    assert rec["inputs"]["reach_length_km"] == {
+        "value": 15.0, "origin": "user", "source": None}
+    assert rec["inputs"]["domain"]["value"] == "s3://cache/basin.fgb"
+    assert rec["inputs"]["bed"] == {"value": None, "origin": "producer",
+                                    "source": "fetch_bed"}
+    for gone in ("sheet", "keywords", "supplied", "sources", "fill"):
+        assert gone not in rec
 
 
 def test_the_record_carries_the_provenance_the_mesh_and_the_wall_time():
@@ -105,7 +93,7 @@ def test_the_mesh_field_carries_the_content_key_and_the_run_that_built_it():
 
 def test_the_record_restates_no_core_count_beside_the_decks_own_keyword():
     """The count a run was partitioned across is a keyword of the solved deck,
-    so the record's ``fill`` carries it and no second field does."""
+    so the record's ``inputs`` carry it and no second field does."""
     assert "cores" not in _record()
 
 
@@ -114,16 +102,17 @@ def test_a_long_list_value_is_truncated_to_a_shape_summary():
     """A stage curve is hundreds of points; the journal wants the FACT that there was
     one and its shape, not a second copy of the deck."""
     curve = [float(i) for i in range(500)]
-    rec = _record(keywords={"STAGE_CURVE": curve, "DURATION": 3600})
-    summary = rec["keywords"]["STAGE_CURVE"]
+    rec = _record(inputs={"STAGE_CURVE": {"value": curve, "origin": "user"},
+                          "DURATION": {"value": 3600, "origin": "user"}})
+    summary = rec["inputs"]["STAGE_CURVE"]["value"]
     assert summary == {"length": 500, "head": [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
                        "truncated": True}
-    assert rec["keywords"]["DURATION"] == 3600       # the scalar is untouched
+    assert rec["inputs"]["DURATION"]["value"] == 3600       # the scalar is untouched
 
 
 def test_a_short_list_value_is_kept_whole():
-    rec = _record(keywords={"BBOX": [-85.0, 29.7, -84.9, 29.8]})
-    assert rec["keywords"]["BBOX"] == [-85.0, 29.7, -84.9, 29.8]
+    rec = _record(inputs={"BBOX": {"value": [-85.0, 29.7, -84.9, 29.8]}})
+    assert rec["inputs"]["BBOX"]["value"] == [-85.0, 29.7, -84.9, 29.8]
 
 
 # --- append + read round-trip ------------------------------------------------- #
@@ -214,17 +203,6 @@ def test_draining_closes_the_channel_so_the_next_run_starts_empty():
     assert run_notes.drain_notes(token) == []
 
 
-def test_a_slot_is_recorded_with_its_value_and_where_it_came_from():
-    """The board copies a run's own numbers off its line: the time step and the
-    duration are VALUES there, each beside the origin that put it on the deck."""
-    rec = _record(fill={
-        "TIME_STEP": {"value": 0.491, "from": "derived: settled.time_step_s"},
-        "DURATION": {"value": 604800.0, "from": "template: telemac_ice_cover"}})
-    assert rec["fill"]["TIME_STEP"] == {"value": 0.491,
-                                        "from": "derived: settled.time_step_s"}
-    assert rec["fill"]["DURATION"]["value"] == 604800.0
-
-
 def test_the_solver_s_correct_end_is_read_off_the_solve_step_and_recorded():
     """A solve says whether it reached its own correct end; the line carries the
     flag it said, and nothing where the solve step's metrics state none."""
@@ -238,25 +216,68 @@ def test_the_solver_s_correct_end_is_read_off_the_solve_step_and_recorded():
     assert _record()["correct_end"] is None
 
 
-def test_the_run_s_own_line_carries_the_fill_and_the_correct_end_its_solve_step_said(
+def _verdict(value, origin, source=""):
+    from trid3nt_contracts.common import Origin
+    from trid3nt_server.workflows.runtime.fill import ACCEPTED, Verdict
+
+    return Verdict(ACCEPTED, value, origin=Origin(origin), source=source)
+
+
+def test_the_run_s_own_line_carries_every_input_and_the_correct_end_its_solve_step_said(
         monkeypatch):
-    """The workflow's one journal seam hands the record the solve step's fill
-    rows and its correct end, so the line on disk states both."""
-    from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
+    """The workflow's one journal seam folds the solved deck's keywords and what
+    the fill answered into the one map: a keyword the caller stated under its
+    spaced spelling is the deck's own row, a supplied row records what was handed
+    in and a matched one names its source."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows.runtime.workflow import RunResult
 
     written: list[dict] = []
     monkeypatch.setattr(journal, "append_record", written.append)
-    run = SimpleNamespace(
-        params=None, outputs=(), keywords={},
-        choices=(), results={"solve": {
-            "module": "khione", "metrics": {"correct_end": False},
-            "sheet": {"filled": {"TIME_STEP": {
-                "value": 0.5, "provenance": "derived: settled.time_step_s"}}}}})
-    TelemacWorkflow._journal(object.__new__(TelemacWorkflow), "RUN1", run,
-                             SimpleNamespace(mesh_size_m=None), 1.0)
-    assert written[0]["correct_end"] is False
-    assert written[0]["fill"]["TIME_STEP"] == {
-        "value": 0.5, "from": "derived: settled.time_step_s"}
+    wf = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
+    run = RunResult(value=None, results={"solve": {
+        "module": "telemac2d", "metrics": {"correct_end": False},
+        "sheet": {"filled": {
+            "TIME_STEP": {"value": 0.5,
+                          "provenance": "derived: settled.time_step_s"},
+            "LAW_OF_BOTTOM_FRICTION": {"value": 4, "provenance": "user"}}}}},
+        inputs={"spill_fraction": _verdict(0.4, "user"),
+                "LAW OF BOTTOM FRICTION": _verdict(4, "user"),
+                "domain": _verdict(object(), "user"),
+                "bed": _verdict(object(), "producer", "fetch_bed")})
+    inputs = wf._inputs(run, {"domain": "s3://cache/reach.fgb"})
+    wf._journal("RUN1", run, SimpleNamespace(mesh_size_m=None), 1.0, [], inputs)
+    line = written[0]
+    assert line["correct_end"] is False
+    assert line["inputs"] == {
+        "TIME_STEP": {"value": 0.5, "origin": "derived",
+                      "source": "settled.time_step_s"},
+        "LAW_OF_BOTTOM_FRICTION": {"value": 4, "origin": "user", "source": None},
+        "spill_fraction": {"value": 0.4, "origin": "user", "source": None},
+        "domain": {"value": "s3://cache/reach.fgb", "origin": "user",
+                   "source": None},
+        "bed": {"value": None, "origin": "producer", "source": "fetch_bed"}}
+
+
+def test_a_keyword_stated_on_a_coupled_body_keeps_its_own_entry():
+    """Two bodies may spell one identifier: the carrier's is the deck's row, and
+    the one a caller stated on a coupled body stays under the name it was stated."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows.runtime.workflow import RunResult
+    from trid3nt_server.workflows.telemac.workflow import run_bodies
+
+    wf = TOOL_REGISTRY["telemac_do_sag"].fn.workflow
+    carrier, coupled = run_bodies(wf.steering)[:2]
+    shared = next(name for name in coupled.MODULE_INPUT
+                  if name in carrier.MODULE_INPUT)
+    stated = f"{coupled.MODULE}: {coupled.MODULE_INPUT[shared].keyword}"
+    assert not wf.input(stated).carried and wf.input(stated).name == shared
+    run = RunResult(value=None, results={"solve": {"sheet": {"filled": {
+        shared: {"value": 1, "provenance": "template: t"}}}}},
+        inputs={stated: _verdict(2, "user")})
+    inputs = wf._inputs(run, {})
+    assert inputs[shared]["value"] == 1
+    assert inputs[stated] == {"value": 2, "origin": "user", "source": None}
 
 
 def test_the_run_journals_the_mesh_its_mesh_step_returned(monkeypatch):
@@ -265,11 +286,10 @@ def test_the_run_journals_the_mesh_its_mesh_step_returned(monkeypatch):
     lines: list = []
     monkeypatch.setattr(journal, "append_record", lines.append)
     skeleton = SimpleNamespace(engine="telemac", _module=lambda run: None,
-                               _fill=lambda run: {},
                                _correct_end=lambda run: None)
     run = RunResult(value=None, results={"mesh": {"key": "5f4d1a42f53e",
                                                   "built_by": "RUN1"}})
     Workflow._journal(skeleton, "RUN2", run,
-                      SimpleNamespace(mesh_size_m=30.0), 1.0)
+                      SimpleNamespace(mesh_size_m=30.0), 1.0, [], {})
     assert lines[0]["mesh"] == {"mesh_size_m": 30.0, "key": "5f4d1a42f53e",
                                 "built_by": "RUN1"}

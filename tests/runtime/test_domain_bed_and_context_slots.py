@@ -13,13 +13,9 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.workflows.runtime import (
-    Data,
-    Param,
-    DeclarationError,
-    data_rows,
-    tool,
-)
+from trid3nt_server.inputs.input import Input, declared
+from trid3nt_server.workflows.runtime import DeclarationError, tool
+from trid3nt_server.workflows.runtime.data import refuse_wrong_shape
 from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LINE, OBSERVE
 
 
@@ -27,12 +23,12 @@ def test_a_domain_row_is_one_slot_however_it_is_filled():
     """A drawn polygon, the user's layer and a producer fill ONE row: the slot is
     on the wire AND names its producer, and nothing downstream reads which."""
     class DRAWN:
-        domain = Data(DOMAIN).supplied(geometry="polygon")
+        domain = Input(DOMAIN).supplied(geometry="polygon")
 
     class FETCHED:
-        domain = Data(DOMAIN)(tool("fetch_nhd_waterbody_at_point", seed_point=[1.0, 2.0]))
+        domain = Input(DOMAIN, producer=tool("fetch_nhd_waterbody_at_point", seed_point=[1.0, 2.0]))
 
-    drawn, fetched = data_rows(DRAWN)[0], data_rows(FETCHED)[0]
+    drawn, fetched = declared(DRAWN)[0], declared(FETCHED)[0]
     assert drawn.slot == fetched.slot == DOMAIN
     # BOTH are on the wire: what the user hands in supersedes the producer.
     assert drawn.fills_from_user and fetched.fills_from_user
@@ -41,37 +37,37 @@ def test_a_domain_row_is_one_slot_however_it_is_filled():
 
 def test_a_bed_row_takes_every_source_a_survey_arrives_in_but_a_mesh():
     class DATA:
-        bed = Data(BED).need("bathymetry")
+        bed = Input(BED).need("bathymetry")
 
-    row = data_rows(DATA)[0]
+    row = declared(DATA)[0]
     assert row.slot == BED and row.fills_from_user
     # A bathymetry is measured as a raster AND as soundings, so both are the
     # class handed in; a stated depth is the number itself and has no shape.
     for supplied in ("s3://b/k/survey.tif", "s3://b/k/soundings.geojson", 2.0):
-        row.refuse_wrong_shape(supplied)
+        refuse_wrong_shape(row, supplied)
     with pytest.raises(Exception, match="reads as mesh"):
-        row.refuse_wrong_shape("s3://b/k/solved.slf")
+        refuse_wrong_shape(row, "s3://b/k/solved.slf")
 
 
 def test_a_terrain_row_refuses_the_shape_no_source_of_terrain_publishes():
     """The supplied twin is the CLASS's: terrain is measured as a surface and
     nothing publishes it as a point layer, so soundings are not a terrain."""
     class DATA:
-        bed = Data(BED).need("terrain")
+        bed = Input(BED).need("terrain")
 
-    row = data_rows(DATA)[0]
-    row.refuse_wrong_shape("s3://b/k/ground.tif")
+    row = declared(DATA)[0]
+    refuse_wrong_shape(row, "s3://b/k/ground.tif")
     with pytest.raises(Exception, match="reads as vector"):
-        row.refuse_wrong_shape("s3://b/k/soundings.geojson")
+        refuse_wrong_shape(row, "s3://b/k/soundings.geojson")
 
 
 def test_a_context_row_states_what_the_sheet_says_when_its_source_is_empty():
     class DATA:
-        stated = Data(tool("fetch_usgs_water_quality")).context(
+        stated = Input(tool("fetch_usgs_water_quality")).context(
             "no water-quality sample near this domain; the stated value stands")
-        unstated = Data(tool("fetch_raws_weather")).context()
+        unstated = Input(tool("fetch_raws_weather")).context()
 
-    rows = {row.name: row for row in data_rows(DATA)}
+    rows = {row.name: row for row in declared(DATA)}
     assert rows["stated"].context_sentence.startswith("no water-quality sample")
     assert rows["unstated"].context_sentence == (
         "no unstated near this domain; the stated value stands")
@@ -80,12 +76,12 @@ def test_a_context_row_states_what_the_sheet_says_when_its_source_is_empty():
 def test_context_needs_something_to_ask_and_optional_still_refuses_a_producer():
     with pytest.raises(DeclarationError,
                        match=r"states neither a need nor a producer"):
-        Data.context()
+        Input().context()
     with pytest.raises(DeclarationError, match=r"declares a producer AND \.optional"):
         class DATA:
-            row = Data(tool("fetch_x")).optional()
+            row = Input(tool("fetch_x")).optional()
 
-        data_rows(DATA)
+        declared(DATA)
 
 
 def test_a_context_rows_absence_continues_the_run_and_says_so(monkeypatch):
@@ -94,15 +90,15 @@ def test_a_context_rows_absence_continues_the_run_and_says_so(monkeypatch):
     from trid3nt_server.workflows.runtime import fill
 
     class DATA:
-        sample = Data(tool("fetch_usgs_water_quality")).context(
+        sample = Input(tool("fetch_usgs_water_quality")).context(
             "no sample near this domain; the stated value stands")
 
     async def _empty(env, producer, label):
         raise RuntimeError("WQP_NO_SITES")
 
     monkeypatch.setattr(fill, "_produced", _empty)
-    env = fill._Env(params=None, data={})
-    row = data_rows(DATA)[0]
+    env = fill._Env(data={})
+    row = declared(DATA)[0]
     assert asyncio.run(fill._produce(env, row)) is None
     assert env.absences == [
         "no sample near this domain; the stated value stands (WQP_NO_SITES)"]
@@ -125,8 +121,8 @@ class _RIVER:
     """A question whose domain producer measures the edge it cuts between and
     the line down the middle of what it cut."""
 
-    domain = Data(DOMAIN)(tool("fetch_river_reach", seed_point=[0.5, 0.5]))
-    line = Data(LINE).supplied(geometry="polyline")
+    domain = Input(DOMAIN, producer=tool("fetch_river_reach", seed_point=[0.5, 0.5]))
+    line = Input(LINE).supplied(geometry="polyline")
 
 
 def _env_over(value, monkeypatch, body=_RIVER):
@@ -136,8 +132,8 @@ def _env_over(value, monkeypatch, body=_RIVER):
         return value
 
     monkeypatch.setattr(fill, "_produced", _answered)
-    rows = {row.name: row for row in data_rows(body)}
-    return fill, fill._Env(params=None, data=rows)
+    rows = {row.name: row for row in declared(body)}
+    return fill, fill._Env(data=rows)
 
 
 def test_the_line_slot_is_filled_by_the_domains_own_centerline(monkeypatch):
@@ -179,7 +175,7 @@ def test_a_malformed_ask_on_a_context_row_refuses_rather_than_reading_absent(
     from trid3nt_server.workflows.runtime import fill
 
     class DATA:
-        survey = Data(tool("fetch_ehydro_surveys")).context(
+        survey = Input(tool("fetch_ehydro_surveys")).context(
             "no published channel survey over this domain")
 
     async def _refused(env, producer, label):
@@ -188,9 +184,9 @@ def test_a_malformed_ask_on_a_context_row_refuses_rather_than_reading_absent(
                                  "the ask's", "INPUT_INVALID")
 
     monkeypatch.setattr(fill, "_produced", _refused)
-    env = fill._Env(params=None, data={})
+    env = fill._Env(data={})
     with pytest.raises(Exception) as exc:
-        asyncio.run(fill._produce(env, data_rows(DATA)[0]))
+        asyncio.run(fill._produce(env, declared(DATA)[0]))
     assert exc.value.error_code == "EHYDRO_INPUT_INVALID"
     assert env.absences == []
 
@@ -202,7 +198,7 @@ def test_a_malformed_value_handed_to_a_context_rows_slot_refuses_too(monkeypatch
     from trid3nt_server.workflows.runtime import fill
 
     class DATA:
-        sample = Data(tool("fetch_usgs_water_quality")).context(
+        sample = Input(tool("fetch_usgs_water_quality")).context(
             "nothing sampled near this domain")
 
     async def _answered(env, producer, label):
@@ -210,8 +206,8 @@ def test_a_malformed_value_handed_to_a_context_rows_slot_refuses_too(monkeypatch
                              code="OBSERVATION_INVALID")
 
     monkeypatch.setattr(fill, "_produced", _answered)
-    env = fill._Env(params=None, data={})
-    row = data_rows(DATA)[0]
+    env = fill._Env(data={})
+    row = declared(DATA)[0]
     with pytest.raises(UserInputError) as exc:
         asyncio.run(fill._produce(env, row))
     assert exc.value.error_code == "OBSERVATION_INVALID"
@@ -228,35 +224,45 @@ def test_a_hard_producer_row_still_refuses_when_its_source_is_empty(monkeypatch)
         raise RuntimeError("WQP_NO_SITES")
 
     monkeypatch.setattr(fill, "_produced", _empty)
-    env = fill._Env(params=None, data={})
+    env = fill._Env(data={})
     with pytest.raises(RuntimeError, match="WQP_NO_SITES"):
-        asyncio.run(fill._produce(env, data_rows(DATA)[0]))
+        asyncio.run(fill._produce(env, declared(DATA)[0]))
 
 
-def _skeleton(params: Any = (), data: Any = ()) -> Any:
+def _skeleton(*inputs: Any) -> Any:
     from types import SimpleNamespace
 
     from trid3nt_server.workflows.runtime import Workflow
 
     return Workflow(metadata=SimpleNamespace(name="probe", engine=""),
-                    params=params, template=SimpleNamespace(), data=data)
+                    inputs=inputs, template=SimpleNamespace())
 
 
 def test_the_runtime_declares_no_input_of_its_own():
     """A skeleton run with no typed row carries exactly what its template wrote."""
-    assert _skeleton().params == ()
-    own = Param(name="depth_m", default=2.0, bounds=(0.1, 50.0), desc="a depth")
-    assert _skeleton(params=(own,)).params == (own,)
+    assert _skeleton().inputs == ()
+    own = Input(name="depth_m", default=2.0, bounds=(0.1, 50.0), desc="a depth")
+    assert _skeleton(own).inputs == (own,)
 
 
 def test_a_bed_row_declares_the_frame_and_a_templates_own_row_wins():
-    class DATA:
-        bed = Data(BED).need("bathymetry")
+    """The frame is a real Input the bed's type states; values lead the body and rows follow."""
+    bed = Input(BED, name="bed").need("bathymetry")
+    seated, row = _skeleton(bed).inputs
+    assert (seated.name, seated.default, row) == ("vertical_frame", "NAVD88", bed)
+    assert seated is BED.states[0] and isinstance(seated, Input)
+    own = Input(name="vertical_frame", default="IGLD85", desc="the lakes' datum")
+    assert _skeleton(bed, own).inputs == (own, bed)
 
-    seated, = _skeleton(data=DATA).params
-    assert (seated.name, seated.default) == ("vertical_frame", "NAVD88")
-    own = Param(name="vertical_frame", default="IGLD85", desc="the lakes' datum")
-    assert _skeleton(params=(own,), data=DATA).params == (own,)
+
+def test_one_lookup_answers_for_a_value_and_a_row_and_refuses_the_rest():
+    from trid3nt_server.inputs.user_input import WireArgsError
+
+    bed = Input(BED, name="bed").need("bathymetry")
+    wf = _skeleton(bed)
+    assert wf.input("bed") is bed and wf.input("vertical_frame") is BED.states[0]
+    with pytest.raises(WireArgsError, match="'depth'"):
+        wf.input("depth")
 
 
 _SITES = {"type": "FeatureCollection", "features": [
@@ -268,7 +274,7 @@ _SITES = {"type": "FeatureCollection", "features": [
 class _OBSERVED:
     """A row whose PRODUCER is a record and whose VALUE is one reading."""
 
-    observe = Data(OBSERVE)(tool("fetch_usgs_water_quality",
+    observe = Input(OBSERVE, producer=tool("fetch_usgs_water_quality",
                         characteristic="temperature"))
 
 
@@ -291,9 +297,9 @@ def test_an_observation_row_yields_the_reading_not_the_record(monkeypatch):
     monkeypatch.setattr(dataclasses, "replace", lambda obj, **kw: obj)
     # NO ROW STATES A UNIT: what this slot reads is the unit of the keyword its
     # ROLE fills, which the workflow answers for.
-    env = fill._Env(params=None, data={}, run={"station": (0.11, 0.1)},
+    env = fill._Env(data={}, run={"station": (0.11, 0.1)},
                            slot_units={OBSERVE: "degC"})
-    found = asyncio.run(fill._produce(env, data_rows(_OBSERVED)[0]))
+    found = asyncio.run(fill._produce(env, declared(_OBSERVED)[0]))
     assert found.value == pytest.approx(10.0)
     assert found.units == "degC" and found.site_id == "NEAR"
 
@@ -302,19 +308,19 @@ def test_the_coercion_a_row_declares_is_bound_before_the_ingestion_runs():
     """``near`` is a late-bound read like any producer kwarg: the point the
     nearest site is ranked against is measured by a step, not written by hand."""
     class RANKED:
-        observe = Data(OBSERVE).need("water quality sample", at="station")
+        observe = Input(OBSERVE).need("water quality sample", at="station")
 
-    row = data_rows(RANKED)[0]
+    row = declared(RANKED)[0]
     assert row.coercion["near"] == "station"
 
 
 def test_a_supplied_number_supersedes_the_record_through_the_same_slot(monkeypatch):
     from trid3nt_server.workflows.runtime import fill
 
-    env = fill._Env(params=None, data={}, run={"station": (0.11, 0.1)},
+    env = fill._Env(data={}, run={"station": (0.11, 0.1)},
                            slot_units={OBSERVE: "degC"},
                            supplied={"observe": 11.5})
-    found = asyncio.run(fill._produce(env, data_rows(_OBSERVED)[0]))
+    found = asyncio.run(fill._produce(env, declared(_OBSERVED)[0]))
     assert found.value == pytest.approx(11.5) and found.units == "degC"
 
 
@@ -324,7 +330,7 @@ def _no_moment_env(**over):
     from trid3nt_server.workflows.runtime import fill
 
     _standing_on()
-    return fill._Env(params=_Params({"event_time": None}), data={}, **over)
+    return fill._Env(run={"event_time": None}, data={}, **over)
 
 
 def test_a_context_need_with_no_moment_stated_is_absent_with_its_sentence():
@@ -335,12 +341,12 @@ def test_a_context_need_with_no_moment_stated_is_absent_with_its_sentence():
     from trid3nt_server.tools.search.match import NO_MOMENT
 
     class DATA:
-        rain = Data.need("precipitation series").context(
+        rain = Input().need("precipitation series").context(
             "no hourly rainfall record over this catchment for that window; "
             "the design storm drives the run")
 
     env = _no_moment_env()
-    row = data_rows(DATA)[0]
+    row = declared(DATA)[0]
     assert asyncio.run(fill._produce(env, row)) is None
     assert len(env.absences) == 1
     assert env.absences[0].startswith(
@@ -356,11 +362,11 @@ def test_a_required_series_need_with_no_moment_stated_refuses_naming_the_slot():
     from trid3nt_server.tools.search.match import NO_MOMENT
 
     class DATA:
-        discharge = Data(DISCHARGE).need("discharge series")
+        discharge = Input(DISCHARGE).need("discharge series")
 
     env = _no_moment_env()
     with pytest.raises(StepFailedError) as caught:
-        asyncio.run(fill._produce(env, data_rows(DATA)[0]))
+        asyncio.run(fill._produce(env, declared(DATA)[0]))
     assert caught.value.error_code == "DATA_NEED_UNMATCHED"
     assert str(caught.value).startswith(f"discharge: {NO_MOMENT}")
 
@@ -374,9 +380,9 @@ def _standing_on(bbox=(-123.22, 45.48, -123.19, 45.50)):
 
 def _elevation_slot(slot):
     """A row that STATES the slot it is - which is the only way to be one."""
-    from trid3nt_server.workflows.runtime.data import DataDecl
+    from trid3nt_server.inputs.input import Input
 
-    return DataDecl(name=slot.name, slot=slot)
+    return Input(name=slot.name, slot=slot)
 
 
 def test_every_elevation_slot_is_read_on_the_runs_own_vertical_frame():
@@ -389,11 +395,11 @@ def test_every_elevation_slot_is_read_on_the_runs_own_vertical_frame():
         return asyncio.run(fill._on_the_run_s_frame(
             env, _elevation_slot(role), source))
 
-    env = fill._Env(params=_Params({}), data={})
+    env = fill._Env(run={}, data={})
     assert _told(env, BED) == {"frame": "NAVD88"}
     assert _told(env, LEVEL) == {"to_datum": "NAVD88"}
     assert _told(env, DISCHARGE) == {}
-    stated = fill._Env(params=_Params({"vertical_frame": "IGLD85"}),
+    stated = fill._Env(run={"vertical_frame": "IGLD85"},
                               data={})
     assert _told(stated, BED) == {"frame": "IGLD85"}
 
@@ -405,7 +411,7 @@ def test_the_runtime_declares_the_offset_row_a_differing_source_owes(monkeypatch
     own footprint nearest the question's seed - and the row is journaled like any
     producer, with what the slot is told the value it produced."""
     from trid3nt_server.workflows.runtime import fill
-    from trid3nt_server.workflows.runtime.data import Data
+    from trid3nt_server.inputs.input import Input
     from trid3nt_server.inputs.slots import BED
 
     record = {"offset_m": -1.054, "from_frame": "NAVD88", "to_frame": "EGM2008",
@@ -419,9 +425,9 @@ def test_the_runtime_declares_the_offset_row_a_differing_source_owes(monkeypatch
     monkeypatch.setattr(fill, "_call_runner", _call)
     _standing_on()
     seeded = dataclasses.replace(
-        Data(DOMAIN).need("hydrography", at=[_MEASURED_EAST_OF + 0.005, 45.49]),
+        Input(DOMAIN).need("hydrography", at=[_MEASURED_EAST_OF + 0.005, 45.49]),
         name="domain")
-    env = fill._Env(params=_Params({"vertical_frame": "EGM2008"}),
+    env = fill._Env(run={"vertical_frame": "EGM2008"},
                            data={"domain": seeded})
     told = asyncio.run(fill._on_the_run_s_frame(
         env, _elevation_slot(BED),
@@ -440,7 +446,7 @@ def test_an_offset_row_is_asked_where_the_source_measured_not_at_the_seed(
     """The seed falls on the half of the DEM that measured nothing, so the ask
     walks to the nearest point the source actually holds."""
     from trid3nt_server.workflows.runtime import fill
-    from trid3nt_server.workflows.runtime.data import Data
+    from trid3nt_server.inputs.input import Input
     from trid3nt_server.inputs.slots import BED
 
     asked: list[dict] = []
@@ -452,9 +458,9 @@ def test_an_offset_row_is_asked_where_the_source_measured_not_at_the_seed(
     monkeypatch.setattr(fill, "_call_runner", _call)
     _standing_on()
     seeded = dataclasses.replace(
-        Data(DOMAIN).need("hydrography", at=[_MEASURED_EAST_OF - 0.01, 45.49]),
+        Input(DOMAIN).need("hydrography", at=[_MEASURED_EAST_OF - 0.01, 45.49]),
         name="domain")
-    env = fill._Env(params=_Params({"vertical_frame": "EGM2008"}),
+    env = fill._Env(run={"vertical_frame": "EGM2008"},
                            data={"domain": seeded})
     asyncio.run(fill._on_the_run_s_frame(
         env, _elevation_slot(BED),
@@ -493,19 +499,9 @@ def test_a_source_on_the_runs_own_frame_declares_no_offset_row(monkeypatch):
 
     monkeypatch.setattr(fill, "_call_runner", _never)
     _standing_on()
-    env = fill._Env(params=_Params({}), data={})
+    env = fill._Env(run={}, data={})
     told = asyncio.run(fill._on_the_run_s_frame(
         env, _elevation_slot(BED),
         {"uri": "s3://b/k/dem.tif", "vertical_datum": "NAVD88 (metres, positive up)",
          "bbox": (-123.22, 45.48, -123.19, 45.50)}))
     assert told == {"frame": "NAVD88"} and not env.data
-
-
-class _Params:
-    """The param state a run is walked against: what the caller filled."""
-
-    def __init__(self, filled: dict) -> None:
-        self._filled = filled
-
-    def value_of(self, name: str):
-        return self._filled.get(name)

@@ -15,6 +15,7 @@ from trid3nt_server.workflows.telemac import workflow as tw
 from trid3nt_server.workflows.telemac.authoring import (mesh_files, opening,
                                                         release_point)
 from trid3nt_server.tools.mesh import step as mesh_step
+from seated import value_inputs
 
 
 def _faked(monkeypatch, calls: list) -> None:
@@ -43,9 +44,13 @@ def _launched(monkeypatch, *, keywords=None, restart_clean=False):
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
     calls: list = []
     _faked(monkeypatch, calls)
-    state = Fill(workflow=workflow, keywords=dict(keywords or {}),
-                 carried={"restart_clean": restart_clean},
-                 params=asyncio.run(resolve_params(workflow.params, {})))
+    from trid3nt_contracts.common import Origin
+    from trid3nt_server.workflows.runtime.fill import ACCEPTED, Verdict
+
+    state = Fill(workflow=workflow, carried={"restart_clean": restart_clean},
+                 inputs=asyncio.run(resolve_params(value_inputs(workflow), {})))
+    state.inputs.update({name: Verdict(ACCEPTED, value, origin=Origin.USER)
+                         for name, value in (keywords or {}).items()})
     run = asyncio.run(workflow.launch(state))
     return run, calls
 
@@ -93,7 +98,7 @@ def test_the_settle_s_keywords_go_straight_to_the_sheet(monkeypatch):
     _faked(monkeypatch, calls)
     monkeypatch.setattr(opening, "open_water", settled())
     state = Fill(workflow=workflow, carried={},
-                 params=asyncio.run(resolve_params(workflow.params, {})))
+                 inputs=asyncio.run(resolve_params(value_inputs(workflow), {})))
     asyncio.run(workflow.launch(state))
     assert dict(calls)["sheet"]["settled"] == {"TIME_STEP": 0.7}
 
@@ -113,7 +118,7 @@ def test_a_launch_that_raises_carries_its_own_error_and_its_notes(monkeypatch):
     _faked(monkeypatch, [])
     monkeypatch.setattr(tw, "fill_sheet", refuse)
     state = Fill(workflow=workflow, carried={"restart_clean": False},
-                 params=asyncio.run(resolve_params(workflow.params, {})))
+                 inputs=asyncio.run(resolve_params(value_inputs(workflow), {})))
     with pytest.raises(StepFailedError) as caught:
         asyncio.run(workflow._launched(state))
     assert isinstance(caught.value.__cause__, Refused)
@@ -125,7 +130,7 @@ def test_what_the_card_seats_is_the_value_the_outputs_stage_binds(monkeypatch):
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
     calls: list = []
     _faked(monkeypatch, calls)
-    name = next(iter(workflow.params)).name
+    name = next(iter(value_inputs(workflow))).name
 
     async def sheet(*, seat, **_kwargs):
         seat({name: "edited on the card"})
@@ -133,7 +138,7 @@ def test_what_the_card_seats_is_the_value_the_outputs_stage_binds(monkeypatch):
 
     monkeypatch.setattr(tw, "fill_sheet", sheet)
     state = Fill(workflow=workflow, carried={"restart_clean": False},
-                 params=asyncio.run(resolve_params(workflow.params, {})))
+                 inputs=asyncio.run(resolve_params(value_inputs(workflow), {})))
     asyncio.run(workflow.launch(state))
     assert dict(calls)["outputs"]["params"][name] == "edited on the card"
 
@@ -154,7 +159,7 @@ def test_a_stated_moment_reaches_the_sheet_with_the_domains_own_point(monkeypatc
     monkeypatch.setattr(fill_mod, "_produce", _row)
     stated = {"event_time": "2024-01-14T12:00:00+00:00"}
     state = Fill(workflow=workflow, carried={},
-                 params=asyncio.run(resolve_params(workflow.params, stated)))
+                 inputs=asyncio.run(resolve_params(value_inputs(workflow), stated)))
     asyncio.run(workflow.launch(state))
     assert dict(calls)["sheet"]["produced"]["moment"] == {
         "at": datetime(2024, 1, 14, 12, tzinfo=timezone.utc),

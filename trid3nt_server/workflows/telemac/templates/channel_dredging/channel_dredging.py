@@ -6,8 +6,9 @@ import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LEVEL, LINE
+from trid3nt_server.inputs.input import Input
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Param,
+    register_workflow,
 )
 from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.workflows.telemac.modules import GAIA, T2D, mass_balance
@@ -17,68 +18,8 @@ from trid3nt_server.workflows.telemac.modules.gaia import (
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
 from trid3nt_server.workflows.telemac.workflow import Measured, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DATA", "DOC", "OUTPUTS", "PARAMS",
+__all__ = ["CAPTIONS", "DOC", "OUTPUTS", "INPUTS",
            "STEERING", "telemac_channel_dredging"]
-
-
-class PARAMS:
-    seed_point = Param(
-        optional=True, type=Point,
-        derived_when_absent=(
-            "nothing: the dredge's reference surface is a band of cross-"
-            "sections stationed down the channel from this point, so a run "
-            "without one refuses by naming it"),
-        desc="A point ON the channel the dredge works in, as the pick's "
-             "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a "
-             "point layer. Geocode a place name first; the channel is fetched "
-             "downstream of it and the levels every dredging action reads are "
-             "stationed along the centerline that comes back with it")
-
-    design_depth_m = Param(
-        default=3.0, bounds=(0.1, 40.0), units="m",
-        desc="Depth the fairway is dredged TO, under the reference water "
-             "surface the run opens at - the design draught plus its overdepth")
-    trigger_depth_m = Param(
-        default=3.0, bounds=(0.1, 40.0), units="m",
-        desc="Depth at which a node is dredged: the bed is worked wherever it "
-             "sits shallower than this under the reference surface. Equal to "
-             "design_depth_m keeps the channel exactly at grade; SMALLER than "
-             "it lets the channel shoal before the dredger returns, and a "
-             "trigger DEEPER than the grade would mark a node for a cut that "
-             "is above its own bed")
-
-    dredge_start_s = Param(
-        default=0.0, bounds=(0.0, 6048000.0), units="s",
-        desc="When the first dredging pass begins, in seconds of the BED's own "
-             "clock - the run's morphological time, DURATION x MORPHOLOGICAL "
-             "FACTOR")
-    dredge_end_s = Param(
-        default=3000.0, bounds=(1.0, 6048000.0), units="s",
-        desc="When the campaign stops, on the same bed clock: no further pass "
-             "begins after it, and a pass already cutting runs on until it "
-             "reaches grade")
-    dredge_repeat_s = Param(
-        default=1800.0, bounds=(1.0, 6048000.0), units="s",
-        desc="Maintenance interval on the bed clock: how long after a pass "
-             "starts the next one begins, if the channel has shoaled past "
-             "trigger_depth_m again")
-
-    dig_rate_m_per_s = Param(
-        default=0.002, bounds=(1.0e-6, 1.0), units="m/s",
-        desc="How fast the dredger lowers the bed, as metres of bed per second "
-             "of SOLVER time at a working node - the plant's capacity, not a "
-             "physical rate. A pass reports its volume only once it has reached "
-             "grade, so this and the cut it has to make are what decide whether "
-             "the run sees a completed pass at all")
-    dump_rate_m_per_s = Param(
-        default=0.002, bounds=(1.0e-6, 1.0), units="m/s",
-        desc="How fast the spoil is laid into the dump area, as metres of bed "
-             "per second of solver time at a receiving node; a pass is not "
-             "finished until its spoil is placed")
-    min_volume_m3 = Param(
-        default=0.0, bounds=(0.0, 1.0e7), units="m^3",
-        desc="Least volume worth moving around a node before it is dredged at "
-             "all; 0 works every node past the trigger")
 
 
 _GEOMETRY = "channel.slf"
@@ -100,17 +41,74 @@ _TIME_ORIGIN = [2000, 1, 1, 0, 0, 0]
 _REFERENCE_LEVEL = "SECTIONS"
 
 
-class DATA:
-    domain = Data(DOMAIN).need("hydrography", at="seed_point",
-                               span_km=_REACH_LENGTH_KM)
-    line = Data(LINE).supplied(geometry="polyline")
-    bed = Data(BED).need("channel survey")
-    discharge = Data(DISCHARGE).need("discharge series").context(
+class INPUTS:
+    seed_point = Input(
+        type=Point,
+        desc="A point ON the channel the dredge works in, as the pick's "
+             "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a "
+             "point layer. Geocode a place name first; the channel is fetched "
+             "downstream of it and the levels every dredging action reads are "
+             "stationed along the centerline that comes back with it").optional(
+        "nothing: the dredge's reference surface is a band of cross-"
+        "sections stationed down the channel from this point, so a run "
+        "without one refuses by naming it")
+
+    design_depth_m = Input(
+        default=3.0, bounds=(0.1, 40.0), units="m",
+        desc="Depth the fairway is dredged TO, under the reference water "
+             "surface the run opens at - the design draught plus its overdepth")
+    trigger_depth_m = Input(
+        default=3.0, bounds=(0.1, 40.0), units="m",
+        desc="Depth at which a node is dredged: the bed is worked wherever it "
+             "sits shallower than this under the reference surface. Equal to "
+             "design_depth_m keeps the channel exactly at grade; SMALLER than "
+             "it lets the channel shoal before the dredger returns, and a "
+             "trigger DEEPER than the grade would mark a node for a cut that "
+             "is above its own bed")
+
+    dredge_start_s = Input(
+        default=0.0, bounds=(0.0, 6048000.0), units="s",
+        desc="When the first dredging pass begins, in seconds of the BED's own "
+             "clock - the run's morphological time, DURATION x MORPHOLOGICAL "
+             "FACTOR")
+    dredge_end_s = Input(
+        default=3000.0, bounds=(1.0, 6048000.0), units="s",
+        desc="When the campaign stops, on the same bed clock: no further pass "
+             "begins after it, and a pass already cutting runs on until it "
+             "reaches grade")
+    dredge_repeat_s = Input(
+        default=1800.0, bounds=(1.0, 6048000.0), units="s",
+        desc="Maintenance interval on the bed clock: how long after a pass "
+             "starts the next one begins, if the channel has shoaled past "
+             "trigger_depth_m again")
+
+    dig_rate_m_per_s = Input(
+        default=0.002, bounds=(1.0e-6, 1.0), units="m/s",
+        desc="How fast the dredger lowers the bed, as metres of bed per second "
+             "of SOLVER time at a working node - the plant's capacity, not a "
+             "physical rate. A pass reports its volume only once it has reached "
+             "grade, so this and the cut it has to make are what decide whether "
+             "the run sees a completed pass at all")
+    dump_rate_m_per_s = Input(
+        default=0.002, bounds=(1.0e-6, 1.0), units="m/s",
+        desc="How fast the spoil is laid into the dump area, as metres of bed "
+             "per second of solver time at a receiving node; a pass is not "
+             "finished until its spoil is placed")
+    min_volume_m3 = Input(
+        default=0.0, bounds=(0.0, 1.0e7), units="m^3",
+        desc="Least volume worth moving around a node before it is dredged at "
+             "all; 0 works every node past the trigger")
+
+    domain = Input(DOMAIN).need("hydrography", at="seed_point",
+                                span_km=_REACH_LENGTH_KM)
+    line = Input(LINE).supplied(geometry="polyline")
+    bed = Input(BED).need("channel survey")
+    discharge = Input(DISCHARGE).need("discharge series").context(
         "the National Water Model published no streamflow over this domain "
         "at that cycle")
-    dredge_area = Data.supplied(geometry="polygon")
-    dump_area = Data.supplied(geometry="polygon")
-    level = Data(LEVEL).need("water level series").optional()
+    dredge_area = Input().supplied(geometry="polygon")
+    dump_area = Input().supplied(geometry="polygon")
+    level = Input(LEVEL).need("water level series").optional()
 
 
 _DREDGE = Measured(
@@ -210,7 +208,6 @@ DOC = dict(
         "(`telemac_sediment_plume`); a dye or contaminant plume "
         "(`telemac_dye_release`); an OIL slick (`telemac_oil_spill`)"
     ),
-    params=PARAMS,
     controls=(
         ("input_mode",
          '"user_gated" presents the filled sheet for review/edit before the solve '

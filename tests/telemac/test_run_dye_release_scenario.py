@@ -13,6 +13,7 @@ from typing import Any
 
 import pytest
 from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN
+from seated import row_inputs, value_inputs
 
 _PORTLAND = (-122.6735, 45.5175)  # the Willamette at USGS 14211720
 
@@ -35,7 +36,7 @@ def _resolve(**supplied):
     """The sheet this invocation resolves, over every row the template declares."""
     from seated import resolve_params
 
-    return asyncio.run(resolve_params(_workflow().params, dict(supplied)))
+    return asyncio.run(resolve_params(value_inputs(_workflow()), dict(supplied)))
 
 
 def _template():
@@ -111,7 +112,7 @@ def test_declared_bounds_keep_the_source_inside_the_domain():
                     {"spill_duration_s": 0.0}):
         with pytest.raises(GateRefusedError, match="outside the declared range"):
             _resolve(**outside)
-    assert _resolve(spill_fraction=0.9).value_of("spill_fraction") == 0.9
+    assert _resolve(spill_fraction=0.9)["spill_fraction"].value == 0.9
 
 
 def test_a_non_numeric_bounded_arg_refuses_it_is_never_defaulted():
@@ -125,14 +126,13 @@ def test_the_inflow_flow_is_the_discharge_slots_value_and_not_a_param():
     """The flow the inflow run carries is the observation ROW's - a reading, or
     the number stated on it - so no param of this question declares one, and the
     row states the CLASS it needs rather than the source that reports it."""
-    from trid3nt_server.workflows.runtime import data_rows, param_rows
-    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import DATA
+    from trid3nt_server.inputs.input import declared
     from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
-        PARAMS,
+        INPUTS,
     )
 
-    assert "discharge_m3s" not in {p.name for p in param_rows(PARAMS)}
-    discharge = next(d for d in data_rows(DATA) if d.name == "discharge")
+    assert "discharge_m3s" not in {p.name for p in declared(INPUTS)}
+    discharge = INPUTS.discharge
     assert discharge.slot is DISCHARGE
     assert discharge.producer is None
     assert discharge.data_class == "discharge series"
@@ -149,14 +149,14 @@ def test_the_params_are_the_questions_own_and_the_deck_states_the_keywords():
     moment and the bed its frame."""
     from seated import SEATED
     from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
-        PARAMS,
+        INPUTS,
     )
     from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
         STEERING,
     )
-    from trid3nt_server.workflows.runtime import param_rows
+    from trid3nt_server.inputs.input import declared
 
-    declared = {p.name for p in param_rows(PARAMS)}
+    declared = {p.name for p in declared(INPUTS) if not p.is_row}
     assert not declared & {"friction_law", "friction_coefficient",
                            "output_interval_min", "sim_duration_s",
                            "wind_speed_mps", "wind_direction_deg",
@@ -169,17 +169,17 @@ def test_the_params_are_the_questions_own_and_the_deck_states_the_keywords():
     assert STEERING.ASSERTED["DURATION"] == 3600.0
     # None is restated here, so all three are seated at the end, in the order
     # the engine seats them.
-    seated = [p.name for p in _workflow().params]
+    seated = [p.name for p in value_inputs(_workflow())]
     assert seated[-len(SEATED):] == list(SEATED)
 
 
 def test_the_data_body_is_the_slots_and_the_classes_they_need():
     """The domain, the bed, the discharge
     and the level as the CLASSES they need - no fetcher named on any of them."""
-    from trid3nt_server.workflows.runtime import data_rows
-    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import DATA
+    from trid3nt_server.inputs.input import declared
+    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import INPUTS
 
-    rows = data_rows(DATA)
+    rows = row_inputs(INPUTS)
     assert [d.name for d in rows] == ["domain", "bed", "discharge", "level"]
     by_name = {d.name: d for d in rows}
     assert by_name["domain"].slot is DOMAIN
@@ -210,10 +210,10 @@ def test_the_release_point_seeds_the_domain_producer():
     import inspect
 
     from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.runtime import data_rows
-    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import DATA
+    from trid3nt_server.inputs.input import declared
+    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import INPUTS
 
-    domain = data_rows(DATA)[0]
+    domain = INPUTS.domain
     # THE POINT the reach is cut from is the one fact about the world the row
     # states; which source cuts it is the match's.
     assert domain.coercion["near"] == "release"
@@ -238,10 +238,10 @@ def test_the_domain_and_the_bed_reach_the_wire_as_the_slots_they_are():
 
 
 def test_an_unknown_data_row_is_an_attribute_error_at_the_line_that_wrote_it():
-    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import DATA
+    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import INPUTS
 
     with pytest.raises(AttributeError):
-        DATA.centreline
+        INPUTS.centreline
 
 
 def test_the_deck_states_the_four_source_keywords_and_a_sources_composite():
@@ -291,7 +291,7 @@ async def _normalized(workflow, args):
     from trid3nt_server.workflows.runtime.fill import ACCEPTED, REJECTED, Fill, fill
 
     state = await fill(Fill(workflow=workflow), args)
-    declared = {prm.name for prm in workflow.params}
+    declared = {prm.name for prm in value_inputs(workflow)}
     refused = [v.reason for v in state.inputs.values() if v.state == REJECTED]
     return ({n: v.value for n, v in state.inputs.items()
              if v.state == ACCEPTED and n in declared},

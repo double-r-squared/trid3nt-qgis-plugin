@@ -12,8 +12,9 @@ from dataclasses import replace
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs.slots import BED, DOMAIN, RAIN
 from trid3nt_server.tools.mesh.recipe import RESOLUTION
+from trid3nt_server.inputs.input import Input
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, tool, Param,
+    register_workflow, tool,
 )
 from trid3nt_server.tools.mesh.tool import mesh_op
 from trid3nt_server.inputs import point_arg, Point
@@ -23,8 +24,8 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
 )
 from trid3nt_server.workflows.telemac.workflow import Measured, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DATA", "DOC", "LANDCOVER_CN_MANNING",
-           "LANDCOVER_UNMAPPED", "MESH", "OUTPUTS", "PARAMS", "STEERING",
+__all__ = ["CAPTIONS", "DOC", "LANDCOVER_CN_MANNING",
+           "LANDCOVER_UNMAPPED", "MESH", "OUTPUTS", "INPUTS", "STEERING",
            "telemac_rain_on_grid"]
 
 
@@ -52,8 +53,18 @@ LANDCOVER_CN_MANNING: dict[int, tuple[float, float, str]] = {
 LANDCOVER_UNMAPPED: tuple[float, float, str] = (75.0, 0.050, "open-land")
 
 
-class PARAMS:
-    pour_point = Param(
+_GEOMETRY = "rog.slf"
+_BOUNDARY = "rog.cli"
+_RESULT = "r2d_rog.slf"
+
+# half-width; the delineation refuses a basin the window clips
+_BASIN_WINDOW_KM = 15.0
+
+_MESH_GRADE = 0.20
+
+
+class INPUTS:
+    pour_point = Input(
         type=Point,
         desc="The catchment OUTLET, as a Point: the pick's {coordinates, name} "
              "verbatim, a (lon, lat) pair, 'lat,lon' or a point layer (geocode "
@@ -63,37 +74,35 @@ class PARAMS:
              "explicitly) and NEVER invented. It is snapped onto the traced "
              "channel, so a click beside the stream still delineates its basin")
 
-    rain_series_mm = Param(
-        optional=True, type=list[float] | None,
+    rain_series_mm = Input(
+        type=list[float] | None,
         units="mm",
-        derived_when_absent=(
-            "the rainfall record fetched over the run's own window drives it, "
-            "else the design storm stated below"),
         desc="A MEASURED storm, as hourly GROSS millimetres in the order the "
              "record reported them - what fetch_aorc_precip returns over this "
              "catchment under `precip_mm` for any CONUS window since 1979. It is "
              "the true intensity structure, which is what resolves the hydrograph "
              "SHAPE; a record that stops inside the simulated window stops in the "
              "run too, so the recession limb appears. State event_time instead to "
-             "have the run look the record up over its own window")
-    design_storm_mm_per_day = Param(
-        optional=True, bounds=(2.4, 12000.0), units="mm/day",
+             "have the run look the record up over its own window").optional(
+        "the rainfall record fetched over the run's own window drives it, "
+        "else the design storm stated below")
+    design_storm_mm_per_day = Input(
+        bounds=(2.4, 12000.0), units="mm/day",
         desc="Constant design-storm intensity, used when no measured series is "
              "given, in the engine's own unit - millimetres per DAY, so a "
              "24 mm/h cloudburst is 576. A hypothetical storm, so it is stated "
              "and never assumed: with no series, no fetched record and no "
              "design storm the run refuses for want of rain. "
              "How long it rains for, and how wet the ground already is, are the "
-             "deck's own keywords")
+             "deck's own keywords").optional()
 
-    curve_number = Param(
-        optional=True, bounds=(30.0, 100.0),
-        derived_when_absent=(
-            "curve numbers are distributed PER NODE from the land-cover raster"),
+    curve_number = Input(
+        bounds=(30.0, 100.0),
         desc="A UNIFORM SCS curve number over the whole catchment, overriding the "
              "land-cover-distributed field. Roughness stays per-node either way - "
-             "Manning n is a separate physical property, not the CN knob")
-    steep_slope_correction = Param(
+             "Manning n is a separate physical property, not the CN knob").optional(
+        "curve numbers are distributed PER NODE from the land-cover raster")
+    steep_slope_correction = Input(
         default=False,
         desc="Apply the Huang (2006) steep-slope correction to the curve numbers "
              "using the mesh's own bed gradients. The engine's native branch is "
@@ -106,30 +115,18 @@ class PARAMS:
              "channel network. THE granularity lever: peak depth and flooded "
              "extent are resolution-bound classes and a coarse mesh reads both "
              "low")
-    mesh_max_edge_m = Param(
+    mesh_max_edge_m = Input(
         default=300.0,
         bounds=(20.0, 5000.0), units="m",
         desc="Coarsest triangle edge, reached far from the channels on the "
              "hillslopes")
 
-
-_GEOMETRY = "rog.slf"
-_BOUNDARY = "rog.cli"
-_RESULT = "r2d_rog.slf"
-
-# half-width; the delineation refuses a basin the window clips
-_BASIN_WINDOW_KM = 15.0
-
-_MESH_GRADE = 0.20
-
-
-class DATA:
-    domain = Data(DOMAIN).need("hydrography", kind="basin", at="pour_point",
-                               span_km=_BASIN_WINDOW_KM)
-    bed = Data(BED).need("terrain")
-    rivers = Data.need("hydrography", geometry="polyline")
-    landcover = Data.need("land cover")
-    rain = Data(RAIN).need("precipitation series").context(
+    domain = Input(DOMAIN).need("hydrography", kind="basin", at="pour_point",
+                                span_km=_BASIN_WINDOW_KM)
+    bed = Input(BED).need("terrain")
+    rivers = Input().need("hydrography", geometry="polyline")
+    landcover = Input().need("land cover")
+    rain = Input(RAIN).need("precipitation series").context(
         "no hourly rainfall record over this catchment for that window; the "
         "design storm drives the run")
 
@@ -239,7 +236,6 @@ DOC = dict(
         "coastal or pluvial inundation depth; a channel dye or sediment plume "
         "(`telemac_dye_release`); urban pipe drainage; storm-surge coastal flooding"
     ),
-    params=PARAMS,
     controls=(
         ("input_mode",
          '"user_gated" presents the resolved storm, catchment and mesh band for '

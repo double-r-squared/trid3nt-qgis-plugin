@@ -21,11 +21,6 @@ from trid3nt_server.workflows.runtime.resolution import (
 )
 
 
-class _Row:
-    def __init__(self, name: str, origin: str) -> None:
-        self.name, self.origin = name, origin
-
-
 _DECL = SensitivityDecl((("water_depth", "extent"),
                          ("inundation_depth", "peak")),
                         lever="target_resolution_m")
@@ -45,21 +40,26 @@ _TEMPLATE, _LEVER = "telemac_do_sag", "mesh_resolution_m"
 _QUANTITY = "dissolved_oxygen"
 
 
+def _inputs_of(workflow, supplied):
+    """The run's inputs by name, as the fill's own verdicts state their origins."""
+    answered = asyncio.run(resolve_params(workflow.inputs, supplied))
+    return {name: {"value": verdict.value, "origin": verdict.origin.value}
+            for name, verdict in answered.items() if verdict.origin}
+
+
 def _resolved_rows(**supplied):
-    """The REAL rows: what ``resolve_params`` seats for this template's params."""
+    """The REAL rows: what the fill answers for this template's values."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
     workflow = TOOL_REGISTRY[_TEMPLATE].fn.workflow
-    rows = asyncio.run(resolve_params(workflow.params, supplied)).rows()
-    return workflow, rows
+    return workflow, _inputs_of(workflow, supplied)
 
 
 def test_a_default_spacing_run_is_labeled_a_bound() -> None:
     """The un-refined run is the case the evidence was measured on."""
     workflow, rows = _resolved_rows(location="Eel River near Scotia, California")
 
-    row = next(r for r in rows if r.name == _LEVER)
-    assert row.value is None, (
+    assert _LEVER not in rows, (
         "nobody supplied an edge, so none is seated: the mesh takes the finest "
         "cell of the data it is built over")
 
@@ -79,8 +79,7 @@ def test_a_refined_run_says_refined_is_not_converged() -> None:
     workflow, rows = _resolved_rows(location="Eel River near Scotia, California",
                                     **{_LEVER: 25.0})
 
-    row = next(r for r in rows if r.name == _LEVER)
-    assert row.origin == "user" and row.value == 25.0
+    assert rows[_LEVER] == {"value": 25.0, "origin": "user"}
 
     notes = sensitivity_notes(
         workflow.sensitivity, {_QUANTITY}, rows,
@@ -91,23 +90,23 @@ def test_a_refined_run_says_refined_is_not_converged() -> None:
     assert "25 m" in notes[0]
 
 
-def test_a_granularity_stated_as_a_keyword_is_read_off_the_fill() -> None:
-    """A lever the module carries as a KEYWORD has no param row, so the note
-    reads the solved deck's own slots: a run whose plane count the user stated
-    is refined, and one left at the deck's own is a bound."""
+def test_a_granularity_stated_as_a_keyword_is_read_off_the_one_map() -> None:
+    """A lever the module carries as a KEYWORD is read where a value's is - the
+    run's inputs by name: a run whose plane count the user stated is refined,
+    and one left at the deck's own is a bound."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
     workflow = TOOL_REGISTRY["telemac3d_stratified_flow"].fn.workflow
     lever = workflow.sensitivity.lever
     assert lever == "NUMBER_OF_HORIZONTAL_LEVELS"
     published = {"water_temperature"}
-    rows = asyncio.run(resolve_params(workflow.params, {})).rows()
+    rows = _inputs_of(workflow, {})
 
-    bound = sensitivity_notes(workflow.sensitivity, published,
-                              rows, fill={lever: {"value": 6, "from": "template: STEERING"}})
+    bound = sensitivity_notes(workflow.sensitivity, published, {
+        **rows, lever: {"value": 6, "origin": "template", "source": "STEERING"}})
     assert bound[0].startswith("RESOLUTION-LIMITED, TREAT AS A BOUND:")
-    refined = sensitivity_notes(workflow.sensitivity, published, rows,
-                                fill={lever: {"value": 12, "from": "user"}})
+    refined = sensitivity_notes(workflow.sensitivity, published, {
+        **rows, lever: {"value": 12, "origin": "user", "source": None}})
     assert refined[0].startswith("RESOLUTION-SENSITIVE:")
 
 
@@ -115,14 +114,14 @@ def test_a_quantity_the_run_did_not_publish_is_not_labeled() -> None:
     """A note about a product that is not there points at nothing."""
     notes = sensitivity_notes(
         _DECL, {"water_depth"},
-        [_Row("target_resolution_m", "derived")], mesh_size_m=250.0)
+        {"target_resolution_m": {"origin": "derived"}}, mesh_size_m=250.0)
     assert "inundation_depth" not in notes[0]
     assert "water_depth" in notes[0]
 
 
 def test_no_declaration_and_nothing_published_are_both_no_note() -> None:
-    assert sensitivity_notes(SensitivityDecl(), {"water_depth"}, []) == ()
-    assert sensitivity_notes(_DECL, set(), []) == ()
+    assert sensitivity_notes(SensitivityDecl(), {"water_depth"}, {}) == ()
+    assert sensitivity_notes(_DECL, set(), {}) == ()
 
 
 @pytest.mark.parametrize("template,quantity,cls", [

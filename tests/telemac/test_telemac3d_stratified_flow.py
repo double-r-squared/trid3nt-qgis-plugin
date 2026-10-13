@@ -11,6 +11,7 @@ from __future__ import annotations
 import inspect
 
 import pytest
+from seated import value_inputs, row_inputs
 
 
 def _module():
@@ -34,10 +35,9 @@ def test_the_data_rows_are_the_engine_neutral_slots_this_run_stands_on():
     picked, or a layer the caller already holds. One bed the match composes, and
     no runs row - a lake IS a closed body, and the mesh takes its roles from the
     domain, which measures none."""
-    from trid3nt_server.workflows.runtime import data_rows
     from trid3nt_server.inputs.slots import BED, DOMAIN, LEVEL
 
-    rows = data_rows(_module().DATA)
+    rows = row_inputs(_module().INPUTS)
     assert [d.name for d in rows] == ["domain", "bed", "level"]
     by_name = {d.name: d for d in rows}
     assert by_name["domain"].slot == DOMAIN
@@ -58,11 +58,10 @@ def test_the_seed_names_which_body_of_water_and_is_a_point_never_a_place():
     """A place name is geocoded to a point before it reaches the match, so what
     ranks the domain is a lon/lat off the Point the seed was ingested into."""
     from trid3nt_server.inputs import Point
-    from trid3nt_server.workflows.runtime import data_rows
 
-    domain = {d.name: d for d in data_rows(_module().DATA)}["domain"]
+    domain = {d.name: d for d in row_inputs(_module().INPUTS)}["domain"]
     assert domain.coercion["near"] == "seed"
-    seed = next(p for p in _workflow().params if p.name == "seed")
+    seed = next(p for p in value_inputs(_workflow()) if p.name == "seed")
     assert seed.type is Point and seed.optional
 
 
@@ -71,9 +70,8 @@ def test_the_level_is_ranked_against_the_domain_and_may_be_absent():
     a carrier discharge: one reading off the nearest gauge that watched this
     water. Water with no gauge on it is not a refusal: the sheet says the gauge
     held nothing and the column opens at the zero the bed is counted from."""
-    from trid3nt_server.workflows.runtime import data_rows
 
-    level = {d.name: d for d in data_rows(_module().DATA)}["level"]
+    level = {d.name: d for d in row_inputs(_module().INPUTS)}["level"]
     assert level.is_context
     assert "opens at the zero" in level.context_sentence
 
@@ -142,11 +140,11 @@ def test_the_template_declares_only_its_own_question_and_one_restated_lever():
     from seated import SEATED
 
     workflow = _workflow()
-    declared = {p.name for p in workflow.params}
+    declared = {p.name for p in value_inputs(workflow)}
     assert declared == _OWN_PARAMS | set(SEATED)
-    rows = {p.name: p for p in workflow.params}
+    rows = {p.name: p for p in value_inputs(workflow)}
     edge = rows["mesh_resolution_m"]
-    assert (edge.default, edge.bounds, edge.optional) == (None, None, True)
+    assert (edge.default, edge.bounds, edge.is_optional) == (None, None, True)
 
 
 @pytest.mark.parametrize("gone", ["location", "bbox", "mesh_min_edge_m",
@@ -158,7 +156,7 @@ def test_the_template_declares_only_its_own_question_and_one_restated_lever():
                                   "max_advection_iterations"])
 def test_the_dissolved_params_are_gone(gone):
     """Each is a keyword the dictionary describes or a slot the runtime declares."""
-    assert gone not in {p.name for p in _workflow().params}
+    assert gone not in {p.name for p in value_inputs(_workflow())}
 
 
 def test_the_model_surface_takes_a_body_of_water_and_never_a_place():

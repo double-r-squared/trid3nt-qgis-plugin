@@ -120,10 +120,10 @@ def test_the_bed_slot_takes_one_source_and_composes_nothing():
     surface underneath: the row states one class."""
     import inspect
 
-    from trid3nt_server.workflows.runtime import Data
+    from trid3nt_server.inputs.input import Input
 
     assert "over" not in inspect.signature(bed).parameters
-    assert not Data.need("bathymetry").coercion.get("near")
+    assert not Input().need("bathymetry").coercion.get("near")
 
 
 def test_a_depth_no_water_body_holds_refuses_rather_than_being_meshed():
@@ -182,22 +182,23 @@ def test_only_the_slots_a_user_can_draw_are_offered_on_the_canvas():
 def test_a_row_states_its_slot_and_its_name_is_free():
     """A row is the slot it STATES: one called ``bed`` that states none is a
     plain row, and one called anything at all that states BED is the bed."""
-    from trid3nt_server.workflows.runtime import Data, DataDecl
+    from trid3nt_server.inputs.input import Input
 
-    assert DataDecl(name="bed").slot is None
-    assert DataDecl(name="surveyed_bed", slot=BED).slot is BED
-    assert Data(LEVEL).need("water level series").slot is LEVEL
+    assert Input(name="bed").slot is None
+    assert Input(name="surveyed_bed", slot=BED).slot is BED
+    assert Input(LEVEL).need("water level series").slot is LEVEL
 
 
 def test_a_slot_states_which_classes_it_serves_and_a_row_outside_them_refuses():
     """The bed reads a measurement or the ground; a level reads a level."""
-    from trid3nt_server.workflows.runtime import Data, DeclarationError
+    from trid3nt_server.inputs.input import Input
+    from trid3nt_server.workflows.runtime import DeclarationError
 
     assert BED.classes == frozenset(
         {"bathymetry", "terrain", "channel survey"})
     assert LEVEL.classes == frozenset({"water level series"})
     with pytest.raises(DeclarationError, match="as a bed"):
-        Data(BED).need("discharge series")
+        Input(BED).need("discharge series")
 
 
 def test_a_domain_producer_hands_over_the_runs_it_cut_the_polygon_between():
@@ -322,7 +323,7 @@ def test_each_slot_module_imports_first_in_a_fresh_interpreter(module):
 @pytest.mark.parametrize("slot", [BED, LEVEL, DISCHARGE, OBSERVE],
                          ids=lambda slot: slot.name)
 def test_a_slot_that_takes_a_number_states_one_on_the_wire(slot):
-    from trid3nt_server.workflows.runtime.data import DataDecl
+    from trid3nt_server.inputs.input import Input
 
-    assert DataDecl("x", slot=slot).wire_annotation == (str | float | None)
-    assert DataDecl("x", slot=DOMAIN).wire_annotation != (str | float | None)
+    assert Input(name="x", slot=slot).wire_type == (str | float | None)
+    assert Input(name="x", slot=DOMAIN).wire_type != (str | float | None)

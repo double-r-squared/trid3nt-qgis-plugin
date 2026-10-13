@@ -8,8 +8,9 @@ from dataclasses import replace
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT
 from trid3nt_server.tools.mesh.recipe import RESOLUTION
+from trid3nt_server.inputs.input import Input
 from trid3nt_server.workflows.runtime import (
-    Data, register_workflow, Param,
+    register_workflow,
 )
 from trid3nt_server.tools.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.telemac.authoring.accepted_mesh import (
@@ -21,9 +22,9 @@ from trid3nt_server.workflows.telemac.modules.artemis import (
 )
 from trid3nt_server.workflows.telemac.workflow import Measured, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DATA", "DEFAULT_BARRIER_WIDTH_M",
+__all__ = ["CAPTIONS", "DEFAULT_BARRIER_WIDTH_M",
            "DEFAULT_GRADE", "DEFAULT_OPEN_DEPTH_M", "DOC", "MESH", "OUTPUTS",
-           "PARAMS", "STEERING", "artemis_harbor_agitation"]
+           "INPUTS", "STEERING", "artemis_harbor_agitation"]
 
 
 DEFAULT_GRADE: float = 0.2
@@ -35,12 +36,16 @@ DEFAULT_BARRIER_WIDTH_M: float = 20.0
 DEFAULT_OPEN_DEPTH_M: float = -12.0
 
 
-class PARAMS:
-    wave_height_m = Param(
+_RESULT = "res_agitation.slf"
+_STEERING_FILE = "art_agitation.cas"
+
+
+class INPUTS:
+    wave_height_m = Input(
         bounds=(0.01, 10.0), units="m",
         desc="Incident wave height H0 on the designated liquid boundary; Kd is "
              "measured against it, so it sets the scale of every narrated height")
-    reflection_coef = Param(
+    reflection_coef = Input(
         bounds=(0.0, 1.0),
         desc="The declared structure's reflection coefficient: 1 fully reflecting "
              "(a vertical quay), 0 fully absorbing (a rubble slope). Every other "
@@ -52,38 +57,32 @@ class PARAMS:
              "structure. THE granularity lever: a phase-resolving solve needs "
              "several nodes per WAVELENGTH and Kd peaks inside a diffraction "
              "fringe, so a coarse mesh reads the peaks low")
-    mesh_grade = Param(
+    mesh_grade = Input(
         default=DEFAULT_GRADE, bounds=(0.05, 0.5),
         desc="Mesh gradation: how fast the edge may grow from the structure band "
              "out to the open approach")
-    barrier_width_m = Param(
+    barrier_width_m = Input(
         default=DEFAULT_BARRIER_WIDTH_M,
         bounds=(1.0, 200.0), units="m",
         desc="The width the mapped structure centreline is cut at; a survey maps "
              "a mound as a line and a line removes no water from the domain")
-    transect_length_m = Param(
+    transect_length_m = Input(
         default=1500.0, bounds=(100.0, 20000.0),
         units="m",
         desc="The whole length of the transect the agitation is read along: a "
              "straight line through the structure's centroid along the incident "
              "wave direction, half of it on the exposed side and half in the lee")
-    open_depth_threshold_m = Param(
+    open_depth_threshold_m = Input(
         default=DEFAULT_OPEN_DEPTH_M,
         bounds=(-200.0, -1.0), units="m",
         desc="How deep a boundary stretch must reach for it to be designated the "
              "OPEN edge the incident wave enters through; every stretch that "
              "reaches it opens")
 
-
-_RESULT = "res_agitation.slf"
-_STEERING_FILE = "art_agitation.cas"
-
-
-class DATA:
-    extent = Data(EXTENT).supplied(geometry="rectangle")
-    domain = Data(DOMAIN).need("hydrography", kind="coastline", geometry="polyline")
-    bed = Data(BED).need("bathymetry")
-    structure = Data.supplied(geometry="polyline")
+    extent = Input(EXTENT).supplied(geometry="rectangle")
+    domain = Input(DOMAIN).need("hydrography", kind="coastline", geometry="polyline")
+    bed = Input(BED).need("bathymetry")
+    structure = Input().supplied(geometry="polyline")
 
 
 _FOOTPRINT = Measured(
@@ -191,7 +190,6 @@ DOC = dict(
         "agitation with no structure; coastal storm-tide flooding; a "
         "tracer released into a river channel"
     ),
-    params=PARAMS,
     controls=(
         ("extent",
          "NOT needed when `domain=` is filled - this is the other way to say "

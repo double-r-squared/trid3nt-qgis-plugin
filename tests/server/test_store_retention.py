@@ -61,7 +61,8 @@ def store(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> _FakeStore:
     record = {
         "run_id": "01RUN",
         "outputs": [{"uri": LAYER_URI, "dataset_uris": []}],
-        "sheet": [{"name": "bed", "real_source": f"s3://{BUCKET}/{DEM}"}],
+        "inputs": {"bed": {"value": f"s3://{BUCKET}/{DEM}", "origin": "user",
+                           "source": None}},
     }
     (tmp_path / "run_journal.jsonl").write_text(json.dumps(record) + "\n",
                                                 encoding="utf-8")

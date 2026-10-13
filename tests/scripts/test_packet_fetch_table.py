@@ -39,13 +39,17 @@ EVIDENCE = {
     "layers": [{"uri": "s3://trid3nt-cache/cache/static-30d/dem/abc123.tif",
                 "legend": {"units": "m"}}],
 }
-JOURNAL = {"sources": {
-    "bed terrain": {"picked": "fetch_dem", "reason": "bed terrain: fetch_dem "
-                    "(measured, over this place, 10 m, measured to 2024-01-01, "
-                    "NAVD88)."},
-    "wave": {"picked": "fetch_ndbc_buoys", "reason": "wave: fetch_ndbc_buoys "
-             "(measured, over this place, stations, 30-min samples, no datum "
-             "stated)."}}}
+JOURNAL = {
+    "inputs": {
+        "bed": {"value": None, "origin": "producer", "source": "fetch_dem"},
+        "wave": {"value": None, "origin": "producer",
+                 "source": "fetch_ndbc_buoys"},
+        "spill_fraction": {"value": 0.4, "origin": "user", "source": None}},
+    "notes": [
+        "bed terrain: fetch_dem (measured, over this place, 10 m, measured to "
+        "2024-01-01, NAVD88).",
+        "wave: fetch_ndbc_buoys (measured, over this place, stations, 30-min "
+        "samples, no datum stated)."]}
 
 
 @functools.lru_cache(maxsize=1)
@@ -73,7 +77,7 @@ def test_a_cache_hit_states_its_ask_bytes_and_pick(rows):
     assert hit["cache"] == "hit"
     assert hit["bytes"] == 159549
     assert "'bbox': [-75.7, 36.1, -75.7, 36.2]" in hit["ask"]
-    assert (hit["kind"], hit["cell"], hit["datum"]) == ("bed terrain", "10 m", "NAVD88")
+    assert (hit["kind"], hit["cell"], hit["datum"]) == ("bed", "10 m", "NAVD88")
     assert hit["units"] == "m"
     assert hit["ms"] == 100
 

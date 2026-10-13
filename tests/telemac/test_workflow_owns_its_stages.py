@@ -12,16 +12,14 @@ from types import SimpleNamespace
 import pytest
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.workflows.runtime import (
-    Data,
-    DeclarationError,
-    tool,
-)
+from trid3nt_server.inputs.input import Input
+from trid3nt_server.workflows.runtime import DeclarationError, tool
 from seated import SEATED
 from trid3nt_server.tools.mesh.recipe import RESOLUTION
 from trid3nt_server.workflows.telemac.modules import T2D
 from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 from trid3nt_server.inputs.slots import BED, DOMAIN
+from seated import value_inputs, row_inputs
 
 _METADATA = AtomicToolMetadata(
     name="telemac_water_temperature", ttl_class="live-no-cache",
@@ -40,24 +38,26 @@ class STEERING(T2D):
     DURATION = 604800.0
 
 
-class PARAMS:
-    mesh_resolution_m = replace(RESOLUTION, default=25.0)
-
-
 class DATA:
-    domain = Data(DOMAIN).need("hydrography", at="seed")
-    bed = Data(BED).need("bathymetry")
+    domain = Input(DOMAIN).need("hydrography", at="seed")
+    bed = Input(BED).need("bathymetry")
 
 
-def _template(data: type = DATA, params: type = PARAMS) -> SimpleNamespace:
+class INPUTS:
+    mesh_resolution_m = replace(RESOLUTION, default=25.0)
+    domain = Input(DOMAIN).need("hydrography", at="seed")
+    bed = Input(BED).need("bathymetry")
+
+
+def _template(inputs: type = INPUTS) -> SimpleNamespace:
     """A template module, as the workflow reads one: its own names and nothing
     around them."""
-    return SimpleNamespace(STEERING=STEERING, PARAMS=params, DATA=data)
+    return SimpleNamespace(STEERING=STEERING, INPUTS=inputs)
 
 
-def _workflow(data: type = DATA, params: type = PARAMS) -> TelemacWorkflow:
-    return TelemacWorkflow(metadata=_METADATA, params=params,
-                           template=_template(data, params), data=data)
+def _workflow(inputs: type = INPUTS) -> TelemacWorkflow:
+    return TelemacWorkflow(metadata=_METADATA, inputs=inputs,
+                           template=_template(inputs))
 
 
 def _mesh(workflow: TelemacWorkflow):
@@ -68,26 +68,22 @@ def test_the_engine_seats_its_inputs_so_the_template_states_none_of_them():
     workflow = _workflow()
     # The template's own row for the mesh edge keeps its place; every input it
     # does not state is seated after it, in the order the engine seats them.
-    assert [prm.name for prm in workflow.params] == [
+    assert [prm.name for prm in value_inputs(workflow)] == [
         "mesh_resolution_m", *(n for n in SEATED if n != "mesh_resolution_m")]
-    assert "cores" not in {prm.name for prm in workflow.params}
+    assert "cores" not in {prm.name for prm in value_inputs(workflow)}
 
 
 def test_the_mesh_edge_is_seated_only_where_the_mesh_ask_names_it():
     """The edge is the mesh ask's input: an ask built at a stated number names
     no run input, so no row is seated for one."""
-    class _NONE:
-        pass
-
-    named = _workflow(params=_NONE)
-    assert named.params[0] is RESOLUTION
+    named = _workflow(DATA)
+    assert value_inputs(named)[0] is RESOLUTION
     fixed = SimpleNamespace(
-        STEERING=STEERING, PARAMS=_NONE, DATA=DATA,
+        STEERING=STEERING, INPUTS=DATA,
         MESH=tool.build_mesh(mesher="om2d", kind="unstructured_tri",
                              extent="domain", resolution_m=40.0))
-    workflow = TelemacWorkflow(metadata=_METADATA, params=_NONE,
-                               template=fixed, data=DATA)
-    assert [prm.name for prm in workflow.params] == ["event_time",
+    workflow = TelemacWorkflow(metadata=_METADATA, inputs=DATA, template=fixed)
+    assert [prm.name for prm in value_inputs(workflow)] == ["event_time",
                                                      "vertical_frame"]
 
 
@@ -95,17 +91,12 @@ def test_the_frame_is_the_beds_and_every_reader_reads_that_one():
     """The bed's type declares the frame; the match's need and the level read
     the value the run stated for it, and the bed's own default without one."""
     from trid3nt_server.workflows.runtime import fill
-    from trid3nt_server.workflows.runtime.params import (ResolvedParam,
-                                                         ResolvedParams)
 
-    (name, default, _desc), = BED.states
-    assert (name, default) == ("vertical_frame", "NAVD88")
-    frame = next(prm for prm in _workflow().params if prm.name == name)
-    assert frame.default == default
-    assert fill._frame(fill._Env(params=None, data={})) == "NAVD88"
-    stated = ResolvedParams({name: ResolvedParam(name=name, value="IGLD85",
-                                                 origin=None)})
-    assert fill._frame(fill._Env(params=stated, data={})) == "IGLD85"
+    frame, = BED.states
+    assert (frame.name, frame.default) == ("vertical_frame", "NAVD88")
+    assert _workflow().input("vertical_frame") is frame
+    assert fill._frame(fill._Env(data={})) == "NAVD88"
+    assert fill._frame(fill._Env(data={}, run={frame.name: "IGLD85"})) == "IGLD85"
 
 
 def test_the_domain_and_the_bed_reach_the_wire_as_the_slots_they_are():
@@ -116,23 +107,23 @@ def test_the_domain_and_the_bed_reach_the_wire_as_the_slots_they_are():
 
 
 def workflow_wire(workflow: TelemacWorkflow) -> set[str]:
-    return {decl.name for decl in workflow.data if decl.fills_from_user}
+    return {decl.name for decl in row_inputs(workflow) if decl.fills_from_user}
 
 
 def test_a_template_with_no_domain_refuses_at_import():
     class NO_DOMAIN:
-        bed = Data(BED).need("bathymetry")
+        bed = Input(BED).need("bathymetry")
 
     with pytest.raises(DeclarationError, match="declares 0 domain rows"):
-        _workflow(data=NO_DOMAIN)
+        _workflow(NO_DOMAIN)
 
 
 def test_a_template_with_no_bed_refuses_at_import():
     class NO_BED:
-        domain = Data(DOMAIN).need("hydrography")
+        domain = Input(DOMAIN).need("hydrography")
 
     with pytest.raises(DeclarationError, match="declares 0 bed rows"):
-        _workflow(data=NO_BED)
+        _workflow(NO_BED)
 
 
 def _built(kind: str, **fields):
@@ -242,20 +233,20 @@ def test_two_level_rows_are_legal_and_two_bed_rows_refuse():
     from trid3nt_server.inputs.slots import LEVEL
 
     class TWO_LEVELS:
-        domain = Data(DOMAIN).need("hydrography", at="seed")
-        bed = Data(BED).need("bathymetry")
-        upstream = Data(LEVEL).need("water level series").optional()
-        downstream = Data(LEVEL).need("water level series").optional()
+        domain = Input(DOMAIN).need("hydrography", at="seed")
+        bed = Input(BED).need("bathymetry")
+        upstream = Input(LEVEL).need("water level series").optional()
+        downstream = Input(LEVEL).need("water level series").optional()
 
-    assert _workflow(data=TWO_LEVELS)._slots()[LEVEL] == "upstream"
+    assert _workflow(TWO_LEVELS)._slots()[LEVEL] == "upstream"
 
     class TWO_BEDS:
-        domain = Data(DOMAIN).need("hydrography", at="seed")
-        bed = Data(BED).need("bathymetry")
-        survey = Data(BED).need("channel survey")
+        domain = Input(DOMAIN).need("hydrography", at="seed")
+        bed = Input(BED).need("bathymetry")
+        survey = Input(BED).need("channel survey")
 
     with pytest.raises(DeclarationError, match="declares 2 bed rows"):
-        _workflow(data=TWO_BEDS)
+        _workflow(TWO_BEDS)
 
 
 def test_a_composite_naming_the_mesh_stage_does_not_fill_the_seated_mesh_row():
@@ -273,10 +264,10 @@ def test_the_moment_is_the_engines_input_and_no_template_seats_or_coerces_it():
     through its own coercion, so a template with no coercion still pins one."""
     from trid3nt_server.workflows.runtime import Workflow
 
-    bare = Workflow(metadata=_METADATA, params=(), template=_template(), data=DATA)
-    assert "event_time" not in {prm.name for prm in bare.params}
+    bare = Workflow(metadata=_METADATA, inputs=DATA, template=_template())
+    assert "event_time" not in {prm.name for prm in value_inputs(bare)}
     workflow = _workflow()
-    assert "event_time" in {prm.name for prm in workflow.params}
+    assert "event_time" in {prm.name for prm in value_inputs(workflow)}
     pinned = workflow.coercions[-1]({"event_time": "2026-03-04"})
     assert str(pinned["event_time"]).startswith("2026-03-04T00:00:00")
 
@@ -290,4 +281,4 @@ def test_every_registered_template_carries_the_moment_and_the_beds_frame():
                  if hasattr(tool.fn, "workflow")]
     assert len(templates) == 15
     for workflow in templates:
-        assert {"event_time", "vertical_frame"} <= {p.name for p in workflow.params}
+        assert {"event_time", "vertical_frame"} <= {p.name for p in value_inputs(workflow)}

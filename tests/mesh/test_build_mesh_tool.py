@@ -27,6 +27,7 @@ from trid3nt_server.tools.mesh.tool import (
     mesh_op,
     tool,
 )
+from seated import row_inputs
 
 _AOI = (-83.50, 35.00, -83.40, 35.09)
 
@@ -182,7 +183,7 @@ def test_every_template_of_the_engine_takes_a_supplied_mesh():
 
     for name in ("artemis_harbor_agitation", "telemac_dye_release",
                  "telemac_rain_on_grid", "telemac3d_stratified_flow"):
-        rows = TOOL_REGISTRY[name].fn.workflow.data
+        rows = row_inputs(TOOL_REGISTRY[name].fn.workflow)
         assert [row.coercion["kinds"] for row in rows if row.slot is MESH] == [
             ("unstructured_tri",)]
 

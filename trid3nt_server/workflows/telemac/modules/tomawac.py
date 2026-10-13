@@ -11,7 +11,6 @@ from types import MappingProxyType
 from typing import Any, Mapping
 
 from trid3nt_server.inputs.run_notes import journal_note
-from trid3nt_server.inputs.slots import LEVEL, WAVE
 
 from .module import MOMENT, Module, Output, Unwritten
 from .outputs import PRIMITIVES, read_spectrum
@@ -142,7 +141,7 @@ class _Tomawac(Module("tomawac")):  # type: ignore[misc]
         for name in keywords:
             cls.slot(name)
         return {"module": "tomawac", "steering": STEERING_FILENAME,
-                "filled_by": (WAVE, MOMENT),
+                "filled_by": ("wave", MOMENT),
                 "slots": {"GEOMETRY_FILE": geometry,
                           "BOUNDARY_CONDITIONS_FILE": boundary,
                           "ED_RESULTS_FILE": RESULT_FILENAME, **keywords}}
@@ -186,10 +185,10 @@ WAC.ARMS_ON_HOST = ("WAVE_DRIVEN_CURRENTS",)
 WAC.reads(**PRIMITIVES, spectrum=read_spectrum)
 # The sea state at the open edge fills the JONSWAP numbers; the gauged level is the still water depths are read under; a settled station is where the spectrum is printed. A coupled body takes only the sea state.
 WAC.FILLED_BY = MappingProxyType({
-    WAVE: {"BOUNDARY_SIGNIFICANT_WAVE_HEIGHT": lambda wave: wave.height_m,
-           "BOUNDARY_PEAK_FREQUENCY": lambda wave: 1.0 / wave.peak_period_s,
-           "BOUNDARY_MAIN_DIRECTION_1": _toward},
-    LEVEL: {"INITIAL_STILL_WATER_LEVEL": lambda level: level.value},
+    "wave": {"BOUNDARY_SIGNIFICANT_WAVE_HEIGHT": lambda wave: wave.height_m,
+             "BOUNDARY_PEAK_FREQUENCY": lambda wave: 1.0 / wave.peak_period_s,
+             "BOUNDARY_MAIN_DIRECTION_1": _toward},
+    "level": {"INITIAL_STILL_WATER_LEVEL": lambda level: level.value},
     "station": {
         "ABSCISSAE_OF_SPECTRUM_PRINTOUT_POINTS": lambda placed: [placed["at"][0]],
         "ORDINATES_OF_SPECTRUM_PRINTOUT_POINTS": lambda placed: [placed["at"][1]]},

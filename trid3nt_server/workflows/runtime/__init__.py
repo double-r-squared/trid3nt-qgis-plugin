@@ -1,4 +1,4 @@
-"""Declared workflows: a template is PARAMS + DATA over one module.
+"""Declared workflows: a template is one body of INPUTS over one module.
 
 A fill puts a value into every input; a run writes, solves and reads.
 """
@@ -6,11 +6,8 @@ A fill puts a value into every input; a run writes, solves and reads.
 from __future__ import annotations
 
 from .data import (
-    Data,
-    DataDecl,
     Producer,
     ToolWord,
-    data_rows,
     tool,
 )
 from .docstring import render_docstring
@@ -20,42 +17,30 @@ from .errors import (
     DeclarativeError,
     GateRefusedError,
     NamelessFailureError,
-    ParamOutOfRangeError,
     DeclarationError,
     StepFailedError,
-)
-from .params import (
-    Param,
-    ResolvedParam,
-    ResolvedParams,
-    param_rows,
 )
 from .workflow import (
     RunResult,
     Workflow,
     register_workflow,
 )
-from .resolver import (
+from .provenance import (
     merge_provenance,
     provenance_entries,
 )
 
 __all__ = [
-    "Data", "DataDecl", "DeclarativeError",
+    "DeclarativeError",
     "GateRefusedError",
-    "Param",
-    "ParamOutOfRangeError",
     "DeclarationError", "Producer",
-    "ResolvedParam",
-    "ResolvedParams",
     "RunResult",
     "NamelessFailureError", "StepFailedError",
     "SuppliedCoverageError",
     "SuppliedGeometryError",
     "ToolWord",
     "Workflow",
-    "data_rows",
-    "merge_provenance", "param_rows", "provenance_entries",
+    "merge_provenance", "provenance_entries",
     "register_workflow",
     "render_docstring",
     "tool",

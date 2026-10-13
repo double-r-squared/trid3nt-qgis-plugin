@@ -12,6 +12,7 @@ import pytest
 
 from trid3nt_server.workflows.telemac.templates.do_sag import do_sag as do_sag_mod
 from trid3nt_server.workflows.telemac.templates.dye_release import dye_release as dye_mod
+from seated import value_inputs
 
 
 @pytest.mark.parametrize("mod, fn_name", [
@@ -21,11 +22,11 @@ def test_template_surfaces_event_time_knob(mod, fn_name):
     assert "event_time" in inspect.signature(fn).parameters
     # The row is the RUNTIME's, seated onto the workflow rather than restated in
     # the template's own class body.
-    rows = {p.name: p for p in fn.workflow.params}
+    rows = {p.name: p for p in value_inputs(fn.workflow)}
     assert "event_time" in rows
-    assert rows["event_time"].optional is True
+    assert rows["event_time"].is_optional is True
     # unset leaves a derived-basis provenance row
-    assert rows["event_time"].derived_when_absent
+    assert rows["event_time"].absent_note
 
 
 @pytest.mark.asyncio

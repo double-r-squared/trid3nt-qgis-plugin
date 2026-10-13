@@ -131,12 +131,12 @@ def test_the_wave_row_is_told_the_record_s_own_columns_and_the_run_s_window():
     from types import SimpleNamespace
 
     from trid3nt_server.workflows.runtime.fill import _what_the_record_reports
-    from trid3nt_server.workflows.runtime.data import DataDecl
+    from trid3nt_server.inputs.input import Input
 
     row = SimpleNamespace(units=_UNITS, value_column="wave_height_m",
                           series_column="wave_height_series_csv",
                           above_column="", data_class="wave series")
-    told = _what_the_record_reports(SimpleNamespace(window_s=7200.0, params=None),
-                                    DataDecl("wave", slot=WAVE), row)
+    told = _what_the_record_reports(SimpleNamespace(window_s=7200.0, run={}),
+                                    Input(name="wave", slot=WAVE), row)
     assert told["column_units"] == _UNITS
     assert told["window_s"] == 7200.0

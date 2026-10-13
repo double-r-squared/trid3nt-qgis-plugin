@@ -18,21 +18,19 @@ from trid3nt_contracts.common import Origin, SyntheticInput
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
 
+from trid3nt_server.inputs.input import Input
 from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LEVEL, MESH
 from trid3nt_server.render.formats import publish
 from trid3nt_server.workflows.runtime import (
-    DataDecl,
     DeclarationError,
-    Param,
     RunResult,
     Workflow,
 )
 from trid3nt_server.workflows.telemac.errors import TelemacError
 from trid3nt_server.workflows.telemac.modules import wrapper_for
-from trid3nt_server.workflows.telemac.modules.module import (MOMENT, PROCESSORS,
-                                                              SlotRefused, accept,
-                                                              identify_on)
+from trid3nt_server.workflows.telemac.modules.module import (MOMENT, SlotRefused,
+                                                              accept, identify_on)
 from trid3nt_server.workflows.telemac.modules.outputs import (
     Line,
     OutputEmpty,
@@ -44,7 +42,7 @@ from trid3nt_server.workflows.telemac.modules.outputs import (
 from trid3nt_server.workflows.telemac.modules.sheet import (
     Sheet,
     CONTINUATION,
-    fits_the_box,
+    Keyword,
 )
 from trid3nt_server.workflows.telemac.modules.sheet import fill as fill_slots
 from trid3nt_server.workflows.telemac.modules.sheet import fill_coupled
@@ -72,16 +70,19 @@ _MESHER, _MESH_KIND = "om2d", "unstructured_tri"
 _DISPATCH = f"{_TELEMAC}.engine.solve_case"
 
 #: The moment a run of this engine opens at: what every dated source is asked for and every record is read at.
-EVENT_TIME = Param(
-    name="event_time", optional=True,
-    derived_when_absent=(
-        "a surface is read at the most recent cycle its own source has "
-        "published, and no series source is asked at all - a record is a "
-        "reading at a time, and this run stated none"),
+EVENT_TIME = Input(
+    name="event_time",
     desc="The moment the scenario is read at - an ISO date or datetime "
          "(YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like "
          "'during last Tuesday's storm'. Each source keeps its own "
-         "retention, and a request deeper than one refuses typed")
+         "retention, and a request deeper than one refuses typed").optional(
+    "a surface is read at the most recent cycle its own source has "
+    "published, and no series source is asked at all - a record is a "
+    "reading at a time, and this run stated none")
+
+# The kind is stated here once: every module of this engine solves on triangles, so a supplied mesh of another kind refuses at its row.
+_SUPPLIED_MESH = Input(MESH, name="mesh", is_optional=True,
+                       coercion=MappingProxyType({"kinds": (_MESH_KIND,)}))
 
 #: What the settle is called: what the deck and every later stage read it as.
 _SETTLED = "settled"
@@ -526,7 +527,7 @@ def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
 
 
 def _source_rows() -> list[ParamSheetRow]:
-    """One row per DATA slot the match filled: the ranked list, pick highlighted.
+    """One row per input the match filled: the ranked list, pick highlighted.
     The card renders the list the model was given. Not editable: a source is superseded by supplying the slot."""
     from trid3nt_server.workflows.runtime.journal import run_choices
 
@@ -587,7 +588,7 @@ def _coupled_rows(sheet: Sheet) -> list[ParamSheetRow]:
                 origin=(Origin.USER if identifier in user
                         else Origin.DERIVED if identifier in body.get("derived", ())
                         else Origin.TEMPLATE),
-                units=slot.unit or None, bounds=_editor_bounds(slot),
+                units=slot.unit or None, bounds=slot.whole_bounds,
                 editable=False, group=f"{module}: {_group(slot)}",
                 source_badge=(f"stated on this run as {module}: {slot.keyword}"
                               if identifier in user
@@ -706,12 +707,13 @@ def _entries(rows: Sequence[ParamSheetRow]) -> list[SyntheticInput]:
 def _seat_on(env: Any) -> Callable[[Mapping[str, Any]], None]:
     """Seat the values a person proceeded on in the run's mapping, so every read
     of a param after the sheet - a chart's reference among them - reads the edit."""
+    from trid3nt_server.workflows.runtime.fill import ACCEPTED, Verdict
+
     def seat(values: Mapping[str, Any]) -> None:
         edited = {name: value for name, value in values.items()
-                  if name in env.params and value != env.params.value_of(name)}
-        env.params = env.params.replacing({
-            name: replace(env.params.row(name), value=value, origin=Origin.USER)
-            for name, value in edited.items()})
+                  if value != env.run.get(name)}
+        env.inputs.update({name: Verdict(ACCEPTED, value, origin=Origin.USER)
+                           for name, value in edited.items()})
         env.run.update(edited)
     return seat
 
@@ -735,15 +737,9 @@ def _slot_row(name: str, row: Any) -> ParamSheetRow:
         else str(row.value)
     return ParamSheetRow(
         name=name, value=value, desc=row.slot.desc[:512],
-        units=row.slot.unit or None, bounds=_editor_bounds(row.slot),
+        units=row.slot.unit or None, bounds=row.slot.whole_bounds,
         origin=row.provenance.origin, source_badge=str(row.provenance),
         group=_group(row.slot))
-
-
-def _editor_bounds(slot: Any) -> tuple[float, float] | None:
-    """The range a card clamps this keyword's editor to, or nothing at all.
-    ONE pair bounds the whole value; a keyword with a pair per element has no single range, and the fill's refusal names the element."""
-    return slot.bounds[0] if len(slot.bounds) == 1 else None
 
 
 def _open_row(slot: Any) -> ParamSheetRow:
@@ -773,41 +769,38 @@ def _group(slot: Any) -> str:
 
 class TelemacWorkflow(Workflow):
     """TELEMAC: the template module, read by its own names.
-    A template DECLARES STEERING (and its coupling), DATA, PARAMS, OUTPUTS, CAPTIONS, DOC and its run files; this builds every stage off them.
+    A template DECLARES STEERING (and its coupling), INPUTS, OUTPUTS, CAPTIONS, DOC and its run files; this builds every stage off them.
     Nothing here restates a template, and a name a template does not state takes the default beside it."""
 
     engine = "telemac"
     solve_step = "solve"
-    # The kind is stated here once: every module of this engine solves on triangles, so a supplied mesh of another kind refuses at its row.
-    seated = (DataDecl(name="mesh", slot=MESH, is_optional=True,
-                       coercion=MappingProxyType({"kinds": (_MESH_KIND,)})),)
-
     def __init__(self, *, coerce: Sequence[Any] = (), **declared: Any) -> None:
         super().__init__(coerce=(*coerce, event_time()), **declared)
 
-    def inputs(self) -> tuple[Param, ...]:
-        """The edge the mesh ask names, the moment the run opens at, then what
-        the types of its rows state."""
+    def seated(self) -> tuple[Input, ...]:
+        """The edge the mesh ask names, the moment the run opens at, what the
+        types of its rows state, then the mesh a caller hands in."""
         from trid3nt_server.tools.mesh.recipe import RESOLUTION, input_names
 
         recipe = self._states("MESH", None)
         asked = recipe is None or RESOLUTION.name in input_names(recipe)
-        return ((RESOLUTION,) if asked else ()) + (EVENT_TIME,) + super().inputs()
+        return (((RESOLUTION,) if asked else ()) + (EVENT_TIME,)
+                + super().seated() + (_SUPPLIED_MESH,))
+
+    def input(self, name: str) -> Any:
+        """The template's and the engine's own inputs first, then the keyword a name
+        spells on whichever of this run's bodies carries it."""
+        declared = next((row for row in self.inputs if row.name == name), None)
+        if declared is not None:
+            return declared
+        body, identifier = identify_on(run_bodies(self.steering), name)
+        return Keyword(body, identifier, body is self.steering)
 
     @property
     def steering(self) -> type:
         """The STEERING body: the module wrapper, the slots this question asserts
         and the coupling it carries."""
         return self.template.STEERING
-
-    def accept_keyword(self, name: str, value: Any) -> tuple[str, Any, str]:
-        """One keyword on whichever of this run's bodies it names, through that
-        module's own accept rule."""
-        body, identifier = identify_on(run_bodies(self.steering), name)
-        accepted = accept(body, identifier, value)
-        if accepted[0] == PROCESSORS:
-            fits_the_box(accepted[1])
-        return accepted
 
     def _states(self, name: str, default: Any) -> Any:
         """One declaration read off the template module, or the default beside it."""
@@ -861,9 +854,16 @@ class TelemacWorkflow(Workflow):
     def _slots(self) -> dict[Any, str]:
         """The row this question declares for each type a stage reads: the first of each, and exactly one domain and one bed."""
         slots: dict[Any, list[str]] = {}
-        for row in self.data:
+        for row in self.inputs:
             if row.slot is not None:
                 slots.setdefault(row.slot, []).append(row.name)
+        named = {row.name: row.slot for row in self.inputs}
+        for slot in slots:
+            if named.get(slot.name, slot) is not slot:
+                # A module reads a row by the NAME of its type, so no other input takes that name.
+                raise DeclarationError(
+                    f"{self.name} declares a {slot.name} row and names another "
+                    f"input {slot.name!r}; a module would read the wrong one.")
         for slot, why in ((DOMAIN, "a run solves over one polygon"),
                           (BED, "every node carries one elevation; a survey "
                                 "over a wider surface is composed by the merge "
@@ -872,8 +872,8 @@ class TelemacWorkflow(Workflow):
             if len(rows) != 1:
                 raise DeclarationError(
                     f"{self.name} declares {len(rows)} {slot.name} rows "
-                    f"({rows}): {why}, so the DATA body needs exactly one "
-                    f"Data({slot.name.upper()}) row.")
+                    f"({rows}): {why}, so the INPUTS body needs exactly one "
+                    f"Input({slot.name.upper()}) row.")
         return {slot: names[0] for slot, names in slots.items()}
 
     async def launch(self, state: Fill) -> RunResult:
@@ -883,7 +883,7 @@ class TelemacWorkflow(Workflow):
         from trid3nt_server.render.pipeline_emitter import (begin_substeps,
                                                             current_emitter,
                                                             substep)
-        from trid3nt_server.workflows.runtime.fill import (_load, _produce, call,
+        from trid3nt_server.workflows.runtime.fill import (_load, _taken, call,
                                                            production, read)
         from .authoring.mesh_files import telemac_mesh_files
         from .authoring.opening import open_channel, open_water
@@ -965,9 +965,9 @@ class TelemacWorkflow(Workflow):
         await measure("derive")
         # A CONTEXT row's output is the SENTENCE, so one nothing read is asked once everything it could stand on is in hand;
         # a row a module fills a keyword from is read here, before the sheet.
-        for row in self.data:
+        for row in self.inputs:
             if row.is_context and row.name not in run:
-                run[row.name] = await _produce(env, row)
+                await _taken(env, row)
         for name in self._fills():
             await read(env, name)
         if run.get(EVENT_TIME.name):
@@ -975,10 +975,10 @@ class TelemacWorkflow(Workflow):
             lon, lat = (await read(env, domain)).centroid
             run[MOMENT] = {"at": datetime.fromisoformat(run[EVENT_TIME.name]),
                            "lon": lon, "lat": lat}
-        declared = {prm.name for prm in self.params}
+        declared = {row.name for row in self.inputs if not row.is_row}
         await stage("sheet", fill_sheet, steering=self.steering,
-                    # A module fills keywords from a row by its TYPE, so each type's row is held under the type beside its name.
-                    produced={**run, **{slot: run[name] for slot, name
+                    # A module fills keywords from a row by the NAME of its type, so each type's row is held under that name beside its own.
+                    produced={**run, **{slot.name: run[name] for slot, name
                                         in slots.items() if name in run}},
                     params={name: run[name] for name in declared},
                     settled=run[_SETTLED].get("keywords") or {},
@@ -987,8 +987,8 @@ class TelemacWorkflow(Workflow):
                     input_mode=env.input_mode,
                     spent=sorted(mark.name for mark in placed),
                     seat=_seat_on(env),
-                    user=[row.name for row in env.params.rows()
-                          if row.origin is Origin.USER])
+                    user=[name for name, verdict in env.inputs.items()
+                          if verdict.origin is Origin.USER])
         listed = tuple(self._states("RESULTS", ()))
         solved = await stage(
             "solve", run_sheet, sheet=run["sheet"], settled=run[_SETTLED],
@@ -1019,14 +1019,14 @@ class TelemacWorkflow(Workflow):
         for body in self.steering.ASSERTED.get("coupling") or ():
             if isinstance(body, Mapping):
                 wanted |= set(body.get("filled_by", ()))
-        return [name for slot, name in self._slots().items() if slot in wanted]
+        return [name for slot, name in self._slots().items()
+                if slot.name in wanted]
 
     def unnamed(self) -> tuple[str, ...]:
         """Every input the template names as a plain string - in a placement, a
         measurement, a row, an output, the mesh recipe or a composite - that no
         param, row, output or keyword of this run is called."""
-        known = ({prm.name for prm in self.params} | {row.name for row in self.data}
-                 | self._marks()
+        known = ({row.name for row in self.inputs} | self._marks()
                  | {"mesh", "mesh_files", "channel", _SETTLED, "line"}
                  | {name for body in run_bodies(self.steering)
                     for name in body.MODULE_INPUT})
@@ -1038,7 +1038,8 @@ class TelemacWorkflow(Workflow):
         run places: that point is a node of the mesh, so the row is produced
         once the point is placed, before the sheet."""
         # A seated row is produced only when stated: a composite names the mesh stage's output by the same word.
-        rows = {row.name: row for row in self.data if row not in self.seated}
+        rows = {row.name: row for row in self.inputs
+                if row.is_row and row is not _SUPPLIED_MESH}
         marks = tuple(self._marks())
         return tuple(dict.fromkeys(
             name for name in self._named() if isinstance(name, str)
@@ -1058,8 +1059,9 @@ class TelemacWorkflow(Workflow):
         elsewhere = {*self._named(mesh=False), *self._fills(), slots[DOMAIN],
                      slots.get(LEVEL), slots.get(DISCHARGE),
                      "open_depth_threshold_m"}
-        stated = ({row.name for row in env.params.rows()
-                   if row.origin is Origin.USER} | set(env.supplied) | set(env.picks))
+        stated = ({name for name, verdict in env.inputs.items()
+                   if verdict.origin is Origin.USER}
+                  | set(env.supplied) | set(env.picks))
         unused = [name for name in dict.fromkeys(input_names(recipe))
                   if name in stated and name not in elsewhere]
         if unused:
@@ -1075,7 +1077,7 @@ class TelemacWorkflow(Workflow):
         named += [mark.fraction for mark in self._declared(Placed)]
         named += [name for ask in self._declared(Measured)
                   for name in _names(dict(ask.reads))]
-        named += [row.coercion.get("near") for row in self.data]
+        named += [row.coercion.get("near") for row in self.inputs]
         named += [value for p in self._states("OUTPUTS", ())
                   for value in (p.at, p.along, p.within)]
         recipe = self._states("MESH", None)
@@ -1120,7 +1122,7 @@ class TelemacWorkflow(Workflow):
         from trid3nt_server.workflows.runtime.fill import read
 
         run = env.run
-        declared = {prm.name for prm in self.params}
+        declared = {row.name for row in self.inputs}
         return {
             "mesh": run["mesh"], "files": run["mesh_files"],
             # WHAT THE WATER STANDS AT: the channel's own measurement, else the level slot, else nothing; a bed stated as a depth needs nothing.

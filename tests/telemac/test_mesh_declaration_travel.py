@@ -16,6 +16,7 @@ from trid3nt_server.tools.mesh.tool import (
     recipe_from_plan_value,
     recipe_plan_value,
 )
+from seated import value_inputs
 
 
 #: Every declared recipe in the tree, at the template that declares it. A
@@ -104,12 +105,12 @@ def _every_template_workflow():
                 f"{templates.__name__}.{found.name}.{found.name}")
             yield found.name, next(
                 value.workflow for value in vars(module).values()
-                if hasattr(getattr(value, "workflow", None), "params"))
+                if hasattr(getattr(value, "workflow", None), "inputs"))
 
 
 @pytest.mark.parametrize("name,workflow", list(_every_template_workflow()))
 def test_no_template_restates_the_edge_with_a_default_or_a_range(name, workflow):
     """Nothing refuses a resolution: unstated, the edge is the input data's own
     cell, so a restatement carries a description and nothing else."""
-    rows = [p for p in workflow.params if p.name == "mesh_resolution_m"]
+    rows = [p for p in value_inputs(workflow) if p.name == "mesh_resolution_m"]
     assert [(p.default, p.bounds) for p in rows] == [(None, None)], name

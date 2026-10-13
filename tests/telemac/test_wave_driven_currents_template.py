@@ -21,6 +21,7 @@ from trid3nt_server.workflows.telemac.modules.tomawac import RESULT_FILENAME
 from trid3nt_server.workflows.telemac.templates.wave_driven_currents import (
     wave_driven_currents as template)
 from trid3nt_server.workflows.telemac.workflow import run_bodies
+from seated import value_inputs, row_inputs
 
 _TOOL = "tomawac_wave_driven_currents"
 _HOUR_S = 3600.0
@@ -35,7 +36,7 @@ def _workflow():
 
 
 def _rows():
-    return {row.name: row for row in _workflow().data}
+    return {row.name: row for row in row_inputs(_workflow())}
 
 
 def _sheet(**floor):
@@ -47,8 +48,8 @@ def _sheet(**floor):
                     "opening": "CONSTANT ELEVATION", "depth_m": None,
                     "level_m": 0.4, "outflow_stage_m": 0.4},
         "station": _STATION,
-        WAVE: Wave(height_m=1.6, peak_period_s=8.0,
-                   from_direction_deg=220.0),
+        "wave": Wave(height_m=1.6, peak_period_s=8.0,
+                     from_direction_deg=220.0),
         "level": 0.4})
 
 
@@ -141,7 +142,7 @@ def test_the_seaward_rim_is_opened_so_the_tide_and_the_spectrum_both_enter():
     # admits neither the tide nor the spectrum.
     stated = named["identify_ocean_boundary_sections"].kwargs["depth_threshold"]
     assert stated == "open_depth_threshold_m"
-    param = next(p for p in _workflow().params
+    param = next(p for p in value_inputs(_workflow())
                  if p.name == "open_depth_threshold_m")
     assert param.default == -12.0
 
@@ -162,7 +163,7 @@ def test_every_charted_variable_is_captioned():
 
 
 def test_the_granularity_row_states_no_default_and_refuses_no_edge():
-    resolution = next(p for p in _workflow().params
+    resolution = next(p for p in value_inputs(_workflow())
                       if p.name == "mesh_resolution_m")
     assert (resolution.default, resolution.bounds) == (None, None)
 
@@ -186,7 +187,7 @@ def test_the_tide_reaches_the_rim_as_the_series_the_record_served():
                     "outflow_stage_series": tide, "time_step_s": 1.0,
                     "start_time_s": 0.0, "until_s": _HOUR_S},
         "station": _STATION,
-        WAVE: Wave(height_m=1.6, peak_period_s=8.0,
+        "wave": Wave(height_m=1.6, peak_period_s=8.0,
                      from_direction_deg=220.0),
         "level": tide})
     stated = dict(sheet.resolved())

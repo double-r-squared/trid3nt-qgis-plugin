@@ -14,6 +14,8 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from .input import Input
+
 __all__ = ["BED", "DISCHARGE", "DOMAIN", "EXTENT", "LEVEL", "LINE", "MESH",
            "OBSERVE", "RAIN", "Slot", "WAVE", "WEATHER", "ask_on_canvas",
            "draw_on_canvas", "ingest_slot", "needs_of"]
@@ -21,7 +23,8 @@ __all__ = ["BED", "DISCHARGE", "DOMAIN", "EXTENT", "LEVEL", "LINE", "MESH",
 logger = logging.getLogger("trid3nt_server.inputs.slots")
 
 
-@dataclass(frozen=True, slots=True)
+# Each type is ONE object, compared and keyed by identity.
+@dataclass(frozen=True, slots=True, eq=False)
 class Slot:
     """The TYPE a row states: what reads its value, what it may ask the world
     for, and what the canvas offers when the user fills it by hand."""
@@ -49,9 +52,9 @@ class Slot:
     #: The one shape this type's ingestion reads a matched source as, "" for any: a
     #: source publishing its class in another shape is never asked.
     reads: str = ""
-    #: What a row of this type declares beside itself, each ``(name, default,
-    #: description)``: a value the run states once and every reader of it shares.
-    states: tuple[tuple[str, Any, str], ...] = ()
+    #: The inputs a row of this type declares beside itself: a value the run
+    #: states once and every reader of it shares.
+    states: tuple[Input, ...] = ()
 
     @property
     def ingest(self) -> Callable[..., Any] | None:
@@ -75,8 +78,9 @@ DOMAIN = Slot("domain", ingestion="domain", classes=frozenset({"hydrography"}),
 BED = Slot("bed", ingestion="bed",
            classes=frozenset({"bathymetry", "terrain", "channel survey"}),
            number=True,
-           states=(("vertical_frame", "NAVD88",
-                    "Vertical datum the bed's elevations are counted from, and "
+           states=(Input(
+               name="vertical_frame", default="NAVD88",
+               desc="Vertical datum the bed's elevations are counted from, and "
                     "with them the level over it. A source published on another "
                     "frame reaches this one through a measured offset, and a pair "
                     "nobody publishes an offset between refuses by name"),))

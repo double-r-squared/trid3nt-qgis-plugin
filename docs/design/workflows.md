@@ -1,6 +1,6 @@
 # Workflows - a template over one engine module
 
-A template is VALUES over one engine module: a `PARAMS` body, a `DATA` body, the
+A template is VALUES over one engine module: one `INPUTS` body, the
 module's own keywords, the mesh ask, the placed reads, the outputs and their
 captions. Nothing in a template names a function to run. A FILL puts a value
 into each input, which ACCEPTS it or REJECTS it naming the remedy; a READY fill
@@ -32,52 +32,87 @@ Three things are not operations and stay:
   actions, forcing composites and outputs - stated by the person or the model
   on any run, whether or not a template uses it.
 
-## The two bodies
+## The one body
 
-`PARAMS` (`workflows/runtime/params.py`) - one declared VALUE per row: its
-default, its bounds and its unit. A value outside the bounds refuses by name.
-Every row is on the model-facing wire. A row with no default that is not
+`INPUTS` - one class body of `Input` (`inputs/input.py`), the one declaration a
+run is handed anything through. The attribute a row is written under is its
+name. An `Input` is a VALUE or a ROW, told apart by what it states:
+
+    spill_fraction = Input(default=0.5, bounds=(0.05, 0.9), desc="...")   a value
+    seed      = Input(type=Point, desc="...").optional("what the run derives")
+    bed       = Input(BED).need("bathymetry")              a class the match fills
+    gauge     = Input(LEVEL).need("water level series").optional()
+    rivers    = Input().need("hydrography", geometry="polyline")
+    structure = Input().supplied(geometry="polyline")      the person hands it in
+    rain      = Input(RAIN).need("precipitation series").context("...")
+
+A VALUE states its default, its bounds and its unit, and a value outside the
+bounds refuses by name (`Input.accept`). One with no default that is not
 optional is REQUIRED: left unstated, the fill refuses it in every mode, so a
 world value nothing measures is stated by the caller and never started from.
-The model reads the same fact twice off `Param.required`: the row is listed in
-the tool schema's `required`, and its docstring line ends `required`. A `DATA`
-row is never listed - one left unfilled is matched, measured or asked for on
-the canvas before it refuses.
-A seated value carries ONE origin - user, derived, producer or template
-(`Origin`, in the contracts) - and the card row, the provenance entry and the
-journal row all write that word.
+The model reads the same fact twice off `Input.required`: the input is listed
+in the tool schema's `required`, and its docstring line ends `required`. A ROW
+is never listed - one left unfilled is matched, measured or asked for on the
+canvas before it refuses. A row STATES its slot as its type - `Input(BED)`, one
+of the types in `inputs/slots.py` - or the producer that fills it
+(`Input(tool(...))`; the producer is the runtime's, `workflows/runtime/data.py`)
+and is named freely; a row that states neither is a plain one, read by whatever
+declared it. A class the stated slot does not read refuses where it is written.
 
-The runtime declares no row of its own. A template carries, without restating
-them, the rows whoever reads them declares: `mesh_resolution_m` is the mesh
-ask's (`RESOLUTION`, `tools/mesh/recipe.py`), seated where the ask names it;
-`event_time` is the engine's, read through the engine's own coercion, and each
-module writes it into its deck in its own date keywords, in UTC, with the
-meridian and latitude a solar clock reads taken off the domain (`MOMENT` in a
-module's `FILLED_BY`; a stated keyword wins, no moment writes none). The ice
-module tests its solar hour unfolded, so a dated ice run stages the engine's
-thermal module with that hour folded (`authoring/solar.py`,
-`Module.CODE_ON_HOST`), compiled as the host's user Fortran;
-`vertical_frame` is the bed's, stated on its type (`Slot.states`). A template's
-own row of the same name wins and keeps its place. How many cores a solve is
-partitioned across is no row at all: it is the module's own PARALLEL PROCESSORS
-keyword, stated on the call like any other, the carrier's on a coupled run, and
-a count past the box's cores refuses by name.
+Values lead the wire and rows follow, each in body order, and the generated
+docstring documents both in ONE section: required values, defaulted ones, then
+the optional values and the rows.
 
-An argument a call states that the tool declares neither as a param, a row nor
-a control is refused at the fill by name (`INPUT_UNNAMED`), with the nearest
-declared names; the generated signature's `**` is how it reaches the fill.
+The runtime declares no input of its own. A template carries, without restating
+them, the inputs whoever reads them declares (`Workflow.seated`):
+`mesh_resolution_m` is the mesh ask's (`RESOLUTION`, `tools/mesh/recipe.py`),
+seated where the ask names it; `event_time` is the engine's, read through the
+engine's own coercion, and each module writes it into its deck in its own date
+keywords, in UTC, with the meridian and latitude a solar clock reads taken off
+the domain (`MOMENT` in a module's `FILLED_BY`; a stated keyword wins, no moment
+writes none). The ice module tests its solar hour unfolded, so a dated ice run
+stages the engine's thermal module with that hour folded (`authoring/solar.py`,
+`Module.CODE_ON_HOST`), compiled as the host's user Fortran; `vertical_frame`
+is the bed's, an `Input` stated on its type (`Slot.states`). A template's own
+input of the same name wins and keeps its place. How many cores a solve is
+partitioned across is no input of the body at all: it is the module's own
+PARALLEL PROCESSORS keyword, stated on the call like any other, the carrier's
+on a coupled run, and a count past the box's cores refuses by name.
 
-`DATA` (`workflows/runtime/data.py`) - one declared ARTIFACT per row. A row
-STATES its slot as its type - `Data(BED)`, one of the types in
-`inputs/slots.py` - and is named freely; a row that states none is a plain one,
-read by whatever declared it. A class the stated slot does not read refuses
-where it is written. A row is filled one of three ways:
+## One lookup, one fill, one record
 
-    bed       = Data(BED).need("bathymetry")              a class the match fills
-    gauge     = Data(LEVEL).need("water level series").optional()
-    rivers    = Data.need("hydrography", geometry="polyline")
-    structure = Data.supplied(geometry="polyline")        the person hands it in
-    rain      = Data(RAIN).need("precipitation series").context("...")
+`Workflow.input(name)` is the ONE lookup: the template's own input, then one
+the engine or a row's type declares, then - on an engine - the keyword the name
+spells on whichever of the run's bodies carries it. A keyword keeps its
+dictionary-backed row and is answered as an `Input` is (`Keyword`,
+`telemac/modules/sheet.py`: its name, the one range that bounds it, the
+module's accept rule). The `keywords={...}` container stays on the wire and the
+two doors keep their own sets: BESIDE it a name is a declared input, INSIDE it
+an engine keyword or composite. A keyword stated beside it refuses naming the
+container, and a declared input stated inside it refuses naming where it
+belongs.
+
+The fill (`workflows/runtime/fill.py`) answers every input in one loop and
+leaves one `Verdict` each: the state, the value taken, and where it came from -
+the origin (user, template, producer, derived; `Origin`, in the contracts) and
+the source or producer that names it. A row is fetched or read and ingested
+before it answers, and a row first read by a stage of the launch is stamped the
+same way. An argument that is no declared input is refused by name
+(`INPUT_UNNAMED`, with the nearest declared names), and a name inside the
+container the module has no keyword for refuses naming the nearest spelling
+(`KEYWORD_REFUSED`); the generated signature's `**` is how it reaches the fill.
+What an accept rule has to say of the run - the engine's own check being out of
+reach at the fill - rides a run that launches and never a failure's text.
+
+Everything the run holds is keyed by NAME. A module that fills keywords from a
+row reads it by the name of the row's type (`FILLED_BY = {"wave": ...}`), so no
+other input of a template takes a type's name.
+
+The run journal records ONE map, `inputs`: every keyword of the solved deck and
+every input the fill answered, by name, each with its `value`, its `origin` and
+its `source`; a keyword stated on a coupled body keeps the name it was stated
+under beside the carrier's own. A supplied row's value is what the caller handed in; a matched
+one holds none and names the source that answered.
 
 A run solves over exactly one `DOMAIN` row and one `BED` row; a record type
 (`LEVEL`, `OBSERVE`) may be stated more than once, and a stage that reads one
@@ -165,7 +200,7 @@ over it - are read on it. A source published on another frame reaches it
 through a shift somebody MEASURED, in one order: the shift the source
 publishes about itself (a district's project datum is stated in the
 survey's own metadata, and no service serves it), else the offset the
-RUNTIME declares as a DATA row on `fetch_vertical_datum_offset`, between
+RUNTIME declares as a row on `fetch_vertical_datum_offset`, between
 the two frames and at a point the OWING SOURCE has data at: the point of
 that source's own footprint nearest the question's seed, the seed itself
 where it lies inside that footprint, never a box's centre or a polygon's
@@ -272,7 +307,7 @@ picture cannot show is the dishonest case this pins.
 
 ## Mesh
 
-The mesh is supplied-optional `Data`: AUTHORED (the person's own mesh) or
+The mesh is a supplied-optional row: AUTHORED (the person's own mesh) or
 GENERATED by the shared front in `tools/mesh/`, which knows no engine. The mesh
 ask carries the mesher, the extent, the resolution and the mesh's own
 operations (`mesh_op`), validated against the chosen mesher's namespaces. A

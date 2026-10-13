@@ -1223,19 +1223,19 @@ def test_a_param_edited_on_the_card_reaches_the_chart_reference(monkeypatch):
     from types import SimpleNamespace
 
     from seated import resolve_params
-    from trid3nt_server.workflows.runtime.params import Param
+    from trid3nt_server.inputs.input import Input
     from trid3nt_server.workflows.telemac.workflow import _seat_on
 
     class _P:
-        storm_mm_per_day = Param(desc="The storm rate the run is forced with.", default=6.0,
+        storm_mm_per_day = Input(desc="The storm rate the run is forced with.", default=6.0,
                          bounds=(0.0, 60.0))
 
-    env = SimpleNamespace(params=asyncio.run(resolve_params(_P, {})),
+    env = SimpleNamespace(inputs=asyncio.run(resolve_params(_P, {})),
                           run={"storm_mm_per_day": 6.0})
     _card_run(monkeypatch, ("narrow_scope", {"storm_mm_per_day": 9.0}),
               ("proceed", None), seat=_seat_on(env))
     assert env.run == {"storm_mm_per_day": 9.0}
-    assert env.params.row("storm_mm_per_day").origin == "user"
+    assert env.inputs["storm_mm_per_day"].origin == "user"
 
 
 @pytest.mark.parametrize("supplied,origin", [
@@ -1250,24 +1250,29 @@ def test_the_card_the_provenance_and_the_journal_say_one_origin(
 
     from seated import resolve_params
     from trid3nt_server.workflows.runtime import journal, provenance_entries
-    from trid3nt_server.workflows.runtime.params import Param
+    from trid3nt_server.inputs.input import Input
 
     class _P:
-        storm_mm_per_day = Param(desc="The storm rate the run is forced with.",
+        storm_mm_per_day = Input(desc="The storm rate the run is forced with.",
                                  default=6.0, bounds=(0.0, 60.0))
 
     params = asyncio.run(resolve_params(_P, supplied))
     _sheet, emitter = _card_run(
-        monkeypatch, ("proceed", None), rate=params.value_of("storm_mm_per_day"),
-        user=[row.name for row in params.rows() if row.origin == "user"])
+        monkeypatch, ("proceed", None), rate=params["storm_mm_per_day"].value,
+        user=[name for name, row in params.items() if row.origin == "user"])
     card = next(row for row in emitter.sent[0].param_sheet.rows
                 if row.name == "storm_mm_per_day")
-    entry = provenance_entries(params, _P)[0]
+    from seated import value_inputs
+
+    entry = provenance_entries(params, value_inputs(_P))[0]
     record = journal.build_record(
-        run_id="R", engine="telemac", module="telemac2d", sheet=params.rows(),
+        run_id="R", engine="telemac", module="telemac2d",
+        inputs={name: {"value": row.value, "origin": row.origin.value}
+                for name, row in params.items()},
         provenance=[entry], result=None, wall_seconds=0.0, origin="headless",
         notes=[])
-    assert (card.origin.value, entry.basis.value, record["sheet"][0]["origin"].value,
+    assert (card.origin.value, entry.basis.value,
+            record["inputs"]["storm_mm_per_day"]["origin"],
             record["provenance"][0]["basis"].value) == (origin,) * 4
 
 

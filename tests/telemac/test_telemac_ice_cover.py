@@ -16,7 +16,6 @@ import pytest
 
 from trid3nt_server.inputs.weather import weather
 from trid3nt_server.inputs.observation import Observation, ObservationError
-from trid3nt_server.workflows.runtime import data_rows
 from trid3nt_server.workflows.telemac.authoring.atmosphere import (
     ATMOSPHERE_FILENAME,
 )
@@ -29,6 +28,7 @@ from trid3nt_server.workflows.telemac.templates.ice_cover import (
     ice_cover as template,
 )
 from trid3nt_server.inputs.slots import BED, DISCHARGE, OBSERVE
+from seated import value_inputs, row_inputs
 
 #: The week the deck states as DURATION, as the hourly record that has to span
 #: it: the engine stops at an instant outside the table, so a week-long run is
@@ -54,7 +54,7 @@ def _workflow():
 
 
 def _rows():
-    return {row.name: row for row in data_rows(template.DATA)}
+    return {row.name: row for row in row_inputs(template.INPUTS)}
 
 
 # -- what the run stands on ---------------------------------------------------- #
@@ -111,11 +111,10 @@ def test_the_bed_is_one_need_row_the_match_composes():
 
 
 def test_no_keyword_twin_and_no_domain_twin_is_declared_here():
-    from trid3nt_server.workflows.runtime import param_rows
 
-    own = {p.name for p in param_rows(template.PARAMS)}
+    own = {p.name for p in value_inputs(template.INPUTS)}
     assert _NOT_DECLARED.isdisjoint(own)
-    seated = {p.name for p in _workflow().params}
+    seated = {p.name for p in value_inputs(_workflow())}
     assert {"event_time", "vertical_frame"} <= seated - own
 
 
@@ -124,14 +123,13 @@ def test_the_only_params_are_the_questions_own_inputs():
     the domain is cut from with which kind of water that is. The days it happens
     under are the run's own moment; everything else is a keyword, a slot or a
     lever."""
-    from trid3nt_server.workflows.runtime import param_rows
 
-    assert {p.name for p in param_rows(template.PARAMS)} == {
+    assert {p.name for p in value_inputs(template.INPUTS)} == {
         "seed", "station", "cover_threshold", "mesh_resolution_m"}
 
 
 def test_the_granularity_row_states_no_default_and_refuses_no_edge():
-    resolution = next(p for p in _workflow().params if p.name == "mesh_resolution_m")
+    resolution = next(p for p in value_inputs(_workflow()) if p.name == "mesh_resolution_m")
     assert (resolution.default, resolution.bounds) == (None, None)
 
 

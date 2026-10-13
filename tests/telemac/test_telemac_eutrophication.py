@@ -21,6 +21,7 @@ from trid3nt_server.workflows.telemac.modules.outputs import (
     Solved,
 )
 from trid3nt_server.inputs.slots import BED, DISCHARGE, LINE, OBSERVE
+from seated import value_inputs, row_inputs
 #: The two algal processes, their rows and the body, read off the wrapper that
 #: carries them.
 APPENDED = waqtel._APPENDED
@@ -393,7 +394,7 @@ def test_the_bed_is_a_class_the_match_composes():
     """set_bed takes ONE source. A survey covers the channel and the terrain
     covers the banks; which of each reaches this domain, and the merge between
     them, is the match's and the runtime's, not a row this template states."""
-    rows = {row.name: row for row in _plan().data}
+    rows = {row.name: row for row in row_inputs(_plan())}
     assert rows["bed"].slot is BED
     assert rows["bed"].data_class == "bathymetry"
     assert [name for name, row in rows.items() if row.slot is BED] == ["bed"]
@@ -405,7 +406,7 @@ def test_the_water_temperature_record_is_one_reading_off_the_nearest_site():
     SITES. Which of them the run is judged against is the observation slot's
     choice, ranked from inside the domain, and the journal carries the site and
     the date because a sample is a moment."""
-    row = {r.name: r for r in _plan().data}["observe"]
+    row = {r.name: r for r in row_inputs(_plan())}["observe"]
     assert row.slot is OBSERVE
     assert row.data_class == "water quality sample"
     # This run publishes no temperature variable, so the record is read in
@@ -416,7 +417,7 @@ def test_the_water_temperature_record_is_one_reading_off_the_nearest_site():
 def test_water_nobody_sampled_is_a_sentence_rather_than_a_refusal():
     """A place with no sample is a fact about the place, not a reason to refuse
     a run whose temperature is stated anyway."""
-    row = {r.name: r for r in _plan().data}["observe"]
+    row = {r.name: r for r in row_inputs(_plan())}["observe"]
     assert row.is_context
     assert "the stated value stands" in row.context_sentence
 
@@ -430,7 +431,7 @@ def test_the_stated_temperature_is_the_decks_own_keyword():
 
 
 def test_the_three_slots_reach_the_wire_so_a_drawn_body_supersedes_the_fetch():
-    filled = {row.name for row in _plan().data if row.fills_from_user}
+    filled = {row.name for row in row_inputs(_plan()) if row.fills_from_user}
     assert {"domain", "bed"} <= filled
 
 
@@ -438,7 +439,7 @@ def test_the_seated_inputs_are_carried_and_no_keyword_twin_is_declared():
     """A template declares no param the dictionary or the runtime already
     describes; mesh_resolution_m is restated only because this question's
     default differs from the runtime's."""
-    declared = {prm.name for prm in _plan().params}
+    declared = {prm.name for prm in value_inputs(_plan())}
     assert {"event_time", "vertical_frame", "mesh_resolution_m"} <= declared
     assert not declared & {"location", "bbox", "river_geometry_uri",
                            "reach_length_km", "friction_coefficient",
@@ -452,7 +453,7 @@ def test_the_carrier_flow_is_one_reading_the_open_channel_step_can_read():
     """The discharge the inflow prescribes is whichever source's row
     matches this domain, read as ONE value - the step that opens the channel
     refuses a record nobody chose a site from - and its absence is legal."""
-    row = {r.name: r for r in _plan().data}["discharge"]
+    row = {r.name: r for r in row_inputs(_plan())}["discharge"]
     assert row.slot is DISCHARGE
     assert row.data_class == "discharge series"
     assert row.is_optional
@@ -466,8 +467,8 @@ def test_the_longitudinal_reads_are_taken_along_the_line_slot():
     template = _template()
     along = {p.along for p in template.OUTPUTS if p.kind == "profile"}
     assert along == {"line"}
-    assert "centerline" not in {row.name for row in _plan().data}
-    assert {row.name for row in _plan().data if row.slot is LINE} == {"line"}
+    assert "centerline" not in {row.name for row in row_inputs(_plan())}
+    assert {row.name for row in row_inputs(_plan()) if row.slot is LINE} == {"line"}
 
 
 def test_the_stretch_the_producer_walks_is_the_templates_own_number():
@@ -479,6 +480,6 @@ def test_the_stretch_the_producer_walks_is_the_templates_own_number():
         eutrophication,
     )
 
-    assert "reach_length_km" not in {prm.name for prm in _plan().params}
-    domain = {r.name: r for r in _plan().data}["domain"]
+    assert "reach_length_km" not in {prm.name for prm in value_inputs(_plan())}
+    domain = {r.name: r for r in row_inputs(_plan())}["domain"]
     assert domain.span_km == eutrophication._REACH_LENGTH_KM

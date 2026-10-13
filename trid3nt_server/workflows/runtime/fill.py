@@ -18,16 +18,18 @@ from datetime import timedelta
 from functools import partial
 from typing import Any, Mapping, Sequence
 
+from trid3nt_contracts.common import Origin
 from trid3nt_contracts.coverage import CoverageExtent, SourceChoice
 
 from trid3nt_server.render.pipeline_emitter import current_emitter, substep
 from trid3nt_server.tools.search.match import (
     Need, ask_for, base_ask, dropped_from, instant, match, sources_with_coverage)
 
-from .data import DataDecl, Producer
+from .data import Producer, refuse_wrong_shape
 
 from trid3nt_server.inputs.slots import (
     BED, DISCHARGE, DOMAIN, EXTENT, LEVEL, LINE, MESH, Slot)
+from trid3nt_server.inputs.input import Input
 from trid3nt_server.inputs.bound_domain import Domain, bind_domain, current_domain
 from .errors import (DeclarativeError, StepFailedError,
                      SuppliedCoverageError, said)
@@ -35,7 +37,6 @@ from . import journal
 from .journal import slot_choice
 from trid3nt_server.inputs.run_notes import (
     bind_coverage, bind_notes, cut_coverage, drain_coverage, drain_notes, journal_note)
-from .params import ResolvedParams
 from trid3nt_server.inputs.user_input import nearest
 from trid3nt_server.inputs.temporal import RATE, STATE
 
@@ -52,12 +53,22 @@ async def read(env: "_Env", name: str) -> Any:
             f"{name!r} names no input of this run: its inputs are "
             f"{sorted(set(env.run) | set(env.data))}.",
             error_code="INPUT_UNNAMED")
-    held = await _produce(env, env.data[name])
-    env.run[name] = held
+    return await _taken(env, env.data[name])
+
+
+async def _taken(env: "_Env", row: Input) -> Any:
+    """Produce one row into the run's mapping and stamp where it came from:
+    the caller's own where one was supplied, else the source or producer that answered."""
+    held = env.run[row.name] = await _produce(env, row)
+    env.inputs[row.name] = Verdict(
+        ACCEPTED, held,
+        origin=(None if held is None else Origin.USER if row.name in env.supplied
+                else Origin.PRODUCER),
+        source=env.sources.get(row.name) or getattr(row.producer, "runner", ""))
     return held
 
 
-async def _seed(env: "_Env", decl: DataDecl) -> Any:
+async def _seed(env: "_Env", decl: Input) -> Any:
     """The point a row is asked at, read off the input its ``at`` names."""
     near = decl.coercion.get("near")
     return await read(env, near) if isinstance(near, str) else near
@@ -65,24 +76,25 @@ async def _seed(env: "_Env", decl: DataDecl) -> Any:
 
 @dataclass
 class _Env:
-    params: ResolvedParams
-    data: dict[str, DataDecl]
+    data: dict[str, Input]
+    #: Every input's verdict, by name - the fill's own mapping, stamped here as well by a row first read during the launch.
+    inputs: dict[str, "Verdict"] = field(default_factory=dict)
     input_mode: str | None = None
     #: The workflow this fill belongs to - what a gate card names as the asker.
     workflow: str = ""
-    #: The raw keyword floor this invocation carried, by the name the caller used.
-    keywords: dict[str, Any] = field(default_factory=dict)
     #: The source the run NAMES for a slot, by slot name. It picks among the
     #: survivors of that slot's match and never past its filters.
     picks: dict[str, str] = field(default_factory=dict)
-    #: THE RUN'S ONE MAPPING: params, fetched rows, what each stage produced
+    #: The source the match took for a row, by row name.
+    sources: dict[str, str] = field(default_factory=dict)
+    #: THE RUN'S ONE MAPPING: stated values, fetched rows, what each stage produced
     #: and the keywords so far, by plain name.
     run: dict[str, Any] = field(default_factory=dict)
     #: Artifacts SUPPLIED rather than produced - a layer handle, a file uri, a
-    #: gate's answer. What satisfies a producer-less ``Data`` slot.
+    #: gate's answer. What satisfies a producer-less row.
     supplied: dict[str, Any] = field(default_factory=dict)
     #: Absences worth narrating, each as the SENTENCE the run carries: an
-    #: optional Data nothing satisfied, or a context row whose source was empty.
+    #: optional row nothing satisfied, or a context row whose source was empty.
     absences: list[str] = field(default_factory=list)
     #: How long the solve runs, in seconds, off the deck this run writes: the WINDOW a
     #: matched series source must cover, or the run refuses.
@@ -103,7 +115,7 @@ def _data_step_label(name: str) -> str:
     return f"data:{name}"
 
 
-async def _produce(env: _Env, decl: DataDecl) -> Any:
+async def _produce(env: _Env, decl: Input) -> Any:
     """Satisfy one declared artifact, ON DEMAND - when a step that reads it runs.
 
     An artifact nothing reads costs no fetch; a CONTEXT row is asked regardless."""
@@ -145,7 +157,7 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
                         "proceeds without it", decl.name)
             return None
         raise StepFailedError(
-            f"Data {decl.name!r} is a producer-less slot and nothing satisfied it: "
+            f"Input {decl.name!r} is a producer-less slot and nothing satisfied it: "
             "supply a layer, a file uri, or declare it .optional().",
             error_code="DATA_SLOT_UNSATISFIED", step=_data_step_label(decl.name),
         )
@@ -157,7 +169,7 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
                            _fetcher_row(producer.runner, decl.data_class))
 
 
-async def _matched(env: _Env, decl: DataDecl) -> Any:
+async def _matched(env: _Env, decl: Input) -> Any:
     """Fill a slot that states a NEED, through the match.
 
     Every slot takes the ONE source its class matched, the bed included; what covers
@@ -184,7 +196,7 @@ async def _matched(env: _Env, decl: DataDecl) -> Any:
     return value
 
 
-async def _beside(env: _Env, decl: DataDecl) -> dict[str, Any]:
+async def _beside(env: _Env, decl: Input) -> dict[str, Any]:
     """The rows this SLOT declared beside the one its own class matched.
 
     Each is produced here, under this slot, through the match; the slot fetches
@@ -208,7 +220,7 @@ async def _beside(env: _Env, decl: DataDecl) -> dict[str, Any]:
     return held
 
 
-async def _bed_surface(env: _Env, decl: DataDecl) -> Any:
+async def _bed_surface(env: _Env, decl: Input) -> Any:
     """THE BED: the ONE row the match ranked first, as it came.
 
     Nothing is gridded here: soundings refuse at the slot's ingestion, and water nothing
@@ -221,7 +233,7 @@ async def _bed_surface(env: _Env, decl: DataDecl) -> Any:
     return top
 
 
-async def _ranked(env: _Env, decl: DataDecl, data_class: str,
+async def _ranked(env: _Env, decl: Input, data_class: str,
                   label: str) -> SourceChoice:
     """What the match RANKS for this slot over one class, nothing produced.
 
@@ -230,7 +242,7 @@ async def _ranked(env: _Env, decl: DataDecl, data_class: str,
                  sources_with_coverage())
 
 
-async def _probe(env: _Env, decl: DataDecl, data_class: str, label: str, *,
+async def _probe(env: _Env, decl: Input, data_class: str, label: str, *,
                  read: Any = None) -> tuple[SourceChoice, Any]:
     """Match a class, then CALL the survivors in rank order -> the first answer.
 
@@ -258,6 +270,7 @@ async def _probe(env: _Env, decl: DataDecl, data_class: str, label: str, *,
             continue
         slot_choice(choice)
         journal_note(choice.sentence)
+        env.sources[decl.name] = choice.picked
         return choice, value
     slot_choice(choice)
     journal_note(choice.sentence)
@@ -265,10 +278,9 @@ async def _probe(env: _Env, decl: DataDecl, data_class: str, label: str, *,
 
 
 def _runtime_row(env: _Env, name: str, runner: str,
-                 ask: Mapping[str, Any]) -> DataDecl:
+                 ask: Mapping[str, Any]) -> Input:
     """One producer row the RUNTIME declares, registered so it is produced like a question's own."""
-    row = DataDecl(name=name, producer=Producer(runner=runner, kwargs=dict(ask),
-                                                row=name))
+    row = Input(Producer(runner=runner, kwargs=dict(ask), row=name), name=name)
     env.data[name] = row
     return row
 
@@ -301,17 +313,18 @@ def _matched_row(choice: SourceChoice, fetcher: str) -> Any:
 
 
 def _mesh_m(env: _Env) -> float | None:
-    return env.params.value_of("mesh_resolution_m") if env.params else None
+    from trid3nt_server.tools.mesh.recipe import RESOLUTION
+
+    return env.run.get(RESOLUTION.name)
 
 
 def _frame(env: _Env) -> str:
     """The vertical frame this run counts elevations from: the one the bed states, for every reader of it."""
-    (name, default, _desc), = BED.states
-    stated = env.params.value_of(name) if env.params else None
-    return str(stated or default)
+    frame, = BED.states
+    return str(env.run.get(frame.name) or frame.default)
 
 
-async def _need(env: _Env, decl: DataDecl, data_class: str,
+async def _need(env: _Env, decl: Input, data_class: str,
                 label: str) -> Need:
     """What this slot asks the world for, assembled off the RUN.
 
@@ -319,7 +332,7 @@ async def _need(env: _Env, decl: DataDecl, data_class: str,
     window is the run's and the frame is the bed's."""
     seed = await _seed(env, decl)
     lon, lat = _place(seed)
-    opens = env.params.value_of("event_time") if env.params else None
+    opens = env.run.get("event_time")
     return Need(slot=label, data_class=data_class, lon=lon, lat=lat,
                 geometry=decl.geometry or getattr(decl.slot, "reads", ""),
                 opens=str(opens) if opens else None,
@@ -328,7 +341,7 @@ async def _need(env: _Env, decl: DataDecl, data_class: str,
                 of=_asked_of(decl, seed), water=_water())
 
 
-def _asked_of(decl: DataDecl, seed: Any) -> str:
+def _asked_of(decl: Input, seed: Any) -> str:
     """WHAT OF ITS CLASS this row asks the world for.
 
     The domain asks for its own KIND: the template's, else the one the SEED stands on,
@@ -382,7 +395,7 @@ def _cut_polygon() -> dict[str, Any] | None:
     return dict(dom.geometry) if dom is not None and dom.geometry else None
 
 
-def _pick(env: _Env, decl: DataDecl, data_class: str) -> str:
+def _pick(env: _Env, decl: Input, data_class: str) -> str:
     """The source this RUN names for this slot, "" where it names none.
 
     A slot reading two classes takes the name on the class the named source serves."""
@@ -424,7 +437,7 @@ def _place(seed: Any) -> tuple[float | None, float | None]:
 
 
 async def _ask_for(env: _Env, choice: SourceChoice,
-                   decl: DataDecl) -> dict[str, Any]:
+                   decl: Input) -> dict[str, Any]:
     """What a matched source is CALLED with, read off its own declared params.
 
     A box or a seed for the place, two dates for a window; the matched ROW closes the
@@ -432,7 +445,7 @@ async def _ask_for(env: _Env, choice: SourceChoice,
     dom = current_domain()
     seed = await _seed(env, decl)
     lon, lat = _place(seed)
-    opens = env.params.value_of("event_time") if env.params else None
+    opens = env.run.get("event_time")
     return ask_for(choice, base_ask(
         choice, decl.name.replace("_", " "),
         _around(dom.bbox, _mesh_m(env)) if dom is not None and dom.bbox else None,
@@ -463,7 +476,7 @@ async def _domain_companion(env: _Env, named: str) -> Any:
     return dict(getattr(bound, "companions", None) or {}).get(named)
 
 
-async def _ingested(env: _Env, decl: DataDecl, value: Any,
+async def _ingested(env: _Env, decl: Input, value: Any,
                     row: Any = None, beside: Mapping[str, Any] | None = None
                     ) -> Any:
     """A SLOT's value through the one ingestion its type reads; a plain row's value as it came.
@@ -511,7 +524,7 @@ async def _ingested(env: _Env, decl: DataDecl, value: Any,
     return ingested
 
 
-def _the_window_it_is_cut_from(decl: DataDecl) -> dict[str, Any]:
+def _the_window_it_is_cut_from(decl: Input) -> dict[str, Any]:
     """The BOX a domain slot cuts a land-water edge against, where the run has one.
 
     Empty once a polygon is bound: a domain that arrived closed is cut against nothing."""
@@ -523,7 +536,7 @@ def _the_window_it_is_cut_from(decl: DataDecl) -> dict[str, Any]:
     return {"extent": tuple(float(v) for v in dom.bbox)}
 
 
-def _what_the_run_calls_it(env: _Env, decl: DataDecl,
+def _what_the_run_calls_it(env: _Env, decl: Input,
                            observed: str) -> dict[str, Any]:
     """The UNIT this slot converts to and the NOUN the run says it in.
 
@@ -541,7 +554,7 @@ def _what_the_run_calls_it(env: _Env, decl: DataDecl,
     return told
 
 
-def _observed_unit(env: _Env, decl: DataDecl, observed: str) -> str:
+def _observed_unit(env: _Env, decl: Input, observed: str) -> str:
     """The unit the variable this row OBSERVES is published in.
 
     A name published under no stated unit refuses: pairing a measurement with a
@@ -550,7 +563,7 @@ def _observed_unit(env: _Env, decl: DataDecl, observed: str) -> str:
     if unit:
         return unit
     raise StepFailedError(
-        f"Data {decl.name!r} observes {observed!r}, and this run publishes "
+        f"Input {decl.name!r} observes {observed!r}, and this run publishes "
         f"no unit under that name (it publishes "
         f"{', '.join(sorted(n for n, u in env.published_units.items() if u)) or 'nothing named'}). "
         "A record read in its own unit against a variable written in another is "
@@ -559,7 +572,7 @@ def _observed_unit(env: _Env, decl: DataDecl, observed: str) -> str:
         error_code="DATA_NEED_UNMATCHED")
 
 
-def _what_the_record_reports(env: _Env, decl: DataDecl,
+def _what_the_record_reports(env: _Env, decl: Input,
                              row: Any) -> dict[str, Any]:
     """What an OBSERVATION slot is told about the record it was handed.
 
@@ -580,12 +593,11 @@ def _what_the_record_reports(env: _Env, decl: DataDecl,
 
     told["quantity"] = (quantity_class(row.data_class) if row is not None
                         else RATE if decl.slot is DISCHARGE else STATE)
-    if env.params is not None:
-        told["at"] = env.params.value_of("event_time")
+    told["at"] = env.run.get("event_time")
     return told
 
 
-async def _on_the_run_s_frame(env: _Env, decl: DataDecl,
+async def _on_the_run_s_frame(env: _Env, decl: Input,
                               value: Any) -> dict[str, Any]:
     """What an ELEVATION slot is told about the run's own vertical frame.
 
@@ -631,13 +643,12 @@ async def _offset_row(env: _Env, owner: str, value: Any, frame: str) -> Any:
     if ask is None:
         return None
     name = f"{owner}_datum_offset"
-    row = DataDecl(name=name, producer=Producer(runner=OFFSET_FETCH,
-                                                kwargs=ask, row=name))
+    row = Input(Producer(runner=OFFSET_FETCH, kwargs=ask, row=name), name=name)
     env.data[name] = row
     return await _produce(env, row)
 
 
-async def _context(env: _Env, decl: DataDecl, label: str) -> Any:
+async def _context(env: _Env, decl: Input, label: str) -> Any:
     """A CONTEXT row: produced where the source has something, absent where it has not.
 
     Only an empty SOURCE is an absence; a cancelled run or a retryable gate error is not."""
@@ -685,10 +696,10 @@ async def _produced(env: _Env, producer: Producer, label: str) -> Any:
         return await _call_runner(producer.runner, kwargs, label)
 
 
-def _validate_supplied(env: _Env, decl: DataDecl, supplied: Any) -> None:
+def _validate_supplied(env: _Env, decl: Input, supplied: Any) -> None:
     """Two checks and no third before a supplied artifact is adopted: the slot's declared
     SHAPE against its class, and that a domain is bound or declared; the artifact's own extent is never read."""
-    decl.refuse_wrong_shape(supplied)
+    refuse_wrong_shape(decl, supplied)
     if isinstance(supplied, (int, float)) and not isinstance(supplied, bool):
         # A NUMBER is not an artifact: a stated depth or a stated reading has no
         # extent for a coverage check to be about, and it covers the domain by
@@ -718,14 +729,17 @@ _CARRIED = ("input_mode", "restart_clean")
 
 @dataclass(frozen=True)
 class Verdict:
-    """One input's answer on arrival: its state and the value taken, or
-    the reason it was refused and what would be taken instead."""
+    """One input's answer on arrival: its state, the value taken and where it
+    came from, or the reason it was refused and what would be taken instead."""
 
     state: str
     value: Any = None
     reason: str = ""
     remedies: tuple[str, ...] = ()
     code: str = ""
+    #: Who stated the value, and the source or producer that names it; none on an input that holds no value.
+    origin: Origin | None = None
+    source: str = ""
 
 
 @dataclass
@@ -736,8 +750,7 @@ class Fill:
     inputs: dict[str, Verdict] = field(default_factory=dict)
     stated: dict[str, Any] = field(default_factory=dict)
     carried: dict[str, Any] = field(default_factory=dict)
-    keywords: dict[str, Any] = field(default_factory=dict)
-    params: ResolvedParams | None = None
+    #: What an accept rule has to say of a run that launches; a refused or failed one never carries it.
     notes: list[str] = field(default_factory=list)
     env: _Env | None = None
     domain: Domain | None = None
@@ -750,6 +763,14 @@ class Fill:
     def ready(self) -> bool:
         return not any(v.state in (REJECTED, MISSING)
                        for v in self.inputs.values())
+
+    @property
+    def keywords(self) -> dict[str, Any]:
+        """The engine's own keywords this fill accepted, by the name the caller
+        used: every accepted input the workflow's body does not declare."""
+        declared = {row.name for row in self.workflow.inputs}
+        return {name: verdict.value for name, verdict in self.inputs.items()
+                if verdict.state == ACCEPTED and name not in declared}
 
     def refusal(self) -> tuple[str, str]:
         """``(code, sentence)`` naming every input that keeps this fill from ready."""
@@ -780,49 +801,86 @@ async def fill(state: Fill, values: Mapping[str, Any]) -> Fill:
             reason="keywords takes a mapping of the engine's own keyword names "
             f"to values; got {type(keywords).__name__}.")
         keywords = {}
-    for name, value in keywords.items():
-        _keyword(state, str(name), value)
-    rows = {decl.name: decl for decl in wf.data}
-    sourced = {n: values.pop(n) for n in list(values) if n in rows}
-    known = {prm.name for prm in wf.params}
-    unknown = [n for n in values if n not in known]
-    for name in unknown:
-        # An invented field resembles no input, so only a near spelling is offered; the keywords sentence is said once, on the last.
-        state.inputs[name] = Verdict(
-            REJECTED, values.pop(name), code="INPUT_UNNAMED",
-            reason=f"{name!r} is not an input of {wf.name} "
-            f"({nearest(name, sorted(known | set(rows)), cutoff=0.6)})."
-            + (" An engine keyword is stated by its own name inside keywords."
-               if name == unknown[-1] else ""))
-    state.stated.update(values)
-    await _seat(state)
-    for name in state.workflow.unnamed():
-        state.inputs[name] = Verdict(
-            REJECTED, name, code="INPUT_UNNAMED",
-            reason=f"the template names {name!r} as an input, and no param, "
-            "row or output of this run is called that.")
-    tokens = (bind_notes(), journal.bind_choices(),
-              bind_coverage())
+    values.update({str(name): value for name, value in keywords.items()})
+    tokens = (bind_notes(), journal.bind_choices(), bind_coverage())
     try:
+        found = _looked_up(state, values, set(keywords))
+        declared = {row.name: row for row in wf.inputs}
+        state.stated.update({name: values[name] for name in found
+                             if name in declared and not declared[name].is_row})
+        args, refused = await _coerced(state)
+        # A declared input refused inside keywords keeps that verdict.
+        refused |= set(keywords) - set(found)
+        # Keywords answer first and every value after them, stated or not; a row
+        # stands on both, so the stated rows answer next and the named ones last.
+        for name, held in found.items():
+            if name not in declared:
+                await _answer(state, name, held, values[name])
+        for row in wf.inputs:
+            if not row.is_row and row.name not in refused:
+                await _answer(state, row.name, row, args.get(row.name))
+        for name in wf.unnamed():
+            state.inputs[name] = Verdict(
+                REJECTED, name, code="INPUT_UNNAMED",
+                reason=f"the template names {name!r} as an input, and no param, "
+                "row or output of this run is called that.")
+        sourced = {name: values[name] for name, held in found.items()
+                   if getattr(held, "is_row", False)}
         # Every stated row is registered before any is produced: producing one
         # forces the domain, which must already see the caller's own.
-        if state.params is not None:
-            for name, value in sourced.items():
-                _stated(production(state), rows[name], value)
         for name, value in sourced.items():
-            await _row(state, rows[name], value)
+            _stated(production(state), declared[name], value)
         # EVERY ROW THE TEMPLATE NAMES is produced here, before anything
         # expands: a consumer only reads the mapping, so a row that cannot be
         # produced is refused now, by name.
-        for name in state.workflow.named_rows() if state.ready else ():
+        for name, value in sourced.items():
+            await _answer(state, name, declared[name], value)
+        for name in wf.named_rows() if state.ready else ():
             if name not in production(state).run:
-                await _row(state, rows[name], None)
+                await _answer(state, name, declared[name], None)
     finally:
         for held, drain, token in zip(state.said, (
                 drain_notes, journal.drain_choices,
                 drain_coverage), tokens):
             held += drain(token)
     return state
+
+
+def _looked_up(state: Fill, values: Mapping[str, Any],
+               keywords: set[str]) -> dict[str, Any]:
+    """Every stated name through the workflow's ONE lookup -> the input each names, each door keeping its own set:
+    beside ``keywords`` a name is a declared input, inside it an engine keyword, and any other is refused here."""
+    wf = state.workflow
+    known = sorted(row.name for row in wf.inputs)
+    found: dict[str, Any] = {}
+    unknown: list[str] = []
+    for name, value in values.items():
+        if name not in keywords:
+            if name in known:
+                found[name] = wf.input(name)
+            else:
+                unknown.append(name)
+            continue
+        try:
+            if name in known:
+                raise StepFailedError(
+                    f"{name!r} is an input of {wf.name}, not an engine keyword: "
+                    "state it by its own name beside keywords.")
+            found[name] = wf.input(name)
+        except Exception as exc:  # noqa: BLE001 - the refusal is the verdict
+            if getattr(exc, "retryable", False):
+                raise
+            state.inputs[name] = Verdict(REJECTED, value, reason=str(exc),
+                                         code="KEYWORD_REFUSED")
+    for name in unknown:
+        # An invented field resembles no input, so only a near spelling is offered; the keywords sentence is said once, on the last.
+        state.inputs[name] = Verdict(
+            REJECTED, values[name], code="INPUT_UNNAMED",
+            reason=f"{name!r} is not an input of {wf.name} "
+            f"({nearest(name, known, cutoff=0.6)})."
+            + (" An engine keyword is stated by its own name inside keywords."
+               if name == unknown[-1] else ""))
+    return found
 
 
 def restate(state: Fill) -> None:
@@ -834,32 +892,12 @@ def restate(state: Fill) -> None:
         slot_choice(choice)
 
 
-def _keyword(state: Fill, name: str, value: Any) -> None:
-    """One engine keyword through the module's own accept rule; a file keyword filled with a layer takes it as the file."""
-    if isinstance(value, Mapping) and "layer" in value:
-        value = value["layer"]
-    try:
-        identifier, taken, note = state.workflow.accept_keyword(name, value)
-    except Exception as exc:  # noqa: BLE001 - the refusal is the verdict
-        if getattr(exc, "retryable", False):
-            raise
-        state.inputs[name] = Verdict(REJECTED, value, reason=str(exc),
-                                     code="KEYWORD_REFUSED")
-        return
-    if note and note not in state.notes:
-        state.notes.append(note)
-    state.keywords[name] = value
-    state.inputs[name] = Verdict(ACCEPTED, taken)
-
-
-async def _seat(state: Fill) -> None:
-    """Every declared param through its coercion and its own accept rule."""
-    from .resolver import seat_param
-
-    wf = state.workflow
+async def _coerced(state: Fill) -> tuple[dict[str, Any], set[str]]:
+    """Every stated value through the workflow's coercions -> what each value input answers
+    on, and the names a coercion refused: its typed refusal is that input's verdict."""
     args = {**state.stated, "input_mode": state.carried.get("input_mode")}
-    refused: dict[str, BaseException] = {}
-    for coercion in wf.coercions:
+    refused: set[str] = set()
+    for coercion in state.workflow.coercions:
         try:
             coerced = coercion(args)
             if asyncio.iscoroutine(coerced) or hasattr(coerced, "__await__"):
@@ -870,59 +908,75 @@ async def _seat(state: Fill) -> None:
             if getattr(exc, "retryable", False) \
                     or getattr(exc, "error_code", None) is None:
                 raise
-            refused[str(getattr(coercion, "__name__", "")).split(":")[-1]] = exc
-            continue
-        args.update(coerced or {})
-    declared = {prm.name for prm in wf.params}
-    for name, exc in refused.items():
-        if name not in declared:
+            name = str(getattr(coercion, "__name__", "")).split(":")[-1]
+            refused.add(name)
             state.inputs[name] = Verdict(REJECTED, state.stated.get(name),
                                          reason=str(exc), code=exc.error_code)
-    rows = {}
-    for prm in wf.params:
-        if prm.name in refused:
-            exc = refused[prm.name]
-            state.inputs[prm.name] = Verdict(
-                REJECTED, state.stated.get(prm.name), reason=str(exc),
-                code=getattr(exc, "error_code", None) or "INPUT_REFUSED")
             continue
-        value = args.get(prm.name)
-        try:
-            rows[prm.name] = row = seat_param(prm, value)
-        except Exception as exc:  # noqa: BLE001 - the refusal is the verdict
-            state.inputs[prm.name] = Verdict(
-                REJECTED, value, reason=str(exc),
-                code=_refusal_code(exc, prm.name),
-                remedies=(f"a value between {prm.bounds[0]} and "
-                          f"{prm.bounds[1]}",) if prm.bounds else ())
-            continue
-        if row.required_missing:
-            state.inputs[prm.name] = Verdict(
-                MISSING, reason=f"{prm.name} was not supplied and has no "
-                "default: supply it explicitly - it is never invented.",
-                code="GATE_REFUSED")
-        elif row.value is not None:
-            state.inputs[prm.name] = Verdict(
-                DEFAULTED if value is None else ACCEPTED, row.value)
-    state.params = ResolvedParams(rows) if len(rows) == len(wf.params) else None
+        args.update(coerced or {})
+    return args, refused
+
+
+async def _answer(state: Fill, name: str, held: Any, value: Any) -> None:
+    """ONE input answers: its own accept rule takes the stated value or its default, a row is
+    fetched or read and ingested first, and the verdict carries where the value came from."""
+    row = getattr(held, "is_row", False)
+    stated = held.default if value is None else value
+    try:
+        if row:
+            await _row(state, held, value)
+            return
+        taken = None if stated is None else held.accept(stated)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - the refusal is the verdict
+        if getattr(exc, "retryable", False):
+            raise
+        picked = None
+        if row and state.env is not None:
+            picked = state.env.picks.pop(name, None)
+            state.env.supplied.pop(name, None)
+        state.inputs[name] = Verdict(
+            REJECTED, value, code=_refusal_code(exc, name),
+            reason=str(exc) if value is not None or not row
+            else f"{name!r} could not be produced: {exc}",
+            remedies=await _instead(state.env, held, picked) if picked
+            else (f"a value between {held.bounds[0]} and {held.bounds[1]}",)
+            if getattr(held, "bounds", None) else ())
+        return
+    note = getattr(held, "note", "")
+    if note and note not in state.notes:
+        state.notes.append(note)
+    if taken is None and held.required:
+        state.inputs[name] = Verdict(
+            MISSING, reason=f"{name} was not supplied and has no "
+            "default: supply it explicitly - it is never invented.",
+            code="GATE_REFUSED")
+    elif taken is None:
+        state.inputs.pop(name, None)
+    else:
+        state.inputs[name] = Verdict(
+            DEFAULTED if value is None else ACCEPTED, taken,
+            origin=Origin.TEMPLATE if value is None else Origin.USER)
 
 
 def production(state: Fill) -> _Env:
-    """The state a sourced input is produced under, built once per fill."""
+    """The state a sourced input is produced under, built once per fill; it reads every value the fill has seated."""
     wf = state.workflow
     if state.env is None:
         state.env = _Env(
-            params=state.params, data={d.name: d for d in wf.data},
-            input_mode=state.carried.get("input_mode"),
-            keywords=dict(state.keywords), workflow=wf.name,
-            window_s=wf.run_window_s(dict(state.keywords)),
+            data={row.name: row for row in wf.inputs if row.is_row},
+            inputs=state.inputs,
+            input_mode=state.carried.get("input_mode"), workflow=wf.name,
+            window_s=wf.run_window_s(state.keywords),
             slot_units=wf.slot_units(), captions=wf.captions,
             published_units=wf.published_units())
-        state.env.run.update(state.params.values_dict() if state.params else {})
+    state.env.run.update({row.name: getattr(state.inputs.get(row.name), "value", None)
+                          for row in wf.inputs if not row.is_row})
     return state.env
 
 
-def _stated(env: _Env, decl: DataDecl, value: Any) -> None:
+def _stated(env: _Env, decl: Input, value: Any) -> None:
     if isinstance(value, Mapping) and "source" in value:
         env.picks[decl.name] = str(value["source"])
     elif value is not None:
@@ -931,35 +985,19 @@ def _stated(env: _Env, decl: DataDecl, value: Any) -> None:
                                    and "layer" in value else value)
 
 
-async def _row(state: Fill, decl: DataDecl, value: Any) -> None:
+async def _row(state: Fill, decl: Input, value: Any) -> None:
     """A sourced input: fetched or read, and ingested, BEFORE it answers."""
-    if state.params is None:
-        state.inputs[decl.name] = Verdict(
-            REJECTED, value, code="FILL_NOT_READY",
-            reason=f"{decl.name} stands on the run's params, and one of them "
-            "was refused.")
-        return
+    if any(state.inputs[row.name].state == REJECTED for row in state.workflow.inputs
+           if not row.is_row and row.name in state.inputs):
+        raise StepFailedError(
+            f"{decl.name} stands on the run's params, and one of them was "
+            "refused.", error_code="FILL_NOT_READY")
     env = production(state)
     _stated(env, decl, value)
-    try:
-        if decl.slot not in (DOMAIN, EXTENT):
-            await _place_first(env)
-        held = env.run[decl.name] = await _produce(env, decl)
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:  # noqa: BLE001 - the refusal is the verdict
-        if getattr(exc, "retryable", False):
-            raise
-        picked = env.picks.pop(decl.name, None)
-        env.supplied.pop(decl.name, None)
-        state.inputs[decl.name] = Verdict(
-            REJECTED, value, code=_refusal_code(exc, decl.name),
-            reason=str(exc) if value is not None
-            else f"{decl.name!r} could not be produced: {exc}",
-            remedies=await _instead(env, decl, picked) if picked else ())
-        return
+    if decl.slot not in (DOMAIN, EXTENT):
+        await _place_first(env)
+    await _taken(env, decl)
     state.domain = current_domain()
-    state.inputs[decl.name] = Verdict(ACCEPTED, held)
 
 
 def _refusal_code(exc: BaseException, name: str) -> str:
@@ -977,10 +1015,10 @@ async def _place_first(env: _Env) -> None:
     Producing a row may register runtime rows, so the loop is over the rows as they stood."""
     for row in list(env.data.values()):
         if row.slot is DOMAIN and row.name not in env.run:
-            env.run[row.name] = await _produce(env, row)
+            await _taken(env, row)
 
 
-async def _instead(env: _Env, decl: DataDecl, picked: str) -> tuple[str, ...]:
+async def _instead(env: _Env, decl: Input, picked: str) -> tuple[str, ...]:
     """The sources the match ranks for this input that a refused pick is not."""
     try:
         choice = await _ranked(env, decl, decl.data_class, decl.name)

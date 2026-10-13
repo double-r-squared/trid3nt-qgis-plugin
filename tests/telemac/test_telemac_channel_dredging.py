@@ -15,11 +15,12 @@ from pathlib import Path
 import yaml
 
 from trid3nt_server.workflows.telemac.workflow import stated
-from seated import SEATED
+from seated import SEATED, row_inputs, value_inputs
 from trid3nt_server.workflows.telemac.templates.channel_dredging import (
     channel_dredging,
 )
 from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN
+from seated import value_inputs, row_inputs
 
 _WORKFLOW = channel_dredging.telemac_channel_dredging.workflow
 _STEERING = channel_dredging.STEERING
@@ -36,7 +37,7 @@ _DISSOLVED = {"location", "bbox", "river_geometry_uri", "reach_length_km",
 
 
 def _rows() -> dict:
-    return {row.name: row for row in _WORKFLOW.data}
+    return {row.name: row for row in row_inputs(_WORKFLOW)}
 
 
 def _recipe():
@@ -63,7 +64,7 @@ def test_the_bed_is_one_need_row_the_stricter_class_the_match_composes():
     bed = _rows()["bed"]
     assert bed.slot is BED and bed.data_class == "channel survey"
     assert bed.producer is None
-    assert [row.name for row in _WORKFLOW.data if row.slot is BED] == ["bed"]
+    assert [row.name for row in row_inputs(_WORKFLOW) if row.slot is BED] == ["bed"]
 
 
 def test_the_flow_the_channel_is_dredged_under_is_a_need_row_not_a_record():
@@ -91,13 +92,12 @@ def test_the_bed_the_dredger_cuts_is_stated_as_the_module_s_own_keywords():
 
 
 def test_the_seated_inputs_are_carried_and_no_baseline_param_is_restated():
-    declared = [prm.name for prm in _WORKFLOW.params]
+    declared = [prm.name for prm in value_inputs(_WORKFLOW)]
     # Every seated input is on the sheet; the ones this question does not state for
     # itself are seated at the end, in the order the engine seats them, and
     # one it differs on keeps its own place and its own opinion of the value.
-    from trid3nt_server.workflows.runtime import param_rows
 
-    own = [prm.name for prm in param_rows(channel_dredging.PARAMS)]
+    own = [prm.name for prm in value_inputs(channel_dredging.INPUTS)]
     assert set(SEATED) <= set(declared)
     seated = [name for name in SEATED if name not in own]
     assert declared[-len(seated):] == seated
@@ -109,7 +109,7 @@ def test_every_slot_a_user_can_fill_reaches_the_wire():
     raster supersedes the matched bed and a stated flow supersedes the reading,
     so all name a class or a role though none names a producer; the two areas
     are supplied and the line names none either."""
-    assert {row.name for row in _WORKFLOW.data if row.fills_from_user} == {
+    assert {row.name for row in row_inputs(_WORKFLOW) if row.fills_from_user} == {
         "domain", "line", "bed", "discharge", "level", "dredge_area",
         "dump_area", "mesh"}
 

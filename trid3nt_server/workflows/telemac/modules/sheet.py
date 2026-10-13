@@ -14,10 +14,12 @@ from typing import Any, Callable, Mapping, Sequence
 from trid3nt_contracts.common import Origin
 
 from ..authoring.staged_check import BOX_CORES
-from .module import PROCESSORS, Output, Slot, SlotRefused
+from trid3nt_server.errors import DeclarativeError
+
+from .module import PROCESSORS, Output, Slot, SlotRefused, accept
 
 __all__ = ["CONTINUATION", "Filled", "Provenance", "Sheet", "SheetIncomplete",
-           "fill", "fill_coupled", "filled_by", "run", "solve_cores",
+           "Keyword", "fill", "fill_coupled", "filled_by", "run", "solve_cores",
            "tracer_text"]
 
 
@@ -289,7 +291,7 @@ def fill(source: type | Sheet, *, template: str = "",
 def filled_by(body: type, produced: Mapping[str, Any],
               only: Sequence[str] = ()) -> list[tuple[str, str, Any]]:
     """``(input, identifier, value)`` for every keyword an input of this run fills on ``body``; an absent input or None value fills nothing."""
-    return [(getattr(source, "name", source), name, value)
+    return [(source, name, value)
             for source, keywords in body.FILLED_BY.items()
             if (not only or source in only) and produced.get(source) is not None
             for name, read in keywords.items()
@@ -368,6 +370,37 @@ def fits_the_box(count: Any) -> None:
             f"PARALLEL PROCESSORS {int(count)} is past the {BOX_CORES} cores this "
             f"box has. State {BOX_CORES} or fewer - a count this box cannot seat "
             "is refused rather than cut down to fit.")
+
+
+@dataclass(slots=True)
+class Keyword:
+    """One keyword of one body, answered as an Input is: its name, the one range that
+    bounds it and the module's own accept rule. ``carried`` says the body is the run's
+    carrier; ``note`` is what the last accept has to say on a run that launches."""
+
+    body: type
+    name: str
+    carried: bool = True
+    note: str = ""
+    is_row = False
+
+    @property
+    def bounds(self) -> tuple[float, float] | None:
+        return getattr(self.body.MODULE_INPUT.get(self.name), "whole_bounds", None)
+
+    def accept(self, value: Any) -> Any:
+        """``value`` as the module takes it; a file keyword stated as a layer takes it
+        as the file, and the processor count is held to this box."""
+        if isinstance(value, Mapping) and "layer" in value:
+            value = value["layer"]
+        try:
+            _identifier, taken, self.note = accept(self.body, self.name, value)
+            if self.name == PROCESSORS:
+                fits_the_box(taken)
+        except DeclarativeError as exc:
+            exc.error_code = "KEYWORD_REFUSED"
+            raise
+        return taken
 
 
 def _solver(body: type, filled: Mapping[str, Filled]) -> Any:
