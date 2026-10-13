@@ -99,7 +99,9 @@ leaves one `Verdict` each: the state, the value taken, and where it came from -
 the origin (user, template, producer, derived; `Origin`, in the contracts) and
 the source or producer that names it. A row is fetched or read and ingested
 before it answers, and a row first read by a stage of the launch is stamped the
-same way. An argument that is no declared input is refused by name
+same way. A row handed a case layer by its handle - bare or as `{"layer": id}` -
+is read at that layer's uri, and nothing judges a workflow's input before the
+fill does: a direct run reaches it with its args as typed. An argument that is no declared input is refused by name
 (`INPUT_UNNAMED`, with the nearest declared names), and a name inside the
 container the module has no keyword for refuses naming the nearest spelling
 (`KEYWORD_REFUSED`); the generated signature's `**` is how it reaches the fill.

@@ -22,15 +22,16 @@ refuses by name rather than runs.
 
 ## The inputs card
 
-A direct run (`!run <tool>` or a model call) that leaves an input out, or states
-one its accept rule refuses, opens the inputs card (`cards/run_inputs.py`):
+A direct run (`!run <tool>`) of a tool NO workflow stands behind that leaves an
+input out, or states one its accept rule refuses, opens the inputs card
+(`cards/run_inputs.py`). A workflow opens none: its fill judges every input
+inside the run, for a direct run and a model call alike, and a fill that is not
+ready refuses by name.
 
 - One row per open input. A row's dropdown lists EXACTLY what that input's
   accept rule takes (`inputs/accept.py`): the case layers the input's own
   ingestion accepts, shown by name and keyed by id - the ingestion of the slot
-  a workflow row states, held to what that row states for it (the engine's
-  mesh kinds), or of the slot a tool with no workflow annotates the parameter
-  with (`build_mesh`'s `extent: Annotated[Any, EXTENT]`); an enumerated input's own
+  the tool annotates the parameter with (`build_mesh`'s `extent: Annotated[Any, EXTENT]`); an enumerated input's own
   values - `build_mesh`'s mesher lists the registered mesher roster; a typed
   input is a text field.
 - A pick is a fill of that one input: it goes through the same accept rule and

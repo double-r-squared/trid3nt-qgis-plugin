@@ -252,14 +252,35 @@ def test_a_drawn_geometry_handed_to_a_row_is_the_rows_value(monkeypatch):
     assert state.inputs["domain"].state == "accepted"
 
 
-def test_the_card_holds_a_mesh_to_the_kind_the_engine_states():
-    from trid3nt_server.inputs.accept import InputRefused, accept
-    from trid3nt_server.tools import TOOL_REGISTRY
+def test_the_fill_holds_a_mesh_to_the_kind_the_engine_states(monkeypatch):
+    state = _filled_with(monkeypatch, _built("structured_grid"))
+    assert state.inputs["mesh"].state == "rejected"
+    assert "solves on" in state.inputs["mesh"].reason
+    assert _filled_with(monkeypatch, _built("unstructured_tri")).inputs["mesh"].state == "accepted"
 
-    fn = TOOL_REGISTRY["telemac_dye_release"].fn
-    accept(fn, "mesh", _built("unstructured_tri"))
-    with pytest.raises(InputRefused, match="solves on"):
-        accept(fn, "mesh", _built("structured_grid"))
+
+def test_a_row_named_by_a_layer_handle_is_read_at_its_uri(monkeypatch, tmp_path):
+    import asyncio
+    import json
+    from trid3nt_server.render.uri_registry import (
+        activate_registry, deactivate_registry, get_uri_registry)
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows.runtime.fill import Fill, fill
+
+    outline = tmp_path / "outline.geojson"
+    outline.write_text(json.dumps({"type": "Polygon", "coordinates": [[*_RING, _RING[0]]]}))
+    workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
+    monkeypatch.setattr(workflow, "named_rows", lambda: ())
+    reg = get_uri_registry("sess-row-handle")
+    reg.record("outline-1", uri=str(outline), tool_name="publish_layer")
+    token = activate_registry(reg)
+    try:
+        state = asyncio.run(fill(Fill(workflow=workflow), {
+            "domain": {"layer": "outline-1"}, "mesh": _built("unstructured_tri")}))
+    finally:
+        deactivate_registry(token)
+    assert state.env.supplied["domain"] == str(outline)
+    assert state.inputs["domain"].state == "accepted"
 
 
 def test_two_level_rows_are_legal_and_two_bed_rows_refuse():

@@ -1,6 +1,6 @@
 """The card a direct run opens for the inputs its call left out or that refused.
 
-One row per open input, each dropdown listing what that input's accept rule takes. The
+One row per open input of a tool no workflow stands behind, each dropdown listing what that input's accept rule takes. The
 card's proceed launches only when the run is READY; short of that it is drawn again.
 """
 
@@ -56,8 +56,11 @@ async def review_run_inputs(tool_name: str, fn: Any, args: Mapping[str, Any], *,
                             emitter: Any) -> dict[str, Any]:
     """The args a direct run launches with -> after its card, where one opens.
 
-    A call stating every input acceptably, or stating ``input_mode='auto'``,
-    opens none; otherwise the card lists the inputs left out or refused."""
+    A workflow opens none: its fill judges every input inside the run. Any other tool stating every
+    input acceptably, or ``input_mode='auto'``, opens none; else the card lists what is left out or refused."""
+    if getattr(fn, "workflow", None) is not None:
+        # A workflow's inputs answer in its own fill, once, inside the run.
+        return dict(args)
     from trid3nt_server.inputs.gate.input_review import gate_input_review
 
     taken, refused = await open_inputs(fn, args, layers)

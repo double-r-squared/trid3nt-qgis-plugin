@@ -1096,7 +1096,8 @@ package SteeringSurface {
         and each refuses the other's by name. What a row's type declares beside itself is an input like
         any other, and the mesh ask's edge is the mesher's own. Values and rows
         are documented to the model in one section, required first, and the run
-        record carries one map of them by name.
+        record carries one map of them by name. A direct run and a model call
+        reach that fill alike; nothing judges a workflow's input before it.
         */
     }
 

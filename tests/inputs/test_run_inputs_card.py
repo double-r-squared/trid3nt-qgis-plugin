@@ -5,8 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from types import SimpleNamespace
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import pytest
 
@@ -15,16 +14,12 @@ from trid3nt_server.inputs.gate import pending
 from trid3nt_server.inputs.gate.cards.run_inputs import (
     RunInputsDeclinedError, review_run_inputs)
 from trid3nt_server.inputs.slots import EXTENT
-from trid3nt_server.inputs.input import Input
 
 
-def _tool(mesher: Literal["om2d", "reg_grid"] = "reg_grid", extent: Any = None,
+def _tool(mesher: Literal["om2d", "reg_grid"] = "reg_grid",
+          extent: Annotated[Any, EXTENT] = None,
           resolution_m: float | None = None, input_mode: str | None = None) -> None:
     """A tool with an enumerated input, a slot-typed input and a typed one."""
-
-
-# The slot an input reads through is what the workflow behind the tool declares for it.
-_tool.workflow = SimpleNamespace(inputs=(Input(EXTENT, name="extent"),))
 
 
 class _Emitter:
@@ -249,6 +244,22 @@ def test_a_bang_run_launches_only_through_the_card(monkeypatch, layers) -> None:
     assert calls == []
     assert [m["payload"]["error_code"] for m in sent
             if m.get("type") == "error"] == ["USER_INPUT_CANCELLED"]
+
+
+def test_a_workflow_is_judged_by_its_fill_and_opens_no_card(monkeypatch, layers) -> None:
+    from trid3nt_server.inputs.gate.cards import run_inputs
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    def judged(*_a, **_k):
+        raise AssertionError("the card judged a workflow's input")
+    monkeypatch.setattr(run_inputs, "accept", judged)
+    monkeypatch.setattr(run_inputs, "offers", judged)
+    args = {"domain": "L-junk", "bed": {"layer": "L-poly"}}
+    emitter = _Emitter()
+    launched = asyncio.run(asyncio.wait_for(run_inputs.review_run_inputs(
+        "telemac_dye_release", TOOL_REGISTRY["telemac_dye_release"].fn, args,
+        layers=layers, emitter=emitter), 10))
+    assert launched == args and emitter.sent == []
 
 
 def test_build_mesh_lists_the_registered_meshers() -> None:

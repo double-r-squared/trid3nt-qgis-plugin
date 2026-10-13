@@ -22,6 +22,7 @@ from trid3nt_contracts.common import Origin
 from trid3nt_contracts.coverage import CoverageExtent, SourceChoice
 
 from trid3nt_server.render.pipeline_emitter import current_emitter, substep
+from trid3nt_server.render.uri_registry import lookup_uri_for_handle
 from trid3nt_server.tools.search.match import (
     Need, ask_for, base_ask, dropped_from, instant, match, sources_with_coverage)
 
@@ -981,8 +982,11 @@ def _stated(env: _Env, decl: Input, value: Any) -> None:
         env.picks[decl.name] = str(value["source"])
     elif value is not None:
         # A mapping that names no layer IS the value: a drawn geometry arrives as one.
-        env.supplied[decl.name] = (value["layer"] if isinstance(value, Mapping)
-                                   and "layer" in value else value)
+        held = (value["layer"] if isinstance(value, Mapping)
+                and "layer" in value else value)
+        # A case layer named by its handle is read at its uri; any other string is the value as it came.
+        env.supplied[decl.name] = (lookup_uri_for_handle(held) or held
+                                   if isinstance(held, str) else held)
 
 
 async def _row(state: Fill, decl: Input, value: Any) -> None:
