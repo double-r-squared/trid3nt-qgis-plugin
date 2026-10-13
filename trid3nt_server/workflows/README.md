@@ -3,7 +3,7 @@
 A workflow is a declaration: one `INPUTS` class body over one engine
 module. A fill puts a value into each input, which accepts or rejects it; a
 READY fill launches on an explicit act, and the engine's run is straight-line
-code - write, solve, read. `runtime/` is the template bodies and the machinery that runs them, `solver/` is the one executor, and each engine package holds the templates that
+code in one order - full fill, mesh, settle, one review, solve. `runtime/` is the template bodies and the machinery that runs them, `solver/` is the one executor, and each engine package holds the templates that
 speak it and the one file that specializes the executor to it.
 
 ## Files

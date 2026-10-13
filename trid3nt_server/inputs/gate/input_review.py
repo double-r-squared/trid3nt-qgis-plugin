@@ -23,6 +23,7 @@ __all__ = [
     "resolve_input_gate_mode",
     "render_input_review_lines",
     "gate_input_review",
+    "no_session",
 ]
 
 #: Run-mode lever for every gated thing. ``auto``
@@ -173,6 +174,19 @@ class ReviewOutcome:
     rounds_used: int = 0
 
 
+def no_session(tool_name: str, mode: str | None) -> str | None:
+    """What a user-gated run with no live session refuses on, or ``None`` where it may launch: a workflow says it at its fill, the gate where a card would have opened."""
+    from trid3nt_server.render.pipeline_emitter import current_emitter
+
+    if resolve_input_gate_mode(mode) == "auto" or current_emitter() is not None:
+        return None
+    return (
+        f"NO_SESSION: {tool_name} did not run - it waits for a person "
+        "to proceed on its review card and no session is open. Open a "
+        "session to review and launch it, or state input_mode='auto' on "
+        "the call to launch it at once.")
+
+
 async def gate_input_review(
     *,
     tool_name: str,
@@ -208,11 +222,7 @@ async def gate_input_review(
         return ReviewOutcome(
             proceed=False, entries=list(entries), params=dict(params),
             cancelled=True, mode="user_gated", cancel_code="no_session",
-            cancel_reason=(
-                f"NO_SESSION: {tool_name} did not run - it waits for a person "
-                "to proceed on its review card and no session is open. Open a "
-                "session to review and launch it, or state input_mode='auto' on "
-                "the call to launch it at once."))
+            cancel_reason=no_session(tool_name, mode))
 
     cur_entries = list(entries)
     cur_params = dict(params)

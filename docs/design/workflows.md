@@ -4,8 +4,8 @@ A template is VALUES over one engine module: one `INPUTS` body, the
 module's own keywords, the mesh ask, the placed reads, the outputs and their
 captions. Nothing in a template names a function to run. A FILL puts a value
 into each input, which ACCEPTS it or REJECTS it naming the remedy; a READY fill
-launches on an explicit act, and the engine's run is straight-line code - write,
-solve, read. The skeleton is `workflows/runtime/workflow.py`; the TELEMAC
+launches on an explicit act, and the engine's run is straight-line code in one order - full
+fill, mesh, settle, one review, solve. The skeleton is `workflows/runtime/workflow.py`; the TELEMAC
 facade is `workflows/telemac/workflow.py`.
 
 ## No declared data operations
@@ -68,7 +68,7 @@ them, the inputs whoever reads them declares (`Workflow.seated`):
 `mesh_resolution_m`, `mesh_grade` and `mesh_max_edge_m` are the mesh ask's
 (`RESOLUTION`, `GRADE`, `MAX_EDGE` in `tools/mesh/recipe.py`), each seated only
 where the ask names it, and the two sizing inputs carry no default - a template
-that names one restates it with its own number or the run asks for it; `event_time` is the engine's, read through the
+that names one restates it with its own number or the run asks for it; `event_time` is the engine's - the workflow names it as its `moment` and the fill reads the moment under that name - read through the
 engine's own coercion, and each module writes it into its deck in its own date
 keywords, in UTC, with the meridian and latitude a solar clock reads taken off
 the domain (`MOMENT` in a module's `FILLED_BY`; a stated keyword wins, no moment
@@ -101,7 +101,11 @@ the source or producer that names it. A row is fetched or read and ingested
 before it answers, and a row first read by a stage of the launch is stamped the
 same way. A row handed a case layer by its handle - bare or as `{"layer": id}` -
 is read at that layer's uri, and nothing judges a workflow's input before the
-fill does: a direct run reaches it with its args as typed. An argument that is no declared input is refused by name
+fill does: a direct run reaches it with its args as typed.
+
+The fill produces every row a stage reads without the mesh (`named_rows(held)`: the domain, the named rows, the mesh ask's rows unless a mesh was supplied, the level, the inflow, a measurement's line, the context rows, the rows a module fills from), and only a row asked near a placed point waits for the settle. `Workflow.judged` answers before any unstated row is fetched: `NO_SESSION` for an engine run with no session and, on TELEMAC, `TELEMAC_CONTINUATION_REFUSED` and `TELEMAC_SHEET_INCOMPLETE` judged from the deck's assertions and the stated keywords. The sheet stage writes the deck and runs the staged check before every card it draws, so a proceed is followed by the box alone. The run holds one tag from its first staging to dispatch: a card edit re-stages into the same local directory and the same prefix, each emptied first, and a run that does not reach the box (the review cancelled, the staged check or completeness refusing, a raise before dispatch) removes both.
+
+An argument that is no declared input is refused by name
 (`INPUT_UNNAMED`, with the nearest declared names), and a name inside the
 container the module has no keyword for refuses naming the nearest spelling
 (`KEYWORD_REFUSED`); the generated signature's `**` is how it reaches the fill.

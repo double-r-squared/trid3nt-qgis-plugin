@@ -129,7 +129,8 @@ _STATED = {"pour_point": [-82.42, 43.0],
 def _stated(workflow):
     """The share of them this template declares: one it does not is refused."""
     declared = {prm.name for prm in value_inputs(workflow)}
-    return {name: value for name, value in _STATED.items() if name in declared}
+    return {"input_mode": "auto",
+            **{name: value for name, value in _STATED.items() if name in declared}}
 
 
 def _filled_with(monkeypatch, workflow, produce):

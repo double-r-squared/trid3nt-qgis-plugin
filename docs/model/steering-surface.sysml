@@ -867,9 +867,12 @@ package SteeringSurface {
         states input_mode='auto' launches a ready sheet on its own; a run that
         states no mode and has no session to review on refuses by name, saying
         how to launch it. Fill produces a sheet and no work
-        beyond the producers the canvas shows; run is the separate, explicit act
-        - and it refuses a sheet whose REQUIRED slots are unanswered BY NAME
-        first, because a run started without the files the dictionary marks
+        beyond the producers the canvas shows; run is the separate, explicit act.
+        A deck whose REQUIRED slots or cadence neither the template nor the
+        call states is refused BY NAME at the fill, before any mesh, and the
+        sheet a card edit left is refused the same way where it is staged; the
+        deck is written and its staged directory checked before each review
+        card is drawn, so nothing but the box follows a proceed - because a run started without the files the dictionary marks
         OBLIG fails inside Fortran minutes later, blaming a keyword rather than
         the gap.
 
@@ -1438,6 +1441,14 @@ package SteeringSurface {
     satisfy requirement RunIsHeld by sheet;
     satisfy requirement RunIsHeld by serializer;
     satisfy requirement RunIsHeld by stager;
+    verify requirement RunIsHeld by
+        "tests/runtime/test_one_fill.py::test_a_user_gated_engine_run_with_no_session_is_refused_at_the_fill_and_fetches_nothing";
+    verify requirement RunIsHeld by
+        "tests/telemac/test_workflow_owns_its_stages.py::test_a_deck_stating_no_cadence_is_refused_at_the_fill_and_stating_it_clears_the_refusal";
+    verify requirement RunIsHeld by
+        "tests/telemac/test_telemac_module_surface.py::test_the_deck_is_written_before_each_card_is_drawn";
+    verify requirement RunIsHeld by
+        "tests/telemac/test_telemac_module_surface.py::test_a_staged_run_goes_to_the_box_and_nothing_else_runs_after_a_proceed";
     verify requirement RunIsHeld by
         "tests/telemac/test_telemac_module_surface.py::test_run_refuses_an_incomplete_sheet_naming_the_required_file";
     verify requirement RunIsHeld by

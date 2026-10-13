@@ -136,7 +136,7 @@ def test_the_wave_row_is_told_the_record_s_own_columns_and_the_run_s_window():
     row = SimpleNamespace(units=_UNITS, value_column="wave_height_m",
                           series_column="wave_height_series_csv",
                           above_column="", data_class="wave series")
-    told = _what_the_record_reports(SimpleNamespace(window_s=7200.0, run={}),
+    told = _what_the_record_reports(SimpleNamespace(window_s=7200.0, run={}, moment=""),
                                     Input(name="wave", slot=WAVE), row)
     assert told["column_units"] == _UNITS
     assert told["window_s"] == 7200.0

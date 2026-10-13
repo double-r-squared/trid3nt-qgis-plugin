@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, replace
 from types import MappingProxyType
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Callable, Collection, Mapping, Sequence
 
 from trid3nt_contracts.common import Origin
 
@@ -19,8 +19,8 @@ from trid3nt_server.errors import DeclarativeError
 from .module import PROCESSORS, Output, Slot, SlotRefused, accept
 
 __all__ = ["CONTINUATION", "Filled", "Provenance", "Sheet", "SheetIncomplete",
-           "Keyword", "fill", "fill_coupled", "filled_by", "run", "solve_cores",
-           "tracer_text"]
+           "Keyword", "complete", "fill", "fill_coupled", "filled_by", "run",
+           "solve_cores", "stage", "tracer_text"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -501,39 +501,48 @@ def _standing(source: type | Sheet, template: str = "",
     return source, standing, pending
 
 
-async def run(sheet: Sheet, *, dispatch: Callable[..., Any],
-              mesh_inputs: Sequence[Mapping[str, str]],
-              outputs: Sequence[str], results: Sequence[str], prefix: str,
-              server_facts: Mapping[str, Any], steering: str | None = None,
-              coupling: str | None = None,
-              continue_from: str | None = None) -> Any:
-    """A complete sheet: serialize, stage, hand it to the box.
+def complete(body: type, stated: Collection[str]) -> None:
+    """Refuse a deck that leaves a REQUIRED file or its cadence out of ``stated``, by identifier.
 
-    Checked against the REQUIRED slots only; the box entry is the caller's.
-    """
+    The fill judges what the template and the call state before any mesh; the stage
+    judges the sheet a card edit left."""
+    unanswered = [slot for name, slot in body.MODULE_INPUT.items()
+                  if slot.is_required and name not in stated]
     # Past the OBLIG files the engine asks for by name in its own listing; a required set invented here would refuse runs it would take.
+    if unanswered:
+        raise SheetIncomplete(
+            f"{body.MODULE} cannot run: "
+            + "; ".join(f"{slot.keyword} ({slot.desc[:60]})"
+                        for slot in unanswered))
+    cadence = body.CADENCE
+    if cadence and cadence not in stated:
+        raise SheetIncomplete(
+            f"{body.MODULE} states no {body.slot(cadence).keyword}, and "
+            "the dictionary's own default writes a frame every step. State the "
+            "period this question's frames are written at.")
+
+
+async def stage(sheet: Sheet, *, run_tag: str,
+                mesh_inputs: Sequence[Mapping[str, str]],
+                outputs: Sequence[str], results: Sequence[str], prefix: str,
+                server_facts: Mapping[str, Any], steering: str | None = None,
+                coupling: str | None = None,
+                continue_from: str | None = None) -> dict[str, Any]:
+    """A complete sheet: serialize it and stage the directory, checked against itself -> the staged run.
+
+    ``run_tag`` names the run's one directory and prefix; a second staging replaces the first.
+    Nothing is handed to the box here."""
     from ..authoring.staging import new_rundir, stage_run
     from ..authoring.serializer import serialize
 
-    unanswered = sheet.required()
-    if unanswered:
-        raise SheetIncomplete(
-            f"{sheet.module} cannot run: "
-            + "; ".join(f"{slot.keyword} ({slot.desc[:60]})"
-                        for slot in unanswered))
-    cadence = sheet.body.CADENCE
-    if cadence and cadence not in sheet.filled:
-        raise SheetIncomplete(
-            f"{sheet.module} states no {sheet.body.slot(cadence).keyword}, and "
-            "the dictionary's own default writes a frame every step. State the "
-            "period this question's frames are written at.")
+    complete(sheet.body, sheet.filled)
     # Files the decks name past the one read from are declared so the worker's success convention checks each landed.
     kept = [name for name in sheet.kept() if name not in results]
-    run_tag, rundir = new_rundir()
+    rundir = new_rundir(run_tag)
     partition = solve_cores(sheet.body, sheet.filled)
     # The serialization is a container round trip, so it runs off the loop.
     written = await asyncio.to_thread(serialize, sheet, rundir, steering=steering)
-    staged = await stage_run(
+    return await stage_run(
         rundir, run_tag, module=sheet.module, steering=written["steering"],
         results=[*results, *kept], outputs=[*outputs, *kept],
         mesh_inputs=list(mesh_inputs), prefix=prefix, sheet=sheet.state(),
@@ -543,5 +552,9 @@ async def run(sheet: Sheet, *, dispatch: Callable[..., Any],
         coupling=coupling, continue_from=continue_from,
         # The same number the steering file states: the launcher partitions the mesh across it.
         cores=partition)
-    # The staged run and the box's answer are one handle so the caller need not join two results.
-    return {**staged, **await dispatch(run=staged, cores=partition)}
+
+
+async def run(staged: Mapping[str, Any], *, dispatch: Callable[..., Any]) -> Any:
+    """A staged run handed to the box -> the staged run and the box's answer, as one handle."""
+    # The launcher partitions across the count the staged case states; a serial case states none.
+    return {**staged, **await dispatch(run=staged, cores=int(staged["case"].get("cores", 1)))}

@@ -9,15 +9,14 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shutil
 from pathlib import Path
 from typing import Any, Mapping, Sequence
-
-from trid3nt_contracts import new_ulid
 
 from ..errors import TelemacError
 from .staged_check import check_staged_run
 
-__all__ = ["case_section", "new_rundir", "stage_run", "stage_telemac_manifest"]
+__all__ = ["case_section", "discard_run", "new_rundir", "stage_run", "stage_telemac_manifest"]
 
 
 def case_section(*, module: str, steering: str, results: list[str],
@@ -68,9 +67,7 @@ def stage_telemac_manifest(*, section: str, config: Mapping[str, Any],
 
 
 def _run_directory(run_tag: str) -> Path:
-    rundir = Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp")) / f"telemac-{run_tag}"
-    rundir.mkdir(parents=True, exist_ok=True)
-    return rundir
+    return Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp")) / f"telemac-{run_tag}"
 
 
 def _cache_bucket() -> str:
@@ -79,6 +76,12 @@ def _cache_bucket() -> str:
         raise TelemacError("TRID3NT_CACHE_BUCKET must be set to stage an authored run.",
                            error_code="TELEMAC_STAGING_FAILED")
     return bucket
+
+
+def _clear_prefix(run_tag: str, prefix: str) -> None:
+    from trid3nt_server.store import objects as storage
+
+    storage.delete_prefix(_cache_bucket(), f"{prefix}/{run_tag}/")
 
 
 def _upload_authored(rundir: Path, run_tag: str, names: Sequence[str],
@@ -106,10 +109,20 @@ def _write_manifest(case: Mapping[str, Any], run_tag: str, *, outputs: list[str]
         inputs=inputs, prefix=prefix)
 
 
-def new_rundir() -> tuple[str, Path]:
-    """A fresh run tag and the directory the run is authored into."""
-    run_tag = new_ulid()
-    return run_tag, _run_directory(run_tag)
+def new_rundir(run_tag: str) -> Path:
+    """The run's directory, emptied: a re-authoring replaces what the last one wrote."""
+    rundir = _run_directory(run_tag)
+    shutil.rmtree(rundir, ignore_errors=True)
+    rundir.mkdir(parents=True)
+    return rundir
+
+
+def discard_run(run_tag: str, prefix: str) -> None:
+    """Remove a run's directory and its staged prefix; a run that does not proceed leaves neither."""
+    shutil.rmtree(_run_directory(run_tag), ignore_errors=True)
+    # With no cache bucket stated, staging refused and nothing was uploaded.
+    if (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip():
+        _clear_prefix(run_tag, prefix)
 
 
 async def stage_run(rundir: Path, run_tag: str, *, module: str, steering: str,
@@ -127,6 +140,8 @@ async def stage_run(rundir: Path, run_tag: str, *, module: str, steering: str,
     # Paths stay relative to the run directory: the oil module's user fortran is a directory the engine compiles, so the walk is recursive.
     authored = sorted(str(p.relative_to(rundir))
                       for p in rundir.rglob("*") if p.is_file())
+    # A re-staging replaces the prefix whole: a file the last deck wrote and this one does not must not remain.
+    await asyncio.to_thread(_clear_prefix, run_tag, prefix)
     inputs = [*mesh_inputs,
               *await asyncio.to_thread(_upload_authored, rundir, run_tag,
                                        authored, prefix)]

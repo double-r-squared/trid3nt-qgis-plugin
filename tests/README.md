@@ -21,12 +21,12 @@ rest and make up the sixth slice.
 | `mesh/` | the meshers, the mesh gate, topology, the bed over the one source it takes, the runs that prescribe a role and the shoreline the domain's own edge is | 9 | 231 |
 | `model/` | the SysML model conformance check | 1 | 19 |
 | `plugin/` | the QGIS dock: the client, the Qt bridge, the cards, the render seams; the Qt-wiring subset runs in a subprocess harness | 39 | 398 |
-| `runtime/` | the template runtime, its engine-neutral slots, the run journal | 13 | 184 |
+| `runtime/` | the template runtime, its engine-neutral slots, the run journal | 13 | 186 |
 | `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 10 | 109 |
 | `search/` | dataset and tool retrieval, the OGC adapter | 13 | 187 |
 | `server/` | the HTTP and WS routes, the fetch short-circuit and the Case AOI, persistence | 29 | 261 |
 | `solver/` | the executor, the run reads, the engine-room posture | 6 | 45 |
-| `telemac/` | the TELEMAC templates, the module surface, what each module writes and the primitives that read it, the listing reads, authoring | 59 | 975 |
+| `telemac/` | the TELEMAC templates, the module surface, what each module writes and the primitives that read it, the listing reads, authoring | 59 | 984 |
 | `tools/` | the registry, the arg normalizer, the tool cache | 10 | 343 |
 
 | file | what it is |
@@ -45,9 +45,9 @@ instance fixtures, and nothing else has one.
 Six slices by subsystem, each its own foreground invocation, from the repo root:
 
     make test-fetchers        # tests/fetchers                                                                              2119
-    make test-spatial         # tests/derive tests/render tests/mesh                                                         698
-    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                      1400
-    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts           1106
+    make test-spatial         # tests/derive tests/render tests/mesh                                                         686
+    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                      1408
+    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts           1107
     make test-model-surface   # tests/adapters tests/tools                                                                   617
     make test-packages        # tests/contracts tests/plugin                                                                  749
 

@@ -100,6 +100,8 @@ class _Env:
     #: How long the solve runs, in seconds, off the deck this run writes: the WINDOW a
     #: matched series source must cover, or the run refuses.
     window_s: float | None = None
+    #: The name of the input holding the moment the run opens at; "" where the workflow names none.
+    moment: str = ""
     #: The UNIT each slot's value is converted to, by type - the unit of the
     #: keyword that type fills, which the transform fixes. No row states one.
     slot_units: Mapping[Slot, str] = field(default_factory=dict)
@@ -333,7 +335,7 @@ async def _need(env: _Env, decl: Input, data_class: str,
     window is the run's and the frame is the bed's."""
     seed = await _seed(env, decl)
     lon, lat = _place(seed)
-    opens = env.run.get("event_time")
+    opens = env.run.get(env.moment)
     return Need(slot=label, data_class=data_class, lon=lon, lat=lat,
                 geometry=decl.geometry or getattr(decl.slot, "reads", ""),
                 opens=str(opens) if opens else None,
@@ -446,7 +448,7 @@ async def _ask_for(env: _Env, choice: SourceChoice,
     dom = current_domain()
     seed = await _seed(env, decl)
     lon, lat = _place(seed)
-    opens = env.run.get("event_time")
+    opens = env.run.get(env.moment)
     return ask_for(choice, base_ask(
         choice, decl.name.replace("_", " "),
         _around(dom.bbox, _mesh_m(env)) if dom is not None and dom.bbox else None,
@@ -594,7 +596,7 @@ def _what_the_record_reports(env: _Env, decl: Input,
 
     told["quantity"] = (quantity_class(row.data_class) if row is not None
                         else RATE if decl.slot is DISCHARGE else STATE)
-    told["at"] = env.run.get("event_time")
+    told["at"] = env.run.get(env.moment)
     return told
 
 
@@ -825,18 +827,19 @@ async def fill(state: Fill, values: Mapping[str, Any]) -> Fill:
                 REJECTED, name, code="INPUT_UNNAMED",
                 reason=f"the template names {name!r} as an input, and no param, "
                 "row or output of this run is called that.")
+        # What the workflow refuses of the whole run answers before any unstated row is fetched.
+        state.inputs.update(wf.judged(state))
         sourced = {name: values[name] for name, held in found.items()
                    if getattr(held, "is_row", False)}
         # Every stated row is registered before any is produced: producing one
         # forces the domain, which must already see the caller's own.
         for name, value in sourced.items():
             _stated(production(state), declared[name], value)
-        # EVERY ROW THE TEMPLATE NAMES is produced here, before anything
-        # expands: a consumer only reads the mapping, so a row that cannot be
-        # produced is refused now, by name.
+        # EVERY ROW A STAGE READS WITHOUT THE MESH is produced here: a consumer only reads the mapping, so a row that cannot be
+        # produced is refused now, by name, and a READY fill is followed by no fetch but a placed mark's.
         for name, value in sourced.items():
             await _answer(state, name, declared[name], value)
-        for name in wf.named_rows() if state.ready else ():
+        for name in wf.named_rows(production(state).run) if state.ready else ():
             if name not in production(state).run:
                 await _answer(state, name, declared[name], None)
     finally:
@@ -969,7 +972,7 @@ def production(state: Fill) -> _Env:
             data={row.name: row for row in wf.inputs if row.is_row},
             inputs=state.inputs,
             input_mode=state.carried.get("input_mode"), workflow=wf.name,
-            window_s=wf.run_window_s(state.keywords),
+            window_s=wf.run_window_s(state.keywords), moment=wf.moment,
             slot_units=wf.slot_units(), captions=wf.captions,
             published_units=wf.published_units())
     state.env.run.update({row.name: getattr(state.inputs.get(row.name), "value", None)

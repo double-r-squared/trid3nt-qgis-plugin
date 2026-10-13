@@ -141,6 +141,7 @@ def test_the_weather_row_is_told_the_run_s_window_and_the_moment_it_opens_at():
 
     told = _what_the_record_reports(
         SimpleNamespace(window_s=7200.0,
-                        run={"event_time": "2026-09-01T12:00:00Z"}),
+                        run={"event_time": "2026-09-01T12:00:00Z"},
+                        moment="event_time"),
         Input(name="weather", slot=WEATHER), None)
     assert (told["window_s"], told["at"]) == (7200.0, "2026-09-01T12:00:00Z")

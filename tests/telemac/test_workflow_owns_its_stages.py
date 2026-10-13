@@ -182,7 +182,7 @@ def _filled_with(monkeypatch, mesh, **stated):
 
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
     # Only what the call states is filled: the rows the template names go out to sources.
-    monkeypatch.setattr(workflow, "named_rows", lambda: ())
+    monkeypatch.setattr(workflow, "named_rows", lambda held=(): ())
     return asyncio.run(fill(Fill(workflow=workflow),
                             {"domain": _RING, "mesh": mesh, **stated}))
 
@@ -244,7 +244,7 @@ def test_a_drawn_geometry_handed_to_a_row_is_the_rows_value(monkeypatch):
     from trid3nt_server.workflows.runtime.fill import Fill, fill
 
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
-    monkeypatch.setattr(workflow, "named_rows", lambda: ())
+    monkeypatch.setattr(workflow, "named_rows", lambda held=(): ())
     drawn = {"type": "Polygon", "coordinates": [[*_RING, _RING[0]]]}
     state = asyncio.run(fill(Fill(workflow=workflow),
                              {"domain": drawn, "mesh": _built("unstructured_tri")}))
@@ -270,7 +270,7 @@ def test_a_row_named_by_a_layer_handle_is_read_at_its_uri(monkeypatch, tmp_path)
     outline = tmp_path / "outline.geojson"
     outline.write_text(json.dumps({"type": "Polygon", "coordinates": [[*_RING, _RING[0]]]}))
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
-    monkeypatch.setattr(workflow, "named_rows", lambda: ())
+    monkeypatch.setattr(workflow, "named_rows", lambda held=(): ())
     reg = get_uri_registry("sess-row-handle")
     reg.record("outline-1", uri=str(outline), tool_name="publish_layer")
     token = activate_registry(reg)
@@ -336,3 +336,58 @@ def test_every_registered_template_carries_the_moment_and_the_beds_frame():
     assert len(templates) == 15
     for workflow in templates:
         assert {"event_time", "vertical_frame"} <= {p.name for p in value_inputs(workflow)}
+
+
+def _filled_by(workflow, values):
+    import asyncio
+
+    from trid3nt_server.workflows.runtime.fill import Fill, fill
+
+    return asyncio.run(fill(Fill(workflow=workflow), values))
+
+
+def test_a_previous_computation_a_measured_settle_cannot_open_on_is_refused_at_the_fill(
+        monkeypatch):
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
+    monkeypatch.setattr(workflow, "_settled_by",
+                        lambda: [SimpleNamespace(kind="harbour")])
+    monkeypatch.setattr(workflow, "named_rows", lambda held=(): ())
+    state = _filled_by(workflow, {
+        "input_mode": "auto",
+        "keywords": {"PREVIOUS COMPUTATION FILE": "s3://r/prev.slf"}})
+    refused = state.inputs["PREVIOUS_COMPUTATION_FILE"]
+    assert refused.state == "rejected"
+    assert refused.code == "TELEMAC_CONTINUATION_REFUSED" and not state.ready
+
+
+def test_a_deck_stating_no_cadence_is_refused_at_the_fill_and_stating_it_clears_the_refusal(
+        monkeypatch):
+    from types import MappingProxyType
+
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
+    body = workflow.steering
+    monkeypatch.setattr(body, "ASSERTED", MappingProxyType(
+        {k: v for k, v in body.ASSERTED.items() if k != body.CADENCE}))
+    monkeypatch.setattr(workflow, "named_rows", lambda held=(): ())
+    state = _filled_by(workflow, {"input_mode": "auto"})
+    refused = state.inputs[body.MODULE]
+    assert refused.state == "missing" and refused.code == "TELEMAC_SHEET_INCOMPLETE"
+    assert "GRAPHIC PRINTOUT PERIOD" in refused.reason and not state.ready
+    state = _filled_by(workflow, {
+        "input_mode": "auto", "keywords": {"GRAPHIC PRINTOUT PERIOD": 100}})
+    assert body.MODULE not in state.inputs
+
+
+def test_the_bed_only_a_mesh_build_reads_is_not_produced_under_a_supplied_mesh():
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
+    assert "bed" in workflow.named_rows()
+    assert "bed" not in workflow.named_rows({"mesh"})
+    ice = TOOL_REGISTRY["telemac_ice_cover"].fn.workflow
+    assert "observe" not in ice.named_rows()
+    assert {"weather", "level", "discharge"} <= set(ice.named_rows())

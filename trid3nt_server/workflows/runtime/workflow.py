@@ -11,7 +11,7 @@ import inspect
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Collection, Mapping, Sequence
 
 from trid3nt_contracts.common import Origin, SyntheticInput
 from trid3nt_contracts.coverage import SourceChoice
@@ -54,13 +54,16 @@ class RunResult:
 
 class Workflow:
     """The universal skeleton. A template declares; this runs.
-    A workflow declares two facts about its engine - the solver family and the name
-    of its solve step; hooks have SILENT defaults and no subtype restates one."""
+    A workflow declares its engine's facts - the solver family, its solve step's name
+    and the input holding its moment; hooks have SILENT defaults and no subtype restates one."""
 
     engine: str = ""
 
     #: The SOLVE step's name; the skeleton reads the run prefix off it when the result carries none.
     solve_step: str = ""
+
+    #: The name of the input holding the moment a run opens at; a runtime that dates nothing names none.
+    moment: str = ""
 
     def seated(self) -> tuple[Input, ...]:
         """The inputs a declaration of this workflow carries without restating
@@ -113,13 +116,23 @@ class Workflow:
         The skeleton knows no engine, so it launches nothing."""
         raise WireArgsError(f"{self.name} declares no engine to launch.")
 
+    def judged(self, state: Fill) -> dict[str, Any]:
+        """What refuses the whole run before any stage of it, as a verdict under the name it is said by.
+        An engine's run waits on a person, so one with no session to wait on refuses here; an engine adds its own."""
+        from trid3nt_server.inputs.gate.input_review import no_session
+        from .fill import REJECTED, Verdict
+
+        mode = state.carried.get("input_mode")
+        sentence = no_session(self.name, mode) if self.engine else None
+        return {} if sentence is None else {"input_mode": Verdict(REJECTED, mode, reason=sentence, code="NO_SESSION")}
+
     def unnamed(self) -> tuple[str, ...]:
         """Every input the template names as a plain string that nothing of
         this run is called; the fill refuses each by name."""
         return ()
 
-    def named_rows(self) -> tuple[str, ...]:
-        """Every declared row the template names; the fill produces each."""
+    def named_rows(self, held: Collection[str] = ()) -> tuple[str, ...]:
+        """Every declared row the fill produces, given the names the run already holds; the skeleton names none."""
         return ()
 
     def sheet_doc(self) -> str | None:

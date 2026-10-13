@@ -12,8 +12,9 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime
 from types import MappingProxyType
 from importlib import import_module
-from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Collection, Mapping, Sequence
 
+from trid3nt_contracts import new_ulid
 from trid3nt_contracts.common import Origin, SyntheticInput
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
@@ -27,6 +28,7 @@ from trid3nt_server.workflows.runtime import (
     RunResult,
     Workflow,
 )
+from trid3nt_server.workflows.telemac.authoring.staging import discard_run
 from trid3nt_server.workflows.telemac.errors import TelemacError
 from trid3nt_server.workflows.telemac.modules import wrapper_for
 from trid3nt_server.workflows.telemac.modules.module import (MOMENT, SlotRefused,
@@ -43,10 +45,13 @@ from trid3nt_server.workflows.telemac.modules.sheet import (
     Sheet,
     CONTINUATION,
     Keyword,
+    SheetIncomplete,
+    complete,
 )
 from trid3nt_server.workflows.telemac.modules.sheet import fill as fill_slots
 from trid3nt_server.workflows.telemac.modules.sheet import fill_coupled
 from trid3nt_server.workflows.telemac.modules.sheet import run as run_sheet_
+from trid3nt_server.workflows.telemac.modules.sheet import stage as stage_sheet_
 
 if TYPE_CHECKING:
     from trid3nt_server.workflows.runtime.fill import Fill
@@ -54,7 +59,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger("trid3nt_server.workflows.telemac.workflow")
 
 __all__ = ["Measured", "Placed", "TelemacWorkflow", "card_rows",
-           "fill_sheet", "publish_outputs", "run_bodies", "run_sheet", "stated"]
+           "fill_sheet", "publish_outputs", "run_bodies", "run_sheet", "stage_sheet", "stated"]
 
 _TELEMAC = "trid3nt_server.workflows.telemac"
 
@@ -452,11 +457,13 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
                      workflow: str, title: str, keywords: Mapping[str, Any],
                      input_mode: str | None, spent: Sequence[str] = (),
                      seat: Callable[[Mapping[str, Any]], None] | None = None,
+                     write: Callable[[Sheet], Any] | None = None,
                      user: Sequence[str] = ()) -> Sheet:
     """Set the body's slots against what the run measured -> the sheet, HELD.
 
     The raw ``keywords`` floor is filled last and therefore beats a template
-    value. ``seat`` takes the param values the person proceeded on; ``user``
+    value. ``seat`` takes the param values the person proceeded on; ``write``
+    writes and checks the deck of every sheet a card is drawn from; ``user``
     names the params the call stated."""
     stated, coupled = _floor(steering, keywords)
 
@@ -466,7 +473,11 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
             fill_slots, steering, template=workflow, produced=dict(produced),
             params=dict(values), settled=settled, **{**stated, **edits})
         # After the fill: the coupled decks are what the carrier's coupling composite wrote into the sheet's files.
-        return fill_coupled(sheet, coupled) if coupled else sheet
+        sheet = fill_coupled(sheet, coupled) if coupled else sheet
+        if write is not None:
+            # The deck is written and its staged directory checked before the card is drawn, so a proceed is followed by the solve alone.
+            await write(sheet)
+        return sheet
 
     sheet = await _review(fill, params, steering=steering, workflow=workflow,
                           title=title, input_mode=input_mode, spent=spent,
@@ -477,24 +488,31 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
     return sheet
 
 
-async def run_sheet(*, sheet: Sheet, settled: Mapping[str, Any],
-                    results: Sequence[str], steering: str, prefix: str,
-                    dispatch: str, display: str = "",
-                    moment: str | None = None) -> dict[str, Any]:
-    """A complete sheet: serialize, stage, hand it to the box -> the run handle.
-    The handle names every variable the deck asked for; what the run wrote is decided here, where the coupled bodies and declared tracers are in hand.
-    Its ``reference_time`` is the instant every published time counts from: the stated ``moment``, else the solve's own start."""
-    module, _, attribute = str(dispatch).rpartition(".")
-    to_the_box = getattr(import_module(module), attribute)
+async def stage_sheet(*, sheet: Sheet, run_tag: str, settled: Mapping[str, Any],
+                      results: Sequence[str], steering: str,
+                      prefix: str) -> dict[str, Any]:
+    """A complete sheet, serialized and staged with the directory checked -> the staged run.
+    The handle names every variable the deck asked for; what the run wrote is decided here, where the coupled bodies and declared tracers are in hand."""
     coupled = dict(sheet.resolved()).get("COUPLING WITH")
     outputs = [*results, *(row["dest"] for row in settled["mesh_inputs"]),
                steering, *_ALWAYS_READABLE, *sorted(sheet.files)]
-    handle = await run_sheet_(
-        sheet, dispatch=to_the_box, mesh_inputs=settled["mesh_inputs"],
+    return await stage_sheet_(
+        sheet, run_tag=run_tag, mesh_inputs=settled["mesh_inputs"],
         outputs=outputs, results=list(results), prefix=prefix,
         server_facts=settled["server_facts"], steering=steering,
         coupling=None if not coupled else str(coupled).split(";")[0].lower(),
         continue_from=settled.get("continue_from"))
+
+
+async def run_sheet(*, sheet: Sheet, staged: Mapping[str, Any],
+                    settled: Mapping[str, Any], dispatch: str,
+                    display: str = "",
+                    moment: str | None = None) -> dict[str, Any]:
+    """A staged run handed to the box -> the run handle.
+    Its ``reference_time`` is the instant every published time counts from: the stated ``moment``, else the solve's own start."""
+    module, _, attribute = str(dispatch).rpartition(".")
+    to_the_box = getattr(import_module(module), attribute)
+    handle = await run_sheet_(staged, dispatch=to_the_box)
     return {**settled, **handle, "module": sheet.module,
             "reference_time": moment or handle.get("started_at"),
             "display_basename": display or None,
@@ -776,6 +794,7 @@ class TelemacWorkflow(Workflow):
 
     engine = "telemac"
     solve_step = "solve"
+    moment = EVENT_TIME.name
     def __init__(self, *, coerce: Sequence[Any] = (), **declared: Any) -> None:
         super().__init__(coerce=(*coerce, event_time()), **declared)
 
@@ -881,7 +900,7 @@ class TelemacWorkflow(Workflow):
         return {slot: names[0] for slot, names in slots.items()}
 
     async def launch(self, state: Fill) -> RunResult:
-        """The run, in order: the world, the mesh and its files, what the run places and measures, the settle, the sheet, the solve, the outputs.
+        """The run, in order: the world, the mesh and its files, what the run places and measures, the settle, the sheet written and checked under its review, the solve, the outputs.
         Every stage writes into the run's one mapping and reads off it by plain name."""
         from trid3nt_server.tools.mesh.step import build_declared_mesh, keep_mesh
         from trid3nt_server.render.pipeline_emitter import (begin_substeps,
@@ -955,20 +974,15 @@ class TelemacWorkflow(Workflow):
                         fraction=await given(mark.fraction), label=mark.label,
                         **({"continue_from": previous} if mark.continues else {}))
         await measure("produce")
-        settles = [ask for ask in asks if _MEASURES[ask.kind][2] == "settle"]
-        if settles and previous:
-            raise TelemacError(
-                f"{self.name} is settled by the {settles[0].kind} it measures, "
-                "which opens on no previous computation: this template does not "
-                "carry a run on.", error_code="TELEMAC_CONTINUATION_REFUSED")
+        settles = self._settled_by()
         if settles:
             await measure("settle")
         else:
             await stage(_SETTLED, open_water, **await self._opening(
                 env, domain, level, inflow), continue_from=previous)
         await measure("derive")
-        # A CONTEXT row's output is the SENTENCE, so one nothing read is asked once everything it could stand on is in hand;
-        # a row a module fills a keyword from is read here, before the sheet.
+        # A row asked near a point this run placed is produced here, once that point is a node of the mesh; the fill holds every other row,
+        # so these two loops fetch nothing else.
         for row in self.inputs:
             if row.is_context and row.name not in run:
                 await _taken(env, row)
@@ -980,26 +994,42 @@ class TelemacWorkflow(Workflow):
             run[MOMENT] = {"at": datetime.fromisoformat(run[EVENT_TIME.name]),
                            "lon": lon, "lat": lat}
         declared = {row.name for row in self.inputs if not row.is_row}
-        await stage("sheet", fill_sheet, steering=self.steering,
-                    # A module fills keywords from a row by the NAME of its type, so each type's row is held under that name beside its own.
-                    produced={**run, **{slot.name: run[name] for slot, name
-                                        in slots.items() if name in run}},
-                    params={name: run[name] for name in declared},
-                    settled=run[_SETTLED].get("keywords") or {},
-                    workflow=self.name,
-                    title=self._states("REVIEW_TITLE", ""), keywords=keywords,
-                    input_mode=env.input_mode,
-                    spent=sorted(mark.name for mark in placed),
-                    seat=_seat_on(env),
-                    user=[name for name, verdict in env.inputs.items()
-                          if verdict.origin is Origin.USER])
         listed = tuple(self._states("RESULTS", ()))
+        staged: dict[str, Any] = {}
+        # One tag for the run: every card edit re-stages into the same directory and prefix.
+        run_tag = new_ulid()
+        prefix = self._states("PREFIX", "telemac")
+
+        async def write(sheet: Sheet) -> None:
+            # A card edit fills the sheet again, so the staged run is the one the last fill wrote.
+            staged.clear()
+            staged.update(await stage_sheet(
+                sheet=sheet, run_tag=run_tag, settled=run[_SETTLED],
+                results=list(listed or (self._result(),)),
+                steering=(self._states("STEERING_FILE", "") or f"{self.steering.MODULE}_{self.name}.cas"),
+                prefix=prefix))
+
+        try:
+            await stage("sheet", fill_sheet, steering=self.steering,
+                        # A module fills keywords from a row by the NAME of its type, so each type's row is held under that name beside its own.
+                        produced={**run, **{slot.name: run[name] for slot, name
+                                            in slots.items() if name in run}},
+                        params={name: run[name] for name in declared},
+                        settled=run[_SETTLED].get("keywords") or {},
+                        workflow=self.name,
+                        title=self._states("REVIEW_TITLE", ""), keywords=keywords,
+                        input_mode=env.input_mode,
+                        spent=sorted(mark.name for mark in placed),
+                        seat=_seat_on(env), write=write,
+                        user=[name for name, verdict in env.inputs.items()
+                              if verdict.origin is Origin.USER])
+        except BaseException:
+            # A run that does not reach the box leaves no staged copy behind.
+            await asyncio.to_thread(discard_run, run_tag, prefix)
+            raise
         solved = await stage(
-            "solve", run_sheet, sheet=run["sheet"], settled=run[_SETTLED],
-            results=list(listed or (self._result(),)),
-            steering=(self._states("STEERING_FILE", "")
-                      or f"{self.steering.MODULE}_{self.name}.cas"),
-            prefix=self._states("PREFIX", "telemac"), dispatch=_DISPATCH,
+            "solve", run_sheet, sheet=run["sheet"], staged=staged,
+            settled=run[_SETTLED], dispatch=_DISPATCH,
             display=self._states("DISPLAY_FILE", ""),
             moment=run.get(EVENT_TIME.name))
         await keep_mesh(run["mesh"], solved.get("run_id"))
@@ -1027,6 +1057,26 @@ class TelemacWorkflow(Workflow):
         return [name for slot, name in self._slots().items()
                 if slot.name in wanted]
 
+    def judged(self, state: Fill) -> dict[str, Any]:
+        """The session rule, then what this deck refuses before any mesh is built: a previous computation on a template whose settle
+        opens on none, and a required file or the cadence neither the deck nor the call states."""
+        from trid3nt_server.workflows.runtime.fill import MISSING, REJECTED, Verdict
+
+        refused = super().judged(state)
+        keywords = dict(state.keywords)
+        settles = self._settled_by()
+        if settles and _previous(self.steering, keywords):
+            refused[CONTINUATION] = Verdict(
+                REJECTED, code="TELEMAC_CONTINUATION_REFUSED",
+                reason=f"{self.name} is settled by the {settles[0].kind} it measures, "
+                "which opens on no previous computation: this template does not "
+                "carry a run on.")
+        try:
+            complete(self.steering, stated(steering=self.steering, keywords=keywords))
+        except SheetIncomplete as exc:
+            refused[self.steering.MODULE] = Verdict(MISSING, reason=str(exc), code=exc.error_code)
+        return refused
+
     def unnamed(self) -> tuple[str, ...]:
         """Every input the template names as a plain string - in a placement, a
         measurement, a row, an output, the mesh recipe or a composite - that no
@@ -1038,17 +1088,25 @@ class TelemacWorkflow(Workflow):
         return tuple(dict.fromkeys(name for name in self._named()
                                    if isinstance(name, str) and name not in known))
 
-    def named_rows(self) -> tuple[str, ...]:
-        """Every declared row the template names, but one asked near a point the
-        run places: that point is a node of the mesh, so the row is produced
-        once the point is placed, before the sheet."""
+    def named_rows(self, held: Collection[str] = ()) -> tuple[str, ...]:
+        """Every declared row a stage of this run reads WITHOUT the mesh: the domain, what the template names, the mesh ask's rows where a mesh
+        is still to be built, the level and the inflow, the line a measurement is taken against, the context rows and the rows a module fills from.
+        One asked near a point the run places is the settle's: that point is a node of the mesh."""
         # A seated row is produced only when stated: a composite names the mesh stage's output by the same word.
         rows = {row.name: row for row in self.inputs
                 if row.is_row and row is not _SUPPLIED_MESH}
         marks = tuple(self._marks())
+        slots = self._slots()
+        read = [slots[DOMAIN], *self._named(mesh="mesh" not in held), slots.get(LEVEL), slots.get(DISCHARGE),
+                *("line" for ask in self._declared(Measured) if "line" in _signature(_MEASURES[ask.kind][0])),
+                *(row.name for row in self.inputs if row.is_context), *self._fills()]
         return tuple(dict.fromkeys(
-            name for name in self._named() if isinstance(name, str)
+            name for name in read if isinstance(name, str)
             and name in rows and rows[name].coercion.get("near") not in marks))
+
+    def _settled_by(self) -> list[Any]:
+        """The measurements this template is SETTLED by, in declared order; none where the open water settles it."""
+        return [ask for ask in self._declared(Measured) if _MEASURES[ask.kind][2] == "settle"]
 
     def _marks(self) -> set[str]:
         return ({mark.name for mark in self._declared(Placed)}
@@ -1085,9 +1143,10 @@ class TelemacWorkflow(Workflow):
         named += [row.coercion.get("near") for row in self.inputs]
         named += [value for p in self._states("OUTPUTS", ())
                   for value in (p.at, p.along, p.within)]
-        recipe = self._states("MESH", None)
-        if mesh and recipe is not None:
-            named += input_names(recipe)
+        if mesh:
+            slots = self._slots()
+            recipe = self._states("MESH", None)
+            named += input_names(recipe if recipe is not None else self._mesh(slots[DOMAIN], slots))
         named += self.steering.named()
         return named
 

@@ -81,7 +81,7 @@ async def _normalized(workflow, args):
         return decl.name
 
     with patch.object(fill_mod, "_produce", _held):
-        state = await fill(Fill(workflow=workflow), args)
+        state = await fill(Fill(workflow=workflow), {"input_mode": "auto", **args})
     declared = {prm.name for prm in value_inputs(workflow)}
     refused = [v.reason for v in state.inputs.values() if v.state == REJECTED]
     return ({n: v.value for n, v in state.inputs.items()

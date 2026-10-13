@@ -238,6 +238,7 @@ async def test_a_run_staged_against_a_clause_refuses_before_the_manifest(
 
     rundir = _staged(tmp_path, **{"SOURCES FILE": "'square_sources.txt'"})
     written: list[str] = []
+    monkeypatch.setattr(staging, "_clear_prefix", lambda *a: None)
     monkeypatch.setattr(staging, "_upload_authored", lambda *a, **k: [])
     monkeypatch.setattr(staging, "_write_manifest",
                         lambda *a, **k: written.append("manifest") or "s3://m")

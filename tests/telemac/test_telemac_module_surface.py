@@ -25,6 +25,7 @@ from trid3nt_server.workflows.telemac.modules import (
     load_module_input,
     run,
 )
+from trid3nt_server.workflows.telemac.modules.sheet import stage
 from trid3nt_server.workflows.telemac.modules.module import (
     UNSET,
     Module,
@@ -298,25 +299,19 @@ def test_a_composite_the_wrapper_never_registered_refuses_by_name():
 # -- the canvas ask ----------------------------------------------------------- #
 
 def test_run_refuses_an_incomplete_sheet_naming_the_required_file():
-    async def _never(**_kwargs):
-        raise AssertionError("nothing dispatches on an incomplete sheet")
-
     with pytest.raises(SheetIncomplete, match="GEOMETRY FILE"):
-        asyncio.run(run(fill(T2D), dispatch=_never, mesh_inputs=(), outputs=(),
-                        results=("r2d.slf",), prefix="telemac", server_facts={}))
+        asyncio.run(stage(fill(T2D), run_tag="TAG", mesh_inputs=(), outputs=(),
+                          results=("r2d.slf",), prefix="telemac", server_facts={}))
 
 
 def test_run_refuses_a_deck_that_states_no_cadence():
     """The module NAMES the keyword that says how often its table is written, and
     the dictionary's own default is every step: a deck that leaves it unwritten
     would write an animation nobody sized."""
-    async def _never(**_kwargs):
-        raise AssertionError("nothing dispatches on a deck with no cadence")
-
     sheet = fill(T2D, GEOMETRY_FILE="geo.slf", BOUNDARY_CONDITIONS_FILE="geo.cli")
     with pytest.raises(SheetIncomplete, match="GRAPHIC PRINTOUT PERIOD"):
-        asyncio.run(run(sheet, dispatch=_never, mesh_inputs=(), outputs=(),
-                        results=("r2d.slf",), prefix="telemac", server_facts={}))
+        asyncio.run(stage(sheet, run_tag="TAG", mesh_inputs=(), outputs=(),
+                          results=("r2d.slf",), prefix="telemac", server_facts={}))
 
 
 def test_run_does_not_refuse_an_open_keyword_the_engine_may_yet_default():
@@ -339,7 +334,7 @@ def test_run_serializes_then_stages_then_dispatches(monkeypatch, tmp_path):
 
     async def _stage(rundir, run_tag, **kwargs):
         order.append("stage")
-        return {"run_tag": run_tag, "manifest_uri": "s3://b/m.json"}
+        return {"run_tag": run_tag, "manifest_uri": "s3://b/m.json", "case": {}}
 
     async def _dispatch(*, run, cores):
         order.append("dispatch")
@@ -347,15 +342,16 @@ def test_run_serializes_then_stages_then_dispatches(monkeypatch, tmp_path):
 
     monkeypatch.setattr(serializer, "serialize", _serialize)
     monkeypatch.setattr(staging, "stage_run", _stage)
-    monkeypatch.setattr(staging, "new_rundir", lambda: ("TAG", tmp_path))
+    monkeypatch.setattr(staging, "new_rundir", lambda run_tag: tmp_path)
 
     sheet = fill(T2D, GEOMETRY_FILE="river.slf",
                  BOUNDARY_CONDITIONS_FILE="river.cli",
                  LAW_OF_BOTTOM_FRICTION=3, GRAPHIC_PRINTOUT_PERIOD=100)
-    out = asyncio.run(run(sheet, dispatch=_dispatch, mesh_inputs=(),
-                          outputs=("r2d.slf",), results=("r2d.slf",),
-                          prefix="telemac", server_facts={},
-                          steering="t2d_river.cas"))
+    staged = asyncio.run(stage(sheet, run_tag="TAG", mesh_inputs=(),
+                               outputs=("r2d.slf",), results=("r2d.slf",),
+                               prefix="telemac", server_facts={},
+                               steering="t2d_river.cas"))
+    out = asyncio.run(run(staged, dispatch=_dispatch))
     assert order == ["serialize", "stage", "dispatch"]
     assert out["run_id"] == "R"
 
@@ -1183,7 +1179,7 @@ class _CARD(T2D):
 
 
 def _card_run(monkeypatch, *replies, spent=(), input_mode=None, seat=None,
-              rate=6.0, user=()):
+              write=None, rate=6.0, user=()):
     import asyncio
 
     from trid3nt_server.render import pipeline_emitter as pe
@@ -1198,7 +1194,7 @@ def _card_run(monkeypatch, *replies, spent=(), input_mode=None, seat=None,
             return await fill_sheet(
                 steering=_CARD, produced=_SETTLED, params={"storm_mm_per_day": rate},
                 workflow="probe", title="", keywords={}, input_mode=input_mode,
-                spent=spent, seat=seat, user=user)
+                spent=spent, seat=seat, write=write, user=user)
         finally:
             answering.cancel()
 
@@ -1214,6 +1210,37 @@ def test_a_template_param_edited_on_the_card_lands_and_the_card_redraws(
     drawn = [{row.name: row.value for row in card.param_sheet.rows}
              for card in emitter.sent]
     assert [card["storm_mm_per_day"] for card in drawn] == [6.0, 9.0]
+
+
+def test_the_deck_is_written_before_each_card_is_drawn(monkeypatch):
+    seen = []
+
+    async def write(sheet):
+        seen.append(dict(sheet.resolved())["RAIN OR EVAPORATION IN MM PER DAY"])
+
+    _sheet, emitter = _card_run(
+        monkeypatch, ("narrow_scope", {"storm_mm_per_day": 9.0}),
+        ("proceed", None), write=write)
+    assert seen == [6.0, 9.0] and len(emitter.sent) == 2
+
+
+def test_a_staged_run_goes_to_the_box_and_nothing_else_runs_after_a_proceed(
+        monkeypatch):
+    from trid3nt_server.workflows.telemac.authoring import serializer, staging
+
+    def _never(*_args, **_kwargs):
+        raise AssertionError("nothing is written once the run is staged")
+
+    for owner, name in ((serializer, "serialize"), (staging, "stage_run"),
+                        (staging, "new_rundir")):
+        monkeypatch.setattr(owner, name, _never)
+
+    async def _dispatch(*, run, cores):
+        return {"run_id": "R", "cores": cores}
+
+    out = asyncio.run(run({"case": {"cores": 4}, "manifest_uri": "s3://b/m.json"},
+                          dispatch=_dispatch))
+    assert out["run_id"] == "R" and out["cores"] == 4
 
 
 def test_a_param_edited_on_the_card_reaches_the_chart_reference(monkeypatch):

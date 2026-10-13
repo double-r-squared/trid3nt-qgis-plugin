@@ -141,7 +141,7 @@ def world(monkeypatch):
 
 def _env(**values):
     return fill._Env(run=dict(mesh_resolution_m=14.0, **values),
-                            data={})
+                            data={}, moment="event_time")
 
 
 def _row(decl, name):
@@ -261,7 +261,7 @@ def test_a_non_retryable_upstream_error_drops_the_rung(world, monkeypatch):
 def test_a_run_series_is_asked_for_the_window_the_deck_will_solve(world):
     env = fill._Env(
         run=dict(mesh_resolution_m=14.0, event_time="2026-09-13T22:00:00Z"),
-        data={}, window_s=172800.0)
+        data={}, window_s=172800.0, moment="event_time")
     discharge = _row(Input(DISCHARGE).need("discharge series"), "discharge")
     choice, value = asyncio.run(fill._probe(
         env, discharge, "discharge series", "discharge"))
@@ -275,6 +275,15 @@ def test_a_run_series_is_asked_for_the_window_the_deck_will_solve(world):
     assert west < WILLAMETTE[0] and south < WILLAMETTE[1]
     assert east > WILLAMETTE[2] and north > WILLAMETTE[3]
     assert value == "s3://b/fetch_gauges.geojson"
+
+
+def test_the_fill_reads_the_moment_under_the_name_the_workflow_states(world):
+    env = fill._Env(run=dict(mesh_resolution_m=14.0, opens="2026-09-13T22:00:00Z",
+                             event_time="1999-01-01T00:00:00Z"),
+                    data={}, window_s=3600.0, moment="opens")
+    row = _row(Input(DISCHARGE).need("discharge series"), "discharge")
+    need = asyncio.run(fill._need(env, row, "discharge", "discharge"))
+    assert need.opens == "2026-09-13T22:00:00Z"
 
 
 def test_a_need_and_a_producer_on_one_row_is_refused_at_declaration():

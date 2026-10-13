@@ -11,7 +11,7 @@ import pytest
 
 from trid3nt_server.workflows.telemac.modules import T2D
 from trid3nt_server.workflows.telemac.modules.sheet import (SheetIncomplete,
-                                                            fill, run)
+                                                            fill, stage)
 
 _SETTLED = {"TITLE": "reach DOMAIN", "TIME_STEP": 0.7, "DURATION": 3600.0,
             "INITIAL_CONDITIONS": "CONSTANT DEPTH", "INITIAL_DEPTH": 1.2,
@@ -75,11 +75,8 @@ def test_a_required_slot_left_empty_refuses_by_name_before_writing(monkeypatch):
     def _written(*_args, **_kwargs):
         raise AssertionError("nothing is written for an incomplete sheet")
 
-    async def _never(**_kwargs):
-        raise AssertionError("nothing dispatches on an incomplete sheet")
-
     monkeypatch.setattr(staging, "new_rundir", _written)
     sheet = fill(T2D, settled=_SETTLED, BOUNDARY_CONDITIONS_FILE="geo.cli")
     with pytest.raises(SheetIncomplete, match="GEOMETRY FILE"):
-        asyncio.run(run(sheet, dispatch=_never, mesh_inputs=(), outputs=(),
-                        results=("r2d.slf",), prefix="telemac", server_facts={}))
+        asyncio.run(stage(sheet, run_tag="TAG", mesh_inputs=(), outputs=(),
+                          results=("r2d.slf",), prefix="telemac", server_facts={}))

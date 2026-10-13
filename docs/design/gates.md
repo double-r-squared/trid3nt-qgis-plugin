@@ -18,7 +18,9 @@ callbacks and nothing else:
 The mode is the run's own: `auto` only when the call states
 `input_mode='auto'`, otherwise `user_gated`. Auto launches a ready run at once;
 user-gated parks the turn on the card, and with no live session to present on it
-refuses by name rather than runs.
+refuses by name rather than runs. A workflow says that refusal at its fill
+(`NO_SESSION` on `input_mode`), before any unstated row is fetched or a mesh built; the
+gate's own is what a tool with no workflow gets.
 
 ## The inputs card
 

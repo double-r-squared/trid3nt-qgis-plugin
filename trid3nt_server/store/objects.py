@@ -11,7 +11,8 @@ import os
 from pathlib import Path
 from typing import Any
 
-__all__ = ["ObjectMissingError", "StorageError", "client", "local_runs_bucket",
+__all__ = ["ObjectMissingError", "StorageError", "client", "delete_prefix",
+           "local_runs_bucket",
            "object_size", "runs_bucket", "set_client", "set_runs_bucket",
            "split_object_uri"]
 
@@ -147,3 +148,13 @@ def object_size(uri: str) -> int:
             raise ObjectMissingError(f"no such object: {uri}") from exc
         raise StorageError(f"could not inspect {uri}: {exc}") from exc
     return int(head.get("ContentLength") or 0)
+
+
+def delete_prefix(bucket: str, prefix: str) -> None:
+    """Delete every object under ``prefix`` in ``bucket``; an empty prefix is a no-op."""
+    s3 = client()
+    for page in s3.get_paginator("list_objects_v2").paginate(
+            Bucket=bucket, Prefix=prefix):
+        keys = [{"Key": obj["Key"]} for obj in page.get("Contents") or ()]
+        if keys:
+            s3.delete_objects(Bucket=bucket, Delete={"Objects": keys})

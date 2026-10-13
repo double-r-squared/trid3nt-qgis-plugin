@@ -116,7 +116,8 @@ def test_a_failed_launch_does_not_say_the_engine_check_was_out_of_reach(monkeypa
     monkeypatch.setattr(fill_mod, "_produce", _produce)
     wf = _wf()
     monkeypatch.setattr(type(wf), "launch", _launch)
-    out = asyncio.run(wf.run({"keywords": {"LAW OF BOTTOM FRICTION": 4}}))
+    out = asyncio.run(wf.run({"input_mode": "auto",
+                              "keywords": {"LAW OF BOTTOM FRICTION": 4}}))
     assert out["status"] == "error" and "the deck refused" in out["error_message"]
     assert module_mod.ENGINE_UNAVAILABLE not in out["error_message"]
 
@@ -189,15 +190,35 @@ def test_a_stated_row_the_template_names_is_produced_once_and_a_refused_one_stop
 
     monkeypatch.setattr(fill_mod, "_produce", _produce)
     wf = TOOL_REGISTRY["telemac_channel_dredging"].fn.workflow
-    assert wf.named_rows() == ("dredge_area", "dump_area")
+    assert wf.named_rows() == ("domain", "dredge_area", "dump_area", "bed", "level",
+                               "discharge", "line")
     refused = None
-    state = asyncio.run(fill(Fill(workflow=wf), {"dredge_area": "L1", "bed": 3.0}))
-    assert state.ready and sorted(asked) == ["bed", "domain", "dredge_area", "dump_area"]
+    stated = {"dredge_area": "L1", "bed": 3.0, "input_mode": "auto"}
+    state = asyncio.run(fill(Fill(workflow=wf), stated))
+    assert state.ready and sorted(asked) == [
+        "bed", "discharge", "domain", "dredge_area", "dump_area", "level", "line"]
     asked.clear()
     refused = "bed"
-    state = asyncio.run(fill(Fill(workflow=wf), {"dredge_area": "L1", "bed": 3.0}))
+    state = asyncio.run(fill(Fill(workflow=wf), stated))
     assert state.inputs["bed"].code == "STUB" and "dump_area" not in asked
     assert asked.count("dredge_area") == 1
+
+
+def test_a_user_gated_engine_run_with_no_session_is_refused_at_the_fill_and_fetches_nothing(
+        monkeypatch):
+    asked = []
+
+    async def _produce(env, decl):
+        asked.append(decl.name)
+        return "held"
+
+    monkeypatch.setattr(fill_mod, "_produce", _produce)
+    state = asyncio.run(fill(Fill(workflow=_wf()), {}))
+    refused = state.inputs["input_mode"]
+    assert refused.code == "NO_SESSION" and "input_mode='auto'" in refused.reason
+    assert not state.ready and asked == []
+    state = asyncio.run(fill(Fill(workflow=_wf()), {"input_mode": "auto"}))
+    assert "input_mode" not in state.inputs and "domain" in asked
 
 
 def test_a_layer_by_id_is_supplied_and_ingested_before_it_answers(monkeypatch):
@@ -361,13 +382,13 @@ def test_what_producing_said_at_the_fill_is_restated_on_the_run(monkeypatch):
     monkeypatch.setattr(fill_mod, "_produce", _produce)
     wf = TOOL_REGISTRY["telemac_ice_cover"].fn.workflow
     monkeypatch.setattr(type(wf), "launch", _launch)
-    state = asyncio.run(fill(Fill(workflow=wf), {}))
+    state = asyncio.run(fill(Fill(workflow=wf), {"input_mode": "auto"}))
     run = asyncio.run(wf._launched(state))
-    assert run.choices == ["domain", "weather"]
-    assert covered == ["the domain covers the cut", "the weather covers the cut"]
-    assert run.notes[:4] == [
-        "the domain covers the cut", "the domain came from a stub",
-        "the weather covers the cut", "the weather came from a stub"]
+    rows = ["domain", "bed", "weather", "level", "discharge"]
+    assert run.choices == rows
+    assert covered == [f"the {name} covers the cut" for name in rows]
+    assert run.notes[:10] == [said for name in rows for said in (
+        f"the {name} covers the cut", f"the {name} came from a stub")]
 
 
 _RING = [[-122.6769, 45.5153], [-122.6615, 45.5153],
@@ -381,7 +402,7 @@ _STATED = {"structure": [[-122.6700, 45.5160], [-122.6700, 45.5190]],
 def test_the_order_inputs_are_stated_in_does_not_decide_the_fill(order):
     wf = TOOL_REGISTRY["artemis_harbor_agitation"].fn.workflow
     values = {name: _STATED[name] for name in order}
-    values.update(_STATED)
+    values.update(_STATED, input_mode="auto")
     state = asyncio.run(fill(Fill(workflow=wf), values))
     assert state.ready, {n: v.reason for n, v in state.inputs.items()
                          if v.state == REJECTED}

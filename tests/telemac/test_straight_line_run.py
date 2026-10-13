@@ -64,6 +64,31 @@ def test_the_run_takes_its_stages_in_their_one_order(monkeypatch):
     assert [len(args) for args in kept] == [1, 2] and kept[1][1] == "RUN7"
 
 
+def test_the_solve_is_handed_the_run_the_sheet_stage_staged(monkeypatch):
+    workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
+    calls: list = []
+    _faked(monkeypatch, calls)
+
+    async def staged(**kwargs):
+        calls.append(("staged", kwargs))
+        return {"run_tag": "T"}
+
+    async def sheet(*, write, **_kwargs):
+        await write("the sheet")
+        return {"name": "sheet"}
+
+    monkeypatch.setattr(tw, "stage_sheet", staged)
+    monkeypatch.setattr(tw, "fill_sheet", sheet)
+    from trid3nt_server.workflows.runtime.fill import Fill
+
+    state = Fill(workflow=workflow, carried={"restart_clean": False},
+                 inputs=asyncio.run(resolve_params(value_inputs(workflow), {})))
+    asyncio.run(workflow.launch(state))
+    assert dict(calls)["solve"]["staged"] == {"run_tag": "T"}
+    assert "results" not in dict(calls)["solve"]
+    assert dict(calls)["staged"]["sheet"] == "the sheet"
+
+
 def test_the_mesh_is_asked_for_over_the_domain_and_bed_rows(monkeypatch):
     _run, calls = _launched(monkeypatch)
     asked = dict(calls)["mesh"]["mesh"]
@@ -200,8 +225,94 @@ def test_the_published_clock_counts_from_the_moment_the_run_stated(monkeypatch):
 
     def solved(**stated):
         return asyncio.run(tw.run_sheet(
-            sheet=sheet, settled=settled, results=["r2d.slf"], steering="t.cas",
-            prefix="telemac", dispatch="builtins.print", **stated))
+            sheet=sheet, staged={}, settled=settled, dispatch="builtins.print", **stated))
 
     assert solved(moment=moment)["reference_time"] == moment
     assert solved()["reference_time"] == "2026-10-12T08:00:00+00:00"
+
+
+class _Store:
+    """The object store's client surface a staging touches, kept in memory."""
+
+    def __init__(self):
+        self.objects: dict[str, bytes] = {}
+
+    def put_object(self, *, Bucket, Key, Body, **_):
+        self.objects[Key] = Body
+
+    def get_paginator(self, _name):
+        store = self
+
+        class _Pages:
+            def paginate(self, *, Bucket, Prefix):
+                yield {"Contents": [{"Key": key} for key in store.objects
+                                    if key.startswith(Prefix)]}
+        return _Pages()
+
+    def delete_objects(self, *, Bucket, Delete):
+        for row in Delete["Objects"]:
+            del self.objects[row["Key"]]
+
+
+def _card_edited(monkeypatch, tmp_path, *, cancel):
+    """Launch a run whose card is edited once, then cancelled or proceeded on -> the store, the solve's staged run."""
+    from trid3nt_server.store import objects
+    from trid3nt_server.workflows.telemac.authoring import staging
+    from trid3nt_server.workflows.telemac.errors import TelemacError
+
+    store, solved = _Store(), []
+    monkeypatch.setattr(objects, "_CLIENT", store)
+    monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "cache")
+    monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
+    monkeypatch.setattr(staging, "check_staged_run", lambda *_a, **_k: None)
+    calls: list = []
+    _faked(monkeypatch, calls)
+
+    async def staged(*, sheet, run_tag, prefix, **_kwargs):
+        rundir = staging.new_rundir(run_tag)
+        (rundir / f"deck-{sheet}.cas").write_text(sheet)
+        return await staging.stage_run(
+            rundir, run_tag, module="telemac2d", steering=f"deck-{sheet}.cas",
+            results=["r.slf"], outputs=[], mesh_inputs=[], prefix=prefix,
+            sheet={}, server_facts={}, result_basename="r.slf")
+
+    async def sheet(*, write, **_kwargs):
+        await write("first")
+        await write("last")
+        if cancel:
+            raise TelemacError("cancelled at the review",
+                               error_code="USER_INPUT_CANCELLED")
+        return {"name": "sheet"}
+
+    async def solve(*, staged, **_kwargs):
+        solved.append(dict(staged))
+        return {"run_id": "RUN7"}
+
+    monkeypatch.setattr(tw, "stage_sheet", staged)
+    monkeypatch.setattr(tw, "fill_sheet", sheet)
+    monkeypatch.setattr(tw, "run_sheet", solve)
+    workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
+    state = Fill(workflow=workflow, carried={"restart_clean": False},
+                 inputs=asyncio.run(resolve_params(value_inputs(workflow), {})))
+    try:
+        asyncio.run(workflow.launch(state))
+    except TelemacError:
+        assert cancel
+    return store, solved
+
+
+def test_card_edits_restage_into_the_one_prefix_and_directory(
+        monkeypatch, tmp_path):
+    store, solved = _card_edited(monkeypatch, tmp_path, cancel=False)
+    tag = solved[0]["run_tag"]
+    assert [path.name for path in tmp_path.iterdir()] == [f"telemac-{tag}"]
+    assert [path.name for path in (tmp_path / f"telemac-{tag}").iterdir()] \
+        == ["deck-last.cas"]
+    assert sorted(store.objects) == [f"telemac/{tag}/deck-last.cas",
+                                     f"telemac/{tag}/manifest.json"]
+
+
+def test_a_review_cancelled_after_an_edit_leaves_nothing_staged(
+        monkeypatch, tmp_path):
+    store, solved = _card_edited(monkeypatch, tmp_path, cancel=True)
+    assert not solved and not store.objects and not list(tmp_path.iterdir())
