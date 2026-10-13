@@ -65,8 +65,10 @@ the optional values and the rows.
 
 The runtime declares no input of its own. A template carries, without restating
 them, the inputs whoever reads them declares (`Workflow.seated`):
-`mesh_resolution_m` is the mesh ask's (`RESOLUTION`, `tools/mesh/recipe.py`),
-seated where the ask names it; `event_time` is the engine's, read through the
+`mesh_resolution_m`, `mesh_grade` and `mesh_max_edge_m` are the mesh ask's
+(`RESOLUTION`, `GRADE`, `MAX_EDGE` in `tools/mesh/recipe.py`), each seated only
+where the ask names it, and the two sizing inputs carry no default - a template
+that names one restates it with its own number or the run asks for it; `event_time` is the engine's, read through the
 engine's own coercion, and each module writes it into its deck in its own date
 keywords, in UTC, with the meridian and latitude a solar clock reads taken off
 the domain (`MOMENT` in a module's `FILLED_BY`; a stated keyword wins, no moment

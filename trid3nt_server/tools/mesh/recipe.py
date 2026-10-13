@@ -23,6 +23,9 @@ from trid3nt_server.tools.mesh.meshers import (
 __all__ = [
     "MeshOp",
     "MeshRecipe",
+    "GRADE",
+    "INPUTS",
+    "MAX_EDGE",
     "RESOLUTION",
     "build_recipe",
     "input_names",
@@ -43,6 +46,20 @@ RESOLUTION = Input(
          "the node count it comes to").optional(
     "the finest edge is the finest cell of the input data the mesh "
     "is built over - the bed raster's own cell")
+
+#: How fast the edge may grow and how coarse it may get, as the run inputs a
+#: sizing op names them by. Neither has a default: the number is the asking
+#: template's opinion, and an ask that names one unstated is asked for it.
+GRADE = Input(
+    name="mesh_grade", bounds=(0.05, 0.5),
+    desc="Mesh gradation: how fast the edge may grow from one element to the "
+         "next, from the finest band out to the coarsest")
+MAX_EDGE = Input(
+    name="mesh_max_edge_m", bounds=(20.0, 5000.0), units="m",
+    desc="Coarsest triangle edge, reached far from what the mesh refines toward")
+
+#: Every run input a mesh ask may name; one is seated where an ask names it.
+INPUTS = (RESOLUTION, GRADE, MAX_EDGE)
 
 
 def jsonable(value: Any) -> Any:

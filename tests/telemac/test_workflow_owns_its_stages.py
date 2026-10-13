@@ -87,6 +87,39 @@ def test_the_mesh_edge_is_seated_only_where_the_mesh_ask_names_it():
                                                      "vertical_frame"]
 
 
+def test_a_sizing_input_is_the_meshers_and_seated_only_where_the_ask_names_it():
+    """The grade and the coarsest edge are declared once, by the mesher, with no
+    default of their own: an ask that names one seats it REQUIRED, a template's
+    restatement gives it the template's number, and an ask naming neither seats none."""
+    from trid3nt_server.tools.mesh.recipe import GRADE, MAX_EDGE
+    from trid3nt_server.tools.mesh.tool import mesh_op
+
+    def asking(inputs: type) -> TelemacWorkflow:
+        named = SimpleNamespace(
+            STEERING=STEERING, INPUTS=inputs,
+            MESH=tool.build_mesh(
+                mesher="om2d", kind="unstructured_tri", extent="domain",
+                resolution_m=40.0,
+                ops=[mesh_op("distance_sizing_from_line_function",
+                             line_file="domain", max_edge_length="mesh_max_edge_m"),
+                     mesh_op("enforce_mesh_gradation", gradation="mesh_grade")]))
+        return TelemacWorkflow(metadata=_METADATA, inputs=inputs, template=named)
+
+    workflow = asking(DATA)
+    assert workflow.input("mesh_grade") is GRADE and GRADE.required
+    assert workflow.input("mesh_max_edge_m") is MAX_EDGE and MAX_EDGE.required
+
+    class OPINION:
+        mesh_grade = replace(GRADE, default=0.2)
+        domain = Input(DOMAIN).need("hydrography", at="seed")
+        bed = Input(BED).need("bathymetry")
+
+    stated = asking(OPINION).input("mesh_grade")
+    assert (stated.default, stated.bounds, stated.required) == (0.2, GRADE.bounds, False)
+    assert not {"mesh_grade", "mesh_max_edge_m"} & {
+        prm.name for prm in value_inputs(_workflow(DATA))}
+
+
 def test_the_frame_is_the_beds_and_every_reader_reads_that_one():
     """The bed's type declares the frame; the match's need and the level read
     the value the run stated for it, and the bed's own default without one."""

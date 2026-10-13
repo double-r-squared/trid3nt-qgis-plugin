@@ -780,14 +780,16 @@ class TelemacWorkflow(Workflow):
         super().__init__(coerce=(*coerce, event_time()), **declared)
 
     def seated(self) -> tuple[Input, ...]:
-        """The edge the mesh ask names, the moment the run opens at, what the
-        types of its rows state, then the mesh a caller hands in."""
-        from trid3nt_server.tools.mesh.recipe import RESOLUTION, input_names
+        """What the mesh ask names of the mesher's own inputs, the moment the run
+        opens at, what the types of its rows state, then the mesh a caller hands in."""
+        from trid3nt_server.tools.mesh import recipe as asks
 
         recipe = self._states("MESH", None)
-        asked = recipe is None or RESOLUTION.name in input_names(recipe)
-        return (((RESOLUTION,) if asked else ()) + (EVENT_TIME,)
-                + super().seated() + (_SUPPLIED_MESH,))
+        # The ask this workflow builds where a template declares none names the edge alone.
+        named = ({asks.RESOLUTION.name} if recipe is None
+                 else set(asks.input_names(recipe)))
+        return (tuple(row for row in asks.INPUTS if row.name in named)
+                + (EVENT_TIME,) + super().seated() + (_SUPPLIED_MESH,))
 
     def input(self, name: str) -> Any:
         """The template's and the engine's own inputs first, then the keyword a name

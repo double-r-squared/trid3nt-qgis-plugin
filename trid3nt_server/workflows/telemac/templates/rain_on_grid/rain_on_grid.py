@@ -11,7 +11,7 @@ from dataclasses import replace
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs.slots import BED, DOMAIN, RAIN
-from trid3nt_server.tools.mesh.recipe import RESOLUTION
+from trid3nt_server.tools.mesh.recipe import MAX_EDGE, RESOLUTION
 from trid3nt_server.inputs.input import Input
 from trid3nt_server.workflows.runtime import (
     register_workflow, tool,
@@ -115,9 +115,8 @@ class INPUTS:
              "channel network. THE granularity lever: peak depth and flooded "
              "extent are resolution-bound classes and a coarse mesh reads both "
              "low")
-    mesh_max_edge_m = Input(
-        default=300.0,
-        bounds=(20.0, 5000.0), units="m",
+    mesh_max_edge_m = replace(
+        MAX_EDGE, default=300.0,
         desc="Coarsest triangle edge, reached far from the channels on the "
              "hillslopes")
 

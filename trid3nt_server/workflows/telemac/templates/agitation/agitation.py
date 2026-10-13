@@ -7,7 +7,7 @@ from dataclasses import replace
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT
-from trid3nt_server.tools.mesh.recipe import RESOLUTION
+from trid3nt_server.tools.mesh.recipe import GRADE, RESOLUTION
 from trid3nt_server.inputs.input import Input
 from trid3nt_server.workflows.runtime import (
     register_workflow,
@@ -57,8 +57,8 @@ class INPUTS:
              "structure. THE granularity lever: a phase-resolving solve needs "
              "several nodes per WAVELENGTH and Kd peaks inside a diffraction "
              "fringe, so a coarse mesh reads the peaks low")
-    mesh_grade = Input(
-        default=DEFAULT_GRADE, bounds=(0.05, 0.5),
+    mesh_grade = replace(
+        GRADE, default=DEFAULT_GRADE,
         desc="Mesh gradation: how fast the edge may grow from the structure band "
              "out to the open approach")
     barrier_width_m = Input(
