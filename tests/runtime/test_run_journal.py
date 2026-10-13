@@ -32,9 +32,6 @@ def _record(**overrides):
                              "source": "telemac_do_sag"},
                 "reach_length_km": {"value": 15.0, "origin": "user",
                                     "source": None}},
-        provenance=[SimpleNamespace(param="discharge_cms", value=12.5,
-                                    basis="producer", note="NWM cycle 2026-08-19T00Z",
-                                    real_source_if_any="national_water_model")],
         result=SimpleNamespace(mesh_size_m=30.0),
         wall_seconds=91.4, origin="session",
         notes=[],
@@ -74,12 +71,9 @@ def test_the_record_carries_one_map_of_inputs_by_name():
         assert gone not in rec
 
 
-def test_the_record_carries_the_provenance_the_mesh_and_the_wall_time():
+def test_the_record_carries_the_mesh_and_one_record_of_an_input():
     rec = _record()
-    assert rec["provenance"] == [{"param": "discharge_cms", "value": 12.5,
-                                  "basis": "producer",
-                                  "note": "NWM cycle 2026-08-19T00Z",
-                                  "real_source": "national_water_model"}]
+    assert "provenance" not in rec
     assert rec["mesh"] == {"mesh_size_m": 30.0, "key": None, "built_by": None}
 
 
@@ -249,6 +243,15 @@ def test_the_run_s_own_line_carries_every_input_and_the_correct_end_its_solve_st
     wf._journal("RUN1", run, SimpleNamespace(mesh_size_m=None), 1.0, [], inputs)
     line = written[0]
     assert line["correct_end"] is False
+    # An optional value nobody stated is on the same map: no value, and the
+    # sentence saying what the run derived in its place as its source.
+    absent = {name: line["inputs"].pop(name) for name, row
+              in list(line["inputs"].items())
+              if row["origin"] == "derived" and row["value"] is None}
+    assert absent["event_time"] == {
+        "value": None, "origin": "derived",
+        "source": wf.input("event_time").absent_note}
+    assert "provenance" not in line
     assert line["inputs"] == {
         "TIME_STEP": {"value": 0.5, "origin": "derived",
                       "source": "settled.time_step_s"},

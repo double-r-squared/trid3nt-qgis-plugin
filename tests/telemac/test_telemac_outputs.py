@@ -66,7 +66,7 @@ def _solved(run: dict[str, Any] | None = None, body: Any = T2D) -> Solved:
     return Solved({"run_id": "RID", "utm_epsg": 32610, "result_basename": "r2d.slf",
                    "tracer_names": ["DYE             MG/L"], "name": "reach",
                    "mesh_size_m": 7.5, "mesh_resolution_label": "7.5 m measured",
-                   "started_at": "2026-01-01T00:00:00+00:00", **(run or {})},
+                   "reference_time": "2026-01-01T00:00:00+00:00", **(run or {})},
                   body)
 
 

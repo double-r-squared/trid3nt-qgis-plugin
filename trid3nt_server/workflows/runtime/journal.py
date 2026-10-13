@@ -132,7 +132,7 @@ def read_records(path: Path | None = None) -> list[dict[str, Any]]:
 def build_record(*, run_id: str | None, engine: str | None,
                  module: str | None,
                  inputs: Mapping[str, Mapping[str, Any]],
-                 provenance: Sequence[Any], result: Any,
+                 result: Any,
                  wall_seconds: float | None, origin: str,
                  notes: Sequence[str],
                  correct_end: bool | None = None,
@@ -146,12 +146,12 @@ def build_record(*, run_id: str | None, engine: str | None,
         "module": module,
         "origin": origin,
         # THE ONE MAP: every input of the run by name - a stated value, a keyword of the solved deck, a supplied or
-        # matched row - with who stated it and the source that names it. A reproduction reads the arguments here.
+        # matched row, an absent optional one the run derived - with who stated it and the source that names it.
+        # A reproduction reads the arguments here.
         "inputs": {name: {"value": _small(row.get("value")),
                           "origin": row.get("origin"),
                           "source": row.get("source")}
                    for name, row in inputs.items()},
-        "provenance": [_provenance(row) for row in provenance],
         "correct_end": correct_end,
         # The mesh content key, and on a reuse the run that built it.
         "mesh": {"mesh_size_m": getattr(result, "mesh_size_m", None),
@@ -161,16 +161,6 @@ def build_record(*, run_id: str | None, engine: str | None,
         "notes": list(notes),
         # What the run put on the map: the one place outputs are read back once artifacts and session are gone.
         "outputs": [dict(layer) for layer in outputs],
-    }
-
-
-def _provenance(row: Any) -> dict[str, Any]:
-    return {
-        "param": getattr(row, "param", None),
-        "value": _small(getattr(row, "value", None)),
-        "basis": getattr(row, "basis", None),
-        "note": getattr(row, "note", None),
-        "real_source": getattr(row, "real_source_if_any", None),
     }
 
 

@@ -159,9 +159,7 @@ def _wait_seconds(facts: Mapping[str, Any]) -> float:
 
 
 def _run_start_iso(run_result: Any) -> str | None:
-    """When the solve began, as the mesh's time origin.
-
-    The origin is the solve's own start whatever date the result's header carries; a run with no ``started_at`` states none."""
+    """When the solve began; a run with no ``started_at`` states none."""
     started = getattr(run_result, "started_at", None)
     return started.isoformat() if started is not None else None
 

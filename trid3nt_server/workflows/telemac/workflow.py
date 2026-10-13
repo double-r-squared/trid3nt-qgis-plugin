@@ -405,7 +405,7 @@ def _record(solved: Solved, *, name: str) -> LayerURI:
         uri=f"s3://{storage.runs_bucket()}/{solved.run_id}/{solved.display_file}",
         style={"kind": "reference"}, bbox=solved.bbox,
         crs_authid=f"EPSG:{solved.utm_epsg}",
-        reference_time=solved.run.get("started_at"))
+        reference_time=solved.run.get("reference_time"))
 
 
 def stated(*, steering: type, keywords: Mapping[str, Any]) -> dict[str, Any]:
@@ -479,10 +479,11 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
 
 async def run_sheet(*, sheet: Sheet, settled: Mapping[str, Any],
                     results: Sequence[str], steering: str, prefix: str,
-                    dispatch: str,
-                    display: str = "") -> dict[str, Any]:
+                    dispatch: str, display: str = "",
+                    moment: str | None = None) -> dict[str, Any]:
     """A complete sheet: serialize, stage, hand it to the box -> the run handle.
-    The handle names every variable the deck asked for; what the run wrote is decided here, where the coupled bodies and declared tracers are in hand."""
+    The handle names every variable the deck asked for; what the run wrote is decided here, where the coupled bodies and declared tracers are in hand.
+    Its ``reference_time`` is the instant every published time counts from: the stated ``moment``, else the solve's own start."""
     module, _, attribute = str(dispatch).rpartition(".")
     to_the_box = getattr(import_module(module), attribute)
     coupled = dict(sheet.resolved()).get("COUPLING WITH")
@@ -495,6 +496,7 @@ async def run_sheet(*, sheet: Sheet, settled: Mapping[str, Any],
         coupling=None if not coupled else str(coupled).split(";")[0].lower(),
         continue_from=settled.get("continue_from"))
     return {**settled, **handle, "module": sheet.module,
+            "reference_time": moment or handle.get("started_at"),
             "display_basename": display or None,
             "module_output": [{"token": token, "module": module,
                                "name": row.name, "unit": row.unit,
@@ -996,7 +998,8 @@ class TelemacWorkflow(Workflow):
             steering=(self._states("STEERING_FILE", "")
                       or f"{self.steering.MODULE}_{self.name}.cas"),
             prefix=self._states("PREFIX", "telemac"), dispatch=_DISPATCH,
-            display=self._states("DISPLAY_FILE", ""))
+            display=self._states("DISPLAY_FILE", ""),
+            moment=run.get(EVENT_TIME.name))
         await keep_mesh(run["mesh"], solved.get("run_id"))
         outputs, captions = self._outputs()
         # A primitive's point, line and band name run inputs; each is read here and rejoins its primitive at publish.

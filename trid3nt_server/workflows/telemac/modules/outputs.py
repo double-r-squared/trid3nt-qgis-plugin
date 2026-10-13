@@ -761,7 +761,7 @@ def read_field(primitive: Primitive, solved: Solved) -> Read:
         return Frames(name=name, units=units, values=_drawn(values, wet),
                       file=solved.result_file,
                       group=name.strip(), epsg=solved.utm_epsg,
-                      reference_time=solved.run.get("started_at"),
+                      reference_time=solved.run.get("reference_time"),
                       frames=int(times.size), floor=floor, measures=measures)
     # An int is a frame index from the file's first frame; a float is an instant in seconds at the nearest written frame. Measures are the frame's own; the envelope only sets the edge.
     index = (int(primitive.t) if isinstance(primitive.t, int)
@@ -1337,7 +1337,7 @@ def deliver(primitive: Primitive, read: Read, solved: Solved, *, caption: str,
     if isinstance(read, Series) and primitive.publish == "station":
         return Deliverable(
             product=_station(read, caption=caption,
-                             reference_time=solved.run.get("started_at")),
+                             reference_time=solved.run.get("reference_time")),
             caption=caption,
             # A station is a point a reader locates the series by, not a quantity painted over the domain.
             style={"kind": "reference", "geometry": "point"})

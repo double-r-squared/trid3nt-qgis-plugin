@@ -112,7 +112,9 @@ The run journal records ONE map, `inputs`: every keyword of the solved deck and
 every input the fill answered, by name, each with its `value`, its `origin` and
 its `source`; a keyword stated on a coupled body keeps the name it was stated
 under beside the carrier's own. A supplied row's value is what the caller handed in; a matched
-one holds none and names the source that answered.
+one holds none and names the source that answered; an optional value nobody stated
+holds none under the origin `derived`, its source the sentence saying what the run
+derived in its place. The map is the line's only record of an input.
 
 A run solves over exactly one `DOMAIN` row and one `BED` row; a record type
 (`LEVEL`, `OBSERVE`) may be stated more than once, and a stage that reads one

@@ -128,7 +128,7 @@ class LayerURI(ContractModel):
     dataset_uris: list[str] = Field(default_factory=list)
     # CRS authority id for a mesh row, whose reader reports an empty CRS; None for raster or vector.
     crs_authid: str | None = None
-    # The instant a mesh's dataset times are counted from (a SELAFIN records no origin); None for raster or vector.
+    # The instant a mesh's dataset times are counted from - the moment the run stated, else when its solve began; None for raster or vector.
     reference_time: str | None = None
     # ISO-8601 UTC window [valid_from, valid_to) of one frame of an ordered sequence, stamped straight onto the map.
     valid_from: str | None = None

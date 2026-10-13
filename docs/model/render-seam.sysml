@@ -363,9 +363,10 @@ package RenderSeam {
         ``visible`` is where the un-emit lands: a row the canvas has already
         seen arriving with it flipped takes the layer off the map and back on.
 
-        ``reference_time`` is the mesh clock's origin. A SELAFIN records the
-        offsets and not the instant they count from, so without this the
-        scrubber plays the run in 1900; the row states when zero was.
+        ``reference_time`` is the mesh clock's origin: the moment the run
+        stated, and when it stated none the instant its solve began. The row
+        states when zero was and the client applies it over the file's own
+        header date.
         */
         item layer_id : String;
         item name : String;

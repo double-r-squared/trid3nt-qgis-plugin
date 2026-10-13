@@ -166,3 +166,42 @@ def test_a_stated_moment_reaches_the_sheet_with_the_domains_own_point(monkeypatc
         "lon": -122.67, "lat": 45.52}
     _run, calls = _launched(monkeypatch)
     assert "moment" not in dict(calls)["sheet"]["produced"]
+
+
+def test_the_published_clock_counts_from_the_moment_the_run_stated(monkeypatch):
+    """A run that states its moment publishes every time counted from it; one
+    that states none counts from when its solve began."""
+    from types import SimpleNamespace
+
+    class _Row(str):
+        centroid = (-82.4, 43.0)
+
+    async def _row(env, decl):
+        return _Row(f"row:{decl.name}")
+
+    moment = "2019-07-04T12:00:00+00:00"
+    workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
+    calls: list = []
+    _faked(monkeypatch, calls)
+    monkeypatch.setattr(fill_mod, "_produce", _row)
+    state = Fill(workflow=workflow, carried={}, inputs=asyncio.run(
+        resolve_params(value_inputs(workflow), {"event_time": moment})))
+    asyncio.run(workflow.launch(state))
+    assert dict(calls)["solve"]["moment"] == moment
+
+    async def _box(*_args, **_kwargs):
+        return {"run_id": "RUN7", "started_at": "2026-10-12T08:00:00+00:00"}
+
+    monkeypatch.undo()
+    monkeypatch.setattr(tw, "run_sheet_", _box)
+    sheet = SimpleNamespace(module="telemac2d", files={}, resolved=lambda: {},
+                            published=lambda: ())
+    settled = {"mesh_inputs": [], "server_facts": {}}
+
+    def solved(**stated):
+        return asyncio.run(tw.run_sheet(
+            sheet=sheet, settled=settled, results=["r2d.slf"], steering="t.cas",
+            prefix="telemac", dispatch="builtins.print", **stated))
+
+    assert solved(moment=moment)["reference_time"] == moment
+    assert solved()["reference_time"] == "2026-10-12T08:00:00+00:00"

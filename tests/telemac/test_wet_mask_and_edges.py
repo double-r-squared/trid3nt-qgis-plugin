@@ -57,7 +57,7 @@ def filmed(monkeypatch, telemac_result):
                    "module": "telemac2d", "name": "reach", "mesh_size_m": 7.5,
                    "tracer_names": ["TEMPERATURE     DEG"],
                    "module_output": _table(),
-                   "started_at": "2026-01-01T00:00:00+00:00"}, T2D)
+                   "reference_time": "2026-01-01T00:00:00+00:00"}, T2D)
 
 
 def test_the_series_is_the_maximum_over_the_nodes_the_run_held_water_on(filmed):
@@ -169,7 +169,7 @@ def infinite(monkeypatch, telemac_result):
                    "module": "telemac2d", "name": "reach", "mesh_size_m": 7.5,
                    "tracer_names": ["TEMPERATURE     DEG"],
                    "module_output": _table(),
-                   "started_at": "2026-01-01T00:00:00+00:00"}, T2D)
+                   "reference_time": "2026-01-01T00:00:00+00:00"}, T2D)
 
 
 def test_a_non_finite_value_is_neither_summed_nor_painted(infinite):

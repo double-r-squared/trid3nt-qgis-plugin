@@ -28,7 +28,7 @@ it does not. What a template adds is the reads it PLACES on the user's geometry.
 
 | a primitive | the product |
 |---|---|
-| `field(name, t="every").animate(style=)` | the results mesh layer, painting the dataset group the result file carries for that variable, ranged over EVERY frame of the record, with the run's own reference time so the temporal controller scrubs the right clock |
+| `field(name, t="every").animate(style=)` | the results mesh layer, painting the dataset group the result file carries for that variable, ranged over EVERY frame of the record, with the run's reference time - the moment it stated, else when its solve began - so the temporal controller scrubs the right clock |
 | `field(name, t)` | the same mesh, painting a single-step group the publish wrote beside the results for that instant - what a row that does NOT vary in time publishes, at the run's final frame |
 | `max_over_time(name)`, a plane of a 3D result, a variable the module DERIVES | the same, for a group no result file carries |
 | `series`, `profile`, `column` | a chart payload |

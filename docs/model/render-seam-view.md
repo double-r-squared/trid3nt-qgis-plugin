@@ -145,7 +145,7 @@ What a reader wants changed about a layer already on the map. Every field is an 
 
 ### `SessionLayerRow`
 
-One row of the session's layer state, which is what the canvas is rebuilt from on every emit. ``uri`` is the same single store reference the producer wrote - the client opens it natively, so no publish ever mints a second face for the same bytes. ``visible`` is where the un-emit lands: a row the canvas has already seen arriving with it flipped takes the layer off the map and back on. ``reference_time`` is the mesh clock's origin. A SELAFIN records the offsets and not the instant they count from, so without this the scrubber plays the run in 1900; the row states when zero was.
+One row of the session's layer state, which is what the canvas is rebuilt from on every emit. ``uri`` is the same single store reference the producer wrote - the client opens it natively, so no publish ever mints a second face for the same bytes. ``visible`` is where the un-emit lands: a row the canvas has already seen arriving with it flipped takes the layer off the map and back on. ``reference_time`` is the mesh clock's origin: the moment the run stated, and when it stated none the instant its solve began. The row states when zero was and the client applies it over the file's own header date.
 
 | item | type | required |
 | --- | --- | --- |

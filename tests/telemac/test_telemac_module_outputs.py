@@ -89,7 +89,7 @@ def _run(telemac_result, monkeypatch, dye=None, unrowed=None) -> dict[str, Any]:
     return {"run_id": "RID", "utm_epsg": 32610, "result_basename": "r2d.slf",
             "module": "telemac2d", "name": "reach",
             "tracer_names": ["DYE             MG/L"],
-            "started_at": "2026-01-01T00:00:00+00:00",
+            "reference_time": "2026-01-01T00:00:00+00:00",
             "module_output": [{"token": token, "module": module,
                                "style": row.style, "varies": row.varies,
                                "has_edge": bool(row.has_edge)}
@@ -459,7 +459,7 @@ def test_the_published_order_is_the_table_order_across_host_and_coupled(
         HIDING_FACTOR_FORMULA=1, MORPHOLOGICAL_FACTOR=10.0)])
     run = {"run_id": "RID", "utm_epsg": 32610, "result_basename": "r2d.slf",
            "module": "telemac2d", "name": "reach",
-           "started_at": "2026-01-01T00:00:00+00:00",
+           "reference_time": "2026-01-01T00:00:00+00:00",
            "module_output": [{"token": token, "module": module,
                               "style": row.style, "varies": row.varies,
                               "has_edge": bool(row.has_edge)}

@@ -1269,11 +1269,9 @@ def test_the_card_the_provenance_and_the_journal_say_one_origin(
         run_id="R", engine="telemac", module="telemac2d",
         inputs={name: {"value": row.value, "origin": row.origin.value}
                 for name, row in params.items()},
-        provenance=[entry], result=None, wall_seconds=0.0, origin="headless",
-        notes=[])
+        result=None, wall_seconds=0.0, origin="headless", notes=[])
     assert (card.origin.value, entry.basis.value,
-            record["inputs"]["storm_mm_per_day"]["origin"],
-            record["provenance"][0]["basis"].value) == (origin,) * 4
+            record["inputs"]["storm_mm_per_day"]["origin"]) == (origin,) * 3
 
 
 def test_a_keyword_edited_on_the_card_lands(monkeypatch):

@@ -187,8 +187,9 @@ package SteeringSurface {
         doc /*
         One line per completed run: the engine and the module it ran under and
         ONE map of its inputs by name - a stated value, a keyword of the solved
-        deck, a supplied or matched row - each with its value, its origin and
-        its source. The template is not a field of the line; it survives as the
+        deck, a supplied or matched row, an absent optional value the run
+        derived - each with its value, its origin and its source, and the line
+        records an input nowhere else. The template is not a field of the line; it survives as the
         source of the keywords it stated.
         */
     }

@@ -13,7 +13,7 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
-from trid3nt_contracts.common import SyntheticInput
+from trid3nt_contracts.common import Origin, SyntheticInput
 from trid3nt_contracts.coverage import SourceChoice
 
 from trid3nt_server.inputs.bound_domain import bind_domain, reset_domain
@@ -302,6 +302,11 @@ class Workflow:
                 "value": (supplied.get(name) if getattr(held, "is_row", False)
                           else verdict.value),
                 "origin": verdict.origin.value, "source": verdict.source or None}
+        # An absent optional value holds none: its source is the sentence saying what the run derived in its place.
+        for held in self.inputs:
+            if held.absent_note and not held.is_row and held.name not in inputs:
+                inputs[held.name] = {"value": None, "origin": Origin.DERIVED.value,
+                                     "source": held.absent_note}
         return inputs
 
     def _correct_end(self, run: RunResult) -> bool | None:
@@ -315,14 +320,13 @@ class Workflow:
     def _journal(self, run_id: str | None, run: RunResult, result: Any,
                  wall_seconds: float, notes: Sequence[str],
                  inputs: Mapping[str, Mapping[str, Any]]) -> None:
-        """Append this run to the run journal, from publish where the inputs, provenance and wall time are all in hand."""
+        """Append this run to the run journal, from publish where the inputs and wall time are both in hand."""
         from trid3nt_server.render.pipeline_emitter import current_emitter
 
         journal.append_record(journal.build_record(
             run_id=run_id, engine=self.engine or None,
             module=self._module(run), inputs=inputs,
             correct_end=self._correct_end(run),
-            provenance=getattr(result, "synthetic_inputs", None) or [],
             result=result, wall_seconds=round(wall_seconds, 3),
             origin=journal.run_origin(live_session=current_emitter() is not None),
             notes=list(notes), outputs=run.outputs,

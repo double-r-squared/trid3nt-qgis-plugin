@@ -93,7 +93,7 @@ def test_the_run_record_carries_the_engine_and_the_module_and_no_template():
                              "source": "telemac_dye_release"},
                 "GEOMETRY FILE": {"value": "mesh.slf", "origin": "producer",
                                   "source": "mesh"}},
-        provenance=(), result=None,
+        result=None,
         wall_seconds=1.0, origin="session", notes=())
     assert record["engine"] == "telemac" and record["module"] == "telemac2d"
     assert "template" not in record
@@ -111,7 +111,8 @@ def test_the_module_and_the_deck_are_read_off_the_solve_step_the_workflow_declar
         "sheet": {"filled": {"DURATION": {"keyword": "DURATION", "value": 600.0,
                                           "provenance": "template: t"}}}}})
     assert TelemacWorkflow._module(TelemacWorkflow, run) == "artemis"
-    assert TelemacWorkflow._inputs(TelemacWorkflow, run, {}) == {
+    declaring = SimpleNamespace(solve_step=TelemacWorkflow.solve_step, inputs=())
+    assert TelemacWorkflow._inputs(declaring, run, {}) == {
         "DURATION": {"value": 600.0, "origin": "template", "source": "t"}}
 
 

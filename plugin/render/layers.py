@@ -299,9 +299,9 @@ def stamp_raster_temporal(layer, event: LayerEvent) -> Optional[str]:
 
 
 def stamp_mesh_temporal(layer, event: LayerEvent) -> Optional[str]:
-    """Point a mesh layer's time axis at the instant its run DECLARED as zero.
-    A SELAFIN records no origin for the seconds it counts, so without this the
-    controller scrubs 1900. Never raises."""
+    """Point a mesh layer's time axis at the instant its row DECLARES as zero.
+    The row decides and this only applies it: the stated instant replaces whatever
+    date the file's own header carries. Never raises."""
     reference = _temporal_qdt((event.raw or {}).get("reference_time"))
     if reference is None:
         return None
