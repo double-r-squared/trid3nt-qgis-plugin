@@ -464,6 +464,7 @@ package RenderSeam {
         port stashIn : StashIn;
         port resolvedOut : ResolvedOut;
         port wireOut : WireOut;
+        port recordOut : RecordOut;
     }
 
     part outputsSeamPoint : OutputsSeamPoint {
@@ -536,6 +537,9 @@ package RenderSeam {
 
     interface recordFromPublish : LayerRecordEntry
         connect publishPath.recordOut to layerRecord.recordIn;
+
+    interface recordFromEmission : LayerRecordEntry
+        connect pipelineEmitter.recordOut to layerRecord.recordIn;
 
     interface recordFromSolve : LayerRecordEntry
         connect outputsSeamPoint.recordOut to layerRecord.recordIn;

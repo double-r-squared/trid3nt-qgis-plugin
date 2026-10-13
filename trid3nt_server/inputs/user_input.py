@@ -100,7 +100,8 @@ def lonlat_point(value: Any, *, label: str = "point",
 
 def _vertices(value: Any, label: str, code: str) -> list[list[float]]:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
-        raise _refuse(f"{label} {value!r} is not a list of (lon, lat) vertices.", code)
+        named = "is not a layer on the map and " if isinstance(value, str) else ""
+        raise _refuse(f"{label} {value!r} {named}is not a list of (lon, lat) vertices.", code)
     out: list[list[float]] = []
     for vertex in value:
         pair = _pair(vertex)

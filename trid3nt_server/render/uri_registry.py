@@ -688,7 +688,7 @@ def lookup_layer_for_handle(handle: str) -> dict[str, Any] | None:
 
 
 def observe_published_layer(layer_id: str, uri: str | None = None) -> None:
-    """Record a published layer's handle and the one uri it carries.
+    """Record a loaded layer's handle and the one uri it carries; a handle already recorded keeps its producer.
 
     A no-op outside an active dispatch, and it never raises into its caller.
     """
@@ -696,7 +696,8 @@ def observe_published_layer(layer_id: str, uri: str | None = None) -> None:
     if reg is None:
         return
     try:
-        reg.record(layer_id, uri=uri, tool_name="publish_layer")
+        reg.record(layer_id, uri=uri,
+                   tool_name=None if layer_id in reg._records else "publish_layer")
     except Exception:  # noqa: BLE001 -- observation must never break the tool
         logger.exception("observe_published_layer failed layer_id=%s", layer_id)
 

@@ -36,6 +36,7 @@ from trid3nt_contracts.ws import (
 )
 
 from .layer_uri_emit import emit_layer_uri, publish_for_emission
+from .uri_registry import observe_published_layer
 
 __all__ = [
     "EmitterError",
@@ -838,6 +839,7 @@ class PipelineEmitter:
         
         Two publishes of one COG name the same uri, so the fresher row replaces the older; a mesh row is its uri and its group."""
         summary = summary_of(layer)
+        observe_published_layer(summary.layer_id, uri=summary.uri)
         for i, existing in enumerate(self._loaded_layers):
             if (existing.uri, existing.dataset_group) == (summary.uri,
                                                           summary.dataset_group):

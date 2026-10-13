@@ -262,3 +262,34 @@ async def test_publish_raster_input_cog_none_emitter_or_uri_noop():
             _emitter(), cog_uri="", layer_id="i", name="n",
         ) is False
     assert called["n"] == 0
+
+
+@pytest.mark.asyncio
+async def test_surfaced_input_layer_resolves_by_its_id_and_registers_once():
+    """A layer loaded through publish_input_layer is in the session registry, so a later
+    call names it by id or short handle; one already registered keeps its handle."""
+    from trid3nt_server.render.uri_registry import (
+        activate_registry, deactivate_registry, get_uri_registry,
+        lookup_uri_for_handle, reset_uri_registries_for_tests)
+
+    reset_uri_registries_for_tests()
+    emitter = _emitter()
+    reg = get_uri_registry(emitter.session_id)
+    token = activate_registry(reg)
+    try:
+        known = LayerURI(layer_id="known-1", name="Known", layer_type="vector",
+                         uri="s3://runs/r/known.fgb", role="primary")
+        reg.record("known-1", uri=known.uri, tool_name="fetch_x")
+        short = reg.short_for_uri(known.uri)
+        layer = LayerURI(layer_id="input-src-abc", name="Input", layer_type="vector",
+                         uri="s3://runs/r/input.fgb", role="context")
+        assert await publish_input_layer(emitter, layer) is True
+        await emitter.add_loaded_layer(known)
+        assert lookup_uri_for_handle("input-src-abc") == layer.uri
+        assert lookup_uri_for_handle(reg.short_for_uri(layer.uri)) == layer.uri
+        assert reg.short_for_uri(known.uri) == short
+        assert len(reg._short_to_uri) == 2
+        assert reg._records["known-1"].tool_name == "fetch_x"
+    finally:
+        deactivate_registry(token)
+        reset_uri_registries_for_tests()

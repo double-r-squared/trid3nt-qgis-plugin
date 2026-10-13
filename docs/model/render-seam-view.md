@@ -26,6 +26,7 @@ flowchart LR
     emissionSeamPoint -- "EmittedLayer" --> pipelineEmitter
     pipelineEmitter -- "ResolvedStyle (pipelineEmitter pass through)" --> layerMaterializer
     publishPath -- "LegendStash" --> pipelineEmitter
+    pipelineEmitter -- "LayerRecordEntry" --> layerRecord
     publishPath -- "LayerRecordEntry" --> layerRecord
     outputsSeamPoint -- "LayerRecordEntry" --> layerRecord
     restyleTool -- "RestyleAsk" --> restyleSurface

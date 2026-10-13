@@ -665,8 +665,8 @@ async def _dispatch_tool_and_persist(
     try:
         try:
             if tool_name in TOOL_REGISTRY:
-                # A direct run opens the one gate's card for the inputs its
-                # call left out or that refused; the card's proceed launches.
+                # A plain tool opens the one gate's card for the inputs its call
+                # left out or that refused; a workflow opens none, its fill refuses.
                 _ensure_emitter(websocket, state)
                 params = await review_run_inputs(
                     tool_name, TOOL_REGISTRY[tool_name].fn, params,
