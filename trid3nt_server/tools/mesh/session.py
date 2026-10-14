@@ -18,7 +18,12 @@ import numpy as np
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.render.mesh_display import mesh_display_path, write_2dm
+from trid3nt_server.render.mesh_display import (
+    MESH_ELEMENT_TAG,
+    mesh_display_path,
+    write_2dm,
+    write_ugrid,
+)
 from trid3nt_server.tools.mesh.grid_geometry import M_PER_DEG_LAT
 from trid3nt_server.tools.mesh.artifact import (
     MeshArtifact,
@@ -225,7 +230,7 @@ class MeshSession:
         return art
 
     def _display_face(self) -> tuple[Path, str]:
-        """The ``.2dm`` this mesh renders as, written and staged ONCE per build.
+        """The display file this mesh renders as, written and staged ONCE per build.
 
         Dropped on every regeneration, so it can never answer for a dead mesh."""
         # Not a cache of STATE - the recipe is that. This memoizes a WRITE: the
@@ -233,11 +238,25 @@ class MeshSession:
         # more by accept, and each miss is a file write plus an object-store put.
         if self._display is None:
             declared = mesh_display_path(self.mesh)
-            local = Path(declared) if declared else self.workdir / "mesh.2dm"
-            if declared is None:
-                local.write_text(write_2dm(self.mesh))
+            local = Path(declared) if declared else self._default_display()
             self._display = (local, self._stage(local))
         return self._display
+
+    def _default_display(self) -> Path:
+        """Write the face this mesh's cells actually have -> the local file.
+
+        A uniform triangle or quad mesh keeps its ``.2dm``; a polygon cell of
+        any other arity - or a ragged mesh - has no SMS tag and is written as
+        CF-UGRID."""
+        mesh = self.mesh
+        if mesh.has_cells and (mesh.ragged or mesh.nodes_per_cell
+                               not in MESH_ELEMENT_TAG):
+            path = self.workdir / "mesh.ugrid"
+            write_ugrid(mesh, path)
+            return path
+        path = self.workdir / "mesh.2dm"
+        path.write_text(write_2dm(mesh))
+        return path
 
     def _stage(self, local: Path) -> str:
         """Upload ``local`` beside this mesh's other objects -> its uri.
@@ -315,7 +334,22 @@ def mesh_digest(mesh: Mesh) -> str:
     """``sha256:<hex>`` over the mesh's display text - one number per geometry."""
     import hashlib
 
-    return "sha256:" + hashlib.sha256(write_2dm(mesh).encode("utf-8")).hexdigest()
+    return "sha256:" + hashlib.sha256(_canonical_text(mesh).encode("utf-8")).hexdigest()
+
+
+def _canonical_text(mesh: Mesh) -> str:
+    """The geometry as the text a digest is taken over.
+
+    A uniform triangle or quad mesh digests over its ``.2dm`` face; a polygon
+    mesh of any other arity has no SMS tag, so it digests over a canonical
+    points-and-cells dump at the same precision the ``.2dm`` writes."""
+    if mesh.has_cells and (mesh.ragged
+                           or mesh.nodes_per_cell not in MESH_ELEMENT_TAG):
+        pts = np.round(np.asarray(mesh.points, dtype=float), 6).tolist()
+        rows = [[int(i) for i in np.asarray(row).ravel()]
+                for row in mesh.cells]
+        return json.dumps({"points": pts, "cells": rows}, sort_keys=True)
+    return write_2dm(mesh)
 
 
 def _metre_scale(mesh: Mesh) -> tuple[float, float]:
@@ -345,6 +379,13 @@ def _lonlat_bbox(mesh: Mesh) -> tuple[float, float, float, float]:
 def _unique_edges(cells: Any) -> tuple[Any, Any]:
     k = int(cells.shape[1])
     pairs = np.vstack([cells[:, [i, (i + 1) % k]] for i in range(k)])
+    return np.unique(np.sort(pairs, axis=1), axis=0, return_counts=True)
+
+
+def _unique_edges_rows(rows: Sequence[Any]) -> tuple[Any, Any]:
+    """The unique edges of a ragged cell set, each cell walked in its own order."""
+    pairs = np.vstack([np.column_stack([row, np.roll(row, -1)])
+                       for row in rows])
     return np.unique(np.sort(pairs, axis=1), axis=0, return_counts=True)
 
 
@@ -411,9 +452,18 @@ def _probes(mesh: Mesh, recipe: MeshRecipe) -> dict[str, Any]:
             "ops": recipe.numbered(),
         }
     pts = np.asarray(mesh.points, dtype=float)
-    cells = np.asarray(mesh.cells, dtype=np.int64)
     scale = _metre_scale(mesh)
-    edges, counts = _unique_edges(cells)
+    if mesh.ragged:
+        rows = [np.asarray(row, dtype=np.int64) for row in mesh.cells]
+        edges, counts = _unique_edges_rows(rows)
+        # A minimum angle over mixed vertex counts measures nothing comparable;
+        # over all-triangle rows it is the same measure a uniform mesh gets.
+        angle_over = (np.vstack(rows)
+                      if all(int(row.size) == 3 for row in rows) else None)
+    else:
+        cells = np.asarray(mesh.cells, dtype=np.int64)
+        edges, counts = _unique_edges(cells)
+        angle_over = cells
     delta = (pts[edges[:, 0]] - pts[edges[:, 1]]) * np.asarray(scale, dtype=float)
     lengths = np.hypot(delta[:, 0], delta[:, 1])
     boundary = edges[counts == 1]
@@ -426,7 +476,8 @@ def _probes(mesh: Mesh, recipe: MeshRecipe) -> dict[str, Any]:
             "min": float(lengths.min()), "max": float(lengths.max()),
             "mean": float(lengths.mean()),
         },
-        "min_angle_deg": _min_angle_deg(pts, cells, scale),
+        **({"min_angle_deg": _min_angle_deg(pts, angle_over, scale)}
+           if angle_over is not None else {}),
         "boundary_edges": int(boundary.shape[0]),
         "boundary_loops": _boundary_loops(boundary),
         # What the MESHER measured about its own build - island count, how much of

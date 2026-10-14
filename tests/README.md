@@ -45,7 +45,7 @@ instance fixtures, and nothing else has one.
 Six slices by subsystem, each its own foreground invocation, from the repo root:
 
     make test-fetchers        # tests/fetchers                                                                              2119
-    make test-spatial         # tests/derive tests/render tests/mesh                                                         686
+    make test-spatial         # tests/derive tests/render tests/mesh                                                         704
     make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                      1410
     make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts           1107
     make test-model-surface   # tests/adapters tests/tools                                                                   617

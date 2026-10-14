@@ -2,11 +2,15 @@
 
 Every template's mesh ask enters here and leaves as an accepted topology. A mesh
 is defined by exactly one object: its RECIPE - three mesher-agnostic params
-(`extent`, `resolution_m`, `kind`) plus one ordered list of `mesh_op(...)`
-entries, which is the program that produces it. The router validates the recipe,
-a mesher executes it, a session holds it and regenerates WHOLESALE on every
-change, a gate presents it with its ops numbered, and an artifact record -
-carrying that recipe as its provenance - is what the solve reads.
+(`extent`, `resolution_m`, `kind`), the backend constructor's own `build` kwargs
+(checked against the mesher's declared roster, recorded only when declared), and
+one ordered list of `mesh_op(...)` entries, which is the program that produces
+it. The router validates the recipe, a mesher executes it, a session holds it
+and regenerates WHOLESALE on every change, a gate presents it with its ops
+numbered, and an artifact record - carrying that recipe as its provenance - is
+what the solve reads. Cells may have any vertex count: a uniform triangle or
+quad mesh keeps its `.2dm` display face, a polygon mesh of any other arity is
+written CF-UGRID, and the probes measure edge over edge either way.
 
 ## Files
 

@@ -1,19 +1,22 @@
 """THE RECIPE - the one object a mesh is defined by.
 
 Not a spec plus a history of edits: the current PROGRAM that produces the mesh,
-as three mesher-agnostic params - extent, resolution_m, kind - and one ordered
-ops list. Engine vocabulary is never a param here; a bed and a role are OPS."""
+as three mesher-agnostic params - extent, resolution_m, kind - the backend
+constructor's own ``build`` kwargs, and one ordered ops list. Engine vocabulary
+is never a param here; a bed and a role are OPS."""
 
 from __future__ import annotations
 
 import inspect
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
+from types import MappingProxyType
 from typing import Any, Iterable, Mapping
 
 from trid3nt_server.inputs.input import Input
 from trid3nt_server.tools.mesh.meshers import (
     MeshOp,
     MeshToolError,
+    bind_build,
     bind_ops,
     get_mesher,
     mesh_op,
@@ -109,7 +112,7 @@ def jsonable(value: Any) -> Any:
 
 @dataclass(frozen=True)
 class MeshRecipe:
-    """The current program that produces one mesh: three params and its ops.
+    """The current program that produces one mesh: its params, build and ops.
 
     Frozen: every editing method returns a NEW recipe."""
 
@@ -117,11 +120,17 @@ class MeshRecipe:
     kind: str
     extent: Any = None
     resolution_m: float | None = None
+    #: The backend CONSTRUCTOR's own keyword arguments, stated verbatim - what
+    #: Triangle takes as maximum_area/angle, Gridgen as delr/delc/xoff. Empty
+    #: for a constructor that takes none; recorded only when non-empty.
+    build: Mapping[str, Any] = field(default_factory=dict)
     ops: tuple[MeshOp, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "ops", tuple(self.ops))
+        object.__setattr__(self, "build", MappingProxyType(dict(self.build or {})))
         bind_ops(get_mesher(self.mesher), self.ops)
+        bind_build(get_mesher(self.mesher), self.build)
 
     def appending(self, op: MeshOp) -> "MeshRecipe":
         """The recipe with one more entry at the end."""
@@ -168,13 +177,18 @@ class MeshRecipe:
         return [f"{i}: {op!r}" for i, op in enumerate(self.ops)]
 
     def to_json(self) -> dict[str, Any]:
-        return {
+        doc = {
             "mesher": self.mesher,
             "kind": self.kind,
             "extent": jsonable(self.extent),
             "resolution_m": jsonable(self.resolution_m),
             "ops": [jsonable(op) for op in self.ops],
         }
+        # Recorded only when declared: a recipe without a build is byte-identical
+        # to one written before the field existed, so its content key stands.
+        if self.build:
+            doc["build"] = jsonable(self.build)
+        return doc
 
     @classmethod
     def from_json(cls, doc: Mapping[str, Any]) -> "MeshRecipe":
@@ -184,15 +198,18 @@ class MeshRecipe:
             for entry in (doc.get("ops") or ()))
         return cls(mesher=str(doc["mesher"]), kind=str(doc["kind"]),
                    extent=doc.get("extent"),
-                   resolution_m=doc.get("resolution_m"), ops=ops)
+                   resolution_m=doc.get("resolution_m"),
+                   build=doc.get("build") or {}, ops=ops)
 
 
 def build_recipe(*, mesher: str, kind: Any = None, extent: Any = None,
-                 resolution_m: Any = None,
+                 resolution_m: Any = None, build: Mapping[str, Any] | None = None,
                  ops: Iterable[MeshOp] | None = None) -> MeshRecipe:
     """The declared ask as a validated recipe. Builds NOTHING.
 
-    Omitting ``ops`` takes the mesher's VISIBLE defaults; declaring replaces them."""
+    Omitting ``ops`` takes the mesher's VISIBLE defaults; declaring replaces them.
+    ``build`` is the backend constructor's own kwargs, checked against the
+    mesher's declared roster; its values must be recordable."""
     registered = get_mesher(mesher)
     declared = registered.default_ops if ops is None else tuple(ops)
     bad = [op for op in declared if not isinstance(op, MeshOp)]
@@ -201,13 +218,16 @@ def build_recipe(*, mesher: str, kind: Any = None, extent: Any = None,
             "MESH_OPS_MALFORMED",
             f"a recipe's ops are mesh_op(...) entries; got a "
             f"{type(bad[0]).__name__} ({bad[0]!r}).")
+    declared_build = dict(build or {})
+    for value in declared_build.values():
+        jsonable(value)
     return MeshRecipe(
         mesher=registered.name, kind=registered.kind_or_default(kind),
         extent=extent,
         # A string is the NAME of the run input the resolution is read off.
         resolution_m=(resolution_m if resolution_m is None
                       or isinstance(resolution_m, str) else float(resolution_m)),
-        ops=declared)
+        build=declared_build, ops=declared)
 
 
 def takes_name(recipe: MeshRecipe, op: MeshOp, key: str) -> bool:
@@ -246,13 +266,18 @@ def recipe_plan_value(recipe: MeshRecipe) -> dict[str, Any]:
             f"(tool.build_mesh(...)), got {type(recipe).__name__}.")
     # A string where a value belongs is the NAME of the run input it is read
     # off; the run reads each into this mapping before the mesh is keyed.
-    return {
+    plan = {
         "mesher": recipe.mesher,
         "kind": recipe.kind,
         "extent": recipe.extent,
         "resolution_m": recipe.resolution_m,
         "ops": [{"op": op.fn, "kwargs": _thaw(op.kwargs)} for op in recipe.ops],
     }
+    # Present only when declared: an undeclared build keys the same content as
+    # one written before the field existed.
+    if recipe.build:
+        plan["build"] = _thaw(recipe.build)
+    return plan
 
 
 def _thaw(value: Any) -> Any:
@@ -275,6 +300,7 @@ def recipe_from_plan_value(value: Mapping[str, Any],
                 for entry in (value.get("ops") or ()))
     fields = {"mesher": str(value["mesher"]), "kind": value.get("kind"),
               "extent": value.get("extent"),
-              "resolution_m": value.get("resolution_m"), "ops": ops}
+              "resolution_m": value.get("resolution_m"),
+              "build": value.get("build") or None, "ops": ops}
     fields.update(overrides)
     return build_recipe(**fields)

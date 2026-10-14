@@ -3,16 +3,22 @@
 MDAL reads a ``.2dm`` directly and turns the node z column into its "Bed Elevation" dataset. The format carries no CRS,
 so the layer row's ``crs_authid`` names the node coordinates. A per-node value no mesh file carries is written as an
 SMS ASCII dataset and loaded onto the mesh it was measured over.
+
+A mesh of polygon cells - Voronoi, quadtree, any vertex count a triangle or
+quad tag cannot state - has no ``.2dm`` face: it is written as a CF-UGRID
+netCDF file, carrying cell-valued dataset groups over time in the same file.
 """
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from pathlib import Path
+from typing import Any, Mapping, Sequence
 
 import numpy as np
 
 __all__ = ["MESH_ELEMENT_TAG", "MeshDisplayError", "mesh_display_path",
-           "write_ascii_dataset", "write_2dm", "write_2dm_arrays"]
+           "write_ascii_dataset", "write_2dm", "write_2dm_arrays",
+           "write_ugrid"]
 
 #: The SMS element tag for a cell of N nodes; any other arity has no display face and says so.
 MESH_ELEMENT_TAG: Mapping[int, str] = {3: "E3T", 4: "E4Q"}
@@ -90,3 +96,104 @@ def write_ascii_dataset(values: Any, *, name: str, nodes: int, cells: int,
     return (f'DATASET\nOBJTYPE "mesh2d"\nBEGSCL\nND {int(nodes)}\n'
             f'NC {int(cells)}\nNAME "{name}"\nTS 0 {float(t):.6f}\n'
             f"{rows}\nENDDS\n")
+
+
+def write_ugrid(mesh: Any, path: str | Path, *,
+                datasets: Mapping[str, Sequence[tuple[float, Sequence[float]]]
+                                  ] | None = None) -> str:
+    """Write a polygon-cell mesh as a CF-UGRID netCDF file MDAL opens.
+
+    Cells may have any vertex count: the connectivity pads shorter rows with
+    the fill value. ``datasets`` are cell-valued groups over time - a name to a
+    sequence of ``(t, values)`` pairs, one value per cell - written into the
+    same file as face-centered variables. A painted bed becomes a node-centered
+    ``bed_elevation`` variable, which MDAL surfaces as its Bed Elevation
+    dataset. Returns the path written.
+    """
+    import netCDF4
+
+    pts = np.asarray(mesh.points, dtype=float)
+    rows = [np.asarray(row, dtype=np.int64) for row in mesh.cells]
+    n_nodes, n_faces = int(pts.shape[0]), len(rows)
+    max_n = max((int(r.size) for r in rows), default=0)
+    if not rows or any(int(r.size) < 3 for r in rows):
+        raise MeshDisplayError(
+            "MESH_UGRID_EMPTY_CELL",
+            "a UGRID face needs cells of at least three vertices; got "
+            f"{[int(r.size) for r in rows[:5]]}.")
+    geographic = str(mesh.crs_authid).upper() == "EPSG:4326"
+    conn = np.full((max_n, n_faces), -1, dtype=np.int64)
+    for column, row in enumerate(rows):
+        conn[: int(row.size), column] = row
+
+    dest = netCDF4.Dataset(str(path), "w", format="NETCDF3_CLASSIC")
+    try:
+        dest.createDimension("nMesh2D_nodes", n_nodes)
+        dest.createDimension("nMesh2D_faces", n_faces)
+        dest.createDimension("max_nfaces", max_n)
+        topo = dest.createVariable("Mesh2D", "i4")
+        topo.setncattr("topology_dimension", 2)
+        topo.setncattr("cf_role", "topology_data")
+        topo.setncattr("node_dimension", "nMesh2D_nodes")
+        topo.setncattr("face_dimension", "nMesh2D_faces")
+        topo.setncattr("node_x", "Mesh2D_node_x")
+        topo.setncattr("node_y", "Mesh2D_node_y")
+        topo.setncattr("face_node_connectivity", "Mesh2D_face_nodes")
+        nx = dest.createVariable("Mesh2D_node_x", "f8", ("nMesh2D_nodes",))
+        nx.setncattr("units", "degrees_east" if geographic else "m")
+        if geographic:
+            nx.setncattr("standard_name", "projection_x_coordinate")
+        nx[:] = pts[:, 0]
+        ny = dest.createVariable("Mesh2D_node_y", "f8", ("nMesh2D_nodes",))
+        ny.setncattr("units", "degrees_north" if geographic else "m")
+        if geographic:
+            ny.setncattr("standard_name", "projection_y_coordinate")
+        ny[:] = pts[:, 1]
+        fn = dest.createVariable("Mesh2D_face_nodes", "i4",
+                                 ("max_nfaces", "nMesh2D_faces"),
+                                 fill_value=-1)
+        fn.setncattr("start_index", 0)
+        fn.setncattr("long_name", "vertex node indices of each face")
+        fn[:] = conn
+        if getattr(mesh, "has_bed", False) and mesh.bed is not None:
+            bed = dest.createVariable("Mesh2D_bed", "f8", ("nMesh2D_nodes",))
+            bed.setncattr("standard_name", "bed_elevation")
+            bed.setncattr("long_name", "Bed Elevation")
+            bed[:] = np.asarray(mesh.bed, dtype=float)
+        if datasets:
+            dest.createDimension("time", None)
+            for name, series in datasets.items():
+                variable = dest.createVariable(
+                    _identifier(name), "f8", ("time", "nMesh2D_faces"),
+                    fill_value=np.float64("nan"))
+                variable.setncattr("units", "1")
+                variable.setncattr("location", "face")
+                for step, (t, values) in enumerate(series):
+                    column = np.asarray(values, dtype=float).ravel()
+                    if column.size != n_faces:
+                        raise MeshDisplayError(
+                            "MESH_DATASET_FACE_COUNT",
+                            f"{name!r} at t={float(t)} carries {column.size} "
+                            f"values over a mesh of {n_faces} faces; MDAL binds "
+                            "a dataset face for face.")
+                    variable[step, :] = column
+        dest.setncattr("Conventions", "CF-1.8, UGRID-1.0")
+    finally:
+        dest.close()
+    return str(path)
+
+
+def _identifier(name: str) -> str:
+    """``name`` as a netCDF-safe variable name, or a refusal naming it."""
+    text = str(name).strip().replace(" ", "_")
+    if not text or not (text[0].isalpha() or text[0] == "_"):
+        raise MeshDisplayError(
+            "MESH_UGRID_DATASET_NAME",
+            f"a dataset name must start with a letter or underscore; got "
+            f"{name!r}.")
+    if not all(ch.isalnum() or ch == "_" for ch in text):
+        raise MeshDisplayError(
+            "MESH_UGRID_DATASET_NAME",
+            f"a dataset name may hold letters, digits and underscores only; "
+            f"got {name!r}.")
+    return text

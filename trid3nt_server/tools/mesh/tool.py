@@ -7,7 +7,7 @@ builds now, and both take the same validation: an unknown op refuses by name."""
 from __future__ import annotations
 
 import os
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Mapping
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
@@ -59,10 +59,11 @@ class MeshTool:
     @staticmethod
     def build_mesh(*, mesher: str, kind: Any = None, extent: Any = None,
                    resolution_m: Any = None,
+                   build: Mapping[str, Any] | None = None,
                    ops: Any = None) -> MeshRecipe:
         """Declare a mesh ask -> a frozen :class:`MeshRecipe`. Builds nothing."""
         return build_recipe(mesher=mesher, kind=kind, extent=extent,
-                            resolution_m=resolution_m, ops=ops)
+                            resolution_m=resolution_m, build=build, ops=ops)
 
 
 _METADATA = AtomicToolMetadata(
@@ -86,6 +87,7 @@ async def build_mesh(
     bbox: tuple[float, float, float, float] | list[float] | str | None = None,
     extent: Annotated[Any, EXTENT] = None,
     resolution_m: float | None = None,
+    build: dict | None = None,
     ops: list[dict] | None = None,
     input_mode: str | None = None,
 ) -> Any:
@@ -105,6 +107,8 @@ async def build_mesh(
             the coastline over it and the water it leaves is what is meshed.
         resolution_m: the finest cell or triangle edge, in metres. Omit for
             the finest cell of the input rasters the recipe names (the bed's).
+        build: the mesher backend's own constructor kwargs, stated verbatim
+            under its parameter names (om2d and reg_grid take none).
         ops: the ordered program, [{"fn": name, ...kwargs}], calling the mesh
             library's own functions plus set_bed and set_boundary_roles. Omit for
             the mesher's defaults; refine a built one with mesh_op.
@@ -134,6 +138,7 @@ async def build_mesh(
 
     recipe = MeshTool.build_mesh(
         mesher=mesher, kind=kind, extent=extent, resolution_m=resolution_m,
+        build=build,
         ops=None if ops is None else [_wire_op(entry) for entry in ops])
     name = location or f"{mesher} mesh"
     session = MeshSession(recipe, case_id=current_turn_case(), name=name)

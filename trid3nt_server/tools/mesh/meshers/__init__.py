@@ -23,6 +23,7 @@ __all__ = [
     "MeshToolError",
     "Mesher",
     "OpNamespace",
+    "bind_build",
     "bind_ops",
     "fetch_notes",
     "get_mesher",
@@ -257,6 +258,21 @@ def _bind_signature(mesher: "Mesher", op: MeshOp,
             f"function's own parameters are {declared}.") from None
 
 
+def bind_build(mesher: "Mesher", build: Mapping[str, Any]) -> None:
+    """Check a recipe's ``build`` keys against the backend's constructor roster.
+
+    The roster is the mesher's own declaration, exactly like an op namespace:
+    the library lives only in the container, so its kwargs bind there against
+    the real signature. An empty roster is a constructor that takes none."""
+    unknown = [key for key in build if key not in mesher.build_params]
+    if unknown:
+        raise MeshToolError(
+            "MESH_BUILD_UNKNOWN_PARAM",
+            f"mesher {mesher.name!r} takes build parameter(s) "
+            f"{list(mesher.build_params) or 'none'}; {unknown} is not among "
+            f"them ({nearest_names(unknown[0], mesher.build_params)}).")
+
+
 @dataclass(frozen=True)
 class Mesh:
     """A built mesh in the ONE shape every mesher returns and every writer reads."""
@@ -265,9 +281,11 @@ class Mesh:
     #: whose realized topology lives in an ENGINE BUNDLE, which the engine
     #: re-realizes from the authoring inputs the mesher staged.
     points: Any
-    #: ``(M, 3)`` triangles or ``(M, 4)`` quads, 0-based; ``None`` carries the
-    #: same meaning as a ``None`` ``points``, and such a mesh states its counts
-    #: in ``meta["artifact"]`` and carries its own display face.
+    #: ``(M, 3)`` triangles, ``(M, 4)`` quads, or a RAGGED sequence of index
+    #: rows of any vertex count (Voronoi polygons, quadtree hanging nodes);
+    #: ``None`` carries the same meaning as a ``None`` ``points``, and such a
+    #: mesh states its counts in ``meta["artifact"]`` and carries its own
+    #: display face.
     cells: Any
     crs_authid: str
     #: Node elevation, positive up; ``None`` when no bed was painted - a solver
@@ -291,11 +309,23 @@ class Mesh:
     def element_count(self) -> int:
         if self.cells is None:
             return self._declared_count("element_count")
-        return int(self.cells.shape[0])
+        return int(len(self.cells))
 
     @property
     def nodes_per_cell(self) -> int:
-        return 0 if self.cells is None else int(self.cells.shape[1])
+        """The one vertex count every cell shares, or 0 for a ragged mesh."""
+        if self.cells is None:
+            return 0
+        shape = getattr(self.cells, "shape", None)
+        return int(shape[1]) if shape is not None and len(shape) == 2 else 0
+
+    @property
+    def ragged(self) -> bool:
+        """Do the cells vary in vertex count? A 2-D array never does."""
+        if self.cells is None:
+            return False
+        shape = getattr(self.cells, "shape", None)
+        return shape is None or len(shape) != 2
 
     @property
     def has_cells(self) -> bool:
@@ -310,13 +340,18 @@ class Mesh:
 class Mesher:
     """A registered mesh library: namespaces, a role adapter, a default recipe.
 
-    ``build`` IS the role adapter; ``kinds[0]`` is what an undeclared ask gets."""
+    ``build`` IS the role adapter; ``kinds[0]`` is what an undeclared ask gets.
+    ``build_params`` is the backend CONSTRUCTOR's own parameter roster, declared
+    like an op namespace - the library lives only in the container, so a
+    recipe's ``build`` kwargs bind there against the real signature. An empty
+    roster is a constructor that takes none (om2d, reg_grid)."""
 
     name: str
     build: Callable[[Any], Mesh]
     kinds: tuple[str, ...]
     namespaces: tuple[OpNamespace, ...] = ()
     default_ops: tuple[MeshOp, ...] = ()
+    build_params: tuple[str, ...] = ()
     #: A MEASURED claim about the library: False where identical inputs have been
     #: observed to produce different meshes, so a replay is read as an equivalent
     #: rebuild rather than as the same mesh.
@@ -344,6 +379,7 @@ def register_mesher(
     kinds: Iterable[str],
     namespaces: Iterable[OpNamespace] = (),
     default_ops: Iterable[MeshOp] = (),
+    build_params: Iterable[str] = (),
     deterministic: bool = True,
 ) -> Mesher:
     """Record a mesher under ``name`` -> the registered :class:`Mesher`.
@@ -357,6 +393,7 @@ def register_mesher(
     mesher = Mesher(
         name=key, build=build, kinds=tuple(str(k) for k in kinds),
         namespaces=tuple(namespaces), default_ops=tuple(default_ops),
+        build_params=tuple(str(p) for p in build_params),
         deterministic=bool(deterministic))
     if not mesher.kinds:
         raise MeshToolError(
