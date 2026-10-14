@@ -218,7 +218,6 @@ def _seed_manifest(
         inputs.append({"gs_uri": f"{scheme}://{bucket}/{key}", "dest": rel})
     manifest = {
         "inputs": inputs,
-        "telemac_args": [],
         "outputs": outputs if outputs is not None else ["r2d_river.slf", "*.slf"],
     }
     manifest_key = f"{base_key}manifest.json"
@@ -316,7 +315,6 @@ def test_local_manifest_gs_uri_field_with_gs_scheme_rejected(
         "inputs": [
             {"gs_uri": "gs://legacy-gcs-bucket/staged/t2d.cas", "dest": "t2d.cas"}
         ],
-        "telemac_args": [],
         "outputs": ["*.slf"],
     }
     s3.objects[("setup-bucket", "mixed/manifest.json")] = json.dumps(manifest).encode()
@@ -335,7 +333,6 @@ def test_local_manifest_dest_traversal_rejected(
     s3.objects[("setup-bucket", "evil/x")] = b"x"
     manifest = {
         "inputs": [{"gs_uri": "s3://setup-bucket/evil/x", "dest": "../../escape.txt"}],
-        "telemac_args": [],
         "outputs": [],
     }
     s3.objects[("setup-bucket", "evil/manifest.json")] = json.dumps(manifest).encode()

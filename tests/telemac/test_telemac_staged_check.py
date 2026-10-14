@@ -234,7 +234,10 @@ def test_a_mesh_still_in_the_store_is_read_through_its_staged_name(tmp_path, mon
 async def test_a_run_staged_against_a_clause_refuses_before_the_manifest(
         tmp_path, monkeypatch):
     """The clauses read on the real path: the staging seam calls them itself."""
-    from trid3nt_server.workflows.telemac.authoring import staging
+    from trid3nt_server.workflows.solver import staging
+    from trid3nt_server.workflows.telemac.authoring.staged_check import (
+        check_staged_run,
+    )
 
     rundir = _staged(tmp_path, **{"SOURCES FILE": "'square_sources.txt'"})
     written: list[str] = []
@@ -248,7 +251,7 @@ async def test_a_run_staged_against_a_clause_refuses_before_the_manifest(
             rundir, "run-tag", module="telemac2d", steering=_DECK,
             results=["r2d_square.slf"], outputs=[], mesh_inputs=[], prefix="p",
             sheet={}, server_facts={"duration_s": 600.0},
-            result_basename="r2d_square")
+            result_basename="r2d_square", check=check_staged_run)
 
     assert caught.value.error_code == "TELEMAC_STAGED_FILE_MISSING"
     assert written == []

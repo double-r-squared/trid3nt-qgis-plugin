@@ -1,7 +1,8 @@
 """One wrapper per TELEMAC module: the dictionary, the composites, the outputs.
 
-``module.py`` holds what a slot and a wrapper are, ``sheet.py`` fill then run, ``outputs.py`` the
-primitive set; every other file is one module's wrapper.
+``module.py`` holds what a wrapper is, ``sheet.py`` the filled deck's engine side and the
+stage, ``outputs.py`` the primitives over a result file; the slot, fill and sheet surface
+they share lives in ``workflows/runtime``. Every other file is one module's wrapper.
 """
 
 from __future__ import annotations
@@ -9,19 +10,18 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Mapping
 
-from .module import Composite, Module, Output, Slot, SlotRefused, load_module_input
-from .outputs import (
+from .outputs import column, spectrum
+from ...runtime.module import Composite, Module, Output, Slot, SlotRefused, load_module_input
+from ...runtime.primitives import (
     Primitive,
-    column,
     extent,
     field,
     mass_balance,
     max_over_time,
     mesh,
     series,
-    spectrum,
 )
-from .sheet import Filled, Sheet, SheetIncomplete, fill, run
+from ...runtime.sheet import Filled, Sheet, SheetIncomplete, fill, run
 from .artemis import ART
 from .gaia import GAIA
 from .khione import KHIONE

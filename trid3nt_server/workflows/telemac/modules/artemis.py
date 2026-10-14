@@ -11,7 +11,8 @@ from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
 
-from .module import MOMENT, ORIGIN_OF_TIME, Module, Output
+from ...runtime.module import Output
+from .module import MOMENT, ORIGIN_OF_TIME, TelemacModule
 from .outputs import PRIMITIVES
 
 __all__ = ["ART", "BOUNDARY_FILENAME", "IncidentWave", "MODULE_OUTPUT",
@@ -140,7 +141,7 @@ def _kd(solved: Any) -> tuple[str, str, Any]:
     return "KD", "Hs/H0", hs / h0
 
 
-ART = Module("artemis")
+ART = TelemacModule("artemis")
 ART.MODULE_OUTPUT = MODULE_OUTPUT
 ART.DERIVED = MappingProxyType({"KD": _kd})
 ART.PRINTOUTS = "VARIABLES_FOR_GRAPHIC_PRINTOUTS"

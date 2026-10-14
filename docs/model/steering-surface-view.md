@@ -20,18 +20,19 @@ flowchart LR
     point["TypedInput<br/>trid3nt_server/inputs/point.py"]
     runRecord["RunRecord<br/>trid3nt_server/workflows/runtime/journal.py"]
     serializer["Serializer<br/>trid3nt_server/workflows/telemac/authoring/serializer.py"]
-    sheet["Sheet<br/>trid3nt_server/workflows/telemac/modules/sheet.py"]
-    slot["Slot<br/>trid3nt_server/workflows/telemac/modules/module.py"]
-    stager["Stager<br/>trid3nt_server/workflows/telemac/authoring/staging.py"]
+    sheet["Sheet<br/>trid3nt_server/workflows/runtime/sheet.py"]
+    slot["Slot<br/>trid3nt_server/workflows/runtime/module.py"]
+    stager["Stager<br/>trid3nt_server/workflows/solver/staging.py"]
     steeringDriver["SteeringDriver<br/>workers/telemac/scripts/cas.py"]
     steeringGate["SteeringGate<br/>trid3nt_server/workflows/telemac/authoring/cas_validate.py"]
+    telemacSheet["Sheet<br/>trid3nt_server/workflows/telemac/modules/sheet.py"]
     temporalValue["TemporalValue<br/>trid3nt_server/inputs/temporal.py"]
-    wrapper["Module<br/>trid3nt_server/workflows/telemac/modules/module.py"]
+    wrapper["Module<br/>trid3nt_server/workflows/runtime/module.py"]
     canvasGate -- "DrawnValue" --> fill
     dictionaryExtractor -- "KeywordDictionary" --> slot
     dictionaryExtractor -- "KeywordDictionary" --> wrapper
     steeringDriver -- "SteeringParse" --> steeringGate
-    sheet -- "StageRequest" --> stager
+    telemacSheet -- "StageRequest" --> stager
     sheet -- "ResolvedSheet" --> serializer
     wrapper -- "WrapperSurface" --> sheet
     steeringGate -- "SteeringWrite (steeringGate pass through)" --> steeringDriver

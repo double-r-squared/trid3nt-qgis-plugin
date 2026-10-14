@@ -257,24 +257,24 @@ class _Store:
 def _card_edited(monkeypatch, tmp_path, *, cancel):
     """Launch a run whose card is edited once, then cancelled or proceeded on -> the store, the solve's staged run."""
     from trid3nt_server.store import objects
-    from trid3nt_server.workflows.telemac.authoring import staging
+    from trid3nt_server.workflows.solver import staging
     from trid3nt_server.workflows.telemac.errors import TelemacError
 
     store, solved = _Store(), []
     monkeypatch.setattr(objects, "_CLIENT", store)
     monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "cache")
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
-    monkeypatch.setattr(staging, "check_staged_run", lambda *_a, **_k: None)
     calls: list = []
     _faked(monkeypatch, calls)
 
     async def staged(*, sheet, run_tag, prefix, **_kwargs):
-        rundir = staging.new_rundir(run_tag)
+        rundir = staging.new_rundir(run_tag, stem="telemac")
         (rundir / f"deck-{sheet}.cas").write_text(sheet)
         return await staging.stage_run(
             rundir, run_tag, module="telemac2d", steering=f"deck-{sheet}.cas",
             results=["r.slf"], outputs=[], mesh_inputs=[], prefix=prefix,
-            sheet={}, server_facts={}, result_basename="r.slf")
+            sheet={}, server_facts={}, result_basename="r.slf",
+            check=lambda *_a, **_k: None)
 
     async def sheet(*, write, **_kwargs):
         await write("first")

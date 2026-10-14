@@ -14,8 +14,9 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.inputs.user_input import nearest
 from trid3nt_server.tools import register_tool
+from trid3nt_server.workflows.runtime.module import load_module_input
 from trid3nt_server.workflows.telemac.modules.module import (
-    load_module_input, module_input_dir)
+    module_input_dir)
 
 __all__ = ["DescribeKeywordsError", "describe_keywords"]
 
@@ -124,14 +125,17 @@ def describe_keywords(module: str = "", keyword: str = "", query: str = "",
     carried = _exposed()
     name = str(module or "").strip().lower()
     if not name:
-        return {"modules": [{"module": m, "keyword_count": len(load_module_input(m))}
-                            for m in carried]}
+        return {"modules": [
+            {"module": m,
+             "keyword_count": len(load_module_input(
+                 m, directory=module_input_dir()))}
+            for m in carried]}
     if name not in carried:
         raise DescribeKeywordsError(
             "UNKNOWN_MODULE",
             f"there is no keyword dictionary for {module!r} ({nearest(name, carried)}); "
             f"the carried modules are {', '.join(carried)}.")
-    dictionary = load_module_input(name)
+    dictionary = load_module_input(name, directory=module_input_dir())
     asked = str(keyword or "").strip()
     if asked:
         by_spelling = {spelling.strip().upper(): slot for ident, slot in dictionary.items()

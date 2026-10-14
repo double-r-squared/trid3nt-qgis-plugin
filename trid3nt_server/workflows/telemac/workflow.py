@@ -15,9 +15,8 @@ from importlib import import_module
 from typing import TYPE_CHECKING, Any, Callable, Collection, Mapping, Sequence
 
 from trid3nt_contracts import new_ulid
-from trid3nt_contracts.common import Origin, SyntheticInput
+from trid3nt_contracts.common import Origin
 from trid3nt_contracts.execution import LayerURI
-from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
 
 from trid3nt_server.inputs.input import Input
 from trid3nt_server.inputs.instant import event_time
@@ -28,37 +27,41 @@ from trid3nt_server.workflows.runtime import (
     RunResult,
     Workflow,
 )
-from trid3nt_server.workflows.telemac.authoring.staging import discard_run
+from trid3nt_server.workflows.solver.staging import discard_run
 from trid3nt_server.workflows.telemac.errors import TelemacError
 from trid3nt_server.workflows.telemac.modules import wrapper_for
-from trid3nt_server.workflows.telemac.modules.module import (MOMENT, SlotRefused,
-                                                              accept, identify_on)
-from trid3nt_server.workflows.telemac.modules.outputs import (
+from trid3nt_server.workflows.runtime.module import (SlotRefused,
+                                                     identify_on)
+from trid3nt_server.workflows.telemac.modules.module import MOMENT
+from trid3nt_server.workflows.runtime.primitives import (
     Line,
     OutputEmpty,
     Primitive,
     Profile,
-    Solved,
     deliver,
 )
-from trid3nt_server.workflows.telemac.modules.sheet import (
-    Sheet,
-    CONTINUATION,
+from trid3nt_server.workflows.telemac.modules.outputs import Solved
+from trid3nt_server.workflows.runtime.review import _review, _seat_on
+from trid3nt_server.workflows.runtime.sheet import (
     Keyword,
     SheetIncomplete,
     complete,
 )
-from trid3nt_server.workflows.telemac.modules.sheet import fill as fill_slots
-from trid3nt_server.workflows.telemac.modules.sheet import fill_coupled
-from trid3nt_server.workflows.telemac.modules.sheet import run as run_sheet_
-from trid3nt_server.workflows.telemac.modules.sheet import stage as stage_sheet_
+from trid3nt_server.workflows.runtime.sheet import fill as fill_slots
+from trid3nt_server.workflows.runtime.sheet import fill_coupled
+from trid3nt_server.workflows.runtime.sheet import run as run_sheet_
+from trid3nt_server.workflows.telemac.modules.sheet import (
+    CONTINUATION,
+    TelemacSheet,
+    stage as stage_sheet_,
+)
 
 if TYPE_CHECKING:
     from trid3nt_server.workflows.runtime.fill import Fill
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.workflow")
 
-__all__ = ["Measured", "Placed", "TelemacWorkflow", "card_rows",
+__all__ = ["Measured", "Placed", "TelemacWorkflow",
            "fill_sheet", "publish_outputs", "run_bodies", "run_sheet", "stage_sheet", "stated"]
 
 _TELEMAC = "trid3nt_server.workflows.telemac"
@@ -175,7 +178,7 @@ async def _read_named(env: Any, value: Any) -> Any:
 def _painted(row: Mapping[str, Any]) -> list[Primitive]:
     """One table row -> the ONE layer the run publishes of it: the temporal layer where the row varies in time, the final frame where it does not.
     A still beside a time series would copy a frame the temporal layer already carries."""
-    from trid3nt_server.workflows.telemac.modules.outputs import field
+    from trid3nt_server.workflows.runtime.primitives import field
 
     token, module, style = row["token"], row["module"], row.get("style")
     if row.get("varies"):
@@ -202,7 +205,7 @@ def _written(run: Mapping[str, Any],
     """EVERY variable this run wrote -> the one layer each is published under.
     Module rows come first in table order, then every variable a result file carries that no row resolved; a spelling two files carry is ONE layer.
     A table decides how a variable is drawn, never whether; a slot marked never-written is carried with that mark and published by no layer."""
-    from trid3nt_server.workflows.telemac.modules.outputs import field
+    from trid3nt_server.workflows.runtime.primitives import field
 
     written: list[_Written] = []
     claimed: dict[str, str] = {}
@@ -457,8 +460,8 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
                      workflow: str, title: str, keywords: Mapping[str, Any],
                      input_mode: str | None, spent: Sequence[str] = (),
                      seat: Callable[[Mapping[str, Any]], None] | None = None,
-                     write: Callable[[Sheet], Any] | None = None,
-                     user: Sequence[str] = ()) -> Sheet:
+                     write: Callable[[TelemacSheet], Any] | None = None,
+                     user: Sequence[str] = ()) -> TelemacSheet:
     """Set the body's slots against what the run measured -> the sheet, HELD.
 
     The raw ``keywords`` floor is filled last and therefore beats a template
@@ -467,7 +470,7 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
     names the params the call stated."""
     stated, coupled = _floor(steering, keywords)
 
-    async def fill(values: Mapping[str, Any], edits: Mapping[str, Any]) -> Sheet:
+    async def fill(values: Mapping[str, Any], edits: Mapping[str, Any]) -> TelemacSheet:
         # A composite may read fetched data at the fill, so the fill runs off the loop.
         sheet = await asyncio.to_thread(
             fill_slots, steering, template=workflow, produced=dict(produced),
@@ -488,7 +491,7 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
     return sheet
 
 
-async def stage_sheet(*, sheet: Sheet, run_tag: str, settled: Mapping[str, Any],
+async def stage_sheet(*, sheet: TelemacSheet, run_tag: str, settled: Mapping[str, Any],
                       results: Sequence[str], steering: str,
                       prefix: str) -> dict[str, Any]:
     """A complete sheet, serialized and staged with the directory checked -> the staged run.
@@ -504,7 +507,7 @@ async def stage_sheet(*, sheet: Sheet, run_tag: str, settled: Mapping[str, Any],
         continue_from=settled.get("continue_from"))
 
 
-async def run_sheet(*, sheet: Sheet, staged: Mapping[str, Any],
+async def run_sheet(*, sheet: TelemacSheet, staged: Mapping[str, Any],
                     settled: Mapping[str, Any], dispatch: str,
                     display: str = "",
                     moment: str | None = None) -> dict[str, Any]:
@@ -523,268 +526,6 @@ async def run_sheet(*, sheet: Sheet, staged: Mapping[str, Any],
                                "injected": bool(row.injected)}
                               for token, module, row in sheet.published()],
             "tracer_names": dict(sheet.resolved()).get("NAMES OF TRACERS")}
-
-
-def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
-    """The sheet as the card renders it: what is SET, what the run WRITES, what
-    is OPEN, then the rest.
-
-    The rest is the whole module, folded under advanced with its engine default."""
-    rows = _source_rows() + _coverage_rows() + [_slot_row(name, row)
-                                               for name, row
-                                               in sheet.filled.items()]
-    rows += _coupled_rows(sheet)
-    rows += _written_rows(sheet)
-    rows += [_open_row(slot) for slot in sheet.required()]
-    # The advanced fold reads down the dictionary's RUBRIQUES and, inside one, its own order. A keyword the sheet GENERATES
-    # is already a written row above; the fold is engine DEFAULTS only.
-    generated = {body.PRINTOUTS for body, _, _ in _decks(sheet)}
-    rest = [slot for name, slot in sheet.body.MODULE_INPUT.items()
-            if name not in sheet.filled and name not in generated
-            and not slot.is_required]
-    return rows + [_default_row(slot) for slot in
-                   sorted(rest, key=lambda slot: _group(slot))]
-
-
-def _source_rows() -> list[ParamSheetRow]:
-    """One row per input the match filled: the ranked list, pick highlighted.
-    The card renders the list the model was given. Not editable: a source is superseded by supplying the slot."""
-    from trid3nt_server.workflows.runtime.journal import run_choices
-
-    return [ParamSheetRow(
-        name=f"{choice.slot} source", value=choice.picked or "nothing matched",
-        desc=f"Which source filled the {choice.slot} slot, matched on "
-             f"{choice.need}.",
-        origin=Origin.PRODUCER, editable=False,
-        source_badge=(f"{len(choice.rows)} sources weighed"
-                      if choice.tie else "matched on the rows"),
-        note=choice.sentence, choices=choice, group="Sources")
-        for choice in run_choices()]
-
-
-def _coverage_rows() -> list[ParamSheetRow]:
-    """WHAT THE CUT COVERS, over the water and over the land, one row each.
-    On the card so the unmeasured share is weighed BEFORE the solve. Not editable: an op or supplying the slot changes it."""
-    from trid3nt_server.inputs.run_notes import run_coverage
-
-    return [ParamSheetRow(
-        name=f"coverage {index}", value=line[:200], desc=line[:512],
-        origin=Origin.DERIVED, editable=False,
-        source_badge="measured on the grid the rows were merged at",
-        group="Sources")
-        for index, line in enumerate(run_coverage(), start=1)]
-
-
-def _decks(sheet: Sheet) -> list[tuple[Any, list[str], Mapping[str, Any]]]:
-    """Every body this run writes a deck for, its tracers, and what that deck states - the row a variable's condition is read against."""
-    from trid3nt_server.workflows.telemac.modules import wrapper_for
-
-    return ([(sheet.body, [row.name for row in sheet.tracers], sheet.stated())]
-            + [(wrapper_for(body["module"]), [], dict(body.get("slots") or {}))
-               for body in sheet.coupled])
-
-
-def _coupled_rows(sheet: Sheet) -> list[ParamSheetRow]:
-    """What each COUPLED deck of this run states, one group per deck in deck order.
-    Read against that module's own dictionary, so the row carries its unit and bounds and the group names the body (two modules may spell one keyword).
-    Not editable: the review's own filter answers for the carrier's sheet."""
-    from trid3nt_server.workflows.telemac.modules import wrapper_for
-
-    rows = []
-    for body in sheet.coupled:
-        module = body["module"]
-        wrapper = wrapper_for(module)
-        user = set(body.get("stated", ()))
-        for identifier, value in body["slots"].items():
-            # KEYWORDS ONLY: a coupled body holds composites unexpanded until the serializer fills it, and a composite has no unit or range.
-            slot = wrapper.MODULE_INPUT.get(identifier)
-            if slot is None or value is None:
-                continue
-            rows.append(ParamSheetRow(
-                name=f"{module}.{identifier}",
-                value=value if isinstance(value, (int, float, str, bool, list))
-                else str(value),
-                desc=slot.desc[:512],
-                origin=(Origin.USER if identifier in user
-                        else Origin.DERIVED if identifier in body.get("derived", ())
-                        else Origin.TEMPLATE),
-                units=slot.unit or None, bounds=slot.whole_bounds,
-                editable=False, group=f"{module}: {_group(slot)}",
-                source_badge=(f"stated on this run as {module}: {slot.keyword}"
-                              if identifier in user
-                              else "read off this run's inputs"
-                              if identifier in body.get("derived", ())
-                              else f"the {module} deck this run couples")))
-    return rows
-
-
-def _written_rows(sheet: Sheet) -> list[ParamSheetRow]:
-    """What each deck of this run WRITES, expanded, in the module's own order.
-    Generated from the module's table, so the card states it rather than reading a slot nobody filled."""
-    rows = []
-    for body, tracers, stated in _decks(sheet):
-        if not body.PRINTOUTS:
-            continue
-        slot = body.slot(body.PRINTOUTS)
-        table = body.table(stated)
-        rows.append(ParamSheetRow(
-            name=f"{body.MODULE}.{slot.identifier}",
-            value=[table[token].name for token in body.written(stated)] + tracers,
-            desc=slot.desc[:512], editable=False, group=_group(slot),
-            source_badge=f"the {body.MODULE} module's own variable table"))
-    return rows
-
-
-async def _review(fill: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
-                  params: Mapping[str, Any], *, steering: type, workflow: str,
-                  title: str, input_mode: str | None,
-                  spent: Sequence[str],
-                  seat: Callable[[Mapping[str, Any]], None] | None = None,
-                  user: Sequence[str] = ()) -> Sheet:
-    """Show the filled sheet and HOLD -> the sheet the person proceeded on.
-
-    An edit re-fills its input and redraws the card, or refuses by name."""
-    from trid3nt_server.inputs.gate.input_review import (
-        GateCard,
-        gate_input_review,
-        render_input_review_lines,
-    )
-
-    values, edits, user = dict(params), {}, set(user)
-    own = {name for name in _strings(steering.ASSERTED)
-           if name in values} - set(spent)
-    sheet = await fill(values, edits)
-
-    def rows() -> list[ParamSheetRow]:
-        return [_param_row(name, values[name], name in user)
-                for name in sorted(own)] \
-            + card_rows(sheet)
-
-    async def card() -> GateCard:
-        drawn = rows()
-        return GateCard(lines=render_input_review_lines(_entries(drawn)),
-                        param_sheet=ParamSheet(
-                            workflow=workflow, rows=drawn,
-                            title=title or f"Review the {workflow} sheet"))
-
-    async def revise(revised: Mapping[str, Any]) -> None:
-        nonlocal sheet
-        for name in revised:
-            if name in params and name not in own:
-                raise SlotRefused(
-                    f"{name} is a param of {workflow} the card cannot re-fill: "
-                    + ("another stage of this run reads it off the run itself"
-                       if name in spent else "no keyword of this sheet reads it")
-                    + f". State {name} on the run instead.")
-            if name not in params:
-                try:
-                    accept(steering, name, revised[name])
-                except SlotRefused as exc:
-                    raise SlotRefused(
-                        f"{name} is not an input of {workflow}: no param of it "
-                        f"is named so, and {exc}") from exc
-        for name, value in revised.items():
-            (values if name in own else edits)[name] = value
-        user.update(own & set(revised))
-        sheet = await fill(values, edits)
-
-    outcome = await gate_input_review(
-        tool_name=workflow, mode=input_mode, entries=_entries(rows()),
-        params={}, present=card, apply_revision=revise)
-    if not outcome.proceed:
-        # A refusal keeps its reason's code; only a person's own cancel is the decline code every gate cancels under.
-        raise TelemacError(
-            outcome.cancel_reason or f"{workflow} was cancelled at the review.",
-            error_code="NO_SESSION" if outcome.cancel_code == "no_session"
-            else "USER_INPUT_CANCELLED")
-    if seat is not None:
-        seat(values)
-    return sheet
-
-
-def _strings(value: Any) -> set[str]:
-    """Every plain string a template's assertions carry, the params a keyword reads by name among them."""
-    if isinstance(value, str):
-        return {value}
-    if isinstance(value, Mapping):
-        return {s for item in value.values() for s in _strings(item)}
-    if isinstance(value, (list, tuple)):
-        return {s for item in value for s in _strings(item)}
-    return set()
-
-
-def _entries(rows: Sequence[ParamSheetRow]) -> list[SyntheticInput]:
-    """The card's rows as provenance lines; a list value is narrated whole.
-    A row stating what the deck writes holds no filled value and reads as derived."""
-    return [SyntheticInput(
-                param=row.name, basis=row.origin or Origin.DERIVED,
-                note=row.source_badge,
-                value=(row.value if isinstance(row.value, (int, float, str, bool))
-                       else "; ".join(str(v) for v in row.value)))
-            for row in rows if row.value is not None and not row.advanced]
-
-
-def _seat_on(env: Any) -> Callable[[Mapping[str, Any]], None]:
-    """Seat the values a person proceeded on in the run's mapping, so every read
-    of a param after the sheet - a chart's reference among them - reads the edit."""
-    from trid3nt_server.workflows.runtime.fill import ACCEPTED, Verdict
-
-    def seat(values: Mapping[str, Any]) -> None:
-        edited = {name: value for name, value in values.items()
-                  if value != env.run.get(name)}
-        env.inputs.update({name: Verdict(ACCEPTED, value, origin=Origin.USER)
-                           for name, value in edited.items()})
-        env.run.update(edited)
-    return seat
-
-
-def _param_row(name: str, value: Any, user: bool) -> ParamSheetRow:
-    """One template param a keyword of this sheet reads, editable by its name."""
-    return ParamSheetRow(
-        name=name, value=(value if isinstance(value, (int, float, str, bool, list))
-                          or value is None else str(value)),
-        desc=f"The template param {name}; an edit re-fills every keyword that "
-             "reads it.",
-        origin=(Origin.USER if user else
-                None if value is None else Origin.TEMPLATE),
-        source_badge="this run's template param", group="Template")
-
-
-def _slot_row(name: str, row: Any) -> ParamSheetRow:
-    """One SET slot, as the card renders it: the value, the unit it is read in,
-    the range it is taken inside, and where it came from."""
-    value = row.value if isinstance(row.value, (int, float, str, bool, list)) \
-        else str(row.value)
-    return ParamSheetRow(
-        name=name, value=value, desc=row.slot.desc[:512],
-        units=row.slot.unit or None, bounds=row.slot.whole_bounds,
-        origin=row.provenance.origin, source_badge=str(row.provenance),
-        group=_group(row.slot))
-
-
-def _open_row(slot: Any) -> ParamSheetRow:
-    """One OPEN MANDATORY slot: an empty the run cannot begin without."""
-    return ParamSheetRow(
-        name=slot.identifier, value=None, desc=slot.desc[:512],
-        editable=True, group=_group(slot),
-        source_badge="required: the dictionary marks this file OBLIG")
-
-
-def _default_row(slot: Any) -> ParamSheetRow:
-    """One slot this run leaves to the engine, under the advanced fold.
-
-    Carries the value the engine will use rather than an empty."""
-    return ParamSheetRow(
-        name=slot.identifier,
-        value=None if slot.is_open else slot.engine_default,
-        desc=slot.desc[:512], editable=True, advanced=True, group=_group(slot),
-        source_badge=("open: the dictionary gives it no default"
-                      if slot.is_open else "engine default"))
-
-
-def _group(slot: Any) -> str:
-    """The dictionary's own top-level rubrique - what the advanced fold sorts by."""
-    return slot.rubrique[0] if slot.rubrique else ""
 
 
 class TelemacWorkflow(Workflow):
@@ -1000,7 +741,7 @@ class TelemacWorkflow(Workflow):
         run_tag = new_ulid()
         prefix = self._states("PREFIX", "telemac")
 
-        async def write(sheet: Sheet) -> None:
+        async def write(sheet: TelemacSheet) -> None:
             # A card edit fills the sheet again, so the staged run is the one the last fill wrote.
             staged.clear()
             staged.update(await stage_sheet(
@@ -1025,7 +766,8 @@ class TelemacWorkflow(Workflow):
                               if verdict.origin is Origin.USER])
         except BaseException:
             # A run that does not reach the box leaves no staged copy behind.
-            await asyncio.to_thread(discard_run, run_tag, prefix)
+            await asyncio.to_thread(discard_run, run_tag, prefix,
+                                    stem=self.engine)
             raise
         solved = await stage(
             "solve", run_sheet, sheet=run["sheet"], staged=staged,
@@ -1074,7 +816,8 @@ class TelemacWorkflow(Workflow):
         try:
             complete(self.steering, stated(steering=self.steering, keywords=keywords))
         except SheetIncomplete as exc:
-            refused[self.steering.MODULE] = Verdict(MISSING, reason=str(exc), code=exc.error_code)
+            refused[self.steering.MODULE] = Verdict(
+                MISSING, reason=str(exc), code="TELEMAC_SHEET_INCOMPLETE")
         return refused
 
     def unnamed(self) -> tuple[str, ...]:

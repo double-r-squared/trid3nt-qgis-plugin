@@ -13,7 +13,7 @@ flowchart LR
     diagnosticsReader["DiagnosticsReader<br/>trid3nt_server/workflows/telemac/diagnostics.py"]
     initialState["Assembler<br/>trid3nt_server/workflows/telemac/authoring/initial_state.py"]
     launcherArm["LauncherArm<br/>trid3nt_server/workflows/telemac/engine.py"]
-    manifestStager["ManifestStager<br/>trid3nt_server/workflows/telemac/authoring/staging.py"]
+    manifestStager["ManifestStager<br/>trid3nt_server/workflows/solver/staging.py"]
     meshAcceptance["MeshAcceptance<br/>trid3nt_server/tools/mesh/step.py"]
     opening["Assembler<br/>trid3nt_server/workflows/telemac/authoring/opening.py"]
     ratingCurve["Assembler<br/>trid3nt_server/workflows/telemac/authoring/rating_curve.py"]

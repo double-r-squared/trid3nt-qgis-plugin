@@ -7,7 +7,7 @@ travels to the worker is the mesh, the authored steering files and the files the
 name; nothing the container receives is a knob it has to interpret.
 
 TWO ACTS. The run is SETTLED - everything the accepted mesh has to be measured
-for before a keyword can be set - and `staging.py` STAGES it:
+for before a keyword can be set - and STAGED (`workflows/solver/staging.py`):
 everything the fill wrote is uploaded beside the mesh the solve runs on, and the
 manifest that names the case is written last. `serializer.py` is what turns the filled sheet
 into the engine's own steering files, through telapy, and every authored file is
@@ -29,7 +29,6 @@ anything is staged.
 | `reference_surface.py` | THE REFERENCE SURFACE a dredger cuts to, as NESTOR reads levels: the design grade as cross-sections along the domain's own centerline, and the stock under it measured against the bed before the run dispatches. |
 | `walked_boundary.py` | THE WALKED BOUNDARY of a harbour: which stretch of the outline the sea reaches, the structure's own segments and the basin's deepest column, so the boundary file prescribes the incident wave there and a solid face nowhere else. |
 | `release_point.py` | THE SETTLED RELEASE POINT: where on the accepted mesh a source enters water - along the domain's centerline or held inside it, and onto a node the run's own initial state has water at, off the rim. |
-| `staging.py` | The run directory the box receives: the case section every run dispatches under, a fresh run tag and its directory, every authored file uploaded beside the mesh, and the manifest written LAST so one exists only for a fully staged run. No mesh, no geometry, no physical value is read here. |
 | `solar.py` | The ice module's solar clock as user Fortran: the engine's own thermal module with the solar hour folded onto one day, compiled over the library's on a run that carries a moment. |
 | `solar_routine/` | The engine's own `thermal_khione.f` (v9.0.0), shipped here because it tests the solar hour against sunrise and sunset unfolded, so a UTC clock loses daylight. |
 | `staged_check.py` | The staged run directory read clause by clause before it leaves the daemon: every file the steering names present under the name the box will find, the boundary file counted and numbered against the walk over the geometry's own connectivity, a value at every liquid face the boundary file opens, a series covering the run's window, a bed whole over the mesh, the deck's clock against the window the fill states, and a partition this box can seat. Each clause refuses by name rather than letting the solve stop inside Fortran. |

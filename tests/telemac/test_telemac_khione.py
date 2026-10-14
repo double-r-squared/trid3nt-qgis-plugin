@@ -23,7 +23,7 @@ from trid3nt_server.workflows.telemac.modules.khione import (
     RESULT_FILENAME,
     STEERING_FILENAME,
 )
-from trid3nt_server.workflows.telemac.modules.module import identify_on
+from trid3nt_server.workflows.runtime.module import identify_on
 from trid3nt_server.workflows.telemac.modules.telemac2d import Atmosphere
 from trid3nt_server.workflows.telemac.workflow import run_bodies
 
@@ -252,7 +252,7 @@ def test_an_ice_run_writes_no_solar_column_because_it_computes_its_own():
 
 
 def test_every_row_the_table_carries_is_a_mnemonic_the_dictionary_spells():
-    from trid3nt_server.workflows.telemac.modules.module import _spelled
+    from trid3nt_server.workflows.runtime.module import _spelled
 
     slot = KHIONE.slot(KHIONE.PRINTOUTS)
     assert len(KHIONE.MODULE_OUTPUT) == 20

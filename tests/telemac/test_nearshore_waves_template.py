@@ -211,7 +211,7 @@ def test_the_spectrum_is_recorded_where_the_station_settled():
     from trid3nt_server.workflows.telemac.templates.nearshore_waves import (
         nearshore_waves as template)
 
-    from trid3nt_server.workflows.telemac.modules.sheet import filled_by
+    from trid3nt_server.workflows.runtime.sheet import filled_by
 
     asserted = template.STEERING.ASSERTED
     assert "ABSCISSAE_OF_SPECTRUM_PRINTOUT_POINTS" not in asserted

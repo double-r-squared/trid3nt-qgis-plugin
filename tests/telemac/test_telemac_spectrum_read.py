@@ -16,11 +16,8 @@ import numpy as np
 import pytest
 
 from trid3nt_server.workflows.telemac.modules import WAC, spectrum
-from trid3nt_server.workflows.telemac.modules.outputs import (
-    OutputEmpty,
-    Solved,
-    Spectrum,
-)
+from trid3nt_server.workflows.runtime.primitives import OutputEmpty, Spectrum
+from trid3nt_server.workflows.telemac.modules.outputs import Solved
 
 #: The grid the deck below states: the engine lays NF frequencies from MINIMAL
 #: FREQUENCY at the FREQUENTIAL RATIO, and NDIRE equal sectors of the circle.

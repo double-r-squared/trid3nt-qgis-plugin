@@ -14,8 +14,8 @@ from trid3nt_server.workflows.runtime import DeclarativeError
 from ..authoring.atmosphere import (ATMOSPHERE_READS, Atmosphere,
                                      expand_atmosphere)
 from .coupling import couples
-from .module import (MOMENT, ORIGIN_OF_TIME, USER_FORTRAN_DIR, Module,
-                     Output)
+from ...runtime.module import Output
+from .module import MOMENT, ORIGIN_OF_TIME, USER_FORTRAN_DIR, TelemacModule
 from .outputs import PRIMITIVES, read_column
 
 __all__ = ["T3D", "Atmosphere", "Column", "MODULE_OUTPUT", "USER_FORTRAN_DIR",
@@ -261,7 +261,7 @@ def _wind(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any
              "WIND_VELOCITY_ALONG_Y": -speed * math.cos(theta)}, {})
 
 
-T3D = Module("telemac3d")
+T3D = TelemacModule("telemac3d")
 T3D.MODULE_OUTPUT = MODULE_OUTPUT
 # The hydrodynamic clock is one keyword: the window itself.
 T3D.CLOCK = ("DURATION",)

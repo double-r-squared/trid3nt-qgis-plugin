@@ -17,7 +17,7 @@ from trid3nt_server.workflows.telemac.modules import KHIONE, T2D
 from trid3nt_server.workflows.telemac.modules.artemis import ART
 from trid3nt_server.workflows.telemac.modules.khione import STEERING_FILENAME
 from trid3nt_server.workflows.telemac.modules.module import MOMENT
-from trid3nt_server.workflows.telemac.modules.sheet import fill, fill_coupled
+from trid3nt_server.workflows.runtime.sheet import fill, fill_coupled
 from trid3nt_server.workflows.telemac.modules.telemac3d import T3D
 from trid3nt_server.workflows.telemac.modules.tomawac import WAC
 
@@ -78,7 +78,7 @@ def test_the_keyword_the_engines_two_readers_disagree_on_is_never_written_and_re
     """DAMOCLES stops on the one-space spelling the launcher writes and the
     launcher stops on the two-space one DAMOCLES reads, so the deck states the
     meridian without it and a caller naming it is told why."""
-    from trid3nt_server.workflows.telemac.modules.module import SlotRefused
+    from trid3nt_server.workflows.runtime.module import SlotRefused
 
     unreadable = "LOCAL_LONGITUDE__IN__DEGREES"
     assert unreadable not in _ice(fill(_Iced, produced=_WILLAMETTE))
@@ -139,7 +139,7 @@ def test_a_stated_sign_without_the_meridian_is_refused_by_name():
     """The derived meridian is placed against the dictionary's sign; a caller
     who takes the placement over states both, and a run with no moment derives
     nothing to protect."""
-    from trid3nt_server.workflows.telemac.modules.module import SlotRefused
+    from trid3nt_server.workflows.runtime.module import SlotRefused
 
     sheet = fill(_Iced, produced=_WILLAMETTE)
     with pytest.raises(SlotRefused, match="EAST OR WEST LONGITUDE is stated and "

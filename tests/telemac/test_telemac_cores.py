@@ -12,13 +12,14 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_server.workflows.telemac.authoring.staged_check import BOX_CORES
-from trid3nt_server.workflows.telemac.authoring.staging import case_section
+from trid3nt_server.workflows.solver.staging import case_section
 from trid3nt_server.workflows.telemac.modules import T2D
 from trid3nt_server.workflows.telemac.modules.artemis import ART
-from trid3nt_server.workflows.telemac.modules.module import PROCESSORS, SlotRefused
+from trid3nt_server.workflows.runtime.module import SlotRefused
+from trid3nt_server.workflows.telemac.modules.module import PROCESSORS
+from trid3nt_server.workflows.runtime.sheet import fill
 from trid3nt_server.workflows.telemac.modules.sheet import (
     SOLVER,
-    fill,
     solve_cores,
 )
 from seated import value_inputs

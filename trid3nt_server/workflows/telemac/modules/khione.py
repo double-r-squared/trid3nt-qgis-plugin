@@ -12,7 +12,8 @@ from types import MappingProxyType
 from typing import Any, Mapping
 
 from ..authoring.solar import SOLAR_ROUTINE_FILENAME, solar_routine
-from .module import MOMENT, Module, Output, Unwritten
+from ...runtime.module import Output
+from .module import MOMENT, TelemacModule, Unwritten
 from .outputs import PRIMITIVES
 
 __all__ = ["KHIONE", "MODULE_OUTPUT", "RESULT_FILENAME", "STEERING_FILENAME"]
@@ -174,7 +175,7 @@ _DYNAMIC_COVER_ROWS: Mapping[str, Output] = MappingProxyType({
 })
 
 
-class _Khione(Module("khione")):  # type: ignore[misc]
+class _Khione(TelemacModule("khione")):  # type: ignore[misc]
     """The module input, and the coupled body a host's ``coupling`` expands."""
 
     @classmethod

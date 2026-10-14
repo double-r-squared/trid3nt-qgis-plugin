@@ -10,7 +10,8 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Any, Mapping
 
-from .module import Module, Output, SlotRefused
+from ...runtime.module import Output, SlotRefused
+from .module import TelemacModule
 from .outputs import PRIMITIVES
 
 __all__ = ["GAIA", "GRAIN_UM_MAX", "GRAIN_UM_MIN", "MODULE_OUTPUT",
@@ -51,7 +52,7 @@ _MIXTURE_MAX_CLASSES = 6
 _MGL_TO_KGM3 = 1.0e-3
 
 
-class _Gaia(Module("gaia")):  # type: ignore[misc]
+class _Gaia(TelemacModule("gaia")):  # type: ignore[misc]
     """The module input and the two sediment bodies."""
 
     @classmethod

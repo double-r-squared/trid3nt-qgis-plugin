@@ -10,9 +10,8 @@ from __future__ import annotations
 import math
 from typing import Any, Callable, Mapping
 
-from trid3nt_server.workflows.telemac.modules.outputs import (
-    Line, Profile, reference_line,
-)
+from trid3nt_server.workflows.runtime.primitives import Line, Profile
+from trid3nt_server.workflows.telemac.modules.outputs import reference_line
 
 __all__ = ["do_profile", "overlay"]
 

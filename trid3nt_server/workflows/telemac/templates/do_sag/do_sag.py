@@ -12,7 +12,7 @@ from trid3nt_server.workflows.runtime import (
 )
 from trid3nt_server.inputs import point_arg, Point
 from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL
-from trid3nt_server.workflows.telemac.modules.outputs import profile
+from trid3nt_server.workflows.runtime.primitives import profile
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Boundaries, Sources,
 )

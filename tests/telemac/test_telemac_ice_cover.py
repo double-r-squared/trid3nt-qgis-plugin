@@ -265,7 +265,7 @@ def test_the_question_places_the_two_series_the_cover_is_read_as():
 def test_the_cover_chart_draws_the_threshold_the_ask_states():
     """WHAT COUNTS AS FROZEN is the user's lever, so the cover chart draws it as
     a reference line beside the series rather than reducing the run to a verdict."""
-    from trid3nt_server.workflows.telemac.modules.outputs import Line, Series
+    from trid3nt_server.workflows.runtime.primitives import Line, Series
 
     cover = next(p for p in template.OUTPUTS if p.variable == "DYNCOVC")
     read = Series(name="COVER", units="", times=[0.0, 3600.0], values=[0.0, 0.9],

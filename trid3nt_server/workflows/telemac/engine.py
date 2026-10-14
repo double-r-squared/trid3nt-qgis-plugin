@@ -63,9 +63,9 @@ def _telemac_image() -> str:
 
 
 def _build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
-    """The volume-mount launch line. ``args`` (``manifest["telemac_args"]``) is
-    normally empty - the image CMD drives the entrypoint - and anything passed is
-    appended after the image."""
+    """The volume-mount launch line. ``args`` (the manifest's optional
+    ``telemac_args`` key) is normally empty - the image CMD drives the
+    entrypoint - and anything passed is appended after the image."""
     return ["docker", "run", "--rm", "--name", run_id,
             "-v", f"{rundir}:/data", "-w", "/data", _telemac_image(), *args]
 

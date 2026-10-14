@@ -94,7 +94,7 @@ def test_a_stated_plane_count_replans_the_grid_and_the_initial_column():
     """The fill binds the composites' read to whatever the sheet holds, so the
     stretch the grid achieves follows the keyword whether the deck stated the
     count or the user did."""
-    from trid3nt_server.workflows.telemac.modules.sheet import fill
+    from trid3nt_server.workflows.runtime.sheet import fill
 
     produced = {"settled": {"title": "basin", "time_step_s": 1.0,
                             "level_m": 100.0, "max_depth_m": 120.0}}
@@ -114,7 +114,7 @@ def test_the_deck_is_calm_and_states_no_wind_keyword_at_all():
     """CALM is the half of the pair the thermocline survives in, and a zero speed
     writes nothing: TELEMAC-3D has no combined speed-and-direction keyword, so the
     wind a user asks for is the engine's own components, set by their names."""
-    from trid3nt_server.workflows.telemac.modules.sheet import fill
+    from trid3nt_server.workflows.runtime.sheet import fill
 
     asserted = _module().STEERING.ASSERTED
     assert not {"WIND", "WIND_VELOCITY_ALONG_X", "WIND_VELOCITY_ALONG_Y"} & set(asserted)

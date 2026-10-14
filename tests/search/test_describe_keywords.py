@@ -108,10 +108,12 @@ def test_an_empty_module_lists_every_carried_dictionary():
 def test_describing_a_keyword_of_every_carried_module_returns_its_entry():
     """Each carried module's FIRST dictionary keyword, asked by its exact
     name, comes back as that dictionary's own entry - no module is special."""
-    from trid3nt_server.workflows.telemac.modules.module import load_module_input
+    from trid3nt_server.workflows.runtime.module import load_module_input
+    from trid3nt_server.workflows.telemac.modules.module import module_input_dir
 
     for module in _carried():
-        slot = next(iter(load_module_input(module).values()))
+        slot = next(iter(load_module_input(
+            module, directory=module_input_dir()).values()))
         answer = describe_keywords(module=module, keyword=slot.keyword.lower())
         assert answer["module"] == module
         assert answer["entry"]["keyword"] == slot.keyword

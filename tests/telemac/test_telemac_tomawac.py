@@ -20,7 +20,7 @@ from trid3nt_server.workflows.telemac.modules import (
     SlotRefused,
     fill,
 )
-from trid3nt_server.workflows.telemac.modules.module import identify_on
+from trid3nt_server.workflows.runtime.module import identify_on
 from trid3nt_server.workflows.telemac.modules.tomawac import (
     RESULT_FILENAME,
     STEERING_FILENAME,

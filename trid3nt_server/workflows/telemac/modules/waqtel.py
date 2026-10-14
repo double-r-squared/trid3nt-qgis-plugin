@@ -9,7 +9,8 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Any, Mapping
 
-from .module import Module, Output, SlotRefused
+from ...runtime.module import Output, SlotRefused
+from .module import TelemacModule
 
 __all__ = ["WAQTEL", "STEERING_FILENAME"]
 
@@ -94,7 +95,7 @@ _TWO_SITE = frozenset(("KINETIC_EXCHANGE_MODEL", "COEFFICIENT_OF_DISTRIBUTION_2"
 STEERING_FILENAME = "t2d_river.waqtel"
 
 
-class _Waqtel(Module("waqtel")):  # type: ignore[misc]
+class _Waqtel(TelemacModule("waqtel")):  # type: ignore[misc]
     """The dictionary, plus the coupled bodies the carrier's ``coupling`` expands."""
 
     @classmethod

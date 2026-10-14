@@ -356,14 +356,14 @@ package SteeringSurface {
 
     part slot : Slot {
         doc /*
-        code: trid3nt_server/workflows/telemac/modules/module.py
+        code: trid3nt_server/workflows/runtime/module.py
         */
         port dictionaryIn : DictionaryIn;
     }
 
     part wrapper : Module {
         doc /*
-        code: trid3nt_server/workflows/telemac/modules/module.py
+        code: trid3nt_server/workflows/runtime/module.py
         */
         port dictionaryIn : DictionaryIn;
         port surfaceOut : SurfaceOut;
@@ -412,10 +412,19 @@ package SteeringSurface {
 
     part sheet : Sheet {
         doc /*
-        code: trid3nt_server/workflows/telemac/modules/sheet.py
+        code: trid3nt_server/workflows/runtime/sheet.py
         */
         port surfaceIn : SurfaceIn;
         port deckOut : DeckOut;
+    }
+
+    part telemacSheet : Sheet {
+        doc /*
+        The engine's half of the filled sheet: the stage a complete sheet is
+        serialized and staged through.
+
+        code: trid3nt_server/workflows/telemac/modules/sheet.py
+        */
         port stageOut : StageOut;
     }
 
@@ -459,7 +468,7 @@ package SteeringSurface {
 
     part stager : Stager {
         doc /*
-        code: trid3nt_server/workflows/telemac/authoring/staging.py
+        code: trid3nt_server/workflows/solver/staging.py
         */
         port stageIn : StageIn;
     }
@@ -522,7 +531,7 @@ package SteeringSurface {
         connect steeringDriver.parseOut to steeringGate.parseIn;
 
     interface runStaged : StageRequest
-        connect sheet.stageOut to stager.stageIn;
+        connect telemacSheet.stageOut to stager.stageIn;
 
     interface canvasAnswered : DrawnValue
         connect canvasGate.drawOut to fill.drawIn;

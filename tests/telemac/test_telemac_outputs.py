@@ -15,7 +15,7 @@ import pytest
 
 from trid3nt_server.render import presets
 from trid3nt_server.render.formats import Published
-from trid3nt_server.workflows.telemac.modules.outputs import Field, Frames, Series
+from trid3nt_server.workflows.runtime.primitives import Field, Frames, Series
 from trid3nt_server.workflows.telemac.modules import (
     T2D,
     extent,
@@ -25,10 +25,8 @@ from trid3nt_server.workflows.telemac.modules import (
     mesh,
     series,
 )
-from trid3nt_server.workflows.telemac.modules.outputs import (
-    OutputEmpty,
-    Solved,
-)
+from trid3nt_server.workflows.runtime.primitives import OutputEmpty
+from trid3nt_server.workflows.telemac.modules.outputs import Solved
 from seated import value_inputs
 
 
@@ -52,7 +50,7 @@ def _table(body: Any = T2D, tracers: int = 1) -> list[dict[str, Any]]:
 
     A read asks the RECORD what a variable draws by and whether it has a visible
     edge, so a test that states no table is testing a run nobody could have."""
-    from trid3nt_server.workflows.telemac.modules.sheet import fill
+    from trid3nt_server.workflows.runtime.sheet import fill
 
     sheet = fill(body, NUMBER_OF_TRACERS=tracers,
                  NAMES_OF_TRACERS=["DYE             MG/L"][:tracers])
@@ -151,7 +149,7 @@ def test_an_envelope_is_delivered_as_a_dataset_group_beside_the_results(tabled,
     """A field the result file carries no group for is written beside it as the
     SMS ASCII dataset MDAL loads onto the mesh it was measured over, with the
     nodes below its floor written as nothing."""
-    from trid3nt_server.workflows.telemac.modules.outputs import deliver
+    from trid3nt_server.workflows.runtime.primitives import deliver
 
     primitive = max_over_time("T1").layer(style={"kind": "continuous",
                                                  "ramp": "reds"})
@@ -176,7 +174,7 @@ def test_an_envelope_is_delivered_as_a_dataset_group_beside_the_results(tabled,
 def test_a_node_below_the_read_s_floor_is_written_as_nothing(tabled, _store):
     """Where a tracer is below its own visible edge the dataset carries nothing,
     so the basemap shows through rather than the ramp's palest colour."""
-    from trid3nt_server.workflows.telemac.modules.outputs import deliver
+    from trid3nt_server.workflows.runtime.primitives import deliver
 
     primitive = field("T1", t=0).layer(style={"kind": "continuous"})
     read = T2D.READS["field"](primitive, tabled)
@@ -245,7 +243,7 @@ def test_the_animations_style_row_carries_the_floor_the_shader_clips_at(tabled):
     the record's, so the legend spans what the run carried rather than collapsing
     onto the empty last frame."""
     from trid3nt_server.render.formats import _mesh_layer
-    from trid3nt_server.workflows.telemac.modules.outputs import deliver
+    from trid3nt_server.workflows.runtime.primitives import deliver
 
     primitive = field("T1", t="every").animate()
     read = T2D.READS["field"](primitive, tabled)
@@ -573,8 +571,8 @@ def test_a_profile_is_the_variable_per_station_down_the_line_at_the_instant(
         coupled):
     """Depth-weighted per station, the dry node dropped, the minimum found and
     placed, and the along-line speed the flow travelled at."""
-    from trid3nt_server.workflows.telemac.modules.outputs import Profile
-    from trid3nt_server.workflows.telemac.modules.outputs import profile
+    from trid3nt_server.workflows.runtime.primitives import Profile
+    from trid3nt_server.workflows.runtime.primitives import profile
 
     read = T2D.READS["profile"](profile("T2", along=_line(coupled)), coupled)
     assert isinstance(read, Profile)
@@ -590,7 +588,7 @@ def test_a_profile_is_the_variable_per_station_down_the_line_at_the_instant(
 def test_a_profile_keeps_only_the_nodes_within_the_stated_band(coupled):
     """A transect through a domain reads the nodes beside the line, not a mean
     over the whole width; without a band the whole domain is the profile."""
-    from trid3nt_server.workflows.telemac.modules.outputs import profile
+    from trid3nt_server.workflows.runtime.primitives import profile
 
     whole = T2D.READS["profile"](profile("T2", along=_line(coupled)), coupled)
     assert whole.measures["stations"] == 4
@@ -630,8 +628,8 @@ def test_a_tracer_that_stopped_being_a_number_fails_the_solve_by_its_name(
     a dry line does, and the two are not the same answer: the read names the
     variable and the instant it stopped being a number, and the run fails by
     that name rather than reporting an empty output."""
-    from trid3nt_server.workflows.telemac.modules.outputs import (
-        SolveNonFinite, profile)
+    from trid3nt_server.workflows.runtime.primitives import profile
+    from trid3nt_server.workflows.telemac.modules.outputs import SolveNonFinite
 
     nan = [float("nan")] * 5
     _five_nodes(telemac_result, oxygen=[[9.0] * 5, nan, nan],
@@ -651,7 +649,7 @@ def test_a_line_with_no_water_on_it_is_still_a_dry_line(
         monkeypatch, telemac_result):
     """The discrimination, the other way: every value is a number and the water
     is gone, which is an empty output and not a failed solve."""
-    from trid3nt_server.workflows.telemac.modules.outputs import profile
+    from trid3nt_server.workflows.runtime.primitives import profile
 
     _five_nodes(telemac_result, oxygen=[[9.0] * 5] * 2,
                 depth=[[2.0] * 5, [0.0] * 5])
@@ -666,7 +664,7 @@ def test_a_line_with_no_water_on_it_is_still_a_dry_line(
 def test_a_profile_runs_the_way_the_solved_flow_goes(coupled):
     """A line drawn against the flow is read downstream regardless: the flow
     orients the chainage, so the mix point stays where the water carries it."""
-    from trid3nt_server.workflows.telemac.modules.outputs import profile
+    from trid3nt_server.workflows.runtime.primitives import profile
 
     forward = T2D.READS["profile"](profile("T3", along=_line(coupled)),
                                           coupled)
@@ -682,7 +680,7 @@ def test_the_drogues_are_the_track_at_three_written_instants(monkeypatch, couple
     import tempfile
     from pathlib import Path
 
-    from trid3nt_server.workflows.telemac.modules.outputs import Track
+    from trid3nt_server.workflows.runtime.primitives import Track
 
     track = Path(tempfile.mkdtemp()) / "drogues.txt"
     track.write_text(
@@ -749,9 +747,9 @@ def test_publish_outputs_rejoins_the_anchors_and_draws_the_reference_lines(
         monkeypatch, coupled):
     from trid3nt_contracts.execution import LayerURI
 
-    from trid3nt_server.workflows.telemac.modules.outputs import Line
+    from trid3nt_server.workflows.runtime.primitives import Line
     from trid3nt_server.workflows.telemac import workflow as door
-    from trid3nt_server.workflows.telemac.modules.outputs import profile
+    from trid3nt_server.workflows.runtime.primitives import profile
 
     seen: dict[str, Any] = {}
 

@@ -22,7 +22,7 @@ from trid3nt_server.workflows.telemac.authoring.atmosphere import (
 )
 from trid3nt_server.workflows.telemac.errors import TelemacError
 from trid3nt_server.workflows.telemac.modules import T2D, T3D, WAQTEL, fill
-from trid3nt_server.workflows.telemac.modules.module import SlotRefused
+from trid3nt_server.workflows.runtime.module import SlotRefused
 
 _HOUR = 3600.0
 

@@ -54,7 +54,7 @@ def test_every_slot_of_a_template_s_default_fill_carries_one_of_the_four(
     """The default fill is what the body states before a run measures anything:
     the values that stand, and the assertions still waiting on a read. A writer
     that invented a fifth word is caught here, not on a card nobody can read."""
-    from trid3nt_server.workflows.telemac.modules.sheet import _standing
+    from trid3nt_server.workflows.runtime.sheet import _standing
 
     _body, standing, pending = _standing(_steering(tool_name))
     assert standing or pending, tool_name
@@ -69,12 +69,13 @@ def test_a_card_names_the_origin_of_every_set_row_and_of_no_other(
         tool_name, _module):
     """The chip is rendered off the sheet: a SET row always has one, and a row
     holding no filled value - open, or left to the engine - has none to claim."""
-    from trid3nt_server.workflows.telemac.modules.sheet import Sheet, _standing
-    from trid3nt_server.workflows.telemac.workflow import card_rows
+    from trid3nt_server.workflows.runtime.sheet import _standing
+    from trid3nt_server.workflows.telemac.modules.sheet import TelemacSheet
+    from trid3nt_server.workflows.runtime.review import card_rows
 
     body = _steering(tool_name)
     _body, standing, _pending = _standing(body)
-    for row in card_rows(Sheet(body=body, filled=standing)):
+    for row in card_rows(TelemacSheet(body=body, filled=standing)):
         if row.name in standing:
             assert isinstance(row.origin, Origin), row.name
         if row.advanced or row.value is None:
@@ -122,7 +123,7 @@ def test_a_template_s_own_name_is_what_its_slots_are_stamped_with(
     """The detail beside the ``template`` origin is the template, not the body
     class: eight templates share the class names, and a page that selects its own
     runs by the provenance needs the name that tells them apart."""
-    from trid3nt_server.workflows.telemac.modules.sheet import _standing
+    from trid3nt_server.workflows.runtime.sheet import _standing
 
     _body, standing, pending = _standing(_steering(tool_name), tool_name)
     stamped = [row.provenance for row in standing.values()]
@@ -136,7 +137,7 @@ def test_what_the_cut_covers_is_on_the_card_before_the_solve():
     """R82's whole answer: a share the person would refuse at is stated where
     they meet the fill, not discovered on the journal after the run."""
     from trid3nt_server.inputs.run_notes import bind_coverage, cut_coverage, drain_coverage
-    from trid3nt_server.workflows.telemac.workflow import _coverage_rows
+    from trid3nt_server.workflows.runtime.review import _coverage_rows
 
     token = bind_coverage()
     try:
@@ -150,7 +151,7 @@ def test_what_the_cut_covers_is_on_the_card_before_the_solve():
 
 
 def test_a_run_that_cut_nothing_states_no_coverage_row():
-    from trid3nt_server.workflows.telemac.workflow import _coverage_rows
+    from trid3nt_server.workflows.runtime.review import _coverage_rows
 
     assert _coverage_rows() == []
 
@@ -159,7 +160,7 @@ def test_the_source_a_slot_was_filled_from_is_on_the_card():
     from trid3nt_contracts.coverage import SourceChoice
     from trid3nt_server.workflows.runtime.journal import (
         bind_choices, drain_choices, slot_choice)
-    from trid3nt_server.workflows.telemac.workflow import _source_rows
+    from trid3nt_server.workflows.runtime.review import _source_rows
 
     token = bind_choices()
     try:

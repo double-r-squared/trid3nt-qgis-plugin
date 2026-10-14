@@ -16,7 +16,7 @@ from trid3nt_server.tools.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.telemac.authoring.accepted_mesh import (
     HARBOUR_GEOMETRY,
 )
-from trid3nt_server.workflows.telemac.modules.outputs import profile
+from trid3nt_server.workflows.runtime.primitives import profile
 from trid3nt_server.workflows.telemac.modules.artemis import (
     ART, BOUNDARY_FILENAME, IncidentWave,
 )

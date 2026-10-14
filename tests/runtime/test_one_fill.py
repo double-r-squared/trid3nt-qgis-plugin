@@ -16,6 +16,11 @@ from trid3nt_server.workflows.runtime.fill import (
     Fill,
     fill,
 )
+from trid3nt_server.workflows.runtime.module import (
+    ENGINE_UNAVAILABLE,
+    SlotRefused,
+    accept,
+)
 from trid3nt_server.workflows.telemac.modules import (
     module as module_mod,
 )
@@ -108,7 +113,7 @@ def test_a_failed_launch_does_not_say_the_engine_check_was_out_of_reach(monkeypa
     monkeypatch.delenv("HOMETEL", raising=False)
 
     async def _launch(self, state):
-        raise module_mod.SlotRefused("the deck refused")
+        raise SlotRefused("the deck refused")
 
     async def _produce(env, decl):
         return decl.name
@@ -119,7 +124,7 @@ def test_a_failed_launch_does_not_say_the_engine_check_was_out_of_reach(monkeypa
     out = asyncio.run(wf.run({"input_mode": "auto",
                               "keywords": {"LAW OF BOTTOM FRICTION": 4}}))
     assert out["status"] == "error" and "the deck refused" in out["error_message"]
-    assert module_mod.ENGINE_UNAVAILABLE not in out["error_message"]
+    assert ENGINE_UNAVAILABLE not in out["error_message"]
 
 
 def test_a_stated_value_is_accepted_and_the_rest_default():
@@ -241,20 +246,19 @@ def test_a_keyword_is_held_to_the_engine_class_where_it_imports(monkeypatch):
                         lambda module: lambda k, v: calls.append(k) or
                         ("not among the choices" if v == 99 else ""))
     t2d = wrapper_for("telemac2d")
-    assert module_mod.accept(t2d, "LAW OF BOTTOM FRICTION", 4)[2] == ""
-    with pytest.raises(module_mod.SlotRefused, match="refused by the engine"):
-        module_mod.accept(t2d, "LAW OF BOTTOM FRICTION", 99)
+    assert accept(t2d, "LAW OF BOTTOM FRICTION", 4)[2] == ""
+    with pytest.raises(SlotRefused, match="refused by the engine"):
+        accept(t2d, "LAW OF BOTTOM FRICTION", 99)
     assert calls
 
 
 def test_an_absent_engine_tree_is_stated_and_ours_judges(monkeypatch):
     monkeypatch.delenv("HOMETEL", raising=False)
     t2d = wrapper_for("telemac2d")
-    assert module_mod.accept(t2d, "LAW OF BOTTOM FRICTION", 4)[2] == \
-        module_mod.ENGINE_UNAVAILABLE
+    assert accept(t2d, "LAW OF BOTTOM FRICTION", 4)[2] == ENGINE_UNAVAILABLE
     state = _filled({"keywords": {"LAW OF BOTTOM FRICTION": 4}})
-    assert state.notes == [module_mod.ENGINE_UNAVAILABLE]
-    assert module_mod.ENGINE_UNAVAILABLE not in state.said[0]
+    assert state.notes == [ENGINE_UNAVAILABLE]
+    assert ENGINE_UNAVAILABLE not in state.said[0]
 
 
 def test_a_keyword_the_module_refuses_is_rejected_by_name():
@@ -271,16 +275,17 @@ def _journal(monkeypatch, line):
 
 def test_a_card_edit_refills_through_the_modules_accept_rule(monkeypatch):
     seen = []
-    real = module_mod.accept
+    real = accept
 
     def _spy(body, name, value):
         seen.append(name)
         return real(body, name, value)
 
+    from trid3nt_server.workflows.runtime import review
     from trid3nt_server.workflows.telemac import workflow as tw
 
-    monkeypatch.setattr(tw, "accept", _spy)
-    monkeypatch.setattr(tw, "card_rows", lambda sheet: [])
+    monkeypatch.setattr(review, "accept", _spy)
+    monkeypatch.setattr(review, "card_rows", lambda sheet: [])
     steering = _wf().steering
 
     async def _fill(values, edits):
@@ -340,11 +345,13 @@ def test_an_untyped_fault_is_refused_and_its_trace_logged(monkeypatch, caplog):
 ])
 def test_a_refusal_keeps_the_code_of_its_reason_through_the_review(
         monkeypatch, cancel_code, code):
+    from trid3nt_server.errors import DeclarativeError
     from trid3nt_server.inputs.gate import input_review
     from trid3nt_server.inputs.gate.input_review import ReviewOutcome
+    from trid3nt_server.workflows.runtime import review
     from trid3nt_server.workflows.telemac import workflow as tw
 
-    monkeypatch.setattr(tw, "card_rows", lambda sheet: [])
+    monkeypatch.setattr(review, "card_rows", lambda sheet: [])
 
     async def _fill(values, edits):
         return types.SimpleNamespace(values=dict(values), edits=dict(edits),
@@ -355,7 +362,7 @@ def test_a_refusal_keeps_the_code_of_its_reason_through_the_review(
                              cancel_reason="declined", cancel_code=cancel_code)
 
     monkeypatch.setitem(input_review.__dict__, "gate_input_review", _gate)
-    with pytest.raises(tw.TelemacError) as caught:
+    with pytest.raises(DeclarativeError) as caught:
         asyncio.run(tw._review(_fill, {}, steering=_wf().steering, workflow="w",
                                title="", input_mode="auto", spent=()))
     assert caught.value.error_code == code

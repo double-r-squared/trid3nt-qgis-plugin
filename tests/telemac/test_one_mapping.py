@@ -15,7 +15,7 @@ from seated import resolve_params
 from trid3nt_server.workflows.runtime.fill import (REJECTED, Fill, fill,
                                                    production)
 from trid3nt_server.workflows.telemac.modules import T2D
-from trid3nt_server.workflows.telemac.modules.module import SlotRefused, _read
+from trid3nt_server.workflows.runtime.module import SlotRefused, _read
 from trid3nt_server.workflows.telemac.modules.telemac2d import Sources
 from trid3nt_server.workflows.telemac.workflow import (Measured, _names,
                                                     _read_named)

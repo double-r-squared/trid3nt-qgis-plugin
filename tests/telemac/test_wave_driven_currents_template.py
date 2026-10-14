@@ -14,7 +14,7 @@ import pytest
 from trid3nt_server.inputs.wave import Wave
 from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT, LEVEL, WAVE
 from trid3nt_server.workflows.telemac.modules import T2D, WAC, fill
-from trid3nt_server.workflows.telemac.modules.module import SlotRefused
+from trid3nt_server.workflows.runtime.module import SlotRefused
 from trid3nt_server.workflows.telemac.authoring.boundaries import (
     LIQUID_BOUNDARIES_FILENAME)
 from trid3nt_server.workflows.telemac.modules.tomawac import RESULT_FILENAME

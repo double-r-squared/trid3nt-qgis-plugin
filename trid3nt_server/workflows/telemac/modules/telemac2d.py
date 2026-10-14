@@ -16,8 +16,8 @@ from trid3nt_server.inputs.temporal import RATE, STATE, Series
 from ..authoring.atmosphere import (ATMOSPHERE_READS, Atmosphere,
                                      expand_atmosphere)
 from .coupling import couples
-from .module import (MOMENT, ORIGIN_OF_TIME, USER_FORTRAN_DIR, Module, Output,
-                     SlotRefused)
+from ...runtime.module import Output, SlotRefused
+from .module import MOMENT, ORIGIN_OF_TIME, USER_FORTRAN_DIR, TelemacModule
 from .outputs import PRIMITIVES, read_drogues
 
 __all__ = ["T2D", "Atmosphere", "Boundaries", "Breach", "Friction", "Infiltration",
@@ -643,7 +643,7 @@ def _rain_tracers(tracers: Any) -> Mapping[str, Any]:
         "VALUES_OF_TRACERS_IN_THE_RAIN": [0.0] * count}
 
 
-T2D = Module("telemac2d")
+T2D = TelemacModule("telemac2d")
 T2D.MODULE_OUTPUT = MODULE_OUTPUT
 # The hydrodynamic clock is one keyword: the window itself.
 T2D.CLOCK = ("DURATION",)

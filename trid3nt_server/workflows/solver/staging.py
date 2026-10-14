@@ -11,12 +11,9 @@ import json
 import os
 import shutil
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
-from ..errors import TelemacError
-from .staged_check import check_staged_run
-
-__all__ = ["case_section", "discard_run", "new_rundir", "stage_run", "stage_telemac_manifest"]
+__all__ = ["case_section", "discard_run", "new_rundir", "stage_run", "stage_manifest"]
 
 
 def case_section(*, module: str, steering: str, results: list[str],
@@ -39,24 +36,25 @@ def case_section(*, module: str, steering: str, results: list[str],
 
 
 # ``inputs`` rows are ``{gs_uri, dest}``, staged into the run directory before the container starts (the worker has no network).
-def stage_telemac_manifest(*, section: str, config: Mapping[str, Any],
-                           run_tag: str, outputs: list[str],
-                           inputs: list[dict[str, str]] | None = None,
-                           prefix: str | None = None,
-                           extra: Mapping[str, Any] | None = None) -> str:
+def stage_manifest(*, section: str, config: Mapping[str, Any],
+                   run_tag: str, outputs: list[str],
+                   inputs: list[dict[str, str]] | None = None,
+                   prefix: str | None = None,
+                   extra: Mapping[str, Any] | None = None) -> str:
     """Write the worker manifest to the cache bucket -> its ``s3://`` URI.
 
     ``section`` is the dispatch key, ``prefix`` the staging word; they differ.
     """
     cache_bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
     if not cache_bucket:
-        raise TelemacError(
-            "TRID3NT_CACHE_BUCKET must be set to stage the TELEMAC manifest.",
-            error_code="TELEMAC_STAGING_FAILED")
+        from .solver import SolverDispatchError
+
+        raise SolverDispatchError(
+            "TRID3NT_CACHE_BUCKET must be set to stage a run's manifest.")
     from trid3nt_server.store import objects as storage
 
     manifest = {section: dict(config), "run_id": run_tag,
-                "inputs": list(inputs or []), "telemac_args": [],
+                "inputs": list(inputs or []),
                 "outputs": list(outputs), **dict(extra or {})}
     key = f"{prefix or section}/{run_tag}/manifest.json"
     storage.client().put_object(
@@ -66,15 +64,17 @@ def stage_telemac_manifest(*, section: str, config: Mapping[str, Any],
     return f"s3://{cache_bucket}/{key}"
 
 
-def _run_directory(run_tag: str) -> Path:
-    return Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp")) / f"telemac-{run_tag}"
+def _run_directory(run_tag: str, *, stem: str) -> Path:
+    return Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp")) / f"{stem}-{run_tag}"
 
 
 def _cache_bucket() -> str:
     bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
     if not bucket:
-        raise TelemacError("TRID3NT_CACHE_BUCKET must be set to stage an authored run.",
-                           error_code="TELEMAC_STAGING_FAILED")
+        from .solver import SolverDispatchError
+
+        raise SolverDispatchError(
+            "TRID3NT_CACHE_BUCKET must be set to stage an authored run.")
     return bucket
 
 
@@ -104,22 +104,22 @@ def _write_manifest(case: Mapping[str, Any], run_tag: str, *, outputs: list[str]
 
     Written under the ``case`` dispatch key.
     """
-    return stage_telemac_manifest(
+    return stage_manifest(
         section="case", config=case, run_tag=run_tag, outputs=outputs,
         inputs=inputs, prefix=prefix)
 
 
-def new_rundir(run_tag: str) -> Path:
+def new_rundir(run_tag: str, *, stem: str) -> Path:
     """The run's directory, emptied: a re-authoring replaces what the last one wrote."""
-    rundir = _run_directory(run_tag)
+    rundir = _run_directory(run_tag, stem=stem)
     shutil.rmtree(rundir, ignore_errors=True)
     rundir.mkdir(parents=True)
     return rundir
 
 
-def discard_run(run_tag: str, prefix: str) -> None:
+def discard_run(run_tag: str, prefix: str, *, stem: str) -> None:
     """Remove a run's directory and its staged prefix; a run that does not proceed leaves neither."""
-    shutil.rmtree(_run_directory(run_tag), ignore_errors=True)
+    shutil.rmtree(_run_directory(run_tag, stem=stem), ignore_errors=True)
     # With no cache bucket stated, staging refused and nothing was uploaded.
     if (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip():
         _clear_prefix(run_tag, prefix)
@@ -129,13 +129,15 @@ async def stage_run(rundir: Path, run_tag: str, *, module: str, steering: str,
                     results: list[str], outputs: list[str],
                     mesh_inputs: list[dict[str, str]], prefix: str,
                     sheet: Mapping[str, Any], server_facts: Mapping[str, Any],
-                    result_basename: str, user_fortran: Sequence[str] = (),
+                    result_basename: str, check: Callable[..., Any],
+                    user_fortran: Sequence[str] = (),
                     coupling: str | None = None,
                     continue_from: str | None = None,
                     cores: int = 1) -> dict[str, Any]:
     """An authored run directory -> the staged run the box receives.
 
-    The manifest is written last.
+    The manifest is written last. ``check`` is the engine's own staged check,
+    run against the uploaded directory before the manifest exists.
     """
     # Paths stay relative to the run directory: the oil module's user fortran is a directory the engine compiles, so the walk is recursive.
     authored = sorted(str(p.relative_to(rundir))
@@ -151,7 +153,7 @@ async def stage_run(rundir: Path, run_tag: str, *, module: str, steering: str,
         continue_from=continue_from, cores=cores, server_facts=server_facts)
     # The staged directory is checked against itself: a steering naming an unstaged file, a mis-numbered boundary, a holed bed, a clock outside its window or an unseatable partition dies in the solve's first second.
     await asyncio.to_thread(
-        check_staged_run, rundir, steering=steering, inputs=inputs,
+        check, rundir, steering=steering, inputs=inputs,
         written_by_the_engine=[*results, *outputs],
         duration_s=server_facts.get("duration_s"), cores=cores)
     manifest_uri = await asyncio.to_thread(

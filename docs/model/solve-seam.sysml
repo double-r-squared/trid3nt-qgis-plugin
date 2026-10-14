@@ -205,7 +205,7 @@ package SolveSeam {
         outside this list.
 
         constructor: case_section
-        constructor: stage_telemac_manifest
+        constructor: stage_manifest
         */
         item module : String;
         item steering : FileName;
@@ -418,7 +418,7 @@ package SolveSeam {
 
     part manifestStager : ManifestStager {
         doc /*
-        code: trid3nt_server/workflows/telemac/authoring/staging.py
+        code: trid3nt_server/workflows/solver/staging.py
         */
         port caseOut : CaseOut;
     }

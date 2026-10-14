@@ -13,13 +13,9 @@ from trid3nt_server.workflows.telemac.modules import (
     fill,
     waqtel,
 )
-from trid3nt_server.workflows.telemac.modules.module import (
-    SlotRefused,
-)
-from trid3nt_server.workflows.telemac.modules.outputs import (
-    OutputEmpty,
-    Solved,
-)
+from trid3nt_server.workflows.runtime.module import SlotRefused
+from trid3nt_server.workflows.runtime.primitives import OutputEmpty
+from trid3nt_server.workflows.telemac.modules.outputs import Solved
 from trid3nt_server.inputs.slots import BED, DISCHARGE, LINE, OBSERVE
 from seated import value_inputs, row_inputs
 #: The two algal processes, their rows and the body, read off the wrapper that
@@ -118,7 +114,7 @@ def test_the_oxygen_row_is_ranged_over_the_wet_nodes_and_pins_no_bottom():
     import numpy as np
 
     from trid3nt_server.render import presets
-    from trid3nt_server.workflows.telemac.modules.outputs import _drawn
+    from trid3nt_server.workflows.runtime.primitives import _drawn
 
     style = {row.name: row.style for row in APPENDED[EUTRO]}["DISSOLVED O2"]
     assert "range" not in style and "floor" not in style
@@ -312,7 +308,7 @@ def test_each_longitudinal_chart_draws_the_water_it_entered_on():
     """The water the reach ARRIVED at is drawn as a reference line on the chart
     that plots that tracer, off the value the deck states for it - one number,
     not a second surface in front of it."""
-    from trid3nt_server.workflows.telemac.modules.outputs import Line, Profile
+    from trid3nt_server.workflows.runtime.primitives import Line, Profile
 
     template = _template()
     entering = template.STEERING.ASSERTED["INITIAL_VALUES_OF_TRACERS"]

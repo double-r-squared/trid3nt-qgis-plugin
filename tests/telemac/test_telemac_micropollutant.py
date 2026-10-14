@@ -18,9 +18,7 @@ from trid3nt_server.workflows.telemac.modules import (
     fill,
     waqtel,
 )
-from trid3nt_server.workflows.telemac.modules.module import (
-    SlotRefused,
-)
+from trid3nt_server.workflows.runtime.module import SlotRefused
 from seated import value_inputs, row_inputs
 
 #: The process, its rows and its body, read off the wrapper that carries them.

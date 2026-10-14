@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from typing import Any, Callable, Mapping
 
-from .module import USER_FORTRAN_DIR, SlotRefused
+from ...runtime.module import SlotRefused
+from .module import USER_FORTRAN_DIR
 
 __all__ = ["couples"]
 

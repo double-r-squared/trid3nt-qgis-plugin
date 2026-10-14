@@ -15,10 +15,7 @@ import pytest
 from trid3nt_server.workflows.telemac.templates.do_sag.streeter_phelps import do_profile
 from seated import SEATED, row_inputs, value_inputs, values_of
 from trid3nt_server.workflows.telemac.workflow import stated
-from trid3nt_server.workflows.telemac.modules.outputs import (
-    Line,
-    Profile,
-)
+from trid3nt_server.workflows.runtime.primitives import Line, Profile
 from trid3nt_server.workflows.telemac.templates.do_sag.streeter_phelps import (
     overlay,
 )
@@ -152,7 +149,7 @@ def test_a_keyword_outside_the_modules_own_bounds_refuses_by_its_name():
     """The clock left the Params and its plausibility range went WITH it, onto
     the module's keyword table: a user setting DURATION by name is bounded
     there, and the refusal names the keyword rather than a param."""
-    from trid3nt_server.workflows.telemac.modules.sheet import SlotRefused
+    from trid3nt_server.workflows.runtime.module import SlotRefused
 
     with pytest.raises(SlotRefused, match="DURATION is taken between"):
         _filled(keywords={"DURATION": 1.0})
@@ -214,7 +211,7 @@ def test_the_outputs_list_charts_the_oxygen_along_the_domains_centerline():
                                "level": "a water level"}
     # the standard the sag is judged by is a LINE on the chart that plots the
     # oxygen, drawn at the param the sheet declares
-    from trid3nt_server.workflows.telemac.modules.outputs import Line, Profile
+    from trid3nt_server.workflows.runtime.primitives import Line, Profile
 
     drawn = do_sag.OUTPUTS[0].reference(
         Profile(name="DO", units="mg/L", distance_m=[0.0, 100.0],
@@ -307,7 +304,7 @@ def _profile(x, values, *, velocity=0.5, units="mg/L") -> Profile:
 
 def _load(x, values) -> dict:
     from trid3nt_server.workflows.telemac.modules import field
-    from trid3nt_server.workflows.telemac.modules.outputs import profile
+    from trid3nt_server.workflows.runtime.primitives import profile
 
     return {profile("T3", along="line"): _profile(x, values),
             field("T2"): None}
@@ -396,7 +393,7 @@ def test_a_bare_coupled_keyword_only_one_body_spells_resolves_there():
 def test_a_name_two_bodies_spell_refuses_naming_both_qualified_spellings():
     """MASS-BALANCE is a keyword of the carrier AND of the coupled deck, and the
     two are read apart, so a bare name is not an answer."""
-    from trid3nt_server.workflows.telemac.modules.module import SlotRefused
+    from trid3nt_server.workflows.runtime.module import SlotRefused
 
     with pytest.raises(SlotRefused) as caught:
         _filled(keywords={"MASS-BALANCE": True})
@@ -408,7 +405,7 @@ def test_a_name_two_bodies_spell_refuses_naming_both_qualified_spellings():
 def test_a_value_the_coupled_dictionary_refuses_refuses_at_the_fill():
     """The coupled slot is checked against WAQTEL's own dictionary, so a wrong
     type is named here rather than by the Fortran."""
-    from trid3nt_server.workflows.telemac.modules.module import SlotRefused
+    from trid3nt_server.workflows.runtime.module import SlotRefused
 
     with pytest.raises(SlotRefused) as caught:
         _filled(keywords={"waqtel: K2 REAERATION COEFFICIENT": "fast"})
@@ -418,7 +415,7 @@ def test_a_value_the_coupled_dictionary_refuses_refuses_at_the_fill():
 def test_the_card_groups_the_coupled_deck_under_its_own_body():
     """One group per coupled deck, every row showing its body, its unit and the
     range it is taken inside."""
-    from trid3nt_server.workflows.telemac.workflow import card_rows
+    from trid3nt_server.workflows.runtime.review import card_rows
 
     sheet = _filled(keywords={"waqtel: K2 REAERATION COEFFICIENT": 6.0})
     rows = {row.name: row for row in card_rows(sheet)}

@@ -24,7 +24,8 @@ from trid3nt_server.workflows.telemac.modules import (
     SlotRefused,
     fill,
 )
-from trid3nt_server.workflows.telemac.modules.outputs import Solved, series
+from trid3nt_server.workflows.telemac.modules.outputs import Solved
+from trid3nt_server.workflows.runtime.primitives import series
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
 
 
@@ -167,7 +168,7 @@ def test_the_froude_row_is_ranged_over_the_wet_nodes_and_not_capped():
     import numpy as np
 
     from trid3nt_server.render import presets
-    from trid3nt_server.workflows.telemac.modules.outputs import _drawn
+    from trid3nt_server.workflows.runtime.primitives import _drawn
     from trid3nt_server.workflows.telemac.modules.telemac2d import MODULE_OUTPUT
 
     style = MODULE_OUTPUT["F"].style
@@ -188,7 +189,7 @@ def test_a_row_the_result_does_not_carry_is_skipped_and_a_placed_read_refuses(
     """The table is what the module writes; what a run actually wrote is what it
     carries. A missing row is skipped - a missing PLACED read is a refusal."""
     from trid3nt_server.workflows.telemac import workflow as door
-    from trid3nt_server.workflows.telemac.modules.outputs import OutputEmpty
+    from trid3nt_server.workflows.runtime.primitives import OutputEmpty
 
     seen, run = published
     asyncio.run(door.publish_outputs(run=run, outputs=[], captions={},
@@ -410,7 +411,7 @@ def test_a_coupled_module_states_the_tracers_it_appends_and_its_own_table():
 def test_the_card_carries_every_variable_each_deck_writes():
     """The keyword is generated, so no slot carries it: the card states what
     each deck writes, expanded, in the module's own order."""
-    from trid3nt_server.workflows.telemac.workflow import card_rows
+    from trid3nt_server.workflows.runtime.review import card_rows
 
     sheet = fill(T2D, NUMBER_OF_TRACERS=1,
                  NAMES_OF_TRACERS=["MARKER          MG/L"],
@@ -481,7 +482,7 @@ def test_the_published_order_is_the_table_order_across_host_and_coupled(
 def test_the_card_carries_a_generated_keyword_once_per_deck():
     """A keyword the sheet GENERATES is not an engine default: it states the
     module's own variable table once, and never again under the advanced fold."""
-    from trid3nt_server.workflows.telemac.workflow import card_rows
+    from trid3nt_server.workflows.runtime.review import card_rows
 
     sheet = fill(T2D, coupling=[GAIA.bed(
         geometry="a.slf", boundary="a.cli", MASS_BALANCE=True, gradation=None,

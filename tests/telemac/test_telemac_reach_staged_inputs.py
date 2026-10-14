@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from trid3nt_server.workflows.telemac.authoring.staging import (
+from trid3nt_server.workflows.solver.staging import (
     _write_manifest,
 )
 
@@ -65,13 +65,14 @@ def test_an_unstaged_manifest_carries_an_empty_inputs_list(monkeypatch):
 def test_writing_the_manifest_requires_a_cache_bucket(monkeypatch):
     from trid3nt_server.store import objects as storage
 
-    from trid3nt_server.workflows.telemac.errors import TelemacError
+    from trid3nt_server.workflows.solver.solver import SolverDispatchError
 
     monkeypatch.setattr(storage, "client", lambda: _FakeS3())
     monkeypatch.delenv("TRID3NT_CACHE_BUCKET", raising=False)
-    with pytest.raises(TelemacError):
+    with pytest.raises(SolverDispatchError) as caught:
         _write_manifest(_CASE, "RUNTAG", outputs=["r2d_river.slf"], inputs=[],
                         prefix="telemac")
+    assert caught.value.error_code == "SOLVER_DISPATCH_FAILED"
 
 
 def _results(name: str) -> tuple:
@@ -119,7 +120,7 @@ def test_no_reach_run_declares_a_bed_cog_output():
 
 
 def test_the_case_section_names_the_engine_the_file_and_the_results():
-    from trid3nt_server.workflows.telemac.authoring.staging import case_section
+    from trid3nt_server.workflows.solver.staging import case_section
 
     case = case_section(
         module="telemac2d", steering="t2d_river.cas",
@@ -153,7 +154,7 @@ def test_the_case_section_names_the_engine_the_file_and_the_results():
 
 def test_a_continued_case_names_the_staged_file_it_restarts_from():
     """Absent on a fresh run, so a present key is always a real continuation."""
-    from trid3nt_server.workflows.telemac.authoring.staging import case_section
+    from trid3nt_server.workflows.solver.staging import case_section
 
     fresh = case_section(module="telemac2d", steering="t2d_river.cas",
                          results=[], server_facts={})
@@ -231,15 +232,15 @@ def test_the_case_names_the_module_the_DECK_says_it_couples_with():
 
 def test_the_one_writer_stages_every_front_under_its_own_prefix(monkeypatch):
     from trid3nt_server.store import objects as storage
-    from trid3nt_server.workflows.telemac.authoring.staging import stage_telemac_manifest
+    from trid3nt_server.workflows.solver.staging import stage_manifest
 
     fake = _FakeS3()
     monkeypatch.setattr(storage, "client", lambda: fake)
     monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache")
-    uri = stage_telemac_manifest(
+    uri = stage_manifest(
         section="agitation", config={"name": "harbour"}, run_tag="RUNTAG",
         outputs=["res.slf"], prefix="artemis")
     assert uri == "s3://test-cache/artemis/RUNTAG/manifest.json"
     doc = json.loads(fake.put["Body"])
     assert doc["agitation"] == {"name": "harbour"}
-    assert doc["telemac_args"] == [] and doc["inputs"] == []
+    assert doc["inputs"] == []

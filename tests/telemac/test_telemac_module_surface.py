@@ -26,9 +26,13 @@ from trid3nt_server.workflows.telemac.modules import (
     run,
 )
 from trid3nt_server.workflows.telemac.modules.sheet import stage
-from trid3nt_server.workflows.telemac.modules.module import (
+from trid3nt_server.workflows.runtime.module import (
     UNSET,
     Module,
+)
+from trid3nt_server.workflows.telemac.modules.module import (
+    TelemacModule,
+    module_input_dir,
 )
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Sources,
@@ -44,7 +48,7 @@ _EXPOSED = ("telemac2d", "telemac3d", "artemis", "waqtel", "gaia")
 
 def test_every_slot_carries_the_dictionary_s_own_name_and_help():
     for module in _EXPOSED:
-        dictionary = load_module_input(module)
+        dictionary = load_module_input(module, directory=module_input_dir())
         assert dictionary, module
         for identifier, slot in dictionary.items():
             assert slot.identifier == identifier
@@ -59,7 +63,7 @@ def test_the_identifier_is_the_keyword_and_nothing_invented():
     Where the mechanical spelling IS an identifier it is the identifier; where it is
     not, the image's own map decides, which is why the map is read out of the image."""
     for module in _EXPOSED:
-        for slot in load_module_input(module).values():
+        for slot in load_module_input(module, directory=module_input_dir()).values():
             mechanical = "".join(c if c.isalnum() else "_"
                                  for c in slot.keyword.strip())
             assert slot.identifier.isidentifier()
@@ -112,14 +116,14 @@ def test_a_wrapper_is_a_declaration_and_refuses_to_be_a_value():
 
 def test_an_unexposed_module_refuses_naming_the_ones_there_are():
     with pytest.raises(SlotRefused, match="no module input"):
-        Module("nosuchmodule")
+        TelemacModule("nosuchmodule")
 
 
 def test_a_keyword_spelled_with_a_double_space_still_resolves_to_its_identifier():
     """KHIONE's identifier map spells one keyword with two spaces the dictionary
     itself writes single, so both sides of the extractor's lookup collapse runs
     of whitespace; a lookup on the literal spelling loses the whole module."""
-    dictionary = load_module_input("khione")
+    dictionary = load_module_input("khione", directory=module_input_dir())
     assert len(dictionary) == 133
     doubled = dictionary["LOCAL_LONGITUDE__IN__DEGREES"]
     assert doubled.keyword == "LOCAL LONGITUDE, IN DEGREES"
@@ -272,7 +276,7 @@ def _sources(value):
 
 
 def test_a_composite_becomes_several_slots_and_the_file_they_name():
-    module = Module("telemac2d")
+    module = TelemacModule("telemac2d")
     module.composites(sources=_sources)
 
     class DYE(module):
@@ -286,7 +290,7 @@ def test_a_composite_becomes_several_slots_and_the_file_they_name():
 
 
 def test_a_composite_lives_on_the_wrapper_and_may_not_shadow_a_keyword():
-    module = Module("telemac2d")
+    module = TelemacModule("telemac2d")
     with pytest.raises(SlotRefused, match="may not shadow"):
         module.composites(DURATION=_sources)
 
@@ -324,7 +328,8 @@ def test_run_does_not_refuse_an_open_keyword_the_engine_may_yet_default():
 
 
 def test_run_serializes_then_stages_then_dispatches(monkeypatch, tmp_path):
-    from trid3nt_server.workflows.telemac.authoring import serializer, staging
+    from trid3nt_server.workflows.solver import staging
+    from trid3nt_server.workflows.telemac.authoring import serializer
 
     order: list[str] = []
 
@@ -342,7 +347,7 @@ def test_run_serializes_then_stages_then_dispatches(monkeypatch, tmp_path):
 
     monkeypatch.setattr(serializer, "serialize", _serialize)
     monkeypatch.setattr(staging, "stage_run", _stage)
-    monkeypatch.setattr(staging, "new_rundir", lambda run_tag: tmp_path)
+    monkeypatch.setattr(staging, "new_rundir", lambda run_tag, **_: tmp_path)
 
     sheet = fill(T2D, GEOMETRY_FILE="river.slf",
                  BOUNDARY_CONDITIONS_FILE="river.cli",
@@ -426,7 +431,7 @@ def test_a_continuation_names_the_file_and_nothing_else():
     run's own continue_from - no deck states it. The staged file is the parent's own
     result, whose format is the keyword's own default, so nothing states that
     either."""
-    from trid3nt_server.workflows.telemac.modules.sheet import fill
+    from trid3nt_server.workflows.runtime.sheet import fill
 
     sheet = fill(T2D, produced={"settled": {"continue_from": "previous.slf"}})
     assert sheet.filled["PREVIOUS_COMPUTATION_FILE"].value == "previous.slf"
@@ -587,7 +592,7 @@ def test_a_coupled_body_states_only_what_its_caller_handed_it():
     opinions = []
     for (module, body), (first, second) in _COUPLED_CALLS.items():
         wrapper = WRAPPERS[module]
-        dictionary = load_module_input(module)
+        dictionary = load_module_input(module, directory=module_input_dir())
         # A substance is a name the run holds: each call's holds its own word.
         one = {name: row.value for name, row in fill(
             wrapper, produced={"x": "x"},
@@ -737,7 +742,8 @@ def test_the_basin_states_how_its_tracer_is_carried_and_under_what_ceiling():
         STEERING,
     )
 
-    slot = load_module_input("telemac3d")["SCHEME_FOR_ADVECTION_OF_TRACERS"]
+    slot = load_module_input(
+        "telemac3d", directory=module_input_dir())["SCHEME_FOR_ADVECTION_OF_TRACERS"]
     assert slot.engine_default is UNSET
     asserted = STEERING.ASSERTED
     scheme = asserted["SCHEME_FOR_ADVECTION_OF_TRACERS"][0]
@@ -977,7 +983,7 @@ def test_the_card_shows_what_is_set_and_open_and_folds_the_rest_by_rubrique():
     """Set slots and open mandatory ones are the review; the whole rest of the
     module is under advanced, grouped by the dictionary's own section and
     carrying the engine default it will otherwise run on."""
-    from trid3nt_server.workflows.telemac.workflow import card_rows
+    from trid3nt_server.workflows.runtime.review import card_rows
 
     sheet = _filled(**{"LAW OF BOTTOM FRICTION": 4})
     rows = {row.name: row for row in card_rows(sheet)}
@@ -1009,7 +1015,7 @@ def test_the_card_shows_what_is_set_and_open_and_folds_the_rest_by_rubrique():
 def test_a_set_keyword_row_shows_the_unit_it_is_read_in_and_the_range_it_is_taken_in():
     """The dictionary carries the unit only in the prose of its help, so the
     bounds sidecar states it as data and the card row renders both."""
-    from trid3nt_server.workflows.telemac.workflow import card_rows
+    from trid3nt_server.workflows.runtime.review import card_rows
 
     rows = {row.name: row for row in card_rows(_filled(DURATION=600.0))}
     assert rows["DURATION"].units == "s"
@@ -1022,7 +1028,7 @@ def test_a_set_keyword_row_shows_the_unit_it_is_read_in_and_the_range_it_is_take
 def test_a_keyword_bounded_per_element_offers_the_card_no_single_range():
     """A speed beside a bearing has no one range an editor could clamp to; the
     refusal at the fill is what names the element that missed."""
-    from trid3nt_server.workflows.telemac.workflow import card_rows
+    from trid3nt_server.workflows.runtime.review import card_rows
 
     sheet = _filled(**{"SPEED AND DIRECTION OF WIND": [4.0, 90.0]})
     row = {r.name: r for r in card_rows(sheet)}["SPEED_AND_DIRECTION_OF_WIND"]
@@ -1035,7 +1041,7 @@ def test_an_open_slot_under_the_fold_says_the_dictionary_answers_it_for_nobody()
     """An engine default that does not exist is not rendered as one: the row says
     the dictionary gives the keyword none, which is what makes a substitution
     the engine makes visible rather than assumed."""
-    from trid3nt_server.workflows.telemac.workflow import card_rows
+    from trid3nt_server.workflows.runtime.review import card_rows
 
     sheet = fill(T2D)
     rows = {row.name: row for row in card_rows(sheet)}
@@ -1094,7 +1100,7 @@ def test_the_serializer_is_the_only_module_that_writes_a_keyword_into_a_deck():
     A keyword formatted into a string anywhere else is a second author of the format,
     caught here by the dictionary's own names rather than by a maintained list."""
     keywords = {slot.keyword for module in _EXPOSED + ("tomawac", "khione")
-                for slot in load_module_input(module).values()}
+                for slot in load_module_input(module, directory=module_input_dir()).values()}
     offenders = {}
     for tree_root in (Path("trid3nt_server"), Path("workers")):
         for path in sorted(tree_root.rglob("*.py")):
@@ -1141,7 +1147,7 @@ def test_the_oil_module_is_one_value_the_deck_s_own_preset_and_point_expand():
 def test_a_module_dictionary_is_parsed_once_per_process():
     """Every body, fill and printouts call reads the dictionary; a parse per read
     re-walks the catalog on every slot lookup."""
-    assert load_module_input("khione") is load_module_input("khione")
+    assert load_module_input("khione", directory=module_input_dir()) is load_module_input("khione", directory=module_input_dir())
 
 
 class _Emitter:
@@ -1226,7 +1232,8 @@ def test_the_deck_is_written_before_each_card_is_drawn(monkeypatch):
 
 def test_a_staged_run_goes_to_the_box_and_nothing_else_runs_after_a_proceed(
         monkeypatch):
-    from trid3nt_server.workflows.telemac.authoring import serializer, staging
+    from trid3nt_server.workflows.solver import staging
+    from trid3nt_server.workflows.telemac.authoring import serializer
 
     def _never(*_args, **_kwargs):
         raise AssertionError("nothing is written once the run is staged")
@@ -1323,12 +1330,12 @@ def test_a_param_another_stage_reads_refuses_by_name(monkeypatch):
 def test_an_unstated_mode_with_no_session_refuses_and_fills_nothing(monkeypatch):
     import asyncio
 
+    from trid3nt_server.errors import DeclarativeError
     from trid3nt_server.render import pipeline_emitter as pe
-    from trid3nt_server.workflows.telemac.errors import TelemacError
     from trid3nt_server.workflows.telemac.workflow import fill_sheet
 
     monkeypatch.setattr(pe, "current_emitter", lambda: None)
-    with pytest.raises(TelemacError) as caught:
+    with pytest.raises(DeclarativeError) as caught:
         asyncio.run(fill_sheet(steering=_CARD, produced=_SETTLED,
                                params={"storm_mm_per_day": 6.0}, workflow="probe",
                                title="", keywords={}, input_mode=None))

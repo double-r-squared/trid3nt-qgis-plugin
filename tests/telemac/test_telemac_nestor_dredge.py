@@ -15,7 +15,7 @@ from trid3nt_server.workflows.telemac.authoring.nestor import NestorRefused
 from trid3nt_server.workflows.telemac.modules import GAIA, fill
 from trid3nt_server.workflows.telemac.modules.gaia import (
     Backfill, Dig, Dredging, Dump, SaveWaterLevel)
-from trid3nt_server.workflows.telemac.modules.module import SlotRefused
+from trid3nt_server.workflows.runtime.module import SlotRefused
 
 #: The run's own clock, which every action is dated against; the profiles are
 #: the surface its levels are read from.

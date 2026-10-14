@@ -10,8 +10,8 @@ import importlib
 import pytest
 
 from trid3nt_server.workflows.telemac.modules import T2D
-from trid3nt_server.workflows.telemac.modules.sheet import (SheetIncomplete,
-                                                            fill, stage)
+from trid3nt_server.workflows.runtime.sheet import SheetIncomplete, fill
+from trid3nt_server.workflows.telemac.modules.sheet import stage
 
 _SETTLED = {"TITLE": "reach DOMAIN", "TIME_STEP": 0.7, "DURATION": 3600.0,
             "INITIAL_CONDITIONS": "CONSTANT DEPTH", "INITIAL_DEPTH": 1.2,
@@ -70,7 +70,7 @@ def test_a_settle_value_the_module_does_not_spell_is_not_written():
 
 
 def test_a_required_slot_left_empty_refuses_by_name_before_writing(monkeypatch):
-    from trid3nt_server.workflows.telemac.authoring import staging
+    from trid3nt_server.workflows.solver import staging
 
     def _written(*_args, **_kwargs):
         raise AssertionError("nothing is written for an incomplete sheet")

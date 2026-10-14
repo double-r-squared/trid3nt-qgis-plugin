@@ -14,13 +14,10 @@ import numpy as np
 import pytest
 
 from trid3nt_server.workflows.telemac.modules import T2D, field, max_over_time, series
-from trid3nt_server.workflows.telemac.modules.module import Output
-from trid3nt_server.workflows.telemac.modules.outputs import (
-    OutputEmpty,
-    Solved,
-    profile,
-)
-from trid3nt_server.workflows.telemac.modules.sheet import fill
+from trid3nt_server.workflows.runtime.module import Output
+from trid3nt_server.workflows.runtime.primitives import OutputEmpty, profile
+from trid3nt_server.workflows.telemac.modules.outputs import Solved
+from trid3nt_server.workflows.runtime.sheet import fill
 
 #: Four nodes the run holds two metres of water on, and one bank film a
 #: centimetre deep - the shape that put 45 C into a reach-wide answer.
@@ -85,7 +82,7 @@ def test_the_envelope_reads_each_node_over_the_instants_it_held_water(filmed):
 def test_the_temporal_layers_legend_is_ranged_over_the_same_nodes(filmed):
     """The picture and the number agree by construction: the legend spans the
     water, and the film saturates at the top rather than owning the ramp."""
-    from trid3nt_server.workflows.telemac.modules.outputs import deliver
+    from trid3nt_server.workflows.runtime.primitives import deliver
 
     primitive = field("T1", t="every").animate()
     read = T2D.READS["field"](primitive, filmed)
@@ -185,6 +182,7 @@ def test_a_non_finite_value_is_not_written_onto_the_mesh(monkeypatch, infinite):
     """The dataset the render seam writes beside the result carries nothing
     where the engine wrote infinity."""
     from trid3nt_server.workflows.telemac.modules import outputs
+    from trid3nt_server.workflows.runtime.primitives import deliver
 
     written: dict[str, Any] = {}
 
@@ -200,8 +198,8 @@ def test_a_non_finite_value_is_not_written_onto_the_mesh(monkeypatch, infinite):
     monkeypatch.setattr("trid3nt_server.store.objects.runs_bucket", lambda: "runs")
     primitive = field("T1", t=0)
     read = T2D.READS["field"](primitive, infinite)
-    outputs.deliver(primitive, read, infinite, caption="water temperature",
-                    name="reach", where="the river")
+    deliver(primitive, read, infinite, caption="water temperature",
+            name="reach", where="the river")
     assert bool(np.isnan(written["values"][-1]))
     assert written["values"][0] == 10.0
 
