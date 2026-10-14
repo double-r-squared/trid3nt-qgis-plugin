@@ -124,6 +124,14 @@ dependencies = [
     "scipy==1.15.3",
     # xarray: 6 direct importers - gridded fetch decode, the COG write path.
     "xarray==2026.4.0",
+    # netCDF4: the GLM-lightning and GOES-ABI fetchers decode their granules
+    # with it. Nothing else carries the C library, so a resolver that drops it
+    # fails only at the first granule.
+    "netCDF4==1.7.4",
+    # flopy: the MODFLOW 6 writer and reader, in this process - authoring is
+    # not a container leg. Requires matplotlib, which the rest of the product
+    # still imports only opportunistically (stac_raster, the plugin).
+    "flopy==3.10.0",
     # The libraries below own a protocol family, so a fetch row names WHAT to
     # fetch and the library holds HOW.
     # odc-stac loads a STAC item set onto an odc-geo GeoBox; odc-geo is the
