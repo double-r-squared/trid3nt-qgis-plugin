@@ -22,6 +22,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 #: What each engine's ANSWER depends on, repo-relative; widening to the whole tree would make every packet stale on every commit.
 ENGINE_PATHS: dict[str, tuple[str, ...]] = {
     "telemac": ("workers/telemac/", "trid3nt_server/workflows/telemac/"),
+    "modflow": ("workers/modflow/", "trid3nt_server/workflows/modflow/"),
 }
 
 #: A commit list is a warning, not a changelog: past this many, the warning says how many and shows the newest.
