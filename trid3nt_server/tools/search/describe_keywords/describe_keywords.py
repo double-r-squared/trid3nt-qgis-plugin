@@ -8,12 +8,15 @@ with a keyword it learns is state it on a fill, through the
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Any, Mapping
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.inputs.user_input import nearest
 from trid3nt_server.tools import register_tool
+from trid3nt_server.workflows.modflow.modules.module import (
+    module_input_dir as modflow_input_dir)
 from trid3nt_server.workflows.runtime.module import load_module_input
 from trid3nt_server.workflows.telemac.modules.module import (
     module_input_dir)
@@ -45,8 +48,11 @@ class DescribeKeywordsError(RuntimeError):
         self.error_code = error_code
 
 
-def _exposed() -> list[str]:
-    return sorted(path.stem for path in module_input_dir().glob("*.json"))
+def _carried() -> dict[str, Path]:
+    """Every dictionary the system carries, by module name: wherever its wrapper loads its slots from."""
+    return {path.stem: directory
+            for directory in (module_input_dir(), modflow_input_dir())
+            for path in directory.glob("*.json")}
 
 
 def _words(text: str) -> list[str]:
@@ -107,9 +113,9 @@ def describe_keywords(module: str = "", keyword: str = "", query: str = "",
 
     For what a template's inputs do not name - a friction law, a turbulence
     model, an ice process, a wave spectrum - in ANY carried module (telemac2d,
-    telemac3d, khione, tomawac, gaia, artemis, waqtel, ...). State what you
-    learn on the call: `keywords={"LAW OF BOTTOM FRICTION": 4}`. Never runs
-    anything; never picks a template.
+    telemac3d, khione, tomawac, gaia, artemis, waqtel, gwf, gwt, gwe, ...). State
+    what you learn on the call: `keywords={"LAW OF BOTTOM FRICTION": 4}`. Never
+    runs anything; never picks a template.
 
     Args:
         module: The dictionary to read; EMPTY lists the carried modules.
@@ -122,20 +128,20 @@ def describe_keywords(module: str = "", keyword: str = "", query: str = "",
     Returns ``{module, entry}`` for a keyword, else ``{module, matches}``, the
     matches grouped by rubrique, best first.
     """
-    carried = _exposed()
+    carried = _carried()
     name = str(module or "").strip().lower()
     if not name:
         return {"modules": [
             {"module": m,
              "keyword_count": len(load_module_input(
-                 m, directory=module_input_dir()))}
-            for m in carried]}
+                 m, directory=carried[m]))}
+            for m in sorted(carried)]}
     if name not in carried:
         raise DescribeKeywordsError(
             "UNKNOWN_MODULE",
-            f"there is no keyword dictionary for {module!r} ({nearest(name, carried)}); "
-            f"the carried modules are {', '.join(carried)}.")
-    dictionary = load_module_input(name, directory=module_input_dir())
+            f"there is no keyword dictionary for {module!r} ({nearest(name, sorted(carried))}); "
+            f"the carried modules are {', '.join(sorted(carried))}.")
+    dictionary = load_module_input(name, directory=carried[name])
     asked = str(keyword or "").strip()
     if asked:
         by_spelling = {spelling.strip().upper(): slot for ident, slot in dictionary.items()
@@ -155,7 +161,7 @@ def describe_keywords(module: str = "", keyword: str = "", query: str = "",
         return {"module": name, "keyword_count": len(dictionary),
                 "sections": [{"rubrique": head, "keywords": count}
                              for head, count in sorted(sections.items())],
-                "modules": carried}
+                "modules": sorted(carried)}
 
     phrase = " ".join(_words(query))
     wanted = {w for w in _words(query) if w not in _GLUE}

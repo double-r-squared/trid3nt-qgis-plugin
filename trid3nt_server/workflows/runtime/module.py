@@ -99,6 +99,8 @@ class Slot:
     bounds: tuple[tuple[float, float], ...] = ()
     # This keyword's one value is a separator-joined selection from its choices, so the choices do not name whole values.
     multi_select: bool = False
+    # The dictionary does not mark this keyword optional and gives it no default, so a run stating nothing refuses on it - MODFLOW's shape; a TELEMAC row leaves it false and is required only through its OBLIG file mark.
+    mandatory: bool = False
 
     @property
     def is_list(self) -> bool:
@@ -115,12 +117,12 @@ class Slot:
 
     @property
     def is_required(self) -> bool:
-        """The engine will not start without this one: an OBLIG file, undefaulted.
+        """The engine will not start without this one: undefaulted and either an OBLIG file or a keyword the dictionary does not mark optional.
 
-        The dictionary's OBLIG mark is the only thing a run refuses on.
+        Other demands come from the engine's own listing (LECDON names the keyword) or from the writer's validate; a set invented here would guess at the Fortran's conditions.
         """
-        # Other demands come from the engine's own listing, where LECDON names the keyword; a set invented here would guess at the Fortran's conditions.
-        return self.is_file and self.file_mandatory and self.is_open
+        return self.is_open and (self.mandatory
+                                 or (self.is_file and self.file_mandatory))
 
     @property
     def whole_bounds(self) -> tuple[float, float] | None:
@@ -166,7 +168,7 @@ class Slot:
 
         A keyword with no bounds row is bounded by the engine alone.
         """
-        if not self.bounds or self.type == "STRING":
+        if not self.bounds or self.type in ("STRING", "ARRAY", "STRUCT"):
             return value
         low, high = self.bounds[position if len(self.bounds) > 1 else 0]
         if not (low <= float(value) <= high):
@@ -194,9 +196,11 @@ class Slot:
 # Keywords neither spelling of which both of the engine's readers take; a deck stating one stops before the solve.
 _UNREADABLE = frozenset({"LOCAL LONGITUDE, IN DEGREES"})
 
-# What each dictionary type is in Python; LOGICAL is separated from INTEGER in ``_scalar`` because a bool is an int.
+# What each dictionary type is in Python; LOGICAL is separated from INTEGER in ``_scalar`` because a bool is an int. ARRAY and STRUCT are MODFLOW's dictionary words: an array is a constant, one value per layer, or the NAME of an input holding the grid; a structured block is a filename, a table, or the mapping the authoring writes.
 _TYPES: Mapping[str, Any] = {
     "INTEGER": int, "REAL": (int, float), "LOGICAL": bool, "STRING": str,
+    "ARRAY": (int, float, str, list, tuple),
+    "STRUCT": (str, list, tuple, dict),
 }
 
 
@@ -286,6 +290,7 @@ def load_module_input(module: str, *, directory: Path) -> Mapping[str, Slot]:
         multi_select=row.get("multi_select", False),
         file_role=row.get("file_role", ""),
         file_mandatory=row.get("file_mandatory", False),
+        mandatory=row.get("mandatory", False),
         unit=bounded.get(row["identifier"], unbounded_row)[0],
         bounds=bounded.get(row["identifier"], unbounded_row)[1],
     ) for row in rows})

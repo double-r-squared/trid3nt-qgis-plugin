@@ -71,6 +71,9 @@ def test_every_exposed_module_answers_a_question_of_its_own():
         ("waqtel", "water temperature", "WATER TEMPERATURE"),
         ("gaia", "hindered settling", "HINDERED SETTLING"),
         ("tomawac", "wind generation", "WIND GENERATION"),
+        ("gwf", "specific discharge", "SAVE_SPECIFIC_DISCHARGE"),
+        ("gwt", "advective transport scheme", "SCHEME"),
+        ("gwe", "specific heat of water", "HEAT_CAPACITY_WATER"),
     ):
         found = _keywords(describe_keywords(module=module, query=query))
         assert wanted in found, f"{module}/{query!r}: {list(found)}"
@@ -91,9 +94,10 @@ def test_a_module_with_no_catalog_refuses_naming_the_ones_there_are():
 
 
 def _carried() -> list[str]:
-    from trid3nt_server.workflows.telemac.modules.module import module_input_dir
+    from trid3nt_server.tools.search.describe_keywords.describe_keywords import (
+        _carried as carried)
 
-    return sorted(p.stem for p in module_input_dir().glob("*.json"))
+    return sorted(carried())
 
 
 def test_an_empty_module_lists_every_carried_dictionary():
@@ -101,7 +105,7 @@ def test_an_empty_module_lists_every_carried_dictionary():
               for row in describe_keywords()["modules"]}
     assert sorted(listed) == _carried()
     assert {"telemac2d", "telemac3d", "khione", "tomawac", "gaia",
-            "artemis", "waqtel"} <= set(listed)
+            "artemis", "waqtel", "gwf", "gwt", "gwe"} <= set(listed)
     assert all(count > 0 for count in listed.values())
 
 
@@ -109,16 +113,31 @@ def test_describing_a_keyword_of_every_carried_module_returns_its_entry():
     """Each carried module's FIRST dictionary keyword, asked by its exact
     name, comes back as that dictionary's own entry - no module is special."""
     from trid3nt_server.workflows.runtime.module import load_module_input
-    from trid3nt_server.workflows.telemac.modules.module import module_input_dir
+    from trid3nt_server.tools.search.describe_keywords.describe_keywords import (
+        _carried as carried)
 
-    for module in _carried():
+    for module, directory in carried().items():
         slot = next(iter(load_module_input(
-            module, directory=module_input_dir()).values()))
+            module, directory=directory).values()))
         answer = describe_keywords(module=module, keyword=slot.keyword.lower())
         assert answer["module"] == module
         assert answer["entry"]["keyword"] == slot.keyword
         assert answer["entry"]["help"] == slot.desc
         assert answer["entry"]["type"] == slot.type
+
+
+def test_a_modflow_entry_carries_its_help_and_required_mark():
+    entry = describe_keywords(
+        module="gwf", keyword="WEL_STRESS_PERIOD_DATA")["entry"]
+    assert entry["type"] == "STRUCT"
+    assert entry["open"] is True and entry["required"] is True
+
+
+def test_a_modflow_choice_carries_the_dictionary_s_own_spellings():
+    entry = describe_keywords(
+        module="gwf", keyword="NPF_ALTERNATIVE_CELL_AVERAGING")["entry"]
+    assert entry["choices"] == ["logarithmic", "amt-lmk", "amt-hmk"]
+    assert entry["engine_default"] is None and entry["open"] is True
 
 
 def test_a_keyword_is_reached_by_its_identifier_too():

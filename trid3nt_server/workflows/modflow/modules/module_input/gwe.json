@@ -1,0 +1,3020 @@
+{
+  "module": "gwe",
+  "keywords": [
+    {
+      "keyword": "SCHEME",
+      "identifier": "ADV_SCHEME",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "advective scheme. scheme used to solve the advection term.  Can be upstream, central, or TVD.  If not specified, upstream weighting is the default weighting scheme.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "choices": [
+        "central",
+        "upstream",
+        "tvd"
+      ]
+    },
+    {
+      "keyword": "ATS_PERCEL",
+      "identifier": "ADV_ATS_PERCEL",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "fractional cell distance used for time step calculation. fractional cell distance submitted by the ADV Package to the adaptive time stepping (ATS) package.  If ATS\\_PERCEL is specified and the ATS Package is active, a time step calculation will be made for each cell based on flow through the cell and cell properties.  The largest time step will be calculated such that the advective fractional cell distance (ATS\\_PERCEL) is not exceeded for any active cell in the grid.  This time-step constraint will be submitted to the ATS Package, perhaps with constraints submitted by other packages, in the calculation of the time step.  ATS\\_PERCEL must be greater than zero.  If a value of zero is specified for ATS\\_PERCEL the program will automatically reset it to an internal no data value to indicate that time steps should not be subject to this constraint.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "XT3D_OFF",
+      "identifier": "CND_XT3D_OFF",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "deactivate xt3d. deactivate the xt3d method and use the faster and less accurate approximation.  This option may provide a fast and accurate solution under some circumstances, such as when flow aligns with the model grid, there is no mechanical dispersion, or when the longitudinal and transverse dispersivities are equal.  This option may also be used to assess the computational demand of the XT3D approach by noting the run time differences with and without this option on.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "XT3D_RHS",
+      "identifier": "CND_XT3D_RHS",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "xt3d on right-hand side. add xt3d terms to right-hand side, when possible.  This option uses less memory, but may require more iterations.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "EXPORT_ARRAY_ASCII",
+      "identifier": "CND_EXPORT_ARRAY_ASCII",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "export array variables to layered ascii files.. keyword that specifies input griddata arrays should be written to layered ascii output files.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "EXPORT_ARRAY_NETCDF",
+      "identifier": "CND_EXPORT_ARRAY_NETCDF",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "export array variables to netcdf output files.. keyword that specifies input gridded arrays should be written to the model output NetCDF file with attributes that support using the generated file as a MODFLOW 6 simulation input.  This option only has an effect when an output model NetCDF file is configured and the simulation is run in VALIDATE mode, otherwise it is ignored.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "ALH",
+      "identifier": "CND_ALH",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "longitudinal dispersivity in horizontal direction. longitudinal dispersivity in horizontal direction.  If flow is strictly horizontal, then this is the longitudinal dispersivity that will be used.  If flow is not strictly horizontal or strictly vertical, then the longitudinal dispersivity is a function of both ALH and ALV.  If mechanical dispersion is represented (by specifying any dispersivity values) then this array is required.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "ALV",
+      "identifier": "CND_ALV",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "longitudinal dispersivity in vertical direction. longitudinal dispersivity in vertical direction.  If flow is strictly vertical, then this is the longitudinal dispsersivity value that will be used.  If flow is not strictly horizontal or strictly vertical, then the longitudinal dispersivity is a function of both ALH and ALV.  If this value is not specified and mechanical dispersion is represented, then this array is set equal to ALH.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "ATH1",
+      "identifier": "CND_ATH1",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "transverse dispersivity in horizontal direction. transverse dispersivity in horizontal direction.  This is the transverse dispersivity value for the second ellipsoid axis.  If flow is strictly horizontal and directed in the x direction (along a row for a regular grid), then this value controls spreading in the y direction.  If mechanical dispersion is represented (by specifying any dispersivity values) then this array is required.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "ATH2",
+      "identifier": "CND_ATH2",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "transverse dispersivity in horizontal direction. transverse dispersivity in horizontal direction.  This is the transverse dispersivity value for the third ellipsoid axis.  If flow is strictly horizontal and directed in the x direction (along a row for a regular grid), then this value controls spreading in the z direction.  If this value is not specified and mechanical dispersion is represented, then this array is set equal to ATH1.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "ATV",
+      "identifier": "CND_ATV",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "transverse dispersivity when flow is in vertical direction. transverse dispersivity when flow is in vertical direction.  If flow is strictly vertical and directed in the z direction, then this value controls spreading in the x and y directions.  If this value is not specified and mechanical dispersion is represented, then this array is set equal to ATH2.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "KTW",
+      "identifier": "CND_KTW",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "thermal conductivity of the simulated fluid. thermal conductivity of the simulated fluid.   Note that the CND Package does not account for the tortuosity of the flow paths when solving for the conductive spread of heat.  If tortuosity plays an important role in the thermal conductivity calculation, its effect should be reflected in the value specified for KTW.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "KTS",
+      "identifier": "CND_KTS",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "thermal conductivity of the aquifer material. thermal conductivity of the solid aquifer material",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "AUXILIARY",
+      "identifier": "CTP_AUXILIARY",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "keyword to specify aux variables",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "AUXMULTNAME",
+      "identifier": "CTP_AUXMULTNAME",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "name of auxiliary variable for multiplier",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "BOUNDNAMES",
+      "identifier": "CTP_BOUNDNAMES",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRINT_INPUT",
+      "identifier": "CTP_PRINT_INPUT",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "print input to listing file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRINT_FLOWS",
+      "identifier": "CTP_PRINT_FLOWS",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "print calculated flows to listing file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "SAVE_FLOWS",
+      "identifier": "CTP_SAVE_FLOWS",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "save constant temperature flows to budget file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TS_FILERECORD",
+      "identifier": "CTP_TS_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "OBS_FILERECORD",
+      "identifier": "CTP_OBS_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "MAXBOUND",
+      "identifier": "CTP_MAXBOUND",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "maximum number of constant temperatures",
+      "rubrique": [
+        "DIMENSIONS"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "STRESS_PERIOD_DATA",
+      "identifier": "CTP_STRESS_PERIOD_DATA",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "PERIOD"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "LENGTH_UNITS",
+      "identifier": "DIS_LENGTH_UNITS",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "model length units. is the length units used for this model.  Values can be ``FEET'', ``METERS'', or ``CENTIMETERS''.  If not specified, the default is ``UNKNOWN''.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "NOGRB",
+      "identifier": "DIS_NOGRB",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "do not write binary grid file. keyword to deactivate writing of the binary grid file.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "GRB_FILERECORD",
+      "identifier": "DIS_GRB_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "XORIGIN",
+      "identifier": "DIS_XORIGIN",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "x-position of the model grid origin. x-position of the lower-left corner of the model grid.  A default value of zero is assigned if not specified.  The value for XORIGIN does not affect the model simulation, but it is written to the binary grid file so that postprocessors can locate the grid in space.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "YORIGIN",
+      "identifier": "DIS_YORIGIN",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "y-position of the model grid origin. y-position of the lower-left corner of the model grid.  If not specified, then a default value equal to zero is used.  The value for YORIGIN does not affect the model simulation, but it is written to the binary grid file so that postprocessors can locate the grid in space.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "ANGROT",
+      "identifier": "DIS_ANGROT",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "rotation angle. counter-clockwise rotation angle (in degrees) of the lower-left corner of the model grid.  If not specified, then a default value of 0.0 is assigned.  The value for ANGROT does not affect the model simulation, but it is written to the binary grid file so that postprocessors can locate the grid in space.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "EXPORT_ARRAY_ASCII",
+      "identifier": "DIS_EXPORT_ARRAY_ASCII",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "export array variables to layered ascii files.. keyword that specifies input griddata arrays should be written to layered ascii output files.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "EXPORT_ARRAY_NETCDF",
+      "identifier": "DIS_EXPORT_ARRAY_NETCDF",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "export array variables to netcdf output files.. keyword that specifies input gridded arrays should be written to the model output NetCDF file with attributes that support using the generated file as a MODFLOW 6 simulation input.  This option only has an effect when an output model NetCDF file is configured and the simulation is run in VALIDATE mode, otherwise it is ignored.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "CRS",
+      "identifier": "DIS_CRS",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "CRS user input string. is a real-world coordinate reference system (CRS) for the model, for example, an EPSG integer code (e.g. 26915), authority string (i.e. epsg:26915), or Open Geospatial Consortium Well-Known Text (WKT) specification. Limited to 5000 characters. The entry for CRS does not affect the model simulation, but it is written to the binary grid file so that postprocessors can locate the grid in space.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "NCF_FILERECORD",
+      "identifier": "DIS_NCF_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "NLAY",
+      "identifier": "DIS_NLAY",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "number of layers. is the number of layers in the model grid.",
+      "rubrique": [
+        "DIMENSIONS"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1
+    },
+    {
+      "keyword": "NROW",
+      "identifier": "DIS_NROW",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "number of rows. is the number of rows in the model grid.",
+      "rubrique": [
+        "DIMENSIONS"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 2
+    },
+    {
+      "keyword": "NCOL",
+      "identifier": "DIS_NCOL",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "number of columns. is the number of columns in the model grid.",
+      "rubrique": [
+        "DIMENSIONS"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 2
+    },
+    {
+      "keyword": "DELR",
+      "identifier": "DIS_DELR",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "spacing along a row. is the column spacing in the row direction.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1.0
+    },
+    {
+      "keyword": "DELC",
+      "identifier": "DIS_DELC",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "spacing along a column. is the row spacing in the column direction.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1.0
+    },
+    {
+      "keyword": "TOP",
+      "identifier": "DIS_TOP",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "cell top elevation. is the top elevation for each cell in the top model layer.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1.0
+    },
+    {
+      "keyword": "BOTM",
+      "identifier": "DIS_BOTM",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "cell bottom elevation. is the bottom elevation for each cell.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0.0
+    },
+    {
+      "keyword": "IDOMAIN",
+      "identifier": "DIS_IDOMAIN",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "idomain existence array. is an optional array that characterizes the existence status of a cell.  If the IDOMAIN array is not specified, then all model cells exist within the solution.  If the IDOMAIN value for a cell is 0, the cell does not exist in the simulation.  Input and output values will be read and written for the cell, but internal to the program, the cell is excluded from the solution.  If the IDOMAIN value for a cell is 1, the cell exists in the simulation.  If the IDOMAIN value for a cell is -1, the cell does not exist in the simulation.  Furthermore, the first existing cell above will be connected to the first existing cell below.  This type of cell is referred to as a ``vertical pass through'' cell.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "LENGTH_UNITS",
+      "identifier": "DISU_LENGTH_UNITS",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "model length units. is the length units used for this model.  Values can be ``FEET'', ``METERS'', or ``CENTIMETERS''.  If not specified, the default is ``UNKNOWN''.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "NOGRB",
+      "identifier": "DISU_NOGRB",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "do not write binary grid file. keyword to deactivate writing of the binary grid file.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "GRB_FILERECORD",
+      "identifier": "DISU_GRB_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "XORIGIN",
+      "identifier": "DISU_XORIGIN",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "x-position origin of the model grid coordinate system. x-position of the origin used for model grid vertices.  This value should be provided in a real-world coordinate system.  A default value of zero is assigned if not specified.  The value for XORIGIN does not affect the model simulation, but it is written to the binary grid file so that postprocessors can locate the grid in space.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "YORIGIN",
+      "identifier": "DISU_YORIGIN",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "y-position origin of the model grid coordinate system. y-position of the origin used for model grid vertices.  This value should be provided in a real-world coordinate system.  If not specified, then a default value equal to zero is used.  The value for YORIGIN does not affect the model simulation, but it is written to the binary grid file so that postprocessors can locate the grid in space.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "ANGROT",
+      "identifier": "DISU_ANGROT",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "rotation angle. counter-clockwise rotation angle (in degrees) of the model grid coordinate system relative to a real-world coordinate system.  If not specified, then a default value of 0.0 is assigned.  The value for ANGROT does not affect the model simulation, but it is written to the binary grid file so that postprocessors can locate the grid in space.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "VERTICAL_OFFSET_TOLERANCE",
+      "identifier": "DISU_VERTICAL_OFFSET_TOLERANCE",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "vertical length dimension for top and bottom checking. checks are performed to ensure that the top of a cell is not higher than the bottom of an overlying cell.  This option can be used to specify the tolerance that is used for checking.  If top of a cell is above the bottom of an overlying cell by a value less than this tolerance, then the program will not terminate with an error.  The default value is zero.  This option should generally not be used.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0.0
+    },
+    {
+      "keyword": "EXPORT_ARRAY_ASCII",
+      "identifier": "DISU_EXPORT_ARRAY_ASCII",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "export array variables to layered ascii files.. keyword that specifies input griddata arrays should be written to layered ascii output files.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "CRS",
+      "identifier": "DISU_CRS",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "CRS user input string. is a real-world coordinate reference system (CRS) for the model, for example, an EPSG integer code (e.g. 26915), authority string (i.e. epsg:26915), or Open Geospatial Consortium Well-Known Text (WKT) specification. Limited to 5000 characters. The entry for CRS does not affect the model simulation, but it is written to the binary grid file so that postprocessors can locate the grid in space.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "NODES",
+      "identifier": "DISU_NODES",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "number of layers. is the number of cells in the model grid.",
+      "rubrique": [
+        "DIMENSIONS"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "NJA",
+      "identifier": "DISU_NJA",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "number of columns. is the sum of the number of connections and NODES.  When calculating the total number of connections, the connection between cell n and cell m is considered to be different from the connection between cell m and cell n.  Thus, NJA is equal to the total number of connections, including n to m and m to n, and the total number of cells.",
+      "rubrique": [
+        "DIMENSIONS"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "NVERT",
+      "identifier": "DISU_NVERT",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "number of vertices. is the total number of (x, y) vertex pairs used to define the plan-view shape of each cell in the model grid.  If NVERT is not specified or is specified as zero, then the VERTICES and CELL2D blocks below are not read.  NVERT and the accompanying VERTICES and CELL2D blocks should be specified for most simulations.  If the XT3D or SAVE\\_SPECIFIC\\_DISCHARGE options are specified in the NPF Package, then this information is required.",
+      "rubrique": [
+        "DIMENSIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TOP",
+      "identifier": "DISU_TOP",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "cell top elevation. is the top elevation for each cell in the model grid.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "BOT",
+      "identifier": "DISU_BOT",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "cell bottom elevation. is the bottom elevation for each cell.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "AREA",
+      "identifier": "DISU_AREA",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "cell surface area. is the cell surface area (in plan view).",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "IDOMAIN",
+      "identifier": "DISU_IDOMAIN",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "idomain existence array. is an optional array that characterizes the existence status of a cell.  If the IDOMAIN array is not specified, then all model cells exist within the solution.  If the IDOMAIN value for a cell is 0, the cell does not exist in the simulation.  Input and output values will be read and written for the cell, but internal to the program, the cell is excluded from the solution.  If the IDOMAIN value for a cell is 1 or greater, the cell exists in the simulation.  IDOMAIN values of -1 cannot be specified for the DISU Package.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "IAC",
+      "identifier": "DISU_IAC",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "number of cell connections. is the number of connections (plus 1) for each cell.  The sum of all the entries in IAC must be equal to NJA.",
+      "rubrique": [
+        "CONNECTIONDATA"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "JA",
+      "identifier": "DISU_JA",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "grid connectivity. is a list of cell number (n) followed by its connecting cell numbers (m) for each of the m cells connected to cell n. The number of values to provide for cell n is IAC(n).  This list is sequentially provided for the first to the last cell. The first value in the list must be cell n itself, and the remaining cells must be listed in an increasing order (sorted from lowest number to highest).  Note that the cell and its connections are only supplied for the GWE cells and their connections to the other GWE cells.  Also note that the JA list input may be divided such that every node and its connectivity list can be on a separate line for ease in readability of the file. To further ease readability of the file, the node number of the cell whose connectivity is subsequently listed, may be expressed as a negative number, the sign of which is subsequently converted to positive by the code.",
+      "rubrique": [
+        "CONNECTIONDATA"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "IHC",
+      "identifier": "DISU_IHC",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "connection type. is an index array indicating the direction between node n and all of its m connections.  If IHC = 0 then cell n and cell m are connected in the vertical direction.  Cell n overlies cell m if the cell number for n is less than m; cell m overlies cell n if the cell number for m is less than n.  If IHC = 1 then cell n and cell m are connected in the horizontal direction.  If IHC = 2 then cell n and cell m are connected in the horizontal direction, and the connection is vertically staggered.  A vertically staggered connection is one in which a cell is horizontally connected to more than one cell in a horizontal connection.",
+      "rubrique": [
+        "CONNECTIONDATA"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "CL12",
+      "identifier": "DISU_CL12",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "connection lengths. is the array containing connection lengths between the center of cell n and the shared face with each adjacent m cell.",
+      "rubrique": [
+        "CONNECTIONDATA"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "HWVA",
+      "identifier": "DISU_HWVA",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "connection lengths. is a symmetric array of size NJA.  For horizontal connections, entries in HWVA are the horizontal width perpendicular to flow.  For vertical connections, entries in HWVA are the vertical area for flow.  Thus, values in the HWVA array contain dimensions of both length and area.  Entries in the HWVA array have a one-to-one correspondence with the connections specified in the JA array.  Likewise, there is a one-to-one correspondence between entries in the HWVA array and entries in the IHC array, which specifies the connection type (horizontal or vertical).  Entries in the HWVA array must be symmetric; the program will terminate with an error if the value for HWVA for an n to m connection does not equal the value for HWVA for the corresponding n to m connection.",
+      "rubrique": [
+        "CONNECTIONDATA"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "ANGLDEGX",
+      "identifier": "DISU_ANGLDEGX",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "angle of face normal to connection. is the angle (in degrees) between the horizontal x-axis and the outward normal to the face between a cell and its connecting cells. The angle varies between zero and 360.0 degrees, where zero degrees points in the positive x-axis direction, and 90 degrees points in the positive y-axis direction.  ANGLDEGX is only needed if horizontal anisotropy is specified in the NPF Package, if the XT3D option is used in the NPF Package, or if the SAVE\\_SPECIFIC\\_DISCHARGE option is specified in the NPF Package.  ANGLDEGX does not need to be specified if these conditions are not met.  ANGLDEGX is of size NJA; values specified for vertical connections and for the diagonal position are not used.  Note that ANGLDEGX is read in degrees, which is different from MODFLOW-USG, which reads a similar variable (ANGLEX) in radians.",
+      "rubrique": [
+        "CONNECTIONDATA"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "VERTICES",
+      "identifier": "DISU_VERTICES",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "vertices data",
+      "rubrique": [
+        "VERTICES"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "CELL2D",
+      "identifier": "DISU_CELL2D",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "cell2d data",
+      "rubrique": [
+        "CELL2D"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "LENGTH_UNITS",
+      "identifier": "DISV_LENGTH_UNITS",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "model length units. is the length units used for this model.  Values can be ``FEET'', ``METERS'', or ``CENTIMETERS''.  If not specified, the default is ``UNKNOWN''.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "NOGRB",
+      "identifier": "DISV_NOGRB",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "do not write binary grid file. keyword to deactivate writing of the binary grid file.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "GRB_FILERECORD",
+      "identifier": "DISV_GRB_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "XORIGIN",
+      "identifier": "DISV_XORIGIN",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "x-position origin of the model grid coordinate system. x-position of the origin used for model grid vertices.  This value should be provided in a real-world coordinate system.  A default value of zero is assigned if not specified.  The value for XORIGIN does not affect the model simulation, but it is written to the binary grid file so that postprocessors can locate the grid in space.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "YORIGIN",
+      "identifier": "DISV_YORIGIN",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "y-position origin of the model grid coordinate system. y-position of the origin used for model grid vertices.  This value should be provided in a real-world coordinate system.  If not specified, then a default value equal to zero is used.  The value for YORIGIN does not affect the model simulation, but it is written to the binary grid file so that postprocessors can locate the grid in space.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "ANGROT",
+      "identifier": "DISV_ANGROT",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "rotation angle. counter-clockwise rotation angle (in degrees) of the model grid coordinate system relative to a real-world coordinate system.  If not specified, then a default value of 0.0 is assigned.  The value for ANGROT does not affect the model simulation, but it is written to the binary grid file so that postprocessors can locate the grid in space.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "EXPORT_ARRAY_ASCII",
+      "identifier": "DISV_EXPORT_ARRAY_ASCII",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "export array variables to layered ascii files.. keyword that specifies input griddata arrays should be written to layered ascii output files.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "EXPORT_ARRAY_NETCDF",
+      "identifier": "DISV_EXPORT_ARRAY_NETCDF",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "export array variables to netcdf output files.. keyword that specifies input gridded arrays should be written to the model output NetCDF file with attributes that support using the generated file as a MODFLOW 6 simulation input.  This option only has an effect when an output model NetCDF file is configured and the simulation is run in VALIDATE mode, otherwise it is ignored.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "CRS",
+      "identifier": "DISV_CRS",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "CRS user input string. is a real-world coordinate reference system (CRS) for the model, for example, an EPSG integer code (e.g. 26915), authority string (i.e. epsg:26915), or Open Geospatial Consortium Well-Known Text (WKT) specification. Limited to 5000 characters. The entry for CRS does not affect the model simulation, but it is written to the binary grid file so that postprocessors can locate the grid in space.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "NCF_FILERECORD",
+      "identifier": "DISV_NCF_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "NLAY",
+      "identifier": "DISV_NLAY",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "number of layers. is the number of layers in the model grid.",
+      "rubrique": [
+        "DIMENSIONS"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "NCPL",
+      "identifier": "DISV_NCPL",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "number of cells per layer. is the number of cells per layer.  This is a constant value for the grid and it applies to all layers.",
+      "rubrique": [
+        "DIMENSIONS"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "NVERT",
+      "identifier": "DISV_NVERT",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "number of columns. is the total number of (x, y) vertex pairs used to characterize the horizontal configuration of the model grid.",
+      "rubrique": [
+        "DIMENSIONS"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "TOP",
+      "identifier": "DISV_TOP",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "model top elevation. is the top elevation for each cell in the top model layer.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "BOTM",
+      "identifier": "DISV_BOTM",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "model bottom elevation. is the bottom elevation for each cell.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "IDOMAIN",
+      "identifier": "DISV_IDOMAIN",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "idomain existence array. is an optional array that characterizes the existence status of a cell.  If the IDOMAIN array is not specified, then all model cells exist within the solution.  If the IDOMAIN value for a cell is 0, the cell does not exist in the simulation.  Input and output values will be read and written for the cell, but internal to the program, the cell is excluded from the solution.  If the IDOMAIN value for a cell is 1, the cell exists in the simulation.  If the IDOMAIN value for a cell is -1, the cell does not exist in the simulation.  Furthermore, the first existing cell above will be connected to the first existing cell below.  This type of cell is referred to as a ``vertical pass through'' cell.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "VERTICES",
+      "identifier": "DISV_VERTICES",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "vertices data",
+      "rubrique": [
+        "VERTICES"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "CELL2D",
+      "identifier": "DISV_CELL2D",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "cell2d data",
+      "rubrique": [
+        "CELL2D"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "AUXILIARY",
+      "identifier": "ESL_AUXILIARY",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "keyword to specify aux variables",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "AUXMULTNAME",
+      "identifier": "ESL_AUXMULTNAME",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "name of auxiliary variable for multiplier",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "BOUNDNAMES",
+      "identifier": "ESL_BOUNDNAMES",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRINT_INPUT",
+      "identifier": "ESL_PRINT_INPUT",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "print input to listing file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRINT_FLOWS",
+      "identifier": "ESL_PRINT_FLOWS",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "print calculated flows to listing file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "SAVE_FLOWS",
+      "identifier": "ESL_SAVE_FLOWS",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "save well flows to budget file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TS_FILERECORD",
+      "identifier": "ESL_TS_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "OBS_FILERECORD",
+      "identifier": "ESL_OBS_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "MAXBOUND",
+      "identifier": "ESL_MAXBOUND",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "maximum number of sources",
+      "rubrique": [
+        "DIMENSIONS"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "STRESS_PERIOD_DATA",
+      "identifier": "ESL_STRESS_PERIOD_DATA",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "PERIOD"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "SAVE_FLOWS",
+      "identifier": "EST_SAVE_FLOWS",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "save calculated flows to budget file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "ZERO_ORDER_DECAY_WATER",
+      "identifier": "EST_ZERO_ORDER_DECAY_WATER",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "activate zero-order decay in aqueous phase. is a text keyword to indicate that zero-order decay will occur in the aqueous phase. That is, decay occurs in the water and is a rate per volume of water only, not per volume of aquifer (i.e., grid cell).  Use of this keyword requires that DECAY\\_WATER is specified in the GRIDDATA block.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "ZERO_ORDER_DECAY_SOLID",
+      "identifier": "EST_ZERO_ORDER_DECAY_SOLID",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "activate zero-order decay in solid phase. is a text keyword to indicate that zero-order decay will occur in the solid phase. That is, decay occurs in the solid and is a rate per mass (not volume) of solid only.  Use of this keyword requires that DECAY\\_SOLID is specified in the GRIDDATA block.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "DENSITY_WATER",
+      "identifier": "EST_DENSITY_WATER",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "density of water. density of water used by calculations related to heat storage and conduction.  This value is set to 1,000 kg/m3 if no overriding value is specified.  A user-specified value should be provided for models that use units other than kilograms and meters or if it is necessary to use a value other than the default.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1000.0
+    },
+    {
+      "keyword": "HEAT_CAPACITY_WATER",
+      "identifier": "EST_HEAT_CAPACITY_WATER",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "heat capacity of water. heat capacity of water used by calculations related to heat storage and conduction.  This value is set to 4,184 J/kg/C if no overriding value is specified.  A user-specified value should be provided for models that use units other than kilograms, joules, and degrees Celsius or it is necessary to use a value other than the default.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 4184.0
+    },
+    {
+      "keyword": "LATENT_HEAT_VAPORIZATION",
+      "identifier": "EST_LATENT_HEAT_VAPORIZATION",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "latent heat of vaporization. latent heat of vaporization is the amount of energy that is required to convert a given quantity of liquid into a gas and is associated with evaporative cooling.  While the EST package does not simulate evaporation, multiple other packages in a GWE simulation may.  To avoid having to specify the latent heat of vaporization in multiple packages, it is specified in a single location and accessed wherever it is needed.  For example, evaporation may occur from the surface of streams or lakes and the energy consumed by the change in phase would be needed in both the SFE and LKE packages.  This value is set to 2,453,500 J/kg if no overriding value is specified.  A user-specified value should be provided for models that use units other than joules and kilograms or if it is necessary to use a value other than the default.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 2453500.0
+    },
+    {
+      "keyword": "POROSITY",
+      "identifier": "EST_POROSITY",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "porosity. is the mobile domain porosity, defined as the mobile domain pore volume per mobile domain volume.  The GWE model does not support the concept of an immobile domain in the context of heat transport.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "DECAY_WATER",
+      "identifier": "EST_DECAY_WATER",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "aqueous phase decay rate coefficient. is the rate coefficient for zero-order decay for the aqueous phase of the mobile domain.  A negative value indicates heat (energy) production.  The dimensions of zero-order decay in the aqueous phase are energy per length cubed (volume of water) per time.  Zero-order decay in the aqueous phase will have no effect on simulation results unless ZERO\\_ORDER\\_DECAY\\_WATER is specified in the options block.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "DECAY_SOLID",
+      "identifier": "EST_DECAY_SOLID",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "solid phase decay rate coefficient. is the rate coefficient for zero-order decay for the solid phase.  A negative value indicates heat (energy) production. The dimensions of zero-order decay in the solid phase are energy per mass of solid per time. Zero-order decay in the solid phase will have no effect on simulation results unless ZERO\\_ORDER\\_DECAY\\_SOLID is specified in the options block.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "HEAT_CAPACITY_SOLID",
+      "identifier": "EST_HEAT_CAPACITY_SOLID",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "heat capacity of the aquifer material. is the mass-based heat capacity of dry solids (aquifer material). For example, units of J/kg/C may be used (or equivalent).",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "DENSITY_SOLID",
+      "identifier": "EST_DENSITY_SOLID",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "density of aquifer material. is a user-specified value of the density of aquifer material not considering the voids. Value will remain fixed for the entire simulation.  For example, if working in SI units, values may be entered as kilograms per cubic meter.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "SAVE_FLOWS",
+      "identifier": "FMI_SAVE_FLOWS",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "save calculated flow imbalance correction to budget file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "FLOW_IMBALANCE_CORRECTION",
+      "identifier": "FMI_FLOW_IMBALANCE_CORRECTION",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "correct for flow imbalance. correct for an imbalance in flows by assuming that any residual flow error comes in or leaves at the temperature of the cell.  When this option is activated, the GWE Model budget written to the listing file will contain two additional entries: FLOW-ERROR and FLOW-CORRECTION.  These two entries will be equal but opposite in sign.  The FLOW-CORRECTION term is a mass flow that is added to offset the error caused by an imprecise flow balance.  If these terms are not relatively small, the flow model should be rerun with stricter convergence tolerances.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PACKAGEDATA",
+      "identifier": "FMI_PACKAGEDATA",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "flowtype list",
+      "rubrique": [
+        "PACKAGEDATA"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "EXPORT_ARRAY_ASCII",
+      "identifier": "IC_EXPORT_ARRAY_ASCII",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "export array variables to layered ascii files.. keyword that specifies input griddata arrays should be written to layered ascii output files.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "EXPORT_ARRAY_NETCDF",
+      "identifier": "IC_EXPORT_ARRAY_NETCDF",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "export array variables to netcdf output files.. keyword that specifies input gridded arrays should be written to the model output NetCDF file with attributes that support using the generated file as a MODFLOW 6 simulation input.  This option only has an effect when an output model NetCDF file is configured and the simulation is run in VALIDATE mode, otherwise it is ignored.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "STRT",
+      "identifier": "IC_STRT",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "starting temperature. is the initial (starting) temperature---that is, the temperature at the beginning of the GWE Model simulation.  STRT must be specified for all GWE Model simulations. One value is read for every model cell.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0.0
+    },
+    {
+      "keyword": "FLOW_PACKAGE_NAME",
+      "identifier": "LKE_FLOW_PACKAGE_NAME",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "keyword to specify name of corresponding flow package. keyword to specify the name of the corresponding flow package.  If not specified, then the corresponding flow package must have the same name as this advanced transport package (the name associated with this package in the GWE name file).",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "AUXILIARY",
+      "identifier": "LKE_AUXILIARY",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "keyword to specify aux variables",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "FLOW_PACKAGE_AUXILIARY_NAME",
+      "identifier": "LKE_FLOW_PACKAGE_AUXILIARY_NAME",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "keyword to specify name of temperature auxiliary variable in flow package. keyword to specify the name of an auxiliary variable in the corresponding flow package.  If specified, then the simulated temperatures from this advanced transport package will be copied into the auxiliary variable specified with this name.  Note that the flow package must have an auxiliary variable with this name or the program will terminate with an error.  If the flows for this advanced transport package are read from a file, then this option will have no effect.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "BOUNDNAMES",
+      "identifier": "LKE_BOUNDNAMES",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRINT_INPUT",
+      "identifier": "LKE_PRINT_INPUT",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "print input to listing file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRINT_TEMPERATURE",
+      "identifier": "LKE_PRINT_TEMPERATURE",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "print calculated temperatures to listing file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRINT_FLOWS",
+      "identifier": "LKE_PRINT_FLOWS",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "print calculated flows to listing file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "SAVE_FLOWS",
+      "identifier": "LKE_SAVE_FLOWS",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "save lake flows to budget file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TEMPERATURE_FILERECORD",
+      "identifier": "LKE_TEMPERATURE_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "BUDGET_FILERECORD",
+      "identifier": "LKE_BUDGET_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "BUDGETCSV_FILERECORD",
+      "identifier": "LKE_BUDGETCSV_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TS_FILERECORD",
+      "identifier": "LKE_TS_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "OBS_FILERECORD",
+      "identifier": "LKE_OBS_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PACKAGEDATA",
+      "identifier": "LKE_PACKAGEDATA",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "PACKAGEDATA"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "LAKEPERIODDATA",
+      "identifier": "LKE_LAKEPERIODDATA",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "PERIOD"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "PRINT_INPUT",
+      "identifier": "MVE_PRINT_INPUT",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "print input to listing file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRINT_FLOWS",
+      "identifier": "MVE_PRINT_FLOWS",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "print calculated flows to listing file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "SAVE_FLOWS",
+      "identifier": "MVE_SAVE_FLOWS",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "save lake flows to budget file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "BUDGET_FILERECORD",
+      "identifier": "MVE_BUDGET_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "BUDGETCSV_FILERECORD",
+      "identifier": "MVE_BUDGETCSV_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "FLOW_PACKAGE_NAME",
+      "identifier": "MWE_FLOW_PACKAGE_NAME",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "keyword to specify name of corresponding flow package. keyword to specify the name of the corresponding flow package.  If not specified, then the corresponding flow package must have the same name as this advanced transport package (the name associated with this package in the GWE name file).",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "AUXILIARY",
+      "identifier": "MWE_AUXILIARY",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "keyword to specify aux variables",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "FLOW_PACKAGE_AUXILIARY_NAME",
+      "identifier": "MWE_FLOW_PACKAGE_AUXILIARY_NAME",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "keyword to specify name of temperature auxiliary variable in flow package. keyword to specify the name of an auxiliary variable in the corresponding flow package.  If specified, then the simulated temperatures from this advanced transport package will be copied into the auxiliary variable specified with this name.  Note that the flow package must have an auxiliary variable with this name or the program will terminate with an error.  If the flows for this advanced transport package are read from a file, then this option will have no effect.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "BOUNDNAMES",
+      "identifier": "MWE_BOUNDNAMES",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRINT_INPUT",
+      "identifier": "MWE_PRINT_INPUT",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "print input to listing file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRINT_TEMPERATURE",
+      "identifier": "MWE_PRINT_TEMPERATURE",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "print calculated temperatures to listing file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRINT_FLOWS",
+      "identifier": "MWE_PRINT_FLOWS",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "print calculated flows to listing file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "SAVE_FLOWS",
+      "identifier": "MWE_SAVE_FLOWS",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "save well flows to budget file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TEMPERATURE_FILERECORD",
+      "identifier": "MWE_TEMPERATURE_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "BUDGET_FILERECORD",
+      "identifier": "MWE_BUDGET_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "BUDGETCSV_FILERECORD",
+      "identifier": "MWE_BUDGETCSV_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TS_FILERECORD",
+      "identifier": "MWE_TS_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "OBS_FILERECORD",
+      "identifier": "MWE_OBS_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PACKAGEDATA",
+      "identifier": "MWE_PACKAGEDATA",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "PACKAGEDATA"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "MWEPERIODDATA",
+      "identifier": "MWE_MWEPERIODDATA",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "PERIOD"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "LIST",
+      "identifier": "NAM_LIST",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "name of listing file. is name of the listing file to create for this GWE model.  If not specified, then the name of the list file will be the basename of the GWE model name file and the ``.lst'' extension.  For example, if the GWE name file is called ``my.model.nam'' then the list file will be called ``my.model.lst''.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRINT_INPUT",
+      "identifier": "NAM_PRINT_INPUT",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "print input to listing file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRINT_FLOWS",
+      "identifier": "NAM_PRINT_FLOWS",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "print calculated flows to listing file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "SAVE_FLOWS",
+      "identifier": "NAM_SAVE_FLOWS",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "save flows for all packages to budget file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "DEPENDENT_VARIABLE_SCALING",
+      "identifier": "NAM_DEPENDENT_VARIABLE_SCALING",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "flag to scale X and RHS. flag to scale X and RHS to avoid very large positive or negative dependent variable values",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "NC_MESH2D_FILERECORD",
+      "identifier": "NAM_NC_MESH2D_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "NetCDF layered mesh fileout record.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "NC_STRUCTURED_FILERECORD",
+      "identifier": "NAM_NC_STRUCTURED_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "NetCDF structured fileout record.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "NC_FILERECORD",
+      "identifier": "NAM_NC_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "NetCDF filerecord",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PACKAGES",
+      "identifier": "NAM_PACKAGES",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "package list",
+      "rubrique": [
+        "PACKAGES"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "BUDGET_FILERECORD",
+      "identifier": "OC_BUDGET_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "BUDGETCSV_FILERECORD",
+      "identifier": "OC_BUDGETCSV_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TEMPERATURE_FILERECORD",
+      "identifier": "OC_TEMPERATURE_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TEMPERATUREPRINTRECORD",
+      "identifier": "OC_TEMPERATUREPRINTRECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "SAVERECORD",
+      "identifier": "OC_SAVERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "PERIOD"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRINTRECORD",
+      "identifier": "OC_PRINTRECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "PERIOD"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "FLOW_PACKAGE_NAME",
+      "identifier": "SFE_FLOW_PACKAGE_NAME",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "keyword to specify name of corresponding flow package. keyword to specify the name of the corresponding flow package.  If not specified, then the corresponding flow package must have the same name as this advanced transport package (the name associated with this package in the GWE name file).",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "AUXILIARY",
+      "identifier": "SFE_AUXILIARY",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "keyword to specify aux variables",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "FLOW_PACKAGE_AUXILIARY_NAME",
+      "identifier": "SFE_FLOW_PACKAGE_AUXILIARY_NAME",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "keyword to specify name of temperature auxiliary variable in flow package. keyword to specify the name of an auxiliary variable provided in the corresponding flow package (i.e., FLOW\\_PACKAGE\\_NAME).  If specified, then the simulated temperatures from this advanced energy transport package will be copied into the auxiliary variable specified with this name.  Note that the flow package must have an auxiliary variable with this name or the program will terminate with an error.  If the flows for this advanced energy transport package are read from a file, then this option will have no effect.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "BOUNDNAMES",
+      "identifier": "SFE_BOUNDNAMES",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRINT_INPUT",
+      "identifier": "SFE_PRINT_INPUT",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "print input to listing file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRINT_TEMPERATURE",
+      "identifier": "SFE_PRINT_TEMPERATURE",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "print calculated temperature to listing file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRINT_FLOWS",
+      "identifier": "SFE_PRINT_FLOWS",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "print calculated flows to listing file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "SAVE_FLOWS",
+      "identifier": "SFE_SAVE_FLOWS",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "save reach flows to budget file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TEMPERATURE_FILERECORD",
+      "identifier": "SFE_TEMPERATURE_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "BUDGET_FILERECORD",
+      "identifier": "SFE_BUDGET_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "BUDGETCSV_FILERECORD",
+      "identifier": "SFE_BUDGETCSV_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TS_FILERECORD",
+      "identifier": "SFE_TS_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "OBS_FILERECORD",
+      "identifier": "SFE_OBS_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PACKAGEDATA",
+      "identifier": "SFE_PACKAGEDATA",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "PACKAGEDATA"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "REACHPERIODDATA",
+      "identifier": "SFE_REACHPERIODDATA",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "PERIOD"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "PRINT_FLOWS",
+      "identifier": "SSM_PRINT_FLOWS",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "print calculated flows to listing file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "SAVE_FLOWS",
+      "identifier": "SSM_SAVE_FLOWS",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "save calculated flows to budget file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "SOURCES",
+      "identifier": "SSM_SOURCES",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "package list",
+      "rubrique": [
+        "SOURCES"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "FILEINPUT",
+      "identifier": "SSM_FILEINPUT",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "FILEINPUT"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "FLOW_PACKAGE_NAME",
+      "identifier": "UZE_FLOW_PACKAGE_NAME",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "keyword to specify name of corresponding flow package. keyword to specify the name of the corresponding flow package.  If not specified, then the corresponding flow package must have the same name as this advanced transport package (the name associated with this package in the GWE name file).",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "AUXILIARY",
+      "identifier": "UZE_AUXILIARY",
+      "type": "ARRAY",
+      "size": 1,
+      "unbounded": false,
+      "help": "keyword to specify aux variables",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "FLOW_PACKAGE_AUXILIARY_NAME",
+      "identifier": "UZE_FLOW_PACKAGE_AUXILIARY_NAME",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "keyword to specify name of concentration auxiliary variable in flow package. keyword to specify the name of an auxiliary variable in the corresponding flow package.  If specified, then the simulated temperatures from this advanced transport package will be copied into the auxiliary variable specified with this name.  Note that the flow package must have an auxiliary variable with this name or the program will terminate with an error.  If the flows for this advanced transport package are read from a file, then this option will have no effect.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "BOUNDNAMES",
+      "identifier": "UZE_BOUNDNAMES",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRINT_INPUT",
+      "identifier": "UZE_PRINT_INPUT",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "print input to listing file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRINT_TEMPERATURE",
+      "identifier": "UZE_PRINT_TEMPERATURE",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "print calculated temperatures to listing file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRINT_FLOWS",
+      "identifier": "UZE_PRINT_FLOWS",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "print calculated flows to listing file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "SAVE_FLOWS",
+      "identifier": "UZE_SAVE_FLOWS",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "save UZE cell flows to budget file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TEMPERATURE_FILERECORD",
+      "identifier": "UZE_TEMPERATURE_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "BUDGET_FILERECORD",
+      "identifier": "UZE_BUDGET_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "BUDGETCSV_FILERECORD",
+      "identifier": "UZE_BUDGETCSV_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TS_FILERECORD",
+      "identifier": "UZE_TS_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "OBS_FILERECORD",
+      "identifier": "UZE_OBS_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PACKAGEDATA",
+      "identifier": "UZE_PACKAGEDATA",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "PACKAGEDATA"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "UZEPERIODDATA",
+      "identifier": "UZE_UZEPERIODDATA",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "PERIOD"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "TIME_UNITS",
+      "identifier": "TDIS_TIME_UNITS",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "time unit. is the time units of the simulation.  This is a text string that is used as a label within model output files.  Values for time\\_units may be ``unknown'',  ``seconds'', ``minutes'', ``hours'', ``days'', or ``years''.  The default time unit is ``unknown''.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "START_DATE_TIME",
+      "identifier": "TDIS_START_DATE_TIME",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "starting date and time. is the starting date and time of the simulation.  This is a text string that is used as a label within the simulation list file.  The value has no effect on the simulation.  The recommended format for the starting date and time is described at https://www.w3.org/TR/NOTE-datetime.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "ATS_FILERECORD",
+      "identifier": "TDIS_ATS_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "NPER",
+      "identifier": "TDIS_NPER",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "number of stress periods. is the number of stress periods for the simulation.",
+      "rubrique": [
+        "DIMENSIONS"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1
+    },
+    {
+      "keyword": "PERIODDATA",
+      "identifier": "TDIS_PERIODDATA",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "stress period time information",
+      "rubrique": [
+        "PERIODDATA"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": [
+        [
+          1.0,
+          1,
+          1.0
+        ]
+      ]
+    },
+    {
+      "keyword": "PRINT_OPTION",
+      "identifier": "IMS_PRINT_OPTION",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "print option. is a flag that controls printing of convergence information from the solver.  NONE means print nothing. SUMMARY means print only the total number of iterations and nonlinear residual reduction summaries. ALL means print linear matrix solver convergence information to the solution listing file and model specific linear matrix solver convergence information to each model listing file in addition to SUMMARY information. NONE is default if PRINT\\_OPTION is not specified.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "COMPLEXITY",
+      "identifier": "IMS_COMPLEXITY",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "print option. is an optional keyword that defines default non-linear and linear solver parameters.  SIMPLE - indicates that default solver input values will be defined that work well for nearly linear models. This would be used for models that do not include nonlinear stress packages and models that are either confined or consist of a single unconfined layer that is thick enough to contain the water table within a single layer. MODERATE - indicates that default solver input values will be defined that work well for moderately nonlinear models. This would be used for models that include nonlinear stress packages and models that consist of one or more unconfined layers. The MODERATE option should be used when the SIMPLE option does not result in successful convergence.  COMPLEX - indicates that default solver input values will be defined that work well for highly nonlinear models. This would be used for models that include nonlinear stress packages and models that consist of one or more unconfined layers representing complex geology and surface-water/groundwater interaction. The COMPLEX option should be used when the MODERATE option does not result in successful convergence.  Non-linear and linear solver parameters assigned using a specified complexity can be modified in the NONLINEAR and LINEAR blocks. If the COMPLEXITY option is not specified, NONLINEAR and LINEAR variables will be assigned the simple complexity values.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "CSV_OUTPUT_FILERECORD",
+      "identifier": "IMS_CSV_OUTPUT_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "CSV_OUTER_OUTPUT_FILERECORD",
+      "identifier": "IMS_CSV_OUTER_OUTPUT_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "CSV_INNER_OUTPUT_FILERECORD",
+      "identifier": "IMS_CSV_INNER_OUTPUT_FILERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "NO_PTCRECORD",
+      "identifier": "IMS_NO_PTCRECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "no_ptc record",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "ATS_OUTER_MAXIMUM_FRACTION",
+      "identifier": "IMS_ATS_OUTER_MAXIMUM_FRACTION",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "fraction of outer maximum used with ats. real value defining the fraction of the maximum allowable outer iterations used with the Adaptive Time Step (ATS) capability if it is active.  If this value is set to zero by the user, then this solution will have no effect on ATS behavior.  This value must be greater than or equal to zero and less than or equal to 0.5 or the program will terminate with an error.  If it is not specified by the user, then it is assigned a default value of one third.  When the number of outer iterations for this solution is less than the product of this value and the maximum allowable outer iterations, then ATS will increase the time step length by a factor of DTADJ in the ATS input file.  When the number of outer iterations for this solution is greater than the maximum allowable outer iterations minus the product of this value and the maximum allowable outer iterations, then the ATS (if active) will decrease the time step length by a factor of 1 / DTADJ.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "OUTER_HCLOSE",
+      "identifier": "IMS_OUTER_HCLOSE",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "head change criterion. real value defining the head change criterion for convergence of the outer (nonlinear) iterations, in units of length. When the maximum absolute value of the head change at all nodes during an iteration is less than or equal to OUTER\\_HCLOSE, iteration stops. Commonly, OUTER\\_HCLOSE equals 0.01.  The OUTER\\_HCLOSE option has been deprecated in favor of the more general OUTER\\_DVCLOSE (for dependent variable), however either one can be specified in order to maintain backward compatibility.",
+      "rubrique": [
+        "NONLINEAR"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "OUTER_DVCLOSE",
+      "identifier": "IMS_OUTER_DVCLOSE",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "dependent-variable change criterion. real value defining the dependent-variable (for example, head) change criterion for convergence of the outer (nonlinear) iterations, in units of the dependent-variable (for example, length for head). When the maximum absolute value of the dependent-variable change at all nodes during an iteration is less than or equal to OUTER\\_DVCLOSE, iteration stops. Commonly, OUTER\\_DVCLOSE equals 0.01. The keyword, OUTER\\_HCLOSE can be still be specified instead of OUTER\\_DVCLOSE for backward compatibility with previous versions of MODFLOW 6 but eventually OUTER\\_HCLOSE will be deprecated and specification of OUTER\\_HCLOSE will cause MODFLOW 6 to terminate with an error.",
+      "rubrique": [
+        "NONLINEAR"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "OUTER_RCLOSEBND",
+      "identifier": "IMS_OUTER_RCLOSEBND",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "boundary package flow residual tolerance. real value defining the residual tolerance for convergence of model packages that solve a separate equation not solved by the IMS linear solver. This value represents the maximum allowable residual between successive outer iterations at any single model package element. An example of a model package that would use OUTER\\_RCLOSEBND to evaluate convergence is the SFR package which solves a continuity equation for each reach.  The OUTER\\_RCLOSEBND option is deprecated and has no effect on simulation results as of version 6.1.1.  The keyword, OUTER\\_RCLOSEBND can be still be specified for backward compatibility with previous versions of MODFLOW 6 but eventually specification of OUTER\\_RCLOSEBND will cause MODFLOW 6 to terminate with an error.",
+      "rubrique": [
+        "NONLINEAR"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "OUTER_MAXIMUM",
+      "identifier": "IMS_OUTER_MAXIMUM",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "outer maximum iterations. integer value defining the maximum number of outer (nonlinear) iterations -- that is, calls to the solution routine. For a linear problem OUTER\\_MAXIMUM should be 1.",
+      "rubrique": [
+        "NONLINEAR"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "UNDER_RELAXATION",
+      "identifier": "IMS_UNDER_RELAXATION",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "under relaxation scheme. is an optional keyword that defines the nonlinear under-relaxation schemes used. Under-relaxation is also known as dampening, and is used to reduce the size of the calculated dependent variable before proceeding to the next outer iteration.  Under-relaxation can be an effective tool for highly nonlinear models when there are large and often counteracting changes in the calculated dependent variable between successive outer iterations.  By default under-relaxation is not used.  NONE - under-relaxation is not used (default). SIMPLE - Simple under-relaxation scheme with a fixed relaxation factor (UNDER\\_RELAXATION\\_GAMMA) is used.  COOLEY - Cooley under-relaxation scheme is used.  DBD - delta-bar-delta under-relaxation is used.  Note that the under-relaxation schemes are often used in conjunction with problems that use the Newton-Raphson formulation, however, experience has indicated that they also work well for non-Newton problems, such as those with the wet/dry options of MODFLOW 6.",
+      "rubrique": [
+        "NONLINEAR"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "UNDER_RELAXATION_GAMMA",
+      "identifier": "IMS_UNDER_RELAXATION_GAMMA",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "relaxation factor for SIMPLE or the history or memory term factor for the Cooley and delta-bar-delta algorithms. real value defining either the relaxation factor for the SIMPLE scheme or the history or memory term factor of the Cooley and delta-bar-delta algorithms. For the SIMPLE scheme, a value of one indicates that there is no under-relaxation and the full head change is applied.  This value can be gradually reduced from one as a way to improve convergence; for well behaved problems, using a value less than one can increase the number of outer iterations required for convergence and needlessly increase run times.  UNDER\\_RELAXATION\\_GAMMA must be greater than zero for the SIMPLE scheme or the program will terminate with an error.  For the Cooley and delta-bar-delta schemes, UNDER\\_RELAXATION\\_GAMMA is a memory term that can range between zero and one. When UNDER\\_RELAXATION\\_GAMMA is zero, only the most recent history (previous iteration value) is maintained. As UNDER\\_RELAXATION\\_GAMMA is increased, past history of iteration changes has greater influence on the memory term. The memory term is maintained as an exponential average of past changes. Retaining some past history can overcome granular behavior in the calculated function surface and therefore helps to overcome cyclic patterns of non-convergence. The value usually ranges from 0.1 to 0.3; a value of 0.2 works well for most problems. UNDER\\_RELAXATION\\_GAMMA only needs to be specified if UNDER\\_RELAXATION is not NONE.",
+      "rubrique": [
+        "NONLINEAR"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "UNDER_RELAXATION_THETA",
+      "identifier": "IMS_UNDER_RELAXATION_THETA",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "under relaxation reduction factor. real value defining the reduction factor for the learning rate (under-relaxation term) of the delta-bar-delta algorithm. The value of UNDER\\_RELAXATION\\_THETA is between zero and one. If the change in the dependent-variable (for example, head) is of opposite sign to that of the previous iteration, the under-relaxation term is reduced by a factor of UNDER\\_RELAXATION\\_THETA. The value usually ranges from 0.3 to 0.9; a value of 0.7 works well for most problems. UNDER\\_RELAXATION\\_THETA only needs to be specified if UNDER\\_RELAXATION is DBD.",
+      "rubrique": [
+        "NONLINEAR"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "UNDER_RELAXATION_KAPPA",
+      "identifier": "IMS_UNDER_RELAXATION_KAPPA",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "under relaxation increment for the learning rate. real value defining the increment for the learning rate (under-relaxation term) of the delta-bar-delta algorithm. The value of UNDER\\_RELAXATION\\_kappa is between zero and one. If the change in the dependent-variable (for example, head) is of the same sign to that of the previous iteration, the under-relaxation term is increased by an increment of UNDER\\_RELAXATION\\_KAPPA. The value usually ranges from 0.03 to 0.3; a value of 0.1 works well for most problems. UNDER\\_RELAXATION\\_KAPPA only needs to be specified if UNDER\\_RELAXATION is DBD.",
+      "rubrique": [
+        "NONLINEAR"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "UNDER_RELAXATION_MOMENTUM",
+      "identifier": "IMS_UNDER_RELAXATION_MOMENTUM",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "fraction of past history changes that is added as a momentum term. real value defining the fraction of past history changes that is added as a momentum term to the step change for a nonlinear iteration. The value of UNDER\\_RELAXATION\\_MOMENTUM is between zero and one. A large momentum term should only be used when small learning rates are expected. Small amounts of the momentum term help convergence. The value usually ranges from 0.0001 to 0.1; a value of 0.001 works well for most problems. UNDER\\_RELAXATION\\_MOMENTUM only needs to be specified if UNDER\\_RELAXATION is DBD.",
+      "rubrique": [
+        "NONLINEAR"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "BACKTRACKING_NUMBER",
+      "identifier": "IMS_BACKTRACKING_NUMBER",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "maximum number of backtracking iterations. integer value defining the maximum number of backtracking iterations allowed for residual reduction computations. If BACKTRACKING\\_NUMBER = 0 then the backtracking iterations are omitted. The value usually ranges from 2 to 20; a value of 10 works well for most problems.",
+      "rubrique": [
+        "NONLINEAR"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "BACKTRACKING_TOLERANCE",
+      "identifier": "IMS_BACKTRACKING_TOLERANCE",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "tolerance for residual change that is allowed for residual reduction. real value defining the tolerance for residual change that is allowed for residual reduction computations. BACKTRACKING\\_TOLERANCE should not be less than one to avoid getting stuck in local minima. A large value serves to check for extreme residual increases, while a low value serves to control step size more severely. The value usually ranges from 1.0 to 10$^6$; a value of 10$^4$ works well for most problems but lower values like 1.1 may be required for harder problems. BACKTRACKING\\_TOLERANCE only needs to be specified if BACKTRACKING\\_NUMBER is greater than zero.",
+      "rubrique": [
+        "NONLINEAR"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "BACKTRACKING_REDUCTION_FACTOR",
+      "identifier": "IMS_BACKTRACKING_REDUCTION_FACTOR",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "reduction in step size used for residual reduction computations. real value defining the reduction in step size used for residual reduction computations. The value of BACKTRACKING\\_REDUCTION\\_FACTOR is between zero and one. The value usually ranges from 0.1 to 0.3; a value of 0.2 works well for most problems. BACKTRACKING\\_REDUCTION\\_FACTOR only needs to be specified if BACKTRACKING\\_NUMBER is greater than zero.",
+      "rubrique": [
+        "NONLINEAR"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "BACKTRACKING_RESIDUAL_LIMIT",
+      "identifier": "IMS_BACKTRACKING_RESIDUAL_LIMIT",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "limit to which the residual is reduced with backtracking. real value defining the limit to which the residual is reduced with backtracking. If the residual is smaller than BACKTRACKING\\_RESIDUAL\\_LIMIT, then further backtracking is not performed. A value of 100 is suitable for large problems and residual reduction to smaller values may only slow down computations. BACKTRACKING\\_RESIDUAL\\_LIMIT only needs to be specified if BACKTRACKING\\_NUMBER is greater than zero.",
+      "rubrique": [
+        "NONLINEAR"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "INNER_MAXIMUM",
+      "identifier": "IMS_INNER_MAXIMUM",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "maximum number of inner iterations. integer value defining the maximum number of inner (linear) iterations. The number typically depends on the characteristics of the matrix solution scheme being used. For nonlinear problems, INNER\\_MAXIMUM usually ranges from 60 to 600; a value of 100 will be sufficient for most linear problems.",
+      "rubrique": [
+        "LINEAR"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "INNER_HCLOSE",
+      "identifier": "IMS_INNER_HCLOSE",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "head change tolerance. real value defining the head change criterion for convergence of the inner (linear) iterations, in units of length. When the maximum absolute value of the head change at all nodes during an iteration is less than or equal to INNER\\_HCLOSE, the matrix solver assumes convergence. Commonly, INNER\\_HCLOSE is set equal to or an order of magnitude less than the OUTER\\_HCLOSE value specified for the NONLINEAR block.  The INNER\\_HCLOSE keyword has been deprecated in favor of the more general INNER\\_DVCLOSE (for dependent variable), however either one can be specified in order to maintain backward compatibility.",
+      "rubrique": [
+        "LINEAR"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "INNER_DVCLOSE",
+      "identifier": "IMS_INNER_DVCLOSE",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "dependent-variable change tolerance. real value defining the dependent-variable (for example, head) change criterion for convergence of the inner (linear) iterations, in units of the dependent-variable (for example, length for head). When the maximum absolute value of the dependent-variable change at all nodes during an iteration is less than or equal to INNER\\_DVCLOSE, the matrix solver assumes convergence. Commonly, INNER\\_DVCLOSE is set equal to or an order of magnitude less than the OUTER\\_DVCLOSE value specified for the NONLINEAR block. The keyword, INNER\\_HCLOSE can be still be specified instead of INNER\\_DVCLOSE for backward compatibility with previous versions of MODFLOW 6 but eventually INNER\\_HCLOSE will be deprecated and specification of INNER\\_HCLOSE will cause MODFLOW 6 to terminate with an error.",
+      "rubrique": [
+        "LINEAR"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "RCLOSERECORD",
+      "identifier": "IMS_RCLOSERECORD",
+      "type": "STRUCT",
+      "size": 1,
+      "unbounded": false,
+      "help": "rclose record",
+      "rubrique": [
+        "LINEAR"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "LINEAR_ACCELERATION",
+      "identifier": "IMS_LINEAR_ACCELERATION",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "linear acceleration method. a keyword that defines the linear acceleration method used by the default IMS linear solvers.  CG - preconditioned conjugate gradient method.  BICGSTAB - preconditioned bi-conjugate gradient stabilized method.",
+      "rubrique": [
+        "LINEAR"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "RELAXATION_FACTOR",
+      "identifier": "IMS_RELAXATION_FACTOR",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "relaxation factor used by ILU factorization. optional real value that defines the relaxation factor used by the incomplete LU factorization preconditioners (MILU(0) and MILUT). RELAXATION\\_FACTOR is unitless and should be greater than or equal to 0.0 and less than or equal to 1.0. RELAXATION\\_FACTOR values of about 1.0 are commonly used, and experience suggests that convergence can be optimized in some cases with relax values of 0.97. A RELAXATION\\_FACTOR value of 0.0 will result in either ILU(0) or ILUT preconditioning (depending on the value specified for PRECONDITIONER\\_LEVELS and/or PRECONDITIONER\\_DROP\\_TOLERANCE). By default,  RELAXATION\\_FACTOR is zero.",
+      "rubrique": [
+        "LINEAR"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRECONDITIONER_LEVELS",
+      "identifier": "IMS_PRECONDITIONER_LEVELS",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "level of fill for ILU decomposition. optional integer value defining the level of fill for ILU decomposition used in the ILUT and MILUT preconditioners. Higher levels of fill provide more robustness but also require more memory. For optimal performance, it is suggested that a large level of fill be applied (7 or 8) with use of a drop tolerance. Specification of a PRECONDITIONER\\_LEVELS value greater than zero results in use of the ILUT preconditioner. By default, PRECONDITIONER\\_LEVELS is zero and the zero-fill incomplete LU factorization preconditioners (ILU(0) and MILU(0)) are used.",
+      "rubrique": [
+        "LINEAR"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRECONDITIONER_DROP_TOLERANCE",
+      "identifier": "IMS_PRECONDITIONER_DROP_TOLERANCE",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "drop tolerance used to drop preconditioner terms. optional real value that defines the drop tolerance used to drop preconditioner terms based on the magnitude of matrix entries in the ILUT and MILUT preconditioners. A value of $10^{-4}$ works well for most problems. By default, PRECONDITIONER\\_DROP\\_TOLERANCE is zero and the zero-fill incomplete LU factorization preconditioners (ILU(0) and MILU(0)) are used.",
+      "rubrique": [
+        "LINEAR"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "NUMBER_ORTHOGONALIZATIONS",
+      "identifier": "IMS_NUMBER_ORTHOGONALIZATIONS",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "drop tolerance used to drop preconditioner terms. optional integer value defining the interval used to explicitly recalculate the residual of the flow equation using the solver coefficient matrix, the latest dependent-variable (for example, head) estimates, and the right hand side. For problems that benefit from explicit recalculation of the residual, a number between 4 and 10 is appropriate. By default, NUMBER\\_ORTHOGONALIZATIONS is zero.",
+      "rubrique": [
+        "LINEAR"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "SCALING_METHOD",
+      "identifier": "IMS_SCALING_METHOD",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "matrix scaling approach. an optional keyword that defines the matrix scaling approach used. By default, matrix scaling is not applied.  NONE - no matrix scaling applied.  DIAGONAL - symmetric matrix scaling using the POLCG preconditioner scaling method in Hill (1992).  L2NORM - symmetric matrix scaling using the L2 norm.",
+      "rubrique": [
+        "LINEAR"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "REORDERING_METHOD",
+      "identifier": "IMS_REORDERING_METHOD",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "matrix reordering approach. an optional keyword that defines the matrix reordering approach used. By default, matrix reordering is not applied.  NONE - original ordering.  RCM - reverse Cuthill McKee ordering.  MD - minimum degree ordering.",
+      "rubrique": [
+        "LINEAR"
+      ],
+      "is_file": false,
+      "mandatory": false
+    }
+  ]
+}
