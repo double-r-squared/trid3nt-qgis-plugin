@@ -13,7 +13,9 @@ from typing import Any, Mapping
 
 from ..authoring.solar import SOLAR_ROUTINE_FILENAME, solar_routine
 from ...runtime.module import Output
-from .module import MOMENT, TelemacModule, Unwritten
+from trid3nt_server.workflows.runtime.module import MOMENT
+
+from .module import TelemacModule, Unwritten
 from .outputs import PRIMITIVES
 
 __all__ = ["KHIONE", "MODULE_OUTPUT", "RESULT_FILENAME", "STEERING_FILENAME"]

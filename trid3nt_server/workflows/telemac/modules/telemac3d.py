@@ -15,7 +15,9 @@ from ..authoring.atmosphere import (ATMOSPHERE_READS, Atmosphere,
                                      expand_atmosphere)
 from .coupling import couples
 from ...runtime.module import Output
-from .module import MOMENT, ORIGIN_OF_TIME, USER_FORTRAN_DIR, TelemacModule
+from trid3nt_server.workflows.runtime.module import MOMENT
+
+from .module import ORIGIN_OF_TIME, USER_FORTRAN_DIR, TelemacModule
 from .outputs import PRIMITIVES, read_column
 
 __all__ = ["T3D", "Atmosphere", "Column", "MODULE_OUTPUT", "USER_FORTRAN_DIR",

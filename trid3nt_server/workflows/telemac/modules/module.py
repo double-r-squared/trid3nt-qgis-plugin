@@ -16,7 +16,6 @@ from ..authoring.staged_check import BOX_CORES
 from trid3nt_server.workflows.runtime.module import Module, Slot, SlotRefused, _spelled
 
 __all__ = [
-    "MOMENT",
     "ORIGIN_OF_TIME",
     "PROCESSORS",
     "TelemacModule",
@@ -45,8 +44,6 @@ class Unwritten:
 
 # The directory the engine compiles for patched Fortran; the keyword names a directory, so manifest and steering statement share the word.
 USER_FORTRAN_DIR = "user_fortran"
-# What a run holds once it states the moment it opens at: ``at`` the UTC datetime, ``lon`` and ``lat`` the domain's own point. A module names the keywords it spells them in under this in FILLED_BY; a run stating no moment holds none.
-MOMENT = "moment"
 # The hydrodynamic modules' spelling: the date and the UTC hour, each a triple.
 ORIGIN_OF_TIME: Mapping[str, Callable[[Any], Any]] = MappingProxyType({
     "ORIGINAL_DATE_OF_TIME": lambda moment: [

@@ -17,7 +17,9 @@ from ..authoring.atmosphere import (ATMOSPHERE_READS, Atmosphere,
                                      expand_atmosphere)
 from .coupling import couples
 from ...runtime.module import Output, SlotRefused
-from .module import MOMENT, ORIGIN_OF_TIME, USER_FORTRAN_DIR, TelemacModule
+from trid3nt_server.workflows.runtime.module import MOMENT
+
+from .module import ORIGIN_OF_TIME, USER_FORTRAN_DIR, TelemacModule
 from .outputs import PRIMITIVES, read_drogues
 
 __all__ = ["T2D", "Atmosphere", "Boundaries", "Breach", "Friction", "Infiltration",

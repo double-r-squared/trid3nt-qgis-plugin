@@ -13,7 +13,9 @@ from typing import Any, Mapping
 from trid3nt_server.inputs.run_notes import journal_note
 
 from ...runtime.module import Output
-from .module import MOMENT, TelemacModule, Unwritten
+from trid3nt_server.workflows.runtime.module import MOMENT
+
+from .module import TelemacModule, Unwritten
 from .outputs import PRIMITIVES, read_spectrum
 
 __all__ = ["MODULE_OUTPUT", "RESULT_FILENAME", "STEERING_FILENAME", "WAC"]

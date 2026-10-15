@@ -16,7 +16,7 @@ import pytest
 from trid3nt_server.workflows.telemac.modules import KHIONE, T2D
 from trid3nt_server.workflows.telemac.modules.artemis import ART
 from trid3nt_server.workflows.telemac.modules.khione import STEERING_FILENAME
-from trid3nt_server.workflows.telemac.modules.module import MOMENT
+from trid3nt_server.workflows.runtime.module import MOMENT
 from trid3nt_server.workflows.runtime.sheet import fill, fill_coupled
 from trid3nt_server.workflows.telemac.modules.telemac3d import T3D
 from trid3nt_server.workflows.telemac.modules.tomawac import WAC

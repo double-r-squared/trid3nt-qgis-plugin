@@ -21,6 +21,7 @@ from trid3nt_server.errors import DeclarativeError
 
 __all__ = [
     "Composite",
+    "MOMENT",
     "Module",
     "Output",
     "Slot",
@@ -47,13 +48,16 @@ class _Unset:
 
 UNSET = _Unset()
 
+# What a run holds once it states the moment it opens at: ``at`` the UTC datetime, ``lon`` and ``lat`` the domain's own point. A module names the keywords it spells them in under this in FILLED_BY; a run stating no moment holds none.
+MOMENT = "moment"
+
 # Class attributes a wrapper carries that are never keyword assertions.
 _RESERVED = frozenset((
     "MODULE", "MODULE_INPUT", "COMPOSITES", "READS", "ASSERTED", "ARMS",
     "ARMS_ON_HOST", "MODULE_OUTPUT", "LISTING", "DERIVED", "PRINTOUTS",
     "CADENCE", "CLOCK", "TRACER", "APPENDS", "APPENDABLE", "ONLY_3D",
     "UNWRITTEN", "RESULT_FILE", "RESULT_FILES", "RESULT_KEYWORD", "FILLED_BY",
-    "CODE_ON_HOST", "PLACED_AGAINST", "PARTITION_KEYWORD",
+    "CODE_ON_HOST", "PLACED_AGAINST", "PARTITION_KEYWORD", "PACKAGES",
     "composites",
     "reads", "appends", "printouts", "seconds", "slot",
 ))
@@ -101,6 +105,10 @@ class Slot:
     multi_select: bool = False
     # The dictionary does not mark this keyword optional and gives it no default, so a run stating nothing refuses on it - MODFLOW's shape; a TELEMAC row leaves it false and is required only through its OBLIG file mark.
     mandatory: bool = False
+    # The DFN's own shape for an ARRAY keyword (``(ncpl)`` per cell, ``(ncpl, nlay)`` per layer too), empty on the types it declares no shape for; the grid-data author places a value against it.
+    shape: str = ""
+    # The DFN marks this array layered: its value is one number for every layer, a row of cells per layer, or a name per layer.
+    layered: bool = False
 
     @property
     def is_list(self) -> bool:
@@ -291,6 +299,8 @@ def load_module_input(module: str, *, directory: Path) -> Mapping[str, Slot]:
         file_role=row.get("file_role", ""),
         file_mandatory=row.get("file_mandatory", False),
         mandatory=row.get("mandatory", False),
+        shape=row.get("shape", ""),
+        layered=row.get("layered", False),
         unit=bounded.get(row["identifier"], unbounded_row)[0],
         bounds=bounded.get(row["identifier"], unbounded_row)[1],
     ) for row in rows})
@@ -409,6 +419,8 @@ class Module(metaclass=_Body):
     PLACED_AGAINST: Mapping[str, tuple[str, ...]] = MappingProxyType({})
     # The keyword this engine partitions a run under; empty says this engine has none, and identify_on then reads no bare name as the carrier's.
     PARTITION_KEYWORD: str = ""
+    # The packages this body wants written however little the deck states of them, by dictionary prefix; empty on a body wanting only what the deck states. A simulation author reads it beside the prefixes the deck names.
+    PACKAGES: tuple[str, ...] = ()
 
     @classmethod
     def dictionary_dir(cls) -> Path:

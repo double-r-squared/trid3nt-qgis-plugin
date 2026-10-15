@@ -12,7 +12,9 @@ from typing import Any, Mapping, Sequence
 
 
 from ...runtime.module import Output
-from .module import MOMENT, ORIGIN_OF_TIME, TelemacModule
+from trid3nt_server.workflows.runtime.module import MOMENT
+
+from .module import ORIGIN_OF_TIME, TelemacModule
 from .outputs import PRIMITIVES
 
 __all__ = ["ART", "BOUNDARY_FILENAME", "IncidentWave", "MODULE_OUTPUT",

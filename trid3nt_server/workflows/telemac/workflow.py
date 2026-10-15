@@ -32,7 +32,7 @@ from trid3nt_server.workflows.telemac.errors import TelemacError
 from trid3nt_server.workflows.telemac.modules import wrapper_for
 from trid3nt_server.workflows.runtime.module import (SlotRefused,
                                                      identify_on)
-from trid3nt_server.workflows.telemac.modules.module import MOMENT
+from trid3nt_server.workflows.runtime.module import MOMENT
 from trid3nt_server.workflows.runtime.primitives import (
     Line,
     OutputEmpty,

@@ -154,6 +154,11 @@ def _row(entry: dict[str, str], package: str) -> dict[str, object]:
         "keyword": name.upper().replace("-", "_"),
         "identifier": f"{package}_{name.upper().replace('-', '_')}",
         "type": _type_of(entry),
+        # The DFN's own shape, empty where it declares none: what an ARRAY keyword's
+        # value is shaped over (``(ncpl)`` one per cell, ``(ncpl, nlay)`` per layer too).
+        "shape": entry.get("shape", ""),
+        # The DFN marks a layered array: one value per layer OR one row of cells per layer.
+        "layered": entry.get("layered", "").strip().lower() == "true",
         "size": 1,
         "unbounded": False,
         "help": _help(entry),

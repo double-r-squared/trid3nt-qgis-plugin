@@ -25,7 +25,7 @@ rest and make up the sixth slice.
 | `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 10 | 109 |
 | `search/` | dataset and tool retrieval, the OGC adapter, the keyword dictionary read | 13 | 194 |
 | `server/` | the HTTP and WS routes, the fetch short-circuit and the Case AOI, persistence | 29 | 261 |
-| `solver/` | the executor, the run reads, the engine-room posture, the MODFLOW engine and its body wrappers | 8 | 73 |
+| `solver/` | the executor, the run reads, the engine-room posture, the MODFLOW engine, its authoring and staged check, and its body wrappers | 11 | 120 |
 | `telemac/` | the TELEMAC templates, the module surface, what each module writes and the primitives that read it, the listing reads, authoring | 59 | 986 |
 | `tools/` | the registry, the arg normalizer, the tool cache | 10 | 343 |
 
@@ -46,7 +46,7 @@ Six slices by subsystem, each its own foreground invocation, from the repo root:
 
     make test-fetchers        # tests/fetchers                                                                              2119
     make test-spatial         # tests/derive tests/render tests/mesh                                                         752
-    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                      1447
+    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                      1494
     make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts           1107
     make test-model-surface   # tests/adapters tests/tools                                                                   617
     make test-packages        # tests/contracts tests/plugin                                                                  749

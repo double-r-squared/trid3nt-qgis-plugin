@@ -5,8 +5,8 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Mapping
 
-from ...runtime.module import Output
-from .module import ModflowModule
+from ...runtime.module import MOMENT, Output
+from .module import ModflowModule, _start_date_time, periods
 
 __all__ = ["GWT", "MODULE_OUTPUT"]
 
@@ -19,3 +19,6 @@ MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
 
 GWT = ModflowModule("gwt")
 GWT.MODULE_OUTPUT = MODULE_OUTPUT
+# The simulation's own clock on every body: Periods spells the marching, the moment the instant it opens at.
+GWT.composites(Periods=periods)
+GWT.FILLED_BY = MappingProxyType({MOMENT: {"TDIS_START_DATE_TIME": _start_date_time}})
