@@ -32,6 +32,14 @@ build_mesh:
 - refine the mesh inside the region I drew, leave the rest alone
 - mark the seaward edge as the open boundary so a tide can be forced there
 - classify which side of the domain is open water and which is a wall
+- triangulate this domain with Triangle, not oceanmesh
+- build the mesh with Triangle's own constrained triangulation at a max area
+- cut a Voronoi mesh over this domain, one polygon per node
+- make the Voronoi dual of a triangle build for this reach
+- quadtree this domain with gridgen and refine along the river
+- build a DISV-shaped quadtree mesh from a rectilinear base grid
+- quadtree this domain and refine a level along this line
+- punch a rectangular hole in the triangulation and mesh around it
 
 # mesh_op routing phrasings: the runtime face of the word a recipe is written in.
 # Question class = "change how this mesh was built and rebuild it", never

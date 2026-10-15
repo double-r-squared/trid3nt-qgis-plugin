@@ -46,7 +46,8 @@ def test_build_mesh_registered_and_the_standalone_builder_is_gone():
 
 
 def test_the_roster_is_the_meshers_the_tree_carries():
-    assert registered_meshers() == ("om2d", "reg_grid")
+    assert registered_meshers() == ("gridgen", "om2d", "reg_grid",
+                                    "triangle", "voronoi")
 
 
 def _bed(tmp_path: Path, cell_deg: float) -> Path:
@@ -101,6 +102,9 @@ def test_no_edge_and_no_raster_is_asked_for_by_name():
 @pytest.mark.parametrize("mesher,expected", [
     ("om2d", ("unstructured_tri",)),
     ("reg_grid", ("structured_grid",)),
+    ("triangle", ("unstructured_tri",)),
+    ("voronoi", ("voronoi",)),
+    ("gridgen", ("quadtree",)),
 ])
 def test_each_mesher_declares_the_kinds_it_makes(mesher, expected):
     assert get_mesher(mesher).kinds == expected

@@ -220,7 +220,7 @@ def _mesh_param_sheet(session: MeshSession, *, tool_name: str) -> Any:
         name="resolution_m",
         value=(None if recipe.resolution_m is None
                else str(recipe.resolution_m)),
-        desc="the finest cell or triangle edge, in metres - the one size word "
+        desc="the finest cell or element edge, in metres - the one size word "
              "every mesher reads. Leave blank to keep this mesh",
         source_badge=f"{recipe.mesher} recipe")]
     for index, line in enumerate(recipe.numbered()):

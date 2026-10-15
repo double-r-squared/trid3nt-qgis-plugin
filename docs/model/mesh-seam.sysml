@@ -499,6 +499,19 @@ package MeshSeam {
         port registrationOut : RegistrationOut;
     }
 
+    part flopyAdapter : MesherAdapter {
+        doc /*
+        The FloPy facade: three registrations - triangle, voronoi and gridgen -
+        declared in one module over one in-image driver. Its namespaces are the
+        libraries' OWN method rosters with the phase derived, so ops are
+        code-as-data bound against signatures only the image can hold.
+
+        code: trid3nt_server/tools/mesh/meshers/flopy_grid.py
+        */
+        port registrationOut : RegistrationOut;
+        port namespaceOut : NamespaceOut;
+    }
+
     part om2dBox : MesherBox {
         doc /*
         code: workers/mesh/scripts/om2d.py
@@ -581,8 +594,26 @@ package MeshSeam {
     interface regGridRegistered : MesherRegistration
         connect regGridAdapter.registrationOut to mesherRegistry.registrationIn;
 
+    interface flopyRegistered : MesherRegistration
+        connect flopyAdapter.registrationOut to mesherRegistry.registrationIn {
+        doc /*
+        Three names - triangle, voronoi and gridgen - ride this one edge: the
+        shape of each is what the registry already accepts for om2d, stated once
+        per module rather than once per registration.
+        */
+    }
+
     interface om2dNamespaces : OpNamespaceDeclaration
         connect om2dAdapter.namespaceOut to mesherRegistry.namespaceIn;
+
+    interface flopyNamespaces : OpNamespaceDeclaration
+        connect flopyAdapter.namespaceOut to mesherRegistry.namespaceIn {
+        doc /*
+        triangle's and voronoi's roster is triangle's own three methods,
+        gridgen's is gridgen's own two - each library declared once with the
+        phase its namespace carries, not once per registration.
+        */
+    }
 
     interface bedPainted : BedProvenance
         connect sharedPrimitives.bedOut to meshSession.bedIn;

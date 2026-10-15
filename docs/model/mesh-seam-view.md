@@ -8,6 +8,7 @@ Plane: **workflow**. System: **mesher**. One seam of the system of systems index
 
 ```mermaid
 flowchart LR
+    flopyAdapter["MesherAdapter<br/>trid3nt_server/tools/mesh/meshers/flopy_grid.py"]
     meshArtifactStore["MeshArtifactStore<br/>trid3nt_server/tools/mesh/artifact.py"]
     meshGate["MeshGate<br/>trid3nt_server/tools/mesh/gate.py"]
     meshRouter["MeshRouter<br/>trid3nt_server/tools/mesh/tool.py"]
@@ -28,6 +29,8 @@ flowchart LR
     om2dAdapter -- "BoxBuildConfig" --> om2dBox
     om2dAdapter -- "MesherContributedFields (meshSession pass through)" --> meshSession
     meshSession -- "RecordedMeshFields (meshSession pass through)" --> meshArtifactStore
+    flopyAdapter -- "OpNamespaceDeclaration" --> mesherRegistry
+    flopyAdapter -- "MesherRegistration" --> mesherRegistry
     om2dBox -- "BoxMeshArrays" --> om2dAdapter
     om2dAdapter -- "OpNamespaceDeclaration" --> mesherRegistry
     om2dAdapter -- "MesherRegistration" --> mesherRegistry
