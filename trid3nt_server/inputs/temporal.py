@@ -76,6 +76,17 @@ _UNITS: dict[str, tuple[str, float, float]] = {
     "in/day": ("depth_rate", 25.4, 0.0),
     "in/h": ("depth_rate", 609.6, 0.0),
     "m/s": ("depth_rate", 86_400_000.0, 0.0),
+    "mm/yr": ("depth_rate", 1.0 / 365.25, 0.0),
+    "mm/year": ("depth_rate", 1.0 / 365.25, 0.0),
+    "m/day": ("depth_rate", 1000.0, 0.0),
+    "m/d": ("depth_rate", 1000.0, 0.0),
+    "ft/day": ("depth_rate", 304.8, 0.0),
+
+    "m2/day": ("area_rate", 1.0, 0.0),
+    "m^2/day": ("area_rate", 1.0, 0.0),
+    "m2/d": ("area_rate", 1.0, 0.0),
+    "ft2/day": ("area_rate", 0.09290304, 0.0),
+    "m2/s": ("area_rate", 86_400.0, 0.0),
 
     "degC": ("temperature", 1.0, 0.0),
     "C": ("temperature", 1.0, 0.0),

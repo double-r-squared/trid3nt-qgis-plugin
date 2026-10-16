@@ -83,7 +83,7 @@ def _place(value, *, name="NPF_K", nlay=2, run=None, cells=_CELLS, utm=None):
 
     return place(value, slot=GWF.slot(name), nlay=nlay,
                  run=run if run is not None else {}, points=_POINTS,
-                 cells=cells, utm_epsg=utm)
+                 cells=cells, utm_epsg=utm, frame=("meters", "days"))
 
 
 def test_a_constant_passes_through():
@@ -165,7 +165,8 @@ def _raster(path: Path, *, value: float = 77.0, width: int = 2,
 def test_a_named_raster_is_sampled_at_the_cells_and_tiled_by_layer(tmp_path):
     raster = _raster(tmp_path / "k.tif")
 
-    placed = _place("k", run={"k": str(raster)}, utm=32617)
+    placed = _place("k", run={"k": {"uri": str(raster), "units": "m/day"}},
+                    utm=32617)
 
     assert placed == [[77.0] * len(_CELLS), [77.0] * len(_CELLS)]
 
@@ -174,7 +175,7 @@ def test_a_raster_that_measures_nothing_at_a_cell_refuses(tmp_path):
     raster = _raster(tmp_path / "k.tif", width=1, height=1)
 
     with pytest.raises(ModflowError) as caught:
-        _place("k", run={"k": str(raster)}, utm=32617)
+        _place("k", run={"k": {"uri": str(raster), "units": "m/day"}}, utm=32617)
     assert caught.value.error_code == "MODFLOW_GRIDDATA_UNMEASURED"
 
 

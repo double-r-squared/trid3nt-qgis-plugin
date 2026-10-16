@@ -17,12 +17,12 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from .accepted_mesh import mesh_artifact, mesh_missing, mesh_nodes
-from .griddata import place
+from .griddata import frame_of, place
 from ..errors import ModflowError
 
 logger = logging.getLogger("trid3nt_server.workflows.modflow.authoring.mesh_files")
 
-__all__ = ["disv_dimensions", "modflow_mesh_files"]
+__all__ = ["disv_dimensions", "modflow_mesh_files", "top_of"]
 
 
 def disv_dimensions(sheet: Any, cells: Any) -> dict[str, int]:
@@ -104,12 +104,8 @@ def _layering(sheet: Any, *, nlay: int, art: Any, bed: Any, points: Any,
     """Top, bottom and idomain for every cell and layer - stated, or refused by name."""
     run = sheet.run
     utm_epsg = getattr(art, "utm_epsg", None)
-    stated_top = sheet.filled.get("DISV_TOP")
-    if stated_top is not None:
-        top = place(stated_top.value, slot=stated_top.slot, nlay=nlay, run=run,
-                    points=points, cells=cells, utm_epsg=utm_epsg)
-    else:
-        top = _bed_top(art, bed, cells)
+    frame = frame_of(sheet)
+    top = top_of(sheet, nlay=nlay, art=art, bed=bed, points=points, cells=cells)
     stated_botm = sheet.filled.get("DISV_BOTM")
     if stated_botm is None:
         raise _unstated(
@@ -117,14 +113,26 @@ def _layering(sheet: Any, *, nlay: int, art: Any, bed: Any, points: Any,
             "elevation the fill states; a thickness under the mesh's bed is the "
             "fill's to choose, never arithmetic made here.")
     botm = place(stated_botm.value, slot=stated_botm.slot, nlay=nlay, run=run,
-                 points=points, cells=cells, utm_epsg=utm_epsg)
+                 points=points, cells=cells, utm_epsg=utm_epsg, frame=frame,
+                 top=top)
     idomain = None
     stated_idomain = sheet.filled.get("DISV_IDOMAIN")
     if stated_idomain is not None:
         idomain = place(stated_idomain.value, slot=stated_idomain.slot,
                         nlay=nlay, run=run, points=points, cells=cells,
-                        utm_epsg=utm_epsg)
+                        utm_epsg=utm_epsg, frame=frame)
     return top, botm, idomain
+
+
+def top_of(sheet: Any, *, nlay: int, art: Any, bed: Any, points: Any,
+           cells: Any) -> Any:
+    """The top of the grid the layering and the starting heads lie under: stated, else the mesh's painted bed."""
+    stated_top = sheet.filled.get("DISV_TOP")
+    if stated_top is None:
+        return _bed_top(art, bed, cells)
+    return place(stated_top.value, slot=stated_top.slot, nlay=nlay, run=sheet.run,
+                 points=points, cells=cells, utm_epsg=getattr(art, "utm_epsg", None),
+                 frame=frame_of(sheet))
 
 
 def _bed_top(art: Any, bed: Any, cells: Any) -> list[float]:

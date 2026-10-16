@@ -2,7 +2,8 @@
 
 A statement carries a geometry in lon/lat, the layer and one value per column; the
 geometry is intersected with the accepted mesh's cells and every value is a number
-or the name of a run input whose raster is read at each placed cell's centre.
+(stated in the model's units) or a raster read at each placed cell's centre onto the
+model's frame, by the dimension its column states.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from .griddata import sample
 __all__ = ["cells_of", "place"]
 
 def place(statement: Mapping[str, Any], *, points: Any, cells: Any,
-          utm_epsg: int | None, nlay: int) -> list[tuple]:
+          utm_epsg: int | None, nlay: int, frame: Any = None) -> list[tuple]:
     """``statement`` -> ``((layer - 1, cell), *values)`` for every cell the geometry places."""
     name = statement["composite"]
     layer = int(statement["layer"])
@@ -32,20 +33,22 @@ def place(statement: Mapping[str, Any], *, points: Any, cells: Any,
     placed = cells_of(statement["geometry"], name=name, points=points,
                     cells=cells, utm_epsg=int(utm_epsg))
     columns = [_column(value, key, name=name, placed=placed, points=points,
-                       cells=cells, utm_epsg=int(utm_epsg))
+                       cells=cells, utm_epsg=int(utm_epsg), frame=frame,
+                       dimension=statement["dimensions"][key])
                for key, value in statement["values"].items()]
     return [((layer - 1, icell), *(column[rank] for column in columns))
             for rank, icell in enumerate(placed)]
 
 
 def _column(value: Any, key: str, *, name: str, placed: list[int], points: Any,
-            cells: Any, utm_epsg: int) -> list[float]:
+            cells: Any, utm_epsg: int, frame: Any,
+            dimension: str) -> list[float]:
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         return [value] * len(placed)
     with tempfile.TemporaryDirectory(prefix="trid3nt_stress_") as work:
         return sample(value, label=f"{name} {key}", name=key, scratch=work,
                       points=points, cells=[cells[i] for i in placed],
-                      utm_epsg=utm_epsg)
+                      utm_epsg=utm_epsg, dimension=dimension, frame=frame)
 
 
 def cells_of(geometry: Any, *, name: str, points: Any, cells: Any,

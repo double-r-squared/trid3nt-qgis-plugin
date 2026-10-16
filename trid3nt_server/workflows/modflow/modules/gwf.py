@@ -24,17 +24,19 @@ MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
     "SPECIFIC_DISCHARGE": Output("specific discharge", "", style=_SIGNED),
 })
 
-# Each stress composite: its package and the arguments it takes, in the package's own column order after the cell id.
+# Each stress composite: its package and the arguments it takes with their dimensions, in the package's own column order after the cell id.
 _STRESS = {
-    "Drains": ("DRN", ("elevation", "conductance")),
-    "GeneralHead": ("GHB", ("head", "conductance")),
-    "ConstantHead": ("CHD", ("head",)),
-    "Wells": ("WEL", ("rate",)),
-    "Recharge": ("RCH", ("rate",)),
+    "Drains": ("DRN", (("elevation", "L"), ("conductance", "L2/T"))),
+    "GeneralHead": ("GHB", (("head", "L"), ("conductance", "L2/T"))),
+    "ConstantHead": ("CHD", (("head", "L"),)),
+    "Wells": ("WEL", (("rate", "L3/T"),)),
+    "Recharge": ("RCH", (("rate", "L/T"),)),
 }
 
 
-def _stress(name: str, package: str, columns: tuple[str, ...]):
+def _stress(name: str, package: str, dimensions: Mapping[str, str]):
+    columns = tuple(dimensions)
+
     def expand(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
         if not isinstance(value, Mapping):
             raise ModflowError(
@@ -56,12 +58,50 @@ def _stress(name: str, package: str, columns: tuple[str, ...]):
         return {f"{package}_STRESS_PERIOD_DATA": {
             "stress": package, "composite": name, "geometry": value["geometry"],
             "values": {column: value[column] for column in columns},
-            "layer": layer}}, {}
+            "dimensions": dict(dimensions), "layer": layer}}, {}
 
     expand.__doc__ = (
         f"The {package} package's cells a geometry places: {name}(geometry, layer, "
         f"{', '.join(columns)}); a geometry reading nothing states nothing.")
     return expand
+
+
+_AQUIFER = ("thickness", "water_table_depth", "conductivity", "transmissivity")
+
+
+def _aquifer(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    """A one-layer aquifer's cells: Aquifer(thickness, water_table_depth, conductivity | transmissivity).
+
+    The bottom lies a thickness below the top, the starting head a water-table depth below it,
+    and the conductivity is stated or is the transmissivity over the thickness."""
+    if not isinstance(value, Mapping):
+        raise ModflowError(
+            f"Aquifer takes a mapping of {', '.join(_AQUIFER)}; got {value!r}.",
+            error_code="MODFLOW_AQUIFER_UNSTATED")
+    unknown = sorted(set(value) - set(_AQUIFER))
+    if unknown:
+        raise ModflowError(
+            f"Aquifer takes {', '.join(_AQUIFER)}; {', '.join(unknown)} is none of them.",
+            error_code="MODFLOW_AQUIFER_UNSTATED")
+    for argument in ("thickness", "water_table_depth"):
+        if value.get(argument) is None:
+            raise ModflowError(
+                f"Aquifer states no {argument}; the engine has no value for it, "
+                "so state it from a measurement or a named source.",
+                error_code="MODFLOW_AQUIFER_UNSTATED")
+    conductivity, transmissivity = value.get("conductivity"), value.get("transmissivity")
+    if (conductivity is None) == (transmissivity is None):
+        raise ModflowError(
+            "Aquifer states "
+            + ("both conductivity and transmissivity; state one" if conductivity is not None
+               else "neither conductivity nor transmissivity; state one")
+            + ", the other follows from the thickness.",
+            error_code="MODFLOW_AQUIFER_UNSTATED")
+    stated = ({"cells": "raster", "of": conductivity} if conductivity is not None
+              else {"cells": "quotient", "of": [transmissivity, value["thickness"]]})
+    return {"DISV_NLAY": 1, "NPF_K": stated,
+            "DISV_BOTM": {"cells": "below_top", "of": value["thickness"]},
+            "IC_STRT": {"cells": "below_top", "of": value["water_table_depth"]}}, {}
 
 
 GWF = ModflowModule("gwf")
@@ -70,7 +110,9 @@ GWF.MODULE_OUTPUT = MODULE_OUTPUT
 GWF.composites(Periods=periods)
 GWF.FILLED_BY = MappingProxyType({MOMENT: {"TDIS_START_DATE_TIME": _start_date_time}})
 GWF.composites(
-    reads={name: ("geometry", *columns) for name, (_, columns) in _STRESS.items()},
-    **{name: _stress(name, package, columns)
+    reads={name: ("geometry", *(column for column, _ in columns))
+           for name, (_, columns) in _STRESS.items()},
+    **{name: _stress(name, package, dict(columns))
        for name, (package, columns) in _STRESS.items()})
+GWF.composites(reads={"Aquifer": _AQUIFER}, Aquifer=_aquifer)
 GWF.reads(**PRIMITIVES)

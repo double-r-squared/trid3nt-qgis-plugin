@@ -21,6 +21,7 @@ from trid3nt_server.workflows.runtime.primitives import (
 )
 
 from ..authoring.accepted_mesh import mesh_nodes
+from ..authoring.griddata import SECONDS
 from ..authoring.mesh_files import disv_dimensions
 from ..authoring.stress import cells_of
 from ..errors import ModflowError
@@ -28,10 +29,6 @@ from .ugrid import group
 
 __all__ = ["PRIMITIVES", "Solved", "read_extent", "read_field", "read_mass_balance",
            "read_max_over_time", "read_mesh", "read_series"]
-
-# mf6 reads a year as 365.25 days.
-_SECONDS = {"seconds": 1.0, "minutes": 60.0, "hours": 3600.0, "days": 86400.0,
-            "years": 31557600.0}
 
 # mf6 writes this magnitude for a cell that is dry (HDRY) or inactive (HNOFLO).
 _NO_HEAD = 1.0e30
@@ -106,12 +103,12 @@ class Solved:
         import numpy as np
 
         units = str(self.stated("TDIS_TIME_UNITS") or "unknown").strip().lower()
-        if units not in _SECONDS:
+        if units not in SECONDS:
             raise ModflowError(
                 f"TDIS_TIME_UNITS is {units!r}, so a model time has no length in "
                 "seconds; state TDIS_TIME_UNITS as seconds, minutes, hours, days or years.",
                 error_code="MODFLOW_CLOCK_UNSTATED")
-        return np.asarray(times, dtype="float64") * _SECONDS[units]
+        return np.asarray(times, dtype="float64") * SECONDS[units]
 
     def local(self, basename: str) -> str:
         from trid3nt_server.workflows.solver.solver import download_result

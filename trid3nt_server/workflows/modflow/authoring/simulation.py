@@ -15,9 +15,9 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from . import DISV_FILE
-from .accepted_mesh import mesh_nodes
-from .griddata import place
-from .mesh_files import disv_dimensions
+from .accepted_mesh import mesh_artifact, mesh_nodes
+from .griddata import frame_of, needs_top, place
+from .mesh_files import disv_dimensions, top_of
 from .stress import place as place_stress
 
 from ..errors import ModflowError
@@ -112,18 +112,25 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
             "are gwf, gwt and gwe.",
             error_code="MODFLOW_MODULE_UNKNOWN")
     cap = module.capitalize()
-    points, cells, _bed, _lonlat = mesh_nodes(mesh)
+    points, cells, bed, _lonlat = mesh_nodes(mesh)
     dims = disv_dimensions(sheet, cells)
     utm_epsg = getattr((mesh or {}).get("artifact"), "utm_epsg", None)
+    frame = frame_of(sheet)
+    top = (top_of(sheet, nlay=int(dims["nlay"]), art=mesh_artifact(mesh), bed=bed,
+                  points=points, cells=cells)
+           if any(needs_top(row.value) for rows in groups.values()
+                  for row in rows.values()) else None)
     derived = _stressed(sheet, groups, nlay=int(dims["nlay"]), points=points,
-                        cells=cells, utm_epsg=utm_epsg)
+                        cells=cells, utm_epsg=utm_epsg, frame=frame)
     _unstated(sheet, set(groups) | set(_REQUIRED_PACKAGES[module]) | {"TDIS"},
               derived)
     sim = flopy.mf6.MFSimulation(sim_name="trid3nt", sim_ws=str(work),
                                  verbosity_level=0)
     _package(flopy, "ModflowTdis",
              _placed(groups.pop("TDIS", {}), dims=dims, points=points,
-                     cells=cells, utm_epsg=utm_epsg, sheet=sheet), owner=sim,
+                     cells=cells, utm_epsg=utm_epsg, sheet=sheet, frame=frame,
+                     top=top),
+             owner=sim,
              how="TDIS of the simulation")
     model = _package(flopy, f"Modflow{cap}", named, owner=sim, modelname=module,
                      model_nam_file=f"{module}.nam",
@@ -136,20 +143,21 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
              **dims, how=f"the staged {DISV_FILE}")
     ims = _package(flopy, "ModflowIms",
                    _placed(groups.pop("IMS", {}), dims=dims, points=points,
-                           cells=cells, utm_epsg=utm_epsg, sheet=sheet),
+                           cells=cells, utm_epsg=utm_epsg, sheet=sheet,
+                           frame=frame, top=top),
                    owner=sim, filename=f"{module}.ims",
                    how="IMS of the simulation")
     sim.register_ims_package(ims, [module])
     for prefix, rows in groups.items():
         _package(flopy, f"Modflow{cap}{prefix.lower()}",
                  _placed(rows, dims=dims, points=points, cells=cells,
-                         utm_epsg=utm_epsg, sheet=sheet),
+                         utm_epsg=utm_epsg, sheet=sheet, frame=frame, top=top),
                  owner=model, how=f"{prefix} of {module}")
     return _write_package_by_package(sim)
 
 
 def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, points: Any,
-              cells: Any, utm_epsg: int | None) -> set[str]:
+              cells: Any, utm_epsg: int | None, frame: Any) -> set[str]:
     """Place each stress statement on the cells -> the identifiers it derived (its MAXBOUND).
 
     A statement's row becomes period 1's rows, carried forward by mf6; the bound is the
@@ -161,7 +169,7 @@ def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, point
                 or "stress" not in row.value:
             continue
         placed = place_stress(row.value, points=points, cells=cells,
-                              utm_epsg=utm_epsg, nlay=nlay)
+                              utm_epsg=utm_epsg, nlay=nlay, frame=frame)
         rows["stress_period_data"] = replace(row, value={0: placed})
         rows["maxbound"] = Filled(
             slot=sheet.body.MODULE_INPUT[f"{prefix}_MAXBOUND"],
@@ -186,12 +194,13 @@ def _unstated(sheet: Any, prefixes: set[str], derived: set[str] = frozenset()) -
 
 
 def _placed(rows: dict[str, Any], *, dims: dict[str, int], points: Any,
-            cells: Any, utm_epsg: int | None, sheet: Any) -> dict[str, Any]:
+            cells: Any, utm_epsg: int | None, sheet: Any, frame: Any,
+            top: Any) -> dict[str, Any]:
     """Each keyword's constructor value - an ARRAY placed against the mesh's cells, the rest as stated."""
     return {
         name: (place(row.value, slot=row.slot, nlay=int(dims["nlay"]),
                      run=sheet.run, points=points, cells=cells,
-                     utm_epsg=utm_epsg)
+                     utm_epsg=utm_epsg, frame=frame, top=top)
                if row.slot.type == "ARRAY" else row.value)
         for name, row in rows.items()}
 

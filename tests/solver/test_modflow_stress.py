@@ -118,11 +118,18 @@ def _fill(stated: dict, where=_LINE):
         "TDIS_PERIODDATA": [[600.0, 1, 600.0]], **stated})
 
 
-def _placed(name: str, geometry, *, layer: int = 1, values=None):
+_DIMENSIONS = {"elevation": "L", "head": "L", "conductance": "L2/T",
+               "rate": "L3/T"}
+
+
+def _placed(name: str, geometry, *, layer: int = 1, values=None,
+            frame=("meters", "days")):
+    values = values or dict(_COMPOSITES[name])
     statement = {"stress": _PACKAGE[name], "composite": name,
-                 "geometry": geometry, "layer": layer,
-                 "values": values or dict(_COMPOSITES[name])}
-    return place(statement, points=_POINTS, cells=_CELLS, utm_epsg=32617, nlay=2)
+                 "geometry": geometry, "layer": layer, "values": values,
+                 "dimensions": {key: _DIMENSIONS[key] for key in values}}
+    return place(statement, points=_POINTS, cells=_CELLS, utm_epsg=32617,
+                 nlay=2, frame=frame)
 
 
 @pytest.mark.parametrize("name", list(_COMPOSITES))
@@ -198,14 +205,16 @@ def test_a_layer_the_grid_does_not_have_refuses_naming_both():
 
 def test_a_named_raster_value_is_sampled_at_each_placed_cell(tmp_path):
     raster = _raster(tmp_path / "head.tif", value=4.5)
-    rows = _placed("ConstantHead", _LEFT, values={"head": str(raster)})
+    rows = _placed("ConstantHead", _LEFT,
+                   values={"head": {"uri": str(raster), "units": "m"}})
     assert [row[1] for row in rows] == [4.5] * 4
 
 
 def test_a_raster_measuring_nothing_at_a_placed_cell_refuses(tmp_path):
     raster = _raster(tmp_path / "small.tif", value=1.0, cells=1, size=5.0)
     with pytest.raises(ModflowError) as caught:
-        _placed("ConstantHead", _LEFT, values={"head": str(raster)})
+        _placed("ConstantHead", _LEFT,
+                values={"head": {"uri": str(raster), "units": "m"}})
     assert caught.value.error_code == "MODFLOW_GRIDDATA_UNMEASURED"
 
 

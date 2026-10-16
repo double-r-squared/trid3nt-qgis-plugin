@@ -23,8 +23,9 @@ Three things are not operations and stay:
 
 - READING ONTO THE RUN'S OWN FRAME at ingestion - a record onto the engine's
   time step and the unit its slot reads, a surface onto the run's vertical
-  frame, an upload onto the store's lon/lat frame. Each is the slot's own
-  coercion, never a row a template writes.
+  frame, an upload onto the store's lon/lat frame, a MODFLOW raster onto the
+  sheet's length and time units (a raster publishing no unit refuses). Each is
+  the slot's own coercion, never a row a template writes.
 - A FETCH reading its source onto the asked window and spacing. The kernel a
   row states is how that source's pixels are read; a grid past the pixel
   budget refuses naming the spacing to re-ask at.

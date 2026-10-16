@@ -207,10 +207,10 @@ class Slot:
 # Keywords neither spelling of which both of the engine's readers take; a deck stating one stops before the solve.
 _UNREADABLE = frozenset({"LOCAL LONGITUDE, IN DEGREES"})
 
-# What each dictionary type is in Python; LOGICAL is separated from INTEGER in ``_scalar`` because a bool is an int. ARRAY and STRUCT are MODFLOW's dictionary words: an array is a constant, one value per layer, or the NAME of an input holding the grid; a structured block is a filename, a table, or the mapping the authoring writes.
+# What each dictionary type is in Python; LOGICAL is separated from INTEGER in ``_scalar`` because a bool is an int. ARRAY and STRUCT are MODFLOW's dictionary words: an array is a constant, one value per layer, the NAME of an input holding the grid, or a mapping stating cells; a structured block is a filename, a table, or the mapping the authoring writes.
 _TYPES: Mapping[str, Any] = {
     "INTEGER": int, "REAL": (int, float), "LOGICAL": bool, "STRING": str,
-    "ARRAY": (int, float, str, list, tuple),
+    "ARRAY": (int, float, str, list, tuple, dict),
     "STRUCT": (str, list, tuple, dict),
 }
 
