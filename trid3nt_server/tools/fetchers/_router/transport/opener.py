@@ -50,13 +50,15 @@ def _typed(url: str, exc: Exception) -> TransportError:
 
 
 @contextmanager
-def open_windowed_cog(url: str) -> Iterator:
-    """Open a remote COG through ``/vsicurl/`` under :data:`READ_POLICY`; a GDAL failure raises the typed transport error."""
+def open_windowed_cog(url: str, *, signed: dict[str, str] | None = None) -> Iterator:
+    """Open a remote COG through ``/vsicurl/`` under :data:`READ_POLICY`, or ``url`` as a ``/vsis3/`` path under the
+    ``signed`` config; a GDAL failure raises the typed transport error."""
     import rasterio
     from rasterio.errors import RasterioError
 
     try:
-        with rasterio.Env(**READ_POLICY), rasterio.open(f"/vsicurl/{url}") as src:
+        with rasterio.Env(**READ_POLICY, **(signed or {})), \
+                rasterio.open(url if signed else f"/vsicurl/{url}") as src:
             yield src
     except RasterioError as exc:
         raise _typed(url, exc) from exc

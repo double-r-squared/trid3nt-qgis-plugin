@@ -7,6 +7,7 @@ re-asserted after the astype so a dropped CRS never reaches the correctness gate
 from __future__ import annotations
 
 import logging
+import math
 import os
 import tempfile
 from typing import Any
@@ -221,7 +222,7 @@ def _direct_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[A
         TransportNotFound,
         is_staged_uri,
         open_windowed_cog,
-        staged_object_url,
+        staged_gdal,
     )
 
     ingest = spec.ingest or {}
@@ -243,9 +244,10 @@ def _direct_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[A
     # A staged object is known to exist: a failure resolving it is a config/upstream
     # defect, never a coverage answer.
     was_staged = is_staged_uri(url)
+    signed = None
     if was_staged:
         try:
-            url = staged_object_url(url)
+            url, signed = staged_gdal(url)
         except StagedEndpointNotConfigured as exc:
             raise router_upstream_error(
                 spec.error_code_prefix,
@@ -254,10 +256,15 @@ def _direct_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[A
 
     round_pixel = bool(ingest.get("round_pixel_window", False))
     try:
-        with open_windowed_cog(url) as src:
+        with open_windowed_cog(url, signed=signed) as src:
             win = window_from_bounds(*bbox, transform=src.transform)
             if round_pixel:
-                win = win.round_offsets(op="floor").round_lengths(op="ceil")
+                # Each EDGE rounds outward: a floored offset with a separately ceiled
+                # length leaves the far edge up to a pixel short of the bbox.
+                col0, row0 = math.floor(win.col_off), math.floor(win.row_off)
+                col1 = math.ceil(win.col_off + win.width)
+                row1 = math.ceil(win.row_off + win.height)
+                win = Window(col0, row0, col1 - col0, row1 - row0)
                 win = win.intersection(Window(0, 0, src.width, src.height))
                 if win.width <= 0 or win.height <= 0:
                     raise router_empty_error(

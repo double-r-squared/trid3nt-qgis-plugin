@@ -60,7 +60,7 @@ class _FakeSrc:
 
 def _patch_open(monkeypatch, arr, seen: dict | None = None):
     @contextlib.contextmanager
-    def _fake_open(url):
+    def _fake_open(url, signed=None):
         if seen is not None:
             seen["url"] = url
         yield _FakeSrc(arr)
@@ -136,6 +136,16 @@ def test_staged_uri_resolves_against_the_configured_endpoint(monkeypatch):
     assert _staged.staged_object_url("s3://buck/a/b.tif") == "http://minio.local:9000/buck/a/b.tif"
 
 
+def test_a_staged_object_is_read_signed_never_anonymously(monkeypatch):
+    """The buckets are private: an anonymous /vsicurl/ read of a staged object is refused 403."""
+    monkeypatch.setenv("AWS_ENDPOINT_URL", "http://minio.local:9000/")
+    monkeypatch.delenv("AWS_ENDPOINT_URL_S3", raising=False)
+    path, config = _staged.staged_gdal("s3://buck/a/b.tif")
+    assert path == "/vsis3/buck/a/b.tif"
+    assert config == {"AWS_S3_ENDPOINT": "minio.local:9000", "AWS_HTTPS": "NO",
+                      "AWS_VIRTUAL_HOSTING": "FALSE"}
+
+
 def test_staged_uri_raises_when_no_endpoint_override(monkeypatch):
     """No real-AWS fallback: this repo's AWS account is decommissioned, so an
     unset endpoint is always a deployment misconfiguration, never a valid
@@ -161,7 +171,7 @@ def test_source_param_selects_the_staged_object(spec, monkeypatch, source, fragm
     seen: dict = {}
     _patch_open(monkeypatch, np.full((4, 4), 150.0, dtype="float32"), seen)
     raster_cog._direct_window_to_array(spec, {"bbox": _BBOX, "source": source})
-    assert seen["url"] == f"http://minio.local:9000/trid3nt-cache/staged/groundwater_recharge/{fragment}"
+    assert seen["url"] == f"/vsis3/trid3nt-cache/staged/groundwater_recharge/{fragment}"
 
 
 
@@ -284,7 +294,7 @@ def test_configured_endpoint_with_404_raises_typed_config_error_not_empty(spec, 
     from trid3nt_server.tools.fetchers._router.transport.errors import TransportNotFound
 
     @contextlib.contextmanager
-    def _fake_open_404(url):
+    def _fake_open_404(url, signed=None):
         raise TransportNotFound("simulated 404", status=404)
         yield  # pragma: no cover
 

@@ -154,3 +154,11 @@ def test_the_frame_is_what_the_sheet_states():
                  DISV_BOTM=[-1.0])
     assert frame_of(sheet) == ("feet", "hours")
     assert frame_of(fill(GWF, DISV_NLAY=1, DISV_BOTM=[-1.0])) == (None, None)
+
+
+def test_a_length_spelled_out_reads_as_its_symbol():
+    from trid3nt_server.inputs.temporal import convert_units
+
+    assert convert_units(3.0, "meters", "m") == 3.0
+    assert convert_units(3.0, "metres", "m") == 3.0
+    assert convert_units(10.0, "feet", "m") == 3.048

@@ -663,7 +663,7 @@ def test_direct_window_url_by_param_selects_endpoint(monkeypatch):
     seen = {}
     import contextlib
     @contextlib.contextmanager
-    def _fake_open(url):
+    def _fake_open(url, signed=None):
         seen["url"] = url
         yield _FakeSrc(np.array([[70, 71], [72, 73]], dtype="uint8"), 255.0)
     monkeypatch.setattr("trid3nt_server.tools.fetchers._router.transport.open_windowed_cog", _fake_open)
@@ -676,7 +676,7 @@ def test_direct_window_nodata_gate_raises_empty(monkeypatch):
     """An all-nodata window is honest no-coverage -> typed EMPTY (never fabricated)."""
     import contextlib
     @contextlib.contextmanager
-    def _fake_open(url):
+    def _fake_open(url, signed=None):
         yield _FakeSrc(np.full((3, 3), 255, dtype="uint8"), 255.0)
     monkeypatch.setattr("trid3nt_server.tools.fetchers._router.transport.open_windowed_cog", _fake_open)
     spec = _dw_spec(nodata_gate=True, default_nodata=255)
@@ -689,7 +689,7 @@ def test_direct_window_nodata_gate_passes_with_data(monkeypatch):
     """A window with at least one valid pixel is NOT gated as empty."""
     import contextlib
     @contextlib.contextmanager
-    def _fake_open(url):
+    def _fake_open(url, signed=None):
         yield _FakeSrc(np.array([[255, 80], [255, 255]], dtype="uint8"), 255.0)
     monkeypatch.setattr("trid3nt_server.tools.fetchers._router.transport.open_windowed_cog", _fake_open)
     spec = _dw_spec(nodata_gate=True)
@@ -740,7 +740,7 @@ def test_multi_url_mosaic_pastes_members(monkeypatch):
     monkeypatch.setattr(raster_cog, "_resolve_multi_url_members", lambda s, p: _two_tile_grid(A, B))
     import contextlib
     @contextlib.contextmanager
-    def _fake_open(url):
+    def _fake_open(url, signed=None):
         yield _FakeMember(A if url == "A" else B)
     monkeypatch.setattr("trid3nt_server.tools.fetchers._router.transport.open_windowed_cog", _fake_open)
     arr, tf, crs = raster_cog._multi_url_to_array(_mu_spec(), {"bbox": [0, 0, 4, 4]})
@@ -755,7 +755,7 @@ def test_multi_url_all_nodata_window_is_empty(monkeypatch):
     monkeypatch.setattr(raster_cog, "_resolve_multi_url_members", lambda s, p: _two_tile_grid(nan2, nan2))
     import contextlib
     @contextlib.contextmanager
-    def _fake_open(url):
+    def _fake_open(url, signed=None):
         yield _FakeMember(nan2)
     monkeypatch.setattr("trid3nt_server.tools.fetchers._router.transport.open_windowed_cog", _fake_open)
     with pytest.raises(RouterEmptyError) as ei:

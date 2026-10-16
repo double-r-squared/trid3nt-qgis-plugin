@@ -1,14 +1,16 @@
-"""Resolve an ``s3://`` staged-dataset URL to the http form the transport reads.
+"""Resolve an ``s3://`` staged-dataset URL to the signed GDAL path the transport reads.
 
 A staged dataset is named by bucket and key, never by host, because the host is
-deployment state; the pair resolves against ``AWS_ENDPOINT_URL`` at read time.
+deployment state; the pair resolves against ``AWS_ENDPOINT_URL`` at read time. The
+buckets are private, so an anonymous read of a staged object is refused (403).
 """
 
 from __future__ import annotations
 
 import os
 
-__all__ = ["StagedEndpointNotConfigured", "is_staged_uri", "staged_object_url"]
+__all__ = ["StagedEndpointNotConfigured", "is_staged_uri", "staged_gdal",
+           "staged_object_url"]
 
 
 class StagedEndpointNotConfigured(RuntimeError):
@@ -35,3 +37,16 @@ def staged_object_url(uri: str) -> str:
             "AWS account is decommissioned)"
         )
     return f"{endpoint.rstrip('/')}/{bucket}/{key}"
+
+
+def staged_gdal(uri: str) -> tuple[str, dict[str, str]]:
+    """``s3://bucket/key`` -> the ``/vsis3/`` path and the GDAL config that signs it against the endpoint.
+
+    GDAL reads the credentials from the environment the daemon already carries."""
+    from urllib.parse import urlsplit
+
+    endpoint = urlsplit(staged_object_url(uri))
+    return (f"/vsis3/{uri[len('s3://'):]}",
+            {"AWS_S3_ENDPOINT": endpoint.netloc,
+             "AWS_HTTPS": "YES" if endpoint.scheme == "https" else "NO",
+             "AWS_VIRTUAL_HOSTING": "FALSE"})

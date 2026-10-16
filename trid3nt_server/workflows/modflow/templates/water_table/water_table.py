@@ -66,9 +66,9 @@ class STEERING(GWF):
     NPF_ICELLTYPE = 1
     NPF_SAVE_FLOWS = True
     # Under the standard formulation a convertible cell an iterate drops below its bottom goes dry and never rewets, and a
-    # steady water table dries whole; Newton-Raphson needs the moderate solver's BiCGSTAB to converge
+    # steady water table dries whole; Newton-Raphson over measured terrain converges only under the complex solver preset
     NAM_NEWTONOPTIONS = "NEWTON"
-    IMS_COMPLEXITY = "MODERATE"
+    IMS_COMPLEXITY = "COMPLEX"
 
     OC_HEAD_FILERECORD = "gwf.hds"
     OC_BUDGET_FILERECORD = "gwf.cbc"

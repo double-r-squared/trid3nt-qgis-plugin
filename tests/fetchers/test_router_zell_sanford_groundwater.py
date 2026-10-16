@@ -80,7 +80,7 @@ class _FakeSrc:
 
 def _patch_open(monkeypatch, arr, seen: dict | None = None, bbox=None):
     @contextlib.contextmanager
-    def _fake_open(url):
+    def _fake_open(url, signed=None):
         if seen is not None:
             seen["url"] = url
         yield _FakeSrc(arr, bbox)
@@ -212,7 +212,7 @@ def test_the_read_resolves_the_configured_endpoint(spec, monkeypatch):
     seen: dict = {}
     _patch_open(monkeypatch, np.full((4, 4), 12.0, dtype="float32"), seen)
     raster_cog._direct_window_to_array(spec, {"bbox": _BBOX})
-    assert seen["url"].startswith("http://minio.local:9000/trid3nt-cache/staged/")
+    assert seen["url"].startswith("/vsis3/trid3nt-cache/staged/")
     assert seen["url"].endswith(spec.endpoints["data"].url.split("/")[-1])
 
 
@@ -233,7 +233,7 @@ def test_staged_404_raises_typed_config_error_not_empty(spec, monkeypatch):
     from trid3nt_server.tools.fetchers._router.transport.errors import TransportNotFound
 
     @contextlib.contextmanager
-    def _fake_open_404(url):
+    def _fake_open_404(url, signed=None):
         raise TransportNotFound("simulated 404", status=404)
         yield  # pragma: no cover
 

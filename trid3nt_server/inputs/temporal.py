@@ -55,6 +55,9 @@ class TemporalShapeError(DeclarativeError):
 # Rows match on spelling normalized for case, spaces, degree signs and full stops, so "deg C", "degC" and "DEGC" are one entry.
 _UNITS: dict[str, tuple[str, float, float]] = {
     "m": ("length", 1.0, 0.0),
+    "meters": ("length", 1.0, 0.0),
+    "metres": ("length", 1.0, 0.0),
+    "feet": ("length", 0.3048, 0.0),
     "cm": ("length", 0.01, 0.0),
     "mm": ("length", 0.001, 0.0),
     "km": ("length", 1000.0, 0.0),

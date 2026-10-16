@@ -15,7 +15,7 @@ from .errors import (
     classify_status,
 )
 from .opener import MAX_PARALLEL, READ_POLICY, open_windowed_cog
-from .staged import StagedEndpointNotConfigured, is_staged_uri, staged_object_url
+from .staged import StagedEndpointNotConfigured, is_staged_uri, staged_gdal
 from .zip_object import get_zip
 
 __all__ = [
@@ -26,7 +26,7 @@ __all__ = [
     "post_bytes",
     "get_zip",
     "is_staged_uri",
-    "staged_object_url",
+    "staged_gdal",
     "StagedEndpointNotConfigured",
     "open_windowed_cog",
     "READ_POLICY",
