@@ -289,3 +289,17 @@ def _lonlat_ring():
     to = Transformer.from_crs(32617, 4326, always_xy=True).transform
     return [to(*p) for p in ((-1.0, -1.0), (21.0, -1.0), (21.0, 21.0),
                              (-1.0, 21.0), (-1.0, -1.0))]
+
+
+def test_stated_numbers_are_the_model_frame_s_own_at_every_cell(tmp_path):
+    sheet = _fill({}, {"thickness": 30.0, "water_table_depth": 3.0,
+                       "conductivity": 5.0})
+    top, botm, _ = _layering(sheet, tmp_path)
+    assert botm == [pytest.approx([t - 30.0 for t in top])]
+
+    from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place
+
+    k = place(sheet.filled["NPF_K"].value, slot=sheet.filled["NPF_K"].slot,
+              nlay=1, run=sheet.run, points=_POINTS, cells=_CELLS, utm_epsg=32617,
+              frame=frame_of(sheet), top=top)
+    assert k == [[5.0] * len(_CELLS)]

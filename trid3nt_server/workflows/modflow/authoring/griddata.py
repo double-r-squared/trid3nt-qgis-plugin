@@ -224,6 +224,9 @@ def _expression(value: Mapping[str, Any], *, slot: Slot, nlay: int, points: Any,
     dimension = _dimension(slot)
 
     def read(artifact: Any, kind: str) -> list[float]:
+        if isinstance(artifact, (int, float)) and not isinstance(artifact, bool):
+            # A stated number is already in the model's own units: it holds at every cell.
+            return [float(artifact)] * len(cells)
         with tempfile.TemporaryDirectory(prefix="trid3nt_griddata_") as work:
             return sample(artifact, label=slot.identifier,
                           name=_name_of(artifact), scratch=work, points=points,
