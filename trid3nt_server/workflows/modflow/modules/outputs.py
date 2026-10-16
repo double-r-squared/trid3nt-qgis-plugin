@@ -20,9 +20,11 @@ from trid3nt_server.workflows.runtime.primitives import (
     Series,
 )
 
-from ..authoring.accepted_mesh import mesh_nodes
-from ..authoring.griddata import SECONDS
-from ..authoring.mesh_files import disv_dimensions
+from trid3nt_server.inputs.observation import Observation
+
+from ..authoring.accepted_mesh import mesh_artifact, mesh_nodes
+from ..authoring.griddata import METRES, SECONDS
+from ..authoring.mesh_files import disv_dimensions, top_of
 from ..authoring.stress import cells_of
 from ..errors import ModflowError
 from .ugrid import group
@@ -303,6 +305,14 @@ def _point(at: Any) -> Any:
 
     if isinstance(at, Point):
         return at
+    if isinstance(at, Observation):
+        if at.lon is None or at.lat is None:
+            raise ModflowError(
+                "the observation was stated as a number, which stands at no "
+                "site, so no cell holds the value it is checked against; state "
+                "it as a point layer of the well that reported it.",
+                error_code="MODFLOW_OBSERVATION_UNPLACED")
+        return Point(at.lon, at.lat, at.site_name or at.site_id)
     if isinstance(at, Mapping):
         return Point(float(at["lon"]), float(at["lat"]), at.get("name"))
     return Point(*at)
@@ -336,9 +346,88 @@ def read_series(primitive: Primitive, solved: Solved) -> Series:
         raise OutputEmpty(
             f"the cell holding the point is dry or inactive in layer {layer} at every saved time.")
     centre = solved.lonlat[list(solved.nodes[1][cell])].mean(axis=0)
+    measures = (_checked(primitive.at, solved, times=times, column=column, cell=cell)
+                if isinstance(primitive.at, Observation) and str(primitive.variable).upper() == "HEAD"
+                else _envelope(times, column[:, None]))
     return Series(name=row.name, units=units, times=times, values=column,
                   at=f"at {point.name or 'the point'}", lon=float(centre[0]),
-                  lat=float(centre[1]), measures=_envelope(times, column[:, None]))
+                  lat=float(centre[1]), measures=measures)
+
+
+def _uncomparable(why: str) -> ModflowError:
+    return ModflowError(why, error_code="MODFLOW_OBSERVATION_UNCOMPARABLE")
+
+
+def _checked(observed: Observation, solved: Solved, *, times: Any, column: Any,
+             cell: int) -> dict[str, Any]:
+    """A measured water level against the solved one at its well's cell, in the SAME quantity and the model's length unit.
+
+    A depth below the land surface is checked against the cell's top less its head, an elevation against the head
+    on the run's own vertical frame; a reading of any other quantity, unit or frame refuses by name."""
+    import numpy as np
+
+    from trid3nt_server.inputs.temporal import TemporalUnitsError, convert_units
+    from trid3nt_server.inputs.vertical_datum import names_frame
+
+    length = str(solved.stated("DISV_LENGTH_UNITS") or "unknown").strip().lower()
+    if length not in METRES:
+        raise ModflowError(
+            f"DISV_LENGTH_UNITS is {length!r}, so a head has no length to check a "
+            f"measured water level against; state it as {', '.join(METRES)}.",
+            error_code="MODFLOW_UNITS_UNSTATED")
+    try:
+        seen = convert_units(observed.value, str(observed.units or ""), "m") / METRES[length]
+    except TemporalUnitsError as refused:
+        raise _uncomparable(
+            f"the observed water level is in {observed.units!r}, which is no "
+            f"length the head can be read in: {refused}") from refused
+    step = _sampled_step(observed, solved, times)
+    head = float(column[step])
+    if not np.isfinite(head):
+        raise _uncomparable(
+            f"the well's cell is dry or inactive at t = {float(times[step]):g} s, "
+            "so it holds no water table to check the reading against.")
+    if observed.quantity == "water_table_depth":
+        points, cells, bed, _ll = solved.nodes
+        top = top_of(solved.sheet, nlay=solved.nlay, art=mesh_artifact(solved.mesh),
+                     bed=bed, points=points, cells=cells)
+        simulated = (float(top) if isinstance(top, (int, float)) else float(top[cell])) - head
+    elif observed.quantity == "groundwater_head":
+        frame = str(solved.run.get("vertical_frame") or "")
+        if not (observed.datum and frame and names_frame(observed.datum, frame)):
+            raise _uncomparable(
+                f"the well reports an elevation on {observed.datum or 'no stated datum'} "
+                f"and this run's heads are on {frame or 'no stated frame'}; a shift "
+                "between the two frames is measured, never assumed, so state a "
+                "reading on the run's frame or a depth below the land surface.")
+        simulated = head
+    else:
+        raise _uncomparable(
+            f"the well reports {observed.quantity or 'a value that states no quantity'}, "
+            "and a head is checked only against a water_table_depth below the "
+            "land surface or a groundwater_head elevation.")
+    return {"site": observed.site_id or observed.site_name or "an unnamed site",
+            "sampled": observed.sampled or "an undated moment",
+            "quantity": observed.quantity, "units": length,
+            "observed": round(seen, 3), "simulated": round(simulated, 3),
+            "simulated_minus_observed": round(simulated - seen, 3)}
+
+
+def _sampled_step(observed: Observation, solved: Solved, times: Any) -> int:
+    """The saved time a reading is checked at: the one a steady run saves, else the one nearest the instant it was sampled."""
+    import numpy as np
+
+    from trid3nt_server.tools.search.match import instant
+
+    if len(times) == 1:
+        return 0
+    opened, sampled = instant(solved.run.get("reference_time")), instant(observed.sampled)
+    if opened is None or sampled is None:
+        raise _uncomparable(
+            f"the run saved {len(times)} times and the reading "
+            + ("states no instant" if sampled is None else "has no run start to count it from")
+            + ", so no saved time is the one it was measured at.")
+    return int(np.argmin(np.abs(np.asarray(times) - (sampled - opened).total_seconds())))
 
 
 def read_mass_balance(primitive: Primitive, solved: Solved) -> Series:

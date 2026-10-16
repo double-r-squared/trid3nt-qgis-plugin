@@ -51,8 +51,8 @@ class Need:
     until: str | None = None
     #: The vertical frame the run is solved on, as the bed states it.
     frame: str | None = None
-    #: WHAT OF THE CLASS the slot asks for, "" for any: the published variable or feature. A source states its own word on its row;
-    #: one with no word for this is excluded.
+    #: WHAT OF THE CLASS the slot asks for, "" for any. Where a source of the class publishes it as its quantity, the rows
+    #: publishing another are excluded; anywhere else it is the published variable or feature, and a row with no word for it is.
     of: str = ""
     #: The cell the mesh resolves, which is what a source's own cell is ranked
     #: against - finer than the mesh is detail the mesh cannot carry.
@@ -111,11 +111,15 @@ def match(need: Need,
     caller probes the top survivor and drops it on empty."""
     kept: list[tuple[tuple[float, ...], str, Coverage]] = []
     dropped: list[SourceOption] = []
-    for name, coverage in candidates:
-        if coverage.data_class != need.data_class:
-            continue
+    rows = [(name, coverage) for name, coverage in candidates
+            if coverage.data_class == need.data_class]
+    # ``of`` FILTERS BY QUANTITY only where some row of the class publishes that quantity; anywhere else it is a column word.
+    by_quantity = bool(need.of) and need.of in {
+        _quantity(name) for name, _coverage in rows}
+    for name, coverage in rows:
         reason = (_no_moment(need, coverage) or _unaskable(name, coverage, need)
-                  or _wrong_shape(name, need) or _excluded(need, coverage))
+                  or _wrong_shape(name, need)
+                  or _excluded(need, coverage, name, by_quantity))
         if reason:
             dropped.append(_option(name, coverage, need, excluded=reason))
             continue
@@ -126,10 +130,10 @@ def match(need: Need,
     if need.pick:
         survivors = _named_first(need, survivors, dropped)
         tie = False
-    rows = (survivors + dropped)[:RANKED_ROWS]
+    ranked = (survivors + dropped)[:RANKED_ROWS]
     picked = survivors[0].fetcher if survivors else ""
     return SourceChoice(
-        slot=need.slot, need=need.data_class, rows=rows, picked=picked,
+        slot=need.slot, need=need.data_class, rows=ranked, picked=picked,
         sentence=_sentence(need, survivors, dropped), tie=tie,
         loosened=need.loosen, picked_by_user=bool(need.pick))
 
@@ -388,9 +392,20 @@ def _picked_row(choice: SourceChoice) -> Coverage | None:
                  and (not kind or row.kind == kind)), None)
 
 
-def _excluded(need: Need, coverage: Coverage) -> str:
+def _quantity(name: str) -> str:
+    """The quantity this source states it publishes (its ``normalize.quantity``), "" where it states none."""
+    from trid3nt_server.tools.fetchers._router.registration import _SPEC_REGISTRY
+
+    spec = _SPEC_REGISTRY.get(name)
+    normalize = getattr(spec, "normalize", None)
+    return str(getattr(normalize, "quantity", None) or "")
+
+
+def _excluded(need: Need, coverage: Coverage, name: str = "",
+              by_quantity: bool = False) -> str:
     """Why a filter drops this source, or "" where it survives; the window is hard for a SERIES only, the datum is never a filter."""
-    unpublished = _unpublished(need, coverage)
+    unpublished = (_other_quantity(name, need) if by_quantity
+                   else _unpublished(need, coverage))
     if unpublished:
         return unpublished
     if need.lon is not None and need.lat is not None:
@@ -435,6 +450,15 @@ def _unpublished(need: Need, coverage: Coverage) -> str:
     known = ", ".join(sorted(coverage.vocabulary)) or "nothing"
     return (f"publishes nothing it calls {need.of}; its row states a word for "
             f"{known}")
+
+
+def _other_quantity(name: str, need: Need) -> str:
+    """Why a source publishing another quantity than the one the slot asked for leaves the list, or ""."""
+    published = _quantity(name)
+    if published == need.of:
+        return ""
+    return (f"publishes {published or 'no stated quantity'} and this slot asks "
+            f"for {need.of}")
 
 
 def _off_the_water(need: Need, extent: CoverageExtent) -> str:

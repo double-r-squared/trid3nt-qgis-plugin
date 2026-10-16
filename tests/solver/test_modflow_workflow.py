@@ -22,7 +22,7 @@ from trid3nt_server.tools.mesh.artifact import MeshArtifact
 from trid3nt_server.workflows.modflow import workflow as door
 from trid3nt_server.workflows.modflow.errors import ModflowError
 from trid3nt_server.workflows.modflow.modules import GWF
-from trid3nt_server.workflows.runtime.primitives import mass_balance
+from trid3nt_server.workflows.runtime.primitives import mass_balance, unanchored
 from trid3nt_server.workflows.runtime.sheet import fill
 
 _FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "modflow" / "lattice_solved"
@@ -80,7 +80,7 @@ def publish(monkeypatch, tmp_path, fake_s3):
 
     monkeypatch.setattr("trid3nt_server.workflows.runtime.primitives.publish", _publish)
 
-    def run(**over):
+    def run(outputs=(mass_balance().chart(),), captions=None, anchors=(), **over):
         display = _lattice(tmp_path / "mesh.2dm")
         art = MeshArtifact(
             mesh_id="M01", name="lattice", mode="om2d", display_uri=str(display),
@@ -88,13 +88,15 @@ def publish(monkeypatch, tmp_path, fake_s3):
             element_count=8, bbox=(0.0, 0.0, 20.0, 20.0), utm_epsg=32617)
         handle = {"run_id": "R1", "utm_epsg": 32617, "module": "gwf",
                   "name": "lattice", "reference_time": "2024-06-01T00:00:00Z",
+                  "vertical_frame": "NAVD88",
                   "mesh": {"artifact": art, "display_uri": str(display)}}
         token = bind_notes()
         try:
             record = asyncio.run(door.publish_outputs(
                 run=handle, sheet=_sheet(**over),
-                outputs=[mass_balance().chart()],
-                captions={"mass_balance": "water budget"}, params={}))
+                outputs=[unanchored(p) for p in outputs],
+                captions=captions or {"mass_balance": "water budget"}, params={},
+                anchors=anchors))
         finally:
             notes = drain_notes(token)
         return record, list(handed), notes
@@ -130,6 +132,27 @@ def test_a_run_that_saved_no_head_has_no_record_to_return(publish):
     assert caught.value.error_code == "MODFLOW_OUTPUT_UNSAVED"
 
 
+def test_the_template_s_well_check_is_said_on_the_run_s_record(publish):
+    from pyproj import Transformer
+
+    from trid3nt_server.inputs.observation import Observation
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    template = TOOL_REGISTRY["modflow_water_table"].fn.workflow.template
+    lon, lat = Transformer.from_crs(32617, 4326, always_xy=True).transform(18.0, 12.0)
+    well = Observation(value=10.0, units="ft", site_id="USGS-1", lon=lon, lat=lat,
+                       quantity="water_table_depth", sampled="2024-06-11T00:00:00Z")
+    _record, _items, notes = publish(
+        outputs=template.OUTPUTS, captions=template.CAPTIONS,
+        anchors=[{"at": well if p.at == "observe" else p.at, "along": None,
+                  "within": None} for p in template.OUTPUTS],
+        DISV_NLAY=1, DISV_BOTM=[[-10.0] * 8], NPF_SAVE_SATURATION=None,
+        NPF_SAVE_SPECIFIC_DISCHARGE=None)
+    said = next(note for note in notes if note.startswith("the water table at the observed well"))
+    assert "site = USGS-1" in said and "observed = 3.048" in said
+    assert "quantity = water_table_depth" in said and "simulated_minus_observed = " in said
+
+
 def test_the_template_registers_over_the_modflow_workflow():
     from trid3nt_server.tools import TOOL_REGISTRY
 
@@ -141,8 +164,18 @@ def test_the_template_registers_over_the_modflow_workflow():
     assert by_name["drain_conductance"].required
     assert by_name["drain_conductance"].units == "m2/day"
     assert by_name["well"].stated_only and by_name["well_rate"].stated_only
-    assert {"domain", "bed", "thickness", "conductivity", "water_table_depth",
-            "recharge", "streams"} <= set(workflow.named_rows())
+    assert {"domain", "bed", "thickness", "transmissivity", "water_table_depth",
+            "recharge", "streams", "observe"} <= set(workflow.named_rows())
+    assert "conductivity" not in by_name
+    # Each aquifer row is filled by the source publishing its quantity; the well is read as a point.
+    assert {name: (by_name[name].data_class, by_name[name].observes) for name in
+            ("thickness", "transmissivity", "water_table_depth", "recharge")} == {
+        "thickness": ("aquifer property", "aquifer_saturated_thickness"),
+        "transmissivity": ("aquifer property", "aquifer_transmissivity"),
+        "water_table_depth": ("groundwater level", "water_table_depth"),
+        "recharge": ("aquifer property", "groundwater_recharge")}
+    assert (by_name["observe"].data_class, by_name["observe"].geometry) == (
+        "groundwater level", "point")
     assert workflow.unnamed() == ()
 
 

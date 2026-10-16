@@ -16,11 +16,12 @@ The STEADY WATER TABLE of an unconfined aquifer under recharge, drained by its s
 |---|---|---|---|
 | `domain` | matched on a need for hydrography | the closed polygon this run solves over, as a uri, a layer name or a drawn shape; unfilled, the run matches a source of hydrography. | - |
 | `bed` | matched on a need for terrain | The land surface: the terrain the mesh paints, which the aquifer's top is and the streams drain at. A DEM, or a depth in metres below the model's zero for a flat surface. | - |
-| `thickness` | supplied by the caller | How thick the aquifer is under the land surface, in metres: a number, or a raster publishing its unit. | - |
-| `conductivity` | supplied by the caller | The aquifer's horizontal hydraulic conductivity, in metres per day: a number, or a raster publishing its unit. | - |
-| `water_table_depth` | supplied by the caller | How far below the land surface the water table stands before the solve, in metres: a number, or a raster publishing its unit. | - |
-| `recharge` | supplied by the caller | What reaches the water table over the domain, in metres per day: a number, or a raster publishing its unit (mm/yr is read onto the model's own). | - |
+| `thickness` | matched on a need for aquifer property | How thick the aquifer is, its base that far below the land surface: a number in metres, or a raster publishing its unit; unfilled, the source publishing aquifer_saturated_thickness here. | - |
+| `transmissivity` | matched on a need for aquifer property | The aquifer's transmissivity: a number in square metres per day, or a raster publishing its unit; unfilled, the source publishing aquifer_transmissivity here. | - |
+| `water_table_depth` | matched on a need for groundwater level | How far below the land surface the water table stands before the solve: a number in metres, or a raster publishing its unit; unfilled, the source publishing water_table_depth here. | - |
+| `recharge` | matched on a need for aquifer property | What reaches the water table over the domain: a number in metres per day, or a raster publishing its unit; unfilled, the source publishing groundwater_recharge here. | - |
 | `streams` | matched on a need for hydrography | the hydrography this run reads, as a uri or a layer name; unfilled, the run matches a source of hydrography. | - |
+| `observe` | matched on a need for groundwater level | A well's measured water level the solved water table is checked against at the well's own cell: a point layer of wells reporting it; unfilled, the measured groundwater levels here. | - |
 | `mesh` | supplied by the caller | a mesh this case already built, as its uri or its layer name, solved on in place of the one the run would build; the user may state one; unstated, the run builds its own. | - |
 
 ## The inputs

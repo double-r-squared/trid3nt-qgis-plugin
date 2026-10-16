@@ -7,12 +7,12 @@ import sys
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.input import Input
-from trid3nt_server.inputs.slots import BED, DOMAIN
+from trid3nt_server.inputs.slots import BED, DOMAIN, OBSERVE
 from trid3nt_server.tools.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.modflow.modules import GWF
 from trid3nt_server.workflows.modflow.workflow import ModflowWorkflow
 from trid3nt_server.workflows.runtime import register_workflow
-from trid3nt_server.workflows.runtime.primitives import mass_balance
+from trid3nt_server.workflows.runtime.primitives import mass_balance, series
 
 __all__ = ["CAPTIONS", "INPUTS", "MESH", "OUTPUTS", "STEERING", "modflow_water_table"]
 
@@ -28,20 +28,31 @@ class INPUTS:
         "is and the streams drain at. A DEM, or a depth in metres below the "
         "model's zero for a flat surface.")).need("terrain")
     thickness = Input(desc=(
-        "How thick the aquifer is under the land surface, in metres: a number, "
-        "or a raster publishing its unit.")).need(geometry="raster")
-    conductivity = Input(desc=(
-        "The aquifer's horizontal hydraulic conductivity, in metres per day: a "
-        "number, or a raster publishing its unit.")).need(geometry="raster")
+        "How thick the aquifer is, its base that far below the land surface: "
+        "a number in metres, or a raster publishing its unit; unfilled, the "
+        "source publishing aquifer_saturated_thickness here.")).need(
+        "aquifer property", of="aquifer_saturated_thickness")
+    transmissivity = Input(desc=(
+        "The aquifer's transmissivity: a number in square metres per day, or a "
+        "raster publishing its unit; unfilled, the source publishing "
+        "aquifer_transmissivity here.")).need(
+        "aquifer property", of="aquifer_transmissivity")
     water_table_depth = Input(desc=(
         "How far below the land surface the water table stands before the "
-        "solve, in metres: a number, or a raster publishing its unit.")).need(
-        geometry="raster")
+        "solve: a number in metres, or a raster publishing its unit; unfilled, "
+        "the source publishing water_table_depth here.")).need(
+        "groundwater level", of="water_table_depth")
     recharge = Input(desc=(
-        "What reaches the water table over the domain, in metres per day: a "
-        "number, or a raster publishing its unit (mm/yr is read onto the "
-        "model's own).")).need(geometry="raster")
+        "What reaches the water table over the domain: a number in metres per "
+        "day, or a raster publishing its unit; unfilled, the source publishing "
+        "groundwater_recharge here.")).need(
+        "aquifer property", of="groundwater_recharge")
     streams = Input().need("hydrography", geometry="polyline")
+    observe = Input(OBSERVE, desc=(
+        "A well's measured water level the solved water table is checked "
+        "against at the well's own cell: a point layer of wells reporting it; "
+        "unfilled, the measured groundwater levels here.")).need(
+        "groundwater level", geometry="point")
 
 
 class STEERING(GWF):
@@ -63,7 +74,7 @@ class STEERING(GWF):
     OC_BUDGET_FILERECORD = "gwf.cbc"
     OC_SAVERECORD = [["HEAD", "ALL"], ["BUDGET", "ALL"]]
 
-    Aquifer = {"thickness": "thickness", "conductivity": "conductivity",
+    Aquifer = {"thickness": "thickness", "transmissivity": "transmissivity",
                "water_table_depth": "water_table_depth"}
     Recharge = {"geometry": "domain", "layer": 1, "rate": "recharge"}
     # at the land surface: a stream drains the aquifer wherever the head stands above its bed
@@ -82,8 +93,10 @@ MESH = tool.build_mesh(
 
 OUTPUTS = [
     mass_balance().chart(),
+    series("HEAD", at="observe").note(),
 ]
-CAPTIONS = {"mass_balance": "water budget"}
+CAPTIONS = {"mass_balance": "water budget",
+            "HEAD": "the water table at the observed well"}
 
 _METADATA = AtomicToolMetadata(
     name="modflow_water_table",

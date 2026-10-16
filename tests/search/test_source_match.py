@@ -547,3 +547,99 @@ def test_a_row_stating_no_interval_this_reads_is_bracketed_by_a_day(monkeypatch)
     assert _asked_over(monkeypatch, "irregular field campaigns",
                        ("start_time", "end_time"), "fetch_irregular") == (
         "2026-09-09T12:00:00+00:00", "2026-09-11T18:00:00+00:00")
+
+
+# THE QUANTITY FILTER, over the real registry rows: ``of`` filters a class's rows by
+# the quantity each source states it publishes only where some row of the class
+# states that quantity; anywhere else it stays the column word it always was.
+
+_DES_MOINES = (-93.655, 41.676)
+
+
+def _registered_rows():
+    from trid3nt_server.tools import TOOL_REGISTRY  # noqa: F401 - registers every fetcher's row
+    from trid3nt_server.tools.search.match import sources_with_coverage
+
+    return sources_with_coverage()
+
+
+def _quantity_need(data_class, of, geometry="", where=_DES_MOINES):
+    return Need(slot="row", data_class=data_class, of=of, geometry=geometry,
+                lon=where[0], lat=where[1], opens=DURING, until=UNTIL,
+                frame="NAVD88", mesh_m=100.0)
+
+
+@pytest.mark.parametrize(("data_class", "of", "fetcher"), [
+    ("aquifer property", "aquifer_saturated_thickness", "fetch_aquifer_thickness"),
+    ("aquifer property", "aquifer_transmissivity", "fetch_aquifer_transmissivity"),
+    ("aquifer property", "groundwater_recharge", "fetch_groundwater_recharge"),
+    ("groundwater level", "water_table_depth", "fetch_water_table_depth"),
+])
+def test_a_need_of_a_published_quantity_takes_only_the_source_publishing_it(
+        data_class, of, fetcher):
+    choice = match(_quantity_need(data_class, of), _registered_rows())
+    assert choice.picked == fetcher
+    assert [row.fetcher for row in choice.rows if not row.excluded] == [fetcher]
+    assert all(row.excluded.endswith(f"this slot asks for {of}")
+               for row in choice.rows if row.fetcher != fetcher)
+
+
+def test_the_wells_measuring_the_class_are_not_the_quantity_the_grid_publishes():
+    choice = match(_quantity_need("groundwater level", "water_table_depth"),
+                   _registered_rows())
+    wells = next(row for row in choice.rows
+                 if row.fetcher == "fetch_usgs_groundwater_levels")
+    assert wells.excluded == ("publishes no stated quantity and this slot asks "
+                              "for water_table_depth")
+
+
+def test_a_quantity_no_source_of_the_class_publishes_refuses_naming_it():
+    choice = match(_quantity_need("aquifer property", "aquifer_porosity"),
+                   _registered_rows())
+    assert not choice.picked
+    assert "aquifer_porosity" in choice.sentence
+
+
+def _declared_of_needs():
+    """Every (class, of) a registered template's row asks the match for: a row's
+    ``of=``, and a domain's kind - which reaches the match as its ``of`` - stated
+    or read off a seed, as every word a hydrography row publishes."""
+    from trid3nt_server.inputs.slots import DOMAIN
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    asked = set()
+    for entry in TOOL_REGISTRY.values():
+        workflow = getattr(entry.fn, "workflow", None)
+        for row in getattr(workflow, "inputs", ()):
+            if not row.data_class:
+                continue
+            word = row.kind if row.slot is DOMAIN else row.observes
+            if word:
+                asked.add((row.data_class, word, row.geometry or ""))
+    for _name, coverage in _registered_rows():
+        if coverage.data_class == "hydrography":
+            asked |= {("hydrography", word, "") for word in coverage.vocabulary}
+    return asked
+
+
+def test_every_declared_of_matches_as_it_did_unless_it_names_a_published_quantity(
+        monkeypatch):
+    from trid3nt_server.tools.search import match as matching
+
+    rows = _registered_rows()
+    places = (WILLAMETTE, _DES_MOINES, (-82.42, 42.97))
+    by_quantity = set()
+    for data_class, of, geometry in sorted(_declared_of_needs()):
+        for where in places:
+            need = _quantity_need(data_class, of, geometry, where)
+            now = match(need, rows)
+            with monkeypatch.context() as quantities_unread:
+                quantities_unread.setattr(matching, "_quantity", lambda name: "")
+                before = match(need, rows)
+            if now.model_dump() != before.model_dump():
+                by_quantity.add((data_class, of))
+    assert by_quantity == {
+        ("aquifer property", "aquifer_saturated_thickness"),
+        ("aquifer property", "aquifer_transmissivity"),
+        ("aquifer property", "groundwater_recharge"),
+        ("groundwater level", "water_table_depth")}

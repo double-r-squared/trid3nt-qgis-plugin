@@ -224,6 +224,18 @@ in rank order. The window comes off `event_time`, which the engine declares,
 and the frame off `vertical_frame`, which the bed declares, so a template states
 neither.
 
+`of=` is WHAT of the class a row asks for, and it is read one of two ways. Where
+some row of the class states that word as the quantity its source publishes
+(`normalize.quantity` in the fetcher's `source.yaml`, read where the row is
+loaded), the match keeps only the rows publishing it: the three CONUS aquifer
+rasters share "aquifer property", so `need("aquifer property",
+of="aquifer_transmissivity")` takes the transmissivity grid and drops the
+thickness and the recharge by name. Anywhere else `of` is a COLUMN word - the
+published variable a record carries (`of="TEMPERATURE"` on a water quality
+sample) or the feature a hydrography source publishes - and a row with no word
+for it in its `vocabulary` leaves the list. A word neither reading finds refuses
+`DATA_NEED_UNMATCHED` naming it.
+
 ## The alignment - one record onto a reader's clock
 
 A measured record reaches the runtime as a `Series`: instants on the run's own
@@ -370,6 +382,52 @@ stated once, on the row, never a second time beside the colours.
 same quantity agree within a stated tolerance, and the resolved range CONTAINS the
 headline - otherwise the caption states the gap. A number in prose that the
 picture cannot show is the dishonest case this pins.
+
+## MODFLOW - a sheet over the accepted mesh
+
+A MODFLOW run is the GWF module's sheet solved on a mesh the shared front built
+or the caller supplied (`workflows/modflow/workflow.py`). `launch` runs one
+order: the mesh, the sheet filled under its one review - each fill writes the
+simulation, runs mf6's own validate over it and stages it with the staged check
+(`authoring/staged_check.py`) into the run's one tag - the solve on the box, and
+the publish.
+
+THE DISV IS THE ACCEPTED MESH'S. The vertices and cells are the mesh's own
+display face; the sheet states the layering (`DISV_NLAY`, `DISV_TOP`,
+`DISV_BOTM`) and no sheet may state the mesh's tables. An unstated top is the
+mean of each cell's painted bed, and a cell touching a node the bed does not
+paint refuses. The file is written once per mesh and layering and staged beside
+the files that name it (`authoring/mesh_files.py`).
+
+A RASTER IS READ ONTO THE MODEL'S FRAME at the sampler (`authoring/griddata.py`):
+each cell takes the raster's value at its centre, and the unit the raster
+publishes (`LayerURI.units`, which the fetcher's `normalize.units` stamps) is
+converted through the declared unit table onto `DISV_LENGTH_UNITS` and
+`TDIS_TIME_UNITS` by the dimension the keyword or stress column states. A
+raster publishing no unit, a frame stating none, a unit of another dimension and
+a cell the raster measures nothing at each refuse by name. A stated number is
+already in the model's units and holds at every cell.
+
+THE AQUIFER IS A COERCION of the GWF wrapper (`modules/gwf.py`):
+`Aquifer(thickness, water_table_depth, conductivity | transmissivity)` states a
+one-layer aquifer as cell expressions against the accepted mesh - the bottom a
+thickness below the top, the starting head a water-table depth below it, the
+conductivity stated or the transmissivity over the thickness - every argument
+required and a thickness at or under zero refused. The stress composites
+(`Recharge`, `Drains`, `GeneralHead`, `ConstantHead`, `Wells`) place a geometry
+on the cells (`authoring/stress.py`) and state their package's period data.
+
+THE PUBLISH is the runtime's `publish_reads` over the engine's own reading of a
+solved run (`modules/outputs.py`): every output the output control saved is one
+temporal mesh layer per model layer, each a dataset group of its own CF-UGRID
+file of the accepted mesh valued per cell (`modules/ugrid.py`), timed in seconds
+since the run's reference instant. A series at a measured well is checked
+against the reading in the reading's own quantity, in the model's length unit,
+at the saved time nearest the moment it was sampled: a depth below the land
+surface against the cell's top less its head, an elevation against the head on
+the run's own vertical frame (`vertical_frame`, carried on the run's handle). A
+reading on another frame, of another quantity, or stated as a number standing at
+no site refuses by name.
 
 ## Mesh
 

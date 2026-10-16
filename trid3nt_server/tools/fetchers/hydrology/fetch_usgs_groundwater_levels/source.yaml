@@ -36,6 +36,7 @@ ingest:
     - site_name
     - parameter_code
     - parameter_label
+    - quantity
     - water_level
     - unit
     - vertical_datum
@@ -149,6 +150,9 @@ docstring: |-
         ``site_name`` (human well name; "" when no metadata match),
         ``parameter_code`` (72019 / 72150 / 62610 / 62611 / 61055),
         ``parameter_label`` (human label for the measured quantity),
+        ``quantity`` (``water_table_depth`` below land surface,
+        ``groundwater_head`` on ``vertical_datum``, or
+        ``depth_below_measuring_point``),
         ``water_level`` (the latest value, ft; null if not parseable),
         ``unit`` (e.g. "ft"), ``vertical_datum`` (e.g. "NAVD88", "NGVD29",
         or "Local Assumed Datum" / "" for depth-below-surface readings),

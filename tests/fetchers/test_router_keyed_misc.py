@@ -96,6 +96,7 @@ def test_groundwater_selector_and_no_wells_and_join():
     feats = _hook("usgs_groundwater_levels.parse_response")(spec, params, [meas])
     assert feats[0]["properties"]["site_no"] == "380"
     assert feats[0]["properties"]["parameter_label"] == "depth to water (ft below land surface)"
+    assert feats[0]["properties"]["quantity"] == "water_table_depth"
     empty = _err(_hook("usgs_groundwater_levels.parse_response"), spec, params, [json.dumps({"type": "FeatureCollection", "features": []}).encode()])
     assert empty.error_code == "USGS_GROUNDWATER_NO_WELLS" and empty.retryable is False
     loc = json.dumps({"type": "FeatureCollection", "features": [
@@ -107,3 +108,4 @@ def test_groundwater_selector_and_no_wells_and_join():
     # a failed/absent locations ref leaves names blank but NEVER drops the reading.
     kept = _hook("usgs_groundwater_levels.enrich_merge")(spec, params, feats, {})
     assert len(kept) == 1 and kept[0]["properties"]["site_name"] == ""
+    assert kept[0]["properties"]["quantity"] == "water_table_depth"

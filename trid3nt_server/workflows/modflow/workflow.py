@@ -21,7 +21,7 @@ from trid3nt_contracts.execution import LayerURI
 
 from trid3nt_server.inputs.input import Input
 from trid3nt_server.inputs.instant import event_time
-from trid3nt_server.inputs.slots import DOMAIN, MESH
+from trid3nt_server.inputs.slots import BED, DOMAIN, MESH
 from trid3nt_server.workflows.runtime import DeclarationError, RunResult, Workflow
 from trid3nt_server.workflows.runtime.module import MOMENT, SlotRefused
 from trid3nt_server.workflows.runtime.primitives import (Primitive, field, publish_reads,
@@ -54,6 +54,8 @@ _METRICS = "modflow_metrics.json"
 
 #: The simulation's own listing, which mf6 writes beside the model's.
 _SIM_LISTING = "mfsim.lst"
+
+_FRAME, = BED.states
 
 # The kinds the FloPy meshers lay; a supplied mesh of another kind refuses at its row.
 _SUPPLIED_MESH = Input(MESH, name="mesh", coercion=MappingProxyType(
@@ -153,13 +155,15 @@ async def stage_simulation(*, sheet: Sheet, run_tag: str, mesh: Mapping[str, Any
 
 async def run_sheet(*, sheet: Sheet, staged: Mapping[str, Any],
                     mesh: Mapping[str, Any], name: str,
-                    moment: str | None = None) -> dict[str, Any]:
+                    moment: str | None = None, frame: str | None = None) -> dict[str, Any]:
     """A staged run handed to the box -> the run handle.
-    Its ``reference_time`` is the instant every published time counts from: the stated ``moment``, else the solve's own start."""
+    Its ``reference_time`` is the instant every published time counts from: the stated ``moment``, else the solve's own start;
+    its ``vertical_frame`` is the zero the bed, and so every head, is counted from."""
     module, _, attribute = _DISPATCH.rpartition(".")
     handle = await run_sheet_(staged, dispatch=getattr(import_module(module), attribute))
     return {**handle, "mesh": mesh, "module": sheet.module, "name": name,
-            "reference_time": moment or handle.get("started_at")}
+            "reference_time": moment or handle.get("started_at"),
+            "vertical_frame": frame}
 
 
 def _table(solved: Callable[[str], Solved], module: str
@@ -363,7 +367,8 @@ class ModflowWorkflow(Workflow):
             raise
         solved = await stage("solve", run_sheet, sheet=run["sheet"], staged=staged,
                              mesh=run["mesh"], name=name,
-                             moment=run.get(EVENT_TIME.name))
+                             moment=run.get(EVENT_TIME.name),
+                             frame=run.get(_FRAME.name) or _FRAME.default)
         await keep_mesh(run["mesh"], solved.get("run_id"))
         outputs, captions = self._outputs()
         # A primitive's point, line and band name run inputs; each is read here and rejoins its primitive at publish.

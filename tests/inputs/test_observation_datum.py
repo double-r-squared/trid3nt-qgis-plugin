@@ -82,7 +82,8 @@ def test_a_reading_with_no_datum_anywhere_refuses_when_a_slot_asks_for_one() -> 
 def test_a_slot_that_names_no_datum_checks_nothing() -> None:
     found = observation(_gauge(9.5, vertical_datum="NGVD29"))
     assert found.value == pytest.approx(9.5)
-    assert found.datum is None
+    # Nothing is shifted: the reading keeps the zero it states it was counted from.
+    assert found.datum == "NGVD29" and not found.datum_note
 
 
 def test_a_stated_value_is_already_on_the_slot_s_datum() -> None:

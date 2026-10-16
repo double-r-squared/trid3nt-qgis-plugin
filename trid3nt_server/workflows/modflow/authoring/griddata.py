@@ -18,14 +18,14 @@ from trid3nt_server.workflows.runtime.module import Slot
 
 from ..errors import ModflowError
 
-__all__ = ["SECONDS", "frame_of", "needs_top", "place", "sample"]
+__all__ = ["METRES", "SECONDS", "frame_of", "needs_top", "place", "sample"]
 
 # mf6 reads a year as 365.25 days.
 SECONDS = {"seconds": 1.0, "minutes": 60.0, "hours": 3600.0, "days": 86400.0,
            "years": 31557600.0}
 
 # mf6's length words, as the metres one of them is.
-_METRES = {"meters": 1.0, "feet": 0.3048, "centimeters": 0.01}
+METRES = {"meters": 1.0, "feet": 0.3048, "centimeters": 0.01}
 
 # The dimension of each keyword a template samples from a raster; any other keyword
 # has none stated and refuses.
@@ -190,7 +190,7 @@ def _factor(artifact: Any, *, dimension: str, frame: Any, label: str, name: str)
             f"converted onto the model's {dimension} and one stating none is "
             "never assumed.", error_code="MODFLOW_UNITS_UNSTATED")
     length, time = frame if frame is not None else (None, None)
-    metres = _stated(length, _METRES, "DISV_LENGTH_UNITS", label, name)
+    metres = _stated(length, METRES, "DISV_LENGTH_UNITS", label, name)
     seconds = (_stated(time, SECONDS, "TDIS_TIME_UNITS", label, name)
                if "T" in dimension else 1.0)
     try:

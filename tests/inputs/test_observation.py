@@ -360,3 +360,18 @@ def test_what_an_engine_is_driven_by_is_the_window_where_one_was_reported():
     window = Series([0.0, 3600.0], [3.2, 0.2], units="degC")
     assert Observation(value=3.2, series=window).forcing is window
     assert Observation(value=3.2).forcing == 3.2
+
+
+def test_a_reading_keeps_where_its_site_stands_what_it_is_and_its_own_zero() -> None:
+    found = observation(_fc(_site("W", -93.6549, 41.6761, 795.62, unit="ft",
+                                  quantity="groundwater_head",
+                                  vertical_datum="NAVD88")))
+    assert (found.lon, found.lat) == (-93.6549, 41.6761)
+    assert found.quantity == "groundwater_head"
+    # A slot reading no datum keeps the reading's own; nothing is shifted onto it.
+    assert found.datum == "NAVD88" and found.value == pytest.approx(795.62)
+
+
+def test_a_stated_number_stands_at_no_site_and_states_no_quantity() -> None:
+    found = observation(2.0)
+    assert (found.lon, found.lat, found.quantity) == (None, None, None)

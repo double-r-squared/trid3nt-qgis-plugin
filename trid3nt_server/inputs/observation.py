@@ -66,8 +66,13 @@ class Observation:
     site_name: str | None = None
     sampled: str | None = None
     distance_km: float | None = None
-    #: What the value is counted from, once it is on the slot's datum, and what the run
-    #: says about the shift that got it there.
+    #: Where the site stands, in lon/lat; ``None`` for a stated number, which stands nowhere.
+    lon: float | None = None
+    lat: float | None = None
+    #: What the value IS, as the reading states it in its own ``quantity`` column; ``None`` where it states none.
+    quantity: str | None = None
+    #: What the value is counted from - on the slot's datum where the slot reads one, else
+    #: as the reading states it - and what the run says about the shift that got it there.
     datum: str | None = None
     datum_note: str = ""
     #: Every instant the record reported over its window, on the slot's own unit
@@ -281,8 +286,10 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
              else float(raw) + zero)
     datum, shift, datum_note = _onto_datum(source, props, to_datum, offset, label)
     reported = props.get("distance_km")
+    lon, lat = _site(feature)
     found = Observation(
         value=float(value) + shift,
+        lon=lon, lat=lat, quantity=_text(props, "quantity"),
         units=str(to_units) if to_units is not None else (
             str(units) if units is not None else None),
         site_id=_text(props, *_SITE_FIELDS),
@@ -385,9 +392,9 @@ def _onto_datum(source: Any, props: Mapping[str, Any], to_datum: Any,
                 offset: Any, label: str) -> tuple[str | None, float, str]:
     """This reading on the datum the slot reads, and what the shift cost.
 
-    A slot naming no datum is not asking for an elevation, so nothing is checked."""
+    A slot naming no datum is not asking for an elevation: nothing is checked or shifted, and the reading's own zero is kept."""
     if to_datum is None:
-        return (None, 0.0, "")
+        return (_text(props, _DATUM_FIELD), 0.0, "")
     on = {"vertical_datum": props.get(_DATUM_FIELD) or datum_of(source),
           "name": _text(props, *_SITE_FIELDS) or label}
     try:
@@ -450,6 +457,16 @@ def _text(props: Mapping[str, Any], *keys: str) -> str | None:
         if value is not None and str(value).strip():
             return str(value)
     return None
+
+
+def _site(feature: Mapping[str, Any]) -> tuple[float | None, float | None]:
+    """Where a point feature stands, in lon/lat; ``(None, None)`` for any other geometry."""
+    geometry = feature.get("geometry") or {}
+    coords = geometry.get("coordinates")
+    if geometry.get("type") != "Point" or not isinstance(coords, (list, tuple)) \
+            or len(coords) < 2:
+        return (None, None)
+    return (float(coords[0]), float(coords[1]))
 
 
 def _distance_km(feature: Mapping[str, Any], near: Any) -> float:

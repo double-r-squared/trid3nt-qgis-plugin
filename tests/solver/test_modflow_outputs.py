@@ -17,6 +17,7 @@ import numpy as np
 import pytest
 from pyproj import Transformer
 
+from trid3nt_server.inputs.observation import Observation
 from trid3nt_server.render.formats import Mesh
 from trid3nt_server.store import objects as storage
 from trid3nt_server.tools.mesh.artifact import MeshArtifact
@@ -78,7 +79,7 @@ def solved(monkeypatch, tmp_path, fake_s3):
             crs_authid="EPSG:32617", has_bathymetry=True, node_count=9,
             element_count=8, bbox=(0.0, 0.0, 20.0, 20.0), utm_epsg=32617)
         run = {"run_id": "R1", "utm_epsg": 32617, "sheet": _sheet(**over),
-               "reference_time": "2024-06-01T00:00:00Z",
+               "reference_time": "2024-06-01T00:00:00Z", "vertical_frame": "NAVD88",
                "mesh": {"artifact": art, "display_uri": str(display)}}
         return Solved(run, GWF)
 
@@ -230,3 +231,64 @@ def test_the_mesh_and_extent_reads_are_the_accepted_meshs(solved):
     extent = GWF.READS["extent"](P.extent(), run).measures
     assert extent["area_km2"] == pytest.approx(400.0e-6, abs=1e-4)
     assert len(extent["bbox"]) == 4
+
+
+def _well(value, *, quantity, units="ft", datum=None, sampled="2024-06-11T00:00:00Z"):
+    lon, lat = _TO_LONLAT(18.0, 12.0)
+    return Observation(value=value, units=units, site_id="USGS-1", lon=lon, lat=lat,
+                       quantity=quantity, datum=datum, sampled=sampled)
+
+
+def _head_at_the_well(step):
+    heads = _heads()
+    return float(np.asarray(heads.get_data(totim=heads.get_times()[step]))[0, 0, 6])
+
+
+def test_a_depth_below_the_land_surface_is_checked_against_the_top_less_the_head(solved):
+    read = GWF.READS["series"](P.series("HEAD", at=_well(10.0, quantity="water_table_depth"),
+                                        plane=1), solved())
+    # The lattice's land surface is its painted bed, -2 m; the reading was sampled ten days in, the last saved time.
+    simulated = -2.0 - _head_at_the_well(-1)
+    assert read.measures["observed"] == pytest.approx(3.048, abs=1e-3)
+    assert read.measures["simulated"] == pytest.approx(simulated, abs=1e-3)
+    assert read.measures["simulated_minus_observed"] == pytest.approx(simulated - 3.048, abs=2e-3)
+    assert read.measures["quantity"] == "water_table_depth" and read.measures["units"] == "meters"
+
+
+def test_an_elevation_on_the_run_s_frame_is_checked_against_the_head_itself(solved):
+    well = _well(-3.0, quantity="groundwater_head", units="m", datum="NAVD88",
+                 sampled="2024-06-03T12:00:00Z")
+    read = GWF.READS["series"](P.series("HEAD", at=well, plane=1), solved())
+    # Two and a half days in is the first saved time.
+    assert read.measures["simulated"] == pytest.approx(_head_at_the_well(0), abs=1e-3)
+    assert read.measures["observed"] == -3.0
+
+
+def test_an_elevation_on_another_frame_refuses_naming_both(solved):
+    well = _well(-3.0, quantity="groundwater_head", units="m", datum="NGVD29")
+    with pytest.raises(ModflowError) as caught:
+        GWF.READS["series"](P.series("HEAD", at=well, plane=1), solved())
+    assert caught.value.error_code == "MODFLOW_OBSERVATION_UNCOMPARABLE"
+    assert "NGVD29" in str(caught.value) and "NAVD88" in str(caught.value)
+
+
+def test_a_reading_of_another_quantity_refuses_naming_it(solved):
+    well = _well(4.0, quantity="depth_below_measuring_point")
+    with pytest.raises(ModflowError) as caught:
+        GWF.READS["series"](P.series("HEAD", at=well, plane=1), solved())
+    assert caught.value.error_code == "MODFLOW_OBSERVATION_UNCOMPARABLE"
+    assert "depth_below_measuring_point" in str(caught.value)
+
+
+def test_a_reading_with_no_instant_on_a_run_saving_several_times_refuses(solved):
+    with pytest.raises(ModflowError) as caught:
+        GWF.READS["series"](P.series("HEAD", at=_well(10.0, quantity="water_table_depth",
+                                                      sampled=None), plane=1), solved())
+    assert caught.value.error_code == "MODFLOW_OBSERVATION_UNCOMPARABLE"
+
+
+def test_a_stated_number_stands_at_no_cell_to_check_against(solved):
+    with pytest.raises(ModflowError) as caught:
+        GWF.READS["series"](P.series("HEAD", at=Observation(value=3.0, units="m"),
+                                     plane=1), solved())
+    assert caught.value.error_code == "MODFLOW_OBSERVATION_UNPLACED"

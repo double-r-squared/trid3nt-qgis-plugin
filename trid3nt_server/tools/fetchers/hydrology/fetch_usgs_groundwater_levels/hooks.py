@@ -31,6 +31,16 @@ _PCODE_LABEL = {
     "62611": "groundwater elevation (ft, NAVD88)",
     "61055": "water level (ft below measuring point)",
 }
+# WHAT a reading's value IS, by its parameter code: a depth below the land surface
+# (positive down), the water's elevation on the reading's own vertical_datum, or a
+# depth below the well's measuring point, whose height above the land no reading states.
+_PCODE_QUANTITY = {
+    "72019": "water_table_depth",
+    "72150": "groundwater_head",
+    "62610": "groundwater_head",
+    "62611": "groundwater_head",
+    "61055": "depth_below_measuring_point",
+}
 _PAGE_LIMIT = 10000
 _USPS_TO_FIPS = {
     "AL": "01", "AK": "02", "AZ": "04", "AR": "05", "CA": "06", "CO": "08",
@@ -45,9 +55,9 @@ _USPS_TO_FIPS = {
     "AS": "60", "MP": "69",
 }
 _OUT_COLUMNS = (
-    "site_no", "site_name", "parameter_code", "parameter_label", "water_level",
-    "unit", "vertical_datum", "datetime", "approval_status", "aquifer_code",
-    "well_depth_ft",
+    "site_no", "site_name", "parameter_code", "parameter_label", "quantity",
+    "water_level", "unit", "vertical_datum", "datetime", "approval_status",
+    "aquifer_code", "well_depth_ft",
 )
 
 
@@ -149,6 +159,7 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
                 "monitoring_location_id": mlid, "site_no": site_no,
                 "parameter_code": pcode,
                 "parameter_label": _PCODE_LABEL.get(pcode or "", pcode or ""),
+                "quantity": _PCODE_QUANTITY.get(pcode or ""),
                 "water_level": water_level,
                 "unit": str(props.get("unit_of_measure") or "").strip() or None,
                 "vertical_datum": str(props.get("vertical_datum") or "").strip() or None,
