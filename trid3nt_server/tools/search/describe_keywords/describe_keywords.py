@@ -81,6 +81,12 @@ def _row(slot: Any) -> dict[str, Any]:
         "level": slot.level, "is_file": slot.is_file,
         "rubrique": list(slot.rubrique),
     }
+    if slot.unit:
+        row["unit"] = slot.unit
+    if slot.bounds:
+        # One pair bounds the whole value; a list is one per element in the keyword's own order.
+        row["bounds"] = (list(slot.bounds[0]) if len(slot.bounds) == 1
+                         else [list(pair) for pair in slot.bounds])
     if slot.choices:
         row["choices"] = slot.choices
     if slot.is_list:

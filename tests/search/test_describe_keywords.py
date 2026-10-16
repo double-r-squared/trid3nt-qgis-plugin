@@ -51,6 +51,16 @@ def test_a_defaulted_keyword_states_the_value_the_engine_will_use():
     assert "open" not in row
 
 
+def test_a_match_carries_the_unit_and_range_the_bounds_sidecar_states():
+    row = _keywords(describe_keywords(
+        module="telemac2d", query="how long does the simulation run"))["DURATION"]
+    assert row["unit"] == "s"
+    assert row["bounds"] == [60.0, 25920000.0]
+    # A keyword no sidecar row bounds stays silent about it rather than inventing a range.
+    assert "bounds" not in _keywords(describe_keywords(
+        module="telemac2d", query="law of bottom friction"))["LAW OF BOTTOM FRICTION"]
+
+
 def test_the_same_question_is_answered_the_same_way_twice():
     first = describe_keywords(module="telemac2d", query="advection scheme")
     assert first == describe_keywords(module="telemac2d", query="advection scheme")

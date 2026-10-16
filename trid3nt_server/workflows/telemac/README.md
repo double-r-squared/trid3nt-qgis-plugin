@@ -6,8 +6,9 @@ what they hold - `modules/` the wrappers, the module inputs their keywords are
 read out of, the tables of what each writes and the primitive set that reads it,
 `templates/` one package per question, `authoring/` the run directory the box receives, `helpers/` the
 pure physics more than one template's run derives a number from. A template
-package is ONE file of what is passed in (`<name>.py`) and its routing phrasings
-(`corpus.yaml`); everything else it uses is the door's or the trees'.
+package is ONE file of what is passed in (`<name>.py`), its routing prose
+(`routing.yaml`) and its retrieval phrasings (`corpus.yaml`); everything else
+it uses is the door's or the trees'.
 
 A template writes no plan. It declares a STEERING body of the module's own raw
 keywords, the data chain it consumes, the mesh recipe it triangulates on and the
@@ -15,7 +16,9 @@ reads it PLACES on the solved run, and hands them to the door - which fills the
 sheet, holds it for review, runs it, and publishes every variable the module's
 own table says the run wrote, the placed reads beside them. Every question this
 engine answers is one of those, so the plan language is gone from the tree and
-the worker authors nothing.
+the worker authors nothing. Its prose - how the question is found and what it is
+not for - is the package's `routing.yaml`, rendered into the tool's docstring at
+registration; the file carries none of it.
 
 TOMAWAC has NO wrapper, and the reason is measurable rather than an oversight:
 `modules/module_input/tomawac.json` holds its 223 keywords and

@@ -167,16 +167,18 @@ def test_a_domain_says_its_own_name_when_it_is_read_as_text():
     assert _session_name(drawn, "om2d") == "domain mesh"
 
 
-def test_only_the_slots_a_user_can_draw_are_offered_on_the_canvas():
-    """A bed is a survey or a number, so there is nothing to draw for it."""
+def test_only_the_shapes_a_user_can_draw_are_offered_on_the_canvas():
+    """A bed is a survey or a number, so there is no shape to draw for it."""
     from trid3nt_server.inputs import slots
 
     assert {slot for slot in vars(slots).values()
-            if isinstance(slot, Slot) and slot.draw} == {DOMAIN, EXTENT, LINE}
-    assert DOMAIN.draw[:2] == ("polygon", "domain")
-    assert LINE.draw[:2] == ("polyline", "line")
+            if isinstance(slot, Slot) and slot.geometry} == {DOMAIN, EXTENT, LINE}
+    assert DOMAIN.geometry == "polygon" and slots.DRAW["polygon"][0] == "domain"
+    assert LINE.geometry == "polyline" and slots.DRAW["polyline"][0] == "line"
     # a box rides the pick mode, which offers no vector tool to choose between
-    assert EXTENT.draw[:2] == ("rectangle", "")
+    assert EXTENT.geometry == "rectangle" and slots.DRAW["rectangle"][0] == ""
+    # a shape nobody draws is not in the table
+    assert set(slots.DRAW) == {"polygon", "polyline", "rectangle"}
 
 
 def test_a_row_states_its_slot_and_its_name_is_free():

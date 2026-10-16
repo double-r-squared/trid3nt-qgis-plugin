@@ -7116,5 +7116,359 @@
       "level": 0,
       "mnemo": "CONCAT_PARTEL"
     }
-  ]
+  ],
+  "inputs": {
+    "telemac_bed_scour": {
+      "release": {
+        "desc": "Where the marker enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. Its name becomes the marker's name, and on a river with no domain supplied it is also the seed the reach is walked downstream from",
+        "type": "Point"
+      },
+      "spill_fraction": {
+        "bounds": [
+          0.05,
+          0.9
+        ],
+        "default": 0.25,
+        "desc": "Along-domain release position, 0=inflow..1=outflow; the source must sit strictly INSIDE the domain, never on a boundary"
+      },
+      "spill_duration_s": {
+        "bounds": [
+          1.0,
+          86400.0
+        ],
+        "default": 300.0,
+        "desc": "Finite pulse injection window",
+        "units": "s"
+      },
+      "sediment_gradation": {
+        "desc": "Multi-class GRADED sediment: a preset name (graded_sand | poorly_sorted | sand_gravel_bimodal | fine_coarse_sand) or a list of [d50_um, fraction] pairs; a mixture sorts under a hiding factor",
+        "type": "list | str"
+      }
+    },
+    "telemac_channel_dredging": {
+      "seed_point": {
+        "desc": "A point ON the channel the dredge works in, as the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer. Geocode a place name first; the channel is fetched downstream of it and the levels every dredging action reads are stationed along the centerline that comes back with it",
+        "type": "Point"
+      },
+      "design_depth_m": {
+        "bounds": [
+          0.1,
+          40.0
+        ],
+        "default": 3.0,
+        "desc": "Depth the fairway is dredged TO, under the reference water surface the run opens at - the design draught plus its overdepth",
+        "units": "m"
+      },
+      "trigger_depth_m": {
+        "bounds": [
+          0.1,
+          40.0
+        ],
+        "default": 3.0,
+        "desc": "Depth at which a node is dredged: the bed is worked wherever it sits shallower than this under the reference surface. Equal to design_depth_m keeps the channel exactly at grade; SMALLER than it lets the channel shoal before the dredger returns, and a trigger DEEPER than the grade would mark a node for a cut that is above its own bed",
+        "units": "m"
+      },
+      "dredge_start_s": {
+        "bounds": [
+          0.0,
+          6048000.0
+        ],
+        "default": 0.0,
+        "desc": "When the first dredging pass begins, in seconds of the BED's own clock - the run's morphological time, DURATION x MORPHOLOGICAL FACTOR",
+        "units": "s"
+      },
+      "dredge_end_s": {
+        "bounds": [
+          1.0,
+          6048000.0
+        ],
+        "default": 3000.0,
+        "desc": "When the campaign stops, on the same bed clock: no further pass begins after it, and a pass already cutting runs on until it reaches grade",
+        "units": "s"
+      },
+      "dredge_repeat_s": {
+        "bounds": [
+          1.0,
+          6048000.0
+        ],
+        "default": 1800.0,
+        "desc": "Maintenance interval on the bed clock: how long after a pass starts the next one begins, if the channel has shoaled past trigger_depth_m again",
+        "units": "s"
+      },
+      "dig_rate_m_per_s": {
+        "bounds": [
+          1e-06,
+          1.0
+        ],
+        "default": 0.002,
+        "desc": "How fast the dredger lowers the bed, as metres of bed per second of SOLVER time at a working node - the plant's capacity, not a physical rate. A pass reports its volume only once it has reached grade, so this and the cut it has to make are what decide whether the run sees a completed pass at all",
+        "units": "m/s"
+      },
+      "dump_rate_m_per_s": {
+        "bounds": [
+          1e-06,
+          1.0
+        ],
+        "default": 0.002,
+        "desc": "How fast the spoil is laid into the dump area, as metres of bed per second of solver time at a receiving node; a pass is not finished until its spoil is placed",
+        "units": "m/s"
+      },
+      "min_volume_m3": {
+        "bounds": [
+          0.0,
+          10000000.0
+        ],
+        "default": 0.0,
+        "desc": "Least volume worth moving around a node before it is dredged at all; 0 works every node past the trigger",
+        "units": "m^3"
+      }
+    },
+    "telemac_do_sag": {
+      "outfall_coords": {
+        "desc": "Where the discharge enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. On a river with no domain supplied it is also the seed the reach is walked downstream from",
+        "type": "Point"
+      },
+      "do_standard_mgl": {
+        "bounds": [
+          0.0,
+          15.0
+        ],
+        "default": 5.0,
+        "desc": "The DO water-quality standard the sag is judged against; 5 is a common warm-water aquatic-life criterion",
+        "units": "mg/L"
+      }
+    },
+    "telemac_dye_release": {
+      "release": {
+        "desc": "Where the substance enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. Its name becomes the tracer's name, and on a river with no domain supplied it is also the seed the reach is walked downstream from",
+        "type": "Point"
+      },
+      "spill_fraction": {
+        "bounds": [
+          0.05,
+          0.9
+        ],
+        "default": 0.25,
+        "desc": "Along-domain release position, 0=inflow..1=outflow; the source must sit strictly INSIDE the domain, never on a boundary"
+      },
+      "spill_duration_s": {
+        "bounds": [
+          1.0,
+          86400.0
+        ],
+        "default": 300.0,
+        "desc": "Finite pulse injection window",
+        "units": "s"
+      },
+      "decaying_substance": {
+        "desc": "Name a substance whose tracer DECAYS - sewage | E. coli | coliform | bacteria | effluent | wastewater - and its narrated literature die-off is applied as a first-order sink on the plume"
+      }
+    },
+    "telemac_eutrophication": {
+      "seed": {
+        "desc": "Where on the channel the modelled stretch STARTS, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. The stretch walked downstream of it is the water one pass is measured over; supply the domain polygon instead and this is not read",
+        "type": "Point"
+      },
+      "station": {
+        "desc": "Where to watch the biomass and the oxygen over time, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer (geocode a place name first). The profiles are all longitudinal and do not move with it",
+        "type": "Point"
+      },
+      "do_standard_mgl": {
+        "bounds": [
+          0.0,
+          15.0
+        ],
+        "default": 5.0,
+        "desc": "The DO water-quality standard the water is judged against; 5 is a common warm-water aquatic-life criterion. It never reaches the deck: no keyword names a standard, and the oxygen profile carries it as a reference line",
+        "units": "mg/L"
+      },
+      "mesh_resolution_m": {
+        "desc": "Target element edge length the domain is triangulated at; it also sets the CFL time step, so it is what decides whether a long window finishes"
+      }
+    },
+    "telemac_ice_cover": {
+      "seed": {
+        "desc": "Where on the water the modelled stretch STARTS, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. It seeds the reach the domain is cut from; supply the domain polygon - a lake, a pond, a reservoir - instead and this is not read",
+        "type": "Point"
+      },
+      "station": {
+        "desc": "Where the ice cover and its thickness are read over time, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer. Geocode a place name first",
+        "type": "Point"
+      },
+      "cover_threshold": {
+        "default": 0.5,
+        "desc": "Fraction of the surface under ice, 0 to 1, that counts as frozen over - the cover chart draws it as a reference line beside the series. A reporting threshold, not a physical constant: half the surface by default",
+        "type": "float"
+      },
+      "mesh_resolution_m": {
+        "desc": "Target element edge length the domain is triangulated at; the budget that makes the ice is divided by the local DEPTH, and the border ice grows from the BANK, so what this has to resolve is how deep the water is and where its edge runs"
+      }
+    },
+    "telemac_micropollutant_release": {
+      "release": {
+        "desc": "Where the substance enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. On a river with no domain it is also the seed the reach is walked downstream from",
+        "type": "Point"
+      },
+      "release_fraction": {
+        "bounds": [
+          0.05,
+          0.9
+        ],
+        "default": 0.1,
+        "desc": "Along-domain release position, 0=inflow..1=outflow; the source must sit strictly INSIDE the domain, never on a boundary. It sits near the top so the substance has water left to sorb and settle in"
+      },
+      "release_duration_s": {
+        "bounds": [
+          1.0,
+          86400.0
+        ],
+        "default": 3600.0,
+        "desc": "Finite injection window; the substance is released over it and the rest of the run is what happens to what was released",
+        "units": "s"
+      },
+      "monitoring_point": {
+        "desc": "Where the dissolved history is read, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first",
+        "type": "Point"
+      },
+      "monitoring_fraction": {
+        "bounds": [
+          0.1,
+          0.95
+        ],
+        "default": 0.85,
+        "desc": "Along-domain position the history is read at when no point was given, 0=inflow..1=outflow"
+      }
+    },
+    "telemac_oil_spill": {
+      "release": {
+        "desc": "Where the oil enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. Its name becomes the tracer's name, and on a river with no domain supplied it is also the seed the reach is walked downstream from",
+        "type": "Point"
+      },
+      "spill_fraction": {
+        "bounds": [
+          0.05,
+          0.9
+        ],
+        "default": 0.25,
+        "desc": "Along-domain release position, 0=inflow..1=outflow; the source must sit strictly INSIDE the domain, never on a boundary"
+      },
+      "spill_duration_s": {
+        "bounds": [
+          1.0,
+          86400.0
+        ],
+        "default": 300.0,
+        "desc": "Finite pulse injection window",
+        "units": "s"
+      },
+      "oil_type": {
+        "default": "light_crude",
+        "desc": "Which preset was spilled: light_crude | diesel | heavy_fuel - the module's own composition, density and viscosity. Crude runs as light_crude, gasoline and petrol as diesel, bunker as heavy_fuel"
+      },
+      "oil_release_step": {
+        "bounds": [
+          1.0,
+          1000000.0
+        ],
+        "default": 600,
+        "desc": "The solver step the floats are released at, compiled into the module's own release routine; it lets the flow field establish before the slick is put on it",
+        "type": "int"
+      }
+    },
+    "telemac_rain_on_grid": {
+      "pour_point": {
+        "desc": "The catchment OUTLET, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer (geocode a place name first) - the point the runoff drains to. It decides which basin is modelled at all, so it is asked for (picked on the canvas or passed explicitly) and NEVER invented. It is snapped onto the traced channel, so a click beside the stream still delineates its basin",
+        "type": "Point"
+      },
+      "rain_series_mm": {
+        "desc": "A MEASURED storm, as hourly GROSS millimetres in the order the record reported them - what fetch_aorc_precip returns over this catchment under `precip_mm` for any CONUS window since 1979. It is the true intensity structure, which is what resolves the hydrograph SHAPE; a record that stops inside the simulated window stops in the run too, so the recession limb appears. State event_time instead to have the run look the record up over its own window",
+        "type": "list[float]",
+        "units": "mm"
+      },
+      "design_storm_mm_per_day": {
+        "bounds": [
+          2.4,
+          12000.0
+        ],
+        "desc": "Constant design-storm intensity, used when no measured series is given, in the engine's own unit - millimetres per DAY, so a 24 mm/h cloudburst is 576. A hypothetical storm, so it is stated and never assumed: with no series, no fetched record and no design storm the run refuses for want of rain. How long it rains for, and how wet the ground already is, are the deck's own keywords",
+        "units": "mm/day"
+      },
+      "curve_number": {
+        "bounds": [
+          30.0,
+          100.0
+        ],
+        "desc": "A UNIFORM SCS curve number over the whole catchment, overriding the land-cover-distributed field. Roughness stays per-node either way - Manning n is a separate physical property, not the CN knob"
+      },
+      "steep_slope_correction": {
+        "default": false,
+        "desc": "Apply the Huang (2006) steep-slope correction to the curve numbers using the mesh's own bed gradients. The engine's native branch is compiled off in the installed 9.0.0 build, so the correction is applied to the CN field before it is written"
+      },
+      "mesh_resolution_m": {
+        "desc": "Finest triangle edge, reached where the mesh refines toward the channel network. THE granularity lever: peak depth and flooded extent are resolution-bound classes and a coarse mesh reads both low"
+      },
+      "mesh_max_edge_m": {
+        "default": 300.0,
+        "desc": "Coarsest triangle edge, reached far from the channels on the hillslopes"
+      }
+    },
+    "telemac_sediment_plume": {
+      "release": {
+        "desc": "Where the sediment enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. Its name becomes the marker's name, and on a river with no domain supplied it is also the seed the reach is walked downstream from",
+        "type": "Point"
+      },
+      "spill_fraction": {
+        "bounds": [
+          0.05,
+          0.9
+        ],
+        "default": 0.25,
+        "desc": "Along-domain release position, 0=inflow..1=outflow; the source must sit strictly INSIDE the domain, never on a boundary"
+      },
+      "spill_duration_s": {
+        "bounds": [
+          1.0,
+          86400.0
+        ],
+        "default": 300.0,
+        "desc": "Finite pulse injection window",
+        "units": "s"
+      }
+    },
+    "telemac_water_temperature": {
+      "seed": {
+        "desc": "Where on the channel the modelled stretch STARTS, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. It seeds the reach the domain is cut from; supply the domain polygon - a lake, a pond, a harbour - instead and this is not read",
+        "type": "Point"
+      },
+      "station": {
+        "desc": "Where the temperature series and its diurnal range are read, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer. Geocode a place name first",
+        "type": "Point"
+      },
+      "mesh_resolution_m": {
+        "desc": "Target element edge length the domain is triangulated at; a surface heat budget is divided by the local DEPTH, so what this has to resolve is how deep the water is rather than its planform"
+      }
+    },
+    "tomawac_wave_driven_currents": {
+      "seed": {
+        "desc": "Where OFFSHORE the incoming sea state is measured, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. The nearest buoy to it is the record the wave boundary is forced at, so put it on the water the swell arrives across",
+        "type": "Point"
+      },
+      "station": {
+        "desc": "Where INSHORE the current is read over time, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. The speed and the wave height are charted at the node of the mesh it settles onto, so put it in the surf zone you are asking about",
+        "type": "Point"
+      },
+      "mesh_resolution_m": {
+        "desc": "Target element edge length the water is triangulated at; the longshore current is driven across the surf zone, so what this has to resolve is the width of the breaking band"
+      },
+      "open_depth_threshold_m": {
+        "bounds": [
+          -200.0,
+          -1.0
+        ],
+        "default": -12.0,
+        "desc": "How deep a boundary stretch must reach for it to be designated the OPEN edge the measured sea state enters through; every stretch that reaches it opens, and a window where none does has no edge for the spectrum and refuses",
+        "units": "m"
+      }
+    }
+  }
 }

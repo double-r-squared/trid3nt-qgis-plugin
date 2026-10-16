@@ -75,12 +75,9 @@ def test_the_bed_is_one_need_row_the_match_composes():
 
 def test_the_discharge_is_a_need_row_the_match_ranks_against_the_domain():
     """The flow that moves the bed is ONE measured value the run opens on, not a
-    layer: a NEED row, absent-is-context, and the user's own number wins over
-    any record."""
+    layer: a NEED row, and the user's own number wins over any record."""
     discharge = _rows()["discharge"]
     assert discharge.slot is DISCHARGE and discharge.data_class == "discharge series"
-    assert discharge.is_context
-    assert "National Water Model" in discharge.context_sentence
     assert discharge.producer is None
 
 
@@ -192,7 +189,8 @@ def test_the_corpus_key_is_the_registered_name():
 def test_the_routing_text_names_the_question_class_not_one_body_of_water():
     """A bed scours under an estuary as readily as under a river, so the first
     sentence of the routing text says the question, never the body."""
-    routing = _MODULE.DOC["routing"]
+    routing = yaml.safe_load(
+        (_PACKAGE / "routing.yaml").read_text(encoding="utf-8"))["routing"]
     assert "reach" not in routing.split(".")[0]
     assert "supply `domain`" in routing
 
@@ -200,7 +198,8 @@ def test_the_routing_text_names_the_question_class_not_one_body_of_water():
 def test_the_routing_text_names_the_keywords_this_deck_has_opinions_about():
     """A user overrides an opinion by the keyword's own name, so the names have
     to be in the text the model routes on."""
-    routing = _MODULE.DOC["routing"]
+    routing = yaml.safe_load(
+        (_PACKAGE / "routing.yaml").read_text(encoding="utf-8"))["routing"]
     for keyword in ("DURATION", "MORPHOLOGICAL FACTOR", "CLASSES SEDIMENT",
                     "LAYERS INITIAL THICKNESS", "BED-LOAD TRANSPORT FORMULA"):
         assert keyword in routing, keyword

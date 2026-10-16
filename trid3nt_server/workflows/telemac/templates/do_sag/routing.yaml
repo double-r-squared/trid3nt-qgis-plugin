@@ -1,0 +1,14 @@
+summary: DISSOLVED-OXYGEN SAG below a discharge (US TMDL / permit question).
+routing: 'THE tool for "where does dissolved oxygen bottom out below this discharge", "will
+  the DO sag violate the standard", "Streeter-Phelps oxygen sag", "BOD loading downstream
+  of a WWTP / outfall". TELEMAC-2D + WAQTEL O2 over a reach walked downstream from the outfall,
+  or a polygon you supply: clean water in at the inflow, CBOD decaying and reaeration recovering
+  downstream of the DISCHARGE. Produces the along-channel oxygen profile against the closed
+  form. Deck opinions, by keyword: CONSTANT OF DEGRADATION OF ORGANIC LOAD K1, K2 REAERATION
+  COEFFICIENT, O2 SATURATION DENSITY OF WATER (CS), WATER TEMPERATURE, DURATION, and the outfall''s
+  own discharge and load. Give `outfall_coords` or `domain`.'
+not_for: a conservative dye/tracer plume that only dilutes (`telemac_dye_release`); rainfall-runoff
+  flood depth (`telemac_rain_on_grid`); a closed body with no through-flow, which has no sag
+returns: 'On success the run''s record (a `LayerURI`): every variable its modules wrote, styled
+  on one mesh layer, animated where it varies, plus the oxygen profile on its Streeter-Phelps
+  curve. On failure a dict with `status="error"` + `error_code`.'

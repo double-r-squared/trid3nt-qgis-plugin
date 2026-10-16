@@ -68,12 +68,10 @@ def test_the_bed_is_one_need_row_the_stricter_class_the_match_composes():
 
 
 def test_the_flow_the_channel_is_dredged_under_is_a_need_row_not_a_record():
-    """The inflow carries ONE number: a NEED row, absent-is-context, and the
+    """The inflow carries ONE number: a NEED row, and the
     user's own number wins over any record."""
     discharge = _rows()["discharge"]
     assert discharge.slot is DISCHARGE and discharge.data_class == "discharge series"
-    assert discharge.is_context
-    assert "National Water Model" in discharge.context_sentence
     assert discharge.producer is None
 
 
@@ -118,7 +116,6 @@ def test_the_two_areas_name_no_source_and_take_polygons():
     rows = _rows()
     for name in ("dredge_area", "dump_area"):
         assert rows[name].producer is None and rows[name].geometry == "polygon"
-        assert not rows[name].is_optional
 
 
 def test_a_dredge_releases_nothing_so_it_prescribes_no_tracer():

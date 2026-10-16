@@ -1,0 +1,18 @@
+summary: How much RUNOFF a storm produces from the catchment a point drains, as an outlet
+  hydrograph and a flood-depth map.
+routing: THE tool for "peak discharge and runoff volume from a storm over this catchment",
+  "rain falls on the basin and floods the valley", "rainfall-runoff hydrograph at the outlet",
+  "flash flood from an intense storm on a watershed". TELEMAC-2D RAIN-ON-GRID
+  over the domain this run solves on - the catchment traced upslope of `pour_point`, or a
+  basin drawn or supplied as `domain` - meshed fine along its channels, bed from a bare-earth
+  DEM, SCS curve-number infiltration per node from land cover. Produces an outlet HYDROGRAPH
+  + a peak flood-DEPTH map. For a REAL event state `event_time`, the moment the storm opens
+  at, and the run reads the record over its own window; else a labeled design storm drives
+  it.
+not_for: coastal or pluvial inundation depth; a channel dye or sediment plume (`telemac_dye_release`);
+  urban pipe drainage; storm-surge coastal flooding
+returns: 'On success the run''s record (a `LayerURI`): every variable its module wrote, styled
+  on one mesh layer, animated where it varies, plus the outlet hydrograph charted at the pour
+  point and placed there as a station. Applicability: SINGLE-STORM flash-flood events in small
+  steep catchments. Infiltrated water is permanently lost, so there is no baseflow and no
+  inter-peak recovery. On failure a dict with `status="error"` + `error_code`.'

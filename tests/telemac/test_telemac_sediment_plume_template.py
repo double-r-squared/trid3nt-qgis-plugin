@@ -64,13 +64,10 @@ def test_the_bed_is_one_need_row_the_match_composes():
 
 def test_the_discharge_is_a_need_row_the_match_ranks_against_the_domain():
     """The flow that carries the pulse is ONE measured value the run opens on,
-    not a layer: a NEED row, absent-is-context, and the user's own number wins
-    over any record."""
+    not a layer: a NEED row, and the user's own number wins over any record."""
     discharge = _rows()["discharge"]
     assert (discharge.slot is DISCHARGE
             and discharge.data_class == "discharge series")
-    assert discharge.is_context
-    assert "National Water Model" in discharge.context_sentence
     assert discharge.producer is None
 
 

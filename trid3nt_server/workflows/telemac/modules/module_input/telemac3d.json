@@ -6658,5 +6658,40 @@
       "level": 0,
       "mnemo": "CONCAT_PARTEL"
     }
-  ]
+  ],
+  "inputs": {
+    "telemac3d_stratified_flow": {
+      "seed": {
+        "desc": "A point ON or beside the body of water this question is about, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer (geocode a place name first). The mapped outline that point names becomes the domain; a domain supplied directly supersedes it, and a body nobody mapped is drawn",
+        "type": "Point"
+      },
+      "warm_temp_c": {
+        "bounds": [
+          -2.0,
+          40.0
+        ],
+        "desc": "Epilimnion (warm surface layer) temperature the column OPENS at. The run exchanges no heat with the atmosphere, so what happens to this difference is the whole answer",
+        "units": "C"
+      },
+      "cold_temp_c": {
+        "bounds": [
+          -2.0,
+          40.0
+        ],
+        "desc": "Hypolimnion (cold bottom layer) temperature; the initial top-to-bottom difference is what the run either keeps or mixes away",
+        "units": "C"
+      },
+      "thermocline_depth_m": {
+        "bounds": [
+          0.5,
+          200.0
+        ],
+        "desc": "Depth of the thermocline below the free surface. The vertical grid is planned to HOLD it and REFUSES when no admissible sigma stretch over the domain's deepest column can",
+        "units": "m"
+      },
+      "mesh_resolution_m": {
+        "desc": "Target triangle edge the water body's interior is meshed at. The horizontal spends its budget on COVERING the body rather than on detail; the 3D node count is this mesh's nodes times the planes the deck states"
+      }
+    }
+  }
 }

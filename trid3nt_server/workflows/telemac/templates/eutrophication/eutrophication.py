@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import sys
-from dataclasses import replace
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LEVEL, LINE, OBSERVE
@@ -12,14 +11,14 @@ from trid3nt_server.inputs.input import Input
 from trid3nt_server.workflows.runtime import (
     register_workflow,
 )
-from trid3nt_server.inputs import point_arg, Point
+from trid3nt_server.inputs import point_arg
 from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, series
 from trid3nt_server.workflows.runtime.primitives import profile
 from trid3nt_server.workflows.telemac.modules.outputs import reference_line
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
 from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DOC", "OUTPUTS", "INPUTS",
+__all__ = ["CAPTIONS", "OUTPUTS", "INPUTS",
            "STEERING", "telemac_eutrophication"]
 
 
@@ -41,51 +40,24 @@ _PHYTO_IN, _PO4_IN, _NO3_IN = _ENTERING[0], _ENTERING[1], _ENTERING[3]
 
 
 class INPUTS:
-    seed = Input(
-        type=Point,
-        desc="Where on the channel the modelled stretch STARTS, as a Point: the "
-             "pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', "
-             "a point layer. Geocode a place name first. The stretch walked "
-             "downstream of it is the water one pass is measured over; supply "
-             "the domain polygon instead and this is not read").optional(
-        "nothing is fetched and the domain is the polygon the caller "
-        "supplied or drew")
+    seed = Input()
 
-    station = Input(
-        type=Point,
-        desc="Where to watch the biomass and the oxygen over time, as a Point: "
-             "the pick's {coordinates, name} verbatim, a (lon, lat) pair, "
-             "'lat,lon' or a point layer (geocode a place name first). The "
-             "profiles are all longitudinal and do not move with it").optional(
-        "the two history charts are read as the domain-wide maximum at each "
-        "instant rather than at one place")
+    station = Input()
 
-    do_standard_mgl = Input(
-        default=5.0, bounds=(0.0, 15.0),
-        units="mg/L",
-        desc="The DO water-quality standard the water is judged against; 5 is a "
-             "common warm-water aquatic-life criterion. It never reaches the "
-             "deck: no keyword names a standard, and the oxygen profile carries "
-             "it as a reference line")
+    do_standard_mgl = Input()
 
-    mesh_resolution_m = replace(
-        RESOLUTION,
-        desc="Target element edge length the domain is triangulated at; it also "
-             "sets the CFL time step, so it is what decides whether a long "
-             "window finishes")
+    mesh_resolution_m = RESOLUTION
 
     domain = Input(DOMAIN).need("hydrography", at="seed",
                                 span_km=_REACH_LENGTH_KM)
-    line = Input(LINE).supplied(geometry="polyline")
+    line = Input(LINE).need(geometry="polyline")
 
     bed = Input(BED).need("bathymetry")
 
-    discharge = Input(DISCHARGE).need("discharge series").optional()
+    discharge = Input(DISCHARGE).need("discharge series")
 
-    observe = Input(OBSERVE).need("water quality sample").context(
-        "no water-quality site near this domain reports a water "
-        "temperature; the stated value stands")
-    level = Input(LEVEL).need("water level series").optional()
+    observe = Input(OBSERVE).need("water quality sample")
+    level = Input(LEVEL).need("water level series")
 
 
 class STEERING(T2D):
@@ -150,46 +122,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 REVIEW_TITLE = "Review the water this run is carrying"
-
-DOC = dict(
-    summary="NUTRIENT ENRICHMENT in a body of water: algal growth, nutrient "
-            "drawdown and the oxygen response over one pass through it.",
-    routing=(
-        "THE tool for \"what does this water do to its nutrient load\", \"how much "
-        "algae grows down this river\", \"eutrophication of this stream\", \"does "
-        "the algal growth pull the oxygen down\". Solves TELEMAC-2D + WAQTEL "
-        "EUTRO: phytoplankton growing on STATED nitrate and phosphate under stated "
-        "light and temperature, dying back, and the oxygen budget that drives. "
-        "Answers the LONGITUDINAL change over one pass. Supply the domain polygon, "
-        "or `seed` a point on it. Opinions, as keywords: DURATION, INITIAL VALUES "
-        "OF TRACERS (eight, in process order), WATER TEMPERATURE, SUNSHINE FLUX "
-        "DENSITY ON WATER SURFACE, GRAPHIC PRINTOUT PERIOD."
-    ),
-    not_for=(
-        "the oxygen sag below a WASTEWATER DISCHARGE (`telemac_do_sag`); a "
-        "conservative plume that only dilutes (`telemac_dye_release`); a SEASONAL "
-        "bloom in standing water - this measures ONE PASS. Nutrients are STATED"
-    ),
-    controls=(
-        ("input_mode",
-         '"user_gated" presents the resolved carrier discharge and the deck the '
-         'run is written on for review/edit before the solve and WAITS; "auto" '
-         "(session default) proceeds with every assumption labeled. Not a "
-         "physical value."),
-        ("restart_clean",
-         "True builds the mesh again even where one built from the same domain, "
-         "bed, resolution and mesher is kept; unset, such a kept mesh is reused. "
-         "Not a physical value."),
-    ),
-    returns=(
-        "On success the run's record (a `LayerURI`): every variable its "
-        "modules wrote - the eight tracers the eutrophication process "
-        "appends among them - styled on one mesh layer, animated where it "
-        "varies, plus the biomass and the oxygen along the water's path as "
-        "charts and their history where the station was picked. On failure "
-        "a dict with `status=\"error\"` + `error_code`."
-    ),
-)
 
 telemac_eutrophication = register_workflow(
     TelemacWorkflow, _METADATA,

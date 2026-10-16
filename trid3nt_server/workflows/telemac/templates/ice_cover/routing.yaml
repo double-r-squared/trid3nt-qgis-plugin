@@ -1,0 +1,15 @@
+summary: 'ICE COVER under a cold snap: when water freezes over, and how thick.'
+routing: 'THE tool for "when does this water freeze over", "how thick does the ice get", "frazil
+  and border ice". KHIONE on TELEMAC-2D over the domain it is given, drawn or matched at `seed`:
+  the heat budget under the hourly airport record over the run''s window, the frazil it makes,
+  and the cover that grows from it. Produces cover fraction and thickness, animated and charted.
+  Deck opinions, by keyword: DURATION (seven days), GRAPHIC PRINTOUT PERIOD, LAW OF BOTTOM
+  FRICTION, FRICTION COEFFICIENT; on the ice deck ATMOSPHERE-WATER EXCHANGE MODEL, DYNAMIC
+  ICE COVER, MODEL FOR MASS EXCHANGE BETWEEN FRAZIL AND ICE COVER, BORDER ICE COVER. Supply
+  the domain or `seed`, and `event_time`, the moment the snap opens at.'
+not_for: how warm the water gets with no ice in the question (`telemac_water_temperature`);
+  snow or ice on LAND; air temperature or a forecast, which the weather fetchers answer
+returns: 'On success the run''s record (a `LayerURI`): every variable its modules wrote, styled
+  on one mesh layer, animated where it varies, plus the cover and thickness series charted
+  at the station. Water that makes no ice at all charts zero thickness and zero cover, which
+  is what that place did in that week. On failure a dict with `status="error"` + `error_code`.'

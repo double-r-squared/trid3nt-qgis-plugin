@@ -10,14 +10,14 @@ from trid3nt_server.inputs.input import Input
 from trid3nt_server.workflows.runtime import (
     register_workflow,
 )
-from trid3nt_server.inputs import point_arg, Point
+from trid3nt_server.inputs import point_arg
 from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, series
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Boundaries, Sources,
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DOC", "OUTPUTS", "INPUTS",
+__all__ = ["CAPTIONS", "OUTPUTS", "INPUTS",
            "STEERING", "telemac_micropollutant_release"]
 
 
@@ -39,44 +39,18 @@ _DISSOLVED = "MICRO POLLUTANT MG/L"
 
 
 class INPUTS:
-    release = Input(
-        type=Point,
-        desc="Where the substance enters the water, as a Point: the pick's "
-             "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
-             "point layer. Geocode a place name first. On a river with no domain "
-             "it is also the seed the reach is walked downstream from").optional(
-        "the release sits at release_fraction along the domain the mesh was "
-        "built over; the travelled distance is measured from there")
-    release_fraction = Input(
-        default=0.1, bounds=(0.05, 0.9),
-        desc="Along-domain release position, 0=inflow..1=outflow; the source "
-             "must sit strictly INSIDE the domain, never on a boundary. It sits "
-             "near the top so the substance has water left to sorb and settle in")
-    release_duration_s = Input(
-        default=3600.0,
-        bounds=(1.0, 86400.0), units="s",
-        desc="Finite injection window; the substance is released over it and the "
-             "rest of the run is what happens to what was released")
+    release = Input()
+    release_fraction = Input()
+    release_duration_s = Input()
 
-    monitoring_point = Input(
-        type=Point,
-        desc="Where the dissolved history is read, as a Point: the pick's "
-             "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
-             "point layer. Geocode a place name first").optional(
-        "the history is read at monitoring_fraction along the domain the "
-        "mesh was built over")
-    monitoring_fraction = Input(
-        default=0.85, bounds=(0.1, 0.95),
-        desc="Along-domain position the history is read at when no point was "
-             "given, 0=inflow..1=outflow")
+    monitoring_point = Input()
+    monitoring_fraction = Input()
 
     domain = Input(DOMAIN).need("hydrography", at="release",
                                 span_km=_REACH_LENGTH_KM)
     bed = Input(BED).need("bathymetry")
-    discharge = Input(DISCHARGE).need("discharge series").context(
-        "the National Water Model published no streamflow over this "
-        "domain at that cycle")
-    level = Input(LEVEL).need("water level series").optional()
+    discharge = Input(DISCHARGE).need("discharge series")
+    level = Input(LEVEL).need("water level series")
 
 
 class STEERING(T2D):
@@ -134,45 +108,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 REVIEW_TITLE = "Review the release and the sediment it partitions onto"
-
-DOC = dict(
-    summary="A SORBING substance released into water: how much stays DISSOLVED and how much ends up ON THE BED.",
-    routing=(
-        "THE tool for \"where does this pollutant END UP\" - a metal, a PCB, a "
-        "pesticide, anything that ATTACHES TO SEDIMENT: how much travels "
-        "dissolved and how much rides the sediment onto the bed. "
-        "TELEMAC-2D + WAQTEL micropol over a reach walked from the release "
-        "point, a basin or harbour on the canvas, or a supplied polygon: "
-        "a finite point release, the water's own suspended sediment as the "
-        "sorbent. Deck opinion: DURATION 172800 s, two "
-        "days against a partition that equilibrates in hours; WAQTEL's own "
-        "sorption and decay constants stand. Give `release` as a pick "
-        "or a pair, or supply `domain`."
-    ),
-    not_for=(
-        "a CONSERVATIVE tracer that only dilutes (`telemac_dye_release`); an OIL "
-        "slick (`telemac_oil_spill`); bed SCOUR (`telemac_bed_scour`); a "
-        "suspended SEDIMENT plume carrying nothing (`telemac_sediment_plume`); "
-        "a dissolved-oxygen sag (`telemac_do_sag`); groundwater contamination"
-    ),
-    controls=(
-        ("input_mode",
-         '"user_gated" presents the resolved scenario sheet for review/edit and asks '
-         'for the release point and the monitoring point on the canvas before the '
-         'solve, and WAITS; "auto" (session default) proceeds with every assumption '
-         "labeled. Not a physical value."),
-        ("restart_clean",
-         "True builds the mesh again even where one built from the same domain, "
-         "bed, resolution and mesher is kept; unset, such a kept mesh is reused. "
-         "Not a physical value."),
-    ),
-    returns=(
-        "On success the run's record (a `LayerURI`): every variable its "
-        "modules wrote, styled on one mesh layer, animated where it varies, "
-        "plus the dissolved history at the monitoring point charted. On "
-        "failure a dict with `status=\"error\"` + `error_code`."
-    ),
-)
 
 telemac_micropollutant_release = register_workflow(
     TelemacWorkflow, _METADATA,

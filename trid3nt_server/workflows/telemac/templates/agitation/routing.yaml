@@ -1,0 +1,18 @@
+summary: The WAVE AGITATION (Kd = Hs/H0) a declared structure leaves inside a harbour, marina
+  or sheltered basin.
+routing: 'THE tool for "does this breakwater shelter the berths", "how much does swell amplify
+  inside this harbour", "wave agitation / tranquility in the basin". ARTEMIS phase-RESOLVING
+  elliptic mild-slope (Berkhoff) over a mesh cut from the real shoreline, the structure punched
+  out and the seaward stretches open: fringes and standing waves are the answer, not an average.
+  Wave: `WAVE PERIOD` 8 s, `DIRECTION OF WAVE PROPAGATION` 90 deg (trig from +x) - set either
+  by name. THE STRUCTURE IS THE QUESTION and is REQUIRED: `structure=` a breakwater layer
+  (`fetch_osm_features`) or a drawn line. Give `domain=` the water as an outline or a polygon
+  layer, or `extent=` a rectangle the coastline cuts into water.'
+not_for: the offshore SEA STATE or fetch-limited wind-wave growth; free-field agitation with
+  no structure; coastal storm-tide flooding; a tracer released into a river channel
+returns: 'On success the run''s record (a `LayerURI`): every variable its module wrote, styled
+  on one mesh layer, animated where it varies, the derived agitation coefficient Kd = Hs/H0
+  among them, plus the Kd profile through the structure charted. The Kd field peaks on a standing
+  wave against the domain''s own open boundary as often as inside the harbour, so read the
+  transect chart and the field behind the structure. On failure a dict with `status="error"`
+  + `error_code`.'

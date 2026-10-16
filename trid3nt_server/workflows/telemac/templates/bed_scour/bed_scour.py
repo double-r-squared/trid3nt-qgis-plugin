@@ -10,7 +10,7 @@ from trid3nt_server.inputs.input import Input
 from trid3nt_server.workflows.runtime import (
     register_workflow,
 )
-from trid3nt_server.inputs import point_arg, Point
+from trid3nt_server.inputs import point_arg
 from trid3nt_server.workflows.telemac.modules import GAIA, T2D, series
 from trid3nt_server.workflows.telemac.modules.gaia import RESULT_FILENAME
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
@@ -18,7 +18,7 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DOC", "GRADATION_PRESETS",
+__all__ = ["CAPTIONS", "GRADATION_PRESETS",
            "OUTPUTS", "INPUTS", "STEERING", "telemac_bed_scour"]
 
 
@@ -45,41 +45,18 @@ _FRICTION_COEFFICIENT = 33.0
 
 
 class INPUTS:
-    release = Input(
-        type=Point,
-        desc="Where the marker enters the water, as a Point: the pick's "
-             "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
-             "point layer. Geocode a place name first. Its name becomes the "
-             "marker's name, "
-             "and on a river with no domain supplied it is also the seed the "
-             "reach is walked downstream from").optional(
-        "the marker sits at spill_fraction along the domain the mesh was "
-        "built over")
+    release = Input()
 
-    spill_fraction = Input(
-        default=0.25, bounds=(0.05, 0.9),
-        desc="Along-domain release position, 0=inflow..1=outflow; the source "
-             "must sit strictly INSIDE the domain, never on a boundary")
-    spill_duration_s = Input(
-        default=300.0,
-        bounds=(1.0, 86400.0), units="s",
-        desc="Finite pulse injection window")
+    spill_fraction = Input()
+    spill_duration_s = Input()
 
-    sediment_gradation = Input(
-        type=list | str,
-        desc="Multi-class GRADED sediment: a preset name (graded_sand | "
-             "poorly_sorted | sand_gravel_bimodal | fine_coarse_sand) or a list "
-             "of [d50_um, fraction] pairs; a mixture sorts under a hiding factor").optional(
-        "the bed is ONE class at the CLASSES SEDIMENT DIAMETERS the deck "
-        "states, which is uniform by construction and cannot sort")
+    sediment_gradation = Input()
 
     domain = Input(DOMAIN).need("hydrography", at="release",
                                 span_km=_REACH_LENGTH_KM)
     bed = Input(BED).need("bathymetry")
-    discharge = Input(DISCHARGE).need("discharge series").context(
-        "the National Water Model published no streamflow over this domain "
-        "at that cycle")
-    level = Input(LEVEL).need("water level series").optional()
+    discharge = Input(DISCHARGE).need("discharge series")
+    level = Input(LEVEL).need("water level series")
 
 
 class STEERING(T2D):
@@ -145,46 +122,6 @@ _METADATA = AtomicToolMetadata(
 RESULTS = (_RESULT, RESULT_FILENAME)
 
 REVIEW_TITLE = "Review the mobile-bed scenario"
-
-DOC = dict(
-    summary="Bed SCOUR and DEPOSITION: a mobile bed under moving water.",
-    routing=(
-        "THE tool for \"where does the bed scour and where does it re-deposit\" - "
-        "erodible-bed morphodynamics below a dam, weir or bridge, bedload "
-        "under a flood, and how a GRADED mixture sorts and armors. "
-        "TELEMAC-2D + GAIA over a reach walked from the release point, an "
-        "estuary you draw, or a polygon you supply, its bed painted from a "
-        "published channel survey where one covers it. Deck opinions, by "
-        "keyword: DURATION 3600 s, MORPHOLOGICAL FACTOR 10, CLASSES SEDIMENT "
-        "DIAMETERS 2e-4 m, LAYERS INITIAL THICKNESS 5 m, BED-LOAD TRANSPORT "
-        "FORMULA FOR ALL SANDS 1. Give `release`, or supply `domain`."
-    ),
-    not_for=(
-        "a SUSPENDED plume settling onto an inert bed "
-        "(`telemac_sediment_plume`); a conservative dye or contaminant plume "
-        "(`telemac_dye_release`); an OIL slick (`telemac_oil_spill`); a "
-        "maintenance DREDGE (`telemac_channel_dredging`); dissolved-oxygen sag "
-        "(`telemac_do_sag`); rainfall-runoff flood depth "
-        "(`telemac_rain_on_grid`)"
-    ),
-    controls=(
-        ("input_mode",
-         '"user_gated" presents the filled sheet for review/edit before the solve '
-         'and WAITS; "auto" (session default) proceeds with every assumption '
-         "labeled. Not a physical value."),
-        ("restart_clean",
-         "True builds the mesh again even where one built from the same domain, "
-         "bed, resolution and mesher is kept; unset, such a kept mesh is reused. "
-         "Not a physical value."),
-    ),
-    returns=(
-        "On success the run's record (a `LayerURI`): every variable its "
-        "modules wrote, styled on one mesh layer, animated where it varies, "
-        "the bed evolution in metres among them (deposition positive, scour "
-        "negative), plus the marker series charted. On failure a dict with "
-        "`status=\"error\"` + `error_code`."
-    ),
-)
 
 telemac_bed_scour = register_workflow(
     TelemacWorkflow, _METADATA,

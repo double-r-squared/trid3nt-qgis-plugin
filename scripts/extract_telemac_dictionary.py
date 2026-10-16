@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Extract every exposed TELEMAC module's keyword dictionary out of the image.
 
-The dictionaries are the engine's own publication of its keyword surface and
-live only in the worker image; the committed JSON this writes is generated
-data, never hand edited.
+Keyword rows are generated data the image owns and are never hand-edited; the
+authored ``inputs`` section a template's values read their schema off is written
+back beside the fresh rows, so regeneration never clobbers it.
 """
 
 from __future__ import annotations
@@ -41,7 +41,16 @@ def image_present() -> bool:
 
 
 def extract_dictionaries(dest: Path, modules: tuple[str, ...] = MODULES) -> dict[str, int]:
-    """Write ``<module>.json`` for every module into ``dest`` -> keyword counts."""
+    """Write ``<module>.json`` for every module into `dest` -> keyword counts.
+
+    The image's fresh rows take the ``module`` and ``keywords`` keys of the
+    committed file it replaces; every other key the committed file carries stays,
+    in its own order, so an authored section survives regeneration."""
+    committed: dict[str, dict] = {}
+    for module in modules:
+        path = module_input_dir() / f"{module}.json"
+        if path.is_file():
+            committed[module] = json.loads(path.read_text())
     dest.mkdir(parents=True, exist_ok=True)
     (dest / "config.json").write_text(json.dumps({"modules": list(modules)}))
     cp = run_image_script(
@@ -54,6 +63,10 @@ def extract_dictionaries(dest: Path, modules: tuple[str, ...] = MODULES) -> dict
     counts = json.loads((dest / "telemac_dico_stats.json").read_text())
     for scratch in ("config.json", "telemac_dico_stats.json"):
         (dest / scratch).unlink()
+    for module in modules:
+        doc = dict(committed.get(module, {}))
+        doc.update(json.loads((dest / f"{module}.json").read_text()))
+        (dest / f"{module}.json").write_text(json.dumps(doc, indent=2) + "\n")
     return counts
 
 

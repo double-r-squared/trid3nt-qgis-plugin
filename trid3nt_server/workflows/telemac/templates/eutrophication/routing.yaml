@@ -1,0 +1,17 @@
+summary: 'NUTRIENT ENRICHMENT in a body of water: algal growth, nutrient drawdown and the
+  oxygen response over one pass through it.'
+routing: 'THE tool for "what does this water do to its nutrient load", "how much algae grows
+  down this river", "eutrophication of this stream", "does the algal growth pull the oxygen
+  down". Solves TELEMAC-2D + WAQTEL EUTRO: phytoplankton growing on STATED nitrate and phosphate
+  under stated light and temperature, dying back, and the oxygen budget that drives. Answers
+  the LONGITUDINAL change over one pass. Supply the domain polygon, or `seed` a point on it.
+  Opinions, as keywords: DURATION, INITIAL VALUES OF TRACERS (eight, in process order), WATER
+  TEMPERATURE, SUNSHINE FLUX DENSITY ON WATER SURFACE, GRAPHIC PRINTOUT PERIOD.'
+not_for: the oxygen sag below a WASTEWATER DISCHARGE (`telemac_do_sag`); a conservative plume
+  that only dilutes (`telemac_dye_release`); a SEASONAL bloom in standing water - this measures
+  ONE PASS. Nutrients are STATED
+returns: 'On success the run''s record (a `LayerURI`): every variable its modules wrote -
+  the eight tracers the eutrophication process appends among them - styled on one mesh layer,
+  animated where it varies, plus the biomass and the oxygen along the water''s path as charts
+  and their history where the station was picked. On failure a dict with `status="error"`
+  + `error_code`.'

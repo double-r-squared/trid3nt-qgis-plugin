@@ -56,17 +56,17 @@ def _sheet(**floor):
 def test_the_world_is_the_water_a_coastline_leaves_inside_the_window():
     """The same world the standalone wave question stands on: a window, the
     coast that cuts it, the bed both modules are solved over, the sea state and
-    the tide. The level is NOT optional here - the seaward rim is a prescribed
-    elevation, so a run nobody measured a tide for has nothing to hold it at."""
+    the tide. The level is the same kind of need row here - the seaward rim is
+    a prescribed elevation."""
     rows = _rows()
-    assert rows["extent"].slot == EXTENT and rows["extent"].supplied
+    assert rows["extent"].slot == EXTENT and rows["extent"].geometry == "rectangle"
     assert rows["domain"].slot == DOMAIN
     assert rows["domain"].data_class == "hydrography"
     assert rows["domain"].kind == "coastline"
     assert rows["bed"].slot == BED and rows["bed"].data_class == "bathymetry"
     assert rows["wave"].slot == WAVE and rows["wave"].data_class == "wave series"
     assert rows["wave"].coercion["near"] == "seed"
-    assert rows["level"].slot == LEVEL and not rows["level"].is_optional
+    assert rows["level"].slot == LEVEL and rows["level"].producer is None
 
 
 def test_the_sea_state_forces_the_wave_deck_and_never_the_host():

@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import sys
-from dataclasses import replace
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
-from trid3nt_server.inputs import point_arg, Point
+from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT, LEVEL, WAVE
 from trid3nt_server.tools.mesh.recipe import RESOLUTION
 from trid3nt_server.inputs.input import Input
@@ -19,13 +18,8 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
 from trid3nt_server.workflows.telemac.modules.tomawac import RESULT_FILENAME
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DEFAULT_OPEN_DEPTH_M", "DOC",
-           "MESH", "OUTPUTS", "INPUTS", "STEERING",
+__all__ = ["CAPTIONS", "MESH", "OUTPUTS", "INPUTS", "STEERING",
            "tomawac_wave_driven_currents"]
-
-
-# every boundary stretch at least this deep opens
-DEFAULT_OPEN_DEPTH_M: float = -12.0
 
 
 _GEOMETRY = "coast.slf"
@@ -50,38 +44,14 @@ _STATION = Placed("station", point="station", label="Current station")
 
 
 class INPUTS:
-    seed = Input(
-        type=Point,
-        desc="Where OFFSHORE the incoming sea state is measured, as a Point: "
-             "the pick's {coordinates, name} verbatim, a (lon, lat) pair, "
-             "'lat,lon', a point layer. Geocode a place name first. The nearest "
-             "buoy to it is the record the wave boundary is forced at, so put "
-             "it on the water the swell arrives across").optional(
-        "the buoy nearest the centre of the water the window was cut to "
-        "is the one the wave deck's open edge is forced at")
-    station = Input(
-        type=Point,
-        desc="Where INSHORE the current is read over time, as a Point: the "
-             "pick's {coordinates, name} verbatim, a (lon, lat) pair, "
-             "'lat,lon', a point layer. Geocode a place name first. The speed "
-             "and the wave height are charted at the node of the mesh it "
-             "settles onto, so put it in the surf zone you are asking about")
+    seed = Input()
+    station = Input()
 
-    mesh_resolution_m = replace(
-        RESOLUTION,
-        desc="Target element edge length the water is triangulated at; the "
-             "longshore current is driven across the surf zone, so what this "
-             "has to resolve is the width of the breaking band")
+    mesh_resolution_m = RESOLUTION
 
-    open_depth_threshold_m = Input(
-        default=DEFAULT_OPEN_DEPTH_M,
-        bounds=(-200.0, -1.0), units="m",
-        desc="How deep a boundary stretch must reach for it to be designated "
-             "the OPEN edge the measured sea state enters through; every "
-             "stretch that reaches it opens, and a window where none does has "
-             "no edge for the spectrum and refuses")
+    open_depth_threshold_m = Input()
 
-    extent = Input(EXTENT).supplied(geometry="rectangle")
+    extent = Input(EXTENT).need(geometry="rectangle")
     domain = Input(DOMAIN).need("hydrography", kind="coastline", geometry="polyline")
     bed = Input(BED).need("bathymetry")
     wave = Input(WAVE).need("wave series", at="seed")
@@ -176,47 +146,6 @@ STEERING_FILE = _STEERING_FILE
 PREFIX = "t2d"
 
 REVIEW_TITLE = "Review the sea state, the tide and the water they drive"
-
-DOC = dict(
-    summary="WAVE-DRIVEN CURRENTS: the current breaking waves drive along the "
-            "shore - how fast and which way.",
-    routing=(
-        "THE tool for \"how strong is the longshore current here\", \"which way "
-        "does the surf push along this beach\", \"what current do these waves "
-        "set up\". TELEMAC-2D over the water the window is cut to at the "
-        "coastline, COUPLED to TOMAWAC on the same mesh: the waves break, the "
-        "gradient of their radiation stress enters the momentum equation, and "
-        "the current that results is the answer. The wave edge is forced at a "
-        "sea state a buoy MEASURED; the water stands at a gauge's tide. Both "
-        "fields on one mesh, animated, the speed and the wave height charted "
-        "where the ask points. Deck opinions, by keyword: TIME STEP, DURATION, "
-        "COUPLING PERIOD FOR TOMAWAC, and the wave deck's under `tomawac:`. "
-        "Supply the window, `station`, `event_time`."
-    ),
-    not_for=(
-        "the waves alone, with no current solved "
-        "(`tomawac_nearshore_waves`); agitation behind a breakwater "
-        "(`artemis_harbor_agitation`); a current with no waves in it"
-    ),
-    controls=(
-        ("input_mode",
-         '"user_gated" presents the resolved sea state, the tide and the mesh '
-         'for review/edit before the solve and WAITS; "auto" (session default) '
-         "proceeds with every assumption labeled. Not a physical value."),
-        ("restart_clean",
-         "True builds the mesh again even where one built from the same domain, "
-         "bed, resolution and mesher is kept; unset, such a kept mesh is reused. "
-         "Not a physical value."),
-    ),
-    returns=(
-        "On success the run's record (a `LayerURI`): every variable "
-        "TELEMAC-2D wrote and every variable TOMAWAC wrote, styled on one "
-        "mesh layer and animated, plus the current speed and the wave "
-        "height charted at the station. A coast the swell reaches head-on "
-        "charts a small longshore speed, which is what that place did in "
-        "that hour. On failure a dict with `status=\"error\"` + `error_code`."
-    ),
-)
 
 tomawac_wave_driven_currents = register_workflow(
     TelemacWorkflow, _METADATA, sys.modules[__name__],

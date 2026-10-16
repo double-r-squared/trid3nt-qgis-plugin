@@ -31,6 +31,12 @@ def _wf():
     return TOOL_REGISTRY["telemac_dye_release"].fn.workflow
 
 
+#: What every TELEMAC run states: the moment it opens at, and the values its
+#: template cannot stand without - a release, the substance it carries.
+_DYE = {"release": [0.5, 0.5], "decaying_substance": "fluorescein",
+        "event_time": "2024-06-01T00:00:00Z"}
+
+
 def _filled(values):
     return asyncio.run(fill(Fill(workflow=_wf()), values))
 
@@ -121,7 +127,7 @@ def test_a_failed_launch_does_not_say_the_engine_check_was_out_of_reach(monkeypa
     monkeypatch.setattr(fill_mod, "_produce", _produce)
     wf = _wf()
     monkeypatch.setattr(type(wf), "launch", _launch)
-    out = asyncio.run(wf.run({"input_mode": "auto",
+    out = asyncio.run(wf.run({**_DYE, "input_mode": "auto",
                               "keywords": {"LAW OF BOTTOM FRICTION": 4}}))
     assert out["status"] == "error" and "the deck refused" in out["error_message"]
     assert ENGINE_UNAVAILABLE not in out["error_message"]
@@ -198,7 +204,8 @@ def test_a_stated_row_the_template_names_is_produced_once_and_a_refused_one_stop
     assert wf.named_rows() == ("domain", "dredge_area", "dump_area", "bed", "level",
                                "discharge", "line")
     refused = None
-    stated = {"dredge_area": "L1", "bed": 3.0, "input_mode": "auto"}
+    stated = {"dredge_area": "L1", "bed": 3.0, "input_mode": "auto",
+              "seed_point": [0.5, 0.5], "event_time": "2024-06-01T00:00:00Z"}
     state = asyncio.run(fill(Fill(workflow=wf), stated))
     assert state.ready and sorted(asked) == [
         "bed", "discharge", "domain", "dredge_area", "dump_area", "level", "line"]
@@ -222,7 +229,8 @@ def test_a_user_gated_engine_run_with_no_session_is_refused_at_the_fill_and_fetc
     refused = state.inputs["input_mode"]
     assert refused.code == "NO_SESSION" and "input_mode='auto'" in refused.reason
     assert not state.ready and asked == []
-    state = asyncio.run(fill(Fill(workflow=_wf()), {"input_mode": "auto"}))
+    state = asyncio.run(fill(Fill(workflow=_wf()),
+                             {**_DYE, "input_mode": "auto"}))
     assert "input_mode" not in state.inputs and "domain" in asked
 
 
@@ -389,7 +397,9 @@ def test_what_producing_said_at_the_fill_is_restated_on_the_run(monkeypatch):
     monkeypatch.setattr(fill_mod, "_produce", _produce)
     wf = TOOL_REGISTRY["telemac_ice_cover"].fn.workflow
     monkeypatch.setattr(type(wf), "launch", _launch)
-    state = asyncio.run(fill(Fill(workflow=wf), {"input_mode": "auto"}))
+    state = asyncio.run(fill(Fill(workflow=wf), {
+        "input_mode": "auto", "seed": [0.5, 0.5], "station": [0.5, 0.5],
+        "event_time": "2024-06-01T00:00:00Z"}))
     run = asyncio.run(wf._launched(state))
     rows = ["domain", "bed", "weather", "level", "discharge"]
     assert run.choices == rows
@@ -402,7 +412,8 @@ _RING = [[-122.6769, 45.5153], [-122.6615, 45.5153],
          [-122.6615, 45.5198], [-122.6769, 45.5198]]
 _STATED = {"structure": [[-122.6700, 45.5160], [-122.6700, 45.5190]],
            "domain": _RING, "bed": 8.0, "wave_height_m": 1.0,
-           "reflection_coef": 0.5, "mesh_resolution_m": 35.0}
+           "reflection_coef": 0.5, "mesh_resolution_m": 35.0,
+           "event_time": "2024-06-01T00:00:00Z"}
 
 
 @pytest.mark.parametrize("order", [("structure", "domain"), ("domain", "structure")])

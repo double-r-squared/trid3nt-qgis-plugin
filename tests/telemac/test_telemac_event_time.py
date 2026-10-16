@@ -24,9 +24,9 @@ def test_template_surfaces_event_time_knob(mod, fn_name):
     # the template's own class body.
     rows = {p.name: p for p in value_inputs(fn.workflow)}
     assert "event_time" in rows
-    assert rows["event_time"].is_optional is True
-    # unset leaves a derived-basis provenance row
-    assert rows["event_time"].absent_note
+    # The moment is required now: unstated, the fill refuses naming the need.
+    assert rows["event_time"].required is True
+    assert rows["event_time"].stated_only is False
 
 
 @pytest.mark.asyncio

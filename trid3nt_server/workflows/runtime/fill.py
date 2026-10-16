@@ -94,9 +94,6 @@ class _Env:
     #: Artifacts SUPPLIED rather than produced - a layer handle, a file uri, a
     #: gate's answer. What satisfies a producer-less row.
     supplied: dict[str, Any] = field(default_factory=dict)
-    #: Absences worth narrating, each as the SENTENCE the run carries: an
-    #: optional row nothing satisfied, or a context row whose source was empty.
-    absences: list[str] = field(default_factory=list)
     #: How long the solve runs, in seconds, off the deck this run writes: the WINDOW a
     #: matched series source must cover, or the run refuses.
     window_s: float | None = None
@@ -121,11 +118,16 @@ def _data_step_label(name: str) -> str:
 async def _produce(env: _Env, decl: Input) -> Any:
     """Satisfy one declared artifact, ON DEMAND - when a step that reads it runs.
 
-    An artifact nothing reads costs no fetch; a CONTEXT row is asked regardless."""
+    An artifact nothing reads costs no fetch; a stated-only row nothing hands in is
+    the run's own machinery's answer, and carries no verdict here."""
     handed_in = env.supplied.get(decl.name)
     if handed_in is not None:
         _validate_supplied(env, decl, handed_in)
         return await _ingested(env, decl, handed_in)
+    if decl.stated_only:
+        # The user MAY state one; unstated, the run's own machinery answers - the
+        # supplied-mesh builder, the mesher's own edge. No verdict, no sentence.
+        return None
     producer = decl.producer
     if producer is None and decl.slot is LINE:
         # THE DOMAIN'S PRODUCER measured this beside the polygon it cut - a reach's
@@ -139,34 +141,26 @@ async def _produce(env: _Env, decl: Input) -> Any:
         # and the runtime declares the row it picked, so the pick earns a
         # journal line like any other producer.
         return await _matched(env, decl)
-    if producer is None and decl.slot is not None:
-        # A SLOT the caller did not fill and no producer answers is asked for on the
-        # canvas, where the user has one. A declined drawing is not a value: the slot's
-        # own refusal below is what a reader sees.
+    if producer is None and (decl.slot is not None or decl.geometry):
+        # A ROW the caller did not fill and no producer answers is asked for on the
+        # canvas - the shape its slot states or the shape its own need names. A
+        # declined drawing is not a value: the refusal below is what a reader sees.
         from trid3nt_server.inputs.slots import ask_on_canvas
 
-        drawn = await ask_on_canvas(decl.slot, tool=env.workflow,
-                                    param=decl.name, input_mode=env.input_mode)
+        drawn = await ask_on_canvas(decl.slot, geometry=decl.geometry or "",
+                                    tool=env.workflow, param=decl.name,
+                                    input_mode=env.input_mode)
         if drawn is not None:
             return drawn
     if producer is None:
         # A producer-less slot: nothing was handed in, and naming a default
         # fetcher for it would be this library inventing the source.
-        if decl.is_optional:
-            env.absences.append(
-                f"the optional {decl.name!r} context layer was not supplied, so "
-                "the run modelled the domain without it")
-            logger.info("data %s is an optional slot nothing satisfied; the run "
-                        "proceeds without it", decl.name)
-            return None
         raise StepFailedError(
             f"Input {decl.name!r} is a producer-less slot and nothing satisfied it: "
-            "supply a layer, a file uri, or declare it .optional().",
+            "supply a layer or a file uri.",
             error_code="DATA_SLOT_UNSATISFIED", step=_data_step_label(decl.name),
         )
     label = _data_step_label(decl.name)
-    if decl.is_context:
-        return await _context(env, decl, label)
     value = await _produced(env, producer, label)
     return await _ingested(env, decl, value,
                            _fetcher_row(producer.runner, decl.data_class))
@@ -187,13 +181,6 @@ async def _matched(env: _Env, decl: Input) -> Any:
         env, decl, decl.data_class, decl.name,
         read=lambda answer, row: _ingested(env, decl, answer, row, beside))
     if value is None:
-        if decl.is_optional or decl.is_context:
-            # A slot nothing measured is an absence the run STATES - the run's own
-            # sentence, and the row's beside it where the row wrote one. The refusal
-            # below is for a slot the run cannot stand without.
-            env.absences.append(choice.sentence if decl.is_optional else
-                                f"{decl.context_sentence} ({choice.sentence})")
-            return None
         raise StepFailedError(choice.sentence, error_code="DATA_NEED_UNMATCHED",
                               step=_data_step_label(decl.name))
     return value
@@ -649,30 +636,6 @@ async def _offset_row(env: _Env, owner: str, value: Any, frame: str) -> Any:
     row = Input(Producer(runner=OFFSET_FETCH, kwargs=ask, row=name), name=name)
     env.data[name] = row
     return await _produce(env, row)
-
-
-async def _context(env: _Env, decl: Input, label: str) -> Any:
-    """A CONTEXT row: produced where the source has something, absent where it has not.
-
-    Only an empty SOURCE is an absence; a cancelled run or a retryable gate error is not."""
-    try:
-        value = await _produced(env, decl.producer, label)
-        # The ingestion is INSIDE the absence: rows the slot finds nothing usable in
-        # held nothing, and a context row says so rather than refusing.
-        ingested = await _ingested(env, decl, value, _fetcher_row(
-            decl.producer.runner, decl.data_class))
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:  # noqa: BLE001 - any empty source is the absence
-        if getattr(exc, "retryable", False):
-            raise
-        if _malformed_ask(exc):
-            raise
-        env.absences.append(f"{decl.context_sentence} ({exc})")
-        logger.info("data %s is CONTEXT and its source held nothing (%s); the run "
-                    "continues", decl.name, exc)
-        return None
-    return ingested
 
 
 def _malformed_ask(exc: BaseException) -> bool:

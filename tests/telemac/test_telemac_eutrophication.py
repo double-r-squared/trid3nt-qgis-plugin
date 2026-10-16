@@ -410,12 +410,11 @@ def test_the_water_temperature_record_is_one_reading_off_the_nearest_site():
     assert not row.observes
 
 
-def test_water_nobody_sampled_is_a_sentence_rather_than_a_refusal():
-    """A place with no sample is a fact about the place, not a reason to refuse
-    a run whose temperature is stated anyway."""
+def test_the_observe_row_holds_no_standing_sentence():
+    """The observe row is a plain need row: whether a place was sampled is the
+    match's affair, not a sentence the row carries."""
     row = {r.name: r for r in row_inputs(_plan())}["observe"]
-    assert row.is_context
-    assert "the stated value stands" in row.context_sentence
+    assert row.producer is None
 
 
 def test_the_stated_temperature_is_the_decks_own_keyword():
@@ -448,11 +447,11 @@ def test_the_seated_inputs_are_carried_and_no_keyword_twin_is_declared():
 def test_the_carrier_flow_is_one_reading_the_open_channel_step_can_read():
     """The discharge the inflow prescribes is whichever source's row
     matches this domain, read as ONE value - the step that opens the channel
-    refuses a record nobody chose a site from - and its absence is legal."""
+    refuses a record nobody chose a site from."""
     row = {r.name: r for r in row_inputs(_plan())}["discharge"]
     assert row.slot is DISCHARGE
     assert row.data_class == "discharge series"
-    assert row.is_optional
+    assert row.producer is None
 
 
 def test_the_longitudinal_reads_are_taken_along_the_line_slot():

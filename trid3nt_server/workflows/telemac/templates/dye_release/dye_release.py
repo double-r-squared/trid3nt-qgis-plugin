@@ -10,14 +10,14 @@ from trid3nt_server.inputs.input import Input
 from trid3nt_server.workflows.runtime import (
     register_workflow,
 )
-from trid3nt_server.inputs import point_arg, Point
+from trid3nt_server.inputs import point_arg
 from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, series
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Boundaries, Sources, TracerNames,
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DECAY_PRESETS", "DOC", "OUTPUTS",
+__all__ = ["CAPTIONS", "DECAY_PRESETS", "OUTPUTS",
            "INPUTS", "STEERING", "telemac_dye_release"]
 
 
@@ -53,38 +53,18 @@ _FRICTION_COEFFICIENT = 33.0
 
 
 class INPUTS:
-    release = Input(
-        type=Point,
-        desc="Where the substance enters the water, as a Point: the pick's "
-             "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
-             "point layer. Geocode a place name first. Its name becomes the "
-             "tracer's name, "
-             "and on a river with no domain supplied it is also the seed the "
-             "reach is walked downstream from").optional(
-        "the release sits at spill_fraction along the domain the mesh was "
-        "built over; the travelled distance is measured from there")
+    release = Input()
 
-    spill_fraction = Input(
-        default=0.25, bounds=(0.05, 0.9),
-        desc="Along-domain release position, 0=inflow..1=outflow; the source "
-             "must sit strictly INSIDE the domain, never on a boundary")
-    spill_duration_s = Input(
-        default=300.0,
-        bounds=(1.0, 86400.0), units="s",
-        desc="Finite pulse injection window")
+    spill_fraction = Input()
+    spill_duration_s = Input()
 
-    decaying_substance = Input(
-        desc="Name a substance whose tracer DECAYS - sewage | E. coli | coliform "
-             "| bacteria | effluent | wastewater - and its narrated literature "
-             "die-off is applied as a first-order sink on the plume").optional(
-        "the tracer is CONSERVATIVE - it dilutes and advects and nothing "
-        "removes it")
+    decaying_substance = Input()
 
     domain = Input(DOMAIN).need("hydrography", at="release",
                                 span_km=_REACH_LENGTH_KM)
     bed = Input(BED).need("bathymetry")
-    discharge = Input(DISCHARGE).need("discharge series").optional()
-    level = Input(LEVEL).need("water level series").optional()
+    discharge = Input(DISCHARGE).need("discharge series")
+    level = Input(LEVEL).need("water level series")
 
 
 class STEERING(T2D):
@@ -146,44 +126,6 @@ _METADATA = AtomicToolMetadata(
 RESULTS = (_RESULT, _RESTART)
 
 REVIEW_TITLE = "Review the tracer-release scenario"
-
-DOC = dict(
-    summary="A DYE / TRACER / CONTAMINANT plume released into a body of surface water and carried by its flow.",
-    routing=(
-        "THE tool for \"a spill in the water - how far does it travel, how "
-        "concentrated\": a dye / contaminant / pollutant / chemical plume carried "
-        "by the current, sewage or E.coli effluent DECAYING as it goes (name it "
-        "in `decaying_substance`). TELEMAC-2D over a reach walked from the "
-        "release, a lake drawn on the canvas, or a supplied polygon: a finite "
-        "pulse is carried by the flow and dilutes. Give `release` as a pick or a "
-        "pair, or supply `domain`. Source: ABSCISSAE/ORDINATES/DISCHARGE/TRACER "
-        "keywords. Deck: DURATION 3600 s, no WIND, no RAIN."
-    ),
-    not_for=(
-        "an OIL slick (`telemac_oil_spill`); bed SCOUR, deposition, grain "
-        "sorting (`telemac_bed_scour`); a SUSPENDED sediment plume settling "
-        "onto the bed (`telemac_sediment_plume`); dissolved-oxygen sag "
-        "(`telemac_do_sag`); rainfall-runoff flood depth "
-        "(`telemac_rain_on_grid`). Groundwater plumes, dam-break and tsunami "
-        "run-up are not modeled here"
-    ),
-    controls=(
-        ("input_mode",
-         '"user_gated" presents the resolved scenario sheet for review/edit and asks '
-         'for the release point on the canvas before the solve, and WAITS; "auto" '
-         "(session default) proceeds with every assumption labeled. Not a physical value."),
-        ("restart_clean",
-         "True builds the mesh again even where one built from the same domain, "
-         "bed, resolution and mesher is kept; unset, such a kept mesh is reused. "
-         "Not a physical value."),
-    ),
-    returns=(
-        "On success the run's record (a `LayerURI`): every variable its "
-        "modules wrote, styled on one mesh layer, animated where it varies, "
-        "plus the dye series charted. On failure a dict with "
-        "`status=\"error\"` + `error_code`."
-    ),
-)
 
 telemac_dye_release = register_workflow(
     TelemacWorkflow, _METADATA,

@@ -1,13 +1,26 @@
-A template is ONE file (`<name>.py`) and its routing phrasings (`corpus.yaml`),
-and NOTHING else - no helper module, no function of its own - except where code
-that is not input has exactly one consumer, which lives beside it. The file is
-VALUES, the whole of what is passed in: the params it declares, a STEERING body
-of the module's own raw keywords restated whole, the DATA rows it consumes - the
-DOMAIN it solves over, the BED every node carries, whatever else this question
-reads - the OUTPUTS it PLACES, the reads that need a place the user gives, with
-the CAPTIONS that name them, and the door it hands them to. A comment stays only
-where a passed value would otherwise be unclear: an unusual unit, a value whose
-reason its name does not carry.
+A template is ONE file (`<name>.py`), its routing prose (`routing.yaml`) and
+its retrieval phrasings (`corpus.yaml`), and NOTHING else - no helper module,
+no function of its own - except where code that is not input has exactly one
+consumer, which lives beside it. The file is VALUES, the whole of what is
+passed in: the inputs it declares, a STEERING body of the module's own raw
+keywords restated whole, the data rows it consumes - the DOMAIN it solves
+over, the BED every node carries, whatever else this question reads - the
+OUTPUTS it PLACES, the reads that need a place the user gives, with the
+CAPTIONS that name them, and the door it hands them to. A comment stays only
+where a passed value would otherwise be unclear: an unusual unit, a value
+whose reason its name does not carry.
+
+Prose has exactly one home each, and the file carries none of it: how the
+question is FOUND - its summary, its routing, what it is not for, what it
+returns - is the package's `routing.yaml`, which the registration renders into
+the tool's docstring and refuses to import without; a VALUE's description, unit
+and range are its module input JSON's (`../modules/module_input/`), hydrated
+onto the declaration at registration; the run CONTROLS' one description each is
+the framework's, beside the wire signature they ride on. A row may still state
+its own words beside the slot it needs (`Input(EXTENT, desc=...)`): those are
+the template's judgment about THIS use of the slot, and the slot's generic
+description is not it. The template-grammar lint refuses a DOC name, a
+controls= argument, or a desc= on a value input.
 
 A template states NO MESH RECIPE either, unless the question cannot be asked
 over the one the workflow builds from those slots: `rain_on_grid` triangulates a

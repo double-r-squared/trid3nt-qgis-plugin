@@ -65,7 +65,6 @@ def test_the_extent_is_a_slot_the_canvas_offers_a_rectangle_for():
     extent = rows["extent"]
     assert (extent.slot, extent.geometry, extent.producer) == (EXTENT, "rectangle",
                                                                 None)
-    assert EXTENT.draw[0] == "rectangle"
 
 
 def test_the_bed_is_the_class_it_is_defined_over():

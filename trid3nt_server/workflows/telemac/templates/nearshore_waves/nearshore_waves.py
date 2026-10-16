@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import sys
-from dataclasses import replace
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
-from trid3nt_server.inputs import point_arg, Point
+from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT, LEVEL, WAVE
 from trid3nt_server.tools.mesh.recipe import RESOLUTION
 from trid3nt_server.inputs.input import Input
@@ -18,12 +17,8 @@ from trid3nt_server.workflows.telemac.modules import WAC, series, spectrum
 from trid3nt_server.workflows.telemac.modules.tomawac import RESULT_FILENAME
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DEFAULT_OPEN_DEPTH_M", "DOC",
-           "MESH", "OUTPUTS", "INPUTS", "STEERING", "tomawac_nearshore_waves"]
-
-
-# every boundary stretch at least this deep opens
-DEFAULT_OPEN_DEPTH_M: float = -12.0
+__all__ = ["CAPTIONS", "MESH", "OUTPUTS", "INPUTS", "STEERING",
+           "tomawac_nearshore_waves"]
 
 
 _GEOMETRY = "coast.slf"
@@ -35,42 +30,18 @@ _STATION = Placed("station", point="station", label="Wave station")
 
 
 class INPUTS:
-    seed = Input(
-        type=Point,
-        desc="Where OFFSHORE the incoming sea state is measured, as a Point: "
-             "the pick's {coordinates, name} verbatim, a (lon, lat) pair, "
-             "'lat,lon', a point layer. Geocode a place name first. The nearest "
-             "buoy to it is the record the open boundary is forced at, so put "
-             "it on the water the swell arrives across").optional(
-        "the buoy nearest the centre of the water the window was cut to "
-        "is the one the open edge is forced at")
-    station = Input(
-        type=Point,
-        desc="Where INSHORE the waves are read over time, as a Point: the "
-             "pick's {coordinates, name} verbatim, a (lon, lat) pair, "
-             "'lat,lon', a point layer. Geocode a place name first. The height, "
-             "the period and the direction are charted at the node of the mesh "
-             "it settles onto, so put it on the water you are asking about")
+    seed = Input()
+    station = Input()
 
-    mesh_resolution_m = replace(
-        RESOLUTION,
-        desc="Target element edge length the water is triangulated at; the "
-             "waves shoal and then break where the DEPTH falls, so what this "
-             "has to resolve is the slope of the bed across the surf zone")
+    mesh_resolution_m = RESOLUTION
 
-    open_depth_threshold_m = Input(
-        default=DEFAULT_OPEN_DEPTH_M,
-        bounds=(-200.0, -1.0), units="m",
-        desc="How deep a boundary stretch must reach for it to be designated "
-             "the OPEN edge the measured sea state enters through; every "
-             "stretch that reaches it opens, and a window where none does has "
-             "no edge for the spectrum and refuses")
+    open_depth_threshold_m = Input()
 
-    extent = Input(EXTENT).supplied(geometry="rectangle")
+    extent = Input(EXTENT).need(geometry="rectangle")
     domain = Input(DOMAIN).need("hydrography", kind="coastline", geometry="polyline")
     bed = Input(BED).need("bathymetry")
     wave = Input(WAVE).need("wave series", at="seed")
-    level = Input(LEVEL).need("water level series").optional()
+    level = Input(LEVEL).need("water level series")
 
 
 class STEERING(WAC):
@@ -147,47 +118,6 @@ STEERING_FILE = _STEERING_FILE
 PREFIX = "tomawac"
 
 REVIEW_TITLE = "Review the sea state, the tide and the water it crosses"
-
-DOC = dict(
-    summary="NEARSHORE WAVES: what the offshore swell becomes at the shore - "
-            "how high, how long, which way, and where it breaks.",
-    routing=(
-        "THE tool for \"how big are the waves at the beach\", \"what does this "
-        "swell do as it comes in\", \"where does the surf break here\", \"wave "
-        "height and period along this coast\". TOMAWAC, the spectral wave "
-        "model, over the water the window is cut to at the coastline: the open "
-        "edge forced at a sea state a buoy MEASURED, shoaling and refraction "
-        "over the charted bed, breaking and bottom friction taking them down. "
-        "Produces the height, the periods, the directions and the breaking "
-        "band, animated, three of them charted where the ask points. Deck "
-        "opinions, by keyword: TIME STEP, NUMBER OF TIME STEP, the spectral "
-        "grid, DEPTH-INDUCED BREAKING DISSIPATION. Supply the window, "
-        "`station`, and `event_time`."
-    ),
-    not_for=(
-        "agitation behind a breakwater, which is phase-resolving "
-        "(`artemis_harbor_agitation`); storm surge or the water level itself; "
-        "the buoy record alone (`fetch_ndbc_buoys`)"
-    ),
-    controls=(
-        ("input_mode",
-         '"user_gated" presents the resolved sea state, the tide and the mesh '
-         'for review/edit before the solve and WAITS; "auto" (session default) '
-         "proceeds with every assumption labeled. Not a physical value."),
-        ("restart_clean",
-         "True builds the mesh again even where one built from the same domain, "
-         "bed, resolution and mesher is kept; unset, such a kept mesh is reused. "
-         "Not a physical value."),
-    ),
-    returns=(
-        "On success the run's record (a `LayerURI`): every variable TOMAWAC "
-        "wrote, styled on one mesh layer and animated, plus the height, the "
-        "period and the direction charted at the station. A coast the swell "
-        "reaches calmly charts a small height and no breaking, which is "
-        "what that place did in that hour. On failure a dict with "
-        "`status=\"error\"` + `error_code`."
-    ),
-)
 
 tomawac_nearshore_waves = register_workflow(
     TelemacWorkflow, _METADATA, sys.modules[__name__],

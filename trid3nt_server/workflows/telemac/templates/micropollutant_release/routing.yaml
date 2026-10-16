@@ -1,0 +1,15 @@
+summary: 'A SORBING substance released into water: how much stays DISSOLVED and how much ends
+  up ON THE BED.'
+routing: 'THE tool for "where does this pollutant END UP" - a metal, a PCB, a pesticide, anything
+  that ATTACHES TO SEDIMENT: how much travels dissolved and how much rides the sediment onto
+  the bed. TELEMAC-2D + WAQTEL micropol over a reach walked from the release point, a basin
+  or harbour on the canvas, or a supplied polygon: a finite point release, the water''s own
+  suspended sediment as the sorbent. Deck opinion: DURATION 172800 s, two days against a partition
+  that equilibrates in hours; WAQTEL''s own sorption and decay constants stand. Give `release`
+  as a pick or a pair, or supply `domain`.'
+not_for: a CONSERVATIVE tracer that only dilutes (`telemac_dye_release`); an OIL slick (`telemac_oil_spill`);
+  bed SCOUR (`telemac_bed_scour`); a suspended SEDIMENT plume carrying nothing (`telemac_sediment_plume`);
+  a dissolved-oxygen sag (`telemac_do_sag`); groundwater contamination
+returns: 'On success the run''s record (a `LayerURI`): every variable its modules wrote, styled
+  on one mesh layer, animated where it varies, plus the dissolved history at the monitoring
+  point charted. On failure a dict with `status="error"` + `error_code`.'

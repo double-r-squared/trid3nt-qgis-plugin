@@ -66,13 +66,12 @@ def test_the_bed_is_one_row_stating_the_class_it_needs():
     assert bed.data_class == "bathymetry"
 
 
-def test_the_level_is_matched_and_its_absence_is_legal():
-    """A reach with no reported water level has no uniform-flow depth to derive,
-    so the slot states its class and stays optional."""
+def test_the_level_is_matched_the_same_way_the_discharge_is():
+    """The water level is the same kind of row as the discharge: one class the
+    match ranks, no producer stated on the template."""
     level = _rows()["level"]
     assert level.producer is None
     assert level.data_class == "water level series"
-    assert level.is_optional
 
 
 def test_the_discharge_is_one_reading_and_never_the_grid_it_came_from():

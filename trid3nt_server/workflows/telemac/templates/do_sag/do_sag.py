@@ -10,7 +10,7 @@ from trid3nt_server.inputs.input import Input
 from trid3nt_server.workflows.runtime import (
     register_workflow,
 )
-from trid3nt_server.inputs import point_arg, Point
+from trid3nt_server.inputs import point_arg
 from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL
 from trid3nt_server.workflows.runtime.primitives import profile
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
@@ -19,7 +19,7 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
 from trid3nt_server.workflows.telemac.templates.do_sag import streeter_phelps
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DOC", "OUTPUTS", "INPUTS",
+__all__ = ["CAPTIONS", "OUTPUTS", "INPUTS",
            "STEERING", "telemac_do_sag"]
 
 
@@ -46,31 +46,16 @@ _SATURATION_MGL = 9.022
 
 
 class INPUTS:
-    outfall_coords = Input(
-        type=Point,
-        desc="Where the discharge enters the water, as a Point: the pick's "
-             "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
-             "point layer. Geocode a place name first. On a river with no domain "
-             "supplied it is also the seed the reach is walked downstream from").optional(
-        "with a domain supplied the outfall sits near the top of its "
-        "centerline and the sag distance is measured downstream from there; "
-        "with no domain either, the run refuses rather than inventing where "
-        "a permitted discharge is")
+    outfall_coords = Input()
 
-    do_standard_mgl = Input(
-        default=5.0, bounds=(0.0, 15.0),
-        units="mg/L",
-        desc="The DO water-quality standard the sag is judged against; 5 is a "
-             "common warm-water aquatic-life criterion")
+    do_standard_mgl = Input()
 
     domain = Input(DOMAIN).need("hydrography", at="outfall_coords",
                                 span_km=_REACH_LENGTH_KM)
-    line = Input(LINE).supplied(geometry="polyline")
+    line = Input(LINE).need(geometry="polyline")
     bed = Input(BED).need("bathymetry")
-    discharge = Input(DISCHARGE).need("discharge series").context(
-        "the National Water Model published no streamflow over this domain "
-        "at that cycle")
-    level = Input(LEVEL).need("water level series").optional()
+    discharge = Input(DISCHARGE).need("discharge series")
+    level = Input(LEVEL).need("water level series")
 
 
 class STEERING(T2D):
@@ -136,44 +121,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 REVIEW_TITLE = "Review the outfall and the water it discharges to"
-
-DOC = dict(
-    summary="DISSOLVED-OXYGEN SAG below a discharge (US TMDL / permit question).",
-    routing=(
-        "THE tool for \"where does dissolved oxygen bottom out below this discharge\", "
-        "\"will the DO sag violate the standard\", \"Streeter-Phelps oxygen sag\", \"BOD "
-        "loading downstream of a WWTP / outfall\". TELEMAC-2D + WAQTEL O2 over a reach "
-        "walked downstream from the outfall, or a polygon you supply: clean water in "
-        "at the inflow, CBOD decaying and reaeration recovering downstream of the "
-        "DISCHARGE. Produces the along-channel oxygen profile against the closed "
-        "form. Deck opinions, by keyword: CONSTANT OF DEGRADATION OF ORGANIC LOAD K1, "
-        "K2 REAERATION COEFFICIENT, O2 SATURATION DENSITY OF WATER (CS), WATER "
-        "TEMPERATURE, DURATION, and the outfall's own discharge and load. Give "
-        "`outfall_coords` or `domain`."
-    ),
-    not_for=(
-        "a conservative dye/tracer plume that only dilutes "
-        "(`telemac_dye_release`); rainfall-runoff flood depth "
-        "(`telemac_rain_on_grid`); a closed body with no through-flow, which "
-        "has no sag"
-    ),
-    controls=(
-        ("input_mode",
-         '"user_gated" presents the resolved carrier discharge and bed source for '
-         'review/edit before the solve and WAITS; "auto" (session default) proceeds '
-         "with every assumption labeled. Not a physical value."),
-        ("restart_clean",
-         "True builds the mesh again even where one built from the same domain, "
-         "bed, resolution and mesher is kept; unset, such a kept mesh is reused. "
-         "Not a physical value."),
-    ),
-    returns=(
-        "On success the run's record (a `LayerURI`): every variable its "
-        "modules wrote, styled on one mesh layer, animated where it varies, "
-        "plus the oxygen profile on its Streeter-Phelps curve. On failure a "
-        "dict with `status=\"error\"` + `error_code`."
-    ),
-)
 
 telemac_do_sag = register_workflow(
     TelemacWorkflow, _METADATA,

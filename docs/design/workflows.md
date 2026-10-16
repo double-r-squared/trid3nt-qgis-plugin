@@ -38,30 +38,67 @@ Three things are not operations and stay:
 run is handed anything through. The attribute a row is written under is its
 name. An `Input` is a VALUE or a ROW, told apart by what it states:
 
-    spill_fraction = Input(default=0.5, bounds=(0.05, 0.9), desc="...")   a value
-    seed      = Input(type=Point, desc="...").optional("what the run derives")
+    spill_fraction = Input()                        a value on TELEMAC: its
+                                                     schema and prose are the
+                                                     module input JSON's row -
+                                       {"bounds": [0.05, 0.9], "default": 0.5,
+                                        "desc": "Along-domain release position..."}
     bed       = Input(BED).need("bathymetry")              a class the match fills
-    gauge     = Input(LEVEL).need("water level series").optional()
+    gauge     = Input(LEVEL).need("water level series")    the match fills it, and
+                                                           nothing measures it it REFUSES
     rivers    = Input().need("hydrography", geometry="polyline")
-    structure = Input().supplied(geometry="polyline")      the person hands it in
-    rain      = Input(RAIN).need("precipitation series").context("...")
+    dredge    = Input().need(geometry="polygon")    the user-prompt fetch: the
+                                                    person draws it or hands it in
+    mesh      = Input(MESH).stated()                the user MAY state one;
+                                                    unstated the run's own
+                                                    machinery answers it
 
 A VALUE states its default, its bounds and its unit, and a value outside the
-bounds refuses by name (`Input.accept`). One with no default that is not
-optional is REQUIRED: left unstated, the fill refuses it in every mode, so a
-world value nothing measures is stated by the caller and never started from.
-The model reads the same fact twice off `Input.required`: the input is listed
-in the tool schema's `required`, and its docstring line ends `required`. A ROW
-is never listed - one left unfilled is matched, measured or asked for on the
-canvas before it refuses. A row STATES its slot as its type - `Input(BED)`, one
-of the types in `inputs/slots.py` - or the producer that fills it
+bounds refuses by name (`Input.accept`). Where the engine keeps a module input
+dictionary, that state and the value's prose are its `inputs` section - one
+entry per workflow, named by the workflow's own name beside the engine's
+keyword rows - and registration takes them onto the body before the body is
+declared (`hydrate`, the engine naming its dictionary through
+`Workflow.input_schema`; the STEERING module's own on TELEMAC). A template
+therefore writes bare declarations and chains, and the section is the only
+place its default, bounds, unit, type and description appear; an engine with no
+dictionary takes the fields on the declaration itself, as a test body does. A
+value outside its bounds refuses by name wherever it was stated. One with no
+default that is not stated-only is REQUIRED: left unstated, the fill refuses it
+in every mode, so a world value nothing measures is stated by the caller and
+never started from. The model reads the same fact twice off `Input.required`:
+the input is listed in the tool schema's `required`, and its docstring line ends
+`required`. A ROW is never listed - one left unfilled is matched, drawn or
+handed in before it refuses, and the refusal is the honest end: there is no
+absence, no authored sentence about what the run did without, and no eager
+asking. A row STATES its slot as its type - `Input(BED)`, one of the types in
+`inputs/slots.py` - or the producer that fills it
 (`Input(tool(...))`; the producer is the runtime's, `workflows/runtime/data.py`)
 and is named freely; a row that states neither is a plain one, read by whatever
 declared it. A class the stated slot does not read refuses where it is written.
+`need(geometry=...)` with no class is the USER-PROMPT FETCH - the shape the
+person draws or hands in, absorbing what they supply (`need` with a class is the
+catalog match, and a geometry with it is the shape the matched source is read
+as). `stated()` is the ONE standing of "the user may state one; unstated the
+run's own machinery answers" - the supplied mesh the builder replaces, the
+mesher's own edge - and carries no verdict, no refusal and no sentence.
 
 Values lead the wire and rows follow, each in body order, and the generated
 docstring documents both in ONE section: required values, defaulted ones, then
-the optional values and the rows.
+the stated-only ones and the rows.
+
+Prose has exactly one home each and the template .py carries none of it: how
+the question is found - summary, routing, what it is not for, what it returns -
+is the package's `routing.yaml`, read at registration and refused when absent
+or short a required key, and its front block must fit the 1000-character
+truncation budget every registered template is measured against; a value's
+description, unit and range are the module input JSON's, hydrated onto the
+declaration; the run controls' one description each is the framework's, beside
+the wire signature they ride on (`_CONTROL_DOCS`); a ROW may state its own
+words beside the slot it needs (`Input(EXTENT, desc=...)`) - the template's
+judgment about this use, read in place of the slot's generic description. The
+template-grammar lint refuses a DOC name, a controls= argument and a desc= on a
+value input.
 
 The runtime declares no input of its own. A template carries, without restating
 them, the inputs whoever reads them declares (`Workflow.seated`):
@@ -120,9 +157,9 @@ The run journal records ONE map, `inputs`: every keyword of the solved deck and
 every input the fill answered, by name, each with its `value`, its `origin` and
 its `source`; a keyword stated on a coupled body keeps the name it was stated
 under beside the carrier's own. A supplied row's value is what the caller handed in; a matched
-one holds none and names the source that answered; an optional value nobody stated
-holds none under the origin `derived`, its source the sentence saying what the run
-derived in its place. The map is the line's only record of an input.
+one holds none and names the source that answered. A stated-only input nobody
+stated holds no verdict at all: it is not in the map. The map is the line's
+only record of an input.
 
 A run solves over exactly one `DOMAIN` row and one `BED` row; a record type
 (`LEVEL`, `OBSERVE`) may be stated more than once, and a stage that reads one
@@ -221,21 +258,12 @@ coercion reads its value and fetches nothing. A pair nothing measures
 refuses naming BOTH frames rather than laying one over the other, and a
 footprint the service reaches nowhere refuses naming the point.
 
-## The context row
-
-A producer row whose absence is legal is declared `.context("...")`: the
-source is asked, an empty answer continues the run, and the review card carries
-the sentence the template stated about what is not there. A load-bearing
-row stays hard and refuses. A producer-less slot says absence with
-`.optional()` instead, because there is no source to have been empty.
-
 ## Degrading between sources
 
 A row declares no fallback of its own. The MATCH ranks every source that
 states coverage for the class here and the probe calls them in that order,
 dropping one that held nothing and writing the substitution on the run's
-own journal; when none of them answered, an optional row states its
-absence and a load-bearing one refuses typed.
+own journal; when none of them answered, the row refuses typed.
 
 ## Continuing a run - an input, not a derivation
 
@@ -317,7 +345,8 @@ picture cannot show is the dishonest case this pins.
 
 ## Mesh
 
-The mesh is a supplied-optional row: AUTHORED (the person's own mesh) or
+The mesh is a stated() row: AUTHORED (the person's own mesh, which the builder
+replaces when unstated) or
 GENERATED by the shared front in `tools/mesh/`, which knows no engine. The mesh
 ask carries the mesher, the extent, the resolution and the mesh's own
 operations (`mesh_op`), validated against the chosen mesher's namespaces. A

@@ -62,18 +62,17 @@ def test_the_seed_names_which_body_of_water_and_is_a_point_never_a_place():
     domain = {d.name: d for d in row_inputs(_module().INPUTS)}["domain"]
     assert domain.coercion["near"] == "seed"
     seed = next(p for p in value_inputs(_workflow()) if p.name == "seed")
-    assert seed.type is Point and seed.optional
+    assert seed.type is Point and seed.required
 
 
-def test_the_level_is_ranked_against_the_domain_and_may_be_absent():
+def test_the_level_is_ranked_against_the_domain():
     """A body of water opens at a LEVEL somebody measured, the way a river opens at
     a carrier discharge: one reading off the nearest gauge that watched this
-    water. Water with no gauge on it is not a refusal: the sheet says the gauge
-    held nothing and the column opens at the zero the bed is counted from."""
+    water, a plain need row the match ranks."""
 
     level = {d.name: d for d in row_inputs(_module().INPUTS)}["level"]
-    assert level.is_context
-    assert "opens at the zero" in level.context_sentence
+    assert level.producer is None
+    assert level.data_class == "water level series"
 
 
 # -- the plan the workflow owns ------------------------------------------------ #
@@ -144,7 +143,7 @@ def test_the_template_declares_only_its_own_question_and_one_restated_lever():
     assert declared == _OWN_PARAMS | set(SEATED)
     rows = {p.name: p for p in value_inputs(workflow)}
     edge = rows["mesh_resolution_m"]
-    assert (edge.default, edge.bounds, edge.is_optional) == (None, None, True)
+    assert (edge.default, edge.bounds, edge.stated_only) == (None, None, True)
 
 
 @pytest.mark.parametrize("gone", ["location", "bbox", "mesh_min_edge_m",
@@ -173,18 +172,20 @@ def test_the_model_surface_takes_a_body_of_water_and_never_a_place():
 def test_the_routing_text_is_about_a_body_of_water():
     """The question class is the vertical structure of WATER; naming a reach or a
     lake alone is what the domain wave took out."""
-    from trid3nt_server.workflows.telemac.templates.stratified_flow.stratified_flow import (
-        DOC,
-    )
+    from pathlib import Path
 
-    routing = DOC["routing"]
+    import yaml
+
+    routing = yaml.safe_load(
+        (Path(_module().__file__).parent / "routing.yaml").read_text(
+            encoding="utf-8"))["routing"]
     assert "reach" not in routing.lower()
     assert "`domain`" in routing and "`bed`" in routing and "`seed`" in routing
     for word in ("lake", "reservoir", "pond"):
         assert word in routing.lower()
 
 
-def test_the_package_holds_the_template_and_its_corpus():
+def test_the_package_holds_the_template_its_corpus_and_its_routing():
     """A template package carries no module of its own: what was a clip and a gauge
     reader are a slot's ingestion and a fetcher row now."""
     from pathlib import Path
@@ -192,4 +193,4 @@ def test_the_package_holds_the_template_and_its_corpus():
     package = Path(_module().__file__).parent
     assert sorted(p.name for p in package.iterdir()
                   if p.is_file() and not p.name.startswith(".")) == [
-        "__init__.py", "corpus.yaml", "stratified_flow.py"]
+        "__init__.py", "corpus.yaml", "routing.yaml", "stratified_flow.py"]

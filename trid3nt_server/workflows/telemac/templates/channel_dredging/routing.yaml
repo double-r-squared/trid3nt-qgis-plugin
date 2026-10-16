@@ -1,0 +1,17 @@
+summary: 'MAINTENANCE DREDGING of a navigation channel: how much comes out, and what the bed
+  does.'
+routing: THE tool for "dredge this channel and tell me the volume" - a maintenance dredge
+  of a fairway or berth pocket held at a design depth, the spoil placed in a disposal area.
+  TELEMAC-2D coupled with GAIA, the dredger driven by NESTOR so what it moves is in the bed's
+  mass balance. The channel is fetched downstream of a point on it; its bed is the published
+  USACE survey where one covers it, terrain elsewhere. DURATION, MORPHOLOGICAL FACTOR, CLASSES
+  SEDIMENT DIAMETERS and LAYERS INITIAL THICKNESS are the deck's own, set by name. Returns
+  the bed evolution and the dredged and dumped volumes; supply `seed_point` and the two areas
+  as polygons.
+not_for: a bed that scours and re-deposits on its own, with no dredger (`telemac_bed_scour`);
+  a SUSPENDED plume settling onto an inert bed (`telemac_sediment_plume`); a dye or contaminant
+  plume (`telemac_dye_release`); an OIL slick (`telemac_oil_spill`)
+returns: 'On success the run''s record (a `LayerURI`): every variable its modules wrote, styled
+  on one mesh layer, animated where it varies, the bed evolution in metres among them (deposition
+  positive, the dredged cut negative), and no read the template placed. On failure a dict
+  with `status="error"` + `error_code`.'

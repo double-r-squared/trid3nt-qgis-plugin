@@ -83,8 +83,6 @@ def test_the_water_opens_on_one_reading_ranked_from_where_it_is_read():
     assert row.observes == "TEMPERATURE"
     assert row.producer is None
     assert row.coercion["near"] == "station"
-    assert row.is_context
-    assert "stated value stands" in row.context_sentence
 
 
 def test_the_discharge_is_one_reading_the_channel_step_can_open_on():
@@ -96,8 +94,6 @@ def test_the_discharge_is_one_reading_the_channel_step_can_open_on():
     assert row.slot is DISCHARGE
     assert row.data_class == "discharge series"
     assert row.producer is None
-    assert row.is_context
-    assert "National Water Model" in row.context_sentence
 
 
 def test_the_bed_is_one_need_row_the_match_composes():

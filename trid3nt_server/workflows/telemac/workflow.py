@@ -78,19 +78,17 @@ _MESHER, _MESH_KIND = "om2d", "unstructured_tri"
 _DISPATCH = f"{_TELEMAC}.engine.solve_case"
 
 #: The moment a run of this engine opens at: what every dated source is asked for and every record is read at.
+#: Required: a source that needs a window and was not given one REFUSES naming the need,
+#: so an undated run proceeds and a dated one is asked.
 EVENT_TIME = Input(
     name="event_time",
     desc="The moment the scenario is read at - an ISO date or datetime "
          "(YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like "
          "'during last Tuesday's storm'. Each source keeps its own "
-         "retention, and a request deeper than one refuses typed").optional(
-    "a surface is read at the most recent cycle its own source has "
-    "published, and no series source is asked at all - a record is a "
-    "reading at a time, and this run stated none")
+         "retention, and a request deeper than one refuses typed")
 
 # The kind is stated here once: every module of this engine solves on triangles, so a supplied mesh of another kind refuses at its row.
-_SUPPLIED_MESH = Input(MESH, name="mesh", is_optional=True,
-                       coercion=MappingProxyType({"kinds": (_MESH_KIND,)}))
+_SUPPLIED_MESH = Input(MESH, name="mesh", coercion=MappingProxyType({"kinds": (_MESH_KIND,)})).stated()
 
 #: What the settle is called: what the deck and every later stage read it as.
 _SETTLED = "settled"
@@ -566,6 +564,16 @@ class TelemacWorkflow(Workflow):
         and the coupling it carries."""
         return self.template.STEERING
 
+    def input_schema(self) -> tuple[Any, str] | None:
+        """The module input dictionary this deck's STEERING drives: where this
+        template's values read their schema off."""
+        module = getattr(getattr(self.template, "STEERING", None), "MODULE", "")
+        if not module:
+            return None
+        from trid3nt_server.workflows.telemac.modules.module import module_input_dir
+
+        return (module_input_dir(), module)
+
     def _states(self, name: str, default: Any) -> Any:
         """One declaration read off the template module, or the default beside it."""
         return getattr(self.template, name, default)
@@ -724,9 +732,6 @@ class TelemacWorkflow(Workflow):
         await measure("derive")
         # A row asked near a point this run placed is produced here, once that point is a node of the mesh; the fill holds every other row,
         # so these two loops fetch nothing else.
-        for row in self.inputs:
-            if row.is_context and row.name not in run:
-                await _taken(env, row)
         for name in self._fills():
             await read(env, name)
         if run.get(EVENT_TIME.name):
@@ -833,7 +838,7 @@ class TelemacWorkflow(Workflow):
 
     def named_rows(self, held: Collection[str] = ()) -> tuple[str, ...]:
         """Every declared row a stage of this run reads WITHOUT the mesh: the domain, what the template names, the mesh ask's rows where a mesh
-        is still to be built, the level and the inflow, the line a measurement is taken against, the context rows and the rows a module fills from.
+        is still to be built, the level and the inflow, the line a measurement is taken against, and the rows a module fills from.
         One asked near a point the run places is the settle's: that point is a node of the mesh."""
         # A seated row is produced only when stated: a composite names the mesh stage's output by the same word.
         rows = {row.name: row for row in self.inputs
@@ -842,7 +847,7 @@ class TelemacWorkflow(Workflow):
         slots = self._slots()
         read = [slots[DOMAIN], *self._named(mesh="mesh" not in held), slots.get(LEVEL), slots.get(DISCHARGE),
                 *("line" for ask in self._declared(Measured) if "line" in _signature(_MEASURES[ask.kind][0])),
-                *(row.name for row in self.inputs if row.is_context), *self._fills()]
+                *self._fills()]
         return tuple(dict.fromkeys(
             name for name in read if isinstance(name, str)
             and name in rows and rows[name].coercion.get("near") not in marks))
@@ -1014,7 +1019,7 @@ class TelemacWorkflow(Workflow):
             f"other keyword is the engine's own default and is set on the call - "
             f"keywords={{\"LAW OF BOTTOM FRICTION\": 4}} - after "
             f"describe_keywords(module=\"{body.MODULE}\", query=...) names it "
-            f"with its help, its choices and that default. The solve is "
+            f"with its help, its choices, its unit, its range and that default. The solve is "
             f"partitioned across PARALLEL PROCESSORS, stated the same way; a "
             f"count past this box's cores is refused.\n"
             f"Stated by this deck (override any of them by name): "

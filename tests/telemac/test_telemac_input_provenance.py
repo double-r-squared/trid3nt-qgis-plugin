@@ -2,12 +2,15 @@
 
 A coercion's return merges into the supplied sheet, so anything it emits for an
 argument nobody sent resolves through the USER door and is stamped as a user
-choice. The rule pinned here is ABSENT in, nothing out. The resolution spine runs
-offline - no solver and no network."""
+choice. The rule pinned here is ABSENT in, nothing out. An unsupplied REQUIRED
+value - the moment, since it stopped being optional - is refused naming the
+need, never invented and never given a provenance row. The resolution spine
+runs offline - no solver and no network."""
 
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import patch
 
 import pytest
 from seated import value_inputs
@@ -35,25 +38,36 @@ def _resolve_bare(tool_name: str, location: str):
 
 
 @pytest.mark.parametrize(("tool_name", "location"), TELEMAC_TEMPLATES)
-def test_an_unsupplied_moment_states_none_of_its_own(tool_name: str,
-                                                     location: str) -> None:
-    """Nobody sent a moment, so the engine's coercion seats none."""
-    workflow, sheet = _resolve_bare(tool_name, location)
-    assert workflow.input("event_time").is_optional
-    assert "event_time" not in sheet, f"{tool_name} invented a moment"
+def test_an_unsupplied_moment_is_refused_naming_the_need(tool_name: str,
+                                                         location: str) -> None:
+    """Nobody sent a moment, so the fill refuses naming event_time - the
+    engine's coercion never invents one."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows.runtime import fill as fill_mod
+    from trid3nt_server.workflows.runtime.fill import Fill, fill
+
+    async def _held(env, decl):
+        return decl.name
+
+    workflow = TOOL_REGISTRY[tool_name].fn.workflow
+    assert workflow.input("event_time").required
+    with patch.object(fill_mod, "_produce", _held):
+        state = asyncio.run(fill(Fill(workflow=workflow), {"input_mode": "auto"}))
+    code, sentence = state.refusal()
+    assert code == "GATE_REFUSED" and "event_time" in sentence
 
 
 @pytest.mark.parametrize(("tool_name", "location"), TELEMAC_TEMPLATES)
-def test_an_unsupplied_moment_s_provenance_row_is_not_user(tool_name: str,
-                                                          location: str) -> None:
-    """The same abstention on the row the LAYER and the input-review gate read."""
+def test_an_unsupplied_moment_leaves_no_provenance_row(tool_name: str,
+                                                       location: str) -> None:
+    """No moment stated: no derived row for the LAYER or the input-review gate
+    to read - the need was refused at the fill instead."""
     from trid3nt_server.workflows.runtime import provenance_entries
 
     workflow, sheet = _resolve_bare(tool_name, location)
-    entry = next(e for e in provenance_entries(sheet, value_inputs(workflow))
-                 if e.param == "event_time")
-    assert entry.basis == "derived"
-    assert "most recent cycle" in entry.note
+    entries = [e for e in provenance_entries(sheet, value_inputs(workflow))
+               if e.param == "event_time"]
+    assert entries == []
 
 
 def test_a_supplied_moment_still_reads_as_the_users() -> None:
@@ -72,8 +86,6 @@ def test_a_supplied_moment_still_reads_as_the_users() -> None:
 async def _normalized(workflow, args):
     """The accepted params of one fill, and the refusal where one was rejected;
     the rows the fill produces are stood in for, so the params alone answer."""
-    from unittest.mock import patch
-
     from trid3nt_server.workflows.runtime import fill as fill_mod
     from trid3nt_server.workflows.runtime.fill import ACCEPTED, REJECTED, Fill, fill
 

@@ -18,6 +18,7 @@ from types import FunctionType, MappingProxyType
 from typing import Any, Callable, Mapping, Sequence
 
 from trid3nt_server.errors import DeclarativeError
+from trid3nt_server.inputs.validate import scalar
 
 __all__ = [
     "Composite",
@@ -172,19 +173,21 @@ class Slot:
                 for position, item in enumerate(value)]
 
     def _bounded(self, value: Any, position: int) -> Any:
-        """``value`` if the bounds row takes it, or the refusal that names both.
+        """``value`` if the bounds row takes it, or the refusal that names it.
 
         A keyword with no bounds row is bounded by the engine alone.
         """
         if not self.bounds or self.type in ("STRING", "ARRAY", "STRUCT"):
             return value
-        low, high = self.bounds[position if len(self.bounds) > 1 else 0]
-        if not (low <= float(value) <= high):
-            raise SlotRefused(
-                f"{self.keyword} is taken between {low:g} and {high:g}"
-                + (f" at position {position + 1}" if len(self.bounds) > 1 else "")
-                + f"; got {value!r}. A value outside that is either a unit this "
-                "keyword is not read in or a run nobody would believe.")
+        many = len(self.bounds) > 1
+        try:
+            scalar(self.keyword, value,
+                   self.bounds[position if many else 0], units=self.unit,
+                   position=position if many else None,
+                   beyond="A value outside it is either a unit this keyword "
+                          "is not read in or a run nobody would believe.")
+        except ValueError as refused:
+            raise SlotRefused(str(refused)) from None
         return value
 
     def _typed(self, value: Any) -> Any:

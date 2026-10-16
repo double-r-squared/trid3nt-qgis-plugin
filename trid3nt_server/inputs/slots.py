@@ -12,15 +12,26 @@ import importlib
 import inspect
 import logging
 from dataclasses import dataclass
-from typing import Any, Callable
+from types import MappingProxyType
+from typing import Any, Callable, Mapping
 
 from .input import Input
 
-__all__ = ["BED", "DISCHARGE", "DOMAIN", "EXTENT", "LEVEL", "LINE", "MESH",
-           "OBSERVE", "RAIN", "Slot", "WAVE", "WEATHER", "ask_on_canvas",
-           "draw_on_canvas", "ingest_slot", "needs_of"]
+__all__ = ["BED", "DISCHARGE", "DOMAIN", "DRAW", "EXTENT", "LEVEL", "LINE",
+           "MESH", "OBSERVE", "RAIN", "Slot", "WAVE", "WEATHER",
+           "ask_on_canvas", "draw_on_canvas", "ingest_slot", "needs_of"]
 
 logger = logging.getLogger("trid3nt_server.inputs.slots")
+
+#: What the canvas asks for per SHAPE: the PURPOSE that shows only for the tool that
+#: needs this shape, and the prompt. One table: a row asks by the shape it takes - its
+#: own need(geometry=), or the shape its slot states. A shape nobody draws is not listed.
+DRAW: Mapping[str, tuple[str, str]] = MappingProxyType({
+    "polygon": ("domain",
+                "Draw the outline of the water body this run solves over"),
+    "polyline": ("line", "Draw the line this reading is measured along"),
+    "rectangle": ("", "Draw the box this question is asked inside"),
+})
 
 
 # Each type is ONE object, compared and keyed by identity.
@@ -38,10 +49,10 @@ class Slot:
     #: The classes a row of this type may state a need of. Empty means the
     #: type states no need at all - a geometry is drawn, supplied or measured.
     classes: frozenset[str] = frozenset()
-    #: The draw kind, the PURPOSE that shows only the tool this slot needs, and
-    #: the prompt. ``None`` is never asked for - a bed is a survey or a number,
-    #: not a shape to draw.
-    draw: tuple[str, str, str] | None = None
+    #: The shape a producer-less row of this type is asked for on the canvas,
+    #: through the one DRAW table; "" is never asked - a bed is a survey or a
+    #: number, not a shape to draw.
+    geometry: str = ""
     #: The value is READ OFF A RECORD somebody measured, so what its row
     #: observes is a published variable and is read in that variable's unit;
     #: on any other slot ``of`` names the feature a source publishes.
@@ -55,6 +66,9 @@ class Slot:
     #: The inputs a row of this type declares beside itself: a value the run
     #: states once and every reader of it shares.
     states: tuple[Input, ...] = ()
+    #: What a row of this type's doc line leads with - the role this registry
+    #: states; the row's own state (producer, class) picks the tail beside it.
+    desc: str = ""
 
     @property
     def ingest(self) -> Callable[..., Any] | None:
@@ -68,8 +82,9 @@ class Slot:
 #: THE CLOSED POLYGON a run solves over. The named stretches of its edge are no row:
 #: they ride on the polygon the domain arrived as.
 DOMAIN = Slot("domain", ingestion="domain", classes=frozenset({"hydrography"}),
-              draw=("polygon", "domain",
-                    "Draw the outline of the water body this run solves over"))
+              geometry="polygon",
+              desc="the closed polygon this run solves over, as a uri, a "
+                   "layer name or a drawn shape")
 
 #: What every node of the domain carries for elevation, and the vertical frame it is
 #: counted from: NAVD88 is what the national terrain, bathymetry and gauges this
@@ -78,6 +93,9 @@ DOMAIN = Slot("domain", ingestion="domain", classes=frozenset({"hydrography"}),
 BED = Slot("bed", ingestion="bed",
            classes=frozenset({"bathymetry", "terrain", "channel survey"}),
            number=True,
+           desc="what the domain's nodes carry for elevation: a DEM, a "
+                "bathymetry or survey raster, a layer of soundings, or a "
+                "depth in metres below the free surface",
            states=(Input(
                name="vertical_frame", default="NAVD88",
                desc="Vertical datum the bed's elevations are counted from, and "
@@ -86,29 +104,28 @@ BED = Slot("bed", ingestion="bed",
                     "nobody publishes an offset between refuses by name"),))
 
 #: The LINE a placed read is measured along.
-LINE = Slot("line", ingestion="line",
-            draw=("polyline", "line",
-                  "Draw the line this reading is measured along"))
+LINE = Slot("line", ingestion="line", geometry="polyline")
 
 #: The type a run OPENS ON: one measured value read off whatever reports it near this
 #: domain, in the unit the keyword it fills reads.
 OBSERVE = Slot("observe", ingestion="observation",
                classes=frozenset({"water quality sample", "bed material",
                                   "groundwater level"}),
-               record=True, number=True)
+               record=True, number=True,
+               desc="a layer of sites that report it, or the number itself")
 
 #: The two observations a solve READS BY TYPE rather than by name: the elevation the
 #: water surface stands at, and the flow an inflow run carries.
 LEVEL = Slot("level", ingestion="observation",
-             classes=frozenset({"water level series"}), record=True, number=True)
+             classes=frozenset({"water level series"}), record=True, number=True,
+             desc="a layer of sites that report it, or the number itself")
 DISCHARGE = Slot("discharge", ingestion="observation",
-                 classes=frozenset({"discharge series"}), record=True, number=True)
+                 classes=frozenset({"discharge series"}), record=True, number=True,
+                 desc="a layer of sites that report it, or the number itself")
 
 #: The RECTANGLE a question is asked inside: the window a domain is cut out of, the grid
 #: a raster engine solves on. Not a domain: it has no shoreline.
-EXTENT = Slot("extent", ingestion="extent",
-              draw=("rectangle", "",
-                    "Draw the box this question is asked inside"))
+EXTENT = Slot("extent", ingestion="extent", geometry="rectangle")
 
 #: The record of the air over the domain: one station's series, every quantity its
 #: network reports. Which of them a solve reads is its engine's.
@@ -125,7 +142,9 @@ RAIN = Slot("rain", ingestion="rain",
 WAVE = Slot("wave", ingestion="wave", classes=frozenset({"wave series"}), record=True)
 
 #: A MESH the caller already has, taken in place of the one the run would build.
-MESH = Slot("mesh", ingestion="mesh")
+MESH = Slot("mesh", ingestion="mesh",
+            desc="a mesh this case already built, as its uri or its layer "
+                 "name, solved on in place of the one the run would build")
 
 
 def needs_of(slot: Slot | None, kind: str) -> tuple[tuple[str, str, str], ...]:
@@ -159,16 +178,20 @@ def ingest_slot(slot: Slot | None, value: Any, *, label: str = "",
     return found
 
 
-async def ask_on_canvas(slot: Slot | None, *, tool: str, param: str,
-                        input_mode: Any = None) -> Any:
-    """Ask the canvas for a slot the caller did not fill -> the typed value.
+async def ask_on_canvas(slot: Slot | None, *, geometry: str = "", tool: str,
+                        param: str, input_mode: Any = None) -> Any:
+    """Ask the canvas for a shape the caller did not fill -> the typed value.
 
-    ``None`` when there is nothing to ask (no session, no canvas offer, a declined drawing)."""
-    if slot is None or slot.draw is None:
+    The shape is the row's own ``need(geometry=)``, else the shape its slot states.
+    ``None`` when there is nothing to ask (a shape nobody draws, no session, no
+    canvas offer, a declined drawing)."""
+    shape = geometry or (slot.geometry if slot is not None else "")
+    offer = DRAW.get(shape)
+    if offer is None:
         return None
-    geometry, purpose, prompt = slot.draw
-    drawn = await draw_on_canvas(geometry, tool=tool, param=param,
-                                 prompt=prompt, purpose=purpose,
+    purpose, prompt = offer
+    drawn = await draw_on_canvas(shape, tool=tool, param=param,
+                                 prompt=prompt, purpose=purpose or None,
                                  input_mode=input_mode)
     return None if drawn is None else ingest_slot(slot, drawn, label=param)
 

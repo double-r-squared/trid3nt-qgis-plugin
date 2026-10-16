@@ -1,0 +1,16 @@
+summary: 'An OIL SLICK released onto a body of surface water: floating particles plus the
+  dissolved fraction.'
+routing: 'THE tool for "an oil spill - where does the slick go": a barge, pipeline, terminal
+  or vessel release of crude, diesel, gasoline or heavy fuel onto water. TELEMAC-2D over a
+  reach walked from the release, a harbour or lake you draw, or a polygon you supply, with
+  the engine''s oil-spill module on the solve: the floats draw the slick and the dissolved
+  fraction advects as a tracer. Give `release` as a pick or a pair, or supply `domain`. Source:
+  ABSCISSAE/ORDINATES/DISCHARGE/TRACER. Deck: DURATION 3600 s, MAXIMUM NUMBER OF DROGUES 100,
+  PRINTOUT PERIOD FOR DROGUES 60, no WIND, no RAIN.'
+not_for: a conservative dye or contaminant plume with no slick (`telemac_dye_release`); bed
+  SCOUR (`telemac_bed_scour`); a SUSPENDED sediment plume (`telemac_sediment_plume`); dissolved-oxygen
+  sag (`telemac_do_sag`). Weathering, evaporation and beaching are the module's own, uncalibrated
+  here
+returns: 'On success the run''s record (a `LayerURI`): every variable its module wrote, styled
+  on one mesh layer, animated where it varies, plus the dissolved-oil series charted and the
+  slick track from the floats. On failure a dict with `status="error"` + `error_code`.'

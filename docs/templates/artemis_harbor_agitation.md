@@ -14,11 +14,11 @@ The WAVE AGITATION (Kd = Hs/H0) a declared structure leaves inside a harbour, ma
 
 | row | produced by | what it is | datum |
 |---|---|---|---|
-| `extent` | supplied by the caller | a rectangle layer you supply, as a uri or a layer name; required - the template names no source for it. | - |
-| `domain` | matched on a need for hydrography | the closed polygon this run solves over, as a uri, a layer name or a drawn shape; unfilled, the run matches a source of hydrography. | - |
-| `bed` | matched on a need for bathymetry | what the domain's nodes carry for elevation: a DEM, a bathymetry or survey raster, a layer of soundings, or a depth in metres below the free surface; unfilled, the run matches a source of bathymetry. | - |
-| `structure` | supplied by the caller | a polyline layer you supply, as a uri or a layer name; required - the template names no source for it. | - |
-| `mesh` | supplied by the caller | a mesh this case already built, as its uri or its layer name, solved on in place of the one the run would build; unfilled, the run builds its own. | - |
+| `extent` | supplied by the caller | NOT needed when `domain=` is filled - this is the other way to say where the water is. A rectangle over the harbour as a LAYER (a uri or a file, not four numbers): the mapped coastline divides it and the water it leaves IS the domain. A box a coastline way crosses without closing divides nothing and refuses by name rather than meshing a shape nobody cut. | - |
+| `domain` | matched on a need for hydrography | A harbour approach, a marina basin, or any water a structure shelters. Its own edge is the SHORELINE the mesh is sized against, so a rough outline is enough; unfilled, the extent above is cut instead. | - |
+| `bed` | matched on a need for bathymetry | That producer is the measured bathymetry under the domain - the surveyed sea floor the wave refracts over, matched to this water and laid rung by rung. Hand it your own survey raster, a layer of soundings, or a depth in metres for a basin nobody has sounded. | - |
+| `structure` | supplied by the caller | REQUIRED. The barrier the question is about, as a polyline LAYER (the uri or handle from fetch_osm_features feature='breakwaters', or any line layer the user has) or a drawn/typed line as [[lon, lat], ...]. Producer-less BY DESIGN - this tool will never go and find a structure you did not name. It is cut out of the water domain at `barrier_width_m` and its faces reflect `reflection_coef` of the incident energy. | - |
+| `mesh` | supplied by the caller | a mesh this case already built, as its uri or its layer name, solved on in place of the one the run would build; the user may state one; unstated, the run builds its own. | - |
 
 ## The inputs
 
@@ -33,6 +33,6 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `barrier_width_m` | m | 20.0 | The width the mapped structure centreline is cut at; a survey maps a mound as a line and a line removes no water from the domain |
 | `transect_length_m` | m | 1500.0 | The whole length of the transect the agitation is read along: a straight line through the structure's centroid along the incident wave direction, half of it on the exposed side and half in the lee |
 | `open_depth_threshold_m` | m | -12.0 | How deep a boundary stretch must reach for it to be designated the OPEN edge the incident wave enters through; every stretch that reaches it opens |
-| `event_time` | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
+| `event_time` | - | required | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `vertical_frame` | - | NAVD88 | Vertical datum the bed's elevations are counted from, and with them the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
 

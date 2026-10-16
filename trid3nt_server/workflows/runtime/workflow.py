@@ -13,11 +13,11 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable, Collection, Mapping, Sequence
 
-from trid3nt_contracts.common import Origin, SyntheticInput
+from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.coverage import SourceChoice
 
 from trid3nt_server.inputs.bound_domain import bind_domain, reset_domain
-from trid3nt_server.inputs.input import Input, declared
+from trid3nt_server.inputs.input import Input, declared, hydrate
 from trid3nt_server.inputs.run_notes import (
     bind_coverage, bind_notes, drain_coverage, drain_notes)
 from trid3nt_server.inputs.slots import Slot
@@ -29,6 +29,8 @@ from .resolution import SensitivityDecl, sensitivity_notes
 from .provenance import merge_provenance, provenance_entries
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from .fill import Fill
 
 __all__ = ["RunResult", "Workflow", "register_workflow"]
@@ -65,6 +67,12 @@ class Workflow:
     #: The name of the input holding the moment a run opens at; a runtime that dates nothing names none.
     moment: str = ""
 
+    def input_schema(self) -> tuple[Path, str] | None:
+        """Where this engine's template values read their schema off: the
+        (directory, module) of the module input JSON, or None where a template
+        declares alone."""
+        return None
+
     def seated(self) -> tuple[Input, ...]:
         """The inputs a declaration of this workflow carries without restating
         them: what the type of each of its rows states beside itself. An engine
@@ -81,8 +89,9 @@ class Workflow:
         #: The template MODULE: STEERING, OUTPUTS, CAPTIONS and its files are read off its own names.
         self.template = template
         #: THE ONE BODY: the template's inputs, then each one a row's type or the engine declares; a template's own wins.
-        #: Values lead the wire and rows follow, each in body order.
-        self.inputs = declared(inputs)
+        #: Values lead the wire and rows follow, each in body order. A value's
+        #: schema and prose arrive from the module input JSON before it is declared.
+        self.inputs = declared(hydrate(inputs, self.input_schema(), self.name))
         stated = {row.name for row in self.inputs}
         self.inputs = tuple(sorted(
             self.inputs + tuple(row for row in self.seated()
@@ -230,13 +239,13 @@ class Workflow:
                 matched = journal.drain_choices(choices)
                 drain_coverage(coverage)
         except Exception as exc:
-            for note in [*said_notes, *env.absences]:
+            for note in said_notes:
                 exc.add_note(f"also missing from this run: {note}")
             raise
         # Read after the launch: a value a person edited on the review card and a row first read by a stage are stamped by then.
         run.entries = provenance_entries(env.inputs, self.inputs)
         run.inputs = dict(env.inputs)
-        run.notes += [*said_notes, *env.absences]
+        run.notes += said_notes
         run.outputs += published
         run.choices += matched
         return run
@@ -315,11 +324,6 @@ class Workflow:
                 "value": (supplied.get(name) if getattr(held, "is_row", False)
                           else verdict.value),
                 "origin": verdict.origin.value, "source": verdict.source or None}
-        # An absent optional value holds none: its source is the sentence saying what the run derived in its place.
-        for held in self.inputs:
-            if held.absent_note and not held.is_row and held.name not in inputs:
-                inputs[held.name] = {"value": None, "origin": Origin.DERIVED.value,
-                                     "source": held.absent_note}
         return inputs
 
     def _correct_end(self, run: RunResult) -> bool | None:
@@ -356,6 +360,43 @@ _CONTROLS: tuple[tuple[str, Any, Any], ...] = (
     ("picks", dict | None, None),
 )
 
+#: What each control does, stated once here rather than restated per template. A control is
+#: never a physical value, so neither sentence ever offers a range or a default.
+_CONTROL_DOCS: tuple[tuple[str, str], ...] = (
+    ("input_mode",
+     '"user_gated" presents the resolved inputs for review/edit before the '
+     'solve and pauses; "auto" (session default) proceeds with every '
+     'assumption labeled. Not a physical value.'),
+    ("restart_clean",
+     "True builds the mesh again even where one built from the same domain, "
+     "bed, resolution and mesher is kept; unset, such a kept mesh is reused. "
+     "Not a physical value."),
+)
+
+
+def _routing_doc(template: Any) -> dict[str, str]:
+    """A template's own prose, off its package's routing.yaml: summary, routing,
+    not_for and returns. The file is the declaration - a template package
+    without one refuses at import rather than registering a mute tool."""
+    from pathlib import Path
+
+    import yaml
+
+    from trid3nt_server.inputs.input import DeclarationError
+
+    package = Path(template.__file__).parent
+    path = package / "routing.yaml"
+    if not path.is_file():
+        raise DeclarationError(
+            f"{package.name} declares no routing.yaml beside its template.")
+    with open(path, encoding="utf-8") as fh:
+        doc = yaml.safe_load(fh) or {}
+    missing = {"summary", "routing", "returns"} - set(doc)
+    if missing:
+        raise DeclarationError(
+            f"{package.name}/routing.yaml is missing {sorted(missing)}.")
+    return doc
+
 
 # A template answers one question on one engine from its own declarations; a question spanning templates or fetchers
 # is composed by the model, never a wrapper tool (a wrapper fixes the chain and hides its judgment from the model).
@@ -369,11 +410,12 @@ def register_workflow(
     **register_kwargs: Any,
 ) -> Callable[..., Any]:
     """Generate and register the tool for a declared workflow.
-    The template module is the declaration (INPUTS, DOC); the signature is synthesized from the
-    declared inputs, so the model-facing schema comes from the declaration the run resolves."""
+    The template module is the declaration (INPUTS); its prose is the package's routing.yaml,
+    and the signature is synthesized from the declared inputs, so the model-facing schema
+    comes from the declaration the run resolves."""
     from trid3nt_server.tools import register_tool
 
-    doc = getattr(template, "DOC", None)
+    doc = _routing_doc(template)
     workflow = facade(metadata=metadata, inputs=getattr(template, "INPUTS"),
                       template=template, sensitivity=sensitivity, coerce=coerce)
 
@@ -387,16 +429,16 @@ def register_workflow(
     _run.__signature__ = sig  # type: ignore[attr-defined]
     _run.__annotations__ = dict(annotations)
     _run.workflow = workflow  # type: ignore[attr-defined]
-    if doc:
-        from .docstring import render_docstring
+    from .docstring import render_docstring
 
-        # The doc describes THIS wire, so it renders from the inputs the signature carries; the SHEET line is the
-        # workflow's own, so a template cannot drift from it.
-        sheet = workflow.sheet_doc()
-        doc = {**doc, "inputs": workflow.inputs,
-               **({} if sheet is None else {"sheet": sheet})}
-        _run.__doc__ = render_docstring(**doc)
-        _run.routing_doc = render_docstring(**doc, view="routing")  # type: ignore[attr-defined]
+    # The doc describes THIS wire, so it renders from the inputs the signature carries; the SHEET line is the
+    # workflow's own, so a template cannot drift from it. The controls are the framework's,
+    # stated once beside the signature they ride on.
+    sheet = workflow.sheet_doc()
+    doc = {**doc, "inputs": workflow.inputs, "controls": _CONTROL_DOCS,
+           **({} if sheet is None else {"sheet": sheet})}
+    _run.__doc__ = render_docstring(**doc)
+    _run.routing_doc = render_docstring(**doc, view="routing")  # type: ignore[attr-defined]
 
     register_kwargs.setdefault("read_only_hint", False)
     register_kwargs.setdefault("open_world_hint", False)

@@ -12,7 +12,7 @@ from trid3nt_server.inputs.input import Input
 from trid3nt_server.workflows.runtime import (
     register_workflow,
 )
-from trid3nt_server.inputs import point_arg, Point
+from trid3nt_server.inputs import point_arg
 from trid3nt_server.workflows.telemac.modules import T2D, series
 from trid3nt_server.workflows.telemac.modules.outputs import drogues
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
@@ -20,7 +20,7 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DOC", "OIL_PRESETS", "OUTPUTS",
+__all__ = ["CAPTIONS", "OIL_PRESETS", "OUTPUTS",
            "INPUTS", "STEERING", "telemac_oil_spill"]
 
 
@@ -54,43 +54,20 @@ _FRICTION_COEFFICIENT = 33.0
 
 
 class INPUTS:
-    release = Input(
-        type=Point,
-        desc="Where the oil enters the water, as a Point: the pick's "
-             "{coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a "
-             "point layer. Geocode a place name first. Its name becomes the "
-             "tracer's name, "
-             "and on a river with no domain supplied it is also the seed the "
-             "reach is walked downstream from").optional(
-        "the release sits at spill_fraction along the domain the mesh was "
-        "built over; the slick's drift is measured from there")
+    release = Input()
 
-    spill_fraction = Input(
-        default=0.25, bounds=(0.05, 0.9),
-        desc="Along-domain release position, 0=inflow..1=outflow; the source "
-             "must sit strictly INSIDE the domain, never on a boundary")
-    spill_duration_s = Input(
-        default=300.0,
-        bounds=(1.0, 86400.0), units="s",
-        desc="Finite pulse injection window")
+    spill_fraction = Input()
+    spill_duration_s = Input()
 
-    oil_type = Input(
-        default="light_crude",
-        desc="Which preset was spilled: light_crude | diesel | heavy_fuel - the "
-             "module's own composition, density and viscosity. Crude runs as "
-             "light_crude, gasoline and petrol as diesel, bunker as heavy_fuel")
+    oil_type = Input()
 
-    oil_release_step = Input(
-        default=600, bounds=(1.0, 1.0e6), type=int,
-        desc="The solver step the floats are released at, compiled into the "
-             "module's own release routine; it lets the flow field establish "
-             "before the slick is put on it")
+    oil_release_step = Input()
 
     domain = Input(DOMAIN).need("hydrography", at="release",
                                 span_km=_REACH_LENGTH_KM)
     bed = Input(BED).need("bathymetry")
     discharge = Input(DISCHARGE).need("discharge series")
-    level = Input(LEVEL).need("water level series").optional()
+    level = Input(LEVEL).need("water level series")
 
 
 class STEERING(T2D):
@@ -160,45 +137,6 @@ _METADATA = AtomicToolMetadata(
 RESULTS = (_RESULT, _RESTART, DROGUES_FILENAME)
 
 REVIEW_TITLE = "Review the oil spill scenario"
-
-DOC = dict(
-    summary="An OIL SLICK released onto a body of surface water: floating particles plus the dissolved fraction.",
-    routing=(
-        "THE tool for \"an oil spill - where does the slick go\": a barge, "
-        "pipeline, terminal or vessel release of crude, diesel, gasoline or "
-        "heavy fuel onto water. TELEMAC-2D over a reach walked from the "
-        "release, a harbour or lake you draw, or a polygon you supply, with the "
-        "engine's oil-spill module on the solve: the floats draw the slick and "
-        "the dissolved fraction advects as a tracer. Give "
-        "`release` as a pick or a pair, or supply `domain`. Source: "
-        "ABSCISSAE/ORDINATES/DISCHARGE/TRACER. Deck: DURATION 3600 s, "
-        "MAXIMUM NUMBER OF DROGUES 100, PRINTOUT PERIOD FOR DROGUES 60, "
-        "no WIND, no RAIN."
-    ),
-    not_for=(
-        "a conservative dye or contaminant plume with no slick "
-        "(`telemac_dye_release`); bed SCOUR (`telemac_bed_scour`); a "
-        "SUSPENDED sediment plume (`telemac_sediment_plume`); "
-        "dissolved-oxygen sag (`telemac_do_sag`). Weathering, evaporation and "
-        "beaching are the module's own, uncalibrated here"
-    ),
-    controls=(
-        ("input_mode",
-         '"user_gated" presents the filled sheet for review/edit before the solve '
-         'and WAITS; "auto" (session default) proceeds with every assumption '
-         "labeled. Not a physical value."),
-        ("restart_clean",
-         "True builds the mesh again even where one built from the same domain, "
-         "bed, resolution and mesher is kept; unset, such a kept mesh is reused. "
-         "Not a physical value."),
-    ),
-    returns=(
-        "On success the run's record (a `LayerURI`): every variable its "
-        "module wrote, styled on one mesh layer, animated where it varies, "
-        "plus the dissolved-oil series charted and the slick track from the "
-        "floats. On failure a dict with `status=\"error\"` + `error_code`."
-    ),
-)
 
 telemac_oil_spill = register_workflow(
     TelemacWorkflow, _METADATA,

@@ -7,7 +7,6 @@ so there is no subsurface return flow and no baseflow."""
 from __future__ import annotations
 
 import sys
-from dataclasses import replace
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs.slots import BED, DOMAIN, RAIN
@@ -17,14 +16,14 @@ from trid3nt_server.workflows.runtime import (
     register_workflow, tool,
 )
 from trid3nt_server.tools.mesh.tool import mesh_op
-from trid3nt_server.inputs import point_arg, Point
+from trid3nt_server.inputs import point_arg
 from trid3nt_server.workflows.telemac.modules import T2D, series
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Infiltration, Rating, Storm,
 )
 from trid3nt_server.workflows.telemac.workflow import Measured, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DOC", "LANDCOVER_CN_MANNING",
+__all__ = ["CAPTIONS", "LANDCOVER_CN_MANNING",
            "LANDCOVER_UNMAPPED", "MESH", "OUTPUTS", "INPUTS", "STEERING",
            "telemac_rain_on_grid"]
 
@@ -64,70 +63,23 @@ _MESH_GRADE = 0.20
 
 
 class INPUTS:
-    pour_point = Input(
-        type=Point,
-        desc="The catchment OUTLET, as a Point: the pick's {coordinates, name} "
-             "verbatim, a (lon, lat) pair, 'lat,lon' or a point layer (geocode "
-             "a place name first) - the point the runoff drains to. It decides "
-             "which basin is "
-             "modelled at all, so it is asked for (picked on the canvas or passed "
-             "explicitly) and NEVER invented. It is snapped onto the traced "
-             "channel, so a click beside the stream still delineates its basin")
+    pour_point = Input()
 
-    rain_series_mm = Input(
-        type=list[float] | None,
-        units="mm",
-        desc="A MEASURED storm, as hourly GROSS millimetres in the order the "
-             "record reported them - what fetch_aorc_precip returns over this "
-             "catchment under `precip_mm` for any CONUS window since 1979. It is "
-             "the true intensity structure, which is what resolves the hydrograph "
-             "SHAPE; a record that stops inside the simulated window stops in the "
-             "run too, so the recession limb appears. State event_time instead to "
-             "have the run look the record up over its own window").optional(
-        "the rainfall record fetched over the run's own window drives it, "
-        "else the design storm stated below")
-    design_storm_mm_per_day = Input(
-        bounds=(2.4, 12000.0), units="mm/day",
-        desc="Constant design-storm intensity, used when no measured series is "
-             "given, in the engine's own unit - millimetres per DAY, so a "
-             "24 mm/h cloudburst is 576. A hypothetical storm, so it is stated "
-             "and never assumed: with no series, no fetched record and no "
-             "design storm the run refuses for want of rain. "
-             "How long it rains for, and how wet the ground already is, are the "
-             "deck's own keywords").optional()
+    rain_series_mm = Input()
+    design_storm_mm_per_day = Input()
 
-    curve_number = Input(
-        bounds=(30.0, 100.0),
-        desc="A UNIFORM SCS curve number over the whole catchment, overriding the "
-             "land-cover-distributed field. Roughness stays per-node either way - "
-             "Manning n is a separate physical property, not the CN knob").optional(
-        "curve numbers are distributed PER NODE from the land-cover raster")
-    steep_slope_correction = Input(
-        default=False,
-        desc="Apply the Huang (2006) steep-slope correction to the curve numbers "
-             "using the mesh's own bed gradients. The engine's native branch is "
-             "compiled off in the installed 9.0.0 build, so the correction is "
-             "applied to the CN field before it is written")
+    curve_number = Input()
+    steep_slope_correction = Input()
 
-    mesh_resolution_m = replace(
-        RESOLUTION,
-        desc="Finest triangle edge, reached where the mesh refines toward the "
-             "channel network. THE granularity lever: peak depth and flooded "
-             "extent are resolution-bound classes and a coarse mesh reads both "
-             "low")
-    mesh_max_edge_m = replace(
-        MAX_EDGE, default=300.0,
-        desc="Coarsest triangle edge, reached far from the channels on the "
-             "hillslopes")
+    mesh_resolution_m = RESOLUTION
+    mesh_max_edge_m = MAX_EDGE
 
     domain = Input(DOMAIN).need("hydrography", kind="basin", at="pour_point",
                                 span_km=_BASIN_WINDOW_KM)
     bed = Input(BED).need("terrain")
     rivers = Input().need("hydrography", geometry="polyline")
     landcover = Input().need("land cover")
-    rain = Input(RAIN).need("precipitation series").context(
-        "no hourly rainfall record over this catchment for that window; the "
-        "design storm drives the run")
+    rain = Input(RAIN).need("precipitation series")
 
 
 MESH = tool.build_mesh(
@@ -214,49 +166,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 REVIEW_TITLE = "Review the storm, the catchment and the mesh band"
-
-DOC = dict(
-    summary="How much RUNOFF a storm produces from the catchment a point drains, "
-            "as an outlet hydrograph and a flood-depth map.",
-    routing=(
-        "THE tool for \"peak discharge and runoff volume from a storm over this "
-        "catchment\", \"rain falls on the basin and floods the valley\", "
-        "\"rainfall-runoff hydrograph at the outlet\", \"flash flood from an intense "
-        "storm on a watershed\". "
-        "TELEMAC-2D shallow-water RAIN-ON-GRID over the domain this run solves on "
-        "- the catchment traced upslope of `pour_point`, or a basin drawn or "
-        "supplied as `domain` - meshed fine along its channels, bed from a "
-        "bare-earth DEM, SCS curve-number infiltration per node from land cover. "
-        "Produces an outlet HYDROGRAPH + a peak flood-DEPTH map. For a REAL event "
-        "state `event_time`, the moment the storm opens at, and the run reads "
-        "the record over its own window; else a labeled design storm drives it."
-    ),
-    not_for=(
-        "coastal or pluvial inundation depth; a channel dye or sediment plume "
-        "(`telemac_dye_release`); urban pipe drainage; storm-surge coastal flooding"
-    ),
-    controls=(
-        ("input_mode",
-         '"user_gated" presents the resolved storm, catchment and mesh band for '
-         'review/edit before the solve and WAITS, and asks for the pour point on the '
-         'canvas; "auto" (session default) proceeds with every assumption labeled and '
-         "REFUSES if no pour point was passed - an outlet is never invented. Not a "
-         "physical value."),
-        ("restart_clean",
-         "True builds the mesh again even where one built from the same domain, "
-         "bed, resolution and mesher is kept; unset, such a kept mesh is reused. "
-         "Not a physical value."),
-    ),
-    returns=(
-        "On success the run's record (a `LayerURI`): every variable its "
-        "module wrote, styled on one mesh layer, animated where it varies, "
-        "plus the outlet hydrograph charted at the pour point and placed "
-        "there as a station. Applicability: SINGLE-STORM flash-flood events "
-        "in small steep catchments. Infiltrated water is permanently lost, "
-        "so there is no baseflow and no inter-peak recovery. On failure a "
-        "dict with `status=\"error\"` + `error_code`."
-    ),
-)
 
 telemac_rain_on_grid = register_workflow(
     TelemacWorkflow, _METADATA, sys.modules[__name__],

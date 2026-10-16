@@ -215,7 +215,9 @@ async def test_a_value_outside_its_bounds_refuses_by_name_and_never_clamps():
                       bounds=(0.0, 5.0), units="m")]
     with pytest.raises(Exception) as exc:
         await resolve_params(declared, {"a": 99.0})
-    assert "a=99 m is outside the declared range 0 to 5 m" in str(exc.value)
+    assert "a=99 m is outside the declared range" in str(exc.value)
+    # The range itself is read at ingestion, not restated by the refusal.
+    assert "0 to 5" not in str(exc.value)
     p = await resolve_params(declared, {"a": 5.0})
     assert p["a"].value == 5.0
 
@@ -259,9 +261,9 @@ async def test_a_bool_is_refused_for_a_bounded_param():
 
 
 @pytest.mark.asyncio
-async def test_optional_absent_param_resolves_to_none():
-    p = await resolve_params([Input(name="a", desc="d").optional()], {})
-    assert "a" not in p
+async def test_an_unstated_required_param_refuses_and_is_never_invented():
+    p = await resolve_params([Input(name="a", desc="d")], {})
+    assert p["a"].state == "missing"
 
 
 @pytest.mark.asyncio
@@ -274,14 +276,11 @@ async def test_a_default_is_stamped_as_the_templates_not_as_the_user():
 
 
 @pytest.mark.asyncio
-async def test_an_absent_param_with_a_derived_stand_in_still_leaves_a_row():
-    decl = [Input(name="outfall", desc="where it enters").optional(
-        "seeded at the derived reach point")]
+async def test_an_absent_param_leaves_no_provenance_row():
+    decl = [Input(name="outfall", desc="where it enters")]
     p = await resolve_params(decl, {})
     rows = provenance_entries(p, decl)
-    assert [r.param for r in rows] == ["outfall"]
-    assert rows[0].basis == "derived"
-    assert "derived reach point" in rows[0].note
+    assert rows == []
 
 
 def test_the_composites_own_provenance_row_wins():
@@ -310,7 +309,7 @@ def test_one_author_word_declares_every_producer():
 
 def _params():
     return [Input(name="base", desc="d", default=1.0, type=float),
-            Input(name="pt", desc="d").optional()]
+            Input(name="pt", desc="d")]
 
 
 def test_the_wire_refuses_an_input_declared_twice():
@@ -334,9 +333,9 @@ def test_one_body_names_values_and_rows_alike_and_keeps_their_order():
 
     class INPUTS:
         depth_m = Input(default=1.0, bounds=(0.0, 9.0), desc="a depth")
-        armed = Input(type=bool, desc="a flag").optional()
+        armed = Input(type=bool, desc="a flag")
         dem = tool("fetch_dem", source="3dep")
-        walls = Input().supplied(geometry="polyline").optional()
+        walls = Input().need(geometry="polyline")
 
     rows = declared(INPUTS)
     assert all(type(row) is Input for row in rows)
@@ -345,7 +344,8 @@ def test_one_body_names_values_and_rows_alike_and_keeps_their_order():
     assert rows[0].bounds == (0.0, 9.0) and not rows[0].required
     assert rows[2].producer.kwargs["source"] == "3dep"
     assert rows[3].producer is None and rows[3].geometry == "polyline"
-    assert rows[3].is_optional is True
+    # a user-prompt fetch: a shape, and no class for a match to go out with
+    assert not rows[3].data_class
     with pytest.raises(AttributeError):
         INPUTS.deth_m
 
@@ -376,30 +376,30 @@ def test_one_declaration_cannot_be_bound_to_two_names():
             second = shared
 
 
-# --- a producer-less Data slot: context handed in, or labelled absence -------- #
+# --- a producer-less row: the prompt fetch, or the one stated() standing -------- #
 
 
-def test_a_producer_backed_data_may_not_be_optional():
-    """A producer either produces or fails typed, so there is no absence to describe."""
-    with pytest.raises(DeclarationError, match="optional"):
-        Input(name="mesh", producer=tool(f"{_HERE}.stub_producer")).optional()
+def test_a_producer_backed_row_may_not_be_stated_only():
+    """A producer IS the run's own machinery answering, so there is no standing left for stated()."""
+    with pytest.raises(DeclarationError, match="stated-only"):
+        Input(name="mesh", producer=tool(f"{_HERE}.stub_producer")).stated()
 
 
-def test_a_context_slot_declares_the_shape_it_accepts():
+def test_a_prompt_fetch_row_declares_the_shape_it_accepts():
     """A slot names no source - the SHAPE is the only thing it can honestly say."""
-    slot = Input(name="structure").supplied(geometry="polyline").optional()
+    slot = Input(name="structure").need(geometry="polyline")
     assert slot.producer is None
-    assert slot.geometry == "polyline" and slot.is_optional is True
+    assert slot.geometry == "polyline" and not slot.data_class
 
 
 def test_a_context_slot_refuses_a_shape_nobody_declares():
     with pytest.raises(DeclarationError, match="not a declared shape"):
-        Input(name="structure").supplied(geometry="squiggle")
+        Input(name="structure").need(geometry="squiggle")
 
 
 def test_a_produced_row_is_not_also_supplied():
     with pytest.raises(DeclarationError, match="declares a producer AND"):
-        Input(name="walls", producer=tool(f"{_HERE}.stub_producer")).supplied(geometry="polyline")
+        Input(name="walls", producer=tool(f"{_HERE}.stub_producer")).need(geometry="polyline")
 
 
 async def stub_refine(**kwargs):
@@ -436,6 +436,51 @@ def test_the_routing_view_stops_before_the_param_sheet():
     assert routing.startswith("S.") and "Do NOT use this for" in routing
     assert "Returns: a layer" in routing
     assert len(routing) < len(full)
+
+
+def test_every_registered_template_fits_the_truncation_budget():
+    """The budget is the routing view's own: a tool whose front block outgrows
+    it is a tool the model never routes on, so every registered template is
+    measured, not one chosen in advance."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    over = {}
+    for name, entry in TOOL_REGISTRY.items():
+        routing = getattr(entry.fn, "routing_doc", None)
+        if routing is None:
+            continue
+        head = routing.split("\nReturns:")[0]
+        if len(head) > 1000:
+            over[name] = len(head)
+    assert not over
+
+
+def test_a_template_package_without_a_routing_yaml_refuses_at_import(tmp_path):
+    """The prose is the declaration: a package that declares none is not a mute
+    tool waiting to be filled in, it is refused where it is registered."""
+    from trid3nt_server.inputs.input import DeclarationError
+    from trid3nt_server.workflows.runtime.workflow import _routing_doc
+
+    package = tmp_path / "silent"
+    package.mkdir()
+    template = type("template", (), {})
+    template.__file__ = str(package / "silent.py")
+    with pytest.raises(DeclarationError, match="declares no routing.yaml"):
+        _routing_doc(template)
+
+
+def test_a_routing_yaml_missing_its_required_keys_refuses(tmp_path):
+    from trid3nt_server.inputs.input import DeclarationError
+    from trid3nt_server.workflows.runtime.workflow import _routing_doc
+
+    package = tmp_path / "partial"
+    package.mkdir()
+    (package / "routing.yaml").write_text("summary: S.\nrouting: R.\n",
+                                          encoding="utf-8")
+    template = type("template", (), {})
+    template.__file__ = str(package / "partial.py")
+    with pytest.raises(DeclarationError, match="missing"):
+        _routing_doc(template)
 
 
 def test_do_sag_publishes_both_docstring_views():

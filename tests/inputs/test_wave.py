@@ -121,7 +121,7 @@ def test_the_slot_reserves_the_name_and_reads_the_class_the_buoys_publish():
     class that fills it is the one a buoy network states coverage of."""
     assert WAVE.classes == frozenset({"wave series"})
     assert WAVE.ingest is wave
-    assert WAVE.draw is None
+    assert WAVE.geometry == ""
     found = ingest_slot(WAVE, _fc(_buoy("44056", -75.71, 36.20)),
                         label="wave", column_units=_UNITS)
     assert found.height_m == pytest.approx(3.0)

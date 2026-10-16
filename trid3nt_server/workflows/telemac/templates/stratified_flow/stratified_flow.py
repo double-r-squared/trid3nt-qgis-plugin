@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import sys
-from dataclasses import replace
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs.slots import BED, DOMAIN, LEVEL
@@ -13,7 +12,7 @@ from trid3nt_server.workflows.runtime import (
     register_workflow,
 )
 from trid3nt_server.workflows.runtime.resolution import SensitivityDecl
-from trid3nt_server.inputs import point_arg, Point
+from trid3nt_server.inputs import point_arg
 from trid3nt_server.workflows.telemac.authoring.accepted_mesh import (
     BASIN_BOUNDARY, BASIN_GEOMETRY,
 )
@@ -23,7 +22,7 @@ from trid3nt_server.workflows.telemac.modules.telemac3d import (
 )
 from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DOC", "OUTPUTS", "INPUTS", "STEERING",
+__all__ = ["CAPTIONS", "OUTPUTS", "INPUTS", "STEERING",
            "telemac3d_stratified_flow"]
 
 
@@ -35,44 +34,17 @@ _LISTING_PERIOD = 100
 
 
 class INPUTS:
-    seed = Input(
-        type=Point,
-        desc="A point ON or beside the body of water this question is about, "
-             "as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) "
-             "pair, 'lat,lon' or a point layer (geocode a place name first). "
-             "The mapped "
-             "outline that point names becomes the domain; a domain supplied "
-             "directly supersedes it, and a body nobody mapped is drawn").optional(
-        "the domain polygon supplied on the call is the body of water the "
-        "run solves over")
+    seed = Input()
 
-    warm_temp_c = Input(
-        bounds=(-2.0, 40.0), units="C",
-        desc="Epilimnion (warm surface layer) temperature the column OPENS at. "
-             "The run exchanges no heat with the atmosphere, so what happens to "
-             "this difference is the whole answer")
-    cold_temp_c = Input(
-        bounds=(-2.0, 40.0), units="C",
-        desc="Hypolimnion (cold bottom layer) temperature; the initial "
-             "top-to-bottom difference is what the run either keeps or mixes away")
-    thermocline_depth_m = Input(
-        bounds=(0.5, 200.0), units="m",
-        desc="Depth of the thermocline below the free surface. The vertical grid "
-             "is planned to HOLD it and REFUSES when no admissible sigma stretch "
-             "over the domain's deepest column can")
+    warm_temp_c = Input()
+    cold_temp_c = Input()
+    thermocline_depth_m = Input()
 
-    mesh_resolution_m = replace(
-        RESOLUTION,
-        desc="Target triangle edge the water body's interior is meshed at. The "
-             "horizontal spends its budget on COVERING the body rather than on "
-             "detail; the 3D node count is this mesh's nodes times the planes "
-             "the deck states")
+    mesh_resolution_m = RESOLUTION
 
     domain = Input(DOMAIN).need("hydrography", at="seed")
     bed = Input(BED).need("bathymetry")
-    level = Input(LEVEL).need("water level series").context(
-        "no water-level gauge published a reading over this domain that day; "
-        "the free surface opens at the zero the bed is counted from")
+    level = Input(LEVEL).need("water level series")
 
 
 class STEERING(T3D):
@@ -140,49 +112,6 @@ DISPLAY_FILE = _RESULT_2D
 PREFIX = "telemac3d"
 
 REVIEW_TITLE = "Review the prescribed column, the deck and the mesh"
-
-DOC = dict(
-    summary="The 3D VERTICAL STRUCTURE of a body of water a 2D depth-averaged "
-            "model cannot resolve.",
-    routing=(
-        "THE tool for \"does this lake stratify or turn over\", \"thermal "
-        "stratification / thermocline\", \"wind-driven vertical "
-        "circulation\". TELEMAC-3D baroclinic coupling over sigma layers on a "
-        "CLOSED body of water - a lake, a reservoir, a pond, a pit - naming no "
-        "liquid boundary. ONE run gives both the temperature difference that "
-        "SURVIVES and the opposed surface / bottom velocities a stated wind "
-        "drives. `seed` names or points at the body and finds its mapped "
-        "outline; `domain` takes a polygon, `bed` a survey raster, soundings "
-        "or a depth in metres. Deck: DURATION 18000 s, NUMBER OF HORIZONTAL "
-        "LEVELS 13, calm; set each by its keyword name."
-    ),
-    not_for=(
-        "a 2D depth-averaged plume or transport question; inundation "
-        "DEPTH; coastal storm-tide flooding; harbour wave agitation "
-        "(`artemis_harbor_agitation`); a salinity intrusion up an estuary, "
-        "which needs a tidal liquid boundary a closed body has none of"
-    ),
-    controls=(
-        ("input_mode",
-         '"user_gated" presents the resolved column, the deck it is solved '
-         'under and the authored mesh for review/edit before the solve and '
-         'WAITS; "auto" (session default) proceeds with every assumption '
-         "labeled. Not a physical value."),
-        ("restart_clean",
-         "True builds the mesh again even where one built from the same domain, "
-         "bed, resolution and mesher is kept; unset, such a kept mesh is reused. "
-         "Not a physical value."),
-    ),
-    returns=(
-        "On success the run's record (a `LayerURI`): every variable its "
-        "module wrote, styled on one mesh layer, animated where it varies, "
-        "plus the temperature column at the deepest node charted against "
-        "the prescribed initial column. The run exchanges NO heat with the "
-        "atmosphere, so a falling surface temperature is downward MIXING "
-        "and never the water cooling - narrate it that way. On failure a "
-        "dict with `status=\"error\"` + `error_code`."
-    ),
-)
 
 telemac3d_stratified_flow = register_workflow(
     TelemacWorkflow, _TELEMAC3D_METADATA, sys.modules[__name__],

@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import sys
-from dataclasses import replace
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
-from trid3nt_server.inputs import point_arg, Point
+from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LEVEL, OBSERVE, WEATHER
 from trid3nt_server.tools.mesh.recipe import RESOLUTION
 from trid3nt_server.inputs.input import Input
@@ -19,7 +18,7 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
 )
 from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
 
-__all__ = ["CAPTIONS", "DOC", "OUTPUTS", "INPUTS",
+__all__ = ["CAPTIONS", "OUTPUTS", "INPUTS",
            "STEERING", "telemac_water_temperature"]
 
 
@@ -37,39 +36,18 @@ _STATION = Placed("station", point="station", fraction=_STATION_FRAC,
 
 
 class INPUTS:
-    seed = Input(
-        type=Point,
-        desc="Where on the channel the modelled stretch STARTS, as a Point: the "
-             "pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', "
-             "a point layer. Geocode a place name first. It seeds the reach "
-             "the domain is cut from; supply the domain polygon - a lake, a "
-             "pond, a harbour - instead and this is not read").optional(
-        "nothing is fetched and the domain is the polygon the caller "
-        "supplied or drew")
-    station = Input(
-        type=Point,
-        desc="Where the temperature series and its diurnal range are read, as a "
-             "Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, "
-             "'lat,lon' or a point layer. Geocode a place name first").optional(
-        "the series is read at the point 98% of the way down the modelled "
-        "domain, which is the water that has been exposed to the weather "
-        "longest")
+    seed = Input()
+    station = Input()
 
-    mesh_resolution_m = replace(
-        RESOLUTION,
-        desc="Target element edge length the domain is triangulated at; a "
-             "surface heat budget is divided by the local DEPTH, so what this "
-             "has to resolve is how deep the water is rather than its planform")
+    mesh_resolution_m = RESOLUTION
 
     domain = Input(DOMAIN).need("hydrography", at="seed",
                                 span_km=_REACH_LENGTH_KM)
 
     bed = Input(BED).need("bathymetry")
 
-    discharge = Input(DISCHARGE).need("discharge series").context(
-        "the National Water Model published no streamflow over this "
-        "domain at that cycle")
-    level = Input(LEVEL).need("water level series").optional()
+    discharge = Input(DISCHARGE).need("discharge series")
+    level = Input(LEVEL).need("water level series")
 
     weather = Input(WEATHER).need("weather forcing")
     observe = Input(OBSERVE).need("water quality sample", of="TEMPERATURE",
@@ -129,45 +107,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 REVIEW_TITLE = "Review the water, the week of weather, and what it opens at"
-
-DOC = dict(
-    summary="WATER TEMPERATURE over a body of water under a week of real weather.",
-    routing=(
-        "THE tool for \"how warm does this water get this week\", \"water "
-        "temperature under the heat wave\", \"too warm for salmon / trout\", "
-        "\"diurnal temperature swing in the water\". WAQTEL THERMIC on "
-        "TELEMAC-2D over the domain it is given - a drawn pond, a picked lake, "
-        "or the reach the seed stands on: the surface heat budget under the "
-        "hourly RAWS record over the run's window. Produces the TEMPERATURE "
-        "field, animated, and the series at a point. Deck opinions, by "
-        "keyword: DURATION (seven days), GRAPHIC PRINTOUT PERIOD, LAW OF "
-        "BOTTOM FRICTION, FRICTION COEFFICIENT. Supply the domain or `seed` a "
-        "point, and `event_time` - the moment the week opens at."
-    ),
-    not_for=(
-        "dissolved oxygen below a discharge (`telemac_do_sag`); a dye or "
-        "contaminant plume (`telemac_dye_release`); stratification over depth "
-        "(`telemac3d_stratified_flow`); air temperature or a forecast, which "
-        "the weather fetchers answer"
-    ),
-    controls=(
-        ("input_mode",
-         '"user_gated" presents the resolved discharge, the weather station and '
-         'the opening water temperature for review/edit before the solve and '
-         'WAITS; "auto" (session default) proceeds with every assumption '
-         "labeled. Not a physical value."),
-        ("restart_clean",
-         "True builds the mesh again even where one built from the same domain, "
-         "bed, resolution and mesher is kept; unset, such a kept mesh is reused. "
-         "Not a physical value."),
-    ),
-    returns=(
-        "On success the run's record (a `LayerURI`): every variable its "
-        "modules wrote, styled on one mesh layer, animated where it varies, "
-        "plus the temperature series charted at the station. On failure a "
-        "dict with `status=\"error\"` + `error_code`."
-    ),
-)
 
 telemac_water_temperature = register_workflow(
     TelemacWorkflow, _METADATA,

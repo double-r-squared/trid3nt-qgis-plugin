@@ -1,0 +1,16 @@
+summary: The 3D VERTICAL STRUCTURE of a body of water a 2D depth-averaged model cannot resolve.
+routing: 'THE tool for "does this lake stratify or turn over", "thermal stratification / thermocline",
+  "wind-driven vertical circulation". TELEMAC-3D baroclinic coupling over sigma layers on
+  a CLOSED body of water - a lake, a reservoir, a pond, a pit - naming no liquid boundary.
+  ONE run gives both the temperature difference that SURVIVES and the opposed surface / bottom
+  velocities a stated wind drives. `seed` names or points at the body and finds its mapped
+  outline; `domain` takes a polygon, `bed` a survey raster, soundings or a depth in metres.
+  Deck: DURATION 18000 s, NUMBER OF HORIZONTAL LEVELS 13, calm; set each by its keyword name.'
+not_for: a 2D depth-averaged plume or transport question; inundation DEPTH; coastal storm-tide
+  flooding; harbour wave agitation (`artemis_harbor_agitation`); a salinity intrusion up an
+  estuary, which needs a tidal liquid boundary a closed body has none of
+returns: 'On success the run''s record (a `LayerURI`): every variable its module wrote, styled
+  on one mesh layer, animated where it varies, plus the temperature column at the deepest
+  node charted against the prescribed initial column. The run exchanges NO heat with the atmosphere,
+  so a falling surface temperature is downward MIXING and never the water cooling - narrate
+  it that way. On failure a dict with `status="error"` + `error_code`.'

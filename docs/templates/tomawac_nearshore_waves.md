@@ -19,7 +19,7 @@ NEARSHORE WAVES: what the offshore swell becomes at the shore - how high, how lo
 | `bed` | matched on a need for bathymetry | what the domain's nodes carry for elevation: a DEM, a bathymetry or survey raster, a layer of soundings, or a depth in metres below the free surface; unfilled, the run matches a source of bathymetry. | - |
 | `wave` | matched on a need for wave series | the wave series this run reads, as a uri or a layer name; unfilled, the run matches a source of wave series. | - |
 | `level` | matched on a need for water level series | the water level series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of water level series. | - |
-| `mesh` | supplied by the caller | a mesh this case already built, as its uri or its layer name, solved on in place of the one the run would build; unfilled, the run builds its own. | - |
+| `mesh` | supplied by the caller | a mesh this case already built, as its uri or its layer name, solved on in place of the one the run would build; the user may state one; unstated, the run builds its own. | - |
 
 ## The inputs
 
@@ -27,10 +27,10 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | input | units | default | desc |
 |---|---|---|---|
-| `seed` | - | optional | Where OFFSHORE the incoming sea state is measured, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. The nearest buoy to it is the record the open boundary is forced at, so put it on the water the swell arrives across |
+| `seed` | - | required | Where OFFSHORE the incoming sea state is measured, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. The nearest buoy to it is the record the open boundary is forced at, so put it on the water the swell arrives across |
 | `station` | - | required | Where INSHORE the waves are read over time, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. The height, the period and the direction are charted at the node of the mesh it settles onto, so put it on the water you are asking about |
 | `mesh_resolution_m` | m | optional | Target element edge length the water is triangulated at; the waves shoal and then break where the DEPTH falls, so what this has to resolve is the slope of the bed across the surf zone |
 | `open_depth_threshold_m` | m | -12.0 | How deep a boundary stretch must reach for it to be designated the OPEN edge the measured sea state enters through; every stretch that reaches it opens, and a window where none does has no edge for the spectrum and refuses |
-| `event_time` | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
+| `event_time` | - | required | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `vertical_frame` | - | NAVD88 | Vertical datum the bed's elevations are counted from, and with them the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
 

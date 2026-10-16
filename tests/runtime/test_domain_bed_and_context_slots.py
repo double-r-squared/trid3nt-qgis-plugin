@@ -23,7 +23,7 @@ def test_a_domain_row_is_one_slot_however_it_is_filled():
     """A drawn polygon, the user's layer and a producer fill ONE row: the slot is
     on the wire AND names its producer, and nothing downstream reads which."""
     class DRAWN:
-        domain = Input(DOMAIN).supplied(geometry="polygon")
+        domain = Input(DOMAIN).need(geometry="polygon")
 
     class FETCHED:
         domain = Input(DOMAIN, producer=tool("fetch_nhd_waterbody_at_point", seed_point=[1.0, 2.0]))
@@ -61,47 +61,14 @@ def test_a_terrain_row_refuses_the_shape_no_source_of_terrain_publishes():
         refuse_wrong_shape(row, "s3://b/k/soundings.geojson")
 
 
-def test_a_context_row_states_what_the_sheet_says_when_its_source_is_empty():
-    class DATA:
-        stated = Input(tool("fetch_usgs_water_quality")).context(
-            "no water-quality sample near this domain; the stated value stands")
-        unstated = Input(tool("fetch_raws_weather")).context()
-
-    rows = {row.name: row for row in declared(DATA)}
-    assert rows["stated"].context_sentence.startswith("no water-quality sample")
-    assert rows["unstated"].context_sentence == (
-        "no unstated near this domain; the stated value stands")
-
-
-def test_context_needs_something_to_ask_and_optional_still_refuses_a_producer():
-    with pytest.raises(DeclarationError,
-                       match=r"states neither a need nor a producer"):
-        Input().context()
-    with pytest.raises(DeclarationError, match=r"declares a producer AND \.optional"):
+def test_a_bare_input_is_a_value_and_a_value_states_its_own():
+    """With no slot, need, producer or shape, an Input is a VALUE - and a value
+    with no prose refuses the declaration."""
+    with pytest.raises(DeclarationError, match="declares no desc"):
         class DATA:
-            row = Input(tool("fetch_x")).optional()
+            row = Input()
 
         declared(DATA)
-
-
-def test_a_context_rows_absence_continues_the_run_and_says_so(monkeypatch):
-    """The whole point: a producer whose source held nothing does not refuse the
-    run - it leaves the slot empty and writes its sentence on the record."""
-    from trid3nt_server.workflows.runtime import fill
-
-    class DATA:
-        sample = Input(tool("fetch_usgs_water_quality")).context(
-            "no sample near this domain; the stated value stands")
-
-    async def _empty(env, producer, label):
-        raise RuntimeError("WQP_NO_SITES")
-
-    monkeypatch.setattr(fill, "_produced", _empty)
-    env = fill._Env(data={})
-    row = declared(DATA)[0]
-    assert asyncio.run(fill._produce(env, row)) is None
-    assert env.absences == [
-        "no sample near this domain; the stated value stands (WQP_NO_SITES)"]
 
 
 #: What a reach producer returns: the section it cut, and the two faces it was
@@ -122,7 +89,7 @@ class _RIVER:
     the line down the middle of what it cut."""
 
     domain = Input(DOMAIN, producer=tool("fetch_river_reach", seed_point=[0.5, 0.5]))
-    line = Input(LINE).supplied(geometry="polyline")
+    line = Input(LINE).need(geometry="polyline")
 
 
 def _env_over(value, monkeypatch, body=_RIVER):
@@ -166,17 +133,16 @@ def test_a_line_the_user_draws_is_read_as_one_geometry(monkeypatch):
         "type": "LineString", "coordinates": [[0.2, 0.2], [0.8, 0.8]]}
 
 
-def test_a_malformed_ask_on_a_context_row_refuses_rather_than_reading_absent(
+def test_a_malformed_ask_on_a_producer_row_refuses_rather_than_reading_absent(
         monkeypatch):
-    """ONLY AN EMPTY SOURCE IS AN ABSENCE. A window, a bbox or a unit the caller
-    stated wrong is the ASK being wrong, and a run that swallowed it would report
-    "nothing was there" about a question nobody managed to put."""
+    """A window, a bbox or a unit the caller stated wrong is the ASK being wrong,
+    and a run that swallowed it would report "nothing was there" about a question
+    nobody managed to put."""
     from trid3nt_server.tools.fetchers._router.errors import router_input_error
     from trid3nt_server.workflows.runtime import fill
 
     class DATA:
-        survey = Input(tool("fetch_ehydro_surveys")).context(
-            "no published channel survey over this domain")
+        survey = Input(tool("fetch_ehydro_surveys"))
 
     async def _refused(env, producer, label):
         raise router_input_error("EHYDRO", "31 surveys end on or after "
@@ -188,18 +154,15 @@ def test_a_malformed_ask_on_a_context_row_refuses_rather_than_reading_absent(
     with pytest.raises(Exception) as exc:
         asyncio.run(fill._produce(env, declared(DATA)[0]))
     assert exc.value.error_code == "EHYDRO_INPUT_INVALID"
-    assert env.absences == []
 
 
-def test_a_malformed_value_handed_to_a_context_rows_slot_refuses_too(monkeypatch):
-    """The ingestion is inside the absence for an empty SOURCE; a value the slot
-    cannot read as what it is asked for is the same wrong ask."""
+def test_a_malformed_value_handed_to_a_producer_rows_slot_refuses_too(monkeypatch):
+    """A value the slot cannot read as what it is asked for is the same wrong ask."""
     from trid3nt_server.inputs.user_input import UserInputError
     from trid3nt_server.workflows.runtime import fill
 
     class DATA:
-        sample = Input(tool("fetch_usgs_water_quality")).context(
-            "nothing sampled near this domain")
+        sample = Input(tool("fetch_usgs_water_quality"))
 
     async def _answered(env, producer, label):
         raise UserInputError("a reading is a number or a layer of sites",
@@ -211,7 +174,6 @@ def test_a_malformed_value_handed_to_a_context_rows_slot_refuses_too(monkeypatch
     with pytest.raises(UserInputError) as exc:
         asyncio.run(fill._produce(env, row))
     assert exc.value.error_code == "OBSERVATION_INVALID"
-    assert env.absences == []
 
 
 def test_a_hard_producer_row_still_refuses_when_its_source_is_empty(monkeypatch):
@@ -331,27 +293,6 @@ def _no_moment_env(**over):
 
     _standing_on()
     return fill._Env(run={"event_time": None}, data={}, **over)
-
-
-def test_a_context_need_with_no_moment_stated_is_absent_with_its_sentence():
-    """The row states a NEED rather than a producer, so the match is what
-    refuses to ask: a series source reached over no window answers with its
-    latest record, which is a storm nobody asked about."""
-    from trid3nt_server.workflows.runtime import fill
-    from trid3nt_server.tools.search.match import NO_MOMENT
-
-    class DATA:
-        rain = Input().need("precipitation series").context(
-            "no hourly rainfall record over this catchment for that window; "
-            "the design storm drives the run")
-
-    env = _no_moment_env()
-    row = declared(DATA)[0]
-    assert asyncio.run(fill._produce(env, row)) is None
-    assert len(env.absences) == 1
-    assert env.absences[0].startswith(
-        "no hourly rainfall record over this catchment for that window; "
-        "the design storm drives the run (rain: " + NO_MOMENT)
 
 
 def test_a_required_series_need_with_no_moment_stated_refuses_naming_the_slot():

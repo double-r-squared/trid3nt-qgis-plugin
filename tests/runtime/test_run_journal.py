@@ -243,14 +243,6 @@ def test_the_run_s_own_line_carries_every_input_and_the_correct_end_its_solve_st
     wf._journal("RUN1", run, SimpleNamespace(mesh_size_m=None), 1.0, [], inputs)
     line = written[0]
     assert line["correct_end"] is False
-    # An optional value nobody stated is on the same map: no value, and the
-    # sentence saying what the run derived in its place as its source.
-    absent = {name: line["inputs"].pop(name) for name, row
-              in list(line["inputs"].items())
-              if row["origin"] == "derived" and row["value"] is None}
-    assert absent["event_time"] == {
-        "value": None, "origin": "derived",
-        "source": wf.input("event_time").absent_note}
     assert "provenance" not in line
     assert line["inputs"] == {
         "TIME_STEP": {"value": 0.5, "origin": "derived",

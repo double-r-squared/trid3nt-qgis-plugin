@@ -242,16 +242,16 @@ def test_the_discharge_reaches_the_channel_as_ONE_reading_never_the_record():
     data = {decl.name: decl for decl in
             row_inputs(_template().telemac_micropollutant_release.workflow)}
     discharge = data["discharge"]
-    assert discharge.slot == DISCHARGE and discharge.is_context
+    assert discharge.slot == DISCHARGE
     assert discharge.data_class == "discharge series"
 
 
 def test_an_unsurveyed_domain_still_runs_on_the_terrain_alone():
     """The bed is ONE need row now; the survey-then-terrain composition is the
-    matched bed's own affair, not a second CONTEXT row on this template."""
+    matched bed's own affair, never a second row on this template."""
     data = {decl.name: decl for decl in
             row_inputs(_template().telemac_micropollutant_release.workflow)}
-    assert data["bed"].is_context is False
+    assert data["bed"].slot is not None
 
 
 def test_the_ambient_sediment_is_a_stated_deck_opinion_not_a_param():

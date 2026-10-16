@@ -89,10 +89,10 @@ def test_the_generated_signature_is_the_declaration_plus_controls():
     from trid3nt_server.workflows.runtime.workflow import _wire_signature
 
     params = (
-        Input(name="location", desc="a place").optional(),
+        Input(name="location", desc="a place"),
         Input(name="depth_m", default=1.0, bounds=(0.0, 9.0),
               desc="a bounded value"),
-        Input(name="armed", type=bool, desc="a flag").optional(),
+        Input(name="armed", type=bool, desc="a flag"),
         Input(name="solver_dt_s", default=1.0, bounds=(0.1, 60.0),
               desc="a solver setting"),
     )
@@ -101,8 +101,8 @@ def test_the_generated_signature_is_the_declaration_plus_controls():
                                     "solver_dt_s", "input_mode", "restart_clean", "keywords",
                                     "picks", "_extra_ignored"]
     assert annotations["depth_m"] == (float | None)      # bounded -> float
-    assert annotations["armed"] == (bool | None)         # declared type wins
-    assert annotations["location"] == (str | None)       # inferred
+    assert annotations["armed"] == bool                  # declared type wins, and it is required
+    assert annotations["location"] == str                # inferred, and required
     assert sig.parameters["restart_clean"].default is False
     assert all(sig.parameters[n].default is None
                for n in ("location", "depth_m", "armed", "input_mode",

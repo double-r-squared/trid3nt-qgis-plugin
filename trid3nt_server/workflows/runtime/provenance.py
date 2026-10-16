@@ -1,7 +1,6 @@
 """The run's PROVENANCE rows: what each value input was answered with, and by whom.
 
-Every answered value leaves a row on the layer; an absent optional one that
-states what the run derives in its place leaves that.
+Every answered value leaves a row on the layer.
 """
 
 from __future__ import annotations
@@ -22,19 +21,13 @@ _STATED = {Origin.USER: "supplied on this invocation",
 
 def provenance_entries(answered: Mapping[str, Any],
                        declared: Sequence[Input]) -> list[SyntheticInput]:
-    """The run's provenance rows off the fill's verdicts - what the layer carries.
-    An absent optional value stating what the run derives still leaves a derived row."""
+    """The run's provenance rows off the fill's verdicts - what the layer carries."""
     out: list[SyntheticInput] = []
     for row in declared:
         verdict = answered.get(row.name)
         if row.is_row:
             continue
         if verdict is None or verdict.origin is None:
-            if row.absent_note:
-                out.append(SyntheticInput(
-                    param=row.name, value="derived", units=row.units,
-                    basis=Origin.DERIVED,
-                    note=f"not supplied; {row.absent_note}"))
             continue
         out.append(SyntheticInput(
             param=row.name, value=_provenance_value(verdict.value),

@@ -513,13 +513,6 @@ package DataSeam {
         */
     }
 
-    part def ContextRow {
-        doc /*
-        A producer row whose absence is legal, and SAID: the run continues and
-        the sheet carries the sentence the row states.
-        */
-    }
-
     part domainSlot : DomainSlot {
         doc /*
         code: trid3nt_server/inputs/domain.py
@@ -565,12 +558,6 @@ package DataSeam {
     part extentSlot : ExtentSlot {
         doc /*
         code: trid3nt_server/inputs/extent.py
-        */
-    }
-
-    part contextRow : ContextRow {
-        doc /*
-        code: trid3nt_server/inputs/input.py
         */
     }
 
@@ -679,12 +666,6 @@ package DataSeam {
     part offsetRowDeclaration : VerticalFrame {
         doc /*
         code: trid3nt_server/workflows/runtime/fill.py
-        */
-    }
-
-    part unreadContextAsk : ContextRow {
-        doc /*
-        code: trid3nt_server/workflows/telemac/workflow.py
         */
     }
 
@@ -1331,33 +1312,6 @@ package DataSeam {
         */
     }
 
-    requirement def AContextRowsAbsenceContinuesTheRun {
-        doc /*
-        A producer row declared as CONTEXT continues the run when its source held
-        nothing, and the sheet carries the sentence the row states. Every other
-        producer row still fails typed: the difference is declared, not inferred,
-        because a row that is load-bearing and a row that is background look
-        identical from inside the fetch.
-
-        ONLY AN EMPTY SOURCE IS AN ABSENCE. A window, a bbox or a unit the
-        caller stated wrong is the ASK being wrong and refuses, because a run
-        that swallowed it would report that nothing was there about a question
-        nobody managed to put.
-
-        The refusal for a producer row declared .optional() stands: absence with
-        nothing said about it is the failure mode this row was written to end.
-
-        A tail read off a row that is WHOLLY ABSENT reads as nothing, exactly as
-        a field that is present and empty does - otherwise the keyword reading a
-        context row refuses the very run the row was declared to let continue.
-
-        THE SENTENCE IS THE PRODUCT, so a context row no step and no sibling row
-        dereferences is asked all the same, before the run works: a row declared
-        to say what the run stood beside and then never asked says nothing at
-        all. Every other declared artifact nothing reads still costs no fetch.
-        */
-    }
-
     requirement def ABoxIsNotADomainAndIsItsOwnSlot {
         doc /*
         A box has no shoreline, so it is not a domain and the mesher refuses one
@@ -1464,7 +1418,7 @@ package DataSeam {
     satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by lakeDeclaration;
     satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by freeSurfaceReader;
     verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
-        "tests/telemac/test_telemac3d_stratified_flow.py::test_the_level_is_ranked_against_the_domain_and_may_be_absent";
+        "tests/telemac/test_telemac3d_stratified_flow.py::test_the_level_is_ranked_against_the_domain";
     verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
         "tests/inputs/test_slot_inputs.py::test_each_slot_reads_through_the_ingestion_its_role_names";
     verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
@@ -1770,7 +1724,6 @@ package DataSeam {
 
     satisfy requirement TheDomainIsOneSlotHoweverItIsFilled by domainSlot;
     satisfy requirement TheDomainIsOneSlotHoweverItIsFilled by slotDoor;
-    satisfy requirement TheDomainIsOneSlotHoweverItIsFilled by contextRow;
     verify requirement TheDomainIsOneSlotHoweverItIsFilled by
         "tests/runtime/test_domain_bed_and_context_slots.py::test_a_domain_row_is_one_slot_however_it_is_filled";
     verify requirement TheDomainIsOneSlotHoweverItIsFilled by
@@ -1843,26 +1796,11 @@ package DataSeam {
     verify requirement ABoxIsNotADomainAndIsItsOwnSlot by
         "tests/inputs/test_slot_inputs.py::test_an_extent_slot_reads_a_box_however_the_caller_named_it";
     verify requirement ABoxIsNotADomainAndIsItsOwnSlot by
-        "tests/inputs/test_slot_inputs.py::test_only_the_slots_a_user_can_draw_are_offered_on_the_canvas";
+        "tests/inputs/test_slot_inputs.py::test_only_the_shapes_a_user_can_draw_are_offered_on_the_canvas";
     verify requirement ABoxIsNotADomainAndIsItsOwnSlot by
         "tests/telemac/test_agitation_template.py::test_the_extent_is_a_slot_the_canvas_offers_a_rectangle_for";
     verify requirement ABoxIsNotADomainAndIsItsOwnSlot by
         "tests/telemac/test_agitation_template.py::test_the_mesh_is_cut_from_the_domain_polygon_and_not_from_a_box";
-
-    satisfy requirement AContextRowsAbsenceContinuesTheRun by contextRow;
-    satisfy requirement AContextRowsAbsenceContinuesTheRun by unreadContextAsk;
-    verify requirement AContextRowsAbsenceContinuesTheRun by
-        "tests/runtime/test_domain_bed_and_context_slots.py::test_a_context_rows_absence_continues_the_run_and_says_so";
-    verify requirement AContextRowsAbsenceContinuesTheRun by
-        "tests/runtime/test_domain_bed_and_context_slots.py::test_a_hard_producer_row_still_refuses_when_its_source_is_empty";
-    verify requirement AContextRowsAbsenceContinuesTheRun by
-        "tests/runtime/test_domain_bed_and_context_slots.py::test_a_malformed_ask_on_a_context_row_refuses_rather_than_reading_absent";
-    verify requirement AContextRowsAbsenceContinuesTheRun by
-        "tests/runtime/test_domain_bed_and_context_slots.py::test_a_malformed_value_handed_to_a_context_rows_slot_refuses_too";
-    verify requirement AContextRowsAbsenceContinuesTheRun by
-        "tests/runtime/test_domain_bed_and_context_slots.py::test_context_needs_something_to_ask_and_optional_still_refuses_a_producer";
-    verify requirement AContextRowsAbsenceContinuesTheRun by
-        "tests/runtime/test_domain_bed_and_context_slots.py::test_a_context_row_states_what_the_sheet_says_when_its_source_is_empty";
 
     satisfy requirement ThalwegBurningIsNeverABedSource by blueTopoSource;
     satisfy requirement ThalwegBurningIsNeverABedSource by cudemDeclaration;

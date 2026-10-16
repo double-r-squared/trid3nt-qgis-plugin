@@ -58,15 +58,15 @@ def test_registered_as_an_engine_template():
     assert TOOL_REGISTRY.get("run_telemac") is None
 
 
-def test_docstring_routing_view_fits_the_truncation_budget():
+def test_the_routing_view_says_the_question_class_not_one_body():
     from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
         telemac_dye_release,
     )
 
     head = telemac_dye_release.routing_doc.split("\nReturns:")[0]
-    assert len(head) <= 1000
     # The question class, not the body of water: nothing here says the answer is
-    # only a river's.
+    # only a river's. The truncation budget is every template's, pinned once in
+    # tests/runtime/test_declarative_library.py.
     assert "river reach" not in head.lower().split("do not use")[0]
 
 
@@ -197,9 +197,8 @@ def test_the_data_body_is_the_slots_and_the_classes_they_need():
     # No point stated: the place a nearest reporting site is ranked against is
     # the domain's own centre.
     assert discharge.coercion["near"] is None
-    # The level is matched too, and its absence is legal.
+    # The level is matched too, the same way the discharge is.
     assert by_name["level"].data_class == "water level series"
-    assert by_name["level"].is_optional
     # No row names a source of its own: degrading between sources is the MATCH's.
     assert all(d.producer is None for d in rows)
 

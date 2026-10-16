@@ -111,8 +111,6 @@ def test_the_carrier_is_one_reading_ranked_against_the_domain():
     assert carrier.slot == DISCHARGE
     assert carrier.data_class == "discharge series"
     assert carrier.producer is None
-    assert carrier.is_context
-    assert "National Water Model" in carrier.context_sentence
 
 
 def test_the_outfall_seeds_the_domain_match():
@@ -151,13 +149,13 @@ def test_a_keyword_outside_the_modules_own_bounds_refuses_by_its_name():
     there, and the refusal names the keyword rather than a param."""
     from trid3nt_server.workflows.runtime.module import SlotRefused
 
-    with pytest.raises(SlotRefused, match="DURATION is taken between"):
+    with pytest.raises(SlotRefused, match=r"DURATION=.* is outside the declared range"):
         _filled(keywords={"DURATION": 1.0})
     assert dict(_filled(keywords={"DURATION": 600.0}).resolved())["DURATION"] \
         == pytest.approx(600.0)
 
 
-# --- the outfall: absent DERIVES, malformed REFUSES -------------------------- #
+# --- the outfall: unstated REFUSES, malformed REFUSES ----------------------- #
 @pytest.mark.parametrize("bad", [[1.0], [1.0, 2.0, 3.0], {"lon": 1},
                                  [200.0, 10.0], ["a", "b"]])
 @pytest.mark.asyncio
@@ -170,14 +168,14 @@ async def test_malformed_outfall_coords_refuse_they_never_fall_back(bad):
     assert "outfall_coords" in out["error_message"]
 
 
-def test_an_absent_outfall_leaves_a_derived_provenance_row():
-    """The user has to see what the sag distance is measured FROM."""
-    from trid3nt_server.workflows.runtime import provenance_entries
+def test_an_absent_outfall_is_refused_naming_the_need():
+    """The sag distance is measured FROM somewhere: unstated, the fill refuses
+    naming outfall_coords - it is never derived from the domain's centreline."""
+    from trid3nt_server.workflows.runtime.fill import Fill, fill
 
-    row = next(r for r in provenance_entries(_resolve(), value_inputs(_workflow()))
-               if r.param == "outfall_coords")
-    assert row.basis == "derived"
-    assert "centerline" in (row.note or "")
+    state = asyncio.run(fill(Fill(workflow=_workflow()), {"input_mode": "auto"}))
+    code, sentence = state.refusal()
+    assert code == "GATE_REFUSED" and "outfall_coords" in sentence
 
 
 def test_a_supplied_outfall_is_carried_as_a_user_row():

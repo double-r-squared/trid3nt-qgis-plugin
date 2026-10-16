@@ -1,0 +1,15 @@
+summary: 'A SUSPENDED SEDIMENT plume in a body of water: it settles and deposits on the bed.'
+routing: 'THE tool for "sediment / silt / a turbidity plume released into the water, where
+  does it settle out" - a slurry spill, a construction or dredging discharge, an upstream
+  sediment supply. TELEMAC-2D + GAIA over a reach walked from the release, a lake or harbour
+  drawn on the canvas, or a supplied polygon: ONE settling class over a bed with NO stock,
+  so nothing erodes and only what was injected deposits. Give `release` as a pick or a pair,
+  or supply `domain`. Deck: DURATION 3600 s, CLASSES SEDIMENT DIAMETERS 1.0e-4 m, SUSPENSION
+  TRANSPORT FORMULA FOR ALL SANDS 3, SCHEME FOR ADVECTION OF SUSPENDED SEDIMENTS 1, no WIND
+  and no RAIN OR EVAPORATION - set each by its keyword name.'
+not_for: bed SCOUR or an erodible bed (`telemac_bed_scour`); a conservative dye or contaminant
+  plume (`telemac_dye_release`); an OIL slick (`telemac_oil_spill`); dissolved-oxygen sag
+  (`telemac_do_sag`)
+returns: 'On success the run''s record (a `LayerURI`): every variable its modules wrote, styled
+  on one mesh layer, animated where it varies, the bed evolution among them, plus the suspended-sediment
+  series charted. On failure a dict with `status="error"` + `error_code`.'

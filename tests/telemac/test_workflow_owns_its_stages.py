@@ -289,8 +289,8 @@ def test_two_level_rows_are_legal_and_two_bed_rows_refuse():
     class TWO_LEVELS:
         domain = Input(DOMAIN).need("hydrography", at="seed")
         bed = Input(BED).need("bathymetry")
-        upstream = Input(LEVEL).need("water level series").optional()
-        downstream = Input(LEVEL).need("water level series").optional()
+        upstream = Input(LEVEL).need("water level series")
+        downstream = Input(LEVEL).need("water level series")
 
     assert _workflow(TWO_LEVELS)._slots()[LEVEL] == "upstream"
 
