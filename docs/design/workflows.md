@@ -155,7 +155,17 @@ same way. A row handed a case layer by its handle - bare or as `{"layer": id}` -
 is read at that layer's uri, and nothing judges a workflow's input before the
 fill does: a direct run reaches it with its args as typed.
 
-The fill produces every row a stage reads without the mesh (`named_rows(held)`: the domain, the named rows, the mesh ask's rows unless a mesh was supplied, the level, the inflow, a measurement's line, the context rows, the rows a module fills from), and only a row asked near a placed point waits for the settle. `Workflow.judged` answers before any unstated row is fetched: `NO_SESSION` for an engine run with no session and, on TELEMAC, `TELEMAC_CONTINUATION_REFUSED` and `TELEMAC_SHEET_INCOMPLETE` judged from the deck's assertions and the stated keywords. The sheet stage writes the deck and runs the staged check before every card it draws, so a proceed is followed by the box alone. The run holds one tag from its first staging to dispatch: a card edit re-stages into the same local directory and the same prefix, each emptied first, and a run that does not reach the box (the review cancelled, the staged check or completeness refusing, a raise before dispatch) removes both.
+The fill produces every row a stage reads without the mesh (`named_rows(held)`: the domain, the named rows, the mesh ask's rows unless a mesh was supplied, the level, the inflow, a measurement's line, the rows a module fills from), and only a row asked near a placed point waits for the settle. `Workflow.judged` answers before any unstated row is fetched: `NO_SESSION` for an engine run with no session and, on TELEMAC, `TELEMAC_CONTINUATION_REFUSED` and `TELEMAC_SHEET_INCOMPLETE` judged from the deck's assertions and the stated keywords. The sheet stage writes the deck and runs the staged check before every card it draws, so a proceed is followed by the box alone. The run holds one tag from its first staging to dispatch: a card edit re-stages into the same local directory and the same prefix, each emptied first, and a run that does not reach the box (the review cancelled, the staged check or completeness refusing, a raise before dispatch) removes both.
+
+A row resolves in ONE order (pinned by `tests/runtime/test_resolution_order.py`):
+what the caller supplied, then the row's one source - its producer, or the
+match its need asks; a row declares one or neither - then, for a row that
+declares neither, the canvas, and nothing answering refuses by name
+(`DATA_SLOT_UNSATISFIED`). A need nothing measures refuses
+(`DATA_NEED_UNMATCHED`) and is never drawn instead. A stated-only row nothing
+supplied stops after the first rung with no verdict. The keyword sheet has its
+own three tiers: the engine's dictionary default, under the template's
+statement, under the fill's.
 
 An argument that is no declared input is refused by name
 (`INPUT_UNNAMED`, with the nearest declared names), and a name inside the
