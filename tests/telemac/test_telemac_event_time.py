@@ -24,9 +24,10 @@ def test_template_surfaces_event_time_knob(mod, fn_name):
     # the template's own class body.
     rows = {p.name: p for p in value_inputs(fn.workflow)}
     assert "event_time" in rows
-    # The moment is required now: unstated, the fill refuses naming the need.
-    assert rows["event_time"].required is True
-    assert rows["event_time"].stated_only is False
+    # The moment is stated or not: an undated run proceeds, and a dated source
+    # refuses at its own parameter naming the need.
+    assert rows["event_time"].required is False
+    assert rows["event_time"].stated_only is True
 
 
 @pytest.mark.asyncio

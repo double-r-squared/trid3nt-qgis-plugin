@@ -69,18 +69,24 @@ def _incident_wave(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                 open_nodes=harbour["open_nodes"],
                 structure_nodes=harbour["structure_nodes"],
                 height_m=float(value["height_m"]),
-                reflection_coef=float(value["reflection_coef"]))})
+                reflection_coef=value["reflection_coef"])})
 
 
 def stamp_boundary_rows(cli_text: str, *, open_nodes: Sequence[int],
                         structure_nodes: Sequence[int], height_m: float,
-                        reflection_coef: float) -> str:
+                        reflection_coef: float | None) -> str:
     """The mesh's boundary file, restamped as ARTEMIS reads it.
 
     Rank and node are written back unchanged: the last two columns are the walk.
+    With no structure nodes the field is free and no reflection is read.
     """
     liquid = {int(n) for n in (open_nodes or ())}
     solid = {int(n) for n in (structure_nodes or ())}
+    if solid and reflection_coef is None:
+        raise ValueError(
+            f"{len(solid)} boundary node(s) stand on the structure and no "
+            "reflection coefficient was stated; a structure's faces reflect "
+            "the fraction the user states, never a default.")
     rows: list[tuple[int, int]] = []
     for line in cli_text.splitlines():
         parts = line.split()

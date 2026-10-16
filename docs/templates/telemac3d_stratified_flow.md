@@ -30,6 +30,6 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `cold_temp_c` | C | required | Hypolimnion (cold bottom layer) temperature; the initial top-to-bottom difference is what the run either keeps or mixes away |
 | `thermocline_depth_m` | m | required | Depth of the thermocline below the free surface. The vertical grid is planned to HOLD it and REFUSES when no admissible sigma stretch over the domain's deepest column can |
 | `mesh_resolution_m` | m | optional | Target triangle edge the water body's interior is meshed at. The horizontal spends its budget on COVERING the body rather than on detail; the 3D node count is this mesh's nodes times the planes the deck states |
-| `event_time` | - | required | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
+| `event_time` | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `vertical_frame` | - | NAVD88 | Vertical datum the bed's elevations are counted from, and with them the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
 

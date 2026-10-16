@@ -81,7 +81,22 @@ person draws or hands in, absorbing what they supply (`need` with a class is the
 catalog match, and a geometry with it is the shape the matched source is read
 as). `stated()` is the ONE standing of "the user may state one; unstated the
 run's own machinery answers" - the supplied mesh the builder replaces, the
-mesher's own edge - and carries no verdict, no refusal and no sentence.
+mesher's own edge, the moment a dated source asks for at its own parameter -
+and carries no verdict, no refusal and no sentence.
+
+A stated-only input may also be the one a PART of the template is composed on,
+and the part is composed only when the input is stated - there is no
+conditional primitive, only the seams the parts already ride. A coupled body
+whose `given` inputs all hold nothing states nothing (an unstated decaying
+substance leaves the dye conservative); a world measurement (`Measured`) whose
+`value` input holds nothing is not taken, and what is set on it is not composed
+either - the mesh op whose `geometry` names it, the profile read `along` it (an
+unstated structure leaves the harbour free-field: no obstacle, no reflecting
+face, no transect). A value whose meaning is the part's - a structure's
+reflection coefficient - is stated with that part and only with it, and the
+author that reads both refuses either alone by name. Composing a part from an
+ad hoc script that edits the composition, beyond the parts a template declares,
+is a stated requirement no seam carries yet.
 
 Values lead the wire and rows follow, each in body order, and the generated
 docstring documents both in ONE section: required values, defaulted ones, then

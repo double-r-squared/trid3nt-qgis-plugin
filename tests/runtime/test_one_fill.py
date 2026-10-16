@@ -31,10 +31,9 @@ def _wf():
     return TOOL_REGISTRY["telemac_dye_release"].fn.workflow
 
 
-#: What every TELEMAC run states: the moment it opens at, and the values its
-#: template cannot stand without - a release, the substance it carries.
-_DYE = {"release": [0.5, 0.5], "decaying_substance": "fluorescein",
-        "event_time": "2024-06-01T00:00:00Z"}
+#: What a dye run states: the moment it opens at, and the one value its template
+#: cannot stand without - the release.
+_DYE = {"release": [0.5, 0.5], "event_time": "2024-06-01T00:00:00Z"}
 
 
 def _filled(values):

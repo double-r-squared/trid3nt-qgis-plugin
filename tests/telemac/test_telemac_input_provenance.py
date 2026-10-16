@@ -38,10 +38,10 @@ def _resolve_bare(tool_name: str, location: str):
 
 
 @pytest.mark.parametrize(("tool_name", "location"), TELEMAC_TEMPLATES)
-def test_an_unsupplied_moment_is_refused_naming_the_need(tool_name: str,
-                                                         location: str) -> None:
-    """Nobody sent a moment, so the fill refuses naming event_time - the
-    engine's coercion never invents one."""
+def test_an_unsupplied_moment_is_no_verdict_and_never_invented(
+        tool_name: str, location: str) -> None:
+    """Nobody sent a moment: the fill holds no event_time and refuses nothing
+    over it - a dated source asks for it at its own parameter."""
     from trid3nt_server.tools import TOOL_REGISTRY
     from trid3nt_server.workflows.runtime import fill as fill_mod
     from trid3nt_server.workflows.runtime.fill import Fill, fill
@@ -50,18 +50,18 @@ def test_an_unsupplied_moment_is_refused_naming_the_need(tool_name: str,
         return decl.name
 
     workflow = TOOL_REGISTRY[tool_name].fn.workflow
-    assert workflow.input("event_time").required
+    assert not workflow.input("event_time").required
     with patch.object(fill_mod, "_produce", _held):
         state = asyncio.run(fill(Fill(workflow=workflow), {"input_mode": "auto"}))
-    code, sentence = state.refusal()
-    assert code == "GATE_REFUSED" and "event_time" in sentence
+    assert "event_time" not in state.inputs
+    assert "event_time" not in state.refusal()[1]
 
 
 @pytest.mark.parametrize(("tool_name", "location"), TELEMAC_TEMPLATES)
 def test_an_unsupplied_moment_leaves_no_provenance_row(tool_name: str,
                                                        location: str) -> None:
     """No moment stated: no derived row for the LAYER or the input-review gate
-    to read - the need was refused at the fill instead."""
+    to read - an unstated moment is no input."""
     from trid3nt_server.workflows.runtime import provenance_entries
 
     workflow, sheet = _resolve_bare(tool_name, location)

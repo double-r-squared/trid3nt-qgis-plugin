@@ -58,7 +58,7 @@ class INPUTS:
     spill_fraction = Input()
     spill_duration_s = Input()
 
-    decaying_substance = Input()
+    decaying_substance = Input().stated()
 
     domain = Input(DOMAIN).need("hydrography", at="release",
                                 span_km=_REACH_LENGTH_KM)

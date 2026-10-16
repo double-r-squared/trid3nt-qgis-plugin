@@ -1,4 +1,4 @@
-"""Engine template ``artemis_harbor_agitation`` - does the structure shelter the water."""
+"""Engine template ``artemis_harbor_agitation`` - the wave agitation in a basin, with or without a structure."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ _STEERING_FILE = "art_agitation.cas"
 
 class INPUTS:
     wave_height_m = Input()
-    reflection_coef = Input()
+    reflection_coef = Input().stated()
 
     mesh_resolution_m = RESOLUTION
     mesh_grade = GRADE
@@ -58,13 +58,15 @@ class INPUTS:
         "soundings, or a depth in metres for a basin nobody has sounded.")).need(
         "bathymetry")
     structure = Input(desc=(
-        "REQUIRED. The barrier the question is about, as a polyline LAYER (the "
-        "uri or handle from fetch_osm_features feature='breakwaters', or any "
-        "line layer the user has) or a drawn/typed line as [[lon, lat], ...]. "
+        "The barrier the question is about, as a polyline LAYER (the uri or "
+        "handle from fetch_osm_features feature='breakwaters', or any line "
+        "layer the user has) or a drawn/typed line as [[lon, lat], ...]. "
         "Producer-less BY DESIGN - this tool will never go and find a structure "
-        "you did not name. It is cut out of the water domain at "
+        "you did not name. Stated, it is cut out of the water domain at "
         "`barrier_width_m` and its faces reflect `reflection_coef` of the "
-        "incident energy.")).need(geometry="polyline")
+        "incident energy, which must be stated with it. Unstated, the basin is "
+        "solved free-field: no obstacle, nothing reflects, and no transect is "
+        "charted.")).need(geometry="polyline").stated()
 
 
 _FOOTPRINT = Measured(

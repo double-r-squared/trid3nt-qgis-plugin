@@ -7261,7 +7261,7 @@
         "units": "s"
       },
       "decaying_substance": {
-        "desc": "Name a substance whose tracer DECAYS - sewage | E. coli | coliform | bacteria | effluent | wastewater - and its narrated literature die-off is applied as a first-order sink on the plume"
+        "desc": "Name a substance whose tracer DECAYS - sewage | E. coli | coliform | bacteria | effluent | wastewater - and its narrated literature die-off is applied as a first-order sink on the plume; unstated, the tracer is conservative and nothing removes it"
       }
     },
     "telemac_eutrophication": {

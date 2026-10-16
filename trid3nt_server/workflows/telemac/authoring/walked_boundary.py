@@ -97,6 +97,21 @@ def _segments_utm(polylines: Sequence[Any], utm_epsg: int) -> list[list[float]]:
     return out
 
 
+def _refuse_unpaired_reflection(structure: Any, reflection_coef: Any) -> None:
+    if structure is not None and reflection_coef is None:
+        raise TelemacError(
+            "the structure is stated and its reflection coefficient is not: "
+            "state reflection_coef, the fraction of the incident energy its "
+            "faces reflect - it is never defaulted.",
+            error_code="ARTEMIS_REFLECTION_UNSTATED")
+    if structure is None and reflection_coef is not None:
+        raise TelemacError(
+            f"reflection_coef={reflection_coef!r} is stated with no structure: "
+            "with no structure the field is free and nothing reflects. State the "
+            "structure, or drop the coefficient.",
+            error_code="ARTEMIS_REFLECTION_UNPAIRED")
+
+
 async def settle_harbour(
     *,
     mesh: dict[str, Any],
@@ -106,16 +121,18 @@ async def settle_harbour(
     wave_period_s: float,
     wave_height_m: float,
     wave_direction_deg: float,
-    reflection_coef: float,
+    reflection_coef: float | None = None,
     result_basename: str,
     deck: str,
     open_depth_threshold_m: float,
 ) -> dict[str, Any]:
     """What the accepted harbour mesh measures -> what the harbour sheet reads.
 
-    A mesh naming no liquid boundary refuses.
+    A mesh naming no liquid boundary refuses; with no structure the field is free.
     """
     from trid3nt_server.inputs.shape import polylines as _lines, shape
+
+    _refuse_unpaired_reflection(structure, reflection_coef)
 
     facts = mesh_facts(mesh, missing=_harbour_mesh_missing)
     utm_epsg = int(facts["utm_epsg"])
@@ -150,10 +167,11 @@ async def settle_harbour(
         f"harbour boundary: {len(boundary_nodes)} boundary nodes, "
         f"{len(open_nodes)} of them the designated liquid edge the "
         f"{wave_height_m:g} m incident wave enters through, "
-        f"{len(structure_nodes)} standing on the {structure_width_m:g} m "
-        f"structure footprint and reflecting "
-        f"{reflection_coef:g} of it; every other face is the absorbing shore. "
-        f"{topology['states']}.")
+        + (f"{len(structure_nodes)} standing on the {structure_width_m:g} m "
+           f"structure footprint and reflecting {reflection_coef:g} of it"
+           if structure is not None else "no structure stated, so the field "
+           "is free")
+        + f"; every other face is the absorbing shore. {topology['states']}.")
     return {
         **facts,
         "name": slug_of(facts["mesh_name"]),
@@ -169,7 +187,8 @@ async def settle_harbour(
         "wave_period_s": float(wave_period_s),
         "wave_height_m": float(wave_height_m),
         "wave_direction_deg": float(wave_direction_deg),
-        "reflection_coef": float(reflection_coef),
+        "reflection_coef": (None if reflection_coef is None
+                            else float(reflection_coef)),
         "max_depth_m": round(float(-np.nanmin(node_bed)), 2),
         "mesh_inputs": [
             {"gs_uri": geometry_uri(files, missing=_harbour_mesh_missing),

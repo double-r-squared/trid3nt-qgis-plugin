@@ -30,6 +30,6 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `outfall_coords` | - | required | Where the discharge enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. On a river with no domain supplied it is also the seed the reach is walked downstream from |
 | `do_standard_mgl` | mg/L | 5.0 | The DO water-quality standard the sag is judged against; 5 is a common warm-water aquatic-life criterion |
 | `mesh_resolution_m` | m | optional | Target element edge or cell length the mesh is built at. The granularity is the USER's and nothing refuses one: absent, the mesh resolves the finest data it stands on, and the card states the node count it comes to |
-| `event_time` | - | required | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
+| `event_time` | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `vertical_frame` | - | NAVD88 | Vertical datum the bed's elevations are counted from, and with them the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
 

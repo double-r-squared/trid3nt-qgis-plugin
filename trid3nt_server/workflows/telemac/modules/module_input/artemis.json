@@ -2217,7 +2217,7 @@
           0.0,
           1.0
         ],
-        "desc": "The declared structure's reflection coefficient: 1 fully reflecting (a vertical quay), 0 fully absorbing (a rubble slope). Every other solid face is the absorbing shore"
+        "desc": "The declared structure's reflection coefficient: 1 fully reflecting (a vertical quay), 0 fully absorbing (a rubble slope). Stated with a structure and only with one; every other solid face is the absorbing shore"
       },
       "mesh_resolution_m": {
         "desc": "Finest triangle edge, used at the shoreline and around the structure. THE granularity lever: a phase-resolving solve needs several nodes per WAVELENGTH and Kd peaks inside a diffraction fringe, so a coarse mesh reads the peaks low"

@@ -6,7 +6,7 @@
 
 ## [`artemis_harbor_agitation`](artemis_harbor_agitation.md)
 
-The WAVE AGITATION (Kd = Hs/H0) a declared structure leaves inside a harbour, marina or sheltered basin.
+The WAVE AGITATION (Kd = Hs/H0) inside a harbour, marina or basin, behind a declared structure or free-field.
 
 Module `artemis`.
 

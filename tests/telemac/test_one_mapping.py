@@ -119,8 +119,8 @@ def test_every_template_names_only_what_its_run_is_called():
 
 
 #: The inputs a bare call has to state before its fill is ready.
-# Every REQUIRED input of every template: a point each, the moment, and the
-# world values no template starts from.
+# Every REQUIRED input of every template - a point each and the world values no
+# template starts from - and the moment, which a dated source asks for.
 _STATED = {"pour_point": [-82.42, 43.0],
            "station": [-82.42, 43.0], "wave_height_m": 1.0,
            "reflection_coef": 0.5, "warm_temp_c": 25.0, "cold_temp_c": 15.0,
@@ -128,7 +128,6 @@ _STATED = {"pour_point": [-82.42, 43.0],
            "seed": [-82.42, 43.0], "seed_point": [-82.42, 43.0],
            "release": [-82.42, 43.0], "outfall_coords": [-82.42, 43.0],
            "monitoring_point": [-82.42, 43.0],
-           "decaying_substance": "fluorescein",
            "sediment_gradation": "fine sand",
            "rain_series_mm": [0.0, 5.0, 10.0],
            "design_storm_mm_per_day": 50.0, "curve_number": 70.0,

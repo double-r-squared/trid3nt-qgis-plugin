@@ -78,14 +78,14 @@ _MESHER, _MESH_KIND = "om2d", "unstructured_tri"
 _DISPATCH = f"{_TELEMAC}.engine.solve_case"
 
 #: The moment a run of this engine opens at: what every dated source is asked for and every record is read at.
-#: Required: a source that needs a window and was not given one REFUSES naming the need,
-#: so an undated run proceeds and a dated one is asked.
+#: Stated or not: a source that needs a window and was not given one REFUSES naming the
+#: need at its own parameter, so an undated run proceeds and a dated one is asked.
 EVENT_TIME = Input(
     name="event_time",
     desc="The moment the scenario is read at - an ISO date or datetime "
          "(YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like "
          "'during last Tuesday's storm'. Each source keeps its own "
-         "retention, and a request deeper than one refuses typed")
+         "retention, and a request deeper than one refuses typed").stated()
 
 # The kind is stated here once: every module of this engine solves on triangles, so a supplied mesh of another kind refuses at its row.
 _SUPPLIED_MESH = Input(MESH, name="mesh", coercion=MappingProxyType({"kinds": (_MESH_KIND,)})).stated()
@@ -293,6 +293,10 @@ def _stated_value(value: Any) -> str:
         text = ", ".join(_stated_value(item) for item in value)
         return f"[{text}]" if len(text) <= _VALUE_CHARS else f"{len(value)} values"
     return f"{value:g}" if isinstance(value, float) else str(value)
+
+
+def _names_untaken(value: Any, untaken: set[str]) -> bool:
+    return isinstance(value, str) and value in untaken
 
 
 def _unanchored(primitive: Primitive) -> Primitive:
@@ -684,15 +688,21 @@ class TelemacWorkflow(Workflow):
                     fn if callable(fn) else _load(fn), kwargs, label)
             return run[label]
 
+        # The measurements of a value nobody stated: the mesh op set on one and the line read along one are not composed either.
+        untaken: set[str] = set()
+
         async def measure(when: str) -> None:
             for ask in asks:
                 runner, _stage, taken = _MEASURES[ask.kind]
                 if taken == when:
+                    reads = await _read_named(env, dict(ask.reads))
+                    if "value" in reads and reads["value"] is None:
+                        run[ask.name] = None
+                        untaken.add(ask.name)
+                        continue
                     world = await self._world(env, domain, _signature(runner))
                     await stage(_SETTLED if taken == "settle" else ask.name,
-                                runner, **world,
-                                **await _read_named(env, dict(ask.reads)),
-                                **ask.asked)
+                                runner, **world, **reads, **ask.asked)
 
         run.update(stated(steering=self.steering, keywords=keywords))
         await measure("world")
@@ -700,7 +710,7 @@ class TelemacWorkflow(Workflow):
         # A supplied mesh is already the run's mesh: its row's ingestion wrote the record the build would have.
         if "mesh" not in run:
             await stage("mesh", build_declared_mesh,
-                        mesh=await self._recipe(env, mesh),
+                        mesh=await self._recipe(env, mesh, untaken),
                         name=await read(env, self._states("MESH_ON", "") or domain),
                         input_mode=env.input_mode,
                         fresh=bool(state.carried.get("restart_clean")))
@@ -781,6 +791,7 @@ class TelemacWorkflow(Workflow):
             moment=run.get(EVENT_TIME.name))
         await keep_mesh(run["mesh"], solved.get("run_id"))
         outputs, captions = self._outputs()
+        outputs = [p for p in outputs if not _names_untaken(p.along, untaken)]
         # A primitive's point, line and band name run inputs; each is read here and rejoins its primitive at publish.
         anchors = [{"at": await given(p.at), "along": await given(p.along),
                     "within": await given(p.within)} for p in outputs]
@@ -898,9 +909,11 @@ class TelemacWorkflow(Workflow):
         named += self.steering.named()
         return named
 
-    async def _recipe(self, env: Any, recipe: Any) -> dict[str, Any]:
+    async def _recipe(self, env: Any, recipe: Any,
+                      untaken: set[str]) -> dict[str, Any]:
         """The mesh ask with every input it names read off the run: the extent,
-        a resolution stated as a name, and each op argument that takes one."""
+        a resolution stated as a name, and each op argument that takes one.
+        An op set on a measurement the run did not take is not composed."""
         from trid3nt_server.tools.mesh.recipe import recipe_plan_value, takes_name
         from trid3nt_server.workflows.runtime.fill import read
 
@@ -908,10 +921,15 @@ class TelemacWorkflow(Workflow):
         for key in ("extent", "resolution_m"):
             if isinstance(asked[key], str):
                 asked[key] = await read(env, asked[key])
+        composed = []
         for op, entry in zip(recipe.ops, asked["ops"]):
+            if _names_untaken(op.kwargs.get("geometry"), untaken):
+                continue
             entry["kwargs"] = {
                 key: await read(env, value) if takes_name(recipe, op, key)
                 else value for key, value in entry["kwargs"].items()}
+            composed.append(entry)
+        asked["ops"] = composed
         return asked
 
     def _mesh(self, domain: str, slots: Mapping[str, str]) -> Any:
