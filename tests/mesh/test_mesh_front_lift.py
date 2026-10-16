@@ -197,8 +197,8 @@ def test_a_ragged_mesh_display_face_is_ugrid_and_a_uniform_one_keeps_2dm(tmp_pat
     import netCDF4
 
     with netCDF4.Dataset(face) as ds:
-        assert ds.variables["Mesh2D"].getncattr("cf_role") == "topology_data"
-        assert ds.variables["Mesh2D_face_nodes"].shape == (5, 3)
+        assert ds.variables["Mesh2D"].getncattr("cf_role") == "mesh_topology"
+        assert ds.variables["Mesh2D_face_nodes"].shape == (3, 5)
 
     uniform = MeshSession(_reg_recipe(), workdir=tmp_path / "uniform")
     uniform._mesh = Mesh(

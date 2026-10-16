@@ -100,15 +100,16 @@ def write_ascii_dataset(values: Any, *, name: str, nodes: int, cells: int,
 
 def write_ugrid(mesh: Any, path: str | Path, *,
                 datasets: Mapping[str, Sequence[tuple[float, Sequence[float]]]
-                                  ] | None = None) -> str:
+                                  ] | None = None,
+                reference_time: str | None = None) -> str:
     """Write a polygon-cell mesh as a CF-UGRID netCDF file MDAL opens.
 
     Cells may have any vertex count: the connectivity pads shorter rows with
-    the fill value. ``datasets`` are cell-valued groups over time - a name to a
-    sequence of ``(t, values)`` pairs, one value per cell - written into the
-    same file as face-centered variables. A painted bed becomes a node-centered
-    ``bed_elevation`` variable, which MDAL surfaces as its Bed Elevation
-    dataset. Returns the path written.
+    the fill value. ``datasets`` are cell-valued groups over ONE time axis - a
+    name to ``(seconds, values)`` pairs, one value per cell, every group at the
+    same instants - counted from ``reference_time`` (ISO 8601), which a dataset
+    requires. A painted bed becomes a node-centered ``bed_elevation`` variable,
+    which MDAL surfaces as its Bed Elevation dataset. Returns the path written.
     """
     import netCDF4
 
@@ -122,9 +123,10 @@ def write_ugrid(mesh: Any, path: str | Path, *,
             "a UGRID face needs cells of at least three vertices; got "
             f"{[int(r.size) for r in rows[:5]]}.")
     geographic = str(mesh.crs_authid).upper() == "EPSG:4326"
-    conn = np.full((max_n, n_faces), -1, dtype=np.int64)
-    for column, row in enumerate(rows):
-        conn[: int(row.size), column] = row
+    conn = np.full((n_faces, max_n), -1, dtype=np.int64)
+    for face, row in enumerate(rows):
+        conn[face, : int(row.size)] = row
+    instants = _instants(datasets, reference_time) if datasets else None
 
     dest = netCDF4.Dataset(str(path), "w", format="NETCDF3_CLASSIC")
     try:
@@ -133,11 +135,9 @@ def write_ugrid(mesh: Any, path: str | Path, *,
         dest.createDimension("max_nfaces", max_n)
         topo = dest.createVariable("Mesh2D", "i4")
         topo.setncattr("topology_dimension", 2)
-        topo.setncattr("cf_role", "topology_data")
-        topo.setncattr("node_dimension", "nMesh2D_nodes")
+        topo.setncattr("cf_role", "mesh_topology")
+        topo.setncattr("node_coordinates", "Mesh2D_node_x Mesh2D_node_y")
         topo.setncattr("face_dimension", "nMesh2D_faces")
-        topo.setncattr("node_x", "Mesh2D_node_x")
-        topo.setncattr("node_y", "Mesh2D_node_y")
         topo.setncattr("face_node_connectivity", "Mesh2D_face_nodes")
         nx = dest.createVariable("Mesh2D_node_x", "f8", ("nMesh2D_nodes",))
         nx.setncattr("units", "degrees_east" if geographic else "m")
@@ -149,9 +149,11 @@ def write_ugrid(mesh: Any, path: str | Path, *,
         if geographic:
             ny.setncattr("standard_name", "projection_y_coordinate")
         ny[:] = pts[:, 1]
+        # MDAL reads the connectivity faces-first; the transposed order surfaces it as a dataset and drops every time step.
         fn = dest.createVariable("Mesh2D_face_nodes", "i4",
-                                 ("max_nfaces", "nMesh2D_faces"),
+                                 ("nMesh2D_faces", "max_nfaces"),
                                  fill_value=-1)
+        fn.setncattr("cf_role", "face_node_connectivity")
         fn.setncattr("start_index", 0)
         fn.setncattr("long_name", "vertex node indices of each face")
         fn[:] = conn
@@ -162,11 +164,17 @@ def write_ugrid(mesh: Any, path: str | Path, *,
             bed[:] = np.asarray(mesh.bed, dtype=float)
         if datasets:
             dest.createDimension("time", None)
+            clock = dest.createVariable("time", "f8", ("time",))
+            clock.setncattr("standard_name", "time")
+            # MDAL reads only "<unit> since YYYY-MM-DD HH:MM:SS": bare seconds read as hours, an ISO "T...Z" anchor rescales.
+            clock.setncattr("units", f"seconds since {instants[0]}")
+            clock[:] = instants[1]
             for name, series in datasets.items():
                 variable = dest.createVariable(
                     _identifier(name), "f8", ("time", "nMesh2D_faces"),
                     fill_value=np.float64("nan"))
                 variable.setncattr("units", "1")
+                variable.setncattr("mesh", "Mesh2D")
                 variable.setncattr("location", "face")
                 for step, (t, values) in enumerate(series):
                     column = np.asarray(values, dtype=float).ravel()
@@ -181,6 +189,30 @@ def write_ugrid(mesh: Any, path: str | Path, *,
     finally:
         dest.close()
     return str(path)
+
+
+def _instants(datasets: Mapping[str, Sequence[tuple[float, Sequence[float]]]],
+              reference_time: str | None) -> tuple[str, list[float]]:
+    """The anchor as MDAL reads it and the one set of instants every group shares."""
+    from datetime import datetime, timezone
+
+    if not reference_time:
+        raise MeshDisplayError(
+            "MESH_DATASET_UNANCHORED",
+            "a dataset over time is counted from an instant, and none was "
+            "given; state the run's moment or its solve's start.")
+    at = datetime.fromisoformat(str(reference_time).replace("Z", "+00:00"))
+    if at.tzinfo is not None:
+        at = at.astimezone(timezone.utc).replace(tzinfo=None)
+    axes = {name: [float(t) for t, _values in series]
+            for name, series in datasets.items()}
+    first = next(iter(axes.values()))
+    if any(axis != first for axis in axes.values()):
+        raise MeshDisplayError(
+            "MESH_DATASET_TIMES",
+            f"the groups {sorted(axes)} are at different instants; one file "
+            "carries one time axis, so each axis is its own file.")
+    return at.strftime("%Y-%m-%d %H:%M:%S"), first
 
 
 def _identifier(name: str) -> str:

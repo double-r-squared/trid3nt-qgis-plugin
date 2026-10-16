@@ -13,7 +13,7 @@ from typing import Any, Mapping
 from ..errors import ModflowError
 from .griddata import sample
 
-__all__ = ["place"]
+__all__ = ["cells_of", "place"]
 
 def place(statement: Mapping[str, Any], *, points: Any, cells: Any,
           utm_epsg: int | None, nlay: int) -> list[tuple]:
@@ -29,7 +29,7 @@ def place(statement: Mapping[str, Any], *, points: Any, cells: Any,
             f"{name} places by geometry, and this run has no accepted mesh "
             "with a projected zone to place it on.",
             error_code="MODFLOW_STRESS_OUTSIDE")
-    placed = _cells(statement["geometry"], name=name, points=points,
+    placed = cells_of(statement["geometry"], name=name, points=points,
                     cells=cells, utm_epsg=int(utm_epsg))
     columns = [_column(value, key, name=name, placed=placed, points=points,
                        cells=cells, utm_epsg=int(utm_epsg))
@@ -48,7 +48,7 @@ def _column(value: Any, key: str, *, name: str, placed: list[int], points: Any,
                       utm_epsg=utm_epsg)
 
 
-def _cells(geometry: Any, *, name: str, points: Any, cells: Any,
+def cells_of(geometry: Any, *, name: str, points: Any, cells: Any,
            utm_epsg: int) -> list[int]:
     """The sorted cell ids the geometry touches: a polygon holds a cell by its centre,
     a point the one cell GridIntersect returns for it, even on a shared vertex."""

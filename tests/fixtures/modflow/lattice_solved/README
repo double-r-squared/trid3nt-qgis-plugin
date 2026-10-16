@@ -1,0 +1,1 @@
+Synthetic verification fixture (not a product result): the 20 m lattice sheet of tests/solver/test_modflow_outputs.py (two layers, stress composites, two periods in days, cell 8 of layer 1 inactive) serialized and solved with `docker run --rm --network none -v <dir>:/run -w /run --entrypoint mf6 trid3nt-local/modflow:latest`.

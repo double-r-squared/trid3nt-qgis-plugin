@@ -8,6 +8,7 @@ from typing import Any, Mapping
 from ...runtime.module import MOMENT, Output
 from ..errors import ModflowError
 from .module import ModflowModule, _start_date_time, periods
+from .outputs import PRIMITIVES
 
 __all__ = ["GWF", "MODULE_OUTPUT"]
 
@@ -72,3 +73,4 @@ GWF.composites(
     reads={name: ("geometry", *columns) for name, (_, columns) in _STRESS.items()},
     **{name: _stress(name, package, columns)
        for name, (package, columns) in _STRESS.items()})
+GWF.reads(**PRIMITIVES)

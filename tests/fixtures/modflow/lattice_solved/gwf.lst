@@ -1,0 +1,376 @@
+                                   MODFLOW 6
+                U.S. GEOLOGICAL SURVEY MODULAR HYDROLOGIC MODEL
+                          GROUNDWATER FLOW MODEL (GWF)
+                            VERSION 6.7.0 02/05/2026
+
+   MODFLOW 6 compiled Feb 05 2026 22:38:38 with Intel(R) Fortran Intel(R) 64
+   Compiler Classic for applications running on Intel(R) 64, Version 2021.6.0
+                             Build 20220226_000000
+
+This software has been approved for release by the U.S. Geological 
+Survey (USGS). Although the software has been subjected to rigorous 
+review, the USGS reserves the right to update the software as needed 
+pursuant to further analysis and review. No warranty, expressed or 
+implied, is made by the USGS or the U.S. Government as to the 
+functionality of the software and related material nor shall the 
+fact of release constitute any such warranty. Furthermore, the 
+software is released on condition that neither the USGS nor the U.S. 
+Government shall be held liable for any damages resulting from its 
+authorized or unauthorized use. Also refer to the USGS Water 
+Resources Software User Rights Notice for complete use, copyright, 
+and distribution information.
+
+
+As a work of the United States Government, this USGS product is 
+in the public domain within the United States. You can copy, 
+modify, distribute, and perform the work, even for commercial 
+purposes, all without asking permission. Additionally, USGS 
+waives copyright and related rights in the work worldwide 
+through CC0 1.0 Universal Public Domain Dedication 
+(https://creativecommons.org/publicdomain/zero/1.0/).
+
+The following GNU Lesser General Public License (LGPL) libraries
+are used in this USGS product:
+
+    SPARSKIT version 2.0
+      ilut, luson, and qsplit 
+      (https://www-users.cse.umn.edu/~saad/software/SPARSKIT/)
+
+    RCM - Reverse Cuthill McKee Ordering
+      (https://people.math.sc.edu/Burkardt/f_src/rcm/rcm.html)
+
+    BLAS - Basic Linear Algebra Subprograms Level 1
+      (https://people.math.sc.edu/Burkardt/f_src/blas1_d/blas1_d.html)
+
+    SPARSEKIT - Sparse Matrix Utility Package
+      amux, dperm, dvperm, rperm, and cperm
+      (https://people.sc.fsu.edu/~jburkardt/f77_src/sparsekit/sparsekit.html)
+
+The following BSD-3 License libraries are used in this USGS product:
+
+    Modern Fortran DAG Library
+      Copyright (c) 2018, Jacob Williams
+      All rights reserved.
+      (https://github.com/jacobwilliams/daglib)
+
+MODFLOW 6 compiler options: -Isrc/libmf6_external.a.p -Isrc/libmf6core.a.p
+-Isrc -I../src -D_FILE_OFFSET_BITS=64 -warn general -warn truncated_source
+-stand=f18 -O2 -fpe0 -no-heap-arrays -traceback -diag-disable:7416
+-diag-disable:7025 -diag-disable:5268 -fPIC -module src/libmf6core.a.p
+-gen-dep=src/libmf6core.a.p/Utilities_compilerversion.F90.o
+-gen-depformat=make -o src/libmf6core.a.p/Utilities_compilerversion.F90.o -c
+
+System command used to initiate simulation:
+mf6
+
+MODFLOW was compiled using uniform precision.
+
+Real Variables
+  KIND: 8
+  TINY (smallest non-zero value):    2.225074-308
+  HUGE (largest value):    1.797693+308
+  PRECISION: 15
+  SIZE IN BITS: 64
+
+Integer Variables
+  KIND: 4
+  HUGE (largest value): 2147483647
+  SIZE IN BITS: 32
+
+Long Integer Variables
+  KIND: 8
+  HUGE (largest value): 9223372036854775807
+  SIZE IN BITS: 64
+
+Logical Variables
+  KIND: 4
+  SIZE IN BITS: 32
+ 
+ NAMEFILE OPTIONS:
+ END NAMEFILE OPTIONS:
+
+ DISV -- VERTEX GRID DISCRETIZATION PACKAGE, VERSION 1 : 12/23/2015 - INPUT READ FROM MEMPATH: __INPUT__/GWF/DISV                                
+
+
+ Setting Discretization Options
+    Model length unit [0=UND, 1=FEET, 2=METERS, 3=CENTIMETERS] set as 2
+ End Setting Discretization Options
+
+ Setting Discretization Dimensions
+    NLAY = 2
+    NCPL = 8
+    NVERT = 9
+ End Setting Discretization Dimensions
+
+ Setting Discretization Griddata
+    TOP set from input file
+    BOTM set from input file
+    IDOMAIN set from input file
+ End Setting Discretization Griddata
+
+ Discretization Vertex data loaded
+ Discretization Cell2d data loaded
+
+ NPF -- NODE PROPERTY FLOW PACKAGE, VERSION 1, 3/30/2015 INPUT READ FROM MEMPATH: __INPUT__/GWF/NPF                                 
+
+
+ IC -- Initial Conditions Package, Version 8, 3/28/2015 input read from mempath: __INPUT__/GWF/IC                                  
+
+
+
+ The specified IDOMAIN results in a reduced number of cells.
+ Number of user nodes: 16
+ Number of nodes in solution: 15
+
+
+ Setting NPF Options
+    Cell-by-cell flow information will be saved to binary file whenever ICBCFL is not zero.
+    Specific discharge will be calculated at cell centers and written to DATA-SPDIS in budget file when requested.
+    Saturation will be written to DATA-SAT in budget file when requested.
+ End Setting NPF Options
+
+ Setting NPF Griddata
+    ICELLTYPE set from input file
+    K set from input file
+    K33 not provided.  Setting K33 = K.
+    K22 not provided.  Setting K22 = K.
+ End Setting NPF Griddata
+
+
+ WEL -- WEL PACKAGE, VERSION 8, 2/22/2014 INPUT READ FROM MEMPATH: __INPUT__/GWF/WEL_0                               
+
+ PROCESSING WEL BASE OPTIONS
+ END OF WEL BASE OPTIONS
+
+ PROCESSING WEL OPTIONS
+ END OF WEL OPTIONS
+
+ PROCESSING WEL BASE DIMENSIONS
+    MAXBOUND =       4
+ END OF WEL BASE DIMENSIONS
+
+ DRN -- DRN PACKAGE, VERSION 8, 2/22/2014 INPUT READ FROM MEMPATH: __INPUT__/GWF/DRN_0                               
+
+ PROCESSING DRN BASE OPTIONS
+ END OF DRN BASE OPTIONS
+
+ PROCESSING DRN OPTIONS
+ END OF DRN OPTIONS
+
+ PROCESSING DRN BASE DIMENSIONS
+    MAXBOUND =       4
+ END OF DRN BASE DIMENSIONS
+
+ GHB -- GHB PACKAGE, VERSION 8, 2/22/2014 INPUT READ FROM MEMPATH: __INPUT__/GWF/GHB_0                               
+
+ PROCESSING GHB BASE OPTIONS
+ END OF GHB BASE OPTIONS
+
+ PROCESSING GHB OPTIONS
+ END OF GHB OPTIONS
+
+ PROCESSING GHB BASE DIMENSIONS
+    MAXBOUND =       4
+ END OF GHB BASE DIMENSIONS
+
+ RCH -- RCH PACKAGE, VERSION 8, 2/22/2014 INPUT READ FROM MEMPATH: __INPUT__/GWF/RCH_0                               
+
+ PROCESSING RCH BASE OPTIONS
+ END OF RCH BASE OPTIONS
+
+ PROCESSING RCH OPTIONS
+ END OF RCH OPTIONS
+
+ PROCESSING RCH BASE DIMENSIONS
+    MAXBOUND =       4
+ END OF RCH BASE DIMENSIONS
+
+ CHD -- CHD PACKAGE, VERSION 8, 2/22/2014 INPUT READ FROM MEMPATH: __INPUT__/GWF/CHD_0                               
+
+ PROCESSING CHD BASE OPTIONS
+ END OF CHD BASE OPTIONS
+
+ PROCESSING CHD BASE DIMENSIONS
+    MAXBOUND =       4
+ END OF CHD BASE DIMENSIONS
+    STRT set from input file
+
+ STO -- STORAGE PACKAGE, VERSION 1, 5/19/2014 INPUT READ FROM MEMPATH: __INPUT__/GWF/STO                                 
+
+
+ PROCESSING STORAGE OPTIONS
+ END OF STORAGE OPTIONS
+    BINARY GRID INFORMATION WILL BE WRITTEN TO:
+      UNIT NUMBER: 1021
+      FILE NAME: mesh.disv.grb
+
+ OPENED mesh.disv.grb
+ FILE TYPE:DATA(BINARY)   UNIT 1021   STATUS:REPLACE             
+ FORMAT:UNFORMATTED            ACCESS:STREAM              
+ ACTION:READWRITE           
+
+      THE LAST TIME STEP WILL BE PRINTED
+      THE LAST TIME STEP WILL BE PRINTED
+
+ PROCESSING OC OPTIONS
+
+    BUDGET INFORMATION WILL BE WRITTEN TO:
+      UNIT NUMBER: 1022
+      FILE NAME: gwf.cbc
+
+ OPENED gwf.cbc
+ FILE TYPE:DATA(BINARY)   UNIT 1022   STATUS:REPLACE             
+ FORMAT:UNFORMATTED            ACCESS:STREAM              
+ ACTION:READWRITE           
+
+    HEAD INFORMATION WILL BE WRITTEN TO:
+      UNIT NUMBER: 1023
+      FILE NAME: gwf.hds
+
+ OPENED gwf.hds
+ FILE TYPE:DATA(BINARY)   UNIT 1023   STATUS:REPLACE             
+ FORMAT:UNFORMATTED            ACCESS:STREAM              
+ ACTION:READWRITE           
+
+ END OF OC OPTIONS
+
+start timestep kper="1" kstp="1" mode="normal"
+
+
+ BEGIN READING OUTPUT CONTROL FOR STRESS PERIOD 1
+      ALL TIME STEPS WILL BE SAVED
+      ALL TIME STEPS WILL BE SAVED
+
+ END READING OUTPUT CONTROL FOR STRESS PERIOD 1
+
+
+ PROCESSING STORAGE PERIOD DATA
+ END PROCESSING STORAGE PERIOD DATA
+
+
+ STRESS PERIOD 1 IS TRANSIENT
+
+ UBDSV1 SAVING     FLOW-JA-FACE ON UNIT   1022 AT TIME STEP      1, STRESS PERIOD      1
+ UBDSV06 SAVING       DATA-SPDIS IN MODEL GWF              PACKAGE NPF             CONNECTED TO MODEL GWF              PACKAGE NPF              ON UNIT   1022 AT TIME STEP      1, STRESS PERIOD      1
+ UBDSV06 SAVING         DATA-SAT IN MODEL GWF              PACKAGE NPF             CONNECTED TO MODEL GWF              PACKAGE NPF              ON UNIT   1022 AT TIME STEP      1, STRESS PERIOD      1
+
+ HEAD WILL BE SAVED ON UNIT 1023 AT END OF TIME STEP    1, STRESS PERIOD    1
+
+end timestep
+
+
+start timestep kper="1" kstp="2" mode="normal"
+
+ UBDSV1 SAVING     FLOW-JA-FACE ON UNIT   1022 AT TIME STEP      2, STRESS PERIOD      1
+ UBDSV06 SAVING       DATA-SPDIS IN MODEL GWF              PACKAGE NPF             CONNECTED TO MODEL GWF              PACKAGE NPF              ON UNIT   1022 AT TIME STEP      2, STRESS PERIOD      1
+ UBDSV06 SAVING         DATA-SAT IN MODEL GWF              PACKAGE NPF             CONNECTED TO MODEL GWF              PACKAGE NPF              ON UNIT   1022 AT TIME STEP      2, STRESS PERIOD      1
+
+ HEAD WILL BE SAVED ON UNIT 1023 AT END OF TIME STEP    2, STRESS PERIOD    1
+
+
+  VOLUME BUDGET FOR ENTIRE MODEL AT END OF TIME STEP    2, STRESS PERIOD   1
+  ---------------------------------------------------------------------------------------------------
+
+     CUMULATIVE VOLUME      L**3       RATES FOR THIS TIME STEP      L**3/T          PACKAGE NAME    
+     ------------------                 ------------------------                     ----------------
+
+           IN:                                      IN:
+           ---                                      ---
+              STO-SS =       1.3485E-03                STO-SS =       7.8468E-09     STORAGE                          
+                 WEL =           0.0000                   WEL =           0.0000     WEL_0                            
+                 DRN =           0.0000                   DRN =           0.0000     DRN_0                            
+                 GHB =         429.8508                   GHB =          85.9702     GHB_0                            
+                 RCH =           0.5000                   RCH =           0.1000     RCH_0                            
+                 CHD =       4.4146E-02                   CHD =       8.4167E-03     CHD_0                            
+
+            TOTAL IN =         430.3963              TOTAL IN =          86.0786
+
+          OUT:                                     OUT:
+          ----                                     ----
+              STO-SS =       2.3155E-02                STO-SS =       4.1204E-03     STORAGE                          
+                 WEL =           5.0000                   WEL =           1.0000     WEL_0                            
+                 DRN =         425.3731                   DRN =          85.0745     DRN_0                            
+                 GHB =           0.0000                   GHB =           0.0000     GHB_0                            
+                 RCH =           0.0000                   RCH =           0.0000     RCH_0                            
+                 CHD =           0.0000                   CHD =           0.0000     CHD_0                            
+
+           TOTAL OUT =         430.3963             TOTAL OUT =          86.0786
+
+            IN - OUT =      -1.7448E-09              IN - OUT =      -4.2732E-10
+
+ PERCENT DISCREPANCY =          -0.00     PERCENT DISCREPANCY =          -0.00
+
+
+
+
+         TIME SUMMARY AT END OF TIME STEP    2 IN STRESS PERIOD    1
+                    SECONDS     MINUTES      HOURS       DAYS        YEARS
+                    -----------------------------------------------------------
+   TIME STEP LENGTH 2.16000E+05  3600.0      60.000      2.5000     6.84463E-03
+ STRESS PERIOD TIME 4.32000E+05  7200.0      120.00      5.0000     1.36893E-02
+         TOTAL TIME 4.32000E+05  7200.0      120.00      5.0000     1.36893E-02
+
+
+end timestep
+
+
+start timestep kper="2" kstp="1" mode="normal"
+
+
+ BEGIN READING OUTPUT CONTROL FOR STRESS PERIOD 2
+      ALL TIME STEPS WILL BE SAVED
+      ALL TIME STEPS WILL BE SAVED
+
+ END READING OUTPUT CONTROL FOR STRESS PERIOD 2
+ UBDSV1 SAVING     FLOW-JA-FACE ON UNIT   1022 AT TIME STEP      1, STRESS PERIOD      2
+ UBDSV06 SAVING       DATA-SPDIS IN MODEL GWF              PACKAGE NPF             CONNECTED TO MODEL GWF              PACKAGE NPF              ON UNIT   1022 AT TIME STEP      1, STRESS PERIOD      2
+ UBDSV06 SAVING         DATA-SAT IN MODEL GWF              PACKAGE NPF             CONNECTED TO MODEL GWF              PACKAGE NPF              ON UNIT   1022 AT TIME STEP      1, STRESS PERIOD      2
+
+ HEAD WILL BE SAVED ON UNIT 1023 AT END OF TIME STEP    1, STRESS PERIOD    2
+
+
+  VOLUME BUDGET FOR ENTIRE MODEL AT END OF TIME STEP    1, STRESS PERIOD   2
+  ---------------------------------------------------------------------------------------------------
+
+     CUMULATIVE VOLUME      L**3       RATES FOR THIS TIME STEP      L**3/T          PACKAGE NAME    
+     ------------------                 ------------------------                     ----------------
+
+           IN:                                      IN:
+           ---                                      ---
+              STO-SS =       1.3485E-03                STO-SS =           0.0000     STORAGE                          
+                 WEL =           0.0000                   WEL =           0.0000     WEL_0                            
+                 DRN =           0.0000                   DRN =           0.0000     DRN_0                            
+                 GHB =         859.7013                   GHB =          85.9701     GHB_0                            
+                 RCH =           1.0000                   RCH =           0.1000     RCH_0                            
+                 CHD =       8.1505E-02                   CHD =       7.4718E-03     CHD_0                            
+
+            TOTAL IN =         860.7841              TOTAL IN =          86.0776
+
+          OUT:                                     OUT:
+          ----                                     ----
+              STO-SS =       3.7372E-02                STO-SS =       2.8435E-03     STORAGE                          
+                 WEL =          10.0000                   WEL =           1.0000     WEL_0                            
+                 DRN =         850.7468                   DRN =          85.0747     DRN_0                            
+                 GHB =           0.0000                   GHB =           0.0000     GHB_0                            
+                 RCH =           0.0000                   RCH =           0.0000     RCH_0                            
+                 CHD =           0.0000                   CHD =           0.0000     CHD_0                            
+
+           TOTAL OUT =         860.7841             TOTAL OUT =          86.0776
+
+            IN - OUT =      -1.8465E-08              IN - OUT =      -3.3442E-09
+
+ PERCENT DISCREPANCY =          -0.00     PERCENT DISCREPANCY =          -0.00
+
+
+
+
+         TIME SUMMARY AT END OF TIME STEP    1 IN STRESS PERIOD    2
+                    SECONDS     MINUTES      HOURS       DAYS        YEARS
+                    -----------------------------------------------------------
+   TIME STEP LENGTH 4.32000E+05  7200.0      120.00      5.0000     1.36893E-02
+ STRESS PERIOD TIME 4.32000E+05  7200.0      120.00      5.0000     1.36893E-02
+         TOTAL TIME 8.64000E+05  14400.      240.00      10.000     2.73785E-02
+
+
+end timestep
+
