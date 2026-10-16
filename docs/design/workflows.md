@@ -6,7 +6,9 @@ captions. Nothing in a template names a function to run. A FILL puts a value
 into each input, which ACCEPTS it or REJECTS it naming the remedy; a READY fill
 launches on an explicit act, and the engine's run is straight-line code in one order - full
 fill, mesh, settle, one review, solve. The skeleton is `workflows/runtime/workflow.py`; the TELEMAC
-facade is `workflows/telemac/workflow.py`.
+facade is `workflows/telemac/workflow.py` and the MODFLOW one `workflows/modflow/workflow.py`. The
+publish is the runtime's (`publish_reads`, `workflows/runtime/primitives.py`): each engine hands it
+how a solved module is opened, its module table of what the run wrote, and the run's record.
 
 ## No declared data operations
 

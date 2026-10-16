@@ -58,7 +58,7 @@ _MODULES = frozenset(("gwf", "gwt", "gwe"))
 
 #: The keys a ``case`` section carries.
 _CASE_FIELDS = frozenset((
-    "module", "mode", "results", "server_facts"))
+    "module", "mode", "results", "server_facts", "steering"))
 
 #: mf6's own closing sentence, case-insensitive, in the simulation listing.
 _NORMAL_TERMINATION = "normal termination"
@@ -184,6 +184,14 @@ def _solve_case(data_dir: Path, body: Any, run_id: str | None) -> dict[str, Any]
         raise CaseError(
             "MODFLOW_CASE_MODE_UNKNOWN",
             f"case.mode {mode!r} is not 'validate' or 'solve'.")
+    # mf6 takes no name-file argument and reads mfsim.nam from its cwd, so a
+    # staged steering file under any other name is a simulation it never runs.
+    steering = str(case.get("steering") or "mfsim.nam")
+    if steering != "mfsim.nam":
+        raise CaseError(
+            "MODFLOW_CASE_STEERING_UNREAD",
+            f"case.steering {steering!r} names a file mf6 never reads; it "
+            "runs mfsim.nam from the run directory.")
     if not (data_dir / "mfsim.nam").exists():
         raise CaseError(
             "MODFLOW_CASE_SIMULATION_MISSING",

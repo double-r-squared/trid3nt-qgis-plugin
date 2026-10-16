@@ -151,13 +151,21 @@ def _dimension(slot: Slot) -> str:
 def sample(artifact: Any, *, label: str, name: str, scratch: str, points: Any,
            cells: Any, utm_epsg: int | None, dimension: str,
            frame: Any) -> list[float]:
-    """A raster artifact read at the centre of every given cell, onto the model's frame.
+    """A raster artifact read at the centre of every given cell, onto the model's frame; a bed reads its own surface.
 
     ``dimension`` is L, L/T, L2/T, L3/T, 1/L or 1 (a pure number); the artifact's own
     unit is converted onto the ``frame`` of (length, time) words, and one stating
     none, or a frame lacking what its dimension needs, refuses."""
+    from trid3nt_server.inputs.bed import Bed
     from trid3nt_server.tools.derive._raster_layers import read, staged
 
+    if isinstance(artifact, Bed):
+        if artifact.is_depth:
+            # A bed stated as a depth is a flat surface that many metres below the run's own zero.
+            return [-float(artifact.depth_m) * _factor(
+                {"units": "m"}, dimension=dimension, frame=frame, label=label,
+                name=name)] * len(cells)
+        artifact = artifact.source
     factor = _factor(artifact, dimension=dimension, frame=frame, label=label, name=name)
     path = staged(artifact, role=name, scratch=scratch)
     values, _provenance, crs, transform = read(path)

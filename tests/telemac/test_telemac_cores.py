@@ -58,7 +58,7 @@ def test_no_template_takes_a_cores_argument():
     import trid3nt_server.workflows.telemac.templates  # noqa: F401
 
     templates = [tool.fn.workflow for tool in TOOL_REGISTRY.values()
-                 if hasattr(tool.fn, "workflow")]
+                 if getattr(getattr(tool.fn, "workflow", None), "engine", "") == "telemac"]
     assert templates
     for workflow in templates:
         assert "cores" not in {prm.name for prm in value_inputs(workflow)}

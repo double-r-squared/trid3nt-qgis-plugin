@@ -428,6 +428,16 @@ package SteeringSurface {
         port stageOut : StageOut;
     }
 
+    part modflowStage : Sheet {
+        doc /*
+        MODFLOW's half of the filled sheet: the simulation directory written,
+        validated by mf6 and staged through the one stager.
+
+        code: trid3nt_server/workflows/modflow/workflow.py
+        */
+        port stageOut : StageOut;
+    }
+
     part fill : Fill {
         doc /*
         code: trid3nt_server/workflows/runtime/fill.py
@@ -532,6 +542,9 @@ package SteeringSurface {
 
     interface runStaged : StageRequest
         connect telemacSheet.stageOut to stager.stageIn;
+
+    interface modflowStaged : StageRequest
+        connect modflowStage.stageOut to stager.stageIn;
 
     interface canvasAnswered : DrawnValue
         connect canvasGate.drawOut to fill.drawIn;

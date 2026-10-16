@@ -2,13 +2,19 @@
 
 # Templates
 
-15 registered templates, one per question. A template declares raw engine keywords over a module wrapper; `fill` sets the inputs and `run` solves it. The wrappers are in [`../modules.md`](../modules.md).
+16 registered templates, one per question. A template declares raw engine keywords over a module wrapper; `fill` sets the inputs and `run` solves it. The wrappers are in [`../modules.md`](../modules.md).
 
 ## [`artemis_harbor_agitation`](artemis_harbor_agitation.md)
 
 The WAVE AGITATION (Kd = Hs/H0) inside a harbour, marina or basin, behind a declared structure or free-field.
 
 Module `artemis`.
+
+## [`modflow_water_table`](modflow_water_table.md)
+
+The STEADY WATER TABLE of an unconfined aquifer under recharge, drained by its streams, with an optional pumping well.
+
+Module `gwf`.
 
 ## [`telemac3d_stratified_flow`](telemac3d_stratified_flow.md)
 

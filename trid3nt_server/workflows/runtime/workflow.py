@@ -20,11 +20,11 @@ from trid3nt_server.inputs.bound_domain import bind_domain, reset_domain
 from trid3nt_server.inputs.input import Input, declared, hydrate
 from trid3nt_server.inputs.run_notes import (
     bind_coverage, bind_notes, drain_coverage, drain_notes)
-from trid3nt_server.inputs.slots import Slot
+from trid3nt_server.inputs.slots import BED, DOMAIN, Slot
 from trid3nt_server.inputs.user_input import WireArgsError
 
 from . import journal
-from .errors import DeclarativeError, said
+from .errors import DeclarationError, DeclarativeError, said
 from .resolution import SensitivityDecl, sensitivity_notes
 from .provenance import merge_provenance, provenance_entries
 
@@ -32,10 +32,25 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from .fill import Fill
+    from .primitives import Primitive
 
-__all__ = ["RunResult", "Workflow", "register_workflow"]
+__all__ = ["EVENT_TIME", "RunResult", "Workflow", "register_workflow"]
 
 logger = logging.getLogger("trid3nt_server.workflows.runtime.workflow")
+
+#: The moment a run of this engine opens at: what every dated source is asked for and every record is read at.
+#: Stated or not: a source that needs a window and was not given one REFUSES naming the
+#: need at its own parameter, so an undated run proceeds and a dated one is asked.
+EVENT_TIME = Input(
+    name="event_time",
+    desc="The moment the scenario is read at - an ISO date or datetime "
+         "(YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like "
+         "'during last Tuesday's storm'. Each source keeps its own "
+         "retention, and a request deeper than one refuses typed").stated()
+
+
+def _names_untaken(value: Any, untaken: set[str]) -> bool:
+    return isinstance(value, str) and value in untaken
 
 
 @dataclass
@@ -177,6 +192,76 @@ class Workflow:
     def _published(self, run: RunResult) -> set[str]:
         """Every QUANTITY the run put on the map or a chart, by the name the publish stage wrote it under."""
         return {str(row.get("quantity") or "") for row in run.outputs} - {""}
+
+    def _states(self, name: str, default: Any) -> Any:
+        """One declaration read off the template module, or the default beside it."""
+        return getattr(self.template, name, default)
+
+    def _slots(self) -> dict[Any, str]:
+        """The row this question declares for each type a stage reads: the first of each, and exactly one domain and one bed."""
+        slots: dict[Any, list[str]] = {}
+        for row in self.inputs:
+            if row.slot is not None:
+                slots.setdefault(row.slot, []).append(row.name)
+        named = {row.name: row.slot for row in self.inputs}
+        for slot in slots:
+            if named.get(slot.name, slot) is not slot:
+                # A module reads a row by the NAME of its type, so no other input takes that name.
+                raise DeclarationError(
+                    f"{self.name} declares a {slot.name} row and names another "
+                    f"input {slot.name!r}; a module would read the wrong one.")
+        for slot, why in ((DOMAIN, "a run solves over one polygon"),
+                          (BED, "every node carries one elevation; a survey "
+                                "over a wider surface is composed by the merge "
+                                "derive into the one row")):
+            rows = slots.get(slot) or []
+            if len(rows) != 1:
+                raise DeclarationError(
+                    f"{self.name} declares {len(rows)} {slot.name} rows "
+                    f"({rows}): {why}, so the INPUTS body needs exactly one "
+                    f"Input({slot.name.upper()}) row.")
+        return {slot: names[0] for slot, names in slots.items()}
+
+    def _outputs(self) -> tuple[tuple[Primitive, ...], dict[str, str]]:
+        """What this question PUBLISHES and what it calls each, checked: every
+        listed read is published and has its caption."""
+        outputs = tuple(self._states("OUTPUTS", ()))
+        captions = dict(self._states("CAPTIONS", {}))
+        for primitive in outputs:
+            if primitive.publish is None:
+                raise DeclarationError(
+                    f"OUTPUTS lists {primitive.kind}({primitive.variable!r}) with "
+                    "no .layer(), .chart(), .animate() or .note(); a listed "
+                    "primitive is published.")
+            named = primitive.variable or primitive.kind
+            if named not in captions:
+                raise DeclarationError(
+                    f"OUTPUTS publishes {named!r} and CAPTIONS names no caption "
+                    "for it.")
+        return outputs, captions
+
+    async def _recipe(self, env: Any, recipe: Any,
+                      untaken: set[str]) -> dict[str, Any]:
+        """The mesh ask with every input it names read off the run: the extent,
+        a resolution stated as a name, and each op argument that takes one.
+        An op set on a measurement the run did not take is not composed."""
+        from trid3nt_server.tools.mesh.recipe import recipe_plan_value, takes_name
+        from trid3nt_server.workflows.runtime.fill import read
+
+        asked = recipe_plan_value(recipe)
+        for key in ("extent", "resolution_m"):
+            if isinstance(asked[key], str):
+                asked[key] = await read(env, asked[key])
+        composed = []
+        for op, entry in zip(recipe.ops, asked["ops"]):
+            if _names_untaken(op.kwargs.get("geometry"), untaken):
+                continue
+            entry["kwargs"] = {
+                key: await read(env, value) if takes_name(recipe, op, key)
+                else value for key, value in entry["kwargs"].items()}
+            composed.append(entry)
+        asked["ops"] = composed
+        return asked
 
 
     async def run(self, wire: Mapping[str, Any]) -> Any:

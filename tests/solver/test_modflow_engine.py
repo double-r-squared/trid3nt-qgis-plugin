@@ -105,6 +105,15 @@ def test_the_strict_gate_refuses_an_unknown_case_field():
     assert "bogus" in str(excinfo.value)
 
 
+def test_a_steering_file_mf6_never_reads_refuses(tmp_path):
+    entry = _entrypoint()
+    (tmp_path / "mfsim.nam").write_text("")
+    with pytest.raises(entry.CaseError) as excinfo:
+        entry._solve_case(tmp_path, {"module": "gwf", "steering": "other.nam"},
+                          None)
+    assert excinfo.value.error_code == "MODFLOW_CASE_STEERING_UNREAD"
+
+
 def test_a_case_naming_no_simulation_refuses(tmp_path):
     entry = _entrypoint()
     with pytest.raises(entry.CaseError) as excinfo:

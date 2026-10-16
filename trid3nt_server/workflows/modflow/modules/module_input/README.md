@@ -1,10 +1,12 @@
 # `modules/module_input/` - the bodies' input vocabulary
 
-One JSON per exposed body, extracted from mf6's own definition files by
-`scripts/extract_modflow_dictionary.py` and committed. Never hand edited: a
-transcribed keyword table is a second answer to a question the engine already
-answers, and the extractor refuses an unreadable default rather than guessing
-one.
+One JSON per exposed body, its `keywords` extracted from mf6's own definition
+files by `scripts/extract_modflow_dictionary.py` and committed. The keyword rows
+are never hand edited: a transcribed keyword table is a second answer to a
+question the engine already answers, and the extractor refuses an unreadable
+default rather than guessing one. The `inputs` section is authored - each
+template's values by name, with their prose, type and unit - and the extractor
+writes it back beside the fresh rows.
 
 A row carries what the DFN says about one keyword - its raw name, the
 identifier `<PACKAGE>_<VARIABLE>` spells it by, its type (a scalar word, or

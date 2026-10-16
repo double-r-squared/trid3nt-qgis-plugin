@@ -1,0 +1,376 @@
+"""The MODFLOW workflow: a template over one module's sheet, meshed, reviewed, solved and read.
+
+``launch`` runs one order - the mesh, the sheet written, validated and staged under its
+one review, the solve, the outputs. The publish is the runtime's; this hands it what is
+the engine's own: how a solved run is opened, the module table of what its output
+control saved, and the run's record."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from datetime import datetime
+from importlib import import_module
+from pathlib import Path
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, Callable, Collection, Mapping, Sequence
+
+from trid3nt_contracts import new_ulid
+from trid3nt_contracts.common import Origin
+from trid3nt_contracts.execution import LayerURI
+
+from trid3nt_server.inputs.input import Input
+from trid3nt_server.inputs.instant import event_time
+from trid3nt_server.inputs.slots import DOMAIN, MESH
+from trid3nt_server.workflows.runtime import DeclarationError, RunResult, Workflow
+from trid3nt_server.workflows.runtime.module import MOMENT, SlotRefused
+from trid3nt_server.workflows.runtime.primitives import (Primitive, field, publish_reads,
+                                                         unanchored)
+from trid3nt_server.workflows.runtime.review import _review, _seat_on
+from trid3nt_server.workflows.runtime.sheet import Keyword, Sheet
+from trid3nt_server.workflows.runtime.sheet import fill as fill_slots
+from trid3nt_server.workflows.runtime.sheet import run as run_sheet_
+from trid3nt_server.workflows.runtime.workflow import EVENT_TIME
+from trid3nt_server.workflows.solver.staging import discard_run
+
+from .authoring import DISV_FILE, MFSIM_FILE
+from .modules import wrapper_for
+from .modules.outputs import Solved, filerecord, group_stem
+from .modules.ugrid import display_file
+
+if TYPE_CHECKING:
+    from trid3nt_server.workflows.runtime.fill import Fill
+
+logger = logging.getLogger("trid3nt_server.workflows.modflow.workflow")
+
+__all__ = ["ModflowWorkflow", "fill_sheet", "publish_outputs", "run_sheet",
+           "stage_simulation"]
+
+#: The dispatch a staged run goes to, by the path it is resolved at CALL time.
+_DISPATCH = "trid3nt_server.workflows.modflow.engine.solve_case"
+
+#: The metrics file the worker writes, read back off the run prefix.
+_METRICS = "modflow_metrics.json"
+
+#: The simulation's own listing, which mf6 writes beside the model's.
+_SIM_LISTING = "mfsim.lst"
+
+# The kinds the FloPy meshers lay; a supplied mesh of another kind refuses at its row.
+_SUPPLIED_MESH = Input(MESH, name="mesh", coercion=MappingProxyType(
+    {"kinds": ("unstructured_tri", "voronoi", "quadtree")})).stated()
+
+
+def _floor(steering: type, keywords: Mapping[str, Any]) -> dict[str, Any]:
+    """The raw keyword floor, by the identifier each name is written under on ``steering``."""
+    if keywords and not isinstance(keywords, Mapping):
+        raise SlotRefused(
+            f"keywords takes a mapping of the engine's own keyword names to "
+            f"values, e.g. {{\"NPF_K33\": 1.0}}; got {type(keywords).__name__}.")
+    return {steering.identify(name): value for name, value in (keywords or {}).items()}
+
+
+async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
+                     params: Mapping[str, Any], workflow: str, title: str,
+                     keywords: Mapping[str, Any], input_mode: str | None,
+                     seat: Callable[[Mapping[str, Any]], None] | None = None,
+                     write: Callable[[Sheet], Any] | None = None,
+                     user: Sequence[str] = ()) -> Sheet:
+    """Set the body's slots against what the run holds -> the sheet, HELD on its one review.
+    The raw ``keywords`` floor is filled last and therefore beats a template value;
+    ``write`` writes, validates and stages every sheet a card is drawn from."""
+    floor = _floor(steering, keywords)
+
+    async def fill(values: Mapping[str, Any], edits: Mapping[str, Any]) -> Sheet:
+        # A composite samples rasters at the fill, so the fill runs off the loop.
+        sheet = await asyncio.to_thread(
+            fill_slots, steering, template=workflow, produced=dict(produced),
+            params=dict(values), **{**floor, **edits})
+        if write is not None:
+            await write(sheet)
+        return sheet
+
+    sheet = await _review(fill, params, steering=steering, workflow=workflow,
+                          title=title, input_mode=input_mode, spent=(),
+                          seat=seat, user=user)
+    logger.info("modflow sheet filled: %s states %d keywords",
+                sheet.body.__name__, len(sheet.filled))
+    return sheet
+
+
+def _results(sheet: Sheet) -> list[str]:
+    """The files the run's output control names: what the worker must find written."""
+    return [name for identifier in ("OC_HEAD_FILERECORD", "OC_BUDGET_FILERECORD")
+            if identifier in sheet.filled
+            and (name := filerecord(sheet.filled[identifier].value))]
+
+
+def _validated(rundir: Path) -> None:
+    """mf6's own validate over the directory, leaving nothing of its own behind: a
+    listing the parse writes is not an input the solve is handed."""
+    from .authoring.validate import validate_authored_simulation
+
+    before = set(rundir.iterdir())
+    try:
+        validate_authored_simulation(rundir)
+    finally:
+        for left in set(rundir.iterdir()) - before:
+            left.unlink()
+
+
+def _beside(uri: str, dest: Path) -> None:
+    from trid3nt_server.tools.cache import read_object_bytes_s3
+
+    dest.write_bytes(read_object_bytes_s3(uri))
+
+
+async def stage_simulation(*, sheet: Sheet, run_tag: str, mesh: Mapping[str, Any],
+                           prefix: str, server_facts: Mapping[str, Any]
+                           ) -> dict[str, Any]:
+    """A filled sheet written as the simulation directory, validated by mf6 and staged with the directory checked -> the staged run.
+    The DISV is the accepted mesh's own artifact for this layering, staged as its input and copied beside the files
+    that name it, so mf6 validates the bytes the solve reads and the staged check digests them."""
+    from .authoring.mesh_files import modflow_mesh_files
+    from .authoring.simulation import serialize
+    from .authoring.staged_check import check_staged_run
+    from ..solver.staging import new_rundir, stage_run
+
+    rundir = new_rundir(run_tag, stem="modflow")
+    disv = (await modflow_mesh_files(sheet=sheet, mesh=mesh))["disv"]
+    await asyncio.to_thread(serialize, sheet, rundir, mesh)
+    await asyncio.to_thread(_beside, disv, rundir / DISV_FILE)
+    # The parse is a container round trip, so it runs off the loop.
+    await asyncio.to_thread(_validated, rundir)
+    results = _results(sheet)
+    listing = str(sheet.filled["NAM_LIST"].value if "NAM_LIST" in sheet.filled
+                  else f"{sheet.module}.lst")
+    return await stage_run(
+        rundir, run_tag, module=sheet.module, steering=MFSIM_FILE,
+        results=results, outputs=[*results, listing, _SIM_LISTING, _METRICS],
+        mesh_inputs=[{"gs_uri": disv, "dest": DISV_FILE}], prefix=prefix,
+        sheet=sheet.state(), server_facts=server_facts,
+        result_basename=(results or [listing])[0], check=check_staged_run)
+
+
+async def run_sheet(*, sheet: Sheet, staged: Mapping[str, Any],
+                    mesh: Mapping[str, Any], name: str,
+                    moment: str | None = None) -> dict[str, Any]:
+    """A staged run handed to the box -> the run handle.
+    Its ``reference_time`` is the instant every published time counts from: the stated ``moment``, else the solve's own start."""
+    module, _, attribute = _DISPATCH.rpartition(".")
+    handle = await run_sheet_(staged, dispatch=getattr(import_module(module), attribute))
+    return {**handle, "mesh": mesh, "module": sheet.module, "name": name,
+            "reference_time": moment or handle.get("started_at")}
+
+
+def _table(solved: Callable[[str], Solved], module: str
+           ) -> tuple[list[Primitive], Callable[[Sequence[LayerURI], Mapping[Primitive, str]], None]]:
+    """EVERY output row the run's output control saved -> one temporal layer per layer, and the account of the rest.
+    A row it did not save is journalled by the keyword that would have saved it, never refused."""
+    from trid3nt_server.inputs.run_notes import journal_note
+
+    read = solved(module)
+    rows: list[Primitive] = []
+    unsaved: list[str] = []
+    for token, row in read.body.MODULE_OUTPUT.items():
+        refused = read.unsaved(token)
+        if refused is not None:
+            unsaved.append(f"no layer carries the {row.name}: {refused}")
+            continue
+        rows += [field(token, t="every", plane=layer).animate(style=row.style)
+                 for layer in range(1, read.nlay + 1)]
+
+    def account(layers: Sequence[LayerURI], why: Mapping[Primitive, str]) -> None:
+        for line in unsaved:
+            journal_note(line)
+        for primitive, reason in why.items():
+            journal_note(f"no layer carries the {primitive.variable} of layer "
+                         f"{primitive.plane}: {reason}")
+
+    return rows, account
+
+
+def _record(solved: Solved, name: str) -> LayerURI:
+    """The run's own record: the layer-1 head group's file, the mesh every published group rides; it binds no group, so it is DRAWN."""
+    from trid3nt_server.store import objects as storage
+
+    refused = solved.unsaved("HEAD")
+    if refused is not None:
+        raise refused
+    head = solved.body.MODULE_OUTPUT["HEAD"]
+    return LayerURI(
+        layer_id=f"modflow-{solved.run_id}", name=name, layer_type="mesh",
+        uri=(f"s3://{storage.runs_bucket()}/{solved.run_id}/"
+             f"{display_file(group_stem(head, 1))}"),
+        style={"kind": "reference"}, bbox=solved.bbox,
+        crs_authid=f"EPSG:{solved.utm_epsg}",
+        reference_time=solved.run.get("reference_time"))
+
+
+async def publish_outputs(*, run: Mapping[str, Any], sheet: Sheet,
+                          outputs: Sequence[Primitive], captions: Mapping[str, str],
+                          params: Mapping[str, Any],
+                          anchors: Sequence[Mapping[str, Any]] = ()) -> LayerURI:
+    """Read what the run saved and publish every output row, one temporal layer per layer, the template's reads beside them.
+    A solved run is opened over the sheet it solved, which the handle carries only as its record."""
+    opened = {**run, "sheet": sheet}
+    return await publish_reads(
+        engine="modflow", run=run, outputs=outputs, captions=captions,
+        params=params, anchors=anchors,
+        solved=lambda module: Solved(opened, wrapper_for(module)),
+        table=lambda solved: _table(solved, str(run["module"])), record=_record)
+
+
+class ModflowWorkflow(Workflow):
+    """MODFLOW: the template module, read by its own names.
+    A template DECLARES STEERING (a body over one model), INPUTS, the MESH ask, OUTPUTS and CAPTIONS; this builds every stage off them."""
+
+    engine = "modflow"
+    solve_step = "solve"
+    moment = EVENT_TIME.name
+
+    def __init__(self, *, coerce: Sequence[Any] = (), **declared: Any) -> None:
+        super().__init__(coerce=(*coerce, event_time()), **declared)
+
+    @property
+    def steering(self) -> type:
+        """The STEERING body: the module wrapper and the slots this question asserts."""
+        return self.template.STEERING
+
+    def input_schema(self) -> tuple[Any, str] | None:
+        """The module input dictionary this template's STEERING drives: where its values read their schema off."""
+        from .modules.module import module_input_dir
+
+        return (module_input_dir(), self.template.STEERING.MODULE)
+
+    def seated(self) -> tuple[Input, ...]:
+        """What the mesh ask names of the mesher's own inputs, the moment the run
+        opens at, what the types of its rows state, then the mesh a caller hands in."""
+        from trid3nt_server.tools.mesh import recipe as asks
+
+        named = set(asks.input_names(self.template.MESH))
+        return (tuple(row for row in asks.INPUTS if row.name in named)
+                + (EVENT_TIME,) + super().seated() + (_SUPPLIED_MESH,))
+
+    def input(self, name: str) -> Any:
+        """The template's and the engine's own inputs first, then the keyword a name spells on the STEERING body."""
+        declared = next((row for row in self.inputs if row.name == name), None)
+        if declared is not None:
+            return declared
+        return Keyword(self.steering, self.steering.identify(name), True)
+
+    def check(self) -> None:
+        """Refuse at import what this template cannot run on: one domain, one bed,
+        a mesh ask and a caption for every output it lists."""
+        self._slots()
+        if self._states("MESH", None) is None:
+            raise DeclarationError(
+                f"{self.name} declares no MESH: a MODFLOW run solves the mesh its "
+                "template asks for, or one the caller supplies in its place.")
+        self._outputs()
+
+    def unnamed(self) -> tuple[str, ...]:
+        """Every input the template names as a plain string - in a composite, the
+        mesh ask or an output - that no input of this run is called."""
+        from trid3nt_server.tools.mesh.recipe import input_names
+
+        known = {row.name for row in self.inputs}
+        named = [*self.steering.named(), *input_names(self.template.MESH),
+                 *(value for p in self._states("OUTPUTS", ())
+                   for value in (p.at, p.along, p.within))]
+        return tuple(dict.fromkeys(name for name in named
+                                   if isinstance(name, str) and name not in known))
+
+    def named_rows(self, held: Collection[str] = ()) -> tuple[str, ...]:
+        """Every declared row: each is read without the mesh - the domain and bed the
+        mesh is built over, and every row a composite of the sheet reads."""
+        return tuple(row.name for row in self.inputs
+                     if row.is_row and row is not _SUPPLIED_MESH)
+
+    async def launch(self, state: Fill) -> RunResult:
+        """The run, in order: the mesh, the sheet written, validated and staged under its review, the solve, the outputs.
+        Every stage writes into the run's one mapping and reads off it by plain name."""
+        from trid3nt_server.render.pipeline_emitter import (begin_substeps,
+                                                            current_emitter,
+                                                            substep)
+        from trid3nt_server.tools.mesh.step import build_declared_mesh, keep_mesh
+        from trid3nt_server.workflows.runtime.fill import call, production, read
+
+        env = production(state)
+        run = env.run
+        slots = self._slots()
+        domain = slots[DOMAIN]
+        keywords = dict(state.keywords)
+        emitter = current_emitter()
+        begin_substeps(emitter, 3 + ("mesh" not in run))
+
+        async def given(value: Any) -> Any:
+            return await read(env, value) if isinstance(value, str) else value
+
+        async def stage(label: str, fn: Any, /, **kwargs: Any) -> Any:
+            async with substep(emitter, label):
+                run[label] = await call(fn, kwargs, label)
+            return run[label]
+
+        # A supplied mesh is already the run's mesh: its row's ingestion wrote the record the build would have.
+        if "mesh" not in run:
+            await stage("mesh", build_declared_mesh,
+                        mesh=await self._recipe(env, self.template.MESH, set()),
+                        name=await read(env, domain), input_mode=env.input_mode,
+                        fresh=bool(state.carried.get("restart_clean")))
+        await keep_mesh(run["mesh"])
+        for name in self.named_rows(run):
+            await read(env, name)
+        if run.get(EVENT_TIME.name):
+            # TDIS states its start in UTC, so the run keeps where on the earth it is beside the instant.
+            lon, lat = (await read(env, domain)).centroid
+            run[MOMENT] = {"at": datetime.fromisoformat(run[EVENT_TIME.name]),
+                           "lon": lon, "lat": lat}
+        art = run["mesh"].get("artifact")
+        if not getattr(art, "utm_epsg", None):
+            from .authoring.accepted_mesh import mesh_missing
+
+            raise mesh_missing("the accepted mesh names no projected zone, so "
+                               "nothing solved on it can be placed on the map.")
+        name = str(getattr(art, "name", None) or "domain")
+        declared = {row.name for row in self.inputs if not row.is_row}
+        staged: dict[str, Any] = {}
+        # One tag for the run: every card edit re-stages into the same directory and prefix.
+        run_tag = new_ulid()
+        prefix = self.engine
+
+        async def write(sheet: Sheet) -> None:
+            # A card edit fills the sheet again, so the staged run is the one the last fill wrote.
+            staged.clear()
+            staged.update(await stage_simulation(
+                sheet=sheet, run_tag=run_tag, mesh=run["mesh"], prefix=prefix,
+                server_facts={"name": name, "utm_epsg": int(art.utm_epsg),
+                              "mesh_size_m": run["mesh"].get("min_edge_m")}))
+
+        try:
+            await stage("sheet", fill_sheet, steering=self.steering,
+                        # A module fills keywords from a row by the NAME of its type, so each type's row is held under that name beside its own.
+                        produced={**run, **{slot.name: run[held] for slot, held
+                                            in slots.items() if held in run}},
+                        params={key: run[key] for key in declared},
+                        workflow=self.name,
+                        title=self._states("REVIEW_TITLE", ""), keywords=keywords,
+                        input_mode=env.input_mode, seat=_seat_on(env), write=write,
+                        user=[key for key, verdict in env.inputs.items()
+                              if verdict.origin is Origin.USER])
+        except BaseException:
+            # A run that does not reach the box leaves no staged copy behind.
+            await asyncio.to_thread(discard_run, run_tag, prefix, stem=self.engine)
+            raise
+        solved = await stage("solve", run_sheet, sheet=run["sheet"], staged=staged,
+                             mesh=run["mesh"], name=name,
+                             moment=run.get(EVENT_TIME.name))
+        await keep_mesh(run["mesh"], solved.get("run_id"))
+        outputs, captions = self._outputs()
+        # A primitive's point, line and band name run inputs; each is read here and rejoins its primitive at publish.
+        anchors = [{"at": await given(p.at), "along": await given(p.along),
+                    "within": await given(p.within)} for p in outputs]
+        value = await stage(
+            "outputs", publish_outputs, run=solved, sheet=run["sheet"],
+            outputs=[unanchored(p) for p in outputs], captions=captions,
+            anchors=anchors, params={key: run[key] for key in declared})
+        return RunResult(value=value, results=dict(run))

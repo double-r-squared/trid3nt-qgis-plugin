@@ -333,7 +333,7 @@ def test_every_registered_template_carries_the_moment_and_the_beds_frame():
 
     templates = [tool.fn.workflow for tool in TOOL_REGISTRY.values()
                  if hasattr(tool.fn, "workflow")]
-    assert len(templates) == 15
+    assert len(templates) == 16
     for workflow in templates:
         assert {"event_time", "vertical_frame"} <= {p.name for p in value_inputs(workflow)}
 

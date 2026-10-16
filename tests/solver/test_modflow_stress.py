@@ -235,3 +235,28 @@ def test_serialize_writes_each_stress_package_with_its_bound(
         assert "MAXBOUND  4" in text
         block = text.split("BEGIN period  1")[1].split("END period")[0]
         assert len([row for row in block.splitlines() if row.strip()]) == 4
+
+
+def test_a_typed_point_places_the_one_cell_it_lies_in():
+    from trid3nt_server.inputs.point import Point
+
+    rows = _placed("Wells", Point(*_TO_LONLAT(8.0, 2.0), "the well"))
+    assert rows == [((0, 0), -5.0)]
+
+
+def test_a_typed_domain_places_the_cells_whose_centres_it_holds():
+    from trid3nt_server.inputs.domain import Domain
+
+    rows = _placed("Recharge", Domain(geometry=_LEFT), layer=2)
+    assert [row[0] for row in rows] == [(1, 0), (1, 1), (1, 4), (1, 5)]
+
+
+@pytest.mark.parametrize("frame,expected", [(("meters", "days"), -3.0),
+                                            (("feet", "days"), -3.0 / 0.3048)])
+def test_a_bed_stated_as_a_depth_is_its_flat_surface_on_the_model_s_frame(frame, expected):
+    from trid3nt_server.inputs.bed import Bed
+
+    rows = _placed("Drains", _LINE, frame=frame,
+                   values={"elevation": Bed(kind="depth", depth_m=3.0),
+                           "conductance": 50.0})
+    assert [row[1] for row in rows] == [pytest.approx(expected)] * 4

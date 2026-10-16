@@ -27,7 +27,7 @@ from ..authoring.stress import cells_of
 from ..errors import ModflowError
 from .ugrid import group
 
-__all__ = ["PRIMITIVES", "Solved", "read_extent", "read_field", "read_mass_balance",
+__all__ = ["PRIMITIVES", "Solved", "filerecord", "group_stem", "read_extent", "read_field", "read_mass_balance",
            "read_max_over_time", "read_mesh", "read_series"]
 
 # mf6 writes this magnitude for a cell that is dry (HDRY) or inactive (HNOFLO).
@@ -43,13 +43,13 @@ def _unsaved(keyword: str, why: str) -> ModflowError:
         error_code="MODFLOW_OUTPUT_UNSAVED")
 
 
-def _filename(value: Any) -> str | None:
+def filerecord(value: Any) -> str | None:
     """The file name a FILERECORD value states: a string, or the first string in the nesting flopy takes."""
     if isinstance(value, str):
         return value
     if isinstance(value, (list, tuple)):
         for item in value:
-            found = _filename(item)
+            found = filerecord(item)
             if found:
                 return found
     return None
@@ -161,14 +161,27 @@ class Solved:
             raise OutputEmpty(f"not one value the run saved for {key} is a number.")
         return row, self.units(key, row), np.asarray(times, dtype="float64"), values, layer
 
+    def unsaved(self, key: str) -> ModflowError | None:
+        """Why the run's output control saved nothing of the output ``key``, or None where it saved it."""
+        if key == "HEAD":
+            if not filerecord(self.stated("OC_HEAD_FILERECORD")):
+                return _unsaved("OC_HEAD_FILERECORD", "the run saved no head file to read")
+            return None
+        text, keyword = _BUDGET_RECORD[key]
+        if self.stated(keyword) is not True:
+            return _unsaved(keyword, f"the budget file carries no {text} record")
+        if not filerecord(self.stated("OC_BUDGET_FILERECORD")):
+            return _unsaved("OC_BUDGET_FILERECORD", "the run saved no budget file to read")
+        return None
+
     def _heads(self, layer: int) -> tuple[Any, Any]:
         import flopy
         import numpy as np
 
-        name = _filename(self.stated("OC_HEAD_FILERECORD"))
-        if not name:
-            raise _unsaved("OC_HEAD_FILERECORD", "the run saved no head file to read")
-        path = self.local(name)
+        refused = self.unsaved("HEAD")
+        if refused is not None:
+            raise refused
+        path = self.local(filerecord(self.stated("OC_HEAD_FILERECORD")))
         try:
             heads = flopy.utils.HeadFile(path)
             try:
@@ -184,14 +197,12 @@ class Solved:
         import flopy
         import numpy as np
 
-        text, keyword = _BUDGET_RECORD[key]
-        if self.stated(keyword) is not True:
-            raise _unsaved(keyword, f"the budget file carries no {text} record")
-        name = _filename(self.stated("OC_BUDGET_FILERECORD"))
-        if not name:
-            raise _unsaved("OC_BUDGET_FILERECORD", "the run saved no budget file to read")
+        text, _keyword = _BUDGET_RECORD[key]
+        refused = self.unsaved(key)
+        if refused is not None:
+            raise refused
         ncpl = len(self.nodes[1])
-        path = self.local(name)
+        path = self.local(filerecord(self.stated("OC_BUDGET_FILERECORD")))
         try:
             budget = flopy.utils.CellBudgetFile(path)
             try:
@@ -229,7 +240,8 @@ def _envelope(times: Any, values: Any) -> dict[str, Any]:
             "frames": int(len(times))}
 
 
-def _stem(row: Any, layer: int, qualifier: str = "") -> str:
+def group_stem(row: Any, layer: int, qualifier: str = "") -> str:
+    """The dataset group a read of the output ``row`` on ``layer`` is written under."""
     return f"{row.name.strip().replace(' ', '_')}{qualifier}_layer_{layer}"
 
 
@@ -249,7 +261,7 @@ def read_field(primitive: Primitive, solved: Solved) -> Read:
 
     row, units, model_times, values, layer = solved.frames(primitive.variable, primitive.plane)
     times = solved.seconds(model_times)
-    stem = _stem(row, layer)
+    stem = group_stem(row, layer)
     if primitive.t == "every":
         return _frames(solved, row, units, stem, times, values,
                        count=int(times.size), measures=_envelope(times, values))
@@ -281,7 +293,7 @@ def read_max_over_time(primitive: Primitive, solved: Solved) -> Read:
     held = np.isfinite(values)
     peak = np.where(held.any(axis=0),
                     np.where(held, values, -np.inf).max(axis=0), np.nan)
-    return _frames(solved, row, units, _stem(row, layer, "_max"), [0.0],
+    return _frames(solved, row, units, group_stem(row, layer, "_max"), [0.0],
                    peak[None, :], count=None,
                    measures=_envelope(model_times, values))
 

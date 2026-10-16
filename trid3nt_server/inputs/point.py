@@ -326,17 +326,18 @@ def _upload(pt: Point, basis: str, context: str) -> str:
     return f"s3://{bucket}/{key}"
 
 
-def point_arg(param: str, *, tool: str, prompt: str, code: str = _CODE
+def point_arg(param: str, *, tool: str, prompt: str | None, code: str = _CODE
               ) -> Callable[[Mapping[str, Any]], Awaitable[dict[str, Any]]]:
     """A coercion reading one wire field into a Point, or asking the canvas for it.
 
-    The ask happens only in a live ``user_gated`` session and only when nothing
-    came on the wire; a decline leaves the slot empty for the template to place."""
+    The ask happens only in a live ``user_gated`` session, only when nothing came on
+    the wire and only with a ``prompt``: a point the caller may leave unstated is
+    never asked for. A decline leaves the slot empty for the template to place."""
     async def _coerce(args: Mapping[str, Any]) -> dict[str, Any]:
         from trid3nt_server.inputs.slots import draw_on_canvas
 
         value = args.get(param)
-        if value is None:
+        if value is None and prompt is not None:
             value = await draw_on_canvas("point", tool=tool, param=param,
                                          prompt=prompt,
                                          input_mode=args.get("input_mode"))

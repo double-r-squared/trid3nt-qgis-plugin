@@ -19,7 +19,7 @@ speak it and the one file that specializes the executor to it.
 | `runtime/` | The template runtime - the producer a row names, the fill, the skeleton and the run's records. See below. |
 | `solver/` | The one executor, which knows no engine: `solver.py` (the box - launch, supervise, poll, dispatch-and-wait, download a result), `solve_progress.py` (the live cards of a solve - the Dispatch and Sim cards and the progress heartbeat on the Sim card), `code_provenance.py` (which code produced a run), `diagnostics/` (the one `read_run_diagnostics` dispatcher; each engine registers its own parser), `corpus.yaml` (routing phrasings). |
 | `telemac/` | The TELEMAC engine: the module wrappers, the templates over them, the code that fills a template, holds it for review and runs it, and the one engine file the executor is specialized by. Has its own map. |
-| `modflow/` | The MODFLOW engine: the engine file the executor is specialized by (image, exit verdict, metrics, solve path), its diagnostics parser, its typed errors, and `modules/` - the gwf, gwt and gwe wrappers over the runtime surface, each its dictionary and what a solved run writes. Nothing is re-exported from the package door. |
+| `modflow/` | The MODFLOW engine: the engine file the executor is specialized by (image, exit verdict, metrics, solve path), its diagnostics parser, its typed errors, `workflow.py` (the door a template hands its declarations to: mesh, the sheet written, validated and staged under one review, solve, publish), `modules/` - the gwf, gwt and gwe wrappers over the runtime surface, each its dictionary and what a solved run writes - `authoring/` and `templates/` (one package per question). Nothing is re-exported from the package door. |
 
 ## `runtime/` - the template runtime
 

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import datetime
 from types import MappingProxyType
 from importlib import import_module
@@ -21,12 +21,12 @@ from trid3nt_contracts.execution import LayerURI
 from trid3nt_server.inputs.input import Input
 from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LEVEL, MESH
-from trid3nt_server.render.formats import publish
 from trid3nt_server.workflows.runtime import (
     DeclarationError,
     RunResult,
     Workflow,
 )
+from trid3nt_server.workflows.runtime.workflow import EVENT_TIME, _names_untaken
 from trid3nt_server.workflows.solver.staging import discard_run
 from trid3nt_server.workflows.telemac.errors import TelemacError
 from trid3nt_server.workflows.telemac.modules import wrapper_for
@@ -34,11 +34,10 @@ from trid3nt_server.workflows.runtime.module import (SlotRefused,
                                                      identify_on)
 from trid3nt_server.workflows.runtime.module import MOMENT
 from trid3nt_server.workflows.runtime.primitives import (
-    Line,
     OutputEmpty,
     Primitive,
-    Profile,
-    deliver,
+    publish_reads,
+    unanchored,
 )
 from trid3nt_server.workflows.telemac.modules.outputs import Solved
 from trid3nt_server.workflows.runtime.review import _review, _seat_on
@@ -76,16 +75,6 @@ _MESHER, _MESH_KIND = "om2d", "unstructured_tri"
 
 #: The dispatch a staged run goes to, by the path it is resolved at CALL time.
 _DISPATCH = f"{_TELEMAC}.engine.solve_case"
-
-#: The moment a run of this engine opens at: what every dated source is asked for and every record is read at.
-#: Stated or not: a source that needs a window and was not given one REFUSES naming the
-#: need at its own parameter, so an undated run proceeds and a dated one is asked.
-EVENT_TIME = Input(
-    name="event_time",
-    desc="The moment the scenario is read at - an ISO date or datetime "
-         "(YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like "
-         "'during last Tuesday's storm'. Each source keeps its own "
-         "retention, and a request deeper than one refuses typed").stated()
 
 # The kind is stated here once: every module of this engine solves on triangles, so a supplied mesh of another kind refuses at its row.
 _SUPPLIED_MESH = Input(MESH, name="mesh", coercion=MappingProxyType({"kinds": (_MESH_KIND,)})).stated()
@@ -295,115 +284,26 @@ def _stated_value(value: Any) -> str:
     return f"{value:g}" if isinstance(value, float) else str(value)
 
 
-def _names_untaken(value: Any, untaken: set[str]) -> bool:
-    return isinstance(value, str) and value in untaken
-
-
-def _unanchored(primitive: Primitive) -> Primitive:
-    return replace(primitive, at=None, along=None, within=None)
-
-
-def _anchored(primitive: Primitive, anchor: Mapping[str, Any]) -> Primitive:
-    return replace(primitive, at=anchor["at"], along=anchor["along"],
-                   within=anchor.get("within"))
-
-
 async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive],
                           captions: Mapping[str, str],
                           params: Mapping[str, Any],
                           anchors: Sequence[Mapping[str, Any]] = ()
                           ) -> LayerURI:
     """Read what the run wrote and publish every variable, ONE layer each (temporal where the row varies in time, else the final frame).
-    Module rows style the layer; a variable no row names goes under the file's own spelling and one reaching no layer is journalled by name. Each module's result is read ONCE.
-    A chart's reference is a callable or another primitive read; a placed read the result lacks refuses."""
-    solved: dict[str, Solved] = {}
+    Module rows style the layer; a variable no row names goes under the file's own spelling and one reaching no layer is journalled by name.
+    The engine's half: how a module's result is opened, the table of what it wrote, and the run's record."""
 
-    def _solved(module: str) -> Solved:
-        if module not in solved:
-            solved[module] = Solved(run, wrapper_for(module))
-        return solved[module]
+    def _table(solved: Callable[[str], Solved]) -> tuple[list[Primitive], Any]:
+        written = _written(run, solved)
+        return ([entry.primitive for entry in written
+                 if entry.first is None and not entry.withheld],
+                lambda layers, why: _account(written, layers, why))
 
-    written = await asyncio.to_thread(_written, run, _solved)
-    table = [entry.primitive for entry in written
-             if entry.first is None and not entry.withheld]
-    if anchors:
-        outputs = [_anchored(p, a) for p, a in zip(outputs, anchors)]
-
-    published_keys = {primitive.key for primitive in outputs}
-    why: dict[Primitive, str] = {}
-
-    def _read(key: Primitive) -> Any:
-        read = _solved(key.module or str(run["module"]))
-        try:
-            return read.body.READS[key.kind](key, read)
-        except OutputEmpty as exc:
-            # A row of the module's OWN table the result lacks is skipped and journalled; a PLACED read is a refusal.
-            if key in published_keys:
-                raise
-            why[key] = str(exc)
-            return None
-
-    def _beside(primitive: Primitive) -> Primitive | None:
-        reference = primitive.reference
-        if not isinstance(reference, Primitive):
-            return None
-        return replace(reference, at=primitive.at, along=primitive.along).key
-
-    wanted = {primitive.key for primitive in (*table, *outputs)}
-    wanted |= {_beside(p) for p in outputs if _beside(p) is not None}
-    reads = await asyncio.to_thread(lambda: {key: _read(key) for key in wanted})
-    for primitive in outputs:
-        if primitive.reference is None:
-            continue
-        read = reads[primitive.key]
-        beside = _beside(primitive)
-        if beside is None:
-            lines = tuple(primitive.reference(read, reads, params))
-        else:
-            other = reads[beside]
-            caption = captions.get(primitive.variable or primitive.kind, primitive.kind)
-            lines = (Line(label=f"{caption} at t = {other.measures['t']:g} s",
-                          x=(other.distance_m if isinstance(other, Profile)
-                             else other.times),
-                          values=other.values),)
-        reads[primitive.key] = replace(read, lines=lines)
-    name, where = str(run["name"]), str(params.get("location") or run["name"])
-
-    def _delivered(primitive: Primitive, caption: str) -> Any:
-        return deliver(primitive, reads[primitive.key],
-                       solved[primitive.module or str(run["module"])],
-                       caption=caption, name=name, where=where)
-
-    for primitive in outputs:
-        if primitive.publish == "note":
-            _note(captions.get(primitive.variable or primitive.kind,
-                               primitive.kind), reads[primitive.key])
-    items = await asyncio.to_thread(
-        lambda: [_delivered(primitive, reads[primitive.key].name.strip().lower())
-                 for primitive in table if reads[primitive.key] is not None]
-        + [_delivered(primitive, captions.get(primitive.variable or primitive.kind,
-                                              primitive.kind))
-           for primitive in outputs if primitive.publish != "note"])
-    published = await publish(run_id=str(run["run_id"]), engine="telemac",
-                              name=name, items=items)
-
-    _account(written, published.layers, why)
-    if not published.layers:
-        raise SlotRefused(
-            f"the {run['module']} run's result files carry no variable at all, "
-            "so it published nothing and there is nothing to paint.")
-    logger.info("telemac outputs published run_id=%s layers=%d charts=%d",
-                run["run_id"], len(published.layers), len(published.charts))
-    return await asyncio.to_thread(_record, _solved(str(run["module"])),
-                                   name=name)
-
-
-def _note(caption: str, read: Any) -> None:
-    """A measured read, said on the run's record in the figures it measured."""
-    from trid3nt_server.inputs.run_notes import journal_note
-
-    figures = "; ".join(f"{name} = {value}" for name, value in read.measures.items())
-    journal_note(f"{caption}: {figures or 'the run measured nothing for it'}")
+    return await publish_reads(
+        engine="telemac", run=run, outputs=outputs, captions=captions,
+        params=params, anchors=anchors,
+        solved=lambda module: Solved(run, wrapper_for(module)), table=_table,
+        record=lambda solved, name: _record(solved, name=name))
 
 
 def _record(solved: Solved, *, name: str) -> LayerURI:
@@ -578,10 +478,6 @@ class TelemacWorkflow(Workflow):
 
         return (module_input_dir(), module)
 
-    def _states(self, name: str, default: Any) -> Any:
-        """One declaration read off the template module, or the default beside it."""
-        return getattr(self.template, name, default)
-
     def slot_units(self) -> Mapping[Any, str]:
         """What the two series slots convert to: the unit of the PRESCRIBED list
         each one's value is written into, which the transform fixes."""
@@ -626,31 +522,6 @@ class TelemacWorkflow(Workflow):
         for ask in self._declared(Measured):
             _signature(_MEASURES[ask.kind][0])
         self._outputs()
-
-    def _slots(self) -> dict[Any, str]:
-        """The row this question declares for each type a stage reads: the first of each, and exactly one domain and one bed."""
-        slots: dict[Any, list[str]] = {}
-        for row in self.inputs:
-            if row.slot is not None:
-                slots.setdefault(row.slot, []).append(row.name)
-        named = {row.name: row.slot for row in self.inputs}
-        for slot in slots:
-            if named.get(slot.name, slot) is not slot:
-                # A module reads a row by the NAME of its type, so no other input takes that name.
-                raise DeclarationError(
-                    f"{self.name} declares a {slot.name} row and names another "
-                    f"input {slot.name!r}; a module would read the wrong one.")
-        for slot, why in ((DOMAIN, "a run solves over one polygon"),
-                          (BED, "every node carries one elevation; a survey "
-                                "over a wider surface is composed by the merge "
-                                "derive into the one row")):
-            rows = slots.get(slot) or []
-            if len(rows) != 1:
-                raise DeclarationError(
-                    f"{self.name} declares {len(rows)} {slot.name} rows "
-                    f"({rows}): {why}, so the INPUTS body needs exactly one "
-                    f"Input({slot.name.upper()}) row.")
-        return {slot: names[0] for slot, names in slots.items()}
 
     async def launch(self, state: Fill) -> RunResult:
         """The run, in order: the world, the mesh and its files, what the run places and measures, the settle, the sheet written and checked under its review, the solve, the outputs.
@@ -797,7 +668,7 @@ class TelemacWorkflow(Workflow):
                     "within": await given(p.within)} for p in outputs]
         value = await stage(
             "outputs", publish_outputs, run=run["solve"],
-            outputs=[_unanchored(p) for p in outputs], captions=captions,
+            outputs=[unanchored(p) for p in outputs], captions=captions,
             anchors=anchors, params={name: run[name] for name in declared})
         return RunResult(value=value, results=dict(run))
 
@@ -908,29 +779,6 @@ class TelemacWorkflow(Workflow):
             named += input_names(recipe if recipe is not None else self._mesh(slots[DOMAIN], slots))
         named += self.steering.named()
         return named
-
-    async def _recipe(self, env: Any, recipe: Any,
-                      untaken: set[str]) -> dict[str, Any]:
-        """The mesh ask with every input it names read off the run: the extent,
-        a resolution stated as a name, and each op argument that takes one.
-        An op set on a measurement the run did not take is not composed."""
-        from trid3nt_server.tools.mesh.recipe import recipe_plan_value, takes_name
-        from trid3nt_server.workflows.runtime.fill import read
-
-        asked = recipe_plan_value(recipe)
-        for key in ("extent", "resolution_m"):
-            if isinstance(asked[key], str):
-                asked[key] = await read(env, asked[key])
-        composed = []
-        for op, entry in zip(recipe.ops, asked["ops"]):
-            if _names_untaken(op.kwargs.get("geometry"), untaken):
-                continue
-            entry["kwargs"] = {
-                key: await read(env, value) if takes_name(recipe, op, key)
-                else value for key, value in entry["kwargs"].items()}
-            composed.append(entry)
-        asked["ops"] = composed
-        return asked
 
     def _mesh(self, domain: str, slots: Mapping[str, str]) -> Any:
         """The mesh this workflow asks for where the template declares none."""
@@ -1053,24 +901,6 @@ class TelemacWorkflow(Workflow):
                 continue
             rows.append(f"{slot.keyword} = {_stated_value(body.ASSERTED[name])}")
         return "; ".join(rows) if rows else "nothing"
-
-    def _outputs(self) -> tuple[tuple[Primitive, ...], dict[str, str]]:
-        """What this question PUBLISHES and what it calls each, checked: every
-        listed read is published and has its caption."""
-        outputs = tuple(self._states("OUTPUTS", ()))
-        captions = dict(self._states("CAPTIONS", {}))
-        for primitive in outputs:
-            if primitive.publish is None:
-                raise DeclarationError(
-                    f"OUTPUTS lists {primitive.kind}({primitive.variable!r}) with "
-                    "no .layer(), .chart(), .animate() or .note(); a listed "
-                    "primitive is published.")
-            named = primitive.variable or primitive.kind
-            if named not in captions:
-                raise DeclarationError(
-                    f"OUTPUTS publishes {named!r} and CAPTIONS names no caption "
-                    "for it.")
-        return outputs, captions
 
 
 def _previous(steering: type, keywords: dict[str, Any]) -> str | None:

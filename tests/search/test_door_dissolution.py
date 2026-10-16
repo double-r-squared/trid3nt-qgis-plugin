@@ -35,6 +35,7 @@ EXPECTED_TEMPLATES = {
     "artemis_harbor_agitation",
     "tomawac_nearshore_waves",
     "tomawac_wave_driven_currents",
+    "modflow_water_table",
 }
 
 # The 10 deleted engine-door concierge tools.

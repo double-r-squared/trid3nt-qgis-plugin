@@ -34,11 +34,20 @@ class Shape:
 
 
 def shape(value: Any, *, label: str = "shape", code: str = _CODE) -> Shape | None:
-    """THE ingestion: a drawn collection, a layer, a geometry or vertices -> Shape.
+    """THE ingestion: a drawn collection, a layer, a geometry, vertices or a typed Point or domain -> Shape.
 
     ``None`` only when nothing came; a value of no readable shape refuses typed."""
     if value is None or isinstance(value, Shape):
         return value
+    from .point import Point
+
+    if isinstance(value, Point):
+        return Shape(_collection({"type": "Point",
+                                  "coordinates": [value.lon, value.lat]}), value.name)
+    collection = getattr(value, "as_feature_collection", None)
+    if callable(collection):
+        # A typed slot value reads as the geometry it is: a domain is its polygon and the stretches of its edge.
+        return Shape(collection(), getattr(value, "name", None))
     if isinstance(value, Mapping):
         return Shape(_collection(value), _named(value))
     uri = getattr(value, "uri", None) or (value if isinstance(value, str) else None)

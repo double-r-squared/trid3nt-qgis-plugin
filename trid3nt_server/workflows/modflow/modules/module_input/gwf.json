@@ -7645,5 +7645,23 @@
       "is_file": false,
       "mandatory": false
     }
-  ]
+  ],
+  "inputs": {
+    "modflow_water_table": {
+      "drain_conductance": {
+        "desc": "The conductance of the stream beds the aquifer drains through, per cell a stream crosses: how readily water at a head above the bed leaves the aquifer. No dataset measures it, so it is stated",
+        "type": "float",
+        "units": "m2/day"
+      },
+      "well": {
+        "desc": "Where a pumping well stands, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair or 'lat,lon'. Stated, the well pumps well_rate at the cell it lies in; unstated, no well is composed",
+        "type": "Point"
+      },
+      "well_rate": {
+        "desc": "The well's pumping rate, negative for water taken out of the aquifer (mf6's own sign); stated with the well, and a stated well with no rate refuses",
+        "type": "float",
+        "units": "m3/day"
+      }
+    }
+  }
 }

@@ -314,10 +314,17 @@ def _read_built(rundir: Path, epsg: int, edge: float, source: str,
                                     dtype=np.int64))
             cursor += int(count)
     stats = json.loads((rundir / "flopy_stats.json").read_text())
+    from pyproj import Transformer
+
+    # The acceptance places a mesh on the map by its lon/lat extent, which a mesh built in UTM states itself.
+    lon, lat = Transformer.from_crs(epsg, 4326, always_xy=True).transform(
+        points[:, 0], points[:, 1])
     return Mesh(
         points=points, cells=cells, crs_authid=f"EPSG:{epsg}", bed=None,
         meta={
             "utm_epsg": epsg,
+            "lonlat_bbox": (float(np.min(lon)), float(np.min(lat)),
+                            float(np.max(lon)), float(np.max(lat))),
             "resolution_m": edge,
             "domain_source": source,
             "probes": dict(stats.get("probes") or {}),

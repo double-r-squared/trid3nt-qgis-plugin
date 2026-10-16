@@ -15,6 +15,7 @@ flowchart LR
     engineWorkflow["EngineWorkflow<br/>trid3nt_server/workflows/telemac/workflow.py"]
     fill["Fill<br/>trid3nt_server/workflows/runtime/fill.py"]
     messageIR["MessageIR<br/>contracts/trid3nt_contracts/message.py"]
+    modflowStage["Sheet<br/>trid3nt_server/workflows/modflow/workflow.py"]
     observationSlot["ObservationSlot<br/>trid3nt_server/inputs/observation.py"]
     output["Output<br/>trid3nt_server/workflows/telemac/modules/telemac2d.py"]
     point["TypedInput<br/>trid3nt_server/inputs/point.py"]
@@ -31,6 +32,7 @@ flowchart LR
     canvasGate -- "DrawnValue" --> fill
     dictionaryExtractor -- "KeywordDictionary" --> slot
     dictionaryExtractor -- "KeywordDictionary" --> wrapper
+    modflowStage -- "StageRequest" --> stager
     steeringDriver -- "SteeringParse" --> steeringGate
     telemacSheet -- "StageRequest" --> stager
     sheet -- "ResolvedSheet" --> serializer

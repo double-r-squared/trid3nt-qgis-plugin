@@ -22,7 +22,6 @@ _RETIRED_ENGINE_NAMES = (
     "geoclaw_inundation",
     "swan_wave_field",
     "schism_coupled_waves",
-    "modflow_",
     "openquake_psha",
     "landlab_susceptibility",
     "elmfire_fire_spread",
@@ -69,6 +68,7 @@ def test_the_tool_list_is_generated_from_the_registry() -> None:
         "telemac_rain_on_grid",
         "telemac3d_stratified_flow",
         "artemis_harbor_agitation",
+        "modflow_water_table",
     ):
         assert f"- {name}: " in section, f"live template {name!r} is not listed"
 

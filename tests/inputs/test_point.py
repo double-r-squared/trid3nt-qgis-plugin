@@ -142,6 +142,19 @@ def test_a_point_and_a_drawn_slot_ask_through_the_one_canvas_ask(monkeypatch):
     assert asked == [("point", "release"), ("polygon", "domain")]
 
 
+def test_a_point_with_no_prompt_is_read_and_never_asked_for(monkeypatch):
+    from trid3nt_server.inputs import slots
+
+    async def _draw(geometry, *, tool, param, **_kw):
+        raise AssertionError("a point the caller may leave unstated is never asked for")
+
+    monkeypatch.setattr(slots, "draw_on_canvas", _draw)
+    coerce = point_arg("well", tool="t", prompt=None)
+    assert asyncio.run(coerce({"input_mode": "user_gated"})) == {"well": None}
+    assert asyncio.run(coerce({"well": [-1.0, 1.0], "input_mode": "user_gated"})) \
+        == {"well": Point(-1.0, 1.0)}
+
+
 def test_a_declined_pick_leaves_the_slot_empty(monkeypatch):
     from trid3nt_server.render import pipeline_emitter
     from trid3nt_server.inputs.gate import draw_input

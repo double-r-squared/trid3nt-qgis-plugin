@@ -6,12 +6,18 @@ A primitive is named from the module's variable vocabulary (``field``, ``series`
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from dataclasses import dataclass, replace
 from dataclasses import field as dataclass_field
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping, Sequence
 
-from trid3nt_server.render.formats import Chart, Deliverable, Mesh, Vector
+from trid3nt_contracts.execution import LayerURI
+
+from trid3nt_server.render.formats import Chart, Deliverable, Mesh, Vector, publish
 from trid3nt_server.workflows.runtime import DeclarativeError
+
+logger = logging.getLogger("trid3nt_server.workflows.runtime.primitives")
 
 __all__ = [
     "Field",
@@ -31,7 +37,9 @@ __all__ = [
     "max_over_time",
     "mesh",
     "profile",
+    "publish_reads",
     "series",
+    "unanchored",
 ]
 
 @dataclass(frozen=True, kw_only=True)
@@ -437,3 +445,116 @@ def _chart(read: Series | Profile | Spectrum, *, caption: str,
                  + (what if values else "") + "."
                  + "".join(f" {line.label} is drawn beside it." for line in read.lines)),
     )
+
+
+async def publish_reads(*, engine: str, run: Mapping[str, Any],
+                        outputs: Sequence[Primitive], captions: Mapping[str, str],
+                        params: Mapping[str, Any],
+                        solved: Callable[[str], Any],
+                        table: Callable[[Callable[[str], Any]], tuple[
+                            Sequence[Primitive],
+                            Callable[[Sequence[LayerURI], Mapping[Primitive, str]], None]]],
+                        record: Callable[[Any, str], LayerURI],
+                        anchors: Sequence[Mapping[str, Any]] = ()) -> LayerURI:
+    """Read what the run wrote and publish every row of the engine's module table plus the template's own reads -> the run's record.
+    ``solved`` makes a module's solved run, read ONCE per module; ``table`` turns it into the module table's reads and the account of what they landed as; ``record`` is the engine's own record of the run.
+    A chart's reference is a callable or another primitive read; a placed read the result lacks refuses."""
+    from .module import SlotRefused
+
+    held: dict[str, Any] = {}
+
+    def _solved(module: str) -> Any:
+        if module not in held:
+            held[module] = solved(module)
+        return held[module]
+
+    rows, account = await asyncio.to_thread(table, _solved)
+    if anchors:
+        outputs = [_anchored(p, a) for p, a in zip(outputs, anchors)]
+
+    published_keys = {primitive.key for primitive in outputs}
+    why: dict[Primitive, str] = {}
+
+    def _read(key: Primitive) -> Any:
+        read = _solved(key.module or str(run["module"]))
+        try:
+            return read.body.READS[key.kind](key, read)
+        except OutputEmpty as exc:
+            # A row of the module's OWN table the result lacks is skipped and journalled; a PLACED read is a refusal.
+            if key in published_keys:
+                raise
+            why[key] = str(exc)
+            return None
+
+    def _beside(primitive: Primitive) -> Primitive | None:
+        reference = primitive.reference
+        if not isinstance(reference, Primitive):
+            return None
+        return replace(reference, at=primitive.at, along=primitive.along).key
+
+    wanted = {primitive.key for primitive in (*rows, *outputs)}
+    wanted |= {_beside(p) for p in outputs if _beside(p) is not None}
+    reads = await asyncio.to_thread(lambda: {key: _read(key) for key in wanted})
+    for primitive in outputs:
+        if primitive.reference is None:
+            continue
+        read = reads[primitive.key]
+        beside = _beside(primitive)
+        if beside is None:
+            lines = tuple(primitive.reference(read, reads, params))
+        else:
+            other = reads[beside]
+            caption = captions.get(primitive.variable or primitive.kind, primitive.kind)
+            lines = (Line(label=f"{caption} at t = {other.measures['t']:g} s",
+                          x=(other.distance_m if isinstance(other, Profile)
+                             else other.times),
+                          values=other.values),)
+        reads[primitive.key] = replace(read, lines=lines)
+    name, where = str(run["name"]), str(params.get("location") or run["name"])
+
+    def _delivered(primitive: Primitive, caption: str) -> Any:
+        return deliver(primitive, reads[primitive.key],
+                       held[primitive.module or str(run["module"])],
+                       caption=caption, name=name, where=where)
+
+    for primitive in outputs:
+        if primitive.publish == "note":
+            _note(captions.get(primitive.variable or primitive.kind,
+                               primitive.kind), reads[primitive.key])
+    items = await asyncio.to_thread(
+        lambda: [_delivered(primitive, reads[primitive.key].name.strip().lower())
+                 for primitive in rows if reads[primitive.key] is not None]
+        + [_delivered(primitive, captions.get(primitive.variable or primitive.kind,
+                                              primitive.kind))
+           for primitive in outputs if primitive.publish != "note"])
+    published = await publish(run_id=str(run["run_id"]), engine=engine,
+                              name=name, items=items)
+
+    account(published.layers, why)
+    if not published.layers:
+        # A read the result held nothing for says why in its own words; the refusal carries them, not a guess at the cause.
+        reasons = "; ".join(sorted({str(reason) for reason in why.values()}))
+        raise SlotRefused(
+            f"the {run['module']} run published nothing, so there is nothing to "
+            "paint: " + (reasons or "its result files carry no variable at all."))
+    logger.info("%s outputs published run_id=%s layers=%d charts=%d", engine,
+                run["run_id"], len(published.layers), len(published.charts))
+    return await asyncio.to_thread(record, _solved(str(run["module"])), name)
+
+
+def unanchored(primitive: Primitive) -> Primitive:
+    """``primitive`` with its point, line and band taken off: each names a run input, read before the publish rejoins it."""
+    return replace(primitive, at=None, along=None, within=None)
+
+
+def _anchored(primitive: Primitive, anchor: Mapping[str, Any]) -> Primitive:
+    return replace(primitive, at=anchor["at"], along=anchor["along"],
+                   within=anchor.get("within"))
+
+
+def _note(caption: str, read: Any) -> None:
+    """A measured read, said on the run's record in the figures it measured."""
+    from trid3nt_server.inputs.run_notes import journal_note
+
+    figures = "; ".join(f"{name} = {value}" for name, value in read.measures.items())
+    journal_note(f"{caption}: {figures or 'the run measured nothing for it'}")

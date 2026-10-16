@@ -1,0 +1,15 @@
+summary: The STEADY WATER TABLE of an unconfined aquifer under recharge, drained by its streams,
+  with an optional pumping well.
+routing: 'THE tool for "where does the water table stand", "groundwater heads under this
+  catchment", "how deep is the groundwater between these streams", "what does a pumping well
+  draw the water table down to". MODFLOW 6 groundwater flow over a triangle mesh of the domain
+  - a basin drawn or supplied as `domain` - one unconfined layer whose top is the land surface
+  (`bed`), stated by `thickness`, `conductivity` and a starting `water_table_depth`, fed by
+  `recharge` over the whole domain and drained along `streams` at the land surface through
+  `drain_conductance`. Lengths in metres, time in days. State `well` and `well_rate` together
+  to pump.'
+not_for: surface-water flooding, a river plume or a lake circulation (the TELEMAC templates);
+  contaminant transport in groundwater; a transient drawdown test
+returns: 'On success the run''s record (a `LayerURI`): every output its output control saved,
+  one temporal mesh layer per layer, the head among them, plus the water budget charted. On
+  failure a dict with `status="error"` + `error_code`.'

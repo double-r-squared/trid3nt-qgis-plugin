@@ -163,6 +163,8 @@ _RECALL_FIXTURE = [
      "artemis_harbor_agitation"),
     ("how far downstream does a dye spill travel in this river",
      "telemac_dye_release"),
+    ("where does the water table stand between the streams of this basin",
+     "modflow_water_table"),
     ("compute the slope from the DEM on the map", "run_qgis_algorithm"),
     ("run this pyqgis script in my qgis session", "run_pyqgis"),
     ("what telemac keyword controls the bottom friction law", "describe_keywords"),

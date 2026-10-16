@@ -2,8 +2,9 @@
 """Extract every exposed MODFLOW body's keyword dictionary out of the mf6 definition files.
 
 The DFNs are the engine's own publication of its keyword surface, read at the
-release the worker carries; the committed JSON this writes is generated data,
-never hand edited.
+release the worker carries; the keyword rows this writes are generated data,
+never hand edited, and the authored ``inputs`` section a template's values read
+their schema off is written back beside them, so regeneration never clobbers it.
 """
 
 from __future__ import annotations
@@ -194,13 +195,18 @@ def body_rows(body: str) -> list[dict[str, object]]:
 
 def extract(dest: Path, bodies: tuple[str, ...] = BODIES
             ) -> dict[str, int]:
-    """Write ``<body>.json`` for every body into ``dest`` -> keyword counts."""
+    """Write ``<body>.json`` for every body into ``dest`` -> keyword counts.
+
+    The fresh rows take the ``module`` and ``keywords`` keys of the committed file
+    they replace; every other key it carries stays, in its own order."""
     dest.mkdir(parents=True, exist_ok=True)
     counts: dict[str, int] = {}
     for body in bodies:
         rows = body_rows(body)
-        (dest / f"{body}.json").write_text(
-            json.dumps({"module": body, "keywords": rows}, indent=2) + "\n")
+        committed = module_input_dir() / f"{body}.json"
+        doc = json.loads(committed.read_text()) if committed.is_file() else {}
+        doc.update({"module": body, "keywords": rows})
+        (dest / f"{body}.json").write_text(json.dumps(doc, indent=2) + "\n")
         counts[body] = len(rows)
     return counts
 

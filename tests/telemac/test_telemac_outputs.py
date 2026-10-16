@@ -399,7 +399,7 @@ def test_publish_outputs_reads_once_and_publishes_each(monkeypatch, solved):
             layer_type="raster", uri="s3://runs/RID/dye_concentration.tif",
             quantity="dye_concentration"),))
 
-    monkeypatch.setattr(door, "publish", _publish)
+    monkeypatch.setattr("trid3nt_server.workflows.runtime.primitives.publish", _publish)
     run = {**solved.run, "module": "telemac2d"}
     result = asyncio.run(door.publish_outputs(
         run=run,
@@ -447,7 +447,7 @@ def test_every_restored_output_can_be_asked_for_on_a_run_and_publishes(
             layer_id="L", name="n", layer_type="mesh", uri="s3://runs/RID/x.dat",
             quantity="dye_concentration"),))
 
-    monkeypatch.setattr(door, "publish", _publish)
+    monkeypatch.setattr("trid3nt_server.workflows.runtime.primitives.publish", _publish)
     monkeypatch.setattr(
         "trid3nt_server.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: _listing(monkeypatch))
@@ -763,7 +763,7 @@ def test_publish_outputs_rejoins_the_anchors_and_draws_the_reference_lines(
         assert params["do_standard_mgl"] == 5.0
         return [Line(label="standard", x=[0.0, 1.0], values=[5.0, 5.0])]
 
-    monkeypatch.setattr(door, "publish", _publish)
+    monkeypatch.setattr("trid3nt_server.workflows.runtime.primitives.publish", _publish)
     run = {**coupled.run, "module": "telemac2d"}
     result = asyncio.run(door.publish_outputs(
         run=run,
@@ -1057,7 +1057,7 @@ def test_a_chart_s_reference_may_be_another_primitive_drawn_as_a_line(
             layer_id="L", name="Water temperature (basin)", layer_type="raster",
             uri="s3://runs/RID/water_temperature.tif", quantity="water_temperature"),))
 
-    monkeypatch.setattr(door, "publish", _publish)
+    monkeypatch.setattr("trid3nt_server.workflows.runtime.primitives.publish", _publish)
     run = {**basin.run, "module": "telemac3d"}
     result = asyncio.run(door.publish_outputs(
         run=run,

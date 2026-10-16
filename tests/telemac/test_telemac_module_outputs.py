@@ -110,7 +110,7 @@ def published(monkeypatch, fake_s3, telemac_result):
             layer_id="L", name="Water depth", layer_type="mesh",
             uri="s3://runs/RID/r2d.slf", quantity="water_depth"),))
 
-    monkeypatch.setattr(door, "publish", _publish)
+    monkeypatch.setattr("trid3nt_server.workflows.runtime.primitives.publish", _publish)
     return seen, _run(telemac_result, monkeypatch)
 
 
@@ -147,7 +147,7 @@ def test_a_temporal_layer_is_ranged_over_the_record_not_its_last_frame(
             layer_id="L", name="Dye", layer_type="mesh",
             uri="s3://runs/RID/r2d.slf", quantity="dye"),))
 
-    monkeypatch.setattr(door, "publish", _publish)
+    monkeypatch.setattr("trid3nt_server.workflows.runtime.primitives.publish", _publish)
     run = _run(telemac_result, monkeypatch,
                dye=[[0.0] * 5, [25.0] * 5, [0.0] * 5])
     asyncio.run(door.publish_outputs(run=run, outputs=[], captions={},
@@ -221,7 +221,7 @@ def _surfacing(monkeypatch, surfaced=None) -> list[Any]:
             if isinstance(item.product, Mesh)
             and (surfaced is None or quantity_of(item.caption) in surfaced)))
 
-    monkeypatch.setattr(door, "publish", _publish)
+    monkeypatch.setattr("trid3nt_server.workflows.runtime.primitives.publish", _publish)
     return seen
 
 

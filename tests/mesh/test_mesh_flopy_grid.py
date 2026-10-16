@@ -247,6 +247,20 @@ def test_the_readback_carries_the_boxes_own_probes_and_provenance(
     assert mesh.meta["synthetic_inputs"][1]["value"] == "4 nodes / 2 elements"
 
 
+def test_the_readback_states_its_own_lon_lat_extent(monkeypatch, tmp_path):
+    """A mesh built in UTM is placed on the map by the extent it states in lon/lat."""
+    from pyproj import Transformer
+
+    from trid3nt_server.tools.mesh.session import _lonlat_bbox
+
+    _stub(monkeypatch, tmp_path)
+    mesh = FLOPY.build(_recipe())
+    lon, lat = Transformer.from_crs(mesh.meta["utm_epsg"], 4326, always_xy=True
+                                    ).transform(_POINTS[:, 0], _POINTS[:, 1])
+    assert _lonlat_bbox(mesh) == pytest.approx(
+        (min(lon), min(lat), max(lon), max(lat)))
+
+
 def test_a_ragged_readback_is_cells_of_their_own_lengths(monkeypatch, tmp_path):
     _stub(monkeypatch, tmp_path, ragged=True)
     mesh = FLOPY.build(_recipe())
