@@ -10,9 +10,12 @@ A row carries what the DFN says about one keyword - its raw name, the
 identifier `<PACKAGE>_<VARIABLE>` spells it by, its type (a scalar word, or
 ARRAY where the value is a constant, one per layer, or the NAME of an input
 holding the grid, or STRUCT for a record, recarray or keystring block), its
-size, its help, its block as the rubrique, its engine default, and whether the
-DFN marks it not optional and gives it no default (mandatory). `modules/module.py`
-reads a file here into the wrapper's slots.
+size, its help, its block as the rubrique, its engine default, and whether it
+is mandatory. Only `optional true` is optional - a bare `optional` line marks K
+and ICELLTYPE, which mf6 refuses a run without - and a required entry carries
+no default: its DFN `default_value` is flopy's illustration, not a value mf6
+uses, except on a required flag (READASARRAYS), the package's own tag.
+`modules/module.py` reads a file here into the wrapper's slots.
 
 ## Files
 

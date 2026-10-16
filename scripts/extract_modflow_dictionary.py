@@ -110,8 +110,10 @@ def _type_of(entry: dict[str, str]) -> str:
 
 
 def _optional(entry: dict[str, str]) -> bool:
-    """Whether the DFN marks this entry optional; a bare ``optional`` flag is the engine's own true."""
-    return entry.get("optional", "false").lower() in ("", "true")
+    """Whether the DFN marks this entry optional: only ``optional true`` is.
+
+    A bare ``optional`` line marks K and ICELLTYPE, which mf6 refuses a run without."""
+    return entry.get("optional", "false").lower() == "true"
 
 
 def _engine_default(entry: dict[str, str]) -> object:
@@ -148,7 +150,11 @@ def _help(entry: dict[str, str]) -> str:
 def _row(entry: dict[str, str], package: str) -> dict[str, object]:
     """One DFN entry as a dictionary row."""
     name = entry["name"]
-    default = _engine_default(entry)
+    # A required entry's default_value is flopy's illustration (NROW 2, SY 0.15, K 1.0):
+    # mf6 itself refuses the run without the keyword, so it is no engine default. A
+    # required flag (READASARRAYS) is the package's own tag, true its only value.
+    default = (_engine_default(entry)
+               if _optional(entry) or entry.get("type") == "keyword" else None)
     choices = entry.get("valid", "").split()
     row: dict[str, object] = {
         "keyword": name.upper().replace("-", "_"),

@@ -56,9 +56,12 @@ def _mesh(tmp_path: Path) -> dict:
     return {"artifact": art, "display_uri": art.display_uri}
 
 
-def _sheet():
-    return fill(GWF, DISV_NLAY=2, DISV_BOTM=[[-10.0] * 8, [-20.0] * 8],
-                TDIS_TIME_UNITS="seconds", TDIS_PERIODDATA=[[600.0, 1, 600.0]])
+def _sheet(**stated):
+    return fill(GWF, **{
+        "DISV_NLAY": 2, "DISV_BOTM": [[-10.0] * 8, [-20.0] * 8],
+        "NPF_K": 1.0e-4, "NPF_ICELLTYPE": 0, "IC_STRT": 0.0,
+        "TDIS_NPER": 1, "TDIS_TIME_UNITS": "seconds",
+        "TDIS_PERIODDATA": [[600.0, 1, 600.0]], **stated})
 
 
 @pytest.fixture
@@ -192,7 +195,7 @@ def test_the_directory_is_written_around_the_staged_disv_and_checked(
     written = serialize(sheet, rundir, mesh)["written"]
 
     assert (rundir / "mesh.disv").read_bytes() == staged_bytes
-    assert set(written) == {"gwf.ic", "gwf.ims", "gwf.nam", "gwf.npf", "gwf.oc",
+    assert set(written) == {"gwf.ic", "gwf.ims", "gwf.nam", "gwf.npf",
                             "mfsim.nam", "trid3nt.tdis"}
     assert "mesh.disv" in (rundir / "gwf.nam").read_text()
 
@@ -205,6 +208,23 @@ def test_the_directory_is_written_around_the_staged_disv_and_checked(
         written_by_the_engine=written, duration_s=600.0, cores=1)
     assert read["digested"] == ["mesh.disv"]
     assert read["tdis_total_s"] == 600.0
+
+
+def test_a_required_keyword_nobody_stated_refuses_by_name(staged_beside, tmp_path):
+    sheet = _sheet()
+    filled = {k: v for k, v in sheet.filled.items() if k != "NPF_K"}
+    with pytest.raises(ModflowError) as caught:
+        serialize(Sheet(body=GWF, filled=filled), tmp_path / "run",
+                  _mesh(tmp_path))
+    assert caught.value.error_code == "MODFLOW_KEYWORD_UNSTATED"
+    assert "NPF_K" in str(caught.value)
+
+
+def test_a_stated_package_s_required_grid_data_is_stated_too(staged_beside, tmp_path):
+    with pytest.raises(ModflowError) as caught:
+        serialize(_sheet(STO_SS=1.0e-5), tmp_path / "run", _mesh(tmp_path))
+    assert caught.value.error_code == "MODFLOW_KEYWORD_UNSTATED"
+    assert "STO_ICONVERT" in str(caught.value) and "STO_SY" in str(caught.value)
 
 
 def test_a_sheet_stating_another_discretization_refuses(staged_beside, tmp_path):

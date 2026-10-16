@@ -526,8 +526,7 @@
         "PERIOD"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 3e+30
+      "mandatory": true
     },
     {
       "keyword": "AUX",
@@ -979,8 +978,7 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 1e-05
+      "mandatory": true
     },
     {
       "keyword": "CG_THETA",
@@ -995,8 +993,7 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 0.2
+      "mandatory": true
     },
     {
       "keyword": "SGM",
@@ -1221,8 +1218,7 @@
         "DIMENSIONS"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 1
+      "mandatory": true
     },
     {
       "keyword": "NROW",
@@ -1237,8 +1233,7 @@
         "DIMENSIONS"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 2
+      "mandatory": true
     },
     {
       "keyword": "NCOL",
@@ -1253,8 +1248,7 @@
         "DIMENSIONS"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 2
+      "mandatory": true
     },
     {
       "keyword": "DELR",
@@ -1269,8 +1263,7 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 1.0
+      "mandatory": true
     },
     {
       "keyword": "DELC",
@@ -1285,8 +1278,7 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 1.0
+      "mandatory": true
     },
     {
       "keyword": "TOP",
@@ -1301,8 +1293,7 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 1.0
+      "mandatory": true
     },
     {
       "keyword": "BOTM",
@@ -1317,8 +1308,7 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 0.0
+      "mandatory": true
     },
     {
       "keyword": "IDOMAIN",
@@ -2355,8 +2345,7 @@
         "PERIOD"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 3e+30
+      "mandatory": true
     },
     {
       "keyword": "COND",
@@ -2371,8 +2360,7 @@
         "PERIOD"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 3e+30
+      "mandatory": true
     },
     {
       "keyword": "AUX",
@@ -2763,8 +2751,7 @@
         "PERIOD"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 0.0
+      "mandatory": true
     },
     {
       "keyword": "RATE",
@@ -2779,8 +2766,7 @@
         "PERIOD"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 0.001
+      "mandatory": true
     },
     {
       "keyword": "DEPTH",
@@ -2795,8 +2781,7 @@
         "PERIOD"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 1.0
+      "mandatory": true
     },
     {
       "keyword": "AUX",
@@ -3142,8 +3127,7 @@
         "PERIOD"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 3e+30
+      "mandatory": true
     },
     {
       "keyword": "COND",
@@ -3158,8 +3142,7 @@
         "PERIOD"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 3e+30
+      "mandatory": true
     },
     {
       "keyword": "AUX",
@@ -3354,8 +3337,7 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 1.0
+      "mandatory": true
     },
     {
       "keyword": "AUXILIARY",
@@ -4635,8 +4617,7 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 0
+      "mandatory": true
     },
     {
       "keyword": "K",
@@ -4651,8 +4632,7 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 1.0
+      "mandatory": true
     },
     {
       "keyword": "K22",
@@ -5178,8 +5158,7 @@
         "PERIOD"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 0.001
+      "mandatory": true
     },
     {
       "keyword": "AUX",
@@ -5525,8 +5504,7 @@
         "PERIOD"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 3e+30
+      "mandatory": true
     },
     {
       "keyword": "COND",
@@ -5541,8 +5519,7 @@
         "PERIOD"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 3e+30
+      "mandatory": true
     },
     {
       "keyword": "RBOT",
@@ -5557,8 +5534,7 @@
         "PERIOD"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 3e+30
+      "mandatory": true
     },
     {
       "keyword": "AUX",
@@ -6128,8 +6104,7 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 0
+      "mandatory": true
     },
     {
       "keyword": "SS",
@@ -6144,8 +6119,7 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 1e-05
+      "mandatory": true
     },
     {
       "keyword": "SY",
@@ -6160,8 +6134,7 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 0.15
+      "mandatory": true
     },
     {
       "keyword": "STEADY_STATE",
@@ -6506,8 +6479,7 @@
         "DIMENSIONS"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 7
+      "mandatory": true
     },
     {
       "keyword": "NWAVESETS",
@@ -6522,8 +6494,7 @@
         "DIMENSIONS"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 40
+      "mandatory": true
     },
     {
       "keyword": "PACKAGEDATA",
@@ -7117,8 +7088,7 @@
         "PERIOD"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 3e+30
+      "mandatory": true
     },
     {
       "keyword": "AUX",
@@ -7193,8 +7163,7 @@
         "DIMENSIONS"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 1
+      "mandatory": true
     },
     {
       "keyword": "PERIODDATA",
@@ -7209,14 +7178,7 @@
         "PERIODDATA"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": [
-        [
-          1.0,
-          1,
-          1.0
-        ]
-      ]
+      "mandatory": true
     },
     {
       "keyword": "PRINT_OPTION",

@@ -455,8 +455,7 @@
         "DIMENSIONS"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 1
+      "mandatory": true
     },
     {
       "keyword": "NROW",
@@ -471,8 +470,7 @@
         "DIMENSIONS"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 2
+      "mandatory": true
     },
     {
       "keyword": "NCOL",
@@ -487,8 +485,7 @@
         "DIMENSIONS"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 2
+      "mandatory": true
     },
     {
       "keyword": "DELR",
@@ -503,8 +500,7 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 1.0
+      "mandatory": true
     },
     {
       "keyword": "DELC",
@@ -519,8 +515,7 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 1.0
+      "mandatory": true
     },
     {
       "keyword": "TOP",
@@ -535,8 +530,7 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 1.0
+      "mandatory": true
     },
     {
       "keyword": "BOTM",
@@ -551,8 +545,7 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 0.0
+      "mandatory": true
     },
     {
       "keyword": "IDOMAIN",
@@ -1438,8 +1431,7 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 0.0
+      "mandatory": true
     },
     {
       "keyword": "SAVE_FLOWS",
@@ -3429,8 +3421,7 @@
         "DIMENSIONS"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": 1
+      "mandatory": true
     },
     {
       "keyword": "PERIODDATA",
@@ -3445,14 +3436,7 @@
         "PERIODDATA"
       ],
       "is_file": false,
-      "mandatory": false,
-      "default": [
-        [
-          1.0,
-          1,
-          1.0
-        ]
-      ]
+      "mandatory": true
     },
     {
       "keyword": "PRINT_OPTION",

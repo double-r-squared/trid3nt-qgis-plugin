@@ -24,14 +24,16 @@ logger = logging.getLogger("trid3nt_server.workflows.modflow.authoring.simulatio
 
 __all__ = ["serialize"]
 
-# What each module's name file must hold even when the sheet states none of it: the
-# engine refuses a flow model without its property and initial-condition packages, and
-# an empty output-control options block is a valid statement of "no printouts yet".
-_ALWAYS = {"gwf": ("IC", "NPF", "OC"), "gwt": (), "gwe": ()}
+# The packages mf6 refuses each model without (its own "package not specified" check):
+# every one is written, so the sheet states their required keywords or the run refuses.
+_REQUIRED_PACKAGES = {"gwf": ("IC", "NPF"), "gwt": ("IC", "MST"),
+                      "gwe": ("IC", "EST")}
+
+# The blocks mf6 refuses a written package without; a required keyword in one has no
+# engine value, and flopy's constructor default would write an aquifer nobody measured.
+_REQUIRED_BLOCKS = frozenset({"DIMENSIONS", "GRIDDATA", "PERIODDATA"})
 
 _MODEL_KWARGS = "NAM"
-
-_SIM_LEVEL = ("TDIS", "IMS")
 
 _GRID = "DISV"
 
@@ -101,11 +103,12 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
     import flopy
 
     module = str(sheet.module)
-    if module not in _ALWAYS:
+    if module not in _REQUIRED_PACKAGES:
         raise ModflowError(
             f"{module!r} is no module this authoring solves; its simulators "
             "are gwf, gwt and gwe.",
             error_code="MODFLOW_MODULE_UNKNOWN")
+    _unstated(sheet, set(groups) | set(_REQUIRED_PACKAGES[module]) | {"TDIS"})
     cap = module.capitalize()
     points, cells, _bed, _lonlat = mesh_nodes(mesh)
     dims = disv_dimensions(sheet, cells)
@@ -131,17 +134,27 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
                    owner=sim, filename=f"{module}.ims",
                    how="IMS of the simulation")
     sim.register_ims_package(ims, [module])
-    covered = set(groups) | set(_SIM_LEVEL) | {_MODEL_KWARGS, _GRID}
     for prefix, rows in groups.items():
         _package(flopy, f"Modflow{cap}{prefix.lower()}",
                  _placed(rows, dims=dims, points=points, cells=cells,
                          utm_epsg=utm_epsg, sheet=sheet),
                  owner=model, how=f"{prefix} of {module}")
-    for prefix in _ALWAYS[module]:
-        if prefix not in covered:
-            _package(flopy, f"Modflow{cap}{prefix.lower()}", {}, owner=model,
-                     how=f"the always-set {prefix} of {module}")
     return _write_package_by_package(sim)
+
+
+def _unstated(sheet: Any, prefixes: set[str]) -> None:
+    """Refuse every required block keyword of a written package the sheet leaves unstated."""
+    missing = sorted(
+        identifier for identifier, slot in sheet.body.MODULE_INPUT.items()
+        if identifier.split("_", 1)[0] in prefixes - {_GRID}
+        and slot.is_required and set(slot.rubrique) & _REQUIRED_BLOCKS
+        and identifier not in sheet.filled)
+    if missing:
+        raise ModflowError(
+            f"{', '.join(missing)} {'is' if len(missing) == 1 else 'are'} "
+            "required by mf6 and stated by nothing: state each from a "
+            "measurement or a named source - the engine has no value for it.",
+            error_code="MODFLOW_KEYWORD_UNSTATED")
 
 
 def _placed(rows: dict[str, Any], *, dims: dict[str, int], points: Any,

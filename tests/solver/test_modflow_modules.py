@@ -14,7 +14,9 @@ import pytest
 
 from trid3nt_server.workflows.modflow.modules import GWF, GWE, GWT, wrapper_for
 from trid3nt_server.workflows.modflow.modules.module import module_input_dir
-from trid3nt_server.workflows.runtime.module import SlotRefused, load_module_input
+from trid3nt_server.workflows.runtime.module import (
+    UNSET, SlotRefused, load_module_input,
+)
 
 
 def _dictionary(module: str):
@@ -64,20 +66,24 @@ def test_required_keywords_are_the_ones_marked_not_optional_and_undefaulted():
     # The stress package's period table: not optional, no default - a run
     # without it does not start.
     assert gwf["WEL_STRESS_PERIOD_DATA"].is_required is True
-    # Every keyword the dictionary defaults or marks optional is not required,
-    # whatever an experienced modeller would always state.
-    for identifier in ("NPF_ICELLTYPE", "NPF_SAVE_FLOWS", "DIS_NLAY",
-                       "TDIS_NPER", "IMS_OUTER_HCLOSE"):
+    # A bare ``optional`` line is not optional: mf6 refuses a run without K or
+    # ICELLTYPE, and a required entry's DFN default_value is flopy's illustration.
+    for identifier in ("NPF_K", "NPF_ICELLTYPE", "IC_STRT", "STO_SY",
+                       "DIS_NROW", "TDIS_NPER", "TDIS_PERIODDATA"):
+        assert gwf[identifier].is_required is True, identifier
+        assert gwf[identifier].is_open is True, identifier
+    # An optional keyword keeps the engine's own value, and a required flag is
+    # the package's own tag.
+    for identifier in ("NPF_SAVE_FLOWS", "IMS_OUTER_HCLOSE",
+                       "RCHA_READASARRAYS"):
         assert gwf[identifier].is_required is False, identifier
-    assert sum(slot.is_required for slot in gwf.values()) == 78
+    assert sum(slot.is_required for slot in gwf.values()) == 110
 
 
 def test_a_dictionary_default_is_the_value_the_engine_will_use():
     gwf = _dictionary("gwf")
-    assert gwf["NPF_ICELLTYPE"].engine_default == 0
-    assert gwf["NPF_K"].engine_default == 1.0
-    assert gwf["TDIS_PERIODDATA"].engine_default == [[1.0, 1, 1.0]]
-    assert gwf["NPF_ICELLTYPE"].is_open is False
+    assert gwf["RCHA_READASARRAYS"].engine_default is True
+    assert gwf["NPF_K"].engine_default is UNSET
 
 
 def test_an_undefaulted_keyword_is_open_for_the_fill_to_state():
