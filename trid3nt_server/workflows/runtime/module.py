@@ -58,7 +58,7 @@ _RESERVED = frozenset((
     "ARMS_ON_HOST", "MODULE_OUTPUT", "LISTING", "DERIVED", "PRINTOUTS",
     "CADENCE", "CLOCK", "TRACER", "APPENDS", "APPENDABLE", "ONLY_3D",
     "UNWRITTEN", "RESULT_FILE", "RESULT_FILES", "RESULT_KEYWORD", "FILLED_BY",
-    "CODE_ON_HOST", "PLACED_AGAINST", "PARTITION_KEYWORD", "PACKAGES",
+    "CODE_ON_HOST", "PLACED_AGAINST", "PARTITION_KEYWORD",
     "composites",
     "reads", "appends", "printouts", "seconds", "slot",
 ))
@@ -422,8 +422,6 @@ class Module(metaclass=_Body):
     PLACED_AGAINST: Mapping[str, tuple[str, ...]] = MappingProxyType({})
     # The keyword this engine partitions a run under; empty says this engine has none, and identify_on then reads no bare name as the carrier's.
     PARTITION_KEYWORD: str = ""
-    # The packages this body wants written however little the deck states of them, by dictionary prefix; empty on a body wanting only what the deck states. A simulation author reads it beside the prefixes the deck names.
-    PACKAGES: tuple[str, ...] = ()
 
     @classmethod
     def dictionary_dir(cls) -> Path:
