@@ -164,13 +164,13 @@ def test_the_template_registers_over_the_modflow_workflow():
     assert by_name["drain_conductance"].required
     assert by_name["drain_conductance"].units == "m2/day"
     assert by_name["well"].stated_only and by_name["well_rate"].stated_only
-    assert {"domain", "bed", "thickness", "transmissivity", "water_table_depth",
+    assert {"domain", "bed", "saturated_thickness", "transmissivity", "water_table_depth",
             "recharge", "streams", "observe"} <= set(workflow.named_rows())
     assert "conductivity" not in by_name
     # Each aquifer row is filled by the source publishing its quantity; the well is read as a point.
     assert {name: (by_name[name].data_class, by_name[name].observes) for name in
-            ("thickness", "transmissivity", "water_table_depth", "recharge")} == {
-        "thickness": ("aquifer property", "aquifer_saturated_thickness"),
+            ("saturated_thickness", "transmissivity", "water_table_depth", "recharge")} == {
+        "saturated_thickness": ("aquifer property", "aquifer_saturated_thickness"),
         "transmissivity": ("aquifer property", "aquifer_transmissivity"),
         "water_table_depth": ("groundwater level", "water_table_depth"),
         "recharge": ("aquifer property", "groundwater_recharge")}

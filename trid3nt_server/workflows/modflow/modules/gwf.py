@@ -66,14 +66,16 @@ def _stress(name: str, package: str, dimensions: Mapping[str, str]):
     return expand
 
 
-_AQUIFER = ("thickness", "water_table_depth", "conductivity", "transmissivity")
+_AQUIFER = ("thickness", "saturated_thickness", "water_table_depth", "conductivity",
+            "transmissivity")
 
 
 def _aquifer(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-    """A one-layer aquifer's cells: Aquifer(thickness, water_table_depth, conductivity | transmissivity).
+    """A one-layer aquifer's cells: Aquifer(thickness | saturated_thickness, water_table_depth, conductivity | transmissivity).
 
-    The bottom lies a thickness below the top, the starting head a water-table depth below it,
-    and the conductivity is stated or is the transmissivity over the thickness."""
+    ``thickness`` runs down from the land surface, ``saturated_thickness`` down from the water table; the
+    bottom lies under whichever, the starting head a water-table depth below the top, and the conductivity
+    is stated or is the transmissivity over the thickness."""
     if not isinstance(value, Mapping):
         raise ModflowError(
             f"Aquifer takes a mapping of {', '.join(_AQUIFER)}; got {value!r}.",
@@ -83,7 +85,15 @@ def _aquifer(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
         raise ModflowError(
             f"Aquifer takes {', '.join(_AQUIFER)}; {', '.join(unknown)} is none of them.",
             error_code="MODFLOW_AQUIFER_UNSTATED")
-    for argument in ("thickness", "water_table_depth"):
+    whole, saturated = value.get("thickness"), value.get("saturated_thickness")
+    if (whole is None) == (saturated is None):
+        raise ModflowError(
+            "Aquifer states "
+            + ("both thickness and saturated_thickness; state one" if whole is not None
+               else "neither thickness nor saturated_thickness; state one")
+            + " - from the land surface, or down from the water table.",
+            error_code="MODFLOW_AQUIFER_UNSTATED")
+    for argument in ("water_table_depth",):
         if value.get(argument) is None:
             raise ModflowError(
                 f"Aquifer states no {argument}; the engine has no value for it, "
@@ -97,11 +107,13 @@ def _aquifer(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
                else "neither conductivity nor transmissivity; state one")
             + ", the other follows from the thickness.",
             error_code="MODFLOW_AQUIFER_UNSTATED")
+    depth = value["water_table_depth"]
     stated = ({"cells": "raster", "of": conductivity} if conductivity is not None
-              else {"cells": "quotient", "of": [transmissivity, value["thickness"]]})
+              else {"cells": "quotient", "of": [transmissivity, saturated if whole is None else whole]})
     return {"DISV_NLAY": 1, "NPF_K": stated,
-            "DISV_BOTM": {"cells": "below_top", "of": value["thickness"]},
-            "IC_STRT": {"cells": "below_top", "of": value["water_table_depth"]}}, {}
+            "DISV_BOTM": {"cells": "below_top",
+                          "of": whole if saturated is None else [depth, saturated]},
+            "IC_STRT": {"cells": "below_top", "of": depth}}, {}
 
 
 GWF = ModflowModule("gwf")

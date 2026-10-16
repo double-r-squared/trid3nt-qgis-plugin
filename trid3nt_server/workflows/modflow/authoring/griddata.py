@@ -250,13 +250,18 @@ def _expression(value: Mapping[str, Any], *, slot: Slot, nlay: int, points: Any,
         _thickness(slot, denominator)
         found = [a / b for a, b in zip(numerator, denominator)]
     elif operation == "below_top" and dimension == "L":
-        found = _below(slot, read(of, "L"), top, nlay=nlay, cells=cells)
+        # A list of depths lies at their sum: a water-table depth, then the saturated thickness under it.
+        parts = [read(item, "L") for item in (of if isinstance(of, (list, tuple)) else [of])]
+        if slot.identifier == "DISV_BOTM":
+            _thickness(slot, parts[-1])
+        found = _below(slot, [sum(column) for column in zip(*parts)], top,
+                       nlay=nlay, cells=cells)
     else:
         raise ModflowError(
             f"{slot.identifier} states {dict(value)!r}; a cells statement is "
             "'raster' (of a raster), 'quotient' (of a numerator and a "
-            "denominator, on a conductivity) or 'below_top' (of a raster, on a "
-            "length).", error_code="MODFLOW_GRIDDATA_SHAPE")
+            "denominator, on a conductivity) or 'below_top' (of a raster or a list "
+            "of rasters whose sum is the depth, on a length).", error_code="MODFLOW_GRIDDATA_SHAPE")
     return [list(found) for _ in range(nlay)] if slot.layered else found
 
 
@@ -276,8 +281,6 @@ def _below(slot: Slot, depth: list[float], top: Any, *, nlay: int, cells: Any) -
             f"{slot.identifier} lies below a top of {len(tops)} value(s) and "
             f"the accepted mesh has {len(cells)} cell(s).",
             error_code="MODFLOW_GRIDDATA_SHAPE")
-    if slot.identifier == "DISV_BOTM":
-        _thickness(slot, depth)
     return [t - d for t, d in zip(tops, depth)]
 
 

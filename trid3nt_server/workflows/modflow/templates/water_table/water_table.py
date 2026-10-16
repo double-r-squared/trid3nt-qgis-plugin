@@ -27,10 +27,10 @@ class INPUTS:
         "The land surface: the terrain the mesh paints, which the aquifer's top "
         "is and the streams drain at. A DEM, or a depth in metres below the "
         "model's zero for a flat surface.")).need("terrain")
-    thickness = Input(desc=(
-        "How thick the aquifer is, its base that far below the land surface: "
-        "a number in metres, or a raster publishing its unit; unfilled, the "
-        "source publishing aquifer_saturated_thickness here.")).need(
+    saturated_thickness = Input(desc=(
+        "How thick the saturated aquifer is, its base that far below the water "
+        "table: a number in metres, or a raster publishing its unit; unfilled, "
+        "the source publishing aquifer_saturated_thickness here.")).need(
         "aquifer property", of="aquifer_saturated_thickness")
     transmissivity = Input(desc=(
         "The aquifer's transmissivity: a number in square metres per day, or a "
@@ -74,7 +74,8 @@ class STEERING(GWF):
     OC_BUDGET_FILERECORD = "gwf.cbc"
     OC_SAVERECORD = [["HEAD", "ALL"], ["BUDGET", "ALL"]]
 
-    Aquifer = {"thickness": "thickness", "transmissivity": "transmissivity",
+    Aquifer = {"saturated_thickness": "saturated_thickness",
+               "transmissivity": "transmissivity",
                "water_table_depth": "water_table_depth"}
     Recharge = {"geometry": "domain", "layer": 1, "rate": "recharge"}
     # at the land surface: a stream drains the aquifer wherever the head stands above its bed

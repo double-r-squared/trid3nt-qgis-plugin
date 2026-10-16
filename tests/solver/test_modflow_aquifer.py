@@ -303,3 +303,26 @@ def test_stated_numbers_are_the_model_frame_s_own_at_every_cell(tmp_path):
               nlay=1, run=sheet.run, points=_POINTS, cells=_CELLS, utm_epsg=32617,
               frame=frame_of(sheet), top=top)
     assert k == [[5.0] * len(_CELLS)]
+
+
+def test_a_saturated_thickness_lies_below_the_water_table_not_the_land_surface(tmp_path):
+    sheet = _fill({}, {"saturated_thickness": 28.0, "water_table_depth": 2.0,
+                       "transmissivity": 140.0})
+    top, botm, _ = _layering(sheet, tmp_path)
+    assert botm == [pytest.approx([t - 2.0 - 28.0 for t in top])]
+
+    from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place
+
+    k = place(sheet.filled["NPF_K"].value, slot=sheet.filled["NPF_K"].slot,
+              nlay=1, run=sheet.run, points=_POINTS, cells=_CELLS, utm_epsg=32617,
+              frame=frame_of(sheet), top=top)
+    assert k == [[pytest.approx(5.0)] * len(_CELLS)]
+
+
+@pytest.mark.parametrize("stated", [
+    {"thickness": 30.0, "saturated_thickness": 28.0}, {}])
+def test_one_thickness_and_only_one_is_stated(stated):
+    with pytest.raises(ModflowError) as caught:
+        _fill({}, {"water_table_depth": 2.0, "transmissivity": 140.0, **stated})
+    assert caught.value.error_code == "MODFLOW_AQUIFER_UNSTATED"
+    assert "saturated_thickness" in str(caught.value)

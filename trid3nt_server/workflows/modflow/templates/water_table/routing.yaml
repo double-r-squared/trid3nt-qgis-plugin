@@ -4,7 +4,7 @@ routing: 'THE tool for "where does the water table stand", "groundwater heads un
   catchment", "how deep is the groundwater between these streams", "what does a pumping well
   draw the water table down to". MODFLOW 6 groundwater flow over a triangle mesh of the domain
   - a basin drawn or supplied as `domain` - one unconfined layer whose top is the land surface
-  (`bed`), stated by `thickness`, `transmissivity` and a starting `water_table_depth`, fed by
+  (`bed`), stated by `saturated_thickness`, `transmissivity` and a starting `water_table_depth`, fed by
   `recharge` over the whole domain and drained along `streams` at the land surface through
   `drain_conductance`; each unstated is fetched. Lengths in metres, time in days. State `well`
   and `well_rate` together to pump.'

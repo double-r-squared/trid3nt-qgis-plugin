@@ -16,7 +16,7 @@ The STEADY WATER TABLE of an unconfined aquifer under recharge, drained by its s
 |---|---|---|---|
 | `domain` | matched on a need for hydrography | the closed polygon this run solves over, as a uri, a layer name or a drawn shape; unfilled, the run matches a source of hydrography. | - |
 | `bed` | matched on a need for terrain | The land surface: the terrain the mesh paints, which the aquifer's top is and the streams drain at. A DEM, or a depth in metres below the model's zero for a flat surface. | - |
-| `thickness` | matched on a need for aquifer property | How thick the aquifer is, its base that far below the land surface: a number in metres, or a raster publishing its unit; unfilled, the source publishing aquifer_saturated_thickness here. | - |
+| `saturated_thickness` | matched on a need for aquifer property | How thick the saturated aquifer is, its base that far below the water table: a number in metres, or a raster publishing its unit; unfilled, the source publishing aquifer_saturated_thickness here. | - |
 | `transmissivity` | matched on a need for aquifer property | The aquifer's transmissivity: a number in square metres per day, or a raster publishing its unit; unfilled, the source publishing aquifer_transmissivity here. | - |
 | `water_table_depth` | matched on a need for groundwater level | How far below the land surface the water table stands before the solve: a number in metres, or a raster publishing its unit; unfilled, the source publishing water_table_depth here. | - |
 | `recharge` | matched on a need for aquifer property | What reaches the water table over the domain: a number in metres per day, or a raster publishing its unit; unfilled, the source publishing groundwater_recharge here. | - |

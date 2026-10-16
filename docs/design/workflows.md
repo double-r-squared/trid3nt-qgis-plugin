@@ -409,11 +409,14 @@ a cell the raster measures nothing at each refuse by name. A stated number is
 already in the model's units and holds at every cell.
 
 THE AQUIFER IS A COERCION of the GWF wrapper (`modules/gwf.py`):
-`Aquifer(thickness, water_table_depth, conductivity | transmissivity)` states a
-one-layer aquifer as cell expressions against the accepted mesh - the bottom a
-thickness below the top, the starting head a water-table depth below it, the
-conductivity stated or the transmissivity over the thickness - every argument
-required and a thickness at or under zero refused. The stress composites
+`Aquifer(thickness | saturated_thickness, water_table_depth, conductivity |
+transmissivity)` states a one-layer aquifer as cell expressions against the accepted
+mesh - the bottom a thickness below the top, or a saturated thickness below the
+water table (the published saturated thickness runs down from the water table, so
+it is never read from the land surface), the starting head a water-table depth below
+the top, the conductivity stated or the transmissivity over the thickness - every
+argument required, exactly one of each pair, and a thickness at or under zero
+refused. The stress composites
 (`Recharge`, `Drains`, `GeneralHead`, `ConstantHead`, `Wells`) place a geometry
 on the cells (`authoring/stress.py`) and state their package's period data.
 
