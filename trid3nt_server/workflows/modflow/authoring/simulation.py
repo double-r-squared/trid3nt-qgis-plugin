@@ -10,15 +10,18 @@ overwrite the staged mesh with a package flopy knows nothing about.
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from . import DISV_FILE
 from .accepted_mesh import mesh_nodes
 from .griddata import place
 from .mesh_files import disv_dimensions
+from .stress import place as place_stress
 
 from ..errors import ModflowError
+from ...runtime.sheet import Filled
 
 logger = logging.getLogger("trid3nt_server.workflows.modflow.authoring.simulation")
 
@@ -108,11 +111,14 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
             f"{module!r} is no module this authoring solves; its simulators "
             "are gwf, gwt and gwe.",
             error_code="MODFLOW_MODULE_UNKNOWN")
-    _unstated(sheet, set(groups) | set(_REQUIRED_PACKAGES[module]) | {"TDIS"})
     cap = module.capitalize()
     points, cells, _bed, _lonlat = mesh_nodes(mesh)
     dims = disv_dimensions(sheet, cells)
     utm_epsg = getattr((mesh or {}).get("artifact"), "utm_epsg", None)
+    derived = _stressed(sheet, groups, nlay=int(dims["nlay"]), points=points,
+                        cells=cells, utm_epsg=utm_epsg)
+    _unstated(sheet, set(groups) | set(_REQUIRED_PACKAGES[module]) | {"TDIS"},
+              derived)
     sim = flopy.mf6.MFSimulation(sim_name="trid3nt", sim_ws=str(work),
                                  verbosity_level=0)
     _package(flopy, "ModflowTdis",
@@ -142,13 +148,35 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
     return _write_package_by_package(sim)
 
 
-def _unstated(sheet: Any, prefixes: set[str]) -> None:
+def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, points: Any,
+              cells: Any, utm_epsg: int | None) -> set[str]:
+    """Place each stress statement on the cells -> the identifiers it derived (its MAXBOUND).
+
+    A statement's row becomes period 1's rows, carried forward by mf6; the bound is the
+    placement's own count."""
+    derived: set[str] = set()
+    for prefix, rows in groups.items():
+        row = rows.get("stress_period_data")
+        if row is None or not isinstance(row.value, Mapping) \
+                or "stress" not in row.value:
+            continue
+        placed = place_stress(row.value, points=points, cells=cells,
+                              utm_epsg=utm_epsg, nlay=nlay)
+        rows["stress_period_data"] = replace(row, value={0: placed})
+        rows["maxbound"] = Filled(
+            slot=sheet.body.MODULE_INPUT[f"{prefix}_MAXBOUND"],
+            value=len(placed), provenance=row.provenance)
+        derived.add(f"{prefix}_MAXBOUND")
+    return derived
+
+
+def _unstated(sheet: Any, prefixes: set[str], derived: set[str] = frozenset()) -> None:
     """Refuse every required block keyword of a written package the sheet leaves unstated."""
     missing = sorted(
         identifier for identifier, slot in sheet.body.MODULE_INPUT.items()
         if identifier.split("_", 1)[0] in prefixes - {_GRID}
         and slot.is_required and set(slot.rubrique) & _REQUIRED_BLOCKS
-        and identifier not in sheet.filled)
+        and identifier not in sheet.filled and identifier not in derived)
     if missing:
         raise ModflowError(
             f"{', '.join(missing)} {'is' if len(missing) == 1 else 'are'} "

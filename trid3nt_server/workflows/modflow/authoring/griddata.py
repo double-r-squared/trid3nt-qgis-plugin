@@ -15,7 +15,7 @@ from trid3nt_server.workflows.runtime.module import Slot
 
 from ..errors import ModflowError
 
-__all__ = ["place"]
+__all__ = ["place", "sample"]
 
 
 def place(value: Any, *, slot: Slot, nlay: int, run: Mapping[str, Any],
@@ -90,20 +90,27 @@ def _sample(name: str, *, slot: Slot, run: Mapping[str, Any], scratch: str,
             f"{slot.keyword} names {name!r} to sample at the cells, and this "
             "run has no accepted mesh to place the cells at.",
             error_code="MODFLOW_GRIDDATA_NO_MESH")
+    return sample(run[name], label=slot.keyword, name=name, scratch=scratch,
+                  points=points, cells=cells, utm_epsg=utm_epsg)
+
+
+def sample(artifact: Any, *, label: str, name: str, scratch: str, points: Any,
+           cells: Any, utm_epsg: int | None) -> list[float]:
+    """A raster artifact read at the centre of every given cell -> the cell values."""
     from trid3nt_server.tools.derive._raster_layers import read, staged
 
-    path = staged(run[name], role=name, scratch=scratch)
+    path = staged(artifact, role=name, scratch=scratch)
     values, _provenance, crs, transform = read(path)
     xs, ys = _centres(points, cells)
     if crs is not None and utm_epsg:
         from rasterio.warp import transform as warp
 
         xs, ys = warp(f"EPSG:{int(utm_epsg)}", crs, xs, ys)
-    return _at(values, transform=transform, xs=xs, ys=ys, slot=slot, name=name)
+    return _at(values, transform=transform, xs=xs, ys=ys, label=label, name=name)
 
 
 def _at(values: Any, *, transform: Any, xs: list[float], ys: list[float],
-        slot: Slot, name: str) -> list[float]:
+        label: str, name: str) -> list[float]:
     """The raster's value at each centre; a cell outside it or in its nodata refuses."""
     import numpy as np
     from rasterio.transform import rowcol
@@ -122,7 +129,7 @@ def _at(values: Any, *, transform: Any, xs: list[float], ys: list[float],
         ~np.isfinite(np.asarray(sampled, dtype="float64"))))
     if unmeasured:
         raise ModflowError(
-            f"{slot.keyword} reads {name!r} at {unmeasured} of {len(xs)} "
+            f"{label} reads {name!r} at {unmeasured} of {len(xs)} "
             "cell(s) where the raster measures nothing - outside its extent or "
             "its nodata; a cell solved on a guessed value refuses here by name.",
             error_code="MODFLOW_GRIDDATA_UNMEASURED")
