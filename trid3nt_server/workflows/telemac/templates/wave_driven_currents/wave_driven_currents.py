@@ -16,7 +16,7 @@ from trid3nt_server.tools.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.telemac.modules import T2D, WAC, series
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
 from trid3nt_server.workflows.telemac.modules.tomawac import RESULT_FILENAME
-from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
+from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
 __all__ = ["CAPTIONS", "MESH", "OUTPUTS", "INPUTS", "STEERING",
            "tomawac_wave_driven_currents"]
@@ -40,12 +40,9 @@ _HOST_FRAMES = int(_DURATION_S / _TIME_STEP_S) // _WAVE_STEPS
 _FRICTION_LAW = 5
 _FRICTION_COEFFICIENT = 0.05
 
-_STATION = Placed("station", point="station", label="Current station")
-
 
 class INPUTS:
     seed = Input().stated()
-    station = Input().stated()
 
     mesh_resolution_m = RESOLUTION
 
@@ -122,8 +119,8 @@ MESH = tool.build_mesh(
 )
 
 OUTPUTS = [
-    series("M", at="station").chart(),
-    series("HM0", at="station", module="tomawac").chart(),
+    series("M").chart(),
+    series("HM0", module="tomawac").chart(),
 ]
 CAPTIONS = {"M": "current speed", "U": "current along x", "V": "current along y",
             "HM0": "significant wave height", "BETA": "breaking rate",
@@ -154,9 +151,6 @@ tomawac_wave_driven_currents = register_workflow(
         point_arg("seed", tool="tomawac_wave_driven_currents",
                   prompt="Click offshore, where the incoming sea state is "
                          "measured",
-                  code="TELEMAC_PARAMS_INVALID"),
-        point_arg("station", tool="tomawac_wave_driven_currents",
-                  prompt="Click on the water where the current should be read",
                   code="TELEMAC_PARAMS_INVALID"),
     ),
 )

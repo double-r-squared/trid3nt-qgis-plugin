@@ -16,7 +16,7 @@ from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, series
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Atmosphere, Boundaries,
 )
-from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
+from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
 __all__ = ["CAPTIONS", "OUTPUTS", "INPUTS",
            "STEERING", "telemac_water_temperature"]
@@ -29,12 +29,8 @@ _FRICTION_COEFFICIENT = 33.0
 _REACH_LENGTH_KM = 12.0
 
 
-_STATION = Placed("station", point="station", label="Temperature station")
-
-
 class INPUTS:
     seed = Input().stated()
-    station = Input().stated()
 
     mesh_resolution_m = RESOLUTION
 
@@ -47,8 +43,7 @@ class INPUTS:
     level = Input(LEVEL).need("water level series")
 
     weather = Input(WEATHER).need("weather forcing")
-    observe = Input(OBSERVE).need("water quality sample", of="TEMPERATURE",
-                                  at="station")
+    observe = Input(OBSERVE).need("water quality sample", of="TEMPERATURE")
 
 
 class STEERING(T2D):
@@ -89,8 +84,8 @@ class STEERING(T2D):
 
 
 OUTPUTS = [
-    series("T1", at="station").chart(),
-    series("T1", at="station").station(),
+    series("T1", at="observe").chart(),
+    series("T1", at="observe").station(),
 ]
 CAPTIONS = {"T1": "water temperature", "discharge": "a streamflow",
             "level": "a water-surface elevation", "observe": "a water temperature"}
@@ -112,9 +107,6 @@ telemac_water_temperature = register_workflow(
     coerce=(
         point_arg("seed", tool="telemac_water_temperature",
                   prompt="Click on the water where the modelled stretch starts",
-                  code="TELEMAC_PARAMS_INVALID"),
-        point_arg("station", tool="telemac_water_temperature",
-                  prompt="Click on the water where the temperature should be read",
                   code="TELEMAC_PARAMS_INVALID"),
     ),
 )

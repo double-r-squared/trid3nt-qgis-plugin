@@ -11,5 +11,5 @@ not_for: how warm the water gets with no ice in the question (`telemac_water_tem
   snow or ice on LAND; air temperature or a forecast, which the weather fetchers answer
 returns: 'On success the run''s record (a `LayerURI`): every variable its modules wrote, styled
   on one mesh layer, animated where it varies, plus the cover and thickness series charted
-  at the station. Water that makes no ice at all charts zero thickness and zero cover, which
+  at the matched water-quality gauge. Water that makes no ice at all charts zero thickness and zero cover, which
   is what that place did in that week. On failure a dict with `status="error"` + `error_code`.'

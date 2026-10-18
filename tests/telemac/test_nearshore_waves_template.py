@@ -191,7 +191,7 @@ def test_what_the_template_places_is_the_module_s_own_rows():
     for token in ("HM0", "TPD", "DMOY", "BETA", "DBR"):
         assert token in WAC.MODULE_OUTPUT
     assert [p.variable or p.kind
-            for p in template.OUTPUTS] == ["HM0", "TPD", "DMOY", "spectrum"]
+            for p in template.OUTPUTS] == ["HM0"]
 
 
 def test_every_charted_variable_is_captioned():
@@ -203,27 +203,24 @@ def test_every_charted_variable_is_captioned():
                for p in template.OUTPUTS)
 
 
-def test_the_spectrum_is_recorded_where_the_station_settled():
-    """The three charted numbers are statistics OF a spectrum, so the deck names
-    the station as a printout point and publishes the spectrum itself. The
-    keyword takes the abscissae apart from the ordinates, and a settled point is
-    one value with an order - so each is read off the pair by position."""
+def test_no_point_read_stands_at_the_forcing_buoy_and_no_printout_point_is_filled():
+    """The forcing buoy's own sea state is the boundary condition, so a read there
+    answers with what the run was handed: no output reads at it, and no input fills
+    a spectrum printout point."""
     from trid3nt_server.workflows.telemac.templates.nearshore_waves import (
         nearshore_waves as template)
 
-    from trid3nt_server.workflows.runtime.sheet import filled_by
-
     asserted = template.STEERING.ASSERTED
     assert "ABSCISSAE_OF_SPECTRUM_PRINTOUT_POINTS" not in asserted
-    assert {(name, tuple(value)) for source, name, value in filled_by(
-        template.STEERING, {"station": {"at": [10.0, 20.0]}})
-        if source == "station"} == {
-        ("ABSCISSAE_OF_SPECTRUM_PRINTOUT_POINTS", (10.0,)),
-        ("ORDINATES_OF_SPECTRUM_PRINTOUT_POINTS", (20.0,))}
+    assert "station" not in template.STEERING.FILLED_BY
+    filled = {name for keywords in template.STEERING.FILLED_BY.values()
+              for name in keywords}
+    assert filled.isdisjoint({
+        "ABSCISSAE_OF_SPECTRUM_PRINTOUT_POINTS",
+        "ORDINATES_OF_SPECTRUM_PRINTOUT_POINTS"})
     # The spectra are read off the file the deck named, never off the wave field.
     assert asserted["PUNCTUAL_RESULTS_FILE"] != asserted["ED_RESULTS_FILE"]
-    read = next(p for p in template.OUTPUTS if p.kind == "spectrum")
-    assert read.at == template._STATION.name and read.publish == "chart"
+    assert all(p.at is None for p in template.OUTPUTS)
 
 
 def _deck():
@@ -233,7 +230,7 @@ def _deck():
     return template.STEERING
 
 
-@pytest.mark.parametrize("named", ["seed", "station", "mesh_resolution_m",
+@pytest.mark.parametrize("named", ["seed", "mesh_resolution_m",
                                    "event_time", "vertical_frame"])
 def test_the_question_declares_the_levers_a_caller_reaches_it_through(named):
     assert named in {param.name for param in value_inputs(_workflow())}

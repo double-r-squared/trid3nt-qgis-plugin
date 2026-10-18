@@ -42,8 +42,6 @@ _PHYTO_IN, _PO4_IN, _NO3_IN = _ENTERING[0], _ENTERING[1], _ENTERING[3]
 class INPUTS:
     seed = Input().stated()
 
-    station = Input()
-
     do_standard_mgl = Input()
 
     mesh_resolution_m = RESOLUTION
@@ -105,8 +103,8 @@ OUTPUTS = [
         reference=reference_line(_NO3_IN, label="entering")),
     profile("T8", along=_CENTERLINE).chart(
         reference=reference_line("do_standard_mgl", label="standard")),
-    series("T1", at="station").chart(),
-    series("T8", at="station").chart(),
+    series("T1", at="observe").chart(),
+    series("T8", at="observe").chart(),
 ]
 CAPTIONS = {"T1": "phyto biomass", "T2": "phosphate", "T4": "nitrate",
             "T8": "dissolved o2",
@@ -131,9 +129,6 @@ telemac_eutrophication = register_workflow(
     coerce=(
         point_arg("seed", tool="telemac_eutrophication",
                   prompt="Click on the channel where the modelled stretch starts",
-                  code="TELEMAC_PARAMS_INVALID"),
-        point_arg("station", tool="telemac_eutrophication",
-                  prompt="Click where you want the water watched",
                   code="TELEMAC_PARAMS_INVALID"),
     ),
 )

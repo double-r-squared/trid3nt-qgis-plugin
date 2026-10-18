@@ -12,4 +12,4 @@ not_for: dissolved oxygen below a discharge (`telemac_do_sag`); a dye or contami
   or a forecast, which the weather fetchers answer
 returns: 'On success the run''s record (a `LayerURI`): every variable its modules wrote, styled
   on one mesh layer, animated where it varies, plus the temperature series charted at the
-  station. On failure a dict with `status="error"` + `error_code`.'
+  matched water-quality gauge. On failure a dict with `status="error"` + `error_code`.'

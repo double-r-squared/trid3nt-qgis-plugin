@@ -13,20 +13,20 @@ rest and make up the sixth slice.
 | `adapters/` | provider adapters, the message IR, the turn loop, the stream persistence | 23 | 274 |
 | `contracts/` | the typed wire and registry contracts, the schema mirror and its drift | 16 | 351 |
 | `credentials/` | credential resolution, the access-token gate and the connect handshake | 4 | 50 |
-| `derive/` | the derive tools, the two session tools | 3 | 51 |
+| `derive/` | the derive tools, the two session tools | 3 | 56 |
 | `render/` | the emitter, the uri registry, publication, the format set, charts | 35 | 427 |
 | `fetchers/` | the fetch router, its executors, hooks and fallbacks | 74 | 2120 |
 | `gates/` | the gates, a declined card at each of them, the code-exec approval gate, the context budget, the circuit breaker | 20 | 303 |
-| `inputs/` | the typed inputs: a Point, an Extent, a Shape, the domain with the companions its producer measured, the bed it reads as elevations on the run's own vertical frame, the boundary runs, the line a placed read follows, the observation a run opens on and the weather, rain and sea state a record measured, each from every form it arrives in, the user-input normalizers under them, and a user's own file adopted as a layer | 25 | 324 |
+| `inputs/` | the typed inputs: a Point, an Extent, a Shape, the domain with the companions its producer measured, the bed it reads as elevations on the run's own vertical frame, the boundary runs, the line a placed read follows, the observation a run opens on and the weather, rain and sea state a record measured, each from every form it arrives in, the user-input normalizers under them, and a user's own file adopted as a layer | 25 | 319 |
 | `mesh/` | the meshers, the mesh gate, topology, the bed over the one source it takes, the runs that prescribe a role and the shoreline the domain's own edge is | 11 | 278 |
 | `model/` | the SysML model conformance check | 1 | 23 |
-| `plugin/` | the QGIS dock: the client, the Qt bridge, the cards, the render seams; the Qt-wiring subset runs in a subprocess harness | 39 | 398 |
-| `runtime/` | the template runtime, its engine-neutral slots and dictionary marks, the run journal | 16 | 203 |
+| `plugin/` | the QGIS dock: the client, the Qt bridge, the cards, the render seams; the Qt-wiring subset runs in a subprocess harness | 39 | 402 |
+| `runtime/` | the template runtime, its engine-neutral slots and dictionary marks, the run journal | 16 | 210 |
 | `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 12 | 171 |
 | `search/` | dataset and tool retrieval, the OGC adapter, the keyword dictionary read | 13 | 203 |
 | `server/` | the HTTP and WS routes, the fetch short-circuit and the Case AOI, persistence | 29 | 260 |
-| `solver/` | the executor, the run reads, the engine-room posture, the MODFLOW engine, its authoring and staged check, and its body wrappers | 16 | 234 |
-| `telemac/` | the TELEMAC templates, the module surface, what each module writes and the primitives that read it, the listing reads, authoring | 61 | 995 |
+| `solver/` | the executor, the run reads, the engine-room posture, the MODFLOW engine, its authoring and staged check, and its body wrappers | 16 | 237 |
+| `telemac/` | the TELEMAC templates, the module surface, what each module writes and the primitives that read it, the listing reads, authoring | 61 | 993 |
 | `tools/` | the registry, the arg normalizer, the tool cache | 10 | 343 |
 
 | file | what it is |
@@ -45,11 +45,11 @@ instance fixtures, and nothing else has one.
 Six slices by subsystem, each its own foreground invocation, from the repo root:
 
     make test-fetchers        # tests/fetchers                                                                              2119
-    make test-spatial         # tests/derive tests/render tests/mesh                                                         752
-    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                      1494
-    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts           1107
-    make test-model-surface   # tests/adapters tests/tools                                                                   617
-    make test-packages        # tests/contracts tests/plugin                                                                  749
+    make test-spatial        # tests/derive tests/render tests/mesh                                         761
+    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                      1643
+    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts       1126
+    make test-model-surface   # tests/adapters tests/tools                                                                   616
+    make test-packages        # tests/contracts tests/plugin                                                                  753
 
 The source-text guards - history markers, dead references, the package maps,
 the template pages, banner comments, import walls, wiring pins, retired names,

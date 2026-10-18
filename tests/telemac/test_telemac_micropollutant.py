@@ -177,12 +177,12 @@ def test_the_deck_states_the_process_and_leaves_its_constants_to_the_engine():
     assert dict(body["slots"]) == {}
 
 
-def test_the_question_is_read_where_the_user_put_the_monitoring_point():
+def test_the_question_composes_no_series_and_captions_only_its_rows():
+    """A probe is a read after the run: the deck takes no monitoring input, so
+    it publishes no series and its captions stay on the data rows."""
     template = _template()
-    (placed,) = template.OUTPUTS
-    assert (placed.kind, placed.variable, placed.publish) == (
-        "series", "T1", "chart")
-    assert placed.variable in template.CAPTIONS
+    assert not template.OUTPUTS
+    assert set(template.CAPTIONS) == {"discharge", "level"}
 
 
 def test_the_declared_params_resolve():

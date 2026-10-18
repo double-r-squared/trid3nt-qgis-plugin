@@ -376,7 +376,7 @@ def test_a_refusal_keeps_the_code_of_its_reason_through_the_review(
 
 
 def test_what_producing_said_at_the_fill_is_restated_on_the_run(monkeypatch):
-    """The fill runs before the run's channels open, so a station a row chose
+    """The fill runs before the run's channels open, so the site a row chose
     and what a cut covers reach the run only because the launch restates them."""
     from trid3nt_server.inputs import run_notes
     from trid3nt_server.workflows.runtime import journal
@@ -397,13 +397,13 @@ def test_what_producing_said_at_the_fill_is_restated_on_the_run(monkeypatch):
     wf = TOOL_REGISTRY["telemac_ice_cover"].fn.workflow
     monkeypatch.setattr(type(wf), "launch", _launch)
     state = asyncio.run(fill(Fill(workflow=wf), {
-        "input_mode": "auto", "seed": [0.5, 0.5], "station": [0.5, 0.5],
+        "input_mode": "auto", "seed": [0.5, 0.5],
         "event_time": "2024-06-01T00:00:00Z"}))
     run = asyncio.run(wf._launched(state))
-    rows = ["domain", "bed", "weather", "level", "discharge"]
+    rows = ["domain", "observe", "bed", "weather", "level", "discharge"]
     assert run.choices == rows
     assert covered == [f"the {name} covers the cut" for name in rows]
-    assert run.notes[:10] == [said for name in rows for said in (
+    assert run.notes[:2 * len(rows)] == [said for name in rows for said in (
         f"the {name} covers the cut", f"the {name} came from a stub")]
 
 

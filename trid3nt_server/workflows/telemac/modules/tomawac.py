@@ -186,15 +186,12 @@ WAC.UNWRITTEN = MappingProxyType({
 WAC.ARMS_ON_HOST = ("WAVE_DRIVEN_CURRENTS",)
 # The spectra are read by the one primitive that reads a polar grid.
 WAC.reads(**PRIMITIVES, spectrum=read_spectrum)
-# The sea state at the open edge fills the JONSWAP numbers; the gauged level is the still water depths are read under; a settled station is where the spectrum is printed. A coupled body takes only the sea state.
+# The sea state at the open edge fills the JONSWAP numbers; the gauged level is the still water depths are read under. A coupled body takes only the sea state.
 WAC.FILLED_BY = MappingProxyType({
     "wave": {"BOUNDARY_SIGNIFICANT_WAVE_HEIGHT": lambda wave: wave.height_m,
              "BOUNDARY_PEAK_FREQUENCY": lambda wave: 1.0 / wave.peak_period_s,
              "BOUNDARY_MAIN_DIRECTION_1": _toward},
     "level": {"INITIAL_STILL_WATER_LEVEL": lambda level: level.value},
-    "station": {
-        "ABSCISSAE_OF_SPECTRUM_PRINTOUT_POINTS": lambda placed: [placed["at"][0]],
-        "ORDINATES_OF_SPECTRUM_PRINTOUT_POINTS": lambda placed: [placed["at"][1]]},
     # One real, yyyymmddhhmm, to the minute.
     MOMENT: {"DATE_OF_COMPUTATION_BEGINNING":
              lambda moment: float(moment["at"].strftime("%Y%m%d%H%M"))}})

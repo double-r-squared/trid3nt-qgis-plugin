@@ -67,6 +67,18 @@ def test_cell_valued_dataset_groups_ride_over_time(tmp_path):
         assert head.shape == (2, 2)
         assert np.allclose(head[0, :], [101.0, 99.5])
         assert np.allclose(head[1, :], [100.5, 99.0])
+        assert "units" not in head.ncattrs()
+
+
+def test_a_group_carries_the_unit_it_was_read_in(tmp_path):
+    import netCDF4
+
+    path = write_ugrid(
+        _polygon_mesh(), tmp_path / "mesh.ugrid",
+        datasets={"head": [(0.0, [101.0, 99.5])]},
+        reference_time="2024-06-01T00:00:00Z", units={"head": "m"})
+    with netCDF4.Dataset(path) as ds:
+        assert ds.variables["head"].units == "m"
 
 
 def test_a_dataset_over_the_wrong_face_count_refuses(tmp_path):

@@ -291,7 +291,16 @@ def test_a_reading_with_no_instant_on_a_run_saving_several_times_refuses(solved)
 
 
 def test_a_stated_number_stands_at_no_cell_to_check_against(solved):
-    with pytest.raises(ModflowError) as caught:
+    with pytest.raises(P.OutputEmpty) as caught:
         GWF.READS["series"](P.series("HEAD", at=Observation(value=3.0, units="m"),
                                      plane=1), solved())
-    assert caught.value.error_code == "MODFLOW_OBSERVATION_UNPLACED"
+    assert "no site" in str(caught.value)
+
+
+def test_a_site_off_the_grid_reads_nothing_and_says_how_far(solved):
+    lon, lat = _TO_LONLAT(100.0, 100.0)
+    site = Observation(value=3.0, units="m", site_id="FAR-OUT", lon=lon, lat=lat)
+    with pytest.raises(P.OutputEmpty) as caught:
+        GWF.READS["series"](P.series("HEAD", at=site, plane=1), solved())
+    assert "FAR-OUT" in str(caught.value)
+    assert "outside the mesh" in str(caught.value)

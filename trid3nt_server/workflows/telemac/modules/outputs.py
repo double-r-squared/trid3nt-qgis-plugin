@@ -26,6 +26,7 @@ from trid3nt_server.workflows.runtime.primitives import (
     Track,
     _drawn,
 )
+from trid3nt_server.inputs.observation import Observation
 from trid3nt_server.workflows.telemac.authoring.selafin_io import (
     SelafinReadError,
     read_selafin,
@@ -563,6 +564,14 @@ def _point(at: Any) -> Any:
 
     if isinstance(at, Point):
         return at
+    if isinstance(at, Observation):
+        # A data input's site, or a number that stands nowhere: the miss is the
+        # reader's to say, so an unmatched read composes nothing instead of refusing.
+        if at.lon is None or at.lat is None:
+            raise OutputEmpty(
+                f"the {at.site_id or at.site_name or 'reading'} was stated as a "
+                "number, which stands at no site, so there is no site to read it at.")
+        return Point(at.lon, at.lat, at.site_name or at.site_id)
     if isinstance(at, Mapping):
         return Point(float(at["lon"]), float(at["lat"]), at.get("name"))
     return Point(*at)
@@ -571,6 +580,8 @@ def _point(at: Any) -> Any:
 def read_series(primitive: Primitive, solved: Solved) -> Series:
     """``series(name, at)``: the domain maximum per instant, or a Point's value.
 
+    At a data input's site the read takes the site's own coordinates, lands on the node
+    the result file reads it at, and with no site or a site off the mesh composes nothing.
     A token the module prints rather than writes is read off the listing, at the liquid boundary the Point lies on.
     """
     import numpy as np
@@ -589,11 +600,24 @@ def read_series(primitive: Primitive, solved: Solved) -> Series:
                           primitive.variable, times, values, row, edge, wet,
                           injected=solved.injected(primitive.variable)))
     point = _point(primitive.at)
-    node = solved.node_at(point)
     lon, lat = solved.lonlat
-    # The measures are the series' own: a point's question is answered at the point. Line and numbers share a mask, so a gap is a gap in both.
+    held = None
+    if isinstance(primitive.at, Observation):
+        from trid3nt_server.inputs.point import as_utm, containing_face
+
+        x, y = solved.xy
+        face, away = containing_face(as_utm(point, solved.utm_epsg),
+                                     x=x, y=y, faces=solved.result["ikle2"])
+        if face is None:
+            raise OutputEmpty(
+                f"the site {primitive.at.site_id or point.name or ''} is outside "
+                f"the mesh, {away:.0f} m from its nearest face.")
+    node = solved.node_at(point)
     column = values[:, node:node + 1]
-    held = None if wet is None else np.asarray(wet)[:, node:node + 1]
+    if wet is not None and not isinstance(primitive.at, Observation):
+        # A site's series is what the record measured there, water or not; a stated
+        # point's line and numbers share the wet mask, so a gap is a gap in both.
+        held = np.asarray(wet)[:, node:node + 1]
     return Series(name=name, units=units, times=times,
                   values=_drawn(column, held)[:, 0],
                   at=f"at {point.name or 'the point'}",

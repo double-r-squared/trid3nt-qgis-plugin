@@ -13,8 +13,8 @@ from .user_input import PlaceNameError, UserInputError, lonlat_point
 
 from .geometry import read_geometry_doc
 
-__all__ = ["Point", "PointNotViableError", "as_utm", "point", "point_arg",
-           "publish_point", "require_viable"]
+__all__ = ["Point", "PointNotViableError", "as_utm", "containing_face", "point",
+           "point_arg", "publish_point", "require_viable"]
 
 logger = logging.getLogger("trid3nt_server.inputs.point")
 
@@ -187,6 +187,35 @@ def as_utm(pt: Point, utm_epsg: int) -> tuple[float, float]:
     x, y = Transformer.from_crs(4326, int(utm_epsg), always_xy=True).transform(
         pt.lon, pt.lat)
     return (float(x), float(y))
+
+
+#: The metres a point may stand off a face and still be read as on it - a lon/lat
+#: round-trip through a projected zone lands a whole micron away, never exactly on.
+_ON_FACE_M = 1e-6
+
+
+def containing_face(xy: tuple[float, float], *, x: Any, y: Any, faces: Any
+                    ) -> tuple[int | None, float]:
+    """The index of the face holding ``xy`` in the zone's own metres and 0.0 away,
+    else ``None`` and the metres from ``xy`` to the nearest face.
+
+    Pure over the arrays a result already carries: the node coordinates and the
+    faces' vertex indices - no viability, no movement, no refusal, no run."""
+    import shapely
+
+    px, py = float(xy[0]), float(xy[1])
+    polygons = [shapely.Polygon([(float(x[i]), float(y[i])) for i in face])
+                for face in faces]
+    tree = shapely.STRtree(polygons)
+    here = shapely.Point(px, py)
+    hits = tree.query(here, predicate="covered_by")
+    if len(hits):
+        return int(sorted(hits)[0]), 0.0
+    near = int(tree.nearest(here))
+    away = float(shapely.distance(here, polygons[near]))
+    if away <= _ON_FACE_M:
+        return near, 0.0
+    return None, away
 
 
 def require_viable(pt: Point, *, label: str, utm_epsg: int, sites_xy: Any,

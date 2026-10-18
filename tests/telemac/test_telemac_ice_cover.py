@@ -71,9 +71,10 @@ def test_every_slot_this_run_stands_on_reaches_the_wire_as_the_slot_it_is():
             "water_temperature"}.isdisjoint(wire)
 
 
-def test_the_water_opens_on_one_reading_ranked_from_where_it_is_read():
+def test_the_water_opens_on_one_reading_ranked_against_the_domain():
     """Which site the run opens on is the observation slot's choice, ranked
-    against the point the series is read at. The row is LOAD-BEARING: the run
+    against the domain the run stands in - no station point is stated, and the
+    series is then read AT that site. The row is LOAD-BEARING: the run
     has to lose that much heat before it makes any ice at all, and it names
     the published TEMPERATURE variable it observes - the unit KHIONE's own
     tracer carries, not a stated one."""
@@ -82,7 +83,7 @@ def test_the_water_opens_on_one_reading_ranked_from_where_it_is_read():
     assert row.data_class == "water quality sample"
     assert row.observes == "TEMPERATURE"
     assert row.producer is None
-    assert row.coercion["near"] == "station"
+    assert row.coercion["near"] is None
 
 
 def test_the_discharge_is_one_reading_the_channel_step_can_open_on():
@@ -121,7 +122,7 @@ def test_the_only_params_are_the_questions_own_inputs():
     lever."""
 
     assert {p.name for p in value_inputs(template.INPUTS)} == {
-        "seed", "station", "cover_threshold", "mesh_resolution_m"}
+        "seed", "cover_threshold", "mesh_resolution_m"}
 
 
 def test_the_granularity_row_states_no_default_and_refuses_no_edge():
@@ -158,7 +159,6 @@ def _sheet(monkeypatch, **floor):
                     "opening": "CONSTANT DEPTH", "depth_m": 1.4,
                     "level_m": 3.1, "inflow_q_m3s": 22.0,
                     "outflow_stage_m": 3.1},
-        "station": _STATION,
         "observe": Observation(value=3.2, units="degC"),
         OBSERVE: Observation(value=3.2, units="degC"),
         "weather": record})

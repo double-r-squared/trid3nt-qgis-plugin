@@ -13,5 +13,5 @@ not_for: the oxygen sag below a WASTEWATER DISCHARGE (`telemac_do_sag`); a conse
 returns: 'On success the run''s record (a `LayerURI`): every variable its modules wrote -
   the eight tracers the eutrophication process appends among them - styled on one mesh layer,
   animated where it varies, plus the biomass and the oxygen along the water''s path as charts
-  and their history where the station was picked. On failure a dict with `status="error"`
+  and their history where the matched water-quality gauge stands. On failure a dict with `status="error"`
   + `error_code`.'

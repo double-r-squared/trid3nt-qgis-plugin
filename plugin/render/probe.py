@@ -2,18 +2,22 @@
 
 One POST per click, deterministic and with no LLM in the loop. The SERVER
 groups an animation-frame sequence into one ``series`` entry, so nothing here
-groups: this builds the request, parses the reply, formats the note block."""
+groups: this builds the request, parses the reply, formats the note block, and
+turns a series entry into the chart payload the Charts window already parses."""
 
 from __future__ import annotations
 
 import json
+import re
 import urllib.error
 import urllib.request
-from typing import Any, Dict, List
+import uuid
+from typing import Any, Dict, List, Optional
 
 __all__ = [
     "DEFAULT_PROBE_TIMEOUT",
     "ProbePointRequestError",
+    "build_probe_chart_payload",
     "format_probe_result",
     "post_probe_point",
 ]
@@ -157,3 +161,52 @@ def probe_location_label(lon: float, lat: float) -> str:
     """The dock's short point label for a note header: five decimal places,
     roughly one metre."""
     return f"({lon:.5f}, {lat:.5f})"
+
+
+#: An ISO instant, what a file's own time axis stamps; anything else is a captioned category.
+_ISO_INSTANT = re.compile(r"^\d{4}-\d{2}-\d{2}")
+
+
+def build_probe_chart_payload(
+    entry: Dict[str, Any], *, lon: float, lat: float
+) -> Optional[Dict[str, Any]]:
+    """One probe ``series`` entry -> the Charts window's payload, or None where
+    it holds no number.
+
+    The window parses the same shape a run's chart carries: a chart_id, a
+    Vega-Lite spec over inline values, a title and a caption. Each saved instant
+    is one row under its own label; a null value is a gap, never a zero."""
+    series = entry.get("series") or []
+    name = str(entry.get("name") or "series")
+    units = entry.get("units")
+    rows: List[Dict[str, Any]] = []
+    for member in series:
+        if not isinstance(member, dict) or "label" not in member:
+            continue
+        value = member.get("value")
+        rows.append({
+            "t": str(member["label"]),
+            "value": float(value) if isinstance(value, (int, float)) else None,
+            "series": name,
+        })
+    if not any(row["value"] is not None for row in rows):
+        return None
+    where = probe_location_label(lon, lat)
+    temporal = all(_ISO_INSTANT.match(row["t"]) for row in rows)
+    return {
+        "chart_id": f"probe-{uuid.uuid4().hex}",
+        "vega_lite_spec": {
+            "mark": {"type": "line", "point": True},
+            "data": {"values": rows},
+            "encoding": {
+                "x": {"field": "t",
+                      "type": "temporal" if temporal else "ordinal",
+                      "title": "Time (UTC)" if temporal else "Time"},
+                "y": {"field": "value", "type": "quantitative",
+                      "title": f"{name} ({units})" if units else name},
+            },
+        },
+        "title": f"{name} at {where}",
+        "caption": (f"{name} probed at {where}, at each of {len(rows)} "
+                    "saved times."),
+    }

@@ -18,7 +18,7 @@ from trid3nt_server.workflows.telemac.modules.outputs import reference_line
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Atmosphere, Boundaries,
 )
-from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
+from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
 __all__ = ["CAPTIONS", "ICE_THICKNESS", "OUTPUTS",
            "INPUTS", "STEERING", "telemac_ice_cover"]
@@ -33,16 +33,12 @@ _FRICTION_COEFFICIENT = 33.0
 
 _REACH_LENGTH_KM = 12.0
 
-
-_STATION = Placed("station", point="station", label="Ice station")
-
 # one value per KHIONE tracer, in the order it appends them
 _INFLOW_ICE = [0.0, 0.0, 0.0]
 
 
 class INPUTS:
     seed = Input().stated()
-    station = Input().stated()
     cover_threshold = Input()
 
     mesh_resolution_m = RESOLUTION
@@ -56,8 +52,7 @@ class INPUTS:
     level = Input(LEVEL).need("water level series")
 
     weather = Input(WEATHER).need("weather forcing")
-    observe = Input(OBSERVE).need("water quality sample", of="TEMPERATURE",
-                                  at="station")
+    observe = Input(OBSERVE).need("water quality sample", of="TEMPERATURE")
 
 
 class STEERING(T2D):
@@ -101,9 +96,9 @@ class STEERING(T2D):
 
 
 OUTPUTS = [
-    series("DYNCOVC", at="station", module="khione").chart(
+    series("DYNCOVC", at="observe", module="khione").chart(
         reference=reference_line("cover_threshold", label="cover threshold")),
-    series("DYNCOVT", at="station", module="khione").chart(),
+    series("DYNCOVT", at="observe", module="khione").chart(),
 ]
 CAPTIONS = {"DYNCOVC": "ice cover fraction", "DYNCOVT": "ice cover thickness",
            "discharge": "a streamflow", "level": "a water-surface elevation",
@@ -128,9 +123,6 @@ telemac_ice_cover = register_workflow(
     coerce=(
         point_arg("seed", tool="telemac_ice_cover",
                   prompt="Click on the water where the modelled stretch starts",
-                  code="TELEMAC_PARAMS_INVALID"),
-        point_arg("station", tool="telemac_ice_cover",
-                  prompt="Click on the water where the ice should be read",
                   code="TELEMAC_PARAMS_INVALID"),
     ),
 )

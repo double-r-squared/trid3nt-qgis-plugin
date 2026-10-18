@@ -7253,10 +7253,6 @@
         "desc": "Where on the channel the modelled stretch STARTS, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. The stretch walked downstream of it is the water one pass is measured over; supply the domain polygon instead and this is not read",
         "type": "Point"
       },
-      "station": {
-        "desc": "Where to watch the biomass and the oxygen over time, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer (geocode a place name first). The profiles are all longitudinal and do not move with it",
-        "type": "Point"
-      },
       "do_standard_mgl": {
         "bounds": [
           0.0,
@@ -7273,10 +7269,6 @@
     "telemac_ice_cover": {
       "seed": {
         "desc": "Where on the water the modelled stretch STARTS, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. It seeds the reach the domain is cut from; supply the domain polygon - a lake, a pond, a reservoir - instead and this is not read",
-        "type": "Point"
-      },
-      "station": {
-        "desc": "Where the ice cover and its thickness are read over time, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer. Geocode a place name first",
         "type": "Point"
       },
       "cover_threshold": {
@@ -7301,10 +7293,6 @@
         "default": 3600.0,
         "desc": "Finite injection window; the substance is released over it and the rest of the run is what happens to what was released",
         "units": "s"
-      },
-      "monitoring_point": {
-        "desc": "Where the dissolved history is read, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first",
-        "type": "Point"
       }
     },
     "telemac_oil_spill": {
@@ -7392,10 +7380,6 @@
         "desc": "Where on the channel the modelled stretch STARTS, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. It seeds the reach the domain is cut from; supply the domain polygon - a lake, a pond, a harbour - instead and this is not read",
         "type": "Point"
       },
-      "station": {
-        "desc": "Where the temperature series and its diurnal range are read, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer. Geocode a place name first",
-        "type": "Point"
-      },
       "mesh_resolution_m": {
         "desc": "Target element edge length the domain is triangulated at; a surface heat budget is divided by the local DEPTH, so what this has to resolve is how deep the water is rather than its planform"
       }
@@ -7403,10 +7387,6 @@
     "tomawac_wave_driven_currents": {
       "seed": {
         "desc": "Where OFFSHORE the incoming sea state is measured, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. The nearest buoy to it is the record the wave boundary is forced at, so put it on the water the swell arrives across",
-        "type": "Point"
-      },
-      "station": {
-        "desc": "Where INSHORE the current is read over time, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. The speed and the wave height are charted at the node of the mesh it settles onto, so put it in the surf zone you are asking about",
         "type": "Point"
       },
       "mesh_resolution_m": {

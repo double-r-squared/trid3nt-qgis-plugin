@@ -4133,10 +4133,6 @@
         "desc": "Where OFFSHORE the incoming sea state is measured, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. The nearest buoy to it is the record the open boundary is forced at, so put it on the water the swell arrives across",
         "type": "Point"
       },
-      "station": {
-        "desc": "Where INSHORE the waves are read over time, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. The height, the period and the direction are charted at the node of the mesh it settles onto, so put it on the water you are asking about",
-        "type": "Point"
-      },
       "mesh_resolution_m": {
         "desc": "Target element edge length the water is triangulated at; the waves shoal and then break where the DEPTH falls, so what this has to resolve is the slope of the bed across the surf zone"
       },

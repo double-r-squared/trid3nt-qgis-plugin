@@ -115,6 +115,20 @@ it where it was stated. A pure seed - a point read only to locate a fetched doma
 `stated()`: a supplied domain never reads it, and a domain the match must locate with
 no seed refuses `DATA_NEED_UNPLACED` naming what to pick or draw.
 
+TWO READS OF A POINT CARRY DIFFERENT WEIGHT. A SOURCE point - a release, an outfall -
+changes the physics, so it goes through the check above and refuses where it misses. A
+PROBE is a read AFTER the run: it never changes the solve, it is never a template
+input, and a click replaces it - the dock's Probe click has QGIS read every visible
+mesh layer's painted group at the point over every saved time, as the map draws it,
+and charts the series; a point inside no face reads "outside the mesh". Within a run,
+a station is the DATA'S SITE: a template's grounded series is read where the record it
+compares against was measured (the matched gauge's own `lon`/`lat`), never at a stated
+override and never at the site whose record forced the run. There the check is
+containment, not viability - a site the mesh or grid does not hold composes no series
+and the journal says so with its site and distance; an observation stated as a number,
+which stands at no site, composes nothing and the journal says that; neither refuses
+the run.
+
 Values lead the wire and rows follow, each in body order, and the generated
 docstring documents both in ONE section: required values, defaulted ones, then
 the stated-only ones and the rows.

@@ -389,5 +389,5 @@ def test_the_bed_only_a_mesh_build_reads_is_not_produced_under_a_supplied_mesh()
     assert "bed" in workflow.named_rows()
     assert "bed" not in workflow.named_rows({"mesh"})
     ice = TOOL_REGISTRY["telemac_ice_cover"].fn.workflow
-    assert "observe" not in ice.named_rows()
+    assert "observe" in ice.named_rows()
     assert {"weather", "level", "discharge"} <= set(ice.named_rows())

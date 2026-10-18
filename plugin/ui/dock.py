@@ -168,6 +168,8 @@ class Trid3ntDock(QDockWidget):
         self._case_list_tasks: List[_CaseListTask] = []  # keep-alive refs
         self._push_tasks: List[_PushLayerTask] = []  # keep-alive refs
         self._probe_tasks: List[_ProbePointTask] = []  # keep-alive refs
+        #: The mesh entries QGIS read at a click, held until its raster reply lands.
+        self._probe_meshes: Dict[Tuple[float, float], list] = {}
         self._provider_config_tasks: List[_ProviderConfigTask] = []
         # Built lazily (QgsMapToolEmitPoint needs a live canvas); ``_prev_map_tool`` is restored on toggle-off.
         self._probe_map_tool = None
@@ -604,6 +606,13 @@ class Trid3ntDock(QDockWidget):
             )
             return
         lon, lat = lonlat
+        try:
+            from ..render.mesh_probe import mesh_entries
+            self._probe_meshes[(lon, lat)] = mesh_entries(
+                point, canvas.mapSettings().destinationCrs())
+        except Exception as exc:  # noqa: BLE001 -- a mesh read never blocks the raster probe
+            self._probe_meshes[(lon, lat)] = [
+                {"name": "mesh layers", "value": None, "error": str(exc)}]
         base_url = self._effective_http_base()
         self._set_probe_output(
             f"Probing {probe.probe_location_label(lon, lat)} ..."
@@ -615,13 +624,35 @@ class Trid3ntDock(QDockWidget):
         task.start()
 
     def _on_probe_finished(self, lon: float, lat: float, result: dict) -> None:
+        # The mesh layers QGIS read at the click lead; the server's rasters follow.
+        meshes = self._probe_meshes.pop((lon, lat), [])
+        result = {**result, "results": meshes + list(result.get("results") or [])}
         lines = probe.format_probe_result(result)
         header = f"Probe {probe.probe_location_label(lon, lat)}:"
         self._set_probe_output("\n".join([header] + [f"  {ln}" for ln in lines]))
+        self._chart_probe_series(lon, lat, result["results"])
+
+    def _chart_probe_series(self, lon: float, lat: float, entries: list) -> None:
+        """A series opens in the Charts window; scalars stay text in the probe panel."""
+        opened = 0
+        for entry in entries:
+            if not isinstance(entry, dict) or "series" not in entry:
+                continue
+            payload = probe.build_probe_chart_payload(entry, lon=lon, lat=lat)
+            if payload is not None:
+                self._ensure_charts_window().add_chart(payload)
+                opened += 1
+        if opened:
+            self._show_charts_window()
 
     def _on_probe_errored(self, lon: float, lat: float, message: str) -> None:
         label = probe.probe_location_label(lon, lat)
-        self._set_probe_output(f"Probe {label} failed: {message}", error=True)
+        meshes = self._probe_meshes.pop((lon, lat), [])
+        lines = probe.format_probe_result({"results": meshes}) if meshes else []
+        self._set_probe_output("\n".join(
+            [f"Probe {label}: rasters failed: {message}"] + [f"  {ln}" for ln in lines]),
+            error=True)
+        self._chart_probe_series(lon, lat, meshes)
 
     def _render_aoi_overlay(
         self, bbox4326: Tuple[float, float, float, float]

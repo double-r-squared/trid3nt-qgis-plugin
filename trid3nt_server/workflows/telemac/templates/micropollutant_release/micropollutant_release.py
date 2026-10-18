@@ -11,7 +11,7 @@ from trid3nt_server.workflows.runtime import (
     register_workflow,
 )
 from trid3nt_server.inputs import point_arg
-from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, series
+from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL
 from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Boundaries, Sources,
 )
@@ -22,8 +22,6 @@ __all__ = ["CAPTIONS", "OUTPUTS", "INPUTS",
 
 
 _RELEASE = Placed("source", point="release", label="Release point")
-
-_MONITORING = Placed("monitoring", point="monitoring_point", label="Monitoring point")
 
 _REACH_LENGTH_KM = 6.0
 
@@ -38,8 +36,6 @@ _DISSOLVED = "MICRO POLLUTANT MG/L"
 class INPUTS:
     release = Input()
     release_duration_s = Input()
-
-    monitoring_point = Input().stated()
 
     domain = Input(DOMAIN).need("hydrography", at="release",
                                 span_km=_REACH_LENGTH_KM)
@@ -88,10 +84,8 @@ class STEERING(T2D):
     coupling = [WAQTEL.micropollutant()]
 
 
-OUTPUTS = [
-    series("T1", at="monitoring").chart(),
-]
-CAPTIONS = {"T1": "dissolved micropollutant", "discharge": "a streamflow",
+OUTPUTS = []
+CAPTIONS = {"discharge": "a streamflow",
             "level": "a water level"}
 
 _METADATA = AtomicToolMetadata(
@@ -107,13 +101,9 @@ REVIEW_TITLE = "Review the release and the sediment it partitions onto"
 telemac_micropollutant_release = register_workflow(
     TelemacWorkflow, _METADATA,
     sys.modules[__name__],
-    sensitivity=(("dissolved_micropollutant", "peak"),),
     coerce=(
         point_arg("release", tool="telemac_micropollutant_release",
                   prompt="Click on the water where the substance enters it",
-                  code="TELEMAC_PARAMS_INVALID"),
-        point_arg("monitoring_point", tool="telemac_micropollutant_release",
-                  prompt="Click where downstream to read the dissolved history",
                   code="TELEMAC_PARAMS_INVALID"),
     ),
 )

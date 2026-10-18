@@ -13,9 +13,9 @@ from trid3nt_server.workflows.runtime import (
     register_workflow,
 )
 from trid3nt_server.tools.mesh.tool import mesh_op, tool
-from trid3nt_server.workflows.telemac.modules import WAC, series, spectrum
+from trid3nt_server.workflows.telemac.modules import WAC, series
 from trid3nt_server.workflows.telemac.modules.tomawac import RESULT_FILENAME
-from trid3nt_server.workflows.telemac.workflow import Placed, TelemacWorkflow
+from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
 __all__ = ["CAPTIONS", "MESH", "OUTPUTS", "INPUTS", "STEERING",
            "tomawac_nearshore_waves"]
@@ -26,12 +26,9 @@ _BOUNDARY = "coast.cli"
 _STEERING_FILE = "tom_nearshore.cas"
 _SPECTRA = "tom_nearshore.spe"
 
-_STATION = Placed("station", point="station", label="Wave station")
-
 
 class INPUTS:
     seed = Input().stated()
-    station = Input().stated()
 
     mesh_resolution_m = RESOLUTION
 
@@ -91,16 +88,12 @@ MESH = tool.build_mesh(
 )
 
 OUTPUTS = [
-    series("HM0", at="station").chart(),
-    series("TPD", at="station").chart(),
-    series("DMOY", at="station").chart(),
-    spectrum(at="station").chart(),
+    series("HM0").chart(),
 ]
 CAPTIONS = {"HM0": "significant wave height", "TPD": "peak wave period",
             "DMOY": "mean wave direction", "BETA": "breaking rate",
             "DBR": "breaker dissipation", "wave": "a sea state",
-            "level": "a water-surface elevation",
-            "spectrum": "wave energy by frequency at the station"}
+            "level": "a water-surface elevation"}
 
 _METADATA = AtomicToolMetadata(
     name="tomawac_nearshore_waves",
@@ -126,9 +119,6 @@ tomawac_nearshore_waves = register_workflow(
         point_arg("seed", tool="tomawac_nearshore_waves",
                   prompt="Click offshore, where the incoming sea state is "
                          "measured",
-                  code="TELEMAC_PARAMS_INVALID"),
-        point_arg("station", tool="tomawac_nearshore_waves",
-                  prompt="Click on the water where the waves should be read",
                   code="TELEMAC_PARAMS_INVALID"),
     ),
 )

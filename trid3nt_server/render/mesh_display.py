@@ -101,15 +101,17 @@ def write_ascii_dataset(values: Any, *, name: str, nodes: int, cells: int,
 def write_ugrid(mesh: Any, path: str | Path, *,
                 datasets: Mapping[str, Sequence[tuple[float, Sequence[float]]]
                                   ] | None = None,
-                reference_time: str | None = None) -> str:
+                reference_time: str | None = None,
+                units: Mapping[str, str] | None = None) -> str:
     """Write a polygon-cell mesh as a CF-UGRID netCDF file MDAL opens.
 
     Cells may have any vertex count: the connectivity pads shorter rows with
     the fill value. ``datasets`` are cell-valued groups over ONE time axis - a
     name to ``(seconds, values)`` pairs, one value per cell, every group at the
     same instants - counted from ``reference_time`` (ISO 8601), which a dataset
-    requires. A painted bed becomes a node-centered ``bed_elevation`` variable,
-    which MDAL surfaces as its Bed Elevation dataset. Returns the path written.
+    requires; ``units`` names a group's unit, and a group with none carries none.
+    A painted bed becomes a node-centered ``bed_elevation`` variable, which MDAL
+    surfaces as its Bed Elevation dataset. Returns the path written.
     """
     import netCDF4
 
@@ -173,7 +175,8 @@ def write_ugrid(mesh: Any, path: str | Path, *,
                 variable = dest.createVariable(
                     _identifier(name), "f8", ("time", "nMesh2D_faces"),
                     fill_value=np.float64("nan"))
-                variable.setncattr("units", "1")
+                if (units or {}).get(name):
+                    variable.setncattr("units", units[name])
                 variable.setncattr("mesh", "Mesh2D")
                 variable.setncattr("location", "face")
                 for step, (t, values) in enumerate(series):

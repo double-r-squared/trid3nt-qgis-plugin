@@ -250,7 +250,7 @@ def group_stem(row: Any, layer: int, qualifier: str = "") -> str:
 def _frames(solved: Solved, row: Any, units: str, name: str,
             times: Any, values: Any, *, count: int | None, measures: Mapping[str, Any],
             ) -> Frames:
-    written = group(solved, name, list(zip(times, values)))
+    written = group(solved, name, list(zip(times, values)), units=units)
     return Frames(name=row.name, units=units, values=values, file=written,
                   group=name, epsg=solved.utm_epsg,
                   reference_time=solved.run.get("reference_time"), frames=count,
@@ -306,12 +306,12 @@ def _point(at: Any) -> Any:
     if isinstance(at, Point):
         return at
     if isinstance(at, Observation):
+        # A stated number stands nowhere: the miss is the reader's to say, so an
+        # unmatched read composes nothing and journals instead of refusing the run.
         if at.lon is None or at.lat is None:
-            raise ModflowError(
-                "the observation was stated as a number, which stands at no "
-                "site, so no cell holds the value it is checked against; state "
-                "it as a point layer of the well that reported it.",
-                error_code="MODFLOW_OBSERVATION_UNPLACED")
+            raise OutputEmpty(
+                f"the {at.site_id or at.site_name or 'observation'} was stated as "
+                "a number, which stands at no site, so there is no site to read it at.")
         return Point(at.lon, at.lat, at.site_name or at.site_id)
     if isinstance(at, Mapping):
         return Point(float(at["lon"]), float(at["lat"]), at.get("name"))
@@ -319,7 +319,10 @@ def _point(at: Any) -> Any:
 
 
 def read_series(primitive: Primitive, solved: Solved) -> Series:
-    """``series(name, at, plane)``: the domain maximum per saved time, or the values of the cell containing a Point."""
+    """``series(name, at, plane)``: the domain maximum per saved time, or the values of the cell containing a Point.
+
+    At a data input's site the read takes the site's own coordinates, lands on the cell
+    the run solves it in, and with no site or a site off the grid composes nothing."""
     import numpy as np
 
     row, units, model_times, values, layer = solved.frames(primitive.variable, primitive.plane)
@@ -331,10 +334,26 @@ def read_series(primitive: Primitive, solved: Solved) -> Series:
                       at="the domain maximum", measures=_envelope(times, values))
     point = _point(primitive.at)
     points, cells, _bed, _ll = solved.nodes
-    cell = point_cell(point, label="series point", points=points, cells=cells,
-                      utm_epsg=solved.utm_epsg)
+    data_site = isinstance(primitive.at, Observation)
+    if data_site:
+        from trid3nt_server.inputs.point import as_utm, containing_face
+
+        import numpy as _np
+
+        grid = _np.asarray(points, dtype="float64")
+        px, py = as_utm(point, solved.utm_epsg)
+        cell, away = containing_face((px, py), x=grid[:, 0], y=grid[:, 1],
+                                     faces=cells)
+        if cell is None:
+            label = getattr(primitive.at, "site_id", None) or point.name or "the site"
+            raise OutputEmpty(
+                f"the site {label} is outside the mesh, {away:.0f} m from its "
+                "nearest cell.")
+    else:
+        cell = point_cell(point, label="series point", points=points, cells=cells,
+                          utm_epsg=solved.utm_epsg)
     column = values[:, cell]
-    if not np.isfinite(column).any():
+    if not data_site and not np.isfinite(column).any():
         raise OutputEmpty(
             f"the cell holding the point is dry or inactive in layer {layer} at every saved time.")
     centre = solved.lonlat[list(solved.nodes[1][cell])].mean(axis=0)

@@ -184,9 +184,14 @@ def _table(solved: Callable[[str], Solved], module: str
                  for layer in range(1, read.nlay + 1)]
 
     def account(layers: Sequence[LayerURI], why: Mapping[Primitive, str]) -> None:
+        from trid3nt_server.inputs.observation import Observation
+
         for line in unsaved:
             journal_note(line)
         for primitive, reason in why.items():
+            # A data input's site miss was said at the read, in the reader's own words.
+            if isinstance(primitive.at, Observation):
+                continue
             journal_note(f"no layer carries the {primitive.variable} of layer "
                          f"{primitive.plane}: {reason}")
 

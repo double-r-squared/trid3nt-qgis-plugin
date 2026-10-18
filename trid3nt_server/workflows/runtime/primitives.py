@@ -480,6 +480,15 @@ async def publish_reads(*, engine: str, run: Mapping[str, Any],
         try:
             return read.body.READS[key.kind](key, read)
         except OutputEmpty as exc:
+            from trid3nt_server.inputs.observation import Observation
+            from trid3nt_server.inputs.run_notes import journal_note
+            if isinstance(key.at, Observation):
+                # A read at a data input's site the result holds nothing for composes
+                # nothing: the miss is said on the journal in the engine's own words,
+                # wherever the row was heading, and the run carries on without it.
+                why[key] = str(exc)
+                journal_note(str(exc))
+                return None
             # A row of the module's OWN table the result lacks is skipped and journalled; a PLACED read is a refusal.
             if key in published_keys:
                 raise
@@ -499,11 +508,15 @@ async def publish_reads(*, engine: str, run: Mapping[str, Any],
         if primitive.reference is None:
             continue
         read = reads[primitive.key]
+        if read is None:
+            continue
         beside = _beside(primitive)
         if beside is None:
             lines = tuple(primitive.reference(read, reads, params))
         else:
             other = reads[beside]
+            if other is None:
+                continue
             caption = captions.get(primitive.variable or primitive.kind, primitive.kind)
             lines = (Line(label=f"{caption} at t = {other.measures['t']:g} s",
                           x=(other.distance_m if isinstance(other, Profile)
@@ -518,7 +531,7 @@ async def publish_reads(*, engine: str, run: Mapping[str, Any],
                        caption=caption, name=name, where=where)
 
     for primitive in outputs:
-        if primitive.publish == "note":
+        if primitive.publish == "note" and reads[primitive.key] is not None:
             _note(captions.get(primitive.variable or primitive.kind,
                                primitive.kind), reads[primitive.key])
     items = await asyncio.to_thread(
@@ -526,7 +539,8 @@ async def publish_reads(*, engine: str, run: Mapping[str, Any],
                  for primitive in rows if reads[primitive.key] is not None]
         + [_delivered(primitive, captions.get(primitive.variable or primitive.kind,
                                               primitive.kind))
-           for primitive in outputs if primitive.publish != "note"])
+           for primitive in outputs
+           if primitive.publish != "note" and reads[primitive.key] is not None])
     published = await publish(run_id=str(run["run_id"]), engine=engine,
                               name=name, items=items)
 

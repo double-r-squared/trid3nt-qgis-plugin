@@ -23,7 +23,8 @@ def display_file(name: str) -> str:
     return f"modflow_{name}.nc"
 
 
-def group(solved: Any, name: str, steps: Sequence[tuple[float, Sequence[float]]]) -> str:
+def group(solved: Any, name: str, steps: Sequence[tuple[float, Sequence[float]]],
+          units: str = "") -> str:
     """Write the dataset group ``name`` (``steps`` = ``(seconds, one value per cell)``) as its own display file -> its basename.
 
     The seconds count from the run's reference time - its moment, else when its solve began."""
@@ -35,7 +36,8 @@ def group(solved: Any, name: str, steps: Sequence[tuple[float, Sequence[float]]]
     try:
         write_ugrid(mesh, path,
                     datasets={name: [(float(t), list(v)) for t, v in steps]},
-                    reference_time=solved.run.get("reference_time"))
+                    reference_time=solved.run.get("reference_time"),
+                    units={name: units})
         with open(path, "rb") as written:
             body = written.read()
     finally:

@@ -7,11 +7,11 @@ routing: 'THE tool for "how strong is the longshore current here", "which way do
   is the answer. The wave edge is forced at a sea state a buoy MEASURED; the water stands
   at a gauge''s tide. Both fields on one mesh, animated, the speed and the wave height charted
   where the ask points. Deck opinions, by keyword: TIME STEP, DURATION, COUPLING PERIOD FOR
-  TOMAWAC, and the wave deck''s under `tomawac:`. Supply the window, `station`, `event_time`.'
+  TOMAWAC, and the wave deck''s under `tomawac:`. Supply the window, `seed`, `event_time`.'
 not_for: the waves alone, with no current solved (`tomawac_nearshore_waves`); agitation behind
   a breakwater (`artemis_harbor_agitation`); a current with no waves in it
 returns: 'On success the run''s record (a `LayerURI`): every variable TELEMAC-2D wrote and
   every variable TOMAWAC wrote, styled on one mesh layer and animated, plus the current speed
-  and the wave height charted at the station. A coast the swell reaches head-on charts a small
+  and the wave height charted at the forcing buoy''s site. A coast the swell reaches head-on charts a small
   longshore speed, which is what that place did in that hour. On failure a dict with `status="error"`
   + `error_code`.'

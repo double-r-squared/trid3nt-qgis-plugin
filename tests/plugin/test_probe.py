@@ -13,6 +13,8 @@ import sys
 import threading
 import unittest
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -250,6 +252,116 @@ class TestFormatProbeResult(unittest.TestCase):
 class TestProbeLocationLabel(unittest.TestCase):
     def test_formats_five_decimals(self):
         self.assertEqual(probe.probe_location_label(-85.42, 29.95), "(-85.42000, 29.95000)")
+
+
+class TestProbeChartPayload(unittest.TestCase):
+    """A series entry in a probe reply becomes the chart payload the Charts
+    window already parses; scalars build no chart."""
+
+    _ENTRY = {
+        "name": "Head layer 1",
+        "units": "m",
+        "series": [
+            {"label": "2026-01-01T00:00:00Z", "value": 10.0},
+            {"label": "2026-01-01T00:01:00Z", "value": None},
+            {"label": "2026-01-01T00:02:00Z", "value": 12.0},
+        ],
+        "layer_ids": ["m-1"],
+    }
+
+    def test_a_series_entry_parses_as_a_chart_for_the_window(self):
+        from plugin.net.trid3nt_client import parse_chart_payload
+
+        payload = probe.build_probe_chart_payload(self._ENTRY, lon=-85.5, lat=29.9)
+        self.assertIsNotNone(parse_chart_payload(payload))
+        spec = payload["vega_lite_spec"]
+        self.assertEqual(spec["mark"]["type"], "line")
+        self.assertEqual(
+            [row["value"] for row in spec["data"]["values"]],
+            [10.0, None, 12.0],
+        )
+        self.assertEqual(spec["encoding"]["x"]["type"], "temporal")
+        self.assertTrue(payload["title"].startswith("Head layer 1 at (-85.50000"))
+
+    def test_a_gap_is_a_gap_and_never_a_zero(self):
+        payload = probe.build_probe_chart_payload(self._ENTRY, lon=-85.5, lat=29.9)
+        rows = payload["vega_lite_spec"]["data"]["values"]
+        self.assertIsNone(rows[1]["value"])
+
+    def test_a_series_with_no_number_builds_no_chart(self):
+        entry = {"name": "Dye", "series": [
+            {"label": "t+0 s", "value": None}, {"label": "t+60 s", "value": None}]}
+        self.assertIsNone(
+            probe.build_probe_chart_payload(entry, lon=-85.5, lat=29.9))
+
+    def test_labels_that_are_not_instants_stay_ordinal(self):
+        entry = {"name": "Dye", "units": "MG/L", "series": [
+            {"label": "t+0 s", "value": 1.0}, {"label": "t+60 s", "value": 2.0}]}
+        payload = probe.build_probe_chart_payload(entry, lon=-85.5, lat=29.9)
+        self.assertEqual(payload["vega_lite_spec"]["encoding"]["x"]["type"], "ordinal")
+
+
+def _qgis_python() -> "str | None":
+    """First interpreter that imports qgis.core, or None."""
+    import shutil
+    import subprocess
+
+    for py in dict.fromkeys(p for p in (shutil.which("python3"), "/usr/bin/python3") if p):
+        try:
+            done = subprocess.run([py, "-c", "import qgis.core"], capture_output=True,
+                                  timeout=60, env={**os.environ, "QT_QPA_PLATFORM": "offscreen"})
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if done.returncode == 0:
+            return py
+    return None
+
+
+@pytest.mark.qt_harness_shim
+class TestMeshProbe(unittest.TestCase):
+    """QGIS reads its own loaded mesh at the click: the painted group over every
+    saved time, a hidden layer skipped, a point inside no face outside the mesh."""
+
+    def test_the_painted_group_reads_over_time_and_off_the_mesh_says_so(self):
+        import json
+        import subprocess
+        import tempfile
+
+        import numpy as np
+
+        from trid3nt_server.render.mesh_display import write_ugrid
+        from trid3nt_server.tools.mesh.meshers import Mesh
+
+        py = _qgis_python()
+        if py is None:
+            self.skipTest("no interpreter with qgis.core available")
+        pts = np.array([[500000.0, 4000000.0], [500100, 4000000], [500100, 4000100],
+                        [500000, 4000100], [500200, 4000000], [500200, 4000100]])
+        mesh = Mesh(points=pts, cells=[np.array([0, 1, 2, 3]), np.array([1, 4, 5, 2])],
+                    crs_authid="EPSG:32617", bed=None, meta={})
+        with tempfile.TemporaryDirectory() as tmp:
+            path = write_ugrid(mesh, os.path.join(tmp, "head.nc"),
+                               datasets={"head": [(0.0, [10.0, 20.0]),
+                                                  (3600.0, [11.0, 21.0])]},
+                               reference_time="2024-06-01T00:00:00Z",
+                               units={"head": "m"})
+            harness = os.path.join(os.path.dirname(__file__), "qt_mesh_probe_harness.py")
+            proc = subprocess.run([py, harness, path], capture_output=True, text=True,
+                                  timeout=300,
+                                  env={**os.environ, "QT_QPA_PLATFORM": "offscreen"})
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        line = next(ln for ln in proc.stdout.splitlines() if ln.startswith("MESH-PROBE "))
+        read = json.loads(line[len("MESH-PROBE "):])
+        self.assertEqual([e["name"] for e in read["west"]], ["Head"])
+        self.assertEqual(read["west"][0]["units"], "m")
+        self.assertEqual(read["west"][0]["series"], [
+            {"label": "2024-06-01T00:00:00Z", "value": 10.0},
+            {"label": "2024-06-01T01:00:00Z", "value": 11.0}])
+        self.assertEqual([m["value"] for m in read["east"][0]["series"]], [20.0, 21.0])
+        self.assertEqual(read["outside"][0]["value"], None)
+        self.assertEqual(read["outside"][0]["note"], "outside the mesh")
+        self.assertIsNotNone(probe.build_probe_chart_payload(
+            read["west"][0], lon=-81.0, lat=36.1))
 
 
 if __name__ == "__main__":

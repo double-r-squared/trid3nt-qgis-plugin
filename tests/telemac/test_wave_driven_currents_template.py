@@ -25,8 +25,6 @@ from seated import value_inputs, row_inputs
 
 _TOOL = "tomawac_wave_driven_currents"
 _HOUR_S = 3600.0
-_STATION = {"at": [500000.0, 4500000.0], "lon": -71.51, "lat": 41.36,
-            "name": "Current station"}
 
 
 def _workflow():
@@ -47,7 +45,6 @@ def _sheet(**floor):
                     "liquid_boundary_prescribes": ["elevation"],
                     "opening": "CONSTANT ELEVATION", "depth_m": None,
                     "level_m": 0.4, "outflow_stage_m": 0.4},
-        "station": _STATION,
         "wave": Wave(height_m=1.6, peak_period_s=8.0,
                      from_direction_deg=220.0),
         "level": 0.4})
@@ -152,6 +149,7 @@ def test_what_the_template_places_is_the_two_modules_own_rows():
     current off the host, the wave off the coupled module."""
     assert [(p.variable, p.module) for p in template.OUTPUTS] == [
         ("M", None), ("HM0", "tomawac")]
+    assert all(p.at is None for p in template.OUTPUTS)
     assert "HM0" in WAC.MODULE_OUTPUT
 
 
@@ -186,7 +184,6 @@ def test_the_tide_reaches_the_rim_as_the_series_the_record_served():
                     "level_m": 0.25, "outflow_stage_m": 0.25,
                     "outflow_stage_series": tide, "time_step_s": 1.0,
                     "start_time_s": 0.0, "until_s": _HOUR_S},
-        "station": _STATION,
         "wave": Wave(height_m=1.6, peak_period_s=8.0,
                      from_direction_deg=220.0),
         "level": tide})

@@ -11,5 +11,4 @@ not_for: a CONSERVATIVE tracer that only dilutes (`telemac_dye_release`); an OIL
   bed SCOUR (`telemac_bed_scour`); a suspended SEDIMENT plume carrying nothing (`telemac_sediment_plume`);
   a dissolved-oxygen sag (`telemac_do_sag`); groundwater contamination
 returns: 'On success the run''s record (a `LayerURI`): every variable its modules wrote, styled
-  on one mesh layer, animated where it varies, plus the dissolved history at the monitoring
-  point charted. On failure a dict with `status="error"` + `error_code`.'
+  on one mesh layer, animated where it varies. On failure a dict with `status="error"` + `error_code`.'

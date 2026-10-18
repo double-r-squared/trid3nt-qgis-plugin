@@ -259,7 +259,7 @@ def test_an_observation_row_yields_the_reading_not_the_record(monkeypatch):
     monkeypatch.setattr(dataclasses, "replace", lambda obj, **kw: obj)
     # NO ROW STATES A UNIT: what this slot reads is the unit of the keyword its
     # ROLE fills, which the workflow answers for.
-    env = fill._Env(data={}, run={"station": (0.11, 0.1)},
+    env = fill._Env(data={}, run={},
                            slot_units={OBSERVE: "degC"})
     found = asyncio.run(fill._produce(env, declared(_OBSERVED)[0]))
     assert found.value == pytest.approx(10.0)
@@ -270,16 +270,16 @@ def test_the_coercion_a_row_declares_is_bound_before_the_ingestion_runs():
     """``near`` is a late-bound read like any producer kwarg: the point the
     nearest site is ranked against is measured by a step, not written by hand."""
     class RANKED:
-        observe = Input(OBSERVE).need("water quality sample", at="station")
+        observe = Input(OBSERVE).need("water quality sample", at="gauge")
 
     row = declared(RANKED)[0]
-    assert row.coercion["near"] == "station"
+    assert row.coercion["near"] == "gauge"
 
 
 def test_a_supplied_number_supersedes_the_record_through_the_same_slot(monkeypatch):
     from trid3nt_server.workflows.runtime import fill
 
-    env = fill._Env(data={}, run={"station": (0.11, 0.1)},
+    env = fill._Env(data={}, run={},
                            slot_units={OBSERVE: "degC"},
                            supplied={"observe": 11.5})
     found = asyncio.run(fill._produce(env, declared(_OBSERVED)[0]))

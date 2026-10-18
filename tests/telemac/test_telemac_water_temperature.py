@@ -73,7 +73,8 @@ def test_every_slot_this_run_stands_on_reaches_the_wire_as_the_slot_it_is():
 
 def test_the_water_opens_on_one_reading_ranked_from_where_it_is_read():
     """Which site the run opens on is the observation slot's choice, ranked
-    against the point the series is read at. The row is LOAD-BEARING: the run
+    against the domain the run stands in - no station point is stated, and the
+    series is then read AT that site. The row is LOAD-BEARING: the run
     spends days on water that entered carrying this value, and it names the
     published TEMPERATURE variable it observes - the unit its own tracer
     text carries, not a stated one."""
@@ -82,7 +83,7 @@ def test_the_water_opens_on_one_reading_ranked_from_where_it_is_read():
     assert row.data_class == "water quality sample"
     assert row.observes == "TEMPERATURE"
     assert row.producer is None
-    assert row.coercion["near"] == "station"
+    assert row.coercion["near"] is None
 
 
 def test_the_discharge_is_one_reading_the_channel_step_can_open_on():
@@ -150,7 +151,6 @@ def _sheet(monkeypatch, **floor):
                     "opening": "CONSTANT DEPTH", "depth_m": 1.4,
                     "level_m": 3.1, "inflow_q_m3s": 22.0,
                     "outflow_stage_m": 3.1},
-        "station": _STATION,
         "observe": Observation(value=16.4, units="degC"),
         OBSERVE: Observation(value=16.4, units="degC"),
         "weather": record})
