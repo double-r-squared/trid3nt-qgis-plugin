@@ -85,6 +85,34 @@ def test_coverage_is_the_painted_bed_not_the_delivered_footprint() -> None:
     assert _tile_mosaic.painted_fraction(numpy.zeros((0, 0))) == 0.0
 
 
+def test_an_aoi_named_no_crs_is_gridded_in_its_own_utm_zone() -> None:
+    """A fixed zone rotates a far AOI's grid against its tiles and leaves nodata
+    wedges in the corners: Duck, NC grids in zone 18, the Florida panhandle in 16."""
+    assert _tile_mosaic.own_utm((-75.80, 36.10, -75.70, 36.25)) == "EPSG:32618"
+    assert _tile_mosaic.own_utm((-85.6, 30.0, -85.3, 30.1)) == "EPSG:32616"
+    assert _tile_mosaic.own_utm((-75.80, -36.25, -75.70, -36.10)) == "EPSG:32718"
+
+
+def test_a_tile_window_reaches_the_far_edge_of_the_box() -> None:
+    """The box spans columns 0.5 to 7.5, so the window holds columns 0-7: an
+    offset floored and a length ceiled apart stop at column 6 and leave the edge unread."""
+    pytest.importorskip("rasterio")
+    numpy = pytest.importorskip("numpy")
+    from rasterio.io import MemoryFile
+    from rasterio.transform import from_origin
+
+    profile = dict(driver="GTiff", width=10, height=10, count=1, dtype="float32",
+                   crs="EPSG:4326", transform=from_origin(0.0, 1.0, 0.1, 0.1))
+    with MemoryFile() as memory:
+        with memory.open(**profile) as ds:
+            ds.write(numpy.ones((1, 10, 10), dtype="float32"))
+        with memory.open() as ds:
+            values, transform = _tile_mosaic._windowed(
+                ds, 0.0, (0.05, 0.05, 0.75, 0.75))
+    assert values.shape == (8, 8)
+    assert transform.c + values.shape[1] * transform.a >= 0.75
+
+
 def test_a_half_nan_tile_grades_the_gap_gate_on_what_it_painted(
     monkeypatch: pytest.MonkeyPatch, tile_scheme: Path
 ) -> None:

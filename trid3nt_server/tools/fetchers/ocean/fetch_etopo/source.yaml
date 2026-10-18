@@ -18,7 +18,7 @@ params:
     quantize: round_6dp
   target_crs:
     type: str
-    default: EPSG:32616
+    schema_optional: true
   resolution_m:
     type: float
     schema_optional: true
@@ -34,7 +34,6 @@ hooks:
   delegate: etopo.read
   delegate_validate: etopo.validate
 normalize:
-  crs: EPSG:32616
   units: meters
   datum: egm2008
   quantity: elevation
@@ -110,7 +109,7 @@ docstring: |-
 
   **Parameters:**
       bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326, anywhere.
-      target_crs: output CRS (default ``EPSG:32616``). The EGM2008 vertical is
+      target_crs: output CRS (default: the UTM zone the AOI's centre falls in). The EGM2008 vertical is
           preserved; only the horizontal grid is reprojected.
       resolution_m: OPTIONAL output cell in metres, floored at the model's own
           15 arc-second cell. It never invents a finer cell than the tile read.

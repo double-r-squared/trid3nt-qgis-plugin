@@ -24,7 +24,6 @@ __all__ = ["CAPTIONS", "MESH", "OUTPUTS", "INPUTS", "STEERING",
 _GEOMETRY = "coast.slf"
 _BOUNDARY = "coast.cli"
 _STEERING_FILE = "tom_nearshore.cas"
-_SPECTRA = "tom_nearshore.spe"
 
 
 class INPUTS:
@@ -60,8 +59,6 @@ class STEERING(WAC):
 
     # JONSWAP; the wave slot fills its height, period and direction
     TYPE_OF_BOUNDARY_DIRECTIONAL_SPECTRUM = 6
-
-    PUNCTUAL_RESULTS_FILE = _SPECTRA
 
     # Battjes-Janssen
     DEPTH_INDUCED_BREAKING_DISSIPATION = 1

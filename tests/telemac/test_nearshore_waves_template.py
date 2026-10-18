@@ -205,8 +205,8 @@ def test_every_charted_variable_is_captioned():
 
 def test_no_point_read_stands_at_the_forcing_buoy_and_no_printout_point_is_filled():
     """The forcing buoy's own sea state is the boundary condition, so a read there
-    answers with what the run was handed: no output reads at it, and no input fills
-    a spectrum printout point."""
+    answers with what the run was handed: no output reads at it, no input fills
+    a spectrum printout point, and the deck names no spectrum file."""
     from trid3nt_server.workflows.telemac.templates.nearshore_waves import (
         nearshore_waves as template)
 
@@ -218,8 +218,8 @@ def test_no_point_read_stands_at_the_forcing_buoy_and_no_printout_point_is_fille
     assert filled.isdisjoint({
         "ABSCISSAE_OF_SPECTRUM_PRINTOUT_POINTS",
         "ORDINATES_OF_SPECTRUM_PRINTOUT_POINTS"})
-    # The spectra are read off the file the deck named, never off the wave field.
-    assert asserted["PUNCTUAL_RESULTS_FILE"] != asserted["ED_RESULTS_FILE"]
+    # TOMAWAC stops on a punctual results file with no printout point, so none is named.
+    assert "PUNCTUAL_RESULTS_FILE" not in asserted
     assert all(p.at is None for p in template.OUTPUTS)
 
 

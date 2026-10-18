@@ -20,7 +20,7 @@ params:
     quantize: round_6dp
   target_crs:
     type: str
-    default: EPSG:32616
+    schema_optional: true
   resolution_m:
     type: float
     schema_optional: true
@@ -36,7 +36,6 @@ hooks:
   delegate: regional_coastal_dem.read
   delegate_validate: regional_coastal_dem.validate
 normalize:
-  crs: EPSG:32616
   units: meters
   datum: NAVD88
   quantity: elevation
@@ -114,7 +113,7 @@ docstring: |-
   **Parameters:**
       bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326, inside a
           published collection's footprint.
-      target_crs: output CRS (default ``EPSG:32616``). The NAVD88 vertical is
+      target_crs: output CRS (default: the UTM zone the AOI's centre falls in). The NAVD88 vertical is
           preserved; only the horizontal grid is reprojected.
       resolution_m: OPTIONAL output cell in metres. The merge is floored at this
           value even where a 1 m item is available; it never invents a finer cell

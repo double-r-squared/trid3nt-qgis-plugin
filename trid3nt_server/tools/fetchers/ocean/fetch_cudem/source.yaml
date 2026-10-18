@@ -21,7 +21,7 @@ params:
     quantize: round_6dp
   target_crs:
     type: str
-    default: EPSG:32616
+    schema_optional: true
   resolution_m:
     type: float
     schema_optional: true
@@ -37,7 +37,6 @@ hooks:
   delegate: cudem.read
   delegate_validate: cudem.validate
 normalize:
-  crs: EPSG:32616
   units: meters
   datum: NAVD88
   quantity: elevation
@@ -118,7 +117,7 @@ docstring: |-
 
   **Parameters:**
       bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326, on the US coast.
-      target_crs: output CRS (default ``EPSG:32616``). The NAVD88 vertical is
+      target_crs: output CRS (default: the UTM zone the AOI's centre falls in). The NAVD88 vertical is
           preserved; only the horizontal grid is reprojected.
       resolution_m: OPTIONAL output cell in metres. The merge is floored at this
           value even where a 3 m tile is available, which keeps a wide AOI from

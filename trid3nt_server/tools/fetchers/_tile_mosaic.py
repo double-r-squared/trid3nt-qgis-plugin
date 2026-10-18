@@ -26,6 +26,7 @@ __all__ = [
     "MAX_GRID_PX",
     "target_grid",
     "mosaic",
+    "own_utm",
     "painted_fraction",
 ]
 
@@ -55,6 +56,14 @@ SENTINEL_ABS = 9000.0
 
 #: Pixel budget per axis: past it the request refuses rather than coarsening.
 MAX_GRID_PX = 12000
+
+
+def own_utm(bbox: tuple[float, float, float, float]) -> str:
+    """The UTM zone the AOI's centre falls in: the grid's CRS when the caller names none."""
+    from trid3nt_server.inputs.geometry import utm_epsg_for
+
+    west, south, east, north = bbox
+    return f"EPSG:{utm_epsg_for((west + east) / 2.0, (south + north) / 2.0)}"
 
 
 def target_grid(sources: list[str], target_crs: str,
@@ -140,7 +149,10 @@ def _windowed(ds: Any, target_cell_m: float,
         sw, ss, se, sn = transform_bounds("EPSG:4326", ds.crs, west, south,
                                           east, north, densify_pts=21)
         win = from_bounds(sw, ss, se, sn, ds.transform)
-        win = win.round_offsets().round_lengths().intersection(full)
+        # Each EDGE rounds outward: rounding the offset and the length apart leaves the far edge up to a pixel short of the box.
+        col0, row0 = math.floor(win.col_off), math.floor(win.row_off)
+        win = Window(col0, row0, math.ceil(win.col_off + win.width) - col0,
+                     math.ceil(win.row_off + win.height) - row0).intersection(full)
     except Exception:  # noqa: BLE001 - fall back to the whole tile
         win = full
     if win.width < 1 or win.height < 1:

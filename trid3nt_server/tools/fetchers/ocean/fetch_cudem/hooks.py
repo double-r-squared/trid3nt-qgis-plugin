@@ -19,7 +19,7 @@ import time
 from typing import Any
 
 from ..._fetch_common import FetchError
-from ..._tile_mosaic import VSICURL_ENV, MosaicEmpty, mosaic
+from ..._tile_mosaic import VSICURL_ENV, MosaicEmpty, mosaic, own_utm
 from ..._router.hooks import register_hook
 
 logger = logging.getLogger(__name__)
@@ -232,7 +232,7 @@ def read_cudem(spec: Any, params: dict[str, Any], *,
                timeout_s: float) -> tuple[Any, Any, Any]:
     """AOI -> manifest -> per-tile NAVD88 gate -> one merged grid."""
     bbox = tuple(float(v) for v in params["bbox"])
-    target_crs = str(params.get("target_crs") or "EPSG:32616").strip()
+    target_crs = str(params.get("target_crs") or own_utm(bbox)).strip()
     fetch_timeout = float(params.get("timeout_s") or 120.0)
     asked = params.get("resolution_m")
 

@@ -30,7 +30,7 @@ from trid3nt_server.tools.cache import record_provenance
 from trid3nt_server.tools.fetchers._public_s3 import public_s3_client
 
 from ..._fetch_common import FetchError
-from ..._tile_mosaic import VSICURL_ENV, MosaicEmpty, mosaic, painted_fraction
+from ..._tile_mosaic import VSICURL_ENV, MosaicEmpty, mosaic, own_utm, painted_fraction
 from ..._router.hooks import register_hook
 
 logger = logging.getLogger(__name__)
@@ -43,7 +43,6 @@ __all__ = [
     "BlueTopoCoverageGapError",
     "BLUETOPO_BUCKET",
     "BLUETOPO_TILE_SCHEME_PREFIX",
-    "TARGET_CRS",
     "latest_tile_scheme_key",
     "select_bluetopo_tiles",
     "assert_navd88_tile",
@@ -108,10 +107,6 @@ BLUETOPO_HTTPS_ROOT = f"https://{BLUETOPO_BUCKET}.s3.amazonaws.com/"
 #: Band 1 of a BlueTopo tile. The three bands are Elevation, Uncertainty and
 #: Contributor; only the first is a bed.
 _ELEVATION_BAND = 1
-
-#: Output CRS. BlueTopo tiles are per-UTM-zone NAD83; the merge normalises onto
-#: one grid the way every other topo-bathy consumer in the tree expects.
-TARGET_CRS = "EPSG:32616"
 
 #: US envelope (incl. AK, HI and the territories BlueTopo covers) -- a coarse
 #: pre-screen so a foreign bbox fails before the tile scheme is downloaded.
@@ -305,7 +300,7 @@ def read_bluetopo(
 ) -> tuple[Any, Any, Any]:
     """AOI -> tile-scheme select -> per-tile NAVD88 gate -> merged bed."""
     bbox = tuple(float(v) for v in params["bbox"])
-    target_crs = (str(params.get("target_crs") or TARGET_CRS)).strip()
+    target_crs = str(params.get("target_crs") or own_utm(bbox)).strip()
     fetch_timeout = float(params.get("timeout_s") or 120.0)
     res = params.get("resolution_m")
     resolution_m = float(res) if res is not None else None
