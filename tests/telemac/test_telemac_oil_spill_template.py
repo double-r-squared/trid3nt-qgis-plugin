@@ -111,7 +111,7 @@ def test_the_question_keeps_only_its_own_inputs():
     run's value, which is the discharge ROW's, so it is no param of this one."""
     declared = {prm.name for prm in value_inputs(_workflow())}
     assert "discharge_m3s" not in declared
-    assert {"release", "spill_fraction", "spill_duration_s", "oil_type",
+    assert {"release", "spill_duration_s", "oil_type",
             "oil_release_step"} <= declared
     # the source strength and its dissolved concentration are the deck's own
     # fixed keyword values now, not a lever this question states.

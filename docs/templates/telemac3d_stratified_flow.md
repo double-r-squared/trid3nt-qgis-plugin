@@ -25,7 +25,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | input | units | default | desc |
 |---|---|---|---|
-| `seed` | - | required | A point ON or beside the body of water this question is about, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer (geocode a place name first). The mapped outline that point names becomes the domain; a domain supplied directly supersedes it, and a body nobody mapped is drawn |
+| `seed` | - | optional | A point ON or beside the body of water this question is about, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer (geocode a place name first). The mapped outline that point names becomes the domain; a domain supplied directly supersedes it, and a body nobody mapped is drawn |
 | `warm_temp_c` | C | required | Epilimnion (warm surface layer) temperature the column OPENS at. The run exchanges no heat with the atmosphere, so what happens to this difference is the whole answer |
 | `cold_temp_c` | C | required | Hypolimnion (cold bottom layer) temperature; the initial top-to-bottom difference is what the run either keeps or mixes away |
 | `thermocline_depth_m` | m | required | Depth of the thermocline below the free surface. The vertical grid is planned to HOLD it and REFUSES when no admissible sigma stretch over the domain's deepest column can |

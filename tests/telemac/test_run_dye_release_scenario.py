@@ -103,16 +103,12 @@ def test_a_core_count_past_the_box_refuses_by_name():
     assert "PARALLEL PROCESSORS" in err and str(BOX_CORES) in err
 
 
-def test_declared_bounds_keep_the_source_inside_the_domain():
-    """spill_fraction=1.0 planted the source ON the outflow boundary and aborted
-    the solve; the declared bound refuses it rather than moving it."""
+def test_a_declared_bound_refuses_rather_than_clamps():
     from trid3nt_server.workflows.runtime import GateRefusedError
 
-    for outside in ({"spill_fraction": 1.0}, {"spill_fraction": 0.0},
-                    {"spill_duration_s": 0.0}):
-        with pytest.raises(GateRefusedError, match="outside the declared range"):
-            _resolve(**outside)
-    assert _resolve(spill_fraction=0.9)["spill_fraction"].value == 0.9
+    with pytest.raises(GateRefusedError, match="outside the declared range"):
+        _resolve(spill_duration_s=0.0)
+    assert _resolve(spill_duration_s=600.0)["spill_duration_s"].value == 600.0
 
 
 def test_a_non_numeric_bounded_arg_refuses_it_is_never_defaulted():

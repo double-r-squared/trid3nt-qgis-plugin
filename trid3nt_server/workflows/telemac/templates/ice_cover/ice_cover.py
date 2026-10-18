@@ -33,19 +33,16 @@ _FRICTION_COEFFICIENT = 33.0
 
 _REACH_LENGTH_KM = 12.0
 
-# the far end, which has lost heat to the air longest
-_STATION_FRAC = 0.98
 
-_STATION = Placed("station", point="station", fraction=_STATION_FRAC,
-                  label="Ice station")
+_STATION = Placed("station", point="station", label="Ice station")
 
 # one value per KHIONE tracer, in the order it appends them
 _INFLOW_ICE = [0.0, 0.0, 0.0]
 
 
 class INPUTS:
-    seed = Input()
-    station = Input()
+    seed = Input().stated()
+    station = Input().stated()
     cover_threshold = Input()
 
     mesh_resolution_m = RESOLUTION

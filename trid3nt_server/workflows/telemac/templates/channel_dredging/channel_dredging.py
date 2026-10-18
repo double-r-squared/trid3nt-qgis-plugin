@@ -42,7 +42,7 @@ _REFERENCE_LEVEL = "SECTIONS"
 
 
 class INPUTS:
-    seed_point = Input()
+    seed_point = Input().stated()
 
     design_depth_m = Input()
     trigger_depth_m = Input()

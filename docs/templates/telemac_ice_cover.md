@@ -28,8 +28,8 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | input | units | default | desc |
 |---|---|---|---|
-| `seed` | - | required | Where on the water the modelled stretch STARTS, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. It seeds the reach the domain is cut from; supply the domain polygon - a lake, a pond, a reservoir - instead and this is not read |
-| `station` | - | required | Where the ice cover and its thickness are read over time, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer. Geocode a place name first |
+| `seed` | - | optional | Where on the water the modelled stretch STARTS, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. It seeds the reach the domain is cut from; supply the domain polygon - a lake, a pond, a reservoir - instead and this is not read |
+| `station` | - | optional | Where the ice cover and its thickness are read over time, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer. Geocode a place name first |
 | `cover_threshold` | - | 0.5 | Fraction of the surface under ice, 0 to 1, that counts as frozen over - the cover chart draws it as a reference line beside the series. A reporting threshold, not a physical constant: half the surface by default |
 | `mesh_resolution_m` | m | optional | Target element edge length the domain is triangulated at; the budget that makes the ice is divided by the local DEPTH, and the border ice grows from the BANK, so what this has to resolve is how deep the water is and where its edge runs |
 | `event_time` | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |

@@ -27,11 +27,8 @@ _RESULT = "r2d_domain.slf"
 
 _REACH_LENGTH_KM = 12.0
 
-# holds the source node off the inflow face when no outfall is placed
-_OUTFALL_FRAC = 0.02
 
-_OUTFALL = Placed("source", point="outfall_coords", fraction=_OUTFALL_FRAC,
-                  label="Outfall")
+_OUTFALL = Placed("source", point="outfall_coords", label="Outfall")
 
 # Strickler; the outflow stage is derived at this same roughness
 _FRICTION_LAW = 3

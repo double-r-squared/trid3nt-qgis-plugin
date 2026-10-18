@@ -40,7 +40,7 @@ _PHYTO_IN, _PO4_IN, _NO3_IN = _ENTERING[0], _ENTERING[1], _ENTERING[3]
 
 
 class INPUTS:
-    seed = Input()
+    seed = Input().stated()
 
     station = Input()
 

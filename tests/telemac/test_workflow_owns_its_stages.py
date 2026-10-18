@@ -226,13 +226,13 @@ def test_what_only_the_mesh_build_reads_is_named_when_a_mesh_is_supplied(
     from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
 
     state = _filled_with(monkeypatch, _built("unstructured_tri"),
-                         mesh_resolution_m=15.0, spill_fraction=0.25)
+                         mesh_resolution_m=15.0, spill_duration_s=600.0)
     workflow, token = state.workflow, bind_notes()
     workflow._say_what_no_build_read(
         state.env, workflow._mesh("domain", workflow._slots()))
     said = drain_notes(token)
     assert len(said) == 1 and "mesh_resolution_m went unused" in said[0]
-    assert "spill_fraction" not in said[0] and "domain" not in said[0]
+    assert "spill_duration_s" not in said[0] and "domain" not in said[0]
 
 
 def test_a_drawn_geometry_handed_to_a_row_is_the_rows_value(monkeypatch):

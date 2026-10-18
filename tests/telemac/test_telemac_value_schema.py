@@ -20,13 +20,13 @@ def _workflow():
 
 
 def test_the_registered_workflow_hydrates_its_values():
-    spill = _workflow().input("spill_fraction")
-    assert (spill.default, spill.bounds, spill.units) == (0.25, (0.05, 0.9), None)
-    assert spill.desc.startswith("Along-domain release position")
+    spill = _workflow().input("spill_duration_s")
+    assert (spill.default, spill.bounds, spill.units) == (300.0, (1.0, 86400.0), "s")
+    assert spill.desc.startswith("Finite pulse injection window")
 
 
 def test_the_template_body_itself_carries_the_schema_after_registration():
-    assert INPUTS.spill_fraction.desc.startswith("Along-domain release position")
+    assert INPUTS.spill_duration_s.desc.startswith("Finite pulse injection window")
     assert INPUTS.release.type.__name__ == "Point"
 
 
@@ -35,4 +35,4 @@ def test_the_schema_source_is_the_steering_modules_dictionary():
     assert (module, directory) == ("telemac2d", module_input_dir())
     doc = json.loads((directory / f"{module}.json").read_text())
     section = doc["inputs"]["telemac_dye_release"]
-    assert "spill_fraction" in section and "release" in section
+    assert "spill_duration_s" in section and "release" in section

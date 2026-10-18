@@ -7123,14 +7123,6 @@
         "desc": "Where the marker enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. Its name becomes the marker's name, and on a river with no domain supplied it is also the seed the reach is walked downstream from",
         "type": "Point"
       },
-      "spill_fraction": {
-        "bounds": [
-          0.05,
-          0.9
-        ],
-        "default": 0.25,
-        "desc": "Along-domain release position, 0=inflow..1=outflow; the source must sit strictly INSIDE the domain, never on a boundary"
-      },
       "spill_duration_s": {
         "bounds": [
           1.0,
@@ -7243,14 +7235,6 @@
         "desc": "Where the substance enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. Its name becomes the tracer's name, and on a river with no domain supplied it is also the seed the reach is walked downstream from",
         "type": "Point"
       },
-      "spill_fraction": {
-        "bounds": [
-          0.05,
-          0.9
-        ],
-        "default": 0.25,
-        "desc": "Along-domain release position, 0=inflow..1=outflow; the source must sit strictly INSIDE the domain, never on a boundary"
-      },
       "spill_duration_s": {
         "bounds": [
           1.0,
@@ -7309,14 +7293,6 @@
         "desc": "Where the substance enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. On a river with no domain it is also the seed the reach is walked downstream from",
         "type": "Point"
       },
-      "release_fraction": {
-        "bounds": [
-          0.05,
-          0.9
-        ],
-        "default": 0.1,
-        "desc": "Along-domain release position, 0=inflow..1=outflow; the source must sit strictly INSIDE the domain, never on a boundary. It sits near the top so the substance has water left to sorb and settle in"
-      },
       "release_duration_s": {
         "bounds": [
           1.0,
@@ -7329,28 +7305,12 @@
       "monitoring_point": {
         "desc": "Where the dissolved history is read, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first",
         "type": "Point"
-      },
-      "monitoring_fraction": {
-        "bounds": [
-          0.1,
-          0.95
-        ],
-        "default": 0.85,
-        "desc": "Along-domain position the history is read at when no point was given, 0=inflow..1=outflow"
       }
     },
     "telemac_oil_spill": {
       "release": {
         "desc": "Where the oil enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. Its name becomes the tracer's name, and on a river with no domain supplied it is also the seed the reach is walked downstream from",
         "type": "Point"
-      },
-      "spill_fraction": {
-        "bounds": [
-          0.05,
-          0.9
-        ],
-        "default": 0.25,
-        "desc": "Along-domain release position, 0=inflow..1=outflow; the source must sit strictly INSIDE the domain, never on a boundary"
       },
       "spill_duration_s": {
         "bounds": [
@@ -7416,14 +7376,6 @@
       "release": {
         "desc": "Where the sediment enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. Its name becomes the marker's name, and on a river with no domain supplied it is also the seed the reach is walked downstream from",
         "type": "Point"
-      },
-      "spill_fraction": {
-        "bounds": [
-          0.05,
-          0.9
-        ],
-        "default": 0.25,
-        "desc": "Along-domain release position, 0=inflow..1=outflow; the source must sit strictly INSIDE the domain, never on a boundary"
       },
       "spill_duration_s": {
         "bounds": [

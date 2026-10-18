@@ -11,10 +11,10 @@ from typing import Any, Awaitable, Callable, Mapping
 
 from .user_input import PlaceNameError, UserInputError, lonlat_point
 
-from .geometry import flatten_geometries, read_geometry_doc, utm_epsg_for
+from .geometry import read_geometry_doc
 
-__all__ = ["Point", "PointOutsideDomainError", "as_utm", "contain", "point",
-           "point_arg", "publish_point", "snap_to_wet"]
+__all__ = ["Point", "PointNotViableError", "as_utm", "point", "point_arg",
+           "publish_point", "require_viable"]
 
 logger = logging.getLogger("trid3nt_server.inputs.point")
 
@@ -47,31 +47,31 @@ class Point:
     kind: str = ""
 
 
-class PointOutsideDomainError(UserInputError):
-    """A point the domain polygon does not hold. Retryable: the fix rides the
-    tool-retry loop rather than a relocation nobody asked for."""
+class PointNotViableError(UserInputError):
+    """A point that misses what the run solves, said with the nearest place it would not
+    miss. Retryable: a restated point fixes it, and nothing is ever moved for it."""
 
     retryable = True
 
-    def __init__(self, point: Point, *, label: str,
-                 distance_m: float | None = None) -> None:
+    def __init__(self, point: Point, *, label: str, missed: str,
+                 hint: tuple[float, float, float] | None = None) -> None:
         self.lon, self.lat = point.lon, point.lat
-        self.distance_m = float(distance_m) if distance_m is not None else None
-        outside = (f", {self.distance_m:.0f} m outside its nearest edge"
-                   if self.distance_m is not None else "")
+        self.hint = (None if hint is None else
+                     {"lon": round(hint[0], 6), "lat": round(hint[1], 6),
+                      "distance_m": round(hint[2], 1)})
+        nearest = ("" if self.hint is None else
+                   f" The nearest place it would not miss is ({self.hint['lon']:.5f}, "
+                   f"{self.hint['lat']:.5f}), {self.hint['distance_m']:.0f} m away.")
         super().__init__(
-            f"The {label} ({self.lon:.5f}, {self.lat:.5f}) is not inside the "
-            f"domain polygon this run solves over{outside}. Nothing was relocated: "
-            "moving it would answer a different question. Retry with a point "
-            "INSIDE the modeled water body, widen the domain so the point falls in "
-            f"it, or omit {label} and the template places it.",
-            code="POINT_OUTSIDE_DOMAIN")
+            f"The {label} ({self.lon:.5f}, {self.lat:.5f}) is {missed}. It was not "
+            f"moved: a point placed for the run answers a question nobody asked.{nearest} "
+            f"State {label} where it lands on what the run solves, or pick it on the "
+            "canvas.", code="POINT_NOT_VIABLE")
         self.suggestions = [
-            f"Retry with {label} INSIDE the modeled water polygon (not on the "
-            "bank, and not at a nearby gage).",
-            "Or widen the domain - a longer reach, or a section cut that covers "
-            "the point - so it falls inside.",
-            f"Or omit {label} and the template places it.",
+            f"Restate {label} where it lands on what the run solves"
+            + ("" if self.hint is None else
+               f", e.g. ({self.hint['lon']:.5f}, {self.hint['lat']:.5f})") + ".",
+            f"Or ask the user to place {label} on the canvas.",
         ]
 
 
@@ -189,89 +189,38 @@ def as_utm(pt: Point, utm_epsg: int) -> tuple[float, float]:
     return (float(x), float(y))
 
 
-def contain(pt: Point, *, domain: Any, flowline: Any,
-            label: str = "point") -> tuple[Point, float]:
-    """Refuse a point outside ``domain``; move one inside it onto ``flowline``.
+def require_viable(pt: Point, *, label: str, utm_epsg: int, sites_xy: Any,
+                   viable: Any, resolve: Callable[[tuple[float, float]], int | None],
+                   missed: str, region_m: Any = None) -> int:
+    """The site the engine reads ``pt`` at, or the refusal naming what it missed and the nearest viable site.
 
-    Returns the moved point and how far it moved, in the domain's own UTM metres."""
-    from shapely.geometry import Point as _P, shape as _shape
-    from shapely.ops import nearest_points, transform as _transform, unary_union
-    from pyproj import Transformer
-
-    polygons = _of_kinds(domain, ("Polygon", "MultiPolygon"))
-    if not polygons:
-        raise UserInputError(
-            f"the domain {domain!r} carries no polygon, so there is no shape a "
-            f"{label} could be inside of.", code="DOMAIN_NO_POLYGON")
-    lines = _of_kinds(flowline, ("LineString", "MultiLineString"))
-    if not lines:
-        raise UserInputError(
-            f"the flowline {flowline!r} carries no line, so there is no river to "
-            f"put the {label} on.", code="FLOWLINE_NO_LINE")
-
-    domain_ll = unary_union([_shape(g) for g in polygons]).buffer(0)
-    river_ll = unary_union([_shape(g) for g in lines])
-    epsg = utm_epsg_for(float(domain_ll.centroid.x), float(domain_ll.centroid.y))
-    forward = Transformer.from_crs(4326, epsg, always_xy=True)
-    back = Transformer.from_crs(epsg, 4326, always_xy=True)
-    domain_m = _transform(forward.transform, domain_ll)
-    here = _P(*forward.transform(pt.lon, pt.lat))
-    if not domain_m.covers(here):
-        raise PointOutsideDomainError(pt, label=label,
-                                      distance_m=float(here.distance(domain_m)))
-    # The flowline is clipped to the domain FIRST: a river that runs on past the
-    # modeled stretch would otherwise offer its own out-of-domain length as the
-    # nearest point, and the run would solve a source it just refused to accept.
-    reach_m = _transform(forward.transform, river_ll).intersection(domain_m)
-    if reach_m.is_empty:
-        raise UserInputError(
-            f"the flowline {flowline!r} does not run through the domain "
-            f"{domain!r}, so the two describe different reaches and there is no "
-            f"river inside the domain to place the {label} on.",
-            code="FLOWLINE_OUTSIDE_DOMAIN")
-    moved_m, _ = nearest_points(reach_m, here)
-    distance = float(here.distance(moved_m))
-    lon, lat = back.transform(moved_m.x, moved_m.y)
-    logger.info("%s (%.5f, %.5f) contained; moved %.1f m to (%.5f, %.5f)",
-                label, pt.lon, pt.lat, distance, lon, lat)
-    return Point(float(lon), float(lat), pt.name), distance
-
-
-def _of_kinds(source: Any, kinds: tuple[str, ...]) -> list[dict[str, Any]]:
-    return [g for g in flatten_geometries(read_geometry_doc(source))
-            if g.get("type") in kinds]
-
-
-def snap_to_wet(xy: tuple[float, float], *, node_xy: Any, wet: Any,
-                state: str, label: str = "point"
-                ) -> tuple[tuple[float, float], float, int]:
-    """Put a point where the run holds WATER at t0 -> where it went, how far, which node.
-
-    The engine solves a source at the nearest mesh NODE, so that node is where it lands;
-    a dry landing moves to the nearest wet node and a state with none refuses. Mesh metres."""
+    ``resolve`` is the engine's own reading of a point (its nearest node, its containing cell) in the zone's
+    metres; ``viable`` marks the sites a point may land on; ``region_m`` the domain it must lie inside."""
     import numpy as np
+    from pyproj import Transformer
+    from shapely.geometry import Point as _P
 
-    nodes = np.asarray(node_xy, dtype=float)
-    mask = np.asarray(wet, dtype=bool)
-    here = np.asarray(xy, dtype=float)
-    reach = np.hypot(nodes[:, 0] - here[0], nodes[:, 1] - here[1])
-    nearest = int(np.argmin(reach))
-    if mask[nearest]:
-        return ((float(nodes[nearest, 0]), float(nodes[nearest, 1])),
-                float(reach[nearest]), nearest)
-    if not mask.any():
-        raise UserInputError(
-            f"the {label} lands at mesh node {nearest}, {reach[nearest]:.0f} m "
-            f"away and DRY, and there is no wet water to move it to: {state}. A "
-            f"{label} needs water at t0 - continue from a state that holds some, "
-            "or run the scenario that fills the domain first.",
-            code="POINT_NOWHERE_WET")
-    wet_nodes = np.flatnonzero(mask)
-    node = int(wet_nodes[np.argmin(reach[wet_nodes])])
-    moved = float(np.hypot(nodes[node, 0] - here[0], nodes[node, 1] - here[1]))
-    logger.info("%s node %d is dry at t0; moved %.1f m to wet node %d",
-                label, nearest, moved, node)
-    return (float(nodes[node, 0]), float(nodes[node, 1])), moved, node
+    here = as_utm(pt, utm_epsg)
+    sites = np.asarray(sites_xy, dtype=float)
+    held = np.asarray(viable, dtype=bool)
+    site = None
+    if region_m is not None and not region_m.covers(_P(*here)):
+        reason = "outside the domain this run solves over"
+    else:
+        site = resolve(here)
+        if site is not None and held[site]:
+            return int(site)
+        reason = ("outside the mesh the run solves on" if site is None
+                  else f"{missed} (site {site})")
+    hint = None
+    if held.any():
+        candidates = np.flatnonzero(held)
+        reach = np.hypot(sites[candidates, 0] - here[0], sites[candidates, 1] - here[1])
+        nearest = int(candidates[int(np.argmin(reach))])
+        lon, lat = Transformer.from_crs(int(utm_epsg), 4326, always_xy=True).transform(
+            float(sites[nearest, 0]), float(sites[nearest, 1]))
+        hint = (float(lon), float(lat), float(reach.min()))
+    raise PointNotViableError(pt, label=label, missed=reason, hint=hint)
 
 
 async def publish_point(emitter: Any, pt: Point, *, label: str, basis: str,

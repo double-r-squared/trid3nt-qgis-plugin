@@ -189,11 +189,36 @@ def test_a_polygon_places_the_cells_whose_centres_it_holds():
     assert [row[0] for row in rows] == [(1, 0), (1, 1), (1, 4), (1, 5)]
 
 
-def test_a_geometry_off_the_mesh_refuses():
+def test_a_point_off_the_mesh_refuses_with_the_shared_code_and_a_hint():
+    from trid3nt_server.inputs.point import PointNotViableError
+
+    with pytest.raises(PointNotViableError) as caught:
+        _placed("Wells", _geo("Point", (500.0, 500.0)))
+    assert caught.value.error_code == "POINT_NOT_VIABLE"
+    assert "Wells" in str(caught.value) and caught.value.hint is not None
+
+
+def test_a_line_off_the_mesh_refuses_by_name():
     with pytest.raises(ModflowError) as caught:
-        _placed("Recharge", _geo("Point", (500.0, 500.0)))
+        _placed("Drains", _geo("LineString", [(500.0, 500.0), (600.0, 600.0)]))
     assert caught.value.error_code == "MODFLOW_STRESS_OUTSIDE"
-    assert "Recharge" in str(caught.value)
+
+
+def test_a_well_in_an_inactive_cell_refuses_naming_the_nearest_active_one():
+    from trid3nt_server.inputs.point import PointNotViableError
+    from trid3nt_server.workflows.modflow.authoring.stress import point_cell
+    from trid3nt_server.inputs.point import Point
+
+    lon, lat = _geo("Point", (5.0, 2.0))["coordinates"]
+    here = point_cell(Point(lon, lat), label="Wells", points=_POINTS, cells=_CELLS,
+                      utm_epsg=32617)
+    active = [1] * len(_CELLS)
+    active[here] = 0
+    with pytest.raises(PointNotViableError) as caught:
+        point_cell(Point(lon, lat), label="Wells", points=_POINTS, cells=_CELLS,
+                   utm_epsg=32617, active=active)
+    assert "DISV_IDOMAIN 0" in str(caught.value)
+    assert caught.value.hint["distance_m"] > 0
 
 
 def test_a_layer_the_grid_does_not_have_refuses_naming_both():

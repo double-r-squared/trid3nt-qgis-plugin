@@ -108,13 +108,12 @@ def _clean_ops() -> list[Any]:
 
 @dataclass(frozen=True, slots=True)
 class Placed:
-    """A point the run SETTLES onto a node of the accepted mesh, under ``name``.
+    """A point the run checks against the accepted mesh, under ``name``.
 
-    ``point`` names the run input holding it; with none, it sits ``fraction`` (a number or an input name) along the domain's centerline."""
+    ``point`` names the run input holding it; an unstated one places nothing, and nothing read at it is composed."""
 
     name: str
-    point: str | None = None
-    fraction: Any = 0.5
+    point: str
     #: What the marker published before the solve is called on the map.
     label: str = "Release point"
     #: Read the initial wet state off the run this one carries on from: a source
@@ -559,7 +558,7 @@ class TelemacWorkflow(Workflow):
                     fn if callable(fn) else _load(fn), kwargs, label)
             return run[label]
 
-        # The measurements of a value nobody stated: the mesh op set on one and the line read along one are not composed either.
+        # What nobody stated - a measurement of no value, a point nobody placed - and the op set on it or the read at or along it are not composed either.
         untaken: set[str] = set()
 
         async def measure(when: str) -> None:
@@ -599,9 +598,14 @@ class TelemacWorkflow(Workflow):
                         friction_coefficient=self._asserted(
                             run, "FRICTION_COEFFICIENT"))
         for mark in placed:
-            await stage(mark.name, settle_release, point=await given(mark.point),
+            held = await given(mark.point)
+            if held is None:
+                run[mark.name] = None
+                untaken.add(mark.name)
+                continue
+            await stage(mark.name, settle_release, point=held,
                         mesh=run["mesh"], domain=await read(env, domain),
-                        fraction=await given(mark.fraction), label=mark.label,
+                        label=mark.label,
                         **({"continue_from": previous} if mark.continues else {}))
         await measure("produce")
         settles = self._settled_by()
@@ -662,7 +666,8 @@ class TelemacWorkflow(Workflow):
             moment=run.get(EVENT_TIME.name))
         await keep_mesh(run["mesh"], solved.get("run_id"))
         outputs, captions = self._outputs()
-        outputs = [p for p in outputs if not _names_untaken(p.along, untaken)]
+        outputs = [p for p in outputs
+                   if not (_names_untaken(p.along, untaken) or _names_untaken(p.at, untaken))]
         # A primitive's point, line and band name run inputs; each is read here and rejoins its primitive at publish.
         anchors = [{"at": await given(p.at), "along": await given(p.along),
                     "within": await given(p.within)} for p in outputs]
@@ -767,7 +772,6 @@ class TelemacWorkflow(Workflow):
         from trid3nt_server.tools.mesh.recipe import input_names
 
         named = [mark.point for mark in self._declared(Placed)]
-        named += [mark.fraction for mark in self._declared(Placed)]
         named += [name for ask in self._declared(Measured)
                   for name in _names(dict(ask.reads))]
         named += [row.coercion.get("near") for row in self.inputs]

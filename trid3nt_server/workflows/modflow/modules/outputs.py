@@ -25,7 +25,7 @@ from trid3nt_server.inputs.observation import Observation
 from ..authoring.accepted_mesh import mesh_artifact, mesh_nodes
 from ..authoring.griddata import METRES, SECONDS
 from ..authoring.mesh_files import disv_dimensions, top_of
-from ..authoring.stress import cells_of
+from ..authoring.stress import point_cell
 from ..errors import ModflowError
 from .ugrid import group
 
@@ -331,16 +331,8 @@ def read_series(primitive: Primitive, solved: Solved) -> Series:
                       at="the domain maximum", measures=_envelope(times, values))
     point = _point(primitive.at)
     points, cells, _bed, _ll = solved.nodes
-    try:
-        cell = cells_of({"type": "Point", "coordinates": [point.lon, point.lat]},
-                        name="series", points=points, cells=cells,
-                        utm_epsg=solved.utm_epsg)[0]
-    except ModflowError as exc:
-        if exc.error_code != "MODFLOW_STRESS_OUTSIDE":
-            raise
-        raise ModflowError(
-            f"the point ({point.lon:g}, {point.lat:g}) lies off the accepted mesh, "
-            "so no cell holds a value for it.", error_code="MODFLOW_POINT_OUTSIDE") from exc
+    cell = point_cell(point, label="series point", points=points, cells=cells,
+                      utm_epsg=solved.utm_epsg)
     column = values[:, cell]
     if not np.isfinite(column).any():
         raise OutputEmpty(

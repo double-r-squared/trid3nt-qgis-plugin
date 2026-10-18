@@ -34,7 +34,7 @@ _LISTING_PERIOD = 100
 
 
 class INPUTS:
-    seed = Input()
+    seed = Input().stated()
 
     warm_temp_c = Input()
     cold_temp_c = Input()

@@ -27,7 +27,6 @@ The values the template declares. `desc` is what the model reads when it fills o
 | input | units | default | desc |
 |---|---|---|---|
 | `release` | - | required | Where the marker enters the water, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon', a point layer. Geocode a place name first. Its name becomes the marker's name, and on a river with no domain supplied it is also the seed the reach is walked downstream from |
-| `spill_fraction` | - | 0.25 | Along-domain release position, 0=inflow..1=outflow; the source must sit strictly INSIDE the domain, never on a boundary |
 | `spill_duration_s` | s | 300.0 | Finite pulse injection window |
 | `sediment_gradation` | - | required | Multi-class GRADED sediment: a preset name (graded_sand \| poorly_sorted \| sand_gravel_bimodal \| fine_coarse_sand) or a list of [d50_um, fraction] pairs; a mixture sorts under a hiding factor |
 | `mesh_resolution_m` | m | optional | Target element edge or cell length the mesh is built at. The granularity is the USER's and nothing refuses one: absent, the mesh resolves the finest data it stands on, and the card states the node count it comes to |

@@ -28,16 +28,13 @@ _FRICTION_COEFFICIENT = 33.0
 
 _REACH_LENGTH_KM = 12.0
 
-# the far end, which has been under the weather longest
-_STATION_FRAC = 0.98
 
-_STATION = Placed("station", point="station", fraction=_STATION_FRAC,
-                  label="Temperature station")
+_STATION = Placed("station", point="station", label="Temperature station")
 
 
 class INPUTS:
-    seed = Input()
-    station = Input()
+    seed = Input().stated()
+    station = Input().stated()
 
     mesh_resolution_m = RESOLUTION
 

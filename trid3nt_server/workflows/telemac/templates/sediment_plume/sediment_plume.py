@@ -27,8 +27,7 @@ SOURCE_Q_M3S = 8.0
 SEDIMENT_CONCENTRATION_MGL = 100.0
 
 
-_RELEASE = Placed("source", point="release", fraction="spill_fraction",
-                  label="Release point")
+_RELEASE = Placed("source", point="release", label="Release point")
 
 _GEOMETRY = "domain.slf"
 _BOUNDARY = "domain.cli"
@@ -44,7 +43,6 @@ _FRICTION_COEFFICIENT = 33.0
 class INPUTS:
     release = Input()
 
-    spill_fraction = Input()
     spill_duration_s = Input()
 
     domain = Input(DOMAIN).need("hydrography", at="release",

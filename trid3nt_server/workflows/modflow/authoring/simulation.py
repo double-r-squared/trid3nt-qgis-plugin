@@ -169,13 +169,29 @@ def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, point
                 or "stress" not in row.value:
             continue
         placed = place_stress(row.value, points=points, cells=cells,
-                              utm_epsg=utm_epsg, nlay=nlay, frame=frame)
+                              utm_epsg=utm_epsg, nlay=nlay, frame=frame,
+                              active=_active(sheet, nlay=nlay, points=points,
+                                             cells=cells, utm_epsg=utm_epsg,
+                                             frame=frame))
         rows["stress_period_data"] = replace(row, value={0: placed})
         rows["maxbound"] = Filled(
             slot=sheet.body.MODULE_INPUT[f"{prefix}_MAXBOUND"],
             value=len(placed), provenance=row.provenance)
         derived.add(f"{prefix}_MAXBOUND")
     return derived
+
+
+def _active(sheet: Any, *, nlay: int, points: Any, cells: Any, utm_epsg: int | None,
+            frame: Any) -> Any:
+    """One row per layer of the cells the run solves, off a stated DISV_IDOMAIN; unstated, None (every cell)."""
+    stated = sheet.filled.get("DISV_IDOMAIN")
+    if stated is None:
+        return None
+    rows = place(stated.value, slot=stated.slot, nlay=nlay, run=sheet.run,
+                 points=points, cells=cells, utm_epsg=utm_epsg, frame=frame)
+    if isinstance(rows, (int, float)):
+        return [[rows] * len(cells) for _ in range(nlay)]
+    return [row if isinstance(row, (list, tuple)) else [row] * len(cells) for row in rows]
 
 
 def _unstated(sheet: Any, prefixes: set[str], derived: set[str] = frozenset()) -> None:

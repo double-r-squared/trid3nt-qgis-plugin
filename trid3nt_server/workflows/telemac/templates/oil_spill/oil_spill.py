@@ -40,8 +40,7 @@ OIL_PRESETS: dict[str, dict[str, Any]] = {
 }
 
 
-_RELEASE = Placed("source", point="release", fraction="spill_fraction",
-                  label="Release point")
+_RELEASE = Placed("source", point="release", label="Release point")
 
 _RESULT = "r2d_domain.slf"
 _RESTART = "restart_domain.slf"
@@ -56,7 +55,6 @@ _FRICTION_COEFFICIENT = 33.0
 class INPUTS:
     release = Input()
 
-    spill_fraction = Input()
     spill_duration_s = Input()
 
     oil_type = Input()

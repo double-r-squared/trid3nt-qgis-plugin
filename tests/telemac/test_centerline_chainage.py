@@ -1,9 +1,5 @@
-"""Which end of the reach ``spill_fraction`` counts from, proved two ways.
-
-Nothing in a solved result says which end the walk started from - a plume that
-advected upstream looks like one that advected downstream on a reversed picture.
-So: chainage 0 is UPSTREAM, at the seed the flowline was navigated down from,
-whatever order the source vertices arrived in; and the walk DISCRIMINATES."""
+"""A centerline's chainage 0 is UPSTREAM, at the seed the flowline was navigated down from,
+whatever order the source vertices arrived in - what a profile along it reads distance from."""
 
 from __future__ import annotations
 
@@ -14,7 +10,6 @@ import numpy as np
 import pytest
 
 from trid3nt_server.tools.mesh.shared.nodes import read_centerline_utm
-from trid3nt_server.workflows.telemac.authoring.release_point import _settle_release
 
 #: A west-to-east flowline near Twin Falls, Idaho. The seed is its WEST end: the
 #: navigate was walked downstream from there, so that is chainage 0.
@@ -84,27 +79,3 @@ def test_the_normalized_centerline_starts_at_the_seed(coords):
     assert np.allclose(line, head_first)
     # the seed end is first: x increases eastward in this UTM zone
     assert line[0][0] < line[-1][0]
-
-
-def test_fraction_zero_is_the_upstream_end_and_one_is_the_downstream_end(monkeypatch):
-    line = read_centerline_utm(_line(_COORDS), _UTM_EPSG, start_lonlat=_SEED)
-    assert _walk(0.0, line, monkeypatch)[0] == pytest.approx(_COORDS[0][0], abs=1e-6)
-    assert _walk(1.0, line, monkeypatch)[0] == pytest.approx(_COORDS[-1][0], abs=1e-6)
-
-
-def test_a_tenth_lands_near_the_inflow_and_nine_tenths_near_the_outflow(monkeypatch):
-    """A walk that ignored its argument would put both at the same station."""
-    line = read_centerline_utm(_line(_COORDS), _UTM_EPSG, start_lonlat=_SEED)
-    span = float(np.hypot(*(line[-1] - line[0])))
-    to_utm = read_centerline_utm  # the same reader both stations are measured in
-
-    def _station(fraction: float) -> float:
-        lon, lat = _walk(fraction, line, monkeypatch)
-        point = to_utm(_line([[lon, lat], [lon + 1e-6, lat]]), _UTM_EPSG,
-                       start_lonlat=(lon, lat))[0]
-        return float(np.hypot(*(point - line[0])))
-
-    upstream, downstream = _station(0.1), _station(0.9)
-    assert upstream == pytest.approx(0.1 * span, rel=0.02)
-    assert downstream == pytest.approx(0.9 * span, rel=0.02)
-    assert downstream - upstream == pytest.approx(0.8 * span, rel=0.02)

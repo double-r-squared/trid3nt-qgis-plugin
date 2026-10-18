@@ -13,11 +13,10 @@ import pytest
 
 from trid3nt_server.inputs.point import (
     Point,
-    PointOutsideDomainError,
-    contain,
+    PointNotViableError,
     point,
     point_arg,
-    snap_to_wet,
+    require_viable,
 )
 from trid3nt_server.inputs.user_input import UserInputError
 
@@ -168,101 +167,60 @@ def test_a_declined_pick_leaves_the_slot_empty(monkeypatch):
     assert asyncio.run(coerce({"input_mode": "user_gated"})) == {"release": None}
 
 
-# -- containment in a domain, on the river ------------------------------------------ #
+# -- the shared viability check: a point is checked, never moved ------------------ #
 
-# A ~0.02 deg square of "water" near Twin Falls, Idaho, with a flowline running
-# west-east through its middle. Inline GeoJSON so nothing is read or fetched.
-_DOMAIN = json.dumps({
-    "type": "FeatureCollection",
-    "features": [{"type": "Feature", "properties": {}, "geometry": {
-        "type": "Polygon",
-        "coordinates": [[[-114.33, 42.57], [-114.29, 42.57],
-                         [-114.29, 42.59], [-114.33, 42.59],
-                         [-114.33, 42.57]]]}}]})
-
-_FLOWLINE = json.dumps({
-    "type": "FeatureCollection",
-    "features": [{"type": "Feature", "properties": {}, "geometry": {
-        "type": "LineString",
-        "coordinates": [[-114.34, 42.58], [-114.31, 42.58], [-114.28, 42.58]]}}]})
+#: Four sites 100 m apart along a line in a projected zone (UTM 11N near Twin
+#: Falls, Idaho). The engine reads a point at the site nearest it.
+_EPSG = 32611
+_SITES = [[700000.0, 4716000.0], [700100.0, 4716000.0], [700200.0, 4716000.0],
+          [700300.0, 4716000.0]]
 
 
-def test_a_point_on_the_flowline_inside_the_domain_is_honored_unmoved():
-    got, moved = contain(Point(-114.31, 42.58, "a"), domain=_DOMAIN,
-                         flowline=_FLOWLINE)
-    assert got.lon == pytest.approx(-114.31, abs=1e-5)
-    assert got.lat == pytest.approx(42.58, abs=1e-5)
-    assert got.name == "a" and moved < 1.0
+def _lonlat(x, y):
+    from pyproj import Transformer
+
+    lon, lat = Transformer.from_crs(_EPSG, 4326, always_xy=True).transform(x, y)
+    return Point(lon, lat, "release")
 
 
-def test_a_point_inside_the_domain_but_off_the_river_is_moved_onto_it():
-    got, moved = contain(Point(-114.31, 42.585), domain=_DOMAIN, flowline=_FLOWLINE)
-    assert got.lon == pytest.approx(-114.31, abs=1e-4)
-    assert got.lat == pytest.approx(42.58, abs=1e-4)
-    assert 400.0 < moved < 700.0  # ~0.005 deg of latitude
+def _nearest(xy):
+    import numpy as np
+
+    sites = np.asarray(_SITES)
+    return int(np.argmin(np.hypot(sites[:, 0] - xy[0], sites[:, 1] - xy[1])))
 
 
-def test_a_point_outside_the_domain_is_refused_by_name_and_names_the_fix():
-    with pytest.raises(PointOutsideDomainError) as ei:
-        contain(Point(-114.26, 42.58), domain=_DOMAIN, flowline=_FLOWLINE,
-                label="release")
-    err = ei.value
-    assert err.error_code == "POINT_OUTSIDE_DOMAIN"
-    assert err.retryable is True and len(err.suggestions) == 3
-    assert err.distance_m > 1000.0
-    assert "release" in str(err) and "not inside the domain polygon" in str(err)
+def _check(pt, viable, region=None):
+    return require_viable(pt, label="release", utm_epsg=_EPSG, sites_xy=_SITES,
+                          viable=viable, resolve=_nearest, region_m=region,
+                          missed="dry at t0")
 
 
-def test_the_move_never_leaves_the_domain_by_following_the_river_out_of_it():
-    got, _ = contain(Point(-114.2905, 42.5895), domain=_DOMAIN, flowline=_FLOWLINE)
-    assert -114.33 <= got.lon <= -114.29
-    assert got.lat == pytest.approx(42.58, abs=1e-4)
+def test_a_viable_point_returns_the_site_the_engine_reads_and_is_not_moved():
+    pt = _lonlat(700110.0, 4716000.0)
+    assert _check(pt, [True] * 4) == 1
 
 
-def test_a_flowline_that_misses_the_domain_refuses_rather_than_reaching_for_it():
-    away = json.dumps({"type": "LineString",
-                       "coordinates": [[-114.20, 42.58], [-114.18, 42.58]]})
-    with pytest.raises(UserInputError) as ei:
-        contain(Point(-114.31, 42.58), domain=_DOMAIN, flowline=away)
-    assert ei.value.error_code == "FLOWLINE_OUTSIDE_DOMAIN"
+def test_a_point_on_a_dry_site_refuses_with_the_nearest_viable_site_as_a_hint():
+    with pytest.raises(PointNotViableError) as caught:
+        _check(_lonlat(700110.0, 4716000.0), [True, False, False, True])
+    err = caught.value
+    assert err.error_code == "POINT_NOT_VIABLE" and err.retryable is True
+    assert "dry at t0 (site 1)" in str(err) and "was not moved" in str(err)
+    assert err.hint["distance_m"] == pytest.approx(110.0, abs=0.5)
 
 
-def test_a_domain_source_carrying_no_polygon_refuses():
-    line_only = json.dumps({"type": "LineString",
-                            "coordinates": [[-114.33, 42.58], [-114.29, 42.58]]})
-    with pytest.raises(UserInputError) as ei:
-        contain(Point(-114.31, 42.58), domain=line_only, flowline=_FLOWLINE)
-    assert ei.value.error_code == "DOMAIN_NO_POLYGON"
+def test_a_point_outside_the_region_refuses_before_any_site_is_read():
+    from shapely.geometry import box
+
+    region = box(700000.0, 4715900.0, 700300.0, 4716100.0)
+    with pytest.raises(PointNotViableError) as caught:
+        _check(_lonlat(701000.0, 4716000.0), [True] * 4, region=region)
+    assert "outside the domain" in str(caught.value)
+    assert caught.value.hint["distance_m"] == pytest.approx(700.0, abs=0.5)
 
 
-# -- the move onto water --------------------------------------------------------- #
-
-#: Four nodes 100 m apart along one bank line. The engine solves a source at the
-#: node nearest it, so these are the only places a point can be.
-_NODES = [[0.0, 0.0], [100.0, 0.0], [200.0, 0.0], [300.0, 0.0]]
-
-
-def _snap(xy, wet):
-    return snap_to_wet(xy, node_xy=_NODES, wet=wet, state="a stand-in initial state")
-
-
-def test_a_point_lands_on_the_wet_node_the_engine_will_solve_it_at():
-    """Between two nodes is a position the solve does not have, and a point that
-    drifted off the mesh is a source the engine refuses as outside its domain."""
-    where, moved, node = _snap((110.0, 0.0), [True] * 4)
-    assert where == (100.0, 0.0) and node == 1
-    assert moved == pytest.approx(10.0)
-
-
-def test_a_point_landing_on_a_dry_node_moves_to_the_nearest_wet_one():
-    where, moved, node = _snap((110.0, 0.0), [True, False, False, True])
-    assert node == 0 and where == (0.0, 0.0)
-    assert moved == pytest.approx(110.0)
-
-
-def test_an_initial_state_with_no_wet_node_anywhere_refuses_typed():
-    with pytest.raises(UserInputError) as ei:
-        _snap((110.0, 0.0), [False] * 4)
-    assert ei.value.error_code == "POINT_NOWHERE_WET"
-    assert "10 m away and DRY" in str(ei.value)
-    assert "a stand-in initial state" in str(ei.value)
+def test_with_no_viable_site_anywhere_the_refusal_carries_no_hint():
+    with pytest.raises(PointNotViableError) as caught:
+        _check(_lonlat(700110.0, 4716000.0), [False] * 4)
+    assert caught.value.hint is None

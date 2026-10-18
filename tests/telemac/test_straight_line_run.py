@@ -51,6 +51,10 @@ def _launched(monkeypatch, *, keywords=None, restart_clean=False):
                  inputs=asyncio.run(resolve_params(value_inputs(workflow), {})))
     state.inputs.update({name: Verdict(ACCEPTED, value, origin=Origin.USER)
                          for name, value in (keywords or {}).items()})
+    # The release is stated: a point the run would place by itself is never invented.
+    from trid3nt_server.inputs.point import Point
+
+    state.inputs["release"] = Verdict(ACCEPTED, Point(-122.65, 45.53), origin=Origin.USER)
     run = asyncio.run(workflow.launch(state))
     return run, calls
 

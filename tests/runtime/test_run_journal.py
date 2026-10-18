@@ -235,7 +235,7 @@ def test_the_run_s_own_line_carries_every_input_and_the_correct_end_its_solve_st
             "TIME_STEP": {"value": 0.5,
                           "provenance": "derived: settled.time_step_s"},
             "LAW_OF_BOTTOM_FRICTION": {"value": 4, "provenance": "user"}}}}},
-        inputs={"spill_fraction": _verdict(0.4, "user"),
+        inputs={"spill_duration_s": _verdict(600.0, "user"),
                 "LAW OF BOTTOM FRICTION": _verdict(4, "user"),
                 "domain": _verdict(object(), "user"),
                 "bed": _verdict(object(), "producer", "fetch_bed")})
@@ -248,7 +248,7 @@ def test_the_run_s_own_line_carries_every_input_and_the_correct_end_its_solve_st
         "TIME_STEP": {"value": 0.5, "origin": "derived",
                       "source": "settled.time_step_s"},
         "LAW_OF_BOTTOM_FRICTION": {"value": 4, "origin": "user", "source": None},
-        "spill_fraction": {"value": 0.4, "origin": "user", "source": None},
+        "spill_duration_s": {"value": 600.0, "origin": "user", "source": None},
         "domain": {"value": "s3://cache/reach.fgb", "origin": "user",
                    "source": None},
         "bed": {"value": None, "origin": "producer", "source": "fetch_bed"}}

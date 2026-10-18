@@ -119,11 +119,11 @@ def test_an_argument_the_tool_does_not_declare_is_refused_by_name():
     from trid3nt_server.tools import TOOL_REGISTRY
 
     out = asyncio.run(TOOL_REGISTRY["telemac_dye_release"].fn(
-        spill_fracton=0.4, cores=8, description="a dye run"))
+        spill_duraton_s=600.0, cores=8, description="a dye run"))
     said = out["error_message"]
     assert out["status"] == "error" and out["error_code"] == "INPUT_UNNAMED"
-    assert "'spill_fracton' is not an input of telemac_dye_release " \
-        "(nearest: spill_fraction" in said
+    assert "'spill_duraton_s' is not an input of telemac_dye_release " \
+        "(nearest: spill_duration_s" in said
     assert "'cores' is not an input of telemac_dye_release (none is close)." in said
     # A field the model invented resembles no input, so none is suggested for it.
     assert "'description' is not an input of telemac_dye_release " \

@@ -29,7 +29,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 
 | input | units | default | desc |
 |---|---|---|---|
-| `seed_point` | - | required | A point ON the channel the dredge works in, as the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer. Geocode a place name first; the channel is fetched downstream of it and the levels every dredging action reads are stationed along the centerline that comes back with it |
+| `seed_point` | - | optional | A point ON the channel the dredge works in, as the pick's {coordinates, name} verbatim, a (lon, lat) pair, 'lat,lon' or a point layer. Geocode a place name first; the channel is fetched downstream of it and the levels every dredging action reads are stationed along the centerline that comes back with it |
 | `design_depth_m` | m | 3.0 | Depth the fairway is dredged TO, under the reference water surface the run opens at - the design draught plus its overdepth |
 | `trigger_depth_m` | m | 3.0 | Depth at which a node is dredged: the bed is worked wherever it sits shallower than this under the reference surface. Equal to design_depth_m keeps the channel exactly at grade; SMALLER than it lets the channel shoal before the dredger returns, and a trigger DEEPER than the grade would mark a node for a cut that is above its own bed |
 | `dredge_start_s` | s | 0.0 | When the first dredging pass begins, in seconds of the BED's own clock - the run's morphological time, DURATION x MORPHOLOGICAL FACTOR |

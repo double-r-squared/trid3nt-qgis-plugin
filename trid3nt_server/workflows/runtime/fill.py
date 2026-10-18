@@ -171,6 +171,14 @@ async def _matched(env: _Env, decl: Input) -> Any:
 
     Every slot takes the ONE source its class matched, the bed included; what covers
     the rest is a layer the person composes and hands the slot, never this fill's."""
+    near = decl.coercion.get("near")
+    if decl.slot is DOMAIN and isinstance(near, str) and await _seed(env, decl) is None:
+        # The water a domain stands on is found from a point; with none stated it is never guessed.
+        raise StepFailedError(
+            f"the {decl.name!r} is found from a point on the water, {near!r}, and "
+            f"none was stated: state {near} on the water this run is about, or "
+            f"draw or supply {decl.name} itself.",
+            error_code="DATA_NEED_UNPLACED", step=_data_step_label(decl.name))
     await _somewhere_to_ask(env)
     if decl.slot is BED:
         return await _ingested(env, decl, await _bed_surface(env, decl))

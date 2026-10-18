@@ -1,9 +1,8 @@
-"""WHERE a release enters the water, on a domain that may have no channel at all.
+"""WHERE a release enters the water: the stated point, held where it was stated.
 
-The reach chain is gone from this step: what it needs is the DOMAIN, and the
-centerline it places an unplaced point along is a companion the domain's own
-producer measured. A drawn pond carries none, so a point is required there and
-the refusal says so. Offline: no solve, no emitter.
+The point is checked, never moved - inside the domain, and the node the engine reads
+it at holding water at t0 off the rim. A miss refuses with the one shared code and
+the nearest node it would not miss. Offline: no solve, no emitter.
 """
 
 from __future__ import annotations
@@ -15,9 +14,8 @@ import numpy as np
 import pytest
 
 from trid3nt_server.inputs.domain import domain as ingest
-from trid3nt_server.inputs.point import Point, PointOutsideDomainError
+from trid3nt_server.inputs.point import Point, PointNotViableError
 from trid3nt_server.workflows.telemac.authoring import release_point as D
-from trid3nt_server.workflows.telemac.errors import TelemacError
 
 _POND = {"type": "Polygon", "coordinates": [[
     [-122.70, 45.50], [-122.60, 45.50], [-122.60, 45.56], [-122.70, 45.56],
@@ -81,50 +79,33 @@ def _settle(point, dom, **over):
         domain=dom, **over))
 
 
-def test_a_point_the_user_placed_in_a_pond_is_held_where_they_placed_it():
-    """A pond has no channel to pull a point onto, so holding it inside the
-    domain is the whole of what containment can honestly do."""
+def test_a_stated_point_is_held_exactly_where_it_was_stated():
     placed = _settle(Point(-122.65, 45.53), ingest(_POND))
-    assert placed["user_supplied"] is True
-    # the nearest node of the stand-in mesh, which is within its own spacing
-    assert placed["lon"] == pytest.approx(-122.65, abs=2e-3)
-    assert "inside the modeled domain" in placed["note"]
+    assert (placed["lon"], placed["lat"]) == (-122.65, 45.53)
+    assert "the engine reads it at mesh node" in placed["note"]
 
 
-def test_a_point_outside_the_domain_refuses_rather_than_being_moved_inside():
-    with pytest.raises(PointOutsideDomainError):
+def test_a_point_outside_the_domain_refuses_with_the_nearest_viable_hint():
+    with pytest.raises(PointNotViableError) as caught:
         _settle(Point(-123.20, 45.53), ingest(_POND))
+    assert caught.value.error_code == "POINT_NOT_VIABLE"
+    assert "outside the domain" in str(caught.value)
+    assert caught.value.hint is not None and caught.value.hint["distance_m"] > 0
 
 
-def test_an_unplaced_point_on_a_domain_with_no_centerline_refuses_by_name():
-    """Where the substance enters the water is not something a closed body can
-    derive, and inventing a place would be this step choosing the question."""
-    with pytest.raises(TelemacError) as exc:
-        _settle(None, ingest(_POND))
-    assert exc.value.error_code == "TELEMAC_RELEASE_UNPLACED"
+def test_a_point_whose_node_is_dry_refuses_rather_than_moving_to_water(monkeypatch):
+    dry = np.ones(len(_XY), dtype=bool)
+    here = D.as_utm(Point(-122.65, 45.53), 32610)
+    near = int(np.argmin(np.hypot(_XY[:, 0] - here[0], _XY[:, 1] - here[1])))
+    dry[near] = False
+    monkeypatch.setattr(D, "initial_state_of", lambda continue_from, count: {
+        "wet": dry, "note": "a stand-in state", "start_s": 0.0})
+    with pytest.raises(PointNotViableError) as caught:
+        _settle(Point(-122.65, 45.53), ingest(_POND))
+    assert "holds no water at t0" in str(caught.value)
+    assert caught.value.hint["distance_m"] > 0
 
 
-def test_an_unplaced_point_rides_the_domains_own_centerline_companion(monkeypatch):
-    """The producer measured the line; the step reads it as ``domain.centerline``
-    rather than being handed the whole artifact."""
-    seen = {}
-
-    def station(*, centerline_utm, mesh, fraction):
-        seen["length"] = float(np.hypot(*(np.asarray(centerline_utm)[-1]
-                                          - np.asarray(centerline_utm)[0])))
-        seen["fraction"] = fraction
-        return (-122.65, 45.53), None
-
-    monkeypatch.setattr(D, "_station_on_mesh", station)
-    placed = _settle(None, ingest(_REACH), fraction=0.25)
-    assert placed["user_supplied"] is False
-    assert seen["fraction"] == 0.25
-    # The companion is the LINE, read in the mesh's own metres.
-    assert seen["length"] > 6000.0
-
-
-def test_a_placed_point_is_pulled_onto_the_channel_where_the_domain_has_one():
-    """The flowline is the centerline companion, so a bank click lands in water."""
+def test_a_bank_click_on_a_reach_is_not_pulled_onto_the_channel():
     placed = _settle(Point(-122.65, 45.555), ingest(_REACH))
-    assert placed["lat"] == pytest.approx(45.53, abs=1e-3)
-    assert "onto the flowline" in placed["note"]
+    assert placed["lat"] == 45.555

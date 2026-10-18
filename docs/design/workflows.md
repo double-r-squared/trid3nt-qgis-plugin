@@ -41,11 +41,11 @@ Three things are not operations and stay:
 run is handed anything through. The attribute a row is written under is its
 name. An `Input` is a VALUE or a ROW, told apart by what it states:
 
-    spill_fraction = Input()                        a value on TELEMAC: its
+    spill_duration_s = Input()                      a value on TELEMAC: its
                                                      schema and prose are the
                                                      module input JSON's row -
-                                       {"bounds": [0.05, 0.9], "default": 0.5,
-                                        "desc": "Along-domain release position..."}
+                                       {"bounds": [1.0, 86400.0], "default": 300.0,
+                                        "units": "s", "desc": "Finite pulse injection window"}
     bed       = Input(BED).need("bathymetry")              a class the match fills
     gauge     = Input(LEVEL).need("water level series")    the match fills it, and
                                                            nothing measures it it REFUSES
@@ -100,6 +100,20 @@ reflection coefficient - is stated with that part and only with it, and the
 author that reads both refuses either alone by name. Composing a part from an
 ad hoc script that edits the composition, beyond the parts a template declares,
 is a stated requirement no seam carries yet.
+
+A POINT IS NEVER INVENTED AND NEVER MOVED. A point is stated, picked on the canvas, or
+supplied by data (a matched gauge, a measured site); nothing derives one - no centroid,
+no box centre, no fixed fraction along a reach. A placed point (`Placed`) whose input
+holds nothing places nothing, and nothing read at it is composed. Before an engine uses
+a stated point, its placement calls the one shared check (`inputs/point.py`
+`require_viable`) with the engine's own reading of where the point lands - TELEMAC's
+nearest mesh node, which must hold water at t0 off the rim, inside the domain polygon;
+MODFLOW's containing cell, which must be one the run solves (`DISV_IDOMAIN` not zero) -
+and a point that misses refuses `POINT_NOT_VIABLE`, naming what it missed and carrying
+the nearest viable site as a hint. The point itself is never relocated: the deck states
+it where it was stated. A pure seed - a point read only to locate a fetched domain - is
+`stated()`: a supplied domain never reads it, and a domain the match must locate with
+no seed refuses `DATA_NEED_UNPLACED` naming what to pick or draw.
 
 Values lead the wire and rows follow, each in body order, and the generated
 docstring documents both in ONE section: required values, defaulted ones, then
@@ -384,6 +398,10 @@ headline - otherwise the caption states the gap. A number in prose that the
 picture cannot show is the dishonest case this pins.
 
 ## MODFLOW - a sheet over the accepted mesh
+
+The engine's own page - the simulation, the three module wrappers, the
+coupling, the publish transform and the worker - is `docs/design/modflow.md`;
+this section is the workflows-runtime view.
 
 A MODFLOW run is the GWF module's sheet solved on a mesh the shared front built
 or the caller supplied (`workflows/modflow/workflow.py`). `launch` runs one

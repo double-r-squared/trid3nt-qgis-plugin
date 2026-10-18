@@ -62,7 +62,8 @@ def test_the_seed_names_which_body_of_water_and_is_a_point_never_a_place():
     domain = {d.name: d for d in row_inputs(_module().INPUTS)}["domain"]
     assert domain.coercion["near"] == "seed"
     seed = next(p for p in value_inputs(_workflow()) if p.name == "seed")
-    assert seed.type is Point and seed.required
+    # Stated or not: a drawn domain never reads it, and a fetched one refuses without it.
+    assert seed.type is Point and seed.stated_only and not seed.required
 
 
 def test_the_level_is_ranked_against_the_domain():

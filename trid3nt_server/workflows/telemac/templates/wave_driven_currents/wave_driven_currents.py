@@ -44,8 +44,8 @@ _STATION = Placed("station", point="station", label="Current station")
 
 
 class INPUTS:
-    seed = Input()
-    station = Input()
+    seed = Input().stated()
+    station = Input().stated()
 
     mesh_resolution_m = RESOLUTION
 

@@ -1,22 +1,19 @@
 """The settled release point: where on the accepted mesh a source enters water.
 
-An unplaced point walks downstream along the centerline to the first station the mesh holds;
-a supplied one is held inside the domain. Either lands on a wet node off the rim, because
-the solver reads a source on the rim as outside the domain.
+A point is held where it was stated, never moved: it must lie inside the domain and the node the
+engine reads it at - its nearest - must hold water at t0 off the rim, because the solver reads a
+source on the rim as outside the domain. A point that misses refuses with the nearest node it would not.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Mapping
+from typing import Any
 
 from trid3nt_server.inputs.run_notes import journal_note
-from trid3nt_server.tools.mesh.shared.nodes import (
-    accepted_mesh_nodes,
-    read_centerline_utm,
-)
-from trid3nt_server.inputs.point import Point, as_utm, contain, publish_point, snap_to_wet
+from trid3nt_server.tools.mesh.shared.nodes import accepted_mesh_nodes
+from trid3nt_server.inputs.point import Point, as_utm, publish_point, require_viable
 from ..errors import TelemacError
 from .accepted_mesh import mesh_artifact, mesh_zone, slug_of
 from .initial_state import initial_state_of
@@ -26,17 +23,14 @@ __all__ = ["settle_release"]
 logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.release_point")
 
 
-def _to_lonlat_point(xy: tuple[float, float],
-                     utm_epsg: int) -> tuple[float, float]:
+def _domain_m(artifact: Any, utm_epsg: int) -> Any:
+    """The polygon the accepted mesh was cut from, in the zone's metres; a mesh cut from a bbox refuses."""
     from pyproj import Transformer
+    from shapely.geometry import shape as _shape
+    from shapely.ops import transform as _transform, unary_union
 
-    lon, lat = Transformer.from_crs(int(utm_epsg), 4326, always_xy=True).transform(
-        float(xy[0]), float(xy[1]))
-    return (float(lon), float(lat))
+    from trid3nt_server.inputs.geometry import flatten_geometries, read_geometry_doc
 
-
-def _domain_polygon(artifact: Any) -> Any:
-    """The polygon the accepted mesh was cut from; a mesh cut from a bbox refuses."""
     # The mesh records its build recipe, so containment runs against the mesh's own domain.
     recipe = ((getattr(artifact, "provenance", None) or {}).get("recipe") or {})
     extent = recipe.get("extent")
@@ -47,78 +41,14 @@ def _domain_polygon(artifact: Any) -> Any:
             "could be inside of. A reach is meshed from the sectioned water "
             "polygon; solve on a mesh built that way.",
             error_code="TELEMAC_DOMAIN_NOT_A_POLYGON")
-    return extent
-
-
-def _station_on_mesh(*, centerline_utm: Any, mesh: Any,
-                     fraction: float) -> tuple[tuple[float, float], str | None]:
-    # The centerline spans the whole navigated stretch but the mesh holds only part; a source with no element stops the run with "SOURCE POINT OUTSIDE DOMAIN", so the station walks downstream to one the mesh holds.
-    import numpy as np
-    import shapely
-    from pyproj import Transformer
-    from shapely.geometry import LineString
-
-    utm_epsg = mesh_zone(mesh)
-    line = LineString(centerline_utm)
-    frac = min(max(float(fraction), 0.0), 1.0)
-    start = frac * line.length
-    back = Transformer.from_crs(int(utm_epsg or 4326), 4326, always_xy=True)
-
-    points_utm, cells, _bed, _lonlat = accepted_mesh_nodes(mesh)
-    rings = np.asarray(points_utm, dtype=float)[np.asarray(cells, dtype=np.int64)]
-    tree = shapely.STRtree(
-        shapely.polygons(np.concatenate([rings, rings[:, :1]], axis=1)))
-    # A cell-length stride: finer resolves nothing, coarser could skip a short meshed stretch.
-    step = max(float(line.length) / 2000.0, 1.0)
-    walked = 0.0
-    while start + walked <= line.length:
-        here = line.interpolate(start + walked)
-        if tree.query(here, predicate="intersects").size:
-            lon, lat = back.transform(here.x, here.y)
-            note = (None if walked <= 0.0 else
-                    f"derived station moved {walked:.0f} m downstream to the "
-                    "first point the accepted mesh holds")
-            if note:
-                logger.info("derived source walked %.0f m downstream into the "
-                            "meshed reach", walked)
-            return (float(lon), float(lat)), note
-        walked += step
-    raise TelemacError(
-        f"no point on the centerline at or below {frac:.0%} of its length lies "
-        "inside the accepted mesh, so there is nowhere in the solved domain to "
-        "put the source. Mesh more of the reach (a finer mesh_resolution_m or a "
-        "supplied mesh) or place the point explicitly.",
-        error_code="TELEMAC_SOURCE_OFF_MESH")
-
-
-def _inside_domain(point: Point, polygon: Any, label: str) -> Point:
-    """A point is inside or not; moving it would be this step choosing the place."""
-    from shapely.geometry import Point as _P, shape as _shape
-    from shapely.ops import transform as _transform
-    from pyproj import Transformer
-
-    from trid3nt_server.inputs.geometry import (
-        flatten_geometries, read_geometry_doc, utm_epsg_for,
-    )
-    from trid3nt_server.inputs.point import PointOutsideDomainError
-
-    shapes = [_shape(g) for g in flatten_geometries(read_geometry_doc(polygon))
+    shapes = [_shape(g) for g in flatten_geometries(read_geometry_doc(extent))
               if str(g.get("type")) in ("Polygon", "MultiPolygon")]
     if not shapes:
         raise TelemacError(
-            f"the domain carries no polygon, so there is no shape the {label} "
+            "the domain carries no polygon, so there is no shape a source point "
             "could be inside of.", error_code="TELEMAC_DOMAIN_NOT_A_POLYGON")
-    from shapely.ops import unary_union
-
-    domain_ll = unary_union(shapes).buffer(0)
-    epsg = utm_epsg_for(float(domain_ll.centroid.x), float(domain_ll.centroid.y))
-    forward = Transformer.from_crs(4326, epsg, always_xy=True)
-    domain_m = _transform(forward.transform, domain_ll)
-    here = _P(*forward.transform(point.lon, point.lat))
-    if not domain_m.covers(here):
-        raise PointOutsideDomainError(point, label=label,
-                                      distance_m=float(here.distance(domain_m)))
-    return point
+    forward = Transformer.from_crs(4326, int(utm_epsg), always_xy=True)
+    return _transform(forward.transform, unary_union(shapes).buffer(0))
 
 
 def _inside_water(cells: Any, wet: Any) -> Any:
@@ -130,90 +60,54 @@ def _inside_water(cells: Any, wet: Any) -> Any:
     return held & interior_nodes(cells, held.shape[0])
 
 
-async def _settle_release(
-    point: Point | None, *, mesh: dict[str, Any],
-    centerline: Any, centerline_utm: Any, utm_epsg: int, fraction: float,
-    node_xy: Any, initial_state: Mapping[str, Any], label: str,
-) -> tuple[Point, str]:
-    """A supplied point the domain polygon does not hold raises rather than moves."""
-    if point is None:
-        if centerline_utm is None:
-            raise TelemacError(
-                f"this domain offers no centerline for the {label} to be placed "
-                "along, so where the substance enters the water is not something "
-                "the run can derive. Place the point.",
-                error_code="TELEMAC_RELEASE_UNPLACED")
-        (lon, lat), note = await asyncio.to_thread(
-            _station_on_mesh, centerline_utm=centerline_utm, mesh=mesh,
-            fraction=fraction)
-        placed = Point(lon, lat)
-    elif centerline is None:
-        placed = await asyncio.to_thread(
-            _inside_domain, point, _domain_polygon(mesh_artifact(mesh)), label)
-        note = "supplied point, inside the modeled domain"
-    else:
-        placed, moved_m = await asyncio.to_thread(
-            contain, point, domain=_domain_polygon(mesh_artifact(mesh)),
-            flowline=centerline, label=label)
-        note = ("supplied point, inside the modeled domain and on the flowline"
-                if moved_m <= 0.0 else
-                f"supplied point, inside the modeled domain; moved {moved_m:.0f} m "
-                "onto the flowline")
+def _nearest(node_xy: Any) -> Any:
+    import numpy as np
 
-    # The point lands last on the nearest node a source may enter: a bankfull domain at low flow has dry mapped river, and a source released there discharges into the bed.
-    wet_utm, moved_m, node = await asyncio.to_thread(
-        snap_to_wet, as_utm(placed, utm_epsg),
-        node_xy=node_xy, wet=initial_state["wet"], state=initial_state["note"],
-        label=label)
-    settled = (f"solved at mesh node {node}, {moved_m:.1f} m from where it was "
-               f"placed - the nearest node, which holds water at t0 "
-               f"({initial_state['note']})")
-    logger.info("%s settled: %s", label, settled)
-    journal_note(f"{label}: {settled}."
-                 + (f" Before that: {note}." if note else ""))
-    lon, lat = _to_lonlat_point(wet_utm, utm_epsg)
-    return Point(lon, lat, placed.name), "; ".join(
-        part for part in (note, settled) if part)
+    nodes = np.asarray(node_xy, dtype=float)
+
+    def resolve(xy: tuple[float, float]) -> int:
+        return int(np.argmin(np.hypot(nodes[:, 0] - xy[0], nodes[:, 1] - xy[1])))
+
+    return resolve
 
 
 async def settle_release(
     *,
-    point: Point | None,
+    point: Point,
     mesh: dict[str, Any],
     label: str,
     domain: Any = None,
-    fraction: float = 0.5,
     continue_from: str | None = None,
 ) -> dict[str, Any]:
-    """Where a source enters the water, settled against the accepted mesh.
+    """Where a source enters the water: the stated point, checked against the accepted mesh, unmoved.
 
-    A supplied point is held inside the domain (and onto the centerline where there is one); an
-    unplaced one sits ``fraction`` along it. A domain with neither refuses.
-    """
+    The engine solves a source at its nearest node, so that node must be wet at t0 and off the rim."""
     from trid3nt_server.render.pipeline_emitter import current_emitter
 
+    import numpy as np
+
     utm_epsg = mesh_zone(mesh)
-    # The centerline runs head-to-tail the way the water does, so ``fraction`` counts from upstream.
-    centerline = getattr(domain, "companions", {}).get("centerline")
-    centerline_utm = None if centerline is None else await asyncio.to_thread(
-        read_centerline_utm, centerline, utm_epsg)
-    node_xy, cells, _bed, _lonlat = await asyncio.to_thread(
-        accepted_mesh_nodes, mesh)
+    node_xy, cells, _bed, _lonlat = await asyncio.to_thread(accepted_mesh_nodes, mesh)
     initial_state = await asyncio.to_thread(initial_state_of, continue_from, len(node_xy))
     # A source may enter where wet at t0 and off the edge; boundary conditions are imposed on the rim.
-    initial_state = {**initial_state,
-                     "wet": _inside_water(cells, initial_state["wet"])}
-    placed, note = await _settle_release(
-        point, mesh=mesh, centerline=centerline, centerline_utm=centerline_utm,
-        utm_epsg=utm_epsg, fraction=fraction, node_xy=node_xy,
-        initial_state=initial_state, label=label)
-    # The marker is emitted before the solve and carries the settled point.
-    await publish_point(current_emitter(), placed, label=label,
-                        basis="user" if point is not None else "derived",
+    wet = _inside_water(cells, initial_state["wet"])
+    region = await asyncio.to_thread(_domain_m, mesh_artifact(mesh), utm_epsg)
+    node = await asyncio.to_thread(
+        require_viable, point, label=label, utm_epsg=utm_epsg, sites_xy=node_xy,
+        viable=wet, resolve=_nearest(node_xy), region_m=region,
+        missed=("where the engine reads it - its nearest mesh node - holds no "
+                f"water at t0 off the rim ({initial_state['note']})"))
+    at = as_utm(point, utm_epsg)
+    away = float(np.hypot(float(node_xy[node][0]) - at[0], float(node_xy[node][1]) - at[1]))
+    settled = (f"stated at ({point.lon:.5f}, {point.lat:.5f}); the engine reads it at "
+               f"mesh node {node}, {away:.1f} m away, which holds water at t0 "
+               f"({initial_state['note']})")
+    logger.info("%s settled: %s", label, settled)
+    journal_note(f"{label}: {settled}.")
+    # The marker is emitted before the solve and carries the stated point.
+    await publish_point(current_emitter(), point, label=label, basis="user",
                         context=slug_of(getattr(domain, "name", None)
                                       or str(mesh.get("mesh_id") or "domain")))
-    at = as_utm(placed, utm_epsg)
     return {"at": [round(at[0], 3), round(at[1], 3)],
-            "lon": round(placed.lon, 6), "lat": round(placed.lat, 6),
-            "name": placed.name, "user_supplied": point is not None,
-            "note": note, "fraction": float(min(max(fraction, 0.0), 1.0))}
+            "lon": round(point.lon, 6), "lat": round(point.lat, 6),
+            "name": point.name, "user_supplied": True, "note": settled}

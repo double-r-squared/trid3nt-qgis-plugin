@@ -44,7 +44,7 @@ JOURNAL = {
         "bed": {"value": None, "origin": "producer", "source": "fetch_dem"},
         "wave": {"value": None, "origin": "producer",
                  "source": "fetch_ndbc_buoys"},
-        "spill_fraction": {"value": 0.4, "origin": "user", "source": None}},
+        "spill_duration_s": {"value": 600.0, "origin": "user", "source": None}},
     "notes": [
         "bed terrain: fetch_dem (measured, over this place, 10 m, measured to "
         "2024-01-01, NAVD88).",

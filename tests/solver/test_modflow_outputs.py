@@ -163,9 +163,12 @@ def test_a_series_at_a_point_is_the_containing_cells_heads_in_seconds(solved):
 
 def test_a_point_off_the_mesh_refuses_by_name(solved):
     lon, lat = _TO_LONLAT(100.0, 100.0)
-    with pytest.raises(ModflowError) as caught:
+    from trid3nt_server.inputs.point import PointNotViableError
+
+    with pytest.raises(PointNotViableError) as caught:
         GWF.READS["series"](P.series("HEAD", at=(lon, lat), plane=1), solved())
-    assert caught.value.error_code == "MODFLOW_POINT_OUTSIDE"
+    assert caught.value.error_code == "POINT_NOT_VIABLE"
+    assert caught.value.hint["distance_m"] > 0
 
 
 def test_the_budget_discrepancy_is_the_listings_own(solved):

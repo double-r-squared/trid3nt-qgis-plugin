@@ -21,12 +21,9 @@ __all__ = ["CAPTIONS", "OUTPUTS", "INPUTS",
            "STEERING", "telemac_micropollutant_release"]
 
 
-_RELEASE = Placed("source", point="release", fraction="release_fraction",
-                  label="Release point")
+_RELEASE = Placed("source", point="release", label="Release point")
 
-_MONITORING = Placed("monitoring", point="monitoring_point",
-                     fraction="monitoring_fraction",
-                     label="Monitoring point")
+_MONITORING = Placed("monitoring", point="monitoring_point", label="Monitoring point")
 
 _REACH_LENGTH_KM = 6.0
 
@@ -40,11 +37,9 @@ _DISSOLVED = "MICRO POLLUTANT MG/L"
 
 class INPUTS:
     release = Input()
-    release_fraction = Input()
     release_duration_s = Input()
 
-    monitoring_point = Input()
-    monitoring_fraction = Input()
+    monitoring_point = Input().stated()
 
     domain = Input(DOMAIN).need("hydrography", at="release",
                                 span_km=_REACH_LENGTH_KM)

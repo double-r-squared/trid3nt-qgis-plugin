@@ -1008,9 +1008,11 @@ package SteeringSurface {
         doc /*
         Every point in the system is a Point. A slot that asks for one fills
         from each of its sources - the pick, a pair, a point layer - under the
-        same ingestion, keeps the name the source carried, refuses by name a
-        point outside the domain, and moves a dry landing to the nearest wet
-        node. Neither the user nor the model names it twice.
+        same ingestion and keeps the name the source carried. A point is never
+        invented and never moved: one that misses what the run solves - outside
+        the domain, dry at t0, an inactive cell - refuses POINT_NOT_VIABLE with
+        the nearest viable site as a hint. Neither the user nor the model names
+        it twice.
 
         An ingestion RESOLVES what it was handed and never fetches: a bare place
         NAME is refused, retryably, naming the geocoder the model calls first,
@@ -1625,7 +1627,7 @@ package SteeringSurface {
     verify requirement InputsAreTypedPrimitives by
         "tests/inputs/test_point.py::test_a_place_name_refuses_and_names_the_geocoder";
     verify requirement InputsAreTypedPrimitives by
-        "tests/inputs/test_point.py::test_a_point_outside_the_domain_is_refused_by_name_and_names_the_fix";
+        "tests/inputs/test_point.py::test_a_point_outside_the_region_refuses_before_any_site_is_read";
     verify requirement InputsAreTypedPrimitives by
-        "tests/inputs/test_point.py::test_a_point_landing_on_a_dry_node_moves_to_the_nearest_wet_one";
+        "tests/inputs/test_point.py::test_a_point_on_a_dry_site_refuses_with_the_nearest_viable_site_as_a_hint";
 }
