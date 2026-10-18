@@ -12,9 +12,42 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Mapping
 
+from ..errors import ModflowError
 from ...runtime.module import Module, SlotRefused
 
 __all__ = ["ModflowModule", "module_input_dir", "periods"]
+
+
+def _stress(name: str, package: str, dimensions: Mapping[str, str]):
+    columns = tuple(dimensions)
+
+    def expand(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+        if not isinstance(value, Mapping):
+            raise ModflowError(
+                f"{name} takes a mapping of geometry, layer and {', '.join(columns)}; "
+                f"got {value!r}.", error_code="MODFLOW_STRESS_UNSTATED")
+        if value.get("geometry") is None:
+            return {}, {}
+        for argument in ("layer", *columns):
+            if value.get(argument) is None:
+                raise ModflowError(
+                    f"{name} states no {argument}; the engine has no value for it, "
+                    "so state it from a measurement or a named source.",
+                    error_code="MODFLOW_STRESS_UNSTATED")
+        layer = value["layer"]
+        if isinstance(layer, bool) or not isinstance(layer, int) or layer < 1:
+            raise ModflowError(
+                f"{name} layer is {layer!r}; it is an integer from 1.",
+                error_code="MODFLOW_STRESS_UNSTATED")
+        return {f"{package}_STRESS_PERIOD_DATA": {
+            "stress": package, "composite": name, "geometry": value["geometry"],
+            "values": {column: value[column] for column in columns},
+            "dimensions": dict(dimensions), "layer": layer}}, {}
+
+    expand.__doc__ = (
+        f"The {package} package's cells a geometry places: {name}(geometry, layer, "
+        f"{', '.join(columns)}); a geometry reading nothing states nothing.")
+    return expand
 
 
 def module_input_dir() -> Path:

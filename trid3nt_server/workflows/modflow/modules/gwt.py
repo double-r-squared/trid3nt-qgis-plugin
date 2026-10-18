@@ -6,7 +6,8 @@ from types import MappingProxyType
 from typing import Mapping
 
 from ...runtime.module import MOMENT, Output
-from .module import ModflowModule, _start_date_time, periods
+from .module import ModflowModule, _start_date_time, _stress, periods
+from .outputs import PRIMITIVES
 
 __all__ = ["GWT", "MODULE_OUTPUT"]
 
@@ -17,8 +18,21 @@ MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
                                    "floor": 0}),
 })
 
+# Each transport stress composite: its package and the arguments it takes with their dimensions, in the package's own column order after the cell id.
+_STRESS = {
+    "ConstantConcentration": ("CNC", (("concentration", "M/L3"),)),
+    "MassSource": ("SRC", (("rate", "M/T"),)),
+}
+
 GWT = ModflowModule("gwt")
 GWT.MODULE_OUTPUT = MODULE_OUTPUT
 # The simulation's own clock on every body: Periods spells the marching, the moment the instant it opens at.
 GWT.composites(Periods=periods)
+GWT.composites(
+    reads={name: ("geometry", *(column for column, _ in columns))
+           for name, (_, columns) in _STRESS.items()},
+    **{name: _stress(name, package, dict(columns))
+       for name, (package, columns) in _STRESS.items()})
 GWT.FILLED_BY = MappingProxyType({MOMENT: {"TDIS_START_DATE_TIME": _start_date_time}})
+# The read of what a solved run writes: the same primitives read off this body's own files.
+GWT.reads(**PRIMITIVES)

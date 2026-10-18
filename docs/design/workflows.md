@@ -464,6 +464,15 @@ the run's own vertical frame (`vertical_frame`, carried on the run's handle). A
 reading on another frame, of another quantity, or stated as a number standing at
 no site refuses by name.
 
+A COUPLED RUN's fill composes the transport body through the GWF wrapper's
+`Transport` composite (`modules/gwf.py`), and the staged run's manifest takes
+the coupled body's module word as its `module` - transport answers, flow is its
+machinery. The publish walks both models' output rows: the carrier's read off
+the run's own module, a coupled body's tagged with its own word, each body
+reading its filerecord from its own slots over the carrier's sheet (the clock
+and units the simulation owns are one for both models). The engine page
+(`docs/design/modflow.md`) holds the coupling itself.
+
 ## Mesh
 
 The mesh is a stated() row: AUTHORED (the person's own mesh, which the builder

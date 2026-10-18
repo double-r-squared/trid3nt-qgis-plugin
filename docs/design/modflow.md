@@ -69,19 +69,37 @@ missing value refuses rather than defaulting.
 
 ## The coupling
 
-A coupled run is ONE simulation holding a GWF model and a GWT (or GWE) model
-whose name files BOTH name the same staged DISV, joined by the GWF-GWT
-exchange. This is proven: mf6 6.7.0 validates and solves it, and the
-concentration output reads exactly like a head - `HeadFile(...,
-text="CONCENTRATION")`, one value per cell per layer per saved step, the same
-4-D layout the head file carries on DISV.
+A coupled run is ONE simulation holding a GWF model and a GWT model whose name
+files BOTH name the same staged DISV, joined by the GWF-GWT exchange. This is
+proven: mf6 6.7.0 validates and solves it, and the concentration output reads
+exactly like a head - `HeadFile(..., text="CONCENTRATION")`, the same 4-D layout
+the head file carries on DISV. Proven through the product: the p01 strip
+authored by this walk (1 x 101 cells, joined quads) reproduces the spike's DIS
+reference bitwise (max|dC| = 0.0 at dispersivity 0 and 10).
 
-THE COUPLING COMPOSITE LIVES IN `workflows/modflow/`. The runtime's composite
-seam and the part-composition rule are the shared half and are already shared;
-TELEMAC's `couples()` is its own steering-file plumbing and stays there. A
-transport body names its module and its slots; composed only when the inputs it
-rides on are stated, it expands into the second model and the exchange - into
-the simulation authoring, not into keyword values on the carrier's sheet.
+THE COUPLING COMPOSITE LIVES IN `workflows/modflow/`. `Transport` is a composite
+of the GWF wrapper (`modules/gwf.py`): it takes `given` (the inputs that carry
+the body - a body whose given inputs all hold nothing composes nothing) and
+`slots` (GWT dictionary identifiers - an unknown one refuses by name, and
+`TDIS`/`DISV` refuse as the simulation's own). A stress statement in a slot is
+the GWT wrapper's own composite's shape: `ConstantConcentration` and
+`MassSource` (`modules/gwt.py`) are the shared `_stress` factory
+(`modules/module.py`) bound to CNC and SRC, expanding geometry + layer + value
+into the package's period data; a geometry reading nothing states nothing and a
+missing value refuses. The composed body names its module and its slots and
+expands into the second model and the exchange - into the simulation authoring,
+not into keyword values on the carrier's sheet.
+
+serialize writes the coupled sheet model by model (`authoring/simulation.py`):
+one name file per model over the SAME filename-only DISV, one IMS per model,
+both name files listing `mesh.disv`, the `Periods`/moment filling only the
+carrier, and the exchange written through `sim.exchange_files` as
+`GWF6-GWT6 <carrier>.<carrier><gwt>`. Each model's required packages are
+unstated-refused (IC and MST for gwt), with CNC/SRC period data placed by the
+stress walk against the shared grid - a point off the mesh refuses
+POINT_NOT_VIABLE. SSM is NOT defaulted: mf6 refuses an SSM whose flow model
+carries no boundary flows, so `SSM_SOURCES` is a stated keyword like every
+other.
 
 For a coupled run the manifest's `module` is the single answering word (`gwt` -
 transport is the question, flow is its machinery). The worker needs no change:
@@ -95,14 +113,19 @@ the product.
 ## The publish
 
 The engine's own reading of a solved run (`modules/outputs.py`) opens the files
-the output control saved. `modules/ugrid.py` is the ONE transform `render.md`
-allows an engine whose output is not in the format set to carry: the accepted
-mesh and the read values in, a UGRID NetCDF out with cell-centred, time-stepped
-dataset groups. DIS gets no raster path of its own - a structured grid is a
-quad mesh and rides the same transform, so there is one result path and a
-rotated or variably spaced grid needs no resampling. A series at a measured
-well is checked against the reading in its own quantity, in the model's length
-unit, at the saved time nearest the moment it was sampled.
+the output control saved - for either model: `_SAVED` maps HEAD and
+CONCENTRATION to their own OC filerecords, and a coupled body reads its
+filerecord from its own slots over the carrier's sheet (the clock and units the
+simulation owns are one for both models). The publish's table walks every
+module's output rows: the carrier's read off the run's own module, a coupled
+body's tagged with its module word. `modules/ugrid.py` is the ONE transform
+`render.md` allows an engine whose output is not in the format set to carry:
+the accepted mesh and the read values in, a UGRID NetCDF out with
+cell-centred, time-stepped dataset groups. DIS gets no raster path of its own -
+a structured grid is a quad mesh and rides the same transform, so there is one
+result path and a rotated or variably spaced grid needs no resampling. A series
+at a measured well is checked against the reading in its own quantity, in the
+model's length unit, at the saved time nearest the moment it was sampled.
 
 ## The worker
 
@@ -117,9 +140,8 @@ builds on was proved through that image before it was built on.
 
 ## What is not built yet
 
-The GWT wrapper's transport composites (ADV, MST, CNC, SSM against the
-examples' bodies), the GWE body's packages, the structured examples through the
-mesher's lattice, the advanced-package composites (SFR, LAK, MAW, UZF, CSUB),
-OBS and time series, the model exchanges (GWF-GWF, GWT-GWT), and PRT. Each is
-a leg in the scope's plan; the coupling design above is what the GWT leg
-builds on.
+The GWE body's packages (and the GWF-GWE exchange), the structured examples
+through the mesher's lattice, the advanced-package composites (SFR, LAK, MAW,
+UZF, CSUB), OBS and time series, the model exchanges (GWF-GWF, GWT-GWT), FMI
+(the transport reading a prior flow run's saved budget), and PRT. Each is a leg
+in the scope's plan; the coupling above is built for GWT on the exchange.

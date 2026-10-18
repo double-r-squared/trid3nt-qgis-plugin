@@ -27,7 +27,7 @@ from trid3nt_server.workflows.runtime.module import MOMENT, SlotRefused
 from trid3nt_server.workflows.runtime.primitives import (Primitive, field, publish_reads,
                                                          unanchored)
 from trid3nt_server.workflows.runtime.review import _review, _seat_on
-from trid3nt_server.workflows.runtime.sheet import Keyword, Sheet
+from trid3nt_server.workflows.runtime.sheet import Filled, Keyword, Sheet
 from trid3nt_server.workflows.runtime.sheet import fill as fill_slots
 from trid3nt_server.workflows.runtime.sheet import run as run_sheet_
 from trid3nt_server.workflows.runtime.workflow import EVENT_TIME
@@ -100,10 +100,24 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
 
 
 def _results(sheet: Sheet) -> list[str]:
-    """The files the run's output control names: what the worker must find written."""
-    return [name for identifier in ("OC_HEAD_FILERECORD", "OC_BUDGET_FILERECORD")
-            if identifier in sheet.filled
-            and (name := filerecord(sheet.filled[identifier].value))]
+    """The files every output control of this run names: what the worker must find written."""
+    found: list[str] = []
+    for source in (sheet.filled, *(body.get("slots") or {}
+                                   for body in sheet.coupled)):
+        for identifier, row in source.items():
+            if identifier.startswith("OC_") and identifier.endswith("_FILERECORD"):
+                value = row.value if isinstance(row, Filled) else row
+                if (name := filerecord(value)):
+                    found.append(name)
+    return found
+
+
+def _listings(sheet: Sheet) -> list[str]:
+    """Every model's listing, and the simulation's: what a failed solve prints its stop into."""
+    return [str(sheet.filled["NAM_LIST"].value if "NAM_LIST" in sheet.filled
+                else f"{sheet.module}.lst")] + [
+        str((body.get("slots") or {}).get("NAM_LIST") or f"{body['module']}.lst")
+        for body in sheet.coupled]
 
 
 def _validated(rundir: Path) -> None:
@@ -143,14 +157,15 @@ async def stage_simulation(*, sheet: Sheet, run_tag: str, mesh: Mapping[str, Any
     # The parse is a container round trip, so it runs off the loop.
     await asyncio.to_thread(_validated, rundir)
     results = _results(sheet)
-    listing = str(sheet.filled["NAM_LIST"].value if "NAM_LIST" in sheet.filled
-                  else f"{sheet.module}.lst")
+    listings = _listings(sheet)
+    # The manifest's module is the body answering the question: a coupled run is its transport.
+    module = str(sheet.coupled[0]["module"]) if sheet.coupled else sheet.module
     return await stage_run(
-        rundir, run_tag, module=sheet.module, steering=MFSIM_FILE,
-        results=results, outputs=[*results, listing, _SIM_LISTING, _METRICS],
+        rundir, run_tag, module=module, steering=MFSIM_FILE,
+        results=results, outputs=[*results, *listings, _SIM_LISTING, _METRICS],
         mesh_inputs=[{"gs_uri": disv, "dest": DISV_FILE}], prefix=prefix,
         sheet=sheet.state(), server_facts=server_facts,
-        result_basename=(results or [listing])[0], check=check_staged_run)
+        result_basename=(results or listings)[0], check=check_staged_run)
 
 
 async def run_sheet(*, sheet: Sheet, staged: Mapping[str, Any],
@@ -166,22 +181,26 @@ async def run_sheet(*, sheet: Sheet, staged: Mapping[str, Any],
             "vertical_frame": frame}
 
 
-def _table(solved: Callable[[str], Solved], module: str
+def _table(solved: Callable[[str], Solved], run_module: str, coupled: Sequence[str]
            ) -> tuple[list[Primitive], Callable[[Sequence[LayerURI], Mapping[Primitive, str]], None]]:
-    """EVERY output row the run's output control saved -> one temporal layer per layer, and the account of the rest.
-    A row it did not save is journalled by the keyword that would have saved it, never refused."""
+    """EVERY output row every module's output control saved -> one temporal layer per layer, and the account of the rest.
+    A row a module did not save is journalled by the keyword that would have saved it, never refused."""
     from trid3nt_server.inputs.run_notes import journal_note
 
-    read = solved(module)
     rows: list[Primitive] = []
     unsaved: list[str] = []
-    for token, row in read.body.MODULE_OUTPUT.items():
-        refused = read.unsaved(token)
-        if refused is not None:
-            unsaved.append(f"no layer carries the {row.name}: {refused}")
-            continue
-        rows += [field(token, t="every", plane=layer).animate(style=row.style)
-                 for layer in range(1, read.nlay + 1)]
+    for module in (run_module, *coupled):
+        read = solved(module)
+        for token, row in read.body.MODULE_OUTPUT.items():
+            refused = read.unsaved(token)
+            if refused is not None:
+                unsaved.append(f"no layer carries the {row.name}: {refused}")
+                continue
+            # The carrier's rows read off the run's own module; a coupled body's carry its name.
+            rows += [field(token, t="every", plane=layer,
+                           module=None if module == run_module else module)
+                     .animate(style=row.style)
+                     for layer in range(1, read.nlay + 1)]
 
     def account(layers: Sequence[LayerURI], why: Mapping[Primitive, str]) -> None:
         from trid3nt_server.inputs.observation import Observation
@@ -220,13 +239,24 @@ async def publish_outputs(*, run: Mapping[str, Any], sheet: Sheet,
                           params: Mapping[str, Any],
                           anchors: Sequence[Mapping[str, Any]] = ()) -> LayerURI:
     """Read what the run saved and publish every output row, one temporal layer per layer, the template's reads beside them.
-    A solved run is opened over the sheet it solved, which the handle carries only as its record."""
+    A solved run is opened over the sheet it solved, which the handle carries only as its record; a coupled body's
+    keywords are its own slots."""
+    from .authoring.simulation import coupled_sheet
+
     opened = {**run, "sheet": sheet}
+    coupled = {str(body.get("module")): body for body in sheet.coupled}
+
+    def _solved(module: str) -> Solved:
+        body = coupled.get(module)
+        return Solved(opened, wrapper_for(module), filled=(
+            None if body is None else coupled_sheet(sheet, body).filled))
+
     return await publish_reads(
         engine="modflow", run=run, outputs=outputs, captions=captions,
-        params=params, anchors=anchors,
-        solved=lambda module: Solved(opened, wrapper_for(module)),
-        table=lambda solved: _table(solved, str(run["module"])), record=_record)
+        params=params, anchors=anchors, solved=_solved,
+        table=lambda solved: _table(solved, str(run["module"]),
+                                    [str(body["module"]) for body in sheet.coupled]),
+        record=_record)
 
 
 class ModflowWorkflow(Workflow):

@@ -189,6 +189,11 @@ def _factor(artifact: Any, *, dimension: str, frame: Any, label: str, name: str)
             f"{label} reads {name!r}, which publishes no unit; a raster is "
             f"converted onto the model's {dimension} and one stating none is "
             "never assumed.", error_code="MODFLOW_UNITS_UNSTATED")
+    if dimension not in _SI and dimension != "1/L":
+        raise ModflowError(
+            f"{label} states a raster for a {dimension} quantity, and the model's "
+            "frame carries no mass unit to convert it onto; state a number in the "
+            "mass units this model declares.", error_code="MODFLOW_UNITS_UNSTATED")
     length, time = frame if frame is not None else (None, None)
     metres = _stated(length, METRES, "DISV_LENGTH_UNITS", label, name)
     seconds = (_stated(time, SECONDS, "TDIS_TIME_UNITS", label, name)

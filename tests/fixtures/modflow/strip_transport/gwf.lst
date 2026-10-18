@@ -1,0 +1,192 @@
+                                   MODFLOW 6
+                U.S. GEOLOGICAL SURVEY MODULAR HYDROLOGIC MODEL
+                          GROUNDWATER FLOW MODEL (GWF)
+                            VERSION 6.7.0 02/05/2026
+
+   MODFLOW 6 compiled Feb 05 2026 22:38:38 with Intel(R) Fortran Intel(R) 64
+   Compiler Classic for applications running on Intel(R) 64, Version 2021.6.0
+                             Build 20220226_000000
+
+This software has been approved for release by the U.S. Geological 
+Survey (USGS). Although the software has been subjected to rigorous 
+review, the USGS reserves the right to update the software as needed 
+pursuant to further analysis and review. No warranty, expressed or 
+implied, is made by the USGS or the U.S. Government as to the 
+functionality of the software and related material nor shall the 
+fact of release constitute any such warranty. Furthermore, the 
+software is released on condition that neither the USGS nor the U.S. 
+Government shall be held liable for any damages resulting from its 
+authorized or unauthorized use. Also refer to the USGS Water 
+Resources Software User Rights Notice for complete use, copyright, 
+and distribution information.
+
+
+As a work of the United States Government, this USGS product is 
+in the public domain within the United States. You can copy, 
+modify, distribute, and perform the work, even for commercial 
+purposes, all without asking permission. Additionally, USGS 
+waives copyright and related rights in the work worldwide 
+through CC0 1.0 Universal Public Domain Dedication 
+(https://creativecommons.org/publicdomain/zero/1.0/).
+
+The following GNU Lesser General Public License (LGPL) libraries
+are used in this USGS product:
+
+    SPARSKIT version 2.0
+      ilut, luson, and qsplit 
+      (https://www-users.cse.umn.edu/~saad/software/SPARSKIT/)
+
+    RCM - Reverse Cuthill McKee Ordering
+      (https://people.math.sc.edu/Burkardt/f_src/rcm/rcm.html)
+
+    BLAS - Basic Linear Algebra Subprograms Level 1
+      (https://people.math.sc.edu/Burkardt/f_src/blas1_d/blas1_d.html)
+
+    SPARSEKIT - Sparse Matrix Utility Package
+      amux, dperm, dvperm, rperm, and cperm
+      (https://people.sc.fsu.edu/~jburkardt/f77_src/sparsekit/sparsekit.html)
+
+The following BSD-3 License libraries are used in this USGS product:
+
+    Modern Fortran DAG Library
+      Copyright (c) 2018, Jacob Williams
+      All rights reserved.
+      (https://github.com/jacobwilliams/daglib)
+
+MODFLOW 6 compiler options: -Isrc/libmf6_external.a.p -Isrc/libmf6core.a.p
+-Isrc -I../src -D_FILE_OFFSET_BITS=64 -warn general -warn truncated_source
+-stand=f18 -O2 -fpe0 -no-heap-arrays -traceback -diag-disable:7416
+-diag-disable:7025 -diag-disable:5268 -fPIC -module src/libmf6core.a.p
+-gen-dep=src/libmf6core.a.p/Utilities_compilerversion.F90.o
+-gen-depformat=make -o src/libmf6core.a.p/Utilities_compilerversion.F90.o -c
+
+System command used to initiate simulation:
+mf6
+
+MODFLOW was compiled using uniform precision.
+
+Real Variables
+  KIND: 8
+  TINY (smallest non-zero value):    2.225074-308
+  HUGE (largest value):    1.797693+308
+  PRECISION: 15
+  SIZE IN BITS: 64
+
+Integer Variables
+  KIND: 4
+  HUGE (largest value): 2147483647
+  SIZE IN BITS: 32
+
+Long Integer Variables
+  KIND: 8
+  HUGE (largest value): 9223372036854775807
+  SIZE IN BITS: 64
+
+Logical Variables
+  KIND: 4
+  SIZE IN BITS: 32
+ 
+ NAMEFILE OPTIONS:
+ END NAMEFILE OPTIONS:
+
+ DISV -- VERTEX GRID DISCRETIZATION PACKAGE, VERSION 1 : 12/23/2015 - INPUT READ FROM MEMPATH: __INPUT__/GWF/DISV                                
+
+
+ Setting Discretization Options
+    Model length unit [0=UND, 1=FEET, 2=METERS, 3=CENTIMETERS] set as 2
+ End Setting Discretization Options
+
+ Setting Discretization Dimensions
+    NLAY = 1
+    NCPL = 3
+    NVERT = 8
+ End Setting Discretization Dimensions
+
+ Setting Discretization Griddata
+    TOP set from input file
+    BOTM set from input file
+ End Setting Discretization Griddata
+
+ Discretization Vertex data loaded
+ Discretization Cell2d data loaded
+
+ NPF -- NODE PROPERTY FLOW PACKAGE, VERSION 1, 3/30/2015 INPUT READ FROM MEMPATH: __INPUT__/GWF/NPF                                 
+
+
+ IC -- Initial Conditions Package, Version 8, 3/28/2015 input read from mempath: __INPUT__/GWF/IC                                  
+
+
+ Setting NPF Options
+ End Setting NPF Options
+
+ Setting NPF Griddata
+    ICELLTYPE set from input file
+    K set from input file
+    K33 not provided.  Setting K33 = K.
+    K22 not provided.  Setting K22 = K.
+ End Setting NPF Griddata
+
+    STRT set from input file
+    BINARY GRID INFORMATION WILL BE WRITTEN TO:
+      UNIT NUMBER: 1020
+      FILE NAME: mesh.disv.grb
+
+ OPENED mesh.disv.grb
+ FILE TYPE:DATA(BINARY)   UNIT 1020   STATUS:REPLACE             
+ FORMAT:UNFORMATTED            ACCESS:STREAM              
+ ACTION:READWRITE           
+
+      THE LAST TIME STEP WILL BE PRINTED
+      THE LAST TIME STEP WILL BE PRINTED
+
+ PROCESSING OC OPTIONS
+
+    BUDGET INFORMATION WILL BE WRITTEN TO:
+      UNIT NUMBER: 1021
+      FILE NAME: gwf.cbc
+
+ OPENED gwf.cbc
+ FILE TYPE:DATA(BINARY)   UNIT 1021   STATUS:REPLACE             
+ FORMAT:UNFORMATTED            ACCESS:STREAM              
+ ACTION:READWRITE           
+
+    HEAD INFORMATION WILL BE WRITTEN TO:
+      UNIT NUMBER: 1022
+      FILE NAME: gwf.hds
+
+ OPENED gwf.hds
+ FILE TYPE:DATA(BINARY)   UNIT 1022   STATUS:REPLACE             
+ FORMAT:UNFORMATTED            ACCESS:STREAM              
+ ACTION:READWRITE           
+
+ END OF OC OPTIONS
+
+start timestep kper="1" kstp="1" mode="normal"
+
+
+ BEGIN READING OUTPUT CONTROL FOR STRESS PERIOD 1
+      THE LAST TIME STEP WILL BE SAVED
+      THE LAST TIME STEP WILL BE SAVED
+
+ END READING OUTPUT CONTROL FOR STRESS PERIOD 1
+
+end timestep
+
+
+start timestep kper="1" kstp="2" mode="normal"
+
+
+ HEAD WILL BE SAVED ON UNIT 1022 AT END OF TIME STEP    2, STRESS PERIOD    1
+
+
+
+         TIME SUMMARY AT END OF TIME STEP    2 IN STRESS PERIOD    1
+                    SECONDS     MINUTES      HOURS       DAYS        YEARS
+                    -----------------------------------------------------------
+   TIME STEP LENGTH 4.32000E+05  7200.0      120.00      5.0000     1.36893E-02
+ STRESS PERIOD TIME 8.64000E+05  14400.      240.00      10.000     2.73785E-02
+         TOTAL TIME 8.64000E+05  14400.      240.00      10.000     2.73785E-02
+
+
+end timestep
+

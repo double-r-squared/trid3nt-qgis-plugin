@@ -21,7 +21,7 @@ from .mesh_files import disv_dimensions, top_of
 from .stress import place as place_stress
 
 from ..errors import ModflowError
-from ...runtime.sheet import Filled
+from ...runtime.sheet import Filled, fill
 
 logger = logging.getLogger("trid3nt_server.workflows.modflow.authoring.simulation")
 
@@ -111,7 +111,6 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
             f"{module!r} is no module this authoring solves; its simulators "
             "are gwf, gwt and gwe.",
             error_code="MODFLOW_MODULE_UNKNOWN")
-    cap = module.capitalize()
     points, cells, bed, _lonlat = mesh_nodes(mesh)
     dims = disv_dimensions(sheet, cells)
     utm_epsg = getattr((mesh or {}).get("artifact"), "utm_epsg", None)
@@ -120,18 +119,43 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
                   points=points, cells=cells)
            if any(needs_top(row.value) for rows in groups.values()
                   for row in rows.values()) else None)
+    placed = dict(dims=dims, points=points, cells=cells, utm_epsg=utm_epsg,
+                  sheet=sheet, frame=frame, top=top)
+    active = _active(sheet, nlay=int(dims["nlay"]), points=points, cells=cells,
+                     utm_epsg=utm_epsg, frame=frame)
     derived = _stressed(sheet, groups, nlay=int(dims["nlay"]), points=points,
-                        cells=cells, utm_epsg=utm_epsg, frame=frame)
+                        cells=cells, utm_epsg=utm_epsg, frame=frame, active=active)
     _unstated(sheet, set(groups) | set(_REQUIRED_PACKAGES[module]) | {"TDIS"},
               derived)
     sim = flopy.mf6.MFSimulation(sim_name="trid3nt", sim_ws=str(work),
                                  verbosity_level=0)
     _package(flopy, "ModflowTdis",
-             _placed(groups.pop("TDIS", {}), dims=dims, points=points,
-                     cells=cells, utm_epsg=utm_epsg, sheet=sheet, frame=frame,
-                     top=top),
+             _placed(groups.pop("TDIS", {}), **placed),
              owner=sim,
              how="TDIS of the simulation")
+    _model(flopy, sim, module=module, groups=groups, named=named, **placed)
+    # Each coupled body is a second model in this simulation: its own packages from its
+    # slots, a filename-only DISV on the same staged mesh, its own solution, and the
+    # exchange that joins it to the flow.
+    for body in sheet.coupled:
+        coupled = coupled_sheet(sheet, body)
+        cgroups, cnamed = _grouped(coupled)
+        cderived = _stressed(coupled, cgroups, nlay=int(dims["nlay"]),
+                             points=points, cells=cells, utm_epsg=utm_epsg,
+                             frame=frame, active=active)
+        _unstated(coupled, set(cgroups) | set(_REQUIRED_PACKAGES[coupled.module]),
+                  cderived)
+        _model(flopy, sim, module=coupled.module, groups=cgroups, named=cnamed,
+               **placed)
+        _exchange(flopy, sim, carrier=module, coupled=coupled.module)
+    return _write_package_by_package(sim)
+
+
+def _model(flopy: Any, sim: Any, *, module: str, groups: dict[str, dict[str, Any]],
+           named: dict[str, Any], dims: dict[str, int], points: Any, cells: Any,
+           utm_epsg: int | None, sheet: Any, frame: Any, top: Any) -> Any:
+    """One model of this simulation: its name file, the staged DISV's line, its solution and its packages."""
+    cap = module.capitalize()
     model = _package(flopy, f"Modflow{cap}", named, owner=sim, modelname=module,
                      model_nam_file=f"{module}.nam",
                      how=f"the {module} model itself")
@@ -146,22 +170,43 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
                            cells=cells, utm_epsg=utm_epsg, sheet=sheet,
                            frame=frame, top=top),
                    owner=sim, filename=f"{module}.ims",
-                   how="IMS of the simulation")
+                   how=f"IMS of the {module} solution")
     sim.register_ims_package(ims, [module])
     for prefix, rows in groups.items():
         _package(flopy, f"Modflow{cap}{prefix.lower()}",
                  _placed(rows, dims=dims, points=points, cells=cells,
                          utm_epsg=utm_epsg, sheet=sheet, frame=frame, top=top),
                  owner=model, how=f"{prefix} of {module}")
-    return _write_package_by_package(sim)
+    return model
+
+
+def coupled_sheet(sheet: Any, body: Mapping[str, Any]) -> Any:
+    """A coupled body's slots as the sheet its own authoring walks: the shared run, the body's own dictionary."""
+    from ..modules import wrapper_for
+
+    return fill(wrapper_for(str(body.get("module") or "")), produced=sheet.run,
+                inputs_fill=False, **dict(body.get("slots") or {}))
+
+
+def _exchange(flopy: Any, sim: Any, *, carrier: str, coupled: str) -> None:
+    """The exchange joining the flow model to its transport, by the pair mf6 names."""
+    if (carrier, coupled) != ("gwf", "gwt"):
+        raise ModflowError(
+            f"{carrier} and {coupled} solve no exchange this engine authors; the "
+            "coupled pair is the flow model and its transport.",
+            error_code="MODFLOW_EXCHANGE_UNKNOWN")
+    _package(flopy, "ModflowGwfgwt", {}, owner=sim, exgtype="GWF6-GWT6",
+             exgmnamea=carrier, exgmnameb=coupled,
+             filename=f"{carrier}.{carrier}{coupled}",
+             how=f"the {carrier}-{coupled} exchange")
 
 
 def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, points: Any,
-              cells: Any, utm_epsg: int | None, frame: Any) -> set[str]:
+              cells: Any, utm_epsg: int | None, frame: Any, active: Any) -> set[str]:
     """Place each stress statement on the cells -> the identifiers it derived (its MAXBOUND).
 
     A statement's row becomes period 1's rows, carried forward by mf6; the bound is the
-    placement's own count."""
+    placement's own count; ``active`` is the carrier's solved cells - the grid is one."""
     derived: set[str] = set()
     for prefix, rows in groups.items():
         row = rows.get("stress_period_data")
@@ -170,9 +215,7 @@ def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, point
             continue
         placed = place_stress(row.value, points=points, cells=cells,
                               utm_epsg=utm_epsg, nlay=nlay, frame=frame,
-                              active=_active(sheet, nlay=nlay, points=points,
-                                             cells=cells, utm_epsg=utm_epsg,
-                                             frame=frame))
+                              active=active)
         rows["stress_period_data"] = replace(row, value={0: placed})
         rows["maxbound"] = Filled(
             slot=sheet.body.MODULE_INPUT[f"{prefix}_MAXBOUND"],
@@ -258,4 +301,7 @@ def _write_package_by_package(sim: Any) -> list[str]:
                 continue
             package.write()
             written.append(Path(package.filename).name)
+    for exchange in getattr(sim, "exchange_files", ()):
+        exchange.write()
+        written.append(Path(exchange.filename).name)
     return sorted(written)

@@ -5,9 +5,9 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Any, Mapping
 
-from ...runtime.module import MOMENT, Output
+from ...runtime.module import MOMENT, Output, SlotRefused
 from ..errors import ModflowError
-from .module import ModflowModule, _start_date_time, periods
+from .module import ModflowModule, _start_date_time, _stress, periods
 from .outputs import PRIMITIVES
 
 __all__ = ["GWF", "MODULE_OUTPUT"]
@@ -32,38 +32,6 @@ _STRESS = {
     "Wells": ("WEL", (("rate", "L3/T"),)),
     "Recharge": ("RCH", (("rate", "L/T"),)),
 }
-
-
-def _stress(name: str, package: str, dimensions: Mapping[str, str]):
-    columns = tuple(dimensions)
-
-    def expand(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-        if not isinstance(value, Mapping):
-            raise ModflowError(
-                f"{name} takes a mapping of geometry, layer and {', '.join(columns)}; "
-                f"got {value!r}.", error_code="MODFLOW_STRESS_UNSTATED")
-        if value.get("geometry") is None:
-            return {}, {}
-        for argument in ("layer", *columns):
-            if value.get(argument) is None:
-                raise ModflowError(
-                    f"{name} states no {argument}; the engine has no value for it, "
-                    "so state it from a measurement or a named source.",
-                    error_code="MODFLOW_STRESS_UNSTATED")
-        layer = value["layer"]
-        if isinstance(layer, bool) or not isinstance(layer, int) or layer < 1:
-            raise ModflowError(
-                f"{name} layer is {layer!r}; it is an integer from 1.",
-                error_code="MODFLOW_STRESS_UNSTATED")
-        return {f"{package}_STRESS_PERIOD_DATA": {
-            "stress": package, "composite": name, "geometry": value["geometry"],
-            "values": {column: value[column] for column in columns},
-            "dimensions": dict(dimensions), "layer": layer}}, {}
-
-    expand.__doc__ = (
-        f"The {package} package's cells a geometry places: {name}(geometry, layer, "
-        f"{', '.join(columns)}); a geometry reading nothing states nothing.")
-    return expand
 
 
 _AQUIFER = ("thickness", "saturated_thickness", "water_table_depth", "conductivity",
@@ -116,6 +84,63 @@ def _aquifer(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
             "IC_STRT": {"cells": "below_top", "of": depth}}, {}
 
 
+# The transport stress a Transport body states, by its package word; each is the leg 7 factory on the GWT wrapper.
+_TRANSPORT_STRESS = {"CNC": "ConstantConcentration", "SRC": "MassSource"}
+
+# The simulation's own clock and grid: one TDIS and one staged DISV describe the whole simulation, and the carrier states them.
+_SIMULATION_OWNED = ("TDIS", "DISV")
+
+
+def _transport(value: Any, *, run: Mapping[str, Any]
+               ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    """The gwt body this run's flow couples: its module word, slots and given inputs.
+
+    ``given`` names the inputs that carry the body; a body whose given inputs all hold
+    nothing states nothing. Each slot is a GWT dictionary identifier - an unknown one
+    refuses by name - and a stress statement is the GWT wrapper's own composite's shape."""
+    from . import wrapper_for
+    from .gwt import GWT
+
+    if not isinstance(value, Mapping):
+        raise SlotRefused(
+            "Transport takes a mapping with 'given' naming the input(s) that carry "
+            "the transport body and 'slots' stating its GWT keywords; got "
+            f"{type(value).__name__}.")
+    given = value.get("given")
+    if isinstance(given, str):
+        given = (given,)
+    given = tuple(given or ())
+    if given and not any((run.get(name) if isinstance(name, str) else name)
+                         is not None for name in given):
+        return ({}, {})
+    stated = value.get("slots")
+    if stated is not None and not isinstance(stated, Mapping):
+        raise SlotRefused(
+            f"Transport slots takes a mapping of GWT identifiers to values; got "
+            f"{type(stated).__name__}.")
+    wrapper = wrapper_for("gwt")
+    slots: dict[str, Any] = {}
+    for name, item in (stated or {}).items():
+        prefix = str(name).split("_", 1)[0]
+        if prefix in _SIMULATION_OWNED:
+            raise SlotRefused(
+                f"{name} states the simulation's own "
+                f"{'clock' if prefix == 'TDIS' else 'grid'}, which the carrier's deck "
+                "owns: one TDIS and the staged DISV describe the simulation, and the "
+                "transport body describes its own packages.")
+        if item is None:
+            continue
+        slots[str(name)] = wrapper.slot(name).check(item)
+    for name, item in list(slots.items()):
+        if not name.endswith("_STRESS_PERIOD_DATA") or not isinstance(item, Mapping) \
+                or "stress" in item:
+            continue
+        composite = _TRANSPORT_STRESS.get(name.split("_", 1)[0])
+        if composite is not None:
+            slots.update(GWT.COMPOSITES[composite].apply(item, run)[0])
+    return ({}, {"gwt": {"module": "gwt", "slots": slots, "given": list(given)}})
+
+
 GWF = ModflowModule("gwf")
 GWF.MODULE_OUTPUT = MODULE_OUTPUT
 # The simulation's own clock on every body: Periods spells the marching, the moment the instant it opens at.
@@ -127,4 +152,5 @@ GWF.composites(
     **{name: _stress(name, package, dict(columns))
        for name, (package, columns) in _STRESS.items()})
 GWF.composites(reads={"Aquifer": _AQUIFER}, Aquifer=_aquifer)
+GWF.composites(Transport=_transport)
 GWF.reads(**PRIMITIVES)

@@ -38,6 +38,10 @@ _NO_HEAD = 1.0e30
 _BUDGET_RECORD = {"SATURATION": ("DATA-SAT", "NPF_SAVE_SATURATION"),
                   "SPECIFIC_DISCHARGE": ("DATA-SPDIS", "NPF_SAVE_SPECIFIC_DISCHARGE")}
 
+# Each variable a model saves to its own binary file: the output control keyword that names the file, and the text the file is written under (None: the head file's own).
+_SAVED = {"HEAD": ("OC_HEAD_FILERECORD", None),
+          "CONCENTRATION": ("OC_CONCENTRATION_FILERECORD", "CONCENTRATION")}
+
 
 def _unsaved(keyword: str, why: str) -> ModflowError:
     return ModflowError(
@@ -61,15 +65,18 @@ class Solved:
     """One solved run's files, each opened where it is read: the head and budget files, the listing.
 
     ``run`` is the handle the solve step returned plus the accepted ``mesh`` and the filled ``sheet`` the run solved.
+    ``filled`` overrides what the sheet states, for a coupled body whose slots its own dictionary filled.
     """
 
-    def __init__(self, run: Mapping[str, Any], body: Any) -> None:
+    def __init__(self, run: Mapping[str, Any], body: Any,
+                 filled: Mapping[str, Any] | None = None) -> None:
         self.run = run
         self.body = body
         self.run_id = str(run["run_id"])
         self.utm_epsg = int(run["utm_epsg"])
         self.mesh = run["mesh"]
         self.sheet = run["sheet"]
+        self._filled = filled
 
     @cached_property
     def nodes(self) -> tuple[Any, Any, Any, Any]:
@@ -97,7 +104,11 @@ class Solved:
         return disv_dimensions(self.sheet, self.nodes[1])["nlay"]
 
     def stated(self, identifier: str) -> Any:
-        row = self.sheet.filled.get(identifier)
+        """What this read's own body states, else what the run's carrier deck states: the clock and units the
+        simulation owns are one for both models, while a body's own keyword - its budget file - is its own."""
+        row = None if self._filled is None else self._filled.get(identifier)
+        if row is None:
+            row = self.sheet.filled.get(identifier)
         return None if row is None else row.value
 
     def seconds(self, times: Any) -> Any:
@@ -150,8 +161,8 @@ class Solved:
         key, row = self.output(token)
         layer = self.layer(plane)
         ncpl = len(self.nodes[1])
-        if key == "HEAD":
-            times, values = self._heads(layer)
+        if key in _SAVED:
+            times, values = self._saved_cells(key, layer)
         else:
             times, values = self._budget_cells(key, layer)
         values = np.where(np.abs(values) >= _NO_HEAD, np.nan, values)
@@ -165,9 +176,11 @@ class Solved:
 
     def unsaved(self, key: str) -> ModflowError | None:
         """Why the run's output control saved nothing of the output ``key``, or None where it saved it."""
-        if key == "HEAD":
-            if not filerecord(self.stated("OC_HEAD_FILERECORD")):
-                return _unsaved("OC_HEAD_FILERECORD", "the run saved no head file to read")
+        if key in _SAVED:
+            identifier = _SAVED[key][0]
+            if not filerecord(self.stated(identifier)):
+                return _unsaved(
+                    identifier, f"the run saved no {key.lower()} file to read")
             return None
         text, keyword = _BUDGET_RECORD[key]
         if self.stated(keyword) is not True:
@@ -176,16 +189,18 @@ class Solved:
             return _unsaved("OC_BUDGET_FILERECORD", "the run saved no budget file to read")
         return None
 
-    def _heads(self, layer: int) -> tuple[Any, Any]:
+    def _saved_cells(self, key: str, layer: int) -> tuple[Any, Any]:
         import flopy
         import numpy as np
 
-        refused = self.unsaved("HEAD")
+        identifier, text = _SAVED[key]
+        refused = self.unsaved(key)
         if refused is not None:
             raise refused
-        path = self.local(filerecord(self.stated("OC_HEAD_FILERECORD")))
+        path = self.local(filerecord(self.stated(identifier)))
         try:
-            heads = flopy.utils.HeadFile(path)
+            heads = (flopy.utils.HeadFile(path) if text is None
+                     else flopy.utils.HeadFile(path, text=text))
             try:
                 times = [float(t) for t in heads.get_times()]
                 values = [np.asarray(heads.get_data(totim=t))[layer - 1].ravel() for t in times]
