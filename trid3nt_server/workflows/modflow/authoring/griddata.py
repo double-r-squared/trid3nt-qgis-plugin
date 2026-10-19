@@ -66,6 +66,8 @@ def place(value: Any, *, slot: Slot, nlay: int, run: Mapping[str, Any],
     if isinstance(value, Mapping):
         return _expression(value, slot=slot, nlay=nlay, points=points, cells=cells,
                            utm_epsg=utm_epsg, frame=frame, top=top)
+    if isinstance(value, str) and _number(run.get(value)):
+        return float(run[value])
     if isinstance(value, str):
         with tempfile.TemporaryDirectory(prefix="trid3nt_griddata_") as work:
             sampled = _sample(value, slot=slot, run=run, scratch=work,
@@ -94,10 +96,14 @@ def _sequence(items: list[Any], *, slot: Slot, nlay: int,
         if not slot.layered or len(items) != nlay:
             raise _shape_refusal(slot, nlay, cells)
         with tempfile.TemporaryDirectory(prefix="trid3nt_griddata_") as work:
-            return [_sample(name, slot=slot, run=run, scratch=work,
-                            points=points, cells=cells, utm_epsg=utm_epsg,
-                            frame=frame)
-                    for name in items]
+            layers = [_sample(name, slot=slot, run=run, scratch=work,
+                              points=points, cells=cells, utm_epsg=utm_epsg,
+                              frame=frame)
+                      for name in items]
+        if all(_number(layer) for layer in layers):
+            return layers
+        return [[layer] * len(cells) if _number(layer) else layer
+                for layer in layers]
     if all(isinstance(item, (list, tuple)) for item in items):
         if not slot.layered or len(items) != nlay:
             raise _shape_refusal(slot, nlay, cells)
@@ -118,10 +124,16 @@ def _sequence(items: list[Any], *, slot: Slot, nlay: int,
     return items
 
 
+def _number(held: Any) -> bool:
+    return isinstance(held, (int, float)) and not isinstance(held, bool)
+
+
 def _sample(name: str, *, slot: Slot, run: Mapping[str, Any], scratch: str,
             points: Any, cells: Any, utm_epsg: int | None,
-            frame: Any) -> list[float]:
-    """One input's raster read at every cell centre -> the cell values."""
+            frame: Any) -> Any:
+    """One input's raster read at every cell centre -> the cell values; an input holding a number is that number, in the model's own units."""
+    if _number(run.get(name)):
+        return float(run[name])
     if name not in run:
         raise ModflowError(
             f"{slot.keyword} names {name!r}, which no input of this run is "

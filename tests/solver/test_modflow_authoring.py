@@ -90,6 +90,16 @@ def test_a_constant_passes_through():
     assert _place(5.5) == 5.5
 
 
+def test_an_input_holding_a_number_is_that_constant_and_never_sampled():
+    from trid3nt_server.workflows.modflow.modules.gwt import GWT
+    from trid3nt_server.workflows.modflow.authoring.griddata import place
+
+    assert place("porosity", slot=GWT.slot("MST_POROSITY"), nlay=2,
+                 run={"porosity": 0.39}, points=None, cells=None,
+                 utm_epsg=None, frame=("meters", "days")) == 0.39
+    assert _place(["k_top", "k_base"], run={"k_top": 10, "k_base": 5.0}) == [10.0, 5.0]
+
+
 def test_one_number_per_layer_fits_the_dfn_shape():
     assert _place([10.0, 5.0]) == [10.0, 5.0]
 
