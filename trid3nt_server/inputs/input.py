@@ -62,7 +62,8 @@ class Input:
     kind: str = ""
     #: How far the domain reaches, in km; the row's ``ask`` block maps it to the source's own param.
     span_km: float | None = None
-    #: What the run tells this row's ingestion: ``near`` names the run input holding the point a nearest-site query ranks against.
+    #: What the run tells this row's ingestion: ``near`` names the run input holding the point a nearest-site query ranks against,
+    #: ``when`` the one holding the instant a record is read at; ``every`` takes each site.
     coercion: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
 
     def __post_init__(self) -> None:
@@ -238,20 +239,32 @@ class Input:
 
     def need(self, data_class: str = "", *, at: Any = None, of: Any = "",
              kind: str = "", span_km: float | None = None,
-             geometry: str | None = None) -> "Input":
+             geometry: str | None = None, when: str = "",
+             every: bool = False) -> "Input":
         """The class this row needs, filled by the match from whatever measures it here.
         ``at`` names the run input holding the asked point; ``of`` the variable; ``kind`` the domain's own kind
         (wins over the seed's); ``span_km`` the reach. A geometry with no class is the
-        user-prompt fetch: the shape the person draws or hands in, absorbing what they supply."""
+        user-prompt fetch: the shape the person draws or hands in, absorbing what they supply.
+        On a record, ``when`` names the run input holding the instant it is read at, and ``every`` takes each site, not the nearest."""
         if self.producer is not None and geometry is not None:
             raise DeclarationError(
                 f"Input {self.name!r} declares a producer AND need(geometry=): a "
                 "row is satisfied one way.")
+        if (when or every) and not getattr(self.slot, "record", False):
+            raise DeclarationError(
+                f"Input {self.name!r} states when= or every= and is read off no "
+                "record: an instant and a set of sites are what a measured "
+                "record is read at, and this row reads none.")
+        told: dict[str, Any] = {"near": at}
+        if when:
+            told["when"] = str(when)
+        if every:
+            told["every"] = True
         return replace(self, data_class=str(data_class), observes=str(of),
                        kind=str(kind),
                        geometry=geometry and self._shape(geometry),
                        span_km=None if span_km is None else float(span_km),
-                       coercion=MappingProxyType({"near": at}))
+                       coercion=MappingProxyType(told))
 
     def _shape(self, geometry: str) -> str:
         if geometry not in GEOMETRY_CLASS:

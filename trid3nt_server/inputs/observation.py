@@ -29,7 +29,7 @@ from .geometry import read_geometry_doc, source_uri
 from .vertical_datum import DatumError, datum_of, onto_frame
 
 __all__ = ["Observation", "ObservationError", "convert", "note",
-           "observation"]
+           "observation", "sited"]
 
 logger = logging.getLogger("trid3nt_server.inputs.observation")
 
@@ -79,6 +79,9 @@ class Observation:
     #: and datum - the same conversion and the same shift the value above rode.
     #: ``None`` where the source reported one moment and nothing more.
     series: Series | None = None
+    #: The instant the reading was asked AT, as UTC ISO: the window it was admitted
+    #: under closes there. ``None`` where nothing was asked, or the value was stated.
+    asked: str | None = None
 
     @property
     def forcing(self) -> Series | float:
@@ -236,8 +239,9 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
                 above_field: str = "", at: Any = None, window_s: Any = None,
                 to_datum: Any = None, offset: Any = None, caption: str = "",
                 quantity: str = "state", label: str = "observation",
-                code: str = _CODE) -> Observation | None:
-    """THE ingestion: a fetched point layer, or a STATED value -> one reading.
+                code: str = _CODE, every: bool = False
+                ) -> Observation | tuple[Observation, ...] | None:
+    """THE ingestion: a fetched point layer, or a STATED value -> one reading, or with ``every`` each site's.
 
     A number stands over any record and is already on the slot's datum; a reading on
     another zero reaches ``to_datum`` only through ``offset``. ``near`` ranks several
@@ -276,8 +280,33 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
             f"nothing in {label} reports {measures}, so the value this run "
             "opens on is not measured anywhere near it. State the value on the "
             "call, or name a source that reaches this place.")
-    distance_km, feature, (sampled, raw, _spacing) = min(
-        candidates, key=lambda row: row[0])
+    candidates.sort(key=lambda row: row[0])
+    found = tuple(_found(source, feature, sampled, raw, distance_km, field=field,
+                         units_field=units_field, to_units=to_units,
+                         series_field=series_field, record_units=record_units,
+                         column_units=column_units, above_field=above_field,
+                         at=at, window_s=window_s, to_datum=to_datum,
+                         offset=offset, quantity=quantity, label=label,
+                         measures=measures)
+                  for distance_km, feature, (sampled, raw, _spacing)
+                  in (candidates if every else candidates[:1]))
+    if every:
+        from .run_notes import journal_note
+
+        journal_note(f"{len(found)} sites of {label} report {measures} within "
+                     f"{_WINDOW_DAYS:g} days of {at}, each at its own sample; a "
+                     "site the mesh does not hold is left out and said.")
+        return found
+    _journal(found[0], opens=opens, stated=False)
+    return found[0]
+
+
+def _found(source: Any, feature: Mapping[str, Any], sampled: str | None, raw: float,
+           distance_km: float, *, field: str, units_field: str, to_units: Any,
+           series_field: str, record_units: Any, column_units: Any,
+           above_field: str, at: Any, window_s: Any, to_datum: Any, offset: Any,
+           quantity: str, label: str, measures: str) -> Observation:
+    """One site's reading on the slot's unit and datum, with its window where it reported one."""
     props = feature.get("properties") or {}
     columns = dict(column_units or {})
     units = props.get(units_field) or columns.get(field) or record_units
@@ -287,7 +316,8 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
     datum, shift, datum_note = _onto_datum(source, props, to_datum, offset, label)
     reported = props.get("distance_km")
     lon, lat = _site(feature)
-    found = Observation(
+    asked = _moment(at)
+    return Observation(
         value=float(value) + shift,
         lon=lon, lat=lat, quantity=_text(props, "quantity"),
         units=str(to_units) if to_units is not None else (
@@ -298,12 +328,18 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
         distance_km=float(reported) if reported is not None else (
             distance_km if distance_km != float("inf") else None),
         datum=datum, datum_note=datum_note,
+        asked=None if asked is None else asked.isoformat(),
         series=_series(props, series_field, columns.get(series_field) or units,
                        to_units, shift + convert(zero, units, to_units)
                        if to_units is not None else shift + zero,
                        label, at, window_s, quantity))
-    _journal(found, opens=opens, stated=False)
-    return found
+
+
+def sited(at: Any) -> bool:
+    """Whether a read is placed at a data input: one reading's site, or each site of a set."""
+    return isinstance(at, Observation) or (
+        isinstance(at, tuple) and bool(at)
+        and all(isinstance(one, Observation) for one in at))
 
 
 def _series(props: Mapping[str, Any], series_field: str, units: Any,

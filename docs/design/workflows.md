@@ -132,6 +132,19 @@ window and never the boundary's own; when the only buoy the row matches is the o
 sea state came from, the observation is taken out of the run's reads before the sheet
 fills or any output answers at it, and the journal says there is no independent check.
 
+AN OBSERVE ROW IS READ AT AN INSTANT AND MAY TAKE A SET. `need(..., when="snapshot")`
+names the run input holding the instant the record is asked and read at, apart from the
+moment the run opens at; unstated, the row reads at the run's moment as before, and a
+stated instant spans no forcing window. An unparseable instant refuses by its input's
+name. The reading keeps the instant it was asked at, and a check reads the saved time
+the reading's own window holds (thirty days back, a day ahead), nearest its sample; no
+saved time in that window refuses naming the nearest - never the nearest silently.
+`need(..., every=True)` takes every site the window holds rather than the nearest, and
+a read placed at the set is each site through the engine's own one-site read: a site
+the mesh does not hold is left out and journalled, never moved, and the checks publish
+as ONE comparison chart (measured across, modelled up, the line of agreement) through
+the chart format. A read that checks nothing at a site has no comparison and refuses.
+
 Values lead the wire and rows follow, each in body order, and the generated
 docstring documents both in ONE section: required values, defaulted ones, then
 the stated-only ones and the rows.

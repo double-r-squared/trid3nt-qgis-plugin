@@ -147,8 +147,12 @@ the accepted mesh and the read values in, a UGRID NetCDF out with
 cell-centred, time-stepped dataset groups. DIS gets no raster path of its own -
 a structured grid is a quad mesh and rides the same transform, so there is one
 result path and a rotated or variably spaced grid needs no resampling. A series
-at a measured well is checked against the reading in its own quantity, in the
-model's length unit, at the saved time nearest the moment it was sampled.
+at a measured well is checked against the reading in its own quantity - a head in
+the model's length unit, a concentration in the unit the run states - at the saved
+time the reading's window holds, nearest the moment it was sampled. mf6 carries no
+concentration unit, so a template whose OBSERVE row observes `CONCENTRATION` seats a
+required `concentration_units`; `published_units` reports it, the measured reading
+converts into it at ingestion or refuses, and the concentration layer carries it.
 
 ## The worker
 

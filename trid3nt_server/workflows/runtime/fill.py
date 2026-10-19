@@ -330,11 +330,11 @@ async def _need(env: _Env, decl: Input, data_class: str,
     window is the run's and the frame is the bed's."""
     seed = await _seed(env, decl)
     lon, lat = _place(seed)
-    opens = env.run.get(env.moment)
+    opens = _opens(env, decl)
     return Need(slot=label, data_class=data_class, lon=lon, lat=lat,
                 geometry=decl.geometry or getattr(decl.slot, "reads", ""),
                 opens=str(opens) if opens else None,
-                until=_closes(opens, env.window_s), frame=_frame(env),
+                until=_closes(opens, _window(env, decl)), frame=_frame(env),
                 mesh_m=_mesh_m(env), pick=_pick(env, decl, data_class),
                 of=_asked_of(decl, seed), water=_water())
 
@@ -443,12 +443,12 @@ async def _ask_for(env: _Env, choice: SourceChoice,
     dom = current_domain()
     seed = await _seed(env, decl)
     lon, lat = _place(seed)
-    opens = env.run.get(env.moment)
+    opens = _opens(env, decl)
     return ask_for(choice, base_ask(
         choice, decl.name.replace("_", " "),
         _around(dom.bbox, _mesh_m(env)) if dom is not None and dom.bbox else None,
         lon, lat, str(opens) if opens else None,
-        _closes(opens, env.window_s)), lon, lat,
+        _closes(opens, _window(env, decl))), lon, lat,
         {"span_km": decl.span_km, "of": _asked_of(decl, seed) or None,
          "seed_point": None if lon is None or lat is None else [lon, lat]})
 
@@ -578,7 +578,7 @@ def _what_the_record_reports(env: _Env, decl: Input,
     rows; a record with no unit column is read in its measured unit. A record stopping early refuses."""
     if not decl.slot.record:
         return {}
-    told: dict[str, Any] = {"window_s": env.window_s}
+    told: dict[str, Any] = {"window_s": _window(env, decl)}
     if row is not None:
         # A SLOT THAT STATED A NEED names no column: which column carries the
         # reading, the window and the zero is the source's own statement.
@@ -591,8 +591,32 @@ def _what_the_record_reports(env: _Env, decl: Input,
 
     told["quantity"] = (quantity_class(row.data_class) if row is not None
                         else RATE if decl.slot is DISCHARGE else STATE)
-    told["at"] = env.run.get(env.moment)
+    told["at"] = _opens(env, decl)
     return told
+
+
+def _opens(env: _Env, decl: Input) -> Any:
+    """The instant a row is read at: the one its ``when`` names, where the run states it, else the run's moment.
+    A stated instant that does not parse refuses by its input's name rather than reading the latest."""
+    from trid3nt_server.inputs.instant import instant as stated_instant
+
+    named = decl.coercion.get("when")
+    if not named:
+        return env.run.get(env.moment)
+    if named not in env.run:
+        raise StepFailedError(
+            f"Input {decl.name!r} is read when {named!r} says, and no input of "
+            f"this run is called that: its inputs are {sorted(env.run)}.",
+            error_code="INPUT_UNNAMED")
+    held = stated_instant(env.run[named], label=named,
+                          code="OBSERVATION_INSTANT_INVALID")
+    return held if held is not None else env.run.get(env.moment)
+
+
+def _window(env: _Env, decl: Input) -> float | None:
+    """How long a record must span from the instant it is read at: the run's window, or none at a stated instant, which is read and not forced over."""
+    named = decl.coercion.get("when")
+    return None if named and env.run.get(named) else env.window_s
 
 
 async def _on_the_run_s_frame(env: _Env, decl: Input,
@@ -944,10 +968,11 @@ def production(state: Fill) -> _Env:
             inputs=state.inputs,
             input_mode=state.carried.get("input_mode"), workflow=wf.name,
             window_s=wf.run_window_s(state.keywords), moment=wf.moment,
-            slot_units=wf.slot_units(), captions=wf.captions,
-            published_units=wf.published_units())
+            slot_units=wf.slot_units(), captions=wf.captions)
     state.env.run.update({row.name: getattr(state.inputs.get(row.name), "value", None)
                           for row in wf.inputs if not row.is_row})
+    # A unit the run states is published under it, so the table is read off the values just seated.
+    state.env.published_units = wf.published_units(state.env.run)
     return state.env
 
 

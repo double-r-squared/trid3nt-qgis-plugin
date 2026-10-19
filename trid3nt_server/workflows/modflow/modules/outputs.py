@@ -153,7 +153,10 @@ class Solved:
         return key, row
 
     def units(self, key: str, row: Any) -> str:
-        return str(self.stated("DISV_LENGTH_UNITS") or "") if key == "HEAD" else row.unit
+        """A head is in the model's length unit; any other output in the unit the run stated it in, else its row's."""
+        if key == "HEAD":
+            return str(self.stated("DISV_LENGTH_UNITS") or "")
+        return str((self.run.get("published_units") or {}).get(key) or row.unit)
 
     def frames(self, token: Any, plane: int | None) -> tuple[Any, str, Any, Any, int]:
         """``(row, units, model times, values(nsteps, ncells), layer)``; a dry or inactive cell is NaN."""
@@ -373,8 +376,10 @@ def read_series(primitive: Primitive, solved: Solved) -> Series:
         raise OutputEmpty(
             f"the cell holding the point is dry or inactive in layer {layer} at every saved time.")
     centre = solved.lonlat[list(solved.nodes[1][cell])].mean(axis=0)
-    measures = (_checked(primitive.at, solved, times=times, column=column, cell=cell)
-                if isinstance(primitive.at, Observation) and str(primitive.variable).upper() == "HEAD"
+    key = str(primitive.variable).strip().upper()
+    measures = (_checked(primitive.at, solved, key=key, units=units, times=times,
+                         column=column, cell=cell)
+                if isinstance(primitive.at, Observation) and key in _CHECKED
                 else _envelope(times, column[:, None]))
     return Series(name=row.name, units=units, times=times, values=column,
                   at=f"at {point.name or 'the point'}", lon=float(centre[0]),
@@ -385,16 +390,39 @@ def _uncomparable(why: str) -> ModflowError:
     return ModflowError(why, error_code="MODFLOW_OBSERVATION_UNCOMPARABLE")
 
 
-def _checked(observed: Observation, solved: Solved, *, times: Any, column: Any,
-             cell: int) -> dict[str, Any]:
-    """A measured water level against the solved one at its well's cell, in the SAME quantity and the model's length unit.
+#: The outputs a measured reading at a site is checked against.
+_CHECKED = ("HEAD", "CONCENTRATION")
 
-    A depth below the land surface is checked against the cell's top less its head, an elevation against the head
-    on the run's own vertical frame; a reading of any other quantity, unit or frame refuses by name."""
+
+def _checked(observed: Observation, solved: Solved, *, key: str, units: str,
+             times: Any, column: Any, cell: int) -> dict[str, Any]:
+    """A measured reading against the solved value at its site's cell, in the SAME quantity and the run's own unit.
+
+    A water level is checked as a depth below the land surface or an elevation on the run's frame, a concentration
+    in the unit the run states; the saved time compared is the one the reading's window holds, and any other
+    quantity, unit or frame refuses by name."""
     import numpy as np
 
+    seen, units = (_level_seen(observed, solved) if key == "HEAD"
+                   else (_concentration_seen(observed, units), units))
+    step = _sampled_step(observed, solved, times)
+    value = float(column[step])
+    if not np.isfinite(value):
+        raise _uncomparable(
+            f"the site's cell is dry or inactive at t = {float(times[step]):g} s, "
+            f"so it holds no {key.lower()} to check the reading against.")
+    simulated = _level_simulated(observed, solved, value, cell) if key == "HEAD" else value
+    compared = ({} if len(times) == 1 else {"compared_at": _saved_at(solved, times[step])})
+    return {"site": observed.site_id or observed.site_name or "an unnamed site",
+            "sampled": observed.sampled or "an undated moment",
+            "quantity": observed.quantity or key.lower(), "units": units,
+            "observed": round(seen, 3), "simulated": round(simulated, 3),
+            "simulated_minus_observed": round(simulated - seen, 3), **compared}
+
+
+def _level_seen(observed: Observation, solved: Solved) -> tuple[float, str]:
+    """A measured water level in the model's length unit, and that unit."""
     from trid3nt_server.inputs.temporal import TemporalUnitsError, convert_units
-    from trid3nt_server.inputs.vertical_datum import names_frame
 
     length = str(solved.stated("DISV_LENGTH_UNITS") or "unknown").strip().lower()
     if length not in METRES:
@@ -403,23 +431,23 @@ def _checked(observed: Observation, solved: Solved, *, times: Any, column: Any,
             f"measured water level against; state it as {', '.join(METRES)}.",
             error_code="MODFLOW_UNITS_UNSTATED")
     try:
-        seen = convert_units(observed.value, str(observed.units or ""), "m") / METRES[length]
+        return convert_units(observed.value, str(observed.units or ""), "m") / METRES[length], length
     except TemporalUnitsError as refused:
         raise _uncomparable(
             f"the observed water level is in {observed.units!r}, which is no "
             f"length the head can be read in: {refused}") from refused
-    step = _sampled_step(observed, solved, times)
-    head = float(column[step])
-    if not np.isfinite(head):
-        raise _uncomparable(
-            f"the well's cell is dry or inactive at t = {float(times[step]):g} s, "
-            "so it holds no water table to check the reading against.")
+
+
+def _level_simulated(observed: Observation, solved: Solved, head: float, cell: int) -> float:
+    """The solved head as the quantity the well reports: a depth below the cell's top, or the head on the run's frame."""
+    from trid3nt_server.inputs.vertical_datum import names_frame
+
     if observed.quantity == "water_table_depth":
         points, cells, bed, _ll = solved.nodes
         top = top_of(solved.sheet, nlay=solved.nlay, art=mesh_artifact(solved.mesh),
                      bed=bed, points=points, cells=cells)
-        simulated = (float(top) if isinstance(top, (int, float)) else float(top[cell])) - head
-    elif observed.quantity == "groundwater_head":
+        return (float(top) if isinstance(top, (int, float)) else float(top[cell])) - head
+    if observed.quantity == "groundwater_head":
         frame = str(solved.run.get("vertical_frame") or "")
         if not (observed.datum and frame and names_frame(observed.datum, frame)):
             raise _uncomparable(
@@ -427,23 +455,46 @@ def _checked(observed: Observation, solved: Solved, *, times: Any, column: Any,
                 f"and this run's heads are on {frame or 'no stated frame'}; a shift "
                 "between the two frames is measured, never assumed, so state a "
                 "reading on the run's frame or a depth below the land surface.")
-        simulated = head
-    else:
+        return head
+    raise _uncomparable(
+        f"the well reports {observed.quantity or 'a value that states no quantity'}, "
+        "and a head is checked only against a water_table_depth below the "
+        "land surface or a groundwater_head elevation.")
+
+
+def _concentration_seen(observed: Observation, units: str) -> float:
+    """A measured concentration in the unit the run states its own in; a run stating none has nothing to compare in."""
+    from trid3nt_server.inputs.temporal import TemporalUnitsError, convert_units
+
+    if not units:
+        raise ModflowError(
+            "this run states no concentration_units, so a measured concentration "
+            "has no unit to be compared in; state the unit the run's "
+            "concentrations are counted in.", error_code="MODFLOW_UNITS_UNSTATED")
+    try:
+        return convert_units(observed.value, str(observed.units or ""), units)
+    except TemporalUnitsError as refused:
         raise _uncomparable(
-            f"the well reports {observed.quantity or 'a value that states no quantity'}, "
-            "and a head is checked only against a water_table_depth below the "
-            "land surface or a groundwater_head elevation.")
-    return {"site": observed.site_id or observed.site_name or "an unnamed site",
-            "sampled": observed.sampled or "an undated moment",
-            "quantity": observed.quantity, "units": length,
-            "observed": round(seen, 3), "simulated": round(simulated, 3),
-            "simulated_minus_observed": round(simulated - seen, 3)}
+            f"the measured concentration is in {observed.units!r}, which does not "
+            f"convert to the run's {units!r}: {refused}") from refused
+
+
+def _saved_at(solved: Solved, t: float) -> str:
+    """A saved time as the UTC instant it stands for on the run's own clock."""
+    from datetime import timedelta
+
+    from trid3nt_server.tools.search.match import instant
+
+    return (instant(solved.run.get("reference_time"))
+            + timedelta(seconds=float(t))).isoformat()
 
 
 def _sampled_step(observed: Observation, solved: Solved, times: Any) -> int:
-    """The saved time a reading is checked at: the one a steady run saves, else the one nearest the instant it was sampled."""
-    import numpy as np
+    """The saved time a reading is checked at: the one a steady run saves, else of the saved times the window it was
+    asked at holds, the one nearest its sample. No saved time in that window refuses, naming the nearest."""
+    from datetime import timedelta
 
+    from trid3nt_server.inputs.observation import _WINDOW_DAYS, _in_window
     from trid3nt_server.tools.search.match import instant
 
     if len(times) == 1:
@@ -454,7 +505,17 @@ def _sampled_step(observed: Observation, solved: Solved, times: Any) -> int:
             f"the run saved {len(times)} times and the reading "
             + ("states no instant" if sampled is None else "has no run start to count it from")
             + ", so no saved time is the one it was measured at.")
-    return int(np.argmin(np.abs(np.asarray(times) - (sampled - opened).total_seconds())))
+    asked = instant(observed.asked) or sampled
+    saved = [opened + timedelta(seconds=float(t)) for t in times]
+    held = [i for i, at in enumerate(saved) if _in_window(at.isoformat(), asked.isoformat())]
+    if not held:
+        nearest = min(saved, key=lambda at: abs(at - asked))
+        raise _uncomparable(
+            f"the reading is compared at {asked.isoformat()}, and the run saved no "
+            f"time within {_WINDOW_DAYS:g} days before it or a day after: the nearest "
+            f"saved time is {nearest.isoformat()}. Save the output at that instant, "
+            "or compare at an instant the run saved.")
+    return min(held, key=lambda i: abs(saved[i] - sampled))
 
 
 def read_mass_balance(primitive: Primitive, solved: Solved) -> Series:

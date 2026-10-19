@@ -11,6 +11,7 @@ import inspect
 import logging
 import time
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Callable, Collection, Mapping, Sequence
 
 from trid3nt_contracts.common import SyntheticInput
@@ -171,8 +172,9 @@ class Workflow:
         Fixed by the engine's transform for the keyword the type fills; a runtime writing no keywords states none."""
         return {}
 
-    def published_units(self) -> Mapping[str, str]:
-        """The UNIT each published variable is written in, by the name the result carries it under.
+    def published_units(self, stated: Mapping[str, Any] = MappingProxyType({})
+                        ) -> Mapping[str, str]:
+        """The UNIT each published variable is written in, by the name the result carries it under, off what the run ``stated``.
         A measurement and its variable compare in one unit only; a runtime publishing nothing named states none."""
         return {}
 

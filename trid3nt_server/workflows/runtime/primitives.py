@@ -20,6 +20,7 @@ from trid3nt_server.workflows.runtime import DeclarativeError
 logger = logging.getLogger("trid3nt_server.workflows.runtime.primitives")
 
 __all__ = [
+    "Comparison",
     "Field",
     "Frames",
     "Line",
@@ -89,6 +90,18 @@ class Series(Read):
     lon: float | None = None
     lat: float | None = None
     lines: tuple[Line, ...] = ()
+
+
+@dataclass(frozen=True, kw_only=True)
+class Comparison(Read):
+    """One variable solved against measured at each site of a set: a row per site the result holds.
+
+    Each row is the site's own check - its ``site``, ``observed`` and ``simulated`` in ``units``, and when it was sampled.
+    """
+
+    name: str
+    units: str
+    sites: tuple[Mapping[str, Any], ...]
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -396,12 +409,14 @@ def _station(read: Series, *, caption: str, reference_time: str | None
                   units=read.units)
 
 
-def _chart(read: Series | Profile | Spectrum, *, caption: str,
+def _chart(read: Series | Profile | Spectrum | Comparison, *, caption: str,
            where: str) -> dict[str, Any]:
-    """A series, profile or spectrum -> the dock's chart payload, titled by the caption; each reference line is its own named series."""
+    """A series, profile, spectrum or comparison -> the dock's chart payload, titled by the caption; each reference line is its own named series."""
     from trid3nt_server.render.charts import build_chart_payload
 
     title = f"{caption[:1].upper()}{caption[1:]}"
+    if isinstance(read, Comparison):
+        return _comparison_chart(read, title=title, caption=caption, where=where)
     if isinstance(read, Profile):
         x, at = [float(d) for d in read.distance_m], read.along
         xfield, axis = "x_m", f"{at[:1].upper()}{at[1:]} (m)"
@@ -447,6 +462,35 @@ def _chart(read: Series | Profile | Spectrum, *, caption: str,
     )
 
 
+def _comparison_chart(read: Comparison, *, title: str, caption: str,
+                      where: str) -> dict[str, Any]:
+    """Measured across, solved up, a point per site, and the line where the two agree."""
+    from trid3nt_server.render.charts import build_chart_payload
+
+    rows = [{"observed": float(row["observed"]), "simulated": float(row["simulated"]),
+             "site": str(row["site"]), "sampled": str(row["sampled"])}
+            for row in read.sites]
+    ends = [min(min(r["observed"], r["simulated"]) for r in rows),
+            max(max(r["observed"], r["simulated"]) for r in rows)]
+    encoding = {"x": {"field": "observed", "type": "quantitative",
+                      "title": f"Measured ({read.units})"},
+                "y": {"field": "simulated", "type": "quantitative",
+                      "title": f"Modelled ({read.units})"}}
+    return build_chart_payload(
+        vega_lite_spec={"layer": [
+            {"mark": {"type": "point"}, "data": {"values": rows}, "encoding": encoding},
+            {"mark": {"type": "line"},
+             "data": {"values": [{"observed": e, "simulated": e} for e in ends]},
+             "encoding": encoding}]},
+        title=f"{title}, measured and modelled at {len(rows)} sites - {where}",
+        caption=(f"The {caption} the run solved against what {len(rows)} sites "
+                 "measured, each at the saved time its own sample speaks for; the "
+                 "line is where the two agree"
+                 + (f", and {read.measures['left_out']} sites the mesh does not "
+                    "hold are left out" if read.measures.get("left_out") else "")
+                 + "."))
+
+
 async def publish_reads(*, engine: str, run: Mapping[str, Any],
                         outputs: Sequence[Primitive], captions: Mapping[str, str],
                         params: Mapping[str, Any],
@@ -476,13 +520,16 @@ async def publish_reads(*, engine: str, run: Mapping[str, Any],
     why: dict[Primitive, str] = {}
 
     def _read(key: Primitive) -> Any:
+        from trid3nt_server.inputs.observation import Observation, sited
+
         read = _solved(key.module or str(run["module"]))
         try:
+            if sited(key.at) and not isinstance(key.at, Observation):
+                return _compared(key, read)
             return read.body.READS[key.kind](key, read)
         except OutputEmpty as exc:
-            from trid3nt_server.inputs.observation import Observation
             from trid3nt_server.inputs.run_notes import journal_note
-            if isinstance(key.at, Observation):
+            if sited(key.at):
                 # A read at a data input's site the result holds nothing for composes
                 # nothing: the miss is said on the journal in the engine's own words,
                 # wherever the row was heading, and the run carries on without it.
@@ -554,6 +601,34 @@ async def publish_reads(*, engine: str, run: Mapping[str, Any],
     logger.info("%s outputs published run_id=%s layers=%d charts=%d", engine,
                 run["run_id"], len(published.layers), len(published.charts))
     return await asyncio.to_thread(record, _solved(str(run["module"])), name)
+
+
+def _compared(key: Primitive, solved: Any) -> Comparison:
+    """A read at every site of a set, each through the engine's own read at one site: a site the result holds
+    nothing for is left out and said, never moved. A read that checks nothing at a site has no comparison."""
+    from trid3nt_server.inputs.run_notes import journal_note
+
+    rows: list[Mapping[str, Any]] = []
+    one = None
+    for site in key.at:
+        try:
+            one = solved.body.READS[key.kind](replace(key, at=site), solved)
+        except OutputEmpty as exc:
+            journal_note(str(exc))
+            continue
+        if "simulated" not in one.measures:
+            raise DeclarativeError(
+                f"{key.kind}({key.variable}) at a site checks nothing against the "
+                "reading there, so a set of sites has no comparison to publish.",
+                error_code="OBSERVATION_UNCOMPARED")
+        rows.append(dict(one.measures))
+    if not rows:
+        raise OutputEmpty(f"not one of the {len(key.at)} sites is inside the mesh, "
+                          "so there is nothing to compare.")
+    gaps = [row["simulated_minus_observed"] for row in rows]
+    return Comparison(name=one.name, units=str(rows[0]["units"]), sites=tuple(rows),
+                      measures={"sites": len(rows), "left_out": len(key.at) - len(rows),
+                                "mean_simulated_minus_observed": round(sum(gaps) / len(gaps), 3)})
 
 
 def unanchored(primitive: Primitive) -> Primitive:

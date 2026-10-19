@@ -324,7 +324,7 @@ def publish(monkeypatch, tmp_path, fake_s3):
 
     monkeypatch.setattr("trid3nt_server.workflows.runtime.primitives.publish", _publish)
 
-    def run(**over):
+    def run(outputs=(), anchors=(), captions=None, **over):
         display = _fixture_display(tmp_path / "mesh.2dm")
         art = MeshArtifact(
             mesh_id="F01", name="strip", mode="om2d", display_uri=str(display),
@@ -333,13 +333,13 @@ def publish(monkeypatch, tmp_path, fake_s3):
         handle = {"run_id": "R1", "utm_epsg": 32617, "module": "gwf",
                   "name": "strip", "reference_time": "2024-06-01T00:00:00Z",
                   "vertical_frame": "NAVD88",
-                  "mesh": {"artifact": art, "display_uri": str(display)}}
+                  "mesh": {"artifact": art, "display_uri": str(display)}, **over}
         token = bind_notes()
         try:
             from trid3nt_server.workflows.modflow import workflow as door
             record = asyncio.run(door.publish_outputs(
-                run=handle, sheet=_fixture_sheet(), outputs=[], captions={},
-                params={}))
+                run=handle, sheet=_fixture_sheet(), outputs=list(outputs),
+                captions=dict(captions or {}), params={}, anchors=list(anchors)))
         finally:
             notes = drain_notes(token)
         return record, list(handed), notes
@@ -411,3 +411,101 @@ def test_the_fixture_s_concentration_read_directly_is_its_saved_frames(
     assert read.group == "concentration_layer_1"
     assert read.values.shape == (1, 3)
     assert read.values[0].tolist() == [_C0, 0.0, 0.0]
+
+
+# ---- a measured concentration against the fixture's, one site and a set ------
+
+
+def _sample(site_id, x, value, units="ug/L"):
+    from trid3nt_server.inputs.observation import Observation
+
+    lon, lat = _TO_LONLAT(x, 0.5)
+    return Observation(value=value, units=units, site_id=site_id, lon=lon, lat=lat,
+                       sampled="2024-06-11T00:00:00Z",
+                       asked="2024-06-11T00:00:00+00:00")
+
+
+@pytest.fixture
+def gwt_solved(monkeypatch, tmp_path, fake_s3):
+    """The fixture's transport body opened for reading -> a builder over the handle's own statements."""
+    def download(_run_id, basename):
+        dest = tmp_path / f"dl_{basename}"
+        shutil.copy(_FIXTURE / basename, dest)
+        return str(dest)
+
+    monkeypatch.setattr("trid3nt_server.workflows.solver.solver.download_result", download)
+    from trid3nt_server.workflows.modflow import workflow as door
+    from trid3nt_server.workflows.modflow.modules import outputs as out_mod
+    quads = ([(x, y) for y in (0.0, 1.0) for x in (0.0, 10.0, 20.0, 30.0)],
+             [[c, 4 + c, 5 + c, c + 1] for c in range(3)], None, None)
+    monkeypatch.setattr(out_mod, "mesh_nodes", lambda _mesh: quads)
+
+    def build(**over):
+        display = _fixture_display(tmp_path / "mesh.2dm")
+        art = MeshArtifact(
+            mesh_id="F01", name="strip", mode="om2d", display_uri=str(display),
+            crs_authid="EPSG:32617", has_bathymetry=False, node_count=8,
+            element_count=6, bbox=(0.0, 0.0, 30.0, 1.0), utm_epsg=32617)
+        run = {"run_id": "R1", "utm_epsg": 32617, "sheet": _fixture_sheet(),
+               "reference_time": "2024-06-01T00:00:00Z", "vertical_frame": "NAVD88",
+               "mesh": {"artifact": art, "display_uri": str(display)}, **over}
+        sheet = run["sheet"]
+        from trid3nt_server.workflows.modflow.authoring.simulation import coupled_sheet
+
+        return Solved({**run}, GWT, filled=coupled_sheet(sheet, sheet.coupled[0]).filled)
+
+    return build
+
+
+def test_a_measured_concentration_is_checked_in_the_unit_the_run_states(gwt_solved):
+    from trid3nt_server.workflows.runtime import primitives as P
+
+    read = GWT.READS["series"](P.series("CONCENTRATION", at=_sample("W-0", 5.0, 900.0)),
+                               gwt_solved(published_units={"CONCENTRATION": "mg/L"}))
+    assert read.units == "mg/L"
+    assert read.measures["observed"] == pytest.approx(0.9)
+    assert read.measures["simulated"] == pytest.approx(_C0)
+    assert read.measures["units"] == "mg/L"
+
+
+def test_a_concentration_the_run_states_no_unit_for_refuses_naming_it(gwt_solved):
+    from trid3nt_server.workflows.runtime import primitives as P
+
+    with pytest.raises(ModflowError) as caught:
+        GWT.READS["series"](P.series("CONCENTRATION", at=_sample("W-0", 5.0, 900.0)),
+                            gwt_solved())
+    assert caught.value.error_code == "MODFLOW_UNITS_UNSTATED"
+    assert "concentration_units" in str(caught.value)
+
+
+def test_a_reading_no_conversion_reaches_the_run_s_unit_refuses(gwt_solved):
+    from trid3nt_server.workflows.runtime import primitives as P
+
+    with pytest.raises(ModflowError) as caught:
+        GWT.READS["series"](P.series("CONCENTRATION",
+                                     at=_sample("W-0", 5.0, 3.0, units="ft")),
+                            gwt_solved(published_units={"CONCENTRATION": "mg/L"}))
+    assert caught.value.error_code == "MODFLOW_OBSERVATION_UNCOMPARABLE"
+
+
+def test_a_set_of_sites_publishes_one_comparison_and_drops_the_one_off_the_mesh(publish):
+    from trid3nt_server.render.formats import Chart
+    from trid3nt_server.workflows.runtime import primitives as P
+
+    wells = (_sample("W-0", 5.0, 900.0), _sample("W-1", 15.0, 20.0),
+             _sample("FAR-OUT", 500.0, 5.0))
+    _record, items, notes = publish(
+        outputs=[P.series("CONCENTRATION", module="gwt").chart()],
+        anchors=[{"at": wells, "along": None, "within": None}],
+        captions={"CONCENTRATION": "boron"},
+        published_units={"CONCENTRATION": "mg/L"})
+
+    charts = [item for item in items if isinstance(item.product, Chart)]
+    assert len(charts) == 1
+    points, agree = charts[0].product.payload["vega_lite_spec"]["layer"]
+    assert [(row["site"], row["observed"], row["simulated"])
+            for row in points["data"]["values"]] == [("W-0", 0.9, _C0), ("W-1", 0.02, 0.0)]
+    assert points["encoding"]["x"]["title"] == "Measured (mg/L)"
+    assert agree["mark"]["type"] == "line"
+    # The well the mesh does not hold is never moved onto it: it is left out and said.
+    assert any("FAR-OUT" in note and "outside the mesh" in note for note in notes)

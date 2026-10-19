@@ -236,10 +236,11 @@ def test_the_mesh_and_extent_reads_are_the_accepted_meshs(solved):
     assert len(extent["bbox"]) == 4
 
 
-def _well(value, *, quantity, units="ft", datum=None, sampled="2024-06-11T00:00:00Z"):
+def _well(value, *, quantity, units="ft", datum=None, sampled="2024-06-11T00:00:00Z",
+          asked=None):
     lon, lat = _TO_LONLAT(18.0, 12.0)
     return Observation(value=value, units=units, site_id="USGS-1", lon=lon, lat=lat,
-                       quantity=quantity, datum=datum, sampled=sampled)
+                       quantity=quantity, datum=datum, sampled=sampled, asked=asked)
 
 
 def _head_at_the_well(step):
@@ -304,3 +305,21 @@ def test_a_site_off_the_grid_reads_nothing_and_says_how_far(solved):
         GWF.READS["series"](P.series("HEAD", at=site, plane=1), solved())
     assert "FAR-OUT" in str(caught.value)
     assert "outside the mesh" in str(caught.value)
+
+
+def test_a_reading_asked_at_an_instant_is_compared_at_the_saved_time_its_window_holds(solved):
+    well = _well(10.0, quantity="water_table_depth", sampled="2024-06-05T00:00:00Z",
+                 asked="2024-06-06T00:00:00+00:00")
+    read = GWF.READS["series"](P.series("HEAD", at=well, plane=1), solved())
+    # The window closing a day past the asked instant holds days 2.5 and 5; day 5 is nearest the sample.
+    assert read.measures["compared_at"] == "2024-06-06T00:00:00+00:00"
+    assert read.measures["simulated"] == pytest.approx(-2.0 - _head_at_the_well(1), abs=1e-3)
+
+
+def test_an_instant_the_run_saved_no_time_near_refuses_naming_the_nearest(solved):
+    well = _well(10.0, quantity="water_table_depth", sampled="2024-07-20T00:00:00Z",
+                 asked="2024-08-01T00:00:00+00:00")
+    with pytest.raises(ModflowError) as caught:
+        GWF.READS["series"](P.series("HEAD", at=well, plane=1), solved())
+    assert caught.value.error_code == "MODFLOW_OBSERVATION_UNCOMPARABLE"
+    assert "2024-08-01" in str(caught.value) and "2024-06-11" in str(caught.value)

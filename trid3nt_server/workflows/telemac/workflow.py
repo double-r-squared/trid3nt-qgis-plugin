@@ -486,7 +486,8 @@ class TelemacWorkflow(Workflow):
         return {DISCHARGE: PRESCRIBED_UNITS["flowrate"],
                 LEVEL: PRESCRIBED_UNITS["elevation"]}
 
-    def published_units(self) -> Mapping[str, str]:
+    def published_units(self, stated: Mapping[str, Any] = MappingProxyType({})
+                        ) -> Mapping[str, str]:
         """The unit each variable this run publishes is written in, by the name the result file carries.
         Four statements, all the deck's own: the module's variable table, the rows every coupled module appends, the rows a coupled module writes of its own, and the 32-character tracer text the deck writes its tracers as."""
         from .modules import wrapper_for

@@ -21,7 +21,7 @@ from trid3nt_contracts.execution import LayerURI
 
 from trid3nt_server.inputs.input import Input
 from trid3nt_server.inputs.instant import event_time
-from trid3nt_server.inputs.slots import BED, DOMAIN, MESH
+from trid3nt_server.inputs.slots import BED, DOMAIN, MESH, OBSERVE
 from trid3nt_server.workflows.runtime import DeclarationError, RunResult, Workflow
 from trid3nt_server.workflows.runtime.module import MOMENT, SlotRefused
 from trid3nt_server.workflows.runtime.primitives import (Primitive, field, publish_reads,
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("trid3nt_server.workflows.modflow.workflow")
 
-__all__ = ["ModflowWorkflow", "fill_sheet", "publish_outputs", "run_sheet",
+__all__ = ["CONCENTRATION_UNITS", "ModflowWorkflow", "fill_sheet", "publish_outputs", "run_sheet",
            "stage_simulation"]
 
 #: The dispatch a staged run goes to, by the path it is resolved at CALL time.
@@ -56,6 +56,14 @@ _METRICS = "modflow_metrics.json"
 _SIM_LISTING = "mfsim.lst"
 
 _FRAME, = BED.states
+
+#: mf6 carries no unit system, so a run that compares a measured concentration states the unit its own is counted in.
+CONCENTRATION_UNITS = Input(
+    name="concentration_units",
+    desc="The unit every concentration this run carries is counted in - the "
+         "unit its source and starting concentrations are stated in, such as "
+         "mg/L. A measured concentration is converted into it, and a reading "
+         "no conversion reaches refuses")
 
 # The kinds the FloPy meshers lay; a supplied mesh of another kind refuses at its row.
 _SUPPLIED_MESH = Input(MESH, name="mesh", coercion=MappingProxyType(
@@ -170,15 +178,16 @@ async def stage_simulation(*, sheet: Sheet, run_tag: str, mesh: Mapping[str, Any
 
 async def run_sheet(*, sheet: Sheet, staged: Mapping[str, Any],
                     mesh: Mapping[str, Any], name: str,
-                    moment: str | None = None, frame: str | None = None) -> dict[str, Any]:
+                    moment: str | None = None, frame: str | None = None,
+                    units: Mapping[str, str] = MappingProxyType({})) -> dict[str, Any]:
     """A staged run handed to the box -> the run handle.
     Its ``reference_time`` is the instant every published time counts from: the stated ``moment``, else the solve's own start;
-    its ``vertical_frame`` is the zero the bed, and so every head, is counted from."""
+    its ``vertical_frame`` is the zero the bed, and so every head, is counted from; ``units`` what the run stated its outputs in."""
     module, _, attribute = _DISPATCH.rpartition(".")
     handle = await run_sheet_(staged, dispatch=getattr(import_module(module), attribute))
     return {**handle, "mesh": mesh, "module": sheet.module, "name": name,
             "reference_time": moment or handle.get("started_at"),
-            "vertical_frame": frame}
+            "vertical_frame": frame, "published_units": dict(units)}
 
 
 def _table(solved: Callable[[str], Solved], run_module: str, coupled: Sequence[str]
@@ -203,13 +212,13 @@ def _table(solved: Callable[[str], Solved], run_module: str, coupled: Sequence[s
                      for layer in range(1, read.nlay + 1)]
 
     def account(layers: Sequence[LayerURI], why: Mapping[Primitive, str]) -> None:
-        from trid3nt_server.inputs.observation import Observation
+        from trid3nt_server.inputs.observation import sited
 
         for line in unsaved:
             journal_note(line)
         for primitive, reason in why.items():
             # A data input's site miss was said at the read, in the reader's own words.
-            if isinstance(primitive.at, Observation):
+            if sited(primitive.at):
                 continue
             journal_note(f"no layer carries the {primitive.variable} of layer "
                          f"{primitive.plane}: {reason}")
@@ -283,12 +292,22 @@ class ModflowWorkflow(Workflow):
 
     def seated(self) -> tuple[Input, ...]:
         """What the mesh ask names of the mesher's own inputs, the moment the run
-        opens at, what the types of its rows state, then the mesh a caller hands in."""
+        opens at, what the types of its rows state, the unit a concentration it
+        compares is counted in, then the mesh a caller hands in."""
         from trid3nt_server.tools.mesh import recipe as asks
 
         named = set(asks.input_names(self.template.MESH))
+        compares = any(row.slot is OBSERVE and row.observes.upper() == "CONCENTRATION"
+                       for row in self.inputs)
         return (tuple(row for row in asks.INPUTS if row.name in named)
-                + (EVENT_TIME,) + super().seated() + (_SUPPLIED_MESH,))
+                + (EVENT_TIME,) + super().seated()
+                + ((CONCENTRATION_UNITS,) if compares else ()) + (_SUPPLIED_MESH,))
+
+    def published_units(self, stated: Mapping[str, Any] = MappingProxyType({})
+                        ) -> Mapping[str, str]:
+        """A concentration is published in the unit the run states it in; mf6 states no unit of its own."""
+        unit = stated.get(CONCENTRATION_UNITS.name)
+        return {"CONCENTRATION": str(unit)} if unit else {}
 
     def input(self, name: str) -> Any:
         """The template's and the engine's own inputs first, then the keyword a name spells on the STEERING body."""
@@ -403,7 +422,8 @@ class ModflowWorkflow(Workflow):
         solved = await stage("solve", run_sheet, sheet=run["sheet"], staged=staged,
                              mesh=run["mesh"], name=name,
                              moment=run.get(EVENT_TIME.name),
-                             frame=run.get(_FRAME.name) or _FRAME.default)
+                             frame=run.get(_FRAME.name) or _FRAME.default,
+                             units=self.published_units(run))
         await keep_mesh(run["mesh"], solved.get("run_id"))
         outputs, captions = self._outputs()
         # A primitive's point, line and band name run inputs; each is read here and rejoins its primitive at publish.
