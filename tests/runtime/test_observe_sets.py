@@ -11,7 +11,7 @@ concentration requires its unit and publishes under it.
 from __future__ import annotations
 
 import dataclasses
-from types import SimpleNamespace
+from types import MappingProxyType, SimpleNamespace
 
 import pytest
 
@@ -110,21 +110,34 @@ def test_an_instant_or_a_set_on_a_row_read_off_no_record_refuses():
         Input(DOMAIN).need("hydrography", when="snapshot")
 
 
-def _workflow(*extra):
+def _workflow(*extra, transport: bool = False):
     from trid3nt_server.workflows.modflow.templates.water_table import water_table
     from trid3nt_server.workflows.modflow.workflow import ModflowWorkflow
 
+    template = water_table
+    if transport:
+        steering = water_table.STEERING
+
+        class carrier:
+            """The template's body as one that also states a Transport."""
+            ASSERTED = MappingProxyType({**steering.ASSERTED, "Transport": []})
+
+            def __getattr__(self, name):
+                return getattr(steering, name)
+
+        carrier = carrier()
+        template = SimpleNamespace(**{name: getattr(water_table, name) for name in dir(water_table)
+                                      if not name.startswith("__") and name != "STEERING"}, STEERING=carrier)
     return ModflowWorkflow(metadata=SimpleNamespace(name="t", engine="modflow"),
                            inputs=[*declared(water_table.INPUTS), *extra],
-                           template=water_table)
+                           template=template)
 
 
-def test_a_run_comparing_a_concentration_requires_the_unit_it_is_counted_in():
-    compares = _workflow(dataclasses.replace(
-        Input(OBSERVE).need("water quality sample", of="CONCENTRATION"), name="wells"))
-    assert compares.input("concentration_units").required
-    assert compares.published_units({"concentration_units": "mg/L"}) == {
+def test_a_run_carrying_a_concentration_requires_the_unit_it_is_counted_in():
+    carries = _workflow(transport=True)
+    assert carries.input("concentration_units").required
+    assert carries.published_units({"concentration_units": "mg/L"}) == {
         "CONCENTRATION": "mg/L"}
-    assert compares.published_units({}) == {}
-    # A run that compares no concentration carries no such input.
+    assert carries.published_units({}) == {}
+    # A run carrying no concentration has no such input.
     assert "concentration_units" not in {row.name for row in _workflow().inputs}

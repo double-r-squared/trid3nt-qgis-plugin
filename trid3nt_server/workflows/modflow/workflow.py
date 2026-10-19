@@ -21,7 +21,7 @@ from trid3nt_contracts.execution import LayerURI
 
 from trid3nt_server.inputs.input import Input
 from trid3nt_server.inputs.instant import event_time
-from trid3nt_server.inputs.slots import BED, DOMAIN, MESH, OBSERVE
+from trid3nt_server.inputs.slots import BED, DOMAIN, MESH
 from trid3nt_server.workflows.runtime import DeclarationError, RunResult, Workflow
 from trid3nt_server.workflows.runtime.module import MOMENT, SlotRefused
 from trid3nt_server.workflows.runtime.primitives import (Primitive, field, publish_reads,
@@ -57,7 +57,7 @@ _SIM_LISTING = "mfsim.lst"
 
 _FRAME, = BED.states
 
-#: mf6 carries no unit system, so a run that compares a measured concentration states the unit its own is counted in.
+#: mf6 carries no unit system, so a run carrying a concentration states the unit it is counted in.
 CONCENTRATION_UNITS = Input(
     name="concentration_units",
     desc="The unit every concentration this run carries is counted in - the "
@@ -293,15 +293,14 @@ class ModflowWorkflow(Workflow):
     def seated(self) -> tuple[Input, ...]:
         """What the mesh ask names of the mesher's own inputs, the moment the run
         opens at, what the types of its rows state, the unit a concentration it
-        compares is counted in, then the mesh a caller hands in."""
+        carries is counted in, then the mesh a caller hands in."""
         from trid3nt_server.tools.mesh import recipe as asks
 
         named = set(asks.input_names(self.template.MESH))
-        compares = any(row.slot is OBSERVE and row.observes.upper() == "CONCENTRATION"
-                       for row in self.inputs)
+        carries = "Transport" in self.template.STEERING.ASSERTED
         return (tuple(row for row in asks.INPUTS if row.name in named)
                 + (EVENT_TIME,) + super().seated()
-                + ((CONCENTRATION_UNITS,) if compares else ()) + (_SUPPLIED_MESH,))
+                + ((CONCENTRATION_UNITS,) if carries else ()) + (_SUPPLIED_MESH,))
 
     def published_units(self, stated: Mapping[str, Any] = MappingProxyType({})
                         ) -> Mapping[str, str]:

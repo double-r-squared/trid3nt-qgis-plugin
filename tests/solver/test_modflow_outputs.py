@@ -316,10 +316,13 @@ def test_a_reading_asked_at_an_instant_is_compared_at_the_saved_time_its_window_
     assert read.measures["simulated"] == pytest.approx(-2.0 - _head_at_the_well(1), abs=1e-3)
 
 
-def test_an_instant_the_run_saved_no_time_near_refuses_naming_the_nearest(solved):
+def test_an_instant_the_run_saved_no_time_near_reads_the_nearest_and_says_so(solved, monkeypatch):
+    from trid3nt_server.inputs import run_notes
+
+    said: list[str] = []
+    monkeypatch.setattr(run_notes, "journal_note", said.append)
     well = _well(10.0, quantity="water_table_depth", sampled="2024-07-20T00:00:00Z",
                  asked="2024-08-01T00:00:00+00:00")
-    with pytest.raises(ModflowError) as caught:
-        GWF.READS["series"](P.series("HEAD", at=well, plane=1), solved())
-    assert caught.value.error_code == "MODFLOW_OBSERVATION_UNCOMPARABLE"
-    assert "2024-08-01" in str(caught.value) and "2024-06-11" in str(caught.value)
+    read = GWF.READS["series"](P.series("HEAD", at=well, plane=1), solved())
+    assert read.measures["compared_at"].startswith("2024-06-11")
+    assert any("2024-08-01" in line and "2024-06-11" in line for line in said)

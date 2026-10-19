@@ -491,7 +491,7 @@ def _saved_at(solved: Solved, t: float) -> str:
 
 def _sampled_step(observed: Observation, solved: Solved, times: Any) -> int:
     """The saved time a reading is checked at: the one a steady run saves, else of the saved times the window it was
-    asked at holds, the one nearest its sample. No saved time in that window refuses, naming the nearest."""
+    asked at holds, the one nearest its sample; with none in that window, the nearest saved time, said on the journal."""
     from datetime import timedelta
 
     from trid3nt_server.inputs.observation import _WINDOW_DAYS, _in_window
@@ -509,12 +509,15 @@ def _sampled_step(observed: Observation, solved: Solved, times: Any) -> int:
     saved = [opened + timedelta(seconds=float(t)) for t in times]
     held = [i for i, at in enumerate(saved) if _in_window(at.isoformat(), asked.isoformat())]
     if not held:
-        nearest = min(saved, key=lambda at: abs(at - asked))
-        raise _uncomparable(
+        from trid3nt_server.inputs.run_notes import journal_note
+
+        nearest = min(range(len(saved)), key=lambda i: abs(saved[i] - asked))
+        journal_note(
             f"the reading is compared at {asked.isoformat()}, and the run saved no "
-            f"time within {_WINDOW_DAYS:g} days before it or a day after: the nearest "
-            f"saved time is {nearest.isoformat()}. Save the output at that instant, "
-            "or compare at an instant the run saved.")
+            f"time within {_WINDOW_DAYS:g} days before it or a day after, so it is "
+            f"checked against the nearest saved time, {saved[nearest].isoformat()}, "
+            f"{abs(saved[nearest] - asked).days} days away.")
+        return nearest
     return min(held, key=lambda i: abs(saved[i] - sampled))
 
 
