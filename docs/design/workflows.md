@@ -137,13 +137,18 @@ names the run input holding the instant the record is asked and read at, apart f
 moment the run opens at; unstated, the row reads at the run's moment as before, and a
 stated instant spans no forcing window. An unparseable instant refuses by its input's
 name. The reading keeps the instant it was asked at, and a check reads the saved time
-the reading's own window holds (thirty days back, a day ahead), nearest its sample; no
-saved time in that window refuses naming the nearest - never the nearest silently.
+the reading's own window holds (thirty days back, a day ahead), nearest its sample; with
+no saved time in that window it reads the nearest saved time and the journal names it
+and how many days away it is - never the nearest silently.
 `need(..., every=True)` takes every site the window holds rather than the nearest, and
 a read placed at the set is each site through the engine's own one-site read: a site
 the mesh does not hold is left out and journalled, never moved, and the checks publish
 as ONE comparison chart (measured across, modelled up, the line of agreement) through
 the chart format. A read that checks nothing at a site has no comparison and refuses.
+`need(..., measured="solute")` names the run input stating WHAT is measured in the
+source's own word ("Boron"): the source is asked for that word in place of its
+vocabulary's word for `of`, and a row that cannot be told it (no `need:of` ask) leaves
+the match. `of` still names the published variable and its unit.
 
 Values lead the wire and rows follow, each in body order, and the generated
 docstring documents both in ONE section: required values, defaulted ones, then

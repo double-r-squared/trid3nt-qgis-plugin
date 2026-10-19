@@ -43,6 +43,7 @@ params:
       zinc: Zinc
       iron: Iron
       chloride: Chloride
+      boron: Boron
       sulfate: Sulfate
       phosphorus: Phosphorus
       atrazine: Atrazine

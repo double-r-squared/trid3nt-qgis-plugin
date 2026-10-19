@@ -475,6 +475,30 @@ def test_the_source_is_called_by_its_own_word_for_the_feature(monkeypatch):
     assert ask["waterway_type"] == "drainage"
 
 
+def test_a_stated_measured_word_is_what_the_source_is_called_with(monkeypatch):
+    """A run naming what it measures ("Boron") is matched to a row that hears the
+    need in its own word, past its vocabulary, and the source is asked for it;
+    a row that cannot be told it leaves the list."""
+    from types import SimpleNamespace
+
+    from trid3nt_server.tools.fetchers._router import registration
+    from trid3nt_server.tools.search import match as m
+
+    asks = hydrography({"NO3": "Nitrate"}, ask={"characteristic": "need:of"})
+    deaf = hydrography({"NO3": "Nitrate"})
+    monkeypatch.setitem(registration._SPEC_REGISTRY, "fetch_quality",
+                        SimpleNamespace(params={"bbox": {"required": True}},
+                                        coverage=[asks]))
+    choice = match(feature_need(of="CONCENTRATION", measured="Boron"),
+                   [("fetch_quality", asks), ("fetch_deaf", deaf)])
+    assert choice.picked == "fetch_quality"
+    dropped, = [row for row in choice.rows if row.excluded]
+    assert "cannot be told Boron" in dropped.excluded
+    ask = m.ask_for(choice, {"bbox": [-122.68, 45.51, -122.66, 45.53]},
+                    *WILLAMETTE, {"of": "CONCENTRATION", "measured": "Boron"})
+    assert ask["characteristic"] == "Boron"
+
+
 def test_a_series_need_with_no_moment_stated_asks_no_source_at_all():
     """A record is a reading AT A TIME. A run that stated none has no window to
     put, so the source that would have answered with its latest one is not

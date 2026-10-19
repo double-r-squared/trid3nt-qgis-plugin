@@ -103,11 +103,25 @@ def test_an_instant_and_a_set_are_stated_on_the_need():
     assert dict(_row().coercion) == {"near": None}
 
 
+def test_what_a_row_measures_is_the_run_input_its_need_names():
+    assert _row(measured="solute").coercion["measured"] == "solute"
+    assert fill._measured(_env(solute="Boron"), _row(measured="solute")) == "Boron"
+    assert fill._measured(_env(), _row()) == ""
+
+
+def test_a_measured_word_naming_no_input_refuses():
+    with pytest.raises(StepFailedError) as refused:
+        fill._measured(_env(), _row(measured="solut"))
+    assert refused.value.error_code == "INPUT_UNNAMED"
+
+
 def test_an_instant_or_a_set_on_a_row_read_off_no_record_refuses():
     with pytest.raises(DeclarationError):
         Input(DOMAIN).need("hydrography", every=True)
     with pytest.raises(DeclarationError):
         Input(DOMAIN).need("hydrography", when="snapshot")
+    with pytest.raises(DeclarationError):
+        Input(DOMAIN).need("hydrography", measured="solute")
 
 
 def _workflow(*extra, transport: bool = False):

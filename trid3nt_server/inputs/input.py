@@ -240,26 +240,29 @@ class Input:
     def need(self, data_class: str = "", *, at: Any = None, of: Any = "",
              kind: str = "", span_km: float | None = None,
              geometry: str | None = None, when: str = "",
-             every: bool = False) -> "Input":
+             every: bool = False, measured: str = "") -> "Input":
         """The class this row needs, filled by the match from whatever measures it here.
         ``at`` names the run input holding the asked point; ``of`` the variable; ``kind`` the domain's own kind
         (wins over the seed's); ``span_km`` the reach. A geometry with no class is the
         user-prompt fetch: the shape the person draws or hands in, absorbing what they supply.
-        On a record, ``when`` names the run input holding the instant it is read at, and ``every`` takes each site, not the nearest."""
+        On a record, ``when`` names the run input holding the instant it is read at, ``every`` takes each site, not the nearest,
+        and ``measured`` names the run input holding what is measured in the source's own word (a solute, say)."""
         if self.producer is not None and geometry is not None:
             raise DeclarationError(
                 f"Input {self.name!r} declares a producer AND need(geometry=): a "
                 "row is satisfied one way.")
-        if (when or every) and not getattr(self.slot, "record", False):
+        if (when or every or measured) and not getattr(self.slot, "record", False):
             raise DeclarationError(
-                f"Input {self.name!r} states when= or every= and is read off no "
-                "record: an instant and a set of sites are what a measured "
-                "record is read at, and this row reads none.")
+                f"Input {self.name!r} states when=, every= or measured= and is "
+                "read off no record: an instant, a set of sites and what is "
+                "measured are what a record is read at, and this row reads none.")
         told: dict[str, Any] = {"near": at}
         if when:
             told["when"] = str(when)
         if every:
             told["every"] = True
+        if measured:
+            told["measured"] = str(measured)
         return replace(self, data_class=str(data_class), observes=str(of),
                        kind=str(kind),
                        geometry=geometry and self._shape(geometry),

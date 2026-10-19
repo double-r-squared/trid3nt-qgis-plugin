@@ -336,7 +336,8 @@ async def _need(env: _Env, decl: Input, data_class: str,
                 opens=str(opens) if opens else None,
                 until=_closes(opens, _window(env, decl)), frame=_frame(env),
                 mesh_m=_mesh_m(env), pick=_pick(env, decl, data_class),
-                of=_asked_of(decl, seed), water=_water())
+                of=_asked_of(decl, seed), measured=_measured(env, decl),
+                water=_water())
 
 
 def _asked_of(decl: Input, seed: Any) -> str:
@@ -450,6 +451,7 @@ async def _ask_for(env: _Env, choice: SourceChoice,
         lon, lat, str(opens) if opens else None,
         _closes(opens, _window(env, decl))), lon, lat,
         {"span_km": decl.span_km, "of": _asked_of(decl, seed) or None,
+         "measured": _measured(env, decl) or None,
          "seed_point": None if lon is None or lat is None else [lon, lat]})
 
 
@@ -611,6 +613,19 @@ def _opens(env: _Env, decl: Input) -> Any:
     held = stated_instant(env.run[named], label=named,
                           code="OBSERVATION_INSTANT_INVALID")
     return held if held is not None else env.run.get(env.moment)
+
+
+def _measured(env: _Env, decl: Input) -> str:
+    """What a row's record measures, as the run input its ``measured`` names states it; "" where it names none."""
+    named = decl.coercion.get("measured")
+    if not named:
+        return ""
+    if named not in env.run:
+        raise StepFailedError(
+            f"Input {decl.name!r} measures what {named!r} says, and no input of "
+            f"this run is called that: its inputs are {sorted(env.run)}.",
+            error_code="INPUT_UNNAMED")
+    return str(env.run[named] or "")
 
 
 def _window(env: _Env, decl: Input) -> float | None:

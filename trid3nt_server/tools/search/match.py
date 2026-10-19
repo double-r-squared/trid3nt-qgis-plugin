@@ -54,6 +54,9 @@ class Need:
     #: WHAT OF THE CLASS the slot asks for, "" for any. Where a source of the class publishes it as its quantity, the rows
     #: publishing another are excluded; anywhere else it is the published variable or feature, and a row with no word for it is.
     of: str = ""
+    #: WHAT IS MEASURED, as the run states it in the source's own word ("Boron"), "" where the run states none. A row
+    #: asking by the need hears it in place of its word for ``of``; a row that cannot be told it is excluded.
+    measured: str = ""
     #: The cell the mesh resolves, which is what a source's own cell is ranked
     #: against - finer than the mesh is detail the mesh cannot carry.
     mesh_m: float | None = None
@@ -344,7 +347,9 @@ def ask_for(choice: SourceChoice, base: Mapping[str, Any], lon: float | None,
     if row is None:
         return ask
     stated = dict(needs or {})
-    if stated.get("of"):
+    if stated.get("measured"):
+        stated["of"] = stated["measured"]
+    elif stated.get("of"):
         # The one attribute a source hears in its OWN word: the row that knows
         # both names is the row that was matched.
         stated["of"] = row.word_for(str(stated["of"])) or None
@@ -444,7 +449,13 @@ def _no_moment(need: Need, coverage: Coverage) -> str:
 
 
 def _unpublished(need: Need, coverage: Coverage) -> str:
-    """Why a source publishing none of what the slot asked for leaves the list, or ""; a row with no word for it publishes something else."""
+    """Why a source publishing none of what the slot asked for leaves the list, or ""; a row with no word for it publishes something else.
+    A run stating what it measures is asked of a row that hears the need in its own word."""
+    if need.measured:
+        if _FROM_NEED + "of" in map(str, coverage.ask.values()):
+            return ""
+        return (f"is asked for no measured word, so it cannot be told "
+                f"{need.measured}")
     if not need.of or coverage.word_for(need.of):
         return ""
     known = ", ".join(sorted(coverage.vocabulary)) or "nothing"
