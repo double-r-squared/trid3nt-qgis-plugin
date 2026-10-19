@@ -1,0 +1,2512 @@
+{
+  "module": "geoclaw",
+  "keywords": [
+    {
+      "keyword": "CLAW_NUM_DIM",
+      "identifier": "CLAW_NUM_DIM",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 2
+    },
+    {
+      "keyword": "CLAW_NUM_EQN",
+      "identifier": "CLAW_NUM_EQN",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1
+    },
+    {
+      "keyword": "CLAW_NUM_WAVES",
+      "identifier": "CLAW_NUM_WAVES",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1
+    },
+    {
+      "keyword": "CLAW_NUM_AUX",
+      "identifier": "CLAW_NUM_AUX",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0
+    },
+    {
+      "keyword": "CLAW_OUTPUT_STYLE",
+      "identifier": "CLAW_OUTPUT_STYLE",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1,
+      "choices": [
+        "1",
+        "2",
+        "3"
+      ]
+    },
+    {
+      "keyword": "CLAW_OUTPUT_TIMES",
+      "identifier": "CLAW_OUTPUT_TIMES",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": []
+    },
+    {
+      "keyword": "CLAW_NUM_OUTPUT_TIMES",
+      "identifier": "CLAW_NUM_OUTPUT_TIMES",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "CLAW_OUTPUT_T0",
+      "identifier": "CLAW_OUTPUT_T0",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": true
+    },
+    {
+      "keyword": "CLAW_OUTPUT_STEP_INTERVAL",
+      "identifier": "CLAW_OUTPUT_STEP_INTERVAL",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "CLAW_TOTAL_STEPS",
+      "identifier": "CLAW_TOTAL_STEPS",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "CLAW_TFINAL",
+      "identifier": "CLAW_TFINAL",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "CLAW_OUTPUT_FORMAT",
+      "identifier": "CLAW_OUTPUT_FORMAT",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1,
+      "choices": [
+        "1",
+        "2",
+        "3",
+        "ascii",
+        "binary32",
+        "binary64",
+        "binary"
+      ]
+    },
+    {
+      "keyword": "CLAW_OUTPUT_Q_COMPONENTS",
+      "identifier": "CLAW_OUTPUT_Q_COMPONENTS",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": "all"
+    },
+    {
+      "keyword": "CLAW_OUTPUT_AUX_COMPONENTS",
+      "identifier": "CLAW_OUTPUT_AUX_COMPONENTS",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": "none"
+    },
+    {
+      "keyword": "CLAW_OUTPUT_AUX_ONLYONCE",
+      "identifier": "CLAW_OUTPUT_AUX_ONLYONCE",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": true
+    },
+    {
+      "keyword": "CLAW_DT_INITIAL",
+      "identifier": "CLAW_DT_INITIAL",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1e-05
+    },
+    {
+      "keyword": "CLAW_DT_MAX",
+      "identifier": "CLAW_DT_MAX",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1e+99
+    },
+    {
+      "keyword": "CLAW_DT_VARIABLE",
+      "identifier": "CLAW_DT_VARIABLE",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": true
+    },
+    {
+      "keyword": "CLAW_CFL_DESIRED",
+      "identifier": "CLAW_CFL_DESIRED",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0.9
+    },
+    {
+      "keyword": "CLAW_CFL_MAX",
+      "identifier": "CLAW_CFL_MAX",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1.0
+    },
+    {
+      "keyword": "CLAW_STEPS_MAX",
+      "identifier": "CLAW_STEPS_MAX",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 50000
+    },
+    {
+      "keyword": "CLAW_ORDER",
+      "identifier": "CLAW_ORDER",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 2
+    },
+    {
+      "keyword": "CLAW_DIMENSIONAL_SPLIT",
+      "identifier": "CLAW_DIMENSIONAL_SPLIT",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0,
+      "choices": [
+        "0",
+        "1",
+        "2",
+        "unsplit",
+        "godunov",
+        "strang"
+      ]
+    },
+    {
+      "keyword": "CLAW_VERBOSITY",
+      "identifier": "CLAW_VERBOSITY",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0
+    },
+    {
+      "keyword": "CLAW_VERBOSITY_REGRID",
+      "identifier": "CLAW_VERBOSITY_REGRID",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0
+    },
+    {
+      "keyword": "CLAW_SOURCE_SPLIT",
+      "identifier": "CLAW_SOURCE_SPLIT",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0,
+      "choices": [
+        "0",
+        "1",
+        "2",
+        "none",
+        "godunov",
+        "strang"
+      ]
+    },
+    {
+      "keyword": "CLAW_CAPA_INDEX",
+      "identifier": "CLAW_CAPA_INDEX",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0
+    },
+    {
+      "keyword": "CLAW_LIMITER",
+      "identifier": "CLAW_LIMITER",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": [
+        4
+      ]
+    },
+    {
+      "keyword": "CLAW_T0",
+      "identifier": "CLAW_T0",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0.0
+    },
+    {
+      "keyword": "CLAW_NUM_GHOST",
+      "identifier": "CLAW_NUM_GHOST",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 2
+    },
+    {
+      "keyword": "CLAW_USE_FWAVES",
+      "identifier": "CLAW_USE_FWAVES",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": false
+    },
+    {
+      "keyword": "CLAW_LOWER",
+      "identifier": "CLAW_LOWER",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "keyword": "CLAW_UPPER",
+      "identifier": "CLAW_UPPER",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": [
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "keyword": "CLAW_NUM_CELLS",
+      "identifier": "CLAW_NUM_CELLS",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": [
+        100,
+        100
+      ]
+    },
+    {
+      "keyword": "CLAW_BC_LOWER",
+      "identifier": "CLAW_BC_LOWER",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": [
+        0,
+        0
+      ]
+    },
+    {
+      "keyword": "CLAW_BC_UPPER",
+      "identifier": "CLAW_BC_UPPER",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": [
+        0,
+        0
+      ]
+    },
+    {
+      "keyword": "CLAW_TRANSVERSE_WAVES",
+      "identifier": "CLAW_TRANSVERSE_WAVES",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 2,
+      "choices": [
+        "0",
+        "1",
+        "2",
+        "none",
+        "increment",
+        "all"
+      ]
+    },
+    {
+      "keyword": "CLAW_RESTART",
+      "identifier": "CLAW_RESTART",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": false
+    },
+    {
+      "keyword": "CLAW_RESTART_FILE",
+      "identifier": "CLAW_RESTART_FILE",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": ""
+    },
+    {
+      "keyword": "CLAW_CHECKPT_STYLE",
+      "identifier": "CLAW_CHECKPT_STYLE",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0,
+      "choices": [
+        "-4",
+        "-3",
+        "-2",
+        "-1",
+        "0",
+        "1",
+        "2",
+        "3",
+        "4"
+      ]
+    },
+    {
+      "keyword": "CLAW_CHECKPT_INTERVAL",
+      "identifier": "CLAW_CHECKPT_INTERVAL",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1000
+    },
+    {
+      "keyword": "CLAW_CHECKPT_TIME_INTERVAL",
+      "identifier": "CLAW_CHECKPT_TIME_INTERVAL",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1000.0
+    },
+    {
+      "keyword": "CLAW_CHECKPT_TIMES",
+      "identifier": "CLAW_CHECKPT_TIMES",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "claw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": [
+        1000.0
+      ]
+    },
+    {
+      "keyword": "GEO_GRAVITY",
+      "identifier": "GEO_GRAVITY",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(gravitational acceleration m/s^2)",
+      "rubrique": [
+        "geoclaw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 9.8
+    },
+    {
+      "keyword": "GEO_RHO",
+      "identifier": "GEO_RHO",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Density of water kg/m^3)",
+      "rubrique": [
+        "geoclaw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1025.0
+    },
+    {
+      "keyword": "GEO_RHO_AIR",
+      "identifier": "GEO_RHO_AIR",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Density of air kg/m^3)",
+      "rubrique": [
+        "geoclaw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1.15
+    },
+    {
+      "keyword": "GEO_AMBIENT_PRESSURE",
+      "identifier": "GEO_AMBIENT_PRESSURE",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Nominal atmospheric pressure Pa)",
+      "rubrique": [
+        "geoclaw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 101300.0
+    },
+    {
+      "keyword": "GEO_EARTH_RADIUS",
+      "identifier": "GEO_EARTH_RADIUS",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Radius of the earth m)",
+      "rubrique": [
+        "geoclaw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 6367500.0
+    },
+    {
+      "keyword": "GEO_COORDINATE_SYSTEM",
+      "identifier": "GEO_COORDINATE_SYSTEM",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(1=meters, 2=lon-lat)",
+      "rubrique": [
+        "geoclaw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1
+    },
+    {
+      "keyword": "GEO_SPHERE_SOURCE",
+      "identifier": "GEO_SPHERE_SOURCE",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(0=none, 1=only in mass eqn, 2=all)",
+      "rubrique": [
+        "geoclaw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1
+    },
+    {
+      "keyword": "GEO_CORIOLIS_FORCING",
+      "identifier": "GEO_CORIOLIS_FORCING",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "geoclaw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": true
+    },
+    {
+      "keyword": "GEO_THETA_0",
+      "identifier": "GEO_THETA_0",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "geoclaw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 45.0
+    },
+    {
+      "keyword": "GEO_FRICTION_FORCING",
+      "identifier": "GEO_FRICTION_FORCING",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "geoclaw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": true
+    },
+    {
+      "keyword": "GEO_MANNING_COEFFICIENT",
+      "identifier": "GEO_MANNING_COEFFICIENT",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "geoclaw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": [
+        0.025
+      ]
+    },
+    {
+      "keyword": "GEO_MANNING_BREAK",
+      "identifier": "GEO_MANNING_BREAK",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "geoclaw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": []
+    },
+    {
+      "keyword": "GEO_DRY_TOLERANCE",
+      "identifier": "GEO_DRY_TOLERANCE",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "geoclaw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0.001
+    },
+    {
+      "keyword": "GEO_FRICTION_DEPTH",
+      "identifier": "GEO_FRICTION_DEPTH",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "geoclaw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1000000.0
+    },
+    {
+      "keyword": "GEO_SEA_LEVEL",
+      "identifier": "GEO_SEA_LEVEL",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "geoclaw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0.0
+    },
+    {
+      "keyword": "GEO_SPEED_LIMIT",
+      "identifier": "GEO_SPEED_LIMIT",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "geoclaw.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 50.0
+    },
+    {
+      "keyword": "GAUGE_GAUGES",
+      "identifier": "GAUGE_GAUGES",
+      "type": "STRUCT",
+      "shape": "(gaugeno, x, y, t1, t2)",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "gauges.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": []
+    },
+    {
+      "keyword": "GAUGE_FILE_FORMAT",
+      "identifier": "GAUGE_FILE_FORMAT",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "gauges.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": "ascii"
+    },
+    {
+      "keyword": "GAUGE_DISPLAY_FORMAT",
+      "identifier": "GAUGE_DISPLAY_FORMAT",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "gauges.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": "e15.7"
+    },
+    {
+      "keyword": "GAUGE_Q_OUT_FIELDS",
+      "identifier": "GAUGE_Q_OUT_FIELDS",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "gauges.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": "all"
+    },
+    {
+      "keyword": "GAUGE_AUX_OUT_FIELDS",
+      "identifier": "GAUGE_AUX_OUT_FIELDS",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "gauges.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": "none"
+    },
+    {
+      "keyword": "GAUGE_MIN_TIME_INCREMENT",
+      "identifier": "GAUGE_MIN_TIME_INCREMENT",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "gauges.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0.0
+    },
+    {
+      "keyword": "GAUGE_GTYPE",
+      "identifier": "GAUGE_GTYPE",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "gauges.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": "stationary"
+    },
+    {
+      "keyword": "TOPO_TOPO_MISSING",
+      "identifier": "TOPO_TOPO_MISSING",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "replace no_data_value in topofile",
+      "rubrique": [
+        "topo.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 99999.0
+    },
+    {
+      "keyword": "TOPO_TEST_TOPOGRAPHY",
+      "identifier": "TOPO_TEST_TOPOGRAPHY",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Type topography specification)",
+      "rubrique": [
+        "topo.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0
+    },
+    {
+      "keyword": "TOPO_OVERRIDE_ORDER",
+      "identifier": "TOPO_OVERRIDE_ORDER",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Override order topo files are used)",
+      "rubrique": [
+        "topo.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": false
+    },
+    {
+      "keyword": "TOPO_TOPOFILES",
+      "identifier": "TOPO_TOPOFILES",
+      "type": "STRUCT",
+      "shape": "(topo_type, filename)",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "topo.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": []
+    },
+    {
+      "keyword": "TOPO_TOPO_LOCATION",
+      "identifier": "TOPO_TOPO_LOCATION",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Bathymetry jump location)",
+      "rubrique": [
+        "topo.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": -50000.0
+    },
+    {
+      "keyword": "TOPO_TOPO_LEFT",
+      "identifier": "TOPO_TOPO_LEFT",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Depth to left of bathy_location)",
+      "rubrique": [
+        "topo.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": -4000.0
+    },
+    {
+      "keyword": "TOPO_TOPO_RIGHT",
+      "identifier": "TOPO_TOPO_RIGHT",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Depth to right of bathy_location)",
+      "rubrique": [
+        "topo.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": -200.0
+    },
+    {
+      "keyword": "TOPO_TOPO_ANGLE",
+      "identifier": "TOPO_TOPO_ANGLE",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "topo.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0.0
+    },
+    {
+      "keyword": "TOPO_X0",
+      "identifier": "TOPO_X0",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Location of basin end)",
+      "rubrique": [
+        "topo.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 350000.0
+    },
+    {
+      "keyword": "TOPO_X1",
+      "identifier": "TOPO_X1",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Location of shelf slope end)",
+      "rubrique": [
+        "topo.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 450000.0
+    },
+    {
+      "keyword": "TOPO_X2",
+      "identifier": "TOPO_X2",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Location of beach slope)",
+      "rubrique": [
+        "topo.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 480000.0
+    },
+    {
+      "keyword": "TOPO_BASIN_DEPTH",
+      "identifier": "TOPO_BASIN_DEPTH",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Depth of basin)",
+      "rubrique": [
+        "topo.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": -3000.0
+    },
+    {
+      "keyword": "TOPO_SHELF_DEPTH",
+      "identifier": "TOPO_SHELF_DEPTH",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Depth of shelf)",
+      "rubrique": [
+        "topo.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": -100.0
+    },
+    {
+      "keyword": "TOPO_BEACH_SLOPE",
+      "identifier": "TOPO_BEACH_SLOPE",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Slope of beach)",
+      "rubrique": [
+        "topo.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0.008
+    },
+    {
+      "keyword": "DTOPO_DTOPOFILES",
+      "identifier": "DTOPO_DTOPOFILES",
+      "type": "STRUCT",
+      "shape": "(dtopo_type, filename)",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "dtopo.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": []
+    },
+    {
+      "keyword": "DTOPO_DT_MAX_DTOPO",
+      "identifier": "DTOPO_DT_MAX_DTOPO",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "dtopo.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1e+99
+    },
+    {
+      "keyword": "AMR_MEMSIZE",
+      "identifier": "AMR_MEMSIZE",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "amr.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 4194303
+    },
+    {
+      "keyword": "AMR_MAX1D",
+      "identifier": "AMR_MAX1D",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "amr.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 60
+    },
+    {
+      "keyword": "AMR_AMR_LEVELS_MAX",
+      "identifier": "AMR_AMR_LEVELS_MAX",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "amr.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1
+    },
+    {
+      "keyword": "AMR_REFINEMENT_RATIOS_X",
+      "identifier": "AMR_REFINEMENT_RATIOS_X",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "amr.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": [
+        1
+      ]
+    },
+    {
+      "keyword": "AMR_REFINEMENT_RATIOS_Y",
+      "identifier": "AMR_REFINEMENT_RATIOS_Y",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "amr.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": [
+        1
+      ]
+    },
+    {
+      "keyword": "AMR_VARIABLE_DT_REFINEMENT_RATIOS",
+      "identifier": "AMR_VARIABLE_DT_REFINEMENT_RATIOS",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "amr.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": false
+    },
+    {
+      "keyword": "AMR_REFINEMENT_RATIOS_T",
+      "identifier": "AMR_REFINEMENT_RATIOS_T",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "amr.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": [
+        1
+      ]
+    },
+    {
+      "keyword": "AMR_AUX_TYPE",
+      "identifier": "AMR_AUX_TYPE",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "amr.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": []
+    },
+    {
+      "keyword": "AMR_FLAG_RICHARDSON",
+      "identifier": "AMR_FLAG_RICHARDSON",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "amr.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": false
+    },
+    {
+      "keyword": "AMR_FLAG_RICHARDSON_TOL",
+      "identifier": "AMR_FLAG_RICHARDSON_TOL",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "amr.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": -1.0
+    },
+    {
+      "keyword": "AMR_FLAG2REFINE",
+      "identifier": "AMR_FLAG2REFINE",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "amr.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": true
+    },
+    {
+      "keyword": "AMR_FLAG2REFINE_TOL",
+      "identifier": "AMR_FLAG2REFINE_TOL",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "amr.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0.05
+    },
+    {
+      "keyword": "AMR_REGRID_INTERVAL",
+      "identifier": "AMR_REGRID_INTERVAL",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "amr.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 2
+    },
+    {
+      "keyword": "AMR_REGRID_BUFFER_WIDTH",
+      "identifier": "AMR_REGRID_BUFFER_WIDTH",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "amr.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 3
+    },
+    {
+      "keyword": "AMR_CLUSTERING_CUTOFF",
+      "identifier": "AMR_CLUSTERING_CUTOFF",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "amr.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0.7
+    },
+    {
+      "keyword": "AMR_VERBOSITY_REGRID",
+      "identifier": "AMR_VERBOSITY_REGRID",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "amr.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 3
+    },
+    {
+      "keyword": "AMR_DPRINT",
+      "identifier": "AMR_DPRINT",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "amr.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": false
+    },
+    {
+      "keyword": "AMR_EPRINT",
+      "identifier": "AMR_EPRINT",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "amr.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": false
+    },
+    {
+      "keyword": "AMR_EDEBUG",
+      "identifier": "AMR_EDEBUG",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "amr.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": false
+    },
+    {
+      "keyword": "AMR_GPRINT",
+      "identifier": "AMR_GPRINT",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "amr.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": false
+    },
+    {
+      "keyword": "AMR_NPRINT",
+      "identifier": "AMR_NPRINT",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "amr.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": false
+    },
+    {
+      "keyword": "AMR_PPRINT",
+      "identifier": "AMR_PPRINT",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "amr.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": false
+    },
+    {
+      "keyword": "AMR_RPRINT",
+      "identifier": "AMR_RPRINT",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "amr.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": false
+    },
+    {
+      "keyword": "AMR_SPRINT",
+      "identifier": "AMR_SPRINT",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "amr.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": false
+    },
+    {
+      "keyword": "AMR_TPRINT",
+      "identifier": "AMR_TPRINT",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "amr.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": false
+    },
+    {
+      "keyword": "AMR_UPRINT",
+      "identifier": "AMR_UPRINT",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "amr.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": false
+    },
+    {
+      "keyword": "ADJOINT_USE_ADJOINT",
+      "identifier": "ADJOINT_USE_ADJOINT",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "adjoint.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": false
+    },
+    {
+      "keyword": "ADJOINT_ADJOINT_OUTDIR",
+      "identifier": "ADJOINT_ADJOINT_OUTDIR",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "adjoint.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": ""
+    },
+    {
+      "keyword": "ADJOINT_ADJOINT_FILES",
+      "identifier": "ADJOINT_ADJOINT_FILES",
+      "type": "STRUCT",
+      "shape": "(filename)",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "adjoint.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": []
+    },
+    {
+      "keyword": "ADJOINT_NUMADJOINTS",
+      "identifier": "ADJOINT_NUMADJOINTS",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "adjoint.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0
+    },
+    {
+      "keyword": "ADJOINT_T1",
+      "identifier": "ADJOINT_T1",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "adjoint.data"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "ADJOINT_T2",
+      "identifier": "ADJOINT_T2",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "adjoint.data"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "ADJOINT_INNERPROD_INDEX",
+      "identifier": "ADJOINT_INNERPROD_INDEX",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "adjoint.data"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "REGION_REGIONS",
+      "identifier": "REGION_REGIONS",
+      "type": "STRUCT",
+      "shape": "(minlevel, maxlevel, t1, t2, x1, x2, y1, y2)",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "regions.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": []
+    },
+    {
+      "keyword": "REGION_NUM_DIM",
+      "identifier": "REGION_NUM_DIM",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "regions.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 2
+    },
+    {
+      "keyword": "FLAGREGION_FLAGREGIONS",
+      "identifier": "FLAGREGION_FLAGREGIONS",
+      "type": "STRUCT",
+      "shape": "(name, minlevel, maxlevel, t1, t2, spatial_region_type, spatial_region)",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "flagregions.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": []
+    },
+    {
+      "keyword": "FLAGREGION_NUM_DIM",
+      "identifier": "FLAGREGION_NUM_DIM",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "flagregions.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 2
+    },
+    {
+      "keyword": "REFINEMENT_WAVE_TOLERANCE",
+      "identifier": "REFINEMENT_WAVE_TOLERANCE",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "refinement.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0.1
+    },
+    {
+      "keyword": "REFINEMENT_SPEED_TOLERANCE",
+      "identifier": "REFINEMENT_SPEED_TOLERANCE",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "refinement.data"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "REFINEMENT_DEEP_DEPTH",
+      "identifier": "REFINEMENT_DEEP_DEPTH",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "refinement.data"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "REFINEMENT_MAX_LEVEL_DEEP",
+      "identifier": "REFINEMENT_MAX_LEVEL_DEEP",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "refinement.data"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "REFINEMENT_VARIABLE_DT_REFINEMENT_RATIOS",
+      "identifier": "REFINEMENT_VARIABLE_DT_REFINEMENT_RATIOS",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Set dt refinement ratios automatically)",
+      "rubrique": [
+        "refinement.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": false
+    },
+    {
+      "keyword": "FGOUT_FGOUT_GRIDS",
+      "identifier": "FGOUT_FGOUT_GRIDS",
+      "type": "STRUCT",
+      "shape": "(fgno, output_style, nout, tstart, tend, point_style, output_format, x1, x2, y1, y2, nx, ny)",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "fgout_grids.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": []
+    },
+    {
+      "keyword": "FGMAX_FGMAX_FILES",
+      "identifier": "FGMAX_FGMAX_FILES",
+      "type": "STRUCT",
+      "shape": "(filename)",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "fgmax_grids.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": []
+    },
+    {
+      "keyword": "FGMAX_NUM_FGMAX_VAL",
+      "identifier": "FGMAX_NUM_FGMAX_VAL",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "fgmax_grids.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1,
+      "choices": [
+        "1",
+        "2",
+        "5"
+      ]
+    },
+    {
+      "keyword": "FGMAX_FGMAX_GRIDS",
+      "identifier": "FGMAX_FGMAX_GRIDS",
+      "type": "STRUCT",
+      "shape": "(fgno, tstart_max, tend_max, dt_check, min_level_check, arrival_tol, interp_method, point_style, points)",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "fgmax_grids.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": []
+    },
+    {
+      "keyword": "QINIT_QINIT_TYPE",
+      "identifier": "QINIT_QINIT_TYPE",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "qinit.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0
+    },
+    {
+      "keyword": "QINIT_QINITFILES",
+      "identifier": "QINIT_QINITFILES",
+      "type": "STRUCT",
+      "shape": "(filename)",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "qinit.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": []
+    },
+    {
+      "keyword": "QINIT_VARIABLE_ETA_INIT",
+      "identifier": "QINIT_VARIABLE_ETA_INIT",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "qinit.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": false
+    },
+    {
+      "keyword": "QINIT_FORCE_DRY_LIST",
+      "identifier": "QINIT_FORCE_DRY_LIST",
+      "type": "STRUCT",
+      "shape": "(filename, tend)",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "qinit.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": []
+    },
+    {
+      "keyword": "QINIT_NUM_FORCE_DRY",
+      "identifier": "QINIT_NUM_FORCE_DRY",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "qinit.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0
+    },
+    {
+      "keyword": "SURGE_WIND_FORCING",
+      "identifier": "SURGE_WIND_FORCING",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Wind source term used)",
+      "rubrique": [
+        "surge.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": false
+    },
+    {
+      "keyword": "SURGE_DRAG_LAW",
+      "identifier": "SURGE_DRAG_LAW",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Type of drag law to use)",
+      "rubrique": [
+        "surge.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1,
+      "choices": [
+        "0",
+        "1",
+        "2"
+      ]
+    },
+    {
+      "keyword": "SURGE_PRESSURE_FORCING",
+      "identifier": "SURGE_PRESSURE_FORCING",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Pressure source term used)",
+      "rubrique": [
+        "surge.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": false
+    },
+    {
+      "keyword": "SURGE_ROTATION_OVERRIDE",
+      "identifier": "SURGE_ROTATION_OVERRIDE",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Override storm rotation)",
+      "rubrique": [
+        "surge.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0,
+      "choices": [
+        "0",
+        "1",
+        "2",
+        "normal",
+        "n",
+        "s"
+      ]
+    },
+    {
+      "keyword": "SURGE_WIND_INDEX",
+      "identifier": "SURGE_WIND_INDEX",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Index into aux array - fortran indexing)",
+      "rubrique": [
+        "surge.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 4
+    },
+    {
+      "keyword": "SURGE_PRESSURE_INDEX",
+      "identifier": "SURGE_PRESSURE_INDEX",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Index into aux array - fortran indexing)",
+      "rubrique": [
+        "surge.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 6
+    },
+    {
+      "keyword": "SURGE_DISPLAY_LANDFALL_TIME",
+      "identifier": "SURGE_DISPLAY_LANDFALL_TIME",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Display time relative to landfall)",
+      "rubrique": [
+        "surge.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": false
+    },
+    {
+      "keyword": "SURGE_WIND_REFINE",
+      "identifier": "SURGE_WIND_REFINE",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Wind speed refinement criteria)",
+      "rubrique": [
+        "surge.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": [
+        20.0,
+        40.0,
+        60.0
+      ]
+    },
+    {
+      "keyword": "SURGE_R_REFINE",
+      "identifier": "SURGE_R_REFINE",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Wind speed refinement criteria)",
+      "rubrique": [
+        "surge.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": [
+        60000.0,
+        40000.0,
+        20000.0
+      ]
+    },
+    {
+      "keyword": "SURGE_STORM_TYPE",
+      "identifier": "SURGE_STORM_TYPE",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "surge.data"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "SURGE_STORM_SPECIFICATION_TYPE",
+      "identifier": "SURGE_STORM_SPECIFICATION_TYPE",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Storm specification)",
+      "rubrique": [
+        "surge.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0,
+      "choices": [
+        "data",
+        "holland80",
+        "holland08",
+        "holland10",
+        "cle",
+        "slosh",
+        "rankine",
+        "modified-rankine",
+        "demaria",
+        "willoughby",
+        "-1",
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
+      ]
+    },
+    {
+      "keyword": "SURGE_STORM_FILE",
+      "identifier": "SURGE_STORM_FILE",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Path to storm data)",
+      "rubrique": [
+        "surge.data"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "FRICTION_VARIABLE_FRICTION",
+      "identifier": "FRICTION_VARIABLE_FRICTION",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(method for setting variable friction)",
+      "rubrique": [
+        "friction.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": false
+    },
+    {
+      "keyword": "FRICTION_FRICTION_INDEX",
+      "identifier": "FRICTION_FRICTION_INDEX",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Index into aux array - fortran indexing)",
+      "rubrique": [
+        "friction.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 3
+    },
+    {
+      "keyword": "FRICTION_FRICTION_REGIONS",
+      "identifier": "FRICTION_FRICTION_REGIONS",
+      "type": "STRUCT",
+      "shape": "(lower, upper, depths, manning_coefficients)",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "friction.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": []
+    },
+    {
+      "keyword": "FRICTION_FRICTION_FILES",
+      "identifier": "FRICTION_FRICTION_FILES",
+      "type": "STRUCT",
+      "shape": "(filename)",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "friction.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": []
+    },
+    {
+      "keyword": "MULTILAYER_NUM_LAYERS",
+      "identifier": "MULTILAYER_NUM_LAYERS",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Number of layers)",
+      "rubrique": [
+        "multilayer.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1
+    },
+    {
+      "keyword": "MULTILAYER_RHO",
+      "identifier": "MULTILAYER_RHO",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "multilayer.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": [
+        1025.0,
+        1028.0
+      ]
+    },
+    {
+      "keyword": "MULTILAYER_ETA",
+      "identifier": "MULTILAYER_ETA",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Initial top surface of each layer)",
+      "rubrique": [
+        "multilayer.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": [
+        0.0,
+        -200.0
+      ]
+    },
+    {
+      "keyword": "MULTILAYER_WAVE_TOLERANCE",
+      "identifier": "MULTILAYER_WAVE_TOLERANCE",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Tolerance of surface perturbation per layer, used for refinement criteria)",
+      "rubrique": [
+        "multilayer.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": [
+        0.1,
+        0.2
+      ]
+    },
+    {
+      "keyword": "MULTILAYER_EIGEN_METHOD",
+      "identifier": "MULTILAYER_EIGEN_METHOD",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Method for calculating eigenspace)",
+      "rubrique": [
+        "multilayer.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 4
+    },
+    {
+      "keyword": "MULTILAYER_INUNDATION_METHOD",
+      "identifier": "MULTILAYER_INUNDATION_METHOD",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Method for calculating inundation eigenspace)",
+      "rubrique": [
+        "multilayer.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 2
+    },
+    {
+      "keyword": "MULTILAYER_CHECK_RICHARDSON",
+      "identifier": "MULTILAYER_CHECK_RICHARDSON",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Check Richardson number)",
+      "rubrique": [
+        "multilayer.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": true
+    },
+    {
+      "keyword": "MULTILAYER_RICHARDSON_TOLERANCE",
+      "identifier": "MULTILAYER_RICHARDSON_TOLERANCE",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Tolerance for Richardson number)",
+      "rubrique": [
+        "multilayer.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0.95
+    },
+    {
+      "keyword": "MULTILAYER_LAYER_INDEX",
+      "identifier": "MULTILAYER_LAYER_INDEX",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "(Index into aux array - fortran indexing)",
+      "rubrique": [
+        "multilayer.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 8
+    },
+    {
+      "keyword": "MULTILAYER_DRY_LIMIT",
+      "identifier": "MULTILAYER_DRY_LIMIT",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "multilayer.data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": false
+    }
+  ]
+}

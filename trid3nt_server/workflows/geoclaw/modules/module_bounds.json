@@ -1,0 +1,8 @@
+{
+  "geoclaw": {
+    "AMR_AMR_LEVELS_MAX": {
+      "unit": "",
+      "bounds": [1, 10]
+    }
+  }
+}

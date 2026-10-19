@@ -11,6 +11,7 @@ a dev tool and lives under `dev/`, which git does not carry.
 | `build_telemac_image.sh` | Build the local TELEMAC worker image. |
 | `extract_telemac_dictionary.py` | Regenerate the committed TELEMAC keyword dictionaries from the worker image; the drift test imports it. |
 | `extract_modflow_dictionary.py` | Regenerate the committed MODFLOW body dictionaries from the mf6 definition files at the release the worker carries. |
+| `extract_geoclaw_dictionary.py` | Regenerate the committed GeoClaw module dictionary from Clawpack's own Data classes (run with the spike venv interpreter; clawpack never enters `venvs/agent`). |
 | `fetch_binaries.sh` | Idempotent downloader for `mf6`, `minio` and `mc`. |
 | `init_minio.sh` | Create the runs and cache buckets in the local MinIO. |
 | `install_plugin.sh` | THE plugin deploy step: sync the plugin into the live QGIS profile. |

@@ -84,6 +84,8 @@ def test_every_exposed_module_answers_a_question_of_its_own():
         ("gwf", "specific discharge", "SAVE_SPECIFIC_DISCHARGE"),
         ("gwt", "advective transport scheme", "SCHEME"),
         ("gwe", "specific heat of water", "HEAT_CAPACITY_WATER"),
+        ("geoclaw", "manning friction coefficient", "GEO_MANNING_COEFFICIENT"),
+        ("geoclaw", "maximum refinement levels", "AMR_AMR_LEVELS_MAX"),
     ):
         found = _keywords(describe_keywords(module=module, query=query))
         assert wanted in found, f"{module}/{query!r}: {list(found)}"
@@ -115,7 +117,7 @@ def test_an_empty_module_lists_every_carried_dictionary():
               for row in describe_keywords()["modules"]}
     assert sorted(listed) == _carried()
     assert {"telemac2d", "telemac3d", "khione", "tomawac", "gaia",
-            "artemis", "waqtel", "gwf", "gwt", "gwe"} <= set(listed)
+            "artemis", "waqtel", "gwf", "gwt", "gwe", "geoclaw"} <= set(listed)
     assert all(count > 0 for count in listed.values())
 
 
@@ -148,6 +150,16 @@ def test_a_modflow_choice_carries_the_dictionary_s_own_spellings():
         module="gwf", keyword="NPF_ALTERNATIVE_CELL_AVERAGING")["entry"]
     assert entry["choices"] == ["logarithmic", "amt-lmk", "amt-hmk"]
     assert entry["engine_default"] is None and entry["open"] is True
+
+
+def test_a_geoclaw_entry_carries_its_required_mark_and_bound():
+    entry = describe_keywords(module="geoclaw", keyword="CLAW_TFINAL")["entry"]
+    assert entry["type"] == "REAL"
+    assert entry["open"] is True and entry["required"] is True
+    bounded = describe_keywords(
+        module="geoclaw", keyword="AMR_AMR_LEVELS_MAX")["entry"]
+    assert bounded["bounds"] == [1.0, 10.0]
+    assert bounded["engine_default"] == 1
 
 
 def test_a_keyword_is_reached_by_its_identifier_too():

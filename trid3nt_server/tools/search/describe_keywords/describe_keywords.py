@@ -15,6 +15,8 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.inputs.user_input import nearest
 from trid3nt_server.tools import register_tool
+from trid3nt_server.workflows.geoclaw.modules.module import (
+    module_input_dir as geoclaw_input_dir)
 from trid3nt_server.workflows.modflow.modules.module import (
     module_input_dir as modflow_input_dir)
 from trid3nt_server.workflows.runtime.module import load_module_input
@@ -51,7 +53,8 @@ class DescribeKeywordsError(RuntimeError):
 def _carried() -> dict[str, Path]:
     """Every dictionary the system carries, by module name: wherever its wrapper loads its slots from."""
     return {path.stem: directory
-            for directory in (module_input_dir(), modflow_input_dir())
+            for directory in (module_input_dir(), modflow_input_dir(),
+                              geoclaw_input_dir())
             for path in directory.glob("*.json")}
 
 
@@ -119,9 +122,9 @@ def describe_keywords(module: str = "", keyword: str = "", query: str = "",
 
     For what a template's inputs do not name - a friction law, a turbulence
     model, an ice process, a wave spectrum - in ANY carried module (telemac2d,
-    telemac3d, khione, tomawac, gaia, artemis, waqtel, gwf, gwt, gwe, ...). State
-    what you learn on the call: `keywords={"LAW OF BOTTOM FRICTION": 4}`. Never
-    runs anything; never picks a template.
+    telemac3d, khione, tomawac, gaia, artemis, waqtel, gwf, gwt, gwe, geoclaw,
+    ...). State what you learn on the call: `keywords={"LAW OF BOTTOM FRICTION": 4}`.
+    Never runs anything; never picks a template.
 
     Args:
         module: The dictionary to read; EMPTY lists the carried modules.
