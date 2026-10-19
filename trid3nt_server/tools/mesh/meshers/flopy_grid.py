@@ -62,7 +62,9 @@ def build(recipe: Any) -> Mesh:
     ops = bind_ops(mesher, recipe.ops)
     rundir = _rundir()
     outer, holes, source, bbox = _domain(recipe.extent, mesher.name)
-    edge, edge_note = finest_edge(recipe.resolution_m, recipe.ops, bbox)
+    spacing = _stated_edge(recipe.build) if mesher.name == "gridgen" else None
+    edge, edge_note = ((spacing, None) if spacing and recipe.resolution_m in (None, "")
+                       else finest_edge(recipe.resolution_m, recipe.ops, bbox))
     rings_m, epsg = _project(outer + holes)
     outer_m, holes_m = rings_m[:len(outer)], rings_m[len(outer):]
     bounds_m = _bounds(rings_m)
@@ -103,6 +105,15 @@ def build(recipe: Any) -> Mesh:
         mesh = dataclasses.replace(mesh, meta={**dict(mesh.meta),
                                                 "edge_notes": [edge_note]})
     return mesh
+
+
+def _stated_edge(build: Mapping[str, Any]) -> float | None:
+    """The narrowest cell width a build states for both axes, or None when either is unstated."""
+    if build.get("delr") is None or build.get("delc") is None:
+        return None
+    return min(float(v) for key in ("delr", "delc")
+               for v in (build[key] if isinstance(build[key], (list, tuple))
+                         else [build[key]]))
 
 
 def _gridgen_base(build: Mapping[str, Any],

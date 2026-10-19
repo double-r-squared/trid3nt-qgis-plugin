@@ -279,9 +279,9 @@ def node_slopes_from_mesh(points_utm: Any, cells: Any, bed_elev: Any) -> Any:
 
 
 def read_2dm_mesh(twodm_path: str) -> tuple[Any, Any, Any]:
-    """Parse an SMS ``.2dm`` -> ``(points (N,2), cells (M,3) 0-based, z (N,))``.
+    """Parse an SMS ``.2dm`` -> ``(points (N,2), cells (M,3) or (M,4) 0-based, z (N,))``.
 
-    ``ND`` and ``E3T`` rows, 1-based; nodes come back in id order, in metres."""
+    ``ND`` rows and ``E3T`` or ``E4Q`` rows, 1-based, one arity per file; nodes come back in id order, in metres."""
     return _parse_2dm(Path(twodm_path).read_text(), twodm_path)
 
 
@@ -289,7 +289,7 @@ def _parse_2dm(text: str, source: str) -> tuple[Any, Any, Any]:
     import numpy as np
 
     nodes: dict[int, tuple[float, float, float]] = {}
-    tris: list[tuple[int, int, int]] = []
+    elements: list[tuple[int, ...]] = []
     for line in text.splitlines():
         parts = line.split()
         if not parts:
@@ -297,16 +297,22 @@ def _parse_2dm(text: str, source: str) -> tuple[Any, Any, Any]:
         if parts[0] == "ND" and len(parts) >= 5:
             nodes[int(parts[1])] = (float(parts[2]), float(parts[3]), float(parts[4]))
         elif parts[0] in ("E3T", "E3L") and len(parts) >= 5:
-            tris.append((int(parts[2]), int(parts[3]), int(parts[4])))
-    if not nodes or not tris:
+            elements.append((int(parts[2]), int(parts[3]), int(parts[4])))
+        elif parts[0] == "E4Q" and len(parts) >= 6:
+            elements.append(tuple(int(v) for v in parts[2:6]))
+    if not nodes or not elements:
         raise MeshNodeError(
             "MESH_SUPPLIED_UNREADABLE",
-            f"2dm mesh {source} parsed to {len(nodes)} nodes / {len(tris)} "
-            "elements; expected a MESH2D ND/E3T body.")
+            f"2dm mesh {source} parsed to {len(nodes)} nodes / {len(elements)} "
+            "elements; expected a MESH2D ND/E3T or ND/E4Q body.")
+    if len({len(element) for element in elements}) > 1:
+        raise MeshNodeError(
+            "MESH_SUPPLIED_UNREADABLE",
+            f"2dm mesh {source} mixes three- and four-node elements; a mesh "
+            "file carries one cell shape.")
     order = sorted(nodes)
     remap = {nid: i for i, nid in enumerate(order)}
     points = np.array([[nodes[n][0], nodes[n][1]] for n in order], dtype=float)
     z = np.array([nodes[n][2] for n in order], dtype=float)
-    cells = np.array([[remap[a], remap[b], remap[c]] for a, b, c in tris],
-                     dtype=np.int64)
+    cells = np.array([[remap[n] for n in element] for element in elements], dtype=np.int64)
     return points, cells, z

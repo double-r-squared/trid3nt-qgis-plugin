@@ -228,7 +228,9 @@ class Composite:
     reads: frozenset[str] = frozenset()
 
     def names(self, value: Any) -> list[str]:
-        """Every input name ``value`` states in an argument that takes one, including inside a mapping."""
+        """Every input name ``value`` states in an argument that takes one, inside a mapping or a list of statements."""
+        if isinstance(value, (list, tuple)):
+            return [name for item in value for name in self.names(item)]
         if not isinstance(value, Mapping):
             return []
         found: list[str] = []
@@ -240,12 +242,18 @@ class Composite:
 
     def apply(self, value: Any, run: Mapping[str, Any]
               ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-        if isinstance(value, Mapping):
-            value = {key: _read(run, item, self.name) if key in self.reads
-                     else item for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            value = [self._reading(item, run) for item in value]
+        value = self._reading(value, run)
         if "run" in inspect.signature(self.expand).parameters:
             return self.expand(value, run=run)
         return self.expand(value)
+
+    def _reading(self, value: Any, run: Mapping[str, Any]) -> Any:
+        if not isinstance(value, Mapping):
+            return value
+        return {key: _read(run, item, self.name) if key in self.reads
+                else item for key, item in value.items()}
 
 
 def _read(run: Mapping[str, Any], value: Any, composite: str) -> Any:

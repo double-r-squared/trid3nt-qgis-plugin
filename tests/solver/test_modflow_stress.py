@@ -262,6 +262,39 @@ def test_serialize_writes_each_stress_package_with_its_bound(
         assert len([row for row in block.splitlines() if row.strip()]) == 4
 
 
+def test_a_list_of_statements_writes_each_ones_cells_under_one_bound(
+        staged_beside, tmp_path):
+    """Wells at different cells on different layers are one package's list of statements."""
+    mesh = _mesh(tmp_path)
+    sheet = _fill({"Wells": [_statement("Wells", geometry="where", layer=1),
+                             _statement("Wells", geometry="where", layer=2, rate=-2.0)]})
+    out = MF._mesh_files(sheet, mesh)
+    rundir = tmp_path / "run"
+    rundir.mkdir()
+    shutil.copy(out["disv"], rundir / "mesh.disv")
+
+    serialize(sheet, rundir, mesh)
+
+    text = (rundir / "gwf.wel").read_text()
+    assert "MAXBOUND  8" in text
+    block = text.split("BEGIN period  1")[1].split("END period")[0]
+    rows = [row.split() for row in block.splitlines() if row.strip()]
+    assert [row[0] for row in rows] == ["1"] * 4 + ["2"] * 4
+    assert {row[-1] for row in rows[:4]} == {"-5.00000000E+00"}
+    assert {row[-1] for row in rows[4:]} == {"-2.00000000E+00"}
+
+
+def test_a_list_of_statements_reading_nothing_states_nothing():
+    sheet = _fill({"Wells": [_statement("Wells"), _statement("Wells", layer=2)]}, where=None)
+    assert "WEL_STRESS_PERIOD_DATA" not in sheet.filled
+
+
+def test_a_list_of_statements_names_every_input_it_reads():
+    composite = GWF.COMPOSITES["Wells"]
+    assert composite.names([_statement("Wells"), _statement("Wells", geometry="other")]) \
+        == ["where", "other"]
+
+
 def test_a_typed_point_places_the_one_cell_it_lies_in():
     from trid3nt_server.inputs.point import Point
 

@@ -219,9 +219,10 @@ def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, point
         if row is None or not isinstance(row.value, Mapping) \
                 or "stress" not in row.value:
             continue
-        placed = place_stress(row.value, points=points, cells=cells,
-                              utm_epsg=utm_epsg, nlay=nlay, frame=frame,
-                              active=active)
+        placed = [cell for statement in row.value.get("statements", [row.value])
+                  for cell in place_stress(statement, points=points, cells=cells,
+                                           utm_epsg=utm_epsg, nlay=nlay, frame=frame,
+                                           active=active)]
         rows["stress_period_data"] = replace(row, value={0: placed})
         rows["maxbound"] = Filled(
             slot=sheet.body.MODULE_INPUT[f"{prefix}_MAXBOUND"],

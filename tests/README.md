@@ -18,14 +18,14 @@ rest and make up the sixth slice.
 | `fetchers/` | the fetch router, its executors, hooks and fallbacks | 74 | 2122 |
 | `gates/` | the gates, a declined card at each of them, the code-exec approval gate, the context budget, the circuit breaker | 20 | 303 |
 | `inputs/` | the typed inputs: a Point, an Extent, a Shape, the domain with the companions its producer measured, the bed it reads as elevations on the run's own vertical frame, the boundary runs, the line a placed read follows, the observation a run opens on and the weather, rain and sea state a record measured, each from every form it arrives in, the user-input normalizers under them, and a user's own file adopted as a layer | 25 | 319 |
-| `mesh/` | the meshers, the mesh gate, topology, the bed over the one source it takes, the runs that prescribe a role and the shoreline the domain's own edge is | 11 | 278 |
+| `mesh/` | the meshers, the mesh gate, topology, the bed over the one source it takes, the runs that prescribe a role and the shoreline the domain's own edge is | 11 | 280 |
 | `model/` | the SysML model conformance check | 1 | 23 |
 | `plugin/` | the QGIS dock: the client, the Qt bridge, the cards, the render seams; the Qt-wiring subset runs in a subprocess harness | 39 | 403 |
 | `runtime/` | the template runtime, its engine-neutral slots and dictionary marks, the run journal | 16 | 210 |
 | `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 12 | 171 |
 | `search/` | dataset and tool retrieval, the OGC adapter, the keyword dictionary read | 13 | 203 |
 | `server/` | the HTTP and WS routes, the fetch short-circuit and the Case AOI, persistence | 29 | 260 |
-| `solver/` | the executor, the run reads, the engine-room posture, the MODFLOW engine, its authoring and staged check, and its body wrappers | 17 | 253 |
+| `solver/` | the executor, the run reads, the engine-room posture, the MODFLOW engine, its authoring and staged check, and its body wrappers | 17 | 255 |
 | `telemac/` | the TELEMAC templates, the module surface, what each module writes and the primitives that read it, the listing reads, authoring | 61 | 993 |
 | `tools/` | the registry, the arg normalizer, the tool cache | 10 | 343 |
 
@@ -45,8 +45,8 @@ instance fixtures, and nothing else has one.
 Six slices by subsystem, each its own foreground invocation, from the repo root:
 
     make test-fetchers        # tests/fetchers                                                                              2121
-    make test-spatial         # tests/derive tests/render tests/mesh                                         757
-    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                      1680
+    make test-spatial         # tests/derive tests/render tests/mesh                                         759
+    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                      1682
     make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts       1126
     make test-model-surface   # tests/adapters tests/tools                                                                   616
     make test-packages        # tests/contracts tests/plugin                                                                  754

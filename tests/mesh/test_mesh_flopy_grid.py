@@ -232,6 +232,21 @@ def test_gridgens_stated_words_travel_verbatim(monkeypatch, tmp_path):
     assert config["sources"]["xoff"] == "stated"
 
 
+def test_a_gridgen_with_both_spacings_stated_needs_no_resolution(monkeypatch,
+                                                                 tmp_path):
+    """A structured grid states its own cell widths; its finest edge is the
+    narrowest of them, never a second word the recipe must also state."""
+    sent = _stub(monkeypatch, tmp_path)
+    mesh = FLOPY.build(_recipe(mesher="gridgen", extent=_AOI, resolution_m=None,
+                               build={"delr": [30.0, 20.0, 10.0],
+                                      "delc": [40.0, 25.0]}))
+    config = sent["config"]
+    assert (config["delr"], config["delc"]) == ([30.0, 20.0, 10.0], [40.0, 25.0])
+    assert len(config["delr"]) * len(config["delc"]) == 6
+    assert config["ops"] == [] and config["resolution_m"] == 10.0
+    assert mesh.meta["synthetic_inputs"][0]["basis"] == "derived"
+
+
 def test_the_readback_carries_the_boxes_own_probes_and_provenance(
         monkeypatch, tmp_path):
     _stub(monkeypatch, tmp_path)

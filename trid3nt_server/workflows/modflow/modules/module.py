@@ -22,9 +22,14 @@ def _stress(name: str, package: str, dimensions: Mapping[str, str]):
     columns = tuple(dimensions)
 
     def expand(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+        if isinstance(value, (list, tuple)) and value:
+            stated = [statement for item in value
+                      if (statement := expand(item)[0].get(f"{package}_STRESS_PERIOD_DATA"))]
+            return ({f"{package}_STRESS_PERIOD_DATA": {"stress": package, "statements": stated}}
+                    if stated else {}), {}
         if not isinstance(value, Mapping):
             raise ModflowError(
-                f"{name} takes a mapping of geometry, layer and {', '.join(columns)}; "
+                f"{name} takes a mapping of geometry, layer and {', '.join(columns)}, or a list of them; "
                 f"got {value!r}.", error_code="MODFLOW_STRESS_UNSTATED")
         if value.get("geometry") is None:
             return {}, {}
@@ -46,7 +51,7 @@ def _stress(name: str, package: str, dimensions: Mapping[str, str]):
 
     expand.__doc__ = (
         f"The {package} package's cells a geometry places: {name}(geometry, layer, "
-        f"{', '.join(columns)}); a geometry reading nothing states nothing.")
+        f"{', '.join(columns)}), or a list of such statements; a geometry reading nothing states nothing.")
     return expand
 
 

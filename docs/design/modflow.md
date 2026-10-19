@@ -49,6 +49,16 @@ the accepted mesh artifact's `engine_files`, keyed by the layering's digest;
 the sheet states the layering (`DISV_NLAY`, `DISV_TOP`, `DISV_BOTM`) and no
 sheet states the mesh's tables.
 
+A structured example reaches the DISV through `gridgen` with no ops: `build` states
+`delr` and `delc` (a number or one width per column and row) with `xoff` and `yoff`,
+and with both spacings stated the recipe needs no `resolution_m` - its finest edge is
+the narrowest stated width. The grid's display face is a `.2dm` of four-node
+elements (`E4Q`), which the accepted-mesh reader returns as `(M, 4)` cells in the
+mesher's row-major order; a mixed file refuses. A package's stress composite takes one
+statement or a list of them, so one package places different cells, layers and values
+(wells at different cells on different layers) under one bound. ex-gwf-twri01 so
+authored equals its DIS reference bitwise.
+
 ## The authoring
 
 A raster is read onto the model's frame at the sampler
@@ -153,8 +163,9 @@ builds on was proved through that image before it was built on.
 
 ## What is not built yet
 
-The GWE body's packages (and the GWF-GWE exchange), the structured examples
-through the mesher's lattice, the advanced-package composites (SFR, LAK, MAW,
+The accepted-mesh reader of a ragged (UGRID) display face - a quadtree with
+refinement, a Voronoi - so those meshes cannot yet be authored on; the
+advanced-package composites (SFR, LAK, MAW,
 UZF, CSUB), OBS and time series, the model exchanges (GWF-GWF, GWT-GWT), FMI
 (the transport reading a prior flow run's saved budget), and PRT. Each is a leg
 in the scope's plan; the coupling above is built for GWT on the exchange.

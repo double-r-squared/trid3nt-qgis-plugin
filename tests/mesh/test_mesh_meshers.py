@@ -143,6 +143,20 @@ def test_2dm_round_trip():
     assert rc.tolist() == cells.tolist()
 
 
+def test_read_2dm_reads_a_quad_mesh_whole_and_refuses_a_mix(tmp_path):
+    """The structured grid's display face is E4Q: its cells read back as four-node rows."""
+    pts = np.array([[0.0, 0.0], [1.0, 0.0], [2.0, 0.0],
+                    [0.0, 1.0], [1.0, 1.0], [2.0, 1.0]])
+    quads = np.array([[0, 1, 4, 3], [1, 2, 5, 4]])
+    path = tmp_path / "quads.2dm"
+    path.write_text(write_2dm_arrays(pts, quads, np.zeros(6)))
+    rp, rc, _ = read_2dm_mesh(str(path))
+    assert rc.shape == (2, 4) and rc.tolist() == quads.tolist()
+    path.write_text(path.read_text() + "E3T 3 1 2 5 1\n")
+    with pytest.raises(MeshNodeError, match="mixes"):
+        read_2dm_mesh(str(path))
+
+
 def test_an_adopted_layer_drops_the_meta_bound_to_the_topology_it_replaced(tmp_path):
     """A hand-edited layer is a different topology, so the per-solver geometry the
     mesher wrote and the probes measured on the old cells must not ride into the
