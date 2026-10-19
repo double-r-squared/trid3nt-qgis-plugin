@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_server.inputs.wave import Wave
-from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT, LEVEL, WAVE
+from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT, LEVEL, OBSERVE, WAVE
 from trid3nt_server.workflows.telemac.modules import T2D, WAC, fill
 from trid3nt_server.workflows.runtime.module import SlotRefused
 from trid3nt_server.workflows.telemac.authoring.boundaries import (
@@ -146,11 +146,31 @@ def test_the_seaward_rim_is_opened_so_the_tide_and_the_spectrum_both_enter():
 
 def test_what_the_template_places_is_the_two_modules_own_rows():
     """Every read this template places is one variable an engine wrote: the
-    current off the host, the wave off the coupled module."""
+    current off the host, the wave off the coupled module - both read at the
+    matched buoy, an independent station rather than the forcing one."""
     assert [(p.variable, p.module) for p in template.OUTPUTS] == [
         ("M", None), ("HM0", "tomawac")]
-    assert all(p.at is None for p in template.OUTPUTS)
+    assert all(p.at == "observe" for p in template.OUTPUTS)
     assert "HM0" in WAC.MODULE_OUTPUT
+
+
+def test_the_matched_buoy_is_its_own_row_not_a_second_wave():
+    """The read stands at a station the run was not forced with, so it arrives as
+    a record of the observe slot observing the wave network's height - and the
+    boundary's own wave row stays the one row on the wave slot."""
+    rows = _rows()
+    observe = rows["observe"]
+    assert (observe.slot, observe.data_class, observe.observes) == (
+        OBSERVE, "wave series", "WAVE HEIGHT HM0")
+    slots = _workflow()._slots()
+    assert slots.get(OBSERVE) == "observe"
+    assert sum(1 for slot in slots if slot is WAVE) == 1
+
+
+def test_the_wave_height_is_published_with_the_unit_its_record_carried():
+    """The run's own buoy row is answered against the same variable table the
+    host publishes, so the coupled wave height keeps the metre it was read in."""
+    assert _workflow().published_units().get("WAVE HEIGHT HM0") == "m"
 
 
 def test_every_charted_variable_is_captioned():

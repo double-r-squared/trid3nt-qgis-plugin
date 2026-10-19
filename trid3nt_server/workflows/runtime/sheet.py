@@ -6,6 +6,7 @@ OPEN is informational; REQUIRED (the dictionary's OBLIG files) is what a run ref
 
 from __future__ import annotations
 
+import inspect
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Callable, Collection, Mapping, Sequence
@@ -199,12 +200,19 @@ def fill(source: type | Sheet, *, template: str = "",
 
 def filled_by(body: type, produced: Mapping[str, Any],
               only: Sequence[str] = ()) -> list[tuple[str, str, Any]]:
-    """``(input, identifier, value)`` for every keyword an input of this run fills on ``body``; an absent input or None value fills nothing."""
-    return [(source, name, value)
-            for source, keywords in body.FILLED_BY.items()
-            if (not only or source in only) and produced.get(source) is not None
-            for name, read in keywords.items()
-            if (value := read(produced[source])) is not None]
+    """``(input, identifier, value)`` for every keyword an input of this run fills on ``body``; an absent input or None value fills nothing.
+    A read that needs more than its own value - a station placed in the mesh's own metres - declares the run's whole mapping as its second parameter."""
+    filled: list[tuple[str, str, Any]] = []
+    for source, keywords in body.FILLED_BY.items():
+        if (only and source not in only) or produced.get(source) is None:
+            continue
+        for name, read in keywords.items():
+            value = read(produced[source], produced) \
+                if len(inspect.signature(read).parameters) > 1 \
+                else read(produced[source])
+            if value is not None:
+                filled.append((source, name, value))
+    return filled
 
 
 def _placed(wrapper: type, body: dict[str, Any]) -> dict[str, Any]:

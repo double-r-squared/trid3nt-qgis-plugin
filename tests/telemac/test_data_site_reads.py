@@ -2,8 +2,9 @@
 
 Offline: the result a read opens is stated through the ``telemac_result``
 fixture, the publisher is stood in for, and what is proved is where the series
-is read from, what a site that misses the mesh does, and that a template
-refuses a station argument as unknown."""
+is read from, what a site that misses the mesh does, that a template refuses a
+station argument as unknown, and that a run whose only matched buoy is the one
+it was forced with drops the circular read and says so."""
 
 from __future__ import annotations
 
@@ -176,3 +177,86 @@ def test_a_station_argument_refuses_as_unknown(tool, argument):
     assert (verdict.state, verdict.code) == (REJECTED, "INPUT_UNNAMED")
     assert f"{argument!r} is not an input of {tool}" in verdict.reason
     assert not state.ready
+
+
+def _sea_state(site_id: str):
+    from trid3nt_server.inputs.wave import Wave
+
+    return Wave(height_m=1.6, peak_period_s=8.0, from_direction_deg=220.0,
+                site_id=site_id)
+
+
+def _matched(site_id: str) -> Observation:
+    return Observation(value=1.5, units="m", site_id=site_id,
+                       site_name="the matched buoy",
+                       lon=-75.714, lat=36.200)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool", ["tomawac_nearshore_waves",
+                                  "tomawac_wave_driven_currents"])
+async def test_the_only_buoy_matched_is_the_one_the_run_was_forced_with(tool):
+    """The observe row matched the same station the sea state came from, so a
+    read there would answer with what the run was handed: the observation is
+    dropped from the run's reads, taken out of what may be charted, and the
+    journal says why there is no independent check."""
+    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt_server.workflows.runtime.fill import production
+
+    workflow = TOOL_REGISTRY[tool].fn.workflow
+    env = production(Fill(workflow=workflow))
+    run = {"wave": _sea_state("44056"), "observe": _matched("44056")}
+    untaken: set[str] = set()
+    token = bind_notes()
+    await workflow._no_independent_check(env, run, untaken)
+    said = drain_notes(token)
+    assert run["observe"] is None
+    assert untaken == {"observe"}
+    assert any("forced with" in note and "independent" in note for note in said), \
+        said
+
+
+@pytest.mark.asyncio
+async def test_a_buoy_other_than_the_forcing_one_is_kept_for_the_run_to_read_at():
+    """The observe row matched a different station than the sea state came from,
+    so the observation stays held for every read and chart to answer at."""
+    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt_server.workflows.runtime.fill import production
+
+    workflow = TOOL_REGISTRY["tomawac_nearshore_waves"].fn.workflow
+    env = production(Fill(workflow=workflow))
+    independent = _matched("44056")
+    run = {"wave": _sea_state("44100"), "observe": independent}
+    untaken: set[str] = set()
+    token = bind_notes()
+    await workflow._no_independent_check(env, run, untaken)
+    said = drain_notes(token)
+    assert run["observe"] is independent
+    assert untaken == set()
+    assert not [note for note in said if "forced with" in note], said
+
+
+@pytest.mark.asyncio
+async def test_a_run_that_has_not_held_the_buoy_reads_it_before_dropping_it(
+        monkeypatch):
+    """The coupled host holds no wave-series fill of its own, so the drop reads
+    the observe row the way any other read does - and drops that result too when
+    it turns out to be the forcing station itself."""
+    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt_server.workflows.runtime import fill as fill_mod
+    from trid3nt_server.workflows.runtime.fill import production
+
+    async def _buoy(_env, _row) -> Observation:
+        return _matched("44097")
+
+    monkeypatch.setattr(fill_mod, "_produce", _buoy)
+    workflow = TOOL_REGISTRY["tomawac_wave_driven_currents"].fn.workflow
+    env = production(Fill(workflow=workflow))
+    run = {"wave": _sea_state("44097")}
+    untaken: set[str] = set()
+    token = bind_notes()
+    await workflow._no_independent_check(env, run, untaken)
+    said = drain_notes(token)
+    assert run["observe"] is None
+    assert untaken == {"observe"}
+    assert any("forced with" in note for note in said), said

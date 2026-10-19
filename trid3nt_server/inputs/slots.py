@@ -110,7 +110,7 @@ LINE = Slot("line", ingestion="line", geometry="polyline")
 #: domain, in the unit the keyword it fills reads.
 OBSERVE = Slot("observe", ingestion="observation",
                classes=frozenset({"water quality sample", "bed material",
-                                  "groundwater level"}),
+                                  "groundwater level", "wave series"}),
                record=True, number=True,
                desc="a layer of sites that report it, or the number itself")
 

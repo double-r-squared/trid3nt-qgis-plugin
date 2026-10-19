@@ -20,7 +20,8 @@ from trid3nt_contracts.execution import LayerURI
 
 from trid3nt_server.inputs.input import Input
 from trid3nt_server.inputs.instant import event_time
-from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LEVEL, MESH
+from trid3nt_server.inputs.slots import (BED, DISCHARGE, DOMAIN, LEVEL, MESH,
+                                         OBSERVE, WAVE)
 from trid3nt_server.workflows.runtime import (
     DeclarationError,
     RunResult,
@@ -487,8 +488,7 @@ class TelemacWorkflow(Workflow):
 
     def published_units(self) -> Mapping[str, str]:
         """The unit each variable this run publishes is written in, by the name the result file carries.
-        Three statements, all the deck's own: the module's variable table, the rows every coupled module appends,
-        and the 32-character tracer text the deck writes its tracers as."""
+        Four statements, all the deck's own: the module's variable table, the rows every coupled module appends, the rows a coupled module writes of its own, and the 32-character tracer text the deck writes its tracers as."""
         from .modules import wrapper_for
         from .modules.sheet import tracer_text
 
@@ -497,6 +497,9 @@ class TelemacWorkflow(Workflow):
         for body in getattr(self.steering, "coupling", ()) or ():
             appends = wrapper_for(body["module"]).APPENDS
             for row in (list(appends(body)) if appends is not None else []):
+                published[row.name] = row.unit
+            coupled = wrapper_for(body["module"]).MODULE_OUTPUT
+            for row in coupled.values():
                 published[row.name] = row.unit
         for declared in getattr(self.steering, "NAMES_OF_TRACERS", ()) or ():
             name, unit = tracer_text(declared)
@@ -624,6 +627,8 @@ class TelemacWorkflow(Workflow):
             lon, lat = (await read(env, domain)).centroid
             run[MOMENT] = {"at": datetime.fromisoformat(run[EVENT_TIME.name]),
                            "lon": lon, "lat": lat}
+        # The world and the sea state are both held now: a buoy matched that is the one the sea state came from is no check, and the sheet must not fill from it either.
+        await self._no_independent_check(env, run, untaken)
         declared = {row.name for row in self.inputs if not row.is_row}
         listed = tuple(self._states("RESULTS", ()))
         staged: dict[str, Any] = {}
@@ -690,6 +695,26 @@ class TelemacWorkflow(Workflow):
                 wanted |= set(body.get("filled_by", ()))
         return [name for slot, name in self._slots().items()
                 if slot.name in wanted]
+
+    async def _no_independent_check(self, env: Any, run: Mapping[str, Any],
+                                    untaken: set[str]) -> None:
+        """Drop the observe read when its station is the one the sea state came from: a read there answers with what the run was forced with, so it checks nothing - held as None, taken out of what may be charted, and said on the journal.
+        A run that states no wave row, or no observe row, reads its buoy as any other input."""
+        from trid3nt_server.inputs.run_notes import journal_note
+        from trid3nt_server.workflows.runtime.fill import read
+
+        slots = self._slots()
+        oname, wname = slots.get(OBSERVE), slots.get(WAVE)
+        if oname is None or wname is None or not run.get(wname):
+            return
+        held = run[oname] if oname in run else await read(env, oname)
+        site = getattr(run[wname], "site_id", None)
+        if site and getattr(held, "site_id", None) == site:
+            run[oname] = None
+            untaken.add(oname)
+            journal_note(
+                "the only buoy matched is the one the run was forced with; "
+                "there is no independent check.")
 
     def judged(self, state: Fill) -> dict[str, Any]:
         """The session rule, then what this deck refuses before any mesh is built: a previous computation on a template whose settle

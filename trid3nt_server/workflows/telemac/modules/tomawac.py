@@ -164,6 +164,28 @@ def _toward(wave: Any) -> float:
     return toward
 
 
+def _printout(obs: Any, run: Mapping[str, Any]) -> tuple[float, float] | None:
+    """The matched buoy's site in the mesh's own metres, or None where this run's mesh does not hold it.
+
+    The mesh is the run's own record; a site no face contains fills no printout point, and the engine answers for the nearest node it wrote.
+    """
+    from trid3nt_server.inputs.point import Point, as_utm, containing_face
+    from trid3nt_server.tools.mesh.shared.nodes import accepted_mesh_nodes
+    from trid3nt_server.workflows.telemac.authoring.accepted_mesh import mesh_zone
+
+    if obs is None or obs.lon is None or obs.lat is None:
+        return None
+    mesh = run.get("mesh") or {}
+    zone = mesh_zone(mesh)
+    if not zone:
+        return None
+    points, faces, _bed, _lonlat = accepted_mesh_nodes(mesh)
+    here = as_utm(Point(float(obs.lon), float(obs.lat)), int(zone))
+    face, _away = containing_face(here, x=points[:, 0], y=points[:, 1],
+                                  faces=faces)
+    return None if face is None else (float(here[0]), float(here[1]))
+
+
 WAC = _Tomawac
 WAC.MODULE_OUTPUT = MODULE_OUTPUT
 WAC.PRINTOUTS = PRINTOUTS
@@ -176,6 +198,8 @@ WAC.RESULT_KEYWORD = "ED_RESULTS_FILE"
 WAC.CLOCK = ("TIME_STEP", "NUMBER_OF_TIME_STEP")
 # The spectra are results over the polar frequency-direction grid, not the domain: published per file a deck names; no geographic-mesh primitive reads them.
 WAC.RESULT_FILES = ("PUNCTUAL_RESULTS_FILE", "ZD_SPECTRA_RESULTS_FILE")
+# The punctual file the printout points write: the module's own name, filled beside the point rather than stated by any deck.
+WAC.PUNCTUAL_FILE = "tomawac_spectra.spe"
 # PRI carries no DEPRECATED mark; its mark is that the array is the user's own and the engine computes nothing into it.
 WAC.UNWRITTEN = MappingProxyType({
     "PRI": Unwritten("PRIVATE 1", (
@@ -194,4 +218,14 @@ WAC.FILLED_BY = MappingProxyType({
     "level": {"INITIAL_STILL_WATER_LEVEL": lambda level: level.value},
     # One real, yyyymmddhhmm, to the minute.
     MOMENT: {"DATE_OF_COMPUTATION_BEGINNING":
-             lambda moment: float(moment["at"].strftime("%Y%m%d%H%M"))}})
+             lambda moment: float(moment["at"].strftime("%Y%m%d%H%M"))},
+    # The spectrum printout stands at the matched buoy's own site in the mesh's metres. TOMAWAC stops on a punctual file whose printout point was never filled, so the file's name travels only with the point that writes it.
+    "observe": {"ABSCISSAE_OF_SPECTRUM_PRINTOUT_POINTS":
+                lambda obs, run: (None if (xy := _printout(obs, run)) is None
+                                  else [xy[0]]),
+                "ORDINATES_OF_SPECTRUM_PRINTOUT_POINTS":
+                lambda obs, run: (None if (xy := _printout(obs, run)) is None
+                                  else [xy[1]]),
+                "PUNCTUAL_RESULTS_FILE":
+                lambda obs, run: WAC.PUNCTUAL_FILE
+                if _printout(obs, run) else None}})

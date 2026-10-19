@@ -6,14 +6,14 @@ import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs import point_arg
-from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT, LEVEL, WAVE
+from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT, LEVEL, OBSERVE, WAVE
 from trid3nt_server.tools.mesh.recipe import RESOLUTION
 from trid3nt_server.inputs.input import Input
 from trid3nt_server.workflows.runtime import (
     register_workflow,
 )
 from trid3nt_server.tools.mesh.tool import mesh_op, tool
-from trid3nt_server.workflows.telemac.modules import WAC, series
+from trid3nt_server.workflows.telemac.modules import WAC, series, spectrum
 from trid3nt_server.workflows.telemac.modules.tomawac import RESULT_FILENAME
 from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
@@ -38,6 +38,9 @@ class INPUTS:
     bed = Input(BED).need("bathymetry")
     wave = Input(WAVE).need("wave series", at="seed")
     level = Input(LEVEL).need("water level series")
+    # The check: a station the run was NOT forced at, so the answers there are
+    # read from a record the boundary never saw.
+    observe = Input(OBSERVE).need("wave series", of="WAVE HEIGHT HM0")
 
 
 class STEERING(WAC):
@@ -85,12 +88,17 @@ MESH = tool.build_mesh(
 )
 
 OUTPUTS = [
-    series("HM0").chart(),
+    series("HM0", at="observe").chart(),
+    series("TPD", at="observe").chart(),
+    series("DMOY", at="observe").chart(),
+    spectrum(at="observe").chart(),
 ]
 CAPTIONS = {"HM0": "significant wave height", "TPD": "peak wave period",
             "DMOY": "mean wave direction", "BETA": "breaking rate",
             "DBR": "breaker dissipation", "wave": "a sea state",
-            "level": "a water-surface elevation"}
+            "level": "a water-surface elevation",
+            "observe": "the matched buoy",
+            "spectrum": "wave energy by frequency at the matched buoy"}
 
 _METADATA = AtomicToolMetadata(
     name="tomawac_nearshore_waves",

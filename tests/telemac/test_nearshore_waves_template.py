@@ -16,7 +16,7 @@ from trid3nt_server.workflows.telemac.authoring.selafin_io import (
 
 import pytest
 
-from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT, LEVEL, WAVE
+from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT, LEVEL, OBSERVE, WAVE
 from trid3nt_server.workflows.telemac.modules import WAC, fill
 from trid3nt_server.workflows.telemac.modules.tomawac import (
     RESULT_FILENAME,
@@ -184,14 +184,37 @@ def test_the_deck_states_the_physics_the_question_is_about():
 
 def test_what_the_template_places_is_the_module_s_own_rows():
     """Every read this template places is one variable TOMAWAC wrote, so nothing
-    here is a template's arithmetic over the engine's."""
+    here is a template's arithmetic over the engine's - and each stands at the
+    matched buoy, never at the buoy the boundary was forced with."""
     from trid3nt_server.workflows.telemac.templates.nearshore_waves import (
         nearshore_waves as template)
 
     for token in ("HM0", "TPD", "DMOY", "BETA", "DBR"):
         assert token in WAC.MODULE_OUTPUT
-    assert [p.variable or p.kind
-            for p in template.OUTPUTS] == ["HM0"]
+    assert [(p.variable or p.kind, p.at)
+            for p in template.OUTPUTS] == [
+        ("HM0", "observe"), ("TPD", "observe"), ("DMOY", "observe"),
+        ("spectrum", "observe")]
+
+
+def test_the_matched_buoy_is_one_row_on_the_observe_slot():
+    """The spectrum is read at a station the run does NOT stand on, so it arrives
+    as its own matched record - a row of the observe slot observing the wave
+    network's published height - and no second wave row is declared beside the
+    boundary's own."""
+    rows = _rows()
+    observe = rows["observe"]
+    assert (observe.slot, observe.data_class, observe.observes) == (
+        OBSERVE, "wave series", "WAVE HEIGHT HM0")
+    slots = _workflow()._slots()
+    assert slots.get(OBSERVE) == "observe"
+    assert sum(1 for slot in slots if slot is WAVE) == 1
+
+
+def test_the_buoy_is_held_by_the_fill_that_fills_its_spectrum_printout():
+    """The printout point fills from the matched buoy's own site, so that row is
+    read with the rest of the run's own derived inputs, before the sheet fills."""
+    assert "observe" in _workflow()._fills()
 
 
 def test_every_charted_variable_is_captioned():
@@ -203,24 +226,80 @@ def test_every_charted_variable_is_captioned():
                for p in template.OUTPUTS)
 
 
-def test_no_point_read_stands_at_the_forcing_buoy_and_no_printout_point_is_filled():
-    """The forcing buoy's own sea state is the boundary condition, so a read there
-    answers with what the run was handed: no output reads at it, no input fills
-    a spectrum printout point, and the deck names no spectrum file."""
+def _station_mesh(tmp_path, cx: float, cy: float) -> dict:
+    """A 3x3 node lattice in the mesh's own UTM metres, two triangles per square,
+    placed so a point at the site's own coordinates falls strictly inside one of
+    them rather than on a node or an edge."""
+    from trid3nt_server.tools.mesh.artifact import MeshArtifact
+
+    rows = ["MESH2D"]
+    cell = 0
+    for r in range(2):
+        for c in range(2):
+            a = r * 3 + c + 1
+            for tri in ((a, a + 1, a + 4), (a, a + 4, a + 3)):
+                cell += 1
+                rows.append(f"E3T {cell} {tri[0]} {tri[1]} {tri[2]} 1")
+    xs = (cx - 13.0, cx - 3.0, cx + 4.0)
+    ys = (cy - 15.0, cy - 5.0, cy + 6.0)
+    node = 0
+    for y in ys:
+        for x in xs:
+            node += 1
+            rows.append(f"ND {node} {x} {y} -2.0")
+    path = tmp_path / "mesh.2dm"
+    path.write_text("\n".join(rows) + "\n")
+    artifact = MeshArtifact(
+        mesh_id="M01", name="the station", mode="om2d",
+        display_uri=str(path), crs_authid="EPSG:32618",
+        has_bathymetry=True, node_count=9, element_count=8,
+        bbox=(xs[0], ys[0], xs[2], ys[2]), utm_epsg=32618)
+    return {"artifact": artifact, "mesh_id": artifact.mesh_id,
+            "display_uri": artifact.display_uri}
+
+
+def _buoy(**over):
+    from trid3nt_server.inputs.observation import Observation
+
+    stated = {"value": 1.5, "units": "m", "site_id": "44056",
+              "site_name": "Duck, NC", "lon": -75.714, "lat": 36.200}
+    return Observation(**{**stated, **over})
+
+
+def test_the_spectrum_printout_fills_from_the_buoy_site_in_the_mesh_s_metres(
+        tmp_path):
+    """A printout point is a station of the solved grid: the three keywords fill
+    from where the matched buoy stands, in the zone's own metres, and the deck
+    states none of them - the spectrum file's name is the module's own."""
+    from trid3nt_server.inputs.point import Point, as_utm
+
+    cx, cy = as_utm(Point(-75.714, 36.200), 32618)
+    stated = dict(fill(WAC, produced={
+        "mesh": _station_mesh(tmp_path, cx, cy), "observe": _buoy()}).resolved())
+    assert stated["ABSCISSAE OF SPECTRUM PRINTOUT POINTS"] == [pytest.approx(cx)]
+    assert stated["ORDINATES OF SPECTRUM PRINTOUT POINTS"] == [pytest.approx(cy)]
+    assert stated["PUNCTUAL RESULTS FILE"] == WAC.PUNCTUAL_FILE
+    assert "PUNCTUAL_RESULTS_FILE" not in _deck().ASSERTED
+
+
+def test_the_spectrum_printout_fills_nothing_where_the_mesh_does_not_hold_the_buoy(
+        tmp_path):
+    """A buoy the window does not stand over fills no printout point, so no
+    punctual file is named either: all three keywords travel together, and a
+    point the mesh does not hold reads as the miss it is."""
+    from trid3nt_server.inputs.point import Point, as_utm
     from trid3nt_server.workflows.telemac.templates.nearshore_waves import (
         nearshore_waves as template)
 
-    asserted = template.STEERING.ASSERTED
-    assert "ABSCISSAE_OF_SPECTRUM_PRINTOUT_POINTS" not in asserted
-    assert "station" not in template.STEERING.FILLED_BY
-    filled = {name for keywords in template.STEERING.FILLED_BY.values()
-              for name in keywords}
-    assert filled.isdisjoint({
-        "ABSCISSAE_OF_SPECTRUM_PRINTOUT_POINTS",
-        "ORDINATES_OF_SPECTRUM_PRINTOUT_POINTS"})
-    # TOMAWAC stops on a punctual results file with no printout point, so none is named.
-    assert "PUNCTUAL_RESULTS_FILE" not in asserted
-    assert all(p.at is None for p in template.OUTPUTS)
+    cx, cy = as_utm(Point(-75.714, 36.200), 32618)
+    far = _buoy(lon=-122.0, lat=45.0)
+    stated = dict(fill(WAC, produced={
+        "mesh": _station_mesh(tmp_path, cx, cy), "observe": far}).resolved())
+    for keyword in ("ABSCISSAE OF SPECTRUM PRINTOUT POINTS",
+                    "ORDINATES OF SPECTRUM PRINTOUT POINTS",
+                    "PUNCTUAL RESULTS FILE"):
+        assert keyword not in stated
+    assert template.STEERING.FILLED_BY.get("observe")
 
 
 def _deck():

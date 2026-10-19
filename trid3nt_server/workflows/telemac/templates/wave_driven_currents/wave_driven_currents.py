@@ -6,7 +6,8 @@ import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs import point_arg
-from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT, LEVEL, WAVE
+from trid3nt_server.inputs.slots import (BED, DOMAIN, EXTENT, LEVEL, OBSERVE,
+                                         WAVE)
 from trid3nt_server.tools.mesh.recipe import RESOLUTION
 from trid3nt_server.inputs.input import Input
 from trid3nt_server.workflows.runtime import (
@@ -53,6 +54,9 @@ class INPUTS:
     bed = Input(BED).need("bathymetry")
     wave = Input(WAVE).need("wave series", at="seed")
     level = Input(LEVEL).need("water level series")
+    # The check: a station the run was NOT forced at, so the answers there are
+    # read from a record the boundary never saw.
+    observe = Input(OBSERVE).need("wave series", of="WAVE HEIGHT HM0")
 
 
 class STEERING(T2D):
@@ -119,13 +123,14 @@ MESH = tool.build_mesh(
 )
 
 OUTPUTS = [
-    series("M").chart(),
-    series("HM0", module="tomawac").chart(),
+    series("M", at="observe").chart(),
+    series("HM0", at="observe", module="tomawac").chart(),
 ]
 CAPTIONS = {"M": "current speed", "U": "current along x", "V": "current along y",
             "HM0": "significant wave height", "BETA": "breaking rate",
             "wave": "a sea state",
-            "level": "the tide the open edge holds, over the run's window"}
+            "level": "the tide the open edge holds, over the run's window",
+            "observe": "the matched buoy"}
 
 _METADATA = AtomicToolMetadata(
     name="tomawac_wave_driven_currents",

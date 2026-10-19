@@ -6,7 +6,7 @@ NEARSHORE WAVES: what the offshore swell becomes at the shore - how high, how lo
 
 |  |  |
 |---|---|
-| module | `tomawac` - 223 keywords in its dictionary, of which this template states 14 |
+| module | `tomawac` - 223 keywords in its dictionary, of which this template states 13 |
 | solves | `trid3nt_server.workflows.telemac.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -19,6 +19,7 @@ NEARSHORE WAVES: what the offshore swell becomes at the shore - how high, how lo
 | `bed` | matched on a need for bathymetry | what the domain's nodes carry for elevation: a DEM, a bathymetry or survey raster, a layer of soundings, or a depth in metres below the free surface; unfilled, the run matches a source of bathymetry. | - |
 | `wave` | matched on a need for wave series | the wave series this run reads, as a uri or a layer name; unfilled, the run matches a source of wave series. | - |
 | `level` | matched on a need for water level series | the water level series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of water level series. | - |
+| `observe` | matched on a need for wave series | the wave series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of wave series. | - |
 | `mesh` | supplied by the caller | a mesh this case already built, as its uri or its layer name, solved on in place of the one the run would build; the user may state one; unstated, the run builds its own. | - |
 
 ## The inputs

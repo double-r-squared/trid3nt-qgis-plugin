@@ -5,12 +5,12 @@ routing: 'THE tool for "how big are the waves at the beach", "what does this swe
   TOMAWAC, the spectral wave model, over the water the window is cut to at the coastline:
   the open edge forced at a sea state a buoy MEASURED, shoaling and refraction over the charted
   bed, breaking and bottom friction taking them down. Produces the height, the periods, the
-  directions and the breaking band, animated, three of them charted where the ask points.
+  directions and the breaking band, animated, charted at a matched buoy.
   Deck opinions, by keyword: TIME STEP, NUMBER OF TIME STEP, the spectral grid, DEPTH-INDUCED
   BREAKING DISSIPATION. Supply the window, `seed`, and `event_time`.'
 not_for: agitation behind a breakwater, which is phase-resolving (`artemis_harbor_agitation`);
   storm surge or the water level itself; the buoy record alone (`fetch_ndbc_buoys`)
 returns: 'On success the run''s record (a `LayerURI`): every variable TOMAWAC wrote, styled
-  on one mesh layer and animated, plus the height, the period and the direction charted at
-  the forcing buoy''s site. A coast the swell reaches calmly charts a small height and no breaking, which
+  on one mesh layer and animated, plus the height, the period, the direction and the
+  spectrum charted at the matched buoy''s site. A coast the swell reaches calmly charts a small height and no breaking, which
   is what that place did in that hour. On failure a dict with `status="error"` + `error_code`.'

@@ -127,7 +127,10 @@ override and never at the site whose record forced the run. There the check is
 containment, not viability - a site the mesh or grid does not hold composes no series
 and the journal says so with its site and distance; an observation stated as a number,
 which stands at no site, composes nothing and the journal says that; neither refuses
-the run.
+the run. A wave run's station is matched as its own OBSERVE row, one buoy nearest the
+window and never the boundary's own; when the only buoy the row matches is the one the
+sea state came from, the observation is taken out of the run's reads before the sheet
+fills or any output answers at it, and the journal says there is no independent check.
 
 Values lead the wire and rows follow, each in body order, and the generated
 docstring documents both in ONE section: required values, defaulted ones, then
