@@ -69,22 +69,29 @@ missing value refuses rather than defaulting.
 
 ## The coupling
 
-A coupled run is ONE simulation holding a GWF model and a GWT model whose name
-files BOTH name the same staged DISV, joined by the GWF-GWT exchange. This is
+A coupled run is ONE simulation holding a GWF model and a GWT model, a GWE model,
+or both, whose name files ALL name the same staged DISV, each joined to the flow by
+its exchange (GWF-GWT, GWF-GWE). This is
 proven: mf6 6.7.0 validates and solves it, and the concentration output reads
 exactly like a head - `HeadFile(..., text="CONCENTRATION")`, the same 4-D layout
 the head file carries on DISV. Proven through the product: the p01 strip
 authored by this walk (1 x 101 cells, joined quads) reproduces the spike's DIS
-reference bitwise (max|dC| = 0.0 at dispersivity 0 and 10).
+reference bitwise (max|dC| = 0.0 at dispersivity 0 and 10). The energy coupling
+is proven the same way: ex-gwe-vsc's VSC-on branch (flow, transport and energy,
+31 x 46 cells) authored on DISV equals its DIS reference to 2e-14 (temperature
+bitwise).
 
-THE COUPLING COMPOSITE LIVES IN `workflows/modflow/`. `Transport` is a composite
-of the GWF wrapper (`modules/gwf.py`): it takes `given` (the inputs that carry
+THE COUPLING COMPOSITES LIVE IN `workflows/modflow/`. `Transport` and `Energy` are
+composites of the GWF wrapper (`modules/gwf.py`), one factory over the coupled
+module word (`gwt`, `gwe`); each takes `given` (the inputs that carry
 the body - a body whose given inputs all hold nothing composes nothing) and
-`slots` (GWT dictionary identifiers - an unknown one refuses by name, and
+`slots` (the coupled module's dictionary identifiers - an unknown one refuses by name, and
 `TDIS`/`DISV` refuse as the simulation's own). A stress statement in a slot is
-the GWT wrapper's own composite's shape: `ConstantConcentration` and
-`MassSource` (`modules/gwt.py`) are the shared `_stress` factory
-(`modules/module.py`) bound to CNC and SRC, expanding geometry + layer + value
+the coupled wrapper's own composite's shape: `ConstantConcentration` and
+`MassSource` (`modules/gwt.py`), `ConstantTemperature` and `EnergySource`
+(`modules/gwe.py`) are the shared `_stress` factory (`modules/module.py`) bound
+to CNC, SRC, CTP and ESL (their dimensions are not length-rate words, so a raster
+refuses - numbers only), expanding geometry + layer + value
 into the package's period data; a geometry reading nothing states nothing and a
 missing value refuses. The composed body names its module and its slots and
 expands into the second model and the exchange - into the simulation authoring,
@@ -94,15 +101,21 @@ serialize writes the coupled sheet model by model (`authoring/simulation.py`):
 one name file per model over the SAME filename-only DISV, one IMS per model,
 both name files listing `mesh.disv`, the `Periods`/moment filling only the
 carrier, and the exchange written through `sim.exchange_files` as
-`GWF6-GWT6 <carrier>.<carrier><gwt>`. Each model's required packages are
-unstated-refused (IC and MST for gwt), with CNC/SRC period data placed by the
+`GWF6-GWT6 <carrier>.<carrier><gwt>` or `GWF6-GWE6 <carrier>.<carrier><gwe>`
+(`_EXCHANGES` holds the pairs; any other refuses). Each model's required packages are
+unstated-refused (IC and MST for gwt; IC and EST for gwe, whose porosity and solid
+heat capacity and density are stated, never defaulted), with CNC/SRC period data placed by the
 stress walk against the shared grid - a point off the mesh refuses
 POINT_NOT_VIABLE. SSM is NOT defaulted: mf6 refuses an SSM whose flow model
 carries no boundary flows, so `SSM_SOURCES` is a stated keyword like every
 other.
 
-For a coupled run the manifest's `module` is the single answering word (`gwt` -
-transport is the question, flow is its machinery). The worker needs no change:
+For a coupled run the manifest's `module` is the single answering word (the first
+coupled body stated - `gwt` where a run couples both; flow is the machinery).
+BUY and VSC are GWF packages stated by their own dictionary keywords on the
+carrier; their PACKAGEDATA names the coupled model by its module word ("gwt",
+"gwe"). An option's name list (AUXILIARY) is written as stated, never placed as
+cell data. The worker needs no change:
 it runs whatever `mfsim.nam` names, `results` names the files that must exist
 after the solve, and `module` is provenance the metrics state. The alternative
 - GWT in its own simulation reading a prior flow run's head and budget through
@@ -113,8 +126,8 @@ the product.
 ## The publish
 
 The engine's own reading of a solved run (`modules/outputs.py`) opens the files
-the output control saved - for either model: `_SAVED` maps HEAD and
-CONCENTRATION to their own OC filerecords, and a coupled body reads its
+the output control saved - for every model: `_SAVED` maps HEAD,
+CONCENTRATION and TEMPERATURE to their own OC filerecords, and a coupled body reads its
 filerecord from its own slots over the carrier's sheet (the clock and units the
 simulation owns are one for both models). The publish's table walks every
 module's output rows: the carrier's read off the run's own module, a coupled

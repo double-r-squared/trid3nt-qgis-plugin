@@ -84,61 +84,68 @@ def _aquifer(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
             "IC_STRT": {"cells": "below_top", "of": depth}}, {}
 
 
-# The transport stress a Transport body states, by its package word; each is the leg 7 factory on the GWT wrapper.
-_TRANSPORT_STRESS = {"CNC": "ConstantConcentration", "SRC": "MassSource"}
+# The stress statements a coupled body states, by its module word: each package word to the composite the wrapper holds for it.
+_COUPLED_STRESS = {
+    "gwt": {"CNC": "ConstantConcentration", "SRC": "MassSource"},
+    "gwe": {"CTP": "ConstantTemperature", "ESL": "EnergySource"},
+}
 
 # The simulation's own clock and grid: one TDIS and one staged DISV describe the whole simulation, and the carrier states them.
 _SIMULATION_OWNED = ("TDIS", "DISV")
 
 
-def _transport(value: Any, *, run: Mapping[str, Any]
+def _coupled(module: str, name: str):
+    stress = _COUPLED_STRESS[module]
+
+    def expand(value: Any, *, run: Mapping[str, Any]
                ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-    """The gwt body this run's flow couples: its module word, slots and given inputs.
+        from . import wrapper_for
 
-    ``given`` names the inputs that carry the body; a body whose given inputs all hold
-    nothing states nothing. Each slot is a GWT dictionary identifier - an unknown one
-    refuses by name - and a stress statement is the GWT wrapper's own composite's shape."""
-    from . import wrapper_for
-    from .gwt import GWT
-
-    if not isinstance(value, Mapping):
-        raise SlotRefused(
-            "Transport takes a mapping with 'given' naming the input(s) that carry "
-            "the transport body and 'slots' stating its GWT keywords; got "
-            f"{type(value).__name__}.")
-    given = value.get("given")
-    if isinstance(given, str):
-        given = (given,)
-    given = tuple(given or ())
-    if given and not any((run.get(name) if isinstance(name, str) else name)
-                         is not None for name in given):
-        return ({}, {})
-    stated = value.get("slots")
-    if stated is not None and not isinstance(stated, Mapping):
-        raise SlotRefused(
-            f"Transport slots takes a mapping of GWT identifiers to values; got "
-            f"{type(stated).__name__}.")
-    wrapper = wrapper_for("gwt")
-    slots: dict[str, Any] = {}
-    for name, item in (stated or {}).items():
-        prefix = str(name).split("_", 1)[0]
-        if prefix in _SIMULATION_OWNED:
+        if not isinstance(value, Mapping):
             raise SlotRefused(
-                f"{name} states the simulation's own "
-                f"{'clock' if prefix == 'TDIS' else 'grid'}, which the carrier's deck "
-                "owns: one TDIS and the staged DISV describe the simulation, and the "
-                "transport body describes its own packages.")
-        if item is None:
-            continue
-        slots[str(name)] = wrapper.slot(name).check(item)
-    for name, item in list(slots.items()):
-        if not name.endswith("_STRESS_PERIOD_DATA") or not isinstance(item, Mapping) \
-                or "stress" in item:
-            continue
-        composite = _TRANSPORT_STRESS.get(name.split("_", 1)[0])
-        if composite is not None:
-            slots.update(GWT.COMPOSITES[composite].apply(item, run)[0])
-    return ({}, {"gwt": {"module": "gwt", "slots": slots, "given": list(given)}})
+                f"{name} takes a mapping with 'given' naming the input(s) that carry "
+                f"the {module} body and 'slots' stating its {module.upper()} keywords; "
+                f"got {type(value).__name__}.")
+        given = value.get("given")
+        if isinstance(given, str):
+            given = (given,)
+        given = tuple(given or ())
+        if given and not any((run.get(item) if isinstance(item, str) else item)
+                             is not None for item in given):
+            return ({}, {})
+        stated = value.get("slots")
+        if stated is not None and not isinstance(stated, Mapping):
+            raise SlotRefused(
+                f"{name} slots takes a mapping of {module.upper()} identifiers to "
+                f"values; got {type(stated).__name__}.")
+        wrapper = wrapper_for(module)
+        slots: dict[str, Any] = {}
+        for key, item in (stated or {}).items():
+            prefix = str(key).split("_", 1)[0]
+            if prefix in _SIMULATION_OWNED:
+                raise SlotRefused(
+                    f"{key} states the simulation's own "
+                    f"{'clock' if prefix == 'TDIS' else 'grid'}, which the carrier's deck "
+                    "owns: one TDIS and the staged DISV describe the simulation, and the "
+                    f"{module} body describes its own packages.")
+            if item is None:
+                continue
+            slots[str(key)] = wrapper.slot(key).check(item)
+        for key, item in list(slots.items()):
+            if not key.endswith("_STRESS_PERIOD_DATA") or not isinstance(item, Mapping) \
+                    or "stress" in item:
+                continue
+            composite = stress.get(key.split("_", 1)[0])
+            if composite is not None:
+                slots.update(wrapper.COMPOSITES[composite].apply(item, run)[0])
+        return ({}, {module: {"module": module, "slots": slots, "given": list(given)}})
+
+    expand.__doc__ = (
+        f"The {module} body this run's flow couples: its module word, slots and given inputs.\n\n"
+        "    ``given`` names the inputs that carry the body; a body whose given inputs all hold\n"
+        f"    nothing states nothing. Each slot is a {module.upper()} dictionary identifier - an unknown one\n"
+        "    refuses by name - and a stress statement is the wrapper's own composite's shape.")
+    return expand
 
 
 GWF = ModflowModule("gwf")
@@ -152,5 +159,6 @@ GWF.composites(
     **{name: _stress(name, package, dict(columns))
        for name, (package, columns) in _STRESS.items()})
 GWF.composites(reads={"Aquifer": _AQUIFER}, Aquifer=_aquifer)
-GWF.composites(Transport=_transport)
+GWF.composites(Transport=_coupled("gwt", "Transport"),
+               Energy=_coupled("gwe", "Energy"))
 GWF.reads(**PRIMITIVES)

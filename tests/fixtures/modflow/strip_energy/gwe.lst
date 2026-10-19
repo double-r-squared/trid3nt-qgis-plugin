@@ -1,0 +1,246 @@
+                                   MODFLOW 6
+                U.S. GEOLOGICAL SURVEY MODULAR HYDROLOGIC MODEL
+                             TRANSPORT MODEL (GWE)
+                            VERSION 6.7.0 02/05/2026
+
+   MODFLOW 6 compiled Feb 05 2026 22:38:38 with Intel(R) Fortran Intel(R) 64
+   Compiler Classic for applications running on Intel(R) 64, Version 2021.6.0
+                             Build 20220226_000000
+
+This software has been approved for release by the U.S. Geological 
+Survey (USGS). Although the software has been subjected to rigorous 
+review, the USGS reserves the right to update the software as needed 
+pursuant to further analysis and review. No warranty, expressed or 
+implied, is made by the USGS or the U.S. Government as to the 
+functionality of the software and related material nor shall the 
+fact of release constitute any such warranty. Furthermore, the 
+software is released on condition that neither the USGS nor the U.S. 
+Government shall be held liable for any damages resulting from its 
+authorized or unauthorized use. Also refer to the USGS Water 
+Resources Software User Rights Notice for complete use, copyright, 
+and distribution information.
+
+
+As a work of the United States Government, this USGS product is 
+in the public domain within the United States. You can copy, 
+modify, distribute, and perform the work, even for commercial 
+purposes, all without asking permission. Additionally, USGS 
+waives copyright and related rights in the work worldwide 
+through CC0 1.0 Universal Public Domain Dedication 
+(https://creativecommons.org/publicdomain/zero/1.0/).
+
+The following GNU Lesser General Public License (LGPL) libraries
+are used in this USGS product:
+
+    SPARSKIT version 2.0
+      ilut, luson, and qsplit 
+      (https://www-users.cse.umn.edu/~saad/software/SPARSKIT/)
+
+    RCM - Reverse Cuthill McKee Ordering
+      (https://people.math.sc.edu/Burkardt/f_src/rcm/rcm.html)
+
+    BLAS - Basic Linear Algebra Subprograms Level 1
+      (https://people.math.sc.edu/Burkardt/f_src/blas1_d/blas1_d.html)
+
+    SPARSEKIT - Sparse Matrix Utility Package
+      amux, dperm, dvperm, rperm, and cperm
+      (https://people.sc.fsu.edu/~jburkardt/f77_src/sparsekit/sparsekit.html)
+
+The following BSD-3 License libraries are used in this USGS product:
+
+    Modern Fortran DAG Library
+      Copyright (c) 2018, Jacob Williams
+      All rights reserved.
+      (https://github.com/jacobwilliams/daglib)
+
+MODFLOW 6 compiler options: -Isrc/libmf6_external.a.p -Isrc/libmf6core.a.p
+-Isrc -I../src -D_FILE_OFFSET_BITS=64 -warn general -warn truncated_source
+-stand=f18 -O2 -fpe0 -no-heap-arrays -traceback -diag-disable:7416
+-diag-disable:7025 -diag-disable:5268 -fPIC -module src/libmf6core.a.p
+-gen-dep=src/libmf6core.a.p/Utilities_compilerversion.F90.o
+-gen-depformat=make -o src/libmf6core.a.p/Utilities_compilerversion.F90.o -c
+
+System command used to initiate simulation:
+mf6
+
+MODFLOW was compiled using uniform precision.
+
+Real Variables
+  KIND: 8
+  TINY (smallest non-zero value):    2.225074-308
+  HUGE (largest value):    1.797693+308
+  PRECISION: 15
+  SIZE IN BITS: 64
+
+Integer Variables
+  KIND: 4
+  HUGE (largest value): 2147483647
+  SIZE IN BITS: 32
+
+Long Integer Variables
+  KIND: 8
+  HUGE (largest value): 9223372036854775807
+  SIZE IN BITS: 64
+
+Logical Variables
+  KIND: 4
+  SIZE IN BITS: 32
+ 
+ NAMEFILE OPTIONS:
+    FLOWS WILL BE SAVED TO BUDGET FILE SPECIFIED IN OUTPUT CONTROL
+ END NAMEFILE OPTIONS:
+
+ DISV -- VERTEX GRID DISCRETIZATION PACKAGE, VERSION 1 : 12/23/2015 - INPUT READ FROM MEMPATH: __INPUT__/GWE/DISV                                
+
+
+ Setting Discretization Options
+    Model length unit [0=UND, 1=FEET, 2=METERS, 3=CENTIMETERS] set as 2
+ End Setting Discretization Options
+
+ Setting Discretization Dimensions
+    NLAY = 1
+    NCPL = 3
+    NVERT = 8
+ End Setting Discretization Dimensions
+
+ Setting Discretization Griddata
+    TOP set from input file
+    BOTM set from input file
+ End Setting Discretization Griddata
+
+ Discretization Vertex data loaded
+ Discretization Cell2d data loaded
+
+ CND-- THERMAL CONDUCTION AND DISPERSION PACKAGE, VERSION 1, 01/01/2024, INPUT READ FROM MEMPATH __INPUT__/GWE/CND                                 
+
+
+
+ FMI -- FLOW MODEL INTERFACE,' VERSION 2, 8/17/2023
+  FLOWS PROVIDED BY A GWF MODEL IN THIS SIMULATION
+
+ ADV -- ADVECTION PACKAGE, VERSION 1, 8/25/2017 INPUT READ FROM MEMPATH: __INPUT__/GWE/ADV                                 
+
+
+ PROCESSING ADVECTION OPTIONS
+    ADVECTION WEIGHTING SCHEME HAS BEEN SET TO: UPSTREAM
+ END OF ADVECTION OPTIONS
+ Setting CND Options
+    XT3D formulation [0=INACTIVE, 1=ACTIVE, 3=ACTIVE RHS] set to: 1
+ End Setting CND Options
+
+ Setting CND Griddata
+    KTW set from input file
+    KTS set from input file
+ End Setting CND Griddata
+
+
+ CTP -- CTP PACKAGE, VERSION 8, 2/22/2014 INPUT READ FROM MEMPATH: __INPUT__/GWE/CTP_0                               
+
+ PROCESSING CTP BASE OPTIONS
+ END OF CTP BASE OPTIONS
+
+ PROCESSING CTP BASE DIMENSIONS
+    MAXBOUND =       1
+ END OF CTP BASE DIMENSIONS
+    STRT set from input file
+
+ EST -- ENERGY STORAGE AND TRANSFER PACKAGE, VERSION 1, 7/29/2020 INPUT READ FROM MEMPATH: __INPUT__/GWE/EST                                 
+
+ PROCESSING ENERGY STORAGE AND TRANSFER OPTIONS
+    Heat capacity of the water has been set to:     4180.00    
+    Density of the water has been set to:     1000.00    
+    Latent heat of vaporization of the water has been set to:    2.453500E+06
+ END PROCESSING ENERGY STORAGE AND TRANSFER OPTIONS
+
+ PROCESSING ENERGY STORAGE AND TRANSFER GRIDDATA
+    POROSITY set from input file
+    HEAT_CAPACITY_SOLID set from input file
+    DENSITY_SOLID set from input file
+ END PROCESSING ENERGY STORAGE AND TRANSFER GRIDDATA
+      THE LAST TIME STEP WILL BE PRINTED
+      THE LAST TIME STEP WILL BE PRINTED
+
+ PROCESSING OC OPTIONS
+
+    BUDGET INFORMATION WILL BE WRITTEN TO:
+      UNIT NUMBER: 1024
+      FILE NAME: gwe.cbc
+
+ OPENED gwe.cbc
+ FILE TYPE:DATA(BINARY)   UNIT 1024   STATUS:REPLACE             
+ FORMAT:UNFORMATTED            ACCESS:STREAM              
+ ACTION:READWRITE           
+
+    TEMPERATURE INFORMATION WILL BE WRITTEN TO:
+      UNIT NUMBER: 1025
+      FILE NAME: gwe.ucn
+
+ OPENED gwe.ucn
+ FILE TYPE:DATA(BINARY)   UNIT 1025   STATUS:REPLACE             
+ FORMAT:UNFORMATTED            ACCESS:STREAM              
+ ACTION:READWRITE           
+
+ END OF OC OPTIONS
+
+start timestep kper="1" kstp="1" mode="normal"
+
+
+ BEGIN READING OUTPUT CONTROL FOR STRESS PERIOD 1
+      THE LAST TIME STEP WILL BE SAVED
+      THE LAST TIME STEP WILL BE SAVED
+
+ END READING OUTPUT CONTROL FOR STRESS PERIOD 1
+
+ XT3D is active.
+
+
+
+end timestep
+
+
+start timestep kper="1" kstp="2" mode="normal"
+
+ UBDSV1 SAVING  STORAGE-CELLBLK ON UNIT   1024 AT TIME STEP      2, STRESS PERIOD      1
+ UBDSV1 SAVING     FLOW-JA-FACE ON UNIT   1024 AT TIME STEP      2, STRESS PERIOD      1
+ UBDSV06 SAVING              CTP IN MODEL GWE              PACKAGE GWE             CONNECTED TO MODEL GWE              PACKAGE CTP_0            ON UNIT   1024 AT TIME STEP      2, STRESS PERIOD      1
+
+ TEMPERATURE WILL BE SAVED ON UNIT 1025 AT END OF TIME STEP    2, STRESS PERIOD    1
+
+
+  ENERGY BUDGET FOR ENTIRE MODEL AT END OF TIME STEP    2, STRESS PERIOD   1
+  ---------------------------------------------------------------------------------------------------
+
+     CUMULATIVE ENERGY      E       RATES FOR THIS TIME STEP      E/T          PACKAGE NAME    
+     ------------------                 ------------------------                     ----------------
+
+           IN:                                      IN:
+           ---                                      ---
+     STORAGE-CELLBLK =           0.0000       STORAGE-CELLBLK =           0.0000     EST                              
+                 CTP =      439486.9012                   CTP =       43931.6046     CTP_0                            
+
+            TOTAL IN =      439486.9012              TOTAL IN =       43931.6046
+
+          OUT:                                     OUT:
+          ----                                     ----
+     STORAGE-CELLBLK =      439486.9012       STORAGE-CELLBLK =       43931.6046     EST                              
+                 CTP =           0.0000                   CTP =           0.0000     CTP_0                            
+
+           TOTAL OUT =      439486.9012             TOTAL OUT =       43931.6046
+
+            IN - OUT =      -1.7462E-08              IN - OUT =      -2.0082E-09
+
+ PERCENT DISCREPANCY =          -0.00     PERCENT DISCREPANCY =          -0.00
+
+
+
+
+         TIME SUMMARY AT END OF TIME STEP    2 IN STRESS PERIOD    1
+                    SECONDS     MINUTES      HOURS       DAYS        YEARS
+                    -----------------------------------------------------------
+   TIME STEP LENGTH 4.32000E+05  7200.0      120.00      5.0000     1.36893E-02
+ STRESS PERIOD TIME 8.64000E+05  14400.      240.00      10.000     2.73785E-02
+         TOTAL TIME 8.64000E+05  14400.      240.00      10.000     2.73785E-02
+
+
+end timestep
+

@@ -40,7 +40,8 @@ _BUDGET_RECORD = {"SATURATION": ("DATA-SAT", "NPF_SAVE_SATURATION"),
 
 # Each variable a model saves to its own binary file: the output control keyword that names the file, and the text the file is written under (None: the head file's own).
 _SAVED = {"HEAD": ("OC_HEAD_FILERECORD", None),
-          "CONCENTRATION": ("OC_CONCENTRATION_FILERECORD", "CONCENTRATION")}
+          "CONCENTRATION": ("OC_CONCENTRATION_FILERECORD", "CONCENTRATION"),
+          "TEMPERATURE": ("OC_TEMPERATURE_FILERECORD", "TEMPERATURE")}
 
 
 def _unsaved(keyword: str, why: str) -> ModflowError:

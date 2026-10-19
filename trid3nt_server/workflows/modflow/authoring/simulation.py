@@ -188,14 +188,20 @@ def coupled_sheet(sheet: Any, body: Mapping[str, Any]) -> Any:
                 inputs_fill=False, **dict(body.get("slots") or {}))
 
 
+# The flow model's exchange with each coupled body: the pair to its flopy class and mf6's exchange type.
+_EXCHANGES = {("gwf", "gwt"): ("ModflowGwfgwt", "GWF6-GWT6"),
+              ("gwf", "gwe"): ("ModflowGwfgwe", "GWF6-GWE6")}
+
+
 def _exchange(flopy: Any, sim: Any, *, carrier: str, coupled: str) -> None:
-    """The exchange joining the flow model to its transport, by the pair mf6 names."""
-    if (carrier, coupled) != ("gwf", "gwt"):
+    """The exchange joining the flow model to a coupled body, by the pair mf6 names."""
+    if (carrier, coupled) not in _EXCHANGES:
         raise ModflowError(
             f"{carrier} and {coupled} solve no exchange this engine authors; the "
-            "coupled pair is the flow model and its transport.",
+            "coupled pairs are the flow model with its transport and with its energy.",
             error_code="MODFLOW_EXCHANGE_UNKNOWN")
-    _package(flopy, "ModflowGwfgwt", {}, owner=sim, exgtype="GWF6-GWT6",
+    cls, exgtype = _EXCHANGES[(carrier, coupled)]
+    _package(flopy, cls, {}, owner=sim, exgtype=exgtype,
              exgmnamea=carrier, exgmnameb=coupled,
              filename=f"{carrier}.{carrier}{coupled}",
              how=f"the {carrier}-{coupled} exchange")
@@ -255,12 +261,13 @@ def _unstated(sheet: Any, prefixes: set[str], derived: set[str] = frozenset()) -
 def _placed(rows: dict[str, Any], *, dims: dict[str, int], points: Any,
             cells: Any, utm_epsg: int | None, sheet: Any, frame: Any,
             top: Any) -> dict[str, Any]:
-    """Each keyword's constructor value - an ARRAY placed against the mesh's cells, the rest as stated."""
+    """Each keyword's constructor value - a cell ARRAY placed against the mesh's cells, the rest (an option's name list included) as stated."""
     return {
         name: (place(row.value, slot=row.slot, nlay=int(dims["nlay"]),
                      run=sheet.run, points=points, cells=cells,
                      utm_epsg=utm_epsg, frame=frame, top=top)
-               if row.slot.type == "ARRAY" else row.value)
+               if row.slot.type == "ARRAY" and "OPTIONS" not in row.slot.rubrique
+               else row.value)
         for name, row in rows.items()}
 
 

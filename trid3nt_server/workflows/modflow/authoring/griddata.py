@@ -192,8 +192,8 @@ def _factor(artifact: Any, *, dimension: str, frame: Any, label: str, name: str)
     if dimension not in _SI and dimension != "1/L":
         raise ModflowError(
             f"{label} states a raster for a {dimension} quantity, and the model's "
-            "frame carries no mass unit to convert it onto; state a number in the "
-            "mass units this model declares.", error_code="MODFLOW_UNITS_UNSTATED")
+            "frame carries no unit for it to convert onto; state a number in the "
+            "units this model declares.", error_code="MODFLOW_UNITS_UNSTATED")
     length, time = frame if frame is not None else (None, None)
     metres = _stated(length, METRES, "DISV_LENGTH_UNITS", label, name)
     seconds = (_stated(time, SECONDS, "TDIS_TIME_UNITS", label, name)
