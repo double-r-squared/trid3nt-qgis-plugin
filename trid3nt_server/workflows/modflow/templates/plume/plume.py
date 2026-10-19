@@ -26,6 +26,9 @@ class INPUTS:
     transverse_dispersivity = Input()
     snapshot = Input()
     solute = Input()
+    until = Input()
+    time_steps = Input()
+    layers = Input().stated()
 
     domain = Input(DOMAIN).need("hydrography", kind="basin")
     source = Input(desc=(
@@ -80,9 +83,12 @@ class STEERING(GWF):
     OC_BUDGET_FILERECORD = "gwf.cbc"
     OC_SAVERECORD = [["HEAD", "LAST"], ["BUDGET", "LAST"]]
 
+    # The clock: one period from the run's start to `until`, over `time_steps` equal steps.
+    Periods = {"until": "until", "steps": "time_steps"}
     Aquifer = {"saturated_thickness": "saturated_thickness",
                "transmissivity": "transmissivity",
-               "water_table_depth": "water_table_depth"}
+               "water_table_depth": "water_table_depth",
+               "layers": "layers"}
     # No storage package: the flow is the steady one every period re-solves. The effluent is recharge over the source, on top of the natural recharge, and each carries its own concentration.
     Recharge = [{"geometry": "domain", "layer": 1, "rate": "recharge",
                  "concentration": "background_concentration"},

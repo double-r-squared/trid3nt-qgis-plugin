@@ -1181,8 +1181,6 @@ package SteeringSurface {
     verify requirement TheRunHoldsOneMapping by
         "tests/telemac/test_one_mapping.py::test_a_composite_expands_from_the_mapping_with_only_a_literal_passed";
     verify requirement TheRunHoldsOneMapping by
-        "tests/telemac/test_one_mapping.py::test_a_composite_reading_a_name_the_mapping_lacks_refuses_by_name";
-    verify requirement TheRunHoldsOneMapping by
         "tests/telemac/test_one_mapping.py::test_a_misspelled_input_in_a_recipe_is_refused_by_name_at_fill";
     verify requirement TheRunHoldsOneMapping by
         "tests/telemac/test_one_mapping.py::test_a_misspelled_input_in_a_measurement_is_refused_by_name_at_fill";

@@ -326,3 +326,28 @@ def test_an_instant_the_run_saved_no_time_near_reads_the_nearest_and_says_so(sol
     read = GWF.READS["series"](P.series("HEAD", at=well, plane=1), solved())
     assert read.measures["compared_at"].startswith("2024-06-11")
     assert any("2024-08-01" in line and "2024-06-11" in line for line in said)
+
+
+def _deep_well(depth, units="ft"):
+    import dataclasses
+
+    well = _well(-3.0, quantity="groundwater_head", units="m", datum="NAVD88",
+                 sampled="2024-06-03T12:00:00Z")
+    return dataclasses.replace(well, depth=depth, depth_units=units)
+
+
+@pytest.mark.parametrize("depth, layer", [(5.0, 0), (40.0, 1)])
+def test_a_well_s_published_depth_picks_the_layer_it_is_read_on(solved, depth, layer):
+    # The land surface is -2 m and the layers end at -10 m and -20 m: 5 ft lands in layer 1, 40 ft in layer 2.
+    read = GWF.READS["series"](P.series("HEAD", at=_deep_well(depth)), solved())
+    heads = _heads()
+    held = float(np.asarray(heads.get_data(totim=heads.get_times()[0]))[layer, 0, 6])
+    assert read.measures["simulated"] == pytest.approx(held, abs=1e-3)
+
+
+@pytest.mark.parametrize("depth, said", [(None, "publishes no well depth"),
+                                         (100.0, "below the model base")])
+def test_a_well_with_no_depth_or_one_below_the_base_is_left_out_and_said(solved, depth, said):
+    with pytest.raises(P.OutputEmpty) as caught:
+        GWF.READS["series"](P.series("HEAD", at=_deep_well(depth)), solved())
+    assert said in str(caught.value) and "USGS-1" in str(caught.value)

@@ -27,7 +27,7 @@ _STRESS = {
 GWT = ModflowModule("gwt")
 GWT.MODULE_OUTPUT = MODULE_OUTPUT
 # The simulation's own clock on every body: Periods spells the marching, the moment the instant it opens at.
-GWT.composites(Periods=periods)
+GWT.composites(reads={"Periods": ("until", "steps")}, Periods=periods)
 GWT.composites(
     reads={name: ("geometry", *(column for column, _ in columns))
            for name, (_, columns) in _STRESS.items()},

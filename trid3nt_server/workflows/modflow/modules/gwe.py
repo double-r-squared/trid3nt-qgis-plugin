@@ -26,7 +26,7 @@ _STRESS = {
 GWE = ModflowModule("gwe")
 GWE.MODULE_OUTPUT = MODULE_OUTPUT
 # The simulation's own clock on every body: Periods spells the marching, the moment the instant it opens at.
-GWE.composites(Periods=periods)
+GWE.composites(reads={"Periods": ("until", "steps")}, Periods=periods)
 GWE.FILLED_BY = MappingProxyType({MOMENT: {"TDIS_START_DATE_TIME": _start_date_time}})
 GWE.composites(
     reads={name: ("geometry", *(column for column, _ in columns))

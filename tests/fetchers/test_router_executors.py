@@ -820,3 +820,37 @@ def test_a_wqp_result_keeps_the_unit_its_own_column_names():
     latest = _latest_results_by_site(frame)
     assert latest["USGS-14211720"]["unit"] == "deg C"
     assert latest["USGS-14211720"]["value"] == 8.0
+
+
+def test_a_wqp_well_carries_its_published_depth_through_to_the_layer(monkeypatch):
+    """The Station service names a well's depth ``WellDepthMeasure/MeasureValue`` (the
+    hole depth beside it), which no named tuple keeps; the depth and its unit reach
+    the written layer's columns, and a site publishing neither carries none."""
+    import pandas as pd
+
+    from pathlib import Path
+
+    from trid3nt_server.tools.fetchers._router.executors.vector_fgb import _out_columns
+    from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
+    from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_water_quality import hooks
+
+    sites = pd.DataFrame([
+        {"MonitoringLocationIdentifier": "USGS-413800070330001",
+         "LongitudeMeasure": -70.55, "LatitudeMeasure": 41.63,
+         "WellDepthMeasure/MeasureValue": "75.0",
+         "WellDepthMeasure/MeasureUnitCode": "ft"},
+        {"MonitoringLocationIdentifier": "USGS-413800070330002",
+         "LongitudeMeasure": -70.54, "LatitudeMeasure": 41.62,
+         "WellDepthMeasure/MeasureValue": float("nan"),
+         "WellHoleDepthMeasure/MeasureValue": "90",
+         "WellHoleDepthMeasure/MeasureUnitCode": "ft"},
+        {"MonitoringLocationIdentifier": "USGS-413800070330003",
+         "LongitudeMeasure": -70.53, "LatitudeMeasure": 41.61}])
+    answers = iter([(sites, None), (pd.DataFrame(), None)])
+    monkeypatch.setattr(hooks, "retrieve", lambda *a, **k: next(answers))
+    spec = load_spec_from_path(Path(hooks.__file__).with_name("source.yaml"))
+    found = hooks.features(spec, {"bbox": [-70.6, 41.6, -70.5, 41.7],
+                                  "characteristic": "Boron"}, timeout_s=5.0)
+    depths = [(f["properties"]["depth"], f["properties"]["depth_unit"]) for f in found]
+    assert depths == [(75.0, "ft"), (90.0, "ft"), (None, "")]
+    assert {"depth", "depth_unit"} <= set(_out_columns(spec, found))

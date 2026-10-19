@@ -7703,6 +7703,18 @@
       "solute": {
         "desc": "What the plume carries, in the measuring source's own word for it (a Water Quality Portal CharacteristicName, such as 'Boron'). The measured wells are asked for that word",
         "type": "str"
+      },
+      "until": {
+        "desc": "The instant the run marches TO: an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ). The one period runs from event_time to this instant, in the model's time units, over time_steps equal steps. It must fall after the start; unstated, the run refuses",
+        "type": "str"
+      },
+      "time_steps": {
+        "desc": "How many equal steps the one period marches from event_time to until: an integer of at least 1. Finer steps resolve the plume's advance more smoothly; unstated, the run refuses",
+        "type": "int"
+      },
+      "layers": {
+        "desc": "How many equal layers the aquifer is split into: an integer of at least 1. Unstated, one layer (the whole saturated thickness). When stated, the saturated thickness is split into that many equal layers, K is the same in each, and only layer 1 is convertible (unconfined); layers below it are confined",
+        "type": "int"
       }
     }
   }

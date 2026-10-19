@@ -6,7 +6,7 @@ Where a DISSOLVED RELEASE goes in an unconfined aquifer - a conservative solute 
 
 |  |  |
 |---|---|
-| module | `gwf` - 508 keywords in its dictionary, of which this template states 13 |
+| module | `gwf` - 508 keywords in its dictionary, of which this template states 14 |
 | solves | `trid3nt_server.workflows.modflow.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -40,6 +40,9 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `transverse_dispersivity` | m | required | The horizontal dispersivity of the solute across the flow, at the scale of the plume (m). It is stated |
 | `snapshot` | - | required | The moment the measured concentrations are read at and compared with the model's: an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ). The run itself starts at event_time, and the period it marches must reach this moment |
 | `solute` | - | required | What the plume carries, in the measuring source's own word for it (a Water Quality Portal CharacteristicName, such as 'Boron'). The measured wells are asked for that word |
+| `until` | - | required | The instant the run marches TO: an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ). The one period runs from event_time to this instant, in the model's time units, over time_steps equal steps. It must fall after the start; unstated, the run refuses |
+| `time_steps` | - | required | How many equal steps the one period marches from event_time to until: an integer of at least 1. Finer steps resolve the plume's advance more smoothly; unstated, the run refuses |
+| `layers` | - | optional | How many equal layers the aquifer is split into: an integer of at least 1. Unstated, one layer (the whole saturated thickness). When stated, the saturated thickness is split into that many equal layers, K is the same in each, and only layer 1 is convertible (unconfined); layers below it are confined |
 | `mesh_resolution_m` | m | optional | Target element edge or cell length the mesh is built at. The granularity is the USER's and nothing refuses one: absent, the mesh resolves the finest data it stands on, and the card states the node count it comes to |
 | `event_time` | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `vertical_frame` | - | NAVD88 | Vertical datum the bed's elevations are counted from, and with them the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |

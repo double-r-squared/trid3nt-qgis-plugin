@@ -271,8 +271,7 @@ def _expression(value: Mapping[str, Any], *, slot: Slot, nlay: int, points: Any,
         parts = [read(item, "L") for item in (of if isinstance(of, (list, tuple)) else [of])]
         if slot.identifier == "DISV_BOTM":
             _thickness(slot, parts[-1])
-        found = _below(slot, [sum(column) for column in zip(*parts)], top,
-                       nlay=nlay, cells=cells)
+        return _below(slot, parts, top, nlay=nlay, cells=cells)
     else:
         raise ModflowError(
             f"{slot.identifier} states {dict(value)!r}; a cells statement is "
@@ -282,12 +281,11 @@ def _expression(value: Mapping[str, Any], *, slot: Slot, nlay: int, points: Any,
     return [list(found) for _ in range(nlay)] if slot.layered else found
 
 
-def _below(slot: Slot, depth: list[float], top: Any, *, nlay: int, cells: Any) -> list[float]:
-    if nlay != 1:
-        raise ModflowError(
-            f"{slot.identifier} states cells below the top, which is one "
-            f"layer's statement, and the grid has {nlay} layers.",
-            error_code="MODFLOW_GRIDDATA_SHAPE")
+def _below(slot: Slot, parts: list[list[float]], top: Any, *, nlay: int, cells: Any) -> Any:
+    """The cell values below the top, at the sum of ``parts``; one row, or one per layer on a layered slot.
+
+    On a grid of several layers a DISV_BOTM splits the LAST part into equal layers under the
+    others (the saturated thickness under the water table), so no layer starts above it."""
     if top is None:
         raise ModflowError(
             f"{slot.identifier} states cells below the top, and this run has "
@@ -298,7 +296,12 @@ def _below(slot: Slot, depth: list[float], top: Any, *, nlay: int, cells: Any) -
             f"{slot.identifier} lies below a top of {len(tops)} value(s) and "
             f"the accepted mesh has {len(cells)} cell(s).",
             error_code="MODFLOW_GRIDDATA_SHAPE")
-    return [t - d for t, d in zip(tops, depth)]
+    above = [sum(column) for column in zip(*parts[:-1])] or [0.0] * len(tops)
+    if slot.identifier == "DISV_BOTM" and nlay > 1:
+        return [[t - a - rank * d / nlay for t, a, d in zip(tops, above, parts[-1])]
+                for rank in range(1, nlay + 1)]
+    row = [t - a - d for t, a, d in zip(tops, above, parts[-1])]
+    return [list(row) for _ in range(nlay)] if slot.layered else row
 
 
 def _thickness(slot: Slot, thickness: list[float]) -> None:

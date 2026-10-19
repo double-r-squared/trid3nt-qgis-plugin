@@ -82,6 +82,11 @@ class Observation:
     #: The instant the reading was asked AT, as UTC ISO: the window it was admitted
     #: under closes there. ``None`` where nothing was asked, or the value was stated.
     asked: str | None = None
+    #: How far below the land surface the measuring interval ends, as the source
+    #: publishes it (a well's depth); the unit it is counted in beside it. ``None``
+    #: where the source publishes no depth.
+    depth: float | None = None
+    depth_units: str | None = None
 
     @property
     def forcing(self) -> Series | float:
@@ -317,6 +322,11 @@ def _found(source: Any, feature: Mapping[str, Any], sampled: str | None, raw: fl
     reported = props.get("distance_km")
     lon, lat = _site(feature)
     asked = _moment(at)
+    depth = props.get("depth")
+    try:
+        depth = float(depth) if depth is not None else None
+    except (TypeError, ValueError):
+        depth = None
     return Observation(
         value=float(value) + shift,
         lon=lon, lat=lat, quantity=_text(props, "quantity"),
@@ -329,6 +339,7 @@ def _found(source: Any, feature: Mapping[str, Any], sampled: str | None, raw: fl
             distance_km if distance_km != float("inf") else None),
         datum=datum, datum_note=datum_note,
         asked=None if asked is None else asked.isoformat(),
+        depth=depth, depth_units=_text(props, "depth_unit"),
         series=_series(props, series_field, columns.get(series_field) or units,
                        to_units, shift + convert(zero, units, to_units)
                        if to_units is not None else shift + zero,

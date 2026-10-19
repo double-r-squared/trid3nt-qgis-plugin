@@ -69,13 +69,17 @@ frame stating none, a unit of another dimension and a cell the raster measures
 nothing at each refuse by name.
 
 The aquifer is a coercion of the GWF wrapper: `Aquifer(thickness |
-saturated_thickness, water_table_depth, conductivity | transmissivity)` states
-a one-layer aquifer as cell expressions against the accepted mesh - every
-argument required, exactly one of each pair, a thickness at or under zero
-refused. The stress composites (`Recharge`, `Drains`, `GeneralHead`,
-`ConstantHead`, `Wells`) place a geometry on the cells and state their
-package's period data; a geometry reading nothing states nothing, and a
-missing value refuses rather than defaulting.
+saturated_thickness, water_table_depth, conductivity | transmissivity [,
+layers])` states an aquifer as cell expressions against the accepted mesh -
+every argument required, exactly one of each pair, a thickness at or under zero
+refused. `layers` (an integer from 1, unstated one) splits the saturated
+thickness under the water table into that many equal layers (a whole `thickness`
+splits from the land surface): K is the same in each, only layer 1 is
+convertible (unconfined) and layers below it are confined, and the starting
+head is the water-table elevation in every layer. The stress composites
+(`Recharge`, `Drains`, `GeneralHead`, `ConstantHead`, `Wells`) place a geometry
+on the cells and state their package's period data; a geometry reading nothing
+states nothing, and a missing value refuses rather than defaulting.
 
 ## The coupling
 
@@ -157,7 +161,9 @@ a structured grid is a quad mesh and rides the same transform, so there is one
 result path and a rotated or variably spaced grid needs no resampling. A series
 at a measured well is checked against the reading in its own quantity - a head in
 the model's length unit, a concentration in the unit the run states - at the saved
-time the reading's window holds, nearest the moment it was sampled. mf6 carries no
+time the reading's window holds, nearest the moment it was sampled. On a run of several
+layers a well's published depth below the land surface picks the layer it is read on; a
+well publishing none, or reaching below the model base, is left out and said. mf6 carries no
 concentration unit, so a template whose OBSERVE row observes `CONCENTRATION` seats a
 required `concentration_units`; `published_units` reports it, the measured reading
 converts into it at ingestion or refuses, and the concentration layer carries it.
@@ -169,8 +175,9 @@ converts into it at ingestion or refuses, and the concentration layer carries it
 `source` polygon at `source_rate` (a depth per day, spread over the polygon as drawn so the cited
 volume is conserved) carrying `source_concentration`, beside the natural recharge carrying
 `background_concentration`; porosity and both dispersivities are stated inputs and the template
-holds no number of its own. The period is the `TDIS_PERIODDATA` keyword the caller states, from
-`event_time` to the `snapshot` its wells are read at. The `observe` row asks the wells reporting
+holds no number of its own. The period is the `Periods` composite: `until` (an ISO instant) and
+`time_steps` (an integer) state one period from the run's start to that instant, over equal steps,
+in `TDIS_TIME_UNITS`. The `observe` row asks the wells reporting
 `solute` at the snapshot and the run charts the modelled against the measured concentration at
 each: extent and shape, never a mass balance. A finished run records the steps its staged clock
 marched as the completion's `ntimestep`, which the packet cross-checks the frames against.

@@ -118,6 +118,38 @@ def test_the_composite_states_a_one_layer_aquifer_with_no_number_computed(tmp_pa
     assert "NPF_ICELLTYPE" in sheet.filled and "STO_SY" not in sheet.filled
 
 
+def test_a_stated_layer_count_splits_the_aquifer_and_confines_all_but_the_top(tmp_path):
+    sheet = _fill(_inputs(tmp_path), {**_FULL, "layers": 3})
+    assert sheet.filled["DISV_NLAY"].value == 3
+    # Only layer 1 is convertible; the layers below it are confined.
+    assert sheet.filled["NPF_ICELLTYPE"].value == [1, 0, 0]
+    # The bottoms split the total depth into three equal layers.
+    from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place
+
+    top, _, _ = _layering(sheet, tmp_path)
+    botm = place(sheet.filled["DISV_BOTM"].value, slot=sheet.filled["DISV_BOTM"].slot,
+                 nlay=3, run=sheet.run, points=_POINTS, cells=_CELLS, utm_epsg=32617,
+                 frame=frame_of(sheet), top=top)
+    total = _per_cell(_THICKNESS)
+    assert botm == [
+        pytest.approx([t - d / 3 for t, d in zip(top, total)]),
+        pytest.approx([t - 2 * d / 3 for t, d in zip(top, total)]),
+        pytest.approx([t - d for t, d in zip(top, total)])]
+
+
+def test_a_layer_count_below_one_refuses_naming_it(tmp_path):
+    with pytest.raises(ModflowError) as caught:
+        _fill(_inputs(tmp_path), {**_FULL, "layers": 0})
+    assert caught.value.error_code == "MODFLOW_AQUIFER_UNSTATED"
+    assert "layers" in str(caught.value)
+
+
+def test_a_non_integer_layer_count_refuses(tmp_path):
+    with pytest.raises(ModflowError) as caught:
+        _fill(_inputs(tmp_path), {**_FULL, "layers": 2.5})
+    assert caught.value.error_code == "MODFLOW_AQUIFER_UNSTATED"
+
+
 def test_a_stated_conductivity_is_the_raster_itself(tmp_path):
     sheet = _fill(_inputs(tmp_path), {"thickness": "thick", "water_table_depth": "depth",
                                        "conductivity": "cond"})
@@ -231,15 +263,19 @@ def test_a_raster_without_a_unit_refuses(tmp_path):
     assert caught.value.error_code == "MODFLOW_UNITS_UNSTATED"
 
 
-def test_cells_below_the_top_on_a_grid_of_two_layers_refuse(tmp_path):
+def test_cells_below_the_top_on_a_grid_of_two_layers_split_equally(tmp_path):
     from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place
 
     sheet = _fill(_inputs(tmp_path), _FULL)
-    with pytest.raises(ModflowError) as caught:
-        place(sheet.filled["DISV_BOTM"].value, slot=sheet.filled["DISV_BOTM"].slot,
-              nlay=2, run=sheet.run, points=_POINTS, cells=_CELLS, utm_epsg=32617,
-              frame=frame_of(sheet), top=50.0)
-    assert caught.value.error_code == "MODFLOW_GRIDDATA_SHAPE"
+    botm = place(sheet.filled["DISV_BOTM"].value, slot=sheet.filled["DISV_BOTM"].slot,
+                 nlay=2, run=sheet.run, points=_POINTS, cells=_CELLS, utm_epsg=32617,
+                 frame=frame_of(sheet), top=50.0)
+    # Two equal layers of the total depth: layer 1's bottom is half the depth below the top,
+    # layer 2's bottom is the full depth.
+    total = _per_cell(_THICKNESS)
+    assert botm == [
+        pytest.approx([50.0 - d / 2 for d in total]),
+        pytest.approx([50.0 - d for d in total])]
 
 
 def test_the_lattice_with_an_aquifer_recharge_and_drains_serializes(
@@ -317,6 +353,24 @@ def test_a_saturated_thickness_lies_below_the_water_table_not_the_land_surface(t
               nlay=1, run=sheet.run, points=_POINTS, cells=_CELLS, utm_epsg=32617,
               frame=frame_of(sheet), top=top)
     assert k == [[pytest.approx(5.0)] * len(_CELLS)]
+
+
+def test_layers_split_the_saturated_thickness_under_the_water_table(tmp_path):
+    from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place
+
+    sheet = _fill({}, {"saturated_thickness": 28.0, "water_table_depth": 2.0,
+                       "transmissivity": 140.0, "layers": 2})
+    top, _, _ = _layering(sheet, tmp_path)
+    botm = place(sheet.filled["DISV_BOTM"].value, slot=sheet.filled["DISV_BOTM"].slot,
+                 nlay=2, run=sheet.run, points=_POINTS, cells=_CELLS, utm_epsg=32617,
+                 frame=frame_of(sheet), top=top)
+    # The top layer holds the water table: it reaches half the saturated thickness under it.
+    assert botm == [pytest.approx([t - 2.0 - 14.0 for t in top]),
+                    pytest.approx([t - 2.0 - 28.0 for t in top])]
+    head = place(sheet.filled["IC_STRT"].value, slot=sheet.filled["IC_STRT"].slot,
+                 nlay=2, run=sheet.run, points=_POINTS, cells=_CELLS, utm_epsg=32617,
+                 frame=frame_of(sheet), top=top)
+    assert head == [pytest.approx([t - 2.0 for t in top])] * 2
 
 
 @pytest.mark.parametrize("stated", [

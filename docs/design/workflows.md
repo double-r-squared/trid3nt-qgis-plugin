@@ -463,13 +463,16 @@ already in the model's units and holds at every cell.
 
 THE AQUIFER IS A COERCION of the GWF wrapper (`modules/gwf.py`):
 `Aquifer(thickness | saturated_thickness, water_table_depth, conductivity |
-transmissivity)` states a one-layer aquifer as cell expressions against the accepted
-mesh - the bottom a thickness below the top, or a saturated thickness below the
-water table (the published saturated thickness runs down from the water table, so
-it is never read from the land surface), the starting head a water-table depth below
-the top, the conductivity stated or the transmissivity over the thickness - every
-argument required, exactly one of each pair, and a thickness at or under zero
-refused. The stress composites
+transmissivity [, layers])` states an aquifer as cell expressions against the
+accepted mesh - the bottom a thickness below the top, or a saturated thickness
+below the water table (the published saturated thickness runs down from the
+water table, so it is never read from the land surface), the starting head a
+water-table depth below the top, the conductivity stated or the transmissivity
+over the thickness - every argument required, exactly one of each pair, and a
+thickness at or under zero refused. `layers` (an integer from 1, unstated one)
+splits the saturated thickness under the water table into that many equal layers: K is the same in
+each, only layer 1 is convertible (unconfined) and layers below it are
+confined. The stress composites
 (`Recharge`, `Drains`, `GeneralHead`, `ConstantHead`, `Wells`) place a geometry
 on the cells (`authoring/stress.py`) and state their package's period data.
 

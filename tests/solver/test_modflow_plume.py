@@ -16,7 +16,7 @@ _STATED = {
     "background_concentration": 0.007, "porosity": 0.39,
     "longitudinal_dispersivity": 1.0, "transverse_dispersivity": 0.1,
     "snapshot": "1994-10-31", "solute": "Boron", "concentration_units": "mg/L",
-    "input_mode": "auto"}
+    "until": "1994-10-31", "time_steps": 118, "input_mode": "auto"}
 _BED_RING = {"type": "Polygon", "coordinates": [[[-70.547, 41.64], [-70.545, 41.64],
                                                   [-70.545, 41.641], [-70.547, 41.641],
                                                   [-70.547, 41.64]]]}
@@ -42,7 +42,7 @@ def test_a_fully_stated_run_is_ready(monkeypatch):
 @pytest.mark.parametrize("name", [
     "source_rate", "source_concentration", "background_concentration", "porosity",
     "longitudinal_dispersivity", "transverse_dispersivity", "snapshot", "solute",
-    "concentration_units", "drain_conductance"])
+    "concentration_units", "drain_conductance", "until", "time_steps"])
 def test_each_value_the_template_does_not_state_refuses_by_name(monkeypatch, name):
     state = _state(monkeypatch, {k: v for k, v in _STATED.items() if k != name})
     assert not state.ready
@@ -61,7 +61,8 @@ def test_the_source_polygon_is_the_recharge_that_carries_the_effluent_concentrat
     steering = _workflow().steering
     produced = {"domain": _BED_RING, "source": _BED_RING, "recharge": 5.0e-4,
                 "saturated_thickness": 28.0, "transmissivity": 140.0,
-                "water_table_depth": 2.0, "bed": 0.0, "streams": None, **{
+                "water_table_depth": 2.0, "bed": 0.0, "streams": None,
+                "event_time": "1936-01-01T00:00:00Z", **{
                     k: _STATED[k] for k in _STATED
                     if k not in ("snapshot", "solute", "concentration_units", "input_mode")}}
     sheet = fill(steering, produced=produced)
@@ -70,6 +71,11 @@ def test_the_source_polygon_is_the_recharge_that_carries_the_effluent_concentrat
     assert source["values"] == {"rate": 0.04, "concentration": 0.45}
     assert source["geometry"] == _BED_RING and source["dimensions"]["concentration"] == "M/L3"
     assert sheet.filled["RCH_AUXILIARY"].value == ["CONCENTRATION"]
+    # The clock: one period from event_time to until, over time_steps equal steps.
+    assert sheet.filled["TDIS_NPER"].value == 1
+    length, steps, mult = sheet.filled["TDIS_PERIODDATA"].value[0]
+    assert steps == 118 and mult == 1.0
+    assert length == pytest.approx(21488.5, abs=0.5)
     body = sheet.coupled[0]
     assert body["module"] == "gwt"
     assert "SSM_SOURCES" not in body["slots"]

@@ -35,15 +35,17 @@ _STRESS = {
 
 
 _AQUIFER = ("thickness", "saturated_thickness", "water_table_depth", "conductivity",
-            "transmissivity")
+            "transmissivity", "layers")
 
 
 def _aquifer(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-    """A one-layer aquifer's cells: Aquifer(thickness | saturated_thickness, water_table_depth, conductivity | transmissivity).
+    """An aquifer's cells: Aquifer(thickness | saturated_thickness, water_table_depth, conductivity | transmissivity [, layers]).
 
     ``thickness`` runs down from the land surface, ``saturated_thickness`` down from the water table; the
     bottom lies under whichever, the starting head a water-table depth below the top, and the conductivity
-    is stated or is the transmissivity over the thickness."""
+    is stated or is the transmissivity over the thickness. ``layers`` (an integer from 1, unstated one)
+    splits the saturated thickness into that many equal layers: K is the same in each, only layer 1 is
+    convertible (unconfined), and the starting head is the water-table elevation in every layer."""
     if not isinstance(value, Mapping):
         raise ModflowError(
             f"Aquifer takes a mapping of {', '.join(_AQUIFER)}; got {value!r}.",
@@ -75,13 +77,25 @@ def _aquifer(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
                else "neither conductivity nor transmissivity; state one")
             + ", the other follows from the thickness.",
             error_code="MODFLOW_AQUIFER_UNSTATED")
+    layers = value.get("layers")
+    if layers is not None and (isinstance(layers, bool) or not isinstance(layers, int)
+                               or layers < 1):
+        raise ModflowError(
+            f"Aquifer layers is {layers!r}; it is an integer from 1.",
+            error_code="MODFLOW_AQUIFER_UNSTATED")
+    nlay = layers if layers is not None else 1
     depth = value["water_table_depth"]
     stated = ({"cells": "raster", "of": conductivity} if conductivity is not None
               else {"cells": "quotient", "of": [transmissivity, saturated if whole is None else whole]})
-    return {"DISV_NLAY": 1, "NPF_K": stated,
-            "DISV_BOTM": {"cells": "below_top",
-                          "of": whole if saturated is None else [depth, saturated]},
-            "IC_STRT": {"cells": "below_top", "of": depth}}, {}
+    slots: dict[str, Any] = {
+        "DISV_NLAY": nlay, "NPF_K": stated,
+        "DISV_BOTM": {"cells": "below_top",
+                      "of": whole if saturated is None else [depth, saturated]},
+        "IC_STRT": {"cells": "below_top", "of": depth}}
+    if nlay > 1:
+        # Only the top layer is convertible (unconfined); the layers below it are confined.
+        slots["NPF_ICELLTYPE"] = [1] + [0] * (nlay - 1)
+    return slots, {}
 
 
 # The stress statements a coupled body states, by its module word: each package word to the composite the wrapper holds for it.
@@ -151,7 +165,8 @@ def _coupled(module: str, name: str):
 GWF = ModflowModule("gwf")
 GWF.MODULE_OUTPUT = MODULE_OUTPUT
 # The simulation's own clock on every body: Periods spells the marching, the moment the instant it opens at.
-GWF.composites(Periods=periods)
+# The until/steps form reads those two run inputs by name; the list form states TDIS rows directly.
+GWF.composites(reads={"Periods": ("until", "steps")}, Periods=periods)
 GWF.FILLED_BY = MappingProxyType({MOMENT: {"TDIS_START_DATE_TIME": _start_date_time}})
 GWF.composites(
     reads={name: ("geometry", *(column for column, _ in columns), "concentration")

@@ -262,10 +262,9 @@ def _read(run: Mapping[str, Any], value: Any, composite: str) -> Any:
                            else item for item in value)
     if not isinstance(value, str):
         return value
-    if value not in run:
-        raise SlotRefused(f"{composite} reads {value!r}, which no input of this "
-                          f"run is called.")
-    return run[value]
+    # A declared-but-unstated input is None: the workflow's declaration check already
+    # refuses a name no input is called, so a missing key here is an unstated value.
+    return run.get(value)
 
 
 @dataclass(frozen=True, slots=True)

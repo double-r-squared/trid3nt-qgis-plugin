@@ -35,6 +35,19 @@ def _str_or_none(v: Any) -> str | None:
     return s or None
 
 
+def _float_or_none(v: Any) -> float | None:
+    """A finite float, or None for pandas NaN / None / empty / non-numeric."""
+    if v is None:
+        return None
+    if isinstance(v, float) and math.isnan(v):
+        return None
+    try:
+        value = float(str(v).strip())
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) else None
+
+
 def _latest_results_by_site(res_df: Any) -> dict[str, dict[str, Any]]:
     """Latest NUMERIC result per MonitoringLocationIdentifier: a non-numeric
     ResultMeasureValue is skipped, and a row wins only when its ActivityStartDate is
@@ -131,8 +144,8 @@ def features(spec: SourceSpec, params: dict[str, Any], *,
 
     stations: dict[str, dict[str, Any]] = {}
     if sites_df is not None and len(sites_df):
-        for row in sites_df.itertuples(index=False):
-            rd = row._asdict()
+        # By record, never itertuples: a tuple renames the "A/B" columns to positions.
+        for rd in sites_df.to_dict(orient="records"):
             site_id = _str_or_none(rd.get("MonitoringLocationIdentifier"))
             if not site_id:
                 continue
@@ -143,12 +156,22 @@ def features(spec: SourceSpec, params: dict[str, Any], *,
                 continue
             if not (math.isfinite(lon) and math.isfinite(lat)):
                 continue
+            # The well's own depth below land surface, the best published depth
+            # for the layer pick; the hole depth is the fallback when the well
+            # depth is absent. Both are feet in the Station service.
+            well_depth = _float_or_none(rd.get("WellDepthMeasure/MeasureValue"))
+            well_unit = _str_or_none(rd.get("WellDepthMeasure/MeasureUnitCode"))
+            if well_depth is None:
+                well_depth = _float_or_none(rd.get("WellHoleDepthMeasure/MeasureValue"))
+                well_unit = _str_or_none(rd.get("WellHoleDepthMeasure/MeasureUnitCode"))
             stations[site_id] = {
                 "site_id": site_id,
                 "site_name": _str_or_none(rd.get("MonitoringLocationName")) or "",
                 "site_type": _str_or_none(rd.get("MonitoringLocationTypeName")) or "",
                 "lon": lon,
                 "lat": lat,
+                "depth": well_depth,
+                "depth_unit": well_unit or "",
             }
 
     # 2. Honest typed error if no sites -- never an empty success layer.
@@ -184,6 +207,8 @@ def features(spec: SourceSpec, params: dict[str, Any], *,
                     "unit": res.get("unit") or "",
                     "result_date": res.get("date") or "",
                     "fraction": res.get("fraction") or "",
+                    "depth": loc.get("depth"),
+                    "depth_unit": loc.get("depth_unit") or "",
              }}
         )
     logger.info(

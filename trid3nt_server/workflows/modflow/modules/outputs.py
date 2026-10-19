@@ -104,6 +104,17 @@ class Solved:
     def nlay(self) -> int:
         return disv_dimensions(self.sheet, self.nodes[1])["nlay"]
 
+    @cached_property
+    def layering(self) -> tuple[Any, Any]:
+        """The grid's top and per-layer bottoms, placed from the sheet's statements."""
+        from ..authoring.mesh_files import _layering
+
+        points, cells, bed, _ = self.nodes
+        top, botm, _ = _layering(self.sheet, nlay=self.nlay,
+                                 art=mesh_artifact(self.mesh), bed=bed,
+                                 points=points, cells=cells)
+        return top, botm
+
     def stated(self, identifier: str) -> Any:
         """What this read's own body states, else what the run's carrier deck states: the clock and units the
         simulation owns are one for both models, while a body's own keyword - its budget file - is its own."""
@@ -341,36 +352,38 @@ def read_series(primitive: Primitive, solved: Solved) -> Series:
     """``series(name, at, plane)``: the domain maximum per saved time, or the values of the cell containing a Point.
 
     At a data input's site the read takes the site's own coordinates, lands on the cell
-    the run solves it in, and with no site or a site off the grid composes nothing."""
+    the run solves it in, and with no site or a site off the grid composes nothing.
+    On a multi-layer run a well's published depth picks its layer; a well publishing
+    no depth, or one reaching below the model base, is left out and said."""
     import numpy as np
 
-    row, units, model_times, values, layer = solved.frames(primitive.variable, primitive.plane)
+    plane, point, cell = primitive.plane, None, None
+    data_site = isinstance(primitive.at, Observation)
+    if data_site:
+        from trid3nt_server.inputs.point import as_utm, containing_face
+
+        point = _point(primitive.at)
+        grid = np.asarray(solved.nodes[0], dtype="float64")
+        cell, away = containing_face(as_utm(point, solved.utm_epsg), x=grid[:, 0],
+                                     y=grid[:, 1], faces=solved.nodes[1])
+        if cell is None:
+            label = primitive.at.site_id or point.name or "the site"
+            raise OutputEmpty(
+                f"the site {label} is outside the mesh, {away:.0f} m from its "
+                "nearest cell.")
+        if plane is None and solved.nlay > 1:
+            plane = _depth_layer(primitive.at, solved, cell)
+    row, units, model_times, values, layer = solved.frames(primitive.variable, plane)
     times = solved.seconds(model_times)
     if primitive.at is None:
         highs = np.where(np.isfinite(values).any(axis=1),
                          np.where(np.isfinite(values), values, -np.inf).max(axis=1), np.nan)
         return Series(name=row.name, units=units, times=times, values=highs,
                       at="the domain maximum", measures=_envelope(times, values))
-    point = _point(primitive.at)
-    points, cells, _bed, _ll = solved.nodes
-    data_site = isinstance(primitive.at, Observation)
-    if data_site:
-        from trid3nt_server.inputs.point import as_utm, containing_face
-
-        import numpy as _np
-
-        grid = _np.asarray(points, dtype="float64")
-        px, py = as_utm(point, solved.utm_epsg)
-        cell, away = containing_face((px, py), x=grid[:, 0], y=grid[:, 1],
-                                     faces=cells)
-        if cell is None:
-            label = getattr(primitive.at, "site_id", None) or point.name or "the site"
-            raise OutputEmpty(
-                f"the site {label} is outside the mesh, {away:.0f} m from its "
-                "nearest cell.")
-    else:
-        cell = point_cell(point, label="series point", points=points, cells=cells,
-                          utm_epsg=solved.utm_epsg)
+    if not data_site:
+        point = _point(primitive.at)
+        cell = point_cell(point, label="series point", points=solved.nodes[0],
+                          cells=solved.nodes[1], utm_epsg=solved.utm_epsg)
     column = values[:, cell]
     if not data_site and not np.isfinite(column).any():
         raise OutputEmpty(
@@ -384,6 +397,46 @@ def read_series(primitive: Primitive, solved: Solved) -> Series:
     return Series(name=row.name, units=units, times=times, values=column,
                   at=f"at {point.name or 'the point'}", lon=float(centre[0]),
                   lat=float(centre[1]), measures=measures)
+
+
+def _depth_layer(observed: Observation, solved: Solved, cell: int) -> int:
+    """The 1-based layer a well's published depth lands in at its cell; a depth
+    reaching below the model base, or a well publishing none, is left out and said."""
+    site = observed.site_id or observed.site_name or "an unnamed site"
+    if observed.depth is None:
+        raise OutputEmpty(
+            f"the site {site} "
+            f"publishes no well depth, and this run has {solved.nlay} layers; "
+            "a multi-layer read needs the depth to pick the layer, so the site "
+            "is left out rather than read on a layer nobody measured.")
+    from trid3nt_server.inputs.temporal import TemporalUnitsError, convert_units
+
+    length = str(solved.stated("DISV_LENGTH_UNITS") or "unknown").strip().lower()
+    if length not in METRES:
+        raise ModflowError(
+            f"DISV_LENGTH_UNITS is {length!r}, so a well depth has no length to "
+            f"place a layer against; state it as {', '.join(METRES)}.",
+            error_code="MODFLOW_UNITS_UNSTATED")
+    try:
+        depth_m = convert_units(float(observed.depth),
+                                str(observed.depth_units or ""), "m")
+    except TemporalUnitsError as refused:
+        raise OutputEmpty(
+            f"the site {site}'s well depth {observed.depth} {observed.depth_units or ''} "
+            f"is no length this model reads: {refused}") from refused
+    depth_model = depth_m / METRES[length]
+    top, botm = solved.layering
+    surface = float(top) if isinstance(top, (int, float)) else float(top[cell])
+    elevation = surface - depth_model
+    for rank in range(solved.nlay):
+        if elevation >= float(botm[rank][cell]):
+            return rank + 1
+    base = float(botm[-1][cell])
+    raise OutputEmpty(
+        f"the site {site}'s well depth {observed.depth} {observed.depth_units or ''} "
+        f"reaches {elevation:.2f} {length}, below the model base {base:.2f} at its "
+        "cell; the site is left out rather than read on a layer the model does "
+        "not solve.")
 
 
 def _uncomparable(why: str) -> ModflowError:

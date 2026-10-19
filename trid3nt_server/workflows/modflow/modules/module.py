@@ -13,7 +13,7 @@ from types import MappingProxyType
 from typing import Any, Mapping
 
 from ..errors import ModflowError
-from ...runtime.module import Module, SlotRefused
+from ...runtime.module import MOMENT, Module, SlotRefused
 
 __all__ = ["ModflowModule", "module_input_dir", "periods"]
 
@@ -74,15 +74,21 @@ def module_input_dir() -> Path:
     return Path(__file__).resolve().parent / "module_input"
 
 
-def periods(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+def periods(value: Any, *, run: Mapping[str, Any] | None = None
+            ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     """The TDIS clock a ``Periods`` value states: the count and one row per period.
 
-    A row is (length, steps, multiplier) in the time units the deck spells - the
-    engine's three numbers, with no step count or cadence guessed for it."""
+    Two forms: a non-empty list of (length, steps, multiplier) rows in the time
+    units the deck spells, or a mapping ``{"until": <instant>, "steps": <int>}``
+    whose instant is a run input resolved by the fill - the clock then runs from
+    the run's start (its moment, else its event_time) to that instant, in
+    ``TDIS_TIME_UNITS``, over the stated number of equal steps."""
+    if isinstance(value, Mapping):
+        return _period_until(value, run or {})
     if not isinstance(value, (list, tuple)) or not value:
         raise SlotRefused(
             "Periods takes a non-empty list of (length, steps, multiplier) rows "
-            f"the simulation marches; got {value!r}.")
+            f"the simulation marches, or a mapping of until and steps; got {value!r}.")
     rows: list[list[float | int]] = []
     for rank, row in enumerate(value, start=1):
         if not isinstance(row, (list, tuple)) or len(row) != 3:
@@ -104,6 +110,59 @@ def periods(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
                 "simulation advances nothing.")
         rows.append([float(length), int(steps), float(multiplier)])
     return {"TDIS_NPER": len(rows), "TDIS_PERIODDATA": rows}, {}
+
+
+def _period_until(value: Mapping[str, Any], run: Mapping[str, Any]
+                  ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    """The one period from the run's start to a stated ``until`` instant, over ``steps`` equal steps."""
+    import datetime as dt
+
+    from trid3nt_server.inputs.instant import instant
+
+    from ..authoring.griddata import SECONDS
+
+    unknown = sorted(set(value) - {"until", "steps"})
+    if unknown:
+        raise SlotRefused(
+            f"Periods takes until and steps; {', '.join(unknown)} is none of them.")
+    until, steps = value.get("until"), value.get("steps")
+    if until is None:
+        raise SlotRefused("Periods states no until; the period runs to an instant.")
+    if steps is None:
+        raise SlotRefused("Periods states no steps; the period marches a number of steps.")
+    if isinstance(steps, bool) or not isinstance(steps, int) or steps < 1:
+        raise SlotRefused(
+            f"Periods steps is {steps!r}; it is an integer from 1.")
+    moment = run.get(MOMENT)
+    start: Any = None
+    if isinstance(moment, Mapping) and moment.get("at") is not None:
+        start = moment["at"]
+    elif run.get("event_time") is not None:
+        start = run["event_time"]
+    if isinstance(start, str):
+        start = dt.datetime.fromisoformat(start)
+    if start is None:
+        raise SlotRefused(
+            "Periods states until, but the run holds no event_time and no "
+            "moment for the clock to start at.")
+    try:
+        end = dt.datetime.fromisoformat(
+            instant(until, label="Periods.until", code="PERIODS_UNTIL_INVALID")
+            or "")
+    except ValueError as refused:
+        raise SlotRefused(f"Periods until is not a parseable instant: {refused}") from None
+    if end <= start:
+        raise SlotRefused(
+            f"Periods until {end.isoformat()} is not after the run's start "
+            f"{start.isoformat()}; a period that advances nothing is no period.")
+    units = str(run.get("TDIS_TIME_UNITS") or "unknown").strip().lower()
+    if units not in SECONDS:
+        raise SlotRefused(
+            f"TDIS_TIME_UNITS is {units!r}, so the period's length in it has "
+            "no length; state TDIS_TIME_UNITS as seconds, minutes, hours, "
+            "days or years.")
+    length = (end - start).total_seconds() / SECONDS[units]
+    return {"TDIS_NPER": 1, "TDIS_PERIODDATA": [[length, int(steps), 1.0]]}, {}
 
 
 def _start_date_time(moment: Mapping[str, Any]) -> str:

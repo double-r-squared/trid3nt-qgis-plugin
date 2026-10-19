@@ -82,6 +82,8 @@ ingest:
   - unit
   - result_date
   - fraction
+  - depth
+  - depth_unit
 normalize:
   crs: EPSG:4326
   units_from_param: characteristic
@@ -207,7 +209,9 @@ docstring: |-
         ``value`` (latest numeric result; null if no numeric sample),
         ``unit`` (result units, e.g. ``"mg/l as N"``), ``result_date``
         (ISO sample date of the latest result; "" if none), ``fraction``
-        (sample fraction, e.g. ``"Dissolved"``/``"Total"``).
+        (sample fraction, e.g. ``"Dissolved"``/``"Total"``), ``depth`` and
+        ``depth_unit`` (a well's published depth below the land surface, else its
+        hole depth; null where the site publishes neither).
 
   Fallback behaviour (data-source fallback norm -- primary -> fallback ->
   honest typed error): the Station service (locations) is primary. If it

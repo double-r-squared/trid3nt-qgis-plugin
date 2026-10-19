@@ -15,7 +15,7 @@ from seated import resolve_params
 from trid3nt_server.workflows.runtime.fill import (REJECTED, Fill, fill,
                                                    production)
 from trid3nt_server.workflows.telemac.modules import T2D
-from trid3nt_server.workflows.runtime.module import SlotRefused, _read
+from trid3nt_server.workflows.runtime.module import _read
 from trid3nt_server.workflows.telemac.modules.telemac2d import Sources
 from trid3nt_server.workflows.telemac.workflow import (Measured, _names,
                                                     _read_named)
@@ -44,11 +44,6 @@ def test_a_composite_expands_from_the_mapping_with_only_a_literal_passed():
     assert dict(slots) == {"SOURCES_FILE": "river_sources.txt"}
     assert files["river_sources.txt"].splitlines()[3:] == [
         "0.000 8 100", "120.000 8 100", "120.100 0 0", "700.000 0 0"]
-
-
-def test_a_composite_reading_a_name_the_mapping_lacks_refuses_by_name():
-    with pytest.raises(SlotRefused, match="'settled'"):
-        T2D.COMPOSITES["sources"].apply(Sources(window_s=120.0), {})
 
 
 def test_a_misspelled_input_in_a_recipe_is_refused_by_name_at_fill(monkeypatch):
