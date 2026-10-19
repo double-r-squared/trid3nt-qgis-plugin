@@ -165,6 +165,8 @@ _RECALL_FIXTURE = [
      "telemac_dye_release"),
     ("where does the water table stand between the streams of this basin",
      "modflow_water_table"),
+    ("where does the dissolved plume from this release go in the groundwater",
+     "modflow_plume"),
     ("compute the slope from the DEM on the map", "run_qgis_algorithm"),
     ("run this pyqgis script in my qgis session", "run_pyqgis"),
     ("what telemac keyword controls the bottom friction law", "describe_keywords"),

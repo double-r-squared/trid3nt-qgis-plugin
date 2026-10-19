@@ -7662,6 +7662,48 @@
         "type": "float",
         "units": "m3/day"
       }
+    },
+    "modflow_plume": {
+      "drain_conductance": {
+        "desc": "The conductance of the stream beds the aquifer drains through, per cell a stream crosses: how readily water at a head above the bed leaves the aquifer. No dataset measures it, so it is stated",
+        "type": "float",
+        "units": "m2/day"
+      },
+      "source_rate": {
+        "desc": "The depth of treated effluent that infiltrates per day over the source polygon, spread over the polygon as drawn: the release's total volume over its period divided by the polygon's area. It enters the flow as recharge on top of the natural recharge, and it is stated",
+        "type": "float",
+        "units": "m/day"
+      },
+      "source_concentration": {
+        "desc": "The concentration of the solute in the effluent that infiltrates, in concentration_units. The infiltrating water carries it into the transport model, and it is stated",
+        "type": "float"
+      },
+      "background_concentration": {
+        "desc": "The concentration of the solute in the aquifer's own water before the release, which is also that of the natural recharge replacing it, in concentration_units. It is stated",
+        "type": "float"
+      },
+      "porosity": {
+        "desc": "The effective porosity the solute moves through, a fraction of the aquifer's volume (dimensionless). It is stated",
+        "type": "float"
+      },
+      "longitudinal_dispersivity": {
+        "desc": "The dispersivity of the solute along the flow, at the scale of the plume (m). It is stated",
+        "type": "float",
+        "units": "m"
+      },
+      "transverse_dispersivity": {
+        "desc": "The horizontal dispersivity of the solute across the flow, at the scale of the plume (m). It is stated",
+        "type": "float",
+        "units": "m"
+      },
+      "snapshot": {
+        "desc": "The moment the measured concentrations are read at and compared with the model's: an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ). The run itself starts at event_time, and the period it marches must reach this moment",
+        "type": "str"
+      },
+      "solute": {
+        "desc": "What the plume carries, in the measuring source's own word for it (a Water Quality Portal CharacteristicName, such as 'Boron'). The measured wells are asked for that word",
+        "type": "str"
+      }
     }
   }
 }

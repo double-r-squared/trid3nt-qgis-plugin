@@ -77,7 +77,7 @@ def _inside() -> list[float]:
     return [lon, lat]
 
 
-def _sheet(transport: dict | None = None, **over):
+def _sheet(transport: dict | None = None, produced: dict | None = None, **over):
     """The p01 flow through this leg's fill, with a coupled transport body if stated."""
     stated = {
         "NAM_SAVE_FLOWS": True,
@@ -99,7 +99,7 @@ def _sheet(transport: dict | None = None, **over):
     if transport is not None:
         stated["Transport"] = transport
     stated.update(over)
-    return fill(GWF, **{k: v for k, v in stated.items() if v is not None})
+    return fill(GWF, produced=produced, **{k: v for k, v in stated.items() if v is not None})
 
 
 def _transport(**over) -> dict:
@@ -224,6 +224,33 @@ def test_the_strip_serializes_two_models_over_one_staged_disv(
         inputs=[{"gs_uri": out["disv"], "dest": "mesh.disv"}],
         written_by_the_engine=written, duration_s=2000.0 * 86400.0, cores=1)
     assert read["digested"] == ["mesh.disv"]
+
+
+def test_inputs_holding_numbers_reach_the_transport_body_and_its_source_water_is_read_by_ssm(
+        strip, staged_beside, tmp_path):
+    transport = _transport(
+        MST_POROSITY="porosity", IC_STRT="background", DSP_ALH="alh", DSP_ATH1="ath",
+        CNC_STRESS_PERIOD_DATA=None)
+    sheet = _sheet(
+        transport,
+        produced={"porosity": 0.3, "background": 0.007, "alh": 1.5, "ath": 0.15,
+                  "bed": {"type": "Point", "coordinates": _inside()}, "q": 0.04, "c": 0.45},
+        Recharge={"geometry": "bed", "layer": 1, "rate": "q", "concentration": "c"})
+    out = MF._mesh_files(sheet, strip)
+    rundir = tmp_path / "run"
+    rundir.mkdir(exist_ok=True)
+    shutil.copy(out["disv"], rundir / "mesh.disv")
+
+    serialize(sheet, rundir, strip)
+
+    assert "auxiliary  CONCENTRATION" in (rundir / "gwf.rch").read_text()
+    assert "4.50000000E-01" in (rundir / "gwf.rch").read_text()
+    # unstated, the SSM names the carrying flow package by the name the flow model's name file gives it
+    ssm = (rundir / "gwt.ssm").read_text()
+    assert "rch_0" in ssm and "AUX" in ssm and "rch_0" in (rundir / "gwf.nam").read_text()
+    assert "CONSTANT       0.30000000" in (rundir / "gwt.mst").read_text()
+    assert "CONSTANT       1.50000000" in (rundir / "gwt.dsp").read_text()
+    assert "CONSTANT       0.00700000" in (rundir / "gwt.ic").read_text()
 
 
 @pytest.mark.parametrize("identifier", ["IC_STRT", "MST_POROSITY"])

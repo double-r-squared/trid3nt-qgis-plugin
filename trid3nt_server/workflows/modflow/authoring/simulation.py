@@ -133,7 +133,13 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
              _placed(groups.pop("TDIS", {}), **placed),
              owner=sim,
              how="TDIS of the simulation")
-    _model(flopy, sim, module=module, groups=groups, named=named, **placed)
+    carrying = [prefix for prefix, rows in groups.items()
+                if "CONCENTRATION" in map(str, getattr(rows.get("auxiliary"), "value", None) or ())]
+    flow = _model(flopy, sim, module=module, groups=groups, named=named, **placed)
+    # The water a flow package carries a CONCENTRATION on is a transport source: SSM names
+    # each such package by the name the flow model's name file gives it.
+    sources = [[flow.get_package(prefix.lower()).package_name, "AUX", "CONCENTRATION"]
+               for prefix in carrying]
     # Each coupled body is a second model in this simulation: its own packages from its
     # slots, a filename-only DISV on the same staged mesh, its own solution, and the
     # exchange that joins it to the flow.
@@ -145,15 +151,19 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
                              frame=frame, active=active)
         _unstated(coupled, set(cgroups) | set(_REQUIRED_PACKAGES[coupled.module]),
                   cderived)
+        if coupled.module == "gwt" and sources \
+                and "sources" not in cgroups.get("SSM", {}):
+            cgroups.setdefault("SSM", {})
         _model(flopy, sim, module=coupled.module, groups=cgroups, named=cnamed,
-               **placed)
+               sources=sources if coupled.module == "gwt" else (), **placed)
         _exchange(flopy, sim, carrier=module, coupled=coupled.module)
     return _write_package_by_package(sim)
 
 
 def _model(flopy: Any, sim: Any, *, module: str, groups: dict[str, dict[str, Any]],
            named: dict[str, Any], dims: dict[str, int], points: Any, cells: Any,
-           utm_epsg: int | None, sheet: Any, frame: Any, top: Any) -> Any:
+           utm_epsg: int | None, sheet: Any, frame: Any, top: Any,
+           sources: Any = ()) -> Any:
     """One model of this simulation: its name file, the staged DISV's line, its solution and its packages."""
     cap = module.capitalize()
     model = _package(flopy, f"Modflow{cap}", named, owner=sim, modelname=module,
@@ -173,9 +183,11 @@ def _model(flopy: Any, sim: Any, *, module: str, groups: dict[str, dict[str, Any
                    how=f"IMS of the {module} solution")
     sim.register_ims_package(ims, [module])
     for prefix, rows in groups.items():
-        _package(flopy, f"Modflow{cap}{prefix.lower()}",
-                 _placed(rows, dims=dims, points=points, cells=cells,
-                         utm_epsg=utm_epsg, sheet=sheet, frame=frame, top=top),
+        keywords = _placed(rows, dims=dims, points=points, cells=cells,
+                           utm_epsg=utm_epsg, sheet=sheet, frame=frame, top=top)
+        if prefix == "SSM" and sources:
+            keywords = {"sources": list(sources), **keywords}
+        _package(flopy, f"Modflow{cap}{prefix.lower()}", keywords,
                  owner=model, how=f"{prefix} of {module}")
     return model
 

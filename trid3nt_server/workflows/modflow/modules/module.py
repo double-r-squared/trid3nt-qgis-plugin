@@ -18,14 +18,25 @@ from ...runtime.module import Module, SlotRefused
 __all__ = ["ModflowModule", "module_input_dir", "periods"]
 
 
-def _stress(name: str, package: str, dimensions: Mapping[str, str]):
+# A flow stress may carry the concentration of the water it moves: the package's AUXILIARY column the transport model's SSM reads.
+_AUX = ("concentration", "CONCENTRATION", "M/L3")
+
+
+def _stress(name: str, package: str, dimensions: Mapping[str, str], *, carries: bool = False):
     columns = tuple(dimensions)
 
     def expand(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
         if isinstance(value, (list, tuple)) and value:
-            stated = [statement for item in value
-                      if (statement := expand(item)[0].get(f"{package}_STRESS_PERIOD_DATA"))]
-            return ({f"{package}_STRESS_PERIOD_DATA": {"stress": package, "statements": stated}}
+            expanded = [slots for item in value if (slots := expand(item)[0])]
+            stated = [slots[f"{package}_STRESS_PERIOD_DATA"] for slots in expanded]
+            carrying = [f"{package}_AUXILIARY" in slots for slots in expanded]
+            if any(carrying) and not all(carrying):
+                raise ModflowError(
+                    f"{name} states {_AUX[0]} on some statements and not others; the "
+                    f"column is on every cell of the package, so state it on each statement.",
+                    error_code="MODFLOW_STRESS_UNSTATED")
+            return ({f"{package}_STRESS_PERIOD_DATA": {"stress": package, "statements": stated},
+                     **({f"{package}_AUXILIARY": [_AUX[1]]} if all(carrying) else {})}
                     if stated else {}), {}
         if not isinstance(value, Mapping):
             raise ModflowError(
@@ -44,14 +55,17 @@ def _stress(name: str, package: str, dimensions: Mapping[str, str]):
             raise ModflowError(
                 f"{name} layer is {layer!r}; it is an integer from 1.",
                 error_code="MODFLOW_STRESS_UNSTATED")
+        aux = {_AUX[0]: _AUX[2]} if carries and value.get(_AUX[0]) is not None else {}
+        taken = {**dimensions, **aux}
         return {f"{package}_STRESS_PERIOD_DATA": {
             "stress": package, "composite": name, "geometry": value["geometry"],
-            "values": {column: value[column] for column in columns},
-            "dimensions": dict(dimensions), "layer": layer}}, {}
+            "values": {column: value[column] for column in taken},
+            "dimensions": dict(taken), "layer": layer},
+            **({f"{package}_AUXILIARY": [_AUX[1]]} if aux else {})}, {}
 
     expand.__doc__ = (
         f"The {package} package's cells a geometry places: {name}(geometry, layer, "
-        f"{', '.join(columns)}), or a list of such statements; a geometry reading nothing states nothing.")
+        f"{', '.join(columns)}{f', [{_AUX[0]}]' if carries else ''}), or a list of such statements; a geometry reading nothing states nothing.")
     return expand
 
 

@@ -79,12 +79,22 @@ def _metrics(rundir: Path) -> dict[str, Any]:
     return {}
 
 
+def _marched_steps(rundir: Path) -> int | None:
+    """The time steps the staged clock marches: the step counts of its TDIS period rows summed, or ``None`` where it holds none."""
+    try:
+        text = (rundir / "trid3nt.tdis").read_text(encoding="utf-8")
+        rows = text.lower().split("begin perioddata")[1].split("end perioddata")[0]
+        return sum(int(line.split()[1]) for line in rows.splitlines() if line.strip())
+    except (OSError, IndexError, ValueError):
+        return None
+
+
 def classify_exit(rundir: Path, exit_code: int
                   ) -> tuple[str, int, str | None, dict[str, Any]]:
     """The post-exit verdict -> ``(status, exit_code, error, extra)``.
 
     The error names the MODULE the worker says it ran; the whole metrics file is
-    the completion's extra."""
+    the completion's extra, beside the steps the staged clock marched."""
     metrics = _metrics(rundir)
     label = str(metrics.get("module") or MODFLOW_SOLVER_NAME)
     if exit_code != 0:
@@ -95,7 +105,8 @@ def classify_exit(rundir: Path, exit_code: int
         said = str(metrics.get("error")
                    or f"{label} did not reach normal termination")
         return ("error", 2, said, metrics)
-    return "ok", 0, None, metrics
+    steps = _marched_steps(rundir)
+    return "ok", 0, None, metrics if steps is None else {**metrics, "ntimestep": steps}
 
 
 def _spec() -> LocalSolverSpec:

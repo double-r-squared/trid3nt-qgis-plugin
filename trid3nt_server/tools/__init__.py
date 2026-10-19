@@ -192,5 +192,6 @@ from trid3nt_server.workflows.telemac.templates.nearshore_waves.nearshore_waves 
 from trid3nt_server.workflows.telemac.templates.wave_driven_currents.wave_driven_currents import tomawac_wave_driven_currents as _tomawac_wave_driven_currents  # noqa: E402,F401
 from trid3nt_server.workflows.telemac.templates.stratified_flow.stratified_flow import telemac3d_stratified_flow as _telemac3d_stratified_flow  # noqa: E402,F401
 from trid3nt_server.workflows.modflow.templates.water_table.water_table import modflow_water_table as _modflow_water_table  # noqa: E402,F401
+from trid3nt_server.workflows.modflow.templates.plume.plume import modflow_plume as _modflow_plume  # noqa: E402,F401
 from trid3nt_server.tools.mesh.tool import build_mesh as _build_mesh  # noqa: E402,F401
 from trid3nt_server.tools.mesh.op_tool import mesh_op as _mesh_op  # noqa: E402,F401

@@ -77,6 +77,21 @@ def test_a_clean_exit_with_normal_termination_is_ok(tmp_path):
     assert extra["module"] == "gwf"
 
 
+def test_a_completed_run_records_the_steps_its_staged_clock_marched(tmp_path):
+    (tmp_path / "modflow_metrics.json").write_text(json.dumps({
+        "module": "gwt", "correct_end": True}))
+    (tmp_path / "trid3nt.tdis").write_text(
+        "BEGIN dimensions\n  NPER  2\nEND dimensions\n\nBEGIN perioddata\n"
+        "    365.0  24  1.0\n    10.0  3  1.0\nEND perioddata\n")
+    assert classify_exit(tmp_path, 0)[3]["ntimestep"] == 27
+
+
+def test_a_run_whose_clock_is_unreadable_records_no_step_count(tmp_path):
+    (tmp_path / "modflow_metrics.json").write_text(json.dumps({
+        "module": "gwf", "correct_end": True}))
+    assert "ntimestep" not in classify_exit(tmp_path, 0)[3]
+
+
 def test_a_nonzero_exit_is_an_error_naming_the_worker_s_sentence(tmp_path):
     (tmp_path / "modflow_metrics.json").write_text(json.dumps({
         "module": "gwf", "correct_end": False,

@@ -120,6 +120,14 @@ POINT_NOT_VIABLE. SSM is NOT defaulted: mf6 refuses an SSM whose flow model
 carries no boundary flows, so `SSM_SOURCES` is a stated keyword like every
 other.
 
+A flow stress (`Recharge`, `Wells`, `Drains`, `GeneralHead`, `ConstantHead`) may state a
+`concentration` beside its values: water carrying a solute. It places as the package's
+AUXILIARY `CONCENTRATION` column (`RCH_AUXILIARY`), every statement of one package stating it
+or none. Unstated, the transport body's `SSM_SOURCES` is written by the authoring: each
+carrying package by the name the flow model's name file gives it, with `AUX CONCENTRATION`,
+so mf6's SSM reads it; no template names a package. A transport slot naming
+a run input that holds a number takes it as a constant (`MST_POROSITY`, `DSP_ALH`, `IC_STRT`).
+
 For a coupled run the manifest's `module` is the single answering word (the first
 coupled body stated - `gwt` where a run couples both; flow is the machinery).
 BUY and VSC are GWF packages stated by their own dictionary keywords on the
@@ -153,6 +161,19 @@ time the reading's window holds, nearest the moment it was sampled. mf6 carries 
 concentration unit, so a template whose OBSERVE row observes `CONCENTRATION` seats a
 required `concentration_units`; `published_units` reports it, the measured reading
 converts into it at ingestion or refuses, and the concentration layer carries it.
+
+## The plume template
+
+`modflow_plume` answers "where does a dissolved release go": the steady unconfined flow of
+`modflow_water_table` with a transient transport body. The release is RECHARGE over a stated
+`source` polygon at `source_rate` (a depth per day, spread over the polygon as drawn so the cited
+volume is conserved) carrying `source_concentration`, beside the natural recharge carrying
+`background_concentration`; porosity and both dispersivities are stated inputs and the template
+holds no number of its own. The period is the `TDIS_PERIODDATA` keyword the caller states, from
+`event_time` to the `snapshot` its wells are read at. The `observe` row asks the wells reporting
+`solute` at the snapshot and the run charts the modelled against the measured concentration at
+each: extent and shape, never a mass balance. A finished run records the steps its staged clock
+marched as the completion's `ntimestep`, which the packet cross-checks the frames against.
 
 ## The worker
 

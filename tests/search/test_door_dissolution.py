@@ -36,6 +36,7 @@ EXPECTED_TEMPLATES = {
     "tomawac_nearshore_waves",
     "tomawac_wave_driven_currents",
     "modflow_water_table",
+    "modflow_plume",
 }
 
 # The 10 deleted engine-door concierge tools.

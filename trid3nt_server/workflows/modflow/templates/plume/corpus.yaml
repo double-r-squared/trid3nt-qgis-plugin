@@ -1,0 +1,10 @@
+# Template routing phrasings: walked into the main retrieval index directly, so
+# an engine template is an ordinary retrieval-pool tool.
+modflow_plume:
+- where does the dissolved plume from this release go in the groundwater
+- how far has the contaminant plume spread in this aquifer
+- simulate the transport of a conservative solute from an infiltration source in groundwater
+- which way does the contamination move under this site over the decades
+- model a sewage effluent plume in an unconfined sand and gravel aquifer
+- compare the modelled plume concentration with the measured wells
+- groundwater solute transport from a source polygon, measured against monitoring wells

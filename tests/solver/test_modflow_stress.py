@@ -318,3 +318,42 @@ def test_a_bed_stated_as_a_depth_is_its_flat_surface_on_the_model_s_frame(frame,
                    values={"elevation": Bed(kind="depth", depth_m=3.0),
                            "conductance": 50.0})
     assert [row[1] for row in rows] == [pytest.approx(expected)] * 4
+
+
+def test_a_recharge_carrying_a_concentration_states_the_auxiliary_column():
+    sheet = _fill({"Recharge": _statement("Recharge", concentration=0.45)})
+    row = sheet.filled["RCH_STRESS_PERIOD_DATA"].value
+    assert list(row["values"]) == ["rate", "concentration"]
+    assert row["dimensions"]["concentration"] == "M/L3"
+    assert sheet.filled["RCH_AUXILIARY"].value == ["CONCENTRATION"]
+
+
+def test_a_recharge_stating_no_concentration_carries_no_auxiliary():
+    assert "RCH_AUXILIARY" not in _fill({"Recharge": _statement("Recharge")}).filled
+
+
+def test_a_concentration_on_some_statements_and_not_others_refuses_by_name():
+    with pytest.raises(ModflowError) as caught:
+        _fill({"Recharge": [_statement("Recharge", concentration=0.45),
+                            _statement("Recharge")]})
+    assert caught.value.error_code == "MODFLOW_STRESS_UNSTATED"
+    assert "concentration" in str(caught.value)
+
+
+def test_serialize_writes_the_concentration_as_the_package_s_auxiliary(
+        staged_beside, tmp_path):
+    mesh = _mesh(tmp_path)
+    sheet = _fill({"Recharge": [_statement("Recharge", concentration=0.0),
+                                _statement("Recharge", rate=0.04, concentration=0.45)]})
+    out = MF._mesh_files(sheet, mesh)
+    rundir = tmp_path / "run"
+    rundir.mkdir()
+    shutil.copy(out["disv"], rundir / "mesh.disv")
+
+    serialize(sheet, rundir, mesh)
+
+    text = (rundir / "gwf.rch").read_text()
+    assert "auxiliary  CONCENTRATION" in text
+    block = text.split("BEGIN period  1")[1].split("END period")[0]
+    rows = [row.split() for row in block.splitlines() if row.strip()]
+    assert len(rows) == 8 and {row[-1] for row in rows[4:]} == {"4.50000000E-01"}

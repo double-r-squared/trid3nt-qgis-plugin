@@ -154,9 +154,9 @@ GWF.MODULE_OUTPUT = MODULE_OUTPUT
 GWF.composites(Periods=periods)
 GWF.FILLED_BY = MappingProxyType({MOMENT: {"TDIS_START_DATE_TIME": _start_date_time}})
 GWF.composites(
-    reads={name: ("geometry", *(column for column, _ in columns))
+    reads={name: ("geometry", *(column for column, _ in columns), "concentration")
            for name, (_, columns) in _STRESS.items()},
-    **{name: _stress(name, package, dict(columns))
+    **{name: _stress(name, package, dict(columns), carries=True)
        for name, (package, columns) in _STRESS.items()})
 GWF.composites(reads={"Aquifer": _AQUIFER}, Aquifer=_aquifer)
 GWF.composites(Transport=_coupled("gwt", "Transport"),

@@ -69,6 +69,7 @@ def test_the_tool_list_is_generated_from_the_registry() -> None:
         "telemac3d_stratified_flow",
         "artemis_harbor_agitation",
         "modflow_water_table",
+        "modflow_plume",
     ):
         assert f"- {name}: " in section, f"live template {name!r} is not listed"
 
