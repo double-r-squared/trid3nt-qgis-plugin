@@ -63,6 +63,12 @@ dependencies = [
     # NOT a second top-level pin: pfdf 3.x hard-pins it, so a pin here could
     # only drift. It is numba-based, so the first tool CALL pays a ~2.2 s lazy
     # import rather than the daemon paying it at boot.
+    # clawpack authors .data in this process: the one geoclaw body's keywords
+    # land on Clawpack's own Data classes and rundata.write() formats every
+    # line, so the image solves and authors nothing. PyPI carries only an sdist
+    # (no linux cp312 wheel) and a host build is barred, so the pin resolves
+    # against the wheel the GeoClaw image's builder stage builds.
+    "clawpack==5.14.0",  # VENDORED wheel in wheels/: built by workers/geoclaw/Dockerfile's builder stage, installs with --find-links
     # rank_bm25 backs the BM25 channel of the hybrid lexical+dense retrieval
     # over the tool corpus. Pure Python (numpy only). The dense backend
     # (sentence-transformers or a hosted embedder) is imported opportunistically

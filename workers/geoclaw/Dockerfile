@@ -44,6 +44,19 @@ RUN make .exe
 
 RUN cp xgeoclaw /usr/local/bin/xgeoclaw
 
+# The daemon authors .data with Clawpack's own writers, so the wheel is a repo
+# artifact: wheels/ carries it and pyproject pins clawpack to this release,
+# installed by `uv pip install --find-links wheels`. Built in THIS stage - the
+# stage that already installs clawpack from its sdist - so a host never builds
+# one. Placed after make .exe so the compile layer stays cached. Extraction
+# (absolute -f/context paths, REPO the repo root's absolute path):
+#   docker build --target builder -f $REPO/workers/geoclaw/Dockerfile \
+#       -t trid3nt-local/geoclaw-builder $REPO/workers/geoclaw
+#   docker create --name geoclaw-wheel trid3nt-local/geoclaw-builder
+#   docker cp geoclaw-wheel:/wheelhouse/. $REPO/wheels/
+#   docker rm geoclaw-wheel
+RUN pip wheel --no-cache-dir --no-deps -w /wheelhouse "clawpack==5.14.0"
+
 
 FROM python:3.12-slim-bookworm
 
