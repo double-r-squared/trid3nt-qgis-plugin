@@ -158,6 +158,13 @@ class Slot:
                 "collapses and its Fortran reader does not, so no steering "
                 "file states it and gets past both.")
         typed = typed or (lambda item: item)
+        if self.type == "LOGICAL" and isinstance(value, Mapping):
+            for period, flag in value.items():
+                if not isinstance(period, int) or not isinstance(flag, bool):
+                    raise SlotRefused(
+                        f"{self.keyword} takes a period-keyed logical - "
+                        f"{{period: true|false}}; got {value!r}.")
+            return dict(value)
         if not self.is_list:
             return self._bounded(typed(value), 0)
         if not isinstance(value, (list, tuple)):

@@ -81,6 +81,23 @@ head is the water-table elevation in every layer. The stress composites
 on the cells and state their package's period data; a geometry reading nothing
 states nothing, and a missing value refuses rather than defaulting.
 
+SFR is stated by its own dictionary keywords (`SFR_NREACHES`, `SFR_PACKAGEDATA`,
+`SFR_CONNECTIONDATA`, `SFR_PERIODDATA`, the options): ex-gwf-sfr-p01 authored on a
+gridgen DISV equals flopy's own DIS reference bitwise (heads, every reach's stage, every
+reach's downstream flow, max difference 0.0). A cellid on a DISV is `[layer, cell]`,
+0-based. The `Streams` composite places lines as those reaches: `Streams(geometry, width,
+slope, bed_top, bed_thickness, bed_conductivity, manning[, layer])`, or a list of them.
+Each line is cut by the cells it crosses in its digitized order (downstream), one reach per
+piece inside a cell, its length the line's length there on `DISV_LENGTH_UNITS`, its layer the
+cell's top solved layer unless `layer` states one. Consecutive reaches connect; a line ending in
+a cell that holds one reach of another line (not that line's last) joins it, and two such reaches
+there refuse. Reaches are numbered from 0, upstream before downstream. `ustrf` is 1.0 and `ndv`
+0 (no diversion is stated here). A line's part past the mesh edge is left out, as for the
+other stresses; one that leaves the mesh and returns refuses naming the cells. A stated
+`SFR_NREACHES` or `SFR_CONNECTIONDATA` beside `Streams` refuses; inflow and the period
+data are stated through `SFR_PERIODDATA` by reach number. `manning` is a number, the others
+a number or a raster read at each reach's cell centre.
+
 ## The coupling
 
 A coupled run is ONE simulation holding a GWF model and a GWT model, a GWE model,
@@ -220,7 +237,7 @@ builds on was proved through that image before it was built on.
 
 The accepted-mesh reader of a ragged (UGRID) display face - a quadtree with
 refinement, a Voronoi - so those meshes cannot yet be authored on; the
-advanced-package composites (SFR, LAK, MAW,
-UZF, CSUB), OBS and time series, the model exchanges (GWF-GWF, GWT-GWT), FMI
+advanced-package composites (LAK, MAW,
+UZF, CSUB; SFR is placed by `Streams` but its MVR mover is not wired), OBS and time series, the model exchanges (GWF-GWF, GWT-GWT), FMI
 (the transport reading a prior flow run's saved budget), and PRT. Each is a leg
 in the scope's plan; the coupling above is built for GWT on the exchange.

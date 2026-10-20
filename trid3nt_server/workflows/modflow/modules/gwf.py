@@ -7,7 +7,7 @@ from typing import Any, Mapping
 
 from ...runtime.module import MOMENT, Output, SlotRefused
 from ..errors import ModflowError
-from .module import ModflowModule, _start_date_time, _stress, periods
+from .module import _STREAMS, ModflowModule, _start_date_time, _streams, _stress, periods
 from .outputs import PRIMITIVES
 
 __all__ = ["COUPLED_BODIES", "GWF", "MODULE_OUTPUT"]
@@ -175,6 +175,7 @@ GWF.composites(
            for name, (_, columns) in _STRESS.items()},
     **{name: _stress(name, package, dict(columns), carries=True)
        for name, (package, columns) in _STRESS.items()})
+GWF.composites(reads={"Streams": ("geometry", *_STREAMS)}, Streams=_streams)
 GWF.composites(reads={"Aquifer": _AQUIFER}, Aquifer=_aquifer)
 # Which coupled body each coupling composite states, by module word: the one statement the registration and the run's bodies both read.
 COUPLED_BODIES = MappingProxyType({"Transport": "gwt", "Energy": "gwe"})

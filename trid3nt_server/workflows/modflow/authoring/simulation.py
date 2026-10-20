@@ -18,7 +18,7 @@ from . import DISV_FILE
 from .accepted_mesh import mesh_artifact, mesh_nodes
 from .griddata import frame_of, needs_top, place
 from .mesh_files import disv_dimensions, top_of
-from .stress import place as place_stress
+from .stress import place as place_stress, place_streams
 
 from ..errors import ModflowError
 from ...runtime.sheet import Filled, fill
@@ -240,7 +240,27 @@ def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, point
             slot=sheet.body.MODULE_INPUT[f"{prefix}_MAXBOUND"],
             value=len(placed), provenance=row.provenance)
         derived.add(f"{prefix}_MAXBOUND")
+    row = groups.get("SFR", {}).get("packagedata")
+    if row is not None and isinstance(row.value, Mapping) and "streams" in row.value:
+        _streamed(sheet, groups["SFR"], row, nlay=nlay, points=points, cells=cells,
+                  utm_epsg=utm_epsg, frame=frame, active=active)
+        derived |= {"SFR_NREACHES", "SFR_CONNECTIONDATA"}
     return derived
+
+
+def _streamed(sheet: Any, rows: dict[str, Any], row: Any, **mesh: Any) -> None:
+    """Cut the Streams lines into reaches: the package's reach list, its connections and its count."""
+    stated = sorted(f"SFR_{name.upper()}" for name in ("nreaches", "connectiondata") if name in rows)
+    if stated:
+        raise ModflowError(
+            f"{', '.join(stated)} {'is' if len(stated) == 1 else 'are'} derived from the "
+            "Streams lines; state either the lines or the reach keywords, not both.",
+            error_code="MODFLOW_KEYWORD_SHAPE")
+    packagedata, connectiondata = place_streams(row.value["streams"], **mesh)
+    for name, value in (("packagedata", packagedata), ("connectiondata", connectiondata),
+                        ("nreaches", len(packagedata))):
+        rows[name] = Filled(slot=sheet.body.MODULE_INPUT[f"SFR_{name.upper()}"],
+                            value=value, provenance=row.provenance)
 
 
 def _active(sheet: Any, *, nlay: int, points: Any, cells: Any, utm_epsg: int | None,

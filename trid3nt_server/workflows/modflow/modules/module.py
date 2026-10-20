@@ -69,6 +69,50 @@ def _stress(name: str, package: str, dimensions: Mapping[str, str], *, carries: 
     return expand
 
 
+_STREAMS = {"width": "L", "slope": "1", "bed_top": "L", "bed_thickness": "L",
+            "bed_conductivity": "L/T", "manning": "1"}
+
+
+def _streams(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    if isinstance(value, (list, tuple)) and value:
+        stated = [item for each in value if (item := _streams(each)[0])]
+        return ({"SFR_PACKAGEDATA": {"streams": [row["SFR_PACKAGEDATA"]["streams"][0]
+                                                 for row in stated]}} if stated else {}), {}
+    if not isinstance(value, Mapping):
+        raise ModflowError(
+            "Streams takes a mapping of geometry, "
+            f"{', '.join(_STREAMS)} and an optional layer, or a list of them; got {value!r}.",
+            error_code="MODFLOW_STRESS_UNSTATED")
+    if value.get("geometry") is None:
+        return {}, {}
+    for argument in _STREAMS:
+        if value.get(argument) is None:
+            raise ModflowError(
+                f"Streams states no {argument}; the engine has no value for it, "
+                "so state it from a measurement or a named source.",
+                error_code="MODFLOW_STRESS_UNSTATED")
+    layer = value.get("layer")
+    if layer is not None and (isinstance(layer, bool) or not isinstance(layer, int) or layer < 1):
+        raise ModflowError(f"Streams layer is {layer!r}; it is an integer from 1.",
+                           error_code="MODFLOW_STRESS_UNSTATED")
+    manning = value["manning"]
+    if isinstance(manning, bool) or not isinstance(manning, (int, float)):
+        raise ModflowError(
+            "Streams manning is a number in the units the SFR conversions state; a raster "
+            "carries no unit this frame converts.", error_code="MODFLOW_STRESS_UNSTATED")
+    return {"SFR_PACKAGEDATA": {"streams": [{
+        "composite": "Streams", "geometry": value["geometry"], "layer": layer,
+        "values": {column: value[column] for column in _STREAMS},
+        "dimensions": dict(_STREAMS)}]}}, {}
+
+
+_streams.__doc__ = (
+    "The SFR reaches a line geometry places: Streams(geometry, width, slope, bed_top, "
+    "bed_thickness, bed_conductivity, manning[, layer]), or a list of such statements.\n\n"
+    "    The line is cut by the cells it crosses in its digitized order, downstream; each\n"
+    "    reach lies on the cell's top solved layer unless layer states one.")
+
+
 def module_input_dir() -> Path:
     """Where the committed module inputs live."""
     return Path(__file__).resolve().parent / "module_input"
