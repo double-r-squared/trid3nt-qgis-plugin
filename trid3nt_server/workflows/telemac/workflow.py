@@ -32,7 +32,8 @@ from trid3nt_server.workflows.solver.staging import discard_run
 from trid3nt_server.workflows.telemac.errors import TelemacError
 from trid3nt_server.workflows.telemac.modules import wrapper_for
 from trid3nt_server.workflows.runtime.module import (SlotRefused,
-                                                     identify_on)
+                                                     identify_on,
+                                                     keyword_floor)
 from trid3nt_server.workflows.runtime.module import MOMENT
 from trid3nt_server.workflows.runtime.primitives import (
     OutputEmpty,
@@ -329,21 +330,7 @@ def stated(*, steering: type, keywords: Mapping[str, Any]) -> dict[str, Any]:
 def _floor(steering: type, keywords: Mapping[str, Any]
            ) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
     """The raw keyword floor routed onto this run's bodies -> the carrier's values and each coupled module's, by identifier."""
-    if keywords and not isinstance(keywords, Mapping):
-        raise SlotRefused(
-            f"keywords takes a mapping of the engine's own keyword names to "
-            f"values, e.g. {{\"LAW OF BOTTOM FRICTION\": 4}}; got "
-            f"{type(keywords).__name__}.")
-    bodies = run_bodies(steering)
-    own: dict[str, Any] = {}
-    coupled: dict[str, dict[str, Any]] = {}
-    for name, value in (keywords or {}).items():
-        body, identifier = identify_on(bodies, name)
-        if body is steering:
-            own[identifier] = value
-        else:
-            coupled.setdefault(body.MODULE, {})[identifier] = value
-    return own, coupled
+    return keyword_floor(run_bodies(steering), keywords)
 
 
 def run_bodies(steering: type) -> list[type]:

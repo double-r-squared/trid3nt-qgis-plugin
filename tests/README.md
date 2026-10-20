@@ -22,10 +22,10 @@ rest and make up the sixth slice.
 | `model/` | the SysML model conformance check | 1 | 23 |
 | `plugin/` | the QGIS dock: the client, the Qt bridge, the cards, the render seams; the Qt-wiring subset runs in a subprocess harness | 39 | 403 |
 | `runtime/` | the template runtime, its engine-neutral slots and dictionary marks, the run journal | 17 | 222 |
-| `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 12 | 173 |
+| `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 12 | 174 |
 | `search/` | dataset and tool retrieval, the OGC adapter, the keyword dictionary read | 13 | 206 |
 | `server/` | the HTTP and WS routes, the fetch short-circuit and the Case AOI, persistence | 29 | 260 |
-| `solver/` | the executor, the run reads, the engine-room posture, the MODFLOW engine, its authoring and staged check, the GeoClaw engine and its module wrapper, the plume template, and its body wrappers | 21 | 340 |
+| `solver/` | the executor, the run reads, the engine-room posture, the MODFLOW engine, its authoring and staged check, the GeoClaw engine and its module wrapper, the plume template, and its body wrappers | 22 | 355 |
 | `telemac/` | the TELEMAC templates, the module surface, what each module writes and the primitives that read it, the listing reads, authoring | 61 | 1001 |
 | `tools/` | the registry, the arg normalizer, the tool cache | 10 | 343 |
 
@@ -46,8 +46,8 @@ Six slices by subsystem, each its own foreground invocation, from the repo root:
 
     make test-fetchers        # tests/fetchers                                                                              2122
     make test-spatial         # tests/derive tests/render tests/mesh                                         759
-    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                      1769
-    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts       1128
+    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                      1784
+    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts       1129
     make test-model-surface   # tests/adapters tests/tools                                                                   616
     make test-packages        # tests/contracts tests/plugin                                                                  754
 

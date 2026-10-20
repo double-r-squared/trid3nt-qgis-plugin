@@ -10,7 +10,7 @@ from ..errors import ModflowError
 from .module import ModflowModule, _start_date_time, _stress, periods
 from .outputs import PRIMITIVES
 
-__all__ = ["GWF", "MODULE_OUTPUT"]
+__all__ = ["COUPLED_BODIES", "GWF", "MODULE_OUTPUT"]
 
 # What the module writes, read off the head and budget files. A discharge component reads about zero, so its ramp diverges; saturation is a fraction.
 _LEVEL = {"kind": "mesh", "ramp": "blues"}
@@ -164,6 +164,8 @@ def _coupled(module: str, name: str):
 
 GWF = ModflowModule("gwf")
 GWF.MODULE_OUTPUT = MODULE_OUTPUT
+# The clock and grid family, which identify_on resolves as the carrier's wherever a bare name of it is spelled - the same families _coupled refuses on a body.
+GWF.CARRIER_OWNED = tuple(f"{prefix}_" for prefix in _SIMULATION_OWNED)
 # The simulation's own clock on every body: Periods spells the marching, the moment the instant it opens at.
 # The until/steps form reads those two run inputs by name; the list form states TDIS rows directly.
 GWF.composites(reads={"Periods": ("until", "steps")}, Periods=periods)
@@ -174,6 +176,8 @@ GWF.composites(
     **{name: _stress(name, package, dict(columns), carries=True)
        for name, (package, columns) in _STRESS.items()})
 GWF.composites(reads={"Aquifer": _AQUIFER}, Aquifer=_aquifer)
-GWF.composites(Transport=_coupled("gwt", "Transport"),
-               Energy=_coupled("gwe", "Energy"))
+# Which coupled body each coupling composite states, by module word: the one statement the registration and the run's bodies both read.
+COUPLED_BODIES = MappingProxyType({"Transport": "gwt", "Energy": "gwe"})
+GWF.composites(**{name: _coupled(module, name)
+                  for name, module in COUPLED_BODIES.items()})
 GWF.reads(**PRIMITIVES)

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import replace
 from datetime import datetime
 from importlib import import_module
 from pathlib import Path
@@ -23,18 +24,21 @@ from trid3nt_server.inputs.input import Input
 from trid3nt_server.inputs.instant import event_time
 from trid3nt_server.inputs.slots import BED, DOMAIN, MESH
 from trid3nt_server.workflows.runtime import DeclarationError, RunResult, Workflow
-from trid3nt_server.workflows.runtime.module import MOMENT, SlotRefused
+from trid3nt_server.workflows.runtime.module import (MOMENT, SlotRefused,
+                                                     identify_on,
+                                                     keyword_floor)
 from trid3nt_server.workflows.runtime.primitives import (Primitive, field, publish_reads,
                                                          unanchored)
 from trid3nt_server.workflows.runtime.review import _review, _seat_on
 from trid3nt_server.workflows.runtime.sheet import Filled, Keyword, Sheet
 from trid3nt_server.workflows.runtime.sheet import fill as fill_slots
+from trid3nt_server.workflows.runtime.sheet import fill_coupled
 from trid3nt_server.workflows.runtime.sheet import run as run_sheet_
 from trid3nt_server.workflows.runtime.workflow import EVENT_TIME
 from trid3nt_server.workflows.solver.staging import discard_run
 
 from .authoring import DISV_FILE, MFSIM_FILE
-from .modules import wrapper_for
+from .modules import COUPLED_BODIES, wrapper_for
 from .modules.outputs import Solved, filerecord, group_stem
 from .modules.ugrid import display_file
 
@@ -43,8 +47,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("trid3nt_server.workflows.modflow.workflow")
 
-__all__ = ["CONCENTRATION_UNITS", "ModflowWorkflow", "fill_sheet", "publish_outputs", "run_sheet",
-           "stage_simulation"]
+__all__ = ["CONCENTRATION_UNITS", "ModflowWorkflow", "fill_sheet", "publish_outputs", "run_bodies",
+           "run_sheet", "stage_simulation"]
 
 #: The dispatch a staged run goes to, by the path it is resolved at CALL time.
 _DISPATCH = "trid3nt_server.workflows.modflow.engine.solve_case"
@@ -70,13 +74,44 @@ _SUPPLIED_MESH = Input(MESH, name="mesh", coercion=MappingProxyType(
     {"kinds": ("unstructured_tri", "voronoi", "quadtree")})).stated()
 
 
-def _floor(steering: type, keywords: Mapping[str, Any]) -> dict[str, Any]:
-    """The raw keyword floor, by the identifier each name is written under on ``steering``."""
-    if keywords and not isinstance(keywords, Mapping):
-        raise SlotRefused(
-            f"keywords takes a mapping of the engine's own keyword names to "
-            f"values, e.g. {{\"NPF_K33\": 1.0}}; got {type(keywords).__name__}.")
-    return {steering.identify(name): value for name, value in (keywords or {}).items()}
+def _floor(steering: type, keywords: Mapping[str, Any]
+           ) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    """The raw keyword floor routed onto this run's bodies -> the carrier's values and each coupled module's, by identifier."""
+    names = list(keywords) if isinstance(keywords, Mapping) else []
+    return keyword_floor(run_bodies(steering, names), keywords)
+
+
+def run_bodies(steering: type, names: Sequence[str] = ()) -> list[type]:
+    """This run's bodies in SIMULATION ORDER: the carrier, then each module its Transport/Energy states, then each body a qualified name of this run names.
+    A qualifier may add only a body the carrier couples (gwt/gwe); an unknown module word is identify_on's to refuse."""
+    bodies = [steering, *(wrapper_for(module)
+                          for name, module in COUPLED_BODIES.items()
+                          if steering.ASSERTED.get(name) is not None)]
+    for name in names:
+        module = str(name).partition(":")[0].strip().lower()
+        if ":" in str(name) and module in COUPLED_BODIES.values() \
+                and all(body.MODULE != module for body in bodies):
+            bodies.append(wrapper_for(module))
+    return bodies
+
+
+#: Which coupling composite on the carrier states each coupled body, by module word.
+_COMPOSITE_FOR = {module: name for name, module in COUPLED_BODIES.items()}
+
+
+def _compose_coupled(sheet: Sheet, stated: Mapping[str, Mapping[str, Any]],
+                     held: Mapping[str, Any]) -> Sheet:
+    """Run-stated coupled keywords -> the sheet: composed through the carrier's own coupling composite (the slot checks, the stress expansion and the simulation's-own refusals a template statement takes) and merged onto that body's deck - a body this run names and no template stated is created here."""
+    for module, slots in stated.items():
+        _, named = sheet.body.COMPOSITES[_COMPOSITE_FOR[module]].apply(
+            {"slots": slots}, held)
+        if any(content["module"] == module for content in sheet.coupled):
+            sheet = fill_coupled(sheet, {module: named[module]["slots"]})
+        else:
+            body = {**named[module], "stated": sorted(named[module]["slots"])}
+            files = {**sheet.files, module: body}
+            sheet = replace(sheet, files=MappingProxyType(files))
+    return sheet
 
 
 async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
@@ -86,15 +121,21 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
                      write: Callable[[Sheet], Any] | None = None,
                      user: Sequence[str] = ()) -> Sheet:
     """Set the body's slots against what the run holds -> the sheet, HELD on its one review.
-    The raw ``keywords`` floor is filled last and therefore beats a template value;
+    The carrier's floor is filled last and therefore beats a template value; each coupled
+    module's composes onto the template's statement of that deck, never replacing it;
     ``write`` writes, validates and stages every sheet a card is drawn from."""
-    floor = _floor(steering, keywords)
+    own, coupled = _floor(steering, keywords)
 
     async def fill(values: Mapping[str, Any], edits: Mapping[str, Any]) -> Sheet:
         # A composite samples rasters at the fill, so the fill runs off the loop.
         sheet = await asyncio.to_thread(
             fill_slots, steering, template=workflow, produced=dict(produced),
-            params=dict(values), **{**floor, **edits})
+            params=dict(values), **{**own, **edits})
+        if coupled:
+            held = {**produced, **values,
+                    **{name: row.value for name, row in sheet.filled.items()}}
+            sheet = await asyncio.to_thread(
+                _compose_coupled, sheet, coupled, held)
         if write is not None:
             await write(sheet)
         return sheet
@@ -309,11 +350,12 @@ class ModflowWorkflow(Workflow):
         return {"CONCENTRATION": str(unit)} if unit else {}
 
     def input(self, name: str) -> Any:
-        """The template's and the engine's own inputs first, then the keyword a name spells on the STEERING body."""
+        """The template's and the engine's own inputs first, then the keyword a name spells on whichever of this run's bodies carries it."""
         declared = next((row for row in self.inputs if row.name == name), None)
         if declared is not None:
             return declared
-        return Keyword(self.steering, self.steering.identify(name), True)
+        body, identifier = identify_on(run_bodies(self.steering, (name,)), name)
+        return Keyword(body, identifier, body is self.steering)
 
     def check(self) -> None:
         """Refuse at import what this template cannot run on: one domain, one bed,

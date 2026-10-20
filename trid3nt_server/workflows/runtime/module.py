@@ -30,6 +30,7 @@ __all__ = [
     "UNSET",
     "accept",
     "identify_on",
+    "keyword_floor",
     "load_module_input",
 ]
 
@@ -58,7 +59,7 @@ _RESERVED = frozenset((
     "ARMS_ON_HOST", "MODULE_OUTPUT", "LISTING", "DERIVED", "PRINTOUTS",
     "CADENCE", "CLOCK", "TRACER", "APPENDS", "APPENDABLE", "ONLY_3D",
     "UNWRITTEN", "RESULT_FILE", "RESULT_FILES", "RESULT_KEYWORD", "FILLED_BY",
-    "CODE_ON_HOST", "PLACED_AGAINST", "PARTITION_KEYWORD",
+    "CODE_ON_HOST", "PLACED_AGAINST", "PARTITION_KEYWORD", "CARRIER_OWNED",
     "composites",
     "reads", "appends", "printouts", "seconds", "slot",
 ))
@@ -429,6 +430,8 @@ class Module(metaclass=_Body):
     PLACED_AGAINST: Mapping[str, tuple[str, ...]] = MappingProxyType({})
     # The keyword this engine partitions a run under; empty says this engine has none, and identify_on then reads no bare name as the carrier's.
     PARTITION_KEYWORD: str = ""
+    # Identifier prefixes the carrier owns for the whole run - one clock, one grid - so identify_on reads a bare name of the family as the carrier's wherever it is spelled. Empty says this engine has none.
+    CARRIER_OWNED: tuple[str, ...] = ()
 
     @classmethod
     def dictionary_dir(cls) -> Path:
@@ -562,7 +565,7 @@ def identify_on(bodies: Sequence[type], name: str) -> tuple[type, str]:
     """The ``(body, identifier)`` a name is written under, across a run's bodies.
 
     A qualified ``"waqtel: K2 REAERATION COEFFICIENT"`` resolves against that body alone. A bare name resolves where exactly one body spells it; two refuse, naming both.
-    The engine's partition keyword is the exception: a run is partitioned once, across the carrier's, so the bare name is the carrier's.
+    The engine's partition keyword and the carrier's own family are the exceptions: a run is partitioned once and its clock and grid are the carrier's, so either bare name is the carrier's.
     """
     wanted = str(name).strip()
     if _QUALIFIER in wanted:
@@ -575,9 +578,11 @@ def identify_on(bodies: Sequence[type], name: str) -> tuple[type, str]:
                 f"{', '.join(b.MODULE for b in bodies)}.")
         return body, body.identify(keyword)
     spelled = [body for body in bodies if _spells(body, wanted)]
-    if spelled[:1] == [bodies[0]] and (
-            bodies[0].identify(wanted) == bodies[0].PARTITION_KEYWORD):
-        return bodies[0], bodies[0].PARTITION_KEYWORD
+    if spelled[:1] == [bodies[0]]:
+        identifier = bodies[0].identify(wanted)
+        if identifier == bodies[0].PARTITION_KEYWORD \
+                or identifier.startswith(bodies[0].CARRIER_OWNED):
+            return bodies[0], identifier
     if len(spelled) > 1:
         raise SlotRefused(
             f"{wanted!r} is a keyword of "
@@ -603,6 +608,28 @@ def _spells(body: type, name: str) -> bool:
     except SlotRefused:
         return False
     return True
+
+
+def keyword_floor(bodies: Sequence[type], keywords: Mapping[str, Any] | None
+                  ) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    """The raw keyword floor over a run's bodies -> (the carrier's values by identifier, each coupled module's, by module word).
+
+    Every name resolves as ``identify_on`` resolves it - a qualifier names its body, a bare
+    name the one body that spells it, two refusing naming both - so a value lands on the body
+    the engine reads it from; anything that is not a mapping of names to values refuses as its argument."""
+    if keywords and not isinstance(keywords, Mapping):
+        raise SlotRefused(
+            f"keywords takes a mapping of the engine's own keyword names to "
+            f"values; got {type(keywords).__name__}.")
+    own: dict[str, Any] = {}
+    coupled: dict[str, dict[str, Any]] = {}
+    for name, value in (keywords or {}).items():
+        body, identifier = identify_on(bodies, name)
+        if body is bodies[0]:
+            own[identifier] = value
+        else:
+            coupled.setdefault(body.MODULE, {})[identifier] = value
+    return own, coupled
 
 
 # The dictionary spells a numbered token with ``i``: ``T1`` is the choice ``Ti``, ``TA1`` is ``TAi``.

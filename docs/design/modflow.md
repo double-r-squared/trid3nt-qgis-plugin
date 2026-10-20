@@ -111,6 +111,25 @@ missing value refuses. The composed body names its module and its slots and
 expands into the second model and the exchange - into the simulation authoring,
 not into keyword values on the carrier's sheet.
 
+A run's `keywords` reach these bodies through ONE floor (`keyword_floor`,
+`workflows/runtime/module.py`; `modflow/workflow.py::_floor` hands it
+`run_bodies`): a `gwt: KEYWORD` qualifier resolves on the transport deck alone,
+a bare name resolves where exactly one body spells it and two (`IMS_PRINT_OPTION`,
+`IC_STRT`, the `OC_*` family) refuse naming both, and `TDIS_*`/`DISV_*` - the
+simulation's own clock and grid, `GWF.CARRIER_OWNED` - resolve as the carrier's
+wherever they are spelled and refuse when restated onto a coupled slot. The
+carrier's values fill last over the template; a coupled body's compose through
+`Transport`/`Energy` itself - the same slot checks, stress expansion and
+TDIS/DISV refusals a template statement takes - and merge over the template's
+statement of that deck, never replacing it. `Workflow.input` answers off the
+same bodies. A qualifier also NAMES the body: where the template states no
+`Transport`/`Energy`, the run's qualified names add gwt/gwe to the run's bodies
+(`run_bodies`), the composite creating that deck with only what the run stated,
+and its required keywords refuse at the write (`_unstated`,
+`MODFLOW_KEYWORD_UNSTATED`) exactly as a template-stated body's do. A body the
+carrier cannot couple (a qualifier for no registered module word) is
+identify_on's to refuse naming the run's bodies.
+
 serialize writes the coupled sheet model by model (`authoring/simulation.py`):
 one name file per model over the SAME filename-only DISV, one IMS per model,
 both name files listing `mesh.disv`, the `Periods`/moment filling only the
@@ -121,8 +140,12 @@ unstated-refused (IC and MST for gwt; IC and EST for gwe, whose porosity and sol
 heat capacity and density are stated, never defaulted), with CNC/SRC period data placed by the
 stress walk against the shared grid - a point off the mesh refuses
 POINT_NOT_VIABLE. SSM is NOT defaulted: mf6 refuses an SSM whose flow model
-carries no boundary flows, so `SSM_SOURCES` is a stated keyword like every
-other.
+carries no boundary flows, and flopy has no empty `SOURCES` record, so
+`SSM_SOURCES` is a stated keyword like every other. The converse holds: a flow
+model WITH boundary packages refuses validation with no SSM at all, so where
+nothing carries concentration the run states the package itself (`SSM_SAVE_FLOWS`)
+and the authoring writes an OPTIONS-only SSM carrying no source record - which
+mf6 accepts.
 
 A flow stress (`Recharge`, `Wells`, `Drains`, `GeneralHead`, `ConstantHead`) may state a
 `concentration` beside its values: water carrying a solute. It places as the package's

@@ -197,6 +197,56 @@ def test_the_transport_body_may_not_state_the_simulation_s_own(identifier):
     assert identifier in str(caught.value)
 
 
+def test_a_run_created_body_missing_a_required_keyword_refuses_by_name(
+        strip, staged_beside, tmp_path):
+    """A body the run's own qualified keywords create is held to the same required
+    set at the write: mf6's own unstated refusal, naming the keyword."""
+    from trid3nt_server.workflows.modflow.workflow import _compose_coupled, _floor
+
+    sheet = _sheet()
+    assert sheet.coupled == ()
+    _, coupled = _floor(sheet.body, {"gwt: MST_POROSITY": _PRSITY})
+    sheet = _compose_coupled(sheet, coupled, {})
+    assert [body["module"] for body in sheet.coupled] == ["gwt"]
+    rundir = tmp_path / "run"
+    rundir.mkdir(exist_ok=True)
+    out = MF._mesh_files(sheet, strip)
+    shutil.copy(out["disv"], rundir / "mesh.disv")
+    with pytest.raises(ModflowError) as caught:
+        serialize(sheet, rundir, strip)
+    assert caught.value.error_code == "MODFLOW_KEYWORD_UNSTATED"
+    assert "IC_STRT" in str(caught.value)
+
+
+def test_a_run_created_body_serializes_and_mf6_validates(
+        strip, staged_beside, tmp_path):
+    """The body the run's own qualified keywords create writes and validates like a
+    template's: its name file and solution over the same DISV, the exchange, and
+    mf6's own --mode validate accepting the directory."""
+    from trid3nt_server.workflows.modflow.authoring.validate import (
+        validate_authored_simulation)
+    from trid3nt_server.workflows.modflow.workflow import _compose_coupled, _floor
+
+    sheet = _sheet()
+    _, coupled = _floor(sheet.body,
+                        {f"gwt: {name}": value
+                         for name, value in _transport()["slots"].items()}
+                        | {"gwt: SSM_SAVE_FLOWS": True})
+    sheet = _compose_coupled(sheet, coupled, {})
+    out = MF._mesh_files(sheet, strip)
+    rundir = tmp_path / "run"
+    rundir.mkdir(exist_ok=True)
+    shutil.copy(out["disv"], rundir / "mesh.disv")
+
+    written = serialize(sheet, rundir, strip)["written"]
+
+    assert {"gwf.nam", "gwt.nam", "mfsim.nam", "gwf.ims", "gwt.ims"} <= set(written)
+    assert (rundir / "gwf.gwfgwt").exists()
+    both = " ".join((rundir / "mfsim.nam").read_text().split())
+    assert "GWF6-GWT6 gwf.gwfgwt gwf gwt" in both
+    assert validate_authored_simulation(rundir) == {"rc": 0}
+
+
 # ---- the write: two models over one staged DISV -----------------------------
 
 

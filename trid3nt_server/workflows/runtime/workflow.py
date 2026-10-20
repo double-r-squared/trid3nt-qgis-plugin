@@ -458,6 +458,13 @@ _CONTROL_DOCS: tuple[tuple[str, str], ...] = (
      "True builds the mesh again even where one built from the same domain, "
      "bed, resolution and mesher is kept; unset, such a kept mesh is reused. "
      "Not a physical value."),
+    ("keywords",
+     "The engine's own keyword names this run states beyond the template, as "
+     "a mapping of name to value; a run's statement beats the template's. A "
+     "name is this engine's keyword, identifier or composite, or a qualified "
+     '"module: keyword" for a body this run couples (gwt: '
+     "IMS_PRINT_OPTION); find them with describe_keywords. A bare name two "
+     "bodies spell refuses naming both: name the body it belongs to."),
 )
 
 

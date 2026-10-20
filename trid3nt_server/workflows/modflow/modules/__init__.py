@@ -10,12 +10,13 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Mapping
 
-from .gwf import GWF
+from .gwf import COUPLED_BODIES, GWF
 from .gwe import GWE
 from .gwt import GWT
 from ...runtime.module import Composite, Module, Output, Slot, SlotRefused, load_module_input
 
 __all__ = [
+    "COUPLED_BODIES",
     "GWF", "GWE", "GWT", "Composite", "Module", "Output", "Slot", "SlotRefused",
     "WRAPPERS", "load_module_input", "wrapper_for",
 ]

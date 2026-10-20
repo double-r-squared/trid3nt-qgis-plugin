@@ -198,6 +198,23 @@ an engine keyword or composite. A keyword stated beside it refuses naming the
 container, and a declared input stated inside it refuses naming where it
 belongs.
 
+ONE floor routes every name inside it across the run's bodies
+(`keyword_floor`, `runtime/module.py`; each engine's `_floor` hands it its
+`run_bodies(steering)`): a qualifier names its body alone, a bare name resolves
+where exactly one body spells it and two refuse naming both, the partition
+keyword and the carrier's `CARRIER_OWNED` family - a clock or grid the whole
+run shares - resolve as the carrier's wherever they are spelled, and an unknown
+module word refuses naming the bodies this run runs. On MODFLOW a qualifier may
+also ADD the body it names where the carrier couples it (`gwt`/`gwe`: the run's
+qualified names join `run_bodies`, and the carrier's composite creates the deck
+the template did not state); on TELEMAC a body's presence is the template's
+`coupling` declaration alone, and a qualifier naming outside it refuses. The floor returns the
+carrier's values by identifier beside each coupled module's: the carrier's fill
+last over the template, and a coupled module's compose through the carrier's
+own coupling composite and merge onto the template's statement of that deck -
+one run statement beats the template's value and never replaces the template's
+statement of the body.
+
 The fill (`workflows/runtime/fill.py`) answers every input in one loop and
 leaves one `Verdict` each: the state, the value taken, and where it came from -
 the origin (user, template, producer, derived; `Origin`, in the contracts) and
