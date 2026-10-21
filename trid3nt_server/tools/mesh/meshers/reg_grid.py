@@ -20,7 +20,7 @@ from trid3nt_server.tools.mesh.meshers import (
     register_mesher,
 )
 
-__all__ = ["REG_GRID", "build"]
+__all__ = ["REG_GRID", "build", "lattice"]
 
 
 def build(recipe: Any) -> Mesh:
@@ -41,7 +41,7 @@ def build(recipe: Any) -> Mesh:
 
     box = tuple(float(v) for v in extent)
     edge, note = finest_edge(recipe.resolution_m, recipe.ops, box)
-    mesh = _lattice(regular_grid_from_bbox(box, edge))
+    mesh = lattice(regular_grid_from_bbox(box, edge))
     if note:
         mesh = dataclasses.replace(mesh, meta={**dict(mesh.meta),
                                                "edge_notes": [note]})
@@ -61,7 +61,8 @@ def _with_ops(mesh: Mesh, recipe: Any) -> Mesh:
     return mesh
 
 
-def _lattice(grid: RegularGrid) -> Mesh:
+def lattice(grid: RegularGrid) -> Mesh:
+    """The node lattice and its counter-clockwise quad cells over ``grid``, in lon/lat."""
     lons = grid.min_lon + np.arange(grid.ncol + 1, dtype=float) * grid.dlon
     lats = grid.min_lat + np.arange(grid.nrow + 1, dtype=float) * grid.dlat
     xx, yy = np.meshgrid(lons, lats)

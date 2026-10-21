@@ -523,3 +523,20 @@ ask carries the mesher, the extent, the resolution and the mesh's own
 operations (`mesh_op`), validated against the chosen mesher's namespaces. A
 mesh of another species (a structured grid, a node-link network) is a typed
 refusal, never a silent conversion.
+
+GeoClaw has no mesh; its grid is a RECIPE on the same front. The `claw_grid`
+mesher (`tools/mesh/meshers/claw_grid.py`) takes the lon/lat level-1 box, the
+level-1 cell edge along a meridian as `resolution_m` (fitted to the box as a whole
+number of cells, and said so), the integer `refinement_ratios` as a build
+parameter (one list for x, y and t), and `flagregion` ops, each one Clawpack
+FlagRegion over a lon/lat rectangle. It builds the level-1 lattice; its finest
+cell (metres and arc-seconds) and the cells each level is forced and allowed
+by the flagregions ride the one mesh gate card as read-only rows. A flagregion
+level above the levels the ratios give refuses by name. Authoring
+(`workflows/geoclaw/authoring/grid.py`) lands the accepted grid on `CLAW_LOWER`,
+`CLAW_UPPER`, `CLAW_NUM_CELLS`, `AMR_AMR_LEVELS_MAX`, `AMR_REFINEMENT_RATIOS_X/Y/T`
+and `FLAGREGION_FLAGREGIONS`, and a template stating any of them beside the recipe
+refuses by name. A topofile header is checked against the level-1 box by the
+engine's own coverage rule (topo node extent against the domain's area), not an
+alignment rule: the engine integrates topo over each cell and stops only when the
+topo does not cover the domain.

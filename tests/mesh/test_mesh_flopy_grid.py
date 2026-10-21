@@ -59,9 +59,9 @@ def _recipe(**over):
     return MeshTool.build_mesh(**ask)
 
 
-def test_the_roster_names_all_five_meshers():
-    assert registered_meshers() == ("gridgen", "om2d", "reg_grid",
-                                    "triangle", "voronoi")
+def test_the_roster_names_all_six_meshers():
+    assert registered_meshers() == ("claw_grid", "gridgen", "om2d",
+                                    "reg_grid", "triangle", "voronoi")
 
 
 def test_the_triangle_names_are_triangles_own_and_phase_derived():

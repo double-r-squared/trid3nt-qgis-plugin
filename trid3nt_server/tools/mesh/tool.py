@@ -31,6 +31,7 @@ from trid3nt_server.tools.mesh.recipe import (
     recipe_plan_value,
 )
 # Importing a mesher REGISTERS it; the roster is this block and nothing else.
+from trid3nt_server.tools.mesh.meshers import claw_grid as _claw_grid  # noqa: F401,E402
 from trid3nt_server.tools.mesh.meshers import flopy_grid as _flopy_grid  # noqa: F401,E402
 from trid3nt_server.tools.mesh.meshers import om2d as _om2d  # noqa: F401,E402
 from trid3nt_server.tools.mesh.meshers import reg_grid as _reg_grid  # noqa: F401,E402
@@ -101,9 +102,10 @@ async def build_mesh(
         mesher: om2d (OceanMesh2D triangles over a polygon's interior),
             reg_grid (a uniform lattice over a box), triangle (Triangle's own
             constrained triangulation, planar), voronoi (the Voronoi dual of
-            that same build), or gridgen (a quadtree over a rectilinear base,
-            DISV-shaped).
-        kind: unstructured_tri | structured_grid | voronoi | quadtree.
+            that same build), gridgen (a quadtree over a rectilinear base,
+            DISV-shaped), or claw_grid (the grid GeoClaw runs on: a lon/lat
+            level-1 box, refinement ratios and flagregion ops).
+        kind: unstructured_tri | structured_grid | voronoi | quadtree | amr_grid.
         location: place naming the domain. Supply this OR bbox.
         bbox: AOI (min_lon, min_lat, max_lon, max_lat) in EPSG:4326.
         extent: the POLYGON to mesh the interior of - what om2d takes, and what
@@ -117,7 +119,8 @@ async def build_mesh(
         build: the mesher backend's own constructor kwargs, stated verbatim
             under its parameter names - maximum_area / angle / nodes /
             additional_args for triangle and voronoi, delr / delc / xoff /
-            yoff / angrot for gridgen (om2d and reg_grid take none).
+            yoff / angrot for gridgen, refinement_ratios (one integer per finer level)
+            for claw_grid (om2d and reg_grid take none).
         ops: the ordered program, [{"fn": name, ...kwargs}], calling the mesh
             library's own functions plus set_bed and set_boundary_roles. Omit for
             the mesher's defaults; refine a built one with mesh_op.

@@ -40,6 +40,8 @@ build_mesh:
 - build a DISV-shaped quadtree mesh from a rectilinear base grid
 - quadtree this domain and refine a level along this line
 - punch a rectangular hole in the triangulation and mesh around it
+- set the grid GeoClaw runs on, with its base cell size, refinement levels and flagregions
+- build the AMR grid for a tsunami run, fine near the coast and coarse in the open ocean
 
 # mesh_op routing phrasings: the runtime face of the word a recipe is written in.
 # Question class = "change how this mesh was built and rebuild it", never

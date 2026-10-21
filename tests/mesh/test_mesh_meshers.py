@@ -46,8 +46,8 @@ def test_build_mesh_registered_and_the_standalone_builder_is_gone():
 
 
 def test_the_roster_is_the_meshers_the_tree_carries():
-    assert registered_meshers() == ("gridgen", "om2d", "reg_grid",
-                                    "triangle", "voronoi")
+    assert registered_meshers() == ("claw_grid", "gridgen", "om2d",
+                                    "reg_grid", "triangle", "voronoi")
 
 
 def _bed(tmp_path: Path, cell_deg: float) -> Path:

@@ -499,6 +499,18 @@ package MeshSeam {
         port registrationOut : RegistrationOut;
     }
 
+    part clawGridAdapter : MesherAdapter {
+        doc /*
+        The GeoClaw grid recipe: a lon/lat level-1 box, refinement ratios and
+        flagregion ops, built in the daemon as the level-1 lattice. Its one
+        namespace is the flagregion op, a roster of names the mesher itself runs.
+
+        code: trid3nt_server/tools/mesh/meshers/claw_grid.py
+        */
+        port registrationOut : RegistrationOut;
+        port namespaceOut : NamespaceOut;
+    }
+
     part flopyAdapter : MesherAdapter {
         doc /*
         The FloPy facade: three registrations - triangle, voronoi and gridgen -
@@ -594,6 +606,9 @@ package MeshSeam {
     interface regGridRegistered : MesherRegistration
         connect regGridAdapter.registrationOut to mesherRegistry.registrationIn;
 
+    interface clawGridRegistered : MesherRegistration
+        connect clawGridAdapter.registrationOut to mesherRegistry.registrationIn;
+
     interface flopyRegistered : MesherRegistration
         connect flopyAdapter.registrationOut to mesherRegistry.registrationIn {
         doc /*
@@ -605,6 +620,9 @@ package MeshSeam {
 
     interface om2dNamespaces : OpNamespaceDeclaration
         connect om2dAdapter.namespaceOut to mesherRegistry.namespaceIn;
+
+    interface clawGridNamespaces : OpNamespaceDeclaration
+        connect clawGridAdapter.namespaceOut to mesherRegistry.namespaceIn;
 
     interface flopyNamespaces : OpNamespaceDeclaration
         connect flopyAdapter.namespaceOut to mesherRegistry.namespaceIn {

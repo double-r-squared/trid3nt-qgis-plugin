@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from trid3nt_server.inputs.gate.input_review import GateCard, gate_input_review
 from trid3nt_server.tools.mesh.artifact import MeshArtifact
@@ -131,7 +131,9 @@ async def gate_mesh_build(session: MeshSession, *, tool_name: str,
             "refine it further with mesh_op")
         return GateCard(
             lines=lines,
-            param_sheet=_mesh_param_sheet(session, tool_name=tool_name),
+            param_sheet=_mesh_param_sheet(
+                session, tool_name=tool_name,
+                facts=session.mesh.meta.get("card_rows") or ()),
             tool_args={"mesh_id": session.mesh_id,
                        "mesh_layer_id": presentation.get("layer_id"),
                        "mesh_display_uri": presentation.get("display_uri")})
@@ -209,10 +211,13 @@ def _as_number(name: str, value: Any) -> float:
         ) from None
 
 
-def _mesh_param_sheet(session: MeshSession, *, tool_name: str) -> Any:
-    """The mesh's rows on the gate card: the size word, the recipe, the actions.
+def _mesh_param_sheet(session: MeshSession, *, tool_name: str,
+                      facts: Sequence[tuple[str, Any]] = ()) -> Any:
+    """The mesh's rows on the gate card: the size word, the recipe, the facts, the actions.
 
-    The ops rows are read-only: the one place an op is written is ``mesh_op``."""
+    The ops rows are read-only: the one place an op is written is ``mesh_op``. So are
+    the mesher's own ``facts`` rows (``meta['card_rows']`` of a built mesh), which the rendered text's
+    512 characters have no room for."""
     from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
 
     recipe = session.recipe
@@ -229,6 +234,11 @@ def _mesh_param_sheet(session: MeshSession, *, tool_name: str) -> Any:
             desc="one step of the program that produced this mesh; append, alter "
                  f"or remove it by index with mesh_op"[:512],
             source_badge="recipe op"))
+    for name, value in facts:
+        rows.append(ParamSheetRow(
+            name=name, value=str(value)[:512],
+            desc="a fact the mesher measured on this build; read-only"[:512],
+            source_badge=f"{recipe.mesher} recipe"))
     rows.append(ParamSheetRow(
         name=_RESET_ROW, value="no",
         desc="type yes to put the recipe back to the way it was declared and "

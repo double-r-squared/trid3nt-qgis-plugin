@@ -68,8 +68,8 @@ def test_the_extent_param_takes_the_polygon_however_it_was_written():
 def test_the_polygon_domain_is_the_om2d_mesher_not_a_second_one():
     from trid3nt_server.tools.mesh.meshers import registered_meshers
 
-    assert registered_meshers() == ("gridgen", "om2d", "reg_grid",
-                                    "triangle", "voronoi")
+    assert registered_meshers() == ("claw_grid", "gridgen", "om2d",
+                                    "reg_grid", "triangle", "voronoi")
 
 
 def test_the_polygon_is_staged_and_nothing_else_is_mounted(monkeypatch, tmp_path):
