@@ -16,34 +16,81 @@ from trid3nt_server.inputs.point import Point, require_viable
 from ..errors import ModflowError
 from .griddata import METRES, sample
 
-__all__ = ["cells_of", "place", "place_streams", "point_cell"]
+__all__ = ["cells_of", "edge_cells", "place", "place_streams", "point_cell"]
 
 def place(statement: Mapping[str, Any], *, points: Any, cells: Any,
           utm_epsg: int | None, nlay: int, frame: Any = None,
-          active: Any = None) -> list[tuple]:
+          active: Any = None, start: Any = None) -> list[tuple]:
     """``statement`` -> ``((layer - 1, cell), *values)`` for every cell the geometry places.
 
-    ``active`` is one row per layer of the cells the run solves (DISV_IDOMAIN not zero); unstated, every cell is."""
+    ``active`` is one row per layer of the cells the run solves (DISV_IDOMAIN not zero); unstated, every cell is.
+    The geometry ``{"cells": "edge"}`` is the cells with a face on the mesh's outer boundary, a layer of
+    ``"all"`` every solved layer of each placed cell, and a value ``{"cells": "start"}`` the run's
+    starting head there; ``start`` is its one row per layer."""
     name = statement["composite"]
-    layer = int(statement["layer"])
-    if layer > nlay:
-        raise ModflowError(
-            f"{name} places on layer {layer} and the grid has {nlay} layer(s).",
-            error_code="MODFLOW_STRESS_LAYER")
+    layers = _layers(statement["layer"], name=name, nlay=nlay)
     if points is None or cells is None or not utm_epsg:
         raise ModflowError(
             f"{name} places by geometry, and this run has no accepted mesh "
             "with a projected zone to place it on.",
             error_code="MODFLOW_STRESS_OUTSIDE")
-    placed = cells_of(statement["geometry"], name=name, points=points,
-                      cells=cells, utm_epsg=int(utm_epsg),
-                      active=None if active is None else active[layer - 1])
-    columns = [_column(value, key, name=name, placed=placed, points=points,
-                       cells=cells, utm_epsg=int(utm_epsg), frame=frame,
-                       dimension=statement["dimensions"][key])
-               for key, value in statement["values"].items()]
-    return [((layer - 1, icell), *(column[rank] for column in columns))
-            for rank, icell in enumerate(placed)]
+    geometry = statement["geometry"]
+    if isinstance(geometry, Mapping) and geometry.get("cells") == "edge":
+        placed = edge_cells(cells)
+    else:
+        placed = cells_of(geometry, name=name, points=points, cells=cells,
+                          utm_epsg=int(utm_epsg), active=None if active is None else active[layers[0]])
+    rows: list[tuple] = []
+    columns = {key: (_start(value, name=name, start=start, placed=placed, layers=layers)
+                     if isinstance(value, Mapping) and value.get("cells") == "start"
+                     else {layers[0]: _column(value, key, name=name, placed=placed, points=points,
+                                              cells=cells, utm_epsg=int(utm_epsg), frame=frame,
+                                              dimension=statement["dimensions"][key])})
+               for key, value in statement["values"].items()}
+    for layer in layers:
+        for rank, icell in enumerate(placed):
+            if active is not None and active[layer][icell] == 0:
+                continue
+            rows.append(((layer, icell), *(column.get(layer, column[layers[0]])[rank]
+                                           for column in columns.values())))
+    return rows
+
+
+def _layers(layer: Any, *, name: str, nlay: int) -> list[int]:
+    """The 0-based layers a statement places on: its one layer, or every layer for ``"all"``."""
+    if layer == "all":
+        return list(range(nlay))
+    if int(layer) > nlay:
+        raise ModflowError(
+            f"{name} places on layer {layer} and the grid has {nlay} layer(s).",
+            error_code="MODFLOW_STRESS_LAYER")
+    return [int(layer) - 1]
+
+
+def _start(value: Mapping[str, Any], *, name: str, start: Any, placed: list[int],
+           layers: list[int]) -> dict[int, list[float]]:
+    """The starting head at the placed cells, per layer."""
+    if start is None:
+        raise ModflowError(
+            f"{name} head is the starting head, and this run states no IC_STRT.",
+            error_code="MODFLOW_STRESS_UNSTATED")
+    # IC_STRT is one number, one value per cell, or one row per layer
+    import numpy as np
+
+    heads = np.asarray(start, dtype=float)
+    if heads.ndim == 0:
+        return {layer: [float(heads)] * len(placed) for layer in layers}
+    rows = heads[None, :] if heads.ndim == 1 else heads
+    return {layer: [float(rows[min(layer, len(rows) - 1)][i]) for i in placed] for layer in layers}
+
+
+def edge_cells(cells: Any) -> list[int]:
+    """The sorted cell ids with a face (two consecutive vertices) no other cell shares: the mesh's outer boundary."""
+    faces: dict[frozenset, list[int]] = {}
+    for icell, ring in enumerate(cells):
+        for a, b in zip(ring, list(ring[1:]) + [ring[0]]):
+            faces.setdefault(frozenset((a, b)), []).append(icell)
+    return sorted({owners[0] for owners in faces.values() if len(owners) == 1})
 
 
 def place_streams(statements: list[Mapping[str, Any]], *, points: Any, cells: Any,

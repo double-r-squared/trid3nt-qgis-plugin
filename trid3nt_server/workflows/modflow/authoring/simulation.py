@@ -123,8 +123,11 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
                   sheet=sheet, frame=frame, top=top)
     active = _active(sheet, nlay=int(dims["nlay"]), points=points, cells=cells,
                      utm_epsg=utm_epsg, frame=frame)
+    start = _start_head(sheet, nlay=int(dims["nlay"]), points=points, cells=cells,
+                        utm_epsg=utm_epsg, frame=frame, top=top)
     derived = _stressed(sheet, groups, nlay=int(dims["nlay"]), points=points,
-                        cells=cells, utm_epsg=utm_epsg, frame=frame, active=active)
+                        cells=cells, utm_epsg=utm_epsg, frame=frame, active=active,
+                        start=start)
     _unstated(sheet, set(groups) | set(_REQUIRED_PACKAGES[module]) | {"TDIS"},
               derived)
     sim = flopy.mf6.MFSimulation(sim_name="trid3nt", sim_ws=str(work),
@@ -219,8 +222,19 @@ def _exchange(flopy: Any, sim: Any, *, carrier: str, coupled: str) -> None:
              how=f"the {carrier}-{coupled} exchange")
 
 
+def _start_head(sheet: Any, *, nlay: int, points: Any, cells: Any, utm_epsg: int | None,
+                frame: Any, top: Any) -> Any:
+    """The run's starting head per layer and cell off a stated IC_STRT, or None; a stress statement may take it as its head."""
+    stated = sheet.filled.get("IC_STRT")
+    if stated is None:
+        return None
+    return place(stated.value, slot=stated.slot, nlay=nlay, run=sheet.run, points=points,
+                 cells=cells, utm_epsg=utm_epsg, frame=frame, top=top)
+
+
 def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, points: Any,
-              cells: Any, utm_epsg: int | None, frame: Any, active: Any) -> set[str]:
+              cells: Any, utm_epsg: int | None, frame: Any, active: Any,
+              start: Any = None) -> set[str]:
     """Place each stress statement on the cells -> the identifiers it derived (its MAXBOUND).
 
     A statement's row becomes period 1's rows, carried forward by mf6; the bound is the
@@ -234,7 +248,7 @@ def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, point
         placed = [cell for statement in row.value.get("statements", [row.value])
                   for cell in place_stress(statement, points=points, cells=cells,
                                            utm_epsg=utm_epsg, nlay=nlay, frame=frame,
-                                           active=active)]
+                                           active=active, start=start)]
         rows["stress_period_data"] = replace(row, value={0: placed})
         rows["maxbound"] = Filled(
             slot=sheet.body.MODULE_INPUT[f"{prefix}_MAXBOUND"],

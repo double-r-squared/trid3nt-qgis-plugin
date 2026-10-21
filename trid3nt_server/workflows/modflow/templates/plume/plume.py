@@ -94,6 +94,8 @@ class STEERING(GWF):
                  "concentration": "background_concentration"},
                 {"geometry": "source", "layer": 1, "rate": "source_rate",
                  "concentration": "source_concentration"}]
+    # The domain's outer cells hold the fetched water table, the head the model starts from: the aquifer continues past the domain, so a closed edge would pile the recharge up.
+    ConstantHead = {"geometry": {"cells": "edge"}, "layer": "all", "head": {"cells": "start"}}
     Drains = {"geometry": "streams", "layer": 1, "elevation": "bed",
               "conductance": "drain_conductance"}
 

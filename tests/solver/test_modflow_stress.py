@@ -357,3 +357,45 @@ def test_serialize_writes_the_concentration_as_the_package_s_auxiliary(
     block = text.split("BEGIN period  1")[1].split("END period")[0]
     rows = [row.split() for row in block.splitlines() if row.strip()]
     assert len(rows) == 8 and {row[-1] for row in rows[4:]} == {"4.50000000E-01"}
+
+
+_NINE = [(r * 4 + c, r * 4 + c + 1, r * 4 + c + 5, r * 4 + c + 4)
+         for r in range(3) for c in range(3)]
+
+
+def test_the_edge_is_the_cells_with_a_face_no_other_cell_shares():
+    from trid3nt_server.workflows.modflow.authoring.stress import edge_cells
+
+    assert edge_cells(_NINE) == [0, 1, 2, 3, 5, 6, 7, 8]
+
+
+def test_an_edge_column_holds_the_starting_head_on_every_solved_layer():
+    points = [(10.0 * c, 10.0 * r) for r in range(4) for c in range(4)]
+    start = [[float(i) for i in range(9)], [100.0 + i for i in range(9)]]
+    statement = {"stress": "CHD", "composite": "ConstantHead",
+                 "geometry": {"cells": "edge"}, "layer": "all",
+                 "values": {"head": {"cells": "start"}}, "dimensions": {"head": "L"}}
+    active = [[1] * 9, [1, 1, 1, 1, 1, 0, 1, 1, 1]]
+    rows = place(statement, points=points, cells=_NINE, utm_epsg=32617, nlay=2,
+                 active=active, start=start)
+    assert [row[0] for row in rows if row[0][0] == 0] == [(0, i) for i in (0, 1, 2, 3, 5, 6, 7, 8)]
+    assert [row[0] for row in rows if row[0][0] == 1] == [(1, i) for i in (0, 1, 2, 3, 6, 7, 8)]
+    assert {r[0]: r[1] for r in rows}[(1, 7)] == 107.0
+
+
+def test_a_starting_head_with_no_initial_condition_refuses_by_name():
+    statement = {"stress": "CHD", "composite": "ConstantHead",
+                 "geometry": {"cells": "edge"}, "layer": "all",
+                 "values": {"head": {"cells": "start"}}, "dimensions": {"head": "L"}}
+    with pytest.raises(ModflowError) as caught:
+        place(statement, points=_POINTS, cells=_NINE, utm_epsg=32617, nlay=1)
+    assert caught.value.error_code == "MODFLOW_STRESS_UNSTATED"
+
+
+def test_a_starting_head_stated_as_one_number_holds_every_edge_cell_at_it():
+    statement = {"stress": "CHD", "composite": "ConstantHead",
+                 "geometry": {"cells": "edge"}, "layer": "all",
+                 "values": {"head": {"cells": "start"}}, "dimensions": {"head": "L"}}
+    rows = place(statement, points=_POINTS, cells=_NINE, utm_epsg=32617, nlay=1,
+                 start=12.5)
+    assert len(rows) == 8 and {row[1] for row in rows} == {12.5}

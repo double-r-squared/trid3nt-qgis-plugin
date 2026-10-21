@@ -51,9 +51,9 @@ def _stress(name: str, package: str, dimensions: Mapping[str, str], *, carries: 
                     "so state it from a measurement or a named source.",
                     error_code="MODFLOW_STRESS_UNSTATED")
         layer = value["layer"]
-        if isinstance(layer, bool) or not isinstance(layer, int) or layer < 1:
+        if layer != "all" and (isinstance(layer, bool) or not isinstance(layer, int) or layer < 1):
             raise ModflowError(
-                f"{name} layer is {layer!r}; it is an integer from 1.",
+                f"{name} layer is {layer!r}; it is an integer from 1, or \"all\".",
                 error_code="MODFLOW_STRESS_UNSTATED")
         aux = {_AUX[0]: _AUX[2]} if carries and value.get(_AUX[0]) is not None else {}
         taken = {**dimensions, **aux}

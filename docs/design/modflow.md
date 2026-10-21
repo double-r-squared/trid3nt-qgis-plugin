@@ -79,7 +79,11 @@ convertible (unconfined) and layers below it are confined, and the starting
 head is the water-table elevation in every layer. The stress composites
 (`Recharge`, `Drains`, `GeneralHead`, `ConstantHead`, `Wells`) place a geometry
 on the cells and state their package's period data; a geometry reading nothing
-states nothing, and a missing value refuses rather than defaulting.
+states nothing, and a missing value refuses rather than defaulting. A statement may name
+the geometry `{"cells": "edge"}` (the cells with a face on the mesh's outer boundary), the
+layer `"all"` (every solved layer of each placed cell) and a value `{"cells": "start"}` (the
+run's starting head, `IC_STRT`, at the placed cells): a `ConstantHead` so stated holds the
+domain's perimeter at the head the Aquifer composite starts from.
 
 SFR is stated by its own dictionary keywords (`SFR_NREACHES`, `SFR_PACKAGEDATA`,
 `SFR_CONNECTIONDATA`, `SFR_PERIODDATA`, the options): ex-gwf-sfr-p01 authored on a
@@ -219,7 +223,11 @@ holds no number of its own. The period is the `Periods` composite: `until` (an I
 `time_steps` (an integer) state one period from the run's start to that instant, over equal steps,
 in `TDIS_TIME_UNITS`. The `observe` row asks the wells reporting
 `solute` at the snapshot and the run charts the modelled against the measured concentration at
-each: extent and shape, never a mass balance. A finished run records the steps its staged clock
+each: extent and shape, never a mass balance. The domain's perimeter is held at constant head at the
+starting head (the fetched water-table depth under the bed, every solved layer): the aquifer
+continues past the domain, and a closed edge with the streams as the only outlet piles the
+recharge up above the land. The kettle ponds are not yet lakes, so the cells around them can
+still stand above land. A finished run records the steps its staged clock
 marched as the completion's `ntimestep`, which the packet cross-checks the frames against.
 
 ## The worker
