@@ -16,7 +16,8 @@ from trid3nt_server.inputs.point import Point, require_viable
 from ..errors import ModflowError
 from .griddata import METRES, sample
 
-__all__ = ["cells_of", "edge_cells", "place", "place_streams", "point_cell"]
+__all__ = ["cells_of", "edge_cells", "hold_lakes", "lake_statements", "layer_rows", "place",
+           "place_lakes", "place_streams", "point_cell"]
 
 def place(statement: Mapping[str, Any], *, points: Any, cells: Any,
           utm_epsg: int | None, nlay: int, frame: Any = None,
@@ -115,13 +116,7 @@ def place_streams(statements: list[Mapping[str, Any]], *, points: Any, cells: An
         raise ModflowError(
             "Streams places by geometry, and this run has no accepted mesh "
             "with a projected zone to place it on.", error_code="MODFLOW_STRESS_OUTSIDE")
-    unit = frame[0] if frame else None
-    metres = METRES.get(str(unit or "unknown").strip().lower())
-    if metres is None:
-        raise ModflowError(
-            "Streams cuts a line into reach lengths on the model's length unit, and "
-            f"DISV_LENGTH_UNITS is {str(unit or 'unstated')!r}; state it as "
-            f"{', '.join(METRES)}.", error_code="MODFLOW_UNITS_UNSTATED")
+    metres = _metres(frame, "Streams cuts a line into reach lengths")
     to_utm = Transformer.from_crs(4326, int(utm_epsg), always_xy=True).transform
     polygons = shapely.polygons([[(float(points[v][0]), float(points[v][1])) for v in ring]
                                  for ring in cells])
@@ -236,6 +231,173 @@ def _rows(reaches: list[dict[str, Any]]) -> tuple[list[list], list[list]]:
             reach["bed_conductivity"], reach["manning"], len(above) + len(below), 1.0, 0])
         connectiondata.append([number[rank], *above, *[-item for item in below]])
     return packagedata, connectiondata
+
+
+def lake_statements(sheet: Any) -> list[Mapping[str, Any]]:
+    """The Lakes statements a sheet states (its LAK_PACKAGEDATA as the composite wrote it), or none."""
+    value = getattr(sheet.filled.get("LAK_PACKAGEDATA"), "value", None)
+    return list(value["lakes"]) if isinstance(value, Mapping) and "lakes" in value else []
+
+
+def layer_rows(idomain: Any, *, nlay: int, ncpl: int) -> list[list[Any]]:
+    """A placed DISV_IDOMAIN (a number, one number per layer, or rows) as one row per layer of every cell; unstated, every cell is 1."""
+    if idomain is None:
+        idomain = 1
+    if isinstance(idomain, (int, float)):
+        return [[idomain] * ncpl for _ in range(nlay)]
+    return [list(row) if isinstance(row, (list, tuple)) else [row] * ncpl for row in idomain]
+
+
+def hold_lakes(statements: list[Mapping[str, Any]], idomain: Any, *, points: Any, cells: Any,
+               utm_epsg: int | None, nlay: int, frame: Any, top: Any, botm: Any) -> list[list[Any]]:
+    """``idomain`` as one row per layer with every lake cell zero: a lake's water stands where the aquifer's cell is not solved."""
+    rows = layer_rows(idomain, nlay=nlay, ncpl=len(cells))
+    for lake in _lakes(statements, points=points, cells=cells, utm_epsg=utm_epsg, nlay=nlay,
+                       frame=frame, active=rows, top=top, botm=botm):
+        for layer, cell in lake["held"]:
+            rows[layer][cell] = 0
+    return rows
+
+
+def place_lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any,
+                utm_epsg: int | None, nlay: int, frame: Any = None, active: Any = None,
+                top: Any, botm: Any) -> tuple[list[list], list[list], list[list]]:
+    """Lakes statements -> ``(packagedata, connectiondata, perioddata)`` rows, one LAK lake per polygon.
+
+    A lake holds the cells whose centres its polygon contains, in every solved layer whose top lies
+    above the lake's bottom; each is connected to the solved cells that are not lake cells beside it
+    (HORIZONTAL, over the face the two cells share, the neighbour's whole thickness) and to the one below it
+    (VERTICAL). A stated rainfall or evaporation is the lake's period-1 row; one not stated has none.
+    ``active`` is one row per layer of the cells the run solves, ``top`` the grid's top and ``botm`` its bottoms."""
+    import numpy as np
+    import shapely
+
+    metres = _metres(frame, "Lakes writes connection lengths")
+    lakes = _lakes(statements, points=points, cells=cells, utm_epsg=utm_epsg, nlay=nlay,
+                   frame=frame, active=active, top=top, botm=botm)
+    tops, bottoms = _levels(top, botm, nlay=nlay, ncpl=len(cells))
+    centres = shapely.centroid(shapely.polygons(
+        [[(float(points[v][0]), float(points[v][1])) for v in ring] for ring in cells]))
+    faces: dict[frozenset, list[int]] = {}
+    for icell, ring in enumerate(cells):
+        for a, b in zip(ring, list(ring[1:]) + [ring[0]]):
+            faces.setdefault(frozenset((a, b)), []).append(icell)
+    held = {item for lake in lakes for item in lake["held"]}
+
+    def solved(layer: int, cell: int) -> bool:
+        return (layer, cell) not in held and (active is None or active[layer][cell] > 0)
+
+    packagedata, connectiondata, perioddata = [], [], []
+    for number, lake in enumerate(lakes):
+        rows = []
+        for layer, cell in lake["held"]:
+            beside = []
+            for a, b in zip(cells[cell], list(cells[cell][1:]) + [cells[cell][0]]):
+                for other in faces[frozenset((a, b))]:
+                    if other != cell and solved(layer, other):
+                        (ax, ay), (bx, by) = points[a][:2], points[b][:2]
+                        width = float(np.hypot(bx - ax, by - ay))
+                        gap = abs((bx - ax) * (centres[other].y - ay)
+                                  - (by - ay) * (centres[other].x - ax)) / width
+                        beside.append((other, gap / metres, width / metres))
+            for other, length, width in sorted(beside):
+                rows.append([number, 0, (layer, other), "horizontal", lake["leakance"],
+                             float(bottoms[layer][other]), float(tops[layer][other]), length, width])
+            if layer + 1 < nlay and solved(layer + 1, cell):
+                rows.append([number, 0, (layer + 1, cell), "vertical", lake["leakance"],
+                             0.0, 0.0, 0.0, 0.0])
+        if not rows:
+            raise ModflowError(
+                f"Lakes: {lake['name']} has no solved cell beside or below it to connect to; "
+                "a lake with no connection exchanges no water.", error_code="MODFLOW_STRESS_OUTSIDE")
+        for count, row in enumerate(rows):
+            row[1] = count
+        packagedata.append([number, lake["stage"], len(rows)])
+        connectiondata += rows
+        perioddata += [[number, flux, value] for flux, value in lake["fluxes"].items()]
+    return packagedata, connectiondata, perioddata
+
+
+def _levels(top: Any, botm: Any, *, nlay: int, ncpl: int) -> tuple[Any, Any]:
+    """The top of each layer's cells and its bottom, each ``(nlay, ncpl)``, off the grid's top and bottoms as placed."""
+    import numpy as np
+
+    low = np.asarray(botm, dtype=float)
+    bottoms = np.broadcast_to(low.reshape(-1, 1) if low.ndim < 2 else low, (nlay, ncpl))
+    first = np.broadcast_to(np.asarray(top, dtype=float), (ncpl,))
+    return np.vstack([first[None, :], bottoms[:-1]]), bottoms
+
+
+def _lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, utm_epsg: int | None,
+           nlay: int, frame: Any, active: Any, top: Any, botm: Any) -> list[dict[str, Any]]:
+    """Every polygon of every statement as a lake: its stated values and the ``(layer, cell)`` pairs it holds."""
+    import shapely
+    from pyproj import Transformer
+    from shapely.geometry import shape as geo
+    from shapely.ops import transform
+
+    from trid3nt_server.inputs.geometry import flatten_geometries
+    from trid3nt_server.inputs.shape import shape
+
+    if points is None or cells is None or not utm_epsg:
+        raise ModflowError(
+            "Lakes places by geometry, and this run has no accepted mesh "
+            "with a projected zone to place it on.", error_code="MODFLOW_STRESS_OUTSIDE")
+    tops, _ = _levels(top, botm, nlay=nlay, ncpl=len(cells))
+    to_utm = Transformer.from_crs(4326, int(utm_epsg), always_xy=True).transform
+    centres = shapely.centroid(shapely.polygons(
+        [[(float(points[v][0]), float(points[v][1])) for v in ring] for ring in cells]))
+    tree = shapely.STRtree(centres)
+    lakes: list[dict[str, Any]] = []
+    owner: dict[tuple[int, int], str] = {}
+    for statement in statements:
+        values = statement["values"]
+        for part in flatten_geometries(shape(statement["geometry"], label="Lakes").features):
+            area = transform(to_utm, geo(part))
+            if area.geom_type not in ("Polygon", "MultiPolygon"):
+                raise ModflowError(f"Lakes places polygons; got a {area.geom_type}.",
+                                   error_code="MODFLOW_STRESS_UNSTATED")
+            for one in (area.geoms if area.geom_type == "MultiPolygon" else [area]):
+                name = f"lake {len(lakes) + 1}"
+                centred = sorted(int(c) for c in tree.query(one, predicate="contains"))
+                if not centred:
+                    raise ModflowError(
+                        f"Lakes: {name} holds no cell centre of the accepted mesh; state a "
+                        "polygon over cells of it.", error_code="MODFLOW_STRESS_OUTSIDE")
+                bottoms = _column(values["bottom"], "bottom", name="Lakes", placed=centred,
+                                  points=points, cells=cells, utm_epsg=int(utm_epsg), frame=frame,
+                                  dimension="L")
+                held = [(layer, cell) for cell, low in zip(centred, bottoms) for layer in range(nlay)
+                        if (active is None or active[layer][cell] > 0) and tops[layer][cell] > low]
+                if not held:
+                    raise ModflowError(
+                        f"Lakes: {name} holds {len(centred)} cell centre(s), and none is solved "
+                        "in a layer whose top lies above the lake's bottom.",
+                        error_code="MODFLOW_STRESS_OUTSIDE")
+                for item in held:
+                    if item in owner:
+                        raise ModflowError(
+                            f"Lakes: {owner[item]} and {name} both hold cell {item[1]} on layer "
+                            f"{item[0] + 1}; a cell belongs to one lake.",
+                            error_code="MODFLOW_STRESS_OUTSIDE")
+                    owner[item] = name
+                lakes.append({"name": name, "held": sorted(held), "stage": values["stage"],
+                              "leakance": values["leakance"],
+                              "fluxes": {key: values[key] for key in ("rainfall", "evaporation")
+                                         if values.get(key) is not None}})
+    return lakes
+
+
+def _metres(frame: Any, what: str) -> float:
+    """The metres in the model's length unit, or the refusal that names DISV_LENGTH_UNITS."""
+    unit = frame[0] if frame else None
+    metres = METRES.get(str(unit or "unknown").strip().lower())
+    if metres is None:
+        raise ModflowError(
+            f"{what} on the model's length unit, and "
+            f"DISV_LENGTH_UNITS is {str(unit or 'unstated')!r}; state it as "
+            f"{', '.join(METRES)}.", error_code="MODFLOW_UNITS_UNSTATED")
+    return metres
 
 
 def _column(value: Any, key: str, *, name: str, placed: list[int], points: Any,

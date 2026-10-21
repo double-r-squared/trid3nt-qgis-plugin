@@ -113,6 +113,53 @@ _streams.__doc__ = (
     "    reach lies on the cell's top solved layer unless layer states one.")
 
 
+_LAKES = ("stage", "bottom", "leakance")
+_LAKE_FLUXES = ("rainfall", "evaporation")
+
+
+def _lakes(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    if isinstance(value, (list, tuple)) and value:
+        stated = [item for each in value if (item := _lakes(each)[0])]
+        return ({"LAK_PACKAGEDATA": {"lakes": [row["LAK_PACKAGEDATA"]["lakes"][0]
+                                               for row in stated]}} if stated else {}), {}
+    if not isinstance(value, Mapping):
+        raise ModflowError(
+            "Lakes takes a mapping of geometry, "
+            f"{', '.join(_LAKES)} and optionally {', '.join(_LAKE_FLUXES)}, or a list of them; got {value!r}.",
+            error_code="MODFLOW_STRESS_UNSTATED")
+    unknown = sorted(set(value) - {"geometry", *_LAKES, *_LAKE_FLUXES})
+    if unknown:
+        raise ModflowError(
+            f"Lakes takes geometry, {', '.join(_LAKES)}, {', '.join(_LAKE_FLUXES)}; "
+            f"{', '.join(unknown)} is none of them.", error_code="MODFLOW_STRESS_UNSTATED")
+    if value.get("geometry") is None:
+        return {}, {}
+    for argument in _LAKES:
+        if value.get(argument) is None:
+            raise ModflowError(
+                f"Lakes states no {argument}; the engine has no value for it, "
+                "so state it from a measurement or a named source.",
+                error_code="MODFLOW_STRESS_UNSTATED")
+    for argument in ("stage", "leakance", *_LAKE_FLUXES):
+        held = value.get(argument)
+        if held is not None and (isinstance(held, bool) or not isinstance(held, (int, float))):
+            raise ModflowError(
+                f"Lakes {argument} is one number for the lake; got {held!r}.",
+                error_code="MODFLOW_STRESS_UNSTATED")
+    return {"LAK_PACKAGEDATA": {"lakes": [{
+        "composite": "Lakes", "geometry": value["geometry"],
+        "values": {column: value.get(column) for column in (*_LAKES, *_LAKE_FLUXES)}}]}}, {}
+
+
+_lakes.__doc__ = (
+    "The LAK lakes a polygon geometry places: Lakes(geometry, stage, bottom, leakance[, rainfall, evaporation]), "
+    "or a list of such statements.\n\n"
+    "    Each polygon is one lake holding the cells whose centres it contains, in every solved layer whose top\n"
+    "    lies above the lake's bottom (a number or a raster); those cells are not solved, and the lake connects\n"
+    "    to the solved cells beside and below them over lakebed leakance. The stage is the lake's starting stage;\n"
+    "    a rainfall or evaporation not stated is not in the package.")
+
+
 def module_input_dir() -> Path:
     """Where the committed module inputs live."""
     return Path(__file__).resolve().parent / "module_input"

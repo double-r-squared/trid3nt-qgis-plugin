@@ -17,8 +17,8 @@ from typing import Any, Mapping
 from . import DISV_FILE
 from .accepted_mesh import mesh_artifact, mesh_nodes
 from .griddata import frame_of, needs_top, place
-from .mesh_files import disv_dimensions, top_of
-from .stress import place as place_stress, place_streams
+from .mesh_files import _layering, disv_dimensions, top_of
+from .stress import lake_statements, layer_rows, place as place_stress, place_lakes, place_streams
 
 from ..errors import ModflowError
 from ...runtime.sheet import Filled, fill
@@ -125,9 +125,11 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
                      utm_epsg=utm_epsg, frame=frame)
     start = _start_head(sheet, nlay=int(dims["nlay"]), points=points, cells=cells,
                         utm_epsg=utm_epsg, frame=frame, top=top)
+    grid = (_layering(sheet, nlay=int(dims["nlay"]), art=mesh_artifact(mesh), bed=bed,
+                      points=points, cells=cells)[:2] if lake_statements(sheet) else None)
     derived = _stressed(sheet, groups, nlay=int(dims["nlay"]), points=points,
                         cells=cells, utm_epsg=utm_epsg, frame=frame, active=active,
-                        start=start)
+                        start=start, grid=grid)
     _unstated(sheet, set(groups) | set(_REQUIRED_PACKAGES[module]) | {"TDIS"},
               derived)
     sim = flopy.mf6.MFSimulation(sim_name="trid3nt", sim_ws=str(work),
@@ -234,7 +236,7 @@ def _start_head(sheet: Any, *, nlay: int, points: Any, cells: Any, utm_epsg: int
 
 def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, points: Any,
               cells: Any, utm_epsg: int | None, frame: Any, active: Any,
-              start: Any = None) -> set[str]:
+              start: Any = None, grid: Any = None) -> set[str]:
     """Place each stress statement on the cells -> the identifiers it derived (its MAXBOUND).
 
     A statement's row becomes period 1's rows, carried forward by mf6; the bound is the
@@ -259,6 +261,11 @@ def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, point
         _streamed(sheet, groups["SFR"], row, nlay=nlay, points=points, cells=cells,
                   utm_epsg=utm_epsg, frame=frame, active=active)
         derived |= {"SFR_NREACHES", "SFR_CONNECTIONDATA"}
+    row = groups.get("LAK", {}).get("packagedata")
+    if row is not None and isinstance(row.value, Mapping) and "lakes" in row.value:
+        _lakened(sheet, groups["LAK"], row, nlay=nlay, points=points, cells=cells,
+                 utm_epsg=utm_epsg, frame=frame, active=active, top=grid[0], botm=grid[1])
+        derived |= {"LAK_NLAKES", "LAK_NOUTLETS", "LAK_NTABLES", "LAK_CONNECTIONDATA"}
     return derived
 
 
@@ -277,6 +284,25 @@ def _streamed(sheet: Any, rows: dict[str, Any], row: Any, **mesh: Any) -> None:
                             value=value, provenance=row.provenance)
 
 
+def _lakened(sheet: Any, rows: dict[str, Any], row: Any, **mesh: Any) -> None:
+    """Place the Lakes polygons: the package's lake list, its connections, its count and the period-1 fluxes stated."""
+    packagedata, connectiondata, perioddata = place_lakes(row.value["lakes"], **mesh)
+    stated = [f"LAK_{name.upper()}" for name in ("nlakes", "connectiondata", "perioddata")
+              if name in rows and (name != "perioddata" or perioddata)]
+    if stated:
+        raise ModflowError(
+            f"{', '.join(stated)} {'is' if len(stated) == 1 else 'are'} derived from the "
+            "Lakes polygons; state either the polygons or the lake keywords, not both.",
+            error_code="MODFLOW_KEYWORD_SHAPE")
+    placed = {"packagedata": packagedata, "connectiondata": connectiondata,
+              "nlakes": len(packagedata)}
+    if perioddata:
+        placed["perioddata"] = {0: perioddata}
+    for name, value in placed.items():
+        rows[name] = Filled(slot=sheet.body.MODULE_INPUT[f"LAK_{name.upper()}"],
+                            value=value, provenance=row.provenance)
+
+
 def _active(sheet: Any, *, nlay: int, points: Any, cells: Any, utm_epsg: int | None,
             frame: Any) -> Any:
     """One row per layer of the cells the run solves, off a stated DISV_IDOMAIN; unstated, None (every cell)."""
@@ -285,9 +311,7 @@ def _active(sheet: Any, *, nlay: int, points: Any, cells: Any, utm_epsg: int | N
         return None
     rows = place(stated.value, slot=stated.slot, nlay=nlay, run=sheet.run,
                  points=points, cells=cells, utm_epsg=utm_epsg, frame=frame)
-    if isinstance(rows, (int, float)):
-        return [[rows] * len(cells) for _ in range(nlay)]
-    return [row if isinstance(row, (list, tuple)) else [row] * len(cells) for row in rows]
+    return layer_rows(rows, nlay=nlay, ncpl=len(cells))
 
 
 def _unstated(sheet: Any, prefixes: set[str], derived: set[str] = frozenset()) -> None:

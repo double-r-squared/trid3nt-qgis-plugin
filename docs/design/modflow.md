@@ -102,6 +102,30 @@ other stresses; one that leaves the mesh and returns refuses naming the cells. A
 data are stated through `SFR_PERIODDATA` by reach number. `manning` is a number, the others
 a number or a raster read at each reach's cell centre.
 
+LAK is stated by its own dictionary keywords (`LAK_NLAKES`, `LAK_PACKAGEDATA`,
+`LAK_CONNECTIONDATA`, `LAK_PERIODDATA`, the options; `LAK_NOUTLETS` and `LAK_NTABLES` are
+read as required though mf6 defaults them to zero, so a keyword deck states both):
+ex-gwf-lak-p01 authored on a gridgen DISV, the lake cells inactive through `DISV_IDOMAIN`,
+equals flopy's own DIS reference bitwise (heads in five layers, the lake stage, max
+difference 0.0). The `Lakes` composite places polygons as lakes: `Lakes(geometry, stage,
+bottom, leakance[, rainfall, evaporation])`, or a list of them; each polygon (each part of a
+multi-polygon) is one lake. A lake holds the cells whose centres its polygon contains, in
+every solved layer whose top lies above its `bottom` (a number or a raster read at each
+cell centre); those cells are inactive in the DISV the run stages. flopy's
+`get_lak_connections` has no embedded lake for a vertex grid, so the connections are written
+here from the mf6 LAK input description: each lake cell connects HORIZONTALLY to every solved
+cell that is not a lake cell across a face they share (belev and telev the neighbour's bottom
+and top, connlen the perpendicular distance from the neighbour's centre to the face, connwidth
+the face's length, both on `DISV_LENGTH_UNITS`) and VERTICALLY to the solved cell below it;
+connections run by lake cell (layer, cell) and then by neighbour id, which on a gridgen mesh
+is flopy's order, and the same p01 footprint placed as a polygon reproduces the keyword
+deck's heads and stage bitwise. `stage`, `bottom` and `leakance` are stated or the
+composite refuses by name; a `rainfall` or `evaporation` not stated is absent from the
+package. A polygon holding no cell centre, a cell in two lakes and a lake with no solved
+cell beside or below it refuse. `LAK_NLAKES`, `LAK_CONNECTIONDATA` and, beside a stated
+flux, `LAK_PERIODDATA` stated beside `Lakes` refuse. The lake stage is not a read the run
+publishes, and the lake-stream mover (MVR) is not wired.
+
 ## The coupling
 
 A coupled run is ONE simulation holding a GWF model and a GWT model, a GWE model,
@@ -245,7 +269,7 @@ builds on was proved through that image before it was built on.
 
 The accepted-mesh reader of a ragged (UGRID) display face - a quadtree with
 refinement, a Voronoi - so those meshes cannot yet be authored on; the
-advanced-package composites (LAK, MAW,
-UZF, CSUB; SFR is placed by `Streams` but its MVR mover is not wired), OBS and time series, the model exchanges (GWF-GWF, GWT-GWT), FMI
+advanced-package composites (MAW,
+UZF, CSUB; SFR is placed by `Streams` and LAK by `Lakes`, but the MVR mover is not wired), OBS and time series, the model exchanges (GWF-GWF, GWT-GWT), FMI
 (the transport reading a prior flow run's saved budget), and PRT. Each is a leg
 in the scope's plan; the coupling above is built for GWT on the exchange.

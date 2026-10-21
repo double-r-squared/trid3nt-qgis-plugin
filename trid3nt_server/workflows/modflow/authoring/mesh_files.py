@@ -18,6 +18,7 @@ from typing import Any, Mapping
 
 from .accepted_mesh import mesh_artifact, mesh_missing, mesh_nodes
 from .griddata import frame_of, place
+from .stress import hold_lakes, lake_statements
 from ..errors import ModflowError
 
 logger = logging.getLogger("trid3nt_server.workflows.modflow.authoring.mesh_files")
@@ -51,6 +52,10 @@ def _mesh_files(sheet: Any, mesh: Mapping[str, Any]) -> dict[str, Any]:
     nlay = _layers(sheet)
     top, botm, idomain = _layering(sheet, nlay=nlay, art=art, bed=bed,
                                    points=points, cells=cells)
+    if lake_statements(sheet):
+        idomain = hold_lakes(lake_statements(sheet), idomain, points=points, cells=cells,
+                             utm_epsg=getattr(art, "utm_epsg", None), nlay=nlay,
+                             frame=frame_of(sheet), top=top, botm=botm)
     key = _layering_key(nlay=nlay, top=top, botm=botm, idomain=idomain)
     files = dict(getattr(art, "engine_files", None) or {})
     if not files.get(key):
