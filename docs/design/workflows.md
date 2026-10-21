@@ -540,3 +540,15 @@ refuses by name. A topofile header is checked against the level-1 box by the
 engine's own coverage rule (topo node extent against the domain's area), not an
 alignment rule: the engine integrates topo over each cell and stops only when the
 topo does not cover the domain.
+
+The bed is the engine's own list of topofiles, coarse to fine. The `Topography`
+composite on the wrapper takes the surfaces in that order, each a bed (a raster or
+a case layer, with the measured `offset` onto the run's `vertical_frame` where its
+zero differs; a pair nothing measures refuses by name), and states one
+`TOPO_TOPOFILES` row per surface. Authoring (`workflows/geoclaw/authoring/topo.py`)
+writes each as topotype 3, centre-registered, in EPSG:4326 with Clawpack's own
+`Topography.write`; a projected surface is reprojected and trimmed of the corner
+wedges the reprojection leaves unmeasured, and a node nothing measured refuses.
+Nothing is merged or filled: GeoClaw takes the finest file at each point, and the
+coverage rule above is applied to the UNION of the files. `TOPO_TOPOFILES` stated
+beside the composite refuses by name.

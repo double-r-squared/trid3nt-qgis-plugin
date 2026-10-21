@@ -6,8 +6,9 @@ parses every written file back against the sheet before the run leaves the daemo
 
 from __future__ import annotations
 
-from .grid import check_topofile, grid_keywords
+from .grid import check_topofile, check_topofiles, grid_keywords
 from .rundata import serialize
 from .staged_check import check_staged_run
 
-__all__ = ["check_staged_run", "check_topofile", "grid_keywords", "serialize"]
+__all__ = ["check_staged_run", "check_topofile", "check_topofiles", "grid_keywords",
+           "serialize"]

@@ -12,7 +12,8 @@ from typing import Any, Iterable, Mapping
 
 from ..errors import GeoclawError
 
-__all__ = ["GRID_KEYWORDS", "check_topofile", "grid_keywords"]
+__all__ = ["GRID_KEYWORDS", "check_topofile", "check_topofiles", "covered_by",
+           "grid_keywords"]
 
 #: The keywords a grid recipe states; a template stating one beside it refuses.
 GRID_KEYWORDS = (
@@ -79,7 +80,48 @@ def check_topofile(artifact: Any, header: Mapping[str, Any]) -> None:
     ``header`` carries ncols, nrows, cellsize, xll, yll and registration
     ('corner' or 'centre'). The topo's reach is its NODE extent: a corner
     header's first node is half a cell in from the stated lower-left."""
+    check_topofiles(artifact, [header])
+
+
+def check_topofiles(artifact: Any, headers: Iterable[Mapping[str, Any]]) -> None:
+    """Refuse a topofile set the engine would stop on for not covering the level-1 box.
+
+    The engine measures the area of the domain the UNION of the files' node extents
+    covers, so a fine file inside a coarse one adds nothing and leaves nothing out."""
     facts = _facts(artifact)
+    covered_by(facts["lower"], facts["upper"], headers)
+
+
+def covered_by(lower: Iterable[float], upper: Iterable[float],
+               headers: Iterable[Mapping[str, Any]]) -> None:
+    """Refuse the topofile headers whose union leaves more than the engine's tolerance of the box [lower, upper] uncovered."""
+    from shapely.geometry import box
+    from shapely.ops import unary_union
+
+    (lx, ly), (ux, uy) = lower, upper
+    spans = [_span(header) for header in headers]
+    if not spans:
+        _refuse("TOPO_HEADER", "no topofile header was given, so nothing covers the level-1 grid.")
+    domain = box(lx, ly, ux, uy)
+    union = unary_union([box(x0, y0, x1, y1) for x0, y0, x1, y1, _ in spans])
+    reach = union.intersection(domain).area
+    if abs(reach - domain.area) <= _COVER_TOLERANCE * domain.area:
+        return
+    listed = "; ".join(
+        f"topofile {n} spans x {x0:g}..{x1:g}, y {y0:g}..{y1:g} ({how})"
+        for n, (x0, y0, x1, y1, how) in enumerate(spans, 1))
+    nearest = tuple(union.intersection(domain).bounds)
+    missing = tuple(domain.difference(union).bounds)
+    _refuse("TOPO_COVERAGE",
+            f"the topofiles' nodes cover {reach:g} of the level-1 grid's "
+            f"{domain.area:g} square degrees (x {lx:g}..{ux:g}, y {ly:g}..{uy:g}); "
+            f"the engine stops beyond {_COVER_TOLERANCE:g} of the area. {listed}. "
+            f"The nearest covered extent is {nearest}; the uncovered part lies "
+            f"within {missing}.")
+
+
+def _span(header: Mapping[str, Any]) -> tuple[float, float, float, float, str]:
+    """A topofile header's node extent (x0, y0, x1, y1) and how it was stated."""
     try:
         offset = _REGISTRATION[str(header["registration"])]
         dx = float(header["cellsize"])
@@ -91,15 +133,4 @@ def check_topofile(artifact: Any, header: Mapping[str, Any]) -> None:
         _refuse("TOPO_HEADER",
                 f"a topofile header states ncols, nrows, cellsize, xll, yll and "
                 f"a registration in {sorted(_REGISTRATION)}; got {dict(header)!r}.")
-    (lx, ly), (ux, uy) = facts["lower"], facts["upper"]
-    reach = max(0.0, min(ux, x1) - max(lx, x0)) * max(0.0, min(uy, y1) - max(ly, y0))
-    domain = (ux - lx) * (uy - ly)
-    if abs(reach - domain) > _COVER_TOLERANCE * domain:
-        nearest = (max(lx, x0), max(ly, y0), min(ux, x1), min(uy, y1))
-        _refuse("TOPO_COVERAGE",
-                f"the topofile's nodes span x {x0:g}..{x1:g}, y {y0:g}..{y1:g} "
-                f"({header['registration']} registration, cell {dx:g}), which "
-                f"covers {reach:g} of the level-1 grid's {domain:g} square "
-                f"degrees (x {lx:g}..{ux:g}, y {ly:g}..{uy:g}); the engine "
-                f"stops beyond {_COVER_TOLERANCE:g} of the area. The nearest "
-                f"covered extent is {nearest}.")
+    return x0, y0, x1, y1, f"{header['registration']} registration, cell {dx:g}"
