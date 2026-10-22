@@ -234,6 +234,53 @@ _wells.__doc__ = (
     "    MEAN both, SPECIFIED the conductance as hk_skin, THIEM none). Rate is the well's rate from period 1.")
 
 
+_UZF = ("surfdep", "vks", "thtr", "thts", "thti", "eps", "finf")
+_UZF_ET = ("pet", "extdp", "extwc", "ha", "hroot", "rootact")
+
+
+def _uzf(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    if isinstance(value, (list, tuple)) and value:
+        stated = [item for each in value if (item := _uzf(each)[0])]
+        return ({"UZF_PACKAGEDATA": {"zones": [row["UZF_PACKAGEDATA"]["zones"][0]
+                                               for row in stated]}} if stated else {}), {}
+    if not isinstance(value, Mapping):
+        raise ModflowError(
+            "UnsaturatedZone takes a mapping of geometry, "
+            f"{', '.join(_UZF)} and optionally {', '.join(_UZF_ET)}, or a list of them; got {value!r}.",
+            error_code="MODFLOW_STRESS_UNSTATED")
+    unknown = sorted(set(value) - {"geometry", *_UZF, *_UZF_ET})
+    if unknown:
+        raise ModflowError(
+            f"UnsaturatedZone takes geometry, {', '.join(_UZF)}, {', '.join(_UZF_ET)}; "
+            f"{', '.join(unknown)} is none of them.", error_code="MODFLOW_STRESS_UNSTATED")
+    if value.get("geometry") is None:
+        return {}, {}
+    for argument in _UZF:
+        if value.get(argument) is None:
+            raise ModflowError(
+                f"UnsaturatedZone states no {argument}; the engine has no value for it, "
+                "so state it from a measurement or a named source.",
+                error_code="MODFLOW_STRESS_UNSTATED")
+    for argument in (*_UZF, *_UZF_ET):
+        held = value.get(argument)
+        if held is not None and (isinstance(held, (bool, str))):
+            raise ModflowError(
+                f"UnsaturatedZone {argument} is a number or a raster; got {held!r}.",
+                error_code="MODFLOW_STRESS_UNSTATED")
+    return {"UZF_PACKAGEDATA": {"zones": [{
+        "composite": "UnsaturatedZone", "geometry": value["geometry"],
+        "values": {column: value.get(column) for column in (*_UZF, *_UZF_ET)}}]}}, {}
+
+
+_uzf.__doc__ = (
+    "The UZF cells a polygon geometry places: UnsaturatedZone(geometry, surfdep, vks, thtr, thts, thti, eps, finf"
+    "[, pet, extdp, extwc, ha, hroot, rootact]), or a list of such statements.\n\n"
+    "    The top solved cell of every column whose centre the polygon holds is a land-surface UZF cell, and each\n"
+    "    solved layer below it down the column a UZF cell connected to the one above; a property is a number or a\n"
+    "    raster read at the column's centre and holds for the whole column, finf is the land cell's infiltration\n"
+    "    from period 1. The ET values are those the stated UZF ET options read; stated beside none, they refuse.")
+
+
 def module_input_dir() -> Path:
     """Where the committed module inputs live."""
     return Path(__file__).resolve().parent / "module_input"

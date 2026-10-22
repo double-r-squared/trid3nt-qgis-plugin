@@ -146,6 +146,28 @@ refuses. Two wells may share a cell. `MAW_NMAWWELLS`, `MAW_CONNECTIONDATA` and
 `MAW_PERIODDATA` stated beside `MultiAquiferWells` refuse. The well head is not a read the run
 publishes; a head-controlled or flowing well is stated through the keywords.
 
+UZF is stated by its own dictionary keywords (`UZF_NUZFCELLS`, `UZF_NTRAILWAVES`,
+`UZF_NWAVESETS`, `UZF_PACKAGEDATA`, `UZF_PERIODDATA`, the options): the GWF half of
+ex-gwt-uzt-2d (CHD and UZF over 20 layers, a stacked column of UZF cells) authored on a
+gridgen DISV equals flopy's own DIS reference bitwise (heads, the UZF budget records and the
+model budget, all 120 steps, max difference 0.0). The `UnsaturatedZone` composite places
+polygons: `UnsaturatedZone(geometry, surfdep, vks, thtr, thts, thti, eps, finf[, pet, extdp,
+extwc, ha, hroot, rootact])`, or a list of them; the top solved cell of every column whose
+centre a polygon holds is a land-surface UZF cell (landflag 1), and each solved layer under it,
+down to the first layer the run does not solve, is a UZF cell joined to the one above by
+`ivertcon`. Cells are numbered by layer then cell; a property is a number or a raster read at
+the column's centre and holds for the whole column (surfdep is read only by the land cell), and
+`finf` is the land cell's infiltration from period 1. The ET values are those the stated UZF
+options read: `UZF_SIMULATE_ET` reads `pet` and `extdp`, `UZF_UNSAT_ETWC` `extwc`,
+`UZF_UNSAT_ETAE` `ha`, `hroot` and `rootact`; a value stated for no option that reads it
+refuses, one an option reads and nothing states refuses, and a period column no option reads is
+written as -999 (mf6 takes any value in it). Every value is stated or the composite refuses by
+name; a polygon holding no cell centre, or only columns the run solves on no layer, refuses, and
+a column in two statements refuses. `UZF_NUZFCELLS` and `UZF_PERIODDATA` stated beside
+`UnsaturatedZone` refuse, as does `Recharge` (or `RCH` rows) on the column of a land cell: the
+same infiltration counted twice. `UZF_NTRAILWAVES` and `UZF_NWAVESETS` are mf6's resolution
+dimensions and stay keywords.
+
 ## The coupling
 
 A coupled run is ONE simulation holding a GWF model and a GWT model, a GWE model,
@@ -289,6 +311,6 @@ builds on was proved through that image before it was built on.
 
 The accepted-mesh reader of a ragged (UGRID) display face - a quadtree with
 refinement, a Voronoi - so those meshes cannot yet be authored on; the
-advanced-package composites (UZF, CSUB; SFR is placed by `Streams`, LAK by `Lakes` and MAW by `MultiAquiferWells`, but the MVR mover is not wired), OBS and time series, the model exchanges (GWF-GWF, GWT-GWT), FMI
+advanced-package composites (CSUB; SFR is placed by `Streams`, LAK by `Lakes`, MAW by `MultiAquiferWells` and UZF by `UnsaturatedZone`, but the MVR mover is not wired), OBS and time series, the model exchanges (GWF-GWF, GWT-GWT), FMI
 (the transport reading a prior flow run's saved budget), and PRT. Each is a leg
 in the scope's plan; the coupling above is built for GWT on the exchange.

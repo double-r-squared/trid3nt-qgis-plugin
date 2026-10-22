@@ -19,7 +19,7 @@ from .accepted_mesh import mesh_artifact, mesh_nodes
 from .griddata import frame_of, needs_top, place
 from .mesh_files import _layering, disv_dimensions, top_of
 from .stress import (lake_statements, layer_rows, maw_statements, place as place_stress, place_lakes, place_maw,
-                     place_streams)
+                     place_streams, place_uzf)
 
 from ..errors import ModflowError
 from ...runtime.sheet import Filled, fill
@@ -273,6 +273,11 @@ def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, point
         _welled(sheet, groups["MAW"], row, nlay=nlay, points=points, cells=cells,
                 utm_epsg=utm_epsg, active=active, top=grid[0], botm=grid[1])
         derived |= {"MAW_NMAWWELLS", "MAW_CONNECTIONDATA", "MAW_PERIODDATA"}
+    row = groups.get("UZF", {}).get("packagedata")
+    if row is not None and isinstance(row.value, Mapping) and "zones" in row.value:
+        _unsaturated(sheet, groups, row, nlay=nlay, points=points, cells=cells, utm_epsg=utm_epsg,
+                     frame=frame, active=active)
+        derived |= {"UZF_NUZFCELLS", "UZF_PERIODDATA"}
     return derived
 
 
@@ -324,6 +329,41 @@ def _welled(sheet: Any, rows: dict[str, Any], row: Any, **mesh: Any) -> None:
                         ("perioddata", {0: perioddata}), ("nmawwells", len(packagedata))):
         rows[name] = Filled(slot=sheet.body.MODULE_INPUT[f"MAW_{name.upper()}"],
                             value=value, provenance=row.provenance)
+
+
+def _unsaturated(sheet: Any, groups: dict[str, dict[str, Any]], row: Any, **mesh: Any) -> None:
+    """Place the UnsaturatedZone polygons: the package's UZF cells, their count and the land cells' period-1 rows."""
+    rows = groups["UZF"]
+    stated = sorted(f"UZF_{name.upper()}" for name in ("nuzfcells", "perioddata") if name in rows)
+    if stated:
+        raise ModflowError(
+            f"{', '.join(stated)} {'is' if len(stated) == 1 else 'are'} derived from the "
+            "UnsaturatedZone polygons; state either the polygons or the UZF keywords, not both.",
+            error_code="MODFLOW_KEYWORD_SHAPE")
+    options = {name: bool(getattr(rows.get(name), "value", False))
+               for name in ("simulate_et", "unsat_etwc", "unsat_etae")}
+    packagedata, perioddata = place_uzf(row.value["zones"], options=options, **mesh)
+    recharged = {cell[-1] for cell in _recharged(groups) if isinstance(cell, (list, tuple))}
+    doubled = sorted(item[1][1] for item in packagedata if item[2] and item[1][1] in recharged)
+    if doubled:
+        raise ModflowError(
+            f"UnsaturatedZone and Recharge both put water on cell {doubled[0]}"
+            + (f" and {len(doubled) - 1} more" if len(doubled) > 1 else "")
+            + "; the same infiltration counted twice. State the recharge from the UZF infiltration "
+            "(finf) or the RCH package over a cell, not both.", error_code="MODFLOW_KEYWORD_SHAPE")
+    for name, value in (("packagedata", packagedata), ("perioddata", {0: perioddata}),
+                        ("nuzfcells", len(packagedata))):
+        rows[name] = Filled(slot=sheet.body.MODULE_INPUT[f"UZF_{name.upper()}"],
+                            value=value, provenance=row.provenance)
+
+
+def _recharged(groups: dict[str, dict[str, Any]]) -> list[Any]:
+    """The cell ids of every RCH row the sheet states or the Recharge composite placed."""
+    value = getattr(groups.get("RCH", {}).get("stress_period_data"), "value", None)
+    if not isinstance(value, Mapping):
+        return []
+    return [item[0] for period in value.values() if isinstance(period, (list, tuple))
+            for item in period if isinstance(item, (list, tuple)) and item]
 
 
 def _active(sheet: Any, *, nlay: int, points: Any, cells: Any, utm_epsg: int | None,

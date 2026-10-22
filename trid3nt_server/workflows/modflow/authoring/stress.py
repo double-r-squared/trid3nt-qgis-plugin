@@ -17,7 +17,7 @@ from ..errors import ModflowError
 from .griddata import METRES, sample
 
 __all__ = ["cells_of", "edge_cells", "hold_lakes", "lake_statements", "layer_rows", "maw_statements",
-           "place", "place_lakes", "place_maw", "place_streams", "point_cell"]
+           "place", "place_lakes", "place_maw", "place_streams", "place_uzf", "point_cell", "uzf_statements"]
 
 def place(statement: Mapping[str, Any], *, points: Any, cells: Any,
           utm_epsg: int | None, nlay: int, frame: Any = None,
@@ -245,6 +245,12 @@ def maw_statements(sheet: Any) -> list[Mapping[str, Any]]:
     return list(value["wells"]) if isinstance(value, Mapping) and "wells" in value else []
 
 
+def uzf_statements(sheet: Any) -> list[Mapping[str, Any]]:
+    """The UnsaturatedZone statements a sheet states (its UZF_PACKAGEDATA as the composite wrote it), or none."""
+    value = getattr(sheet.filled.get("UZF_PACKAGEDATA"), "value", None)
+    return list(value["zones"]) if isinstance(value, Mapping) and "zones" in value else []
+
+
 def layer_rows(idomain: Any, *, nlay: int, ncpl: int) -> list[list[Any]]:
     """A placed DISV_IDOMAIN (a number, one number per layer, or rows) as one row per layer of every cell; unstated, every cell is 1."""
     if idomain is None:
@@ -374,6 +380,114 @@ def place_maw(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, u
         raise ModflowError("MultiAquiferWells places by geometry and the geometry holds no point.",
                            error_code="MODFLOW_STRESS_OUTSIDE")
     return packagedata, connectiondata, perioddata
+
+
+# The value mf6 takes in a UZF period column its stated options do not read.
+_UNREAD = -999.0
+# The period columns after the infiltration, with the options that read them (None: always when ET is simulated).
+_ET_READ = {"pet": None, "extdp": None, "extwc": "unsat_etwc",
+            "ha": "unsat_etae", "hroot": "unsat_etae", "rootact": "unsat_etae"}
+
+
+def place_uzf(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, utm_epsg: int | None,
+              nlay: int, frame: Any = None, active: Any = None,
+              options: Mapping[str, Any] = {}) -> tuple[list[list], list[list]]:
+    """UnsaturatedZone statements -> ``(packagedata, perioddata)`` rows, one UZF cell per solved layer of a held column.
+
+    A polygon holds the columns whose centres it contains; the top solved cell of a column is the land-surface
+    cell (landflag 1) and each solved layer under it, down to the first layer the run does not solve, a cell
+    connected to the one above (ivertcon, the last one 0-based -1). Cells are numbered by layer then cell, the
+    land cells carry the period-1 row. ``options`` names the UZF options stated (simulate_et, unsat_etwc,
+    unsat_etae): an ET value is read, and required, only by the options that read it, and stated for none it refuses;
+    a column no option reads is written as mf6's unread value. ``active`` is one row per layer of the cells the run solves."""
+    import shapely
+    from pyproj import Transformer
+    from shapely.geometry import shape as geo
+    from shapely.ops import transform
+
+    from trid3nt_server.inputs.geometry import flatten_geometries
+    from trid3nt_server.inputs.shape import shape
+
+    if points is None or cells is None or not utm_epsg:
+        raise ModflowError(
+            "UnsaturatedZone places by geometry, and this run has no accepted mesh "
+            "with a projected zone to place it on.", error_code="MODFLOW_STRESS_OUTSIDE")
+    to_utm = Transformer.from_crs(4326, int(utm_epsg), always_xy=True).transform
+    centres = shapely.centroid(shapely.polygons(
+        [[(float(points[v][0]), float(points[v][1])) for v in ring] for ring in cells]))
+    tree = shapely.STRtree(centres)
+    solved = [[True] * len(cells) for _ in range(nlay)] if active is None else [
+        [item > 0 for item in row] for row in active]
+    columns: dict[int, dict[str, Any]] = {}
+    for index, statement in enumerate(statements):
+        values = statement["values"]
+        reads = {name for name, option in _ET_READ.items()
+                 if options.get("simulate_et") and (option is None or options.get(option))}
+        stated = {name for name in _ET_READ if values.get(name) is not None}
+        if stated - reads:
+            raise ModflowError(
+                f"UnsaturatedZone states {', '.join(sorted(stated - reads))}, which the UZF options stated "
+                "read nothing of; state UZF_SIMULATE_ET (and UZF_UNSAT_ETWC or UZF_UNSAT_ETAE for "
+                "extwc, ha, hroot, rootact) or remove it.", error_code="MODFLOW_STRESS_UNSTATED")
+        if reads - stated:
+            raise ModflowError(
+                f"UnsaturatedZone states no {', '.join(sorted(reads - stated))}, which the UZF options "
+                "stated read; the engine has no value for it, so state it from a measurement or a named source.",
+                error_code="MODFLOW_STRESS_UNSTATED")
+        for part in flatten_geometries(shape(statement["geometry"], label="UnsaturatedZone").features):
+            area = transform(to_utm, geo(part))
+            if area.geom_type not in ("Polygon", "MultiPolygon"):
+                raise ModflowError(f"UnsaturatedZone places polygons; got a {area.geom_type}.",
+                                   error_code="MODFLOW_STRESS_UNSTATED")
+            for one in (area.geoms if area.geom_type == "MultiPolygon" else [area]):
+                centred = sorted(int(c) for c in tree.query(one, predicate="contains"))
+                if not centred:
+                    raise ModflowError(
+                        "UnsaturatedZone: a polygon holds no cell centre of the accepted mesh; "
+                        "state a polygon over cells of it.", error_code="MODFLOW_STRESS_OUTSIDE")
+                held = [cell for cell in centred if any(row[cell] for row in solved)]
+                if not held:
+                    raise ModflowError(
+                        f"UnsaturatedZone: a polygon holds {len(centred)} cell centre(s), and the run solves "
+                        "none of them on any layer (DISV_IDOMAIN 0).", error_code="MODFLOW_STRESS_OUTSIDE")
+                found = {key: _column(values[key], key, name="UnsaturatedZone", placed=held, points=points,
+                                      cells=cells, utm_epsg=int(utm_epsg), frame=frame,
+                                      dimension=_UZF_DIMENSION[key])
+                         for key in (*_UZF_CELL, "finf", *reads)}
+                for rank, cell in enumerate(held):
+                    if cell in columns:
+                        raise ModflowError(
+                            f"UnsaturatedZone: statements {columns[cell]['statement'] + 1} and "
+                            f"{index + 1} both hold cell {cell}; a column belongs "
+                            "to one statement.", error_code="MODFLOW_STRESS_OUTSIDE")
+                    columns[cell] = {"statement": index,
+                                     **{key: column[rank] for key, column in found.items()}}
+    top = {cell: next(layer for layer in range(nlay) if solved[layer][cell]) for cell in columns}
+    stacks = {}
+    for cell, layer in top.items():
+        stack = [layer]
+        while stack[-1] + 1 < nlay and solved[stack[-1] + 1][cell]:
+            stack.append(stack[-1] + 1)
+        stacks[cell] = stack
+    order = sorted((layer, cell) for cell, stack in stacks.items() for layer in stack)
+    number = {item: rank for rank, item in enumerate(order)}
+    packagedata, perioddata = [], []
+    for layer, cell in order:
+        column = columns[cell]
+        land = layer == top[cell]
+        below = number.get((layer + 1, cell), -1)
+        packagedata.append([number[(layer, cell)], (layer, cell), int(land), below,
+                            *[column[key] for key in _UZF_CELL]])
+        if land:
+            perioddata.append([number[(layer, cell)], column["finf"],
+                               *[column.get(key, _UNREAD) for key in _ET_READ]])
+    return packagedata, perioddata
+
+
+_UZF_CELL = ("surfdep", "vks", "thtr", "thts", "thti", "eps")
+_UZF_DIMENSION = {"surfdep": "L", "vks": "L/T", "thtr": "1", "thts": "1", "thti": "1", "eps": "1",
+                  "finf": "L/T", "pet": "L/T", "extdp": "L", "extwc": "1", "ha": "L", "hroot": "L",
+                  "rootact": "1"}
 
 
 def _levels(top: Any, botm: Any, *, nlay: int, ncpl: int) -> tuple[Any, Any]:
