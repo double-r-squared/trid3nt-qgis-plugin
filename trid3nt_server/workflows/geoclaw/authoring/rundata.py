@@ -194,12 +194,16 @@ def _object(kind: str, fields: tuple[str, ...], record: Any,
 
         obj = FGoutGrid()
     for field, item in zip(fields, record):
-        try:
-            setattr(obj, field, item)
-        except AttributeError:
-            _refuse("RECORD_FIELD",
-                    f"{identifier} states the field {field!r}, which "
-                    f"{type(obj).__name__} does not hold.")
+        # An fgmax grid's geometry is stated under the tool's own attribute names (x1, y1, x2, y2, nx, ny for a uniform grid): the shape's one ``points`` field carries them.
+        stated = (item.items() if kind == "FGmaxGrid" and field == "points"
+                  and isinstance(item, Mapping) else [(field, item)])
+        for name, value in stated:
+            try:
+                setattr(obj, name, value)
+            except AttributeError:
+                _refuse("RECORD_FIELD",
+                        f"{identifier} states the field {name!r}, which "
+                        f"{type(obj).__name__} does not hold.")
     return obj
 
 

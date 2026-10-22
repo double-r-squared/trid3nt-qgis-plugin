@@ -286,3 +286,34 @@ def test_an_fgmax_record_whose_geometry_the_writes_never_take_refuses(tmp_path):
         serialize(sheet, tmp_path / "run")
 
     assert caught.value.error_code == "GEOCLAW_AUTHORING_WRITE"
+
+
+_FGMAX_GRID = [[1, 10.0, 1.0e10, 60.0, 3, 1.0e-2, 0, 2,
+                {"x1": -119.91666667, "y1": -59.91666667, "x2": -60.08333333, "y2": -0.08333333,
+                 "nx": 360, "ny": 360}]]
+
+
+def test_an_fgmax_grid_states_its_geometry_by_the_tools_names_and_reads_back(tmp_path):
+    rundir = tmp_path / "run"
+    sheet = fill(GEO, CLAW_NUM_OUTPUT_TIMES=2, CLAW_TFINAL=3600.0, FGMAX_NUM_FGMAX_VAL=2,
+                 FGMAX_FGMAX_GRIDS=_FGMAX_GRID)
+    written = serialize(sheet, rundir)["written"]
+
+    text = (rundir / "fgmax_grids.data").read_text()
+    assert "360  360" in text and "# x1, y1" in text and "# point_style" in text
+    assert "FGMAX_FGMAX_GRIDS" in check_staged_run(
+        rundir, sheet=sheet, written=written)["checked"]
+
+
+def test_an_fgmax_geometry_that_did_not_reach_the_file_refuses_by_name(tmp_path):
+    rundir = tmp_path / "run"
+    sheet = fill(GEO, CLAW_NUM_OUTPUT_TIMES=2, CLAW_TFINAL=3600.0, FGMAX_FGMAX_GRIDS=_FGMAX_GRID)
+    written = serialize(sheet, rundir)["written"]
+    path = rundir / "fgmax_grids.data"
+    path.write_text(path.read_text().replace("360  360", "180  360"))
+
+    with pytest.raises(GeoclawError) as caught:
+        check_staged_run(rundir, sheet=sheet, written=written)
+
+    assert caught.value.error_code == "GEOCLAW_STAGED_MISMATCH"
+    assert "FGMAX_FGMAX_GRIDS" in str(caught.value)

@@ -1,7 +1,7 @@
 """The staged .data set read back against the sheet: a mismatch refuses by name.
 
 Each file Clawpack just wrote is parsed again - with the engine's own readers where
-they ship (gauges, regions, flagregions, fgout grids) and with this check's record
+they ship (gauges, regions, flagregions, fgmax and fgout grids) and with this check's record
 reader where Clawpack ships none (topo, dtopo) - so a keyword that did not survive
 its file surfaces here, before the solve stops inside the engine. Nothing writes.
 """
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 from ..errors import GeoclawError
 from .rundata import _fields, _prefix_of
@@ -68,8 +68,8 @@ def check_staged_run(rundir: Path | str, *, sheet: Any,
         if row.slot.type == "STRUCT" and found \
                 and not isinstance(found[0], (list, tuple)):
             fields = _fields(row)
-            found = [[getattr(obj, field) for field in fields]
-                     for obj in found]
+            found = [_record(obj, fields, stated)
+                     for obj, stated in zip(found, row.value)]
         if not _same(row.value, found):
             _refuse("MISMATCH",
                     f"{identifier}: the sheet states {row.value!r} and "
@@ -180,7 +180,35 @@ def _fgout(path: Path, work: Path, _rundata: Any) -> Any:
     return grids
 
 
+def _fgmax(path: Path, work: Path, _rundata: Any) -> Any:
+    from clawpack.geoclaw.fgmax_tools import FGmaxGrid
+
+    text = path.read_text(encoding="utf-8")
+    count = _count(text, "num_fgmax_grids")
+    fgnos = [int(line.partition("#")[0])
+             for line in text.splitlines()
+             if line.partition("#")[2].strip().startswith("fgno")]
+    if len(fgnos) != count:
+        raise ValueError(f"the file declares {count} grids and carries "
+                         f"{len(fgnos)}")
+    grids = []
+    for fgno in fgnos:
+        grid = FGmaxGrid()
+        grid.read_fgmax_grids_data(fgno, data_file=str(path))
+        grids.append(grid)
+    return grids
+
+
+def _record(obj: Any, fields: Sequence[str], stated: Any) -> list[Any]:
+    """A grid object as the record the sheet states: ``points`` is the geometry the record named, read off the attributes it named."""
+    return [{name: getattr(obj, name) for name in item}
+            if field == "points" and isinstance(item, Mapping)
+            else getattr(obj, field)
+            for field, item in zip(fields, stated)]
+
+
 _READERS: dict[str, Any] = {
+    "FGMAX_FGMAX_GRIDS": _fgmax,
     "FGOUT_FGOUT_GRIDS": _fgout,
     "FLAGREGION_FLAGREGIONS": _flagregions,
     "GAUGE_GAUGES": _gauges,
@@ -211,6 +239,9 @@ def _same(stated: Any, found: Any) -> bool:
         return found is None or found == "None"
     if isinstance(stated, bool) or isinstance(found, bool):
         return stated is found or stated == found
+    if isinstance(stated, Mapping) and isinstance(found, Mapping):
+        return stated.keys() == found.keys() and all(
+            _same(want, found[name]) for name, want in stated.items())
     if isinstance(stated, (list, tuple)) and isinstance(found, (list, tuple)):
         return len(stated) == len(found) and all(
             _same(want, got) for want, got in zip(stated, found))

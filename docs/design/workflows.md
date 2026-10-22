@@ -565,3 +565,24 @@ topofiles at least one grid node under the projection must stand on water (fines
 file at the node, below `GEO_SEA_LEVEL`); a rupture over land or outside the box refuses
 before the solve, naming the subfault. `DTOPO_DTOPOFILES` stated beside the composite
 refuses by name.
+
+What a solved GeoClaw run publishes is its fixed grids, never the AMR frames: the
+fgmax grid (`FGMAX_FGMAX_GRIDS`, a uniform grid whose geometry the record's `points`
+states under `FGmaxGrid`'s own names `x1, y1, x2, y2, nx, ny`), the fgout grid
+(`FGOUT_FGOUT_GRIDS`) and the gauges (`GAUGE_GAUGES`). `GEO.MODULE_OUTPUT` rows the maximum
+depth, speed and surface elevation and the arrival time (`max_over_time`), the depth,
+surface elevation and overland depth per frame (`field`), and a gauge's surface elevation
+and depth (`series`); the reads (`modules/outputs.py`) go through Clawpack's own
+`FGmaxGrid.read_output`, `FGoutGrid.read_frame` and `GaugeSolution`, and write each raster
+as a lon/lat COG beside the run's files (north-up, cell edges from the grid's nodes, nodata
+NaN). A read of an output whose keyword the run did not state, a speed with
+`FGMAX_NUM_FGMAX_VAL` below 2, a grid that is not lon/lat (`GEO_COORDINATE_SYSTEM` not 2)
+or a file the run did not write refuses by name. Depth is TOTAL depth, drawn where the
+engine calls the cell wet (`GEO_DRY_TOLERANCE`, read off the run); the maximum surface is
+Clawpack's own `h + B` at the fgmax point; the arrival time keeps Clawpack's nodata where
+no wave was flagged. The overland rows (`OVERLAND_DEPTH`, `MAX_OVERLAND_DEPTH`) also drop
+the cells wet in fgout frame 0, which must be written at t = 0 - never the cells below
+zero elevation; the fgmax one needs the fgout nodes on the fgmax nodes and refuses
+otherwise. A series is read at the run's one gauge, a gauge number, or a Point standing on
+a gauge (a Point off every gauge refuses with the nearest). A run stating more than one
+grid of a kind has no one grid to read and refuses.
