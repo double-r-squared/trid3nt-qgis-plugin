@@ -14,7 +14,7 @@ from typing import Any, Callable, Mapping, Sequence
 
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.render.formats import Chart, Deliverable, Mesh, Vector, publish
+from trid3nt_server.render.formats import Chart, Deliverable, Mesh, Raster, RasterFrame, Vector, publish
 from trid3nt_server.workflows.runtime import DeclarativeError
 
 logger = logging.getLogger("trid3nt_server.workflows.runtime.primitives")
@@ -25,6 +25,7 @@ __all__ = [
     "Frames",
     "Line",
     "Profile",
+    "Rasters",
     "Read",
     "Series",
     "Spectrum",
@@ -32,6 +33,7 @@ __all__ = [
     "deliver",
     "OutputEmpty",
     "Primitive",
+    "RasterUnanchored",
     "extent",
     "field",
     "mass_balance",
@@ -160,10 +162,33 @@ class Frames(Read):
     floor: float | None = None
 
 
+@dataclass(frozen=True, kw_only=True)
+class Rasters(Read):
+    """One variable on a lon/lat grid as north-up rasters: one per instant, or the one envelope over the run.
+
+    ``values`` is (frames, rows, cols) with nothing as NaN; ``bounds`` the grid's cell edges (west, south, east, north);
+    ``times`` each frame's seconds into the run (empty for an envelope) and ``until`` the second the run ends at, where
+    the last frame's window stops (``None`` ends it at its own instant). The legend is measured over every frame.
+    """
+
+    name: str
+    units: str
+    values: Any
+    bounds: tuple[float, float, float, float]
+    times: tuple[float, ...] = ()
+    until: float | None = None
+
+
 class OutputEmpty(DeclarativeError):
     """The variable a primitive names is not in the result, or never rose above its floor."""
 
     error_code = "TELEMAC_OUTPUT_EMPTY"
+
+
+class RasterUnanchored(DeclarativeError):
+    """A raster read at instants on a run that states no reference time, so no frame has an absolute instant."""
+
+    error_code = "RASTER_UNANCHORED"
 
 
 
@@ -316,6 +341,10 @@ def deliver(primitive: Primitive, read: Read, solved: Any, *, caption: str,
                                                   quantity=quantity,
                                                   style=primitive.style),
                            caption=caption, style=primitive.style, tracer=tracer)
+    if isinstance(read, Rasters):
+        return Deliverable(product=_rasters(read, solved, caption=caption, quantity=quantity,
+                                            style=primitive.style),
+                           caption=caption, style=primitive.style, tracer=tracer)
     if isinstance(read, Track):
         return Deliverable(product=Vector(features=read.features),
                            caption=caption, style=primitive.style)
@@ -369,6 +398,58 @@ def _derived_group(read: Field, solved: Any, *, caption: str, quantity: str,
                 # Ranged over the nodes the measures were read over, so the legend describes the water, not a drying-bar film.
                 value_range=presets.measured_range(_drawn(values, read.wet),
                                                    style, floor=read.floor))
+
+
+def _rasters(read: Rasters, solved: Any, *, caption: str, quantity: str, style: Any) -> Raster:
+    """A raster read -> its COGs under the run prefix and the Raster that carries them.
+
+    A frame holds the map from its instant to the next frame's, the last to ``until``; an instant is the run's reference
+    time plus the frame's seconds, and a run stating none refuses.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    import numpy as np
+    from rasterio.transform import from_bounds
+
+    from trid3nt_server.render import presets
+    from trid3nt_server.render.cog import array_to_cog_bytes
+    from trid3nt_server.render.formats import instant_token
+    from trid3nt_server.store import objects as storage
+
+    values = np.asarray(read.values, dtype="float64")
+    if values.shape[0] != (len(read.times) or 1):
+        raise ValueError(f"{values.shape[0]} frames read at {len(read.times)} instants.")
+    origin = None
+    if read.times:
+        stated = solved.run.get("reference_time")
+        if not stated:
+            raise RasterUnanchored(
+                f"{caption} is read at {len(read.times)} instants and the run states no reference time, so no frame "
+                "has an absolute instant; state the moment the run's seconds are counted from.")
+        origin = datetime.fromisoformat(str(stated).replace("Z", "+00:00"))
+        if origin.tzinfo is None:
+            origin = origin.replace(tzinfo=timezone.utc)
+
+    def _at(seconds: float) -> str:
+        return (origin + timedelta(seconds=float(seconds))).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    west, south, east, north = read.bounds
+    transform = from_bounds(west, south, east, north, values.shape[2], values.shape[1])
+    bucket = storage.runs_bucket()
+    uris: list[str] = []
+    for index, frame in enumerate(values):
+        basename = f"{quantity}-t{instant_token(read.times[index])}.tif" if read.times else f"{quantity}.tif"
+        storage.client().put_object(
+            Bucket=bucket, Key=f"{solved.run_id}/{basename}",
+            Body=array_to_cog_bytes(frame, transform, "EPSG:4326"), ContentType="image/tiff")
+        uris.append(f"s3://{bucket}/{solved.run_id}/{basename}")
+    common = dict(bbox=read.bounds, units=read.units,
+                  value_range=presets.measured_range(values, style))
+    if not read.times:
+        return Raster(uri=uris[0], **common)
+    ends = [*read.times[1:], read.times[-1] if read.until is None else max(read.until, read.times[-1])]
+    return Raster(frames=tuple(RasterFrame(uri=uri, t=float(t), valid_from=_at(t), valid_to=_at(end))
+                               for uri, t, end in zip(uris, read.times, ends)), **common)
 
 
 def _token(text: str) -> str:

@@ -26,7 +26,7 @@ from ..errors import (
     router_upstream_error,
 )
 from ..transport import READ_POLICY
-from .raster_cog import array_to_cog_bytes
+from trid3nt_server.render.cog import array_to_cog_bytes
 
 logger = logging.getLogger(
     "trid3nt_server.tools.fetchers._router.executors.stac_raster"

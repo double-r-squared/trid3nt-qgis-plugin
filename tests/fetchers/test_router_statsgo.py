@@ -15,6 +15,7 @@ import pytest
 from affine import Affine
 from rasterio.crs import CRS
 
+from trid3nt_server.render.cog import array_to_cog_bytes
 from trid3nt_server.tools.fetchers._router import router
 from trid3nt_server.tools.fetchers._router.errors import (
     RouterEmptyError,
@@ -108,7 +109,7 @@ def test_statsgo_delegate_array_serializes_to_cog(monkeypatch):
     _patch_statsgo_read(monkeypatch, np.array([[0.31, 0.35], [0.38, np.nan]], dtype="float32"))
     arr, transform, crs = raster_cog.fetch_source_array(STATSGO_SPEC, _vp(bbox=list(_KANSAS), field="KFFACT"))
     assert arr.shape == (2, 2)
-    cog = raster_cog.array_to_cog_bytes(arr, transform, crs)
+    cog = array_to_cog_bytes(arr, transform, crs)
     assert cog[:2] in (b"II", b"MM")  # TIFF magic
 
 

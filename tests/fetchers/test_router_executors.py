@@ -15,6 +15,7 @@ import rasterio
 import rasterio.transform as rtransform
 
 from trid3nt_contracts.source_spec import SourceSpec
+from trid3nt_server.render.cog import array_to_cog_bytes
 from trid3nt_server.tools.fetchers._router.errors import (
     RouterEmptyError,
     RouterInputError,
@@ -115,7 +116,7 @@ def _synthetic_raster(bbox=(-117.5, 33.5, -116.5, 34.5), n=64):
 
 def test_array_to_cog_bytes_roundtrips():
     arr, transform, crs = _synthetic_raster()
-    data = raster_cog.array_to_cog_bytes(arr, transform, crs)
+    data = array_to_cog_bytes(arr, transform, crs)
     assert isinstance(data, bytes) and len(data) > 0
     with rasterio.open(io.BytesIO(data)) as src:
         assert src.count == 1
@@ -436,7 +437,7 @@ def test_mosaic_execute_single_tile_fast_path(monkeypatch):
     def _fake_execute(s, p):
         called["execute"] += 1
         arr, tf, crs = _synthetic_raster(bbox=tuple(p["bbox"]), n=16)
-        return raster_cog.array_to_cog_bytes(arr, tf, crs)
+        return array_to_cog_bytes(arr, tf, crs)
 
     monkeypatch.setattr(raster_cog, "execute", _fake_execute)
     data = tiled_mosaic.execute(spec, {"bbox": [-100.0, 40.0, -99.8, 40.2]})  # < 0.5 deg^2

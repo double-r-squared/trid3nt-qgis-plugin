@@ -573,9 +573,14 @@ states under `FGmaxGrid`'s own names `x1, y1, x2, y2, nx, ny`), the fgout grid
 depth, speed and surface elevation and the arrival time (`max_over_time`), the depth,
 surface elevation and overland depth per frame (`field`), and a gauge's surface elevation
 and depth (`series`); the reads (`modules/outputs.py`) go through Clawpack's own
-`FGmaxGrid.read_output`, `FGoutGrid.read_frame` and `GaugeSolution`, and write each raster
-as a lon/lat COG beside the run's files (north-up, cell edges from the grid's nodes, nodata
-NaN). A read of an output whose keyword the run did not state, a speed with
+`FGmaxGrid.read_output`, `FGoutGrid.read_frame` and `GaugeSolution`, and return each raster
+as a `Rasters` read (north-up, cell edges from the grid's nodes, nodata NaN); `deliver`
+writes the COGs under the run prefix and a `Raster` carries them: an fgmax product is one
+untimed layer, the fgout frames one layer per frame, each stamped with its window
+(`valid_from` to the next frame's instant, the last to the run's `CLAW_TFINAL`; an instant
+is the run's reference time plus the frame's seconds, and a run stating none refuses
+`RASTER_UNANCHORED`), which the plugin's Temporal Controller plays as it does a fetcher's
+frames. A read of an output whose keyword the run did not state, a speed with
 `FGMAX_NUM_FGMAX_VAL` below 2, a grid that is not lon/lat (`GEO_COORDINATE_SYSTEM` not 2)
 or a file the run did not write refuses by name. Depth is TOTAL depth, drawn where the
 engine calls the cell wet (`GEO_DRY_TOLERANCE`, read off the run); the maximum surface is

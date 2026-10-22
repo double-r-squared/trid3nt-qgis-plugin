@@ -183,7 +183,7 @@ def _exported_raster_to_cog(spec: SourceSpec, raw: bytes) -> bytes:
     import numpy as np
     import rasterio
 
-    from .raster_cog import array_to_cog_bytes
+    from trid3nt_server.render.cog import array_to_cog_bytes
 
     ingest = spec.ingest or {}
     sentinel = (ingest.get("qgis_provider") or {}).get("nodata_sentinel")

@@ -15,6 +15,7 @@ from typing import Any
 import numpy as np
 import pytest
 
+from trid3nt_server.render.cog import array_to_cog_bytes
 from trid3nt_server.tools.fetchers._router import router
 from trid3nt_server.tools.fetchers._router.errors import (
     RouterEmptyError,
@@ -214,7 +215,7 @@ def test_delegate_downloads_windows_and_serializes_to_cog(monkeypatch):
     assert arr.ndim == 2 and arr.size > 0
     # nodata (-99999) masked to NaN; the covered AOI carries the 5 people/cell value.
     assert np.nanmax(arr) == pytest.approx(5.0)
-    cog = raster_cog.array_to_cog_bytes(arr, transform, crs)
+    cog = array_to_cog_bytes(arr, transform, crs)
     assert cog[:2] in (b"II", b"MM")  # TIFF magic
 
 

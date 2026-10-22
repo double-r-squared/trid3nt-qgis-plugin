@@ -15,7 +15,6 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-import rasterio
 
 from trid3nt_server.inputs import Point
 from trid3nt_server.inputs.point import PointNotViableError
@@ -31,7 +30,7 @@ _FIXTURE = Path(__file__).parents[1] / "fixtures" / "geoclaw" / "chile2010_fgmax
 _RUN = "run-geoclaw-outputs"
 
 _SHEET = {
-    "GEO_COORDINATE_SYSTEM": 2, "GEO_DRY_TOLERANCE": 0.001, "FGMAX_NUM_FGMAX_VAL": 2,
+    "GEO_COORDINATE_SYSTEM": 2, "GEO_DRY_TOLERANCE": 0.001, "CLAW_TFINAL": 36000.0, "FGMAX_NUM_FGMAX_VAL": 2,
     "FGMAX_FGMAX_GRIDS": [[1, 10.0, 1.0e10, 60.0, 3, 1.0e-2, 0, 2,
                            {"x1": -77.583333334, "y1": -44.916666667, "x2": -72.416666667, "y2": -41.416666667,
                             "nx": 32, "ny": 22}]],
@@ -41,7 +40,7 @@ _SHEET = {
 
 
 class _Store:
-    """The run prefix as a dict: what the reads fetch and the COGs they write."""
+    """The run prefix as a dict: the files the reads fetch. A read writes nothing back."""
 
     def __init__(self) -> None:
         self.objects: dict[str, bytes] = {}
@@ -51,8 +50,8 @@ class _Store:
             raise KeyError(Key)
         return {"Body": io.BytesIO(self.objects[Key])}
 
-    def put_object(self, *, Bucket: str, Key: str, Body: bytes, ContentType: str | None = None):
-        self.objects[Key] = Body
+    def put_object(self, **_kw):
+        raise AssertionError("a read wrote to the store")
 
 
 @pytest.fixture()
@@ -69,10 +68,9 @@ def _solved(**over) -> Solved:
     return Solved({"run_id": _RUN, "sheet": sheet}, GEO)
 
 
-def _cog(store: _Store, uri: str):
-    """``(values, bounds, crs)`` of a COG the read wrote; the nodata cells are NaN."""
-    with rasterio.MemoryFile(store.objects[uri.split("/", 3)[3]]) as memory, memory.open() as src:
-        return src.read(1), tuple(src.bounds), src.crs.to_string()
+def _grid(read, index: int):
+    """``(values, bounds)`` of frame ``index`` of a raster read; the nodata cells are NaN."""
+    return read.values[index], read.bounds
 
 
 def _read(solved: Solved, primitive: Primitive):
@@ -107,9 +105,9 @@ def test_every_fgmax_product_equals_the_values_clawpacks_reader_gives(store):
     differences = {}
     for token, want in wanted.items():
         read = _read(solved, max_over_time(token))
-        got, bounds, crs = _cog(store, read.uris[0])
+        got, bounds = _grid(read, 0)
         differences[token] = _same(got, want)
-        assert crs == "EPSG:4326" and read.times == ()
+        assert read.times == () and len(read.values) == 1
         dx, dy = (grid.x[-1] - grid.x[0]) / 31, (grid.y[-1] - grid.y[0]) / 21
         assert np.allclose(bounds, (grid.x[0] - dx / 2, grid.y[0] - dy / 2, grid.x[-1] + dx / 2, grid.y[-1] + dy / 2))
         assert read.units == GEO.MODULE_OUTPUT[token].unit
@@ -118,9 +116,18 @@ def test_every_fgmax_product_equals_the_values_clawpacks_reader_gives(store):
     assert np.isnan(wanted["ARRIVAL_TIME"]).any() and np.isfinite(wanted["ARRIVAL_TIME"]).any()
 
 
+def test_a_fgout_read_is_timed_to_the_run_s_end_and_writes_nothing(store):
+    read = _read(_solved(), field("DEPTH", "every"))
+    assert read.until == 36000.0 and read.times[-1] == 21600.0
+    assert _read(_solved(), max_over_time("MAX_DEPTH")).until is None
+    with pytest.raises(GeoclawError) as caught:
+        _read(_solved(CLAW_TFINAL=None), field("DEPTH", "every"))
+    assert "CLAW_TFINAL" in str(caught.value)
+
+
 def test_a_cell_never_flagged_keeps_the_arrival_time_nodata(store):
     grid, rows = _fgmax_expected()
-    got, _bounds, _crs = _cog(store, _read(_solved(), max_over_time("ARRIVAL_TIME")).uris[0])
+    got, _bounds = _grid(_read(_solved(), max_over_time("ARRIVAL_TIME")), 0)
     never = rows(grid.arrival_time)
     assert np.isnan(got[np.isnan(never)]).all() and np.isnan(never).sum() == 182
 
@@ -137,14 +144,13 @@ def test_every_fgout_frame_equals_the_frame_clawpacks_reader_gives(store):
     grid, frames = _fgout_expected()
     for token, quantity in (("DEPTH", lambda f: f.h), ("SURFACE", lambda f: f.eta)):
         read = _read(_solved(), field(token, "every"))
-        assert read.times == tuple(float(t) for t in grid.times) and len(read.uris) == 25
+        assert read.times == tuple(float(t) for t in grid.times) and len(read.values) == 25
         worst = 0.0
-        for uri, frame in zip(read.uris, frames):
+        for number, frame in enumerate(frames):
             wet = frame.h > 0.001
             want = np.flipud(np.where(wet, quantity(frame).astype("float64"), np.nan).T)
-            got, bounds, crs = _cog(store, uri)
+            got, bounds = read.values[number], read.bounds
             worst = max(worst, _same(got, want))
-            assert crs == "EPSG:4326"
             assert np.allclose(bounds, (grid.extent_edges[0], grid.extent_edges[2], grid.extent_edges[1],
                                         grid.extent_edges[3]))
         assert worst == 0.0
@@ -159,7 +165,7 @@ def test_a_single_frame_is_read_by_index_or_by_the_nearest_instant(store):
     assert by_index.times == by_instant.times == (2700.0,) and last.times == (21600.0,)
     wet = frames[3].h > 0.001
     want = np.flipud(np.where(wet, frames[3].h.astype("float64"), np.nan).T)
-    assert _same(_cog(store, by_index.uris[0])[0], want) == 0.0
+    assert _same(_grid(by_index, 0)[0], want) == 0.0
 
 
 def test_the_overland_depth_is_total_depth_where_frame_0_held_no_water(store):
@@ -167,16 +173,16 @@ def test_the_overland_depth_is_total_depth_where_frame_0_held_no_water(store):
     sea = frames[0].h > 0.001
     read = _read(_solved(), field("OVERLAND_DEPTH", "every"))
     flooded = 0
-    for uri, frame in zip(read.uris, frames):
+    for number, frame in enumerate(frames):
         want = np.flipud(np.where((frame.h > 0.001) & ~sea, frame.h.astype("float64"), np.nan).T)
-        got, _bounds, _crs = _cog(store, uri)
+        got, _bounds = _grid(read, number)
         assert _same(got, want) == 0.0
         flooded += int(np.isfinite(want).sum())
     assert flooded > 0
-    first, _bounds, _crs = _cog(store, read.uris[0])
+    first, _bounds = _grid(read, 0)
     assert np.isnan(first).all()
-    total, _bounds, _crs = _cog(store, _read(_solved(), field("DEPTH", -1)).uris[0])
-    overland, _bounds, _crs = _cog(store, read.uris[-1])
+    total, _bounds = _grid(_read(_solved(), field("DEPTH", -1)), 0)
+    overland, _bounds = _grid(read, -1)
     assert np.isfinite(total).sum() > np.isfinite(overland).sum() > 0
 
 
@@ -191,7 +197,7 @@ def test_a_first_frame_not_written_at_zero_holds_no_initial_sea(store):
 def test_the_wet_tolerance_is_the_runs_own_keyword(store):
     def cells(**over):
         read = _read(_solved(**over), field("DEPTH", -1))
-        return int(np.isfinite(_cog(store, read.uris[0])[0]).sum())
+        return int(np.isfinite(_grid(read, 0)[0]).sum())
 
     default = cells(GEO_DRY_TOLERANCE=None)
     assert default == cells(GEO_DRY_TOLERANCE=0.001)
@@ -222,7 +228,7 @@ def test_the_fgmax_overland_depth_drops_the_initial_sea_where_the_fgout_nodes_ar
                                      "nx": grid.nx, "ny": grid.ny}]]}
     read = _read(_solved(**sheet), max_over_time("MAX_OVERLAND_DEPTH"))
     want = np.flipud(np.where((h > 0.001) & ~(frames[0].h > 0.001), h.astype("float64"), np.nan).T)
-    got, _bounds, _crs = _cog(store, read.uris[0])
+    got, _bounds = _grid(read, 0)
     assert 0 < np.isfinite(want).sum() < np.isfinite(np.where(h > 0.001, h, np.nan)).sum()
     assert _same(got, want) <= 1.0e-4
 

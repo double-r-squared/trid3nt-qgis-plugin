@@ -17,6 +17,7 @@ from trid3nt_server.render.formats import (
     Deliverable,
     Mesh,
     Raster,
+    RasterFrame,
     Vector,
     publish,
     quantity_of,
@@ -189,3 +190,39 @@ def test_two_groups_of_one_mesh_file_are_two_rows_on_the_canvas() -> None:
 
 async def _swallow(_text: str) -> None:
     return None
+
+
+def _frames(*instants: float) -> tuple[RasterFrame, ...]:
+    edges = [*instants[1:], instants[-1] + 600.0]
+    return tuple(RasterFrame(uri=f"s3://runs/RID/depth-t{int(t)}.tif", t=t,
+                             valid_from=f"2010-02-27T00:{int(t) // 60:02d}:00Z",
+                             valid_to=f"2010-02-27T00:{int(e) // 60:02d}:00Z")
+                 for t, e in zip(instants, edges))
+
+
+def test_a_timed_raster_group_is_one_layer_per_frame_on_one_range() -> None:
+    published = _publish([Deliverable(
+        product=Raster(frames=_frames(0.0, 600.0, 1200.0), bbox=(-1.0, 2.0, -0.5, 2.5), units="m",
+                       value_range=(0.0, 7.0)),
+        caption="water depth", style={"kind": "continuous"})])
+    layers = published.layers
+    assert len({layer.layer_id for layer in layers}) == 3
+    assert [layer.layer_id for layer in layers][1] == "telemac-water_depth-t600-RID"
+    assert [layer.valid_from for layer in layers] == ["2010-02-27T00:00:00Z", "2010-02-27T00:10:00Z",
+                                                      "2010-02-27T00:20:00Z"]
+    assert [layer.valid_to for layer in layers[:2]] == [layers[1].valid_from, layers[2].valid_from]
+    assert {tuple(layer.style["scale"]["range"]) for layer in layers} == {(0.0, 7.0)}
+    assert all(layer.layer_type == "raster" and layer.quantity == "water_depth" for layer in layers)
+
+
+def test_an_untimed_raster_carries_no_window() -> None:
+    layer = _publish([Deliverable(product=Raster(uri="s3://cache/dem.tif"), caption="ground elevation",
+                                  style={"kind": "continuous"})]).layers[0]
+    assert layer.valid_from is None and layer.valid_to is None and layer.layer_id == "telemac-ground_elevation-RID"
+
+
+def test_a_raster_is_one_uri_or_its_frames() -> None:
+    with pytest.raises(ValueError):
+        Raster()
+    with pytest.raises(ValueError):
+        Raster(uri="s3://cache/a.tif", frames=_frames(0.0))

@@ -19,6 +19,7 @@ declared beside them.
 | --- | --- |
 | `__init__.py` | The format set, stated. |
 | `charts.py` | The one Vega-Lite chart-envelope builder every chart routes through. |
+| `cog.py` | The array-to-COG writer for a product made in memory: float32 DEFLATE, tiled, CRS-tagged, with a nodata. |
 | `formats.py` | The four kinds a product arrives in, and the publish of one outputs list into layers and charts. |
 | `layer_uri_emit.py` | The single seam every client-bound `LayerURI` crosses. |
 | `mesh_display.py` | The MDAL faces: a built mesh as `.2dm`, and a derived value per node as the ASCII dataset loaded beside a mesh. |

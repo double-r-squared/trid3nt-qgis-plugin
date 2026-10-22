@@ -1,7 +1,7 @@
 """A module's outputs: the read of each primitive off a solved GeoClaw run.
 
-fgmax is read by Clawpack's FGmaxGrid, an fgout frame by its FGoutGrid and a gauge by GaugeSolution; each raster is a
-lon/lat COG written beside the run's files, a gauge a series. A product is total depth where the engine calls the cell
+fgmax is read by Clawpack's FGmaxGrid, an fgout frame by its FGoutGrid and a gauge by GaugeSolution; each raster is
+a lon/lat grid of values the framework writes as COGs, a gauge a series. A product is total depth where the engine calls the cell
 wet (GEO_DRY_TOLERANCE) and nothing elsewhere; the overland rows also drop the cells wet in frame 0, the initial sea.
 """
 
@@ -10,16 +10,15 @@ from __future__ import annotations
 import shutil
 import tempfile
 from contextlib import contextmanager
-from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
 from typing import Any, Iterator, Mapping
 
-from trid3nt_server.workflows.runtime.primitives import OutputEmpty, Primitive, Read, Series
+from trid3nt_server.workflows.runtime.primitives import OutputEmpty, Primitive, Rasters, Series
 
 from ..errors import GeoclawError
 
-__all__ = ["Grids", "PRIMITIVES", "Solved", "read_field", "read_max_over_time", "read_series"]
+__all__ = ["PRIMITIVES", "Solved", "read_field", "read_max_over_time", "read_series"]
 
 # Each output by token: the primitive that reads it, and the keyword that makes the engine write it.
 _READ_BY = {"MAX_DEPTH": "max_over_time", "MAX_SPEED": "max_over_time", "MAX_SURFACE": "max_over_time",
@@ -38,21 +37,6 @@ def _refuse(code: str, message: str) -> GeoclawError:
 
 def _unsaved(keyword: str, why: str) -> GeoclawError:
     return _refuse("OUTPUT_UNSAVED", f"{keyword} is stated by nothing, so {why}; state it and solve again.")
-
-
-@dataclass(frozen=True, kw_only=True)
-class Grids(Read):
-    """One variable over a lon/lat grid as COGs in the run's store: one, or one per fgout frame.
-
-    ``times`` is each frame's instant in seconds (empty for an envelope); ``value_range`` is the legend range over every frame.
-    """
-
-    name: str
-    units: str
-    uris: tuple[str, ...]
-    times: tuple[float, ...]
-    bbox: tuple[float, float, float, float]
-    value_range: tuple[float, float]
 
 
 class _Stage:
@@ -91,6 +75,14 @@ class Solved:
     def dry_tolerance(self) -> float:
         stated = self.stated("GEO_DRY_TOLERANCE")
         return float(self.body.slot("GEO_DRY_TOLERANCE").engine_default if stated is None else stated)
+
+    @cached_property
+    def until(self) -> float:
+        """The second the run ends at: its stated CLAW_TFINAL, which has no default."""
+        stated = self.stated("CLAW_TFINAL")
+        if stated is None:
+            raise _unsaved("CLAW_TFINAL", "no instant ends the last frame's window")
+        return float(stated)
 
     @contextmanager
     def staged(self) -> Iterator[_Stage]:
@@ -134,20 +126,6 @@ class Solved:
                           "read off; a read takes a run that states one.")
         return list(records[0])
 
-    def cog(self, basename: str, raster: Any, bounds: tuple[float, float, float, float]) -> str:
-        """``raster`` (rows north to south) as a lon/lat COG under the run prefix -> its uri."""
-        from rasterio.transform import from_bounds
-
-        from trid3nt_server.store import objects as storage
-        from trid3nt_server.tools.fetchers._router.executors.raster_cog import array_to_cog_bytes
-
-        west, south, east, north = bounds
-        transform = from_bounds(west, south, east, north, raster.shape[1], raster.shape[0])
-        storage.client().put_object(
-            Bucket=storage.runs_bucket(), Key=f"{self.run_id}/{basename}",
-            Body=array_to_cog_bytes(raster, transform, "EPSG:4326"), ContentType="image/tiff")
-        return f"s3://{storage.runs_bucket()}/{self.run_id}/{basename}"
-
 
 def _flat(primitive: Primitive) -> None:
     if primitive.plane is not None:
@@ -173,20 +151,15 @@ def _envelope(rasters: Any) -> dict[str, Any]:
     return {"max": float(finite.max()), "min": float(finite.min()), "cells": int(finite.size)}
 
 
-def _grids(solved: Solved, row: Any, key: str, rasters: list[Any], bounds: Any, times: list[float],
-           stem: str) -> Grids:
-    """Write each raster as a COG; none holding a number refuses, as the engine drew nothing for it."""
+def _rasters(solved: Solved, row: Any, key: str, rasters: list[Any], bounds: Any, times: list[float]) -> Rasters:
+    """The rasters as a read; none holding a number refuses, as the engine drew nothing for it."""
     import numpy as np
-
-    from trid3nt_server.render import presets
 
     if not any(np.isfinite(r).any() for r in rasters):
         raise OutputEmpty(f"not one cell of {key} is a number the engine called wet or reached.")
-    uris = [solved.cog(f"{stem}-t{int(t)}.tif" if times else f"{stem}.tif", r, bounds)
-            for r, t in zip(rasters, times or [0.0])]
-    return Grids(name=row.name, units=row.unit, uris=tuple(uris), times=tuple(times), bbox=bounds,
-                 value_range=presets.measured_range(np.stack(rasters), row.style),
-                 measures={**_envelope(rasters), "frames": len(rasters)})
+    return Rasters(name=row.name, units=row.unit, values=np.stack(rasters), bounds=bounds, times=tuple(times),
+                   until=float(solved.until) if times else None,
+                   measures={**_envelope(rasters), "frames": len(rasters)})
 
 
 def _fgmax(solved: Solved, key: str, stage: _Stage) -> Any:
@@ -231,7 +204,7 @@ def _initial_wet(solved: Solved, grid: Any, stage: _Stage) -> Any:
     return first.h > solved.dry_tolerance
 
 
-def read_max_over_time(primitive: Primitive, solved: Solved) -> Grids:
+def read_max_over_time(primitive: Primitive, solved: Solved) -> Rasters:
     """``max_over_time(name)``: an fgmax product - max depth, speed or surface, or the arrival time - on the fgmax grid.
 
     Depth, speed and surface are drawn where the maximum depth was wet; arrival time is Clawpack's own and stays
@@ -267,10 +240,10 @@ def read_max_over_time(primitive: Primitive, solved: Solved) -> Grids:
         dx, dy = (grid.x[-1] - grid.x[0]) / (grid.nx - 1), (grid.y[-1] - grid.y[0]) / (grid.ny - 1)
         bounds = (float(grid.x[0] - dx / 2), float(grid.y[0] - dy / 2),
                   float(grid.x[-1] + dx / 2), float(grid.y[-1] + dy / 2))
-    return _grids(solved, row, key, [field[::-1]], bounds, [], f"geoclaw_{key.lower()}")
+    return _rasters(solved, row, key, [field[::-1]], bounds, [])
 
 
-def read_field(primitive: Primitive, solved: Solved) -> Grids:
+def read_field(primitive: Primitive, solved: Solved) -> Rasters:
     """``field(name, t)``: an fgout variable - depth, surface or overland depth - at every frame, or the frame at ``t``.
 
     ``t`` is ``"every"``, a frame index counted from 0 (-1 the last), or an instant in seconds taking the nearest frame.
@@ -307,7 +280,7 @@ def read_field(primitive: Primitive, solved: Solved) -> Grids:
             rasters.append(_north_up(values))
         west, east, south, north = (float(v) for v in grid.extent_edges)
     instants = [float(times[n - 1]) for n in numbers]
-    return _grids(solved, row, key, rasters, (west, south, east, north), instants, f"geoclaw_{key.lower()}")
+    return _rasters(solved, row, key, rasters, (west, south, east, north), instants)
 
 
 def _gauge(solved: Solved, at: Any) -> list[Any]:

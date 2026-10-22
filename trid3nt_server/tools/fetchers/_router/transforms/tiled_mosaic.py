@@ -14,6 +14,8 @@ from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
 
+from trid3nt_server.render.cog import array_to_cog_bytes
+
 from ..errors import bbox_error_suffix, router_empty_error, router_input_error
 from ..executors import raster_cog, stac_raster
 
@@ -105,7 +107,7 @@ def mosaic_tile_files(
                 s.close()
             except Exception:  # noqa: BLE001
                 pass
-    return raster_cog.array_to_cog_bytes(
+    return array_to_cog_bytes(
         mosaic if mosaic.ndim == 2 else mosaic[0], out_transform, crs,
         nodata=(float("nan") if nodata is None else nodata), dtype=dtype, colormap=colormap,
     )

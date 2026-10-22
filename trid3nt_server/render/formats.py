@@ -1,6 +1,6 @@
 """The FORMAT SET, and the publish of one outputs list into it.
 
-A raster arrives as a COG already in the store, a vector as GeoJSON, a mesh as the MDAL file its engine wrote plus its
+A raster arrives as a COG already in the store (a timed group as one COG per instant), a vector as GeoJSON, a mesh as the MDAL file its engine wrote plus its
 dataset files, a series or profile as a chart payload. Nothing here reads an engine's result or paints a field;
 every product carries the style row its producer declared."""
 
@@ -12,18 +12,33 @@ from typing import Any, Mapping, Sequence
 
 from trid3nt_contracts.execution import LayerURI
 
-__all__ = ["Chart", "Deliverable", "Mesh", "Published", "Raster", "Vector",
-           "publish", "quantity_of"]
+__all__ = ["Chart", "Deliverable", "Mesh", "Published", "Raster", "RasterFrame",
+           "Vector", "instant_token", "publish", "quantity_of"]
+
+
+@dataclass(frozen=True, kw_only=True)
+class RasterFrame:
+    """One COG of a timed group: ``t`` seconds into the run and the window [valid_from, valid_to) it holds the map for."""
+
+    uri: str
+    t: float
+    valid_from: str
+    valid_to: str
 
 
 @dataclass(frozen=True, kw_only=True)
 class Raster:
-    """A COG in the store, in EPSG:4326."""
+    """A COG in the store, in EPSG:4326; or, as ``frames``, the timed COGs of one quantity (each its own layer)."""
 
-    uri: str
+    uri: str | None = None
     bbox: tuple[float, float, float, float] | None = None
     units: str | None = None
     value_range: tuple[float, float] | None = None
+    frames: tuple[RasterFrame, ...] = ()
+
+    def __post_init__(self) -> None:
+        if (self.uri is None) == (not self.frames):
+            raise ValueError("a Raster is one uri or its frames, never both and never neither.")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -86,6 +101,11 @@ class Published:
     charts: Mapping[str, Any] = field(default_factory=dict)
 
 
+def instant_token(t: float) -> str:
+    """Seconds as a name part: ``21600`` -> ``21600``, ``0.5`` -> ``0p500``; two instants never share one."""
+    return str(int(t)) if float(t) == int(t) else f"{float(t):.3f}".replace(".", "p")
+
+
 def quantity_of(caption: str) -> str:
     """The quantity token a caption's own words spell: ``water depth`` ->
     ``water_depth``. Every product of one quantity is held to one scale by it."""
@@ -115,9 +135,9 @@ async def publish(*, run_id: str, engine: str, name: str,
             layers.append(_mesh_layer(item, run_id=run_id, engine=engine,
                                       name=name, value_range=shared.get(quantity)))
         elif isinstance(item.product, Raster):
-            layers.append(_raster_layer(item, run_id=run_id, engine=engine,
-                                        name=name,
-                                        value_range=shared.get(quantity)))
+            layers.extend(_raster_layers(item, run_id=run_id, engine=engine,
+                                         name=name,
+                                         value_range=shared.get(quantity)))
         elif isinstance(item.product, Vector):
             layers.append(await asyncio.to_thread(
                 _vector_layer, item, run_id=run_id, engine=engine, name=name))
@@ -236,18 +256,28 @@ def _mesh_layer(item: Deliverable, *, run_id: str, engine: str, name: str,
         reference_time=mesh.reference_time)
 
 
-def _raster_layer(item: Deliverable, *, run_id: str, engine: str, name: str,
-                  value_range: tuple[float, float] | None) -> LayerURI:
-    """A COG in the store -> ONE raster layer, styled by the declared row."""
+def _raster_layers(item: Deliverable, *, run_id: str, engine: str, name: str,
+                   value_range: tuple[float, float] | None) -> list[LayerURI]:
+    """A COG in the store -> ONE raster layer; a timed group -> one layer per frame, each stamped with its own window."""
     raster: Raster = item.product  # type: ignore[assignment]
     quantity = quantity_of(item.caption)
-    title = _title(item, name=name)
-    return LayerURI(
-        layer_id=f"{engine}-{quantity}-{run_id}",
-        name=title, layer_type="raster", uri=raster.uri,
-        style=_style_row(item, kind="continuous",
-                         value_range=value_range or raster.value_range),
-        quantity=quantity, role="primary", units=raster.units, bbox=raster.bbox)
+    style = _style_row(item, kind="continuous",
+                       value_range=value_range or raster.value_range)
+    if not raster.frames:
+        return [LayerURI(
+            layer_id=f"{engine}-{quantity}-{run_id}",
+            name=_title(item, name=name), layer_type="raster", uri=raster.uri,
+            style=style, quantity=quantity, role="primary", units=raster.units,
+            bbox=raster.bbox)]
+    label = f"{item.caption[:1].upper()}{item.caption[1:]}"
+    measured = f"{label} ({raster.units})" if raster.units else label
+    return [LayerURI(
+        layer_id=f"{engine}-{quantity}-t{instant_token(frame.t)}-{run_id}",
+        name=f"{measured} at t = {frame.t:g} s ({name})", layer_type="raster",
+        uri=frame.uri, style=style, quantity=quantity, role="primary",
+        units=raster.units, bbox=raster.bbox,
+        valid_from=frame.valid_from, valid_to=frame.valid_to)
+        for frame in raster.frames]
 
 
 def _vector_layer(item: Deliverable, *, run_id: str, engine: str,
