@@ -552,3 +552,16 @@ wedges the reprojection leaves unmeasured, and a node nothing measured refuses.
 Nothing is merged or filled: GeoClaw takes the finest file at each point, and the
 coverage rule above is applied to the UNION of the files. `TOPO_TOPOFILES` stated
 beside the composite refuses by name.
+
+The rupture is the `Fault` composite: `Fault({subfaults, x, y, times})` states every
+value of each subfault under Clawpack's own `SubFault` names (location, depth, strike,
+dip, rake, slip, length, width, `coordinate_specification`) and the lon/lat grid the
+Okada displacement is summed on. A value left out refuses by name; nothing is scaled
+from a magnitude or defaulted, and the magnitude is Clawpack's output, logged with the
+rigidity it used. Authoring (`workflows/geoclaw/authoring/dtopo.py`) writes one
+topotype-3 dtopo with `DTopography.write` and states one `DTOPO_DTOPOFILES` row. Every
+subfault's surface projection must lie in the level-1 box, and where the run states
+topofiles at least one grid node under the projection must stand on water (finest
+file at the node, below `GEO_SEA_LEVEL`); a rupture over land or outside the box refuses
+before the solve, naming the subfault. `DTOPO_DTOPOFILES` stated beside the composite
+refuses by name.
