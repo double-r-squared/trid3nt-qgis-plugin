@@ -160,6 +160,80 @@ _lakes.__doc__ = (
     "    a rainfall or evaporation not stated is not in the package.")
 
 
+_MAW = ("radius", "bottom", "start_head", "condeqn", "screen_top", "screen_bottom", "rate")
+_MAW_SKIN = ("hk_skin", "radius_skin")
+# The skin values each conductance equation reads; mf6 takes any value in a column its equation does not read.
+_CONDEQN = {"THIEM": (), "SPECIFIED": ("hk_skin",), "SKIN": _MAW_SKIN, "CUMULATIVE": _MAW_SKIN,
+            "MEAN": _MAW_SKIN}
+_UNREAD = -999.0
+
+
+def _wells(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    if isinstance(value, (list, tuple)) and value:
+        stated = [item for each in value if (item := _wells(each)[0])]
+        return ({"MAW_PACKAGEDATA": {"wells": [row["MAW_PACKAGEDATA"]["wells"][0]
+                                               for row in stated]}} if stated else {}), {}
+    if not isinstance(value, Mapping):
+        raise ModflowError(
+            "MultiAquiferWells takes a mapping of geometry, "
+            f"{', '.join(_MAW)} and, by its condeqn, {', '.join(_MAW_SKIN)}, or a list of them; got {value!r}.",
+            error_code="MODFLOW_STRESS_UNSTATED")
+    unknown = sorted(set(value) - {"geometry", *_MAW, *_MAW_SKIN})
+    if unknown:
+        raise ModflowError(
+            f"MultiAquiferWells takes geometry, {', '.join(_MAW)}, {', '.join(_MAW_SKIN)}; "
+            f"{', '.join(unknown)} is none of them.", error_code="MODFLOW_STRESS_UNSTATED")
+    if value.get("geometry") is None:
+        return {}, {}
+    for argument in _MAW:
+        if value.get(argument) is None:
+            raise ModflowError(
+                f"MultiAquiferWells states no {argument}; the engine has no value for it, "
+                "so state it from a measurement or a named source.",
+                error_code="MODFLOW_STRESS_UNSTATED")
+    for argument in _MAW:
+        held = value[argument]
+        if argument != "condeqn" and (isinstance(held, bool) or not isinstance(held, (int, float))):
+            raise ModflowError(
+                f"MultiAquiferWells {argument} is one number for the well; got {held!r}.",
+                error_code="MODFLOW_STRESS_UNSTATED")
+    condeqn = str(value["condeqn"]).strip().upper()
+    if condeqn not in _CONDEQN:
+        raise ModflowError(
+            f"MultiAquiferWells condeqn is {value['condeqn']!r}; it is one of {', '.join(_CONDEQN)}.",
+            error_code="MODFLOW_STRESS_UNSTATED")
+    if value["screen_top"] <= value["screen_bottom"]:
+        raise ModflowError(
+            f"MultiAquiferWells screen runs from {value['screen_bottom']} up to {value['screen_top']}; "
+            "its top is above its bottom.", error_code="MODFLOW_STRESS_UNSTATED")
+    skin = {}
+    for argument in _MAW_SKIN:
+        held = value.get(argument)
+        if argument not in _CONDEQN[condeqn]:
+            if held is not None:
+                raise ModflowError(
+                    f"MultiAquiferWells {condeqn} reads no {argument}; remove it or state "
+                    "another condeqn.", error_code="MODFLOW_STRESS_UNSTATED")
+            skin[argument] = _UNREAD
+        elif held is None or isinstance(held, bool) or not isinstance(held, (int, float)):
+            raise ModflowError(
+                f"MultiAquiferWells {condeqn} states {argument} as one number; got {held!r}.",
+                error_code="MODFLOW_STRESS_UNSTATED")
+        else:
+            skin[argument] = held
+    return {"MAW_PACKAGEDATA": {"wells": [{
+        "composite": "MultiAquiferWells", "geometry": value["geometry"],
+        "values": {**{column: value[column] for column in _MAW}, "condeqn": condeqn, **skin}}]}}, {}
+
+
+_wells.__doc__ = (
+    "The MAW wells a point geometry places: MultiAquiferWells(geometry, radius, bottom, start_head, condeqn, "
+    "screen_top, screen_bottom, rate[, hk_skin, radius_skin]), or a list of such statements.\n\n"
+    "    Each point is one well in the cell holding it, connected to every solved layer its screen crosses;\n"
+    "    condeqn names the conductance equation, and the skin values are those it reads (SKIN, CUMULATIVE and\n"
+    "    MEAN both, SPECIFIED the conductance as hk_skin, THIEM none). Rate is the well's rate from period 1.")
+
+
 def module_input_dir() -> Path:
     """Where the committed module inputs live."""
     return Path(__file__).resolve().parent / "module_input"

@@ -126,6 +126,26 @@ cell beside or below it refuse. `LAK_NLAKES`, `LAK_CONNECTIONDATA` and, beside a
 flux, `LAK_PERIODDATA` stated beside `Lakes` refuse. The lake stage is not a read the run
 publishes, and the lake-stream mover (MVR) is not wired.
 
+MAW is stated by its own dictionary keywords (`MAW_NMAWWELLS`, `MAW_PACKAGEDATA`,
+`MAW_CONNECTIONDATA`, `MAW_PERIODDATA`, the options): ex-gwf-maw-p01, both variants, authored
+on a gridgen DISV equals flopy's own DIS reference bitwise (heads in both layers, the well
+head, the head and per-connection flows of the observation file, max difference 0.0). The
+`MultiAquiferWells` composite places points as wells: `MultiAquiferWells(geometry, radius,
+bottom, start_head, condeqn, screen_top, screen_bottom, rate[, hk_skin, radius_skin])`, or a
+list of them; each point (each part of a multi-point) is one well in the cell holding it,
+numbered in order, with one connection to every solved layer its screen crosses (the screen's
+bottom under the layer's top and its top over the layer's bottom, so a screen that only touches
+a layer's boundary does not connect it). Each connection carries the stated screen, which mf6
+clips to the cell. `condeqn` is THIEM, SPECIFIED, SKIN, CUMULATIVE or MEAN; the skin values are
+those the equation reads (SKIN, CUMULATIVE and MEAN both, SPECIFIED the conductance as
+`hk_skin`, THIEM none), a value the equation does not read refuses if stated and is written as
+-999, the column mf6 takes any value in. `rate` is the well's rate from period 1. Every value is
+stated or the composite refuses by name; a point on no cell, or in a cell the run does not
+solve, refuses with the nearest viable cell, and a screen crossing no solved layer there
+refuses. Two wells may share a cell. `MAW_NMAWWELLS`, `MAW_CONNECTIONDATA` and
+`MAW_PERIODDATA` stated beside `MultiAquiferWells` refuse. The well head is not a read the run
+publishes; a head-controlled or flowing well is stated through the keywords.
+
 ## The coupling
 
 A coupled run is ONE simulation holding a GWF model and a GWT model, a GWE model,
@@ -269,7 +289,6 @@ builds on was proved through that image before it was built on.
 
 The accepted-mesh reader of a ragged (UGRID) display face - a quadtree with
 refinement, a Voronoi - so those meshes cannot yet be authored on; the
-advanced-package composites (MAW,
-UZF, CSUB; SFR is placed by `Streams` and LAK by `Lakes`, but the MVR mover is not wired), OBS and time series, the model exchanges (GWF-GWF, GWT-GWT), FMI
+advanced-package composites (UZF, CSUB; SFR is placed by `Streams`, LAK by `Lakes` and MAW by `MultiAquiferWells`, but the MVR mover is not wired), OBS and time series, the model exchanges (GWF-GWF, GWT-GWT), FMI
 (the transport reading a prior flow run's saved budget), and PRT. Each is a leg
 in the scope's plan; the coupling above is built for GWT on the exchange.

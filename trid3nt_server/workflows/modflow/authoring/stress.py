@@ -16,8 +16,8 @@ from trid3nt_server.inputs.point import Point, require_viable
 from ..errors import ModflowError
 from .griddata import METRES, sample
 
-__all__ = ["cells_of", "edge_cells", "hold_lakes", "lake_statements", "layer_rows", "place",
-           "place_lakes", "place_streams", "point_cell"]
+__all__ = ["cells_of", "edge_cells", "hold_lakes", "lake_statements", "layer_rows", "maw_statements",
+           "place", "place_lakes", "place_maw", "place_streams", "point_cell"]
 
 def place(statement: Mapping[str, Any], *, points: Any, cells: Any,
           utm_epsg: int | None, nlay: int, frame: Any = None,
@@ -239,6 +239,12 @@ def lake_statements(sheet: Any) -> list[Mapping[str, Any]]:
     return list(value["lakes"]) if isinstance(value, Mapping) and "lakes" in value else []
 
 
+def maw_statements(sheet: Any) -> list[Mapping[str, Any]]:
+    """The MultiAquiferWells statements a sheet states (its MAW_PACKAGEDATA as the composite wrote it), or none."""
+    value = getattr(sheet.filled.get("MAW_PACKAGEDATA"), "value", None)
+    return list(value["wells"]) if isinstance(value, Mapping) and "wells" in value else []
+
+
 def layer_rows(idomain: Any, *, nlay: int, ncpl: int) -> list[list[Any]]:
     """A placed DISV_IDOMAIN (a number, one number per layer, or rows) as one row per layer of every cell; unstated, every cell is 1."""
     if idomain is None:
@@ -315,6 +321,58 @@ def place_lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any,
         packagedata.append([number, lake["stage"], len(rows)])
         connectiondata += rows
         perioddata += [[number, flux, value] for flux, value in lake["fluxes"].items()]
+    return packagedata, connectiondata, perioddata
+
+
+def place_maw(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, utm_epsg: int | None,
+              nlay: int, active: Any = None, top: Any, botm: Any) -> tuple[list[list], list[list], list[list]]:
+    """MultiAquiferWells statements -> ``(packagedata, connectiondata, perioddata)`` rows, one MAW well per point.
+
+    A well sits in the cell holding its point and has one connection to every solved layer whose cell its
+    screen crosses (the screen's bottom under the layer's top and its top over the layer's bottom); a
+    well is numbered in statement order and a point's order, and its rate is the period-1 row.
+    ``active`` is one row per layer of the cells the run solves, ``top`` the grid's top and ``botm`` its bottoms."""
+    import numpy as np
+
+    from trid3nt_server.inputs.geometry import flatten_geometries
+    from trid3nt_server.inputs.shape import shape
+
+    if points is None or cells is None or not utm_epsg:
+        raise ModflowError(
+            "MultiAquiferWells places by geometry, and this run has no accepted mesh "
+            "with a projected zone to place it on.", error_code="MODFLOW_STRESS_OUTSIDE")
+    tops, bottoms = _levels(top, botm, nlay=nlay, ncpl=len(cells))
+    solved = np.ones((nlay, len(cells)), dtype=bool) if active is None else np.asarray(active) > 0
+    packagedata, connectiondata, perioddata = [], [], []
+    for statement in statements:
+        values = statement["values"]
+        parts = flatten_geometries(shape(statement["geometry"], label="MultiAquiferWells").features)
+        for part in parts:
+            if part.get("type") not in ("Point", "MultiPoint"):
+                raise ModflowError(f"MultiAquiferWells places points; got a {part.get('type')}.",
+                                   error_code="MODFLOW_STRESS_UNSTATED")
+        for lon, lat, *_ in (xy for part in parts for xy in (
+                part["coordinates"] if part["type"] == "MultiPoint" else [part["coordinates"]])):
+            number = len(packagedata)
+            cell = point_cell(Point(float(lon), float(lat)), label="MultiAquiferWells", points=points,
+                              cells=cells, utm_epsg=int(utm_epsg), active=solved.any(axis=0))
+            screened = [layer for layer in range(nlay) if solved[layer][cell]
+                        and values["screen_bottom"] < tops[layer][cell]
+                        and values["screen_top"] > bottoms[layer][cell]]
+            if not screened:
+                raise ModflowError(
+                    f"MultiAquiferWells: well {number + 1} in cell {cell} has a screen "
+                    f"({values['screen_bottom']} to {values['screen_top']}) crossing no solved layer there; "
+                    "state a screen over a layer the run solves.", error_code="MODFLOW_STRESS_OUTSIDE")
+            packagedata.append([number, values["radius"], values["bottom"], values["start_head"],
+                                values["condeqn"], len(screened)])
+            connectiondata += [[number, count, (layer, cell), values["screen_top"], values["screen_bottom"],
+                                values["hk_skin"], values["radius_skin"]]
+                               for count, layer in enumerate(screened)]
+            perioddata.append([number, "rate", values["rate"]])
+    if not packagedata:
+        raise ModflowError("MultiAquiferWells places by geometry and the geometry holds no point.",
+                           error_code="MODFLOW_STRESS_OUTSIDE")
     return packagedata, connectiondata, perioddata
 
 

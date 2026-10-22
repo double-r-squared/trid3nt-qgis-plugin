@@ -18,7 +18,8 @@ from . import DISV_FILE
 from .accepted_mesh import mesh_artifact, mesh_nodes
 from .griddata import frame_of, needs_top, place
 from .mesh_files import _layering, disv_dimensions, top_of
-from .stress import lake_statements, layer_rows, place as place_stress, place_lakes, place_streams
+from .stress import (lake_statements, layer_rows, maw_statements, place as place_stress, place_lakes, place_maw,
+                     place_streams)
 
 from ..errors import ModflowError
 from ...runtime.sheet import Filled, fill
@@ -126,7 +127,8 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
     start = _start_head(sheet, nlay=int(dims["nlay"]), points=points, cells=cells,
                         utm_epsg=utm_epsg, frame=frame, top=top)
     grid = (_layering(sheet, nlay=int(dims["nlay"]), art=mesh_artifact(mesh), bed=bed,
-                      points=points, cells=cells)[:2] if lake_statements(sheet) else None)
+                      points=points, cells=cells)[:2]
+            if lake_statements(sheet) or maw_statements(sheet) else None)
     derived = _stressed(sheet, groups, nlay=int(dims["nlay"]), points=points,
                         cells=cells, utm_epsg=utm_epsg, frame=frame, active=active,
                         start=start, grid=grid)
@@ -266,6 +268,11 @@ def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, point
         _lakened(sheet, groups["LAK"], row, nlay=nlay, points=points, cells=cells,
                  utm_epsg=utm_epsg, frame=frame, active=active, top=grid[0], botm=grid[1])
         derived |= {"LAK_NLAKES", "LAK_NOUTLETS", "LAK_NTABLES", "LAK_CONNECTIONDATA"}
+    row = groups.get("MAW", {}).get("packagedata")
+    if row is not None and isinstance(row.value, Mapping) and "wells" in row.value:
+        _welled(sheet, groups["MAW"], row, nlay=nlay, points=points, cells=cells,
+                utm_epsg=utm_epsg, active=active, top=grid[0], botm=grid[1])
+        derived |= {"MAW_NMAWWELLS", "MAW_CONNECTIONDATA", "MAW_PERIODDATA"}
     return derived
 
 
@@ -300,6 +307,22 @@ def _lakened(sheet: Any, rows: dict[str, Any], row: Any, **mesh: Any) -> None:
         placed["perioddata"] = {0: perioddata}
     for name, value in placed.items():
         rows[name] = Filled(slot=sheet.body.MODULE_INPUT[f"LAK_{name.upper()}"],
+                            value=value, provenance=row.provenance)
+
+
+def _welled(sheet: Any, rows: dict[str, Any], row: Any, **mesh: Any) -> None:
+    """Place the MultiAquiferWells points: the package's well list, its connections, its count and each well's rate."""
+    stated = sorted(f"MAW_{name.upper()}" for name in ("nmawwells", "connectiondata", "perioddata")
+                    if name in rows)
+    if stated:
+        raise ModflowError(
+            f"{', '.join(stated)} {'is' if len(stated) == 1 else 'are'} derived from the "
+            "MultiAquiferWells points; state either the points or the well keywords, not both.",
+            error_code="MODFLOW_KEYWORD_SHAPE")
+    packagedata, connectiondata, perioddata = place_maw(row.value["wells"], **mesh)
+    for name, value in (("packagedata", packagedata), ("connectiondata", connectiondata),
+                        ("perioddata", {0: perioddata}), ("nmawwells", len(packagedata))):
+        rows[name] = Filled(slot=sheet.body.MODULE_INPUT[f"MAW_{name.upper()}"],
                             value=value, provenance=row.provenance)
 
 
