@@ -539,7 +539,11 @@ and `FLAGREGION_FLAGREGIONS`, and a template stating any of them beside the reci
 refuses by name. A topofile header is checked against the level-1 box by the
 engine's own coverage rule (topo node extent against the domain's area), not an
 alignment rule: the engine integrates topo over each cell and stops only when the
-topo does not cover the domain.
+topo does not cover the domain - when the overlap differs from the domain's area by
+more than 1 percent of it. The check refuses exactly where the engine would stop, never
+more strictly. The level-1 cell is stated in metres along a meridian and fitted to a
+whole number of cells over the box, the card saying when the fit moved it; one
+refinement-ratio list applies to x, y and t.
 
 The bed is the engine's own list of topofiles, coarse to fine. The `Topography`
 composite on the wrapper takes the surfaces in that order, each a bed (a raster or
