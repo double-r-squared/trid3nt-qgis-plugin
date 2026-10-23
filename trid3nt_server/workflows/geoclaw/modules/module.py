@@ -10,11 +10,16 @@ to pin.
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Mapping
 
+from trid3nt_contracts.common import Origin
+from trid3nt_contracts.payload_warning import ParamSheetRow
+
 from ...runtime.module import Module
+from ...runtime.sheet import Sheet
 from ..errors import GeoclawError
 
 __all__ = ["GeoclawModule", "fault", "fixed_grids", "initial_surface", "module_input_dir", "sift_fault",
@@ -278,6 +283,28 @@ def _triple(axis_value: Any, axis: str) -> tuple[float, float, int]:
     return float(axis_value[0]), float(axis_value[1]), int(axis_value[2])
 
 
+@dataclass(frozen=True, slots=True)
+class GeoclawSheet(Sheet):
+    """A filled GeoClaw deck: the sheet, plus the card row stating the run's wall time."""
+
+    def engine_rows(self) -> tuple[list[ParamSheetRow], set[str]]:
+        """The card's engine section: the wall-time estimate of the whole run, from the accepted grid's rate and the stated CLAW_TFINAL.
+
+        States nothing while the run holds no grid facts or CLAW_TFINAL is unstated."""
+        from trid3nt_server.tools.mesh.meshers.claw_grid import PROBE_KEY, WALL_BASIS
+
+        mesh = self.run.get("mesh")
+        facts = (getattr(mesh.get("artifact"), "probes", None) or {}).get(PROBE_KEY) if isinstance(mesh, Mapping) else None
+        tfinal = self.stated().get("CLAW_TFINAL")
+        if not facts or tfinal is None:
+            return [], set()
+        minutes = facts["wall_s_per_sim_s"] * float(tfinal) / 60.0
+        return [ParamSheetRow(
+            name="wall_estimate", value=f"about {minutes:.0f} min of wall for CLAW_TFINAL {float(tfinal):g} s",
+            desc="The run's wall time: the grid's wall seconds per simulated second times CLAW_TFINAL. Read-only, not enforced.",
+            origin=Origin.DERIVED, editable=False, source_badge=WALL_BASIS, group="Grid")], set()
+
+
 class GeoclawModule(Module):
     """The GeoClaw wrapper: its dictionary and the registry of the one exposed body."""
 
@@ -298,8 +325,6 @@ class GeoclawModule(Module):
 
         Nothing is armed or written into files here - the authoring that turns
         slots into setrun values and Clawpack's .data files is a later leg's."""
-        from ...runtime.sheet import Sheet
-
-        return Sheet(body=cls, filled=MappingProxyType(filled),
+        return GeoclawSheet(body=cls, filled=MappingProxyType(filled),
                      files=MappingProxyType(files),
                      run=MappingProxyType(run))

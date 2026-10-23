@@ -540,8 +540,10 @@ parameter (one list for x, y and t), and `flagregion` ops, each one Clawpack
 FlagRegion over a lon/lat rectangle. It builds the level-1 lattice; its finest
 cell (metres and arc-seconds) and the cells each level is forced and allowed
 by the flagregions ride the one mesh gate card as read-only rows, with a wall-time
-estimate per simulated hour that states its measured basis; no budget is enforced,
-the resolution being the user's lever. Refinement is stated as flagregions only:
+estimate per simulated hour that states its measured basis; the sheet card states the
+run's total (that rate times the stated `CLAW_TFINAL`, redrawn when either is edited) as a
+read-only row off the same probe fact; no budget is enforced, the resolution being the
+user's lever. Refinement is stated as flagregions only:
 old-style `REGION_REGIONS` refuses by name pointing at `FLAGREGION_FLAGREGIONS`. A
 flagregion level above the levels the ratios give refuses by name. Authoring
 (`workflows/geoclaw/authoring/grid.py`) lands the accepted grid on `CLAW_LOWER`,
