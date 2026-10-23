@@ -87,6 +87,14 @@ run's own machinery answers" - the supplied mesh the builder replaces, the
 mesher's own edge, the moment a dated source asks for at its own parameter -
 and carries no verdict, no refusal and no sentence.
 
+`optional_need()` (after `need`) is the standing of "fill this where a source covers, else go on without
+it": a need the match answers with no source leaves the row unfilled (no verdict against the run; the
+probe's own journal line, "nothing measures ... here", says its absence once) instead of rejecting it, and
+the user can still state it. A source that matched and then failed is not an absence and still refuses.
+`optional_need(instead_of="row")` is the either-or: the row stands in for another. It is not read when the
+run states that other row (a supplied value or a picked source), and the other row is not asked for when
+the stand-in fills, each said once in the journal - so the composite that reads both never sees both.
+
 A stated-only input may also be the one a PART of the template is composed on,
 and the part is composed only when the input is stated - there is no
 conditional primitive, only the seams the parts already ride. A coupled body
@@ -595,7 +603,9 @@ the cells wet in fgout frame 0, which must be written at t = 0 - never the cells
 zero elevation; the fgmax one needs the fgout nodes on the fgmax nodes and refuses
 otherwise. A series is read at the run's one gauge, a gauge number, or a Point standing on
 a gauge (a Point off every gauge refuses with the nearest). A run stating more than one
-grid of a kind has no one grid to read and refuses.
+grid of a kind has no one grid to read and refuses. A template's own `OUTPUTS` and `CAPTIONS` publish beside
+the module table through the same `publish_outputs` shape as MODFLOW's: a placed read is a
+`series` at a gauge, a `field` over the fgout grid or a `max_over_time` over the fgmax grid.
 
 ### The GeoClaw template: `geoclaw_tsunami_inundation`
 

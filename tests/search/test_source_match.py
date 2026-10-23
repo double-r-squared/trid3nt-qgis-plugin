@@ -665,6 +665,8 @@ def test_every_declared_of_matches_as_it_did_unless_it_names_a_published_quantit
             if now.model_dump() != before.model_dump():
                 by_quantity.add((data_class, of))
     assert by_quantity == {
+        ("aquifer property", "aquifer_hydraulic_conductivity"),
+        ("aquifer property", "aquifer_layer_elevation"),
         ("aquifer property", "aquifer_saturated_thickness"),
         ("aquifer property", "aquifer_transmissivity"),
         ("aquifer property", "groundwater_recharge"),

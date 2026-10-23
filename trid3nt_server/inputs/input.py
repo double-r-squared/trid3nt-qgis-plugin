@@ -58,6 +58,10 @@ class Input:
     data_class: str = ""
     #: What of the class is asked for, by the name the source publishes it under; empty where any will do.
     observes: str = ""
+    #: A need no source covers leaves the row unfilled instead of rejecting it; the user can still state it.
+    optional: bool = False
+    #: The row this one stands in for: where this one fills, that one is not asked for, and where the user states that one, this one is not.
+    instead_of: str = ""
     #: The domain's own kind, stated only where the seed cannot imply it; a stated kind wins.
     kind: str = ""
     #: How far the domain reaches, in km; the row's ``ask`` block maps it to the source's own param.
@@ -116,6 +120,11 @@ class Input:
             raise DeclarationError(
                 f"Input states need={self.data_class!r} as a {self.slot.name}, "
                 f"which reads {sorted(self.slot.classes)}.")
+        if self.optional and not self.data_class:
+            raise DeclarationError(
+                f"Input {self.name!r} is optional and states no need: an optional "
+                "row is one whose need no source covers, and a row with no need "
+                "has nothing to cover.")
         if self.stated_only and (self.producer is not None or self.data_class):
             raise DeclarationError(
                 f"Input {self.name!r} is stated-only AND declares a producer or a "
@@ -228,14 +237,21 @@ class Input:
     @property
     def _unfilled(self) -> str:
         """What a row with no producer says about how it fills itself."""
-        return (f"; unfilled, the run matches a source of {self.data_class}."
-                if self.data_class else ".")
+        if not self.data_class:
+            return "."
+        return (f"; unfilled, the run matches a source of {self.data_class}"
+                + ("; where none covers, the run goes on without it." if self.optional else "."))
 
     def stated(self) -> "Input":
         """The user MAY state one; unstated, the run's own machinery answers - a
         supplied mesh the builder replaces, the mesher's own edge. No verdict, no
         refusal, no sentence: the one standing where absence is the design."""
         return replace(self, stated_only=True)
+
+    def optional_need(self, instead_of: str = "") -> "Input":
+        """The need is asked of the match, and a place no source covers leaves the row unfilled: no verdict against the run, the absence said once in the journal.
+        ``instead_of`` names the row this one stands in for: it is read first, and where it fills that row is not asked for."""
+        return replace(self, optional=True, instead_of=str(instead_of))
 
     def need(self, data_class: str = "", *, at: Any = None, of: Any = "",
              kind: str = "", span_km: float | None = None,

@@ -128,6 +128,14 @@ async def _produce(env: _Env, decl: Input) -> Any:
         # The user MAY state one; unstated, the run's own machinery answers - the
         # supplied-mesh builder, the mesher's own edge. No verdict, no sentence.
         return None
+    if decl.instead_of and (env.supplied.get(decl.instead_of) is not None
+                            or decl.instead_of in env.picks):
+        journal_note(f"{decl.name} is not read: the run states {decl.instead_of}, which it stands in for.")
+        return None
+    for standing in [row for row in env.data.values() if row.instead_of == decl.name]:
+        if await read(env, standing.name) is not None:
+            journal_note(f"{decl.name} is not asked for: {standing.name} fills in its place.")
+            return None
     producer = decl.producer
     if producer is None and decl.slot is LINE:
         # THE DOMAIN'S PRODUCER measured this beside the polygon it cut - a reach's
@@ -188,7 +196,7 @@ async def _matched(env: _Env, decl: Input) -> Any:
     choice, value = await _probe(
         env, decl, decl.data_class, decl.name,
         read=lambda answer, row: _ingested(env, decl, answer, row, beside))
-    if value is None:
+    if value is None and not decl.optional:
         raise StepFailedError(choice.sentence, error_code="DATA_NEED_UNMATCHED",
                               step=_data_step_label(decl.name))
     return value

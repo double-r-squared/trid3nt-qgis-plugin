@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from types import MappingProxyType
 from typing import Any, Mapping
 
@@ -45,8 +46,60 @@ def _layered_source(value: Any) -> bool:
     return isinstance(value, Mapping) and bool({"layers", "surfaces"} & set(value))
 
 
+# The layer a frame is of, read off the frame id each fetched row states: K frames ``-l{n}-``, surface frames ``-top-l1-`` (the top of layer 1, surface 0) and ``-bot-l{n}-``.
+_K_FRAME = re.compile(r"-l(\d+)-")
+_SURFACE_FRAME = re.compile(r"-(?:top-l(1)|bot-l(\d+))-")
+
+
+def _frame_id(frame: Any) -> str:
+    return str((frame.get("layer_id") if isinstance(frame, Mapping) else getattr(frame, "layer_id", None)) or "")
+
+
+def _numbered(frames: Any, pattern: re.Pattern, *, name: str, top: bool = False) -> dict[int, Any]:
+    """A frame list by the layer number each frame's id states (the top of layer 1 is 0 when ``top``), or a refusal naming the frame."""
+    if not isinstance(frames, (list, tuple)):
+        raise ModflowError(
+            f"Aquifer conductivity by depth reads {name!r} as a list of frames; it holds {type(frames).__name__}.",
+            error_code="MODFLOW_AQUIFER_UNSTATED")
+    found: dict[int, Any] = {}
+    for frame in frames:
+        hit = pattern.search(_frame_id(frame))
+        if hit is None:
+            raise ModflowError(
+                f"Aquifer conductivity by depth pairs {name!r} by layer, and the frame {_frame_id(frame)!r} "
+                "states no layer in its id.", error_code="MODFLOW_AQUIFER_UNSTATED")
+        number = 0 if top and hit.group(1) else int(hit.group(2) if top else hit.group(1))
+        found[number] = frame
+    return found
+
+
+def _paired(layers: Any, surfaces: Any, *, names: tuple[str, str]) -> Mapping[str, Any]:
+    """The frames of a K row and a surfaces row as ``layers`` and ``surfaces``, paired by layer id.
+
+    Layers run 1 to the deepest K frame; a layer or surface with no frame is NaN, unmeasured, and weighs zero."""
+    k = _numbered(layers, _K_FRAME, name=names[0])
+    s = _numbered(surfaces, _SURFACE_FRAME, name=names[1], top=True)
+    if not k:
+        raise ModflowError(
+            f"Aquifer conductivity by depth reads {names[0]!r}, which holds no frame.",
+            error_code="MODFLOW_AQUIFER_UNSTATED")
+    deepest = max(k)
+    unmeasured = float("nan")
+    return {"layers": [k.get(n, unmeasured) for n in range(1, deepest + 1)],
+            "surfaces": [s.get(n, unmeasured) for n in range(deepest + 1)]}
+
+
+def _unstated(item: Any, run: Mapping[str, Any]) -> bool:
+    return item is None or (isinstance(item, str) and run.get(item) is None)
+
+
 def _by_depth(source: Mapping[str, Any], run: Mapping[str, Any]) -> Mapping[str, Any]:
-    """A layered source's statement with its input names read: ``layers`` and ``surfaces``, m and m + 1 long, or a refusal naming them."""
+    """A layered source's statement with its input names read: ``layers`` and ``surfaces``, m and m + 1 long, or a refusal naming them.
+
+    An input name that holds a whole list of frames is paired by layer id."""
+    named = [source.get(key) for key in ("layers", "surfaces")]
+    if all(isinstance(item, str) and isinstance(run.get(item), (list, tuple)) for item in named):
+        return _paired(run[named[0]], run[named[1]], names=(named[0], named[1]))
     missing = [key for key in ("layers", "surfaces") if source.get(key) is None]
     extra = sorted(set(source) - {"layers", "surfaces"})
     if missing or extra:
@@ -85,7 +138,7 @@ def _aquifer(value: Any, *, run: Mapping[str, Any]) -> tuple[Mapping[str, Any], 
     splits the saturated thickness into that many equal layers: only layer 1 is convertible (unconfined),
     and the starting head is the water-table elevation in every layer. K is the same in each layer unless
     ``conductivity`` is a list of one number or raster per layer, top first, as long as ``layers``, or
-    ``{"layers": [K_1..K_m], "surfaces": [S_0..S_m]}``: a layered source read by depth, each layer's K the
+    ``{"layers": [K_1..K_m], "surfaces": [S_0..S_m]}`` (each name an input holding a list of frames is paired by layer id): a layered source read by depth, each layer's K the
     thickness-weighted mean of the source layers it overlaps (m conductivities, m + 1 surfaces - the top of
     source layer 1 then each layer's bottom - on the run's vertical frame; a layer outside the source refuses)."""
     if not isinstance(value, Mapping):
@@ -112,6 +165,9 @@ def _aquifer(value: Any, *, run: Mapping[str, Any]) -> tuple[Mapping[str, Any], 
                 "so state it from a measurement or a named source.",
                 error_code="MODFLOW_AQUIFER_UNSTATED")
     conductivity, transmissivity = value.get("conductivity"), value.get("transmissivity")
+    if _layered_source(conductivity) and all(_unstated(conductivity.get(key), run) for key in ("layers", "surfaces")):
+        # A by-depth source the run holds nothing for is no conductivity: the transmissivity states the aquifer.
+        conductivity = None
     if (conductivity is None) == (transmissivity is None):
         raise ModflowError(
             "Aquifer states "

@@ -44,10 +44,21 @@ class INPUTS:
         "table: a number in metres, or a raster publishing its unit; unfilled, "
         "the source publishing aquifer_saturated_thickness here.")).need(
         "aquifer property", of="aquifer_saturated_thickness")
+    conductivity_layers = Input(desc=(
+        "The aquifer's conductivity by depth, one raster of metres per day for each layer of "
+        "the published USGS model whose grid holds the domain; unfilled, the source publishing "
+        "aquifer_hydraulic_conductivity here, and absent where none does. Where it fills, "
+        "transmissivity is not asked for; a transmissivity you state is used in its place.")).need(
+        "aquifer property", of="aquifer_hydraulic_conductivity").optional_need(instead_of="transmissivity")
+    layer_surfaces = Input(desc=(
+        "The top of the published model's first layer and the bottom of each layer, one raster of "
+        "metres each, which place the conductivity by depth; unfilled, the source publishing "
+        "aquifer_layer_elevation here, and absent where none does.")).need(
+        "aquifer property", of="aquifer_layer_elevation").optional_need(instead_of="transmissivity")
     transmissivity = Input(desc=(
         "The aquifer's transmissivity: a number in square metres per day, or a "
         "raster publishing its unit; unfilled, the source publishing "
-        "aquifer_transmissivity here.")).need(
+        "aquifer_transmissivity here. Not asked for where the conductivity by depth fills.")).need(
         "aquifer property", of="aquifer_transmissivity")
     water_table_depth = Input(desc=(
         "How far below the land surface the water table stands before the "
@@ -86,6 +97,7 @@ class STEERING(GWF):
     # The clock: one period from the run's start to `until`, over `time_steps` equal steps.
     Periods = {"until": "until", "steps": "time_steps"}
     Aquifer = {"saturated_thickness": "saturated_thickness",
+               "conductivity": {"layers": "conductivity_layers", "surfaces": "layer_surfaces"},
                "transmissivity": "transmissivity",
                "water_table_depth": "water_table_depth",
                "layers": "layers"}
