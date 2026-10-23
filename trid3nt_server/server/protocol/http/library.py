@@ -193,9 +193,9 @@ def _classes_named_by(query: str) -> list[str]:
 
 
 async def build_library_search(query: str, top_k: int = 10) -> dict[str, Any]:
-    """The ``/api/library/search`` hits: one ask over both facets. The tools are
-    ranked by the BM25 corpus the model routes on; the rows are those of the
-    classes the ask names, which is how a covered source is reached at all."""
+    """The ``/api/library/search`` hits: one ask over both facets. The rows of the
+    classes the ask names come first, which is how a covered source is reached at
+    all; the tools follow, ranked by the BM25 corpus the model routes on."""
     from trid3nt_server.tools import TOOL_REGISTRY
     from trid3nt_server.tools.search.search_tools.search_tools import search_tools
 
@@ -205,7 +205,21 @@ async def build_library_search(query: str, top_k: int = 10) -> dict[str, Any]:
         k = 10
     found = await search_tools(query=query, top_k=k)
 
+    # The rows of a class the ask names lead: the ask named their class outright.
+    # They carry no score: rank here is the class overlap, and a number beside a
+    # row would read as a measurement of the row.
     hits: list[dict[str, Any]] = []
+    named = _classes_named_by(query)
+    by_class = {cls["name"]: cls for cls in build_library_payload()["classes"]}
+    for class_name in named:
+        listed = by_class.get(class_name)
+        if listed is None:
+            continue
+        for kind in listed["kinds"]:
+            for row in kind["rows"]:
+                hits.append(dict(row, kind="row",
+                                 group=f"{class_name} / {kind['name']}"))
+
     for ranked in found.get("results", []):
         name = str(ranked.get("tool_name") or "")
         entry = TOOL_REGISTRY.get(name)
@@ -218,19 +232,6 @@ async def build_library_search(query: str, top_k: int = 10) -> dict[str, Any]:
         if isinstance(score, (int, float)):
             hit["score"] = score
         hits.append(hit)
-
-    # The rows carry no score: rank here is the class overlap, and a number
-    # beside a row would read as a measurement of the row.
-    named = _classes_named_by(query)
-    by_class = {cls["name"]: cls for cls in build_library_payload()["classes"]}
-    for class_name in named:
-        listed = by_class.get(class_name)
-        if listed is None:
-            continue
-        for kind in listed["kinds"]:
-            for row in kind["rows"]:
-                hits.append(dict(row, kind="row",
-                                 group=f"{class_name} / {kind['name']}"))
 
     return {"query": query, "hits": hits}
 

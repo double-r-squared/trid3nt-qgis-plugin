@@ -124,6 +124,13 @@ def test_search_route_answers_both_facets_from_one_ask():
             assert "score" not in hit
 
 
+def test_the_rows_of_a_named_class_lead_the_ranked_tools():
+    """An ask that names a class lists that class's rows first, then the tools by score."""
+    kinds = [h["kind"] for h in _body_json(_drive(_get("/api/library/search?q=bathymetry")))["hits"]]
+    assert kinds[0] == "row" and "tool" in kinds
+    assert kinds == sorted(kinds, key=lambda kind: kind != "row")
+
+
 def test_a_class_the_ask_never_names_brings_no_rows():
     """The row half is the class the ask names, not every row there is."""
     payload = _body_json(_drive(_get("/api/library/search?q=water+level")))
