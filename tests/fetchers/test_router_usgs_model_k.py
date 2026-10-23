@@ -191,8 +191,8 @@ def test_the_refusal_reaches_the_model_through_the_registry():
     assert ei.value.error_code == "USGS_MODEL_K_INPUT_INVALID"
 
 
-def test_a_partial_overlap_refuses_naming_its_share():
-    with pytest.raises(RouterInputError) as ei:
+def test_a_partial_overlap_is_empty_naming_its_share():
+    with pytest.raises(RouterEmptyError) as ei:
         MK.frames_plan(_SPEC, {"bbox": [-70.62, 41.59, -70.0, 41.68]})
     msg = str(ei.value)
     share = re.search(r"Cape Cod JBCC MODFLOW covers (\d+)% of the AOI", msg)

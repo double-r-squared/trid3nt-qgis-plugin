@@ -801,3 +801,73 @@ def test_a_by_depth_conductivity_serializes_one_k_array_per_grid_layer(staged_be
     # Layer 1 lies 15 m under each cell's top: t m of the 4 m/d source layer, 15 - t of the 0.4 one.
     assert rows[0] == pytest.approx([(t * 4.0 + (15.0 - t) * 0.4) / 15.0 for t in _TOP])
     assert rows[1] == pytest.approx([0.4] * 8)
+
+
+def _placed(sheet, keyword, *, nlay=1, top=None, run=None):
+    from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place
+
+    return place(sheet.filled[keyword].value, slot=sheet.filled[keyword].slot, nlay=nlay,
+                 run={**sheet.run, **(_VERTICAL if run is None else run)}, points=_POINTS, cells=_CELLS,
+                 utm_epsg=32617, frame=frame_of(sheet), top=[_TOP[0]] * 8 if top is None else top)
+
+
+def test_a_water_table_elevation_is_the_starting_head_and_the_saturated_thickness_lies_under_it():
+    sheet = _fill({}, {"saturated_thickness": 28.0, "water_table": 50.0, "transmissivity": 140.0, "layers": 2})
+    assert _placed(sheet, "IC_STRT", nlay=2) == [pytest.approx([50.0] * 8)] * 2
+    assert _placed(sheet, "DISV_BOTM", nlay=2) == [pytest.approx([36.0] * 8), pytest.approx([22.0] * 8)]
+
+
+def test_a_head_above_the_bed_stands_where_it_is_stated():
+    """The top is the bed: an elevation over it is neither refused nor clamped, as a negative depth is not."""
+    sheet = _fill({}, {"saturated_thickness": 28.0, "water_table": _TOP[0] + 5.0, "transmissivity": 140.0})
+    assert _placed(sheet, "IC_STRT") == [pytest.approx([_TOP[0] + 5.0] * 8)]
+
+
+def test_a_water_table_elevation_with_a_thickness_from_the_land_surface_leaves_the_bottom_under_the_top(tmp_path):
+    sheet = _fill({}, {"thickness": 40.0, "water_table": 50.0, "transmissivity": 140.0})
+    top, botm, _ = _layering(sheet, tmp_path)
+    assert botm == [pytest.approx([t - 40.0 for t in top])]
+    assert _placed(sheet, "IC_STRT") == [pytest.approx([50.0] * 8)]
+
+
+def test_a_water_table_raster_is_read_per_cell_on_the_run_s_frame(tmp_path):
+    inputs = {"head": _tif(tmp_path / "head.tif", [[10.0, 20.0], [30.0, 40.0]], name="head", units="m")}
+    sheet = _fill(inputs, {"saturated_thickness": 5.0, "water_table": "head", "transmissivity": 140.0})
+    head = [10.0, 20.0, 30.0, 40.0]
+    want = [head[2 * (1 - cell // 4) + (cell // 2) % 2] for cell in range(8)]
+    assert _placed(sheet, "IC_STRT") == [pytest.approx(want)]
+    assert _placed(sheet, "DISV_BOTM") == [pytest.approx([h - 5.0 for h in want])]
+
+
+def test_a_water_table_on_another_datum_or_none_or_a_run_with_no_frame_refuses(tmp_path):
+    def run(datum, frame="NAVD88"):
+        inputs = {"head": _tif(tmp_path / "head.tif", [[10.0] * 2] * 2, name="head", units="m", datum=datum)}
+        sheet = _fill(inputs, {"saturated_thickness": 5.0, "water_table": "head", "transmissivity": 140.0})
+        return _placed(sheet, "IC_STRT", run={"vertical_frame": frame})
+
+    with pytest.raises(ModflowError) as caught:
+        run("National Geodetic Vertical Datum of 1929")
+    assert caught.value.error_code == "MODFLOW_DATUMS_DIFFER"
+    with pytest.raises(ModflowError) as caught:
+        run(None)
+    assert caught.value.error_code == "MODFLOW_DATUM_UNSTATED"
+    with pytest.raises(ModflowError) as caught:
+        run(_DATUM, frame="")
+    assert caught.value.error_code == "MODFLOW_DATUM_UNSTATED"
+    assert run("NAVD88") == [pytest.approx([10.0] * 8)]
+
+
+@pytest.mark.parametrize("stated, word", [
+    ({"water_table": 50.0, "water_table_depth": 2.0}, "both water_table and water_table_depth"),
+    ({}, "neither water_table nor water_table_depth")])
+def test_one_water_table_and_only_one_is_stated(stated, word):
+    with pytest.raises(ModflowError) as caught:
+        _fill({}, {"saturated_thickness": 28.0, "transmissivity": 140.0, **stated})
+    assert caught.value.error_code == "MODFLOW_AQUIFER_UNSTATED"
+    assert word in str(caught.value)
+
+
+def test_a_water_table_depth_still_lies_below_the_top():
+    sheet = _fill({}, {"saturated_thickness": 28.0, "water_table_depth": 2.0, "transmissivity": 140.0})
+    assert sheet.filled["IC_STRT"].value["cells"] == "below_top"
+    assert _placed(sheet, "IC_STRT") == [pytest.approx([_TOP[0] - 2.0] * 8)]

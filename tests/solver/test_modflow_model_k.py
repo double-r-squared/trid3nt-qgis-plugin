@@ -54,11 +54,12 @@ def test_a_list_of_frames_that_holds_none_refuses():
         _paired([], [_surface(0)], names=("k", "s"))
 
 
-def _sheet(template, frames, transmissivity):
+def _sheet(template, frames, transmissivity, water_table=None, water_table_depth=2.0):
     workflow = TOOL_REGISTRY[template].fn.workflow
     run = {"conductivity_layers": [_k(1), _k(2)] if frames else None,
            "layer_surfaces": [_surface(n) for n in range(3)] if frames else None,
-           "transmissivity": transmissivity, "saturated_thickness": 30.0, "water_table_depth": 2.0, "layers": 2,
+           "transmissivity": transmissivity, "saturated_thickness": 30.0, "water_table": water_table,
+           "water_table_depth": water_table_depth, "layers": 2,
            "until": "1994-10-31", "time_steps": 2, "event_time": "1994-01-01T00:00:00+00:00"}
     return fill(workflow.steering, template=template, produced=run, params={})
 
@@ -78,7 +79,28 @@ def test_outside_every_grid_the_sheet_states_transmissivity_as_before(template):
 
 
 @pytest.mark.parametrize("template", ["modflow_plume", "modflow_water_table"])
-def test_a_deck_stating_both_refuses_rather_than_choosing(template):
+def test_inside_a_published_grid_the_sheet_states_the_head_as_an_elevation_and_no_depth(template):
+    filled = _sheet(template, True, None, water_table=12.0, water_table_depth=None).filled
+    assert filled["IC_STRT"].value == {"cells": "elevation", "of": 12.0}
+    assert filled["DISV_BOTM"].value == {"cells": "elevation", "of": [12.0, 30.0]}
+
+
+@pytest.mark.parametrize("template", ["modflow_plume", "modflow_water_table"])
+def test_outside_every_grid_the_sheet_states_the_depth_below_the_top_as_before(template):
+    filled = _sheet(template, False, 100.0).filled
+    assert filled["IC_STRT"].value == {"cells": "below_top", "of": 2.0}
+    assert filled["DISV_BOTM"].value == {"cells": "below_top", "of": [2.0, 30.0]}
+
+
+@pytest.mark.parametrize("template", ["modflow_plume", "modflow_water_table"])
+def test_a_deck_stating_an_elevation_and_a_depth_refuses_rather_than_choosing(template):
+    with pytest.raises(ModflowError) as refused:
+        _sheet(template, True, None, water_table=12.0)
+    assert "both water_table and water_table_depth" in str(refused.value)
+
+
+@pytest.mark.parametrize("template", ["modflow_plume", "modflow_water_table"])
+def test_a_deck_stating_a_conductivity_pair_and_transmissivity_refuses_rather_than_choosing(template):
     with pytest.raises(ModflowError) as refused:
         _sheet(template, True, 100.0)
     assert "both conductivity and transmissivity" in str(refused.value)

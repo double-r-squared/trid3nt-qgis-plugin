@@ -69,10 +69,13 @@ frame stating none, a unit of another dimension and a cell the raster measures
 nothing at each refuse by name.
 
 The aquifer is a coercion of the GWF wrapper: `Aquifer(thickness |
-saturated_thickness, water_table_depth, conductivity | transmissivity [,
+saturated_thickness, water_table | water_table_depth, conductivity | transmissivity [,
 layers])` states an aquifer as cell expressions against the accepted mesh -
 every argument required, exactly one of each pair, a thickness at or under zero
-refused. `layers` (an integer from 1, unstated one) splits the saturated
+refused. `water_table` is an elevation on the run's vertical frame (`{"cells": "elevation"}`; a raster states
+the datum it counts from and it names the run's frame, or the cells refuse): the starting head is that
+elevation, a saturated thickness lies under it, and the top stays the bed; a head above the bed stands where it
+is stated, as a negative `water_table_depth` does. `layers` (an integer from 1, unstated one) splits the saturated
 thickness under the water table into that many equal layers (a whole `thickness`
 splits from the land surface): only layer 1 is convertible (unconfined) and
 layers below it are confined, and the starting head is the water-table
@@ -95,7 +98,15 @@ frame, a layer or a surface with no frame is unmeasured and weighs zero. A by-de
 the run holds nothing for is no conductivity, so `transmissivity` states the aquifer; both stated still
 refuses. The two templates declare the K pair optional and standing in for `transmissivity`
 (`Input.optional_need`, workflows.md): inside a published grid the sheet states conductivity by depth and
-asks no transmissivity, anywhere else, or when the run states a transmissivity, it states that. `transmissivity` stays one
+asks no transmissivity, anywhere else, or when the run states a transmissivity, it states that. Inside a published
+grid the water table and the saturated thickness come from the same model as the K: `fetch_usgs_model_water_table`
+(the head of the cell's topmost active layer, an elevation on NAVD88, Cape Cod put onto it through VDatum) and
+`fetch_usgs_model_thickness` (that head over the bottom of the cell's deepest active layer) answer the templates'
+optional `water_table` input, standing in for `water_table_depth`, and the thickness; both measure the same
+cells, and each answers only where it measures every cell of the box (a box a grid holds in part, or one with an
+unmeasured cell, is the row's empty, and the fill takes Zell-Sanford's depth and thickness for both). Outside
+the grids the Zell-Sanford rows answer as before, and a stated depth or elevation wins. The run's head is then
+the model's, not a depth below the run's bed, so every layer lies inside the model's range by construction. `transmissivity` stays one
 value, a list or a layered source there refuses; NPF_K33 is not written, so mf6 takes it equal to
 each layer's K. The stress composites
 (`Recharge`, `Drains`, `GeneralHead`, `ConstantHead`, `Wells`) place a geometry

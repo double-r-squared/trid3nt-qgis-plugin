@@ -7,6 +7,8 @@ run states."""
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
 from trid3nt_contracts.coverage import (
@@ -594,12 +596,10 @@ def _quantity_need(data_class, of, geometry="", where=_DES_MOINES):
 
 
 @pytest.mark.parametrize(("data_class", "of", "fetcher"), [
-    ("aquifer property", "aquifer_saturated_thickness", "fetch_aquifer_thickness"),
     ("aquifer property", "aquifer_transmissivity", "fetch_aquifer_transmissivity"),
     ("aquifer property", "aquifer_hydraulic_conductivity", "fetch_usgs_model_k"),
     ("aquifer property", "aquifer_layer_elevation", "fetch_usgs_model_layers"),
     ("aquifer property", "groundwater_recharge", "fetch_groundwater_recharge"),
-    ("groundwater level", "water_table_depth", "fetch_water_table_depth"),
 ])
 def test_a_need_of_a_published_quantity_takes_only_the_source_publishing_it(
         data_class, of, fetcher):
@@ -608,6 +608,45 @@ def test_a_need_of_a_published_quantity_takes_only_the_source_publishing_it(
     assert [row.fetcher for row in choice.rows if not row.excluded] == [fetcher]
     assert all(row.excluded.endswith(f"this slot asks for {of}")
                for row in choice.rows if row.fetcher != fetcher)
+
+
+_CAPE_COD = (-70.56, 41.635)
+_NOWHERE_IN_A_GRID = (-100.0, 35.0)
+
+
+@pytest.mark.parametrize("mesh_m", [20.0, 100.0, 150.0, 300.0, 1000.0])
+@pytest.mark.parametrize("where", [_DES_MOINES, _CAPE_COD])
+def test_inside_a_published_model_grid_its_thickness_ranks_before_the_regional_grid(mesh_m, where):
+    need = dataclasses.replace(
+        _quantity_need("aquifer property", "aquifer_saturated_thickness", where=where), mesh_m=mesh_m)
+    choice = match(need, _registered_rows())
+    assert [row.fetcher for row in choice.rows if not row.excluded] == [
+        "fetch_usgs_model_thickness", "fetch_aquifer_thickness"]
+    assert choice.picked == "fetch_usgs_model_thickness"
+
+
+@pytest.mark.parametrize("where", [_DES_MOINES, _CAPE_COD])
+def test_inside_a_published_model_grid_the_water_table_elevation_is_the_models_alone(where):
+    """No other source publishes the water table as an elevation, so outside the grids the need is unmatched."""
+    choice = match(_quantity_need("groundwater level", "water_table_elevation", where=where), _registered_rows())
+    assert [row.fetcher for row in choice.rows if not row.excluded] == ["fetch_usgs_model_water_table"]
+    assert choice.picked == "fetch_usgs_model_water_table"
+    nowhere = match(_quantity_need("groundwater level", "water_table_elevation", where=_NOWHERE_IN_A_GRID),
+                    _registered_rows())
+    assert not nowhere.picked
+
+
+@pytest.mark.parametrize("where", [_DES_MOINES, _CAPE_COD, _NOWHERE_IN_A_GRID])
+def test_the_water_table_depth_is_the_regional_grids_everywhere(where):
+    choice = match(_quantity_need("groundwater level", "water_table_depth", where=where), _registered_rows())
+    assert choice.picked == "fetch_water_table_depth"
+
+
+def test_outside_every_model_grid_the_regional_thickness_answers_as_before():
+    choice = match(_quantity_need("aquifer property", "aquifer_saturated_thickness", where=_NOWHERE_IN_A_GRID),
+                   _registered_rows())
+    assert choice.picked == "fetch_aquifer_thickness"
+    assert [row.fetcher for row in choice.rows if not row.excluded] == ["fetch_aquifer_thickness"]
 
 
 def test_the_wells_measuring_the_class_are_not_the_quantity_the_grid_publishes():
@@ -670,4 +709,5 @@ def test_every_declared_of_matches_as_it_did_unless_it_names_a_published_quantit
         ("aquifer property", "aquifer_saturated_thickness"),
         ("aquifer property", "aquifer_transmissivity"),
         ("aquifer property", "groundwater_recharge"),
-        ("groundwater level", "water_table_depth")}
+        ("groundwater level", "water_table_depth"),
+        ("groundwater level", "water_table_elevation")}

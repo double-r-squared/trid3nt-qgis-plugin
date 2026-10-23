@@ -248,7 +248,7 @@ def _stated(word: Any, table: Mapping[str, float], keyword: str, label: str,
 def _expression(value: Mapping[str, Any], *, slot: Slot, nlay: int, points: Any,
                 cells: Any, utm_epsg: int | None, frame: Any, top: Any, botm: Any,
                 run: Mapping[str, Any]) -> Any:
-    """A cells statement - a raster, a quotient of two, a raster below the top, or a conductivity by depth - per cell."""
+    """A cells statement - a raster, a quotient of two, a raster below the top, an elevation, or a conductivity by depth - per cell."""
     if points is None or cells is None:
         raise ModflowError(
             f"{slot.identifier} states cells to evaluate, and this run has no "
@@ -288,13 +288,24 @@ def _expression(value: Mapping[str, Any], *, slot: Slot, nlay: int, points: Any,
         if slot.identifier == "DISV_BOTM":
             _thickness(slot, parts[-1])
         return _below(slot, parts, top, nlay=nlay, cells=cells)
+    elif operation == "elevation" and dimension == "L":
+        # An elevation on the run's vertical frame; with a thickness beside it, the cells lie that thickness under it.
+        parts = list(of) if isinstance(of, (list, tuple)) else [of]
+        _on_vertical_frame(slot, parts[0], reading="the elevation", vertical=str(run.get("vertical_frame") or "").strip())
+        levels = [read(item, "L") for item in parts]
+        if len(levels) > 1:
+            if slot.identifier == "DISV_BOTM":
+                _thickness(slot, levels[-1])
+            return _below(slot, levels[1:], levels[0], nlay=nlay, cells=cells)
+        found = levels[0]
     else:
         raise ModflowError(
             f"{slot.identifier} states {dict(value)!r}; a cells statement is "
             "'raster' (of a raster), 'layers' (of one raster or number per layer), 'by_depth' (of a layered "
             "source's conductivities and surfaces, on a conductivity), 'quotient' (of a numerator and a "
-            "denominator, on a conductivity) or 'below_top' (of a raster or a list "
-            "of rasters whose sum is the depth, on a length).", error_code="MODFLOW_GRIDDATA_SHAPE")
+            "denominator, on a conductivity), 'below_top' (of a raster or a list "
+            "of rasters whose sum is the depth, on a length) or 'elevation' (of a raster on the run's vertical frame, "
+            "or of that raster and a thickness lying under it, on a length).", error_code="MODFLOW_GRIDDATA_SHAPE")
     return [list(found) for _ in range(nlay)] if slot.layered else found
 
 
@@ -321,7 +332,7 @@ def _by_depth(slot: Slot, source: Mapping[str, Any], *, read: Any, top: Any, bot
             f"{slot.identifier} reads by depth, and this run has no placed top and bottoms to read against.",
             error_code="MODFLOW_LAYERING_UNSTATED")
     for number, surface in enumerate(surfaces):
-        _on_vertical_frame(slot, surface, number=number, vertical=vertical)
+        _on_vertical_frame(slot, surface, reading=f"by depth against surface {number}", vertical=vertical)
     ncpl = len(cells)
     conductivity = np.array([read(item, "L/T", True) for item in layers], dtype=float)
     elevation = np.array([read(item, "L", True) for item in surfaces], dtype=float)
@@ -344,7 +355,7 @@ def _by_depth(slot: Slot, source: Mapping[str, Any], *, read: Any, top: Any, bot
     return rows
 
 
-def _on_vertical_frame(slot: Slot, surface: Any, *, number: int, vertical: str) -> None:
+def _on_vertical_frame(slot: Slot, surface: Any, *, reading: str, vertical: str) -> None:
     """A surface raster states the datum it counts from, and it names the run's vertical frame."""
     from trid3nt_server.inputs.vertical_datum import datum_of, names_frame
 
@@ -354,17 +365,17 @@ def _on_vertical_frame(slot: Slot, surface: Any, *, number: int, vertical: str) 
     datum = datum_of(surface)
     if not vertical:
         raise ModflowError(
-            f"{slot.identifier} reads by depth against surface {number} ({named!r}), and the run states "
+            f"{slot.identifier} reads {reading} ({named!r}), and the run states "
             "no vertical_frame to hold the grid's top and bottoms on.",
             error_code="MODFLOW_DATUM_UNSTATED")
     if not datum:
         raise ModflowError(
-            f"{slot.identifier} reads by depth against surface {number} ({named!r}), which states no "
+            f"{slot.identifier} reads {reading} ({named!r}), which states no "
             f"vertical datum; the grid is on {vertical}, and a surface of unstated zero is never assumed on it.",
             error_code="MODFLOW_DATUM_UNSTATED")
     if not names_frame(datum, vertical):
         raise ModflowError(
-            f"{slot.identifier} reads by depth against surface {number} ({named!r}) on {datum!r}, and "
+            f"{slot.identifier} reads {reading} ({named!r}) on {datum!r}, and "
             f"the grid is on {vertical}; no offset between them is applied here, so state a surface on "
             "the run's frame.", error_code="MODFLOW_DATUMS_DIFFER")
 

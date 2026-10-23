@@ -1,0 +1,120 @@
+# The saturated thickness of the two published USGS MODFLOW model archives behind
+# fetch_usgs_model_k: the model's own starting head of the topmost active layer minus the bottom of the
+# cell's deepest active layer, as one EPSG:4326 raster in metres. The delegate
+# hook reads the head, the layer bottoms and the layer masks from the archive
+# the K row downloads (one shared cached download). Ranked beside
+# fetch_aquifer_thickness by the match seam, on the finer cell.
+schema_version: v1
+
+name: fetch_usgs_model_thickness
+source_class: usgs_model_thickness
+error_prefix: USGS_MODEL_THICKNESS
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+shape: raster-cog
+supports_global_query: false
+
+# Documentary: the archives are read through fetch_usgs_model_k's endpoints and
+# cache entries, so a call here after a K call downloads nothing.
+endpoints:
+  jbcc_model:
+    url: https://www.sciencebase.gov/catalog/file/get/631405ded34e36012efa3476?f=__disk__0f%2F7e%2F50%2F0f7e50aa9965d7d1ebb3261e6070e35b6857bd89
+  des_moines_model:
+    url: https://www.sciencebase.gov/catalog/file/get/6601d849d34e64ff1548e2ad?f=__disk__be%2F60%2F44%2Fbe6044364e5897bfd556958e27867f28ee124f64
+auth:
+  mode: none
+  user_agent: "trid3nt/0.1 (Hazard Modeling Agent; agent@trid3nt.dev)"
+
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+
+ingest:
+  access: library_delegate
+  delegate:
+    library: usgs_model_archive
+    timeout_s: 120.0
+
+hooks:
+  delegate: usgs_model_thickness.read
+
+normalize:
+  crs: EPSG:4326
+  units: m
+  quantity: aquifer_saturated_thickness
+
+output:
+  layer_type: raster
+  ext: tif
+  role: primary
+  emit_bbox: true
+  style:
+    kind: continuous
+    ramp: rdylbu_r
+    units: m
+  display_name: "Aquifer saturated thickness (USGS model)"
+
+cache:
+  ttl_class: static-30d
+
+payload_estimate:
+  model: bbox_area
+  # One surface at Cape Cod's 121.92 m cells: ~622k cells/deg^2 x 4 B = ~2.5 MB/deg^2.
+  mb_per_sq_deg: 2.5
+
+coverage:
+- data_class: aquifer property
+  kind: modelled
+  extent:
+    kind: surface
+    # The four native corners of each model grid, as fetch_usgs_model_k states them.
+    rings:
+      - [[-70.720992, 41.805502], [-70.13421, 41.799982], [-70.140988, 41.481685], [-70.724858, 41.487178]]
+      - [[-93.854022, 41.817624], [-93.577352, 41.819348], [-93.575291, 41.588597], [-93.850975, 41.586887]]
+    note: the Cape Cod JBCC (32 layers, ~400 ft cells) and Des Moines MF6 (6 layers, 60 m cells) USGS MODFLOW model grids, their union
+  window:
+    series: false
+    latest: '2019-01-01'
+  # The COARSER of the two grids (Cape Cod 400 ft = 121.92 m).
+  resolution_m: 121.92
+  datum: null
+  units:
+    aquifer_saturated_thickness: m
+  value_column: aquifer_saturated_thickness
+
+caveats:
+  - "Two published calibrated USGS MODFLOW model grids, nothing more: Cape Cod JBCC (2019 release, 32 layers) and Des Moines MF6 (2024 release, 6 layers). A bbox outside both raises USGS_MODEL_THICKNESS_INPUT_INVALID naming them; a bbox a grid holds only in part, or a box with a cell the model leaves unmeasured, raises USGS_MODEL_THICKNESS_EMPTY so the next source answers the whole run; there is no third grid and nothing is interpolated between grids."
+  - "The value is the model's starting head of the topmost active layer minus the bottom of the deepest layer active at the cell, in the model's datum (Cape Cod start_heads and bot{n} where ib{n} is 1; Des Moines dmww_strt.hds times the FACTOR 1.001 its initial-condition input states, and l{n}_bot.dat where idomain is 1): the thickness the model's own layers span under its water table, a run's aquifer bottom lying that far under the run's water table."
+  - "A cell whose head is at or below the bottom of its deepest active layer is unmeasured, never clamped, and so is a cell no layer holds active; the water table row measures exactly the same cells."
+
+docstring: |-
+  Fetch the saturated thickness inside a published USGS MODFLOW model's grid,
+  as the model itself spans it.
+
+  **What it does:** Reads the starting head and the layer bottoms and masks out
+  of two published USGS groundwater-flow model archives - the Joint Base Cape
+  Cod (JBCC) MODFLOW-2005 model (32 layers; feet on NGVD 29) and the Des
+  Moines River alluvial-aquifer MODFLOW-6 model (6 layers; metres on NAVD 88) -
+  and returns the head minus the bottom of the cell's deepest active layer, in
+  metres, as one EPSG:4326 float32 COG over the bbox.
+
+  **When to use:**
+  - The aquifer thickness of a run whose domain lies inside the Cape Cod or Des
+    Moines model grid, so it agrees with the model's hydraulic conductivity
+    (fetch_usgs_model_k) and water table (fetch_usgs_model_water_table).
+  - "How thick is the saturated aquifer in the Cape Cod / Des Moines model?"
+
+  **When NOT to use:**
+  - Anywhere outside the two grids - the call refuses, naming the grids and
+    how much of the AOI each covers; fetch_aquifer_thickness covers CONUS.
+  - A measured depth to bedrock - this is the models' own discretisation.
+
+  **Parameters:**
+  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326; must
+    lie ENTIRELY inside ONE of the two model grids. Required. Example (Cape
+    Cod canary): ``(-70.62, 41.59, -70.50, 41.68)``.
+
+  **Returns:** a ``LayerURI`` for a one-band float32 COG (``layer_type="raster"``,
+  ``role="primary"``, ``units="m"``, ``quantity="aquifer_saturated_thickness"``).

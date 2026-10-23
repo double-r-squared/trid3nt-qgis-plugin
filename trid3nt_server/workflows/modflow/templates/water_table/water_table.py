@@ -48,10 +48,18 @@ class INPUTS:
         "raster publishing its unit; unfilled, the source publishing "
         "aquifer_transmissivity here. Not asked for where the conductivity by depth fills.")).need(
         "aquifer property", of="aquifer_transmissivity")
+    water_table = Input(desc=(
+        "Where the water table stands before the solve, as an elevation on the "
+        "run's vertical frame: a number in metres, or a raster publishing its unit "
+        "and datum; unfilled, the source publishing water_table_elevation here, "
+        "and absent where none measures every cell of the domain. Where it fills, "
+        "the depth is not asked for; a depth you state is used in its place.")).need(
+        "groundwater level", of="water_table_elevation").optional_need(instead_of="water_table_depth")
     water_table_depth = Input(desc=(
         "How far below the land surface the water table stands before the "
         "solve: a number in metres, or a raster publishing its unit; unfilled, "
-        "the source publishing water_table_depth here.")).need(
+        "the source publishing water_table_depth here. Not asked for where the "
+        "water table elevation fills.")).need(
         "groundwater level", of="water_table_depth")
     recharge = Input(desc=(
         "What reaches the water table over the domain: a number in metres per "
@@ -88,6 +96,7 @@ class STEERING(GWF):
     Aquifer = {"saturated_thickness": "saturated_thickness",
                "conductivity": {"layers": "conductivity_layers", "surfaces": "layer_surfaces"},
                "transmissivity": "transmissivity",
+               "water_table": "water_table",
                "water_table_depth": "water_table_depth"}
     Recharge = {"geometry": "domain", "layer": 1, "rate": "recharge"}
     # at the land surface: a stream drains the aquifer wherever the head stands above its bed

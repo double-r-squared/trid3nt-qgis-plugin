@@ -1,7 +1,7 @@
 # USGS MODFLOW model archive excerpts
 
 Offline excerpts of the two published ScienceBase MODFLOW model archives the
-`fetch_usgs_model_k` and `fetch_usgs_model_layers` rows read, built from the
+`fetch_usgs_model_k`, `fetch_usgs_model_layers`, `fetch_usgs_model_water_table` and `fetch_usgs_model_thickness` rows read, built from the
 real downloads so the rows' parsers and pipeline see the same member paths, text formats and grid shapes
 they see in production:
 
@@ -33,3 +33,9 @@ L5 51.718, L3 empty) and probe cells (64.271 / 28.973) to 0.01 m/day.
 
 The surface members were added to the same zips with the same window and
 formats (JBCC `%12.2f` + CRLF, DM `%8.3f ` rows + CRLF).
+
+The head members were added with the same windows: JBCC `Init_Heads/start_heads` and `Bots/lse_bath_adj_c3` (`%12.2f`,
+0 outside the window) and Des Moines `ic/dmww_strt.hds` (six MF6 binary records, 52-byte header + float64, 1e30 outside
+the window as the archive leaves inactive cells). The zips now hold the sha256 values
+`30bd0ed55acb0a1a58a32bc943e3836205fea53a43d3c8d203603003ab312f42` (JBCC) and
+`b59e0c61df2eaf7aed0470046d4c1ac8cdc2e5f512caa2b7c21743bae8648f08` (Des Moines).

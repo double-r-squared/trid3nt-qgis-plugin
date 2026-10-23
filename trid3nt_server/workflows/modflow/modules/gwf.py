@@ -37,7 +37,7 @@ _STRESS = {
 }
 
 
-_AQUIFER = ("thickness", "saturated_thickness", "water_table_depth", "conductivity",
+_AQUIFER = ("thickness", "saturated_thickness", "water_table", "water_table_depth", "conductivity",
             "transmissivity", "layers")
 
 
@@ -130,11 +130,12 @@ def _by_depth(source: Mapping[str, Any], run: Mapping[str, Any]) -> Mapping[str,
 
 
 def _aquifer(value: Any, *, run: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-    """An aquifer's cells: Aquifer(thickness | saturated_thickness, water_table_depth, conductivity | transmissivity [, layers]).
+    """An aquifer's cells: Aquifer(thickness | saturated_thickness, water_table | water_table_depth, conductivity | transmissivity [, layers]).
 
     ``thickness`` runs down from the land surface, ``saturated_thickness`` down from the water table; the
-    bottom lies under whichever, the starting head a water-table depth below the top, and the conductivity
-    is stated or is the transmissivity over the thickness. ``layers`` (an integer from 1, unstated one)
+    bottom lies under whichever, the starting head a water-table depth below the top or the ``water_table``
+    elevation itself (on the run's vertical frame; a saturated thickness then lies under that elevation),
+    and the conductivity is stated or is the transmissivity over the thickness. ``layers`` (an integer from 1, unstated one)
     splits the saturated thickness into that many equal layers: only layer 1 is convertible (unconfined),
     and the starting head is the water-table elevation in every layer. K is the same in each layer unless
     ``conductivity`` is a list of one number or raster per layer, top first, as long as ``layers``, or
@@ -158,12 +159,15 @@ def _aquifer(value: Any, *, run: Mapping[str, Any]) -> tuple[Mapping[str, Any], 
                else "neither thickness nor saturated_thickness; state one")
             + " - from the land surface, or down from the water table.",
             error_code="MODFLOW_AQUIFER_UNSTATED")
-    for argument in ("water_table_depth",):
-        if value.get(argument) is None:
-            raise ModflowError(
-                f"Aquifer states no {argument}; the engine has no value for it, "
-                "so state it from a measurement or a named source.",
-                error_code="MODFLOW_AQUIFER_UNSTATED")
+    elevation, depth = value.get("water_table"), value.get("water_table_depth")
+    if (elevation is None) == (depth is None):
+        raise ModflowError(
+            "Aquifer states "
+            + ("both water_table and water_table_depth; state one" if elevation is not None
+               else "neither water_table nor water_table_depth; the engine has no value for it, "
+                    "so state one from a measurement or a named source")
+            + " - an elevation, or a depth below the land surface.",
+            error_code="MODFLOW_AQUIFER_UNSTATED")
     conductivity, transmissivity = value.get("conductivity"), value.get("transmissivity")
     if _layered_source(conductivity) and all(_unstated(conductivity.get(key), run) for key in ("layers", "surfaces")):
         # A by-depth source the run holds nothing for is no conductivity: the transmissivity states the aquifer.
@@ -195,16 +199,18 @@ def _aquifer(value: Any, *, run: Mapping[str, Any]) -> tuple[Mapping[str, Any], 
     by_depth = _layered_source(conductivity)
     if by_depth:
         conductivity = _by_depth(conductivity, run)
-    depth = value["water_table_depth"]
     stated = ({"cells": ("by_depth" if by_depth
                          else "layers" if isinstance(conductivity, (list, tuple)) else "raster"),
                "of": conductivity} if conductivity is not None
               else {"cells": "quotient", "of": [transmissivity, saturated if whole is None else whole]})
-    slots: dict[str, Any] = {
-        "DISV_NLAY": nlay, "NPF_K": stated,
-        "DISV_BOTM": {"cells": "below_top",
-                      "of": whole if saturated is None else [depth, saturated]},
-        "IC_STRT": {"cells": "below_top", "of": depth}}
+    if elevation is not None:
+        bottom = ({"cells": "below_top", "of": whole} if saturated is None
+                  else {"cells": "elevation", "of": [elevation, saturated]})
+        head = {"cells": "elevation", "of": elevation}
+    else:
+        bottom = {"cells": "below_top", "of": whole if saturated is None else [depth, saturated]}
+        head = {"cells": "below_top", "of": depth}
+    slots: dict[str, Any] = {"DISV_NLAY": nlay, "NPF_K": stated, "DISV_BOTM": bottom, "IC_STRT": head}
     if nlay > 1:
         # Only the top layer is convertible (unconfined); the layers below it are confined.
         slots["NPF_ICELLTYPE"] = [1] + [0] * (nlay - 1)

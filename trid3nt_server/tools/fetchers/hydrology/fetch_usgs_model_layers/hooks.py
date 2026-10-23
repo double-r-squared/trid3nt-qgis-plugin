@@ -20,8 +20,6 @@ import numpy as np
 
 from trid3nt_contracts.source_spec import SourceSpec
 
-from ..._fetch_common import FetchError
-from ..._router.errors import router_input_error, router_upstream_error
 from ..._router.hooks import FrameDegraded, FramePlan, register_hook
 from ..._router.transport import get_bytes
 from .. import _usgs_model_grid as grid
@@ -29,11 +27,6 @@ from .. import _usgs_model_grid as grid
 logger = logging.getLogger(__name__)
 
 __all__ = ["frames_plan", "frame_bytes"]
-
-#: The frame the row states its elevations on; a model counted from another
-#: frame is converted onto it, and one already on it is read as stated.
-_TARGET = "NAVD88"
-
 
 @register_hook("usgs_model_layers.frames_plan")
 def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
@@ -64,45 +57,6 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
     return plans
 
 
-def _offset_m(spec: SourceSpec, lon: float, lat: float, frame: str) -> float:
-    """What VDatum says a zero on ``frame`` reads at on NAVD88 at this point;
-    its refusal is raised as this row's own, naming the point."""
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    try:
-        record = TOOL_REGISTRY["fetch_vertical_datum_offset"].fn(
-            point=[lon, lat], from_frame=frame.lower(), to_frame=_TARGET.lower())
-    except FetchError as exc:
-        message = (
-            f"the {frame} elevations of the model layers cannot be put on "
-            f"{_TARGET}: NOAA VDatum has no offset at ({lon:.6f}, {lat:.6f}) - "
-            f"fetch_vertical_datum_offset says ({getattr(exc, 'error_code', '')}): {exc}")
-        if getattr(exc, "retryable", False):
-            raise router_upstream_error(spec.error_code_prefix, message) from exc
-        raise router_input_error(
-            spec.error_code_prefix, message, spec.input_error_suffix) from exc
-    return float(record["offset_m"])
-
-
-def _shift(spec: SourceSpec, bbox: tuple[float, ...], frame: str):
-    """The offset onto NAVD88 across the AOI: VDatum's offset at each of the
-    AOI's four corners, bilinear between them. A datum offset is a smooth
-    field, so the corners the caller named bound it without a point chosen
-    for them. The offsets are asked when the shift is first applied, so a
-    frame with no active cell never asks."""
-    west, south, east, north = bbox
-
-    def shift(xs: Any, ys: Any) -> Any:
-        sw, se, nw, ne = (
-            _offset_m(spec, lon, lat, frame)
-            for lon, lat in ((west, south), (east, south), (west, north), (east, north)))
-        u = (xs - west) / max(east - west, 1e-12)
-        v = (ys - south) / max(north - south, 1e-12)
-        return (1 - u) * (1 - v) * sw + u * (1 - v) * se + (1 - u) * v * nw + u * v * ne
-
-    return shift
-
-
 @register_hook("usgs_model_layers.frame_bytes")
 def frame_bytes(
     spec: SourceSpec, params: dict[str, Any], frame: FramePlan
@@ -131,6 +85,6 @@ def frame_bytes(
             f"{arch['label']} {what}: unreadable archive member ({exc})"
         ) from exc
     frame_of_model = str(arch["datum"])
-    shift = None if frame_of_model == _TARGET else _shift(spec, bbox, frame_of_model)
+    shift = None if frame_of_model == grid.TARGET else grid.shift_to_navd88(spec, bbox, frame_of_model)
     return grid.masked_window_cog(
         arch, values * float(arch["factor"]), mask, bbox, what, shift)
