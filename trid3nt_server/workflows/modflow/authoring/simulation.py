@@ -282,25 +282,36 @@ def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, point
 
 
 def _streamed(sheet: Any, rows: dict[str, Any], row: Any, **mesh: Any) -> None:
-    """Cut the Streams lines into reaches: the package's reach list, its connections and its count."""
+    """Cut the Streams lines into reaches: the package's reach list, its connections, its count and its period settings."""
     stated = sorted(f"SFR_{name.upper()}" for name in ("nreaches", "connectiondata") if name in rows)
     if stated:
         raise ModflowError(
             f"{', '.join(stated)} {'is' if len(stated) == 1 else 'are'} derived from the "
             "Streams lines; state either the lines or the reach keywords, not both.",
             error_code="MODFLOW_KEYWORD_SHAPE")
-    packagedata, connectiondata = place_streams(row.value["streams"], **mesh)
-    for name, value in (("packagedata", packagedata), ("connectiondata", connectiondata),
-                        ("nreaches", len(packagedata))):
+    packagedata, connectiondata, perioddata = place_streams(row.value["streams"], auxiliary=_declared(rows), **mesh)
+    if perioddata and "perioddata" in rows:
+        raise ModflowError(
+            "SFR_PERIODDATA is derived from the period settings the Streams lines state; state "
+            "either those or the reach keywords' period rows, not both.", error_code="MODFLOW_KEYWORD_SHAPE")
+    placed = {"packagedata": packagedata, "connectiondata": connectiondata, "nreaches": len(packagedata),
+              **({"perioddata": perioddata} if perioddata else {})}
+    for name, value in placed.items():
         rows[name] = Filled(slot=sheet.body.MODULE_INPUT[f"SFR_{name.upper()}"],
                             value=value, provenance=row.provenance)
 
 
+def _declared(rows: dict[str, Any]) -> tuple[str, ...]:
+    """The auxiliary names a package's AUXILIARY option states."""
+    return tuple(str(name) for name in getattr(rows.get("auxiliary"), "value", None) or ())
+
+
 def _lakened(sheet: Any, rows: dict[str, Any], row: Any, **mesh: Any) -> None:
-    """Place the Lakes polygons: the package's lake list, its connections, its count and the period-1 fluxes stated."""
-    packagedata, connectiondata, perioddata = place_lakes(row.value["lakes"], **mesh)
-    stated = [f"LAK_{name.upper()}" for name in ("nlakes", "connectiondata", "perioddata")
-              if name in rows and (name != "perioddata" or perioddata)]
+    """Place the Lakes polygons: the package's lake list, its connections, its count, its outlets and the period settings stated."""
+    packagedata, connectiondata, perioddata, outlets = place_lakes(row.value["lakes"], auxiliary=_declared(rows), **mesh)
+    derived = {"nlakes": True, "connectiondata": True, "perioddata": bool(perioddata),
+               "noutlets": bool(outlets), "outlets": bool(outlets)}
+    stated = [f"LAK_{name.upper()}" for name, placed in derived.items() if placed and name in rows]
     if stated:
         raise ModflowError(
             f"{', '.join(stated)} {'is' if len(stated) == 1 else 'are'} derived from the "
@@ -309,14 +320,16 @@ def _lakened(sheet: Any, rows: dict[str, Any], row: Any, **mesh: Any) -> None:
     placed = {"packagedata": packagedata, "connectiondata": connectiondata,
               "nlakes": len(packagedata)}
     if perioddata:
-        placed["perioddata"] = {0: perioddata}
+        placed["perioddata"] = perioddata
+    if outlets:
+        placed.update(outlets=outlets, noutlets=len(outlets))
     for name, value in placed.items():
         rows[name] = Filled(slot=sheet.body.MODULE_INPUT[f"LAK_{name.upper()}"],
                             value=value, provenance=row.provenance)
 
 
 def _welled(sheet: Any, rows: dict[str, Any], row: Any, **mesh: Any) -> None:
-    """Place the MultiAquiferWells points: the package's well list, its connections, its count and each well's rate."""
+    """Place the MultiAquiferWells points: the package's well list, its connections, its count and each well's period settings."""
     stated = sorted(f"MAW_{name.upper()}" for name in ("nmawwells", "connectiondata", "perioddata")
                     if name in rows)
     if stated:
@@ -324,15 +337,17 @@ def _welled(sheet: Any, rows: dict[str, Any], row: Any, **mesh: Any) -> None:
             f"{', '.join(stated)} {'is' if len(stated) == 1 else 'are'} derived from the "
             "MultiAquiferWells points; state either the points or the well keywords, not both.",
             error_code="MODFLOW_KEYWORD_SHAPE")
-    packagedata, connectiondata, perioddata = place_maw(row.value["wells"], **mesh)
+    packagedata, connectiondata, perioddata = place_maw(
+        row.value["wells"], auxiliary=_declared(rows), flowing_wells=bool(getattr(rows.get("flowing_wells"), "value", False)),
+        **mesh)
     for name, value in (("packagedata", packagedata), ("connectiondata", connectiondata),
-                        ("perioddata", {0: perioddata}), ("nmawwells", len(packagedata))):
+                        ("perioddata", perioddata), ("nmawwells", len(packagedata))):
         rows[name] = Filled(slot=sheet.body.MODULE_INPUT[f"MAW_{name.upper()}"],
                             value=value, provenance=row.provenance)
 
 
 def _unsaturated(sheet: Any, groups: dict[str, dict[str, Any]], row: Any, **mesh: Any) -> None:
-    """Place the UnsaturatedZone polygons: the package's UZF cells, their count and the land cells' period-1 rows."""
+    """Place the UnsaturatedZone polygons: the package's UZF cells, their count and the land cells' period rows."""
     rows = groups["UZF"]
     stated = sorted(f"UZF_{name.upper()}" for name in ("nuzfcells", "perioddata") if name in rows)
     if stated:
@@ -342,7 +357,7 @@ def _unsaturated(sheet: Any, groups: dict[str, dict[str, Any]], row: Any, **mesh
             error_code="MODFLOW_KEYWORD_SHAPE")
     options = {name: bool(getattr(rows.get(name), "value", False))
                for name in ("simulate_et", "unsat_etwc", "unsat_etae")}
-    packagedata, perioddata = place_uzf(row.value["zones"], options=options, **mesh)
+    packagedata, perioddata = place_uzf(row.value["zones"], options=options, auxiliary=_declared(rows), **mesh)
     recharged = {cell[-1] for cell in _recharged(groups) if isinstance(cell, (list, tuple))}
     doubled = sorted(item[1][1] for item in packagedata if item[2] and item[1][1] in recharged)
     if doubled:
@@ -351,7 +366,7 @@ def _unsaturated(sheet: Any, groups: dict[str, dict[str, Any]], row: Any, **mesh
             + (f" and {len(doubled) - 1} more" if len(doubled) > 1 else "")
             + "; the same infiltration counted twice. State the recharge from the UZF infiltration "
             "(finf) or the RCH package over a cell, not both.", error_code="MODFLOW_KEYWORD_SHAPE")
-    for name, value in (("packagedata", packagedata), ("perioddata", {0: perioddata}),
+    for name, value in (("packagedata", packagedata), ("perioddata", perioddata),
                         ("nuzfcells", len(packagedata))):
         rows[name] = Filled(slot=sheet.body.MODULE_INPUT[f"UZF_{name.upper()}"],
                             value=value, provenance=row.provenance)

@@ -73,7 +73,7 @@ def test_a_polygon_over_one_column_is_a_land_cell_and_the_cells_under_it():
     assert packagedata == [[0, (0, 4), 1, 1, 0.1, *_ROW],
                            [1, (1, 4), 0, 2, 0.1, *_ROW],
                            [2, (2, 4), 0, -1, 0.1, *_ROW]]
-    assert perioddata == [[0, 0.02, -999.0, -999.0, -999.0, -999.0, -999.0, -999.0]]
+    assert perioddata == {0: [[0, 0.02, -999.0, -999.0, -999.0, -999.0, -999.0, -999.0]]}
 
 
 def test_cells_are_numbered_by_layer_then_cell_and_each_connects_to_the_one_below():
@@ -83,14 +83,14 @@ def test_cells_are_numbered_by_layer_then_cell_and_each_connects_to_the_one_belo
         (0, (0, 3), 1, 3), (1, (0, 4), 1, 4), (2, (0, 5), 1, 5),
         (3, (1, 3), 0, 6), (4, (1, 4), 0, 7), (5, (1, 5), 0, 8),
         (6, (2, 3), 0, -1), (7, (2, 4), 0, -1), (8, (2, 5), 0, -1)]
-    assert [row[0] for row in perioddata] == [0, 1, 2]
+    assert [row[0] for row in perioddata[0]] == [0, 1, 2]
 
 
 def test_the_land_cell_is_the_top_solved_cell_of_the_column():
     packagedata, perioddata = _place([_statement()], active=_solved(off=[(0, 4)]))
 
     assert [(row[1], row[2], row[3]) for row in packagedata] == [((1, 4), 1, 1), ((2, 4), 0, -1)]
-    assert perioddata[0][0] == 0
+    assert perioddata[0][0][0] == 0
 
 
 def test_the_cells_under_a_layer_the_run_does_not_solve_are_not_uzf_cells():
@@ -133,7 +133,7 @@ def test_a_list_of_statements_numbers_the_cells_through_all_of_them():
     packagedata, perioddata = _place([_statement(_CENTRE, finf=0.01), _statement(_box(1.0, 1.0, 9.0, 9.0), finf=0.03)])
 
     assert [row[1] for row in packagedata] == [(0, 0), (0, 4), (1, 0), (1, 4), (2, 0), (2, 4)]
-    assert [(row[0], row[1]) for row in perioddata] == [(0, 0.03), (1, 0.01)]
+    assert [(row[0], row[1]) for row in perioddata[0]] == [(0, 0.03), (1, 0.01)]
 
 
 def test_a_property_read_from_a_raster_is_each_column_s_own():
@@ -170,7 +170,7 @@ def test_simulate_et_requires_pet_and_extdp_and_writes_them():
         _place([_statement(pet=0.01)], simulate_et=True)
     assert "extdp" in str(caught.value) and "no " in str(caught.value)
     _, perioddata = _place([_statement(pet=0.01, extdp=1.5)], simulate_et=True)
-    assert perioddata == [[0, 0.02, 0.01, 1.5, -999.0, -999.0, -999.0, -999.0]]
+    assert perioddata == {0: [[0, 0.02, 0.01, 1.5, -999.0, -999.0, -999.0, -999.0]]}
 
 
 def test_the_options_that_read_the_other_et_values_require_them():
@@ -182,7 +182,7 @@ def test_the_options_that_read_the_other_et_values_require_them():
     assert "ha, hroot, rootact" in str(caught.value)
     _, perioddata = _place([_statement(pet=0.01, extdp=1.5, extwc=0.2, ha=-1.0, hroot=-5.0, rootact=0.5)],
                            simulate_et=True, unsat_etwc=True, unsat_etae=True)
-    assert perioddata == [[0, 0.02, 0.01, 1.5, 0.2, -1.0, -5.0, 0.5]]
+    assert perioddata == {0: [[0, 0.02, 0.01, 1.5, 0.2, -1.0, -5.0, 0.5]]}
 
 
 def test_an_et_value_no_stated_option_reads_refuses():

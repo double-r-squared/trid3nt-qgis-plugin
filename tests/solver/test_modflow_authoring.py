@@ -235,7 +235,7 @@ def test_a_stated_package_s_required_grid_data_is_stated_too(staged_beside, tmp_
     with pytest.raises(ModflowError) as caught:
         serialize(_sheet(STO_SS=1.0e-5), tmp_path / "run", _mesh(tmp_path))
     assert caught.value.error_code == "MODFLOW_KEYWORD_UNSTATED"
-    assert "STO_ICONVERT" in str(caught.value) and "STO_SY" in str(caught.value)
+    assert "STO_ICONVERT" in str(caught.value) and "STO_SY" not in str(caught.value)
 
 
 def test_a_sheet_stating_another_discretization_refuses(staged_beside, tmp_path):

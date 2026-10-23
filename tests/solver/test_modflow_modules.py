@@ -68,7 +68,7 @@ def test_required_keywords_are_the_ones_marked_not_optional_and_undefaulted():
     assert gwf["WEL_STRESS_PERIOD_DATA"].is_required is True
     # A bare ``optional`` line is not optional: mf6 refuses a run without K or
     # ICELLTYPE, and a required entry's DFN default_value is flopy's illustration.
-    for identifier in ("NPF_K", "NPF_ICELLTYPE", "IC_STRT", "STO_SY",
+    for identifier in ("NPF_K", "NPF_ICELLTYPE", "IC_STRT", "STO_ICONVERT",
                        "DIS_NROW", "TDIS_NPER", "TDIS_PERIODDATA"):
         assert gwf[identifier].is_required is True, identifier
         assert gwf[identifier].is_open is True, identifier
@@ -77,7 +77,10 @@ def test_required_keywords_are_the_ones_marked_not_optional_and_undefaulted():
     for identifier in ("NPF_SAVE_FLOWS", "IMS_OUTER_HCLOSE",
                        "RCHA_READASARRAYS"):
         assert gwf[identifier].is_required is False, identifier
-    assert sum(slot.is_required for slot in gwf.values()) == 110
+    # An entry whose own description says the engine runs without it stated is not required.
+    for identifier in ("STO_SY", "LAK_NOUTLETS", "LAK_NTABLES", "EVT_NSEG", "EVTA_AUX"):
+        assert gwf[identifier].is_required is False, identifier
+    assert sum(slot.is_required for slot in gwf.values()) == 105
 
 
 def test_a_dictionary_default_is_the_value_the_engine_will_use():

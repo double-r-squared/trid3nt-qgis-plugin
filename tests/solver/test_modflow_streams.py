@@ -50,7 +50,7 @@ def _statement(geometry, **over):
 
 def _place(statements, *, frame=("meters", "days"), active=None, nlay=1):
     return place_streams(statements, points=_POINTS, cells=_CELLS, utm_epsg=32617,
-                         nlay=nlay, frame=frame, active=active)
+                         nlay=nlay, frame=frame, active=active)[:2]
 
 
 def _lattice(tmp_path: Path) -> Path:

@@ -62,7 +62,7 @@ def test_a_point_is_a_well_in_its_cell_connected_to_each_layer_its_screen_crosse
     assert packagedata == [[0, 0.15, 0.0, 8.0, "THIEM", 2]]
     assert connectiondata == [[0, 0, (0, 4), 10.0, 0.0, -999.0, -999.0],
                               [0, 1, (1, 4), 10.0, 0.0, -999.0, -999.0]]
-    assert perioddata == [[0, "rate", -3.0]]
+    assert perioddata == {0: [[0, "rate", -3.0]]}
 
 
 def test_a_screen_in_the_lower_layer_alone_connects_that_layer_only():
@@ -121,7 +121,7 @@ def test_several_points_are_wells_numbered_in_order_with_their_own_connections()
     assert [row[0] for row in packagedata] == [0, 1]
     assert [(row[0], row[1], row[2]) for row in connectiondata] \
         == [(0, 0, (0, 0)), (0, 1, (1, 0)), (1, 0, (0, 8)), (1, 1, (1, 8))]
-    assert perioddata == [[0, "rate", -3.0], [1, "rate", -3.0]]
+    assert perioddata == {0: [[0, "rate", -3.0], [1, "rate", -3.0]]}
 
 
 def test_a_list_of_statements_numbers_the_wells_through_all_of_them():
@@ -130,7 +130,7 @@ def test_a_list_of_statements_numbers_the_wells_through_all_of_them():
 
     assert [row[0] for row in packagedata] == [0, 1]
     assert [(row[0], row[2]) for row in connectiondata] == [(0, (0, 0)), (0, (1, 0)), (1, (1, 2))]
-    assert perioddata == [[0, "rate", -1.0], [1, "rate", -2.0]]
+    assert perioddata == {0: [[0, "rate", -1.0], [1, "rate", -2.0]]}
 
 
 def test_two_wells_in_one_cell_are_two_wells():

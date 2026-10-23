@@ -49,7 +49,7 @@ def _statement(geometry, **over):
 
 def _place(statements, grid=_ONE_LAYER, *, nlay=1, frame=("meters", "days"), active=None):
     return place_lakes(statements, points=_POINTS, cells=_CELLS, utm_epsg=32617, nlay=nlay,
-                       frame=frame, active=active, **grid)
+                       frame=frame, active=active, **grid)[:3]
 
 
 # ---- Part B: the lake cells and their connections --------------------------
@@ -64,7 +64,7 @@ def test_a_polygon_over_one_cell_is_a_lake_connected_to_its_four_neighbours():
             (0, 2, (0, 5), "horizontal"), (0, 3, (0, 7), "horizontal")]
     # bed leakance, bottom and top of the neighbour, half its width to the face, the face's width
     assert all(row[4:] == [0.1, 0.0, 10.0, 5.0, 10.0] for row in connectiondata)
-    assert perioddata == []
+    assert perioddata == {}
 
 
 def test_a_lake_one_layer_deep_connects_horizontally_and_to_the_cell_below():
@@ -138,8 +138,8 @@ def test_one_polygon_in_several_parts_is_several_lakes_numbered_in_order():
 def test_a_stated_rainfall_and_evaporation_are_the_first_period_s_rows_and_an_unstated_one_is_absent():
     _, _, both = _place([_statement(_CENTRE, rainfall=0.01, evaporation=0.02)])
     _, _, one = _place([_statement(_CENTRE, evaporation=0.02)])
-    assert both == [[0, "rainfall", 0.01], [0, "evaporation", 0.02]]
-    assert one == [[0, "evaporation", 0.02]]
+    assert both == {0: [[0, "rainfall", 0.01], [0, "evaporation", 0.02]]}
+    assert one == {0: [[0, "evaporation", 0.02]]}
 
 
 def test_a_connection_s_lengths_are_on_the_model_s_length_unit():

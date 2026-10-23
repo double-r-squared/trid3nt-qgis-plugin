@@ -8,6 +8,7 @@ in TDIS.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Mapping
@@ -69,8 +70,77 @@ def _stress(name: str, package: str, dimensions: Mapping[str, str], *, carries: 
     return expand
 
 
+_STATUS = ("ACTIVE", "INACTIVE", "CONSTANT")
+
+
+def _by_period(held: Any) -> bool:
+    """Whether a value is keyed by period (every key a period number) and not a raster's mapping."""
+    return isinstance(held, Mapping) and bool(held) and all(
+        isinstance(key, int) and not isinstance(key, bool) or isinstance(key, str) and key.strip().isdigit()
+        for key in held)
+
+
+def _timed(held: Any, *, composite: str, argument: str, words: tuple[str, ...] = (), number: bool = True) -> Any:
+    """A period setting as stated -> its value (from period 1) or ``{period index: value}``; a mapping is keyed by period from 1."""
+    if isinstance(held, Mapping):
+        stated: dict[int, Any] = {}
+        for period, item in held.items():
+            index = period if isinstance(period, int) and not isinstance(period, bool) \
+                else int(period) if isinstance(period, str) and period.strip().isdigit() else 0
+            if index < 1 or index - 1 in stated:
+                raise ModflowError(
+                    f"{composite} {argument} is keyed by period, each an integer from 1 once; got {period!r}.",
+                    error_code="MODFLOW_STRESS_UNSTATED")
+            stated[index - 1] = _setting(item, composite=composite, argument=argument, words=words, number=number)
+        if not stated:
+            raise ModflowError(f"{composite} {argument} is an empty mapping; state a period and its value.",
+                               error_code="MODFLOW_STRESS_UNSTATED")
+        return stated
+    return _setting(held, composite=composite, argument=argument, words=words, number=number)
+
+
+def _setting(item: Any, *, composite: str, argument: str, words: tuple[str, ...], number: bool) -> Any:
+    if isinstance(item, str) and item.strip().upper() in words:
+        return item.strip().upper()
+    if number and isinstance(item, (int, float)) and not isinstance(item, bool) and math.isfinite(item):
+        return item
+    expected = " or ".join(part for part in ("a number" if number else "", ", ".join(words)) if part)
+    raise ModflowError(
+        f"{composite} {argument} is {expected}, from period 1 or keyed by period; got {item!r}.",
+        error_code="MODFLOW_STRESS_UNSTATED")
+
+
+def _settings(value: Mapping[str, Any], composite: str, *, numbers: tuple[str, ...],
+              words: Mapping[str, tuple[tuple[str, ...], bool]]) -> dict[str, Any]:
+    """The optional period settings a statement states, validated, by their mf6 names; the auxiliary values by name."""
+    stated = {argument: _timed(value[argument], composite=composite, argument=argument)
+              for argument in numbers if value.get(argument) is not None}
+    stated.update({argument: _timed(value[argument], composite=composite, argument=argument,
+                                    words=choices, number=allowed)
+                   for argument, (choices, allowed) in words.items() if value.get(argument) is not None})
+    aux = value.get("auxiliary")
+    if aux is not None:
+        if not isinstance(aux, Mapping) or not aux or not all(isinstance(name, str) for name in aux):
+            raise ModflowError(
+                f"{composite} auxiliary is a mapping of an auxiliary name to its value; got {aux!r}.",
+                error_code="MODFLOW_STRESS_UNSTATED")
+        stated["auxiliary"] = {name: _timed(held, composite=composite, argument=f"auxiliary {name}")
+                               for name, held in aux.items()}
+    return stated
+
+
+def _unknown(value: Mapping[str, Any], composite: str, takes: tuple[str, ...]) -> None:
+    unknown = sorted(set(value) - set(takes))
+    if unknown:
+        raise ModflowError(
+            f"{composite} takes {', '.join(takes)}; {', '.join(unknown)} is none of them.",
+            error_code="MODFLOW_STRESS_UNSTATED")
+
+
 _STREAMS = {"width": "L", "slope": "1", "bed_top": "L", "bed_thickness": "L",
             "bed_conductivity": "L/T", "manning": "1"}
+_STREAM_NUMBERS = ("bedk", "stage", "inflow", "rainfall", "evaporation", "runoff", "upstream_fraction")
+_STREAM_WORDS = {"status": (("ACTIVE", "INACTIVE", "SIMPLE"), False)}
 
 
 def _streams(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
@@ -83,6 +153,7 @@ def _streams(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
             "Streams takes a mapping of geometry, "
             f"{', '.join(_STREAMS)} and an optional layer, or a list of them; got {value!r}.",
             error_code="MODFLOW_STRESS_UNSTATED")
+    _unknown(value, "Streams", ("geometry", "layer", *_STREAMS, *_STREAM_NUMBERS, *_STREAM_WORDS, "auxiliary"))
     if value.get("geometry") is None:
         return {}, {}
     for argument in _STREAMS:
@@ -96,25 +167,84 @@ def _streams(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
         raise ModflowError(f"Streams layer is {layer!r}; it is an integer from 1.",
                            error_code="MODFLOW_STRESS_UNSTATED")
     manning = value["manning"]
-    if isinstance(manning, bool) or not isinstance(manning, (int, float)):
+    if isinstance(manning, bool) or not isinstance(manning, (int, float, Mapping)):
         raise ModflowError(
-            "Streams manning is a number in the units the SFR conversions state; a raster "
-            "carries no unit this frame converts.", error_code="MODFLOW_STRESS_UNSTATED")
+            "Streams manning is a number in the units the SFR conversions state, or keyed by period; "
+            "a raster carries no unit this frame converts.", error_code="MODFLOW_STRESS_UNSTATED")
+    settings = _settings(value, "Streams", numbers=_STREAM_NUMBERS, words=_STREAM_WORDS)
+    values = {column: value[column] for column in _STREAMS}
+    if isinstance(manning, Mapping):
+        settings["manning"] = _timed(manning, composite="Streams", argument="manning")
+        if 0 not in settings["manning"]:
+            raise ModflowError(
+                "Streams manning keyed by period states period 1, the reach's own roughness.",
+                error_code="MODFLOW_STRESS_UNSTATED")
+        values["manning"] = settings["manning"][0]
     return {"SFR_PACKAGEDATA": {"streams": [{
         "composite": "Streams", "geometry": value["geometry"], "layer": layer,
-        "values": {column: value[column] for column in _STREAMS},
-        "dimensions": dict(_STREAMS)}]}}, {}
+        "values": values, "dimensions": dict(_STREAMS), "settings": settings}]}}, {}
 
 
 _streams.__doc__ = (
-    "The SFR reaches a line geometry places: Streams(geometry, width, slope, bed_top, "
-    "bed_thickness, bed_conductivity, manning[, layer]), or a list of such statements.\n\n"
+    "The SFR reaches a line geometry places: Streams(geometry, width, slope, bed_top, bed_thickness, "
+    "bed_conductivity, manning[, layer, status, bedk, stage, inflow, rainfall, evaporation, runoff, "
+    "upstream_fraction, auxiliary]), or a list of such statements.\n\n"
     "    The line is cut by the cells it crosses in its digitized order, downstream; each\n"
-    "    reach lies on the cell's top solved layer unless layer states one.")
+    "    reach lies on the cell's top solved layer unless layer states one. A setting is mf6's own SFR\n"
+    "    period setting: a number from period 1 or {period from 1: value}, written to every reach of the\n"
+    "    line, inflow to the line's upstream reach; status is ACTIVE, INACTIVE or SIMPLE, manning keyed\n"
+    "    by period names period 1 as the reach's own, auxiliary is {name: value} of the SFR_AUXILIARY names.")
 
 
 _LAKES = ("stage", "bottom", "leakance")
 _LAKE_FLUXES = ("rainfall", "evaporation")
+_LAKE_NUMBERS = ("runoff", "inflow", "withdrawal")
+_LAKE_WORDS = {"status": (_STATUS, False)}
+_OUTLETS = ("to", "couttype", "rate", "invert", "width", "rough", "slope")
+# The outlet values each outlet type reads; mf6 takes any value in a column its type does not read.
+_COUTTYPE = {"SPECIFIED": ("rate",), "MANNING": ("invert", "width", "rough", "slope"), "WEIR": ("invert", "width")}
+
+
+def _outlets(held: Any) -> list[dict[str, Any]]:
+    if not isinstance(held, (list, tuple)) or not held or not all(isinstance(each, Mapping) for each in held):
+        raise ModflowError(f"Lakes outlets is a list of mappings of {', '.join(_OUTLETS)}; got {held!r}.",
+                           error_code="MODFLOW_STRESS_UNSTATED")
+    outlets = []
+    for each in held:
+        _unknown(each, "Lakes outlet", _OUTLETS)
+        couttype = str(each.get("couttype") or "").strip().upper()
+        if couttype not in _COUTTYPE:
+            raise ModflowError(
+                f"Lakes outlet couttype is {each.get('couttype')!r}; it is one of {', '.join(_COUTTYPE)}.",
+                error_code="MODFLOW_STRESS_UNSTATED")
+        to = each.get("to")
+        if isinstance(to, str) and to.strip().lower() == "outside":
+            to = 0
+        if isinstance(to, bool) or not isinstance(to, int) or to < 0:
+            raise ModflowError(
+                f"Lakes outlet to is the number of the lake it discharges into (from 1, the order "
+                f"the lakes are stated in) or \"outside\"; got {each.get('to')!r}.",
+                error_code="MODFLOW_STRESS_UNSTATED")
+        read = _COUTTYPE[couttype]
+        outlet: dict[str, Any] = {"couttype": couttype, "to": to}
+        for argument in ("rate", "invert", "width", "rough", "slope"):
+            held = each.get(argument)
+            if argument in read and held is None:
+                raise ModflowError(
+                    f"Lakes outlet {couttype} states no {argument}; the engine has no value for it, "
+                    "so state it from a measurement or a named source.", error_code="MODFLOW_STRESS_UNSTATED")
+            if argument not in read and held is not None:
+                raise ModflowError(
+                    f"Lakes outlet {couttype} reads no {argument}; remove it or state another couttype.",
+                    error_code="MODFLOW_STRESS_UNSTATED")
+            if held is not None:
+                outlet[argument] = _timed(held, composite="Lakes", argument=f"outlet {argument}")
+                if isinstance(outlet[argument], dict) and 0 not in outlet[argument]:
+                    raise ModflowError(
+                        f"Lakes outlet {argument} keyed by period states period 1, the outlet's first value.",
+                        error_code="MODFLOW_STRESS_UNSTATED")
+        outlets.append(outlet)
+    return outlets
 
 
 def _lakes(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
@@ -127,11 +257,8 @@ def _lakes(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
             "Lakes takes a mapping of geometry, "
             f"{', '.join(_LAKES)} and optionally {', '.join(_LAKE_FLUXES)}, or a list of them; got {value!r}.",
             error_code="MODFLOW_STRESS_UNSTATED")
-    unknown = sorted(set(value) - {"geometry", *_LAKES, *_LAKE_FLUXES})
-    if unknown:
-        raise ModflowError(
-            f"Lakes takes geometry, {', '.join(_LAKES)}, {', '.join(_LAKE_FLUXES)}; "
-            f"{', '.join(unknown)} is none of them.", error_code="MODFLOW_STRESS_UNSTATED")
+    _unknown(value, "Lakes", ("geometry", *_LAKES, *_LAKE_FLUXES, *_LAKE_NUMBERS, *_LAKE_WORDS,
+                              "auxiliary", "outlets"))
     if value.get("geometry") is None:
         return {}, {}
     for argument in _LAKES:
@@ -140,27 +267,40 @@ def _lakes(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
                 f"Lakes states no {argument}; the engine has no value for it, "
                 "so state it from a measurement or a named source.",
                 error_code="MODFLOW_STRESS_UNSTATED")
-    for argument in ("stage", "leakance", *_LAKE_FLUXES):
-        held = value.get(argument)
-        if held is not None and (isinstance(held, bool) or not isinstance(held, (int, float))):
-            raise ModflowError(
-                f"Lakes {argument} is one number for the lake; got {held!r}.",
-                error_code="MODFLOW_STRESS_UNSTATED")
+    leakance = value["leakance"]
+    if isinstance(leakance, bool) or not isinstance(leakance, (int, float)):
+        raise ModflowError(
+            f"Lakes leakance is one number for the lake; got {leakance!r}.",
+            error_code="MODFLOW_STRESS_UNSTATED")
+    settings = _settings(value, "Lakes", numbers=(*_LAKE_FLUXES, *_LAKE_NUMBERS), words=_LAKE_WORDS)
+    stage = _timed(value["stage"], composite="Lakes", argument="stage")
+    if isinstance(stage, dict) and 0 not in stage:
+        raise ModflowError("Lakes stage keyed by period states period 1, the lake's starting stage.",
+                           error_code="MODFLOW_STRESS_UNSTATED")
     return {"LAK_PACKAGEDATA": {"lakes": [{
         "composite": "Lakes", "geometry": value["geometry"],
-        "values": {column: value.get(column) for column in (*_LAKES, *_LAKE_FLUXES)}}]}}, {}
+        "outlets": _outlets(value["outlets"]) if value.get("outlets") is not None else [],
+        "values": {"bottom": value["bottom"], "leakance": leakance, **settings, "stage": stage}}]}}, {}
 
 
 _lakes.__doc__ = (
-    "The LAK lakes a polygon geometry places: Lakes(geometry, stage, bottom, leakance[, rainfall, evaporation]), "
-    "or a list of such statements.\n\n"
+    "The LAK lakes a polygon geometry places: Lakes(geometry, stage, bottom, leakance[, rainfall, evaporation, "
+    "runoff, inflow, withdrawal, status, auxiliary, outlets]), or a list of such statements.\n\n"
     "    Each polygon is one lake holding the cells whose centres it contains, in every solved layer whose top\n"
     "    lies above the lake's bottom (a number or a raster); those cells are not solved, and the lake connects\n"
     "    to the solved cells beside and below them over lakebed leakance. The stage is the lake's starting stage;\n"
-    "    a rainfall or evaporation not stated is not in the package.")
+    "    a setting not stated is not in the package. A setting is mf6's own LAK period setting: a number from\n"
+    "    period 1 or {period from 1: value}; status is ACTIVE, INACTIVE or CONSTANT, a stage keyed by period names\n"
+    "    period 1 as the starting stage and is the stage a CONSTANT lake holds, auxiliary is {name: value} of the\n"
+    "    LAK_AUXILIARY names. outlets is a list of {to, couttype, rate | invert, width, rough, slope} leaving\n"
+    "    the lake (one polygon): to is the number of the lake it discharges into or \"outside\"; couttype is SPECIFIED\n"
+    "    (rate), MANNING (invert, width, rough, slope) or WEIR (invert, width), each value from period 1 or keyed by period.")
 
 
-_MAW = ("radius", "bottom", "start_head", "condeqn", "screen_top", "screen_bottom", "rate")
+_MAW = ("radius", "bottom", "start_head", "condeqn", "screen_top", "screen_bottom")
+_MAW_NUMBERS = ("rate", "well_head", "fwelev", "fwcond", "fwrlen", "minrate", "maxrate", "pump_elevation",
+                "scaling_length")
+_MAW_WORDS = {"status": (_STATUS, False), "head_limit": (("OFF",), True)}
 _MAW_SKIN = ("hk_skin", "radius_skin")
 # The skin values each conductance equation reads; mf6 takes any value in a column its equation does not read.
 _CONDEQN = {"THIEM": (), "SPECIFIED": ("hk_skin",), "SKIN": _MAW_SKIN, "CUMULATIVE": _MAW_SKIN,
@@ -176,13 +316,9 @@ def _wells(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     if not isinstance(value, Mapping):
         raise ModflowError(
             "MultiAquiferWells takes a mapping of geometry, "
-            f"{', '.join(_MAW)} and, by its condeqn, {', '.join(_MAW_SKIN)}, or a list of them; got {value!r}.",
+            f"{', '.join(_MAW)}, rate and, by its condeqn, {', '.join(_MAW_SKIN)}, or a list of them; got {value!r}.",
             error_code="MODFLOW_STRESS_UNSTATED")
-    unknown = sorted(set(value) - {"geometry", *_MAW, *_MAW_SKIN})
-    if unknown:
-        raise ModflowError(
-            f"MultiAquiferWells takes geometry, {', '.join(_MAW)}, {', '.join(_MAW_SKIN)}; "
-            f"{', '.join(unknown)} is none of them.", error_code="MODFLOW_STRESS_UNSTATED")
+    _unknown(value, "MultiAquiferWells", ("geometry", *_MAW, *_MAW_SKIN, *_MAW_NUMBERS, *_MAW_WORDS, "auxiliary"))
     if value.get("geometry") is None:
         return {}, {}
     for argument in _MAW:
@@ -221,17 +357,41 @@ def _wells(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
                 error_code="MODFLOW_STRESS_UNSTATED")
         else:
             skin[argument] = held
+    settings = _settings(value, "MultiAquiferWells", numbers=_MAW_NUMBERS, words=_MAW_WORDS)
+    _rated(settings)
     return {"MAW_PACKAGEDATA": {"wells": [{
         "composite": "MultiAquiferWells", "geometry": value["geometry"],
-        "values": {**{column: value[column] for column in _MAW}, "condeqn": condeqn, **skin}}]}}, {}
+        "values": {**{column: value[column] for column in _MAW if column != "condeqn"}, "condeqn": condeqn,
+                   **skin, **settings}}]}}, {}
+
+
+def _rated(settings: Mapping[str, Any]) -> None:
+    """Refuse a well ACTIVE in a period where no rate has been stated yet: mf6 would take zero."""
+    status = settings.get("status", {})
+    rate = settings.get("rate")
+    rate = {} if rate is None else rate if isinstance(rate, dict) else {0: rate}
+    status = status if isinstance(status, dict) else {0: status}
+    current, rated = "ACTIVE", False
+    for period in sorted({0, *status, *rate}):
+        current, rated = status.get(period, current), rated or period in rate
+        if current == "ACTIVE" and not rated:
+            raise ModflowError(
+                f"MultiAquiferWells states no rate for period {period + 1}, where the well is ACTIVE; the engine "
+                "has no value for it, so state it from a measurement or a named source, or state the well "
+                "CONSTANT or INACTIVE.", error_code="MODFLOW_STRESS_UNSTATED")
 
 
 _wells.__doc__ = (
     "The MAW wells a point geometry places: MultiAquiferWells(geometry, radius, bottom, start_head, condeqn, "
-    "screen_top, screen_bottom, rate[, hk_skin, radius_skin]), or a list of such statements.\n\n"
+    "screen_top, screen_bottom, rate[, hk_skin, radius_skin, status, well_head, head_limit, fwelev, fwcond, fwrlen, "
+    "minrate, maxrate, pump_elevation, scaling_length, auxiliary]), or a list of such statements.\n\n"
     "    Each point is one well in the cell holding it, connected to every solved layer its screen crosses;\n"
     "    condeqn names the conductance equation, and the skin values are those it reads (SKIN, CUMULATIVE and\n"
-    "    MEAN both, SPECIFIED the conductance as hk_skin, THIEM none). Rate is the well's rate from period 1.")
+    "    MEAN both, SPECIFIED the conductance as hk_skin, THIEM none). A setting is mf6's own MAW period\n"
+    "    setting: a number from period 1 or {period from 1: value}. rate is required wherever the well is ACTIVE\n"
+    "    (the default), status is ACTIVE, INACTIVE or CONSTANT, head_limit a number or OFF. fwelev, fwcond and\n"
+    "    fwrlen are the FLOWING_WELL record, minrate and maxrate SHUT_OFF, pump_elevation and scaling_length\n"
+    "    RATE_SCALING - each record stated whole, in the same periods. auxiliary is {name: value} of the MAW_AUXILIARY names.")
 
 
 _UZF = ("surfdep", "vks", "thtr", "thts", "thti", "eps", "finf")
@@ -248,11 +408,7 @@ def _uzf(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
             "UnsaturatedZone takes a mapping of geometry, "
             f"{', '.join(_UZF)} and optionally {', '.join(_UZF_ET)}, or a list of them; got {value!r}.",
             error_code="MODFLOW_STRESS_UNSTATED")
-    unknown = sorted(set(value) - {"geometry", *_UZF, *_UZF_ET})
-    if unknown:
-        raise ModflowError(
-            f"UnsaturatedZone takes geometry, {', '.join(_UZF)}, {', '.join(_UZF_ET)}; "
-            f"{', '.join(unknown)} is none of them.", error_code="MODFLOW_STRESS_UNSTATED")
+    _unknown(value, "UnsaturatedZone", ("geometry", *_UZF, *_UZF_ET, "auxiliary"))
     if value.get("geometry") is None:
         return {}, {}
     for argument in _UZF:
@@ -261,24 +417,31 @@ def _uzf(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
                 f"UnsaturatedZone states no {argument}; the engine has no value for it, "
                 "so state it from a measurement or a named source.",
                 error_code="MODFLOW_STRESS_UNSTATED")
+    values = {}
     for argument in (*_UZF, *_UZF_ET):
         held = value.get(argument)
-        if held is not None and (isinstance(held, (bool, str))):
+        if argument in ("finf", *_UZF_ET) and _by_period(held):
+            held = _timed(held, composite="UnsaturatedZone", argument=argument)
+        elif held is not None and (isinstance(held, (bool, str))):
             raise ModflowError(
                 f"UnsaturatedZone {argument} is a number or a raster; got {held!r}.",
                 error_code="MODFLOW_STRESS_UNSTATED")
+        values[argument] = held
+    if value.get("auxiliary") is not None:
+        values["auxiliary"] = _settings(value, "UnsaturatedZone", numbers=(), words={})["auxiliary"]
     return {"UZF_PACKAGEDATA": {"zones": [{
-        "composite": "UnsaturatedZone", "geometry": value["geometry"],
-        "values": {column: value.get(column) for column in (*_UZF, *_UZF_ET)}}]}}, {}
+        "composite": "UnsaturatedZone", "geometry": value["geometry"], "values": values}]}}, {}
 
 
 _uzf.__doc__ = (
     "The UZF cells a polygon geometry places: UnsaturatedZone(geometry, surfdep, vks, thtr, thts, thti, eps, finf"
-    "[, pet, extdp, extwc, ha, hroot, rootact]), or a list of such statements.\n\n"
+    "[, pet, extdp, extwc, ha, hroot, rootact, auxiliary]), or a list of such statements.\n\n"
     "    The top solved cell of every column whose centre the polygon holds is a land-surface UZF cell, and each\n"
     "    solved layer below it down the column a UZF cell connected to the one above; a property is a number or a\n"
-    "    raster read at the column's centre and holds for the whole column, finf is the land cell's infiltration\n"
-    "    from period 1. The ET values are those the stated UZF ET options read; stated beside none, they refuse.")
+    "    raster read at the column's centre and holds for the whole column. finf and the ET values are the land\n"
+    "    cell's period settings: a number or raster from period 1, or {period from 1: number}; the ET values are\n"
+    "    those the stated UZF ET options read; stated beside none, they refuse. auxiliary is {name: value} of the\n"
+    "    UZF_AUXILIARY names, from period 1 or keyed by period.")
 
 
 def module_input_dir() -> Path:

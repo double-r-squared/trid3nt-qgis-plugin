@@ -117,6 +117,18 @@ def _optional(entry: dict[str, str]) -> bool:
     return entry.get("optional", "false").lower() == "true"
 
 
+#: A sentence of the DFN's own prose saying the engine needs no value for the entry: it names its default
+#: (``a default value of zero is used``, ``Default is one``), assigns one when unstated, or
+#: waives the entry where it is unread (``does not have to be specified if``).
+_NEEDS_NO_VALUE = re.compile(
+    r"\bDefault is\b|\bnot specified\b[^.]*\b(?:used|assigned)\b|\bdoes not have to be specified\b")
+
+
+def _unrequired(entry: dict[str, str]) -> bool:
+    """Whether the DFN's description says mf6 runs without this entry stated."""
+    return bool(_NEEDS_NO_VALUE.search(re.sub(r"\s+", " ", entry.get("description", ""))))
+
+
 def _engine_default(entry: dict[str, str]) -> object:
     """The value the DFN's default spells, or ``None`` where it gives none.
 
@@ -171,7 +183,7 @@ def _row(entry: dict[str, str], package: str) -> dict[str, object]:
         "help": _help(entry),
         "rubrique": [entry["block"].upper()],
         "is_file": False,
-        "mandatory": not _optional(entry) and default is None,
+        "mandatory": not _optional(entry) and default is None and not _unrequired(entry),
     }
     if default is not None:
         row["default"] = default

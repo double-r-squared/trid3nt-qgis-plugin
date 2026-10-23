@@ -16,7 +16,8 @@ size, its help, its block as the rubrique, its engine default, and whether it
 is mandatory. Only `optional true` is optional - a bare `optional` line marks K
 and ICELLTYPE, which mf6 refuses a run without - and a required entry carries
 no default: its DFN `default_value` is flopy's illustration, not a value mf6
-uses, except on a required flag (READASARRAYS), the package's own tag.
+uses, except on a required flag (READASARRAYS), the package's own tag. An entry whose own description says mf6 runs without it stated
+(a stated default, or a waiver where it is unread) is not mandatory.
 `modules/module.py` reads a file here into the wrapper's slots.
 
 ## Files

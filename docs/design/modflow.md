@@ -168,6 +168,29 @@ a column in two statements refuses. `UZF_NUZFCELLS` and `UZF_PERIODDATA` stated 
 same infiltration counted twice. `UZF_NTRAILWAVES` and `UZF_NWAVESETS` are mf6's resolution
 dimensions and stay keywords.
 
+### Period settings of the placement composites
+
+`Streams`, `Lakes`, `MultiAquiferWells` and `UnsaturatedZone` each take every period setting
+mf6 defines for their package (gwf-sfr, gwf-lak, gwf-maw, gwf-uzf `.dfn`, block `period`), by
+mf6's own names: SFR `status, bedk, manning, stage, inflow, rainfall, evaporation, runoff,
+upstream_fraction, auxiliary`; LAK `status, stage, rainfall, evaporation, runoff, inflow,
+withdrawal, auxiliary` and `outlets` (`to, couttype, rate | invert, width, rough, slope`); MAW
+`status, rate, well_head, head_limit`, the FLOWING_WELL record `fwelev, fwcond, fwrlen`, SHUT_OFF
+`minrate, maxrate`, RATE_SCALING `pump_elevation, scaling_length`, `auxiliary`; UZF `finf`, the ET
+values and `auxiliary`. A setting is a number from period 1 or `{period from 1: value}`; a setting
+not stated is absent from the package, never a zero. A record is stated whole and in the same
+periods; `status` and `head_limit` take their words (`ACTIVE|INACTIVE|CONSTANT`, SFR
+`ACTIVE|INACTIVE|SIMPLE`, `OFF`). Where the package's table holds the value too (SFR `manning`,
+LAK `stage` and the outlet `invert, width, rough, slope`, the SFR/LAK/MAW `auxiliary` columns) a
+plain number is the table's alone and a keyed value states period 1 as the table's and every entry
+as a row. A well needs a `rate` wherever it is ACTIVE; the flowing-well values need
+`MAW_FLOWING_WELLS`; `auxiliary` names must be the package's AUXILIARY names. SFR settings land on
+every reach of the line, `inflow` on its upstream reach. A UZF period line carries every column, so
+a keyed value writes a line per period named with the value in force in each column. SFR
+`diversion` and `cross_section` and LAK tables name a topology and a table file and stay on the
+keyword path. The dictionary marks an entry not mandatory when its own DFN description says mf6
+runs without it (`EVT_NSEG`, `EVTA_AUX`, `LAK_NOUTLETS`, `LAK_NTABLES`, `STO_SY`).
+
 ## The coupling
 
 A coupled run is ONE simulation holding a GWF model and a GWT model, a GWE model,

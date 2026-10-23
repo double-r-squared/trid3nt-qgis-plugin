@@ -2555,7 +2555,7 @@
         "DIMENSIONS"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": false
     },
     {
       "keyword": "STRESS_PERIOD_DATA",
@@ -2796,7 +2796,7 @@
         "PERIOD"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": false
     },
     {
       "keyword": "AUXILIARY",
@@ -3637,7 +3637,7 @@
         "DIMENSIONS"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": false
     },
     {
       "keyword": "NTABLES",
@@ -3652,7 +3652,7 @@
         "DIMENSIONS"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": false
     },
     {
       "keyword": "PACKAGEDATA",
@@ -6134,7 +6134,7 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": false
     },
     {
       "keyword": "STEADY_STATE",
