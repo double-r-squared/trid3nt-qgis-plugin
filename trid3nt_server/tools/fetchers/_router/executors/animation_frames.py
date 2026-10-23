@@ -69,6 +69,8 @@ def execute(
                 role=spec.output.role,
                 units=spec.normalize.units,
                 bbox=frame.bbox,
+                # The row's statement of what its elevations are counted from rides on every frame, as on a single layer.
+                vertical_datum=spec.vertical_datum or None,
                 # The frame's own validity window becomes the layer's fixed temporal range.
                 valid_from=frame.valid_from,
                 valid_to=frame.valid_to,

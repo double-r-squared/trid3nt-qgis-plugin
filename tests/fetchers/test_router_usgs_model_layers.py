@@ -347,6 +347,14 @@ def test_the_frames_are_the_k_rows_cells(monkeypatch):
     assert (np.ma.getmaskarray(t_arr) == np.ma.getmaskarray(k_frames[1][0])).all()
 
 
+def test_every_frame_states_its_vertical_datum_and_the_k_frames_state_none(monkeypatch):
+    _wire(monkeypatch)
+    surfaces = TOOL_REGISTRY["fetch_usgs_model_layers"].fn(bbox=_DM_BBOX)
+    assert surfaces and {l.vertical_datum for l in surfaces} == {"NAVD88"}
+    k = TOOL_REGISTRY["fetch_usgs_model_k"].fn(bbox=_DM_BBOX)
+    assert k and {l.vertical_datum for l in k} == {None}
+
+
 def test_des_moines_is_seven_planned_six_emitted_and_read_as_published(monkeypatch):
     seen = _wire(monkeypatch)
     layers = TOOL_REGISTRY["fetch_usgs_model_layers"].fn(bbox=_DM_BBOX)

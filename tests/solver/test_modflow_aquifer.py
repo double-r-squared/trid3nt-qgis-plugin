@@ -724,6 +724,49 @@ def test_a_fetched_layered_model_is_read_by_depth_at_a_cell(monkeypatch, tmp_pat
     assert got[1] == pytest.approx([want2], rel=1e-3)
 
 
+def test_a_gap_layer_of_the_fetched_ring_is_unmeasured_and_the_layers_around_it_still_place(monkeypatch, tmp_path):
+    """Des Moines layers 3 and 4 carry no active cell at the probe: the frames drop layer 3 whole, and the lists
+    state what is emitted (K of layers 1, 2, 4, 5, 6; the top and the bottoms of layers 1, 2, 4, 5, 6)."""
+    import re
+
+    from pyproj import Transformer
+    import rasterio
+
+    from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place
+
+    k_layers, surface_layers, held = _ring_frames(monkeypatch)
+    assert sorted(int(re.search(r"-l(\d+)-", l.layer_id).group(1)) for l in k_layers) == [1, 2, 4, 5, 6]
+    assert len(surface_layers) == len(k_layers) + 1 and {l.vertical_datum for l in surface_layers} == {"NAVD88"}
+
+    def artifact(layer, name, units):
+        path = tmp_path / f"{name}.tif"
+        path.write_bytes(held[layer.uri])
+        return {"uri": str(path), "name": name, "units": units, "vertical_datum": layer.vertical_datum}
+
+    k_ordered = sorted(k_layers, key=lambda l: int(re.search(r"-l(\d+)-", l.layer_id).group(1)))
+    s_ordered = sorted(surface_layers, key=lambda l: 0 if "-top-l1-" in l.layer_id
+                       else int(re.search(r"-bot-l(\d+)-", l.layer_id).group(1)))
+    inputs = {f"k{i}": artifact(l, f"k{i}", "m/d") for i, l in enumerate(k_ordered)}
+    inputs |= {f"s{i}": artifact(l, f"s{i}", "m") for i, l in enumerate(s_ordered)}
+
+    with rasterio.open(tmp_path / "s0.tif") as ds:
+        lon, lat = ds.xy(*ds.index(*_DM_PROBE))
+    x, y = Transformer.from_crs(4326, 32615, always_xy=True).transform(lon, lat)
+    points = [(x - 1.0, y - 1.0), (x + 1.0, y - 1.0), (x, y + 2.0)]
+    cells = [(0, 1, 2)]
+
+    # Model layers 1 and 2 span [243, 245] and [234, 243] m at the probe; layers 3 and 4 are pass-through.
+    top, botm = 245.0, [243.0, 234.0]
+    sheet = _fill(inputs, {"thickness": top - botm[-1], "water_table_depth": 1.0, "layers": 2,
+                           "conductivity": {"layers": [f"k{i}" for i in range(5)],
+                                            "surfaces": [f"s{i}" for i in range(6)]}}, DISV_TOP=top)
+    got = place(sheet.filled["NPF_K"].value, slot=sheet.filled["NPF_K"].slot, nlay=2,
+                run={**sheet.run, "vertical_frame": "NAVD88"}, points=points, cells=cells,
+                utm_epsg=32615, frame=frame_of(sheet), top=[top], botm=[[b] for b in botm])
+    assert got[0] == pytest.approx([28.973], rel=1e-3)
+    assert got[1] == pytest.approx([10.289], rel=1e-3)
+
+
 def test_a_by_depth_conductivity_serializes_one_k_array_per_grid_layer(staged_beside, tmp_path):
     mesh = _mesh(tmp_path)
     sheet = _fill({}, {"thickness": 30.0, "water_table_depth": 1.0, "layers": 2,
