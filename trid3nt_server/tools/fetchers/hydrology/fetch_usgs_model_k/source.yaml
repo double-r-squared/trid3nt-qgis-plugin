@@ -1,0 +1,133 @@
+# Two published USGS MODFLOW model-K archives behind ONE row: Cape Cod JBCC
+# (32 layers, K in ft/d over a NAD27 state-plane grid) and Des Moines MF6
+# (6 layers, K in m/d over a NAD83 UTM grid). The plan hook fans one call into
+# one frame per layer of the single grid covering the AOI; the bytes hook reads
+# that layer's K + mask members from the constant archive and warps the touched
+# window to an EPSG:4326 COG, nearest-neighbour, cropped to cells whose centers
+# fall in the bbox. A fetcher with a row is FOUND through its class, so the row
+# carries no sibling corpus.
+schema_version: v1
+
+name: fetch_usgs_model_k
+source_class: usgs_model_k
+error_prefix: USGS_MODEL_K
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+shape: animation_frames
+supports_global_query: false
+
+# The two ScienceBase model.zip objects; documentary - frame_bytes owns the reads
+# through each archive's own constant cache entry, so every frame of one call
+# shares a single download.
+endpoints:
+  jbcc_model:
+    url: https://www.sciencebase.gov/catalog/file/get/631405ded34e36012efa3476?f=__disk__0f%2F7e%2F50%2F0f7e50aa9965d7d1ebb3261e6070e35b6857bd89
+  des_moines_model:
+    url: https://www.sciencebase.gov/catalog/file/get/6601d849d34e64ff1548e2ad?f=__disk__be%2F60%2F44%2Fbe6044364e5897bfd556958e27867f28ee124f64
+auth:
+  mode: none
+  user_agent: "trid3nt/0.1 (Hazard Modeling Agent; agent@trid3nt.dev)"
+
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+
+hooks:
+  frames_plan: usgs_model_k.frames_plan
+  frame_bytes: usgs_model_k.frame_bytes
+
+normalize:
+  crs: EPSG:4326
+  units: m/day
+  quantity: aquifer_hydraulic_conductivity
+
+output:
+  layer_type: raster
+  ext: tif
+  role: primary
+  emit_bbox: true
+  style:
+    kind: continuous
+    units: m/day
+  display_name: "Aquifer hydraulic conductivity (modelled)"
+
+cache:
+  ttl_class: static-30d
+
+payload_estimate:
+  model: bbox_area
+  # Cape Cod at 121.92 m cells: ~622k cells/deg^2/layer x 32 layers x 4 B = ~80
+  # MB/deg^2; Des Moines (6 layers, 60 m) lands under the same coefficient. A
+  # canary-ring AOI (~0.01 deg^2) is under 1 MB, far below the 25 MB warn.
+  mb_per_sq_deg: 80.0
+
+coverage:
+- data_class: aquifer property
+  kind: modelled
+  extent:
+    kind: surface
+    # The four native corners of each model grid (JBCC georeferencing; Des Moines
+    # DIS extent) transformed to lon/lat at 6 dp - the union of the two grids.
+    rings:
+      - [[-70.720992, 41.805502], [-70.13421, 41.799982], [-70.140988, 41.481685], [-70.724858, 41.487178]]
+      - [[-93.854022, 41.817624], [-93.577352, 41.819348], [-93.575291, 41.588597], [-93.850975, 41.586887]]
+    note: the Cape Cod JBCC (32 layers, ~400 ft cells) and Des Moines MF6 (6 layers, 60 m cells) USGS MODFLOW model grids, their union
+  window:
+    series: false
+    latest: '2019-01-01'
+  # The COARSER of the two grids (Cape Cod 400 ft = 121.92 m); Des Moines is
+  # finer at 60 m - the row states its worst cell.
+  resolution_m: 121.92
+  datum: null
+  units:
+    hydraulic_conductivity: m/day
+  value_column: hydraulic_conductivity
+
+caveats:
+  - "Two published calibrated USGS MODFLOW model grids, nothing more: Cape Cod JBCC (2019 release, 32 layers, ~400 ft cells, NAD27 state plane, K stored in ft/d and converted here to m/day) and Des Moines MF6 (2024 release, 6 layers, 60 m cells, K native m/day). A bbox outside both raises USGS_MODEL_K_INPUT_INVALID naming them; there is no third grid and nothing is interpolated between grids."
+  - "Model NPF array values (horizontal Kx), not pumping tests: these are the conductivities the calibrated models route flow with, not measurements of any single well. Cape Cod cells reading 100000 ft/d are the model's own placeholder conductances for river-connected cells, not measured aquifer K."
+  - "Horizontal K only: vertical K (Kz), specific storage, specific yield and layer tops/bottoms are carried nowhere - each frame is a single-band m/day raster. Frames land on the EPSG:4326 grid by NEAREST NEIGHBOUR; a cell's value is never blended with its neighbours."
+  - "A layer with no active (ib/idomain == 1) cells over the AOI is skipped and recorded; if no layer covers, the call raises USGS_MODEL_K_EMPTY rather than emitting blank layers. The Cape Cod item states no license for its archive (cite the 2019 data release); Des Moines is CC0-1.0."
+
+docstring: |-
+  Fetch published USGS MODFLOW model hydraulic conductivity as one raster frame
+  per model layer.
+
+  **What it does:** Reads the horizontal hydraulic-conductivity (K) arrays out of
+  two published USGS groundwater-flow model archives - the Joint Base Cape Cod
+  (JBCC) MODFLOW-2005 model (32 layers, ~400 ft cells, NAD27 Massachusetts
+  State Plane, K stored in ft/d and converted to m/day) and the Des Moines
+  River alluvial-aquifer MODFLOW-6 model (6 layers, 60 m cells, NAD83 UTM 15N,
+  K native m/day) - for the requested bbox, masks to each model's ACTIVE cells
+  (ib / idomain == 1), warps NEAREST-neighbour onto an EPSG:4326 grid cropped
+  to cells whose centers fall inside the bbox, and returns an ORDERED list of
+  float32 COG frames - one per model layer - in m/day.
+
+  **When to use:**
+  - "What is the aquifer hydraulic conductivity here, in this model layer?"
+  - Comparing K between the layers of the Cape Cod or Des Moines model (a
+    screened depth against an aquitard), or sanity-checking plausible K ranges
+    for a new model setup at either site.
+  - A layer-resolved, modelled counterpart to a regional K mosaic.
+
+  **When NOT to use:**
+  - Pumping-test or field-measured K - these are the calibrated models' own
+    input arrays, not measurements of any single well.
+  - Anywhere outside the Cape Cod (JBCC) and Des Moines grids - the call
+    refuses, naming the grids and how much of the AOI each covers.
+  - Vertical K, storage properties, or layer geometry (tops/bottoms) - not
+    carried.
+
+  **Parameters:**
+  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326; must
+    lie ENTIRELY inside ONE of the two model grids. Required. Example (Cape
+    Cod canary): ``(-70.62, 41.59, -70.50, 41.68)``.
+
+  **Returns:** an ORDERED ``list[LayerURI]`` of one-band float32 COG frames
+  (``layer_type="raster"``, ``role="primary"``, ``units="m/day"``), layer 1
+  first, one ``layer_id`` per model + layer + bbox, no temporal windows (a
+  static overlay). A layer with no active cells over the AOI is skipped and
+  recorded; a bbox where NO layer is active raises the typed
+  ``USGS_MODEL_K_EMPTY``.

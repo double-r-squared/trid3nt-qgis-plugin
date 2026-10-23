@@ -596,6 +596,7 @@ def _quantity_need(data_class, of, geometry="", where=_DES_MOINES):
 @pytest.mark.parametrize(("data_class", "of", "fetcher"), [
     ("aquifer property", "aquifer_saturated_thickness", "fetch_aquifer_thickness"),
     ("aquifer property", "aquifer_transmissivity", "fetch_aquifer_transmissivity"),
+    ("aquifer property", "aquifer_hydraulic_conductivity", "fetch_usgs_model_k"),
     ("aquifer property", "groundwater_recharge", "fetch_groundwater_recharge"),
     ("groundwater level", "water_table_depth", "fetch_water_table_depth"),
 ])
