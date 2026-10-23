@@ -2,7 +2,7 @@
 
 Each call fans into the top of layer 1 and the bottom of every layer of the ONE
 model grid covering the AOI, built from the real-archive excerpt zips offline:
-the n + 1 frame count, the stacking order, the same cells as the K row's frames,
+the n + 1 frame count, the stacking order, the cells of the K row's frames,
 one hand-checked cell per model on its vertical datum, the VDatum offset onto
 NAVD88 and its refusal, and the outside-grid refusal."""
 
@@ -326,8 +326,8 @@ def test_the_archives_own_top_is_above_bottom_at_every_active_cell():
 
 
 def test_the_frames_are_the_k_rows_cells(monkeypatch):
-    """Frame i + 1 here and frame i of the K row hold values at exactly the
-    same cells, on the same grid."""
+    """On Cape Cod, where no layer is inactive under an active one, frame i + 1
+    here and frame i of the K row hold values at exactly the same cells, on the same grid."""
     seen = _wire(monkeypatch)
     surf = TOOL_REGISTRY["fetch_usgs_model_layers"].fn(bbox=_CC_BBOX)
     k = TOOL_REGISTRY["fetch_usgs_model_k"].fn(bbox=_CC_BBOX)
@@ -355,11 +355,11 @@ def test_every_frame_states_its_vertical_datum_and_the_k_frames_state_none(monke
     assert k and {l.vertical_datum for l in k} == {None}
 
 
-def test_des_moines_is_seven_planned_six_emitted_and_read_as_published(monkeypatch):
+def test_des_moines_is_seven_planned_and_emitted_and_read_as_published(monkeypatch):
     seen = _wire(monkeypatch)
     layers = TOOL_REGISTRY["fetch_usgs_model_layers"].fn(bbox=_DM_BBOX)
-    # idomain has no active cell over the ring in layer 3, so its bottom drops.
-    assert sorted(_surface_no(l.layer_id) for l in layers) == [0, 1, 2, 4, 5, 6]
+    # Layer 3 has no active cell over the ring but layer 4 does, so layer 3's bottom (4's top) is kept.
+    assert sorted(_surface_no(l.layer_id) for l in layers) == [0, 1, 2, 3, 4, 5, 6]
     assert seen["gets"] == 1
     assert seen["asks"] == [], "a NAVD88 model is read as published, no VDatum ask"
     frames = _frames(seen, layers)
@@ -374,11 +374,14 @@ def test_des_moines_is_seven_planned_six_emitted_and_read_as_published(monkeypat
     assert float(arr[r, c]) == pytest.approx(raw, abs=1e-3)
     print(f"DM top L1 cell (row {row}, col {col}): raw {raw} m NAVD88 -> "
           f"{float(arr[r, c]):.4f} m NAVD88 (no conversion)")
-    for s in (1, 2, 5, 6):
+    for s in (1, 2, 3, 4, 5, 6):
         upper, lower = frames[s - 1][0], frames[s][0]
         both = ~np.ma.getmaskarray(upper) & ~np.ma.getmaskarray(lower)
         if both.any():
-            assert (upper.data[both] > lower.data[both]).all()
+            # An inactive layer is zero thick (idomain -1), so the surfaces around it coincide.
+            assert (upper.data[both] >= lower.data[both]).all()
+            if s in (1, 2):
+                assert (upper.data[both] > lower.data[both]).all()
 
 
 def test_a_vdatum_gap_refuses_by_name_and_returns_no_frames(monkeypatch):

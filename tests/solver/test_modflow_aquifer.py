@@ -725,10 +725,13 @@ def test_a_fetched_layered_model_is_read_by_depth_at_a_cell(monkeypatch, tmp_pat
 
 
 def test_a_gap_layer_of_the_fetched_ring_is_unmeasured_and_the_layers_around_it_still_place(monkeypatch, tmp_path):
-    """Des Moines layers 3 and 4 carry no active cell at the probe: the frames drop layer 3 whole, and the lists
-    state what is emitted (K of layers 1, 2, 4, 5, 6; the top and the bottoms of layers 1, 2, 4, 5, 6)."""
+    """Des Moines layers 3 and 4 carry no active cell at the probe and layer 5 does: a surface is kept wherever a layer
+    it bounds is active, so the bottom of layer 4 stays and layer 5 places; K of layers 3 is not emitted, nor are its
+    surfaces used (K of layers 1, 2, 4, 5, 6 over the top and the bottoms of 1, 2, 4, 5, 6)."""
     import re
+    import zipfile
 
+    import numpy as np
     from pyproj import Transformer
     import rasterio
 
@@ -736,16 +739,18 @@ def test_a_gap_layer_of_the_fetched_ring_is_unmeasured_and_the_layers_around_it_
 
     k_layers, surface_layers, held = _ring_frames(monkeypatch)
     assert sorted(int(re.search(r"-l(\d+)-", l.layer_id).group(1)) for l in k_layers) == [1, 2, 4, 5, 6]
-    assert len(surface_layers) == len(k_layers) + 1 and {l.vertical_datum for l in surface_layers} == {"NAVD88"}
+    assert {l.vertical_datum for l in surface_layers} == {"NAVD88"}
 
     def artifact(layer, name, units):
         path = tmp_path / f"{name}.tif"
         path.write_bytes(held[layer.uri])
         return {"uri": str(path), "name": name, "units": units, "vertical_datum": layer.vertical_datum}
 
+    def number(layer):
+        return 0 if "-top-l1-" in layer.layer_id else int(re.search(r"-bot-l(\d+)-", layer.layer_id).group(1))
+
     k_ordered = sorted(k_layers, key=lambda l: int(re.search(r"-l(\d+)-", l.layer_id).group(1)))
-    s_ordered = sorted(surface_layers, key=lambda l: 0 if "-top-l1-" in l.layer_id
-                       else int(re.search(r"-bot-l(\d+)-", l.layer_id).group(1)))
+    s_ordered = sorted((l for l in surface_layers if number(l) != 3), key=number)
     inputs = {f"k{i}": artifact(l, f"k{i}", "m/d") for i, l in enumerate(k_ordered)}
     inputs |= {f"s{i}": artifact(l, f"s{i}", "m") for i, l in enumerate(s_ordered)}
 
@@ -754,17 +759,29 @@ def test_a_gap_layer_of_the_fetched_ring_is_unmeasured_and_the_layers_around_it_
     x, y = Transformer.from_crs(4326, 32615, always_xy=True).transform(lon, lat)
     points = [(x - 1.0, y - 1.0), (x + 1.0, y - 1.0), (x, y + 2.0)]
     cells = [(0, 1, 2)]
+    ux, uy = Transformer.from_crs(4326, 26915, always_xy=True).transform(lon, lat)
+    row, col = int((4629880.0 - uy) // 60.0), int((ux - 429070.0) // 60.0)
 
-    # Model layers 1 and 2 span [243, 245] and [234, 243] m at the probe; layers 3 and 4 are pass-through.
-    top, botm = 245.0, [243.0, 234.0]
-    sheet = _fill(inputs, {"thickness": top - botm[-1], "water_table_depth": 1.0, "layers": 2,
+    def raw(member):
+        with zipfile.ZipFile(_FIXTURES / "dm_ring_excerpt.zip") as zf:
+            return float(np.array(zf.read(member).decode().split(), dtype=float).reshape(427, 383)[row, col])
+
+    k5 = raw("external_files/props/l5._kx")
+    b4, b5 = raw("external_files/surfs/l4_bot.dat"), raw("external_files/surfs/l5_bot.dat")
+
+    # Grid layers [243, 245], [234, 243] and [b5, b4] (230 to 234 m): layers 3 and 4 are zero thick at the probe and
+    # weigh nothing, so the third grid layer takes layer 5 alone, k5 * (b4 - b5) / (b4 - b5).
+    top, botm = 245.0, [243.0, 234.0, b5]
+    assert b4 == pytest.approx(234.0, abs=0.5) and b5 < b4
+    sheet = _fill(inputs, {"thickness": top - b5, "water_table_depth": 1.0, "layers": 3,
                            "conductivity": {"layers": [f"k{i}" for i in range(5)],
                                             "surfaces": [f"s{i}" for i in range(6)]}}, DISV_TOP=top)
-    got = place(sheet.filled["NPF_K"].value, slot=sheet.filled["NPF_K"].slot, nlay=2,
+    got = place(sheet.filled["NPF_K"].value, slot=sheet.filled["NPF_K"].slot, nlay=3,
                 run={**sheet.run, "vertical_frame": "NAVD88"}, points=points, cells=cells,
                 utm_epsg=32615, frame=frame_of(sheet), top=[top], botm=[[b] for b in botm])
     assert got[0] == pytest.approx([28.973], rel=1e-3)
     assert got[1] == pytest.approx([10.289], rel=1e-3)
+    assert got[2] == pytest.approx([k5], rel=1e-3) and k5 == pytest.approx(49.7, abs=0.05)
 
 
 def test_a_by_depth_conductivity_serializes_one_k_array_per_grid_layer(staged_beside, tmp_path):

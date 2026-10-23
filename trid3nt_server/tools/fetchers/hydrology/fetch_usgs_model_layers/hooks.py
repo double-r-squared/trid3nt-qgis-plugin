@@ -1,9 +1,11 @@
 """usgs_model_layers frames hooks: a plan per layer surface over the covering grid.
 
 The frames are the top of layer 1 and then the bottom of each layer in order,
-cropped and masked exactly as ``usgs_model_k`` crops and masks that layer's K
-(the top of layer 1 by layer 1's mask, a layer's bottom by that layer's mask),
-so frame i + 1 here and frame i there describe the same cells. Every frame is
+cropped like ``usgs_model_k``'s K frames and masked by the layers each surface
+bounds: the top of layer 1 by layer 1, the bottom of layer n by layer n OR
+layer n + 1 (it is also the top of n + 1), the last bottom by the last layer.
+A surface is kept wherever any layer it bounds is active, so an inactive layer
+stays unmeasured while the layers around it keep both their surfaces. Every frame is
 metres on NAVD88: a model counted from another datum is put onto NAVD88 through
 NOAA VDatum, refusing where the service has no offset."""
 
@@ -13,6 +15,8 @@ import io
 import logging
 import zipfile
 from typing import Any
+
+import numpy as np
 
 from trid3nt_contracts.source_spec import SourceSpec
 
@@ -119,6 +123,9 @@ def frame_bytes(
         with zipfile.ZipFile(io.BytesIO(blob)) as zf:
             values = grid.read_grid(zf, member, arch)
             mask = grid.read_grid(zf, arch["mask_member"].format(n=layer), arch)
+            if 0 < surface < int(arch["layers"]):
+                below = grid.read_grid(zf, arch["mask_member"].format(n=surface + 1), arch)
+                mask = np.where((mask == 1) | (below == 1), 1, 0)
     except (zipfile.BadZipFile, KeyError, ValueError, OSError) as exc:
         raise FrameDegraded(
             f"{arch['label']} {what}: unreadable archive member ({exc})"
