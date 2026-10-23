@@ -74,9 +74,14 @@ layers])` states an aquifer as cell expressions against the accepted mesh -
 every argument required, exactly one of each pair, a thickness at or under zero
 refused. `layers` (an integer from 1, unstated one) splits the saturated
 thickness under the water table into that many equal layers (a whole `thickness`
-splits from the land surface): K is the same in each, only layer 1 is
-convertible (unconfined) and layers below it are confined, and the starting
-head is the water-table elevation in every layer. The stress composites
+splits from the land surface): only layer 1 is convertible (unconfined) and
+layers below it are confined, and the starting head is the water-table
+elevation in every layer. K is the same in each layer unless `conductivity` is a
+list of one number or raster per layer, top first, as long as `layers` (a
+length mismatch refuses naming both; the list is the `{"cells": "layers"}`
+statement, each entry placed as a single K is). `transmissivity` stays one
+value, a list there refuses; NPF_K33 is not written, so mf6 takes it equal to
+each layer's K. The stress composites
 (`Recharge`, `Drains`, `GeneralHead`, `ConstantHead`, `Wells`) place a geometry
 on the cells and state their package's period data; a geometry reading nothing
 states nothing, and a missing value refuses rather than defaulting. A statement may name

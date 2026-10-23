@@ -380,3 +380,80 @@ def test_one_thickness_and_only_one_is_stated(stated):
         _fill({}, {"water_table_depth": 2.0, "transmissivity": 140.0, **stated})
     assert caught.value.error_code == "MODFLOW_AQUIFER_UNSTATED"
     assert "saturated_thickness" in str(caught.value)
+
+
+def _k_by_layer(sheet, nlay):
+    from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place
+
+    return place(sheet.filled["NPF_K"].value, slot=sheet.filled["NPF_K"].slot, nlay=nlay,
+                 run=sheet.run, points=_POINTS, cells=_CELLS, utm_epsg=32617,
+                 frame=frame_of(sheet))
+
+
+def test_a_conductivity_list_lands_each_entry_on_its_own_layer(tmp_path):
+    sheet = _fill(_inputs(tmp_path), {"thickness": "thick", "water_table_depth": "depth",
+                                       "layers": 3, "conductivity": [5.0, 0.5, 0.05]})
+    assert _k_by_layer(sheet, 3) == [[5.0] * 8, [0.5] * 8, [0.05] * 8]
+
+
+def test_a_conductivity_list_of_rasters_samples_each_layer_from_its_own_raster(tmp_path):
+    inputs = _inputs(tmp_path)
+    inputs["deep"] = _raster(tmp_path / "deep.tif", [[10.0, 20.0], [30.0, 40.0]], "m/day", "deep")
+    sheet = _fill(inputs, {"thickness": "thick", "water_table_depth": "depth",
+                           "layers": 2, "conductivity": ["cond", "deep"]})
+    assert _k_by_layer(sheet, 2) == [pytest.approx(_per_cell(_DEPTH)),
+                                     pytest.approx(_per_cell([[10.0, 20.0], [30.0, 40.0]]))]
+
+
+def test_a_conductivity_list_may_mix_a_number_and_a_raster(tmp_path):
+    sheet = _fill(_inputs(tmp_path), {"thickness": "thick", "water_table_depth": "depth",
+                                       "layers": 2, "conductivity": ["cond", 0.25]})
+    assert _k_by_layer(sheet, 2) == [pytest.approx(_per_cell(_DEPTH)), [0.25] * 8]
+
+
+def test_a_conductivity_list_longer_or_shorter_than_the_layers_refuses_naming_both(tmp_path):
+    for listed in ([1.0, 2.0], [1.0, 2.0, 3.0, 4.0]):
+        with pytest.raises(ModflowError) as caught:
+            _fill(_inputs(tmp_path), {"thickness": "thick", "water_table_depth": "depth",
+                                       "layers": 3, "conductivity": listed})
+        assert caught.value.error_code == "MODFLOW_AQUIFER_UNSTATED"
+        assert f"lists {len(listed)}" in str(caught.value) and "layers is 3" in str(caught.value)
+
+
+def test_a_conductivity_list_with_no_layer_count_is_one_layer_and_refuses_two_values(tmp_path):
+    with pytest.raises(ModflowError) as caught:
+        _fill(_inputs(tmp_path), {"thickness": "thick", "water_table_depth": "depth",
+                                   "conductivity": [1.0, 2.0]})
+    assert "layers is 1" in str(caught.value)
+
+
+def test_a_transmissivity_list_refuses_by_name(tmp_path):
+    with pytest.raises(ModflowError) as caught:
+        _fill(_inputs(tmp_path), {**_FULL, "layers": 2, "transmissivity": ["trans", "trans"]})
+    assert caught.value.error_code == "MODFLOW_AQUIFER_UNSTATED"
+    assert "transmissivity" in str(caught.value)
+
+
+def test_a_single_conductivity_still_repeats_on_every_layer(tmp_path):
+    sheet = _fill(_inputs(tmp_path), {"thickness": "thick", "water_table_depth": "depth",
+                                       "layers": 2, "conductivity": 3.0})
+    assert sheet.filled["NPF_K"].value["cells"] == "raster"
+    assert _k_by_layer(sheet, 2) == [[3.0] * 8, [3.0] * 8]
+
+
+def test_a_two_layer_list_serializes_one_k_array_per_layer_top_first(staged_beside, tmp_path):
+    mesh = _mesh(tmp_path)
+    sheet = _fill(_inputs(tmp_path), {"thickness": "thick", "water_table_depth": "depth",
+                                       "layers": 2, "conductivity": [4.0, 0.4]})
+    out = MF._mesh_files(sheet, mesh)
+    rundir = tmp_path / "run"
+    rundir.mkdir()
+    shutil.copy(out["disv"], rundir / "mesh.disv")
+
+    serialize(sheet, rundir, mesh)
+
+    lines = (rundir / "gwf.npf").read_text().splitlines()
+    start = next(i for i, row in enumerate(lines) if row.split()[:2] == ["k", "LAYERED"])
+    rows = [[float(v) for v in lines[start + at].split()] for at in (2, 4)]
+    assert rows == [[4.0] * 8, [0.4] * 8]
+    assert not any(row.strip().startswith("k33") for row in lines)

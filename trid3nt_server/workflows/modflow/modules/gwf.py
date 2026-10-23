@@ -46,8 +46,9 @@ def _aquifer(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     ``thickness`` runs down from the land surface, ``saturated_thickness`` down from the water table; the
     bottom lies under whichever, the starting head a water-table depth below the top, and the conductivity
     is stated or is the transmissivity over the thickness. ``layers`` (an integer from 1, unstated one)
-    splits the saturated thickness into that many equal layers: K is the same in each, only layer 1 is
-    convertible (unconfined), and the starting head is the water-table elevation in every layer."""
+    splits the saturated thickness into that many equal layers: only layer 1 is convertible (unconfined),
+    and the starting head is the water-table elevation in every layer. K is the same in each layer unless
+    ``conductivity`` is a list of one number or raster per layer, top first, as long as ``layers``."""
     if not isinstance(value, Mapping):
         raise ModflowError(
             f"Aquifer takes a mapping of {', '.join(_AQUIFER)}; got {value!r}.",
@@ -86,8 +87,19 @@ def _aquifer(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
             f"Aquifer layers is {layers!r}; it is an integer from 1.",
             error_code="MODFLOW_AQUIFER_UNSTATED")
     nlay = layers if layers is not None else 1
+    if isinstance(transmissivity, (list, tuple)):
+        raise ModflowError(
+            "Aquifer transmissivity is one value over the whole thickness; a list of "
+            "values per layer is a conductivity, so state conductivity as that list.",
+            error_code="MODFLOW_AQUIFER_UNSTATED")
+    if isinstance(conductivity, (list, tuple)) and len(conductivity) != nlay:
+        raise ModflowError(
+            f"Aquifer conductivity lists {len(conductivity)} value(s) and layers is {nlay}; "
+            "state one conductivity per layer, top first.",
+            error_code="MODFLOW_AQUIFER_UNSTATED")
     depth = value["water_table_depth"]
-    stated = ({"cells": "raster", "of": conductivity} if conductivity is not None
+    stated = ({"cells": "layers" if isinstance(conductivity, (list, tuple)) else "raster",
+               "of": conductivity} if conductivity is not None
               else {"cells": "quotient", "of": [transmissivity, saturated if whole is None else whole]})
     slots: dict[str, Any] = {
         "DISV_NLAY": nlay, "NPF_K": stated,

@@ -260,6 +260,10 @@ def _expression(value: Mapping[str, Any], *, slot: Slot, nlay: int, points: Any,
 
     if operation == "raster":
         found = read(of, dimension)
+    elif operation == "layers" and slot.layered and isinstance(of, (list, tuple)) \
+            and len(of) == nlay:
+        # One number or raster per layer, top first: each lands on its own layer's row.
+        return [read(item, dimension) for item in of]
     elif operation == "quotient" and dimension in _QUOTIENT and \
             isinstance(of, (list, tuple)) and len(of) == 2:
         over, under = _QUOTIENT[dimension]
@@ -275,7 +279,7 @@ def _expression(value: Mapping[str, Any], *, slot: Slot, nlay: int, points: Any,
     else:
         raise ModflowError(
             f"{slot.identifier} states {dict(value)!r}; a cells statement is "
-            "'raster' (of a raster), 'quotient' (of a numerator and a "
+            "'raster' (of a raster), 'layers' (of one raster or number per layer), 'quotient' (of a numerator and a "
             "denominator, on a conductivity) or 'below_top' (of a raster or a list "
             "of rasters whose sum is the depth, on a length).", error_code="MODFLOW_GRIDDATA_SHAPE")
     return [list(found) for _ in range(nlay)] if slot.layered else found
