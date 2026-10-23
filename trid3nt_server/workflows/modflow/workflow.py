@@ -48,7 +48,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger("trid3nt_server.workflows.modflow.workflow")
 
 __all__ = ["CONCENTRATION_UNITS", "ModflowWorkflow", "fill_sheet", "publish_outputs", "run_bodies",
-           "run_sheet", "stage_simulation"]
+           "run_sheet", "stage_sheet"]
 
 #: The dispatch a staged run goes to, by the path it is resolved at CALL time.
 _DISPATCH = "trid3nt_server.workflows.modflow.engine.solve_case"
@@ -157,7 +157,7 @@ def _beside(uri: str, dest: Path) -> None:
     dest.write_bytes(read_object_bytes_s3(uri))
 
 
-async def stage_simulation(*, sheet: Sheet, run_tag: str, mesh: Mapping[str, Any],
+async def stage_sheet(*, sheet: Sheet, run_tag: str, mesh: Mapping[str, Any],
                            prefix: str, server_facts: Mapping[str, Any]
                            ) -> dict[str, Any]:
     """A filled sheet written as the simulation directory, validated by mf6 and staged with the directory checked -> the staged run.
@@ -409,7 +409,7 @@ class ModflowWorkflow(Workflow):
         async def write(sheet: Sheet) -> None:
             # A card edit fills the sheet again, so the staged run is the one the last fill wrote.
             staged.clear()
-            staged.update(await stage_simulation(
+            staged.update(await stage_sheet(
                 sheet=sheet, run_tag=run_tag, mesh=run["mesh"], prefix=prefix,
                 server_facts={"name": name, "utm_epsg": int(art.utm_epsg),
                               "mesh_size_m": run["mesh"].get("min_edge_m")}))

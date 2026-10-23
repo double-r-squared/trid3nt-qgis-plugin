@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("trid3nt_server.workflows.geoclaw.workflow")
 
-__all__ = ["GeoclawWorkflow", "fill_sheet", "publish_outputs", "run_sheet", "stage_simulation"]
+__all__ = ["GeoclawWorkflow", "fill_sheet", "publish_outputs", "run_sheet", "stage_sheet"]
 
 #: The dispatch a staged run goes to, by the path it is resolved at CALL time.
 _DISPATCH = "trid3nt_server.workflows.geoclaw.engine.solve_case"
@@ -73,7 +73,7 @@ def _results(sheet: Sheet) -> list[str]:
     return found
 
 
-async def stage_simulation(*, sheet: Sheet, run_tag: str, prefix: str, name: str) -> dict[str, Any]:
+async def stage_sheet(*, sheet: Sheet, run_tag: str, prefix: str, name: str) -> dict[str, Any]:
     """A filled sheet written as the run directory, checked against itself and staged -> the staged run.
     The worker reads only a case's results, so the case section is just those."""
     from ..solver.staging import new_rundir, stage_run
@@ -276,7 +276,7 @@ class GeoclawWorkflow(Workflow):
         async def write(sheet: Sheet) -> None:
             # A card edit fills the sheet again, so the staged run is the one the last fill wrote.
             staged.clear()
-            staged.update(await stage_simulation(sheet=sheet, run_tag=run_tag, prefix=prefix, name=name))
+            staged.update(await stage_sheet(sheet=sheet, run_tag=run_tag, prefix=prefix, name=name))
 
         try:
             await stage("sheet", fill_sheet, steering=self.steering,
