@@ -582,8 +582,9 @@ as a `Rasters` read (north-up, cell edges from the grid's nodes, nodata NaN); `d
 writes the COGs under the run prefix and a `Raster` carries them: an fgmax product is one
 untimed layer, the fgout frames one layer per frame, each stamped with its window
 (`valid_from` to the next frame's instant, the last to the run's `CLAW_TFINAL`; an instant
-is the run's reference time plus the frame's seconds, and a run stating none refuses
-`RASTER_UNANCHORED`), which the plugin's Temporal Controller plays as it does a fetcher's
+is the run's reference time plus the frame's seconds; a run states its own `event_time`, else its
+reference time is the solve's start, said on the record as defaulted, and only a record carrying
+neither refuses `RASTER_UNANCHORED`), which the plugin's Temporal Controller plays as it does a fetcher's
 frames. A read of an output whose keyword the run did not state, a speed with
 `FGMAX_NUM_FGMAX_VAL` below 2, a grid that is not lon/lat (`GEO_COORDINATE_SYSTEM` not 2)
 or a file the run did not write refuses by name. Depth is TOTAL depth, drawn where the

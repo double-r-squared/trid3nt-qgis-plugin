@@ -11,6 +11,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from types import MappingProxyType
+from functools import partial
 from importlib import import_module
 from typing import TYPE_CHECKING, Any, Callable, Collection, Mapping, Sequence
 
@@ -42,14 +43,13 @@ from trid3nt_server.workflows.runtime.primitives import (
     unanchored,
 )
 from trid3nt_server.workflows.telemac.modules.outputs import Solved
-from trid3nt_server.workflows.runtime.review import _review, _seat_on
+from trid3nt_server.workflows.runtime.review import _seat_on, fill_sheet
 from trid3nt_server.workflows.runtime.sheet import (
     Keyword,
     SheetIncomplete,
     complete,
+    reference_time,
 )
-from trid3nt_server.workflows.runtime.sheet import fill as fill_slots
-from trid3nt_server.workflows.runtime.sheet import fill_coupled
 from trid3nt_server.workflows.runtime.sheet import run as run_sheet_
 from trid3nt_server.workflows.telemac.modules.sheet import (
     CONTINUATION,
@@ -343,41 +343,7 @@ def run_bodies(steering: type) -> list[type]:
                          if isinstance(body, Mapping) and body.get("module")]
 
 
-async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
-                     params: Mapping[str, Any],
-                     settled: Mapping[str, Any] | None = None,
-                     workflow: str, title: str, keywords: Mapping[str, Any],
-                     input_mode: str | None, spent: Sequence[str] = (),
-                     seat: Callable[[Mapping[str, Any]], None] | None = None,
-                     write: Callable[[TelemacSheet], Any] | None = None,
-                     user: Sequence[str] = ()) -> TelemacSheet:
-    """Set the body's slots against what the run measured -> the sheet, HELD.
-
-    The raw ``keywords`` floor is filled last and therefore beats a template
-    value. ``seat`` takes the param values the person proceeded on; ``write``
-    writes and checks the deck of every sheet a card is drawn from; ``user``
-    names the params the call stated."""
-    stated, coupled = _floor(steering, keywords)
-
-    async def fill(values: Mapping[str, Any], edits: Mapping[str, Any]) -> TelemacSheet:
-        # A composite may read fetched data at the fill, so the fill runs off the loop.
-        sheet = await asyncio.to_thread(
-            fill_slots, steering, template=workflow, produced=dict(produced),
-            params=dict(values), settled=settled, **{**stated, **edits})
-        # After the fill: the coupled decks are what the carrier's coupling composite wrote into the sheet's files.
-        sheet = fill_coupled(sheet, coupled) if coupled else sheet
-        if write is not None:
-            # The deck is written and its staged directory checked before the card is drawn, so a proceed is followed by the solve alone.
-            await write(sheet)
-        return sheet
-
-    sheet = await _review(fill, params, steering=steering, workflow=workflow,
-                          title=title, input_mode=input_mode, spent=spent,
-                          seat=seat, user=user)
-    logger.info("telemac sheet filled: %s states %d keywords, %d open "
-                "(%d required)", sheet.body.__name__, len(sheet.filled),
-                len(sheet.open()), len(sheet.required()))
-    return sheet
+fill_sheet = partial(fill_sheet, engine="telemac", floor=_floor)
 
 
 async def stage_sheet(*, sheet: TelemacSheet, run_tag: str, settled: Mapping[str, Any],
@@ -401,12 +367,12 @@ async def run_sheet(*, sheet: TelemacSheet, staged: Mapping[str, Any],
                     display: str = "",
                     moment: str | None = None) -> dict[str, Any]:
     """A staged run handed to the box -> the run handle.
-    Its ``reference_time`` is the instant every published time counts from: the stated ``moment``, else the solve's own start."""
+    Its ``reference_time`` is the instant every published time counts from: the stated ``moment``, else the solve's own start, said on the record as defaulted."""
     module, _, attribute = str(dispatch).rpartition(".")
     to_the_box = getattr(import_module(module), attribute)
     handle = await run_sheet_(staged, dispatch=to_the_box)
     return {**settled, **handle, "module": sheet.module,
-            "reference_time": moment or handle.get("started_at"),
+            "reference_time": reference_time(moment, handle),
             "display_basename": display or None,
             "module_output": [{"token": token, "module": module,
                                "name": row.name, "unit": row.unit,

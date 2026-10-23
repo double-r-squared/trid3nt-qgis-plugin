@@ -289,6 +289,9 @@ class Keyword:
     carried: bool = True
     note: str = ""
     is_row = False
+    #: A keyword is not required and states no default of its own: stated as None it is not stated, and the module's own default applies.
+    default = None
+    required = False
 
     @property
     def bounds(self) -> tuple[float, float] | None:
@@ -312,3 +315,14 @@ async def run(staged: Mapping[str, Any], *, dispatch: Callable[..., Any]) -> Any
     """A staged run handed to the box -> the staged run and the box's answer, as one handle."""
     # The launcher partitions across the count the staged case states; a serial case states none.
     return {**staged, **await dispatch(run=staged, cores=int(staged["case"].get("cores", 1)))}
+
+
+def reference_time(moment: str | None, handle: Mapping[str, Any]) -> str | None:
+    """The instant every published time of a run counts from: the stated ``moment``, else the solve's own start, said on the record as defaulted."""
+    if moment or not handle.get("started_at"):
+        return moment or None
+    from trid3nt_server.inputs.run_notes import journal_note
+
+    journal_note(f"reference time defaulted to the solve's start, {handle['started_at']}: the run states no moment its seconds "
+                 "are counted from, so state one to count them from a date of your own.")
+    return str(handle["started_at"])

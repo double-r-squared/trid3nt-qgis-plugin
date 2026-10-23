@@ -11,6 +11,7 @@ import asyncio
 import logging
 from dataclasses import replace
 from datetime import datetime
+from functools import partial
 from importlib import import_module
 from pathlib import Path
 from types import MappingProxyType
@@ -29,10 +30,9 @@ from trid3nt_server.workflows.runtime.module import (MOMENT, SlotRefused,
                                                      keyword_floor)
 from trid3nt_server.workflows.runtime.primitives import (Primitive, field, publish_reads,
                                                          unanchored)
-from trid3nt_server.workflows.runtime.review import _review, _seat_on
+from trid3nt_server.workflows.runtime.review import _seat_on, fill_sheet
 from trid3nt_server.workflows.runtime.sheet import Filled, Keyword, Sheet
-from trid3nt_server.workflows.runtime.sheet import fill as fill_slots
-from trid3nt_server.workflows.runtime.sheet import fill_coupled
+from trid3nt_server.workflows.runtime.sheet import fill_coupled, reference_time
 from trid3nt_server.workflows.runtime.sheet import run as run_sheet_
 from trid3nt_server.workflows.runtime.workflow import EVENT_TIME
 from trid3nt_server.workflows.solver.staging import discard_run
@@ -114,38 +114,7 @@ def _compose_coupled(sheet: Sheet, stated: Mapping[str, Mapping[str, Any]],
     return sheet
 
 
-async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
-                     params: Mapping[str, Any], workflow: str, title: str,
-                     keywords: Mapping[str, Any], input_mode: str | None,
-                     seat: Callable[[Mapping[str, Any]], None] | None = None,
-                     write: Callable[[Sheet], Any] | None = None,
-                     user: Sequence[str] = ()) -> Sheet:
-    """Set the body's slots against what the run holds -> the sheet, HELD on its one review.
-    The carrier's floor is filled last and therefore beats a template value; each coupled
-    module's composes onto the template's statement of that deck, never replacing it;
-    ``write`` writes, validates and stages every sheet a card is drawn from."""
-    own, coupled = _floor(steering, keywords)
-
-    async def fill(values: Mapping[str, Any], edits: Mapping[str, Any]) -> Sheet:
-        # A composite samples rasters at the fill, so the fill runs off the loop.
-        sheet = await asyncio.to_thread(
-            fill_slots, steering, template=workflow, produced=dict(produced),
-            params=dict(values), **{**own, **edits})
-        if coupled:
-            held = {**produced, **values,
-                    **{name: row.value for name, row in sheet.filled.items()}}
-            sheet = await asyncio.to_thread(
-                _compose_coupled, sheet, coupled, held)
-        if write is not None:
-            await write(sheet)
-        return sheet
-
-    sheet = await _review(fill, params, steering=steering, workflow=workflow,
-                          title=title, input_mode=input_mode, spent=(),
-                          seat=seat, user=user)
-    logger.info("modflow sheet filled: %s states %d keywords",
-                sheet.body.__name__, len(sheet.filled))
-    return sheet
+fill_sheet = partial(fill_sheet, engine="modflow", floor=_floor, compose=_compose_coupled)
 
 
 def _results(sheet: Sheet) -> list[str]:
@@ -222,12 +191,12 @@ async def run_sheet(*, sheet: Sheet, staged: Mapping[str, Any],
                     moment: str | None = None, frame: str | None = None,
                     units: Mapping[str, str] = MappingProxyType({})) -> dict[str, Any]:
     """A staged run handed to the box -> the run handle.
-    Its ``reference_time`` is the instant every published time counts from: the stated ``moment``, else the solve's own start;
+    Its ``reference_time`` is the instant every published time counts from: the stated ``moment``, else the solve's own start, said on the record as defaulted;
     its ``vertical_frame`` is the zero the bed, and so every head, is counted from; ``units`` what the run stated its outputs in."""
     module, _, attribute = _DISPATCH.rpartition(".")
     handle = await run_sheet_(staged, dispatch=getattr(import_module(module), attribute))
     return {**handle, "mesh": mesh, "module": sheet.module, "name": name,
-            "reference_time": moment or handle.get("started_at"),
+            "reference_time": reference_time(moment, handle),
             "vertical_frame": frame, "published_units": dict(units)}
 
 

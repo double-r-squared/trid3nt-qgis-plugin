@@ -289,7 +289,7 @@ def test_a_card_edit_refills_through_the_modules_accept_rule(monkeypatch):
         return real(body, name, value)
 
     from trid3nt_server.workflows.runtime import review
-    from trid3nt_server.workflows.telemac import workflow as tw
+    from trid3nt_server.workflows.runtime import review as tw
 
     monkeypatch.setattr(review, "accept", _spy)
     monkeypatch.setattr(review, "card_rows", lambda sheet: [])
@@ -356,7 +356,7 @@ def test_a_refusal_keeps_the_code_of_its_reason_through_the_review(
     from trid3nt_server.inputs.gate import input_review
     from trid3nt_server.inputs.gate.input_review import ReviewOutcome
     from trid3nt_server.workflows.runtime import review
-    from trid3nt_server.workflows.telemac import workflow as tw
+    from trid3nt_server.workflows.runtime import review as tw
 
     monkeypatch.setattr(review, "card_rows", lambda sheet: [])
 
@@ -423,3 +423,11 @@ def test_the_order_inputs_are_stated_in_does_not_decide_the_fill(order):
     state = asyncio.run(fill(Fill(workflow=wf), values))
     assert state.ready, {n: v.reason for n, v in state.inputs.items()
                          if v.state == REJECTED}
+
+
+@pytest.mark.parametrize("name", ["INITIAL_ELEVATION", "LAW_OF_BOTTOM_FRICTION"])
+def test_a_keyword_stated_as_none_is_not_stated_with_or_without_a_module_default(name):
+    """None beside a keyword leaves it to the module: no verdict, no keyword written, nothing refused."""
+    state = _filled({**_DYE, "keywords": {name: None}})
+    assert name not in state.inputs and name not in state.keywords
+    assert state.ready == _filled(_DYE).ready

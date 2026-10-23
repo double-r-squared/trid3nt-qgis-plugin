@@ -7,6 +7,8 @@ hook, so this module names no engine."""
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from typing import Any, Callable, Mapping, Sequence
 
 from trid3nt_contracts.common import Origin, SyntheticInput
@@ -15,9 +17,12 @@ from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
 from trid3nt_server.errors import DeclarativeError
 
 from .module import SlotRefused, accept
-from .sheet import Sheet
+from .sheet import Sheet, fill_coupled
+from .sheet import fill as fill_slots
 
-__all__ = ["card_rows"]
+__all__ = ["card_rows", "fill_sheet"]
+
+logger = logging.getLogger(__name__)
 
 
 def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
@@ -219,3 +224,46 @@ def _default_row(slot: Any) -> ParamSheetRow:
 def _group(slot: Any) -> str:
     """The dictionary's own top-level rubrique - what the advanced fold sorts by."""
     return slot.rubrique[0] if slot.rubrique else ""
+
+
+async def fill_sheet(*, engine: str, floor: Callable[[type, Mapping[str, Any]], tuple[dict[str, Any], dict[str, dict[str, Any]]]],
+                     steering: type, produced: Mapping[str, Any], params: Mapping[str, Any],
+                     settled: Mapping[str, Any] | None = None, workflow: str, title: str,
+                     keywords: Mapping[str, Any], input_mode: str | None, spent: Sequence[str] = (),
+                     compose: Callable[[Sheet, Mapping[str, Mapping[str, Any]], Mapping[str, Any]], Sheet] | None = None,
+                     seat: Callable[[Mapping[str, Any]], None] | None = None,
+                     write: Callable[[Sheet], Any] | None = None, user: Sequence[str] = ()) -> Sheet:
+    """Set the body's slots against what the run holds -> the sheet, HELD on its one review.
+
+    ``floor`` is the engine's routing of the raw ``keywords`` onto its bodies: the carrier's
+    values are filled last and therefore beat a template value, and each coupled module's
+    are merged onto that body's deck by ``compose`` (the engine's own composition, given the
+    sheet, the coupled floor and the values held) or, where the engine states none, as written.
+    ``seat`` takes the param values the person proceeded on; ``write`` writes and checks the deck
+    of every sheet a card is drawn from; ``user`` names the params the call stated."""
+    own, coupled = floor(steering, keywords)
+
+    async def fill(values: Mapping[str, Any], edits: Mapping[str, Any]) -> Sheet:
+        # A composite may read fetched data at the fill, so the fill runs off the loop.
+        sheet = await asyncio.to_thread(
+            fill_slots, steering, template=workflow, produced=dict(produced),
+            params=dict(values), settled=settled, **{**own, **edits})
+        if coupled and compose is not None:
+            held = {**produced, **values,
+                    **{name: row.value for name, row in sheet.filled.items()}}
+            sheet = await asyncio.to_thread(compose, sheet, coupled, held)
+        elif coupled:
+            # After the fill: the coupled decks are what the carrier's coupling composite wrote into the sheet's files.
+            sheet = fill_coupled(sheet, coupled)
+        if write is not None:
+            # The deck is written and its staged directory checked before the card is drawn, so a proceed is followed by the solve alone.
+            await write(sheet)
+        return sheet
+
+    sheet = await _review(fill, params, steering=steering, workflow=workflow,
+                          title=title, input_mode=input_mode, spent=spent,
+                          seat=seat, user=user)
+    logger.info("%s sheet filled: %s states %d keywords, %d open (%d required)",
+                engine, sheet.body.__name__, len(sheet.filled),
+                len(sheet.open()), len(sheet.required()))
+    return sheet

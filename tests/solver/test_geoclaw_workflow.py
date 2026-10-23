@@ -257,3 +257,23 @@ def test_the_workflow_answers_for_its_own_fetch_rows_and_the_modules_keywords():
     assert workflow.input("CLAW_TFINAL").name == "CLAW_TFINAL"
     with pytest.raises(Exception):
         workflow.input("no_such_thing")
+
+
+def test_a_run_stating_no_moment_counts_its_seconds_from_the_solve_start_and_says_so(monkeypatch):
+    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt_server.workflows.geoclaw import workflow as gw
+
+    async def _box(*_args, **_kwargs):
+        return {"run_id": "RUN1", "started_at": "2026-10-12T08:00:00+00:00"}
+
+    monkeypatch.setattr(gw, "run_sheet_", _box)
+    sheet = SimpleNamespace(module="geoclaw")
+
+    def solved(**stated):
+        token = bind_notes()
+        handle = asyncio.run(gw.run_sheet(sheet=sheet, staged={}, mesh={}, name="x", **stated))
+        return handle["reference_time"], drain_notes(token)
+
+    assert solved(moment="2000-01-01T00:00:00Z") == ("2000-01-01T00:00:00Z", [])
+    stamped, notes = solved()
+    assert stamped == "2026-10-12T08:00:00+00:00" and len(notes) == 1 and "defaulted" in notes[0]

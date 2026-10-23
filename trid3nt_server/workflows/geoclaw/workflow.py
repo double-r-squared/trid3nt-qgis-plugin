@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from functools import partial
 from importlib import import_module
 from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
@@ -23,9 +24,8 @@ from trid3nt_server.workflows.runtime import DeclarationError, RunResult, Workfl
 from trid3nt_server.workflows.runtime.data import Producer
 from trid3nt_server.workflows.runtime.module import identify_on, keyword_floor
 from trid3nt_server.workflows.runtime.primitives import Primitive, field, max_over_time, publish_reads, series
-from trid3nt_server.workflows.runtime.review import _review, _seat_on
-from trid3nt_server.workflows.runtime.sheet import Keyword, Sheet
-from trid3nt_server.workflows.runtime.sheet import fill as fill_slots
+from trid3nt_server.workflows.runtime.review import _seat_on, fill_sheet
+from trid3nt_server.workflows.runtime.sheet import Keyword, Sheet, reference_time
 from trid3nt_server.workflows.runtime.sheet import run as run_sheet_
 from trid3nt_server.workflows.runtime.workflow import EVENT_TIME
 from trid3nt_server.workflows.solver.staging import discard_run
@@ -54,31 +54,12 @@ _PRODUCED = ("deep_bed_offset", "sift_unit_sources")
 _FRAME, = BED.states
 
 
-def _floor(steering: type, keywords: Mapping[str, Any]) -> dict[str, Any]:
-    """The raw keyword floor -> the values by identifier."""
-    return keyword_floor([steering], keywords)[0]
+def _floor(steering: type, keywords: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    """The raw keyword floor -> the values by identifier and each coupled module's, none here."""
+    return keyword_floor([steering], keywords)
 
 
-async def fill_sheet(*, steering: type, produced: Mapping[str, Any], params: Mapping[str, Any],
-                     workflow: str, title: str, keywords: Mapping[str, Any], input_mode: str | None,
-                     seat: Callable[[Mapping[str, Any]], None] | None = None,
-                     write: Callable[[Sheet], Any] | None = None, user: Sequence[str] = ()) -> Sheet:
-    """Set the body's slots against what the run holds -> the sheet, HELD on its one review.
-    The floor is filled last and so beats a template value; ``write`` writes, checks and stages every sheet a card is drawn from."""
-    own = _floor(steering, keywords)
-
-    async def fill(values: Mapping[str, Any], edits: Mapping[str, Any]) -> Sheet:
-        # A composite samples rasters at the fill, so the fill runs off the loop.
-        sheet = await asyncio.to_thread(fill_slots, steering, template=workflow, produced=dict(produced),
-                                        params=dict(values), **{**own, **edits})
-        if write is not None:
-            await write(sheet)
-        return sheet
-
-    sheet = await _review(fill, params, steering=steering, workflow=workflow, title=title,
-                          input_mode=input_mode, spent=(), seat=seat, user=user)
-    logger.info("geoclaw sheet filled: %s states %d keywords", sheet.body.__name__, len(sheet.filled))
-    return sheet
+fill_sheet = partial(fill_sheet, engine="geoclaw", floor=_floor)
 
 
 def _results(sheet: Sheet) -> list[str]:
@@ -114,12 +95,12 @@ async def stage_simulation(*, sheet: Sheet, run_tag: str, prefix: str, name: str
 async def run_sheet(*, sheet: Sheet, staged: Mapping[str, Any], mesh: Mapping[str, Any], name: str,
                     moment: str | None = None, frame: str | None = None) -> dict[str, Any]:
     """A staged run handed to the box -> the run handle.
-    Its ``reference_time`` is the instant every published time counts from: the stated ``moment`` and no other,
-    for a scenario's clock starts at its rupture and the solve's own start says nothing of it;
+    Its ``reference_time`` is the instant every published time counts from: the stated ``moment`` (a scenario's clock
+    starts at its rupture), else the solve's own start, said on the record as defaulted;
     its ``vertical_frame`` is the zero the bed, and so every depth, is counted from."""
     module, _, attribute = _DISPATCH.rpartition(".")
     handle = await run_sheet_(staged, dispatch=getattr(import_module(module), attribute))
-    return {**handle, "mesh": mesh, "module": sheet.module, "name": name, "reference_time": moment,
+    return {**handle, "mesh": mesh, "module": sheet.module, "name": name, "reference_time": reference_time(moment, handle),
             "vertical_frame": frame}
 
 
@@ -266,7 +247,7 @@ class GeoclawWorkflow(Workflow):
         slots = self._slots()
         domain = slots[DOMAIN]
         keywords = dict(state.keywords)
-        own = _floor(self.steering, keywords)
+        own, _ = _floor(self.steering, keywords)
         emitter = current_emitter()
         begin_substeps(emitter, 4 + ("mesh" not in run))
 
@@ -304,11 +285,6 @@ class GeoclawWorkflow(Workflow):
                         title=self._states("REVIEW_TITLE", ""), keywords={**keywords, **grid},
                         input_mode=env.input_mode, seat=_seat_on(env), write=write,
                         user=[key for key, verdict in env.inputs.items() if verdict.origin is Origin.USER])
-            if run["sheet"].stated().get("FGOUT_FGOUT_GRIDS") and not run.get(EVENT_TIME.name):
-                raise GeoclawError(
-                    "the fgout frames are read at instants and the run states no event_time, so no frame has an absolute "
-                    "instant: state event_time, the moment the run's seconds are counted from. A scenario has no date of "
-                    "its own, and the solve's start is not one.", error_code="GEOCLAW_EVENT_TIME_UNSTATED")
         except BaseException:
             # A run that does not reach the box leaves no staged copy behind.
             await asyncio.to_thread(discard_run, run_tag, prefix, stem=self.engine)
