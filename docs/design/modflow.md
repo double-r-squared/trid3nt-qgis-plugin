@@ -128,11 +128,10 @@ piece inside a cell, its length the line's length there on `DISV_LENGTH_UNITS`, 
 cell's top solved layer unless `layer` states one. Consecutive reaches connect; a line ending in
 a cell that holds one reach of another line (not that line's last) joins it, and two such reaches
 there refuse. Reaches are numbered from 0, upstream before downstream. `ustrf` is 1.0 and `ndv`
-0 (no diversion is stated here). A line's part past the mesh edge is left out, as for the
+0 unless a `Diversions` statement says otherwise. A line's part past the mesh edge is left out, as for the
 other stresses; one that leaves the mesh and returns refuses naming the cells. A stated
-`SFR_NREACHES` or `SFR_CONNECTIONDATA` beside `Streams` refuses; inflow and the period
-data are stated through `SFR_PERIODDATA` by reach number. `manning` is a number, the others
-a number or a raster read at each reach's cell centre.
+`SFR_NREACHES` or `SFR_CONNECTIONDATA` beside `Streams` refuses; `manning` is a number, the
+others a number or a raster read at each reach's cell centre.
 
 LAK is stated by its own dictionary keywords (`LAK_NLAKES`, `LAK_PACKAGEDATA`,
 `LAK_CONNECTIONDATA`, `LAK_PERIODDATA`, the options; `LAK_NOUTLETS` and `LAK_NTABLES` are
@@ -156,7 +155,7 @@ composite refuses by name; a `rainfall` or `evaporation` not stated is absent fr
 package. A polygon holding no cell centre, a cell in two lakes and a lake with no solved
 cell beside or below it refuse. `LAK_NLAKES`, `LAK_CONNECTIONDATA` and, beside a stated
 flux, `LAK_PERIODDATA` stated beside `Lakes` refuse. The lake stage is not a read the run
-publishes, and the lake-stream mover (MVR) is not wired.
+publishes.
 
 MAW is stated by its own dictionary keywords (`MAW_NMAWWELLS`, `MAW_PACKAGEDATA`,
 `MAW_CONNECTIONDATA`, `MAW_PERIODDATA`, the options): ex-gwf-maw-p01, both variants, authored
@@ -219,9 +218,40 @@ as a row. A well needs a `rate` wherever it is ACTIVE; the flowing-well values n
 `MAW_FLOWING_WELLS`; `auxiliary` names must be the package's AUXILIARY names. SFR settings land on
 every reach of the line, `inflow` on its upstream reach. A UZF period line carries every column, so
 a keyed value writes a line per period named with the value in force in each column. SFR
-`diversion` and `cross_section` and LAK tables name a topology and a table file and stay on the
-keyword path. The dictionary marks an entry not mandatory when its own DFN description says mf6
+`diversion` is the `Diversions` statement below, not a `Streams` argument. The dictionary marks an entry not mandatory when its own DFN description says mf6
 runs without it (`EVT_NSEG`, `EVTA_AUX`, `LAK_NOUTLETS`, `LAK_NTABLES`, `STO_SY`).
+
+### Water moved between features, diversions, cross sections and lake tables
+
+`Streams`, `Lakes`, `MultiAquiferWells` and `UnsaturatedZone` statements take an optional
+`name`, which a statement placing several features gives them all. `Movers(from, to, type,
+value[, from_at, to_at, from_outlet])` (a mapping or a list) is the MVR package: `from` and `to`
+are names, `from_at` and `to_at` a point read as the cell it lies in (never moved; a miss
+refuses with the nearest-viable hint), and an end resolves to exactly one feature or the
+statement refuses naming how many it matched. A stream gives and takes water by its reach, a
+well by its number, an `UnsaturatedZone` column by its land cell (rejected infiltration out,
+extra infiltration in), a lake takes water by its number and gives it through an outlet
+(`from_outlet` from 1, optional when it has one). `type` is `FACTOR` (a fraction 0 to 1),
+`EXCESS`, `THRESHOLD` or `UPTO` (a rate); `value` is stated, a number from period 1 or
+`{period from 1: number}`, and a period it names restates every mover with the value in force
+(an mf6 period block replaces the one before). The authoring numbers the features, names the
+packages as the flow model does, derives `MVR_MAXMVR`, `MVR_MAXPACKAGES`, `MVR_PACKAGES` and
+sets the MOVER option of each package used; stating any of them beside `Movers`, or a MOVER
+option false, refuses.
+
+`Diversions(from, to, type, value[, from_at, to_at])` is the same grammar over `Streams`
+reaches, `type` `FRACTION|EXCESS|THRESHOLD|UPTO` (`FRACTION` 0 to 1). The target must have no
+upstream reach and not be the source's downstream reach; it becomes a downstream connection of
+the source, numbered after it, with USTRF 0.0 (it receives only the diverted water); the
+source's NDV counts its diversions (`idv` from 0 in statement order), `SFR_DIVERSIONS` and the
+`diversion` period rows are derived. `Streams` takes `cross_section`, the rows `(xfraction,
+height[, manfraction])` of the reach cross-section table every reach of the line reads, and
+`Lakes` takes `table`, the rows `(stage, volume, sarea)` of the lake's stage-volume-area table
+(a statement placing one polygon); a table is stated or a run input holding the rows, a raster
+is no table and refuses, and mf6's own validation judges the values. Authoring writes each as a
+TAB6 file beside the package (`sfr_xs<k>.tab`, one per distinct cross section;
+`lak_tab<lake>.tab`) through flopy's child package, and derives `SFR_CROSSSECTIONS`,
+`LAK_TABLES` and `LAK_NTABLES`.
 
 ## The coupling
 
@@ -366,6 +396,6 @@ builds on was proved through that image before it was built on.
 
 The accepted-mesh reader of a ragged (UGRID) display face - a quadtree with
 refinement, a Voronoi - so those meshes cannot yet be authored on; the
-advanced-package composites (CSUB; SFR is placed by `Streams`, LAK by `Lakes`, MAW by `MultiAquiferWells` and UZF by `UnsaturatedZone`, but the MVR mover is not wired), OBS and time series, the model exchanges (GWF-GWF, GWT-GWT), FMI
+advanced-package composites (CSUB; SFR is placed by `Streams`, LAK by `Lakes`, MAW by `MultiAquiferWells` and UZF by `UnsaturatedZone`, and `Movers` joins them; WEL, DRN, GHB and RIV give water to the mover by row number and are not wired), OBS and time series, the model exchanges (GWF-GWF, GWT-GWT), FMI
 (the transport reading a prior flow run's saved budget), and PRT. Each is a leg
 in the scope's plan; the coupling above is built for GWT on the exchange.

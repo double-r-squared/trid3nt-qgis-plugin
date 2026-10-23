@@ -137,6 +137,26 @@ def _unknown(value: Mapping[str, Any], composite: str, takes: tuple[str, ...]) -
             error_code="MODFLOW_STRESS_UNSTATED")
 
 
+def _given(value: Mapping[str, Any], composite: str) -> str | None:
+    """The optional name a statement gives its features, or None."""
+    name = value.get("name")
+    if name is not None and (not isinstance(name, str) or not name.strip()):
+        raise ModflowError(f"{composite} name is a non-empty string; got {name!r}.", error_code="MODFLOW_STRESS_UNSTATED")
+    return None if name is None else name.strip()
+
+
+def _table(held: Any, *, composite: str, argument: str, widths: tuple[int, ...]) -> list[list[float]]:
+    """A table stated as rows of numbers, every row one of ``widths`` columns, as stated or read off a run input."""
+    if not isinstance(held, (list, tuple)) or not held or not all(
+            isinstance(row, (list, tuple)) and len(row) == len(held[0]) and len(row) in widths
+            and all(isinstance(item, (int, float)) and not isinstance(item, bool) and math.isfinite(item) for item in row)
+            for row in held):
+        raise ModflowError(
+            f"{composite} {argument} is a table of rows of {' or '.join(map(str, widths))} numbers, every row the same "
+            f"length (a raster is no table); got {held!r}.", error_code="MODFLOW_STRESS_UNSTATED")
+    return [[float(item) for item in row] for row in held]
+
+
 _STREAMS = {"width": "L", "slope": "1", "bed_top": "L", "bed_thickness": "L",
             "bed_conductivity": "L/T", "manning": "1"}
 _STREAM_NUMBERS = ("bedk", "stage", "inflow", "rainfall", "evaporation", "runoff", "upstream_fraction")
@@ -153,7 +173,8 @@ def _streams(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
             "Streams takes a mapping of geometry, "
             f"{', '.join(_STREAMS)} and an optional layer, or a list of them; got {value!r}.",
             error_code="MODFLOW_STRESS_UNSTATED")
-    _unknown(value, "Streams", ("geometry", "layer", *_STREAMS, *_STREAM_NUMBERS, *_STREAM_WORDS, "auxiliary"))
+    _unknown(value, "Streams", ("geometry", "layer", "name", "cross_section", *_STREAMS, *_STREAM_NUMBERS,
+                                *_STREAM_WORDS, "auxiliary"))
     if value.get("geometry") is None:
         return {}, {}
     for argument in _STREAMS:
@@ -181,19 +202,23 @@ def _streams(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
                 error_code="MODFLOW_STRESS_UNSTATED")
         values["manning"] = settings["manning"][0]
     return {"SFR_PACKAGEDATA": {"streams": [{
-        "composite": "Streams", "geometry": value["geometry"], "layer": layer,
+        "composite": "Streams", "geometry": value["geometry"], "layer": layer, "name": _given(value, "Streams"),
+        "cross_section": None if value.get("cross_section") is None else _table(
+            value["cross_section"], composite="Streams", argument="cross_section", widths=(2, 3)),
         "values": values, "dimensions": dict(_STREAMS), "settings": settings}]}}, {}
 
 
 _streams.__doc__ = (
     "The SFR reaches a line geometry places: Streams(geometry, width, slope, bed_top, bed_thickness, "
-    "bed_conductivity, manning[, layer, status, bedk, stage, inflow, rainfall, evaporation, runoff, "
-    "upstream_fraction, auxiliary]), or a list of such statements.\n\n"
+    "bed_conductivity, manning[, layer, name, cross_section, status, bedk, stage, inflow, rainfall, evaporation, "
+    "runoff, upstream_fraction, auxiliary]), or a list of such statements.\n\n"
     "    The line is cut by the cells it crosses in its digitized order, downstream; each\n"
     "    reach lies on the cell's top solved layer unless layer states one. A setting is mf6's own SFR\n"
     "    period setting: a number from period 1 or {period from 1: value}, written to every reach of the\n"
     "    line, inflow to the line's upstream reach; status is ACTIVE, INACTIVE or SIMPLE, manning keyed\n"
-    "    by period names period 1 as the reach's own, auxiliary is {name: value} of the SFR_AUXILIARY names.")
+    "    by period names period 1 as the reach's own, auxiliary is {name: value} of the SFR_AUXILIARY names.\n"
+    "    name is what Movers and Diversions call the line's reaches; cross_section is the rows (xfraction, height\n"
+    "    [, manfraction]) of the reach cross-section table every reach of the line reads.")
 
 
 _LAKES = ("stage", "bottom", "leakance")
@@ -257,7 +282,7 @@ def _lakes(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
             "Lakes takes a mapping of geometry, "
             f"{', '.join(_LAKES)} and optionally {', '.join(_LAKE_FLUXES)}, or a list of them; got {value!r}.",
             error_code="MODFLOW_STRESS_UNSTATED")
-    _unknown(value, "Lakes", ("geometry", *_LAKES, *_LAKE_FLUXES, *_LAKE_NUMBERS, *_LAKE_WORDS,
+    _unknown(value, "Lakes", ("geometry", "name", "table", *_LAKES, *_LAKE_FLUXES, *_LAKE_NUMBERS, *_LAKE_WORDS,
                               "auxiliary", "outlets"))
     if value.get("geometry") is None:
         return {}, {}
@@ -278,14 +303,16 @@ def _lakes(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
         raise ModflowError("Lakes stage keyed by period states period 1, the lake's starting stage.",
                            error_code="MODFLOW_STRESS_UNSTATED")
     return {"LAK_PACKAGEDATA": {"lakes": [{
-        "composite": "Lakes", "geometry": value["geometry"],
+        "composite": "Lakes", "geometry": value["geometry"], "name": _given(value, "Lakes"),
+        "table": None if value.get("table") is None else _table(
+            value["table"], composite="Lakes", argument="table", widths=(3,)),
         "outlets": _outlets(value["outlets"]) if value.get("outlets") is not None else [],
         "values": {"bottom": value["bottom"], "leakance": leakance, **settings, "stage": stage}}]}}, {}
 
 
 _lakes.__doc__ = (
-    "The LAK lakes a polygon geometry places: Lakes(geometry, stage, bottom, leakance[, rainfall, evaporation, "
-    "runoff, inflow, withdrawal, status, auxiliary, outlets]), or a list of such statements.\n\n"
+    "The LAK lakes a polygon geometry places: Lakes(geometry, stage, bottom, leakance[, name, table, rainfall, "
+    "evaporation, runoff, inflow, withdrawal, status, auxiliary, outlets]), or a list of such statements.\n\n"
     "    Each polygon is one lake holding the cells whose centres it contains, in every solved layer whose top\n"
     "    lies above the lake's bottom (a number or a raster); those cells are not solved, and the lake connects\n"
     "    to the solved cells beside and below them over lakebed leakance. The stage is the lake's starting stage;\n"
@@ -294,7 +321,91 @@ _lakes.__doc__ = (
     "    period 1 as the starting stage and is the stage a CONSTANT lake holds, auxiliary is {name: value} of the\n"
     "    LAK_AUXILIARY names. outlets is a list of {to, couttype, rate | invert, width, rough, slope} leaving\n"
     "    the lake (one polygon): to is the number of the lake it discharges into or \"outside\"; couttype is SPECIFIED\n"
-    "    (rate), MANNING (invert, width, rough, slope) or WEIR (invert, width), each value from period 1 or keyed by period.")
+    "    (rate), MANNING (invert, width, rough, slope) or WEIR (invert, width), each value from period 1 or keyed by period.\n"
+    "    name is what Movers calls the lake; table is the rows (stage, volume, sarea) of the lake's stage-volume-area\n"
+    "    table, for a statement holding one polygon.")
+
+
+_MOVER_TYPES = ("FACTOR", "EXCESS", "THRESHOLD", "UPTO")
+_DIVERSION_TYPES = ("FRACTION", "EXCESS", "THRESHOLD", "UPTO")
+_FRACTIONS = ("FACTOR", "FRACTION")
+_ENDS = ("from", "from_at", "to", "to_at")
+
+
+def _movement(value: Any, *, composite: str, slot: str, key: str, types: tuple[str, ...], takes: tuple[str, ...]
+              ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    if isinstance(value, (list, tuple)) and value:
+        stated = [item for each in value if (item := _movement(
+            each, composite=composite, slot=slot, key=key, types=types, takes=takes)[0])]
+        return ({slot: {key: [row[slot][key][0] for row in stated]}} if stated else {}), {}
+    if not isinstance(value, Mapping):
+        raise ModflowError(
+            f"{composite} takes a mapping of {', '.join(_ENDS)}, type and value, or a list of them; got {value!r}.",
+            error_code="MODFLOW_STRESS_UNSTATED")
+    _unknown(value, composite, (*_ENDS, "type", "value", *takes))
+    if not value:
+        return {}, {}
+    for end in ("from", "to"):
+        if value.get(end) is None and value.get(f"{end}_at") is None:
+            raise ModflowError(f"{composite} states neither {end} nor {end}_at; state the feature it is.",
+                               error_code="MODFLOW_STRESS_UNSTATED")
+        if value.get(end) is not None and (not isinstance(value[end], str) or not value[end].strip()):
+            raise ModflowError(f"{composite} {end} is the name of a feature; got {value[end]!r}.",
+                               error_code="MODFLOW_STRESS_UNSTATED")
+    kind = str(value.get("type") or "").strip().upper()
+    if kind not in types:
+        raise ModflowError(f"{composite} type is {value.get('type')!r}; it is one of {', '.join(types)}.",
+                           error_code="MODFLOW_STRESS_UNSTATED")
+    if value.get("value") is None:
+        raise ModflowError(
+            f"{composite} states no value; the engine has no value for it, so state it from a measurement or a "
+            "named source.", error_code="MODFLOW_STRESS_UNSTATED")
+    held = _timed(value["value"], composite=composite, argument="value")
+    stated = held.values() if isinstance(held, dict) else [held]
+    if isinstance(held, dict) and 0 not in held:
+        raise ModflowError(f"{composite} value keyed by period states period 1, the first value.",
+                           error_code="MODFLOW_STRESS_UNSTATED")
+    if any(item < 0 or kind in _FRACTIONS and item > 1 for item in stated):
+        raise ModflowError(
+            f"{composite} value is {'a fraction from 0 to 1' if kind in _FRACTIONS else 'a rate from 0'} for {kind}; "
+            f"got {value['value']!r}.", error_code="MODFLOW_STRESS_UNSTATED")
+    outlet = value.get("from_outlet")
+    if outlet is not None and (isinstance(outlet, bool) or not isinstance(outlet, int) or outlet < 1):
+        raise ModflowError(f"{composite} from_outlet is an outlet number from 1; got {outlet!r}.",
+                           error_code="MODFLOW_STRESS_UNSTATED")
+    return {slot: {key: [{"composite": composite, **{end: value.get(end) for end in _ENDS}, "type": kind,
+                          "value": held, "from_outlet": outlet}]}}, {}
+
+
+def _movers(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    return _movement(value, composite="Movers", slot="MVR_PERIODDATA", key="movers", types=_MOVER_TYPES,
+                     takes=("from_outlet",))
+
+
+_movers.__doc__ = (
+    "The MVR movers that carry water from one placed feature to another: Movers(from, to, type, value[, from_at, "
+    "to_at, from_outlet]), or a list of such statements.\n\n"
+    "    from and to are the name a Streams, Lakes, MultiAquiferWells or UnsaturatedZone statement gave its features;\n"
+    "    from_at and to_at a point, read as the cell it lies in, to tell apart features sharing a name or to name a\n"
+    "    feature by where it is; each end resolves to exactly one feature. A lake gives water through one of its\n"
+    "    outlets (from_outlet from 1, optional when it has one); a stream through its reach, a well, an\n"
+    "    UnsaturatedZone column through its land cell's rejected infiltration. type is FACTOR (a fraction of the\n"
+    "    provider's water, 0 to 1), EXCESS, THRESHOLD or UPTO (a rate); value is a number from period 1 or\n"
+    "    {period from 1: number}, a period it names restating every mover with the value in force.")
+
+
+def _diversions(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    return _movement(value, composite="Diversions", slot="SFR_DIVERSIONS", key="diversions", types=_DIVERSION_TYPES,
+                     takes=())
+
+
+_diversions.__doc__ = (
+    "The SFR diversions that take water from one placed reach to another: Diversions(from, to, type, value[, "
+    "from_at, to_at]), or a list of such statements.\n\n"
+    "    from and to name Streams reaches as Movers does, from_at and to_at a point in the reach's cell. The target\n"
+    "    reach must have no upstream reach of its own; it becomes a downstream connection of the source and\n"
+    "    receives the diverted water alone. type is FRACTION (of the source's outflow, 0 to 1), EXCESS, THRESHOLD or\n"
+    "    UPTO (a rate); value is a number from period 1 or {period from 1: number}.")
 
 
 _MAW = ("radius", "bottom", "start_head", "condeqn", "screen_top", "screen_bottom")
@@ -318,7 +429,8 @@ def _wells(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
             "MultiAquiferWells takes a mapping of geometry, "
             f"{', '.join(_MAW)}, rate and, by its condeqn, {', '.join(_MAW_SKIN)}, or a list of them; got {value!r}.",
             error_code="MODFLOW_STRESS_UNSTATED")
-    _unknown(value, "MultiAquiferWells", ("geometry", *_MAW, *_MAW_SKIN, *_MAW_NUMBERS, *_MAW_WORDS, "auxiliary"))
+    _unknown(value, "MultiAquiferWells", ("geometry", "name", *_MAW, *_MAW_SKIN, *_MAW_NUMBERS, *_MAW_WORDS,
+                                          "auxiliary"))
     if value.get("geometry") is None:
         return {}, {}
     for argument in _MAW:
@@ -360,7 +472,7 @@ def _wells(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     settings = _settings(value, "MultiAquiferWells", numbers=_MAW_NUMBERS, words=_MAW_WORDS)
     _rated(settings)
     return {"MAW_PACKAGEDATA": {"wells": [{
-        "composite": "MultiAquiferWells", "geometry": value["geometry"],
+        "composite": "MultiAquiferWells", "geometry": value["geometry"], "name": _given(value, "MultiAquiferWells"),
         "values": {**{column: value[column] for column in _MAW if column != "condeqn"}, "condeqn": condeqn,
                    **skin, **settings}}]}}, {}
 
@@ -383,15 +495,16 @@ def _rated(settings: Mapping[str, Any]) -> None:
 
 _wells.__doc__ = (
     "The MAW wells a point geometry places: MultiAquiferWells(geometry, radius, bottom, start_head, condeqn, "
-    "screen_top, screen_bottom, rate[, hk_skin, radius_skin, status, well_head, head_limit, fwelev, fwcond, fwrlen, "
-    "minrate, maxrate, pump_elevation, scaling_length, auxiliary]), or a list of such statements.\n\n"
+    "screen_top, screen_bottom, rate[, name, hk_skin, radius_skin, status, well_head, head_limit, fwelev, fwcond, "
+    "fwrlen, minrate, maxrate, pump_elevation, scaling_length, auxiliary]), or a list of such statements.\n\n"
     "    Each point is one well in the cell holding it, connected to every solved layer its screen crosses;\n"
     "    condeqn names the conductance equation, and the skin values are those it reads (SKIN, CUMULATIVE and\n"
     "    MEAN both, SPECIFIED the conductance as hk_skin, THIEM none). A setting is mf6's own MAW period\n"
     "    setting: a number from period 1 or {period from 1: value}. rate is required wherever the well is ACTIVE\n"
     "    (the default), status is ACTIVE, INACTIVE or CONSTANT, head_limit a number or OFF. fwelev, fwcond and\n"
     "    fwrlen are the FLOWING_WELL record, minrate and maxrate SHUT_OFF, pump_elevation and scaling_length\n"
-    "    RATE_SCALING - each record stated whole, in the same periods. auxiliary is {name: value} of the MAW_AUXILIARY names.")
+    "    RATE_SCALING - each record stated whole, in the same periods. auxiliary is {name: value} of the MAW_AUXILIARY names;\n"
+    "    name is what Movers calls the well.")
 
 
 _UZF = ("surfdep", "vks", "thtr", "thts", "thti", "eps", "finf")
@@ -408,7 +521,7 @@ def _uzf(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
             "UnsaturatedZone takes a mapping of geometry, "
             f"{', '.join(_UZF)} and optionally {', '.join(_UZF_ET)}, or a list of them; got {value!r}.",
             error_code="MODFLOW_STRESS_UNSTATED")
-    _unknown(value, "UnsaturatedZone", ("geometry", *_UZF, *_UZF_ET, "auxiliary"))
+    _unknown(value, "UnsaturatedZone", ("geometry", "name", *_UZF, *_UZF_ET, "auxiliary"))
     if value.get("geometry") is None:
         return {}, {}
     for argument in _UZF:
@@ -430,18 +543,19 @@ def _uzf(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     if value.get("auxiliary") is not None:
         values["auxiliary"] = _settings(value, "UnsaturatedZone", numbers=(), words={})["auxiliary"]
     return {"UZF_PACKAGEDATA": {"zones": [{
-        "composite": "UnsaturatedZone", "geometry": value["geometry"], "values": values}]}}, {}
+        "composite": "UnsaturatedZone", "geometry": value["geometry"], "name": _given(value, "UnsaturatedZone"),
+        "values": values}]}}, {}
 
 
 _uzf.__doc__ = (
     "The UZF cells a polygon geometry places: UnsaturatedZone(geometry, surfdep, vks, thtr, thts, thti, eps, finf"
-    "[, pet, extdp, extwc, ha, hroot, rootact, auxiliary]), or a list of such statements.\n\n"
+    "[, name, pet, extdp, extwc, ha, hroot, rootact, auxiliary]), or a list of such statements.\n\n"
     "    The top solved cell of every column whose centre the polygon holds is a land-surface UZF cell, and each\n"
     "    solved layer below it down the column a UZF cell connected to the one above; a property is a number or a\n"
     "    raster read at the column's centre and holds for the whole column. finf and the ET values are the land\n"
     "    cell's period settings: a number or raster from period 1, or {period from 1: number}; the ET values are\n"
     "    those the stated UZF ET options read; stated beside none, they refuse. auxiliary is {name: value} of the\n"
-    "    UZF_AUXILIARY names, from period 1 or keyed by period.")
+    "    UZF_AUXILIARY names, from period 1 or keyed by period. name is what Movers calls the land cells.")
 
 
 def module_input_dir() -> Path:

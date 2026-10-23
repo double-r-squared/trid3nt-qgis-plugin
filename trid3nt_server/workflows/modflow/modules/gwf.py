@@ -9,8 +9,8 @@ from typing import Any, Mapping
 from ...runtime.module import MOMENT, Output, SlotRefused
 from ..errors import ModflowError
 from .module import (_LAKE_FLUXES, _LAKE_NUMBERS, _LAKES, _MAW, _MAW_NUMBERS, _MAW_SKIN, _STREAM_NUMBERS, _STREAMS,
-                     _UZF, _UZF_ET, ModflowModule, _lakes, _start_date_time, _streams, _stress, _uzf, _wells,
-                     periods)
+                     _UZF, _UZF_ET, ModflowModule, _diversions, _lakes, _movers, _start_date_time, _streams, _stress,
+                     _uzf, _wells, periods)
 from .outputs import PRIMITIVES
 
 __all__ = ["COUPLED_BODIES", "GWF", "MODULE_OUTPUT"]
@@ -294,8 +294,10 @@ GWF.composites(
            for name, (_, columns) in _STRESS.items()},
     **{name: _stress(name, package, dict(columns), carries=True)
        for name, (package, columns) in _STRESS.items()})
-GWF.composites(reads={"Streams": ("geometry", *_STREAMS, *_STREAM_NUMBERS)}, Streams=_streams)
-GWF.composites(reads={"Lakes": ("geometry", *_LAKES, *_LAKE_FLUXES, *_LAKE_NUMBERS)}, Lakes=_lakes)
+GWF.composites(reads={"Streams": ("geometry", "cross_section", *_STREAMS, *_STREAM_NUMBERS)}, Streams=_streams)
+GWF.composites(reads={"Lakes": ("geometry", "table", *_LAKES, *_LAKE_FLUXES, *_LAKE_NUMBERS)}, Lakes=_lakes)
+GWF.composites(reads={"Movers": ("from_at", "to_at")}, Movers=_movers)
+GWF.composites(reads={"Diversions": ("from_at", "to_at")}, Diversions=_diversions)
 GWF.composites(reads={"MultiAquiferWells": ("geometry", *(name for name in _MAW if name != "condeqn"), *_MAW_SKIN,
                                             *_MAW_NUMBERS)},
               MultiAquiferWells=_wells)

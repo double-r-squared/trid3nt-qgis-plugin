@@ -17,7 +17,7 @@ from ..errors import ModflowError
 from .griddata import METRES, sample
 
 __all__ = ["cells_of", "edge_cells", "hold_lakes", "lake_statements", "layer_rows", "maw_statements",
-           "place", "place_lakes", "place_maw", "place_streams", "place_uzf", "point_cell", "uzf_statements"]
+           "pick", "place", "place_lakes", "place_maw", "place_streams", "place_uzf", "point_cell", "uzf_statements"]
 
 def place(statement: Mapping[str, Any], *, points: Any, cells: Any,
           utm_epsg: int | None, nlay: int, frame: Any = None,
@@ -181,8 +181,9 @@ def _by_period(found: list[tuple[int, list]]) -> dict[int, list[list]]:
 
 def place_streams(statements: list[Mapping[str, Any]], *, points: Any, cells: Any,
                   utm_epsg: int | None, nlay: int, frame: Any = None, active: Any = None,
-                  auxiliary: tuple = ()) -> tuple[list[list], list[list], dict[int, list[list]]]:
-    """Streams statements -> ``(packagedata, connectiondata, perioddata)``, one SFR reach per line piece in a cell.
+                  auxiliary: tuple = (), diversions: list[Mapping[str, Any]] = ()
+                  ) -> tuple[list[list], list[list], dict[int, list[list]], list[list], list[dict[str, Any]]]:
+    """Streams statements -> ``(packagedata, connectiondata, perioddata, diversions, features)``, one SFR reach per line piece in a cell.
 
     Each line is cut by the cells it crosses in digitized order (downstream), a part of it off the mesh is left out, a reach's length is
     the line's length inside its cell on the model's length unit, and its layer is the statement's
@@ -190,7 +191,9 @@ def place_streams(statements: list[Mapping[str, Any]], *, points: Any, cells: An
     a cell that holds one reach of another line (not that line's last) joins it. Reaches are numbered
     from 0, upstream before downstream, ties by statement, line and position along the line. A statement's
     period settings are written to each of its reaches, its inflow to each line's upstream reach; ``auxiliary``
-    names the SFR_AUXILIARY columns."""
+    names the SFR_AUXILIARY columns. A diversion statement moves water from one reach to another: the target
+    becomes a downstream connection of the source (numbered after it), receives only the diverted water (USTRF 0.0),
+    and the source counts it in NDV. ``features`` is each reach as ``{package, name, number, cells, table}``."""
     import shapely
     from pyproj import Transformer
     from shapely.geometry import shape as geo
@@ -225,6 +228,7 @@ def place_streams(statements: list[Mapping[str, Any]], *, points: Any, cells: An
         for reach in reaches[first:]:
             reach["settings"] = {key: value for key, value in (statement.get("settings") or {}).items()
                                  if key != "inflow" or reach["first"]}
+            reach["name"], reach["table"] = statement.get("name"), statement.get("cross_section")
         for key, value in statement["values"].items():
             column = _column(value, key, name="Streams", placed=placed, points=points,
                              cells=cells, utm_epsg=int(utm_epsg), frame=frame,
@@ -236,7 +240,17 @@ def place_streams(statements: list[Mapping[str, Any]], *, points: Any, cells: An
             "Streams places by geometry and the geometry touches no cell of the "
             "accepted mesh; state a geometry that lies on it.",
             error_code="MODFLOW_STRESS_OUTSIDE")
-    return _rows(reaches, auxiliary)
+    mesh = {"points": points, "cells": cells, "utm_epsg": utm_epsg}
+    found = _reaches(reaches)
+    chosen = [(pick(item.get("from"), item.get("from_at"), found, role="Diversions from", **mesh)["number"],
+               pick(item.get("to"), item.get("to_at"), found, role="Diversions to", **mesh)["number"], item)
+              for item in diversions]
+    return _rows(reaches, auxiliary, chosen)
+
+
+def _reaches(reaches: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [{"package": "SFR", "name": reach.get("name"), "number": rank, "cells": {reach["cell"]}}
+            for rank, reach in enumerate(reaches)]
 
 
 def _cut(line: Any, tree: Any, polygons: Any, cells: Any, *, line_id: int, metres: float,
@@ -280,8 +294,9 @@ def _reach_layer(cell: int, layer: Any, nlay: int, active: Any) -> int:
         error_code="MODFLOW_STRESS_OUTSIDE")
 
 
-def _rows(reaches: list[dict[str, Any]], auxiliary: tuple) -> tuple[list[list], list[list], dict[int, list[list]]]:
-    """Number the reaches upstream first, join the lines, and write each reach's packagedata, connection and period rows."""
+def _rows(reaches: list[dict[str, Any]], auxiliary: tuple, diversions: list[tuple[int, int, Mapping[str, Any]]]
+          ) -> tuple[list[list], list[list], dict[int, list[list]], list[list], list[dict[str, Any]]]:
+    """Number the reaches upstream first, join the lines, and write each reach's packagedata, connection, diversion and period rows."""
     downstream: dict[int, int] = {}
     for rank, reach in enumerate(reaches):
         if rank + 1 < len(reaches) and not reach["last"]:
@@ -300,6 +315,15 @@ def _rows(reaches: list[dict[str, Any]], auxiliary: tuple) -> tuple[list[list], 
     upstream: dict[int, list[int]] = {rank: [] for rank in range(len(reaches))}
     for rank, below in downstream.items():
         upstream[below].append(rank)
+    diverted: dict[int, list[tuple[int, Mapping[str, Any]]]] = {}
+    for source, target, item in diversions:
+        if source == target or downstream.get(source) == target or upstream[target]:
+            raise ModflowError(
+                f"Diversions: reach {target + 1} of the placed reaches cannot take water diverted from reach "
+                f"{source + 1}; a diversion's target is a reach that has no upstream reach and is not the source's "
+                "own downstream reach, so its USTRF is the diverted water alone.", error_code="MODFLOW_STRESS_UNSTATED")
+        diverted.setdefault(source, []).append((target, item))
+        upstream[target].append(source)
     number: dict[int, int] = {}
     while len(number) < len(reaches):
         ready = [rank for rank in range(len(reaches)) if rank not in number
@@ -310,21 +334,30 @@ def _rows(reaches: list[dict[str, Any]], auxiliary: tuple) -> tuple[list[list], 
                 error_code="MODFLOW_STRESS_UNSTATED")
         number[ready[0]] = len(number)
     order = sorted(number, key=number.get)
-    packagedata, connectiondata, found = [], [], []
+    packagedata, connectiondata, found, divisions, features = [], [], [], [], []
+    targets = {target for items in diverted.values() for target, _ in items}
     for rank in order:
         reach = reaches[rank]
         above = sorted(number[up] for up in upstream[rank])
         below = [number[downstream[rank]]] if rank in downstream else []
+        below += [number[target] for target, _ in diverted.get(rank, ())]
         settings = reach.get("settings") or {}
         label = f"Streams reach {number[rank] + 1}"
         columns, timed = _aux_table(number[rank], settings.get("auxiliary"), auxiliary, label=label, option="SFR_AUXILIARY")
         packagedata.append([
             number[rank], reach["layer"], reach["cell"], reach["length"], reach["width"],
             reach["slope"], reach["bed_top"], reach["bed_thickness"],
-            reach["bed_conductivity"], reach["manning"], len(above) + len(below), 1.0, 0, *columns])
+            reach["bed_conductivity"], reach["manning"], len(above) + len(below), 0.0 if rank in targets else 1.0,
+            len(diverted.get(rank, ())), *columns])
         connectiondata.append([number[rank], *above, *[-item for item in below]])
         found += _setting_rows(number[rank], settings, _SFR_SETTINGS, label=label, tabled=_SFR_TABLED) + timed
-    return packagedata, connectiondata, _by_period(found)
+        for idv, (target, item) in enumerate(diverted.get(rank, ())):
+            divisions.append([number[rank], idv, number[target], item["type"]])
+            found += [(period, [number[rank], "diversion", idv, value])
+                      for period, value in sorted(_timed(item["value"]).items())]
+        features.append({"package": "SFR", "name": reach.get("name"), "number": number[rank],
+                         "cells": {reach["cell"]}, "table": reach.get("table")})
+    return packagedata, connectiondata, _by_period(found), divisions, features
 
 
 def lake_statements(sheet: Any) -> list[Mapping[str, Any]]:
@@ -368,8 +401,8 @@ def hold_lakes(statements: list[Mapping[str, Any]], idomain: Any, *, points: Any
 def place_lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any,
                 utm_epsg: int | None, nlay: int, frame: Any = None, active: Any = None,
                 top: Any, botm: Any, auxiliary: tuple = ()
-                ) -> tuple[list[list], list[list], dict[int, list[list]], list[list]]:
-    """Lakes statements -> ``(packagedata, connectiondata, perioddata, outlets)`` rows, one LAK lake per polygon.
+                ) -> tuple[list[list], list[list], dict[int, list[list]], list[list], list[dict[str, Any]]]:
+    """Lakes statements -> ``(packagedata, connectiondata, perioddata, outlets, features)`` rows, one LAK lake per polygon.
 
     A lake holds the cells whose centres its polygon contains, in every solved layer whose top lies
     above the lake's bottom; each is connected to the solved cells that are not lake cells beside it
@@ -378,7 +411,8 @@ def place_lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any,
     the statement's one lake for the lake number ``to`` (from 1) or outside, numbered in statement order, its
     values the columns its type reads and mf6's unread value elsewhere.
     ``active`` is one row per layer of the cells the run solves, ``top`` the grid's top and ``botm`` its bottoms;
-    ``auxiliary`` names the LAK_AUXILIARY columns."""
+    ``auxiliary`` names the LAK_AUXILIARY columns. ``features`` is each lake as ``{package, name, number, cells,
+    outlets, table}``, its outlets the numbers they were given."""
     import numpy as np
     import shapely
 
@@ -427,7 +461,11 @@ def place_lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any,
         packagedata.append([number, _timed(lake["values"]["stage"])[0], len(rows), *columns])
         connectiondata += rows
         found += _setting_rows(number, lake["values"], _LAK_SETTINGS, label=label, tabled=_LAK_TABLED) + timed
+    features = []
     for number, lake in enumerate(lakes):
+        features.append({"package": "LAK", "name": lake["given"], "number": number,
+                         "cells": {cell for _, cell in lake["held"]}, "table": lake["table"],
+                         "outlets": list(range(len(outlets), len(outlets) + len(lake["outlets"])))})
         for outlet in lake["outlets"]:
             outletno = len(outlets)
             out = outlet["to"] - 1
@@ -441,13 +479,14 @@ def place_lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any,
             outlets.append([outletno, number, out, outlet["couttype"], *read.values()])
             found += _setting_rows(outletno, outlet, _OUTLET_SETTINGS,
                                    label=f"Lakes outlet {outletno + 1}", tabled=_OUTLET_TABLED)
-    return packagedata, connectiondata, _by_period(found), outlets
+    return packagedata, connectiondata, _by_period(found), outlets, features
 
 
 def place_maw(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, utm_epsg: int | None,
               nlay: int, active: Any = None, top: Any, botm: Any, auxiliary: tuple = (),
-              flowing_wells: bool = False) -> tuple[list[list], list[list], dict[int, list[list]]]:
-    """MultiAquiferWells statements -> ``(packagedata, connectiondata, perioddata)`` rows, one MAW well per point.
+              flowing_wells: bool = False
+              ) -> tuple[list[list], list[list], dict[int, list[list]], list[dict[str, Any]]]:
+    """MultiAquiferWells statements -> ``(packagedata, connectiondata, perioddata, features)`` rows, one MAW well per point.
 
     A well sits in the cell holding its point and has one connection to every solved layer whose cell its
     screen crosses (the screen's bottom under the layer's top and its top over the layer's bottom); a
@@ -466,7 +505,7 @@ def place_maw(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, u
             "with a projected zone to place it on.", error_code="MODFLOW_STRESS_OUTSIDE")
     tops, bottoms = _levels(top, botm, nlay=nlay, ncpl=len(cells))
     solved = np.ones((nlay, len(cells)), dtype=bool) if active is None else np.asarray(active) > 0
-    packagedata, connectiondata, found = [], [], []
+    packagedata, connectiondata, found, features = [], [], [], []
     for statement in statements:
         values = statement["values"]
         flowing = [name for name in ("fwelev", "fwcond", "fwrlen") if values.get(name) is not None]
@@ -494,6 +533,7 @@ def place_maw(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, u
                     "state a screen over a layer the run solves.", error_code="MODFLOW_STRESS_OUTSIDE")
             label = f"MultiAquiferWells well {number + 1}"
             columns, timed = _aux_table(number, values.get("auxiliary"), auxiliary, label=label, option="MAW_AUXILIARY")
+            features.append({"package": "MAW", "name": statement.get("name"), "number": number, "cells": {cell}})
             packagedata.append([number, values["radius"], values["bottom"], values["start_head"],
                                 values["condeqn"], len(screened), *columns])
             connectiondata += [[number, count, (layer, cell), values["screen_top"], values["screen_bottom"],
@@ -503,7 +543,7 @@ def place_maw(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, u
     if not packagedata:
         raise ModflowError("MultiAquiferWells places by geometry and the geometry holds no point.",
                            error_code="MODFLOW_STRESS_OUTSIDE")
-    return packagedata, connectiondata, _by_period(found)
+    return packagedata, connectiondata, _by_period(found), features
 
 
 # The value mf6 takes in a UZF period column its stated options do not read.
@@ -515,8 +555,8 @@ _ET_READ = {"pet": None, "extdp": None, "extwc": "unsat_etwc",
 
 def place_uzf(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, utm_epsg: int | None,
               nlay: int, frame: Any = None, active: Any = None, options: Mapping[str, Any] = {},
-              auxiliary: tuple = ()) -> tuple[list[list], dict[int, list[list]]]:
-    """UnsaturatedZone statements -> ``(packagedata, perioddata)`` rows, one UZF cell per solved layer of a held column.
+              auxiliary: tuple = ()) -> tuple[list[list], dict[int, list[list]], list[dict[str, Any]]]:
+    """UnsaturatedZone statements -> ``(packagedata, perioddata, features)`` rows, one UZF cell per solved layer of a held column.
 
     A polygon holds the columns whose centres it contains; the top solved cell of a column is the land-surface
     cell (landflag 1) and each solved layer under it, down to the first layer the run does not solve, a cell
@@ -604,7 +644,7 @@ def place_uzf(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, u
         stacks[cell] = stack
     order = sorted((layer, cell) for cell, stack in stacks.items() for layer in stack)
     number = {item: rank for rank, item in enumerate(order)}
-    packagedata, period_rows = [], []
+    packagedata, period_rows, features = [], [], []
     for layer, cell in order:
         column = columns[cell]
         land = layer == top[cell]
@@ -612,6 +652,8 @@ def place_uzf(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, u
         packagedata.append([number[(layer, cell)], (layer, cell), int(land), below,
                             *[column[key] for key in _UZF_CELL]])
         if land:
+            features.append({"package": "UZF", "name": statements[column["statement"]].get("name"),
+                             "number": number[(layer, cell)], "cells": {cell}})
             timed = {key: _timed(column[key]) for key in ("finf", *_ET_READ) if column.get(key) is not None}
             series = [*timed.values(), *column["auxiliary"].values()]
             for period in sorted({period for item in series for period in item}):
@@ -619,7 +661,7 @@ def place_uzf(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, u
                                              *[_in_force(timed[key], period) if key in timed else _UNREAD
                                                for key in _ET_READ],
                                              *[_in_force(item, period) for item in column["auxiliary"].values()]]))
-    return packagedata, _by_period(period_rows)
+    return packagedata, _by_period(period_rows), features
 
 
 def _in_force(item: Mapping[int, Any], period: int) -> Any:
@@ -698,12 +740,13 @@ def _lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, utm_
                             error_code="MODFLOW_STRESS_OUTSIDE")
                     owner[item] = name
                 lakes.append({"name": name, "held": sorted(held), "stage": values["stage"],
-                              "leakance": values["leakance"], "values": values,
-                              "outlets": statement.get("outlets") or []})
-        if statement.get("outlets") and len(lakes) - first != 1:
-            raise ModflowError(
-                f"Lakes: outlets leave one lake, and this statement's geometry places {len(lakes) - first}; "
-                "state the outlets on a statement holding one polygon.", error_code="MODFLOW_STRESS_UNSTATED")
+                              "leakance": values["leakance"], "values": values, "given": statement.get("name"),
+                              "outlets": statement.get("outlets") or [], "table": statement.get("table")})
+        for stated in ("outlets", "table"):
+            if statement.get(stated) and len(lakes) - first != 1:
+                raise ModflowError(
+                    f"Lakes: {stated} belong to one lake, and this statement's geometry places {len(lakes) - first}; "
+                    f"state the {stated} on a statement holding one polygon.", error_code="MODFLOW_STRESS_UNSTATED")
     return lakes
 
 
@@ -749,6 +792,40 @@ def point_cell(pt: Any, *, label: str, points: Any, cells: Any, utm_epsg: int,
     return require_viable(pt, label=label, utm_epsg=int(utm_epsg), sites_xy=centres,
                           viable=held, resolve=resolve,
                           missed="in a cell the run does not solve (DISV_IDOMAIN 0)")
+
+
+def pick(name: Any, at: Any, features: list[Mapping[str, Any]], *, role: str, points: Any, cells: Any,
+         utm_epsg: int | None) -> Mapping[str, Any]:
+    """The one feature a statement's end names, by its name, the cell of the point it lies at, or both; none or several refuse."""
+    from trid3nt_server.inputs.geometry import flatten_geometries
+    from trid3nt_server.inputs.shape import shape
+
+    if name is None and at is None:
+        raise ModflowError(f"{role} states neither a name nor a point; state the feature it is.",
+                           error_code="MODFLOW_STRESS_UNSTATED")
+    found = [item for item in features if name is None or item["name"] == name]
+    if name is not None and not found:
+        named = sorted({str(item["name"]) for item in features if item["name"] is not None})
+        raise ModflowError(
+            f"{role} names {name!r}, and no placed feature carries that name"
+            + (f" (named: {', '.join(named)})" if named else "") + ".", error_code="MODFLOW_STRESS_UNSTATED")
+    if at is not None:
+        if points is None or cells is None or not utm_epsg:
+            raise ModflowError(f"{role} places by a point, and this run has no accepted mesh with a projected zone.",
+                               error_code="MODFLOW_STRESS_OUTSIDE")
+        parts = flatten_geometries(shape(at, label=role).features)
+        if len(parts) != 1 or parts[0].get("type") != "Point":
+            raise ModflowError(f"{role} places by one point; got {len(parts)} geometries.",
+                               error_code="MODFLOW_STRESS_UNSTATED")
+        lon, lat = parts[0]["coordinates"][:2]
+        cell = point_cell(Point(float(lon), float(lat)), label=role, points=points, cells=cells, utm_epsg=int(utm_epsg))
+        found = [item for item in found if cell in item["cells"]]
+    if len(found) != 1:
+        raise ModflowError(
+            f"{role} names {len(found)} features"
+            + (f" ({', '.join(f'{item['package']} {item['number'] + 1}' for item in found)})" if found else "")
+            + "; state the one it is by a name, a point in its cell, or both.", error_code="MODFLOW_STRESS_UNSTATED")
+    return found[0]
 
 
 def cells_of(geometry: Any, *, name: str, points: Any, cells: Any,

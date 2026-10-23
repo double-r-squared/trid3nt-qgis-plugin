@@ -51,7 +51,7 @@ def _statement(geometry=_CENTRE, **over):
 
 def _place(statements, *, active=None, **options):
     return place_uzf(statements, points=_POINTS, cells=_CELLS, utm_epsg=32617, nlay=_NLAY,
-                     frame=("meters", "days"), active=active, options=options)
+                     frame=("meters", "days"), active=active, options=options)[:2]
 
 
 def _solved(**off):

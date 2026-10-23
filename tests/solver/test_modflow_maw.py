@@ -50,7 +50,7 @@ def _statement(geometry=_CENTRE, **over):
 
 def _place(statements, *, active=None):
     return place_maw(statements, points=_POINTS, cells=_CELLS, utm_epsg=32617, nlay=2,
-                     active=active, **_GRID)
+                     active=active, **_GRID)[:3]
 
 
 # ---- Part B: the wells and their connections -------------------------------

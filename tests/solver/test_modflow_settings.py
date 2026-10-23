@@ -109,7 +109,7 @@ def _wells(statement=None, *, declared=(), flowing_wells=True, **settings):
     sheet = _fill({"MultiAquiferWells": {"geometry": "where", **_WELL, **settings, **(statement or {})}},
                   nlay=2, where=_point(15.0, 15.0))
     return place_maw(sheet.filled["MAW_PACKAGEDATA"].value["wells"], nlay=2, auxiliary=declared,
-                     flowing_wells=flowing_wells, **_MESH, **_GRID[2])
+                     flowing_wells=flowing_wells, **_MESH, **_GRID[2])[:3]
 
 
 @pytest.mark.parametrize("settings,rows", [
@@ -231,7 +231,7 @@ def _lakes(*statements, declared=()):
     sheet = _fill({"Lakes": [{"geometry": f"area{n}", **_LAKE, **body} for n, (_, body) in enumerate(statements)]},
                   **produced)
     return place_lakes(sheet.filled["LAK_PACKAGEDATA"].value["lakes"], nlay=1, frame=("meters", "days"),
-                       auxiliary=declared, **_MESH, **_GRID[1])
+                       auxiliary=declared, **_MESH, **_GRID[1])[:4]
 
 
 @pytest.mark.parametrize("settings,rows", [
@@ -344,7 +344,7 @@ def test_stating_the_outlet_keywords_beside_composite_outlets_refuses(staged_bes
 
 
 # ---- SFR: gwf-sfr.dfn, block period: status, bedk, manning, stage, inflow, rainfall, evaporation, runoff,
-# ---- upstream_fraction, auxiliary (diversion and cross_section name a diversion topology and a table file)
+# ---- upstream_fraction, auxiliary
 
 _STREAM = {"width": 5.0, "slope": 0.001, "bed_top": 9.0, "bed_thickness": 1.0, "bed_conductivity": 1.0e-5,
            "manning": 0.03}
@@ -356,7 +356,7 @@ def _streams(*statements, declared=()):
     sheet = _fill({"Streams": [{"geometry": f"line{n}", **_STREAM, **body} for n, (_, body) in enumerate(statements)]},
                   **produced)
     return place_streams(sheet.filled["SFR_PACKAGEDATA"].value["streams"], nlay=1, frame=("meters", "days"),
-                         auxiliary=declared, **_MESH)
+                         auxiliary=declared, **_MESH)[:3]
 
 
 @pytest.mark.parametrize("settings,keyword,value", [
@@ -395,7 +395,7 @@ def test_an_sfr_manning_keyed_by_period_is_the_reach_s_own_from_its_first_period
 
 
 @pytest.mark.parametrize("settings", [{"status": "CONSTANT"}, {"stage": True}, {"inflow": {0: 1.0}},
-                                      {"diversion": {1: 1.0}}, {"cross_section": "x.tab"}])
+                                      {"diversion": {1: 1.0}}, {"tab6": "x.tab"}])
 def test_an_sfr_setting_that_is_not_one_the_composite_takes_refuses(settings):
     with pytest.raises(ModflowError) as caught:
         _streams((_MAIN, settings))

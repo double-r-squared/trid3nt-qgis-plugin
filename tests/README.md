@@ -25,7 +25,7 @@ rest and make up the sixth slice.
 | `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 12 | 176 |
 | `search/` | dataset and tool retrieval, the OGC adapter, the keyword dictionary read | 13 | 225 |
 | `server/` | the HTTP and WS routes, the fetch short-circuit and the Case AOI, persistence | 29 | 261 |
-| `solver/` | the executor, the run reads, the engine-room posture, the MODFLOW engine, its authoring and staged check, the GeoClaw engine, its module wrapper, its .data authoring, its grid recipe, its topofiles, its Fault dtopo and its fgmax, fgout and gauge outputs, the plume template, its body wrappers, the SFR keywords and Streams composite, the LAK keywords and Lakes composite, the MAW keywords and MultiAquiferWells composite, and the UZF keywords and UnsaturatedZone composite, and their period settings, and the GeoClaw template's pieces (the SIFT row, the SiftFault, FixedGrids and InitialSurface composites, the staged case) | 33 | 739 |
+| `solver/` | the executor, the run reads, the engine-room posture, the MODFLOW engine, its authoring and staged check, the GeoClaw engine, its module wrapper, its .data authoring, its grid recipe, its topofiles, its Fault dtopo and its fgmax, fgout and gauge outputs, the plume template, its body wrappers, the SFR keywords and Streams composite, the LAK keywords and Lakes composite, the MAW keywords and MultiAquiferWells composite, and the UZF keywords and UnsaturatedZone composite, and their period settings, the Movers and Diversions composites with the cross-section and lake tables, and the GeoClaw template's pieces (the SIFT row, the SiftFault, FixedGrids and InitialSurface composites, the staged case) | 34 | 793 |
 | `telemac/` | the TELEMAC templates, the module surface, what each module writes and the primitives that read it, the listing reads, authoring | 61 | 1001 |
 | `tools/` | the registry, the arg normalizer, the tool cache | 10 | 343 |
 
@@ -46,7 +46,7 @@ Six slices by subsystem, each its own foreground invocation, from the repo root:
 
     make test-fetchers        # tests/fetchers                                                                              2230
     make test-spatial         # tests/derive tests/render tests/mesh                                         762
-    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                      2206
+    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                      2260
     make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts       1132
     make test-model-surface   # tests/adapters tests/tools                                                                   616
     make test-packages        # tests/contracts tests/plugin                                                                  754
