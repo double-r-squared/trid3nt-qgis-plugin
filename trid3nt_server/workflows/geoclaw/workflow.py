@@ -23,7 +23,7 @@ from trid3nt_server.inputs.slots import BED, DOMAIN
 from trid3nt_server.workflows.runtime import DeclarationError, RunResult, Workflow
 from trid3nt_server.workflows.runtime.data import Producer
 from trid3nt_server.workflows.runtime.module import identify_on, keyword_floor
-from trid3nt_server.workflows.runtime.primitives import Primitive, field, max_over_time, publish_reads, series
+from trid3nt_server.workflows.runtime.primitives import Primitive, field, max_over_time, publish_reads, series, unanchored
 from trid3nt_server.workflows.runtime.review import _seat_on, fill_sheet
 from trid3nt_server.workflows.runtime.sheet import Keyword, Sheet, reference_time
 from trid3nt_server.workflows.runtime.sheet import run as run_sheet_
@@ -157,12 +157,14 @@ def _record(solved: Solved, name: str) -> LayerURI:
         bbox=(west, south, east, north), crs_authid="EPSG:4326", reference_time=solved.run.get("reference_time"))
 
 
-async def publish_outputs(*, run: Mapping[str, Any], sheet: Sheet, params: Mapping[str, Any]) -> LayerURI:
-    """Read what the run saved and publish every row of the module table.
+async def publish_outputs(*, run: Mapping[str, Any], sheet: Sheet, outputs: Sequence[Primitive],
+                          captions: Mapping[str, str], params: Mapping[str, Any],
+                          anchors: Sequence[Mapping[str, Any]] = ()) -> LayerURI:
+    """Read what the run saved and publish every row of the module table, the template's own reads beside them.
     A solved run is opened over the sheet it solved, which the handle carries only as its record."""
     opened = {**run, "sheet": sheet}
     return await publish_reads(
-        engine="geoclaw", run=run, outputs=[], captions={}, params=params,
+        engine="geoclaw", run=run, outputs=outputs, captions=captions, params=params, anchors=anchors,
         solved=lambda module: Solved(opened, GEO), table=lambda solved: _table(solved(str(run["module"])), sheet),
         record=_record)
 
@@ -251,6 +253,9 @@ class GeoclawWorkflow(Workflow):
         emitter = current_emitter()
         begin_substeps(emitter, 4 + ("mesh" not in run))
 
+        async def given(value: Any) -> Any:
+            return await read(env, value) if isinstance(value, str) else value
+
         async def stage(label: str, fn: Any, /, **kwargs: Any) -> Any:
             async with substep(emitter, label):
                 run[label] = await call(fn, kwargs, label)
@@ -297,7 +302,11 @@ class GeoclawWorkflow(Workflow):
         mass = (solved.get("metrics") or {}).get("initial_mass")
         journal_note(f"Total mass at initial time {mass}" if mass is not None else
                      "the engine printed no Total mass at initial time")
+        outputs, captions = self._outputs()
+        # A primitive's point, line and band name run inputs; each is read here and rejoins its primitive at publish.
+        anchors = [{"at": await given(p.at), "along": await given(p.along), "within": await given(p.within)} for p in outputs]
         value = await stage("outputs", publish_outputs, run=solved, sheet=run["sheet"],
+                            outputs=[unanchored(p) for p in outputs], captions=captions, anchors=anchors,
                             params={key: run[key] for key in declared})
         return RunResult(value=value, results=dict(run))
 

@@ -277,3 +277,51 @@ def test_a_run_stating_no_moment_counts_its_seconds_from_the_solve_start_and_say
     assert solved(moment="2000-01-01T00:00:00Z") == ("2000-01-01T00:00:00Z", [])
     stamped, notes = solved()
     assert stamped == "2026-10-12T08:00:00+00:00" and len(notes) == 1 and "defaulted" in notes[0]
+
+
+def _publish_over_stub(monkeypatch, outputs, captions):
+    """TEST-ONLY STUB: publish_outputs over a stand-in solved run whose gauge series is synthetic; it proves the seam, not a result."""
+    import numpy as np
+
+    from trid3nt_contracts.execution import LayerURI
+    from trid3nt_server.render.formats import Published
+    from trid3nt_server.workflows.geoclaw import workflow as gw
+    from trid3nt_server.workflows.runtime.primitives import Series, series
+
+    seen: dict = {}
+
+    async def _publish(**kwargs):
+        seen.update(kwargs)
+        return Published(layers=(LayerURI(layer_id="L", name="x", layer_type="raster", uri="s3://runs/R/x.tif"),))
+
+    def _series(primitive, _solved):
+        return Series(name="surface elevation", units="m", times=np.array([0.0, 60.0]), values=np.array([0.0, 1.5]),
+                      at=f"at gauge {primitive.at}", measures={"max": 1.5})
+
+    class _Solved:
+        run = {}
+        body = SimpleNamespace(READS={"series": _series})
+
+    monkeypatch.setattr("trid3nt_server.workflows.runtime.primitives.publish", _publish)
+    monkeypatch.setattr(gw, "Solved", lambda *_a, **_k: _Solved())
+    monkeypatch.setattr(gw, "_table", lambda _solved, _sheet: ([series("GAUGE_SURFACE", at=1).chart()], lambda *_a: None))
+    monkeypatch.setattr(gw, "_record", lambda _solved, name: LayerURI(
+        layer_id="rec", name=name, layer_type="vector", uri="s3://runs/R/record.geojson"))
+    run = {"run_id": "R", "module": "geoclaw", "name": "bay"}
+    asyncio.run(gw.publish_outputs(run=run, sheet=SimpleNamespace(), outputs=outputs, captions=captions,
+                                   params={}, anchors=[{"at": 2, "along": None, "within": None}] * len(outputs)))
+    return [(d.caption, d.product.payload.get("title") if hasattr(d.product, "payload") else None) for d in seen["items"]]
+
+
+def test_a_placed_series_is_published_beside_the_module_table_with_its_caption(monkeypatch):
+    from trid3nt_server.workflows.runtime.primitives import series, unanchored
+
+    placed = unanchored(series("GAUGE_SURFACE", at=2).chart())
+    items = _publish_over_stub(monkeypatch, [placed], {"GAUGE_SURFACE": "tide at the pier"})
+    assert [caption for caption, _ in items] == ["surface elevation", "tide at the pier"]
+
+
+def test_a_template_with_no_placed_reads_publishes_the_module_table_alone(monkeypatch):
+    assert template.OUTPUTS == [] and template.CAPTIONS == {}
+    items = _publish_over_stub(monkeypatch, [], {})
+    assert [caption for caption, _ in items] == ["surface elevation"]
