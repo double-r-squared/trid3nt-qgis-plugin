@@ -72,12 +72,16 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
    unverified work is not done work.
 3. The live stack runs on THIS box: MinIO :9000, the daemon via
    `make agent`, local docker solvers. `set -a; source .env.local;
-   set +a` for env. Server changes end with daemon restart +
-   `dev/instruments/ws_smoke.py` (all_passed) + one declared canary
-   through the product path,
+   set +a` for env. Server changes end with daemon restart + the canary
+   of the piece that changed, through the product path,
    `python -m dev.testing.canaries <name>`, which exits
    non-zero unless the run's own products were read AND its delivery
-   packet assembled. You run these yourself.
+   packet assembled. A canary is a drift check, not a result: it runs
+   once when a module or feature lands and again only when that piece
+   changes, under 30 minutes end to end. A full-resolution run is a
+   showcase, run only on NATE's request. `dev/instruments/ws_smoke.py`
+   calls the LLM endpoint: run it once, and only for server, protocol
+   or model changes. You run these yourself.
 4. Behavior-preserving refactors move code verbatim; every reference
    site (tests, monkeypatch paths, source-inspection anchors,
    parents[N] depths) moves WITH it - grep the old path to zero, clear
