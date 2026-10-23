@@ -37,6 +37,7 @@ EXPECTED_TEMPLATES = {
     "tomawac_wave_driven_currents",
     "modflow_water_table",
     "modflow_plume",
+    "geoclaw_tsunami_inundation",
 }
 
 # The 10 deleted engine-door concierge tools.

@@ -1,0 +1,11 @@
+# Propagation database metadata file
+# Name, Filename/URL, Long(deg), Lat(deg), Slip(m), Strike(deg), Dip(deg), Depth(km), Length(km), Width(km), Rake(deg)
+acsza1, http://sift.pmel.noaa.gov/ComMIT/compressed/ac_001_a_ha.nc, 164.7994, 55.9606, 1.0, 299.0, 17.0, 19.61, 100.0, 50.0, 90.0
+acsza57, http://sift.pmel.noaa.gov/ComMIT/compressed/ac_057_a_ha.nc, 234.9041, 48.25964, 1.0, 341.0, 11.0, 12.82, 100.0, 50.0, 90.0
+acszb57, http://sift.pmel.noaa.gov/ComMIT/compressed/ac_057_b_ha.nc, 234.2797, 48.1161, 1.0, 341.0, 9.0, 5.0, 100.0, 50.0, 90.0
+acsza58, http://sift.pmel.noaa.gov/ComMIT/compressed/ac_058_a_ha.nc, 235.3021, 47.38119, 1.0, 344.0, 11.0, 12.82, 100.0, 50.0, 90.0
+acszb58, http://sift.pmel.noaa.gov/ComMIT/compressed/ac_058_b_ha.nc, 234.6776, 47.25966, 1.0, 344.0, 9.0, 5.0, 100.0, 50.0, 90.0
+acsza59, http://sift.pmel.noaa.gov/ComMIT/compressed/ac_059_a_ha.nc, 235.6432, 46.50817, 1.0, 345.0, 11.0, 12.82, 100.0, 50.0, 90.0
+acszb59, http://sift.pmel.noaa.gov/ComMIT/compressed/ac_059_b_ha.nc, 235.0257, 46.39406, 1.0, 345.0, 9.0, 5.0, 100.0, 50.0, 90.0
+acsza60, http://sift.pmel.noaa.gov/ComMIT/compressed/ac_060_a_ha.nc, 235.864, 45.5429, 1.0, 356.0, 11.0, 12.82, 100.0, 50.0, 90.0
+acszb60, http://sift.pmel.noaa.gov/ComMIT/compressed/ac_060_b_ha.nc, 235.2363, 45.51215, 1.0, 356.0, 9.0, 5.0, 100.0, 50.0, 90.0

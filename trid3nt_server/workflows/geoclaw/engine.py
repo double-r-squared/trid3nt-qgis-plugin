@@ -147,14 +147,13 @@ async def solve_case(*, run: dict[str, Any], cores: int) -> dict[str, Any]:
 
     The returned ``uri`` is the result the ledger replay probes; GeoClaw's
     product is its ``.data``-driven output set, so no mesh fact rides back."""
-    facts = run["case"]["server_facts"]
     run_result, batch_run_id = await dispatch_and_wait(
         solver=GEOCLAW_SOLVER_NAME, manifest_uri=run["manifest_uri"],
         cores=cores, module=GEOCLAW_SOLVER_NAME,
-        label=str(facts["name"]), timeout_s=_WAIT_CEILING_S)
+        label=str(run["name"]), timeout_s=_WAIT_CEILING_S)
     if run_result is None or run_result.status != "complete":
         raise GeoclawError(
-            f"the {facts['name']} solve did not complete "
+            f"the {run['name']} solve did not complete "
             f"(status={getattr(run_result, 'status', None)}, "
             f"error_code={getattr(run_result, 'error_code', None)}): "
             f"{getattr(run_result, 'error_message', '') or ''}",

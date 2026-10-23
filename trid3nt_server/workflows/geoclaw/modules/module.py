@@ -17,7 +17,8 @@ from typing import Any, Mapping
 from ...runtime.module import Module
 from ..errors import GeoclawError
 
-__all__ = ["GeoclawModule", "fault", "module_input_dir", "topography"]
+__all__ = ["GeoclawModule", "fault", "fixed_grids", "initial_surface", "module_input_dir", "sift_fault",
+           "topography"]
 
 #: What one Topography statement may carry: the surface, and the offset onto the run's frame.
 _SURFACE = ("surface", "offset")
@@ -151,6 +152,119 @@ def fault(value: Any, *, run: Mapping[str, Any]
     name = "dtopo_01.tt3"
     return ({"DTOPO_DTOPOFILES": [[3, name]]},
             {name: {"dtopo": {"subfaults": stated, **grid, "times": [float(t) for t in times]}}})
+
+
+#: What one SiftFault statement carries: the unit sources read, the slip on each, the dtopo grid's spacing and margin in degrees, and its instants.
+_SIFT = ("unit_sources", "slips", "spacing", "buffer", "times")
+
+
+def sift_fault(value: Any, *, run: Mapping[str, Any]
+               ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    """The rupture of a SIFT scenario as a dtopo file: SiftFault({unit_sources, slips, spacing, buffer, times}).
+
+    ``unit_sources`` is the record ``fetch_sift_unit_sources`` returns for the unit sources the scenario
+    names, ``slips`` the metres each slips by name, ``spacing`` and ``buffer`` the dtopo node spacing and
+    the margin around the rupture in degrees, ``times`` the instants it is written at. Each unit source
+    becomes a Fault subfault and the grid is the one Clawpack's ``create_dtopo_xy`` lays around them.
+    No slip anywhere is no rupture: empty ``slips`` writes no dtopo."""
+    if not isinstance(value, Mapping):
+        _refuse("SIFT_UNSTATED", "SiftFault takes a mapping {unit_sources, slips, spacing, buffer, times}.")
+    extra = sorted(set(value) - set(_SIFT))
+    if extra:
+        _refuse("SIFT_UNSTATED", f"SiftFault states {', '.join(extra)}; it takes {', '.join(_SIFT)}.")
+    if isinstance(value.get("slips"), Mapping) and not value["slips"]:
+        return {}, {}
+    absent = [key for key in _SIFT if value.get(key) is None]
+    if absent:
+        _refuse("SIFT_UNSTATED", f"SiftFault states no {', '.join(absent)}: the unit sources read, the slip "
+                "on each and the dtopo grid are all stated, the engine has no value for them.")
+    table = value["unit_sources"]
+    table = table.get("unit_sources") if isinstance(table, Mapping) else None
+    slips = value["slips"]
+    if not isinstance(table, Mapping) or not isinstance(slips, Mapping) or not slips:
+        _refuse("SIFT_UNSTATED", "SiftFault takes the record fetch_sift_unit_sources returns and a mapping "
+                "of unit-source name to slip in metres.")
+    from ..authoring.dtopo import dtopo_axes, sift_subfaults
+
+    subfaults = sift_subfaults(table, slips)
+    x, y = dtopo_axes(subfaults, float(value["spacing"]), float(value["buffer"]))
+    return fault({"subfaults": subfaults, "x": x, "y": y, "times": value["times"]}, run=run)
+
+
+#: What one FixedGrids statement carries: the extent the products cover and their cadence.
+_GRIDS = ("extent", "interval", "tstart_max", "dt_check", "arrival_tol", "interp_method")
+
+
+def fixed_grids(value: Any, *, run: Mapping[str, Any]
+                ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    """The fixed grids the products are read from: FixedGrids({extent, interval, tstart_max, dt_check, arrival_tol, interp_method}).
+
+    One fgmax grid and one fgout grid, both on the cells of the FINEST level of the stated grid recipe that
+    cover ``extent`` whole, so each node reads one finest cell; the fgout frames run from t = 0 to
+    CLAW_TFINAL every ``interval`` seconds, frame 0 being the initial sea the overland products are masked by.
+    ``tstart_max`` starts the maxima, ``dt_check`` and ``arrival_tol`` are fgmax's own, and the monitored level is the finest."""
+    if not isinstance(value, Mapping):
+        _refuse("GRIDS_UNSTATED", "FixedGrids takes a mapping " + "{" + ", ".join(_GRIDS) + "}.")
+    absent = [key for key in _GRIDS if value.get(key) is None]
+    extra = sorted(set(value) - set(_GRIDS))
+    if absent or extra:
+        _refuse("GRIDS_UNSTATED", f"FixedGrids states {', '.join(extra) or 'nothing extra'} beyond and no "
+                f"{', '.join(absent) or 'missing value'}: it takes {', '.join(_GRIDS)}, all stated.")
+    for key in ("FGMAX_FGMAX_GRIDS", "FGOUT_FGOUT_GRIDS"):
+        if run.get(key) is not None:
+            _refuse("GRIDS_STATED", f"{key} is stated beside FixedGrids: FixedGrids states the grid lists, "
+                    "so remove the keyword or the composite.")
+    facts = ((getattr(run.get("mesh", {}).get("artifact"), "probes", None) or {}).get("claw_grid")
+             if isinstance(run.get("mesh"), Mapping) else None)
+    tfinal = run.get("CLAW_TFINAL")
+    if facts is None or tfinal is None:
+        _refuse("GRIDS_UNSTATED", "FixedGrids sits on the accepted grid recipe's finest level and the run's "
+                "CLAW_TFINAL: the mesh is built and CLAW_TFINAL stated before the grids are.")
+    west, south, east, north = (float(v) for v in getattr(value["extent"], "bbox", value["extent"]))
+    (lx, ly), (dx, dy), levels = facts["lower"], facts["finest_cell_deg"], int(facts["levels"])
+    x1, x2 = lx + math.floor((west - lx) / dx + 1e-9) * dx, lx + math.ceil((east - lx) / dx - 1e-9) * dx
+    y1, y2 = ly + math.floor((south - ly) / dy + 1e-9) * dy, ly + math.ceil((north - ly) / dy - 1e-9) * dy
+    nx, ny = round((x2 - x1) / dx), round((y2 - y1) / dy)
+    interval = float(value["interval"])
+    if interval <= 0 or float(tfinal) <= 0:
+        _refuse("GRIDS_UNSTATED", f"FixedGrids interval {interval:g} s over CLAW_TFINAL {float(tfinal):g} s "
+                "writes no frame.")
+    nout = int(math.floor(float(tfinal) / interval + 1e-9)) + 1
+    return ({"FGMAX_FGMAX_GRIDS": [[1, float(value["tstart_max"]), 1.0e10, float(value["dt_check"]), levels,
+                                    float(value["arrival_tol"]), int(value["interp_method"]), 2,
+                                    {"x1": x1 + dx / 2, "y1": y1 + dy / 2, "x2": x2 - dx / 2,
+                                     "y2": y2 - dy / 2, "nx": nx, "ny": ny}]],
+             "FGOUT_FGOUT_GRIDS": [[1, 1, nout, 0.0, (nout - 1) * interval, 2, "binary32",
+                                    x1, x2, y1, y2, nx, ny]]}, {})
+
+
+def initial_surface(value: Any, *, run: Mapping[str, Any]
+                    ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    """The water surface the run opens at, from a raster: InitialSurface({surface}).
+
+    ``surface`` is a raster of surface elevation, read on the run's ``vertical_frame``; it is written as the
+    one qinit file the engine reads and the water stands at that elevation wherever it is above the bed.
+    A surface the run does not state states nothing."""
+    from trid3nt_server.inputs.bed import bed
+    from trid3nt_server.inputs.geometry import source_uri
+
+    if not isinstance(value, Mapping) or set(value) != {"surface"}:
+        _refuse("SURFACE_UNSTATED", "InitialSurface takes a mapping {surface}: the raster of the surface elevation.")
+    if value["surface"] is None:
+        return {}, {}
+    if run.get("QINIT_QINIT_TYPE") is not None or run.get("QINIT_QINITFILES") is not None:
+        _refuse("SURFACE_QINIT_STATED", "QINIT_QINIT_TYPE or QINIT_QINITFILES is stated beside InitialSurface: "
+                "InitialSurface states the qinit file, so remove the keyword or the composite.")
+    frame = str(run.get("vertical_frame") or "").strip()
+    if not frame:
+        _refuse("SURFACE_FRAME_UNSTATED", "the run states no vertical_frame, so the surface cannot be read on the "
+                "run's zero: state the frame the run counts elevations from.")
+    read = bed(value["surface"], frame=frame, label="initial surface")
+    if read.is_depth:
+        _refuse("SURFACE_DEPTH", "InitialSurface is a depth in metres, which is no grid a qinit file holds: hand it the raster.")
+    name = "qinit_01.xyz"
+    return ({"QINIT_QINIT_TYPE": 4, "QINIT_QINITFILES": [[name]]},
+            {name: {"qinit": str(source_uri(read.source)), "frame": frame}})
 
 
 def _triple(axis_value: Any, axis: str) -> tuple[float, float, int]:

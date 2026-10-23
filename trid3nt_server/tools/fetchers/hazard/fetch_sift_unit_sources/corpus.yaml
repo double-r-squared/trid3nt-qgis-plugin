@@ -1,0 +1,6 @@
+fetch_sift_unit_sources:
+- NOAA SIFT tsunami unit sources for a Cascadia subduction zone scenario
+- the subfault geometry of SIFT unit source acsza57
+- which fault patches does the ASCE tsunami scenario slip
+- get the unit source table for a tsunami earthquake scenario by name
+- NOAA PMEL propagation database unit sources strike dip depth and rake

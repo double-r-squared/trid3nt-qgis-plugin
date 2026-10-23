@@ -42,10 +42,12 @@ def serialize(sheet: Any, rundir: Path | str) -> dict[str, Any]:
     _applied(sheet, groups)
     _unstated(sheet)
     from .dtopo import write_dtopofiles
+    from .qinit import write_qinitfiles
     from .topo import write_topofiles
 
     write_topofiles(sheet, work)
     write_dtopofiles(sheet, work)
+    write_qinitfiles(sheet, work)
     written = sorted(out_file(obj) for _name, obj in groups.values())
     try:
         rundata.write(str(work))

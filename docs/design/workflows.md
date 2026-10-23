@@ -6,7 +6,7 @@ captions. Nothing in a template names a function to run. A FILL puts a value
 into each input, which ACCEPTS it or REJECTS it naming the remedy; a READY fill
 launches on an explicit act, and the engine's run is straight-line code in one order - full
 fill, mesh, settle, one review, solve. The skeleton is `workflows/runtime/workflow.py`; the TELEMAC
-facade is `workflows/telemac/workflow.py` and the MODFLOW one `workflows/modflow/workflow.py`. The
+facade is `workflows/telemac/workflow.py`, the MODFLOW one `workflows/modflow/workflow.py` and the GeoClaw one `workflows/geoclaw/workflow.py`. The
 publish is the runtime's (`publish_reads`, `workflows/runtime/primitives.py`): each engine hands it
 how a solved module is opened, its module table of what the run wrote, and the run's record.
 
@@ -595,3 +595,25 @@ zero elevation; the fgmax one needs the fgout nodes on the fgmax nodes and refus
 otherwise. A series is read at the run's one gauge, a gauge number, or a Point standing on
 a gauge (a Point off every gauge refuses with the nearest). A run stating more than one
 grid of a kind has no one grid to read and refuses.
+
+### The GeoClaw template: `geoclaw_tsunami_inundation`
+
+The first GeoClaw template (`workflows/geoclaw/templates/tsunami_inundation/`) takes R. J. LeVeque's Copalis Beach tutorial
+(`CopalisBeach/example2/setrun.py`) as its values. The caller states the places: `extent` (the level-1 box), `source` and
+`approach` (the rupture's sea and the sea to the coast), `domain` (the coast) and `seed` (a point on the water), plus
+`event_time`, the label of the rupture's t = 0 - a scenario has no date, the solve's start is never one, and a run that
+writes fgout frames without it refuses before the solve. The grid recipe is the tutorial's seven levels (ratios
+`[2,5,2,2,2,3]`) with its three regions over the stated boxes and one more holding the `domain` at the finest level from t = 0,
+so fgout frame 0 is the initial sea at the resolution the overland products are read at. The `FixedGrids` composite puts the
+fgmax and fgout grids on the finest cells that cover the `domain`, on the same nodes.
+
+The bed is the fetched finest surface at the `domain` (the BED row) over a deep rung over the whole grid (ETOPO 2022, or
+`deep_bed`), two topofiles, nothing merged; the deep rung's zero reaches the run's frame by the VDatum offset the workflow asks
+at the seed. `GEO_SEA_LEVEL` is the offset of the template's tidal datum (`SEA_LEVEL_DATUM`, MHW, as in the tutorial) on that
+frame, measured by the same row at the seed and never moved, unless the run states it. The rupture is the `SiftFault`
+composite: NOAA PMEL SIFT unit sources (`fetch_sift_unit_sources`) slipped by the tutorial's ASCE_SIFT_Region2 slips, each a
+Fault subfault, the dtopo grid being the one Clawpack's `create_dtopo_xy` lays (10 arcsec, 1 degree margin); no slip anywhere is
+no rupture. `InitialSurface` opens the sea at a stated raster instead (a qinit file of type 4). The workflow stages only the
+case section the worker reads (`stage_run(case=)`), publishes the module table through `publish_reads`, and its record is the
+outline of the fixed grids. The verification twin (`geoclaw_tsunami_zero_fetch`) runs Thacker's oscillating paraboloid, stated
+and synthetic, against its analytic solution.

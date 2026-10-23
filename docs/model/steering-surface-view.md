@@ -14,6 +14,7 @@ flowchart LR
     dictionaryExtractor["Dictionary<br/>workers/telemac/scripts/dico.py"]
     engineWorkflow["EngineWorkflow<br/>trid3nt_server/workflows/telemac/workflow.py"]
     fill["Fill<br/>trid3nt_server/workflows/runtime/fill.py"]
+    geoclawStage["Sheet<br/>trid3nt_server/workflows/geoclaw/workflow.py"]
     messageIR["MessageIR<br/>contracts/trid3nt_contracts/message.py"]
     modflowStage["Sheet<br/>trid3nt_server/workflows/modflow/workflow.py"]
     observationSlot["ObservationSlot<br/>trid3nt_server/inputs/observation.py"]
@@ -32,6 +33,7 @@ flowchart LR
     canvasGate -- "DrawnValue" --> fill
     dictionaryExtractor -- "KeywordDictionary" --> slot
     dictionaryExtractor -- "KeywordDictionary" --> wrapper
+    geoclawStage -- "StageRequest" --> stager
     modflowStage -- "StageRequest" --> stager
     steeringDriver -- "SteeringParse" --> steeringGate
     telemacSheet -- "StageRequest" --> stager

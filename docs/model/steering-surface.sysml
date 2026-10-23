@@ -438,6 +438,17 @@ package SteeringSurface {
         port stageOut : StageOut;
     }
 
+    part geoclawStage : Sheet {
+        doc /*
+        GeoClaw's half of the filled sheet: the .data set written by Clawpack,
+        checked against itself and staged through the one stager with the one
+        case section its worker reads.
+
+        code: trid3nt_server/workflows/geoclaw/workflow.py
+        */
+        port stageOut : StageOut;
+    }
+
     part fill : Fill {
         doc /*
         code: trid3nt_server/workflows/runtime/fill.py
@@ -545,6 +556,9 @@ package SteeringSurface {
 
     interface modflowStaged : StageRequest
         connect modflowStage.stageOut to stager.stageIn;
+
+    interface geoclawStaged : StageRequest
+        connect geoclawStage.stageOut to stager.stageIn;
 
     interface canvasAnswered : DrawnValue
         connect canvasGate.drawOut to fill.drawIn;

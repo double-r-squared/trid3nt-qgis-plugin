@@ -1,0 +1,97 @@
+# NOAA PMEL's SIFT unit-source table: one row per unit source, each a 100 x 50 km
+# rectangular subfault with a unit slip, published beside the propagation database
+# the Short-term Inundation Forecast for Tsunamis (SIFT) system runs on. A scenario
+# is a slip in metres on each unit source it names; Clawpack's own
+# dtopotools.SiftFault reads this very file.
+schema_version: v1
+
+name: fetch_sift_unit_sources
+source_class: sift_unit_sources
+error_prefix: SIFT
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: NO_COVERAGE
+shape: record
+supports_global_query: false
+
+endpoints:
+  table:
+    url: "https://sift.pmel.noaa.gov/ComMIT/compressed/info_sz.dat"
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+params:
+  names:
+    type: str_list
+    required: true
+
+hooks:
+  build_request: sift.build_request
+  record: sift.record
+
+normalize:
+  crs: "EPSG:4326"
+  units: m
+
+output:
+  layer_type: record
+  ext: json
+  emit_bbox: false
+
+cache:
+  # The table is republished when a unit source is added; a name already in it keeps its geometry.
+  ttl_class: static-30d
+
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 0.001
+  floor_mb: 0.001
+  ceil_mb: 0.01
+
+caveats:
+  - "model-callable, not matched: a unit source is a scenario's building block and never a measurement a slot matches, so it carries no coverage row"
+  - "longitude is east longitude (0 to 360) as NOAA publishes it; subtract 360 to read it west of Greenwich"
+  - "length, width and depth are kilometres, slip is the unit slip in metres, strike, dip and rake are degrees; the depth is that of the subfault's top edge"
+  - "the table gives each unit source's geometry only: how much it slips in a scenario, and the rigidity the moment is computed with, are the scenario's"
+
+docstring: |-
+  NOAA SIFT tsunami unit sources by name -> the subfault geometry of a scenario's building blocks.
+
+  What it does:
+      Reads NOAA PMEL's published SIFT unit-source table and returns the rows named:
+      each is one rectangular subfault (100 km x 50 km) with its position, strike,
+      dip, depth and rake, at a unit slip. A scenario earthquake is a slip in metres
+      on each unit source it names; the Okada displacement of the sum is its
+      sea-floor deformation.
+
+  When to use:
+      - A published tsunami scenario names SIFT unit sources and the slip on each
+        ("ASCE_SIFT_Region2: acsza57 35 m, acszb57 35 m ..."), and the run needs their
+        subfaults to make the initial sea-floor deformation.
+      - "which SIFT unit sources lie along the Cascadia subduction zone".
+
+  When NOT to use:
+      - A rupture described by a finite-fault model or by its own fault parameters: state
+        those subfaults directly.
+      - A historical event's slip distribution: this table has unit slips only.
+
+  Parameters:
+      names: the unit-source names to read, such as ``["acsza57", "acszb57"]``; a name
+          the table does not hold refuses naming it.
+
+  Returns:
+      a JSON-compatible dict with ``unit_sources`` (name to ``longitude`` east degrees,
+      ``latitude``, ``slip_m``, ``strike``, ``dip``, ``depth_km``, ``length_km``,
+      ``width_km``, ``rake``) and ``source``.
+
+  Cross-tool dependencies:
+      - Composes WITH: the GeoClaw ``SiftFault`` composite.
+      - Upstream data source: NOAA PMEL SIFT / ComMIT (https://sift.pmel.noaa.gov/ComMIT/).
+
+  Cache: ``ttl_class="static-30d"``.
+
+  Errors:
+      - ``SIFT_INPUT_INVALID``: no name, or a name the table does not hold.
+      - ``SIFT_UPSTREAM_ERROR``: the table could not be read.
+
+  Tier-1 free. No API key.

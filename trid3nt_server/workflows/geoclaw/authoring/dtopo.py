@@ -17,7 +17,7 @@ from ..errors import GeoclawError
 
 logger = logging.getLogger("trid3nt_server.workflows.geoclaw.authoring.dtopo")
 
-__all__ = ["DTOPO", "SUBFAULT_FIELDS", "write_dtopofiles"]
+__all__ = ["DTOPO", "SUBFAULT_FIELDS", "dtopo_axes", "sift_subfaults", "write_dtopofiles"]
 
 #: The key a composite's file entry carries its fault under.
 DTOPO = "dtopo"
@@ -29,6 +29,44 @@ SUBFAULT_FIELDS = ("longitude", "latitude", "depth", "strike", "dip", "rake", "s
 
 def _refuse(code: str, message: str) -> None:
     raise GeoclawError(message, error_code=f"GEOCLAW_{code}")
+
+
+def sift_subfaults(unit_sources: Mapping[str, Mapping[str, float]],
+                   slips: Mapping[str, float]) -> list[dict[str, Any]]:
+    """SIFT unit sources slipped by ``slips`` (metres, by unit-source name) -> subfault statements in Clawpack's own SubFault names.
+
+    Kilometres become metres and NOAA's east longitude becomes west-negative, as
+    ``dtopotools.SiftFault`` reads the same table; the rigidity is left to Clawpack."""
+    missing = [name for name in slips if name not in unit_sources]
+    if missing:
+        _refuse("SIFT_UNSTATED", f"the slips name {', '.join(map(repr, missing))}, which the unit "
+                f"sources read ({', '.join(sorted(unit_sources))}) do not hold.")
+    return [{"longitude": (lon - 360.0 if (lon := row["longitude"]) > 180.0 else lon),
+             "latitude": row["latitude"], "depth": row["depth_km"] * 1000.0, "strike": row["strike"],
+             "dip": row["dip"], "rake": row["rake"], "slip": float(slip),
+             "length": row["length_km"] * 1000.0, "width": row["width_km"] * 1000.0,
+             "coordinate_specification": "noaa sift"}
+            for name, slip in slips.items() for row in [unit_sources[name]]]
+
+
+def dtopo_axes(subfaults: list[Mapping[str, Any]], spacing: float, buffer: float
+               ) -> tuple[list[float], list[float]]:
+    """The ``[first, last, nodes]`` of the lon and lat axes Clawpack's own ``Fault.create_dtopo_xy`` lays around these subfaults.
+
+    ``spacing`` is the node spacing in degrees and ``buffer`` the margin in degrees around the rupture."""
+    from clawpack.geoclaw import dtopotools
+
+    subs = []
+    for stated in subfaults:
+        sub = dtopotools.SubFault()
+        for field in SUBFAULT_FIELDS:
+            setattr(sub, field, stated[field])
+        sub.calculate_geometry()
+        subs.append(sub)
+    fault = dtopotools.Fault()
+    fault.subfaults = subs
+    x, y = fault.create_dtopo_xy(dx=spacing, buffer_size=buffer)
+    return [float(x[0]), float(x[-1]), len(x)], [float(y[0]), float(y[-1]), len(y)]
 
 
 def write_dtopofiles(sheet: Any, work: Path) -> dict[str, dict[str, Any]]:

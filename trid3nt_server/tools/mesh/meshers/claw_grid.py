@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
+from types import SimpleNamespace
 from typing import Any, Sequence
 
 from trid3nt_server.tools.mesh.grid_geometry import M_PER_DEG_LAT, RegularGrid
@@ -226,12 +227,14 @@ def _refuse(code: str, message: str) -> None:
     raise MeshToolError(code, message)
 
 
+# The op's own signature is its schema: a literal word in `name` is a label, not the name of a run input.
+_OPS = SimpleNamespace(__name__="claw_grid ops", __all__=("flagregion",), flagregion=flagregion)
+
 CLAW_GRID = register_mesher(
     "claw_grid",
     build,
     kinds=("amr_grid",),
-    namespaces=(OpNamespace(origin="clawpack", phase=POST,
-                            names=("flagregion",)),),
+    namespaces=(OpNamespace(origin="clawpack", phase=POST, module=_OPS),),
     build_params=("refinement_ratios",),
     default_ops=(),
 )

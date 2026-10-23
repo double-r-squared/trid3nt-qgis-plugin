@@ -133,11 +133,14 @@ async def stage_run(rundir: Path, run_tag: str, *, module: str, steering: str,
                     user_fortran: Sequence[str] = (),
                     coupling: str | None = None,
                     continue_from: str | None = None,
-                    cores: int = 1) -> dict[str, Any]:
+                    cores: int = 1,
+                    case: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """An authored run directory -> the staged run the box receives.
 
     The manifest is written last. ``check`` is the engine's own staged check,
-    run against the uploaded directory before the manifest exists.
+    run against the uploaded directory before the manifest exists. ``case`` is
+    the manifest's case section for a worker that reads fewer keys than
+    ``case_section`` writes.
     """
     # Paths stay relative to the run directory: the oil module's user fortran is a directory the engine compiles, so the walk is recursive.
     authored = sorted(str(p.relative_to(rundir))
@@ -147,7 +150,7 @@ async def stage_run(rundir: Path, run_tag: str, *, module: str, steering: str,
     inputs = [*mesh_inputs,
               *await asyncio.to_thread(_upload_authored, rundir, run_tag,
                                        authored, prefix)]
-    case = case_section(
+    case = dict(case) if case is not None else case_section(
         module=module, steering=steering, results=results,
         user_fortran=user_fortran, coupling=coupling,
         continue_from=continue_from, cores=cores, server_facts=server_facts)

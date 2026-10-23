@@ -1,0 +1,12 @@
+summary: A TSUNAMI from a sea-floor rupture across the open sea to a coast, and how far inland and how deep it
+  floods, with the wave's arrival time and the water level at a gauge.
+routing: 'THE tool for "how far inland would a tsunami reach", "when does it arrive", "how deep does it flood", "run a
+  Cascadia tsunami at this beach". GeoClaw, depth-averaged shallow water on adaptively refined grids in lon/lat: a
+  level-1 grid over `extent`, refined toward `approach`, the rupture''s `source` and the `domain` coast, finest there from
+  the start; the sea floor moves by the NOAA SIFT unit sources the template slips (the GeoClaw tutorial''s Cascadia
+  scenario), over the fetched finest bed at `domain` with ETOPO 2022 under it; the sea stands at the mean high water NOAA
+  VDatum measures at `seed`. State `extent`, `source`, `approach`, `domain`, `seed` (a point on the water) and `event_time`.'
+not_for: river or rain flooding, storm surge from a hurricane, a dam break, groundwater or a tide-only question
+returns: 'On success the run''s record (a `LayerURI`): the maximum depth, speed, surface and arrival time, the maximum
+  onshore depth, and the depth, surface and onshore depth at every fgout frame, plus the gauge''s surface and depth
+  charted. On failure a dict with `status="error"` + `error_code`.'

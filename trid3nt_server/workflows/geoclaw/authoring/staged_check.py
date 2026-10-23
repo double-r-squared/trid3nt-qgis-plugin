@@ -199,6 +199,12 @@ def _fgmax(path: Path, work: Path, _rundata: Any) -> Any:
     return grids
 
 
+def _qinitfiles(path: Path, _work: Path, _rundata: Any) -> Any:
+    """The quoted file line qinit.data carries, one record per file."""
+    return [[line.strip().strip("'")] for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip().startswith("'")]
+
+
 def _record(obj: Any, fields: Sequence[str], stated: Any) -> list[Any]:
     """A grid object as the record the sheet states: ``points`` is the geometry the record named, read off the attributes it named."""
     return [{name: getattr(obj, name) for name in item}
@@ -212,6 +218,7 @@ _READERS: dict[str, Any] = {
     "FGOUT_FGOUT_GRIDS": _fgout,
     "FLAGREGION_FLAGREGIONS": _flagregions,
     "GAUGE_GAUGES": _gauges,
+    "QINIT_QINITFILES": _qinitfiles,
     "REGION_REGIONS": _regions,
 }
 

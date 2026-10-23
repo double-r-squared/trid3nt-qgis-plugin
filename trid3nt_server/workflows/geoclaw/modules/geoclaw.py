@@ -6,7 +6,7 @@ from types import MappingProxyType
 from typing import Mapping
 
 from ...runtime.module import Output
-from .module import GeoclawModule, fault, topography
+from .module import GeoclawModule, fault, fixed_grids, initial_surface, sift_fault, topography
 from .outputs import PRIMITIVES
 
 __all__ = ["GEO", "MODULE_OUTPUT"]
@@ -34,7 +34,14 @@ MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
 })
 
 GEO = GeoclawModule("geoclaw")
-GEO.composites(reads={"Topography": ("surface", "offset")}, Topography=topography,
-               Fault=fault)
+GEO.composites(reads={"Topography": ("surface", "offset"), "SiftFault": ("unit_sources",),
+                      "FixedGrids": ("extent",), "InitialSurface": ("surface",)},
+               Topography=topography, Fault=fault, SiftFault=sift_fault, FixedGrids=fixed_grids,
+               InitialSurface=initial_surface)
 GEO.MODULE_OUTPUT = MODULE_OUTPUT
 GEO.reads(**PRIMITIVES)
+# A stated point is the one gauge the run reads: the sea off the coast the question is about. The sea level is the
+# offset the workflow measured, on the run's frame.
+GEO.FILLED_BY = MappingProxyType({
+    "seed": {"GAUGE_GAUGES": lambda point: [[1, point.lon, point.lat, 0.0, 1.0e10]]},
+    "sea_level": {"GEO_SEA_LEVEL": lambda metres: float(metres)}})
