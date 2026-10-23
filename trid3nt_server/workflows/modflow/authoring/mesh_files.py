@@ -23,7 +23,7 @@ from ..errors import ModflowError
 
 logger = logging.getLogger("trid3nt_server.workflows.modflow.authoring.mesh_files")
 
-__all__ = ["disv_dimensions", "modflow_mesh_files", "top_of"]
+__all__ = ["botm_of", "disv_dimensions", "modflow_mesh_files", "top_of"]
 
 
 def disv_dimensions(sheet: Any, cells: Any) -> dict[str, int]:
@@ -111,15 +111,7 @@ def _layering(sheet: Any, *, nlay: int, art: Any, bed: Any, points: Any,
     utm_epsg = getattr(art, "utm_epsg", None)
     frame = frame_of(sheet)
     top = top_of(sheet, nlay=nlay, art=art, bed=bed, points=points, cells=cells)
-    stated_botm = sheet.filled.get("DISV_BOTM")
-    if stated_botm is None:
-        raise _unstated(
-            "DISV_BOTM", "every cell and layer this run solves needs a bottom "
-            "elevation the fill states; a thickness under the mesh's bed is the "
-            "fill's to choose, never arithmetic made here.")
-    botm = place(stated_botm.value, slot=stated_botm.slot, nlay=nlay, run=run,
-                 points=points, cells=cells, utm_epsg=utm_epsg, frame=frame,
-                 top=top)
+    botm = botm_of(sheet, nlay=nlay, art=art, points=points, cells=cells, top=top)
     idomain = None
     stated_idomain = sheet.filled.get("DISV_IDOMAIN")
     if stated_idomain is not None:
@@ -127,6 +119,19 @@ def _layering(sheet: Any, *, nlay: int, art: Any, bed: Any, points: Any,
                         nlay=nlay, run=run, points=points, cells=cells,
                         utm_epsg=utm_epsg, frame=frame)
     return top, botm, idomain
+
+
+def botm_of(sheet: Any, *, nlay: int, art: Any, points: Any, cells: Any, top: Any) -> Any:
+    """The grid's bottoms as the DISV is written from them: stated, or refused by name."""
+    stated_botm = sheet.filled.get("DISV_BOTM")
+    if stated_botm is None:
+        raise _unstated(
+            "DISV_BOTM", "every cell and layer this run solves needs a bottom "
+            "elevation the fill states; a thickness under the mesh's bed is the "
+            "fill's to choose, never arithmetic made here.")
+    return place(stated_botm.value, slot=stated_botm.slot, nlay=nlay, run=sheet.run,
+                 points=points, cells=cells, utm_epsg=getattr(art, "utm_epsg", None),
+                 frame=frame_of(sheet), top=top)
 
 
 def top_of(sheet: Any, *, nlay: int, art: Any, bed: Any, points: Any,

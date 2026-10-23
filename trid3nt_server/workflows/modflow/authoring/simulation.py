@@ -16,8 +16,8 @@ from typing import Any, Mapping
 
 from . import DISV_FILE
 from .accepted_mesh import mesh_artifact, mesh_nodes
-from .griddata import frame_of, needs_top, place
-from .mesh_files import _layering, disv_dimensions, top_of
+from .griddata import frame_of, needs_botm, needs_top, place
+from .mesh_files import _layering, botm_of, disv_dimensions, top_of
 from .stress import (lake_statements, layer_rows, maw_statements, place as place_stress, place_lakes, place_maw,
                      place_streams, place_uzf)
 
@@ -120,8 +120,12 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
                   points=points, cells=cells)
            if any(needs_top(row.value) for rows in groups.values()
                   for row in rows.values()) else None)
+    botm = (botm_of(sheet, nlay=int(dims["nlay"]), art=mesh_artifact(mesh), points=points,
+                    cells=cells, top=top)
+            if any(needs_botm(row.value) for rows in groups.values()
+                   for row in rows.values()) else None)
     placed = dict(dims=dims, points=points, cells=cells, utm_epsg=utm_epsg,
-                  sheet=sheet, frame=frame, top=top)
+                  sheet=sheet, frame=frame, top=top, botm=botm)
     active = _active(sheet, nlay=int(dims["nlay"]), points=points, cells=cells,
                      utm_epsg=utm_epsg, frame=frame)
     start = _start_head(sheet, nlay=int(dims["nlay"]), points=points, cells=cells,
@@ -170,7 +174,7 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
 def _model(flopy: Any, sim: Any, *, module: str, groups: dict[str, dict[str, Any]],
            named: dict[str, Any], dims: dict[str, int], points: Any, cells: Any,
            utm_epsg: int | None, sheet: Any, frame: Any, top: Any,
-           sources: Any = ()) -> Any:
+           botm: Any = None, sources: Any = ()) -> Any:
     """One model of this simulation: its name file, the staged DISV's line, its solution and its packages."""
     cap = module.capitalize()
     model = _package(flopy, f"Modflow{cap}", named, owner=sim, modelname=module,
@@ -191,7 +195,8 @@ def _model(flopy: Any, sim: Any, *, module: str, groups: dict[str, dict[str, Any
     sim.register_ims_package(ims, [module])
     for prefix, rows in groups.items():
         keywords = _placed(rows, dims=dims, points=points, cells=cells,
-                           utm_epsg=utm_epsg, sheet=sheet, frame=frame, top=top)
+                           utm_epsg=utm_epsg, sheet=sheet, frame=frame, top=top,
+                           botm=botm)
         if prefix == "SSM" and sources:
             keywords = {"sources": list(sources), **keywords}
         _package(flopy, f"Modflow{cap}{prefix.lower()}", keywords,
@@ -409,12 +414,12 @@ def _unstated(sheet: Any, prefixes: set[str], derived: set[str] = frozenset()) -
 
 def _placed(rows: dict[str, Any], *, dims: dict[str, int], points: Any,
             cells: Any, utm_epsg: int | None, sheet: Any, frame: Any,
-            top: Any) -> dict[str, Any]:
+            top: Any, botm: Any = None) -> dict[str, Any]:
     """Each keyword's constructor value - a cell ARRAY placed against the mesh's cells, the rest (an option's name list included) as stated."""
     return {
         name: (place(row.value, slot=row.slot, nlay=int(dims["nlay"]),
                      run=sheet.run, points=points, cells=cells,
-                     utm_epsg=utm_epsg, frame=frame, top=top)
+                     utm_epsg=utm_epsg, frame=frame, top=top, botm=botm)
                if row.slot.type == "ARRAY" and "OPTIONS" not in row.slot.rubrique
                else row.value)
         for name, row in rows.items()}

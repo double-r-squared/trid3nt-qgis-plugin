@@ -18,7 +18,7 @@ from trid3nt_server.workflows.runtime.module import Slot
 
 from ..errors import ModflowError
 
-__all__ = ["METRES", "SECONDS", "frame_of", "needs_top", "place", "sample"]
+__all__ = ["METRES", "SECONDS", "frame_of", "needs_botm", "needs_top", "place", "sample"]
 
 # mf6 reads a year as 365.25 days.
 SECONDS = {"seconds": 1.0, "minutes": 60.0, "hours": 3600.0, "days": 86400.0,
@@ -47,25 +47,31 @@ def frame_of(sheet: Any) -> tuple[Any, Any]:
 
 
 def needs_top(value: Any) -> bool:
-    """Whether this value is a cells statement lying below the top."""
-    return isinstance(value, Mapping) and value.get("cells") == "below_top"
+    """Whether this value is a cells statement lying below the top or read by depth under it."""
+    return isinstance(value, Mapping) and value.get("cells") in ("below_top", "by_depth")
+
+
+def needs_botm(value: Any) -> bool:
+    """Whether this value is a cells statement read by depth against the grid's bottoms."""
+    return isinstance(value, Mapping) and value.get("cells") == "by_depth"
 
 
 def place(value: Any, *, slot: Slot, nlay: int, run: Mapping[str, Any],
           points: Any = None, cells: Any = None,
           utm_epsg: int | None = None, frame: Any = None,
-          top: Any = None) -> Any:
+          top: Any = None, botm: Any = None) -> Any:
     """``value`` as this ARRAY keyword's data: a constant, per-layer rows, or sampled cells.
 
     ``points``/``cells`` are the accepted mesh's nodes and connectivity - needed only
     where the value names a raster or carries one number per cell; ``nlay`` is the
     sheet's layer count a layered value is checked against; ``frame`` is
-    ``frame_of(sheet)`` and ``top`` the per-cell top a below-the-top statement lies under."""
+    ``frame_of(sheet)``, ``top`` the per-cell top a below-the-top statement lies under and
+    ``botm`` the placed bottoms a by-depth statement is averaged over."""
     if isinstance(value, (int, float)):
         return value
     if isinstance(value, Mapping):
         return _expression(value, slot=slot, nlay=nlay, points=points, cells=cells,
-                           utm_epsg=utm_epsg, frame=frame, top=top)
+                           utm_epsg=utm_epsg, frame=frame, top=top, botm=botm, run=run)
     if isinstance(value, str) and _number(run.get(value)):
         return float(run[value])
     if isinstance(value, str):
@@ -162,12 +168,13 @@ def _dimension(slot: Slot) -> str:
 
 def sample(artifact: Any, *, label: str, name: str, scratch: str, points: Any,
            cells: Any, utm_epsg: int | None, dimension: str,
-           frame: Any) -> list[float]:
+           frame: Any, unmeasured: bool = False) -> list[float]:
     """A raster artifact read at the centre of every given cell, onto the model's frame; a bed reads its own surface.
 
     ``dimension`` is L, L/T, L2/T, L3/T, 1/L or 1 (a pure number); the artifact's own
     unit is converted onto the ``frame`` of (length, time) words, and one stating
-    none, or a frame lacking what its dimension needs, refuses."""
+    none, or a frame lacking what its dimension needs, refuses. A cell the raster measures
+    nothing at refuses, or reads NaN where ``unmeasured`` allows it."""
     from trid3nt_server.inputs.bed import Bed
     from trid3nt_server.tools.derive._raster_layers import read, staged
 
@@ -186,7 +193,8 @@ def sample(artifact: Any, *, label: str, name: str, scratch: str, points: Any,
         from rasterio.warp import transform as warp
 
         xs, ys = warp(f"EPSG:{int(utm_epsg)}", crs, xs, ys)
-    found = _at(values, transform=transform, xs=xs, ys=ys, label=label, name=name)
+    found = _at(values, transform=transform, xs=xs, ys=ys, label=label, name=name,
+                unmeasured=unmeasured)
     return found if factor == 1.0 else [item * factor for item in found]
 
 
@@ -238,8 +246,9 @@ def _stated(word: Any, table: Mapping[str, float], keyword: str, label: str,
 
 
 def _expression(value: Mapping[str, Any], *, slot: Slot, nlay: int, points: Any,
-                cells: Any, utm_epsg: int | None, frame: Any, top: Any) -> Any:
-    """A cells statement - a raster, a quotient of two, or a raster below the top - per cell."""
+                cells: Any, utm_epsg: int | None, frame: Any, top: Any, botm: Any,
+                run: Mapping[str, Any]) -> Any:
+    """A cells statement - a raster, a quotient of two, a raster below the top, or a conductivity by depth - per cell."""
     if points is None or cells is None:
         raise ModflowError(
             f"{slot.identifier} states cells to evaluate, and this run has no "
@@ -248,7 +257,7 @@ def _expression(value: Mapping[str, Any], *, slot: Slot, nlay: int, points: Any,
     operation, of = value.get("cells"), value.get("of")
     dimension = _dimension(slot)
 
-    def read(artifact: Any, kind: str) -> list[float]:
+    def read(artifact: Any, kind: str, unmeasured: bool = False) -> list[float]:
         if isinstance(artifact, (int, float)) and not isinstance(artifact, bool):
             # A stated number is already in the model's own units: it holds at every cell.
             return [float(artifact)] * len(cells)
@@ -256,7 +265,7 @@ def _expression(value: Mapping[str, Any], *, slot: Slot, nlay: int, points: Any,
             return sample(artifact, label=slot.identifier,
                           name=_name_of(artifact), scratch=work, points=points,
                           cells=cells, utm_epsg=utm_epsg, dimension=kind,
-                          frame=frame)
+                          frame=frame, unmeasured=unmeasured)
 
     if operation == "raster":
         found = read(of, dimension)
@@ -264,6 +273,9 @@ def _expression(value: Mapping[str, Any], *, slot: Slot, nlay: int, points: Any,
             and len(of) == nlay:
         # One number or raster per layer, top first: each lands on its own layer's row.
         return [read(item, dimension) for item in of]
+    elif operation == "by_depth" and slot.layered and dimension == "L/T" and isinstance(of, Mapping):
+        return _by_depth(slot, of, read=read, top=top, botm=botm, nlay=nlay, cells=cells,
+                         vertical=str(run.get("vertical_frame") or "").strip())
     elif operation == "quotient" and dimension in _QUOTIENT and \
             isinstance(of, (list, tuple)) and len(of) == 2:
         over, under = _QUOTIENT[dimension]
@@ -279,10 +291,99 @@ def _expression(value: Mapping[str, Any], *, slot: Slot, nlay: int, points: Any,
     else:
         raise ModflowError(
             f"{slot.identifier} states {dict(value)!r}; a cells statement is "
-            "'raster' (of a raster), 'layers' (of one raster or number per layer), 'quotient' (of a numerator and a "
+            "'raster' (of a raster), 'layers' (of one raster or number per layer), 'by_depth' (of a layered "
+            "source's conductivities and surfaces, on a conductivity), 'quotient' (of a numerator and a "
             "denominator, on a conductivity) or 'below_top' (of a raster or a list "
             "of rasters whose sum is the depth, on a length).", error_code="MODFLOW_GRIDDATA_SHAPE")
     return [list(found) for _ in range(nlay)] if slot.layered else found
+
+
+def _by_depth(slot: Slot, source: Mapping[str, Any], *, read: Any, top: Any, botm: Any, nlay: int,
+              cells: Any, vertical: str) -> list[list[float]]:
+    """One conductivity row per grid layer: the thickness-weighted mean of the source layers it overlaps.
+
+    ``source`` is ``layers`` (m conductivities, top first) and ``surfaces`` (m + 1 elevations, the top of
+    layer 1 then each layer's bottom). A grid layer between ``top`` (the grid's top, else the layer above's
+    bottom) and its own ``botm`` takes sum(o_j K_j) / sum(o_j), o_j the overlap with source layer j; a source
+    cell unmeasured at its conductivity or either surface weighs zero, and a cell overlapping none refuses."""
+    import numpy as np
+
+    layers, surfaces = source.get("layers"), source.get("surfaces")
+    if not isinstance(layers, (list, tuple)) or not isinstance(surfaces, (list, tuple)) \
+            or len(layers) < 1 or len(surfaces) != len(layers) + 1:
+        raise ModflowError(
+            f"{slot.identifier} by depth states {len(layers) if isinstance(layers, (list, tuple)) else 'no'} "
+            f"layer(s) and {len(surfaces) if isinstance(surfaces, (list, tuple)) else 'no'} surface(s); "
+            "m layers need m + 1 surfaces, the top of layer 1 then each layer's bottom.",
+            error_code="MODFLOW_GRIDDATA_SHAPE")
+    if top is None or botm is None:
+        raise ModflowError(
+            f"{slot.identifier} reads by depth, and this run has no placed top and bottoms to read against.",
+            error_code="MODFLOW_LAYERING_UNSTATED")
+    for number, surface in enumerate(surfaces):
+        _on_vertical_frame(slot, surface, number=number, vertical=vertical)
+    ncpl = len(cells)
+    conductivity = np.array([read(item, "L/T", True) for item in layers], dtype=float)
+    elevation = np.array([read(item, "L", True) for item in surfaces], dtype=float)
+    low = np.asarray(botm, dtype=float)
+    bottoms = np.broadcast_to(low.reshape(-1, 1) if low.ndim < 2 else low, (nlay, ncpl))
+    first = np.broadcast_to(np.asarray(top, dtype=float), (ncpl,))
+    tops = np.vstack([first[None, :], bottoms[:-1]])
+    measured = np.isfinite(conductivity) & np.isfinite(elevation[:-1]) & np.isfinite(elevation[1:])
+    rows: list[list[float]] = []
+    for layer in range(nlay):
+        upper, lower = tops[layer], bottoms[layer]
+        overlap = np.where(
+            measured,
+            np.maximum(0.0, np.minimum(upper, elevation[:-1]) - np.maximum(lower, elevation[1:])), 0.0)
+        weight = overlap.sum(axis=0)
+        if (weight <= 0.0).any():
+            raise _outside_source(slot, layer + 1, weight <= 0.0, upper, lower, elevation)
+        rows.append([float(item) for item in
+                     (overlap * np.nan_to_num(conductivity)).sum(axis=0) / weight])
+    return rows
+
+
+def _on_vertical_frame(slot: Slot, surface: Any, *, number: int, vertical: str) -> None:
+    """A surface raster states the datum it counts from, and it names the run's vertical frame."""
+    from trid3nt_server.inputs.vertical_datum import datum_of, names_frame
+
+    if isinstance(surface, (int, float)) and not isinstance(surface, bool):
+        return
+    named = _name_of(surface)
+    datum = datum_of(surface)
+    if not vertical:
+        raise ModflowError(
+            f"{slot.identifier} reads by depth against surface {number} ({named!r}), and the run states "
+            "no vertical_frame to hold the grid's top and bottoms on.",
+            error_code="MODFLOW_DATUM_UNSTATED")
+    if not datum:
+        raise ModflowError(
+            f"{slot.identifier} reads by depth against surface {number} ({named!r}), which states no "
+            f"vertical datum; the grid is on {vertical}, and a surface of unstated zero is never assumed on it.",
+            error_code="MODFLOW_DATUM_UNSTATED")
+    if not names_frame(datum, vertical):
+        raise ModflowError(
+            f"{slot.identifier} reads by depth against surface {number} ({named!r}) on {datum!r}, and "
+            f"the grid is on {vertical}; no offset between them is applied here, so state a surface on "
+            "the run's frame.", error_code="MODFLOW_DATUMS_DIFFER")
+
+
+def _outside_source(slot: Slot, layer: int, none: Any, upper: Any, lower: Any,
+                    elevation: Any) -> ModflowError:
+    """The refusal for grid cells of one layer that overlap no measured source layer, split by where they lie."""
+    import numpy as np
+
+    source_top, source_bottom = elevation[0], elevation[-1]
+    above = none & np.isfinite(source_top) & (lower >= source_top)
+    below = none & ~above & np.isfinite(source_bottom) & (upper <= source_bottom)
+    inactive = none & ~above & ~below
+    return ModflowError(
+        f"{slot.identifier} reads by depth, and layer {layer} overlaps no measured source layer at "
+        f"{int(none.sum())} cell(s): {int(above.sum())} above the source's top, {int(below.sum())} below "
+        f"its bottom, {int(inactive.sum())} over cells the source leaves unmeasured; a layer outside "
+        "the source's range takes no neighbouring layer's value.",
+        error_code="MODFLOW_GRIDDATA_OUTSIDE_SOURCE")
 
 
 def _below(slot: Slot, parts: list[list[float]], top: Any, *, nlay: int, cells: Any) -> Any:
@@ -325,8 +426,8 @@ def _name_of(artifact: Any) -> str:
 
 
 def _at(values: Any, *, transform: Any, xs: list[float], ys: list[float],
-        label: str, name: str) -> list[float]:
-    """The raster's value at each centre; a cell outside it or in its nodata refuses."""
+        label: str, name: str, unmeasured: bool = False) -> list[float]:
+    """The raster's value at each centre; a cell outside it or in its nodata refuses, or is NaN where ``unmeasured`` allows."""
     import numpy as np
     from rasterio.transform import rowcol
 
@@ -340,11 +441,11 @@ def _at(values: Any, *, transform: Any, xs: list[float], ys: list[float],
     sampled = np.where(
         inside, values[np.clip(rows, 0, values.shape[0] - 1),
                        np.clip(cols, 0, values.shape[1] - 1)], NODATA)
-    unmeasured = int(np.count_nonzero(
+    blank = int(np.count_nonzero(
         ~np.isfinite(np.asarray(sampled, dtype="float64"))))
-    if unmeasured:
+    if blank and not unmeasured:
         raise ModflowError(
-            f"{label} reads {name!r} at {unmeasured} of {len(xs)} "
+            f"{label} reads {name!r} at {blank} of {len(xs)} "
             "cell(s) where the raster measures nothing - outside its extent or "
             "its nodata; a cell solved on a guessed value refuses here by name.",
             error_code="MODFLOW_GRIDDATA_UNMEASURED")

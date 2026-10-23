@@ -79,8 +79,17 @@ layers below it are confined, and the starting head is the water-table
 elevation in every layer. K is the same in each layer unless `conductivity` is a
 list of one number or raster per layer, top first, as long as `layers` (a
 length mismatch refuses naming both; the list is the `{"cells": "layers"}`
-statement, each entry placed as a single K is). `transmissivity` stays one
-value, a list there refuses; NPF_K33 is not written, so mf6 takes it equal to
+statement, each entry placed as a single K is). `conductivity` may also be a
+layered source read by depth, `{"layers": [K_1..K_m], "surfaces": [S_0..S_m]}` (`{"cells": "by_depth"}`):
+m conductivities and m + 1 elevations, the top of source layer 1 then each layer's bottom, each a number
+or a raster read as a single K or a length is (a surface raster states a vertical datum that names the
+run's `vertical_frame`, else it refuses; a number is on the model's frame). Each cell and Aquifer layer,
+between the grid's placed top (or the bottom above it) and its own `DISV_BOTM`, takes the
+thickness-weighted arithmetic mean of the source layers it overlaps, a source cell unmeasured at its K or
+either surface weighing zero; a part of the layer outside the source is ignored, and a layer overlapping
+no measured source layer at some cell refuses naming the layer and how many cells lie above the source's
+top, below its bottom or over unmeasured cells - the nearest layer is never extended. `transmissivity` stays one
+value, a list or a layered source there refuses; NPF_K33 is not written, so mf6 takes it equal to
 each layer's K. The stress composites
 (`Recharge`, `Drains`, `GeneralHead`, `ConstantHead`, `Wells`) place a geometry
 on the cells and state their package's period data; a geometry reading nothing

@@ -457,3 +457,287 @@ def test_a_two_layer_list_serializes_one_k_array_per_layer_top_first(staged_besi
     rows = [[float(v) for v in lines[start + at].split()] for at in (2, 4)]
     assert rows == [[4.0] * 8, [0.4] * 8]
     assert not any(row.strip().startswith("k33") for row in lines)
+
+
+_VERTICAL = {"vertical_frame": "NAVD88"}
+_DATUM = "NAVD88 (metres, positive up)"
+
+
+def _by_depth(source_k, source_s, **aquifer):
+    return _fill({}, {"thickness": 30.0, "water_table_depth": 3.0,
+                      "conductivity": {"layers": source_k, "surfaces": source_s}, **aquifer})
+
+
+def _depth_k(sheet, *, tops, botms, run=None):
+    """NPF_K placed against a grid whose top and bottoms are stated, every cell alike."""
+    from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place
+
+    return place(sheet.filled["NPF_K"].value, slot=sheet.filled["NPF_K"].slot,
+                 nlay=len(botms), run={**sheet.run, **(_VERTICAL if run is None else run)},
+                 points=_POINTS, cells=_CELLS, utm_epsg=32617, frame=frame_of(sheet),
+                 top=[tops] * 8, botm=[[b] * 8 for b in botms])
+
+
+@pytest.mark.parametrize("top, bottom, expected", [
+    # 5 m in the 10 m/d layer and 5 m in the 1 m/d layer: (5*10 + 5*1) / 10.
+    (95.0, 85.0, 5.5),
+    # Wholly inside the lower source layer.
+    (90.0, 70.0, 1.0),
+    # 5 m of overlap above 100 is none: only the 5 m under 100 and over 90 counts.
+    (105.0, 95.0, 10.0)])
+def test_a_layer_takes_the_thickness_weighted_mean_of_the_source_layers_it_overlaps(
+        top, bottom, expected):
+    sheet = _by_depth([10.0, 1.0], [100.0, 90.0, 70.0])
+    assert _depth_k(sheet, tops=top, botms=[bottom]) == [pytest.approx([expected] * 8)]
+
+
+def test_each_grid_layer_is_read_between_the_bottom_above_it_and_its_own():
+    sheet = _by_depth([10.0, 1.0], [100.0, 90.0, 70.0], layers=2)
+    # Layer 2 lies 85 to 70: none of the 10 m/d layer, 15 m of the 1 m/d one.
+    assert _depth_k(sheet, tops=95.0, botms=[85.0, 70.0]) == [
+        pytest.approx([5.5] * 8), pytest.approx([1.0] * 8)]
+
+
+def test_a_layer_below_the_source_refuses_naming_the_count_and_where():
+    sheet = _by_depth([10.0, 1.0], [100.0, 90.0, 70.0])
+    with pytest.raises(ModflowError) as caught:
+        _depth_k(sheet, tops=65.0, botms=[55.0])
+    assert caught.value.error_code == "MODFLOW_GRIDDATA_OUTSIDE_SOURCE"
+    assert "layer 1" in str(caught.value) and "8 cell(s)" in str(caught.value)
+    assert "8 below its bottom" in str(caught.value) and "0 above" in str(caught.value)
+
+
+def test_a_layer_above_the_source_refuses_and_takes_no_neighbouring_value():
+    sheet = _by_depth([10.0, 1.0], [100.0, 90.0, 70.0])
+    with pytest.raises(ModflowError) as caught:
+        _depth_k(sheet, tops=120.0, botms=[110.0])
+    assert "8 above the source's top" in str(caught.value)
+
+
+def test_a_deeper_grid_layer_than_the_source_refuses_naming_that_layer():
+    sheet = _by_depth([10.0, 1.0], [100.0, 90.0, 70.0], layers=2)
+    with pytest.raises(ModflowError) as caught:
+        _depth_k(sheet, tops=95.0, botms=[70.0, 60.0])
+    assert "layer 2" in str(caught.value) and "layer 1" not in str(caught.value)
+    assert "0 above" in str(caught.value) and "8 below" in str(caught.value)
+
+
+def _tif(path, pixels, *, name, units, datum=_DATUM):
+    return {**_raster(path, pixels, units, name), **({"vertical_datum": datum} if datum else {})}
+
+
+def test_rasters_per_source_layer_and_per_surface_sample_at_each_cell(tmp_path):
+    inputs = {
+        "k1": _tif(tmp_path / "k1.tif", [[10.0, 20.0], [30.0, 40.0]], name="k1", units="m/day",
+                   datum=None),
+        "s0": _tif(tmp_path / "s0.tif", [[100.0, 100.0], [100.0, 100.0]], name="s0", units="m"),
+        "s1": _tif(tmp_path / "s1.tif", [[90.0, 80.0], [90.0, 80.0]], name="s1", units="m")}
+    sheet = _fill(inputs, {"thickness": 30.0, "water_table_depth": 3.0, "conductivity": {
+        "layers": ["k1", 1.0], "surfaces": ["s0", "s1", 70.0]}})
+    # The grid layer is 95 to 85. Where s1 = 90: (5 * K1 + 5 * 1) / 10; where s1 = 80:
+    # 10 m of the first layer and none of the second, so K1 itself.
+    k1 = _per_cell([[10.0, 20.0], [30.0, 40.0]])
+    wide = [(5 * k + 5 * 1.0) / 10 if (cell // 2) % 2 == 0 else k for cell, k in enumerate(k1)]
+    assert _depth_k(sheet, tops=95.0, botms=[85.0]) == [pytest.approx(wide)]
+
+
+def test_an_unmeasured_source_cell_weighs_zero(tmp_path):
+    nan = float("nan")
+    inputs = {"k1": _tif(tmp_path / "k1.tif", [[nan, 20.0], [30.0, 40.0]], name="k1",
+                         units="m/day", datum=None)}
+    sheet = _fill(inputs, {"thickness": 30.0, "water_table_depth": 3.0, "conductivity": {
+        "layers": ["k1", 1.0], "surfaces": [100.0, 90.0, 70.0]}})
+    got = _depth_k(sheet, tops=95.0, botms=[85.0])[0]
+    # Cells 4 and 5 sit on the unmeasured pixel: only the 5 m of the 1 m/d layer counts.
+    assert got[4] == got[5] == pytest.approx(1.0)
+    assert got[0] == pytest.approx((5 * 30.0 + 5 * 1.0) / 10)
+    with pytest.raises(ModflowError) as caught:
+        _depth_k(sheet, tops=100.0, botms=[90.0])
+    assert caught.value.error_code == "MODFLOW_GRIDDATA_OUTSIDE_SOURCE"
+    assert "2 over cells the source leaves unmeasured" in str(caught.value)
+
+
+def test_a_surface_on_another_datum_or_none_or_a_run_with_no_frame_refuses(tmp_path):
+    def run(datum, frame="NAVD88"):
+        inputs = {"s0": _tif(tmp_path / "s0.tif", [[100.0] * 2] * 2, name="s0", units="m",
+                             datum=datum)}
+        sheet = _fill(inputs, {"thickness": 30.0, "water_table_depth": 3.0, "conductivity": {
+            "layers": [10.0, 1.0], "surfaces": ["s0", 90.0, 70.0]}})
+        return _depth_k(sheet, tops=95.0, botms=[85.0], run={"vertical_frame": frame})
+
+    with pytest.raises(ModflowError) as caught:
+        run("National Geodetic Vertical Datum of 1929")
+    assert caught.value.error_code == "MODFLOW_DATUMS_DIFFER"
+    with pytest.raises(ModflowError) as caught:
+        run(None)
+    assert caught.value.error_code == "MODFLOW_DATUM_UNSTATED"
+    with pytest.raises(ModflowError) as caught:
+        run(_DATUM, frame="")
+    assert caught.value.error_code == "MODFLOW_DATUM_UNSTATED"
+    assert run("NAVD88") == [pytest.approx([5.5] * 8)]
+
+
+def test_surfaces_not_one_longer_than_the_layers_refuse_naming_both():
+    for surfaces in ([100.0, 90.0], [100.0, 90.0, 70.0, 50.0]):
+        with pytest.raises(ModflowError) as caught:
+            _by_depth([10.0, 1.0], surfaces)
+        assert caught.value.error_code == "MODFLOW_AQUIFER_UNSTATED"
+        assert "2 layer(s)" in str(caught.value) and f"{len(surfaces)} surface(s)" in str(caught.value)
+
+
+@pytest.mark.parametrize("stated, named", [
+    ({"surfaces": [100.0, 90.0, 70.0]}, "layers"), ({"layers": [10.0, 1.0]}, "surfaces")])
+def test_a_layered_source_missing_a_key_refuses_by_name(stated, named):
+    with pytest.raises(ModflowError) as caught:
+        _fill({}, {"thickness": 30.0, "water_table_depth": 3.0, "conductivity": stated})
+    assert caught.value.error_code == "MODFLOW_AQUIFER_UNSTATED"
+    assert f"{named} is not stated" in str(caught.value)
+
+
+def test_a_layered_source_under_transmissivity_refuses_by_name():
+    with pytest.raises(ModflowError) as caught:
+        _fill({}, {"thickness": 30.0, "water_table_depth": 3.0,
+                   "transmissivity": {"layers": [1.0], "surfaces": [2.0, 1.0]}})
+    assert "transmissivity" in str(caught.value)
+
+
+_FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "usgs_model_k"
+_DM_BBOX = [-93.6729, 41.6625, -93.6369, 41.6895]
+_DM_PROBE = (-93.655, 41.676)
+
+
+class _Held:
+    def __init__(self, uri, data=b""):
+        self.uri, self.data = uri, data
+
+
+def _ring_frames(monkeypatch):
+    """The Des Moines fetchers' own frames over the ring excerpt, offline: K layers 1-2 and surfaces 0-2, as COG bytes by layer."""
+    import trid3nt_server.tools.cache as cache_mod
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.tools.fetchers._router.executors import animation_frames as EX
+    from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_model_k import hooks as MK
+    from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_model_layers import hooks as ML
+
+    archive = (_FIXTURES / "dm_ring_excerpt.zip").read_bytes()
+    inner, held = {}, {}
+
+    def get_bytes(client, url, *, headers=None, params=None):
+        return archive, "application/zip", url
+
+    def inner_rt(metadata, params, ext, fetch_fn, **kw):
+        key = str(params)
+        inner.setdefault(key, fetch_fn())
+        return _Held(f"s3://cache-in/{len(inner)}", inner[key])
+
+    def outer_rt(metadata, params, ext, fetch_fn, **kw):
+        data = fetch_fn()
+        uri = f"s3://cache/{metadata.name}-{params.get('layer', params.get('surface'))}"
+        held[uri] = data
+        return _Held(uri, data)
+
+    monkeypatch.setattr(MK, "get_bytes", get_bytes)
+    monkeypatch.setattr(ML, "get_bytes", get_bytes)
+    monkeypatch.setattr(cache_mod, "read_through", inner_rt)
+    monkeypatch.setattr(EX, "read_through", outer_rt)
+    k = TOOL_REGISTRY["fetch_usgs_model_k"].fn(bbox=_DM_BBOX)
+    surfaces = TOOL_REGISTRY["fetch_usgs_model_layers"].fn(bbox=_DM_BBOX)
+    return k, surfaces, held
+
+
+def test_a_fetched_layered_model_is_read_by_depth_at_a_cell(monkeypatch, tmp_path):
+    import re
+    import zipfile
+
+    import numpy as np
+    import rasterio
+    from pyproj import Transformer
+
+    from trid3nt_server.tools.fetchers._router import registration as reg
+    from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place
+
+    k_layers, surface_layers, held = _ring_frames(monkeypatch)
+    datum = reg.get_spec("fetch_usgs_model_layers").vertical_datum
+    assert datum == "NAVD88"
+
+    def artifact(layer, number, units):
+        path = tmp_path / f"{number}.tif"
+        path.write_bytes(held[layer.uri])
+        return {"uri": str(path), "name": number, "units": units, "vertical_datum": datum}
+
+    k_by = {int(re.search(r"-l(\d+)-", l.layer_id).group(1)): l for l in k_layers}
+    s_by = {0 if "-top-l1-" in l.layer_id else int(re.search(r"-bot-l(\d+)-", l.layer_id).group(1)): l
+            for l in surface_layers}
+    inputs = {f"k{n}": artifact(k_by[n], f"k{n}", "m/d") for n in (1, 2)}
+    inputs |= {f"s{n}": artifact(s_by[n], f"s{n}", "m") for n in (0, 1, 2)}
+
+    # The probe's pixel in the surface frame, and the cell whose centre is that pixel's centre.
+    with rasterio.open(tmp_path / "s0.tif") as ds:
+        r, c = ds.index(*_DM_PROBE)
+        lon, lat = ds.xy(r, c)
+    x, y = Transformer.from_crs(4326, 32615, always_xy=True).transform(lon, lat)
+    points = [(x - 1.0, y - 1.0), (x + 1.0, y - 1.0), (x, y + 2.0)]
+    cells = [(0, 1, 2)]
+
+    # The archive's own members at the same model cell: the grid is 60 m from (429070, 4629880) in 26915.
+    ux, uy = Transformer.from_crs(4326, 26915, always_xy=True).transform(lon, lat)
+    row, col = int((4629880.0 - uy) // 60.0), int((ux - 429070.0) // 60.0)
+
+    def raw(member):
+        with zipfile.ZipFile(_FIXTURES / "dm_ring_excerpt.zip") as zf:
+            return float(np.array(zf.read(member).decode().split(), dtype=float)
+                         .reshape(427, 383)[row, col])
+
+    k1, k2 = raw("external_files/props/l1._kx"), raw("external_files/props/l2._kx")
+    s0, s1, s2 = (raw("external_files/surfs/l1_top.dat"), raw("external_files/surfs/l1_bot.dat"),
+                  raw("external_files/surfs/l2_bot.dat"))
+    assert s0 > s1 > s2 + 2.0 and k1 > 0.0 and k2 > 0.0
+
+    # A two-layer Aquifer from 2 m over the source's top to 1 m over its bottom, split at the
+    # middle: layer 1 ignores the 2 m above the top and takes the part of each source layer it
+    # overlaps; layer 2 lies in source layer 2 alone.
+    top, bottom = s0 + 2.0, s2 + 1.0
+    sheet = _fill(inputs, {"thickness": top - bottom, "water_table_depth": 1.0, "layers": 2,
+                           "conductivity": {"layers": ["k1", "k2"], "surfaces": ["s0", "s1", "s2"]}},
+                  DISV_TOP=top)
+    run = {**sheet.run, "vertical_frame": "NAVD88"}
+    art = type("Art", (), {"utm_epsg": 32615})()
+    from trid3nt_server.workflows.modflow.authoring import mesh_files as mf
+
+    placed_top = mf.top_of(sheet, nlay=2, art=art, bed=None, points=points, cells=cells)
+    botm = mf.botm_of(sheet, nlay=2, art=art, points=points, cells=cells, top=placed_top)
+    mid = (top + bottom) / 2.0
+    assert botm == [pytest.approx([mid]), pytest.approx([bottom])]
+    got = place(sheet.filled["NPF_K"].value, slot=sheet.filled["NPF_K"].slot, nlay=2, run=run,
+                points=points, cells=cells, utm_epsg=32615, frame=frame_of(sheet),
+                top=placed_top, botm=botm)
+    # Layer 1 spans [mid, top]: source layer 1 is [s1, s0] and source layer 2 [s2, s1].
+    o11 = s0 - max(mid, s1)
+    o12 = max(0.0, min(s1, top) - max(mid, s2))
+    o22 = min(mid, s1) - bottom
+    o21 = max(0.0, min(mid, s0) - max(bottom, s1))
+    want1 = (o11 * k1 + o12 * k2) / (o11 + o12)
+    want2 = (o21 * k1 + o22 * k2) / (o21 + o22)
+    print(f"DM cell (row {row}, col {col}): K {k1:.4f}/{k2:.4f} m/d, surfaces "
+          f"{s0:.3f}/{s1:.3f}/{s2:.3f} m; layer 1 {want1:.4f}, layer 2 {want2:.4f} m/d")
+    assert got[0] == pytest.approx([want1], rel=1e-3)
+    assert got[1] == pytest.approx([want2], rel=1e-3)
+
+
+def test_a_by_depth_conductivity_serializes_one_k_array_per_grid_layer(staged_beside, tmp_path):
+    mesh = _mesh(tmp_path)
+    sheet = _fill({}, {"thickness": 30.0, "water_table_depth": 1.0, "layers": 2,
+                       "conductivity": {"layers": [4.0, 0.4], "surfaces": [20.0, 0.0, -40.0]}})
+    out = MF._mesh_files(sheet, mesh)
+    rundir = tmp_path / "run"
+    rundir.mkdir()
+    shutil.copy(out["disv"], rundir / "mesh.disv")
+
+    serialize(sheet, rundir, mesh)
+
+    lines = (rundir / "gwf.npf").read_text().splitlines()
+    start = next(i for i, row in enumerate(lines) if row.split()[:2] == ["k", "LAYERED"])
+    rows = [[float(v) for v in lines[start + at].split()] for at in (2, 4)]
+    # Layer 1 lies 15 m under each cell's top: t m of the 4 m/d source layer, 15 - t of the 0.4 one.
+    assert rows[0] == pytest.approx([(t * 4.0 + (15.0 - t) * 0.4) / 15.0 for t in _TOP])
+    assert rows[1] == pytest.approx([0.4] * 8)

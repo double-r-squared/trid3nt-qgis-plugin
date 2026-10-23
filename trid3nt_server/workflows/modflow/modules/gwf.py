@@ -40,7 +40,43 @@ _AQUIFER = ("thickness", "saturated_thickness", "water_table_depth", "conductivi
             "transmissivity", "layers")
 
 
-def _aquifer(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+def _layered_source(value: Any) -> bool:
+    """Whether a value states a layered source (a mapping of layers and surfaces) rather than one raster artifact."""
+    return isinstance(value, Mapping) and bool({"layers", "surfaces"} & set(value))
+
+
+def _by_depth(source: Mapping[str, Any], run: Mapping[str, Any]) -> Mapping[str, Any]:
+    """A layered source's statement with its input names read: ``layers`` and ``surfaces``, m and m + 1 long, or a refusal naming them."""
+    missing = [key for key in ("layers", "surfaces") if source.get(key) is None]
+    extra = sorted(set(source) - {"layers", "surfaces"})
+    if missing or extra:
+        raise ModflowError(
+            "Aquifer conductivity by depth takes layers and surfaces; "
+            + (f"{', '.join(missing)} is not stated" if missing else f"{', '.join(extra)} is neither")
+            + ".", error_code="MODFLOW_AQUIFER_UNSTATED")
+    layers, surfaces = source["layers"], source["surfaces"]
+    if not isinstance(layers, (list, tuple)) or not isinstance(surfaces, (list, tuple)) or not layers \
+            or len(surfaces) != len(layers) + 1:
+        raise ModflowError(
+            f"Aquifer conductivity by depth lists "
+            f"{len(layers) if isinstance(layers, (list, tuple)) else 'no'} layer(s) and "
+            f"{len(surfaces) if isinstance(surfaces, (list, tuple)) else 'no'} surface(s); m layers "
+            "need m + 1 surfaces, the top of layer 1 then each layer's bottom.",
+            error_code="MODFLOW_AQUIFER_UNSTATED")
+
+    def read(item: Any) -> Any:
+        if not isinstance(item, str):
+            return item
+        if run.get(item) is None:
+            raise ModflowError(
+                f"Aquifer conductivity by depth names {item!r}, which this run states no value for.",
+                error_code="MODFLOW_AQUIFER_UNSTATED")
+        return run[item]
+
+    return {"layers": [read(item) for item in layers], "surfaces": [read(item) for item in surfaces]}
+
+
+def _aquifer(value: Any, *, run: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     """An aquifer's cells: Aquifer(thickness | saturated_thickness, water_table_depth, conductivity | transmissivity [, layers]).
 
     ``thickness`` runs down from the land surface, ``saturated_thickness`` down from the water table; the
@@ -48,7 +84,10 @@ def _aquifer(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     is stated or is the transmissivity over the thickness. ``layers`` (an integer from 1, unstated one)
     splits the saturated thickness into that many equal layers: only layer 1 is convertible (unconfined),
     and the starting head is the water-table elevation in every layer. K is the same in each layer unless
-    ``conductivity`` is a list of one number or raster per layer, top first, as long as ``layers``."""
+    ``conductivity`` is a list of one number or raster per layer, top first, as long as ``layers``, or
+    ``{"layers": [K_1..K_m], "surfaces": [S_0..S_m]}``: a layered source read by depth, each layer's K the
+    thickness-weighted mean of the source layers it overlaps (m conductivities, m + 1 surfaces - the top of
+    source layer 1 then each layer's bottom - on the run's vertical frame; a layer outside the source refuses)."""
     if not isinstance(value, Mapping):
         raise ModflowError(
             f"Aquifer takes a mapping of {', '.join(_AQUIFER)}; got {value!r}.",
@@ -87,7 +126,7 @@ def _aquifer(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
             f"Aquifer layers is {layers!r}; it is an integer from 1.",
             error_code="MODFLOW_AQUIFER_UNSTATED")
     nlay = layers if layers is not None else 1
-    if isinstance(transmissivity, (list, tuple)):
+    if isinstance(transmissivity, (list, tuple)) or _layered_source(transmissivity):
         raise ModflowError(
             "Aquifer transmissivity is one value over the whole thickness; a list of "
             "values per layer is a conductivity, so state conductivity as that list.",
@@ -97,8 +136,12 @@ def _aquifer(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
             f"Aquifer conductivity lists {len(conductivity)} value(s) and layers is {nlay}; "
             "state one conductivity per layer, top first.",
             error_code="MODFLOW_AQUIFER_UNSTATED")
+    by_depth = _layered_source(conductivity)
+    if by_depth:
+        conductivity = _by_depth(conductivity, run)
     depth = value["water_table_depth"]
-    stated = ({"cells": "layers" if isinstance(conductivity, (list, tuple)) else "raster",
+    stated = ({"cells": ("by_depth" if by_depth
+                         else "layers" if isinstance(conductivity, (list, tuple)) else "raster"),
                "of": conductivity} if conductivity is not None
               else {"cells": "quotient", "of": [transmissivity, saturated if whole is None else whole]})
     slots: dict[str, Any] = {
@@ -195,7 +238,7 @@ GWF.composites(reads={"MultiAquiferWells": ("geometry", *(name for name in _MAW 
                                             *_MAW_NUMBERS)},
               MultiAquiferWells=_wells)
 GWF.composites(reads={"UnsaturatedZone": ("geometry", *_UZF, *_UZF_ET)}, UnsaturatedZone=_uzf)
-GWF.composites(reads={"Aquifer": _AQUIFER}, Aquifer=_aquifer)
+GWF.composites(reads={"Aquifer": (*_AQUIFER, "surfaces")}, Aquifer=_aquifer)
 # Which coupled body each coupling composite states, by module word: the one statement the registration and the run's bodies both read.
 COUPLED_BODIES = MappingProxyType({"Transport": "gwt", "Energy": "gwe"})
 GWF.composites(**{name: _coupled(module, name)
