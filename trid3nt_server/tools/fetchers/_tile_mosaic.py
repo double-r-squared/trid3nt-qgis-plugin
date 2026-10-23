@@ -66,6 +66,17 @@ def own_utm(bbox: tuple[float, float, float, float]) -> str:
     return f"EPSG:{utm_epsg_for((west + east) / 2.0, (south + north) / 2.0)}"
 
 
+#: Metres in one degree of latitude: the length a geographic target's cell is read in.
+METRES_PER_DEGREE = 111320.0
+
+
+def _metres_per_unit(target_crs: str) -> float:
+    """The length of one unit of the target's axes in metres: 1 for a projected CRS, a degree of latitude for a geographic one."""
+    from rasterio.crs import CRS
+
+    return METRES_PER_DEGREE if CRS.from_user_input(target_crs).is_geographic else 1.0
+
+
 def target_grid(sources: list[str], target_crs: str,
                 bbox: tuple[float, float, float, float],
                 resolution_m: float | None = None, *, source: str = "") -> Any:
@@ -103,16 +114,18 @@ def target_grid(sources: list[str], target_crs: str,
     if finest is None or finest <= 0:
         raise MosaicEmpty(
             f"no tile of {len(sources)} stated a readable cell over {bbox!r}")
-    if resolution_m is not None and finest < float(resolution_m):
-        finest = float(resolution_m)
+    # Cells, the bounds and the budget are in the target's own units; resolution_m and the refusal speak metres.
+    per_unit = _metres_per_unit(target_crs)
+    if resolution_m is not None and finest < float(resolution_m) / per_unit:
+        finest = float(resolution_m) / per_unit
 
     # The budget is measured on the PROJECTED grid, so it holds at a UTM zone edge.
-    long_axis_m = max(t_east - t_west, t_north - t_south)
-    fits = int(math.ceil(long_axis_m / MAX_GRID_PX))
-    if finest < fits:
+    long_axis = max(t_east - t_west, t_north - t_south)
+    if int(math.ceil(long_axis / finest)) > MAX_GRID_PX:
+        fits = int(math.ceil(long_axis * per_unit / MAX_GRID_PX))
         raise PixelBudgetExceededError(
             f"{source or 'this source'}: bbox={tuple(bbox)} at "
-            f"resolution_m={finest:g} needs {int(math.ceil(long_axis_m / finest))} "
+            f"resolution_m={finest * per_unit:g} needs {int(math.ceil(long_axis / finest))} "
             f"px on its long axis in {target_crs}, past the {MAX_GRID_PX} px/axis "
             f"budget. Nothing was coarsened: re-ask at resolution_m={fits} m (the "
             "finest spacing that fits this bbox) or coarser, or ask for a smaller "
@@ -187,7 +200,7 @@ def mosaic(sources: list[str], target_crs: str,
         sources, target_crs, bbox, resolution_m=resolution_m, source=source)
     grid = np.full((height, width), np.nan, dtype="float32")
     painted = [False] * len(sources)
-    target_cell_m = abs(dst_transform.a)
+    target_cell_m = abs(dst_transform.a) * _metres_per_unit(target_crs)
 
     with rasterio.Env(**VSICURL_ENV):
         for index, src in enumerate(sources):

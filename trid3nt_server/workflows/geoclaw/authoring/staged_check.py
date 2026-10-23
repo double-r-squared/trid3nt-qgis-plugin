@@ -151,11 +151,6 @@ def _gauges(path: Path, work: Path, _rundata: Any) -> Any:
     return group.gauges
 
 
-def _regions(path: Path, work: Path, rundata: Any) -> Any:
-    rundata.regiondata.read(str(path))
-    return rundata.regiondata.regions
-
-
 def _flagregions(path: Path, work: Path, rundata: Any) -> Any:
     rundata.flagregiondata.read(str(path))
     return rundata.flagregiondata.flagregions
@@ -219,7 +214,6 @@ _READERS: dict[str, Any] = {
     "FLAGREGION_FLAGREGIONS": _flagregions,
     "GAUGE_GAUGES": _gauges,
     "QINIT_QINITFILES": _qinitfiles,
-    "REGION_REGIONS": _regions,
 }
 
 

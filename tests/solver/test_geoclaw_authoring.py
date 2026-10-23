@@ -97,6 +97,8 @@ _CHILE = {'AMR_AMR_LEVELS_MAX': 3,
  'CLAW_VERBOSITY': 1,
  'DTOPO_DTOPOFILES': [[3, 'dtopo_usgs100227.tt3']],
  'DTOPO_DT_MAX_DTOPO': 0.2,
+ 'FLAGREGION_FLAGREGIONS': [['region1', 3, 3, 0.0, 10000.0, 1, [-77.0, -67.0, -40.0, -30.0]],
+                           ['region2', 3, 3, 8000.0, 26000.0, 1, [-90.0, -80.0, -30.0, -15.0]]],
  'GAUGE_GAUGES': [[32412, -86.392, -17.975, 0.0, 10000000000.0]],
  'GEO_COORDINATE_SYSTEM': 2,
  'GEO_CORIOLIS_FORCING': False,
@@ -111,8 +113,6 @@ _CHILE = {'AMR_AMR_LEVELS_MAX': 3,
  'QINIT_QINIT_TYPE': 0,
  'REFINEMENT_VARIABLE_DT_REFINEMENT_RATIOS': True,
  'REFINEMENT_WAVE_TOLERANCE': 0.1,
- 'REGION_REGIONS': [[3, 3, 0.0, 10000.0, -77, -67, -40, -30],
-                    [3, 3, 8000.0, 26000.0, -90, -80, -30, -15]],
  'TOPO_TOPOFILES': [[2, 'etopo10min120W60W60S0S.asc']]}
 
 _TOPO = "etopo10min120W60W60S0S.asc"
@@ -171,10 +171,18 @@ def test_a_struct_row_lands_as_the_writers_list(tmp_path):
     written = _run(tmp_path)["written"]
 
     assert "claw.data" in written and len(written) == 16
-    regions = (rundir / "regions.data").read_text()
-    assert "3  3 0.00000000000000e+00" in regions
-    assert "8.00000000000000e+03" in regions
+    regions = (rundir / "flagregions.data").read_text()
+    assert "'region1'" in regions and "8000.0" in regions
     assert "32412" in (rundir / "gauges.data").read_text()
+
+
+def test_old_style_regions_refuse_by_name_pointing_at_flagregion(tmp_path):
+    sheet = _sheet(REGION_REGIONS=[[3, 3, 0.0, 10000.0, -77, -67, -40, -30]])
+    with pytest.raises(GeoclawError) as caught:
+        _run(tmp_path, sheet)
+
+    assert caught.value.error_code == "GEOCLAW_REGION_REGIONS_UNSUPPORTED"
+    assert "FLAGREGION_FLAGREGIONS" in str(caught.value)
 
 
 def test_the_written_claw_and_geoclaw_files_parse_back_equal(tmp_path):

@@ -52,6 +52,13 @@ def _recipe(*ops, box=_CHILE_BOX, edge=_CHILE_EDGE_M, ratios=(2, 6)):
                            ops=list(ops))
 
 
+_CHILE_REGIONS = (
+    mesh_op("flagregion", name="region1", minlevel=3, maxlevel=3, t1=0.0, t2=10000.0,
+            extent=(-77.0, -40.0, -67.0, -30.0)),
+    mesh_op("flagregion", name="region2", minlevel=3, maxlevel=3, t1=8000.0, t2=26000.0,
+            extent=(-90.0, -30.0, -80.0, -15.0)))
+
+
 def _accepted(tmp_path, *ops, **over):
     return MeshSession(_recipe(*ops, **over), workdir=tmp_path).accept()
 
@@ -63,16 +70,16 @@ def _stage(rundir: Path) -> None:
 
 
 def test_chile_grid_as_a_recipe_states_the_setrun_grid_keywords(tmp_path):
-    keywords = grid_keywords(_accepted(tmp_path))
+    keywords = grid_keywords(_accepted(tmp_path, *_CHILE_REGIONS))
 
-    for name in _GRID_KEYS:
+    for name in (*_GRID_KEYS, "FLAGREGION_FLAGREGIONS"):
         assert keywords[name] == _sheet_module._CHILE[name], name
-    assert "FLAGREGION_FLAGREGIONS" not in keywords
 
 
 def test_chile_with_the_recipes_grid_writes_the_same_data_files(tmp_path):
-    grid = grid_keywords(_accepted(tmp_path))
-    own = {k: v for k, v in _sheet_module._CHILE.items() if k not in _GRID_KEYS}
+    grid = grid_keywords(_accepted(tmp_path, *_CHILE_REGIONS))
+    own = {k: v for k, v in _sheet_module._CHILE.items()
+           if k not in (*_GRID_KEYS, "FLAGREGION_FLAGREGIONS")}
     original, recipe = tmp_path / "original", tmp_path / "recipe"
     _stage(original)
     _stage(recipe)
@@ -83,6 +90,14 @@ def test_chile_with_the_recipes_grid_writes_the_same_data_files(tmp_path):
     assert len(wrote) == 16
     assert all((original / name).read_bytes() == (recipe / name).read_bytes()
                for name in wrote)
+
+
+def test_old_style_regions_stated_beside_a_recipe_refuse_pointing_at_flagregion(tmp_path):
+    with pytest.raises(GeoclawError) as caught:
+        grid_keywords(_accepted(tmp_path), {"REGION_REGIONS"})
+
+    assert caught.value.error_code == "GEOCLAW_REGION_REGIONS_UNSUPPORTED"
+    assert "FLAGREGION_FLAGREGIONS" in str(caught.value)
 
 
 def test_a_flagregion_op_lands_as_the_flagregion_record(tmp_path):
@@ -156,6 +171,24 @@ async def test_the_gate_card_names_the_finest_cell_and_the_cells_per_level(
     assert rows["grid"].startswith("level-1 grid 30 x 30 cells")
     assert rows["level[2]"] == "100 cells forced, up to 100 allowed"
     assert rows["level[3]"] == "0 cells forced, up to 3600 allowed"
+    assert rows["wall_estimate"].startswith("about ") and "per simulated hour" in rows["wall_estimate"]
+
+
+def _copalis_ops():
+    ops = [mesh_op("flagregion", name="a", minlevel=1, maxlevel=2, t1=0.0, t2=1e9, extent=(-128.5, 45.0, -123.5, 49.0)),
+           mesh_op("flagregion", name="b", minlevel=4, maxlevel=4, t1=0.0, t2=10.0, extent=(-126.6, 45.5, -124.0, 48.5)),
+           mesh_op("flagregion", name="c", minlevel=3, maxlevel=4, t1=10.0, t2=1e9, extent=(-126.6, 46.27, -124.0, 47.68)),
+           mesh_op("flagregion", name="d", minlevel=7, maxlevel=7, t1=0.0, t2=1e9, extent=(-124.195, 47.11, -124.155, 47.145))]
+    return ops
+
+
+def test_the_wall_estimate_reproduces_the_measured_copalis_runs(tmp_path):
+    ops = _copalis_ops()
+    mesh = MeshSession(_recipe(*ops, box=(-128.5, 45.0, -123.5, 49.0), edge=4.0 / 60.0 * 111_320.0,
+                               ratios=(2, 5, 2, 2, 2, 3)), workdir=tmp_path).mesh
+    minutes = int(dict(mesh.meta["card_rows"])["wall_estimate"].split()[1])
+    # the full run took about 50 minutes for its simulated hour (3600 s)
+    assert 47 <= minutes <= 53
 
 
 # GeoClaw's reach rule (topo_module.f90: the overlap of the topo NODE extent

@@ -539,8 +539,11 @@ number of cells, and said so), the integer `refinement_ratios` as a build
 parameter (one list for x, y and t), and `flagregion` ops, each one Clawpack
 FlagRegion over a lon/lat rectangle. It builds the level-1 lattice; its finest
 cell (metres and arc-seconds) and the cells each level is forced and allowed
-by the flagregions ride the one mesh gate card as read-only rows. A flagregion
-level above the levels the ratios give refuses by name. Authoring
+by the flagregions ride the one mesh gate card as read-only rows, with a wall-time
+estimate per simulated hour that states its measured basis; no budget is enforced,
+the resolution being the user's lever. Refinement is stated as flagregions only:
+old-style `REGION_REGIONS` refuses by name pointing at `FLAGREGION_FLAGREGIONS`. A
+flagregion level above the levels the ratios give refuses by name. Authoring
 (`workflows/geoclaw/authoring/grid.py`) lands the accepted grid on `CLAW_LOWER`,
 `CLAW_UPPER`, `CLAW_NUM_CELLS`, `AMR_AMR_LEVELS_MAX`, `AMR_REFINEMENT_RATIOS_X/Y/T`
 and `FLAGREGION_FLAGREGIONS`, and a template stating any of them beside the recipe
@@ -552,6 +555,11 @@ more than 1 percent of it. The check refuses exactly where the engine would stop
 more strictly. The level-1 cell is stated in metres along a meridian and fitted to a
 whole number of cells over the box, the card saying when the fit moved it; one
 refinement-ratio list applies to x, y and t.
+
+The engine's exit verdict (`classify_exit`) reads the worker's metrics: a run whose
+`Total mass at initial time` is zero (no wet cell) refuses first, naming it; any other
+mass is reported in the journal and on the record for the user to read, since a small
+domain is a legitimate run.
 
 The bed is the engine's own list of topofiles, coarse to fine. The `Topography`
 composite on the wrapper takes the surfaces in that order, each a bed (a raster or

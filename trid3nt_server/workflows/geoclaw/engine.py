@@ -86,6 +86,11 @@ def classify_exit(rundir: Path, exit_code: int
     plain-Fortran ``stop`` exits 0 - and the whole metrics file is the
     completion's extra."""
     metrics = _metrics(rundir)
+    mass = metrics.get("initial_mass")
+    if isinstance(mass, (int, float)) and mass <= 0:
+        return ("error", 2,
+                f"Total mass at initial time is {mass:g}: no cell of the domain holds water, "
+                "so there is nothing to simulate", {**metrics, "error_code": "GEOCLAW_NO_WATER"})
     if exit_code != 0:
         said = str(metrics.get("error")
                    or f"{GEOCLAW_SOLVER_NAME} exited with non-zero code "

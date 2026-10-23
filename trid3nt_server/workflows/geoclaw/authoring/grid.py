@@ -12,7 +12,7 @@ from typing import Any, Iterable, Mapping
 
 from ..errors import GeoclawError
 
-__all__ = ["GRID_KEYWORDS", "check_topofile", "check_topofiles", "covered_by",
+__all__ = ["GRID_KEYWORDS", "REGIONS_REFUSAL", "check_topofile", "check_topofiles", "covered_by",
            "grid_keywords"]
 
 #: The keywords a grid recipe states; a template stating one beside it refuses.
@@ -29,6 +29,10 @@ _COVER_TOLERANCE = 1e-2
 #: A topofile header's registration word -> the offset of its first node from
 #: the stated lower-left, in cells (the reader shifts a corner by half a cell).
 _REGISTRATION = {"corner": 0.5, "centre": 0.0}
+
+
+REGIONS_REFUSAL = ("REGION_REGIONS (Clawpack's old-style regions) is not supported: state the refinement as "
+                   "FLAGREGION_FLAGREGIONS, or as flagregion ops on the grid recipe.")
 
 
 def _refuse(code: str, message: str) -> None:
@@ -51,6 +55,8 @@ def grid_keywords(artifact: Any, stated: Iterable[str] = ()) -> dict[str, Any]:
     keyword refuses naming it, since the recipe is the one place the grid is
     stated. No flagregion keyword is returned when the recipe holds none."""
     facts = _facts(artifact)
+    if "REGION_REGIONS" in stated:
+        _refuse("REGION_REGIONS_UNSUPPORTED", REGIONS_REFUSAL)
     clash = sorted(set(stated) & set(GRID_KEYWORDS))
     if clash:
         _refuse("GRID_KEYWORD_STATED",

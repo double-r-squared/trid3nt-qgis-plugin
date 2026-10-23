@@ -105,6 +105,21 @@ def test_a_success_metrics_is_ok(tmp_path):
     assert extra["initial_mass"] == 1.0575487000653194e17
 
 
+def test_a_run_with_no_water_is_refused_first_naming_the_mass(tmp_path):
+    (tmp_path / "geoclaw_metrics.json").write_text(json.dumps({
+        "correct_end": True, "initial_mass": 0.0, "engine_exit_code": 0}))
+    status, code, error, extra = classify_exit(tmp_path, 0)
+    assert (status, code) == ("error", 2)
+    assert "Total mass at initial time is 0" in error and extra["error_code"] == "GEOCLAW_NO_WATER"
+
+
+def test_a_small_domain_s_mass_is_not_refused_and_stays_on_the_record(tmp_path):
+    (tmp_path / "geoclaw_metrics.json").write_text(json.dumps({
+        "correct_end": True, "initial_mass": 1728.0, "engine_exit_code": 0}))
+    status, _code, _error, extra = classify_exit(tmp_path, 0)
+    assert status == "ok" and extra["initial_mass"] == 1728.0
+
+
 def test_a_nonzero_exit_is_an_error_naming_the_worker_s_sentence(tmp_path):
     (tmp_path / "geoclaw_metrics.json").write_text(json.dumps({
         "correct_end": False,

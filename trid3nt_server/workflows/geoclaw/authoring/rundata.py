@@ -38,6 +38,10 @@ def serialize(sheet: Any, rundir: Path | str) -> dict[str, Any]:
     """
     work = Path(rundir)
     work.mkdir(parents=True, exist_ok=True)
+    if "REGION_REGIONS" in sheet.filled and sheet.filled["REGION_REGIONS"].value:
+        from .grid import REGIONS_REFUSAL
+
+        _refuse("REGION_REGIONS_UNSUPPORTED", REGIONS_REFUSAL)
     groups, rundata = _groups(sheet)
     _applied(sheet, groups)
     _unstated(sheet)

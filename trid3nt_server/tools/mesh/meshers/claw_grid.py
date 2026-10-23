@@ -31,6 +31,13 @@ PROBE_KEY = "claw_grid"
 #: Arc-seconds per degree.
 _ARCSEC = 3600.0
 
+# Wall seconds per simulated second = _WALL_S_PER_WORK * W / level-1 cell (m), where W sums, per level, the
+# cells the regions allow times the product of the ratios down to that level (the steps that level takes
+# per level-1 step). Measured on this box through the image with the 7-level Copalis recipe: 244.9 s for
+# 2400 s at an 8 arcmin level 1 gives 2.93e-4, about 3000 s for 3600 s at 4 arcmin gives 3.04e-4. A run of a
+# few hundred cells is dominated by fixed costs (chile2010: 41 s measured, 5 s here), so this reads low there.
+_WALL_S_PER_WORK = 3.0e-4
+
 
 def flagregion(mesh: Mesh, name: str, minlevel: int, maxlevel: int, t1: float,
                t2: float, extent: Sequence[float]) -> Mesh:
@@ -168,6 +175,11 @@ def _with_facts(mesh: Mesh, grid: RegularGrid, ratios: list[int],
         *[(f"level[{c['level']}]", f"{c['forced']} cells forced, up to "
            f"{c['allowed']} allowed") for c in counts[1:]],
     ]
+    work = sum(c["allowed"] * math.prod(ratios[:i]) for i, c in enumerate(counts))
+    hour_s = _WALL_S_PER_WORK * 3600.0 * work / facts["level1_cell_m"][0]
+    rows.append(("wall_estimate", f"about {hour_s / 60.0:.0f} min of wall per simulated hour on the box that measured it, "
+                 "counting every cell the regions allow; scaled from the 7-level Copalis runs (2400 s in 245 s at "
+                 "8 arcmin, 3600 s in about 50 min at 4 arcmin) - a guide to the cost of the finer levels, not a limit"))
     if abs(grid.dlat * M_PER_DEG_LAT - float(stated_m)) > 1e-6 * float(stated_m):
         notes.append(f"the stated {float(stated_m):g} m was fitted to the "
                      "extent as a whole number of cells")
