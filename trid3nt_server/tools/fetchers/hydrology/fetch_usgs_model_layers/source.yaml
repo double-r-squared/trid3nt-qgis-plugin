@@ -1,0 +1,128 @@
+# The layer geometry of the two published USGS MODFLOW model archives behind
+# fetch_usgs_model_k: the top of layer 1 and the bottom of each layer, as one
+# EPSG:4326 raster per surface in metres on NAVD88. The plan hook fans one call
+# into n + 1 frames of the single grid covering the AOI; the bytes hook reads
+# the surface and that layer's mask from the archive the K row downloads (one
+# shared cached download), warps the touched window and, for a model counted
+# from NGVD 29, adds NOAA VDatum's offset onto NAVD88. A fetcher with a row is
+# FOUND through its class, so the row carries no sibling corpus.
+schema_version: v1
+
+name: fetch_usgs_model_layers
+source_class: usgs_model_layers
+error_prefix: USGS_MODEL_LAYERS
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+shape: animation_frames
+supports_global_query: false
+
+# Documentary: the archives are read through fetch_usgs_model_k's endpoints and
+# cache entries, so a call here after a K call downloads nothing.
+endpoints:
+  jbcc_model:
+    url: https://www.sciencebase.gov/catalog/file/get/631405ded34e36012efa3476?f=__disk__0f%2F7e%2F50%2F0f7e50aa9965d7d1ebb3261e6070e35b6857bd89
+  des_moines_model:
+    url: https://www.sciencebase.gov/catalog/file/get/6601d849d34e64ff1548e2ad?f=__disk__be%2F60%2F44%2Fbe6044364e5897bfd556958e27867f28ee124f64
+auth:
+  mode: none
+  user_agent: "trid3nt/0.1 (Hazard Modeling Agent; agent@trid3nt.dev)"
+
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+
+hooks:
+  frames_plan: usgs_model_layers.frames_plan
+  frame_bytes: usgs_model_layers.frame_bytes
+
+normalize:
+  crs: EPSG:4326
+  units: m
+  quantity: aquifer_layer_elevation
+
+output:
+  layer_type: raster
+  ext: tif
+  role: primary
+  emit_bbox: true
+  style:
+    kind: continuous
+    units: m
+  display_name: "Aquifer model layer elevations (modelled)"
+
+cache:
+  ttl_class: static-30d
+
+payload_estimate:
+  model: bbox_area
+  # Cape Cod at 121.92 m cells: ~622k cells/deg^2/surface x 33 surfaces x 4 B =
+  # ~82 MB/deg^2; Des Moines (7 surfaces, 60 m cells) lands under the same
+  # coefficient. A canary-ring AOI (~0.01 deg^2) is under 1 MB.
+  mb_per_sq_deg: 85.0
+
+coverage:
+- data_class: aquifer property
+  kind: modelled
+  extent:
+    kind: surface
+    # The four native corners of each model grid, as fetch_usgs_model_k states them.
+    rings:
+      - [[-70.720992, 41.805502], [-70.13421, 41.799982], [-70.140988, 41.481685], [-70.724858, 41.487178]]
+      - [[-93.854022, 41.817624], [-93.577352, 41.819348], [-93.575291, 41.588597], [-93.850975, 41.586887]]
+    note: the Cape Cod JBCC (32 layers, ~400 ft cells) and Des Moines MF6 (6 layers, 60 m cells) USGS MODFLOW model grids, their union
+  window:
+    series: false
+    latest: '2019-01-01'
+  # The COARSER of the two grids (Cape Cod 400 ft = 121.92 m).
+  resolution_m: 121.92
+  datum: NAVD88
+  units:
+    elevation: m
+  value_column: elevation
+
+caveats:
+  - "Two published calibrated USGS MODFLOW model grids, nothing more: Cape Cod JBCC (2019 release, 32 layers) and Des Moines MF6 (2024 release, 6 layers). A bbox outside both raises USGS_MODEL_LAYERS_INPUT_INVALID naming them; there is no third grid and nothing is interpolated between grids."
+  - "Frames are the model's own surfaces, top of layer 1 first and then the bottom of each layer in order (n layers give n + 1 frames); a layer's top is the previous frame. Frame i + 1 here and frame i of fetch_usgs_model_k are the same cells: each surface is masked by the layer's own active cells (the top of layer 1 by layer 1's)."
+  - "Datum: the Des Moines surfaces are metres above NAVD88 as published. The Cape Cod surfaces are feet above NGVD 29 as published (data release metadata sir2018-5139.xml) and are put onto NAVD88 here with NOAA VDatum's NGVD29 to NAVD88 offset at the AOI's four corners, bilinear between them (about -0.27 to -0.51 m across the grid). Where VDatum has no offset at a corner the call refuses by name rather than assuming zero."
+  - "A model layer's top and bottom, not a land surface or a measured contact: layer tops and bottoms are the calibrated models' own discretisation. Nearest-neighbour onto EPSG:4326; a layer with no active cell over the AOI is skipped and recorded, and if no surface covers the call raises USGS_MODEL_LAYERS_EMPTY."
+
+docstring: |-
+  Fetch each published USGS MODFLOW model layer's top and bottom elevation as one
+  raster frame per surface, in metres on NAVD88.
+
+  **What it does:** Reads the layer geometry out of two published USGS
+  groundwater-flow model archives - the Joint Base Cape Cod (JBCC)
+  MODFLOW-2005 model (32 layers, ~400 ft cells; surfaces published in feet on
+  NGVD 29, converted to metres and put onto NAVD88 with NOAA VDatum) and the
+  Des Moines River alluvial-aquifer MODFLOW-6 model (6 layers, 60 m cells;
+  surfaces published in metres on NAVD88) - for the requested bbox, masks each
+  surface to its layer's ACTIVE cells, warps NEAREST-neighbour onto an
+  EPSG:4326 grid cropped to cells whose centers fall inside the bbox, and
+  returns an ORDERED list of float32 COG frames: the top of layer 1, then the
+  bottom of layer 1, 2, ... n (n layers give n + 1 frames).
+
+  **When to use:**
+  - "How deep is each model layer here?" - layer thickness, or the depth range a
+    layer's hydraulic conductivity applies over, in the Cape Cod or Des Moines
+    model.
+  - Putting the layers of fetch_usgs_model_k on a common vertical axis: frame
+    i + 1 here is the bottom of the layer frame i of fetch_usgs_model_k describes.
+
+  **When NOT to use:**
+  - A land surface or DEM - these are the models' own layer surfaces.
+  - Anywhere outside the Cape Cod (JBCC) and Des Moines grids - the call
+    refuses, naming the grids and how much of the AOI each covers.
+
+  **Parameters:**
+  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326; must
+    lie ENTIRELY inside ONE of the two model grids. Required. Example (Cape
+    Cod canary): ``(-70.62, 41.59, -70.50, 41.68)``.
+
+  **Returns:** an ORDERED ``list[LayerURI]`` of one-band float32 COG frames
+  (``layer_type="raster"``, ``role="primary"``, ``units="m"``), the top of layer
+  1 first, then each layer's bottom, one ``layer_id`` per model + surface +
+  bbox, no temporal windows. A surface whose layer has no active cells over the
+  AOI is skipped and recorded; a bbox where NO surface is active raises the
+  typed ``USGS_MODEL_LAYERS_EMPTY``.

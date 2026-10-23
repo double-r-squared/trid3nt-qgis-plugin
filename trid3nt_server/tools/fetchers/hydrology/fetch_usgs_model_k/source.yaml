@@ -88,7 +88,7 @@ coverage:
 caveats:
   - "Two published calibrated USGS MODFLOW model grids, nothing more: Cape Cod JBCC (2019 release, 32 layers, ~400 ft cells, NAD27 state plane, K stored in ft/d and converted here to m/day) and Des Moines MF6 (2024 release, 6 layers, 60 m cells, K native m/day). A bbox outside both raises USGS_MODEL_K_INPUT_INVALID naming them; there is no third grid and nothing is interpolated between grids."
   - "Model NPF array values (horizontal Kx), not pumping tests: these are the conductivities the calibrated models route flow with, not measurements of any single well. Cape Cod cells reading 100000 ft/d are the model's own placeholder conductances for river-connected cells, not measured aquifer K."
-  - "Horizontal K only: vertical K (Kz), specific storage, specific yield and layer tops/bottoms are carried nowhere - each frame is a single-band m/day raster. Frames land on the EPSG:4326 grid by NEAREST NEIGHBOUR; a cell's value is never blended with its neighbours."
+  - "Horizontal K only: vertical K (Kz), specific storage and specific yield are carried nowhere; layer tops and bottoms are fetch_usgs_model_layers - each frame is a single-band m/day raster. Frames land on the EPSG:4326 grid by NEAREST NEIGHBOUR; a cell's value is never blended with its neighbours."
   - "A layer with no active (ib/idomain == 1) cells over the AOI is skipped and recorded; if no layer covers, the call raises USGS_MODEL_K_EMPTY rather than emitting blank layers. The Cape Cod item states no license for its archive (cite the 2019 data release); Des Moines is CC0-1.0."
 
 docstring: |-
@@ -117,8 +117,8 @@ docstring: |-
     input arrays, not measurements of any single well.
   - Anywhere outside the Cape Cod (JBCC) and Des Moines grids - the call
     refuses, naming the grids and how much of the AOI each covers.
-  - Vertical K, storage properties, or layer geometry (tops/bottoms) - not
-    carried.
+  - Vertical K or storage properties - not carried. A layer's top and bottom
+    elevation is fetch_usgs_model_layers.
 
   **Parameters:**
   - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326; must

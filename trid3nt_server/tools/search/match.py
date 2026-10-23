@@ -32,6 +32,7 @@ __all__ = ["LOOSEN_DATUM", "LOOSEN_WINDOW", "NO_MOMENT", "Need", "RANKED_ROWS",
 #: comparable in one read, few enough that a model answering with a row number
 #: is choosing rather than scanning.
 RANKED_ROWS = 5
+_NAMED_EXCLUSIONS = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -603,6 +604,14 @@ def _currency(coverage: Coverage) -> str:
         else "static"
 
 
+def _named_exclusions(rows: Sequence[SourceOption]) -> str:
+    """The first few exclusions in a sentence, the rest counted: the wire's
+    sentence field is bounded and a class grows rows."""
+    shown = "; ".join(f"{row.fetcher} {row.excluded}" for row in rows[:_NAMED_EXCLUSIONS])
+    more = len(rows) - _NAMED_EXCLUSIONS
+    return f"{shown}; and {more} more" if more > 0 else shown
+
+
 def _sentence(need: Need, survivors: Sequence[SourceOption],
               dropped: Sequence[SourceOption]) -> str:
     """ONE sentence: what the model is told and what the card shows."""
@@ -611,7 +620,7 @@ def _sentence(need: Need, survivors: Sequence[SourceOption],
             return (f"{need.slot}: {NO_MOMENT}, so no source was asked for "
                     f"{need.data_class}. State the moment the scenario is read "
                     "at, or state the value on the call.")
-        named = "; ".join(f"{row.fetcher} {row.excluded}" for row in dropped)
+        named = _named_exclusions(dropped)
         return (f"{need.slot}: nothing measures {need.data_class} here - "
                 + (named or "no source states coverage of this class")
                 + ". State the value on the call, or ask about a place or a "
@@ -632,8 +641,7 @@ def _probe_sentence(choice: SourceChoice, rows: Sequence[SourceOption],
     """What the run says once the world has answered."""
     if nxt:
         return f"{choice.slot}: {fetcher} held nothing, so {nxt} fills the slot."
-    named = "; ".join(f"{row.fetcher} {row.excluded}" for row in rows
-                      if row.excluded)
+    named = _named_exclusions([row for row in rows if row.excluded])
     return (f"{choice.slot}: nothing measures {choice.need} here - {named}. "
             "State the value on the call, or ask about a place or a moment a "
             "source reaches.")
