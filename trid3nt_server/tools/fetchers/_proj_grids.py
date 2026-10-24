@@ -9,6 +9,7 @@ height, so they are switched off.
 from __future__ import annotations
 
 import logging
+from functools import lru_cache
 from typing import Any
 
 from ._fetch_common import FetchError
@@ -17,7 +18,7 @@ from ._router.transport import TransportError, get_bytes, get_client
 logger = logging.getLogger(__name__)
 
 __all__ = ["FRAMES", "DatumGridError", "DatumGridUnavailable", "NoGridCoverage",
-           "geodetic_offset", "grids_used"]
+           "geodetic_offset", "grids_used", "served_pairs"]
 
 #: The frames the seam converts between, in the order the chain below runs them.
 FRAMES = ("NGVD29", "NAVD88", "NAD83_2011_ELLIPSOID", "EGM2008")
@@ -71,6 +72,26 @@ def geodetic_offset(from_frame: str, to_frame: str, lon: Any, lat: Any) -> Any:
             "the seam answers CONUS (GEOID18, VERTCON) and Alaska (GEOID12B) and refuses "
             "elsewhere rather than reading a zero offset.")
     return float(height[0]) if np.ndim(lon) == 0 and np.ndim(lat) == 0 else height
+
+
+@lru_cache(maxsize=256)
+def served_pairs(lon: float, lat: float) -> tuple[tuple[str, str], ...] | None:
+    """The pairs of :data:`FRAMES`' geodetic set the grids convert between at this point, as ``(from, to)``.
+
+    Message context for a refusal: a pair no grid covers is left out, and a
+    grid the PROJ CDN could not give leaves the whole answer ``None``, so a
+    reader never reads an outage as "nothing is served here"."""
+    geodetic = (("NGVD29", "NAVD88"), ("NAVD88", "EGM2008"), ("NGVD29", "EGM2008"))
+    served: list[tuple[str, str]] = []
+    for pair in geodetic:
+        try:
+            geodetic_offset(*pair, lon, lat)
+        except NoGridCoverage:
+            continue
+        except DatumGridUnavailable:
+            return None
+        served.append(pair)
+    return tuple(served)
 
 
 def grids_used(from_frame: str, to_frame: str, lon: float, lat: float) -> list[str]:

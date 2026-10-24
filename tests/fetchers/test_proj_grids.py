@@ -38,6 +38,22 @@ def test_a_chain_through_navd88_adds_its_two_offsets(proj_grids):
     assert chained == pytest.approx(-0.2605 - 0.3668, abs=1e-3)
 
 
+def test_served_pairs_at_a_sand_point_names_the_pair_the_seams_serve_there(proj_grids):
+    # VERTCON never reaches Alaska; the refusal a tidal pair gets there names
+    # the one pair the grids do convert at the point, so a frame can be stated.
+    proj_grids("alaska")
+    seam.served_pairs.cache_clear()
+    assert seam.served_pairs(*_SAND_POINT) == (("NAVD88", "EGM2008"),)
+
+
+def test_served_pairs_over_conus_names_every_geodetic_pair(proj_grids):
+    proj_grids("capecod")
+    seam.served_pairs.cache_clear()
+    pairs = seam.served_pairs(*_JBCC_SW)
+    assert pairs == (("NGVD29", "NAVD88"), ("NAVD88", "EGM2008"),
+                     ("NGVD29", "EGM2008"))
+
+
 def test_the_reverse_direction_is_the_negation(proj_grids):
     proj_grids("capecod")
     forward = seam.geodetic_offset("EGM2008", "NAVD88", *_JBCC_SW)

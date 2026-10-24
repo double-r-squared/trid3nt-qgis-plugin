@@ -258,8 +258,12 @@ def test_a_point_the_service_does_not_reach_refuses_naming_it(
     from trid3nt_server.tools.fetchers._router.errors import RouterEmptyError
     from trid3nt_server.tools.fetchers.ocean.fetch_vertical_datum_offset.hooks \
         import record
+    from trid3nt_server.tools.fetchers import _proj_grids
 
     _standing_on_the_box(monkeypatch)
+    # The refusal names what the local grids convert at the point; the naming
+    # itself is pinned in the fetchers slice, and the probe must fetch nothing.
+    monkeypatch.setattr(_proj_grids, "served_pairs", lambda lon, lat: ())
     ask = offset_ask(_half_measured(tmp_path), "NAVD88", at=_SEED_OFF_THE_SURVEY)
     with pytest.raises(RouterEmptyError) as caught:
         record(get_spec(OFFSET_FETCH), dict(ask),

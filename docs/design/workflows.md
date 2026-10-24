@@ -370,7 +370,12 @@ is a shift and not a field, and the row states WHICH point it was asked
 at. That row is journaled like any other producer, and the slot's
 coercion reads its value and fetches nothing. A pair nothing measures
 refuses naming BOTH frames rather than laying one over the other, and a
-footprint the service reaches nowhere refuses naming the point.
+footprint the service reaches nowhere refuses naming the point. A
+refusal that is coverage - no region stands over the point, VDatum's
+grids leave a gap, VDatum refuses the pairing - also names the frame
+pairs the local grids convert AT that point, so a run can state a
+frame whose offset is measured; nothing states it for the run, and a
+template names no fallback frame order.
 
 ## Degrading between sources
 

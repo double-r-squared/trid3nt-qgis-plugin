@@ -38,8 +38,12 @@ def spec():
 @pytest.fixture
 def vdatum_only(monkeypatch):
     """The grids answer nowhere, so every pair reaches the service."""
+    from trid3nt_server.tools.fetchers import _proj_grids
+
     vd._local.cache_clear()
     monkeypatch.setattr(vd, "_local", lambda *args: None)
+    monkeypatch.setattr(_proj_grids, "served_pairs",
+                        lambda lon, lat: (("NAVD88", "EGM2008"),))
 
 
 def _answered(**fields) -> list[bytes]:
@@ -92,6 +96,9 @@ def test_a_point_no_region_stands_over_refuses_by_name(spec, vdatum_only):
         vd.build_request(spec, _params(point=[-150.0, 30.0]))
     assert caught.value.error_code == "VDATUM_INPUT_INVALID"
     assert "no NOAA VDatum region stands over" in str(caught.value)
+    # The refusal names what the local grids convert there, so a run can
+    # state a frame whose offset is measured.
+    assert "NAVD88 <-> EGM2008" in str(caught.value)
 
 
 def test_egm2008_is_sent_under_the_ellipsoid_and_its_own_geoid(spec, vdatum_only):
@@ -120,6 +127,7 @@ def test_an_uncovered_point_refuses_rather_than_reading_the_sentinel(spec, vdatu
         vd.record(spec, _params(), _answered(t_z="-999999"))
     assert caught.value.error_code == "VDATUM_NO_COVERAGE"
     assert "westcoast" in str(caught.value)
+    assert "NAVD88 <-> EGM2008" in str(caught.value)
 
 
 def test_the_service_s_own_refusal_arrives_under_http_200(spec, vdatum_only):
@@ -128,6 +136,19 @@ def test_the_service_s_own_refusal_arrives_under_http_200(spec, vdatum_only):
         vd.record(spec, _params(), body)
     assert caught.value.error_code == "VDATUM_INPUT_INVALID"
     assert "Uncaught error" in str(caught.value)
+    assert "NAVD88 <-> EGM2008" in str(caught.value)
+
+
+def test_an_uncheckable_grid_probe_is_not_read_as_nothing_served(spec, vdatum_only, monkeypatch):
+    from trid3nt_server.tools.fetchers import _proj_grids
+
+    # An outage at the PROJ CDN must never replace the primary refusal with a
+    # claim that nothing converts at the point.
+    monkeypatch.setattr(_proj_grids, "served_pairs", lambda lon, lat: None)
+    with pytest.raises(RouterEmptyError) as caught:
+        vd.record(spec, _params(), _answered(t_z="-999999"))
+    assert "could not be checked" in str(caught.value)
+    assert "convert no pair" not in str(caught.value)
 
 
 def test_a_project_datum_is_not_a_frame_this_fetch_serves(spec, vdatum_only):
@@ -183,7 +204,7 @@ def test_the_west_coast_tidal_offset_is_read_off_the_answer_that_pairing_gets(sp
     assert read["region"] == "westcoast"
 
 
-def test_the_refusal_the_wrong_west_coast_pairing_gets_is_read_as_the_input_error(spec):
+def test_the_refusal_the_wrong_west_coast_pairing_gets_is_read_as_the_input_error(spec, vdatum_only):
     """The service answers it with HTTP 200 and an error envelope, and the
     message a reader is handed is the service's own."""
     body = {"errorCode": 412,
@@ -212,6 +233,35 @@ def test_where_no_grid_covers_the_point_the_pair_goes_to_the_service(spec, proj_
     vd._local.cache_clear()
     plan, = vd.build_request(spec, _params(point=[-160.505, 55.333]))
     assert plan.params["region"] == "ak"
+
+
+def test_the_sentinel_refusal_at_a_sand_point_names_the_pair_the_grids_serve(spec, proj_grids):
+    # The live shape the Chignik sea-level row hits: a tidal frame VDatum's
+    # Alaska grids leave as their sentinel, refusing while naming the pair the
+    # local grids DO convert at the point, so the run can state that frame.
+    from trid3nt_server.tools.fetchers import _proj_grids
+
+    proj_grids("alaska")
+    vd._local.cache_clear()
+    _proj_grids.served_pairs.cache_clear()
+    asked = _params(point=[-160.505, 55.333], from_frame="mhw", to_frame="navd88")
+    with pytest.raises(RouterEmptyError) as caught:
+        vd.record(spec, asked, _answered(t_z="-999999"))
+    assert "ak" in str(caught.value) and "MHW" in str(caught.value)
+    assert "the local PROJ grids at this point convert NAVD88 <-> EGM2008" in str(caught.value)
+
+
+def test_the_error_envelope_refusal_at_a_sand_point_names_the_pair_the_grids_serve(spec, proj_grids):
+    from trid3nt_server.tools.fetchers import _proj_grids
+
+    proj_grids("alaska")
+    vd._local.cache_clear()
+    _proj_grids.served_pairs.cache_clear()
+    asked = _params(point=[-160.505, 55.333], from_frame="mhw", to_frame="navd88")
+    body = [json.dumps({"errorCode": 412, "message": "Uncaught error"}).encode()]
+    with pytest.raises(RouterInputError) as caught:
+        vd.record(spec, asked, body)
+    assert "the local PROJ grids at this point convert NAVD88 <-> EGM2008" in str(caught.value)
 
 
 def test_a_tidal_pair_never_asks_the_grids(spec, monkeypatch):

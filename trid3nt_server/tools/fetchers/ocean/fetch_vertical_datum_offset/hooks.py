@@ -101,7 +101,8 @@ def _region(spec: SourceSpec, lon: float, lat: float) -> str:
         spec.error_code_prefix,
         f"no NOAA VDatum region stands over ({lon}, {lat}): the service covers "
         f"the US and its territories only ({', '.join(n for n, _ in _REGION_BOXES)}), "
-        "and an offset between two vertical frames outside them is not published.",
+        f"and an offset between two vertical frames outside them is not published; "
+        f"{_served_note(lon, lat)}.",
         spec.input_error_suffix,
     )
 
@@ -206,7 +207,7 @@ def record(spec: SourceSpec, params: dict[str, Any],
             sc,
             f"NOAA VDatum refused {source} -> {target} in region {region!r}, "
             f"the grid that stands over ({lon}, {lat}): {answer.get('message')!r}. "
-            "Name two frames the service transforms between there.",
+            f"{_served_note(lon, lat)}.",
             spec.input_error_suffix,
         )
     try:
@@ -218,9 +219,8 @@ def record(spec: SourceSpec, params: dict[str, Any],
         raise router_empty_error(
             sc,
             f"NOAA VDatum's {region} grids do not reach ({lon}, {lat}), so the "
-            f"offset between {source} and {target} there is not published. "
-            f"{region} is the region that stands over the point, and its grids "
-            "leave gaps; ask at the water the question is about.",
+            f"offset between {source} and {target} there is not published; "
+            f"{_served_note(lon, lat)}.",
             spec.empty_error_suffix,
         )
     uncertainty = _metres(answer.get("uncertainty"))
@@ -246,3 +246,15 @@ def _metres(stated: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return round(value, 4) if value == value else None
+
+
+def _served_note(lon: float, lat: float) -> str:
+    """What the local grids convert between at this point, for a refusal to name alongside VDatum's."""
+    pairs = _proj_grids.served_pairs(lon, lat)
+    if pairs is None:
+        return "the local PROJ grids could not be checked at this point"
+    if not pairs:
+        return ("the local PROJ grids convert no pair of NGVD29, NAVD88 and "
+                "EGM2008 at this point")
+    spelled = ", ".join(f"{a} <-> {b}" for a, b in pairs)
+    return f"the local PROJ grids at this point convert {spelled}"
