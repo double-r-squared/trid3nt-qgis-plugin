@@ -22,11 +22,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 #: The mf6 release the worker carries (``workers/modflow/Dockerfile`` MF6_VERSION); the DFNs are that release's own.
 MF6_REF = "6.7.0"
 
-#: The bodies this exposes. PRT rides with a later leg.
-BODIES: tuple[str, ...] = ("gwf", "gwt", "gwe")
+#: The bodies this exposes.
+BODIES: tuple[str, ...] = ("gwf", "gwt", "gwe", "prt")
 
 #: The simulation's own packages and the observation utility every body carries beside its model's.
 SHARED: tuple[str, ...] = ("sim-tdis", "sln-ims", "utl-obs")
+
+#: A body whose model solves without IMS and writes no OBS carries the clock alone.
+_SHARED_BY_BODY: dict[str, tuple[str, ...]] = {"prt": ("sim-tdis",)}
 
 #: The mf6 source this reads the definition files out of.
 _REPO = "https://github.com/MODFLOW-ORG/modflow6"
@@ -165,6 +168,11 @@ def _sized_by_optional(entry: dict[str, str], dimensions: frozenset[str]) -> boo
     return entry.get("shape", "").strip().strip("()").strip().lower() in dimensions
 
 
+#: Entries the DFN marks required that mf6 6.7.0 runs without (a PRP deck with no PERIOD block and no NRELEASETIMES solves
+#: and tracks the same particles), by package and name; a ``dev_`` entry is a developer option, never a required input.
+_NOT_REQUIRED = frozenset({("PRP", "perioddata"), ("PRP", "nreleasetimes")})
+
+
 def _row(entry: dict[str, str], package: str, dimensions: frozenset[str] = frozenset()) -> dict[str, object]:
     """One DFN entry as a dictionary row; ``dimensions`` are the package's optional dimension names."""
     name = entry["name"]
@@ -189,7 +197,8 @@ def _row(entry: dict[str, str], package: str, dimensions: frozenset[str] = froze
         "rubrique": [entry["block"].upper()],
         "is_file": False,
         "mandatory": (not _optional(entry) and default is None and not _unrequired(entry)
-                      and not _sized_by_optional(entry, dimensions)),
+                      and not _sized_by_optional(entry, dimensions)
+                      and (package, name) not in _NOT_REQUIRED and not name.startswith("dev_")),
     }
     if default is not None:
         row["default"] = default
@@ -201,10 +210,10 @@ def _row(entry: dict[str, str], package: str, dimensions: frozenset[str] = froze
 def body_rows(body: str) -> list[dict[str, object]]:
     """Every dictionary row of one body, its model's packages first and the shared TDIS, IMS and OBS after."""
     stems = [stem for stem in _dfn_names() if stem.startswith(f"{body}-")] \
-        + list(SHARED)
+        + list(_SHARED_BY_BODY.get(body, SHARED))
     rows = []
     for stem in stems:
-        entries = parse(fetch_dfn(stem))
+        entries = [entry for entry in parse(fetch_dfn(stem)) if "removed" not in entry]
         optional = frozenset(entry["name"].lower() for entry in entries
                              if entry.get("block") == "dimensions" and _optional(entry))
         rows += [_row(entry, package=stem.split("-", 1)[1].upper(), dimensions=optional)

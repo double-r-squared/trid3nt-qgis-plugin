@@ -13,17 +13,18 @@ from typing import Mapping
 from .gwf import COUPLED_BODIES, GWF
 from .gwe import GWE
 from .gwt import GWT
+from .prt import PRT
 from ...runtime.module import Composite, Module, Output, Slot, SlotRefused, load_module_input
 
 __all__ = [
     "COUPLED_BODIES",
-    "GWF", "GWE", "GWT", "Composite", "Module", "Output", "Slot", "SlotRefused",
+    "GWF", "GWE", "GWT", "PRT", "Composite", "Module", "Output", "Slot", "SlotRefused",
     "WRAPPERS", "load_module_input", "wrapper_for",
 ]
 
 # The exposed wrappers by engine body name; a coupled body's module name resolves to the dictionary its slots are checked against.
 WRAPPERS: Mapping[str, type] = MappingProxyType({
-    "gwf": GWF, "gwt": GWT, "gwe": GWE})
+    "gwf": GWF, "gwt": GWT, "gwe": GWE, "prt": PRT})
 
 
 def wrapper_for(module: str) -> type:

@@ -30,7 +30,7 @@ from ..authoring.stress import point_cell
 from ..errors import ModflowError
 from .ugrid import group
 
-__all__ = ["PRIMITIVES", "Solved", "filerecord", "group_stem", "read_extent", "read_field", "read_mass_balance",
+__all__ = ["PRIMITIVES", "Solved", "TRACKED", "filerecord", "group_stem", "read_extent", "read_field", "read_mass_balance",
            "read_max_over_time", "read_mesh", "read_observations", "read_series"]
 
 # mf6 writes this magnitude for a cell that is dry (HDRY) or inactive (HNOFLO).
@@ -45,6 +45,9 @@ _SAVED = {"HEAD": ("OC_HEAD_FILERECORD", None),
           "TEMPERATURE": ("OC_TEMPERATURE_FILERECORD", "TEMPERATURE"),
           "COMPACTION": ("CSUB_COMPACTION_FILERECORD", "CSUB-COMPACTION"),
           "SUBSIDENCE": ("CSUB_ZDISPLACEMENT_FILERECORD", "CSUB-ZDISPLACE")}
+
+# The outputs a PRT run reads off its CSV track file, each as the read that makes it and how it is published.
+TRACKED = {"PATHLINES": ("pathlines", "layer"), "ENDPOINTS": ("endpoints", "layer"), "TRAVEL_TIME": ("travel_time", "chart")}
 
 # The outputs a package alone writes: a run stating no keyword of it has no such row.
 _PACKAGED = {"COMPACTION": "CSUB_", "SUBSIDENCE": "CSUB_"}
@@ -230,6 +233,10 @@ class Solved:
 
     def unsaved(self, key: str) -> ModflowError | None:
         """Why the run's output control saved nothing of the output ``key``, or None where it saved it."""
+        if key in TRACKED:
+            if not filerecord(self.stated("OC_TRACKCSV_FILERECORD")):
+                return _unsaved("OC_TRACKCSV_FILERECORD", f"the run saved no CSV track file to read the {key.lower()} from")
+            return None
         if key in _SAVED:
             identifier = _SAVED[key][0]
             if not filerecord(self.stated(identifier)):

@@ -25,7 +25,8 @@ the cell ids, the finite griddata and the TDIS window before dispatch.
 ## The modules
 
 GWF (flow), GWT (solute transport) and GWE (heat transport) - the three that
-solve a field on the grid through IMS. Each is a `ModflowModule` wrapper over a
+solve a field on the grid through IMS - and PRT (particle tracking), which solves
+explicitly and writes tracks. Each is a `ModflowModule` wrapper over a
 dictionary extracted from the mf6 6.7.0 DFNs (`scripts/
 extract_modflow_dictionary.py`, committed under `modules/module_input/`). A
 keyword is flat in the DFN's own spelling - `NPF_ICELLTYPE`,
@@ -38,7 +39,8 @@ rides every body as the `Periods` composite, and the run's moment as
 Each wrapper carries its `MODULE_OUTPUT` table - what a solved run writes,
 read off the files the output control saved: GWF head, saturation and specific
 discharge; GWT concentration; GWE temperature. mf6 carries no unit system, so
-the units stay empty: they are the ones the modeller declared.
+the units stay empty: they are the ones the modeller declared. PRT's table is its
+tracks: pathlines, endpoints and the travel times (the section on particle tracking).
 
 ## The accepted mesh is the DISV
 
@@ -458,6 +460,48 @@ transport in both models and all four exchanges (heads and concentrations); a St
 joined by two cross movers moves exactly the water the other side receives; ex-gwf-rad-disu's radial DISU, stated whole,
 equals the published script's heads and observation CSV bitwise.
 
+## Particle tracking
+
+A PRT model rides in the flow model's simulation. `ParticleTracking({given, slots})` is a composite of the GWF wrapper
+(`modules/gwf.py`), stated like `Transport` and `Energy`: the body is `prt` (`modules/prt.py`, its dictionary the 6.7.0 `prt-*`
+definition files plus the clock - no IMS, no OBS, `prt.json`), it takes the carrier's staged DISV as its grid, it is joined to the
+flow by a `GWF6-PRT6` exchange and solved by an EMS of its own (`prt.ems`), and its FMI package, which an exchange makes
+unneeded, is not written. The tracks of the exchanged form equal the published two-simulation form (the flow saved to files,
+then read by a second simulation) in every column but `IMDL`; the second form is not authored, because the worker runs one
+`mfsim.nam`. A qualified run keyword (`prt: PRP_EXIT_SOLVE_TOLERANCE`) reaches the body; the manifest's module word stays the flow
+or the transport body's (the worker names three simulators). A PRT beside a `LocalGridRefinement` refuses: the particles never see
+the child's flow.
+
+The porosity (`MIP_POROSITY`, with `MIP_RETFACTOR` and `MIP_IZONE`) is the dictionary's, a constant, a list per layer or a run
+input, and has no default. The release package is `Release(geometry | on, layer, z | depth, spacing | count)`, or a list of them,
+a composite of the PRT wrapper: one PRP package whose `PRP_NRELEASEPTS` and `PRP_PACKAGEDATA` the authoring derives
+(`authoring/release.py`). `geometry` is a point (one particle, never moved), a line (a particle every `spacing` metres from its
+start, or `count` from end to end) or a polygon (`spacing`: a lattice of squares anchored at the polygon's bounding box, a
+particle at the centre of each square the polygon holds; `count` n: n by n particles at the sub-cell centres of every
+rectangular cell whose centre it holds); `on` names a placed feature of the flow model (a well, a boundary, a stream reach) and
+`count` n releases n by n in each of its cells. The height is `layer` (from 1) with `z`, the fraction of the layer's thickness above
+its bottom (1 the layer's top), or `depth` below the grid's top at the cell, in the model's length unit, whose layer is the one it
+falls in; neither is defaulted. The cell of every particle is computed - the lowest cell covering the position - and a position
+off the grid refuses with the nearest cell, as every placed point does. Everything else of the package is the PRP's own keyword,
+stated by its name: `PRP_EXIT_SOLVE_TOLERANCE`, `PRP_EXTEND_TRACKING`, `PRP_STOPTRAVELTIME`, `PRP_DRAPE`, and the release times
+(`PRP_PERIODDATA`, `PRP_RELEASE_TIME_FREQUENCY`, `PRP_RELEASETIMES`; a run stating none releases once at the start, mf6's own).
+
+What a solved run writes is read off the CSV track file `OC_TRACKCSV_FILERECORD` names (`modules/tracks.py`): `PATHLINES` is a
+GeoJSON vector, a LineString per particle through the places the track records, each vertex `[lon, lat, z]`, with the travel
+time at every vertex (`travel_times_s`), the release point and package, the release time and how the particle ended in its
+properties; `ENDPOINTS` is a Point per particle at its last record with the end in words (mf6's status codes: a boundary face,
+a weak sink, a cell with no exit face, a stop zone, an inactive cell, the stop time); `TRAVEL_TIME` is a chart of the particles
+that ended against their travel time. The table's rows publish them as the vector format and the chart, and a run saving no CSV
+track file journals `OC_TRACKCSV_FILERECORD` and publishes none of the three.
+
+Proven through the image: prt-mp7-p01 on a gridgen DISV (the example's geometry placed in UTM 17N) writes the published
+script's particles and equals flopy's own DISV simulation of the same models bitwise in every column; against the published DIS
+script's tracks the particle sets of part A agree to 3e-8 (the placement's shift in coordinates), and those of part B end in
+the same cells and zones at the same statuses with end times within 1e-4 of the total (mf6's tracking on a DISV grid is not
+its tracking on a DIS grid). The `Release` composite seeds the same 21 and 3780 points as the example's MODPATH 7 particle data
+(`spacing`, `count`, and a polygon's `count`) to 1e-9. On the triangle mesher's 188-cell mesh a polygon lattice, a line's `count`, a `depth` and a point release 15 particles that equal flopy's own
+DISV simulation of the same cells bitwise (the cells found by an independent shapely walk of the DISV).
+
 ## The publish
 
 The engine's own reading of a solved run (`modules/outputs.py`) opens the files
@@ -516,6 +560,7 @@ builds on was proved through that image before it was built on.
 
 The accepted-mesh reader of a ragged (UGRID) display face - a quadtree with
 refinement, a Voronoi - so those meshes cannot yet be authored on; a refinement of a
-mesh that is not a lattice; the mesh front handing down a DISU; FMI
-(the transport reading a prior flow run's saved budget), and PRT. Each is a leg
-in the scope's plan; the coupling above is built for GWT on the exchange.
+mesh that is not a lattice; the mesh front handing down a DISU; and FMI (a
+model reading a prior flow run's saved budget, a second simulation). Each is a
+leg in the scope's plan; the coupling above is built on the exchange for GWT,
+GWE and PRT.

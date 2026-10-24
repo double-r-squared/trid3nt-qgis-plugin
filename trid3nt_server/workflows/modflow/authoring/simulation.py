@@ -21,6 +21,7 @@ from .mesh_files import _layering, botm_of, disv_dimensions, top_of, unstructure
 from .movers import grouped, resolved_moves
 from .observations import place_observations
 from .refinement import Child, built_children, children_of, refined_idomain
+from .release import place_release
 from .stress import (GIVERS, lake_statements, layer_rows, maw_statements, place as place_stress, place_interbeds,
                      place_lakes, place_maw, place_streams, place_uzf)
 
@@ -34,7 +35,7 @@ __all__ = ["serialize"]
 # The packages mf6 refuses each model without (its own "package not specified" check):
 # every one is written, so the sheet states their required keywords or the run refuses.
 _REQUIRED_PACKAGES = {"gwf": ("IC", "NPF"), "gwt": ("IC", "MST"),
-                      "gwe": ("IC", "EST")}
+                      "gwe": ("IC", "EST"), "prt": ("MIP", "PRP")}
 
 # The blocks mf6 refuses a written package without; a required keyword in one has no
 # engine value, and flopy's constructor default would write an aquifer nobody measured.
@@ -120,7 +121,7 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
     if module not in _REQUIRED_PACKAGES:
         raise ModflowError(
             f"{module!r} is no module this authoring solves; its simulators "
-            "are gwf, gwt and gwe.",
+            "are gwf, gwt, gwe and prt.",
             error_code="MODFLOW_MODULE_UNKNOWN")
     if unstructured(sheet):
         return _write_unstructured(sheet, work, groups, named)
@@ -129,14 +130,19 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
     utm_epsg = getattr((mesh or {}).get("artifact"), "utm_epsg", None)
     frame = frame_of(sheet)
     refined = bool(children_of(sheet))
+    released = _released(sheet)
+    if released and refined:
+        raise ModflowError(
+            "ParticleTracking tracks the carrier's grid, and a LocalGridRefinement moves the flow through its child "
+            "model, which the particles never see; state one of them.", error_code="MODFLOW_EXCHANGE_UNKNOWN")
     top = (top_of(sheet, nlay=int(dims["nlay"]), art=mesh_artifact(mesh), bed=bed,
                   points=points, cells=cells)
-           if refined or any(needs_top(row.value) for rows in groups.values()
-                             for row in rows.values()) else None)
+           if refined or released or any(needs_top(row.value) for rows in groups.values()
+                                         for row in rows.values()) else None)
     botm = (botm_of(sheet, nlay=int(dims["nlay"]), art=mesh_artifact(mesh), points=points,
                     cells=cells, top=top)
-            if refined or any(needs_botm(row.value) for rows in groups.values()
-                              for row in rows.values()) else None)
+            if refined or released or any(needs_botm(row.value) for rows in groups.values()
+                                          for row in rows.values()) else None)
     placed = dict(dims=dims, points=points, cells=cells, utm_epsg=utm_epsg,
                   sheet=sheet, frame=frame, top=top, botm=botm)
     active = _active(sheet, nlay=int(dims["nlay"]), points=points, cells=cells,
@@ -203,6 +209,12 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
     return _write_package_by_package(sim, [mover for mover in movers if mover is not None])
 
 
+def _released(sheet: Any) -> bool:
+    """Whether a PRT body of the sheet states Release statements: their heights read the grid's top and bottoms."""
+    return any(isinstance(held := (body.get("slots") or {}).get("PRP_PACKAGEDATA"), Mapping) and "release" in held
+               for body in sheet.coupled)
+
+
 def _carrying(model: _Model) -> list[str]:
     """The prefixes of the flow packages that carry a CONCENTRATION: the water sources a transport model's SSM names."""
     return [prefix for prefix, rows in model.groups.items()
@@ -221,7 +233,8 @@ def _coupled(flopy: Any, sim: Any, coupled: Any, body: Mapping[str, Any], *, flo
     grid = at.mesh
     derived, tables, series, observed, _features = _stressed(
         coupled, groups, nlay=int(grid["dims"]["nlay"]), points=grid["points"], cells=grid["cells"],
-        utm_epsg=grid["utm_epsg"], frame=grid["frame"], active=active, features=features, name=name, stem=at.stem)
+        utm_epsg=grid["utm_epsg"], frame=grid["frame"], active=active, features=features, name=name, stem=at.stem,
+        grid=(grid["top"], grid["botm"]))
     _unstated(coupled, set(groups) | set(_REQUIRED_PACKAGES[coupled.module]), derived)
     sources = [[flow.get_package(prefix.lower()).package_name, "AUX", "CONCENTRATION"] for prefix in carrying]
     if coupled.module == "gwt" and sources and "sources" not in groups.get("SSM", {}):
@@ -336,7 +349,10 @@ def _model(flopy: Any, sim: Any, held: _Model, *, solution: bool, sources: Any =
     else:
         _package(flopy, f"Modflow{cap}disv", {}, owner=model, filename=held.disv,
                  **mesh["dims"], how=f"the staged {held.disv}")
-    if solution:
+    if solution and module == "prt":
+        ems = _package(flopy, "ModflowEms", {}, owner=sim, filename=f"{name}.ems", how=f"EMS of the {name} solution")
+        sim.register_solution_package(ems, [name])
+    elif solution:
         ims = _package(flopy, "ModflowIms",
                        placing(groups.pop("IMS", {})) if mesh is None else
                        _placed(groups.pop("IMS", {}), dims=mesh["dims"], points=mesh["points"],
@@ -387,7 +403,8 @@ def coupled_sheet(sheet: Any, body: Mapping[str, Any]) -> Any:
 
 # The flow model's exchange with each coupled body: the pair to its flopy class and mf6's exchange type.
 _EXCHANGES = {("gwf", "gwt"): ("ModflowGwfgwt", "GWF6-GWT6"),
-              ("gwf", "gwe"): ("ModflowGwfgwe", "GWF6-GWE6")}
+              ("gwf", "gwe"): ("ModflowGwfgwe", "GWF6-GWE6"),
+              ("gwf", "prt"): ("ModflowGwfprt", "GWF6-PRT6")}
 
 
 def _exchange(flopy: Any, sim: Any, *, carrier: str, coupled: str, kinds: tuple[str, str] | None = None) -> None:
@@ -483,6 +500,14 @@ def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, point
         features += _interbedded(sheet, groups["CSUB"], row, nlay=nlay, points=points, cells=cells,
                                  utm_epsg=utm_epsg, frame=frame, active=active)
         derived.add("CSUB_NINTERBEDS")
+    row = groups.get("PRP", {}).get("packagedata")
+    if row is not None and isinstance(row.value, Mapping) and "release" in row.value:
+        found = place_release(row.value["release"], points=points, cells=cells, utm_epsg=utm_epsg, nlay=nlay,
+                              top=grid[0], botm=grid[1], active=active, features=features)
+        groups["PRP"]["packagedata"] = replace(row, value=found)
+        groups["PRP"]["nreleasepts"] = Filled(
+            slot=sheet.body.MODULE_INPUT["PRP_NRELEASEPTS"], value=len(found), provenance=row.provenance)
+        derived.add("PRP_NRELEASEPTS")
     series: dict[str, Mapping[str, Any]] = {}
     for prefix, rows in groups.items():
         held = rows.pop("ts_filerecord", None)

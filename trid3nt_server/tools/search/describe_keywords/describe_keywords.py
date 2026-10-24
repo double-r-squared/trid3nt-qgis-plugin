@@ -122,7 +122,7 @@ def describe_keywords(module: str = "", keyword: str = "", query: str = "",
 
     For what a template's inputs do not name - a friction law, a turbulence
     model, an ice process, a wave spectrum - in ANY carried module (telemac2d,
-    telemac3d, khione, tomawac, gaia, artemis, waqtel, gwf, gwt, gwe, geoclaw,
+    telemac3d, khione, tomawac, gaia, artemis, waqtel, gwf, gwt, gwe, prt, geoclaw,
     ...). State what you learn on the call: `keywords={"LAW OF BOTTOM FRICTION": 4}`;
     on a run of several bodies the name carries its body first, as
     `keywords={"gwt: IMS_PRINT_OPTION": "ALL"}`. Never runs anything; never

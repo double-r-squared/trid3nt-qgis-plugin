@@ -17,7 +17,7 @@ is mandatory. Only `optional true` is optional - a bare `optional` line marks K
 and ICELLTYPE, which mf6 refuses a run without - and a required entry carries
 no default: its DFN `default_value` is flopy's illustration, not a value mf6
 uses, except on a required flag (READASARRAYS), the package's own tag. An entry whose own description says mf6 runs without it stated
-(a stated default, or a waiver where it is unread) is not mandatory, and neither is one shaped by an optional dimension alone (CSUB's period list over MAXSIG0).
+(a stated default, or a waiver where it is unread) is not mandatory, and neither is one shaped by an optional dimension alone (CSUB's period list over MAXSIG0). An entry the DFN marks required that mf6 runs without (PRP's PERIOD block and NRELEASETIMES) and a `dev_` option are not mandatory, and an entry the DFN marks `removed` is no row.
 `modules/module.py` reads a file here into the wrapper's slots.
 
 ## Files
@@ -27,3 +27,4 @@ uses, except on a required flag (READASARRAYS), the package's own tag. An entry 
 | `gwf.json` | 511 | The groundwater-flow body: every `gwf-*` package plus the simulation's TDIS and IMS and the OBS utility. |
 | `gwt.json` | 262 | The groundwater-transport body: every `gwt-*` package plus TDIS, IMS and OBS. |
 | `gwe.json` | 233 | The groundwater-energy body: every `gwe-*` package plus TDIS, IMS and OBS. |
+| `prt.json` | 93 | The particle-tracking body: every `prt-*` package plus TDIS (PRT solves explicitly and has no IMS or OBS). |

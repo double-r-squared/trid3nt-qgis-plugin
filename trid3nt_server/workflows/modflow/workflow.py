@@ -40,7 +40,7 @@ from trid3nt_server.workflows.solver.staging import discard_run
 from .authoring import DISV_FILE, MFSIM_FILE
 from .authoring.observations import observation_files
 from .modules import COUPLED_BODIES, wrapper_for
-from .modules.outputs import Solved, filerecord, group_stem
+from .modules.outputs import TRACKED, Solved, filerecord, group_stem
 from .modules.ugrid import display_file
 
 if TYPE_CHECKING:
@@ -166,6 +166,13 @@ def _beside(uri: str, dest: Path) -> None:
     dest.write_bytes(read_object_bytes_s3(uri))
 
 
+def answering(sheet: Sheet) -> str:
+    """The manifest's module word: the body answering the question - a coupled run is its transport.
+    The worker names three simulators, so a PRT body, which solves beside the flow model, is not the word."""
+    coupling = [body for body in sheet.coupled if "refine" not in body and body["module"] != "prt"]
+    return str(coupling[0]["module"]) if coupling else sheet.module
+
+
 async def stage_sheet(*, sheet: Sheet, run_tag: str, mesh: Mapping[str, Any],
                            prefix: str, server_facts: Mapping[str, Any]
                            ) -> dict[str, Any]:
@@ -186,9 +193,7 @@ async def stage_sheet(*, sheet: Sheet, run_tag: str, mesh: Mapping[str, Any],
     await asyncio.to_thread(_validated, rundir)
     results = _results(sheet)
     listings = _listings(sheet)
-    # The manifest's module is the body answering the question: a coupled run is its transport.
-    coupling = [body for body in sheet.coupled if "refine" not in body]
-    module = str(coupling[0]["module"]) if coupling else sheet.module
+    module = answering(sheet)
     return await stage_run(
         rundir, run_tag, module=module, steering=MFSIM_FILE,
         results=results, outputs=[*results, *listings, _SIM_LISTING, _METRICS],
@@ -229,6 +234,11 @@ def _table(solved: Callable[[str], Solved], run_module: str, coupled: Sequence[s
             refused = read.unsaved(token)
             if refused is not None:
                 unsaved.append(f"no layer carries the {row.name}: {refused}")
+                continue
+            if token in TRACKED:
+                kind, how = TRACKED[token]
+                tracked = Primitive(kind, module=None if module == run_module else module)
+                rows.append(tracked.chart() if how == "chart" else tracked.layer(style=row.style))
                 continue
             # The carrier's rows read off the run's own module; a coupled body's carry its name.
             rows += [field(token, t="every", plane=layer,

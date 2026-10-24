@@ -228,6 +228,7 @@ _COUPLED_STRESS = {
             "RCH": "Recharge"},
     "gwt": {"CNC": "ConstantConcentration", "SRC": "MassSource"},
     "gwe": {"CTP": "ConstantTemperature", "ESL": "EnergySource"},
+    "prt": {},
 }
 
 # The simulation's own clock and grid: one TDIS and one staged DISV describe the whole simulation, and the carrier states them.
@@ -302,7 +303,7 @@ def _coupled(module: str, name: str):
             raise SlotRefused(
                 f"{name} slots takes a mapping of {module.upper()} identifiers to "
                 f"values; got {type(stated).__name__}.")
-        slots = _deck(module, stated, run)
+        slots = _deck(module, stated, run, composites=module == "prt")
         return ({}, {module: {"module": module, "slots": slots, "given": list(given)}})
 
     expand.__doc__ = (
@@ -417,7 +418,7 @@ GWF.composites(reads={"TimeSeries": ("rows",)}, TimeSeries=_series)
 GWF.composites(reads={"Observations": ("at", "to_at")}, Observations=_observations)
 GWF.composites(reads={"Aquifer": (*_AQUIFER, "surfaces")}, Aquifer=_aquifer)
 # Which coupled body each coupling composite states, by module word: the one statement the registration and the run's bodies both read.
-COUPLED_BODIES = MappingProxyType({"Transport": "gwt", "Energy": "gwe"})
+COUPLED_BODIES = MappingProxyType({"Transport": "gwt", "Energy": "gwe", "ParticleTracking": "prt"})
 GWF.composites(**{name: _coupled(module, name)
                   for name, module in COUPLED_BODIES.items()})
 GWF.composites(reads={"LocalGridRefinement": ("geometry",)}, LocalGridRefinement=_refinement)

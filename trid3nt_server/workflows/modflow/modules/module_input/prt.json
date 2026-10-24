@@ -1,0 +1,1411 @@
+{
+  "module": "prt",
+  "keywords": [
+    {
+      "keyword": "LENGTH_UNITS",
+      "identifier": "DIS_LENGTH_UNITS",
+      "type": "STRING",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "model length units. is the length units used for this model.  Values can be ``FEET'', ``METERS'', or ``CENTIMETERS''.  If not specified, the default is ``UNKNOWN''.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "NOGRB",
+      "identifier": "DIS_NOGRB",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "do not write binary grid file. keyword to deactivate writing of the binary grid file.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "GRB_FILERECORD",
+      "identifier": "DIS_GRB_FILERECORD",
+      "type": "STRUCT",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "XORIGIN",
+      "identifier": "DIS_XORIGIN",
+      "type": "REAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "x-position of the model grid origin. x-position of the lower-left corner of the model grid.  A default value of zero is assigned if not specified.  The value for XORIGIN does not affect the model simulation, but it is written to the binary grid file so that postprocessors can locate the grid in space.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "YORIGIN",
+      "identifier": "DIS_YORIGIN",
+      "type": "REAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "y-position of the model grid origin. y-position of the lower-left corner of the model grid.  If not specified, then a default value equal to zero is used.  The value for YORIGIN does not affect the model simulation, but it is written to the binary grid file so that postprocessors can locate the grid in space.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "ANGROT",
+      "identifier": "DIS_ANGROT",
+      "type": "REAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "rotation angle. counter-clockwise rotation angle (in degrees) of the lower-left corner of the model grid.  If not specified, then a default value of 0.0 is assigned.  The value for ANGROT does not affect the model simulation, but it is written to the binary grid file so that postprocessors can locate the grid in space.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "EXPORT_ARRAY_ASCII",
+      "identifier": "DIS_EXPORT_ARRAY_ASCII",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "export array variables to layered ascii files.. keyword that specifies input griddata arrays should be written to layered ascii output files.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "EXPORT_ARRAY_NETCDF",
+      "identifier": "DIS_EXPORT_ARRAY_NETCDF",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "export array variables to netcdf output files.. keyword that specifies input gridded arrays should be written to the model output NetCDF file with attributes that support using the generated file as a MODFLOW 6 simulation input.  This option only has an effect when an output model NetCDF file is configured and the simulation is run in VALIDATE mode, otherwise it is ignored.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "CRS",
+      "identifier": "DIS_CRS",
+      "type": "STRING",
+      "shape": "lenbigline",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "CRS user input string. is a real-world coordinate reference system (CRS) for the model, for example, an EPSG integer code (e.g. 26915), authority string (i.e. epsg:26915), or Open Geospatial Consortium Well-Known Text (WKT) specification. Limited to 5000 characters. The entry for CRS does not affect the model simulation, but it is written to the binary grid file so that postprocessors can locate the grid in space.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "NCF_FILERECORD",
+      "identifier": "DIS_NCF_FILERECORD",
+      "type": "STRUCT",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "NLAY",
+      "identifier": "DIS_NLAY",
+      "type": "INTEGER",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "number of layers. is the number of layers in the model grid.",
+      "rubrique": [
+        "DIMENSIONS"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "NROW",
+      "identifier": "DIS_NROW",
+      "type": "INTEGER",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "number of rows. is the number of rows in the model grid.",
+      "rubrique": [
+        "DIMENSIONS"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "NCOL",
+      "identifier": "DIS_NCOL",
+      "type": "INTEGER",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "number of columns. is the number of columns in the model grid.",
+      "rubrique": [
+        "DIMENSIONS"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "DELR",
+      "identifier": "DIS_DELR",
+      "type": "ARRAY",
+      "shape": "(ncol)",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "spacing along a row. is the column spacing in the row direction.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "DELC",
+      "identifier": "DIS_DELC",
+      "type": "ARRAY",
+      "shape": "(nrow)",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "spacing along a column. is the row spacing in the column direction.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "TOP",
+      "identifier": "DIS_TOP",
+      "type": "ARRAY",
+      "shape": "(ncol, nrow)",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "cell top elevation. is the top elevation for each cell in the top model layer.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "BOTM",
+      "identifier": "DIS_BOTM",
+      "type": "ARRAY",
+      "shape": "(ncol, nrow, nlay)",
+      "layered": true,
+      "size": 1,
+      "unbounded": false,
+      "help": "cell bottom elevation. is the bottom elevation for each cell.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "IDOMAIN",
+      "identifier": "DIS_IDOMAIN",
+      "type": "ARRAY",
+      "shape": "(ncol, nrow, nlay)",
+      "layered": true,
+      "size": 1,
+      "unbounded": false,
+      "help": "idomain existence array. is an optional array that characterizes the existence status of a cell.  If the IDOMAIN array is not specified, then all model cells exist within the solution.  If the IDOMAIN value for a cell is 0, the cell does not exist in the simulation.  Input and output values will be read and written for the cell, but internal to the program, the cell is excluded from the solution.  If the IDOMAIN value for a cell is 1, the cell exists in the simulation.  If the IDOMAIN value for a cell is -1, the cell does not exist in the simulation.  Furthermore, the first existing cell above will be connected to the first existing cell below.  This type of cell is referred to as a ``vertical pass through'' cell.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "LENGTH_UNITS",
+      "identifier": "DISV_LENGTH_UNITS",
+      "type": "STRING",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "model length units. is the length units used for this model.  Values can be ``FEET'', ``METERS'', or ``CENTIMETERS''.  If not specified, the default is ``UNKNOWN''.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "NOGRB",
+      "identifier": "DISV_NOGRB",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "do not write binary grid file. keyword to deactivate writing of the binary grid file.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "GRB_FILERECORD",
+      "identifier": "DISV_GRB_FILERECORD",
+      "type": "STRUCT",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "XORIGIN",
+      "identifier": "DISV_XORIGIN",
+      "type": "REAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "x-position origin of the model grid coordinate system. x-position of the origin used for model grid vertices.  This value should be provided in a real-world coordinate system.  A default value of zero is assigned if not specified.  The value for XORIGIN does not affect the model simulation, but it is written to the binary grid file so that postprocessors can locate the grid in space.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "YORIGIN",
+      "identifier": "DISV_YORIGIN",
+      "type": "REAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "y-position origin of the model grid coordinate system. y-position of the origin used for model grid vertices.  This value should be provided in a real-world coordinate system.  If not specified, then a default value equal to zero is used.  The value for YORIGIN does not affect the model simulation, but it is written to the binary grid file so that postprocessors can locate the grid in space.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "ANGROT",
+      "identifier": "DISV_ANGROT",
+      "type": "REAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "rotation angle. counter-clockwise rotation angle (in degrees) of the model grid coordinate system relative to a real-world coordinate system.  If not specified, then a default value of 0.0 is assigned.  The value for ANGROT does not affect the model simulation, but it is written to the binary grid file so that postprocessors can locate the grid in space.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "EXPORT_ARRAY_ASCII",
+      "identifier": "DISV_EXPORT_ARRAY_ASCII",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "export array variables to layered ascii files.. keyword that specifies input griddata arrays should be written to layered ascii output files.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "EXPORT_ARRAY_NETCDF",
+      "identifier": "DISV_EXPORT_ARRAY_NETCDF",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "export array variables to netcdf output files.. keyword that specifies input gridded arrays should be written to the model output NetCDF file with attributes that support using the generated file as a MODFLOW 6 simulation input.  This option only has an effect when an output model NetCDF file is configured and the simulation is run in VALIDATE mode, otherwise it is ignored.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "CRS",
+      "identifier": "DISV_CRS",
+      "type": "STRING",
+      "shape": "lenbigline",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "CRS user input string. is a real-world coordinate reference system (CRS) for the model, for example, an EPSG integer code (e.g. 26915), authority string (i.e. epsg:26915), or Open Geospatial Consortium Well-Known Text (WKT) specification. Limited to 5000 characters. The entry for CRS does not affect the model simulation, but it is written to the binary grid file so that postprocessors can locate the grid in space.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "NCF_FILERECORD",
+      "identifier": "DISV_NCF_FILERECORD",
+      "type": "STRUCT",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "NLAY",
+      "identifier": "DISV_NLAY",
+      "type": "INTEGER",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "number of layers. is the number of layers in the model grid.",
+      "rubrique": [
+        "DIMENSIONS"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "NCPL",
+      "identifier": "DISV_NCPL",
+      "type": "INTEGER",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "number of cells per layer. is the number of cells per layer.  This is a constant value for the grid and it applies to all layers.",
+      "rubrique": [
+        "DIMENSIONS"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "NVERT",
+      "identifier": "DISV_NVERT",
+      "type": "INTEGER",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "number of columns. is the total number of (x, y) vertex pairs used to characterize the horizontal configuration of the model grid.",
+      "rubrique": [
+        "DIMENSIONS"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "TOP",
+      "identifier": "DISV_TOP",
+      "type": "ARRAY",
+      "shape": "(ncpl)",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "model top elevation. is the top elevation for each cell in the top model layer.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "BOTM",
+      "identifier": "DISV_BOTM",
+      "type": "ARRAY",
+      "shape": "(ncpl, nlay)",
+      "layered": true,
+      "size": 1,
+      "unbounded": false,
+      "help": "model bottom elevation. is the bottom elevation for each cell.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "IDOMAIN",
+      "identifier": "DISV_IDOMAIN",
+      "type": "ARRAY",
+      "shape": "(ncpl, nlay)",
+      "layered": true,
+      "size": 1,
+      "unbounded": false,
+      "help": "idomain existence array. is an optional array that characterizes the existence status of a cell.  If the IDOMAIN array is not specified, then all model cells exist within the solution.  If the IDOMAIN value for a cell is 0, the cell does not exist in the simulation.  Input and output values will be read and written for the cell, but internal to the program, the cell is excluded from the solution.  If the IDOMAIN value for a cell is 1, the cell exists in the simulation.  If the IDOMAIN value for a cell is -1, the cell does not exist in the simulation.  Furthermore, the first existing cell above will be connected to the first existing cell below.  This type of cell is referred to as a ``vertical pass through'' cell.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "VERTICES",
+      "identifier": "DISV_VERTICES",
+      "type": "STRUCT",
+      "shape": "(nvert)",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "vertices data",
+      "rubrique": [
+        "VERTICES"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "CELL2D",
+      "identifier": "DISV_CELL2D",
+      "type": "STRUCT",
+      "shape": "(ncpl)",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "cell2d data",
+      "rubrique": [
+        "CELL2D"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "SAVE_FLOWS",
+      "identifier": "FMI_SAVE_FLOWS",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "save cell-by-cell flows to budget file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PACKAGEDATA",
+      "identifier": "FMI_PACKAGEDATA",
+      "type": "STRUCT",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "flowtype list",
+      "rubrique": [
+        "PACKAGEDATA"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "EXPORT_ARRAY_ASCII",
+      "identifier": "MIP_EXPORT_ARRAY_ASCII",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "export array variables to layered ascii files.. keyword that specifies input griddata arrays should be written to layered ascii output files.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "POROSITY",
+      "identifier": "MIP_POROSITY",
+      "type": "ARRAY",
+      "shape": "(nodes)",
+      "layered": true,
+      "size": 1,
+      "unbounded": false,
+      "help": "porosity. is the aquifer porosity.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "RETFACTOR",
+      "identifier": "MIP_RETFACTOR",
+      "type": "ARRAY",
+      "shape": "(nodes)",
+      "layered": true,
+      "size": 1,
+      "unbounded": false,
+      "help": "retardation factor. is a real value by which velocity is divided within a given cell.  RETFACTOR can be used to account for solute retardation, i.e., the apparent effect of linear sorption on the velocity of particles that track solute advection.  RETFACTOR may be assigned any real value.  A RETFACTOR value greater than 1 represents particle retardation (slowing), and a value of 1 represents no retardation.  The effect of specifying a RETFACTOR value for each cell is the same as the effect of directly multiplying the POROSITY in each cell by the proposed RETFACTOR value for each cell.  RETFACTOR allows conceptual isolation of effects such as retardation from the effect of porosity.  The default value is 1.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "IZONE",
+      "identifier": "MIP_IZONE",
+      "type": "ARRAY",
+      "shape": "(nodes)",
+      "layered": true,
+      "size": 1,
+      "unbounded": false,
+      "help": "zone number. is an integer zone number assigned to each cell.  IZONE may be positive, negative, or zero.  The current cell's zone number is recorded with each particle track datum.  If a PRP package's ISTOPZONE option is set to any value other than zero, particles released by that PRP Package terminate if they enter a cell whose IZONE value matches ISTOPZONE.  If ISTOPZONE is not specified or is set to zero in a PRP Package, IZONE has no effect on the termination of particles released by that PRP Package.  Each PRP Package may configure a single ISTOPZONE value.",
+      "rubrique": [
+        "GRIDDATA"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "LIST",
+      "identifier": "NAM_LIST",
+      "type": "STRING",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "name of listing file. is name of the listing file to create for this PRT model.  If not specified, then the name of the list file will be the basename of the PRT model name file and the '.lst' extension.  For example, if the PRT name file is called ``my.model.nam'' then the list file will be called ``my.model.lst''.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRINT_INPUT",
+      "identifier": "NAM_PRINT_INPUT",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "print input to listing file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRINT_FLOWS",
+      "identifier": "NAM_PRINT_FLOWS",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "print calculated flows to listing file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "SAVE_FLOWS",
+      "identifier": "NAM_SAVE_FLOWS",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "save flows for all packages to budget file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PACKAGES",
+      "identifier": "NAM_PACKAGES",
+      "type": "STRUCT",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "package list",
+      "rubrique": [
+        "PACKAGES"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "BUDGET_FILERECORD",
+      "identifier": "OC_BUDGET_FILERECORD",
+      "type": "STRUCT",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "BUDGETCSV_FILERECORD",
+      "identifier": "OC_BUDGETCSV_FILERECORD",
+      "type": "STRUCT",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TRACK_FILERECORD",
+      "identifier": "OC_TRACK_FILERECORD",
+      "type": "STRUCT",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TRACKCSV_FILERECORD",
+      "identifier": "OC_TRACKCSV_FILERECORD",
+      "type": "STRUCT",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TRACK_RELEASE",
+      "identifier": "OC_TRACK_RELEASE",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "track release. keyword to indicate that particle tracking output is to be written when a particle is released",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TRACK_EXIT",
+      "identifier": "OC_TRACK_EXIT",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "track domain exits. keyword to indicate that particle tracking output is to be written when a particle exits a grid feature (e.g. model, cell)",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TRACK_SUBFEATURE_EXIT",
+      "identifier": "OC_TRACK_SUBFEATURE_EXIT",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "track cell exits. keyword to indicate that particle tracking output is to be written when a particle exits a sub-grid-scale feature. Such features are considered implementation details of the tracking algorithm employed for particular grid types, and reporting for exit events from such features is disabled by default.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TRACK_TIMESTEP",
+      "identifier": "OC_TRACK_TIMESTEP",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "track timestep ends. keyword to indicate that particle tracking output is to be written at the end of each time step",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TRACK_TERMINATE",
+      "identifier": "OC_TRACK_TERMINATE",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "track termination. keyword to indicate that particle tracking output is to be written when a particle terminates for any reason",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TRACK_WEAKSINK",
+      "identifier": "OC_TRACK_WEAKSINK",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "track weaksink exits. keyword to indicate that particle tracking output is to be written when a particle exits a weak sink (a cell which removes some but not all inflow from adjacent cells)",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TRACK_USERTIME",
+      "identifier": "OC_TRACK_USERTIME",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "track user-specified times. keyword to indicate that particle tracking output is to be written at user-specified times, provided as double precision values in the TRACKTIMES block.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TRACK_DROPPED",
+      "identifier": "OC_TRACK_DROPPED",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "track drops to water table. keyword to indicate that particle tracking output is to be written when a particle is dropped to the water table via DRY\\_TRACKING\\_METHOD DROP.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "DEV_DUMP_EVENT_TRACE",
+      "identifier": "OC_DEV_DUMP_EVENT_TRACE",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "print particle tracking events. print a verbose particle tracking event trace to standard output",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "NTRACKTIMES",
+      "identifier": "OC_NTRACKTIMES",
+      "type": "INTEGER",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "number of particle tracking times. is the number of user-specified particle tracking times in the TRACKTIMES block.",
+      "rubrique": [
+        "DIMENSIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TRACKTIMES",
+      "identifier": "OC_TRACKTIMES",
+      "type": "STRUCT",
+      "shape": "(ntracktimes)",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "TRACKTIMES"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "SAVERECORD",
+      "identifier": "OC_SAVERECORD",
+      "type": "STRUCT",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "PERIOD"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRINTRECORD",
+      "identifier": "OC_PRINTRECORD",
+      "type": "STRUCT",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "PERIOD"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "BOUNDNAMES",
+      "identifier": "PRP_BOUNDNAMES",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "keyword to indicate that boundary names may be provided with the list of particle release points.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRINT_INPUT",
+      "identifier": "PRP_PRINT_INPUT",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "print input to listing file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "DEV_EXIT_SOLVE_METHOD",
+      "identifier": "PRP_DEV_EXIT_SOLVE_METHOD",
+      "type": "INTEGER",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "exit solve method. the method for iterative solution of particle exit location and time in the generalized Pollock's method.  0 default, 1 Brent, 2 Chandrupatla.  The default is Brent's method.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "EXIT_SOLVE_TOLERANCE",
+      "identifier": "PRP_EXIT_SOLVE_TOLERANCE",
+      "type": "REAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "exit solve tolerance. the convergence tolerance for iterative solution of particle exit location and time in the generalized Pollock's method.  The variable being solved for varies from 0 to 1.  A tolerance of 0.00001 works well for many problems, but the value that strikes the best balance between accuracy and runtime is problem-dependent.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1e-05
+    },
+    {
+      "keyword": "LOCAL_Z",
+      "identifier": "PRP_LOCAL_Z",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "whether to use local z coordinates. indicates that ``zrpt'' defines the local z coordinate of the release point within the cell, with value of 0 at the bottom and 1 at the effective top of the cell. If the cell is convertible and partially saturated at release time, the effective top of the cell is considered to be the water table elevation (the head in the cell) rather than the top defined by the user, and is constrained to be no higher than the geometric top of the cell and no lower than the cell bottom. If the cell is confined, the effective top is the geometric top.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "EXTEND_TRACKING",
+      "identifier": "PRP_EXTEND_TRACKING",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "whether to extend tracking beyond the end of the simulation. indicates that particles should be tracked beyond the end of the simulation's final time step (using that time step's flows) until particles terminate or reach a specified stop time.  By default, particles are terminated at the end of the simulation's final time step.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TRACK_FILERECORD",
+      "identifier": "PRP_TRACK_FILERECORD",
+      "type": "STRUCT",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TRACKCSV_FILERECORD",
+      "identifier": "PRP_TRACKCSV_FILERECORD",
+      "type": "STRUCT",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "STOPTIME",
+      "identifier": "PRP_STOPTIME",
+      "type": "REAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "stop time. real value defining the maximum simulation time to which particles in the package can be tracked.  Particles that have not terminated earlier due to another termination condition will terminate when simulation time STOPTIME is reached.  If the last stress period in the simulation consists of more than one time step, particles will not be tracked past the ending time of the last stress period, regardless of STOPTIME.  If the EXTEND\\_TRACKING option is enabled and the last stress period in the simulation is steady-state, the simulation ending time will not limit the time to which particles can be tracked, but STOPTIME and STOPTRAVELTIME will continue to apply.  If STOPTIME and STOPTRAVELTIME are both provided, particles will be stopped if either is reached.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "STOPTRAVELTIME",
+      "identifier": "PRP_STOPTRAVELTIME",
+      "type": "REAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "stop travel time. real value defining the maximum travel time over which particles in the model can be tracked.  Particles that have not terminated earlier due to another termination condition will terminate when their travel time reaches STOPTRAVELTIME.  If the last stress period in the simulation consists of more than one time step, particles will not be tracked past the ending time of the last stress period, regardless of STOPTRAVELTIME.  If the EXTEND\\_TRACKING option is enabled and the last stress period in the simulation is steady-state, the simulation ending time will not limit the time to which particles can be tracked, but STOPTIME and STOPTRAVELTIME will continue to apply.  If STOPTIME and STOPTRAVELTIME are both provided, particles will be stopped if either is reached.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "STOP_AT_WEAK_SINK",
+      "identifier": "PRP_STOP_AT_WEAK_SINK",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "stop at weak sink. is a text keyword to indicate that a particle is to terminate when it enters a cell that is a weak sink.  By default, particles are allowed to pass though cells that are weak sinks.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "ISTOPZONE",
+      "identifier": "PRP_ISTOPZONE",
+      "type": "INTEGER",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "stop zone number. integer value defining the stop zone number.  If cells have been assigned IZONE values in the GRIDDATA block, a particle terminates if it enters a cell whose IZONE value matches ISTOPZONE.  An ISTOPZONE value of zero indicates that there is no stop zone.  The default value is zero.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "DRAPE",
+      "identifier": "PRP_DRAPE",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "drape. is a text keyword to indicate that if a particle's release point is in a cell that happens to be inactive at release time, the particle is to be moved to the topmost active cell below it, if any. By default, a particle is not released into the simulation if its release point's cell is inactive at release time. Note that DRAPE does not apply to attempted release into a cell for which IDOMAIN <= 0, which is considered not to exist in the simulation. Attempted release into a such a cell results in an error.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "DRY_TRACKING_METHOD",
+      "identifier": "PRP_DRY_TRACKING_METHOD",
+      "type": "STRING",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "what to do in dry-but-active cells. is a string indicating how particles should behave in dry-but-active cells (as can occur with the Newton formulation).  The value can be ``DROP'', ``STOP'', or ``STAY''.  The default is ``DROP'', which passes particles vertically and instantaneously to the water table. ``STOP'' causes particles to terminate. ``STAY'' causes particles to remain stationary but active.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "choices": [
+        "drop",
+        "stop",
+        "stay"
+      ]
+    },
+    {
+      "keyword": "DEV_FORCETERNARY",
+      "identifier": "PRP_DEV_FORCETERNARY",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "force ternary tracking method. force use of the ternary tracking method regardless of cell type in DISV grids.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "RELEASE_TIME_TOLERANCE",
+      "identifier": "PRP_RELEASE_TIME_TOLERANCE",
+      "type": "REAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "release time coincidence tolerance. real number indicating the tolerance within which to consider consecutive release times coincident. Coincident release times will be merged into a single release time. The default is $\\epsilon \\times 10^{11}$, where $\\epsilon$ is machine precision.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "RELEASE_TIME_FREQUENCY",
+      "identifier": "PRP_RELEASE_TIME_FREQUENCY",
+      "type": "REAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "release time frequency. real number indicating the time frequency at which to release particles. This option can be used to schedule releases at a regular interval for the duration of the simulation, starting at the simulation start time. The release schedule is the union of this option, the RELEASETIMES block, and PERIOD block RELEASESETTING selections. If none of these are provided, a single release time is configured at the beginning of the first time step of the simulation's first stress period.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "COORDINATE_CHECK_METHOD",
+      "identifier": "PRP_COORDINATE_CHECK_METHOD",
+      "type": "STRING",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "coordinate checking method. approach for verifying that release point coordinates are in the cell with the specified ID. Possible values are NONE and EAGER. By default, release point coordinates are checked at release time, i.e. EAGER.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": "eager",
+      "choices": [
+        "none",
+        "eager"
+      ]
+    },
+    {
+      "keyword": "DEV_CYCLE_DETECTION_WINDOW",
+      "identifier": "PRP_DEV_CYCLE_DETECTION_WINDOW",
+      "type": "INTEGER",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "cycle detection window size. integer value defining the size of the window (number of consecutive exit events) used for cycle detection. Defaults to 0, disabling cycle detection. With detection enabled, particle pathlines with duplicate cell exit events (i.e., exiting the same cell through the same face twice) will cause the program to terminate with an error. A larger window size provides more robust cycle detection at the cost of more runtime operations per cell exit.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "NRELEASEPTS",
+      "identifier": "PRP_NRELEASEPTS",
+      "type": "INTEGER",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "number of particle release points. is the number of particle release points.",
+      "rubrique": [
+        "DIMENSIONS"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "NRELEASETIMES",
+      "identifier": "PRP_NRELEASETIMES",
+      "type": "INTEGER",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "number of particle release times. is the number of particle release times specified in the RELEASETIMES block. This is not necessarily the total number of release times; release times are the union of RELEASE\\_TIME\\_FREQUENCY, RELEASETIMES block, and PERIOD block RELEASESETTING selections.",
+      "rubrique": [
+        "DIMENSIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PACKAGEDATA",
+      "identifier": "PRP_PACKAGEDATA",
+      "type": "STRUCT",
+      "shape": "(nreleasepts)",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "PACKAGEDATA"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "RELEASETIMES",
+      "identifier": "PRP_RELEASETIMES",
+      "type": "STRUCT",
+      "shape": "(nreleasetimes)",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "RELEASETIMES"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PERIODDATA",
+      "identifier": "PRP_PERIODDATA",
+      "type": "STRUCT",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "PERIOD"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "TIME_UNITS",
+      "identifier": "TDIS_TIME_UNITS",
+      "type": "STRING",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "time unit. is the time units of the simulation.  This is a text string that is used as a label within model output files.  Values for time\\_units may be ``unknown'',  ``seconds'', ``minutes'', ``hours'', ``days'', or ``years''.  The default time unit is ``unknown''.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "START_DATE_TIME",
+      "identifier": "TDIS_START_DATE_TIME",
+      "type": "STRING",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "starting date and time. is the starting date and time of the simulation.  This is a text string that is used as a label within the simulation list file.  The value has no effect on the simulation.  The recommended format for the starting date and time is described at https://www.w3.org/TR/NOTE-datetime.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "ATS_FILERECORD",
+      "identifier": "TDIS_ATS_FILERECORD",
+      "type": "STRUCT",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "NPER",
+      "identifier": "TDIS_NPER",
+      "type": "INTEGER",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "number of stress periods. is the number of stress periods for the simulation.",
+      "rubrique": [
+        "DIMENSIONS"
+      ],
+      "is_file": false,
+      "mandatory": true
+    },
+    {
+      "keyword": "PERIODDATA",
+      "identifier": "TDIS_PERIODDATA",
+      "type": "STRUCT",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "stress period time information",
+      "rubrique": [
+        "PERIODDATA"
+      ],
+      "is_file": false,
+      "mandatory": true
+    }
+  ]
+}

@@ -22,10 +22,10 @@ rest and make up the sixth slice.
 | `model/` | the SysML model conformance check | 1 | 23 |
 | `plugin/` | the QGIS dock: the client, the Qt bridge, the cards, the render seams; the Qt-wiring subset runs in a subprocess harness | 39 | 403 |
 | `runtime/` | the template runtime, its engine-neutral slots and dictionary marks, the run journal, the optional need | 19 | 241 |
-| `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 12 | 177 |
+| `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 12 | 178 |
 | `search/` | dataset and tool retrieval, the OGC adapter, the keyword dictionary read | 13 | 225 |
 | `server/` | the HTTP and WS routes, the fetch short-circuit and the Case AOI, persistence | 29 | 261 |
-| `solver/` | the executor, the run reads, the engine-room posture, the MODFLOW engine, its authoring and staged check, the GeoClaw engine, its module wrapper, its .data authoring, its grid recipe, its topofiles, its Fault dtopo and its fgmax, fgout and gauge outputs, the plume template, its body wrappers, the SFR keywords and Streams composite, the LAK keywords and Lakes composite, the MAW keywords and MultiAquiferWells composite, and the UZF keywords and UnsaturatedZone composite, and their period settings, the WaterMover and Diversions composites with the cross-section and lake tables, the Interbeds and TimeSeries composites with the boundary givers and the compaction reads, the Observations composite with the OBS files and charts, and the GeoClaw template's pieces (the SIFT row, the SiftFault, FiniteFault (static or kinematic, with the event-id fetch), FixedGrids and InitialSurface composites, the staged case, and the model exchanges: the LocalGridRefinement child, its exchange and transport, WaterMover across models and the sheet-stated DISU) | 39 | 947 |
+| `solver/` | the executor, the run reads, the engine-room posture, the MODFLOW engine, its authoring and staged check, the GeoClaw engine, its module wrapper, its .data authoring, its grid recipe, its topofiles, its Fault dtopo and its fgmax, fgout and gauge outputs, the plume template, its body wrappers, the SFR keywords and Streams composite, the LAK keywords and Lakes composite, the MAW keywords and MultiAquiferWells composite, and the UZF keywords and UnsaturatedZone composite, and their period settings, the WaterMover and Diversions composites with the cross-section and lake tables, the Interbeds and TimeSeries composites with the boundary givers and the compaction reads, the Observations composite with the OBS files and charts, and the GeoClaw template's pieces (the SIFT row, the SiftFault, FiniteFault (static or kinematic, with the event-id fetch), FixedGrids and InitialSurface composites, the staged case, the model exchanges: the LocalGridRefinement child, its exchange and transport, WaterMover across models and the sheet-stated DISU, and particle tracking: the ParticleTracking body, the Release composite and the pathline reads) | 40 | 997 |
 | `telemac/` | the TELEMAC templates, the module surface, what each module writes and the primitives that read it, the listing reads, authoring | 61 | 1001 |
 | `tools/` | the registry, the arg normalizer, the tool cache | 10 | 343 |
 
@@ -46,8 +46,8 @@ Six slices by subsystem, each its own foreground invocation, from the repo root:
 
     make test-fetchers        # tests/fetchers                                                                              2263
     make test-spatial         # tests/derive tests/render tests/mesh                                         762
-    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                      2416
-    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts       1133
+    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                      2466
+    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts       1134
     make test-model-surface   # tests/adapters tests/tools                                                                   616
     make test-packages        # tests/contracts tests/plugin                                                                  754
 

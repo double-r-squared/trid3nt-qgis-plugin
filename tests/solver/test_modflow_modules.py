@@ -12,7 +12,7 @@ import json
 
 import pytest
 
-from trid3nt_server.workflows.modflow.modules import GWF, GWE, GWT, wrapper_for
+from trid3nt_server.workflows.modflow.modules import GWF, GWE, GWT, PRT, wrapper_for
 from trid3nt_server.workflows.modflow.modules.module import module_input_dir
 from trid3nt_server.workflows.runtime.module import (
     UNSET, SlotRefused, load_module_input,
@@ -25,10 +25,10 @@ def _dictionary(module: str):
 
 def test_every_exposed_body_carries_a_committed_dictionary():
     exposed = {path.stem for path in module_input_dir().glob("*.json")}
-    assert exposed == {"gwf", "gwt", "gwe"}
+    assert exposed == {"gwf", "gwt", "gwe", "prt"}
     assert {body.MODULE: len(body.MODULE_INPUT)
-            for body in (GWF, GWT, GWE)} == {
-                "gwf": 511, "gwt": 262, "gwe": 233}
+            for body in (GWF, GWT, GWE, PRT)} == {
+                "gwf": 511, "gwt": 262, "gwe": 233, "prt": 93}
 
 
 def test_every_body_carries_the_simulation_s_tdis_and_ims():
@@ -117,19 +117,21 @@ def test_the_wrapper_registry_answers_an_exposed_body_and_refuses_another():
     assert wrapper_for("gwf") is GWF
     assert wrapper_for("gwt") is GWT
     assert wrapper_for("gwe") is GWE
+    assert wrapper_for("prt") is PRT
     with pytest.raises(SlotRefused) as caught:
-        wrapper_for("prt")
-    assert "prt" in str(caught.value)
+        wrapper_for("chf")
+    assert "chf" in str(caught.value)
 
 
 def test_every_body_rows_what_a_solved_run_writes():
     assert set(GWF.MODULE_OUTPUT) == {"HEAD", "SATURATION", "SPECIFIC_DISCHARGE", "COMPACTION", "SUBSIDENCE"}
     assert set(GWT.MODULE_OUTPUT) == {"CONCENTRATION"}
     assert set(GWE.MODULE_OUTPUT) == {"TEMPERATURE"}
+    assert set(PRT.MODULE_OUTPUT) == {"PATHLINES", "ENDPOINTS", "TRAVEL_TIME"}
 
 
 def test_the_committed_rows_are_the_extractors_shape():
-    for body in ("gwf", "gwt", "gwe"):
+    for body in ("gwf", "gwt", "gwe", "prt"):
         document = json.loads(
             (module_input_dir() / f"{body}.json").read_text())
         assert document["module"] == body
