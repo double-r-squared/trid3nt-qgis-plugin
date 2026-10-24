@@ -10,6 +10,7 @@ subfaults' surface projection must stand on water.
 from __future__ import annotations
 
 import logging
+import math
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -17,7 +18,7 @@ from ..errors import GeoclawError
 
 logger = logging.getLogger("trid3nt_server.workflows.geoclaw.authoring.dtopo")
 
-__all__ = ["DTOPO", "KINEMATIC_FIELDS", "SUBFAULT_FIELDS", "dtopo_axes", "finite_fault_subfaults", "sift_subfaults", "write_dtopofiles"]
+__all__ = ["DTOPO", "KINEMATIC_FIELDS", "PLACEMENTS", "SUBFAULT_FIELDS", "dtopo_axes", "finite_fault_subfaults", "moment_tensor_subfaults", "sift_subfaults", "write_dtopofiles"]
 
 #: The key a composite's file entry carries its fault under.
 DTOPO = "dtopo"
@@ -70,6 +71,59 @@ def finite_fault_subfaults(record: Mapping[str, Any], kinematic: bool = False) -
                     if kinematic else {})} for row in rows]
     except (KeyError, TypeError) as exc:
         _refuse("FINITE_FAULT_UNSTATED", f"a finite-fault subfault states no usable {exc}.")
+
+
+#: Where a moment-tensor rupture sits: the solution's published centroid, or on the Slab2 interface at that centroid.
+PLACEMENTS = ("centroid", "slab")
+
+
+def moment_tensor_subfaults(record: Mapping[str, Any], *, solution: str, plane: int, relation: str, placement: str,
+                            slab: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
+    """The record ``fetch_moment_tensor`` returns -> the one subfault its named solution, plane and scaling relation make.
+
+    Length and width come from ``relation`` at the solution's Mw (Clawpack's definition of the scalar moment), the slip
+    is M0 / (mu L W) with Clawpack's own SubFault rigidity, and strike, dip and rake are the stated plane's. ``placement``
+    'slab' takes the depth from the ``slab`` record at the published centroid instead of the tensor's."""
+    from clawpack.geoclaw import dtopotools
+
+    from ..helpers.scaling import rupture_dimensions, slip_for_moment
+
+    held = record.get("solutions") if isinstance(record, Mapping) else None
+    if not isinstance(held, (list, tuple)) or not held:
+        _refuse("MOMENT_TENSOR_UNSTATED", "the moment-tensor record holds no solution.")
+    chosen = [s for s in held if s.get("code") == solution]
+    if not chosen:
+        _refuse("MOMENT_TENSOR_SOLUTION", f"solution {solution!r} is none the event holds: {', '.join(str(s.get('code')) for s in held)}.")
+    sol = chosen[0]
+    if plane not in (1, 2):
+        _refuse("MOMENT_TENSOR_PLANE", f"plane {plane!r} is neither 1 nor 2: the tensor publishes both nodal planes and does not say which ruptured.")
+    if placement not in PLACEMENTS:
+        _refuse("MOMENT_TENSOR_PLACEMENT", f"placement {placement!r} is none of {' or '.join(PLACEMENTS)}.")
+    centroid = sol.get("centroid")
+    if not centroid:
+        _refuse("MOMENT_TENSOR_CENTROID", f"solution {solution!r} publishes no centroid, and the hypocentre is not a stand-in for it.")
+    moment, nodal = float(sol["scalar_moment_nm"]), sol["planes"][plane - 1]
+    mw = float(dtopotools.Mw(moment))
+    length, width = rupture_dimensions(relation, mw)
+    depth_km = float(centroid["depth_km"])
+    if placement == "slab":
+        from trid3nt_server.tools.fetchers import _slab2_grids as slab2
+
+        if not isinstance(slab, Mapping):
+            _refuse("MOMENT_TENSOR_PLACEMENT", "placement 'slab' reads the interface from the record fetch_slab_geometry returns: state slab.")
+        try:
+            depth_km = float(slab2.sample(slab2.blocks_from_record(slab), centroid["longitude"], centroid["latitude"])["depth_km"])
+        except slab2.SlabError as exc:
+            _refuse("MOMENT_TENSOR_SLAB", f"the published centroid is not on the slab record: {exc}")
+    top_km = depth_km - width / 2000.0 * math.sin(math.radians(nodal["dip"]))
+    if top_km <= 0.0:
+        _refuse("MOMENT_TENSOR_SURFACE", f"the {width / 1000:.1f} km wide rupture centred at {depth_km:.1f} km on a {nodal['dip']:g} degree plane "
+                f"reaches {top_km:.1f} km, above the surface an Okada subfault takes.")
+    mu = float(dtopotools.SubFault().mu)
+    return [{"longitude": centroid["longitude"], "latitude": centroid["latitude"], "depth": depth_km * 1000.0,
+             "strike": nodal["strike"], "dip": nodal["dip"], "rake": nodal["rake"],
+             "slip": slip_for_moment(moment, mu, length, width), "length": length, "width": width,
+             "coordinate_specification": "centroid"}]
 
 
 def dtopo_axes(subfaults: list[Mapping[str, Any]], spacing: float, buffer: float

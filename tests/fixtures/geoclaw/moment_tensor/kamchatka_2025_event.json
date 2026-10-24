@@ -1,0 +1,82 @@
+{
+ "properties": {
+  "products": {
+   "moment-tensor": [
+    {
+     "indexid": 27144939,
+     "indexTime": 1760216515543,
+     "id": "urn:usgs-product:us:moment-tensor:us_6000qw60_mww:1760216255040",
+     "type": "moment-tensor",
+     "code": "us_6000qw60_mww",
+     "source": "us",
+     "updateTime": 1760216255040,
+     "status": "UPDATE",
+     "properties": {
+      "beachball-source": "us",
+      "depth": "20.9",
+      "derived-depth": "21.5",
+      "derived-eventtime": "2025-07-29T23:26:52.900Z",
+      "derived-latitude": "52.2496",
+      "derived-longitude": "159.5904",
+      "derived-magnitude": "8.8",
+      "derived-magnitude-type": "Mww",
+      "evaluation-status": "reviewed",
+      "eventParametersPublicID": "quakeml:us.anss.org/eventparameters/6000qw60/1760216268",
+      "eventsource": "us",
+      "eventsourcecode": "6000qw60",
+      "eventtime": "2025-07-29T23:24:50.900Z",
+      "latitude": "52.5496",
+      "longitude": "160.0838",
+      "n-axis-azimuth": "236",
+      "n-axis-length": "-1.8571E+21",
+      "n-axis-plunge": "11",
+      "nodal-plane-1-dip": "18.06",
+      "nodal-plane-1-rake": "51.4",
+      "nodal-plane-1-strike": "198.47",
+      "nodal-plane-2-dip": "75.98",
+      "nodal-plane-2-rake": "101.5",
+      "nodal-plane-2-strike": "58.49",
+      "p-axis-azimuth": "139",
+      "p-axis-length": "-2.12222E+22",
+      "p-axis-plunge": "30",
+      "pdl-client-version": "Version 2.9.1 2023-05-15",
+      "percent-double-couple": "0.8391",
+      "quakeml-publicid": "quakeml:us.anss.org/focalmechanism/6000qw60/mww",
+      "review-status": "reviewed",
+      "scalar-moment": "2.22E+22",
+      "sourcetime-decaytime": "112",
+      "sourcetime-duration": "225",
+      "sourcetime-risetime": "113",
+      "sourcetime-type": "triangle",
+      "t-axis-azimuth": "344",
+      "t-axis-length": "2.30793E+22",
+      "t-axis-plunge": "58",
+      "tensor-mpp": "-7.505E+21",
+      "tensor-mrp": "8.664E+21",
+      "tensor-mrr": "1.103E+22",
+      "tensor-mrt": "1.719E+22",
+      "tensor-mtp": "-5.242E+21",
+      "tensor-mtt": "-3.524E+21"
+     },
+     "preferredWeight": 218,
+     "contents": {
+      "contents.xml": {
+       "contentType": "application/xml",
+       "lastModified": 1760216512000,
+       "length": 195,
+       "url": "https://earthquake.usgs.gov/product/moment-tensor/us_6000qw60_mww/us/1760216255040/contents.xml",
+       "sha256": "ABhLiaqdYWmIak24eD/csBAWouBShhatD9bUzLNEZFk="
+      },
+      "quakeml.xml": {
+       "contentType": "application/xml",
+       "lastModified": 1760216255000,
+       "length": 72297,
+       "url": "https://earthquake.usgs.gov/product/moment-tensor/us_6000qw60_mww/us/1760216255040/quakeml.xml",
+       "sha256": "oS5FyhUBL6PbOBfSHqqBHNbc2aFIPXgh/mWelovUhPk="
+      }
+     }
+    }
+   ]
+  }
+ }
+}

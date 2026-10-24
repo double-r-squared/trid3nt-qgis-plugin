@@ -6,7 +6,7 @@ from types import MappingProxyType
 from typing import Mapping
 
 from ...runtime.module import Output
-from .module import GeoclawModule, fault, finite_fault, fixed_grids, initial_surface, sift_fault, slab_fault, topography
+from .module import GeoclawModule, fault, finite_fault, fixed_grids, initial_surface, moment_tensor_fault, sift_fault, slab_fault, topography
 from .outputs import PRIMITIVES
 
 __all__ = ["GEO", "MODULE_OUTPUT"]
@@ -35,9 +35,9 @@ MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
 
 GEO = GeoclawModule("geoclaw")
 GEO.composites(reads={"Topography": ("surface", "offset"), "SiftFault": ("unit_sources",),
-                      "FiniteFault": ("finite_fault",), "SlabFault": ("slab",),
+                      "FiniteFault": ("finite_fault",), "SlabFault": ("slab",), "MomentTensorFault": ("moment_tensor", "slab"),
                       "FixedGrids": ("extent",), "InitialSurface": ("surface",)},
-               Topography=topography, Fault=fault, SiftFault=sift_fault, FiniteFault=finite_fault, SlabFault=slab_fault, FixedGrids=fixed_grids,
+               Topography=topography, Fault=fault, SiftFault=sift_fault, FiniteFault=finite_fault, SlabFault=slab_fault, MomentTensorFault=moment_tensor_fault, FixedGrids=fixed_grids,
                InitialSurface=initial_surface)
 GEO.MODULE_OUTPUT = MODULE_OUTPUT
 GEO.reads(**PRIMITIVES)

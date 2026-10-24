@@ -172,6 +172,8 @@ _RECALL_FIXTURE = [
     ("get the NOAA SIFT unit sources for a tsunami earthquake scenario", "fetch_sift_unit_sources"),
     ("the USGS slip model of the 2011 Tohoku earthquake by event id", "fetch_finite_fault"),
     ("how much did each patch of the fault slip in the Kamchatka 2025 earthquake", "fetch_finite_fault"),
+    ("USGS moment tensor nodal planes and scalar moment of the 2025 Kamchatka earthquake", "fetch_moment_tensor"),
+    ("strike dip rake and centroid depth of a real earthquake by event id", "fetch_moment_tensor"),
     ("what are the depth, strike and dip of the Cascadia subduction interface", "fetch_slab_geometry"),
     ("how deep is the subduction slab under this point for a hypothetical megathrust earthquake", "fetch_slab_geometry"),
     ("compute the slope from the DEM on the map", "run_qgis_algorithm"),

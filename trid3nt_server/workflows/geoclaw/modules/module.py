@@ -23,7 +23,7 @@ from ...runtime.sheet import Sheet
 from ..errors import GeoclawError
 
 __all__ = ["GeoclawModule", "fault", "finite_fault", "fixed_grids", "initial_surface", "module_input_dir", "rupture_end", "sift_fault",
-           "slab_fault", "topography"]
+           "moment_tensor_fault", "slab_fault", "topography"]
 
 #: What one Topography statement may carry: the surface, and the offset onto the run's frame.
 _SURFACE = ("surface", "offset")
@@ -334,10 +334,47 @@ def slab_fault(value: Any, *, run: Mapping[str, Any]
     return fault({"subfaults": subfaults, "x": x, "y": y, "times": value["times"]}, run=run)
 
 
+#: What one MomentTensorFault statement carries: the moment-tensor record read, the solution (by code), nodal plane and scaling relation named, where the rupture sits, and the dtopo grid's spacing, margin and instants.
+_TENSOR = ("moment_tensor", "solution", "plane", "relation", "placement", "spacing", "buffer", "times")
+
+
+def moment_tensor_fault(value: Any, *, run: Mapping[str, Any]
+                        ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    """A magnitude-only source as a rupture through a named published scaling relation: MomentTensorFault({moment_tensor, solution, plane, relation, placement, [slab], spacing, buffer, times}).
+
+    ``moment_tensor`` is the record ``fetch_moment_tensor`` returns; ``solution`` names one of its products by code,
+    ``plane`` (1 or 2) the nodal plane that ruptured and ``relation`` the published regression (see
+    ``helpers/scaling.py``) that sizes it from the solution's Mw; none is picked. The rupture is one rectangle at the
+    published centroid (``placement`` 'centroid') or at the depth the ``slab`` record (``fetch_slab_geometry``) reads
+    at that centroid ('slab'), slipped uniformly M0 / (mu L W) with Clawpack's rigidity. A magnitude outside the
+    relation's fitted range refuses. Static; ``spacing``, ``buffer`` and ``times`` are as SiftFault's."""
+    if not isinstance(value, Mapping):
+        _refuse("MOMENT_TENSOR_UNSTATED", f"MomentTensorFault takes a mapping {{{', '.join(_TENSOR)}}} and optionally slab.")
+    extra = sorted(set(value) - set(_TENSOR) - {"slab"})
+    if extra:
+        _refuse("MOMENT_TENSOR_UNSTATED", f"MomentTensorFault states {', '.join(extra)}; it takes {', '.join(_TENSOR)} and slab.")
+    absent = [key for key in _TENSOR if value.get(key) is None]
+    if absent:
+        _refuse("MOMENT_TENSOR_UNSTATED", f"MomentTensorFault states no {', '.join(absent)}: the solution, plane, relation, "
+                "placement and dtopo grid are all stated, the engine has no value for them.")
+    if run.get("DTOPO_DTOPOFILES") is not None:
+        _refuse("MOMENT_TENSOR_RUPTURE_STATED", "DTOPO_DTOPOFILES is already stated (by Fault, SiftFault, FiniteFault, SlabFault or the "
+                "keyword): MomentTensorFault is the run's one rupture, so state only one of them.")
+    for key in ("spacing", "buffer"):
+        if isinstance(value[key], bool) or not isinstance(value[key], (int, float)) or not math.isfinite(value[key]) or value[key] <= 0:
+            _refuse("MOMENT_TENSOR_UNSTATED", f"MomentTensorFault {key} {value[key]!r} is no positive number of degrees.")
+    from ..authoring.dtopo import dtopo_axes, moment_tensor_subfaults
+
+    subfaults = moment_tensor_subfaults(value["moment_tensor"], solution=value["solution"], plane=value["plane"],
+                                        relation=value["relation"], placement=value["placement"], slab=value.get("slab"))
+    x, y = dtopo_axes(subfaults, float(value["spacing"]), float(value["buffer"]))
+    return fault({"subfaults": subfaults, "x": x, "y": y, "times": value["times"]}, run=run)
+
+
 def rupture_end(name: str, value: Any, run: Mapping[str, Any]) -> float | None:
     """The second a stated rupture ends -> its last dtopo instant, or the largest rupture_time + rise_time of a kinematic one.
 
-    ``name`` is the composite (Fault, SiftFault, FiniteFault or SlabFault) and ``value`` its statement; a statement that
+    ``name`` is the composite (Fault, SiftFault, FiniteFault, SlabFault or MomentTensorFault) and ``value`` its statement; a statement that
     states no rupture, or not yet a usable one, gives None and the composite refuses it when it runs."""
     if not isinstance(value, Mapping) or (name == "SiftFault" and not value.get("slips")):
         return None

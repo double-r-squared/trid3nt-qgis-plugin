@@ -1,0 +1,6 @@
+fetch_moment_tensor:
+- USGS moment tensor of the 2025 Kamchatka earthquake nodal planes and scalar moment
+- strike dip rake focal mechanism and centroid depth of a real earthquake by event id
+- GCMT or W-phase moment tensor solutions for the Maule 2010 earthquake
+- seismic moment and nodal planes to build a tsunami source when no slip model exists
+- GCMT W-phase or regional centroid moment tensor beach ball of an earthquake

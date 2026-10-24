@@ -1,0 +1,95 @@
+# USGS ComCat moment-tensor products: every published solution of one earthquake (W-phase,
+# GCMT, regional) with both nodal planes, the scalar moment and the centroid. The products
+# ride in the event record, so one request reads them all.
+schema_version: v1
+
+name: fetch_moment_tensor
+source_class: moment_tensor
+error_prefix: MOMENT_TENSOR
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: NO_PRODUCT
+shape: record
+supports_global_query: false
+
+endpoints:
+  event:
+    url: "https://earthquake.usgs.gov/fdsnws/event/1/query"
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+params:
+  event_id:
+    type: str
+    required: true
+
+hooks:
+  build_request: moment_tensor.build_request
+  record: moment_tensor.record
+
+normalize:
+  crs: "EPSG:4326"
+  units: m
+
+output:
+  layer_type: record
+  ext: json
+  emit_bbox: false
+
+cache:
+  ttl_class: static-30d
+
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 0.001
+  floor_mb: 0.001
+  ceil_mb: 0.01
+
+caveats:
+  - "model-callable, not matched: a moment tensor is one event's published solution and never a measurement a slot matches, so it carries no coverage row"
+  - "every moment-tensor product of the event is returned and none is preferred: solutions differ in centroid, plane angles and moment (a W-phase product can publish a moment an order above its siblings, carried as published), so the caller names the one it uses by code"
+  - "the two nodal planes are both published and the tensor does not say which one ruptured"
+  - "the centroid is the product's own derived origin (its centroid-type origin), never the hypocentre; a product that publishes none carries a null centroid"
+  - "scalar_moment_nm is the product's scalar-moment in newton metres as published, unscaled"
+
+docstring: |-
+  USGS moment tensor of one real earthquake by ComCat event id -> every published solution with its two nodal planes, scalar moment and centroid.
+
+  What it does:
+      Reads the event's moment-tensor products from ComCat. Each solution carries its
+      product code and source (W-phase, GCMT, ...), the two nodal planes (strike, dip,
+      rake), the scalar moment in N m, the centroid (longitude, latitude, depth) and the
+      source-time duration where stated. A tensor alone is a point source: a rupture of
+      finite size needs a stated scaling relation, plane and placement.
+
+  When to use:
+      - The mechanism, scalar moment or centroid depth of a real earthquake ("strike, dip and rake of
+        the 2025 Kamchatka earthquake", "GCMT solution for Maule").
+      - A tsunami source for an event USGS published a tensor for and no slip model: ComCat id such
+        as ``us6000qw60``.
+
+  When NOT to use:
+      - The slip distribution of an event: use fetch_finite_fault.
+      - A scenario with no event behind it: state the subfaults or use the SIFT unit sources.
+
+  Parameters:
+      event_id: the ComCat event id, such as ``us6000qw60``.
+
+  Returns:
+      a JSON-compatible dict with ``event_id`` and ``solutions``, each with ``code``,
+      ``source``, ``magnitude``, ``magnitude_type``, ``scalar_moment_nm``, ``centroid``
+      (``longitude``, ``latitude``, ``depth_km``, or null), ``planes`` (two of ``strike``,
+      ``dip``, ``rake``), ``duration_s`` and ``updated_ms``.
+
+  Cross-tool dependencies:
+      - Composes WITH: the GeoClaw ``MomentTensorFault`` composite.
+      - Upstream data source: USGS ComCat moment-tensor products (https://earthquake.usgs.gov/).
+
+  Cache: ``ttl_class="static-30d"``.
+
+  Errors:
+      - ``MOMENT_TENSOR_INPUT_INVALID``: no event id.
+      - ``MOMENT_TENSOR_NO_PRODUCT``: the event holds no moment-tensor product.
+      - ``MOMENT_TENSOR_UPSTREAM_ERROR``: ComCat could not be read, or a product lacks a nodal plane or the scalar moment.
+
+  Tier-1 free. No API key.
