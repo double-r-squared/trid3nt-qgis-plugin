@@ -38,6 +38,7 @@ from trid3nt_server.workflows.runtime.workflow import EVENT_TIME
 from trid3nt_server.workflows.solver.staging import discard_run
 
 from .authoring import DISV_FILE, MFSIM_FILE
+from .authoring.observations import observation_files
 from .modules import COUPLED_BODIES, wrapper_for
 from .modules.outputs import Solved, filerecord, group_stem
 from .modules.ugrid import display_file
@@ -127,6 +128,9 @@ def _results(sheet: Sheet) -> list[str]:
                 value = row.value if isinstance(row, Filled) else row
                 if (name := filerecord(value)):
                     found.append(name)
+    found += [name for name, _label, _kind in observation_files(sheet.filled, sheet.module)]
+    for body in sheet.coupled:
+        found += [name for name, _label, _kind in observation_files(body.get("slots") or {}, str(body["module"]))]
     return found
 
 
@@ -222,6 +226,8 @@ def _table(solved: Callable[[str], Solved], run_module: str, coupled: Sequence[s
                            module=None if module == run_module else module)
                      .animate(style=row.style)
                      for layer in range(1, read.nlay + 1)]
+        rows += [Primitive("observations", variable=file, module=None if module == run_module else module).chart()
+                 for file, _label, _kind in read.observed()]
 
     def account(layers: Sequence[LayerURI], why: Mapping[Primitive, str]) -> None:
         from trid3nt_server.inputs.observation import sited
@@ -231,6 +237,9 @@ def _table(solved: Callable[[str], Solved], run_module: str, coupled: Sequence[s
         for primitive, reason in why.items():
             # A data input's site miss was said at the read, in the reader's own words.
             if sited(primitive.at):
+                continue
+            if primitive.kind == "observations":
+                journal_note(f"no chart carries the observations of {primitive.variable}: {reason}")
                 continue
             journal_note(f"no layer carries the {primitive.variable} of layer "
                          f"{primitive.plane}: {reason}")

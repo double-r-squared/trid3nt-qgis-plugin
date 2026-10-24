@@ -11,7 +11,7 @@ from ..authoring.stress import GIVERS
 from ..errors import ModflowError
 from .module import (_LAKE_FLUXES, _LAKE_NUMBERS, _LAKES, _MAW, _MAW_NUMBERS, _MAW_SKIN, _STREAM_NUMBERS, _STREAMS,
                      _UZF, _UZF_ET, _INTERBED, _INTERBED_DELAY, ModflowModule, _diversions, _interbeds, _lakes, _movers,
-                     _series, _start_date_time, _streams, _stress, _uzf, _wells, periods)
+                     _observations, _series, _start_date_time, _streams, _stress, _uzf, _wells, periods)
 from .outputs import PRIMITIVES
 
 __all__ = ["COUPLED_BODIES", "GWF", "MODULE_OUTPUT"]
@@ -270,6 +270,14 @@ def _coupled(module: str, name: str):
                 continue
             slots[str(key)] = wrapper.slot(key).check(item)
         for key, item in list(slots.items()):
+            if key == "OBS_CONTINUOUS" and (isinstance(item, list) or (isinstance(item, Mapping) and "type" in item)):
+                del slots[key]
+                slots.update(wrapper.COMPOSITES["Observations"].apply(item, run)[0])
+                continue
+            if key.endswith("_TS_FILERECORD") and isinstance(item, Mapping) and "series" not in item:
+                del slots[key]
+                slots.update(wrapper.COMPOSITES["TimeSeries"].apply({"package": key.split("_", 1)[0], **item}, run)[0])
+                continue
             if not key.endswith("_STRESS_PERIOD_DATA") or not isinstance(item, Mapping) \
                     or "stress" in item:
                 continue
@@ -309,6 +317,7 @@ GWF.composites(reads={"MultiAquiferWells": ("geometry", *(name for name in _MAW 
 GWF.composites(reads={"UnsaturatedZone": ("geometry", *_UZF, *_UZF_ET)}, UnsaturatedZone=_uzf)
 GWF.composites(reads={"Interbeds": ("geometry", *_INTERBED, *_INTERBED_DELAY)}, Interbeds=_interbeds)
 GWF.composites(reads={"TimeSeries": ("rows",)}, TimeSeries=_series)
+GWF.composites(reads={"Observations": ("at", "to_at")}, Observations=_observations)
 GWF.composites(reads={"Aquifer": (*_AQUIFER, "surfaces")}, Aquifer=_aquifer)
 # Which coupled body each coupling composite states, by module word: the one statement the registration and the run's bodies both read.
 COUPLED_BODIES = MappingProxyType({"Transport": "gwt", "Energy": "gwe"})

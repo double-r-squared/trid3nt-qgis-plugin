@@ -92,6 +92,8 @@ class Series(Read):
     lon: float | None = None
     lat: float | None = None
     lines: tuple[Line, ...] = ()
+    # What the main line is drawn under beside its ``lines``; unstated, the chart's own title.
+    label: str | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -508,7 +510,7 @@ def _chart(read: Series | Profile | Spectrum | Comparison, *, caption: str,
         x, at = [float(t) for t in read.times], read.at
         xfield, axis = "t_s", "Time (s)"
     values = [float(v) for v in read.values]
-    rows = [{xfield: a, "value": v, "series": title} for a, v in zip(x, values)]
+    rows = [{xfield: a, "value": v, "series": getattr(read, "label", None) or title} for a, v in zip(x, values)]
     for line in read.lines:
         rows += [{xfield: float(a), "value": float(v), "series": line.label}
                  for a, v in zip(line.x, line.values)]

@@ -25,8 +25,8 @@ MF6_REF = "6.7.0"
 #: The bodies this exposes. PRT rides with a later leg.
 BODIES: tuple[str, ...] = ("gwf", "gwt", "gwe")
 
-#: The simulation's own packages every body carries beside its model's.
-SHARED: tuple[str, ...] = ("sim-tdis", "sln-ims")
+#: The simulation's own packages and the observation utility every body carries beside its model's.
+SHARED: tuple[str, ...] = ("sim-tdis", "sln-ims", "utl-obs")
 
 #: The mf6 source this reads the definition files out of.
 _REPO = "https://github.com/MODFLOW-ORG/modflow6"
@@ -199,7 +199,7 @@ def _row(entry: dict[str, str], package: str, dimensions: frozenset[str] = froze
 
 
 def body_rows(body: str) -> list[dict[str, object]]:
-    """Every dictionary row of one body, its model's packages first and the shared TDIS and IMS after."""
+    """Every dictionary row of one body, its model's packages first and the shared TDIS, IMS and OBS after."""
     stems = [stem for stem in _dfn_names() if stem.startswith(f"{body}-")] \
         + list(SHARED)
     rows = []

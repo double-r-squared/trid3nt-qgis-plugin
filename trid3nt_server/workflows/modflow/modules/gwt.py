@@ -6,7 +6,7 @@ from types import MappingProxyType
 from typing import Mapping
 
 from ...runtime.module import MOMENT, Output
-from .module import ModflowModule, _start_date_time, _stress, periods
+from .module import ModflowModule, _observations, _series, _start_date_time, _stress, periods
 from .outputs import PRIMITIVES
 
 __all__ = ["GWT", "MODULE_OUTPUT"]
@@ -33,6 +33,8 @@ GWT.composites(
            for name, (_, columns) in _STRESS.items()},
     **{name: _stress(name, package, dict(columns))
        for name, (package, columns) in _STRESS.items()})
+GWT.composites(reads={"TimeSeries": ("rows",)}, TimeSeries=_series)
+GWT.composites(reads={"Observations": ("at", "to_at")}, Observations=_observations)
 GWT.FILLED_BY = MappingProxyType({MOMENT: {"TDIS_START_DATE_TIME": _start_date_time}})
 # The read of what a solved run writes: the same primitives read off this body's own files.
 GWT.reads(**PRIMITIVES)

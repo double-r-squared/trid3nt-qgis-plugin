@@ -28,7 +28,7 @@ def test_every_exposed_body_carries_a_committed_dictionary():
     assert exposed == {"gwf", "gwt", "gwe"}
     assert {body.MODULE: len(body.MODULE_INPUT)
             for body in (GWF, GWT, GWE)} == {
-                "gwf": 508, "gwt": 259, "gwe": 230}
+                "gwf": 511, "gwt": 262, "gwe": 233}
 
 
 def test_every_body_carries_the_simulation_s_tdis_and_ims():
@@ -83,7 +83,7 @@ def test_required_keywords_are_the_ones_marked_not_optional_and_undefaulted():
     # An entry shaped by an optional dimension alone has nothing to state while the count is unstated.
     assert gwf["CSUB_STRESS_PERIOD_DATA"].is_required is False
     assert gwf["CSUB_NINTERBEDS"].is_required is True
-    assert sum(slot.is_required for slot in gwf.values()) == 104
+    assert sum(slot.is_required for slot in gwf.values()) == 105
 
 
 def test_a_dictionary_default_is_the_value_the_engine_will_use():

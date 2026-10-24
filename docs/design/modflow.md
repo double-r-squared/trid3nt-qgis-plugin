@@ -271,13 +271,17 @@ it refuses). `cdelay` is `DELAY` or `NODELAY`; `rnb`, `kv` and `h0` are the dela
 `h0` are a number or a raster read at each cell centre; `pcs0`, `ssv_cc` and `sse_cr` change dimension with the
 options, so they are numbers. `name` is the boundary-name column, required exactly when `CSUB_BOUNDNAMES` is true.
 
-`TimeSeries(package, names, rows[, interpolation, sfac])` writes the package's time-series file
-(`<package>.ts`, through flopy's child package, which also states the package's `TS6` option): `names` are the series
-(the columns after the time), `rows` the `[time, value per name]` lines in increasing time (or a run input holding
-them), `interpolation` (`STEPWISE`, `LINEAR`, `LINEAREND`) and `sfac` mf6's own attributes, once or per series and
-absent when unstated. The package's keyword rows name a series by its name (`CSUB_STRESS_PERIOD_DATA`
-`[[layer, cell], "LOAD"]`, a CHD row's head); one file feeds a package, and `<PKG>_TS_FILERECORD` stated by keyword
-refuses. ex-gwf-csub-p01 (the passing-train load) and p03 (three CHD head series) are built on it.
+`TimeSeries(package, names, rows[, units, interpolation, sfac])`, or a list of them, writes the package's time-series
+file (`<package>.ts`, through flopy's child package, which also states the package's `TS6` option) for any package that
+takes one, on the carrier and on a coupled body (`CNC_TS_FILERECORD` stated in the `Transport` slots as the same
+mapping): `names` are the series (the columns after the time), `rows` the `[time, value per name]` lines in increasing
+time, or the name of a run input holding one record (one name; its times count from the run's start and are written in
+`TDIS_TIME_UNITS`, `units` converts its values through the input's own unit table), `interpolation` (`STEPWISE`,
+`LINEAR`, `LINEAREND`) and `sfac` mf6's own attributes, once or per series and absent when unstated. The package's
+keyword rows name a series by its name (`CSUB_STRESS_PERIOD_DATA` `[[layer, cell], "LOAD"]`, a CHD row's head), and a
+stress composite's value column names one as `{"series": NAME}`, refused when the package's `TimeSeries` states no such
+name; one file feeds a package, and `<PKG>_TS_FILERECORD` stated by keyword refuses. ex-gwf-csub-p01 (the
+passing-train load), p03 (three CHD head series) and ex-gwf-fhb (a CHD and a WEL series) are built on it.
 
 `Wells`, `Drains`, `GeneralHead` and the new `Rivers(geometry, layer, stage, conductance, rbot[, name])` give water to
 the mover: each takes an optional `name`, and every row such a statement places is one feature (package WEL, DRN, GHB
@@ -286,6 +290,28 @@ or RIV; its number the row's index in the package's period list, which the compo
 as `to` they refuse naming the package, since mf6 moves water to SFR, LAK, MAW and UZF only. The four givers are proven
 against a flopy-authored reference (a drain to a lake, a well, a river and a general-head boundary to reaches and a
 lake; heads, stages and every mover flow equal, 0.0).
+
+### Observations
+
+`Observations(type, name[, package, at, on, layer, connection, to_at, to_layer, digits])`, or a list, is one line of
+an OBS file; it is on GWF, GWT and GWE. `type` is mf6's own observation type (head, drawdown, concentration,
+flow-ja-face, or a package's: stage, downstream-flow, maw ...) and `name` mf6's observation name; mf6's validate judges
+the type, the composite the id. With no `package` the line is the model's OBS file (`OBS_CONTINUOUS`, with
+`OBS_DIGITS`), with one it is that package's own (`<PKG>_OBS_FILERECORD`). The id follows the point contract: a cell
+is `at` (a map point; the cell is computed, a miss refuses with the nearest cell and the point is never moved) on a
+`layer` from 1, with `to_at` and `to_layer` the second cell of flow-ja-face; a placed feature (SFR reach, LAK lake, MAW
+well, UZF cell, CSUB interbed, or a WEL, DRN, GHB or RIV row) is `on` (the name its composite gave), `at` (the point in
+its cell) or both, its id the feature's number, a boundary row's its cell, and a named boundary row resolves to its
+cell for a model-level head; `connection` (from 1) is the second id of a MAW or LAK connection. One CSV is written per
+file owner and type (`<module>.obs.<type>.csv`, a package's `<module>.<pkg>.obs.<type>.csv`) and listed among the
+run's results, and `digits` is the file's option (one value per file). The raw path is the dictionary's:
+`OBS_CONTINUOUS` stated as flopy's `{file: rows}` and `<PKG>_OBS_FILERECORD` as `{"continuous": {file: rows},
+"digits": n}`; any other value of a package's OBS record refuses rather than being dropped. The publish's table adds
+one chart per CSV the run states (`observations` read, `Series.label` the main line's name): a line per observation, y
+in the model's length unit for head and drawdown, the run's concentration unit for concentration and unitless
+otherwise, a dry or inactive value left out of its line. ex-gwf-fhb (head and flow-ja-face), ex-gwf-maw-p01 (head and
+two connection flows, digits 10) and ex-gwf-sfr-p01 (four stages and four downstream flows, digits 10) equal the
+published scripts' own OBS CSVs bitwise.
 
 ## The coupling
 
@@ -432,6 +458,6 @@ builds on was proved through that image before it was built on.
 
 The accepted-mesh reader of a ragged (UGRID) display face - a quadtree with
 refinement, a Voronoi - so those meshes cannot yet be authored on; the
-observations (OBS), the model exchanges (GWF-GWF, GWT-GWT), FMI
+model exchanges (GWF-GWF, GWT-GWT), FMI
 (the transport reading a prior flow run's saved budget), and PRT. Each is a leg
 in the scope's plan; the coupling above is built for GWT on the exchange.

@@ -6,7 +6,7 @@ from types import MappingProxyType
 from typing import Mapping
 
 from ...runtime.module import MOMENT, Output
-from .module import ModflowModule, _start_date_time, _stress, periods
+from .module import ModflowModule, _observations, _series, _start_date_time, _stress, periods
 from .outputs import PRIMITIVES
 
 __all__ = ["GWE", "MODULE_OUTPUT"]
@@ -27,6 +27,8 @@ GWE = ModflowModule("gwe")
 GWE.MODULE_OUTPUT = MODULE_OUTPUT
 # The simulation's own clock on every body: Periods spells the marching, the moment the instant it opens at.
 GWE.composites(reads={"Periods": ("until", "steps")}, Periods=periods)
+GWE.composites(reads={"TimeSeries": ("rows",)}, TimeSeries=_series)
+GWE.composites(reads={"Observations": ("at", "to_at")}, Observations=_observations)
 GWE.FILLED_BY = MappingProxyType({MOMENT: {"TDIS_START_DATE_TIME": _start_date_time}})
 GWE.composites(
     reads={name: ("geometry", *(column for column, _ in columns))

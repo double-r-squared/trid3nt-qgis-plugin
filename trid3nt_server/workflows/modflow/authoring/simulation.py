@@ -19,6 +19,7 @@ from .accepted_mesh import mesh_artifact, mesh_nodes
 from .griddata import frame_of, needs_botm, needs_top, place
 from .mesh_files import _layering, botm_of, disv_dimensions, top_of
 from .movers import mover_rows
+from .observations import place_observations
 from .stress import (GIVERS, lake_statements, layer_rows, maw_statements, place as place_stress, place_interbeds,
                      place_lakes, place_maw, place_streams, place_uzf)
 
@@ -134,9 +135,9 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
     grid = (_layering(sheet, nlay=int(dims["nlay"]), art=mesh_artifact(mesh), bed=bed,
                       points=points, cells=cells)[:2]
             if lake_statements(sheet) or maw_statements(sheet) else None)
-    derived, tables, series = _stressed(sheet, groups, nlay=int(dims["nlay"]), points=points,
-                                        cells=cells, utm_epsg=utm_epsg, frame=frame, active=active,
-                                        start=start, grid=grid)
+    derived, tables, series, observed, features = _stressed(
+        sheet, groups, nlay=int(dims["nlay"]), points=points, cells=cells, utm_epsg=utm_epsg, frame=frame,
+        active=active, start=start, grid=grid)
     _unstated(sheet, set(groups) | set(_REQUIRED_PACKAGES[module]) | {"TDIS"},
               derived)
     sim = flopy.mf6.MFSimulation(sim_name="trid3nt", sim_ws=str(work),
@@ -147,7 +148,8 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
              how="TDIS of the simulation")
     carrying = [prefix for prefix, rows in groups.items()
                 if "CONCENTRATION" in map(str, getattr(rows.get("auxiliary"), "value", None) or ())]
-    flow = _model(flopy, sim, module=module, groups=groups, named=named, tables=tables, series=series, **placed)
+    flow = _model(flopy, sim, module=module, groups=groups, named=named, tables=tables, series=series,
+                  observed=observed, **placed)
     # The water a flow package carries a CONCENTRATION on is a transport source: SSM names
     # each such package by the name the flow model's name file gives it.
     sources = [[flow.get_package(prefix.lower()).package_name, "AUX", "CONCENTRATION"]
@@ -158,16 +160,16 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
     for body in sheet.coupled:
         coupled = coupled_sheet(sheet, body)
         cgroups, cnamed = _grouped(coupled)
-        cderived, _tables, _series = _stressed(coupled, cgroups, nlay=int(dims["nlay"]),
-                                               points=points, cells=cells, utm_epsg=utm_epsg,
-                                               frame=frame, active=active)
+        cderived, ctables, cseries, cobserved, _features = _stressed(
+            coupled, cgroups, nlay=int(dims["nlay"]), points=points, cells=cells, utm_epsg=utm_epsg,
+            frame=frame, active=active, features=features)
         _unstated(coupled, set(cgroups) | set(_REQUIRED_PACKAGES[coupled.module]),
                   cderived)
         if coupled.module == "gwt" and sources \
                 and "sources" not in cgroups.get("SSM", {}):
             cgroups.setdefault("SSM", {})
-        _model(flopy, sim, module=coupled.module, groups=cgroups, named=cnamed,
-               sources=sources if coupled.module == "gwt" else (), **placed)
+        _model(flopy, sim, module=coupled.module, groups=cgroups, named=cnamed, tables=ctables, series=cseries,
+               observed=cobserved, sources=sources if coupled.module == "gwt" else (), **placed)
         _exchange(flopy, sim, carrier=module, coupled=coupled.module)
     return _write_package_by_package(sim)
 
@@ -176,8 +178,9 @@ def _model(flopy: Any, sim: Any, *, module: str, groups: dict[str, dict[str, Any
            named: dict[str, Any], dims: dict[str, int], points: Any, cells: Any,
            utm_epsg: int | None, sheet: Any, frame: Any, top: Any,
            botm: Any = None, sources: Any = (), tables: Mapping[str, list] = {},
-           series: Mapping[str, Mapping[str, Any]] = {}) -> Any:
-    """One model of this simulation: its name file, the staged DISV's line, its solution and its packages; ``tables`` are the TAB6 files a package reads and ``series`` its time-series file."""
+           series: Mapping[str, Mapping[str, Any]] = {},
+           observed: Mapping[str, Mapping[str, Any]] = {}) -> Any:
+    """One model of this simulation: its name file, the staged DISV's line, its solution and its packages; ``tables`` are the TAB6 files a package reads, ``series`` its time-series file and ``observed`` its own OBS file."""
     cap = module.capitalize()
     model = _package(flopy, f"Modflow{cap}", named, owner=sim, modelname=module,
                      model_nam_file=f"{module}.nam",
@@ -203,8 +206,12 @@ def _model(flopy: Any, sim: Any, *, module: str, groups: dict[str, dict[str, Any
             keywords = {"sources": list(sources), **keywords}
         if prefix == "MVR":
             keywords = _named_movers(keywords, model)
-        package = _package(flopy, f"Modflow{cap}{prefix.lower()}", keywords,
+        package = _package(flopy, "ModflowUtlobs" if prefix == "OBS" else f"Modflow{cap}{prefix.lower()}", keywords,
                            owner=model, how=f"{prefix} of {module}")
+        if prefix in observed:
+            held = observed[prefix]
+            package.obs.initialize(filename=f"{module}.{prefix.lower()}.obs", digits=held.get("digits"),
+                                   continuous=held["continuous"])
         if prefix in series:
             held = series[prefix]
             package.ts.initialize(filename=f"{prefix.lower()}.ts", timeseries=held["rows"],
@@ -264,14 +271,18 @@ def _start_head(sheet: Any, *, nlay: int, points: Any, cells: Any, utm_epsg: int
 
 def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, points: Any,
               cells: Any, utm_epsg: int | None, frame: Any, active: Any,
-              start: Any = None, grid: Any = None
-              ) -> tuple[set[str], dict[str, list], dict[str, Mapping[str, Any]]]:
-    """Place each stress statement on the cells -> the identifiers it derived (its MAXBOUND), the TAB6 files its packages read and the time series they read.
+              start: Any = None, grid: Any = None, features: list[Mapping[str, Any]] | None = None
+              ) -> tuple[set[str], dict[str, list], dict[str, Mapping[str, Any]], dict[str, Mapping[str, Any]],
+                         list[Mapping[str, Any]]]:
+    """Place each stress statement on the cells -> the identifiers it derived (its MAXBOUND), the TAB6 files its packages read, the time series they read, the OBS files packages state and the placed features.
+
+    ``features`` are a flow model's placed features, which a coupled body's observations name.
 
     A statement's row becomes period 1's rows, carried forward by mf6; the bound is the
     placement's own count; ``active`` is the carrier's solved cells - the grid is one."""
     derived: set[str] = set()
-    features: list[Mapping[str, Any]] = []
+    features = list(features or [])
+    used: dict[str, set[str]] = {}
     for prefix, rows in groups.items():
         row = rows.get("stress_period_data")
         if row is None or not isinstance(row.value, Mapping) \
@@ -283,8 +294,10 @@ def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, point
                                  active=active, start=start)
             if prefix in GIVERS:
                 features += [{"package": prefix, "name": statement.get("name"), "number": len(placed) + rank,
-                              "cells": {item[0][1]}} for rank, item in enumerate(found)]
+                              "cells": {item[0][1]}, "layer": item[0][0]} for rank, item in enumerate(found)]
             placed += found
+        if (names := {item for line in placed for item in line[1:] if isinstance(item, str)}):
+            used[prefix] = names
         rows["stress_period_data"] = replace(row, value={0: placed})
         rows["maxbound"] = Filled(
             slot=sheet.body.MODULE_INPUT[f"{prefix}_MAXBOUND"],
@@ -319,8 +332,8 @@ def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, point
         derived |= {"UZF_NUZFCELLS", "UZF_PERIODDATA"}
     row = groups.get("CSUB", {}).get("packagedata")
     if row is not None and isinstance(row.value, Mapping) and "interbeds" in row.value:
-        _interbedded(sheet, groups["CSUB"], row, nlay=nlay, points=points, cells=cells, utm_epsg=utm_epsg,
-                     frame=frame, active=active)
+        features += _interbedded(sheet, groups["CSUB"], row, nlay=nlay, points=points, cells=cells,
+                                 utm_epsg=utm_epsg, frame=frame, active=active)
         derived.add("CSUB_NINTERBEDS")
     row = groups.get("MVR", {}).get("perioddata")
     if row is not None and isinstance(row.value, Mapping) and "movers" in row.value:
@@ -336,11 +349,61 @@ def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, point
                 f"{prefix}_TS_FILERECORD names a time-series file this authoring would not write; state the series "
                 "through TimeSeries.", error_code="MODFLOW_KEYWORD_SHAPE")
         series[prefix] = held.value["series"]
-    return derived, {prefix: files for prefix, files in tables.items() if files}, series
+    _named_series(used, series)
+    observed = _observations(sheet, groups, features, nlay=nlay, points=points, cells=cells, utm_epsg=utm_epsg,
+                             active=active)
+    return derived, {prefix: files for prefix, files in tables.items() if files}, series, observed, features
 
 
-def _interbedded(sheet: Any, rows: dict[str, Any], row: Any, **mesh: Any) -> None:
-    """Place the Interbeds statements: the package's interbed list and its count."""
+def _named_series(used: Mapping[str, set[str]], series: Mapping[str, Mapping[str, Any]]) -> None:
+    """Refuse a stress statement naming a series its package's TimeSeries does not state."""
+    for prefix, names in used.items():
+        known = set(series.get(prefix, {}).get("names", ()))
+        if names - known:
+            raise ModflowError(
+                f"{prefix} names the series {', '.join(sorted(names - known))}, and the {prefix} TimeSeries states "
+                + (", ".join(sorted(known)) if known else "none") + ".", error_code="MODFLOW_STRESS_UNSTATED")
+
+
+def _observations(sheet: Any, groups: dict[str, dict[str, Any]], features: list[Mapping[str, Any]], *, nlay: int,
+                  **mesh: Any) -> dict[str, Mapping[str, Any]]:
+    """Place every Observations statement: the model's OBS rows are set on its group, a package's returned by prefix for its own OBS file."""
+    observed: dict[str, Mapping[str, Any]] = {}
+    for prefix, rows in groups.items():
+        package = None if prefix == "OBS" else prefix
+        row = rows.get("continuous") if package is None else rows.pop("obs_filerecord", None)
+        if row is None:
+            continue
+        stated = row.value if isinstance(row.value, Mapping) else {}
+        if "observations" in stated:
+            files, digits = place_observations(stated["observations"], module=str(sheet.module), package=package,
+                                               features=features, nlay=nlay, **mesh)
+            if package is not None:
+                observed[prefix] = {"continuous": files, "digits": digits}
+                continue
+            if digits is not None:
+                if "digits" in rows:
+                    raise ModflowError(
+                        "OBS_DIGITS is stated beside Observations digits; state the option once.",
+                        error_code="MODFLOW_KEYWORD_SHAPE")
+                rows["digits"] = Filled(slot=sheet.body.MODULE_INPUT["OBS_DIGITS"], value=digits,
+                                        provenance=row.provenance)
+            rows["continuous"] = replace(row, value=files)
+        elif package is None and stated:
+            continue
+        elif package is not None and "continuous" in stated:
+            observed[prefix] = dict(stated)
+        else:
+            raise ModflowError(
+                f"{prefix}_OBS_FILERECORD names an observation file this authoring would not write; state the "
+                "observations through Observations, or {\"continuous\": {file: rows}}."
+                if package else "OBS_CONTINUOUS is {file: rows} or the Observations statements.",
+                error_code="MODFLOW_KEYWORD_SHAPE")
+    return observed
+
+
+def _interbedded(sheet: Any, rows: dict[str, Any], row: Any, **mesh: Any) -> list[Mapping[str, Any]]:
+    """Place the Interbeds statements: the package's interbed list and its count; each interbed is a feature."""
     stated = sorted(f"CSUB_{name.upper()}" for name in ("ninterbeds",) if name in rows)
     if stated:
         raise ModflowError(
@@ -350,6 +413,9 @@ def _interbedded(sheet: Any, rows: dict[str, Any], row: Any, **mesh: Any) -> Non
                                   **mesh)
     for name, value in (("packagedata", packagedata), ("ninterbeds", len(packagedata))):
         rows[name] = Filled(slot=sheet.body.MODULE_INPUT[f"CSUB_{name.upper()}"], value=value, provenance=row.provenance)
+    named = bool(getattr(rows.get("boundnames"), "value", False))
+    return [{"package": "CSUB", "name": line[-1] if named else None, "number": line[0], "cells": {line[1][1]}}
+            for line in packagedata]
 
 
 def _movered(sheet: Any, groups: dict[str, dict[str, Any]], row: Any, features: list[Mapping[str, Any]],

@@ -16,7 +16,7 @@ from trid3nt_server.inputs.point import Point, require_viable
 from ..errors import ModflowError
 from .griddata import METRES, sample
 
-__all__ = ["GIVERS", "cells_of", "edge_cells", "hold_lakes", "lake_statements", "layer_rows", "maw_statements",
+__all__ = ["GIVERS", "at_cell", "cells_of", "edge_cells", "hold_lakes", "lake_statements", "layer_rows", "maw_statements",
            "pick", "place", "place_interbeds", "place_lakes", "place_maw", "place_streams", "place_uzf", "point_cell", "uzf_statements"]
 
 # The boundary packages that give water to the mover: each row a statement of theirs places is a feature.
@@ -811,6 +811,11 @@ def _column(value: Any, key: str, *, name: str, placed: list[int], points: Any,
             dimension: str) -> list[float]:
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         return [value] * len(placed)
+    if isinstance(value, Mapping) and set(value) == {"series"}:
+        if not isinstance(value["series"], str) or not value["series"].strip():
+            raise ModflowError(f"{name} {key} names a series as {{\"series\": NAME}}; got {value!r}.",
+                               error_code="MODFLOW_STRESS_UNSTATED")
+        return [value["series"].strip()] * len(placed)
     with tempfile.TemporaryDirectory(prefix="trid3nt_stress_") as work:
         return sample(value, label=f"{name} {key}", name=key, scratch=work,
                       points=points, cells=[cells[i] for i in placed],
@@ -838,12 +843,25 @@ def point_cell(pt: Any, *, label: str, points: Any, cells: Any, utm_epsg: int,
                           missed="in a cell the run does not solve (DISV_IDOMAIN 0)")
 
 
-def pick(name: Any, at: Any, features: list[Mapping[str, Any]], *, role: str, points: Any, cells: Any,
-         utm_epsg: int | None) -> Mapping[str, Any]:
-    """The one feature a statement's end names, by its name, the cell of the point it lies at, or both; none or several refuse."""
+def at_cell(at: Any, *, role: str, points: Any, cells: Any, utm_epsg: int | None) -> int:
+    """The cell the one point a statement places by lies in; a point that misses refuses with the nearest-cell hint."""
     from trid3nt_server.inputs.geometry import flatten_geometries
     from trid3nt_server.inputs.shape import shape
 
+    if points is None or cells is None or not utm_epsg:
+        raise ModflowError(f"{role} places by a point, and this run has no accepted mesh with a projected zone.",
+                           error_code="MODFLOW_STRESS_OUTSIDE")
+    parts = flatten_geometries(shape(at, label=role).features)
+    if len(parts) != 1 or parts[0].get("type") != "Point":
+        raise ModflowError(f"{role} places by one point; got {len(parts)} geometries.",
+                           error_code="MODFLOW_STRESS_UNSTATED")
+    lon, lat = parts[0]["coordinates"][:2]
+    return point_cell(Point(float(lon), float(lat)), label=role, points=points, cells=cells, utm_epsg=int(utm_epsg))
+
+
+def pick(name: Any, at: Any, features: list[Mapping[str, Any]], *, role: str, points: Any, cells: Any,
+         utm_epsg: int | None) -> Mapping[str, Any]:
+    """The one feature a statement's end names, by its name, the cell of the point it lies at, or both; none or several refuse."""
     if name is None and at is None:
         raise ModflowError(f"{role} states neither a name nor a point; state the feature it is.",
                            error_code="MODFLOW_STRESS_UNSTATED")
@@ -854,15 +872,7 @@ def pick(name: Any, at: Any, features: list[Mapping[str, Any]], *, role: str, po
             f"{role} names {name!r}, and no placed feature carries that name"
             + (f" (named: {', '.join(named)})" if named else "") + ".", error_code="MODFLOW_STRESS_UNSTATED")
     if at is not None:
-        if points is None or cells is None or not utm_epsg:
-            raise ModflowError(f"{role} places by a point, and this run has no accepted mesh with a projected zone.",
-                               error_code="MODFLOW_STRESS_OUTSIDE")
-        parts = flatten_geometries(shape(at, label=role).features)
-        if len(parts) != 1 or parts[0].get("type") != "Point":
-            raise ModflowError(f"{role} places by one point; got {len(parts)} geometries.",
-                               error_code="MODFLOW_STRESS_UNSTATED")
-        lon, lat = parts[0]["coordinates"][:2]
-        cell = point_cell(Point(float(lon), float(lat)), label=role, points=points, cells=cells, utm_epsg=int(utm_epsg))
+        cell = at_cell(at, role=role, points=points, cells=cells, utm_epsg=utm_epsg)
         found = [item for item in found if cell in item["cells"]]
     if len(found) != 1:
         raise ModflowError(

@@ -3902,6 +3902,51 @@
       ],
       "is_file": false,
       "mandatory": false
+    },
+    {
+      "keyword": "DIGITS",
+      "identifier": "OBS_DIGITS",
+      "type": "INTEGER",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "Keyword and an integer digits specifier used for conversion of simulated values to text on output. If not specified, the default is the maximum number of digits stored in the program (as written with the G0 Fortran specifier). When simulated values are written to a comma-separated value text file specified in a CONTINUOUS block below, the digits specifier controls the number of significant digits with which simulated values are written to the output file. The digits specifier has no effect on the number of significant digits with which the simulation time is written for continuous observations.  If DIGITS is specified as zero, then observations are written with the default setting, which is the maximum number of digits.",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "PRINT_INPUT",
+      "identifier": "OBS_PRINT_INPUT",
+      "type": "LOGICAL",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "print input to listing file",
+      "rubrique": [
+        "OPTIONS"
+      ],
+      "is_file": false,
+      "mandatory": false
+    },
+    {
+      "keyword": "CONTINUOUS",
+      "identifier": "OBS_CONTINUOUS",
+      "type": "STRUCT",
+      "shape": "",
+      "layered": false,
+      "size": 1,
+      "unbounded": false,
+      "help": "",
+      "rubrique": [
+        "CONTINUOUS"
+      ],
+      "is_file": false,
+      "mandatory": true
     }
   ]
 }

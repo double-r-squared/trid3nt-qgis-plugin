@@ -24,6 +24,6 @@ uses, except on a required flag (READASARRAYS), the package's own tag. An entry 
 
 | file | keywords | what it is |
 | --- | --- | --- |
-| `gwf.json` | 508 | The groundwater-flow body: every `gwf-*` package plus the simulation's TDIS and IMS. |
-| `gwt.json` | 259 | The groundwater-transport body: every `gwt-*` package plus TDIS and IMS. |
-| `gwe.json` | 230 | The groundwater-energy body: every `gwe-*` package plus TDIS and IMS. |
+| `gwf.json` | 511 | The groundwater-flow body: every `gwf-*` package plus the simulation's TDIS and IMS and the OBS utility. |
+| `gwt.json` | 262 | The groundwater-transport body: every `gwt-*` package plus TDIS, IMS and OBS. |
+| `gwe.json` | 233 | The groundwater-energy body: every `gwe-*` package plus TDIS, IMS and OBS. |

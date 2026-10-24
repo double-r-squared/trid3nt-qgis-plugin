@@ -25,12 +25,13 @@ from trid3nt_server.inputs.observation import Observation
 from ..authoring.accepted_mesh import mesh_artifact, mesh_nodes
 from ..authoring.griddata import METRES, SECONDS
 from ..authoring.mesh_files import disv_dimensions, top_of
+from ..authoring.observations import observation_files
 from ..authoring.stress import point_cell
 from ..errors import ModflowError
 from .ugrid import group
 
 __all__ = ["PRIMITIVES", "Solved", "filerecord", "group_stem", "read_extent", "read_field", "read_mass_balance",
-           "read_max_over_time", "read_mesh", "read_series"]
+           "read_max_over_time", "read_mesh", "read_observations", "read_series"]
 
 # mf6 writes this magnitude for a cell that is dry (HDRY) or inactive (HNOFLO).
 _NO_HEAD = 1.0e30
@@ -202,6 +203,11 @@ class Solved:
         prefix = _PACKAGED.get(key)
         return prefix is None or any(str(name).startswith(prefix) for name in (
             self.sheet.filled if self._filled is None else self._filled))
+
+    def observed(self) -> list[tuple[str, str, str | None]]:
+        """The OBS CSVs this body's observations write: ``(file, label, observation type)``."""
+        return observation_files(self.sheet.filled if self._filled is None else self._filled,
+                                 str(self.body.MODULE))
 
     def unsaved(self, key: str) -> ModflowError | None:
         """Why the run's output control saved nothing of the output ``key``, or None where it saved it."""
@@ -588,6 +594,52 @@ def _sampled_step(observed: Observation, solved: Solved, times: Any) -> int:
     return min(held, key=lambda i: abs(saved[i] - sampled))
 
 
+def read_observations(primitive: Primitive, solved: Solved) -> Series:
+    """``observations(file)``: an OBS file's CSV as one chart, a line per observation; a dry or inactive value is left out of its line."""
+    import csv
+
+    import numpy as np
+
+    file = str(primitive.variable)
+    found = {name: (label, kind) for name, label, kind in solved.observed()}
+    if file not in found:
+        raise ModflowError(f"{file!r} is no OBS file this run states; it writes {sorted(found)}.",
+                           error_code="MODFLOW_OUTPUT_UNKNOWN")
+    label, kind = found[file]
+    path = solved.local(file)
+    try:
+        with open(path, newline="") as handle:
+            table = list(csv.reader(handle))
+    finally:
+        Path(path).unlink(missing_ok=True)
+    if len(table) < 2:
+        raise OutputEmpty(f"{file} holds no observed time.")
+    times = solved.seconds([float(row[0]) for row in table[1:]])
+    lines = []
+    for rank, name in enumerate(table[0][1:], start=1):
+        values = np.asarray([float(row[rank]) for row in table[1:]], dtype="float64")
+        held = np.isfinite(values) & (np.abs(values) < _NO_HEAD)
+        if held.any():
+            lines.append((name.strip(), times[held], values[held]))
+    if not lines:
+        raise OutputEmpty(f"not one value {file} holds is a number.")
+    every = np.concatenate([values for _name, _t, values in lines])
+    (first, t, values), rest = lines[0], lines[1:]
+    return Series(name=f"{Path(label).stem if kind is None else label} observations", units=_observed_units(solved, kind),
+                  times=t, values=values, at="at the observation points", label=first,
+                  lines=tuple(Line(label=name, x=x, values=y) for name, x, y in rest),
+                  measures={"observations": len(lines), "max": float(every.max()), "min": float(every.min())})
+
+
+def _observed_units(solved: Solved, kind: str | None) -> str:
+    """A head or drawdown observation is in the model's length unit, a concentration in the unit the run states it in; any other has no unit this run states."""
+    if kind in ("head", "drawdown"):
+        return str(solved.stated("DISV_LENGTH_UNITS") or "")
+    if kind == "concentration":
+        return str((solved.run.get("published_units") or {}).get("CONCENTRATION") or "")
+    return ""
+
+
 def read_mass_balance(primitive: Primitive, solved: Solved) -> Series:
     """``mass_balance()``: the percent discrepancy the model listing prints, per listed step, with one net line per budget term."""
     import flopy
@@ -642,6 +694,6 @@ def read_extent(primitive: Primitive, solved: Solved) -> Read:
     return Read(measures={"bbox": list(solved.bbox), "area_km2": round(area / 1.0e6, 4)})
 
 
-PRIMITIVES = {"field": read_field, "series": read_series,
+PRIMITIVES = {"field": read_field, "series": read_series, "observations": read_observations,
               "max_over_time": read_max_over_time, "mass_balance": read_mass_balance,
               "mesh": read_mesh, "extent": read_extent}

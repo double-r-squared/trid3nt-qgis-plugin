@@ -9,12 +9,14 @@ in TDIS.
 from __future__ import annotations
 
 import math
+import re
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Mapping
 
 from ..errors import ModflowError
 from ...runtime.module import MOMENT, Module, SlotRefused
+from trid3nt_server.inputs.temporal import Series
 
 __all__ = ["ModflowModule", "module_input_dir", "periods"]
 
@@ -625,12 +627,21 @@ _interbeds.__doc__ = (
 _INTERPOLATION = ("STEPWISE", "LINEAR", "LINEAREND")
 
 
-def _series(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+def _series(value: Any, *, run: Mapping[str, Any] | None = None) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    if isinstance(value, (list, tuple)) and value:
+        slots: dict[str, Any] = {}
+        for each in value:
+            for key, held in _series(each, run=run)[0].items():
+                if key in slots:
+                    raise ModflowError(f"TimeSeries states {key[:-len('_TS_FILERECORD')]} twice; one file feeds a package.",
+                                       error_code="MODFLOW_STRESS_UNSTATED")
+                slots[key] = held
+        return slots, {}
     if not isinstance(value, Mapping):
         raise ModflowError(
             f"TimeSeries takes a mapping of package, names and rows; got {value!r}.",
             error_code="MODFLOW_STRESS_UNSTATED")
-    _unknown(value, "TimeSeries", ("package", "names", "rows", "interpolation", "sfac"))
+    _unknown(value, "TimeSeries", ("package", "names", "rows", "units", "interpolation", "sfac"))
     if not value:
         return {}, {}
     package, names = value.get("package"), value.get("names")
@@ -643,13 +654,41 @@ def _series(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
             or len(set(names)) != len(names):
         raise ModflowError(f"TimeSeries names is a list of distinct series names; got {names!r}.",
                            error_code="MODFLOW_STRESS_UNSTATED")
-    rows = _table(value.get("rows"), composite="TimeSeries", argument="rows", widths=(len(names) + 1,))
+    held = value.get("rows")
+    if isinstance(held, Series):
+        held = _recorded(held, names, value.get("units"), run or {})
+    elif value.get("units") is not None:
+        raise ModflowError("TimeSeries units converts a run input's record; the rows stated here are in the package's "
+                           "own units.", error_code="MODFLOW_STRESS_UNSTATED")
+    rows = _table(held, composite="TimeSeries", argument="rows", widths=(len(names) + 1,))
     if any(later[0] <= earlier[0] for earlier, later in zip(rows, rows[1:])):
         raise ModflowError("TimeSeries rows run in increasing time.", error_code="MODFLOW_STRESS_UNSTATED")
     return {f"{package.strip().upper()}_TS_FILERECORD": {"series": {
         "package": package.strip().upper(), "names": [each.strip() for each in names], "rows": rows,
         "interpolation": _per_name(value.get("interpolation"), names, "interpolation", words=_INTERPOLATION),
         "sfac": _per_name(value.get("sfac"), names, "sfac")}}}, {}
+
+
+def _recorded(record: Series, names: Any, units: Any, run: Mapping[str, Any]) -> list[list[float]]:
+    """A run input's record as the rows of one series, its times counted from the run's start in TDIS_TIME_UNITS."""
+    from ..authoring.griddata import SECONDS
+
+    if len(names) != 1:
+        raise ModflowError(
+            f"TimeSeries reads a run input's record as one series; names lists {len(names)}.",
+            error_code="MODFLOW_STRESS_UNSTATED")
+    clock = str(run.get("TDIS_TIME_UNITS") or "unknown").strip().lower()
+    if clock not in SECONDS:
+        raise ModflowError(
+            f"TDIS_TIME_UNITS is {clock!r}, so the record's times on the run's clock have no length in it; "
+            "state TDIS_TIME_UNITS as seconds, minutes, hours, days or years.", error_code="MODFLOW_CLOCK_UNSTATED")
+    if units is not None:
+        try:
+            record = record.in_units(str(units))
+        except Exception as refused:
+            raise ModflowError(f"TimeSeries cannot read the record, in {record.units}, as {units}: {refused}",
+                               error_code="MODFLOW_STRESS_UNSTATED") from refused
+    return [[t / SECONDS[clock], v] for t, v in zip(record.times_s, record.values)]
 
 
 def _per_name(held: Any, names: Any, argument: str, *, words: tuple[str, ...] = ()) -> list | None:
@@ -667,11 +706,63 @@ def _per_name(held: Any, names: Any, argument: str, *, words: tuple[str, ...] = 
 
 
 _series.__doc__ = (
-    "A package's time-series file: TimeSeries(package, names, rows[, interpolation, sfac]).\n\n"
+    "A package's time-series file: TimeSeries(package, names, rows[, units, interpolation, sfac]), or a list of them.\n\n"
     "    package is the prefix of the package the file feeds; names the series, the columns after the time;\n"
-    "    rows [time, value per name] in increasing time (a run input name holds the rows too). interpolation\n"
+    "    rows [time, value per name] in increasing time, or the name of a run input holding one record (one name;\n"
+    "    its times are counted from the run's start in TDIS_TIME_UNITS, and units converts its values). interpolation\n"
     "    (STEPWISE, LINEAR or LINEAREND) and sfac are mf6's own series attributes, once or per series, absent\n"
-    "    when unstated. The package's rows name a series by its name; one file feeds a package.")
+    "    when unstated. A stress statement names a series as {\"series\": NAME}; one file feeds a package.")
+
+
+_OBSERVATION = ("type", "name", "package", "at", "on", "layer", "connection", "to_at", "to_layer", "digits")
+_OBSERVATION_TYPE = re.compile(r"[A-Za-z0-9-]+")
+
+
+def _observations(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    if isinstance(value, (list, tuple)) and value:
+        slots: dict[str, Any] = {}
+        for each in value:
+            for key, held in _observations(each)[0].items():
+                slots.setdefault(key, {"observations": []})["observations"] += held["observations"]
+        return slots, {}
+    if not isinstance(value, Mapping):
+        raise ModflowError(f"Observations takes a mapping of type, name and where, or a list of them; got {value!r}.",
+                           error_code="MODFLOW_STRESS_UNSTATED")
+    _unknown(value, "Observations", _OBSERVATION)
+    if not value:
+        return {}, {}
+    kind, name = value.get("type"), value.get("name")
+    if not isinstance(kind, str) or not _OBSERVATION_TYPE.fullmatch(kind.strip()):
+        raise ModflowError(f"Observations type is mf6's own observation type (head, flow-ja-face, maw ...); got {kind!r}.",
+                           error_code="MODFLOW_STRESS_UNSTATED")
+    if not isinstance(name, str) or not name.strip() or len(name.strip()) > 40 or len(name.split()) != 1:
+        raise ModflowError(f"Observations name is 1 to 40 characters without a space; got {name!r}.",
+                           error_code="MODFLOW_STRESS_UNSTATED")
+    package = value.get("package")
+    if package is not None and (not isinstance(package, str) or not package.strip()):
+        raise ModflowError(f"Observations package is the prefix of the package whose OBS file this line goes in; "
+                           f"got {package!r}.", error_code="MODFLOW_STRESS_UNSTATED")
+    for argument, floor in (("layer", 1), ("connection", 1), ("to_layer", 1), ("digits", 0)):
+        held = value.get(argument)
+        if held is not None and (isinstance(held, bool) or not isinstance(held, int) or held < floor):
+            raise ModflowError(f"Observations {argument} is an integer from {floor}; got {held!r}.",
+                               error_code="MODFLOW_STRESS_UNSTATED")
+    if value.get("on") is not None:
+        _given({"name": value["on"]}, "Observations")
+    statement = {key: held for key, held in value.items() if held is not None}
+    statement.update(type=kind.strip(), name=name.strip())
+    package = package.strip().upper() if package else None
+    statement["package"] = package
+    return {f"{package}_OBS_FILERECORD" if package else "OBS_CONTINUOUS": {"observations": [statement]}}, {}
+
+
+_observations.__doc__ = (
+    "A line of an OBS file: Observations(type, name[, package, at, on, layer, connection, to_at, to_layer, digits]), or a list.\n\n"
+    "    type is mf6's own observation type and name the observation's name; with no package the line is the\n"
+    "    model's OBS file, with one (SFR, LAK, MAW, UZF, CSUB, WEL ...) that package's own. A cell is at (a map\n"
+    "    point, never moved) on a layer from 1; a placed feature is on (the name its composite gave), at, or both;\n"
+    "    connection (from 1) and to_at with to_layer are the second id. One CSV per file and type is written, and\n"
+    "    published as a chart with a line per observation. digits is the file's significant digits.")
 
 
 def module_input_dir() -> Path:
