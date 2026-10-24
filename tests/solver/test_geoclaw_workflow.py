@@ -259,6 +259,50 @@ def test_the_workflow_answers_for_its_own_fetch_rows_and_the_modules_keywords():
         workflow.input("no_such_thing")
 
 
+def _data_fetches(monkeypatch, own, run):
+    """The rows `_data` asks the world for, over a stand-in environment and a recording fetch."""
+    from trid3nt_server.workflows.geoclaw import workflow as gw
+
+    asked = []
+
+    async def _fetch(env, row, runner, **kwargs):
+        asked.append((row, runner, kwargs))
+        return {"event_id": kwargs["event_id"], "subfaults": [{}]}
+
+    monkeypatch.setattr(gw, "_fetch", _fetch)
+    standin = SimpleNamespace(steering=template.STEERING, template=template)
+    asyncio.run(gw.GeoclawWorkflow._data(standin, SimpleNamespace(run=run), own))
+    return asked
+
+
+_EVENT = {"finite_fault": "finite_fault", "event_id": "usp000hvnu", "spacing": 0.05, "buffer": 1.0, "times": 30.0}
+
+
+def test_a_stated_event_id_is_fetched_by_the_run_and_a_supplied_record_wins(monkeypatch):
+    own = {"GEO_SEA_LEVEL": 0.0, "FiniteFault": _EVENT, "SiftFault": {"slips": {}}}
+    held = {"deep_bed": object(), "deep_bed_offset": None}
+
+    asked = _data_fetches(monkeypatch, own, dict(held))
+    run = dict(held)
+    _data_fetches(monkeypatch, own, run)
+    supplied = _data_fetches(monkeypatch, own, {**held, "finite_fault": {"subfaults": [{"slip_m": 1.0}]}})
+    inline = _data_fetches(monkeypatch, {**own, "FiniteFault": {**_EVENT, "finite_fault": {"subfaults": []}}}, dict(held))
+
+    assert asked == [("finite_fault_fetch", "fetch_finite_fault", {"event_id": "usp000hvnu"})]
+    assert run["finite_fault"]["event_id"] == "usp000hvnu"
+    assert supplied == [] and inline == []
+
+
+def test_the_workflow_answers_for_the_finite_fault_row_and_names_its_product():
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows.geoclaw import workflow as gw
+
+    workflow = TOOL_REGISTRY["geoclaw_tsunami_inundation"].fn.workflow
+
+    assert workflow.input("finite_fault_fetch").producer.runner == "fetch_finite_fault"
+    assert "finite_fault" in gw._PRODUCED
+
+
 def test_a_run_stating_no_moment_counts_its_seconds_from_the_solve_start_and_says_so(monkeypatch):
     from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
     from trid3nt_server.workflows.geoclaw import workflow as gw

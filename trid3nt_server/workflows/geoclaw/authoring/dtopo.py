@@ -17,7 +17,7 @@ from ..errors import GeoclawError
 
 logger = logging.getLogger("trid3nt_server.workflows.geoclaw.authoring.dtopo")
 
-__all__ = ["DTOPO", "SUBFAULT_FIELDS", "dtopo_axes", "finite_fault_subfaults", "sift_subfaults", "write_dtopofiles"]
+__all__ = ["DTOPO", "KINEMATIC_FIELDS", "SUBFAULT_FIELDS", "dtopo_axes", "finite_fault_subfaults", "sift_subfaults", "write_dtopofiles"]
 
 #: The key a composite's file entry carries its fault under.
 DTOPO = "dtopo"
@@ -25,6 +25,9 @@ DTOPO = "dtopo"
 #: The ten values Okada needs; Clawpack's own attribute names.
 SUBFAULT_FIELDS = ("longitude", "latitude", "depth", "strike", "dip", "rake", "slip",
                    "length", "width", "coordinate_specification")
+
+#: What a kinematic rupture adds to each subfault: when it begins slipping and how long the slip takes, in seconds.
+KINEMATIC_FIELDS = ("rupture_time", "rise_time")
 
 
 def _refuse(code: str, message: str) -> None:
@@ -49,11 +52,12 @@ def sift_subfaults(unit_sources: Mapping[str, Mapping[str, float]],
             for name, slip in slips.items() for row in [unit_sources[name]]]
 
 
-def finite_fault_subfaults(record: Mapping[str, Any]) -> list[dict[str, Any]]:
+def finite_fault_subfaults(record: Mapping[str, Any], kinematic: bool = False) -> list[dict[str, Any]]:
     """The record ``fetch_finite_fault`` returns -> subfault statements in Clawpack's own SubFault names.
 
     Each published row is a subfault centre, so the specification is ``centroid``; kilometres
-    become metres and the slip is the inversion's, with no rigidity or scaling applied."""
+    become metres and the slip is the inversion's, with no rigidity or scaling applied.
+    ``kinematic`` adds each row's published rupture and rise times, in seconds."""
     rows = record.get("subfaults") if isinstance(record, Mapping) else None
     if not isinstance(rows, (list, tuple)) or not rows:
         _refuse("FINITE_FAULT_UNSTATED", "the finite-fault record holds no subfault.")
@@ -61,7 +65,9 @@ def finite_fault_subfaults(record: Mapping[str, Any]) -> list[dict[str, Any]]:
         return [{"longitude": row["longitude"], "latitude": row["latitude"], "depth": row["depth_km"] * 1000.0,
                  "strike": row["strike"], "dip": row["dip"], "rake": row["rake"], "slip": float(row["slip_m"]),
                  "length": row["length_km"] * 1000.0, "width": row["width_km"] * 1000.0,
-                 "coordinate_specification": "centroid"} for row in rows]
+                 "coordinate_specification": "centroid",
+                 **({"rupture_time": float(row["rupture_time_s"]), "rise_time": float(row["rise_time_s"])}
+                    if kinematic else {})} for row in rows]
     except (KeyError, TypeError) as exc:
         _refuse("FINITE_FAULT_UNSTATED", f"a finite-fault subfault states no usable {exc}.")
 
@@ -90,7 +96,8 @@ def write_dtopofiles(sheet: Any, work: Path) -> dict[str, dict[str, Any]]:
     """Write every dtopo the sheet's composite named into ``work`` -> file name to its facts.
 
     The facts are the grid (nodes in x and y, times), the moment magnitude Clawpack
-    computes from the subfaults and the rigidity it used for it."""
+    computes from the subfaults and the rigidity it used for it. A kinematic rupture is
+    written at each of its instants with every subfault's share of the slip at that instant."""
     facts: dict[str, dict[str, Any]] = {}
     for name, content in sheet.files.items():
         if isinstance(content, Mapping) and DTOPO in content:
@@ -102,11 +109,16 @@ def _written(spec: Mapping[str, Any], sheet: Any, work: Path, name: str) -> dict
     import numpy as np
     from clawpack.geoclaw import dtopotools
 
+    kinematic = spec.get("rupture_type") == "kinematic"
     faults = []
     for number, stated in enumerate(spec["subfaults"], 1):
         sub = dtopotools.SubFault()
         for field in SUBFAULT_FIELDS:
             setattr(sub, field, stated[field])
+        if kinematic:
+            for field in KINEMATIC_FIELDS:
+                setattr(sub, field, stated[field])
+            sub.rise_shape = spec["rise_shape"]
         try:
             sub.calculate_geometry()
         except ValueError as exc:
@@ -118,6 +130,8 @@ def _written(spec: Mapping[str, Any], sheet: Any, work: Path, name: str) -> dict
     _wet(sheet, work, footprints, x, y)
     fault = dtopotools.Fault()
     fault.subfaults = faults
+    if kinematic:
+        fault.rupture_type = "kinematic"
     try:
         dtopo = fault.create_dtopography(x, y, list(spec["times"]))
     except ValueError as exc:

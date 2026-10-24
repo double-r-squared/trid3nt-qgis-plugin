@@ -31,6 +31,12 @@ _SURFACE = ("surface", "offset")
 #: What one Fault statement carries: the subfaults and the dtopo grid they are summed on.
 _FAULT = ("subfaults", "x", "y", "times")
 
+#: What a Fault statement may add: the rupture's kind (Clawpack's own word, static unless stated) and, for a kinematic one, the rise function's shape.
+_RUPTURE = ("rupture_type", "rise_shape")
+
+#: The rise functions Clawpack's ``rise_fraction`` offers.
+_RISE_SHAPES = ("linear", "quadratic")
+
 
 def module_input_dir() -> Path:
     """Where the committed module inputs live."""
@@ -92,6 +98,25 @@ def topography(value: Any, *, run: Mapping[str, Any]
     return {"TOPO_TOPOFILES": rows}, files
 
 
+def _rupture(value: Mapping[str, Any], owner: str) -> tuple[bool, str | None]:
+    """A statement's ``rupture_type`` and ``rise_shape`` -> (kinematic, shape); a kind or a shape Clawpack lacks, or a shape beside a static rupture or none beside a kinematic one, refuses."""
+    kind = value.get("rupture_type") or "static"
+    if kind not in ("static", "kinematic"):
+        _refuse("FAULT_RUPTURE_TYPE", f"{owner} rupture_type {kind!r} is no kind: it is 'static' (the default) or 'kinematic'.")
+    shape = value.get("rise_shape")
+    if kind == "static":
+        if shape is not None:
+            _refuse("FAULT_RISE_SHAPE", f"{owner} states rise_shape {shape!r} beside a static rupture, which rises "
+                    "in no time: state rupture_type 'kinematic' or remove it.")
+        return False, None
+    if shape is None:
+        _refuse("FAULT_RISE_SHAPE_UNSTATED", f"{owner} is kinematic and states no rise_shape: Clawpack offers "
+                f"{' and '.join(_RISE_SHAPES)}, and the engine has no value for it.")
+    if shape not in _RISE_SHAPES:
+        _refuse("FAULT_RISE_SHAPE", f"{owner} rise_shape {shape!r} is none Clawpack takes: {' or '.join(_RISE_SHAPES)}.")
+    return True, shape
+
+
 def fault(value: Any, *, run: Mapping[str, Any]
           ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     """The seafloor rupture as a dtopo file: Fault({subfaults, x, y, times}), every value stated.
@@ -101,13 +126,18 @@ def fault(value: Any, *, run: Mapping[str, Any]
     degrees, metres and the run's lon/lat; ``x`` and ``y`` are ``[first, last, nodes]``
     of the dtopo grid and ``times`` its one or two instants. Clawpack's Okada model sums
     the subfaults into one topotype-3 dtopo file and one DTOPO_DTOPOFILES row; the
-    magnitude is computed from the slip, never stated, and nothing is scaled or defaulted."""
+    magnitude is computed from the slip, never stated, and nothing is scaled or defaulted.
+    ``rupture_type: 'kinematic'`` with a ``rise_shape`` ('linear' or 'quadratic') makes the rupture unfold:
+    every subfault then states ``rupture_time`` and ``rise_time`` (seconds), ``times`` lists the strictly
+    increasing instants the dtopo is written at, and the last must not precede the largest rupture_time +
+    rise_time, since the engine holds the last frame."""
     if not isinstance(value, Mapping):
         _refuse("FAULT_UNSTATED", "Fault takes a mapping {subfaults, x, y, times}: the "
                 "subfaults and the dtopo grid they are summed on are all stated.")
-    extra = sorted(set(value) - set(_FAULT))
+    extra = sorted(set(value) - set(_FAULT) - set(_RUPTURE))
     if extra:
-        _refuse("FAULT_UNSTATED", f"Fault states {', '.join(extra)}; it takes {', '.join(_FAULT)}.")
+        _refuse("FAULT_UNSTATED", f"Fault states {', '.join(extra)}; it takes {', '.join(_FAULT + _RUPTURE)}.")
+    kinematic, shape = _rupture(value, "Fault")
     absent = [key for key in _FAULT if value.get(key) is None]
     if absent:
         _refuse("FAULT_UNSTATED", f"Fault states no {', '.join(absent)}: the rupture and the "
@@ -119,8 +149,9 @@ def fault(value: Any, *, run: Mapping[str, Any]
     if run.get("GEO_COORDINATE_SYSTEM") != 2:
         _refuse("FAULT_COORDINATES", "Fault writes a lon/lat dtopo, so GEO_COORDINATE_SYSTEM "
                 "must be stated 2 beside it.")
-    from ..authoring.dtopo import SUBFAULT_FIELDS
+    from ..authoring.dtopo import KINEMATIC_FIELDS, SUBFAULT_FIELDS
 
+    taken = SUBFAULT_FIELDS + (KINEMATIC_FIELDS if kinematic else ())
     subfaults = value["subfaults"]
     if not isinstance(subfaults, (list, tuple)) or not subfaults:
         _refuse("FAULT_UNSTATED", "Fault states no subfault; it takes a list of them.")
@@ -128,15 +159,16 @@ def fault(value: Any, *, run: Mapping[str, Any]
     for number, item in enumerate(subfaults, 1):
         if not isinstance(item, Mapping):
             _refuse("FAULT_SUBFAULT", f"Fault subfault {number} is not a mapping.")
-        extra = sorted(set(item) - set(SUBFAULT_FIELDS))
+        extra = sorted(set(item) - set(taken))
         if extra:
             _refuse("FAULT_SUBFAULT", f"Fault subfault {number} states {', '.join(extra)}; a "
-                    f"subfault takes {', '.join(SUBFAULT_FIELDS)}.")
-        absent = [f for f in SUBFAULT_FIELDS if item.get(f) is None]
+                    f"subfault takes {', '.join(taken)}"
+                    + ("" if kinematic else " (rupture_time and rise_time need rupture_type 'kinematic')") + ".")
+        absent = [f for f in taken if item.get(f) is None]
         if absent:
             _refuse("FAULT_SUBFAULT", f"Fault subfault {number} states no {', '.join(absent)}: "
                     "every value of the rupture is stated or refused, none is scaled or defaulted.")
-        for field in SUBFAULT_FIELDS[:-1]:
+        for field in (*SUBFAULT_FIELDS[:-1], *(KINEMATIC_FIELDS if kinematic else ())):
             if isinstance(item[field], bool) or not isinstance(item[field], (int, float)) \
                     or not math.isfinite(item[field]):
                 _refuse("FAULT_SUBFAULT", f"Fault subfault {number} states {field} "
@@ -144,7 +176,9 @@ def fault(value: Any, *, run: Mapping[str, Any]
         if not isinstance(item["coordinate_specification"], str):
             _refuse("FAULT_SUBFAULT", f"Fault subfault {number} states a coordinate_specification "
                     "that is no string.")
-        stated.append({field: item[field] for field in SUBFAULT_FIELDS})
+        if kinematic and item["rise_time"] < 0:
+            _refuse("FAULT_SUBFAULT", f"Fault subfault {number} states rise_time {item['rise_time']!r}, below zero.")
+        stated.append({field: item[field] for field in taken})
     grid = {}
     for axis in ("x", "y"):
         lo, hi, nodes = _triple(value[axis], axis)
@@ -154,9 +188,19 @@ def fault(value: Any, *, run: Mapping[str, Any]
             isinstance(t, (int, float)) and not isinstance(t, bool) and math.isfinite(t)
             for t in times):
         _refuse("FAULT_GRID", "Fault times is a list of the instants the dtopo is written at.")
+    kind: dict[str, Any] = {}
+    if kinematic:
+        if any(b <= a for a, b in zip(times, times[1:])):
+            _refuse("FAULT_GRID", "a kinematic Fault's times are strictly increasing.")
+        end = max(item["rupture_time"] + item["rise_time"] for item in stated)
+        if times[-1] < end:
+            _refuse("FAULT_KINEMATIC_UNFINISHED", f"the last dtopo instant {times[-1]:g} s precedes the rupture's end "
+                    f"{end:g} s (the largest rupture_time + rise_time): the engine holds the last frame, so the "
+                    "seafloor would freeze half risen. Extend times.")
+        kind = {"rupture_type": "kinematic", "rise_shape": shape}
     name = "dtopo_01.tt3"
     return ({"DTOPO_DTOPOFILES": [[3, name]]},
-            {name: {"dtopo": {"subfaults": stated, **grid, "times": [float(t) for t in times]}}})
+            {name: {"dtopo": {"subfaults": stated, **grid, "times": [float(t) for t in times], **kind}}})
 
 
 #: What one SiftFault statement carries: the unit sources read, the slip on each, the dtopo grid's spacing and margin in degrees, and its instants.
@@ -199,6 +243,9 @@ def sift_fault(value: Any, *, run: Mapping[str, Any]
 #: What one FiniteFault statement carries: the finite-fault record read, the dtopo grid's spacing and margin in degrees, and its instants.
 _FINITE = ("finite_fault", "spacing", "buffer", "times")
 
+#: What it may add: the rupture's kind and rise shape as Fault's, and the ComCat event the workflow reads the record of.
+_FINITE_MORE = (*_RUPTURE, "event_id")
+
 
 def finite_fault(value: Any, *, run: Mapping[str, Any]
                  ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
@@ -206,12 +253,17 @@ def finite_fault(value: Any, *, run: Mapping[str, Any]
 
     ``finite_fault`` is the record ``fetch_finite_fault`` returns; each of its subfaults becomes a Fault subfault
     at the slip the inversion states, and ``spacing``, ``buffer`` and ``times`` are as SiftFault's. A rupture
-    another composite already wrote refuses: one run has one rupture."""
+    another composite already wrote refuses: one run has one rupture. ``event_id`` names the event whose record the
+    workflow fetches when ``finite_fault`` is the name of a run value it holds nothing under; the composite reads
+    only the record. ``rupture_type: 'kinematic'`` with a ``rise_shape`` plays the inversion's own rupture and rise
+    times, ``times`` then being the instants or one interval in seconds from 0 to the first multiple at or past the
+    rupture's end."""
     if not isinstance(value, Mapping):
         _refuse("FINITE_FAULT_UNSTATED", "FiniteFault takes a mapping {finite_fault, spacing, buffer, times}.")
-    extra = sorted(set(value) - set(_FINITE))
+    extra = sorted(set(value) - set(_FINITE) - set(_FINITE_MORE))
     if extra:
-        _refuse("FINITE_FAULT_UNSTATED", f"FiniteFault states {', '.join(extra)}; it takes {', '.join(_FINITE)}.")
+        _refuse("FINITE_FAULT_UNSTATED", f"FiniteFault states {', '.join(extra)}; it takes {', '.join(_FINITE + _FINITE_MORE)}.")
+    kinematic, shape = _rupture(value, "FiniteFault")
     absent = [key for key in _FINITE if value.get(key) is None]
     if absent:
         _refuse("FINITE_FAULT_UNSTATED", f"FiniteFault states no {', '.join(absent)}: the record read and the "
@@ -221,9 +273,19 @@ def finite_fault(value: Any, *, run: Mapping[str, Any]
                 "keyword): FiniteFault is the run's one rupture, so state only one of them.")
     from ..authoring.dtopo import dtopo_axes, finite_fault_subfaults
 
-    subfaults = finite_fault_subfaults(value["finite_fault"])
+    subfaults = finite_fault_subfaults(value["finite_fault"], kinematic)
     x, y = dtopo_axes(subfaults, float(value["spacing"]), float(value["buffer"]))
-    return fault({"subfaults": subfaults, "x": x, "y": y, "times": value["times"]}, run=run)
+    times = value["times"]
+    if isinstance(times, (int, float)) and not isinstance(times, bool):
+        if not kinematic:
+            _refuse("FINITE_FAULT_UNSTATED", "FiniteFault times is one interval only for a kinematic rupture; a static "
+                    "one states the list of instants.")
+        if not math.isfinite(times) or times <= 0:
+            _refuse("FINITE_FAULT_UNSTATED", f"FiniteFault interval {times!r} is no positive number of seconds.")
+        end = max(sub["rupture_time"] + sub["rise_time"] for sub in subfaults)
+        times = [step * float(times) for step in range(math.ceil(end / float(times) - 1e-9) + 1)]
+    return fault({"subfaults": subfaults, "x": x, "y": y, "times": times,
+                  **({"rupture_type": "kinematic", "rise_shape": shape} if kinematic else {})}, run=run)
 
 
 #: What one FixedGrids statement carries: the extent the products cover and their cadence.

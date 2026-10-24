@@ -49,7 +49,7 @@ _DISPATCH = "trid3nt_server.workflows.geoclaw.engine.solve_case"
 _OUTPUTS = ["fgmax*", "fgout*", "gauge*", "geoclaw_metrics.json"]
 
 #: The names the workflow writes into the run itself, as the data rows it declares: composites read them, no caller states them.
-_PRODUCED = ("deep_bed_offset", "sift_unit_sources")
+_PRODUCED = ("deep_bed_offset", "finite_fault", "sift_unit_sources")
 
 _FRAME, = BED.states
 
@@ -208,7 +208,8 @@ class GeoclawWorkflow(Workflow):
         from trid3nt_server.inputs.vertical_datum import OFFSET_FETCH
 
         return {"deep_bed_fetch": self.template.DEEP_BED, "deep_bed_offset": OFFSET_FETCH,
-                "sea_level_offset": OFFSET_FETCH, "sift_unit_sources_fetch": "fetch_sift_unit_sources"}
+                "sea_level_offset": OFFSET_FETCH, "sift_unit_sources_fetch": "fetch_sift_unit_sources",
+                "finite_fault_fetch": "fetch_finite_fault"}
 
     def check(self) -> None:
         """Refuse at import what this template cannot run on: one domain, one bed, a mesh ask."""
@@ -315,7 +316,8 @@ class GeoclawWorkflow(Workflow):
 
         The deep rung of the bed (the coarse surface under the fine one, over the whole grid) unless the run
         states one; the sea level, as the offset of the template's tidal datum on the run's frame at the seed,
-        unless the run states GEO_SEA_LEVEL; the unit sources of a SIFT rupture the sheet will state."""
+        unless the run states GEO_SEA_LEVEL; the unit sources of a SIFT rupture the sheet will state; the record of the earthquake a FiniteFault statement
+        names by ``event_id``, unless the statement already holds a record or the run holds one under its name."""
         from trid3nt_server.inputs.point import lonlat_of
         from trid3nt_server.inputs.vertical_datum import OFFSET_FETCH, offset_ask
 
@@ -346,6 +348,11 @@ class GeoclawWorkflow(Workflow):
         if rupture is not None and rupture["slips"] and run.get("sift_unit_sources") is None:
             run["sift_unit_sources"] = await _fetch(env, "sift_unit_sources_fetch", "fetch_sift_unit_sources",
                                                     names=list(rupture["slips"]))
+        finite = own["FiniteFault"] if "FiniteFault" in own else self.steering.ASSERTED.get("FiniteFault")
+        if isinstance(finite, Mapping) and finite.get("event_id") and isinstance(finite.get("finite_fault"), str) \
+                and run.get(finite["finite_fault"]) is None:
+            run[finite["finite_fault"]] = await _fetch(env, "finite_fault_fetch", "fetch_finite_fault",
+                                                       event_id=finite["event_id"])
 
 
 async def _fetch(env: Any, row: str, runner: str, **kwargs: Any) -> Any:

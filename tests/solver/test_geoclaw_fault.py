@@ -100,6 +100,49 @@ def test_the_subfault_writes_the_dtopo_the_example_writes(tmp_path):
     assert abs(float(np.abs(ours.dZ).max())) > 1.0
 
 
+_RISE = {"rupture_time": 5.0, "rise_time": 20.0}
+_TIMES = [0.0, 10.0, 20.0, 30.0]
+
+
+def test_a_kinematic_subfault_writes_the_dtopo_clawpack_writes_at_each_instant(tmp_path):
+    from clawpack.geoclaw import dtopotools
+
+    rundir, sheet, written = _written(tmp_path, _fault(sub=_RISE, times=_TIMES, rupture_type="kinematic",
+                                                       rise_shape="linear"))
+    sub = dtopotools.SubFault()
+    for key, value in {**_SUBFAULT, **_RISE, "rise_shape": "linear"}.items():
+        setattr(sub, key, value)
+    theirs = dtopotools.Fault()
+    theirs.subfaults, theirs.rupture_type = [sub], "kinematic"
+    theirs.create_dtopography(np.linspace(-77, -67, 100), np.linspace(-40, -30, 100), _TIMES).write(
+        str(tmp_path / "example.tt3"), dtopo_type=3)
+
+    ours = _read(rundir / "dtopo_01.tt3")
+
+    assert ours.dZ.shape == (4, 100, 100) and list(ours.times) == _TIMES
+    assert (rundir / "dtopo_01.tt3").read_bytes() == (tmp_path / "example.tt3").read_bytes()
+    assert float(np.abs(ours.dZ[0]).max()) == 0.0 < float(np.abs(ours.dZ[1]).max()) < float(np.abs(ours.dZ[3]).max())
+    assert written["written"] and "dtopo_01.tt3" in (rundir / "dtopo.data").read_text()
+
+
+@pytest.mark.parametrize("fault, code, word", [
+    (dict(sub=_RISE), "GEOCLAW_FAULT_SUBFAULT", "rupture_type 'kinematic'"),
+    (dict(sub=_RISE, rupture_type="kinematic", times=_TIMES), "GEOCLAW_FAULT_RISE_SHAPE_UNSTATED", "rise_shape"),
+    (dict(rupture_type="kinematic", rise_shape="linear", times=_TIMES), "GEOCLAW_FAULT_SUBFAULT", "no rupture_time"),
+    (dict(sub=_RISE, rupture_type="kinematic", rise_shape="quadratic", times=[0.0, 10.0]),
+     "GEOCLAW_FAULT_KINEMATIC_UNFINISHED", "last dtopo instant 10 s precedes the rupture's end 25 s"),
+    (dict(sub=_RISE, rupture_type="kinematic", rise_shape="quadratic", times=[10.0, 0.0, 30.0]),
+     "GEOCLAW_FAULT_GRID", "strictly increasing"),
+    (dict(sub={"rupture_time": 0.0, "rise_time": -1.0}, rupture_type="kinematic", rise_shape="linear", times=_TIMES),
+     "GEOCLAW_FAULT_SUBFAULT", "below zero"),
+])
+def test_a_kinematic_fault_unstated_or_unfinished_refuses_by_name(tmp_path, fault, code, word):
+    with pytest.raises(GeoclawError) as caught:
+        _written(tmp_path, _fault(**fault))
+
+    assert caught.value.error_code == code and word in str(caught.value)
+
+
 def test_the_dtopo_row_lands_in_dtopo_data_and_parses_back(tmp_path):
     rundir, sheet, written = _written(tmp_path, _fault())
 

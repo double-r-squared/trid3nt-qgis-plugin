@@ -637,8 +637,16 @@ Fault subfault, the dtopo grid being the one Clawpack's `create_dtopo_xy` lays (
 no rupture. `FiniteFault` is the rupture of a real earthquake: the record `fetch_finite_fault` reads from the event's USGS
 finite-fault product (ComCat names the `complete_inversion.fsp`; the parse takes segment strike and dip, Dx and Dz and the
 row count from the file's own headers) becomes one Fault subfault per row, centred (`centroid`), at the inversion's slip with
-no rigidity or scaling; TRUP and RISE ride in the record, unread by the static dtopo. It refuses beside any other rupture
-(`Fault`, `SiftFault`, the keyword), and the workflow does not fetch the record from an event id. `InitialSurface` opens the sea at a stated raster instead (a qinit file of type 4). The workflow stages only the
+no rigidity or scaling. It refuses beside any other rupture (`Fault`, `SiftFault`, the keyword). A rupture is static (one
+final dtopo, Clawpack's two-instant limit) unless the statement says `rupture_type: 'kinematic'` (Clawpack's own word, on
+`Fault` and `FiniteFault`): each subfault then carries `rupture_time` and `rise_time` (a `FiniteFault` takes the record's
+TRUP and RISE), the statement states `rise_shape` ('linear' or 'quadratic', the two Clawpack's `rise_fraction` offers; the
+FSP's asymmetric cosine is neither, so none is defaulted and an unstated or unknown one refuses), and Clawpack writes the
+dtopo at the instants `times` lists, each subfault's share of its slip at that instant. A `FiniteFault` may state `times` as
+one interval in seconds, the instants then running from 0 to the first multiple at or past the largest TRUP + RISE; a `Fault`
+whose last instant precedes the rupture's end refuses (`GEOCLAW_FAULT_KINEMATIC_UNFINISHED`), since the engine holds the last
+frame. A `FiniteFault` stating `event_id` (and a `finite_fault` name) has the workflow fetch the record as a declared row, the
+way it fetches SIFT unit sources; a record the run already holds under that name wins and nothing is fetched. `InitialSurface` opens the sea at a stated raster instead (a qinit file of type 4). The workflow stages only the
 case section the worker reads (`stage_run(case=)`), publishes the module table through `publish_reads`, and its record is the
 outline of the fixed grids. The verification twin (`geoclaw_tsunami_zero_fetch`) runs Thacker's oscillating paraboloid, stated
 and synthetic, against its analytic solution.
