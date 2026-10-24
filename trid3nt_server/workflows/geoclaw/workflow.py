@@ -285,7 +285,7 @@ class GeoclawWorkflow(Workflow):
         async with substep(emitter, "data"):
             await self._data(env, own)
         ends = [rupture_end(composite, own[composite] if composite in own else self.steering.ASSERTED.get(composite), run)
-                for composite in ("Fault", "SiftFault", "FiniteFault")]
+                for composite in ("Fault", "SiftFault", "FiniteFault", "SlabFault")]
         grid = grid_keywords(art, set(own) | set(self.steering.ASSERTED), max((end for end in ends if end is not None), default=None))
         declared = {row.name for row in self.inputs if not row.is_row}
         staged: dict[str, Any] = {}

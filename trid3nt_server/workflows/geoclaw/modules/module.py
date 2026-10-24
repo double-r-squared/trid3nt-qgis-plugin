@@ -23,7 +23,7 @@ from ...runtime.sheet import Sheet
 from ..errors import GeoclawError
 
 __all__ = ["GeoclawModule", "fault", "finite_fault", "fixed_grids", "initial_surface", "module_input_dir", "rupture_end", "sift_fault",
-           "topography"]
+           "slab_fault", "topography"]
 
 #: What one Topography statement may carry: the surface, and the offset onto the run's frame.
 _SURFACE = ("surface", "offset")
@@ -288,10 +288,56 @@ def finite_fault(value: Any, *, run: Mapping[str, Any]
                   **({"rupture_type": "kinematic", "rise_shape": shape} if kinematic else {})}, run=run)
 
 
+#: What one SlabFault statement carries: the slab record read, the rectangle and the point it is anchored at, the subfault size,
+#: the rake and slip, and the dtopo grid's spacing and margin in degrees and instants.
+_SLAB = ("slab", "longitude", "latitude", "anchor", "length", "width", "subfault_length", "subfault_width", "rake", "slip",
+         "spacing", "buffer", "times")
+
+
+def slab_fault(value: Any, *, run: Mapping[str, Any]
+               ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    """A rupture on the real subduction interface as a dtopo file: SlabFault({slab, longitude, latitude, anchor, length, width, subfault_length, subfault_width, rake, slip, spacing, buffer, times}).
+
+    ``slab`` is the record ``fetch_slab_geometry`` returns over the rupture; the rectangle is ``length`` along strike
+    and ``width`` down dip in metres, anchored at the stated point as the midpoint of its top edge (``anchor`` 'top')
+    or its centre ('centre'), and it must divide into whole subfaults of ``subfault_length`` x ``subfault_width``.
+    Each subfault reads depth, strike and dip from Slab2 at its own centre; ``rake`` (degrees) and ``slip`` (metres)
+    are stated and uniform, and nothing is defaulted. A point or subfault Slab2 does not hold refuses; the rupture is
+    static, and ``spacing``, ``buffer`` and ``times`` are as SiftFault's."""
+    if not isinstance(value, Mapping):
+        _refuse("SLAB_FAULT_UNSTATED", f"SlabFault takes a mapping {{{', '.join(_SLAB)}}}.")
+    extra = sorted(set(value) - set(_SLAB))
+    if extra:
+        _refuse("SLAB_FAULT_UNSTATED", f"SlabFault states {', '.join(extra)}; it takes {', '.join(_SLAB)}.")
+    absent = [key for key in _SLAB if value.get(key) is None]
+    if absent:
+        _refuse("SLAB_FAULT_UNSTATED", f"SlabFault states no {', '.join(absent)}: the interface read, the rectangle, "
+                "the rake and slip and the dtopo grid are all stated, the engine has no value for them.")
+    if run.get("DTOPO_DTOPOFILES") is not None:
+        _refuse("SLAB_FAULT_RUPTURE_STATED", "DTOPO_DTOPOFILES is already stated (by Fault, SiftFault, FiniteFault or the "
+                "keyword): SlabFault is the run's one rupture, so state only one of them.")
+    numbers = {}
+    for key in (k for k in _SLAB if k not in ("slab", "anchor", "times")):
+        item = value[key]
+        if isinstance(item, bool) or not isinstance(item, (int, float)) or not math.isfinite(item):
+            _refuse("SLAB_FAULT_UNSTATED", f"SlabFault {key} {item!r} is no finite number.")
+        numbers[key] = float(item)
+    for key in ("length", "width", "subfault_length", "subfault_width", "spacing", "buffer"):
+        if numbers[key] <= 0:
+            _refuse("SLAB_FAULT_UNSTATED", f"SlabFault {key} {numbers[key]:g} must be positive.")
+    from ..authoring.dtopo import dtopo_axes
+    from ..authoring.slab import slab_subfaults
+
+    subfaults = slab_subfaults(value["slab"], anchor=value["anchor"], **{
+        k: numbers[k] for k in ("longitude", "latitude", "length", "width", "subfault_length", "subfault_width", "rake", "slip")})
+    x, y = dtopo_axes(subfaults, numbers["spacing"], numbers["buffer"])
+    return fault({"subfaults": subfaults, "x": x, "y": y, "times": value["times"]}, run=run)
+
+
 def rupture_end(name: str, value: Any, run: Mapping[str, Any]) -> float | None:
     """The second a stated rupture ends -> its last dtopo instant, or the largest rupture_time + rise_time of a kinematic one.
 
-    ``name`` is the composite (Fault, SiftFault or FiniteFault) and ``value`` its statement; a statement that
+    ``name`` is the composite (Fault, SiftFault, FiniteFault or SlabFault) and ``value`` its statement; a statement that
     states no rupture, or not yet a usable one, gives None and the composite refuses it when it runs."""
     if not isinstance(value, Mapping) or (name == "SiftFault" and not value.get("slips")):
         return None

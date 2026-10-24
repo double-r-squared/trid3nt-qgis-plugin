@@ -1,0 +1,102 @@
+# USGS Slab2 (Hayes et al. 2018): the depth, strike and dip of the subduction interface on a
+# 0.05 or 0.02 degree grid per zone. The release is one tarball downloaded whole through the
+# cache and read from it, so the record hook makes no request of its own.
+schema_version: v1
+
+name: fetch_slab_geometry
+source_class: slab_geometry
+error_prefix: SLAB
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: NO_COVERAGE
+shape: record
+supports_global_query: false
+
+endpoints:
+  archive:
+    url: "https://www.sciencebase.gov/catalog/file/get/5aa1b00ee4b0b1c392e86467?f=__disk__d5%2F91%2F39%2Fd591399bf4f249ab49ffec8a366e5070fe96e0ba"
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+params:
+  point:
+    type: point
+  bbox:
+    type: bbox
+    quantize: round_6dp
+  zone:
+    type: str
+
+hooks:
+  record: slab_geometry.record
+
+normalize:
+  crs: "EPSG:4326"
+  units: km
+
+output:
+  layer_type: record
+  ext: json
+  emit_bbox: false
+
+cache:
+  ttl_class: static-30d
+
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 0.05
+  floor_mb: 0.001
+  ceil_mb: 5
+
+caveats:
+  - "model-callable, not matched: an interface geometry is a scenario input and never a measurement a slot matches, so it carries no coverage row"
+  - "depth_km is POSITIVE DOWN (Slab2 publishes it negative), the interface being the slab top; strike is degrees clockwise from north with the slab dipping to the right of the strike direction, dip degrees from horizontal"
+  - "a value on a grid node is Slab2's own; between nodes depth and dip blend bilinearly and strike blends as a unit vector. A node Slab2 masks is never filled and a point is never moved: a stencil that needs one refuses"
+  - "zones overlap where slabs stack (Kuril and Ryukyu, Halmahera and Sulawesi, Izu and Ryukyu ...) at different depths; a read that lands in two zones refuses naming both depths and the zone param picks one"
+  - "geometry only: Slab2 carries no rake, slip or rupture extent, which a scenario states; the interface is a surface, so a planar subfault laid on it is an approximation"
+  - "four zones (izu, ker, man, sol) have overturned slab that Slab2 publishes as separate discrete nodes; this row reads the gridded depth, strike and dip only"
+  - "longitudes come back in the frame of the box or point asked, so a box west of the antimeridian reads a zone published east of it"
+
+docstring: |-
+  USGS Slab2 subduction-interface geometry (depth, strike, dip) at a point or over a box -> the real plate-interface surface a megathrust scenario sits on.
+
+  What it does:
+      Reads the global Slab2 release (Hayes et al. 2018), downloaded once and cached, and
+      returns for each zone around the place a window of the interface's depth (km, positive
+      down), strike and dip on the published grid. A ``point`` also returns the interface read
+      there: the grid value on a node, a bilinear blend between nodes, never moved or filled.
+
+  When to use:
+      - "how deep is the Cascadia subduction interface under 124.5 W 47 N", "strike and dip of
+        the megathrust off Chile".
+      - A tsunami scenario on a real interface with no earthquake behind it: read a box over the
+        rupture and hand the record to the GeoClaw ``SlabFault`` composite with the length,
+        width, rake and slip you state.
+
+  When NOT to use:
+      - A real earthquake's slip: ``fetch_finite_fault``.
+      - Rake, slip or rupture size: Slab2 states none, they are the scenario's.
+      - Crustal faults: ``fetch_fault_sources``.
+
+  Parameters:
+      point: ``[lon, lat]`` in EPSG:4326. Exactly one of ``point`` and ``bbox``.
+      bbox: ``[west, south, east, north]``; a margin of one node is added so a point on the edge can be read.
+      zone: optional three-letter Slab2 zone code (``cas`` Cascadia, ``sam`` South America, ``kur`` Kuril ...), needed only where two zones hold the place.
+
+  Returns:
+      a JSON-compatible dict with ``zones`` (each ``zone``, ``spacing_deg``, ``lons``, ``lats``
+      and the ``depth_km``, ``strike``, ``dip`` rows, null where masked), ``at`` for a point
+      (``longitude``, ``latitude``, ``zone``, ``depth_km``, ``strike``, ``dip``) and ``source``.
+
+  Cross-tool dependencies:
+      - Composes WITH: the GeoClaw ``SlabFault`` composite.
+      - Upstream data source: USGS Slab2 (https://doi.org/10.5066/F7PV6JNV).
+
+  Cache: ``ttl_class="static-30d"``.
+
+  Errors:
+      - ``SLAB_INPUT_INVALID``: neither or both of point and bbox, an unknown zone, or a place two zones hold (state the zone).
+      - ``SLAB_NO_COVERAGE``: Slab2 states no interface there; a point names the nearest node that does.
+      - ``SLAB_UPSTREAM_ERROR``: the release could not be downloaded.
+
+  Tier-1 free. No API key.
