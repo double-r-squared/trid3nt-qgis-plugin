@@ -1,0 +1,6 @@
+fetch_finite_fault:
+- USGS finite fault slip model of the 2011 Tohoku earthquake
+- how much did each patch of the fault slip in the Kamchatka 2025 earthquake
+- get the published rupture model subfaults for a real earthquake by event id
+- earthquake slip distribution from the NEIC finite-fault inversion for a tsunami source
+- FSP file complete inversion slip rake strike dip of an earthquake

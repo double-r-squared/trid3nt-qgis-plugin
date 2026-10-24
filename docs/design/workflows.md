@@ -634,7 +634,11 @@ at the seed. `GEO_SEA_LEVEL` is the offset of the template's tidal datum (`SEA_L
 frame, measured by the same row at the seed and never moved, unless the run states it. The rupture is the `SiftFault`
 composite: NOAA PMEL SIFT unit sources (`fetch_sift_unit_sources`) slipped by the tutorial's ASCE_SIFT_Region2 slips, each a
 Fault subfault, the dtopo grid being the one Clawpack's `create_dtopo_xy` lays (10 arcsec, 1 degree margin); no slip anywhere is
-no rupture. `InitialSurface` opens the sea at a stated raster instead (a qinit file of type 4). The workflow stages only the
+no rupture. `FiniteFault` is the rupture of a real earthquake: the record `fetch_finite_fault` reads from the event's USGS
+finite-fault product (ComCat names the `complete_inversion.fsp`; the parse takes segment strike and dip, Dx and Dz and the
+row count from the file's own headers) becomes one Fault subfault per row, centred (`centroid`), at the inversion's slip with
+no rigidity or scaling; TRUP and RISE ride in the record, unread by the static dtopo. It refuses beside any other rupture
+(`Fault`, `SiftFault`, the keyword), and the workflow does not fetch the record from an event id. `InitialSurface` opens the sea at a stated raster instead (a qinit file of type 4). The workflow stages only the
 case section the worker reads (`stage_run(case=)`), publishes the module table through `publish_reads`, and its record is the
 outline of the fixed grids. The verification twin (`geoclaw_tsunami_zero_fetch`) runs Thacker's oscillating paraboloid, stated
 and synthetic, against its analytic solution.

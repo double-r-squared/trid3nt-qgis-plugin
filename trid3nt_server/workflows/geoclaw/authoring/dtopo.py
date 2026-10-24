@@ -17,7 +17,7 @@ from ..errors import GeoclawError
 
 logger = logging.getLogger("trid3nt_server.workflows.geoclaw.authoring.dtopo")
 
-__all__ = ["DTOPO", "SUBFAULT_FIELDS", "dtopo_axes", "sift_subfaults", "write_dtopofiles"]
+__all__ = ["DTOPO", "SUBFAULT_FIELDS", "dtopo_axes", "finite_fault_subfaults", "sift_subfaults", "write_dtopofiles"]
 
 #: The key a composite's file entry carries its fault under.
 DTOPO = "dtopo"
@@ -47,6 +47,23 @@ def sift_subfaults(unit_sources: Mapping[str, Mapping[str, float]],
              "length": row["length_km"] * 1000.0, "width": row["width_km"] * 1000.0,
              "coordinate_specification": "noaa sift"}
             for name, slip in slips.items() for row in [unit_sources[name]]]
+
+
+def finite_fault_subfaults(record: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """The record ``fetch_finite_fault`` returns -> subfault statements in Clawpack's own SubFault names.
+
+    Each published row is a subfault centre, so the specification is ``centroid``; kilometres
+    become metres and the slip is the inversion's, with no rigidity or scaling applied."""
+    rows = record.get("subfaults") if isinstance(record, Mapping) else None
+    if not isinstance(rows, (list, tuple)) or not rows:
+        _refuse("FINITE_FAULT_UNSTATED", "the finite-fault record holds no subfault.")
+    try:
+        return [{"longitude": row["longitude"], "latitude": row["latitude"], "depth": row["depth_km"] * 1000.0,
+                 "strike": row["strike"], "dip": row["dip"], "rake": row["rake"], "slip": float(row["slip_m"]),
+                 "length": row["length_km"] * 1000.0, "width": row["width_km"] * 1000.0,
+                 "coordinate_specification": "centroid"} for row in rows]
+    except (KeyError, TypeError) as exc:
+        _refuse("FINITE_FAULT_UNSTATED", f"a finite-fault subfault states no usable {exc}.")
 
 
 def dtopo_axes(subfaults: list[Mapping[str, Any]], spacing: float, buffer: float

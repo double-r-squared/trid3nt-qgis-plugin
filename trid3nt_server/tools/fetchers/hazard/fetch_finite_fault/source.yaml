@@ -1,0 +1,100 @@
+# USGS NEIC finite-fault products (Hayes et al.): the slip distribution of one
+# earthquake, published in SRCMOD's FSP text format beside the event in ComCat. The
+# event record names the product's files by a URL that embeds the product's version,
+# so the file is found through the record and its URL is never built.
+schema_version: v1
+
+name: fetch_finite_fault
+source_class: finite_fault
+error_prefix: FINITE_FAULT
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: NO_PRODUCT
+shape: record
+supports_global_query: false
+
+endpoints:
+  event:
+    url: "https://earthquake.usgs.gov/fdsnws/event/1/query"
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+params:
+  event_id:
+    type: str
+    required: true
+
+hooks:
+  resolve_build: finite_fault.resolve_build
+  resolve_parse: finite_fault.resolve_parse
+  build_request: finite_fault.build_request
+  record: finite_fault.record
+
+normalize:
+  crs: "EPSG:4326"
+  units: m
+
+output:
+  layer_type: record
+  ext: json
+  emit_bbox: false
+
+cache:
+  # The product URL carries its version and enters the key, so a re-inversion is a new entry.
+  ttl_class: static-30d
+
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 0.001
+  floor_mb: 0.001
+  ceil_mb: 0.01
+
+caveats:
+  - "model-callable, not matched: a rupture model is one event's published slip and never a measurement a slot matches, so it carries no coverage row"
+  - "subfault longitude and latitude are the subfault's centre in degrees east (-180 to 180), depth_km is the centre's depth, slip_m the slip, length_km along strike and width_km down dip"
+  - "rupture_time_s and rise_time_s are the inversion's kinematics, carried for a kinematic rupture; a static dtopo does not read them"
+  - "the file's own rigidity (a layered velocity-density model) is not carried: the Okada displacement is linear in slip and the magnitude a composite computes uses Clawpack's"
+  - "an event has a finite-fault product mostly at M6.5 and above since 1990; an event without one refuses naming it"
+
+docstring: |-
+  USGS finite-fault slip model of one real earthquake by ComCat event id -> its subfaults with the slip on each.
+
+  What it does:
+      Reads the event's newest finite-fault product from ComCat and parses its
+      complete_inversion.fsp: every segment's strike and dip and every subfault's
+      centre (longitude, latitude, depth), slip, rake, length, width and the
+      inversion's rupture and rise times. The Okada displacement of the slipped
+      subfaults is the event's sea-floor deformation.
+
+  When to use:
+      - A historical earthquake's tsunami or deformation is wanted from the slip
+        USGS inverted for it ("Kamchatka 2025", "Tohoku 2011"): ComCat id
+        ``us6000qw60``, ``usp000hvnu``.
+      - "how much did each part of the fault slip in the 2010 Maule earthquake".
+
+  When NOT to use:
+      - A scenario with no event behind it: state the subfaults, or use the SIFT unit sources.
+      - An event USGS never inverted: it refuses naming the event.
+
+  Parameters:
+      event_id: the ComCat event id, such as ``us6000qw60``.
+
+  Returns:
+      a JSON-compatible dict with ``event_id``, ``magnitude_mw``, ``moment_nm``,
+      ``segments`` (``segment``, ``strike``, ``dip``), ``subfaults`` (``segment``,
+      ``longitude``, ``latitude``, ``depth_km``, ``strike``, ``dip``, ``rake``,
+      ``slip_m``, ``length_km``, ``width_km``, ``rupture_time_s``, ``rise_time_s``)
+      and ``source`` (``product_code``, ``updated_ms``, ``url``).
+
+  Cross-tool dependencies:
+      - Composes WITH: the GeoClaw ``FiniteFault`` composite.
+      - Upstream data source: USGS ComCat finite-fault products (https://earthquake.usgs.gov/).
+
+  Cache: ``ttl_class="static-30d"``.
+
+  Errors:
+      - ``FINITE_FAULT_INPUT_INVALID``: no event id.
+      - ``FINITE_FAULT_NO_PRODUCT``: the event has no finite-fault product with a complete inversion.
+      - ``FINITE_FAULT_UPSTREAM_ERROR``: ComCat or the product file could not be read, or the file states no value the parse needs.
+
+  Tier-1 free. No API key.

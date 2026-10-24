@@ -1,0 +1,332 @@
+{
+ "properties": {
+  "products": {
+   "finite-fault": [
+    {
+     "indexid": 19935051,
+     "indexTime": 1635193048860,
+     "id": "urn:usgs-product:us:finite-fault:ak0219neiszm_2:1635193034829",
+     "type": "finite-fault",
+     "code": "ak0219neiszm_2",
+     "source": "us",
+     "updateTime": 1635193034829,
+     "status": "UPDATE",
+     "properties": {
+      "average-rise-time": "14.01",
+      "average-rupture-velocity": "2.14",
+      "crustal-model": "1D crustal model interpolated from CRUST2.0 (Bassin et al., 2000).",
+      "depth": "32.2000",
+      "derived-magnitude": "8.2740",
+      "derived-magnitude-type": "Mw",
+      "eventsource": "ak",
+      "eventsourcecode": "0219neiszm",
+      "eventtime": "2021-07-29T00:00:00.000Z",
+      "hypocenter-x": "189.0000",
+      "hypocenter-z": "105.0000",
+      "latitude": "55.3250",
+      "location": "99 km SE of Perryville, Alaska",
+      "longitude": "-157.8410",
+      "maximum-frequency": "0.1250",
+      "maximum-rise": "33.0000",
+      "maximum-slip": "5.5498",
+      "minimum-frequency": "0.0100",
+      "model-dip": "14.0000",
+      "model-length": "294.0000",
+      "model-number": "2",
+      "model-rake": "93.0000",
+      "model-strike": "243.0000",
+      "model-top": "7.1369",
+      "model-width": "196.0000",
+      "number-longwaves": "60",
+      "number-pwaves": "44",
+      "number-shwaves": "16",
+      "original-signature": "MCwCFDY43t3U6LI4OJNo6Yh3/iQTeTHXAhQ44UWj5ceiCT+HK3aqx/F4w5cckg==",
+      "original-signature-version": "v1",
+      "pdl-client-version": "Version 1.10.1 2016-04-07",
+      "review-status": "reviewed",
+      "scalar-moment": "2890433112309999599616.0000",
+      "segment-1-dip": "14.0000",
+      "segment-1-strike": "243.0000",
+      "segments": "1",
+      "subfault-1-area": "11041.6993",
+      "subfault-1-length": "123.9063",
+      "subfault-1-width": "89.1133",
+      "time-windows": "11",
+      "velocity-function": "Asymetriccosine",
+      "version": "1"
+     },
+     "preferredWeight": 53,
+     "contents": {
+      "coulomb.inp": {
+       "contentType": "application/octet-stream",
+       "lastModified": 1635181730000,
+       "length": 35704,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_2/us/1635193034829/coulomb.inp",
+       "sha256": "Pzp6jNh0nTZQr/IEwS81GYvx0DFLssLglatnF4gA/Tg="
+      },
+      "properties.json": {
+       "contentType": "application/json",
+       "lastModified": 1635193034000,
+       "length": 1252,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_2/us/1635193034829/properties.json",
+       "sha256": "zKdfyjCx6nsE2hdFTL94/eUGW5wwqRrEY3cEi9pcZZQ="
+      },
+      "surface_deformation.disp": {
+       "contentType": "application/octet-stream",
+       "lastModified": 1635181730000,
+       "length": 123312,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_2/us/1635193034829/surface_deformation.disp",
+       "sha256": "iWViv/GLSc3hXchhTwM/ScxKD96hZatsSFl+Q9MVkuI="
+      },
+      "basemap.png": {
+       "contentType": "image/png",
+       "lastModified": 1635188267000,
+       "length": 1176473,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_2/us/1635193034829/basemap.png",
+       "sha256": "OqonLcrUk3HkF55mVlPX3WG7CreMJrjWlB/X3pM7+ss="
+      },
+      "shakemap_polygon.txt": {
+       "contentType": "text/plain",
+       "lastModified": 1635181730000,
+       "length": 197,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_2/us/1635193034829/shakemap_polygon.txt",
+       "sha256": "0RwmTW+vusjDpRkX3fV45yJCyp4/P+Kq/pHFuXraGXc="
+      },
+      "basic_inversion.param": {
+       "contentType": "application/octet-stream",
+       "lastModified": 1635181730000,
+       "length": 46126,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_2/us/1635193034829/basic_inversion.param",
+       "sha256": "t5GbYEjqpcwLLq0z427pF7LpVUaNcfwe+MWUllRLMPw="
+      },
+      "FFM.geojson": {
+       "contentType": "application/octet-stream",
+       "lastModified": 1635193033000,
+       "length": 426437,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_2/us/1635193034829/FFM.geojson",
+       "sha256": "tdLRPWxlo6gAXsDVklnH8U8KwUP9IWLMXNJHliodo1c="
+      },
+      "contents.xml": {
+       "contentType": "application/xml",
+       "lastModified": 1635193034000,
+       "length": 1923,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_2/us/1635193034829/contents.xml",
+       "sha256": "vk9qXoZiNu3Gffh9r7p210LOYhF3XtRzLGB7LscOhaM="
+      },
+      "moment_rate.mr": {
+       "contentType": "application/octet-stream",
+       "lastModified": 1635181730000,
+       "length": 363548,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_2/us/1635193034829/moment_rate.mr",
+       "sha256": "qHocA+cU6oRxiMfRrU7JaQ9VzEoPG9iwOnAaH1HrYc4="
+      },
+      "slip.png": {
+       "contentType": "image/png",
+       "lastModified": 1635181730000,
+       "length": 533032,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_2/us/1635193034829/slip.png",
+       "sha256": "0ZAcQjuymxG+m/zCd58BUPa7poAm2lG/NVxOXi/fW3A="
+      },
+      "waveplots.zip": {
+       "contentType": "application/zip",
+       "lastModified": 1635181731000,
+       "length": 9847204,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_2/us/1635193034829/waveplots.zip",
+       "sha256": "2TqnI7ulp/1fSx8mq6yIobALy68jpoSIfXtGaOnn3sc="
+      },
+      "moment_rate.png": {
+       "contentType": "image/png",
+       "lastModified": 1635181730000,
+       "length": 95221,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_2/us/1635193034829/moment_rate.png",
+       "sha256": "VzRpg4FkL7dOY0+1FMBOlrobc+r0dujdeUoWMveKIRw="
+      },
+      "CMTSOLUTION": {
+       "contentType": "application/octet-stream",
+       "lastModified": 1635181730000,
+       "length": 112602,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_2/us/1635193034829/CMTSOLUTION",
+       "sha256": "Cpwl8Q1cuUNyHaaHLGMqFrFd7ehdHaI9QyH4DLDHza8="
+      },
+      "complete_inversion.fsp": {
+       "contentType": "application/octet-stream",
+       "lastModified": 1635181730000,
+       "length": 30859,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_2/us/1635193034829/complete_inversion.fsp",
+       "sha256": "cnEP0IiTtkn3NN7qhURVJORihzSq7HE2gAdv9WsI5Bs="
+      },
+      "analysis.html": {
+       "contentType": "text/html",
+       "lastModified": 1635193032000,
+       "length": 759,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_2/us/1635193034829/analysis.html",
+       "sha256": "5GO4ZEbxWB5zuJXVCzEG7DkrAfmexhPuTw/U+7NV9A8="
+      }
+     }
+    },
+    {
+     "indexid": 19934686,
+     "indexTime": 1635191864869,
+     "id": "urn:usgs-product:us:finite-fault:ak0219neiszm_1:1635188938271",
+     "type": "finite-fault",
+     "code": "ak0219neiszm_1",
+     "source": "us",
+     "updateTime": 1635188938271,
+     "status": "UPDATE",
+     "properties": {
+      "average-rise-time": "14.62",
+      "average-rupture-velocity": "2.26",
+      "crustal-model": "1D crustal model interpolated from CRUST2.0 (Bassin et al., 2000).",
+      "depth": "32.2000",
+      "derived-magnitude": "8.2726",
+      "derived-magnitude-type": "Mw",
+      "eventsource": "ak",
+      "eventsourcecode": "0219neiszm",
+      "eventtime": "2021-07-29T00:00:00.000Z",
+      "hypocenter-x": "203.0000",
+      "hypocenter-z": "105.0000",
+      "latitude": "55.3250",
+      "location": "99 km SE of Perryville, Alaska",
+      "longitude": "-157.8410",
+      "maximum-frequency": "0.1250",
+      "maximum-rise": "33.0000",
+      "maximum-slip": "3.3535",
+      "minimum-frequency": "0.0100",
+      "model-dip": "14.0000",
+      "model-length": "308.0000",
+      "model-number": "1",
+      "model-rake": "93.0000",
+      "model-strike": "243.0000",
+      "model-top": "7.1369",
+      "model-width": "252.0000",
+      "number-longwaves": "60",
+      "number-pwaves": "44",
+      "number-shwaves": "16",
+      "original-signature": "MC0CFH4JgIzAb1PQaoJwBr0G/4Ahb1bWAhUAqruoIJW6/RkkLlSMhMZu6KZJZpk=",
+      "original-signature-version": "v1",
+      "pdl-client-version": "Version 1.10.1 2016-04-07",
+      "review-status": "reviewed",
+      "scalar-moment": "2877146326371000123392.0000",
+      "segment-1-dip": "14.0000",
+      "segment-1-strike": "243.0000",
+      "segments": "1",
+      "subfault-1-area": "14048.4932",
+      "subfault-1-length": "146.0404",
+      "subfault-1-width": "96.1959",
+      "time-windows": "11",
+      "velocity-function": "Asymetriccosine",
+      "version": "1"
+     },
+     "preferredWeight": 53,
+     "contents": {
+      "coulomb.inp": {
+       "contentType": "application/octet-stream",
+       "lastModified": 1635187214000,
+       "length": 47332,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_1/us/1635188938271/coulomb.inp",
+       "sha256": "HenrR2Rs2OpaGQb3Djsp53aOxmSr5/PcIP/PXroPb+c="
+      },
+      "properties.json": {
+       "contentType": "application/json",
+       "lastModified": 1635188937000,
+       "length": 1248,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_1/us/1635188938271/properties.json",
+       "sha256": "XGmnKd18uTN902nR1dxSoWLTeoA+C0mk6h+rZQaMPco="
+      },
+      "surface_deformation.disp": {
+       "contentType": "application/octet-stream",
+       "lastModified": 1635187214000,
+       "length": 123312,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_1/us/1635188938271/surface_deformation.disp",
+       "sha256": "wN9a0iFchwTyh7ho2p6KS9P0tuw5TTxnVD/T7sMHgHU="
+      },
+      "basemap.png": {
+       "contentType": "image/png",
+       "lastModified": 1635187214000,
+       "length": 1423478,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_1/us/1635188938271/basemap.png",
+       "sha256": "2s0vZjbmLeAHe+9bz+o2wscSQn4ZM5keL/i2pDfHHQ4="
+      },
+      "shakemap_polygon.txt": {
+       "contentType": "text/plain",
+       "lastModified": 1635187214000,
+       "length": 197,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_1/us/1635188938271/shakemap_polygon.txt",
+       "sha256": "DJYcOAtOh32CQmPSHl4ccq98RoL/YrKHNq1pYHYN03c="
+      },
+      "basic_inversion.param": {
+       "contentType": "application/octet-stream",
+       "lastModified": 1635187214000,
+       "length": 61936,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_1/us/1635188938271/basic_inversion.param",
+       "sha256": "DlXC7ObOhx3eFec75sFkFc0Ll8uAnyDuKgS+GDMFo14="
+      },
+      "FFM.geojson": {
+       "contentType": "application/octet-stream",
+       "lastModified": 1635188936000,
+       "length": 574227,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_1/us/1635188938271/FFM.geojson",
+       "sha256": "Kk3oOwgbUONn047Cq2k/rkugWXExXXTFcIvoFTsmEKs="
+      },
+      "contents.xml": {
+       "contentType": "application/xml",
+       "lastModified": 1635188937000,
+       "length": 1923,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_1/us/1635188938271/contents.xml",
+       "sha256": "vk9qXoZiNu3Gffh9r7p210LOYhF3XtRzLGB7LscOhaM="
+      },
+      "moment_rate.mr": {
+       "contentType": "application/octet-stream",
+       "lastModified": 1635187214000,
+       "length": 371171,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_1/us/1635188938271/moment_rate.mr",
+       "sha256": "NRvrQsxh9F5LAYddrAdfRCmmWs20Gk9Bl5a4Jbn2NOs="
+      },
+      "slip.png": {
+       "contentType": "image/png",
+       "lastModified": 1635187214000,
+       "length": 597100,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_1/us/1635188938271/slip.png",
+       "sha256": "3SAQOptba8anynNUYiufcMz05rzWhs5kGDV23tj5m3Y="
+      },
+      "waveplots.zip": {
+       "contentType": "application/zip",
+       "lastModified": 1635187215000,
+       "length": 8483064,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_1/us/1635188938271/waveplots.zip",
+       "sha256": "/IIcVuKbc4ctR/9YndgCmSlutQCxWQ4cj5TOGcn8EJA="
+      },
+      "moment_rate.png": {
+       "contentType": "image/png",
+       "lastModified": 1635187214000,
+       "length": 92071,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_1/us/1635188938271/moment_rate.png",
+       "sha256": "pdkTi2tFmvDDtzQNwCIkrDITIf/QQRvBnxjTGRban2w="
+      },
+      "CMTSOLUTION": {
+       "contentType": "application/octet-stream",
+       "lastModified": 1635187214000,
+       "length": 151668,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_1/us/1635188938271/CMTSOLUTION",
+       "sha256": "jlv4uyLtjFnI5N/3dyPEGHOriz2qbVvRgV2NWJnwFHg="
+      },
+      "complete_inversion.fsp": {
+       "contentType": "application/octet-stream",
+       "lastModified": 1635187214000,
+       "length": 40852,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_1/us/1635188938271/complete_inversion.fsp",
+       "sha256": "UpLBTFYuWALVXFNVqVwxOC0a/4/qB1yVygPya1TVGrU="
+      },
+      "analysis.html": {
+       "contentType": "text/html",
+       "lastModified": 1635188936000,
+       "length": 198,
+       "url": "https://earthquake.usgs.gov/product/finite-fault/ak0219neiszm_1/us/1635188938271/analysis.html",
+       "sha256": "7KcXc5zLOVt8/ymjR3VXVWh+XM7haXSFyFmb7recXEw="
+      }
+     }
+    }
+   ]
+  }
+ }
+}

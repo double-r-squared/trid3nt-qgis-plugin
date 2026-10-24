@@ -22,7 +22,7 @@ from ...runtime.module import Module
 from ...runtime.sheet import Sheet
 from ..errors import GeoclawError
 
-__all__ = ["GeoclawModule", "fault", "fixed_grids", "initial_surface", "module_input_dir", "sift_fault",
+__all__ = ["GeoclawModule", "fault", "finite_fault", "fixed_grids", "initial_surface", "module_input_dir", "sift_fault",
            "topography"]
 
 #: What one Topography statement may carry: the surface, and the offset onto the run's frame.
@@ -192,6 +192,36 @@ def sift_fault(value: Any, *, run: Mapping[str, Any]
     from ..authoring.dtopo import dtopo_axes, sift_subfaults
 
     subfaults = sift_subfaults(table, slips)
+    x, y = dtopo_axes(subfaults, float(value["spacing"]), float(value["buffer"]))
+    return fault({"subfaults": subfaults, "x": x, "y": y, "times": value["times"]}, run=run)
+
+
+#: What one FiniteFault statement carries: the finite-fault record read, the dtopo grid's spacing and margin in degrees, and its instants.
+_FINITE = ("finite_fault", "spacing", "buffer", "times")
+
+
+def finite_fault(value: Any, *, run: Mapping[str, Any]
+                 ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    """A real earthquake's published slip as a dtopo file: FiniteFault({finite_fault, spacing, buffer, times}).
+
+    ``finite_fault`` is the record ``fetch_finite_fault`` returns; each of its subfaults becomes a Fault subfault
+    at the slip the inversion states, and ``spacing``, ``buffer`` and ``times`` are as SiftFault's. A rupture
+    another composite already wrote refuses: one run has one rupture."""
+    if not isinstance(value, Mapping):
+        _refuse("FINITE_FAULT_UNSTATED", "FiniteFault takes a mapping {finite_fault, spacing, buffer, times}.")
+    extra = sorted(set(value) - set(_FINITE))
+    if extra:
+        _refuse("FINITE_FAULT_UNSTATED", f"FiniteFault states {', '.join(extra)}; it takes {', '.join(_FINITE)}.")
+    absent = [key for key in _FINITE if value.get(key) is None]
+    if absent:
+        _refuse("FINITE_FAULT_UNSTATED", f"FiniteFault states no {', '.join(absent)}: the record read and the "
+                "dtopo grid are all stated, the engine has no value for them.")
+    if run.get("DTOPO_DTOPOFILES") is not None:
+        _refuse("FINITE_FAULT_RUPTURE_STATED", "DTOPO_DTOPOFILES is already stated (by Fault, SiftFault or the "
+                "keyword): FiniteFault is the run's one rupture, so state only one of them.")
+    from ..authoring.dtopo import dtopo_axes, finite_fault_subfaults
+
+    subfaults = finite_fault_subfaults(value["finite_fault"])
     x, y = dtopo_axes(subfaults, float(value["spacing"]), float(value["buffer"]))
     return fault({"subfaults": subfaults, "x": x, "y": y, "times": value["times"]}, run=run)
 
