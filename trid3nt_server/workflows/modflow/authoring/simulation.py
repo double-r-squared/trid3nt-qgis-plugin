@@ -19,8 +19,8 @@ from .accepted_mesh import mesh_artifact, mesh_nodes
 from .griddata import frame_of, needs_botm, needs_top, place
 from .mesh_files import _layering, botm_of, disv_dimensions, top_of
 from .movers import mover_rows
-from .stress import (lake_statements, layer_rows, maw_statements, place as place_stress, place_lakes, place_maw,
-                     place_streams, place_uzf)
+from .stress import (GIVERS, lake_statements, layer_rows, maw_statements, place as place_stress, place_interbeds,
+                     place_lakes, place_maw, place_streams, place_uzf)
 
 from ..errors import ModflowError
 from ...runtime.sheet import Filled, fill
@@ -134,9 +134,9 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
     grid = (_layering(sheet, nlay=int(dims["nlay"]), art=mesh_artifact(mesh), bed=bed,
                       points=points, cells=cells)[:2]
             if lake_statements(sheet) or maw_statements(sheet) else None)
-    derived, tables = _stressed(sheet, groups, nlay=int(dims["nlay"]), points=points,
-                                cells=cells, utm_epsg=utm_epsg, frame=frame, active=active,
-                                start=start, grid=grid)
+    derived, tables, series = _stressed(sheet, groups, nlay=int(dims["nlay"]), points=points,
+                                        cells=cells, utm_epsg=utm_epsg, frame=frame, active=active,
+                                        start=start, grid=grid)
     _unstated(sheet, set(groups) | set(_REQUIRED_PACKAGES[module]) | {"TDIS"},
               derived)
     sim = flopy.mf6.MFSimulation(sim_name="trid3nt", sim_ws=str(work),
@@ -147,7 +147,7 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
              how="TDIS of the simulation")
     carrying = [prefix for prefix, rows in groups.items()
                 if "CONCENTRATION" in map(str, getattr(rows.get("auxiliary"), "value", None) or ())]
-    flow = _model(flopy, sim, module=module, groups=groups, named=named, tables=tables, **placed)
+    flow = _model(flopy, sim, module=module, groups=groups, named=named, tables=tables, series=series, **placed)
     # The water a flow package carries a CONCENTRATION on is a transport source: SSM names
     # each such package by the name the flow model's name file gives it.
     sources = [[flow.get_package(prefix.lower()).package_name, "AUX", "CONCENTRATION"]
@@ -158,9 +158,9 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
     for body in sheet.coupled:
         coupled = coupled_sheet(sheet, body)
         cgroups, cnamed = _grouped(coupled)
-        cderived, _tables = _stressed(coupled, cgroups, nlay=int(dims["nlay"]),
-                                     points=points, cells=cells, utm_epsg=utm_epsg,
-                                     frame=frame, active=active)
+        cderived, _tables, _series = _stressed(coupled, cgroups, nlay=int(dims["nlay"]),
+                                               points=points, cells=cells, utm_epsg=utm_epsg,
+                                               frame=frame, active=active)
         _unstated(coupled, set(cgroups) | set(_REQUIRED_PACKAGES[coupled.module]),
                   cderived)
         if coupled.module == "gwt" and sources \
@@ -175,8 +175,9 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
 def _model(flopy: Any, sim: Any, *, module: str, groups: dict[str, dict[str, Any]],
            named: dict[str, Any], dims: dict[str, int], points: Any, cells: Any,
            utm_epsg: int | None, sheet: Any, frame: Any, top: Any,
-           botm: Any = None, sources: Any = (), tables: Mapping[str, list] = {}) -> Any:
-    """One model of this simulation: its name file, the staged DISV's line, its solution and its packages; ``tables`` are the TAB6 files a package reads."""
+           botm: Any = None, sources: Any = (), tables: Mapping[str, list] = {},
+           series: Mapping[str, Mapping[str, Any]] = {}) -> Any:
+    """One model of this simulation: its name file, the staged DISV's line, its solution and its packages; ``tables`` are the TAB6 files a package reads and ``series`` its time-series file."""
     cap = module.capitalize()
     model = _package(flopy, f"Modflow{cap}", named, owner=sim, modelname=module,
                      model_nam_file=f"{module}.nam",
@@ -204,6 +205,11 @@ def _model(flopy: Any, sim: Any, *, module: str, groups: dict[str, dict[str, Any
             keywords = _named_movers(keywords, model)
         package = _package(flopy, f"Modflow{cap}{prefix.lower()}", keywords,
                            owner=model, how=f"{prefix} of {module}")
+        if prefix in series:
+            held = series[prefix]
+            package.ts.initialize(filename=f"{prefix.lower()}.ts", timeseries=held["rows"],
+                                  time_series_namerecord=held["names"],
+                                  interpolation_methodrecord=held["interpolation"], sfacrecord=held["sfac"])
         for filename, table in tables.get(prefix, ()):
             _package(flopy, f"ModflowUtl{prefix.lower()}tab", {"nrow": len(table), "ncol": len(table[0]),
                                                                "table": table, "filename": filename},
@@ -258,27 +264,32 @@ def _start_head(sheet: Any, *, nlay: int, points: Any, cells: Any, utm_epsg: int
 
 def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, points: Any,
               cells: Any, utm_epsg: int | None, frame: Any, active: Any,
-              start: Any = None, grid: Any = None) -> tuple[set[str], dict[str, list]]:
-    """Place each stress statement on the cells -> the identifiers it derived (its MAXBOUND) and the TAB6 files its packages read.
+              start: Any = None, grid: Any = None
+              ) -> tuple[set[str], dict[str, list], dict[str, Mapping[str, Any]]]:
+    """Place each stress statement on the cells -> the identifiers it derived (its MAXBOUND), the TAB6 files its packages read and the time series they read.
 
     A statement's row becomes period 1's rows, carried forward by mf6; the bound is the
     placement's own count; ``active`` is the carrier's solved cells - the grid is one."""
     derived: set[str] = set()
+    features: list[Mapping[str, Any]] = []
     for prefix, rows in groups.items():
         row = rows.get("stress_period_data")
         if row is None or not isinstance(row.value, Mapping) \
                 or "stress" not in row.value:
             continue
-        placed = [cell for statement in row.value.get("statements", [row.value])
-                  for cell in place_stress(statement, points=points, cells=cells,
-                                           utm_epsg=utm_epsg, nlay=nlay, frame=frame,
-                                           active=active, start=start)]
+        placed: list[tuple] = []
+        for statement in row.value.get("statements", [row.value]):
+            found = place_stress(statement, points=points, cells=cells, utm_epsg=utm_epsg, nlay=nlay, frame=frame,
+                                 active=active, start=start)
+            if prefix in GIVERS:
+                features += [{"package": prefix, "name": statement.get("name"), "number": len(placed) + rank,
+                              "cells": {item[0][1]}} for rank, item in enumerate(found)]
+            placed += found
         rows["stress_period_data"] = replace(row, value={0: placed})
         rows["maxbound"] = Filled(
             slot=sheet.body.MODULE_INPUT[f"{prefix}_MAXBOUND"],
             value=len(placed), provenance=row.provenance)
         derived.add(f"{prefix}_MAXBOUND")
-    features: list[Mapping[str, Any]] = []
     tables: dict[str, list] = {}
     row = groups.get("SFR", {}).get("packagedata")
     if row is not None and isinstance(row.value, Mapping) and "streams" in row.value:
@@ -306,29 +317,57 @@ def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, point
         features += _unsaturated(sheet, groups, row, nlay=nlay, points=points, cells=cells, utm_epsg=utm_epsg,
                                  frame=frame, active=active)
         derived |= {"UZF_NUZFCELLS", "UZF_PERIODDATA"}
+    row = groups.get("CSUB", {}).get("packagedata")
+    if row is not None and isinstance(row.value, Mapping) and "interbeds" in row.value:
+        _interbedded(sheet, groups["CSUB"], row, nlay=nlay, points=points, cells=cells, utm_epsg=utm_epsg,
+                     frame=frame, active=active)
+        derived.add("CSUB_NINTERBEDS")
     row = groups.get("MVR", {}).get("perioddata")
     if row is not None and isinstance(row.value, Mapping) and "movers" in row.value:
         _movered(sheet, groups, row, features, points=points, cells=cells, utm_epsg=utm_epsg)
         derived |= {"MVR_MAXMVR", "MVR_MAXPACKAGES"}
-    return derived, {prefix: files for prefix, files in tables.items() if files}
+    series: dict[str, Mapping[str, Any]] = {}
+    for prefix, rows in groups.items():
+        held = rows.pop("ts_filerecord", None)
+        if held is None:
+            continue
+        if not (isinstance(held.value, Mapping) and "series" in held.value):
+            raise ModflowError(
+                f"{prefix}_TS_FILERECORD names a time-series file this authoring would not write; state the series "
+                "through TimeSeries.", error_code="MODFLOW_KEYWORD_SHAPE")
+        series[prefix] = held.value["series"]
+    return derived, {prefix: files for prefix, files in tables.items() if files}, series
+
+
+def _interbedded(sheet: Any, rows: dict[str, Any], row: Any, **mesh: Any) -> None:
+    """Place the Interbeds statements: the package's interbed list and its count."""
+    stated = sorted(f"CSUB_{name.upper()}" for name in ("ninterbeds",) if name in rows)
+    if stated:
+        raise ModflowError(
+            f"{', '.join(stated)} is derived from the Interbeds statements; state either the statements or the "
+            "CSUB keywords, not both.", error_code="MODFLOW_KEYWORD_SHAPE")
+    packagedata = place_interbeds(row.value["interbeds"], boundnames=bool(getattr(rows.get("boundnames"), "value", False)),
+                                  **mesh)
+    for name, value in (("packagedata", packagedata), ("ninterbeds", len(packagedata))):
+        rows[name] = Filled(slot=sheet.body.MODULE_INPUT[f"CSUB_{name.upper()}"], value=value, provenance=row.provenance)
 
 
 def _movered(sheet: Any, groups: dict[str, dict[str, Any]], row: Any, features: list[Mapping[str, Any]],
              **mesh: Any) -> None:
-    """Resolve the Movers statements: the package's mover list, its package list and counts, and the MOVER option of each package used."""
+    """Resolve the WaterMover statements: the package's mover list, its package list and counts, and the MOVER option of each package used."""
     rows = groups["MVR"]
     stated = sorted(f"MVR_{name.upper()}" for name in ("maxmvr", "maxpackages", "packages") if name in rows)
     if stated:
         raise ModflowError(
             f"{', '.join(stated)} {'is' if len(stated) == 1 else 'are'} derived from the "
-            "Movers statements; state either the statements or the MVR keywords, not both.",
+            "WaterMover statements; state either the statements or the MVR keywords, not both.",
             error_code="MODFLOW_KEYWORD_SHAPE")
     used, periods = mover_rows(row.value["movers"], features, **mesh)
     for package in used:
         mover = groups.get(package, {}).get("mover")
         if mover is not None and not mover.value:
             raise ModflowError(
-                f"{package}_MOVER is stated false, and Movers moves water through the {package} package.",
+                f"{package}_MOVER is stated false, and WaterMover moves water through the {package} package.",
                 error_code="MODFLOW_KEYWORD_SHAPE")
         groups[package]["mover"] = Filled(slot=sheet.body.MODULE_INPUT[f"{package}_MOVER"], value=True,
                                           provenance=row.provenance)

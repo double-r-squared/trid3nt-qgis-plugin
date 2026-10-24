@@ -41,7 +41,15 @@ _BUDGET_RECORD = {"SATURATION": ("DATA-SAT", "NPF_SAVE_SATURATION"),
 # Each variable a model saves to its own binary file: the output control keyword that names the file, and the text the file is written under (None: the head file's own).
 _SAVED = {"HEAD": ("OC_HEAD_FILERECORD", None),
           "CONCENTRATION": ("OC_CONCENTRATION_FILERECORD", "CONCENTRATION"),
-          "TEMPERATURE": ("OC_TEMPERATURE_FILERECORD", "TEMPERATURE")}
+          "TEMPERATURE": ("OC_TEMPERATURE_FILERECORD", "TEMPERATURE"),
+          "COMPACTION": ("CSUB_COMPACTION_FILERECORD", "CSUB-COMPACTION"),
+          "SUBSIDENCE": ("CSUB_ZDISPLACEMENT_FILERECORD", "CSUB-ZDISPLACE")}
+
+# The outputs a package alone writes: a run stating no keyword of it has no such row.
+_PACKAGED = {"COMPACTION": "CSUB_", "SUBSIDENCE": "CSUB_"}
+
+# The outputs counted in the model's own length unit.
+_LENGTHS = ("HEAD", "COMPACTION", "SUBSIDENCE")
 
 
 def _unsaved(keyword: str, why: str) -> ModflowError:
@@ -164,8 +172,8 @@ class Solved:
         return key, row
 
     def units(self, key: str, row: Any) -> str:
-        """A head is in the model's length unit; any other output in the unit the run stated it in, else its row's."""
-        if key == "HEAD":
+        """A head, a compaction and a subsidence are in the model's length unit; any other output in the unit the run stated it in, else its row's."""
+        if key in _LENGTHS:
             return str(self.stated("DISV_LENGTH_UNITS") or "")
         return str((self.run.get("published_units") or {}).get(key) or row.unit)
 
@@ -188,6 +196,12 @@ class Solved:
         if not len(times) or not np.isfinite(values).any():
             raise OutputEmpty(f"not one value the run saved for {key} is a number.")
         return row, self.units(key, row), np.asarray(times, dtype="float64"), values, layer
+
+    def carried(self, key: str) -> bool:
+        """Whether the run has the output ``key`` at all: its package is written (a row of a package the deck never states is no row)."""
+        prefix = _PACKAGED.get(key)
+        return prefix is None or any(str(name).startswith(prefix) for name in (
+            self.sheet.filled if self._filled is None else self._filled))
 
     def unsaved(self, key: str) -> ModflowError | None:
         """Why the run's output control saved nothing of the output ``key``, or None where it saved it."""

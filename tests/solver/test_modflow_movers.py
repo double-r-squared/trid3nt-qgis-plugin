@@ -144,7 +144,7 @@ def _refused(sheet, tmp_path):
 # ---- MVR: a mover's ends resolve to the reach, outlet, lake, well or UZF cell mf6 numbers
 
 def test_a_stream_into_a_lake_and_the_lake_s_outlet_into_a_stream_write_the_numbers_mf6_reads(staged_beside, tmp_path):
-    sheet = _deck({"Movers": [{"from": "creek", "from_at": "s1", "to": "pond", "type": "factor", "value": 1.0},
+    sheet = _deck({"WaterMover": [{"from": "creek", "from_at": "s1", "to": "pond", "type": "factor", "value": 1.0},
                               {"from": "pond", "to": "ditch", "to_at": "n1", "type": "UPTO", "value": 0.2}]})
     rundir, text = _mvr(sheet, tmp_path)
     assert "MAXMVR  2" in text and "MAXPACKAGES  2" in text
@@ -155,7 +155,7 @@ def test_a_stream_into_a_lake_and_the_lake_s_outlet_into_a_stream_write_the_numb
 
 
 def test_a_value_keyed_by_period_restates_every_mover_in_each_period_it_names(staged_beside, tmp_path):
-    sheet = _deck({"Movers": [{"from": "creek", "from_at": "s1", "to": "pond", "type": "FACTOR", "value": 1.0},
+    sheet = _deck({"WaterMover": [{"from": "creek", "from_at": "s1", "to": "pond", "type": "FACTOR", "value": 1.0},
                               {"from": "pond", "to": "ditch", "to_at": "n1", "type": "FACTOR", "value": {1: 0.5, 3: 0.25}}]})
     _, text = _mvr(sheet, tmp_path)
     assert text.count("BEGIN period") == 2
@@ -166,9 +166,9 @@ def test_a_value_keyed_by_period_restates_every_mover_in_each_period_it_names(st
 def test_an_end_is_a_name_a_point_or_both_and_resolves_to_exactly_one_feature(staged_beside, tmp_path):
     ends = [{"from": "creek", "from_at": "s1"}, {"from_at": "s1"}]
     for end in ends:
-        _, text = _mvr(_deck({"Movers": {**end, "to": "pond", "type": "FACTOR", "value": 1.0}}), tmp_path)
+        _, text = _mvr(_deck({"WaterMover": {**end, "to": "pond", "type": "FACTOR", "value": 1.0}}), tmp_path)
         assert "sfr_0  2  lak_0  1" in text
-    assert "lak_0  1  sfr_0  5" in _mvr(_deck({"Movers": {"from": "pond", "to_at": "n1", "type": "FACTOR", "value": 1.0}}),
+    assert "lak_0  1  sfr_0  5" in _mvr(_deck({"WaterMover": {"from": "pond", "to_at": "n1", "type": "FACTOR", "value": 1.0}}),
                                         tmp_path)[1]
 
 
@@ -181,28 +181,28 @@ def test_an_end_is_a_name_a_point_or_both_and_resolves_to_exactly_one_feature(st
     ({"from": "creek", "from_at": "s1", "from_outlet": 1, "to": "pond"}, "from_outlet"),
 ])
 def test_an_end_naming_no_feature_or_several_refuses_by_what_it_matched(staged_beside, tmp_path, move, named):
-    sheet = _deck({"Movers": {"type": "FACTOR", "value": 1.0, **move}}, off=_point(500.0, 500.0))
+    sheet = _deck({"WaterMover": {"type": "FACTOR", "value": 1.0, **move}}, off=_point(500.0, 500.0))
     assert named in _refused(sheet, tmp_path)
 
 
 def test_a_point_in_a_lake_s_cell_names_the_lake(staged_beside, tmp_path):
-    _, text = _mvr(_deck({"Movers": {"from": "pond", "to_at": "n1", "type": "FACTOR", "value": 1.0}}), tmp_path)
+    _, text = _mvr(_deck({"WaterMover": {"from": "pond", "to_at": "n1", "type": "FACTOR", "value": 1.0}}), tmp_path)
     assert "lak_0  1  sfr_0  5" in text
-    _, text = _mvr(_deck({"Movers": {"from_at": "s1", "to_at": "centre", "type": "EXCESS", "value": 0.0}}), tmp_path)
+    _, text = _mvr(_deck({"WaterMover": {"from_at": "s1", "to_at": "centre", "type": "EXCESS", "value": 0.0}}), tmp_path)
     assert "sfr_0  2  lak_0  1  EXCESS" in text
 
 
 def test_a_lake_with_several_outlets_gives_water_through_the_one_from_outlet_names(staged_beside, tmp_path):
     lake = {"Lakes": {"geometry": "pond", **_LAKE, "name": "pond", "outlets": [_POND, {**_POND, "rate": -0.25}]}}
     move = {"from": "pond", "to": "ditch", "to_at": "n1", "type": "UPTO", "value": 0.2}
-    assert "outlet" in _refused(_deck(lake, {"Movers": move}), tmp_path)
-    _, text = _mvr(_deck(lake, {"Movers": {**move, "from_outlet": 2}}), tmp_path)
+    assert "outlet" in _refused(_deck(lake, {"WaterMover": move}), tmp_path)
+    _, text = _mvr(_deck(lake, {"WaterMover": {**move, "from_outlet": 2}}), tmp_path)
     assert "lak_0  2  sfr_0  5  UPTO" in text
 
 
 def test_a_lake_with_no_outlet_gives_no_water_to_the_mover(staged_beside, tmp_path):
     lake = {"Lakes": {"geometry": "pond", **_LAKE, "name": "pond"}}
-    assert "0 outlet" in _refused(_deck(lake, {"Movers": {"from": "pond", "to": "ditch", "to_at": "n1",
+    assert "0 outlet" in _refused(_deck(lake, {"WaterMover": {"from": "pond", "to": "ditch", "to_at": "n1",
                                                           "type": "FACTOR", "value": 1.0}}), tmp_path)
 
 
@@ -214,12 +214,12 @@ def test_a_lake_with_no_outlet_gives_no_water_to_the_mover(staged_beside, tmp_pa
     ({"type": "UPTO", "value": 1.0, "speed": 3}, "speed")])
 def test_a_mover_statement_missing_its_value_or_stating_a_wrong_one_refuses_by_name(move, named):
     with pytest.raises(ModflowError) as caught:
-        _deck({"Movers": {"from": "creek", "from_at": "s1", "to": "pond", **move}})
+        _deck({"WaterMover": {"from": "creek", "from_at": "s1", "to": "pond", **move}})
     assert named in str(caught.value)
 
 
 def test_the_mover_keywords_beside_movers_and_a_false_mover_option_refuse(staged_beside, tmp_path):
-    move = {"Movers": {"from": "creek", "from_at": "s1", "to": "pond", "type": "FACTOR", "value": 1.0}}
+    move = {"WaterMover": {"from": "creek", "from_at": "s1", "to": "pond", "type": "FACTOR", "value": 1.0}}
     assert "MVR_MAXMVR" in _refused(_deck(move, {"MVR_MAXMVR": 3}), tmp_path)
     assert "SFR_MOVER" in _refused(_deck(move, {"SFR_MOVER": False}), tmp_path)
 

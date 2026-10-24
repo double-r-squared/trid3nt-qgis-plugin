@@ -180,19 +180,28 @@ def _inputs_match_the_staged(rundir: Path,
     return checked
 
 
-def _cell_ids_inside_the_grid(disv: Path | None, local: Path) -> int:
-    """Every cell id a period list names, against the staged DISV's cell2d table.
+#: The packages whose period rows lead with a cell, by the suffix flopy names their file with.
+_CELL_LED = frozenset({".chd", ".wel", ".drn", ".riv", ".ghb", ".rch", ".evt", ".csub"})
 
-    The table is the grid: cell ids are its own row numbers (flopy writes them from 1),
-    and a period row whose first token is not an integer is not a cell row (a record
-    keyword) and this clause leaves it to the parser. PACKAGEDATA columns are the
-    package's own numbering (a lake number, not a grid cell), so only period lists are
-    read here until their legs name the column.
+
+def _cell_ids_inside_the_grid(disv: Path | None, local: Path) -> int:
+    """Every cell a period list names, against the staged DISV's layers and cell2d table.
+
+    On a DISV a cell is (layer, cell2d id), both from 1. Only the packages whose period
+    rows lead with a cell are read (_CELL_LED, by flopy's file suffix): SFR, LAK, MAW, UZF
+    and MVR rows lead with their own feature numbers. A row whose first two tokens are
+    not integers is a record keyword and this clause leaves it to the parser.
     """
     if disv is None:
         return 0
     cells: set[int] = set()
+    nlay = 0
     for name, body in _blocks(disv):
+        if name == "dimensions":
+            for line in body:
+                tokens = line.split()
+                if len(tokens) >= 2 and tokens[0].upper() == "NLAY":
+                    nlay = int(tokens[1])
         if name != "cell2d":
             continue
         for line in body:
@@ -208,17 +217,14 @@ def _cell_ids_inside_the_grid(disv: Path | None, local: Path) -> int:
                 "run has a grid to be inside of.")
     checked = 0
     for path in sorted(local.rglob("*")):
-        if not path.is_file() or path.suffix in (".lst", ".disv"):
+        if not path.is_file() or path.suffix.lower() not in _CELL_LED:
             continue
         for name, body in _blocks(path):
             if not name.startswith("period "):
                 continue
             for line in body:
-                first = line.split()[:1]
-                if not first:
-                    continue
                 try:
-                    cellid = int(first[0])
+                    layer, cellid = (int(token) for token in line.split()[:2])
                 except ValueError:
                     continue
                 checked += 1
@@ -229,6 +235,12 @@ def _cell_ids_inside_the_grid(disv: Path | None, local: Path) -> int:
                         f"numbers {len(cells)} cell(s) (cell2d {min(cells)} to "
                         f"{max(cells)}); the solve would write a value against "
                         "no cell.")
+                if nlay and not 1 <= layer <= nlay:
+                    _refuse(
+                        "CELLID_OUTSIDE",
+                        f"{path.name} names layer {layer} and the staged DISV "
+                        f"has {nlay} layer(s); the solve would write a value "
+                        "against no cell.")
     if checked:
         logger.info("modflow staged check read %d cell id(s) against %d cell(s)",
                     checked, len(cells))

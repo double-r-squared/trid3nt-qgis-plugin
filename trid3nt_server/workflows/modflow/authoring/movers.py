@@ -9,11 +9,11 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from ..errors import ModflowError
-from .stress import pick
+from .stress import GIVERS, pick
 
 __all__ = ["mover_rows"]
 
-# The packages that give water to the mover and take it.
+# The packages that take water from the mover (and give it); the boundary packages only give.
 _MOVING = ("SFR", "LAK", "MAW", "UZF")
 
 
@@ -25,28 +25,35 @@ def mover_rows(statements: list[Mapping[str, Any]], features: list[Mapping[str, 
     a period a value is keyed by writes every mover with the value in force there, since an mf6 period block
     replaces the one before it. Packages are named by their prefix, in order of first use."""
     mesh = {"points": points, "cells": cells, "utm_epsg": utm_epsg}
-    moving = [f for f in features if f["package"] in _MOVING]
+    receivers = [f for f in features if f["package"] in _MOVING]
+    givers = [f for f in features if f["package"] in (*_MOVING, *GIVERS)]
     rows, used, periods = [], [], {0}
     for rank, item in enumerate(statements, start=1):
-        source = pick(item.get("from"), item.get("from_at"), moving,
-                      role=f"Movers {rank} from", **mesh)
-        target = pick(item.get("to"), item.get("to_at"), moving,
-                      role=f"Movers {rank} to", **mesh)
+        source = pick(item.get("from"), item.get("from_at"), givers,
+                      role=f"WaterMover {rank} from", **mesh)
+        named = item.get("to")
+        boundary = next((f["package"] for f in features if f["package"] in GIVERS and f["name"] == named), None)
+        if boundary and not any(f["name"] == named for f in receivers):
+            raise ModflowError(
+                f"WaterMover {rank} to names {named!r}, a {boundary} boundary: mf6 moves water to SFR, LAK, MAW "
+                "and UZF features only.", error_code="MODFLOW_STRESS_UNSTATED")
+        target = pick(item.get("to"), item.get("to_at"), receivers,
+                      role=f"WaterMover {rank} to", **mesh)
         outlet = item.get("from_outlet")
         if source["package"] == "LAK":
             outlets = source["outlets"]
             if outlet is None and len(outlets) != 1:
                 raise ModflowError(
-                    f"Movers {rank}: lake {source['number'] + 1} has {len(outlets)} outlet(s); a lake gives water to "
+                    f"WaterMover {rank}: lake {source['number'] + 1} has {len(outlets)} outlet(s); a lake gives water to "
                     "the mover through an outlet, so state the lake's outlets and from_outlet "
                     "(from 1) when it has more than one.", error_code="MODFLOW_STRESS_UNSTATED")
             if outlet is not None and not 1 <= outlet <= len(outlets):
                 raise ModflowError(
-                    f"Movers {rank}: from_outlet {outlet} but lake {source['number'] + 1} has {len(outlets)} outlet(s).",
+                    f"WaterMover {rank}: from_outlet {outlet} but lake {source['number'] + 1} has {len(outlets)} outlet(s).",
                     error_code="MODFLOW_STRESS_UNSTATED")
             provider = outlets[(outlet or 1) - 1]
         elif outlet is not None:
-            raise ModflowError(f"Movers {rank}: from_outlet names a lake's outlet and the provider is "
+            raise ModflowError(f"WaterMover {rank}: from_outlet names a lake's outlet and the provider is "
                                f"{source['package']}.", error_code="MODFLOW_STRESS_UNSTATED")
         else:
             provider = source["number"]

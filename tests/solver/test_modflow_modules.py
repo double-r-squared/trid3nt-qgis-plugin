@@ -80,7 +80,10 @@ def test_required_keywords_are_the_ones_marked_not_optional_and_undefaulted():
     # An entry whose own description says the engine runs without it stated is not required.
     for identifier in ("STO_SY", "LAK_NOUTLETS", "LAK_NTABLES", "EVT_NSEG", "EVTA_AUX"):
         assert gwf[identifier].is_required is False, identifier
-    assert sum(slot.is_required for slot in gwf.values()) == 105
+    # An entry shaped by an optional dimension alone has nothing to state while the count is unstated.
+    assert gwf["CSUB_STRESS_PERIOD_DATA"].is_required is False
+    assert gwf["CSUB_NINTERBEDS"].is_required is True
+    assert sum(slot.is_required for slot in gwf.values()) == 104
 
 
 def test_a_dictionary_default_is_the_value_the_engine_will_use():
@@ -120,8 +123,7 @@ def test_the_wrapper_registry_answers_an_exposed_body_and_refuses_another():
 
 
 def test_every_body_rows_what_a_solved_run_writes():
-    assert set(GWF.MODULE_OUTPUT) == {"HEAD", "SATURATION",
-                                      "SPECIFIC_DISCHARGE"}
+    assert set(GWF.MODULE_OUTPUT) == {"HEAD", "SATURATION", "SPECIFIC_DISCHARGE", "COMPACTION", "SUBSIDENCE"}
     assert set(GWT.MODULE_OUTPUT) == {"CONCENTRATION"}
     assert set(GWE.MODULE_OUTPUT) == {"TEMPERATURE"}
 

@@ -17,7 +17,7 @@ is mandatory. Only `optional true` is optional - a bare `optional` line marks K
 and ICELLTYPE, which mf6 refuses a run without - and a required entry carries
 no default: its DFN `default_value` is flopy's illustration, not a value mf6
 uses, except on a required flag (READASARRAYS), the package's own tag. An entry whose own description says mf6 runs without it stated
-(a stated default, or a waiver where it is unread) is not mandatory.
+(a stated default, or a waiver where it is unread) is not mandatory, and neither is one shaped by an optional dimension alone (CSUB's period list over MAXSIG0).
 `modules/module.py` reads a file here into the wrapper's slots.
 
 ## Files

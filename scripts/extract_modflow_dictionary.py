@@ -160,8 +160,13 @@ def _help(entry: dict[str, str]) -> str:
     return f"{longname}. {description}" if longname else description
 
 
-def _row(entry: dict[str, str], package: str) -> dict[str, object]:
-    """One DFN entry as a dictionary row."""
+def _sized_by_optional(entry: dict[str, str], dimensions: frozenset[str]) -> bool:
+    """Whether the entry's whole shape is one dimension the DFN marks optional: an empty count leaves it nothing to state."""
+    return entry.get("shape", "").strip().strip("()").strip().lower() in dimensions
+
+
+def _row(entry: dict[str, str], package: str, dimensions: frozenset[str] = frozenset()) -> dict[str, object]:
+    """One DFN entry as a dictionary row; ``dimensions`` are the package's optional dimension names."""
     name = entry["name"]
     # A required entry's default_value is flopy's illustration (NROW 2, SY 0.15, K 1.0):
     # mf6 itself refuses the run without the keyword, so it is no engine default. A
@@ -183,7 +188,8 @@ def _row(entry: dict[str, str], package: str) -> dict[str, object]:
         "help": _help(entry),
         "rubrique": [entry["block"].upper()],
         "is_file": False,
-        "mandatory": not _optional(entry) and default is None and not _unrequired(entry),
+        "mandatory": (not _optional(entry) and default is None and not _unrequired(entry)
+                      and not _sized_by_optional(entry, dimensions)),
     }
     if default is not None:
         row["default"] = default
@@ -196,9 +202,13 @@ def body_rows(body: str) -> list[dict[str, object]]:
     """Every dictionary row of one body, its model's packages first and the shared TDIS and IMS after."""
     stems = [stem for stem in _dfn_names() if stem.startswith(f"{body}-")] \
         + list(SHARED)
-    rows = [_row(entry, package=stem.split("-", 1)[1].upper())
-            for stem in stems for entry in parse(fetch_dfn(stem))
-            if "in_record" not in entry and "block_variable" not in entry]
+    rows = []
+    for stem in stems:
+        entries = parse(fetch_dfn(stem))
+        optional = frozenset(entry["name"].lower() for entry in entries
+                             if entry.get("block") == "dimensions" and _optional(entry))
+        rows += [_row(entry, package=stem.split("-", 1)[1].upper(), dimensions=optional)
+                 for entry in entries if "in_record" not in entry and "block_variable" not in entry]
     identifiers = [row["identifier"] for row in rows]
     if len(set(identifiers)) != len(identifiers):
         raise ValueError(f"{body}: the DFNs spell a keyword twice")

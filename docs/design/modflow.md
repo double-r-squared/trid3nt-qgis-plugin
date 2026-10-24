@@ -224,7 +224,7 @@ runs without it (`EVT_NSEG`, `EVTA_AUX`, `LAK_NOUTLETS`, `LAK_NTABLES`, `STO_SY`
 ### Water moved between features, diversions, cross sections and lake tables
 
 `Streams`, `Lakes`, `MultiAquiferWells` and `UnsaturatedZone` statements take an optional
-`name`, which a statement placing several features gives them all. `Movers(from, to, type,
+`name`, which a statement placing several features gives them all. `WaterMover(from, to, type,
 value[, from_at, to_at, from_outlet])` (a mapping or a list) is the MVR package: `from` and `to`
 are names, `from_at` and `to_at` a point read as the cell it lies in (never moved; a miss
 refuses with the nearest-viable hint), and an end resolves to exactly one feature or the
@@ -236,7 +236,7 @@ extra infiltration in), a lake takes water by its number and gives it through an
 `{period from 1: number}`, and a period it names restates every mover with the value in force
 (an mf6 period block replaces the one before). The authoring numbers the features, names the
 packages as the flow model does, derives `MVR_MAXMVR`, `MVR_MAXPACKAGES`, `MVR_PACKAGES` and
-sets the MOVER option of each package used; stating any of them beside `Movers`, or a MOVER
+sets the MOVER option of each package used; stating any of them beside `WaterMover`, or a MOVER
 option false, refuses.
 
 `Diversions(from, to, type, value[, from_at, to_at])` is the same grammar over `Streams`
@@ -252,6 +252,40 @@ is no table and refuses, and mf6's own validation judges the values. Authoring w
 TAB6 file beside the package (`sfr_xs<k>.tab`, one per distinct cross section;
 `lak_tab<lake>.tab`) through flopy's child package, and derives `SFR_CROSSSECTIONS`,
 `LAK_TABLES` and `LAK_NTABLES`.
+
+### Interbeds, time series and the boundary givers
+
+CSUB is stated by its own dictionary keywords: the options (`CSUB_HEAD_BASED`, `CSUB_COMPRESSION_INDICES`,
+`CSUB_NDELAYCELLS`, the output records), the coarse-grained arrays (`CSUB_CG_SKE_CR`, `CSUB_CG_THETA`, `CSUB_SGM`,
+`CSUB_SGS`: a number, a list per layer or a raster) and `CSUB_STRESS_PERIOD_DATA` (a period block is no
+requirement while `CSUB_MAXSIG0` is unstated: the dictionary does not mark an entry shaped by an optional
+dimension alone mandatory). ex-gwf-csub-p02 (a, b), p03 (a, b) and p04 authored this way on a gridgen DISV equal
+flopy's own DIS reference bitwise (heads, the four compaction files, every budget record); p01, whose 0.5 m cells
+the DISV's millimetre vertex coordinates distort, equals flopy authored on the same DISV bitwise and the DIS reference
+to 4.5e-7 in head. The `Interbeds` composite places the interbed list:
+`Interbeds(geometry, layer, cdelay, pcs0, thick_frac, ssv_cc, sse_cr, theta[, rnb, kv, h0, name])`, or a list of
+them; every cell the geometry places on the layer (an integer from 1, or `"all"`) is one interbed, numbered from 0
+in statement, layer then cell order, and `CSUB_NINTERBEDS` and `CSUB_PACKAGEDATA` are derived (stating either beside
+it refuses). `cdelay` is `DELAY` or `NODELAY`; `rnb`, `kv` and `h0` are the delay interbed's own, required for
+`DELAY`, refused for `NODELAY` and written -999 (mf6 takes any value there). `thick_frac`, `theta`, `rnb`, `kv` and
+`h0` are a number or a raster read at each cell centre; `pcs0`, `ssv_cc` and `sse_cr` change dimension with the
+options, so they are numbers. `name` is the boundary-name column, required exactly when `CSUB_BOUNDNAMES` is true.
+
+`TimeSeries(package, names, rows[, interpolation, sfac])` writes the package's time-series file
+(`<package>.ts`, through flopy's child package, which also states the package's `TS6` option): `names` are the series
+(the columns after the time), `rows` the `[time, value per name]` lines in increasing time (or a run input holding
+them), `interpolation` (`STEPWISE`, `LINEAR`, `LINEAREND`) and `sfac` mf6's own attributes, once or per series and
+absent when unstated. The package's keyword rows name a series by its name (`CSUB_STRESS_PERIOD_DATA`
+`[[layer, cell], "LOAD"]`, a CHD row's head); one file feeds a package, and `<PKG>_TS_FILERECORD` stated by keyword
+refuses. ex-gwf-csub-p01 (the passing-train load) and p03 (three CHD head series) are built on it.
+
+`Wells`, `Drains`, `GeneralHead` and the new `Rivers(geometry, layer, stage, conductance, rbot[, name])` give water to
+the mover: each takes an optional `name`, and every row such a statement places is one feature (package WEL, DRN, GHB
+or RIV; its number the row's index in the package's period list, which the composites state in period 1 only).
+`WaterMover` takes them as `from` (by name, by a point in the row's cell, or both) and sets the package's `MOVER` option;
+as `to` they refuse naming the package, since mf6 moves water to SFR, LAK, MAW and UZF only. The four givers are proven
+against a flopy-authored reference (a drain to a lake, a well, a river and a general-head boundary to reaches and a
+lake; heads, stages and every mover flow equal, 0.0).
 
 ## The coupling
 
@@ -344,7 +378,9 @@ the product.
 
 The engine's own reading of a solved run (`modules/outputs.py`) opens the files
 the output control saved - for every model: `_SAVED` maps HEAD,
-CONCENTRATION and TEMPERATURE to their own OC filerecords, and a coupled body reads its
+CONCENTRATION and TEMPERATURE to their own OC filerecords and COMPACTION and SUBSIDENCE to the CSUB package's
+compaction and z-displacement records (rows a run states no CSUB keyword for are no rows of that run, and ones it
+states but did not save are journalled by the record keyword), and a coupled body reads its
 filerecord from its own slots over the carrier's sheet (the clock and units the
 simulation owns are one for both models). The publish's table walks every
 module's output rows: the carrier's read off the run's own module, a coupled
@@ -396,6 +432,6 @@ builds on was proved through that image before it was built on.
 
 The accepted-mesh reader of a ragged (UGRID) display face - a quadtree with
 refinement, a Voronoi - so those meshes cannot yet be authored on; the
-advanced-package composites (CSUB; SFR is placed by `Streams`, LAK by `Lakes`, MAW by `MultiAquiferWells` and UZF by `UnsaturatedZone`, and `Movers` joins them; WEL, DRN, GHB and RIV give water to the mover by row number and are not wired), OBS and time series, the model exchanges (GWF-GWF, GWT-GWT), FMI
+observations (OBS), the model exchanges (GWF-GWF, GWT-GWT), FMI
 (the transport reading a prior flow run's saved budget), and PRT. Each is a leg
 in the scope's plan; the coupling above is built for GWT on the exchange.

@@ -23,7 +23,7 @@ __all__ = ["ModflowModule", "module_input_dir", "periods"]
 _AUX = ("concentration", "CONCENTRATION", "M/L3")
 
 
-def _stress(name: str, package: str, dimensions: Mapping[str, str], *, carries: bool = False):
+def _stress(name: str, package: str, dimensions: Mapping[str, str], *, carries: bool = False, moves: bool = False):
     columns = tuple(dimensions)
 
     def expand(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
@@ -61,12 +61,13 @@ def _stress(name: str, package: str, dimensions: Mapping[str, str], *, carries: 
         return {f"{package}_STRESS_PERIOD_DATA": {
             "stress": package, "composite": name, "geometry": value["geometry"],
             "values": {column: value[column] for column in taken},
-            "dimensions": dict(taken), "layer": layer},
+            "dimensions": dict(taken), "layer": layer, **({"name": _given(value, name)} if moves else {})},
             **({f"{package}_AUXILIARY": [_AUX[1]]} if aux else {})}, {}
 
     expand.__doc__ = (
         f"The {package} package's cells a geometry places: {name}(geometry, layer, "
-        f"{', '.join(columns)}{f', [{_AUX[0]}]' if carries else ''}), or a list of such statements; a geometry reading nothing states nothing.")
+        f"{', '.join(columns)}{f', [{_AUX[0]}]' if carries else ''}{', [name]' if moves else ''}), or a list of such statements; a geometry reading nothing states nothing."
+        + (f"\n\n    name is what WaterMover calls each cell row this statement places; the {package} package gives water to the mover, never takes it." if moves else ""))
     return expand
 
 
@@ -217,7 +218,7 @@ _streams.__doc__ = (
     "    period setting: a number from period 1 or {period from 1: value}, written to every reach of the\n"
     "    line, inflow to the line's upstream reach; status is ACTIVE, INACTIVE or SIMPLE, manning keyed\n"
     "    by period names period 1 as the reach's own, auxiliary is {name: value} of the SFR_AUXILIARY names.\n"
-    "    name is what Movers and Diversions call the line's reaches; cross_section is the rows (xfraction, height\n"
+    "    name is what WaterMover and Diversions call the line's reaches; cross_section is the rows (xfraction, height\n"
     "    [, manfraction]) of the reach cross-section table every reach of the line reads.")
 
 
@@ -322,7 +323,7 @@ _lakes.__doc__ = (
     "    LAK_AUXILIARY names. outlets is a list of {to, couttype, rate | invert, width, rough, slope} leaving\n"
     "    the lake (one polygon): to is the number of the lake it discharges into or \"outside\"; couttype is SPECIFIED\n"
     "    (rate), MANNING (invert, width, rough, slope) or WEIR (invert, width), each value from period 1 or keyed by period.\n"
-    "    name is what Movers calls the lake; table is the rows (stage, volume, sarea) of the lake's stage-volume-area\n"
+    "    name is what WaterMover calls the lake; table is the rows (stage, volume, sarea) of the lake's stage-volume-area\n"
     "    table, for a statement holding one polygon.")
 
 
@@ -378,14 +379,15 @@ def _movement(value: Any, *, composite: str, slot: str, key: str, types: tuple[s
 
 
 def _movers(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-    return _movement(value, composite="Movers", slot="MVR_PERIODDATA", key="movers", types=_MOVER_TYPES,
+    return _movement(value, composite="WaterMover", slot="MVR_PERIODDATA", key="movers", types=_MOVER_TYPES,
                      takes=("from_outlet",))
 
 
 _movers.__doc__ = (
-    "The MVR movers that carry water from one placed feature to another: Movers(from, to, type, value[, from_at, "
+    "The MVR movers that carry water from one placed feature to another: WaterMover(from, to, type, value[, from_at, "
     "to_at, from_outlet]), or a list of such statements.\n\n"
-    "    from and to are the name a Streams, Lakes, MultiAquiferWells or UnsaturatedZone statement gave its features;\n"
+    "    from and to are the name a Streams, Lakes, MultiAquiferWells or UnsaturatedZone statement gave its features,\n"
+    "    and from also the name a Wells, Drains, GeneralHead or Rivers statement gave its cell rows (they give water only);\n"
     "    from_at and to_at a point, read as the cell it lies in, to tell apart features sharing a name or to name a\n"
     "    feature by where it is; each end resolves to exactly one feature. A lake gives water through one of its\n"
     "    outlets (from_outlet from 1, optional when it has one); a stream through its reach, a well, an\n"
@@ -402,7 +404,7 @@ def _diversions(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
 _diversions.__doc__ = (
     "The SFR diversions that take water from one placed reach to another: Diversions(from, to, type, value[, "
     "from_at, to_at]), or a list of such statements.\n\n"
-    "    from and to name Streams reaches as Movers does, from_at and to_at a point in the reach's cell. The target\n"
+    "    from and to name Streams reaches as WaterMover does, from_at and to_at a point in the reach's cell. The target\n"
     "    reach must have no upstream reach of its own; it becomes a downstream connection of the source and\n"
     "    receives the diverted water alone. type is FRACTION (of the source's outflow, 0 to 1), EXCESS, THRESHOLD or\n"
     "    UPTO (a rate); value is a number from period 1 or {period from 1: number}.")
@@ -504,7 +506,7 @@ _wells.__doc__ = (
     "    (the default), status is ACTIVE, INACTIVE or CONSTANT, head_limit a number or OFF. fwelev, fwcond and\n"
     "    fwrlen are the FLOWING_WELL record, minrate and maxrate SHUT_OFF, pump_elevation and scaling_length\n"
     "    RATE_SCALING - each record stated whole, in the same periods. auxiliary is {name: value} of the MAW_AUXILIARY names;\n"
-    "    name is what Movers calls the well.")
+    "    name is what WaterMover calls the well.")
 
 
 _UZF = ("surfdep", "vks", "thtr", "thts", "thti", "eps", "finf")
@@ -555,7 +557,121 @@ _uzf.__doc__ = (
     "    raster read at the column's centre and holds for the whole column. finf and the ET values are the land\n"
     "    cell's period settings: a number or raster from period 1, or {period from 1: number}; the ET values are\n"
     "    those the stated UZF ET options read; stated beside none, they refuse. auxiliary is {name: value} of the\n"
-    "    UZF_AUXILIARY names, from period 1 or keyed by period. name is what Movers calls the land cells.")
+    "    UZF_AUXILIARY names, from period 1 or keyed by period. name is what WaterMover calls the land cells.")
+
+
+_INTERBED = ("pcs0", "thick_frac", "ssv_cc", "sse_cr", "theta")
+_INTERBED_DELAY = ("rnb", "kv", "h0")
+# The interbed values a raster can state: the ones whose dimension the options do not change.
+_INTERBED_RASTER = {"thick_frac": "1", "theta": "1", "rnb": "1", "kv": "L/T", "h0": "L"}
+_CDELAY = ("DELAY", "NODELAY")
+
+
+def _interbeds(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    if isinstance(value, (list, tuple)) and value:
+        stated = [item for each in value if (item := _interbeds(each)[0])]
+        return ({"CSUB_PACKAGEDATA": {"interbeds": [row["CSUB_PACKAGEDATA"]["interbeds"][0]
+                                                    for row in stated]}} if stated else {}), {}
+    if not isinstance(value, Mapping):
+        raise ModflowError(
+            "Interbeds takes a mapping of geometry, layer, cdelay, "
+            f"{', '.join(_INTERBED)} and, for a DELAY interbed, {', '.join(_INTERBED_DELAY)}, or a list of them; "
+            f"got {value!r}.", error_code="MODFLOW_STRESS_UNSTATED")
+    _unknown(value, "Interbeds", ("geometry", "layer", "cdelay", "name", *_INTERBED, *_INTERBED_DELAY))
+    if value.get("geometry") is None:
+        return {}, {}
+    cdelay = str(value.get("cdelay") or "").strip().upper()
+    if cdelay not in _CDELAY:
+        raise ModflowError(f"Interbeds cdelay is {value.get('cdelay')!r}; it is one of {', '.join(_CDELAY)}.",
+                           error_code="MODFLOW_STRESS_UNSTATED")
+    layer = value.get("layer")
+    if layer != "all" and (isinstance(layer, bool) or not isinstance(layer, int) or layer < 1):
+        raise ModflowError(f"Interbeds layer is {layer!r}; it is an integer from 1, or \"all\".",
+                           error_code="MODFLOW_STRESS_UNSTATED")
+    read = _INTERBED if cdelay == "NODELAY" else (*_INTERBED, *_INTERBED_DELAY)
+    for argument in (*_INTERBED, *_INTERBED_DELAY):
+        held = value.get(argument)
+        if argument not in read:
+            if held is not None:
+                raise ModflowError(
+                    f"Interbeds NODELAY reads no {argument}; remove it or state cdelay DELAY.",
+                    error_code="MODFLOW_STRESS_UNSTATED")
+            continue
+        if held is None:
+            raise ModflowError(
+                f"Interbeds states no {argument}; the engine has no value for it, so state it from a "
+                "measurement or a named source.", error_code="MODFLOW_STRESS_UNSTATED")
+        if isinstance(held, bool) or (argument not in _INTERBED_RASTER and not isinstance(held, (int, float))):
+            raise ModflowError(
+                f"Interbeds {argument} is one number: its dimension changes with the CSUB options, so a raster "
+                f"carries no unit this frame converts; got {held!r}.", error_code="MODFLOW_STRESS_UNSTATED")
+    return {"CSUB_PACKAGEDATA": {"interbeds": [{
+        "composite": "Interbeds", "geometry": value["geometry"], "layer": layer, "cdelay": cdelay.lower(),
+        "name": _given(value, "Interbeds"), "dimensions": dict(_INTERBED_RASTER),
+        "values": {argument: value[argument] for argument in read}}]}}, {}
+
+
+_interbeds.__doc__ = (
+    "The CSUB interbeds a geometry places: Interbeds(geometry, layer, cdelay, pcs0, thick_frac, ssv_cc, sse_cr, theta"
+    "[, rnb, kv, h0, name]), or a list of such statements.\n\n"
+    "    Every cell the geometry places, on the layer (an integer from 1, or \"all\" for every solved layer), is\n"
+    "    one interbed, numbered in statement order then cell order. cdelay is DELAY or NODELAY: rnb, kv and h0\n"
+    "    are the delay interbed's own, required for DELAY and refused for NODELAY. pcs0, ssv_cc and sse_cr are\n"
+    "    numbers in the units the CSUB options state (head or stress, compression indices or specific storage);\n"
+    "    thick_frac, theta, rnb, kv and h0 are a number or a raster read at each cell centre. name is the\n"
+    "    boundary name, required when CSUB_BOUNDNAMES is true.")
+
+
+_INTERPOLATION = ("STEPWISE", "LINEAR", "LINEAREND")
+
+
+def _series(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    if not isinstance(value, Mapping):
+        raise ModflowError(
+            f"TimeSeries takes a mapping of package, names and rows; got {value!r}.",
+            error_code="MODFLOW_STRESS_UNSTATED")
+    _unknown(value, "TimeSeries", ("package", "names", "rows", "interpolation", "sfac"))
+    if not value:
+        return {}, {}
+    package, names = value.get("package"), value.get("names")
+    if not isinstance(package, str) or not package.strip():
+        raise ModflowError("TimeSeries package is the prefix of the package the series feeds (CHD, CSUB ...).",
+                           error_code="MODFLOW_STRESS_UNSTATED")
+    if isinstance(names, str):
+        names = [names]
+    if not isinstance(names, (list, tuple)) or not names or not all(isinstance(each, str) and each.strip() for each in names) \
+            or len(set(names)) != len(names):
+        raise ModflowError(f"TimeSeries names is a list of distinct series names; got {names!r}.",
+                           error_code="MODFLOW_STRESS_UNSTATED")
+    rows = _table(value.get("rows"), composite="TimeSeries", argument="rows", widths=(len(names) + 1,))
+    if any(later[0] <= earlier[0] for earlier, later in zip(rows, rows[1:])):
+        raise ModflowError("TimeSeries rows run in increasing time.", error_code="MODFLOW_STRESS_UNSTATED")
+    return {f"{package.strip().upper()}_TS_FILERECORD": {"series": {
+        "package": package.strip().upper(), "names": [each.strip() for each in names], "rows": rows,
+        "interpolation": _per_name(value.get("interpolation"), names, "interpolation", words=_INTERPOLATION),
+        "sfac": _per_name(value.get("sfac"), names, "sfac")}}}, {}
+
+
+def _per_name(held: Any, names: Any, argument: str, *, words: tuple[str, ...] = ()) -> list | None:
+    """An attribute stated once for every series or once per series, or None where unstated."""
+    if held is None:
+        return None
+    each = list(held) if isinstance(held, (list, tuple)) else [held] * len(names)
+    ok = lambda item: (isinstance(item, str) and item.strip().upper() in words) if words else (
+        isinstance(item, (int, float)) and not isinstance(item, bool) and math.isfinite(item))
+    if len(each) != len(names) or not all(ok(item) for item in each):
+        raise ModflowError(
+            f"TimeSeries {argument} is {'one of ' + ', '.join(words) if words else 'a number'}, once or per series "
+            f"({len(names)}); got {held!r}.", error_code="MODFLOW_STRESS_UNSTATED")
+    return [item.strip().lower() if words else float(item) for item in each]
+
+
+_series.__doc__ = (
+    "A package's time-series file: TimeSeries(package, names, rows[, interpolation, sfac]).\n\n"
+    "    package is the prefix of the package the file feeds; names the series, the columns after the time;\n"
+    "    rows [time, value per name] in increasing time (a run input name holds the rows too). interpolation\n"
+    "    (STEPWISE, LINEAR or LINEAREND) and sfac are mf6's own series attributes, once or per series, absent\n"
+    "    when unstated. The package's rows name a series by its name; one file feeds a package.")
 
 
 def module_input_dir() -> Path:

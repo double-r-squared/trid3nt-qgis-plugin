@@ -1053,7 +1053,7 @@
         "PERIOD"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": false
     },
     {
       "keyword": "LENGTH_UNITS",

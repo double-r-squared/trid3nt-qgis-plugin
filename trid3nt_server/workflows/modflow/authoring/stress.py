@@ -16,8 +16,12 @@ from trid3nt_server.inputs.point import Point, require_viable
 from ..errors import ModflowError
 from .griddata import METRES, sample
 
-__all__ = ["cells_of", "edge_cells", "hold_lakes", "lake_statements", "layer_rows", "maw_statements",
-           "pick", "place", "place_lakes", "place_maw", "place_streams", "place_uzf", "point_cell", "uzf_statements"]
+__all__ = ["GIVERS", "cells_of", "edge_cells", "hold_lakes", "lake_statements", "layer_rows", "maw_statements",
+           "pick", "place", "place_interbeds", "place_lakes", "place_maw", "place_streams", "place_uzf", "point_cell", "uzf_statements"]
+
+# The boundary packages that give water to the mover: each row a statement of theirs places is a feature.
+GIVERS = ("WEL", "DRN", "GHB", "RIV")
+
 
 def place(statement: Mapping[str, Any], *, points: Any, cells: Any,
           utm_epsg: int | None, nlay: int, frame: Any = None,
@@ -544,6 +548,46 @@ def place_maw(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, u
         raise ModflowError("MultiAquiferWells places by geometry and the geometry holds no point.",
                            error_code="MODFLOW_STRESS_OUTSIDE")
     return packagedata, connectiondata, _by_period(found), features
+
+
+def place_interbeds(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, utm_epsg: int | None, nlay: int,
+                    frame: Any = None, active: Any = None, boundnames: bool = False) -> list[list]:
+    """Interbeds statements -> CSUB packagedata rows ``[icsubno, (layer, cell), cdelay, pcs0, thick_frac, rnb, ssv_cc, sse_cr, theta, kv, h0[, boundname]]``.
+
+    Each cell a geometry places on a layer is one interbed, numbered in statement order, then layer, then cell;
+    ``active`` is one row per layer of the cells the run solves. A NODELAY interbed's rnb, kv and h0 are the
+    value mf6 takes any value in. ``boundnames`` is the CSUB_BOUNDNAMES option: every row then carries a name."""
+    if points is None or cells is None or not utm_epsg:
+        raise ModflowError("Interbeds places by geometry, and this run has no accepted mesh with a projected zone "
+                           "to place it on.", error_code="MODFLOW_STRESS_OUTSIDE")
+    rows: list[list] = []
+    for statement in statements:
+        layers = _layers(statement["layer"], name="Interbeds", nlay=nlay)
+        placed = cells_of(statement["geometry"], name="Interbeds", points=points, cells=cells, utm_epsg=int(utm_epsg),
+                          active=None if active is None else active[layers[0]])
+        if boundnames and not statement.get("name"):
+            raise ModflowError("Interbeds states no name, and CSUB_BOUNDNAMES is true: every interbed then carries a "
+                               "boundary name.", error_code="MODFLOW_STRESS_UNSTATED")
+        if not boundnames and statement.get("name"):
+            raise ModflowError("Interbeds states a name, and CSUB_BOUNDNAMES is not true: the name is the boundary "
+                               "name column mf6 reads only under that option.", error_code="MODFLOW_STRESS_UNSTATED")
+        columns = {key: (_column(held, key, name="Interbeds", placed=placed, points=points, cells=cells,
+                                 utm_epsg=int(utm_epsg), frame=frame, dimension=statement["dimensions"][key])
+                         if key in statement["dimensions"] else [held] * len(placed))
+                   for key, held in statement["values"].items()}
+        unread = [_UNREAD] * len(placed)
+        for layer in layers:
+            for rank, icell in enumerate(placed):
+                if active is not None and active[layer][icell] == 0:
+                    continue
+                at = {key: columns.get(key, unread)[rank] for key in ("pcs0", "thick_frac", "rnb", "ssv_cc", "sse_cr",
+                                                                      "theta", "kv", "h0")}
+                rows.append([len(rows), (layer, icell), statement["cdelay"], *at.values(),
+                             *([statement["name"]] if boundnames else [])])
+    if not rows:
+        raise ModflowError("Interbeds places by geometry and the geometry holds no solved cell.",
+                           error_code="MODFLOW_STRESS_OUTSIDE")
+    return rows
 
 
 # The value mf6 takes in a UZF period column its stated options do not read.

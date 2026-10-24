@@ -15,7 +15,7 @@ rest and make up the sixth slice.
 | `credentials/` | credential resolution, the access-token gate and the connect handshake | 4 | 50 |
 | `derive/` | the derive tools, the two session tools | 3 | 51 |
 | `render/` | the emitter, the uri registry, publication, the format set, charts | 35 | 431 |
-| `fetchers/` | the fetch router, its executors, hooks and fallbacks | 78 | 2230 |
+| `fetchers/` | the fetch router, its executors, hooks and fallbacks | 79 | 2243 |
 | `gates/` | the gates, a declined card at each of them, the code-exec approval gate, the context budget, the circuit breaker | 20 | 303 |
 | `inputs/` | the typed inputs: a Point, an Extent, a Shape, the domain with the companions its producer measured, the bed it reads as elevations on the run's own vertical frame, the boundary runs, the line a placed read follows, the observation a run opens on and the weather, rain and sea state a record measured, each from every form it arrives in, the user-input normalizers under them, and a user's own file adopted as a layer | 25 | 319 |
 | `mesh/` | the meshers, the mesh gate, topology, the bed over the one source it takes, the runs that prescribe a role and the shoreline the domain's own edge is | 11 | 280 |
@@ -25,7 +25,7 @@ rest and make up the sixth slice.
 | `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 12 | 176 |
 | `search/` | dataset and tool retrieval, the OGC adapter, the keyword dictionary read | 13 | 225 |
 | `server/` | the HTTP and WS routes, the fetch short-circuit and the Case AOI, persistence | 29 | 261 |
-| `solver/` | the executor, the run reads, the engine-room posture, the MODFLOW engine, its authoring and staged check, the GeoClaw engine, its module wrapper, its .data authoring, its grid recipe, its topofiles, its Fault dtopo and its fgmax, fgout and gauge outputs, the plume template, its body wrappers, the SFR keywords and Streams composite, the LAK keywords and Lakes composite, the MAW keywords and MultiAquiferWells composite, and the UZF keywords and UnsaturatedZone composite, and their period settings, the Movers and Diversions composites with the cross-section and lake tables, and the GeoClaw template's pieces (the SIFT row, the SiftFault, FixedGrids and InitialSurface composites, the staged case) | 34 | 793 |
+| `solver/` | the executor, the run reads, the engine-room posture, the MODFLOW engine, its authoring and staged check, the GeoClaw engine, its module wrapper, its .data authoring, its grid recipe, its topofiles, its Fault dtopo and its fgmax, fgout and gauge outputs, the plume template, its body wrappers, the SFR keywords and Streams composite, the LAK keywords and Lakes composite, the MAW keywords and MultiAquiferWells composite, and the UZF keywords and UnsaturatedZone composite, and their period settings, the WaterMover and Diversions composites with the cross-section and lake tables, the Interbeds and TimeSeries composites with the boundary givers and the compaction reads, and the GeoClaw template's pieces (the SIFT row, the SiftFault, FiniteFault, FixedGrids and InitialSurface composites, the staged case) | 36 | 839 |
 | `telemac/` | the TELEMAC templates, the module surface, what each module writes and the primitives that read it, the listing reads, authoring | 61 | 1001 |
 | `tools/` | the registry, the arg normalizer, the tool cache | 10 | 343 |
 
@@ -44,9 +44,9 @@ instance fixtures, and nothing else has one.
 
 Six slices by subsystem, each its own foreground invocation, from the repo root:
 
-    make test-fetchers        # tests/fetchers                                                                              2230
+    make test-fetchers        # tests/fetchers                                                                              2243
     make test-spatial         # tests/derive tests/render tests/mesh                                         762
-    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                      2260
+    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                      2308
     make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts       1132
     make test-model-surface   # tests/adapters tests/tools                                                                   616
     make test-packages        # tests/contracts tests/plugin                                                                  754

@@ -73,8 +73,8 @@ _CHD = """BEGIN options
 END options
 
 BEGIN period 1
-  1  CHD  -1.0
-  2  CHD  -1.0
+  1  1  -1.0
+  1  2  -1.0
 END period 1
 """
 
@@ -186,12 +186,30 @@ def test_a_dest_that_climbs_out_of_the_run_directory_refuses(tmp_path):
 
 
 def test_a_cell_id_the_grid_does_not_number_refuses(tmp_path):
-    rundir = _staged(tmp_path, chd=_CHD.replace("2  CHD", "7  CHD"))
+    rundir = _staged(tmp_path, chd=_CHD.replace("1  2  -1.0", "1  7  -1.0"))
 
     refusal = _refusal(rundir)
 
     assert refusal.error_code == "MODFLOW_STAGED_CELLID_OUTSIDE"
     assert "cell id 7" in str(refusal) and "cell2d 1 to 2" in str(refusal)
+
+
+def test_a_layer_the_grid_does_not_have_refuses(tmp_path):
+    rundir = _staged(tmp_path, chd=_CHD.replace("1  2  -1.0", "3  2  -1.0"))
+
+    refusal = _refusal(rundir)
+
+    assert refusal.error_code == "MODFLOW_STAGED_CELLID_OUTSIDE"
+    assert "layer 3" in str(refusal) and "2 layer(s)" in str(refusal)
+
+
+def test_a_cell_is_its_layer_and_its_cell2d_id_and_a_feature_row_is_not_a_cell(tmp_path):
+    # Layer 2 of cell 1 on a grid of two cells; the SFR row leads with reach 9.
+    sfr = "BEGIN period 1\n  9  INFLOW  1.0\n  12  2  STATUS  ACTIVE\nEND period 1\n"
+    rundir = _staged(tmp_path, chd=_CHD.replace("1  2  -1.0", "2  1  -1.0"),
+                     **{"gwf.sfr": sfr})
+
+    assert _check(rundir)["cell_ids"] == 2
 
 
 def test_a_disv_with_no_cell_table_refuses_rather_than_counting_nothing(tmp_path):
@@ -271,7 +289,7 @@ async def test_a_run_staged_against_a_clause_refuses_before_the_manifest(
         check_staged_run,
     )
 
-    rundir = _staged(tmp_path, chd=_CHD.replace("2  CHD", "7  CHD"))
+    rundir = _staged(tmp_path, chd=_CHD.replace("1  2  -1.0", "1  7  -1.0"))
     written: list[str] = []
     monkeypatch.setattr(staging, "_clear_prefix", lambda *a: None)
     monkeypatch.setattr(staging, "_upload_authored", lambda *a, **k: [])

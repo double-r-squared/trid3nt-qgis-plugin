@@ -7,10 +7,11 @@ from types import MappingProxyType
 from typing import Any, Mapping
 
 from ...runtime.module import MOMENT, Output, SlotRefused
+from ..authoring.stress import GIVERS
 from ..errors import ModflowError
 from .module import (_LAKE_FLUXES, _LAKE_NUMBERS, _LAKES, _MAW, _MAW_NUMBERS, _MAW_SKIN, _STREAM_NUMBERS, _STREAMS,
-                     _UZF, _UZF_ET, ModflowModule, _diversions, _lakes, _movers, _start_date_time, _streams, _stress,
-                     _uzf, _wells, periods)
+                     _UZF, _UZF_ET, _INTERBED, _INTERBED_DELAY, ModflowModule, _diversions, _interbeds, _lakes, _movers,
+                     _series, _start_date_time, _streams, _stress, _uzf, _wells, periods)
 from .outputs import PRIMITIVES
 
 __all__ = ["COUPLED_BODIES", "GWF", "MODULE_OUTPUT"]
@@ -19,18 +20,22 @@ __all__ = ["COUPLED_BODIES", "GWF", "MODULE_OUTPUT"]
 _LEVEL = {"kind": "mesh", "ramp": "blues"}
 _SATURATION = {"kind": "mesh", "ramp": "ylgnbu", "floor": 0}
 _SIGNED = {"kind": "mesh", "ramp": "rdbu", "center": 0.0}
+_COMPACTION = {"kind": "mesh", "ramp": "oranges"}
 
 # Units stay empty: mf6 carries no unit system, and a run's lengths and rates are the units the modeller declares.
 MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
     "HEAD": Output("head", "", style=_LEVEL),
     "SATURATION": Output("saturation", "", style=_SATURATION),
     "SPECIFIC_DISCHARGE": Output("specific discharge", "", style=_SIGNED),
+    "COMPACTION": Output("compaction", "", style=_COMPACTION),
+    "SUBSIDENCE": Output("subsidence", "", style=_SIGNED),
 })
 
 # Each stress composite: its package and the arguments it takes with their dimensions, in the package's own column order after the cell id.
 _STRESS = {
     "Drains": ("DRN", (("elevation", "L"), ("conductance", "L2/T"))),
     "GeneralHead": ("GHB", (("head", "L"), ("conductance", "L2/T"))),
+    "Rivers": ("RIV", (("stage", "L"), ("conductance", "L2/T"), ("rbot", "L"))),
     "ConstantHead": ("CHD", (("head", "L"),)),
     "Wells": ("WEL", (("rate", "L3/T"),)),
     "Recharge": ("RCH", (("rate", "L/T"),)),
@@ -292,16 +297,18 @@ GWF.FILLED_BY = MappingProxyType({MOMENT: {"TDIS_START_DATE_TIME": _start_date_t
 GWF.composites(
     reads={name: ("geometry", *(column for column, _ in columns), "concentration")
            for name, (_, columns) in _STRESS.items()},
-    **{name: _stress(name, package, dict(columns), carries=True)
+    **{name: _stress(name, package, dict(columns), carries=True, moves=package in GIVERS)
        for name, (package, columns) in _STRESS.items()})
 GWF.composites(reads={"Streams": ("geometry", "cross_section", *_STREAMS, *_STREAM_NUMBERS)}, Streams=_streams)
 GWF.composites(reads={"Lakes": ("geometry", "table", *_LAKES, *_LAKE_FLUXES, *_LAKE_NUMBERS)}, Lakes=_lakes)
-GWF.composites(reads={"Movers": ("from_at", "to_at")}, Movers=_movers)
+GWF.composites(reads={"WaterMover": ("from_at", "to_at")}, WaterMover=_movers)
 GWF.composites(reads={"Diversions": ("from_at", "to_at")}, Diversions=_diversions)
 GWF.composites(reads={"MultiAquiferWells": ("geometry", *(name for name in _MAW if name != "condeqn"), *_MAW_SKIN,
                                             *_MAW_NUMBERS)},
               MultiAquiferWells=_wells)
 GWF.composites(reads={"UnsaturatedZone": ("geometry", *_UZF, *_UZF_ET)}, UnsaturatedZone=_uzf)
+GWF.composites(reads={"Interbeds": ("geometry", *_INTERBED, *_INTERBED_DELAY)}, Interbeds=_interbeds)
+GWF.composites(reads={"TimeSeries": ("rows",)}, TimeSeries=_series)
 GWF.composites(reads={"Aquifer": (*_AQUIFER, "surfaces")}, Aquifer=_aquifer)
 # Which coupled body each coupling composite states, by module word: the one statement the registration and the run's bodies both read.
 COUPLED_BODIES = MappingProxyType({"Transport": "gwt", "Energy": "gwe"})

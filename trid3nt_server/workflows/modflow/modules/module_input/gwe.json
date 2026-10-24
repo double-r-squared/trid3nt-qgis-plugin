@@ -965,7 +965,7 @@
         "VERTICES"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": false
     },
     {
       "keyword": "CELL2D",

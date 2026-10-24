@@ -211,6 +211,8 @@ def _table(solved: Callable[[str], Solved], run_module: str, coupled: Sequence[s
     for module in (run_module, *coupled):
         read = solved(module)
         for token, row in read.body.MODULE_OUTPUT.items():
+            if not read.carried(token):
+                continue
             refused = read.unsaved(token)
             if refused is not None:
                 unsaved.append(f"no layer carries the {row.name}: {refused}")
