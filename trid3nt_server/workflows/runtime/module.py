@@ -501,11 +501,11 @@ class Module(metaclass=_Body):
             if composite is None:
                 continue
             found += composite.names(value)
-            for coupled in value if isinstance(value, (list, tuple)) else ():
+            for coupled in value if isinstance(value, (list, tuple)) else [value]:
                 if not (isinstance(coupled, Mapping) and "slots" in coupled):
                     continue
                 found += [n for n in coupled.get("given", ()) if isinstance(n, str)]
-                wrapper = cls.wrapper_for(coupled["module"])
+                wrapper = cls.wrapper_for(coupled.get("module") or cls.MODULE)
                 found += [name for key, item in coupled["slots"].items()
                           if key in wrapper.COMPOSITES
                           for name in wrapper.COMPOSITES[key].names(item)]

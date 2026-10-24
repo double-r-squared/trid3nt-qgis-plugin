@@ -130,15 +130,20 @@ def _results(sheet: Sheet) -> list[str]:
                     found.append(name)
     found += [name for name, _label, _kind in observation_files(sheet.filled, sheet.module)]
     for body in sheet.coupled:
-        found += [name for name, _label, _kind in observation_files(body.get("slots") or {}, str(body["module"]))]
+        found += [name for name, _label, _kind in observation_files(body.get("slots") or {}, body_name(body))]
     return found
+
+
+def body_name(body: Mapping[str, Any]) -> str:
+    """The name a coupled body's model is called in the simulation: its own, else its module word."""
+    return str(body.get("name") or body["module"])
 
 
 def _listings(sheet: Sheet) -> list[str]:
     """Every model's listing, and the simulation's: what a failed solve prints its stop into."""
     return [str(sheet.filled["NAM_LIST"].value if "NAM_LIST" in sheet.filled
                 else f"{sheet.module}.lst")] + [
-        str((body.get("slots") or {}).get("NAM_LIST") or f"{body['module']}.lst")
+        str((body.get("slots") or {}).get("NAM_LIST") or f"{body_name(body)}.lst")
         for body in sheet.coupled]
 
 
@@ -175,17 +180,19 @@ async def stage_sheet(*, sheet: Sheet, run_tag: str, mesh: Mapping[str, Any],
     rundir = new_rundir(run_tag, stem="modflow")
     disv = (await modflow_mesh_files(sheet=sheet, mesh=mesh))["disv"]
     await asyncio.to_thread(serialize, sheet, rundir, mesh)
-    await asyncio.to_thread(_beside, disv, rundir / DISV_FILE)
+    if disv is not None:
+        await asyncio.to_thread(_beside, disv, rundir / DISV_FILE)
     # The parse is a container round trip, so it runs off the loop.
     await asyncio.to_thread(_validated, rundir)
     results = _results(sheet)
     listings = _listings(sheet)
     # The manifest's module is the body answering the question: a coupled run is its transport.
-    module = str(sheet.coupled[0]["module"]) if sheet.coupled else sheet.module
+    coupling = [body for body in sheet.coupled if "refine" not in body]
+    module = str(coupling[0]["module"]) if coupling else sheet.module
     return await stage_run(
         rundir, run_tag, module=module, steering=MFSIM_FILE,
         results=results, outputs=[*results, *listings, _SIM_LISTING, _METRICS],
-        mesh_inputs=[{"gs_uri": disv, "dest": DISV_FILE}], prefix=prefix,
+        mesh_inputs=[{"gs_uri": disv, "dest": DISV_FILE}] if disv is not None else [], prefix=prefix,
         sheet=sheet.state(), server_facts=server_facts,
         result_basename=(results or listings)[0], check=check_staged_run)
 
@@ -204,18 +211,20 @@ async def run_sheet(*, sheet: Sheet, staged: Mapping[str, Any],
             "vertical_frame": frame, "published_units": dict(units)}
 
 
-def _table(solved: Callable[[str], Solved], run_module: str, coupled: Sequence[str]
+def _table(solved: Callable[[str], Solved], run_module: str, coupled: Sequence[str], *, mapped: bool = True
            ) -> tuple[list[Primitive], Callable[[Sequence[LayerURI], Mapping[Primitive, str]], None]]:
-    """EVERY output row every module's output control saved -> one temporal layer per layer, and the account of the rest.
-    A row a module did not save is journalled by the keyword that would have saved it, never refused."""
+    """EVERY output row every model's output control saved -> one temporal layer per layer, and the account of the rest; ``coupled`` names the other models.
+    A row a model did not save is journalled by the keyword that would have saved it, never refused; ``mapped`` is false for a DISU, whose cells no map face holds, and its observations alone are charts."""
     from trid3nt_server.inputs.run_notes import journal_note
 
     rows: list[Primitive] = []
     unsaved: list[str] = []
+    if not mapped:
+        unsaved.append("the run's grid is the DISU its sheet states, which holds no map face to paint a field on")
     for module in (run_module, *coupled):
         read = solved(module)
         for token, row in read.body.MODULE_OUTPUT.items():
-            if not read.carried(token):
+            if not mapped or not read.carried(token):
                 continue
             refused = read.unsaved(token)
             if refused is not None:
@@ -251,6 +260,13 @@ def _record(solved: Solved, name: str) -> LayerURI:
     """The run's own record: the layer-1 head group's file, the mesh every published group rides; it binds no group, so it is DRAWN."""
     from trid3nt_server.store import objects as storage
 
+    from .authoring.mesh_files import unstructured
+
+    if unstructured(solved.sheet):
+        return LayerURI(
+            layer_id=f"modflow-{solved.run_id}", name=name, layer_type="mesh",
+            uri=str(solved.mesh["display_uri"]), style={"kind": "reference"}, bbox=solved.bbox,
+            crs_authid=f"EPSG:{solved.utm_epsg}", reference_time=solved.run.get("reference_time"))
     refused = solved.unsaved("HEAD")
     if refused is not None:
         raise refused
@@ -270,22 +286,26 @@ async def publish_outputs(*, run: Mapping[str, Any], sheet: Sheet,
                           anchors: Sequence[Mapping[str, Any]] = ()) -> LayerURI:
     """Read what the run saved and publish every output row, one temporal layer per layer, the template's reads beside them.
     A solved run is opened over the sheet it solved, which the handle carries only as its record; a coupled body's
-    keywords are its own slots."""
+    keywords are its own slots, and a refinement's model is read on the grid it was cut to."""
+    from .authoring.mesh_files import unstructured
+    from .authoring.refinement import refined_grids
     from .authoring.simulation import coupled_sheet
 
     opened = {**run, "sheet": sheet}
-    coupled = {str(body.get("module")): body for body in sheet.coupled}
+    coupled = {body_name(body): body for body in sheet.coupled}
+    grids = refined_grids(sheet, run["mesh"]) if any("refine" in body for body in sheet.coupled) else {}
 
-    def _solved(module: str) -> Solved:
-        body = coupled.get(module)
-        return Solved(opened, wrapper_for(module), filled=(
-            None if body is None else coupled_sheet(sheet, body).filled))
+    def _solved(name: str) -> Solved:
+        body = coupled.get(name)
+        if body is None:
+            return Solved(opened, wrapper_for(name))
+        return Solved(opened, wrapper_for(str(body["module"])), filled=coupled_sheet(sheet, body).filled, model=name,
+                      grid=grids.get(name))
 
     return await publish_reads(
         engine="modflow", run=run, outputs=outputs, captions=captions,
         params=params, anchors=anchors, solved=_solved,
-        table=lambda solved: _table(solved, str(run["module"]),
-                                    [str(body["module"]) for body in sheet.coupled]),
+        table=lambda solved: _table(solved, str(run["module"]), list(coupled), mapped=not unstructured(sheet)),
         record=_record)
 
 

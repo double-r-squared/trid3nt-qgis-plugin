@@ -88,7 +88,7 @@ def parse(text: str) -> list[dict[str, str]]:
 
 
 #: A shape naming the grid or an axis of it: the value is a constant, one per layer, or the NAME of an input holding the array.
-_ARRAY_SHAPE = re.compile(r"nrow|ncol|ncpl|nlay|nodes|naux")
+_ARRAY_SHAPE = re.compile(r"nrow|ncol|ncpl|nlay|nodes|nja|naux")
 
 #: What each DFN type word is in the dictionary; a record, recarray or keystring is one structured block.
 _SCALAR = {"keyword": "LOGICAL", "integer": "INTEGER",

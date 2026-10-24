@@ -224,6 +224,8 @@ def _aquifer(value: Any, *, run: Mapping[str, Any]) -> tuple[Mapping[str, Any], 
 
 # The stress statements a coupled body states, by its module word: each package word to the composite the wrapper holds for it.
 _COUPLED_STRESS = {
+    "gwf": {"CHD": "ConstantHead", "WEL": "Wells", "DRN": "Drains", "GHB": "GeneralHead", "RIV": "Rivers",
+            "RCH": "Recharge"},
     "gwt": {"CNC": "ConstantConcentration", "SRC": "MassSource"},
     "gwe": {"CTP": "ConstantTemperature", "ESL": "EnergySource"},
 }
@@ -232,13 +234,57 @@ _COUPLED_STRESS = {
 _SIMULATION_OWNED = ("TDIS", "DISV")
 
 
-def _coupled(module: str, name: str):
-    stress = _COUPLED_STRESS[module]
+def _deck(module: str, stated: Mapping[str, Any] | None, run: Mapping[str, Any], *, composites: bool = False
+          ) -> dict[str, Any]:
+    """A body's slots from the identifiers and statements its deck states, each checked against that module's dictionary."""
+    from . import wrapper_for
 
+    wrapper = wrapper_for(module)
+    stress = _COUPLED_STRESS[module]
+    slots: dict[str, Any] = {}
+    statements: dict[str, Any] = {}
+    for key, item in (stated or {}).items():
+        if composites and key in wrapper.COMPOSITES:
+            statements[str(key)] = item
+            continue
+        prefix = str(key).split("_", 1)[0]
+        if prefix in _SIMULATION_OWNED:
+            raise SlotRefused(
+                f"{key} states the simulation's own "
+                f"{'clock' if prefix == 'TDIS' else 'grid'}, which the carrier's deck "
+                "owns: one TDIS and the staged DISV describe the simulation, and the "
+                f"{module} body describes its own packages.")
+        if item is None:
+            continue
+        slots[str(key)] = wrapper.slot(key).check(item)
+    for key, item in list(slots.items()):
+        if key == "OBS_CONTINUOUS" and (isinstance(item, list) or (isinstance(item, Mapping) and "type" in item)):
+            del slots[key]
+            slots.update(wrapper.COMPOSITES["Observations"].apply(item, run)[0])
+            continue
+        if key.endswith("_TS_FILERECORD") and isinstance(item, Mapping) and "series" not in item:
+            del slots[key]
+            slots.update(wrapper.COMPOSITES["TimeSeries"].apply({"package": key.split("_", 1)[0], **item}, run)[0])
+            continue
+        if not key.endswith("_STRESS_PERIOD_DATA") or not isinstance(item, Mapping) \
+                or "stress" in item:
+            continue
+        composite = stress.get(key.split("_", 1)[0])
+        if composite is not None:
+            slots.update(wrapper.COMPOSITES[composite].apply(item, run)[0])
+    for key, item in statements.items():
+        expanded = wrapper.COMPOSITES[key].apply(item, run)[0]
+        owned = sorted(name for name in expanded if name.split("_", 1)[0] in _SIMULATION_OWNED)
+        if owned:
+            raise SlotRefused(f"{key} states {', '.join(owned)}, the simulation's own clock or grid, which the "
+                              f"carrier's deck owns; the {module} body describes its own packages.")
+        slots.update(expanded)
+    return slots
+
+
+def _coupled(module: str, name: str):
     def expand(value: Any, *, run: Mapping[str, Any]
                ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-        from . import wrapper_for
-
         if not isinstance(value, Mapping):
             raise SlotRefused(
                 f"{name} takes a mapping with 'given' naming the input(s) that carry "
@@ -256,34 +302,7 @@ def _coupled(module: str, name: str):
             raise SlotRefused(
                 f"{name} slots takes a mapping of {module.upper()} identifiers to "
                 f"values; got {type(stated).__name__}.")
-        wrapper = wrapper_for(module)
-        slots: dict[str, Any] = {}
-        for key, item in (stated or {}).items():
-            prefix = str(key).split("_", 1)[0]
-            if prefix in _SIMULATION_OWNED:
-                raise SlotRefused(
-                    f"{key} states the simulation's own "
-                    f"{'clock' if prefix == 'TDIS' else 'grid'}, which the carrier's deck "
-                    "owns: one TDIS and the staged DISV describe the simulation, and the "
-                    f"{module} body describes its own packages.")
-            if item is None:
-                continue
-            slots[str(key)] = wrapper.slot(key).check(item)
-        for key, item in list(slots.items()):
-            if key == "OBS_CONTINUOUS" and (isinstance(item, list) or (isinstance(item, Mapping) and "type" in item)):
-                del slots[key]
-                slots.update(wrapper.COMPOSITES["Observations"].apply(item, run)[0])
-                continue
-            if key.endswith("_TS_FILERECORD") and isinstance(item, Mapping) and "series" not in item:
-                del slots[key]
-                slots.update(wrapper.COMPOSITES["TimeSeries"].apply({"package": key.split("_", 1)[0], **item}, run)[0])
-                continue
-            if not key.endswith("_STRESS_PERIOD_DATA") or not isinstance(item, Mapping) \
-                    or "stress" in item:
-                continue
-            composite = stress.get(key.split("_", 1)[0])
-            if composite is not None:
-                slots.update(wrapper.COMPOSITES[composite].apply(item, run)[0])
+        slots = _deck(module, stated, run)
         return ({}, {module: {"module": module, "slots": slots, "given": list(given)}})
 
     expand.__doc__ = (
@@ -292,6 +311,84 @@ def _coupled(module: str, name: str):
         f"    nothing states nothing. Each slot is a {module.upper()} dictionary identifier - an unknown one\n"
         "    refuses by name - and a stress statement is the wrapper's own composite's shape.")
     return expand
+
+
+# The words of a refinement statement; the exchange's options are the GWF-GWF exchange's own.
+_REFINEMENT = ("geometry", "refinement", "layers", "name", "slots", "exchange", "transport")
+_EXCHANGE_OPTIONS = ("xt3d", "print_flows", "print_input", "save_flows")
+_MODEL_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,15}")
+
+
+def _refinement(value: Any, *, run: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    statements = list(value) if isinstance(value, (list, tuple)) else [value]
+    bodies: dict[str, Any] = {}
+    for rank, item in enumerate(statements, start=1):
+        if not isinstance(item, Mapping):
+            raise SlotRefused(f"LocalGridRefinement takes a mapping of {', '.join(_REFINEMENT)}, or a list of them; "
+                              f"got {type(item).__name__}.")
+        unknown = sorted(set(item) - set(_REFINEMENT))
+        if unknown:
+            raise SlotRefused(f"LocalGridRefinement takes {', '.join(_REFINEMENT)}; {', '.join(unknown)} is none of them.")
+        if item.get("geometry") is None:
+            continue
+        name = item.get("name") or ("gwf-child" if rank == 1 else f"gwf-child{rank}")
+        if not isinstance(name, str) or not _MODEL_NAME.fullmatch(name) or name in {*COUPLED_BODIES.values(), "gwf"} \
+                or name in bodies:
+            raise SlotRefused(f"LocalGridRefinement {rank} names the model {name!r}; a model name is 1 to 16 letters, "
+                              "digits, hyphens or underscores, is not gwf, gwt or gwe and is no other model's.")
+        ncpp = item.get("refinement")
+        if isinstance(ncpp, bool) or not isinstance(ncpp, int) or ncpp < 2:
+            raise SlotRefused(f"LocalGridRefinement {name} states refinement {ncpp!r}; it is the integer count of child "
+                              "cells along a parent cell's side, from 2 - the engine has no value for it, so state it.")
+        layers = item.get("layers")
+        if layers is not None and (not isinstance(layers, (list, tuple)) or any(
+                isinstance(each, bool) or not isinstance(each, int) for each in layers)):
+            raise SlotRefused(f"LocalGridRefinement {name} layers is a list of integers, the child layers in each parent "
+                              f"layer; got {layers!r}.")
+        options = item.get("exchange")
+        if options is not None and (not isinstance(options, Mapping) or set(options) - set(_EXCHANGE_OPTIONS)):
+            raise SlotRefused(f"LocalGridRefinement {name} exchange takes {', '.join(_EXCHANGE_OPTIONS)}; "
+                              f"got {options!r}.")
+        stated = item.get("slots")
+        if stated is not None and not isinstance(stated, Mapping):
+            raise SlotRefused(f"LocalGridRefinement {name} slots takes a mapping of GWF identifiers and statements to "
+                              f"values; got {type(stated).__name__}.")
+        bodies[name] = {"module": "gwf", "name": name, "slots": _deck("gwf", stated, run, composites=True), "given": [],
+                        "refine": {"geometry": item["geometry"], "refinement": ncpp,
+                                   "layers": None if layers is None else [int(each) for each in layers],
+                                   "exchange": dict(options or {})}}
+        transport = item.get("transport")
+        if transport is not None:
+            bodies.update(_refined_transport(transport, name, run, taken=bodies))
+    return {}, bodies
+
+
+def _refined_transport(value: Any, child: str, run: Mapping[str, Any], *, taken: Mapping[str, Any]) -> dict[str, Any]:
+    """The GWT model beside a refinement's flow model: its name (default the flow model's with gwt for gwf) and slots."""
+    if not isinstance(value, Mapping) or set(value) - {"name", "slots"}:
+        raise SlotRefused(f"LocalGridRefinement {child} transport takes name and slots; got {value!r}.")
+    name = value.get("name") or (f"gwt{child[3:]}" if child.startswith("gwf") else f"gwt-{child}"[:16])
+    if not isinstance(name, str) or not _MODEL_NAME.fullmatch(name) or name in {*COUPLED_BODIES.values(), "gwf"} \
+            or name in taken:
+        raise SlotRefused(f"LocalGridRefinement {child} transport names the model {name!r}; a model name is 1 to 16 "
+                          "letters, digits, hyphens or underscores, is not gwf, gwt or gwe and is no other model's.")
+    stated = value.get("slots")
+    if stated is not None and not isinstance(stated, Mapping):
+        raise SlotRefused(f"LocalGridRefinement {child} transport slots takes a mapping of GWT identifiers to values; "
+                          f"got {type(stated).__name__}.")
+    return {name: {"module": "gwt", "name": name, "slots": _deck("gwt", stated, run), "given": [], "of": child}}
+
+
+_refinement.__doc__ = (
+    "A child model refining part of the grid: LocalGridRefinement(geometry, refinement[, layers, name, slots, exchange, transport]), or a list.\n\n"
+    "    geometry is the polygon whose parent cells (held by their centres) the child replaces, refinement the child\n"
+    "    cells along each parent cell's side (an integer from 2) and layers the child layers in each parent layer, top\n"
+    "    first (unstated, one each; the refined layers start at layer 1 and run unbroken, 0 below them). The child is\n"
+    "    a GWF model of its own named name (default gwf-child), joined to this one by a GWF-GWF exchange whose cells\n"
+    "    flopy's Lgr computes; slots states its keywords and statements (CHD, WEL, Streams ... as the carrier\n"
+    "    does, placed on the child's cells), exchange the exchange's options (xt3d, print_flows, print_input,\n"
+    "    save_flows) and transport {name, slots} the GWT model beside it, exchanged with this run's Transport body.\n"
+    "    The parent solves no cell the child replaces; the parent's mesh must be rectilinear.")
 
 
 GWF = ModflowModule("gwf")
@@ -323,4 +420,5 @@ GWF.composites(reads={"Aquifer": (*_AQUIFER, "surfaces")}, Aquifer=_aquifer)
 COUPLED_BODIES = MappingProxyType({"Transport": "gwt", "Energy": "gwe"})
 GWF.composites(**{name: _coupled(module, name)
                   for name, module in COUPLED_BODIES.items()})
+GWF.composites(reads={"LocalGridRefinement": ("geometry",)}, LocalGridRefinement=_refinement)
 GWF.reads(**PRIMITIVES)

@@ -18,12 +18,18 @@ from typing import Any, Mapping
 
 from .accepted_mesh import mesh_artifact, mesh_missing, mesh_nodes
 from .griddata import frame_of, place
+from .refinement import refined_idomain
 from .stress import hold_lakes, lake_statements
 from ..errors import ModflowError
 
 logger = logging.getLogger("trid3nt_server.workflows.modflow.authoring.mesh_files")
 
-__all__ = ["botm_of", "disv_dimensions", "modflow_mesh_files", "top_of"]
+__all__ = ["botm_of", "disv_dimensions", "modflow_mesh_files", "top_of", "unstructured"]
+
+
+def unstructured(sheet: Any) -> bool:
+    """Whether the sheet states the run's grid as a DISU, which no accepted-mesh DISV describes."""
+    return any(identifier.startswith("DISU_") for identifier in sheet.filled)
 
 
 def disv_dimensions(sheet: Any, cells: Any) -> dict[str, int]:
@@ -43,6 +49,8 @@ async def modflow_mesh_files(*, sheet: Any, mesh: Mapping[str, Any]) -> dict[str
 
 
 def _mesh_files(sheet: Any, mesh: Mapping[str, Any]) -> dict[str, Any]:
+    if unstructured(sheet):
+        return {"engine_files": dict(getattr(mesh_artifact(mesh), "engine_files", None) or {}), "disv": None}
     art = mesh_artifact(mesh)
     if art is None:
         raise mesh_missing(
@@ -56,6 +64,8 @@ def _mesh_files(sheet: Any, mesh: Mapping[str, Any]) -> dict[str, Any]:
         idomain = hold_lakes(lake_statements(sheet), idomain, points=points, cells=cells,
                              utm_epsg=getattr(art, "utm_epsg", None), nlay=nlay,
                              frame=frame_of(sheet), top=top, botm=botm)
+    idomain = refined_idomain(sheet, idomain, points=points, cells=cells,
+                              utm_epsg=getattr(art, "utm_epsg", None), nlay=nlay)
     key = _layering_key(nlay=nlay, top=top, botm=botm, idomain=idomain)
     files = dict(getattr(art, "engine_files", None) or {})
     if not files.get(key):

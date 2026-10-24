@@ -821,7 +821,7 @@
     {
       "keyword": "JA",
       "identifier": "DISU_JA",
-      "type": "INTEGER",
+      "type": "ARRAY",
       "shape": "(nja)",
       "layered": false,
       "size": 1,
@@ -836,7 +836,7 @@
     {
       "keyword": "IHC",
       "identifier": "DISU_IHC",
-      "type": "INTEGER",
+      "type": "ARRAY",
       "shape": "(nja)",
       "layered": false,
       "size": 1,
@@ -851,7 +851,7 @@
     {
       "keyword": "CL12",
       "identifier": "DISU_CL12",
-      "type": "REAL",
+      "type": "ARRAY",
       "shape": "(nja)",
       "layered": false,
       "size": 1,
@@ -866,7 +866,7 @@
     {
       "keyword": "HWVA",
       "identifier": "DISU_HWVA",
-      "type": "REAL",
+      "type": "ARRAY",
       "shape": "(nja)",
       "layered": false,
       "size": 1,
@@ -881,7 +881,7 @@
     {
       "keyword": "ANGLDEGX",
       "identifier": "DISU_ANGLDEGX",
-      "type": "REAL",
+      "type": "ARRAY",
       "shape": "(nja)",
       "layered": false,
       "size": 1,

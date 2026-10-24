@@ -400,6 +400,64 @@ FMI - is proven and remains the path for reusing a solved flow without
 re-running it; the examples' own transport bodies use the exchange, and so does
 the product.
 
+## Model exchanges and the unstructured grid
+
+A LOCAL GRID REFINEMENT is a second GWF model on a grid cut out of the first. `LocalGridRefinement(geometry,
+refinement[, layers, name, slots, exchange, transport])` is a composite of the GWF wrapper (`modules/gwf.py`), or a list of
+them. The polygon `geometry` holds the parent cells whose centres it contains; `refinement` is the integer count of child
+cells along a parent cell's side, from 2 and never defaulted; `layers` the child layers in each parent layer, top first
+(unstated, one each - the refined layers start at layer 1 and run unbroken, 0 below them, and a parent layer not refined
+stays solved under the child); `name` the child's model name (default `gwf-child`, then `gwf-child2` by statement position;
+1 to 16 letters, digits, hyphens or underscores, never `gwf`, `gwt` or `gwe`). `slots` states the child's own keywords and
+the composites a deck states (`Wells`, `Streams`, `Lakes`, `Observations` ... as the carrier does, placed on the CHILD's
+cells), checked against the GWF dictionary; `TDIS` and `DISV` refuse as the simulation's own, and `IMS` refuses because the
+child solves in the carrier's solution. `exchange` is the exchange's own options (`xt3d`, `print_flows`, `print_input`,
+`save_flows`). The composed body is a coupled body of the sheet keyed by its name, carrying `refine`; a qualified run keyword
+(`gwf:X`) does not route to it - a child speaks only through its statement.
+
+THE PARENT IS A LATTICE. `authoring/refinement.py::lattice` reads the accepted mesh as one rectangle per cell on a regular
+lattice (its row 0 the northern row, whatever the mesh's own numbering) or refuses naming what the refinement needs; the
+triangle, Voronoi and quadtree meshers hand it no lattice. flopy's `Lgr` cuts the child out of that lattice, the parent's
+stated top and bottoms, and the zeros: the parent's `idomain` gains 0 under the polygon in the refined layers (written into
+the staged DISV by `mesh_files`, and into the carrier's active cells, merged with a stated `DISV_IDOMAIN` and the lake
+cells; a covered cell the run does not solve refuses), the child's DISV is written into the run directory as
+`<name>.disv` by the same `_write_disv` (its vertices a row-major lattice of the child, the options those of the parent's
+DISV), and `Lgr.get_exchange_data()` rows are renumbered to `(layer, icell2d)` on each grid. The carrier and the child are
+two models of one simulation in ONE solution group (`gwf6 gwf.nam gwf`, `gwf6 gwf-child.nam gwf-child`, `ims6 gwf.ims gwf
+gwf-child`) joined by `GWF6-GWF6 gwf-gwf-child.exg`. An `xt3d` exchange and every exchange of a refinement that has a
+transport carry the auxiliary variables `ANGLDEGX` and `CDIST`, which mf6 reads there.
+
+The `transport` of a statement (`{name, slots}`, the GWT model beside the child, default `gwt-child`) is a gwt body keyed by
+its name with `of` the child's name: it is placed on the child's cells, joins the run's `Transport` body's solution, and is
+exchanged with it (`GWT6-GWT6` with `gwfmodelname1/2`) and with the child's flow (`GWF6-GWT6`); its SSM sources are the
+child flow's carrying packages. A refinement's transport in a run with no `Transport` refuses.
+
+WATERMOVER RESOLVES ITS ENDS ACROSS MODELS. One grammar: a statement stated on any model's deck names its two ends by a
+name, a point or both among the placed features of EVERY flow model, and each end resolves to exactly one feature (a point is
+read on the model whose cells hold it). A mover whose ends sit in one model is that model's MVR package whichever deck
+stated it; one whose ends sit in the carrier and a child is written to the exchange's own MVR (`MODELNAMES`, the packages as
+`model package`), and each package used sets its `MOVER` option. A mover between two children refuses - an exchange joins a
+child to its carrier alone. The MVR keywords beside a statement refuse as they do in one model.
+
+The outputs of a child are read on its own grid: `Solved(model=, grid=)` gives it its cells and layers, the publish's table
+walks every model (a child's rows carry its name in the module tag, its group and its caption), the listing and the
+observation files are named for the model, and the results the worker must find include the child's. The staged check reads
+each model's period lists against that model's own grid.
+
+THE DISU IS THE SHEET'S WHOLE GRID. A sheet that states `DISU_*` keywords (the dictionary's own rows; `nja`-shaped rows
+are ARRAY like the other grid data) has no DISV: `authoring/simulation.py::_write_unstructured` writes the model's
+discretization as stated, every other keyword as stated, and nothing places on the accepted mesh - a statement that places
+by geometry, a `DISV_*` keyword or a refinement beside it refuses. The period rows and observation ids are node numbers
+(`[[node], rate]`), the staged check reads them against `NODES`, and no DISV is written or staged. A DISU has no face on the
+map unless `DISU_CELL2D` gives one and the publish reads the accepted mesh's, so its fields are not painted: the run's
+observations chart and its record is the accepted mesh. The mesh front handing down a DISU (gridgen's) is the follow-on.
+
+Proven through the image: ex-gwf-lgr's parent and child (the example's geometry in round widths and four child cells per
+parent cell, with the SFR and MVR set aside) equal flopy's own DIS reference bitwise, as does the same simulation with a
+transport in both models and all four exchanges (heads and concentrations); a Streams line in the parent and one in the child
+joined by two cross movers moves exactly the water the other side receives; ex-gwf-rad-disu's radial DISU, stated whole,
+equals the published script's heads and observation CSV bitwise.
+
 ## The publish
 
 The engine's own reading of a solved run (`modules/outputs.py`) opens the files
@@ -457,7 +515,7 @@ builds on was proved through that image before it was built on.
 ## What is not built yet
 
 The accepted-mesh reader of a ragged (UGRID) display face - a quadtree with
-refinement, a Voronoi - so those meshes cannot yet be authored on; the
-model exchanges (GWF-GWF, GWT-GWT), FMI
+refinement, a Voronoi - so those meshes cannot yet be authored on; a refinement of a
+mesh that is not a lattice; the mesh front handing down a DISU; FMI
 (the transport reading a prior flow run's saved budget), and PRT. Each is a leg
 in the scope's plan; the coupling above is built for GWT on the exchange.

@@ -10,16 +10,17 @@ overwrite the staged mesh with a package flopy knows nothing about.
 from __future__ import annotations
 
 import logging
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Mapping
 
 from . import DISV_FILE
 from .accepted_mesh import mesh_artifact, mesh_nodes
 from .griddata import frame_of, needs_botm, needs_top, place
-from .mesh_files import _layering, botm_of, disv_dimensions, top_of
-from .movers import mover_rows
+from .mesh_files import _layering, botm_of, disv_dimensions, top_of, unstructured
+from .movers import grouped, resolved_moves
 from .observations import place_observations
+from .refinement import Child, built_children, children_of, refined_idomain
 from .stress import (GIVERS, lake_statements, layer_rows, maw_statements, place as place_stress, place_interbeds,
                      place_lakes, place_maw, place_streams, place_uzf)
 
@@ -43,9 +44,9 @@ _MODEL_KWARGS = "NAM"
 
 _GRID = "DISV"
 
-# A sheet stating these would answer the mesh's own question: this run's grid is the
-# accepted mesh, and only its DISV may describe it.
-_WRONG_GRID = ("DIS", "DISU")
+# A sheet stating DIS would answer the mesh's own question: this run's grid is the
+# accepted mesh's DISV, or the DISU the sheet states whole.
+_WRONG_GRID = ("DIS",)
 
 
 def serialize(sheet: Any, rundir: Path | str, mesh: Any) -> dict[str, Any]:
@@ -64,6 +65,13 @@ def serialize(sheet: Any, rundir: Path | str, mesh: Any) -> dict[str, Any]:
 
 
 def _refuse(sheet: Any) -> None:
+    if unstructured(sheet):
+        staged = sorted(identifier for identifier in sheet.filled if identifier.startswith("DISV_"))
+        if staged or children_of(sheet):
+            raise ModflowError(
+                f"{', '.join(staged) or 'LocalGridRefinement'} states the accepted mesh's grid beside the DISU this run "
+                "states; a run solves one grid, so state the DISU alone or the DISV alone.",
+                error_code="MODFLOW_WRONG_GRID")
     for identifier in sheet.filled:
         if identifier.split("_", 1)[0] in _WRONG_GRID:
             raise ModflowError(
@@ -114,18 +122,21 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
             f"{module!r} is no module this authoring solves; its simulators "
             "are gwf, gwt and gwe.",
             error_code="MODFLOW_MODULE_UNKNOWN")
+    if unstructured(sheet):
+        return _write_unstructured(sheet, work, groups, named)
     points, cells, bed, _lonlat = mesh_nodes(mesh)
     dims = disv_dimensions(sheet, cells)
     utm_epsg = getattr((mesh or {}).get("artifact"), "utm_epsg", None)
     frame = frame_of(sheet)
+    refined = bool(children_of(sheet))
     top = (top_of(sheet, nlay=int(dims["nlay"]), art=mesh_artifact(mesh), bed=bed,
                   points=points, cells=cells)
-           if any(needs_top(row.value) for rows in groups.values()
-                  for row in rows.values()) else None)
+           if refined or any(needs_top(row.value) for rows in groups.values()
+                             for row in rows.values()) else None)
     botm = (botm_of(sheet, nlay=int(dims["nlay"]), art=mesh_artifact(mesh), points=points,
                     cells=cells, top=top)
-            if any(needs_botm(row.value) for rows in groups.values()
-                   for row in rows.values()) else None)
+            if refined or any(needs_botm(row.value) for rows in groups.values()
+                              for row in rows.values()) else None)
     placed = dict(dims=dims, points=points, cells=cells, utm_epsg=utm_epsg,
                   sheet=sheet, frame=frame, top=top, botm=botm)
     active = _active(sheet, nlay=int(dims["nlay"]), points=points, cells=cells,
@@ -138,86 +149,220 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
     derived, tables, series, observed, features = _stressed(
         sheet, groups, nlay=int(dims["nlay"]), points=points, cells=cells, utm_epsg=utm_epsg, frame=frame,
         active=active, start=start, grid=grid)
-    _unstated(sheet, set(groups) | set(_REQUIRED_PACKAGES[module]) | {"TDIS"},
-              derived)
+    flow = _Model(name=module, sheet=sheet, groups=groups, named=named, derived=derived, tables=tables, series=series,
+                  observed=observed, features=features, mesh=placed, disv=DISV_FILE, active=active)
+    # A refinement's child is a flow model of its own on a grid cut from this one, written beside it.
+    models = [flow]
+    for child in built_children(sheet, points=points, cells=cells, utm_epsg=utm_epsg, nlay=int(dims["nlay"]),
+                                top=top, botm=botm, idomain=active):
+        models.append(_child(sheet, child, work, utm_epsg=utm_epsg, frame=frame))
+    exchanges = _moved(models)
+    for model in models:
+        _unstated(model.sheet, set(model.groups) | set(_REQUIRED_PACKAGES[model.sheet.module]) | (
+            {"TDIS"} if model is flow else set()), model.derived)
     sim = flopy.mf6.MFSimulation(sim_name="trid3nt", sim_ws=str(work),
                                  verbosity_level=0)
     _package(flopy, "ModflowTdis",
              _placed(groups.pop("TDIS", {}), **placed),
              owner=sim,
              how="TDIS of the simulation")
-    carrying = [prefix for prefix, rows in groups.items()
-                if "CONCENTRATION" in map(str, getattr(rows.get("auxiliary"), "value", None) or ())]
-    flow = _model(flopy, sim, module=module, groups=groups, named=named, tables=tables, series=series,
-                  observed=observed, **placed)
-    # The water a flow package carries a CONCENTRATION on is a transport source: SSM names
-    # each such package by the name the flow model's name file gives it.
-    sources = [[flow.get_package(prefix.lower()).package_name, "AUX", "CONCENTRATION"]
-               for prefix in carrying]
-    # Each coupled body is a second model in this simulation: its own packages from its
-    # slots, a filename-only DISV on the same staged mesh, its own solution, and the
-    # exchange that joins it to the flow.
+    carrying = {model.name: _carrying(model) for model in models}
+    made = {model.name: _model(flopy, sim, model, solution=model is flow) for model in models}
+    movers = []
+    for model in models[1:]:
+        movers.append(_joined(flopy, sim, made[flow.name], made[model.name], model, exchanges.get(model.name)))
+        sim.register_ims_package(sim._solution_files[f"{flow.name}.ims"], [model.name])
+    # Each coupled body is a second model in this simulation: its own packages from its slots, a filename-only
+    # DISV on the staged mesh, its own solution, and the exchange that joins it to the flow; the transport of a
+    # refinement is on the child's grid, in the solution of the run's transport.
+    parents: dict[str, _Model] = {}
     for body in sheet.coupled:
+        if "refine" in body or "of" in body:
+            continue
         coupled = coupled_sheet(sheet, body)
-        cgroups, cnamed = _grouped(coupled)
-        cderived, ctables, cseries, cobserved, _features = _stressed(
-            coupled, cgroups, nlay=int(dims["nlay"]), points=points, cells=cells, utm_epsg=utm_epsg,
-            frame=frame, active=active, features=features)
-        _unstated(coupled, set(cgroups) | set(_REQUIRED_PACKAGES[coupled.module]),
-                  cderived)
-        if coupled.module == "gwt" and sources \
-                and "sources" not in cgroups.get("SSM", {}):
-            cgroups.setdefault("SSM", {})
-        _model(flopy, sim, module=coupled.module, groups=cgroups, named=cnamed, tables=ctables, series=cseries,
-               observed=cobserved, sources=sources if coupled.module == "gwt" else (), **placed)
-        _exchange(flopy, sim, carrier=module, coupled=coupled.module)
-    return _write_package_by_package(sim)
+        held = _coupled(flopy, sim, coupled, body, flow=made[flow.name], at=flow, active=active,
+                        features=features, carrying=carrying[flow.name], join=None)
+        parents[coupled.module] = held
+        _exchange(flopy, sim, carrier=flow.name, coupled=held.name)
+    for body in sheet.coupled:
+        if "of" not in body:
+            continue
+        home = next(model for model in models if model.name == body["of"])
+        if "gwt" not in parents:
+            raise ModflowError(
+                f"{body['name']} is the transport of the refinement {home.name}, and this run couples no gwt body to "
+                "exchange it with; state Transport.", error_code="MODFLOW_EXCHANGE_UNKNOWN")
+        held = _coupled(flopy, sim, coupled_sheet(sheet, body), body, flow=made[home.name], at=home,
+                        active=home.active, features=home.features, carrying=carrying[home.name], join=parents["gwt"])
+        _exchange(flopy, sim, carrier=home.name, coupled=held.name, kinds=("gwf", "gwt"))
+        cells = home.child.exchange
+        _package(flopy, "ModflowGwtgwt", {**({"auxiliary": ["ANGLDEGX", "CDIST"]} if home.child.auxiliary else {})},
+                 owner=sim, exgtype="GWT6-GWT6", gwfmodelname1=flow.name, gwfmodelname2=home.name,
+                 exgmnamea=parents["gwt"].name, exgmnameb=held.name, nexg=len(cells), exchangedata=cells,
+                 filename=f"{parents['gwt'].name}-{held.name}.exg", how=f"the {parents['gwt'].name}-{held.name} exchange")
+    return _write_package_by_package(sim, [mover for mover in movers if mover is not None])
 
 
-def _model(flopy: Any, sim: Any, *, module: str, groups: dict[str, dict[str, Any]],
-           named: dict[str, Any], dims: dict[str, int], points: Any, cells: Any,
-           utm_epsg: int | None, sheet: Any, frame: Any, top: Any,
-           botm: Any = None, sources: Any = (), tables: Mapping[str, list] = {},
-           series: Mapping[str, Mapping[str, Any]] = {},
-           observed: Mapping[str, Mapping[str, Any]] = {}) -> Any:
-    """One model of this simulation: its name file, the staged DISV's line, its solution and its packages; ``tables`` are the TAB6 files a package reads, ``series`` its time-series file and ``observed`` its own OBS file."""
+def _carrying(model: _Model) -> list[str]:
+    """The prefixes of the flow packages that carry a CONCENTRATION: the water sources a transport model's SSM names."""
+    return [prefix for prefix, rows in model.groups.items()
+            if "CONCENTRATION" in map(str, getattr(rows.get("auxiliary"), "value", None) or ())]
+
+
+def _coupled(flopy: Any, sim: Any, coupled: Any, body: Mapping[str, Any], *, flow: Any, at: _Model,
+             active: Any, features: list[Mapping[str, Any]], carrying: list[str], join: _Model | None) -> _Model:
+    """A transport or energy body placed on the cells of ``at`` and written as a model; ``join`` is the body whose solution it shares."""
+    name = str(body.get("name") or coupled.module)
+    groups, named = _grouped(coupled)
+    if join is not None and "IMS" in groups:
+        raise ModflowError(
+            f"{name} states IMS keywords, and a refinement's transport solves in the solution of {join.name}; state "
+            f"the solver once, on {join.name}.", error_code="MODFLOW_KEYWORD_SHAPE")
+    grid = at.mesh
+    derived, tables, series, observed, _features = _stressed(
+        coupled, groups, nlay=int(grid["dims"]["nlay"]), points=grid["points"], cells=grid["cells"],
+        utm_epsg=grid["utm_epsg"], frame=grid["frame"], active=active, features=features, name=name, stem=at.stem)
+    _unstated(coupled, set(groups) | set(_REQUIRED_PACKAGES[coupled.module]), derived)
+    sources = [[flow.get_package(prefix.lower()).package_name, "AUX", "CONCENTRATION"] for prefix in carrying]
+    if coupled.module == "gwt" and sources and "sources" not in groups.get("SSM", {}):
+        groups.setdefault("SSM", {})
+    held = _Model(name=name, sheet=coupled, groups=groups, named=named, derived=derived, tables=tables, series=series,
+                  observed=observed, features=[], mesh=grid, disv=at.disv, stem=at.stem)
+    _model(flopy, sim, held, solution=join is None, sources=sources if coupled.module == "gwt" else ())
+    if join is not None:
+        sim.register_ims_package(sim._solution_files[f"{join.name}.ims"], [name])
+    return held
+
+
+# The statements that place on the accepted mesh's cells: a DISU run's cells are node numbers the sheet states.
+_PLACING = ("stress", "streams", "lakes", "wells", "zones", "interbeds", "movers", "observations")
+
+
+def _write_unstructured(sheet: Any, work: Path, groups: dict[str, dict[str, Any]], named: dict[str, Any]) -> list[str]:
+    """The simulation of a run whose grid is the DISU its sheet states: every keyword is written as stated."""
+    import flopy
+
+    module = str(sheet.module)
+    if sheet.coupled:
+        raise ModflowError(
+            "a run on a DISU couples no other model: its transport, energy and refinement bodies are placed on the "
+            "accepted mesh's cells.", error_code="MODFLOW_WRONG_GRID")
+    for prefix, rows in groups.items():
+        for name, row in rows.items():
+            if isinstance(row.value, Mapping) and set(row.value) & set(_PLACING):
+                raise ModflowError(
+                    f"{prefix}_{name.upper()} states a statement that places on the accepted mesh's cells, and this "
+                    "run's grid is the DISU its sheet states; state the cells as node numbers, one integer per cell id.",
+                    error_code="MODFLOW_WRONG_GRID")
+    _unstated(sheet, set(groups) | set(_REQUIRED_PACKAGES[module]) | {"TDIS"}, set())
+    sim = flopy.mf6.MFSimulation(sim_name="trid3nt", sim_ws=str(work), verbosity_level=0)
+    _package(flopy, "ModflowTdis", _stated(groups.pop("TDIS", {})), owner=sim, how="TDIS of the simulation")
+    _model(flopy, sim, _Model(name=module, sheet=sheet, groups=groups, named=named, derived=set(), tables={}, series={},
+                              observed={}, features=[], mesh=None, disv=f"{module}.disu"), solution=True)
+    return _write_package_by_package(sim, [])
+
+
+def _stated(rows: dict[str, Any]) -> dict[str, Any]:
+    return {name: row.value for name, row in rows.items()}
+
+
+@dataclass
+class _Model:
+    """One model of the simulation, its statements placed: what ``_model`` writes it from."""
+
+    name: str
+    sheet: Any
+    groups: dict[str, dict[str, Any]]
+    named: dict[str, Any]
+    derived: set[str]
+    tables: dict[str, list]
+    series: dict[str, Mapping[str, Any]]
+    observed: dict[str, Mapping[str, Any]]
+    features: list[Mapping[str, Any]]
+    mesh: dict[str, Any] | None
+    disv: str
+    stem: str = ""
+    options: Mapping[str, Any] = field(default_factory=dict)
+    child: Any = None
+    active: Any = None
+
+
+def _child(sheet: Any, child: Child, work: Path, *, utm_epsg: int | None, frame: Any) -> _Model:
+    """A refinement's model: its DISV written beside the run, its statements placed on its cells."""
+    from .mesh_files import _disv_options, _gridprops, _write_disv
+
+    body = next(item for item in children_of(sheet) if item["name"] == child.name)
+    coupled = coupled_sheet(sheet, body)
+    groups, named = _grouped(coupled)
+    if "IMS" in groups:
+        raise ModflowError(
+            f"{child.name} states IMS keywords, and a refinement solves in the carrier's solution; state the solver "
+            "once, on the carrier.", error_code="MODFLOW_KEYWORD_SHAPE")
+    nlay = len(child.botm)
+    dims = {"nlay": nlay, "ncpl": len(child.cells)}
+    _write_disv(work, filename=f"{child.name}.disv", nlay=nlay, top=child.top, botm=child.botm,
+                idomain=child.idomain, gridprops=_gridprops(child.points, child.cells),
+                options=_disv_options(sheet))
+    active = layer_rows(child.idomain, nlay=nlay, ncpl=len(child.cells))
+    mesh = dict(dims=dims, points=child.points, cells=child.cells, utm_epsg=utm_epsg, sheet=coupled, frame=frame,
+                top=child.top, botm=child.botm)
+    start = _start_head(coupled, nlay=nlay, points=child.points, cells=child.cells, utm_epsg=utm_epsg, frame=frame,
+                        top=child.top)
+    grid = (child.top, child.botm) if lake_statements(coupled) or maw_statements(coupled) else None
+    derived, tables, series, observed, features = _stressed(
+        coupled, groups, nlay=nlay, points=child.points, cells=child.cells, utm_epsg=utm_epsg, frame=frame,
+        active=active, start=start, grid=grid, name=child.name, stem=f"{child.name}.")
+    return _Model(name=child.name, sheet=coupled, groups=groups, named=named, derived=derived, tables=tables,
+                  series=series, observed=observed, features=features, mesh=mesh, disv=f"{child.name}.disv",
+                  stem=f"{child.name}.", options=body["refine"].get("exchange") or {}, child=child, active=active)
+
+
+def _model(flopy: Any, sim: Any, held: _Model, *, solution: bool, sources: Any = ()) -> Any:
+    """One model of this simulation: its name file, its DISV's line, its solution and its packages; the TAB6 files a package reads, its time-series file and its own OBS file come with ``held``."""
+    module, name = str(held.sheet.module), held.name
+    groups, mesh = held.groups, held.mesh
+    placing = (lambda rows: _placed(rows, **mesh)) if mesh else _stated
     cap = module.capitalize()
-    model = _package(flopy, f"Modflow{cap}", named, owner=sim, modelname=module,
-                     model_nam_file=f"{module}.nam",
-                     how=f"the {module} model itself")
+    model = _package(flopy, f"Modflow{cap}", held.named, owner=sim, modelname=name,
+                     model_nam_file=f"{name}.nam",
+                     how=f"the {name} model itself")
     # The grid is the staged mesh's: constructed for the name file's line alone and
     # the dimension integers flopy shapes arrays against; mesh_files wrote its bytes,
     # and the DISV rows themselves were read there.
     groups.pop(_GRID, None)
-    _package(flopy, f"Modflow{cap}disv", {}, owner=model, filename=DISV_FILE,
-             **dims, how=f"the staged {DISV_FILE}")
-    ims = _package(flopy, "ModflowIms",
-                   _placed(groups.pop("IMS", {}), dims=dims, points=points,
-                           cells=cells, utm_epsg=utm_epsg, sheet=sheet,
-                           frame=frame, top=top),
-                   owner=sim, filename=f"{module}.ims",
-                   how=f"IMS of the {module} solution")
-    sim.register_ims_package(ims, [module])
+    if mesh is None:
+        _package(flopy, f"Modflow{cap}disu", _stated(groups.pop("DISU")), owner=model, filename=held.disv,
+                 how=f"the {name} DISU")
+    else:
+        _package(flopy, f"Modflow{cap}disv", {}, owner=model, filename=held.disv,
+                 **mesh["dims"], how=f"the staged {held.disv}")
+    if solution:
+        ims = _package(flopy, "ModflowIms",
+                       placing(groups.pop("IMS", {})) if mesh is None else
+                       _placed(groups.pop("IMS", {}), dims=mesh["dims"], points=mesh["points"],
+                               cells=mesh["cells"], utm_epsg=mesh["utm_epsg"], sheet=mesh["sheet"],
+                               frame=mesh["frame"], top=mesh["top"]),
+                       owner=sim, filename=f"{name}.ims",
+                       how=f"IMS of the {name} solution")
+        sim.register_ims_package(ims, [name])
     for prefix, rows in sorted(groups.items(), key=lambda item: item[0] == "MVR"):
-        keywords = _placed(rows, dims=dims, points=points, cells=cells,
-                           utm_epsg=utm_epsg, sheet=sheet, frame=frame, top=top,
-                           botm=botm)
+        keywords = placing(rows)
         if prefix == "SSM" and sources:
             keywords = {"sources": list(sources), **keywords}
         if prefix == "MVR":
             keywords = _named_movers(keywords, model)
         package = _package(flopy, "ModflowUtlobs" if prefix == "OBS" else f"Modflow{cap}{prefix.lower()}", keywords,
-                           owner=model, how=f"{prefix} of {module}")
-        if prefix in observed:
-            held = observed[prefix]
-            package.obs.initialize(filename=f"{module}.{prefix.lower()}.obs", digits=held.get("digits"),
-                                   continuous=held["continuous"])
-        if prefix in series:
-            held = series[prefix]
-            package.ts.initialize(filename=f"{prefix.lower()}.ts", timeseries=held["rows"],
-                                  time_series_namerecord=held["names"],
-                                  interpolation_methodrecord=held["interpolation"], sfacrecord=held["sfac"])
-        for filename, table in tables.get(prefix, ()):
+                           owner=model, how=f"{prefix} of {name}")
+        if prefix in held.observed:
+            seen = held.observed[prefix]
+            package.obs.initialize(filename=f"{name}.{prefix.lower()}.obs", digits=seen.get("digits"),
+                                   continuous=seen["continuous"])
+        if prefix in held.series:
+            seen = held.series[prefix]
+            package.ts.initialize(filename=f"{held.stem}{prefix.lower()}.ts", timeseries=seen["rows"],
+                                  time_series_namerecord=seen["names"],
+                                  interpolation_methodrecord=seen["interpolation"], sfacrecord=seen["sfac"])
+        for filename, table in held.tables.get(prefix, ()):
             _package(flopy, f"ModflowUtl{prefix.lower()}tab", {"nrow": len(table), "ncol": len(table[0]),
                                                                "table": table, "filename": filename},
                      owner=package, how=f"the {prefix} table {filename}")
@@ -245,17 +390,18 @@ _EXCHANGES = {("gwf", "gwt"): ("ModflowGwfgwt", "GWF6-GWT6"),
               ("gwf", "gwe"): ("ModflowGwfgwe", "GWF6-GWE6")}
 
 
-def _exchange(flopy: Any, sim: Any, *, carrier: str, coupled: str) -> None:
-    """The exchange joining the flow model to a coupled body, by the pair mf6 names."""
-    if (carrier, coupled) not in _EXCHANGES:
+def _exchange(flopy: Any, sim: Any, *, carrier: str, coupled: str, kinds: tuple[str, str] | None = None) -> None:
+    """The exchange joining the flow model to a coupled body, by the pair mf6 names; ``kinds`` are the two modules where the models carry names of their own."""
+    pair = kinds or (carrier, coupled)
+    if pair not in _EXCHANGES:
         raise ModflowError(
-            f"{carrier} and {coupled} solve no exchange this engine authors; the "
+            f"{pair[0]} and {pair[1]} solve no exchange this engine authors; the "
             "coupled pairs are the flow model with its transport and with its energy.",
             error_code="MODFLOW_EXCHANGE_UNKNOWN")
-    cls, exgtype = _EXCHANGES[(carrier, coupled)]
+    cls, exgtype = _EXCHANGES[pair]
     _package(flopy, cls, {}, owner=sim, exgtype=exgtype,
              exgmnamea=carrier, exgmnameb=coupled,
-             filename=f"{carrier}.{carrier}{coupled}",
+             filename=f"{carrier}.{carrier}{coupled}" if kinds is None else f"{carrier}-{coupled}.exg",
              how=f"the {carrier}-{coupled} exchange")
 
 
@@ -271,12 +417,14 @@ def _start_head(sheet: Any, *, nlay: int, points: Any, cells: Any, utm_epsg: int
 
 def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, points: Any,
               cells: Any, utm_epsg: int | None, frame: Any, active: Any,
-              start: Any = None, grid: Any = None, features: list[Mapping[str, Any]] | None = None
+              start: Any = None, grid: Any = None, features: list[Mapping[str, Any]] | None = None,
+              name: str | None = None, stem: str = ""
               ) -> tuple[set[str], dict[str, list], dict[str, Mapping[str, Any]], dict[str, Mapping[str, Any]],
                          list[Mapping[str, Any]]]:
     """Place each stress statement on the cells -> the identifiers it derived (its MAXBOUND), the TAB6 files its packages read, the time series they read, the OBS files packages state and the placed features.
 
-    ``features`` are a flow model's placed features, which a coupled body's observations name.
+    ``features`` are a flow model's placed features, which a coupled body's observations name; ``name`` is the
+    model the observation files are named for and ``stem`` what its table files begin with.
 
     A statement's row becomes period 1's rows, carried forward by mf6; the bound is the
     placement's own count; ``active`` is the carrier's solved cells - the grid is one."""
@@ -306,7 +454,7 @@ def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, point
     tables: dict[str, list] = {}
     row = groups.get("SFR", {}).get("packagedata")
     if row is not None and isinstance(row.value, Mapping) and "streams" in row.value:
-        found, tables["SFR"] = _streamed(sheet, groups["SFR"], row, nlay=nlay, points=points, cells=cells,
+        found, tables["SFR"] = _streamed(sheet, groups["SFR"], row, stem=stem, nlay=nlay, points=points, cells=cells,
                                          utm_epsg=utm_epsg, frame=frame, active=active)
         features += found
         derived |= {"SFR_NREACHES", "SFR_CONNECTIONDATA"}
@@ -316,7 +464,7 @@ def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, point
             "reaches another way, so state the lines.", error_code="MODFLOW_KEYWORD_SHAPE")
     row = groups.get("LAK", {}).get("packagedata")
     if row is not None and isinstance(row.value, Mapping) and "lakes" in row.value:
-        found, tables["LAK"] = _lakened(sheet, groups["LAK"], row, nlay=nlay, points=points, cells=cells,
+        found, tables["LAK"] = _lakened(sheet, groups["LAK"], row, stem=stem, nlay=nlay, points=points, cells=cells,
                                         utm_epsg=utm_epsg, frame=frame, active=active, top=grid[0], botm=grid[1])
         features += found
         derived |= {"LAK_NLAKES", "LAK_NOUTLETS", "LAK_NTABLES", "LAK_CONNECTIONDATA"}
@@ -335,10 +483,6 @@ def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, point
         features += _interbedded(sheet, groups["CSUB"], row, nlay=nlay, points=points, cells=cells,
                                  utm_epsg=utm_epsg, frame=frame, active=active)
         derived.add("CSUB_NINTERBEDS")
-    row = groups.get("MVR", {}).get("perioddata")
-    if row is not None and isinstance(row.value, Mapping) and "movers" in row.value:
-        _movered(sheet, groups, row, features, points=points, cells=cells, utm_epsg=utm_epsg)
-        derived |= {"MVR_MAXMVR", "MVR_MAXPACKAGES"}
     series: dict[str, Mapping[str, Any]] = {}
     for prefix, rows in groups.items():
         held = rows.pop("ts_filerecord", None)
@@ -350,8 +494,8 @@ def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, point
                 "through TimeSeries.", error_code="MODFLOW_KEYWORD_SHAPE")
         series[prefix] = held.value["series"]
     _named_series(used, series)
-    observed = _observations(sheet, groups, features, nlay=nlay, points=points, cells=cells, utm_epsg=utm_epsg,
-                             active=active)
+    observed = _observations(sheet, groups, features, module=name or str(sheet.module), nlay=nlay, points=points,
+                             cells=cells, utm_epsg=utm_epsg, active=active)
     return derived, {prefix: files for prefix, files in tables.items() if files}, series, observed, features
 
 
@@ -365,8 +509,8 @@ def _named_series(used: Mapping[str, set[str]], series: Mapping[str, Mapping[str
                 + (", ".join(sorted(known)) if known else "none") + ".", error_code="MODFLOW_STRESS_UNSTATED")
 
 
-def _observations(sheet: Any, groups: dict[str, dict[str, Any]], features: list[Mapping[str, Any]], *, nlay: int,
-                  **mesh: Any) -> dict[str, Mapping[str, Any]]:
+def _observations(sheet: Any, groups: dict[str, dict[str, Any]], features: list[Mapping[str, Any]], *, module: str,
+                  nlay: int, **mesh: Any) -> dict[str, Mapping[str, Any]]:
     """Place every Observations statement: the model's OBS rows are set on its group, a package's returned by prefix for its own OBS file."""
     observed: dict[str, Mapping[str, Any]] = {}
     for prefix, rows in groups.items():
@@ -376,7 +520,7 @@ def _observations(sheet: Any, groups: dict[str, dict[str, Any]], features: list[
             continue
         stated = row.value if isinstance(row.value, Mapping) else {}
         if "observations" in stated:
-            files, digits = place_observations(stated["observations"], module=str(sheet.module), package=package,
+            files, digits = place_observations(stated["observations"], module=module, package=package,
                                                features=features, nlay=nlay, **mesh)
             if package is not None:
                 observed[prefix] = {"continuous": files, "digits": digits}
@@ -418,33 +562,103 @@ def _interbedded(sheet: Any, rows: dict[str, Any], row: Any, **mesh: Any) -> lis
             for line in packagedata]
 
 
-def _movered(sheet: Any, groups: dict[str, dict[str, Any]], row: Any, features: list[Mapping[str, Any]],
-             **mesh: Any) -> None:
-    """Resolve the WaterMover statements: the package's mover list, its package list and counts, and the MOVER option of each package used."""
-    rows = groups["MVR"]
-    stated = sorted(f"MVR_{name.upper()}" for name in ("maxmvr", "maxpackages", "packages") if name in rows)
-    if stated:
-        raise ModflowError(
-            f"{', '.join(stated)} {'is' if len(stated) == 1 else 'are'} derived from the "
-            "WaterMover statements; state either the statements or the MVR keywords, not both.",
-            error_code="MODFLOW_KEYWORD_SHAPE")
-    used, periods = mover_rows(row.value["movers"], features, **mesh)
-    for package in used:
-        mover = groups.get(package, {}).get("mover")
-        if mover is not None and not mover.value:
+def _moved(models: list[_Model]) -> dict[str, dict[str, Any]]:
+    """Resolve every WaterMover statement across the flow models -> the movers each child's exchange carries, by child name.
+
+    A mover whose two ends sit in one model is that model's MVR package (its rows, package list and counts, and the MOVER
+    option of each package used); one whose ends sit in the carrier and a child is the exchange's. A statement may be
+    stated on any model's deck."""
+    stating = [(model, model.groups["MVR"]["perioddata"]) for model in models
+               if isinstance(getattr(model.groups.get("MVR", {}).get("perioddata"), "value", None), Mapping)
+               and "movers" in model.groups["MVR"]["perioddata"].value]
+    if not stating:
+        return {}
+    for model, _row in stating:
+        stated = sorted(f"MVR_{name.upper()}" for name in ("maxmvr", "maxpackages", "packages")
+                        if name in model.groups["MVR"])
+        if stated:
             raise ModflowError(
-                f"{package}_MOVER is stated false, and WaterMover moves water through the {package} package.",
+                f"{', '.join(stated)} {'is' if len(stated) == 1 else 'are'} derived from the "
+                "WaterMover statements; state either the statements or the MVR keywords, not both.",
                 error_code="MODFLOW_KEYWORD_SHAPE")
-        groups[package]["mover"] = Filled(slot=sheet.body.MODULE_INPUT[f"{package}_MOVER"], value=True,
-                                          provenance=row.provenance)
-    placed = {"perioddata": periods, "maxmvr": len(row.value["movers"]), "maxpackages": len(used),
-              "packages": [[package] for package in used]}
-    for name, value in placed.items():
-        rows[name] = Filled(slot=sheet.body.MODULE_INPUT[f"MVR_{name.upper()}"], value=value,
-                            provenance=row.provenance)
+    carrier = models[0]
+    flows = {model.name: {"features": model.features, "points": model.mesh["points"], "cells": model.mesh["cells"],
+                          "utm_epsg": model.mesh["utm_epsg"]} for model in models}
+    moves = resolved_moves([item for _model_, row in stating for item in row.value["movers"]], flows,
+                           home=carrier.name)
+    by_models = grouped(moves, lambda move: tuple(sorted({move["from"][0], move["to"][0]})))
+    provenance = stating[0][1].provenance
+    exchanged: dict[str, dict[str, Any]] = {}
+    for key, (used, periods) in by_models.items():
+        mine = [move for move in moves if tuple(sorted({move["from"][0], move["to"][0]})) == key]
+        for move in mine:
+            for model_name, package, _number in (move["from"], move["to"]):
+                _movable(next(model for model in models if model.name == model_name), package, provenance)
+        if len(key) == 2:
+            if carrier.name not in key:
+                raise ModflowError(
+                    f"WaterMover moves water between {key[0]} and {key[1]}, and no exchange joins them; a refinement "
+                    f"is exchanged with {carrier.name} alone.", error_code="MODFLOW_STRESS_UNSTATED")
+            child = key[0] if key[1] == carrier.name else key[1]
+            exchanged[child] = {
+                "packages": list(dict.fromkeys((name, package) for move in mine
+                                               for name, package, _n in (move["from"], move["to"]))),
+                "periods": periods, "maxmvr": len(mine)}
+            continue
+        model = next(model for model in models if model.name == key[0])
+        rows = model.groups.setdefault("MVR", {})
+        for name, value in {"perioddata": periods, "maxmvr": len(mine), "maxpackages": len(used),
+                            "packages": [[package] for package in used]}.items():
+            rows[name] = Filled(slot=model.sheet.body.MODULE_INPUT[f"MVR_{name.upper()}"], value=value,
+                                provenance=provenance)
+        model.derived |= {"MVR_MAXMVR", "MVR_MAXPACKAGES"}
+    inside = {key[0] for key in by_models if len(key) == 1}
+    for model, row in stating:
+        if model.name in inside:
+            continue
+        rest = sorted(f"MVR_{name.upper()}" for name in model.groups["MVR"] if name != "perioddata")
+        if rest:
+            raise ModflowError(
+                f"{', '.join(rest)} is stated on {model.name}, and every WaterMover statement of the run moves water "
+                f"across its exchange; {model.name} writes no MVR package of its own.",
+                error_code="MODFLOW_KEYWORD_SHAPE")
+        del model.groups["MVR"]
+    return exchanged
 
 
-def _streamed(sheet: Any, rows: dict[str, Any], row: Any, **mesh: Any) -> tuple[list[Mapping[str, Any]], list]:
+def _movable(model: _Model, package: str, provenance: Any) -> None:
+    """Set the MOVER option of a package that gives or takes water through the mover."""
+    held = model.groups.get(package, {}).get("mover")
+    if held is not None and not held.value:
+        raise ModflowError(f"{package}_MOVER is stated false, and WaterMover moves water through the {package} package.",
+                           error_code="MODFLOW_KEYWORD_SHAPE")
+    model.groups[package]["mover"] = Filled(slot=model.sheet.body.MODULE_INPUT[f"{package}_MOVER"], value=True,
+                                            provenance=provenance)
+
+
+def _joined(flopy: Any, sim: Any, parent: Any, child: Any, held: _Model, moved: Mapping[str, Any] | None) -> Any:
+    """The GWF-GWF exchange between the carrier and a refinement, its cells from Lgr -> the MVR package of the movers that cross it, or None."""
+    cells = held.child.exchange
+    options = {**held.options, **({"auxiliary": ["ANGLDEGX", "CDIST"]} if held.child.auxiliary else {})}
+    stem = f"{parent.name}-{child.name}"
+    exchange = _package(flopy, "ModflowGwfgwf", options, owner=sim, exgtype="GWF6-GWF6", exgmnamea=parent.name,
+                        exgmnameb=child.name, nexg=len(cells), exchangedata=cells, filename=f"{stem}.exg",
+                        **({"mvr_filerecord": f"{stem}.mvr"} if moved else {}),
+                        how=f"the {parent.name}-{child.name} exchange")
+    if not moved:
+        return None
+    made = {parent.name: parent, child.name: child}
+    named = lambda model, package: made[model].get_package(package.lower()).package_name
+    return _package(flopy, "ModflowMvr", {
+        "modelnames": True, "maxmvr": moved["maxmvr"], "maxpackages": len(moved["packages"]),
+        "packages": [[model, named(model, package)] for model, package in moved["packages"]],
+        "perioddata": {period: [[a, named(a, pa), i, b, named(b, pb), j, kind, value]
+                                for a, pa, i, b, pb, j, kind, value in rows]
+                       for period, rows in moved["periods"].items()}},
+        owner=exchange, filename=f"{stem}.mvr", how=f"the movers across the {parent.name}-{child.name} exchange")
+
+
+def _streamed(sheet: Any, rows: dict[str, Any], row: Any, *, stem: str = "", **mesh: Any) -> tuple[list[Mapping[str, Any]], list]:
     """Cut the Streams lines into reaches: the package's reach list, its connections, its count, its diversions, its cross-section files and its period settings."""
     stated = sorted(f"SFR_{name.upper()}" for name in ("nreaches", "connectiondata") if name in rows)
     if stated:
@@ -470,7 +684,7 @@ def _streamed(sheet: Any, rows: dict[str, Any], row: Any, **mesh: Any) -> tuple[
     files: dict[tuple, str] = {}
     for reach in features:
         if reach["table"] is not None:
-            files.setdefault(tuple(map(tuple, reach["table"])), f"sfr_xs{len(files) + 1}.tab")
+            files.setdefault(tuple(map(tuple, reach["table"])), f"{stem}sfr_xs{len(files) + 1}.tab")
     placed = {"packagedata": packagedata, "connectiondata": connectiondata, "nreaches": len(packagedata),
               **({"perioddata": perioddata} if perioddata else {}),
               **({"diversions": divisions} if divisions else {}),
@@ -487,7 +701,7 @@ def _declared(rows: dict[str, Any]) -> tuple[str, ...]:
     return tuple(str(name) for name in getattr(rows.get("auxiliary"), "value", None) or ())
 
 
-def _lakened(sheet: Any, rows: dict[str, Any], row: Any, **mesh: Any) -> tuple[list[Mapping[str, Any]], list]:
+def _lakened(sheet: Any, rows: dict[str, Any], row: Any, *, stem: str = "", **mesh: Any) -> tuple[list[Mapping[str, Any]], list]:
     """Place the Lakes polygons: the package's lake list, its connections, its count, its outlets, its table files and the period settings stated."""
     packagedata, connectiondata, perioddata, outlets, features = place_lakes(
         row.value["lakes"], auxiliary=_declared(rows), **mesh)
@@ -507,12 +721,12 @@ def _lakened(sheet: Any, rows: dict[str, Any], row: Any, **mesh: Any) -> tuple[l
     if outlets:
         placed.update(outlets=outlets, noutlets=len(outlets))
     if tabled:
-        placed.update(tables=[[lake["number"], f"lak_tab{lake['number'] + 1}.tab"] for lake in tabled],
+        placed.update(tables=[[lake["number"], f"{stem}lak_tab{lake['number'] + 1}.tab"] for lake in tabled],
                       ntables=len(tabled))
     for name, value in placed.items():
         rows[name] = Filled(slot=sheet.body.MODULE_INPUT[f"LAK_{name.upper()}"],
                             value=value, provenance=row.provenance)
-    return features, [(f"lak_tab{lake['number'] + 1}.tab", [list(line) for line in lake["table"]]) for lake in tabled]
+    return features, [(f"{stem}lak_tab{lake['number'] + 1}.tab", [list(line) for line in lake["table"]]) for lake in tabled]
 
 
 def _welled(sheet: Any, rows: dict[str, Any], row: Any, **mesh: Any) -> list[Mapping[str, Any]]:
@@ -572,13 +786,13 @@ def _recharged(groups: dict[str, dict[str, Any]]) -> list[Any]:
 
 def _active(sheet: Any, *, nlay: int, points: Any, cells: Any, utm_epsg: int | None,
             frame: Any) -> Any:
-    """One row per layer of the cells the run solves, off a stated DISV_IDOMAIN; unstated, None (every cell)."""
+    """One row per layer of the cells the run solves, off a stated DISV_IDOMAIN and the cells a refinement hands to its child; neither, None (every cell)."""
     stated = sheet.filled.get("DISV_IDOMAIN")
-    if stated is None:
-        return None
-    rows = place(stated.value, slot=stated.slot, nlay=nlay, run=sheet.run,
-                 points=points, cells=cells, utm_epsg=utm_epsg, frame=frame)
-    return layer_rows(rows, nlay=nlay, ncpl=len(cells))
+    rows = None if stated is None else place(stated.value, slot=stated.slot, nlay=nlay, run=sheet.run,
+                                             points=points, cells=cells, utm_epsg=utm_epsg, frame=frame)
+    if children_of(sheet):
+        return refined_idomain(sheet, rows, points=points, cells=cells, utm_epsg=utm_epsg, nlay=nlay)
+    return None if rows is None else layer_rows(rows, nlay=nlay, ncpl=len(cells))
 
 
 def _unstated(sheet: Any, prefixes: set[str], derived: set[str] = frozenset()) -> None:
@@ -627,8 +841,8 @@ def _package(flopy: Any, class_name: str, keywords: dict[str, Any], *,
             error_code="MODFLOW_PACKAGE_STATE") from exc
 
 
-def _write_package_by_package(sim: Any) -> list[str]:
-    """Every file but the discretization - the staged DISV's bytes are the mesh's."""
+def _write_package_by_package(sim: Any, exchanged: list[Any]) -> list[str]:
+    """Every file but the discretization - the staged DISV's bytes are the mesh's; ``exchanged`` are the movers an exchange carries."""
     written: list[str] = []
     sim.name_file.write()
     written.append(sim.name_file.filename)
@@ -642,11 +856,11 @@ def _write_package_by_package(sim: Any) -> list[str]:
         written.append(model.name_file.filename)
         for package_name in model.get_package_list():
             package = model.get_package(package_name)
-            if package.package_type in ("dis", "disv", "disu"):
+            if package.package_type in ("dis", "disv"):
                 continue
             package.write()
             written.append(Path(package.filename).name)
-    for exchange in getattr(sim, "exchange_files", ()):
+    for exchange in [*getattr(sim, "exchange_files", ()), *exchanged]:
         exchange.write()
         written.append(Path(exchange.filename).name)
     return sorted(written)

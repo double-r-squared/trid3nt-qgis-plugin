@@ -15,8 +15,6 @@ import tempfile
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from . import DISV_FILE
-
 from ..errors import ModflowError
 
 logger = logging.getLogger("trid3nt_server.workflows.modflow.authoring.staged_check")
@@ -183,26 +181,40 @@ def _inputs_match_the_staged(rundir: Path,
 #: The packages whose period rows lead with a cell, by the suffix flopy names their file with.
 _CELL_LED = frozenset({".chd", ".wel", ".drn", ".riv", ".ghb", ".rch", ".evt", ".csub"})
 
+#: The grid packages a model name file lists, by the kind of cell id they give a period row.
+_GRIDS = {"DISV6": "disv", "DISU6": "disu"}
 
-def _cell_ids_inside_the_grid(disv: Path | None, local: Path) -> int:
-    """Every cell a period list names, against the staged DISV's layers and cell2d table.
 
-    On a DISV a cell is (layer, cell2d id), both from 1. Only the packages whose period
-    rows lead with a cell are read (_CELL_LED, by flopy's file suffix): SFR, LAK, MAW, UZF
-    and MVR rows lead with their own feature numbers. A row whose first two tokens are
-    not integers is a record keyword and this clause leaves it to the parser.
-    """
-    if disv is None:
-        return 0
-    cells: set[int] = set()
+def _model_grids(paths: Sequence[Path], staged: Mapping[str, Any]) -> list[tuple[str, str, Path | str, list[str]]]:
+    """Each model name file -> ``(model name, grid kind, where its grid file is now, its package files)``; a model with no DISV or DISU is left to its parser."""
+    found = []
+    for path in paths:
+        records = [(tokens[0].upper(), tokens[1])
+                   for line in path.read_text(encoding="utf-8", errors="replace").splitlines()
+                   if len(tokens := line.split()) >= 2 and tokens[0] not in ("BEGIN", "END")
+                   and tokens[0].upper().endswith("6") and not tokens[0].startswith("#")]
+        grid = next(((_GRIDS[ftype], name) for ftype, name in records if ftype in _GRIDS), None)
+        if grid is None or staged.get(grid[1]) is None:
+            continue
+        found.append((path.stem, grid[0], staged[grid[1]],
+                      [name for ftype, name in records if ftype not in _GRIDS]))
+    return found
+
+
+def _grid_cells(kind: str, grid: Path) -> tuple[set[int], int]:
+    """The ids a period row may name in one grid file -> ``(the cell ids, the layer count)``; a DISU's ids are its node numbers and it has no layers."""
     nlay = 0
-    for name, body in _blocks(disv):
+    nodes = 0
+    cells: set[int] = set()
+    for name, body in _blocks(grid):
         if name == "dimensions":
             for line in body:
                 tokens = line.split()
                 if len(tokens) >= 2 and tokens[0].upper() == "NLAY":
                     nlay = int(tokens[1])
-        if name != "cell2d":
+                if len(tokens) >= 2 and tokens[0].upper() == "NODES":
+                    nodes = int(tokens[1])
+        if name != "cell2d" or kind != "disv":
             continue
         for line in body:
             first = line.split()[:1]
@@ -211,39 +223,60 @@ def _cell_ids_inside_the_grid(disv: Path | None, local: Path) -> int:
                     cells.add(int(first[0]))
                 except ValueError:
                     continue
+    if kind == "disu":
+        if not nodes:
+            _refuse("GRID_UNREADABLE", f"the staged DISU {grid.name} states no NODES, so no node number in this "
+                    "run has a grid to be inside of.")
+        return set(range(1, nodes + 1)), 0
     if not cells:
         _refuse("GRID_UNREADABLE",
                 "the staged DISV carries no cell2d table, so no cell id in this "
                 "run has a grid to be inside of.")
+    return cells, nlay
+
+
+def _cell_ids_inside_the_grid(grids: Sequence[tuple[str, str, Path | str, list[str]]], local: Path) -> int:
+    """Every cell a period list names, against its own model's grid.
+
+    On a DISV a cell is (layer, cell2d id), both from 1; on a DISU it is the node number alone. Only the packages
+    whose period rows lead with a cell are read (_CELL_LED, by flopy's file suffix): SFR, LAK, MAW, UZF
+    and MVR rows lead with their own feature numbers. A row whose leading tokens are
+    not integers is a record keyword and this clause leaves it to the parser.
+    """
     checked = 0
-    for path in sorted(local.rglob("*")):
-        if not path.is_file() or path.suffix.lower() not in _CELL_LED:
-            continue
-        for name, body in _blocks(path):
-            if not name.startswith("period "):
+    for model, kind, found, files in grids:
+        cells, nlay = _grid_cells(kind, _read(found))
+        for name in files:
+            path = local / name
+            if not path.is_file() or path.suffix.lower() not in _CELL_LED:
                 continue
-            for line in body:
-                try:
-                    layer, cellid = (int(token) for token in line.split()[:2])
-                except ValueError:
+            for block, body in _blocks(path):
+                if not block.startswith("period "):
                     continue
-                checked += 1
-                if cellid not in cells:
-                    _refuse(
-                        "CELLID_OUTSIDE",
-                        f"{path.name} names cell id {cellid} and the staged DISV "
-                        f"numbers {len(cells)} cell(s) (cell2d {min(cells)} to "
-                        f"{max(cells)}); the solve would write a value against "
-                        "no cell.")
-                if nlay and not 1 <= layer <= nlay:
-                    _refuse(
-                        "CELLID_OUTSIDE",
-                        f"{path.name} names layer {layer} and the staged DISV "
-                        f"has {nlay} layer(s); the solve would write a value "
-                        "against no cell.")
+                for line in body:
+                    try:
+                        ids = [int(token) for token in line.split()[:1 if kind == "disu" else 2]]
+                    except ValueError:
+                        continue
+                    if len(ids) != (1 if kind == "disu" else 2):
+                        continue
+                    layer, cellid = (0, ids[0]) if kind == "disu" else ids
+                    checked += 1
+                    if cellid not in cells:
+                        _refuse(
+                            "CELLID_OUTSIDE",
+                            f"{path.name} names {'node' if kind == 'disu' else 'cell id'} {cellid} and the staged "
+                            f"{'DISU' if kind == 'disu' else 'DISV'} of {model} numbers {len(cells)} cell(s) "
+                            f"({'nodes' if kind == 'disu' else 'cell2d'} {min(cells)} to {max(cells)}); the solve "
+                            "would write a value against no cell.")
+                    if nlay and not 1 <= layer <= nlay:
+                        _refuse(
+                            "CELLID_OUTSIDE",
+                            f"{path.name} names layer {layer} and the staged DISV of {model} "
+                            f"has {nlay} layer(s); the solve would write a value "
+                            "against no cell.")
     if checked:
-        logger.info("modflow staged check read %d cell id(s) against %d cell(s)",
-                    checked, len(cells))
+        logger.info("modflow staged check read %d cell id(s) against %d model grid(s)", checked, len(grids))
     return checked
 
 
@@ -335,13 +368,10 @@ def check_staged_run(rundir: Path | str, *, steering: str,
     paths = _name_files(rundir, steering)
     referenced = _files_referenced_exist(paths, staged, written_by_the_engine)
     digested = _inputs_match_the_staged(rundir, inputs)
-    disv_name = next((name for name in referenced if name.endswith(".disv")), None)
-    found_disv = staged.get(disv_name or DISV_FILE)
-    disv = _read(found_disv) if found_disv is not None else None
-    disv_is_local = isinstance(found_disv, Path)
-    cell_ids = _cell_ids_inside_the_grid(disv, rundir)
+    grids = _model_grids([p for p in paths if p.name != steering], staged)
+    cell_ids = _cell_ids_inside_the_grid(grids, rundir)
     numbers = _arrays_are_finite(
-        rundir, () if disv is None or disv_is_local else (disv,))
+        rundir, [_read(found) for _model, _kind, found, _files in grids if not isinstance(found, Path)])
     tdis_name = next((name for name in referenced if name.endswith(".tdis")), None)
     found_tdis = staged.get(tdis_name or "")
     total = _tdis_covers_the_run(

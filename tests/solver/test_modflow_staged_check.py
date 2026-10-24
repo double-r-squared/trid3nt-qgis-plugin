@@ -305,3 +305,36 @@ async def test_a_run_staged_against_a_clause_refuses_before_the_manifest(
 
     assert caught.value.error_code == "MODFLOW_STAGED_CELLID_OUTSIDE"
     assert written == []
+
+
+_CHILD_NAM = """DISV6  child.disv  disv
+CHD6  child.chd  chd
+"""
+
+_CHILD_DISV = _DISV.replace("NCPL  2", "NCPL  4").replace(
+    "  2  15.0 5.0  4  2 5 6 4\n", "  2  15.0 5.0  4  2 5 6 4\n  3  5.0 15.0  4  1 2 4 3\n  4  15.0 15.0  4  2 5 6 4\n")
+
+_TWO_MODELS = _MFSIM.replace("  GWF6  gwf.nam  gwf\n", "  GWF6  gwf.nam  gwf\n  GWF6  child.nam  child\n")
+
+
+def _with_a_child(tmp_path, chd):
+    rundir = _staged(tmp_path)
+    (rundir / _STEERING).write_text(_TWO_MODELS.format(tdis=_TDIS))
+    (rundir / "child.nam").write_text(_CHILD_NAM)
+    (rundir / "child.disv").write_text(_CHILD_DISV)
+    (rundir / "child.chd").write_text(chd)
+    return rundir
+
+
+def test_each_model_s_cell_ids_are_read_against_its_own_grid(tmp_path):
+    # Cell 4 is the child's last cell and no cell of the two-cell parent.
+    read = _check(_with_a_child(tmp_path, _CHD.replace("1  2  -1.0", "1  4  -1.0")))
+
+    assert read["cell_ids"] == 4
+
+
+def test_a_cell_the_child_does_not_number_refuses_in_the_child_s_file(tmp_path):
+    refusal = _refusal(_with_a_child(tmp_path, _CHD.replace("1  2  -1.0", "1  5  -1.0")))
+
+    assert refusal.error_code == "MODFLOW_STAGED_CELLID_OUTSIDE"
+    assert "child.chd" in str(refusal) and "cell id 5" in str(refusal) and "of child numbers 4" in str(refusal)

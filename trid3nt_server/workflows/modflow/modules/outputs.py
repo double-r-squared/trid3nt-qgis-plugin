@@ -76,10 +76,11 @@ class Solved:
 
     ``run`` is the handle the solve step returned plus the accepted ``mesh`` and the filled ``sheet`` the run solved.
     ``filled`` overrides what the sheet states, for a coupled body whose slots its own dictionary filled.
+    ``model`` is the name the model is called in the simulation, and ``grid`` the refined grid a refinement's model solves on.
     """
 
     def __init__(self, run: Mapping[str, Any], body: Any,
-                 filled: Mapping[str, Any] | None = None) -> None:
+                 filled: Mapping[str, Any] | None = None, *, model: str | None = None, grid: Any = None) -> None:
         self.run = run
         self.body = body
         self.run_id = str(run["run_id"])
@@ -87,9 +88,23 @@ class Solved:
         self.mesh = run["mesh"]
         self.sheet = run["sheet"]
         self._filled = filled
+        self.model = model or str(body.MODULE)
+        self._grid = grid
+
+    @property
+    def qualifier(self) -> str:
+        """What a refinement's group and caption carry to tell its model from the carrier's."""
+        return "" if self.model == str(self.body.MODULE) else f" ({self.model})"
+
+    @property
+    def tag(self) -> str:
+        """The qualifier as a dataset group's and a file's name carries it."""
+        return "" if self.model == str(self.body.MODULE) else f"_{self.model}"
 
     @cached_property
     def nodes(self) -> tuple[Any, Any, Any, Any]:
+        if self._grid is not None:
+            return self._grid.points, self._grid.cells, None, None
         return mesh_nodes(self.mesh)
 
     @cached_property
@@ -111,12 +126,17 @@ class Solved:
 
     @cached_property
     def nlay(self) -> int:
+        if self._grid is not None:
+            return len(self._grid.botm)
         return disv_dimensions(self.sheet, self.nodes[1])["nlay"]
 
     @cached_property
     def layering(self) -> tuple[Any, Any]:
         """The grid's top and per-layer bottoms, placed from the sheet's statements."""
         from ..authoring.mesh_files import _layering
+
+        if self._grid is not None:
+            return self._grid.top, self._grid.botm
 
         points, cells, bed, _ = self.nodes
         top, botm, _ = _layering(self.sheet, nlay=self.nlay,
@@ -206,8 +226,7 @@ class Solved:
 
     def observed(self) -> list[tuple[str, str, str | None]]:
         """The OBS CSVs this body's observations write: ``(file, label, observation type)``."""
-        return observation_files(self.sheet.filled if self._filled is None else self._filled,
-                                 str(self.body.MODULE))
+        return observation_files(self.sheet.filled if self._filled is None else self._filled, self.model)
 
     def unsaved(self, key: str) -> ModflowError | None:
         """Why the run's output control saved nothing of the output ``key``, or None where it saved it."""
@@ -275,7 +294,7 @@ class Solved:
 
     @cached_property
     def listing_name(self) -> str:
-        return str(self.stated("NAM_LIST") or f"{self.body.MODULE}.lst")
+        return str(self.stated("NAM_LIST") or f"{self.model}.lst")
 
 
 def _envelope(times: Any, values: Any) -> dict[str, Any]:
@@ -301,7 +320,7 @@ def _frames(solved: Solved, row: Any, units: str, name: str,
             times: Any, values: Any, *, count: int | None, measures: Mapping[str, Any],
             ) -> Frames:
     written = group(solved, name, list(zip(times, values)), units=units)
-    return Frames(name=row.name, units=units, values=values, file=written,
+    return Frames(name=f"{row.name}{solved.qualifier}", units=units, values=values, file=written,
                   group=name, epsg=solved.utm_epsg,
                   reference_time=solved.run.get("reference_time"), frames=count,
                   measures=dict(measures))
@@ -313,7 +332,7 @@ def read_field(primitive: Primitive, solved: Solved) -> Read:
 
     row, units, model_times, values, layer = solved.frames(primitive.variable, primitive.plane)
     times = solved.seconds(model_times)
-    stem = group_stem(row, layer)
+    stem = group_stem(row, layer, solved.tag)
     if primitive.t == "every":
         return _frames(solved, row, units, stem, times, values,
                        count=int(times.size), measures=_envelope(times, values))
@@ -345,7 +364,8 @@ def read_max_over_time(primitive: Primitive, solved: Solved) -> Read:
     held = np.isfinite(values)
     peak = np.where(held.any(axis=0),
                     np.where(held, values, -np.inf).max(axis=0), np.nan)
-    return _frames(solved, row, units, group_stem(row, layer, "_max"), [0.0],
+    return _frames(solved, row, units,
+                   group_stem(row, layer, f"{solved.tag}_max"), [0.0],
                    peak[None, :], count=None,
                    measures=_envelope(model_times, values))
 
