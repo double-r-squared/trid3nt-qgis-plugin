@@ -554,7 +554,12 @@ flagregion level above the levels the ratios give refuses by name. Authoring
 (`workflows/geoclaw/authoring/grid.py`) lands the accepted grid on `CLAW_LOWER`,
 `CLAW_UPPER`, `CLAW_NUM_CELLS`, `AMR_AMR_LEVELS_MAX`, `AMR_REFINEMENT_RATIOS_X/Y/T`
 and `FLAGREGION_FLAGREGIONS`, and a template stating any of them beside the recipe
-refuses by name. A topofile header is checked against the level-1 box by the
+refuses by name. A flagregion op that states `with_rupture` ends at the run's stated
+rupture when that is later than its own `t2` (a static rupture's last dtopo instant, a kinematic
+one's largest rupture_time + rise_time), computed once the finite-fault record is fetched; a run
+that restates the op without it keeps its window, and a run stating no rupture keeps `t2`. The
+template states `RISE_SHAPE` ('quadratic'), which a kinematic Fault or FiniteFault naming no
+`rise_shape` takes. A topofile header is checked against the level-1 box by the
 engine's own coverage rule (topo node extent against the domain's area), not an
 alignment rule: the engine integrates topo over each cell and stops only when the
 topo does not cover the domain - when the overlap differs from the domain's area by

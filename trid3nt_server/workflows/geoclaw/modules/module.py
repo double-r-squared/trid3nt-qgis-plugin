@@ -22,7 +22,7 @@ from ...runtime.module import Module
 from ...runtime.sheet import Sheet
 from ..errors import GeoclawError
 
-__all__ = ["GeoclawModule", "fault", "finite_fault", "fixed_grids", "initial_surface", "module_input_dir", "sift_fault",
+__all__ = ["GeoclawModule", "fault", "finite_fault", "fixed_grids", "initial_surface", "module_input_dir", "rupture_end", "sift_fault",
            "topography"]
 
 #: What one Topography statement may carry: the surface, and the offset onto the run's frame.
@@ -286,6 +286,30 @@ def finite_fault(value: Any, *, run: Mapping[str, Any]
         times = [step * float(times) for step in range(math.ceil(end / float(times) - 1e-9) + 1)]
     return fault({"subfaults": subfaults, "x": x, "y": y, "times": times,
                   **({"rupture_type": "kinematic", "rise_shape": shape} if kinematic else {})}, run=run)
+
+
+def rupture_end(name: str, value: Any, run: Mapping[str, Any]) -> float | None:
+    """The second a stated rupture ends -> its last dtopo instant, or the largest rupture_time + rise_time of a kinematic one.
+
+    ``name`` is the composite (Fault, SiftFault or FiniteFault) and ``value`` its statement; a statement that
+    states no rupture, or not yet a usable one, gives None and the composite refuses it when it runs."""
+    if not isinstance(value, Mapping) or (name == "SiftFault" and not value.get("slips")):
+        return None
+    try:
+        if value.get("rupture_type") == "kinematic":
+            if name == "FiniteFault":
+                record = value["finite_fault"]
+                record = run.get(record) if isinstance(record, str) else record
+                from ..authoring.dtopo import finite_fault_subfaults
+
+                subs = finite_fault_subfaults(record, True)
+            else:
+                subs = value["subfaults"]
+            return float(max(sub["rupture_time"] + sub["rise_time"] for sub in subs))
+        times = value["times"]
+        return float(times[-1]) if isinstance(times, (list, tuple)) and times else None
+    except (KeyError, TypeError, ValueError, GeoclawError):
+        return None
 
 
 #: What one FixedGrids statement carries: the extent the products cover and their cadence.

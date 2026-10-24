@@ -44,12 +44,13 @@ WALL_BASIS = ("counting every cell the regions allow; scaled from the 7-level Co
 
 
 def flagregion(mesh: Mesh, name: str, minlevel: int, maxlevel: int, t1: float,
-               t2: float, extent: Sequence[float]) -> Mesh:
+               t2: float, extent: Sequence[float], with_rupture: bool = False) -> Mesh:
     """One Clawpack FlagRegion over a lon/lat rectangle -> the mesh carrying it.
 
     Levels minlevel..maxlevel are forced to at least minlevel and allowed up to
     maxlevel inside ``extent`` (min_lon, min_lat, max_lon, max_lat) between the
-    run times t1 and t2, in seconds."""
+    run times t1 and t2, in seconds. ``with_rupture`` lengthens the window to the end of the run's
+    stated rupture when that is later than t2; the run's keywords state the result."""
     levels = int(mesh.meta["levels"])
     lo, hi = int(minlevel), int(maxlevel)
     if not 1 <= lo <= hi:
@@ -71,7 +72,8 @@ def flagregion(mesh: Mesh, name: str, minlevel: int, maxlevel: int, t1: float,
                 f"flagregion {name!r}: extent {tuple(extent)!r} is not "
                 "(min_lon, min_lat, max_lon, max_lat) with max above min.")
     record = {"name": str(name), "minlevel": lo, "maxlevel": hi,
-              "t1": float(t1), "t2": float(t2), "extent": (x1, y1, x2, y2)}
+              "t1": float(t1), "t2": float(t2), "extent": (x1, y1, x2, y2),
+              "with_rupture": bool(with_rupture)}
     carried = [*mesh.meta.get("flagregions", ()), record]
     return dataclasses.replace(mesh, meta={**dict(mesh.meta),
                                            "flagregions": carried})
@@ -127,7 +129,7 @@ def _run(op: MeshOp, mesh: Mesh) -> Mesh:
         raise MeshToolError(
             "MESH_OP_BAD_KWARGS",
             f"mesh_op('flagregion', ...): {exc}. It takes name, minlevel, "
-            "maxlevel, t1, t2 and extent.") from None
+            "maxlevel, t1, t2, extent and with_rupture.") from None
 
 
 def _ratios(value: Any) -> list[int]:

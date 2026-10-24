@@ -391,3 +391,38 @@ def test_the_sheet_card_states_the_run_total_from_the_grids_rate_and_clawtfinal(
 def test_the_sheet_card_states_no_wall_estimate_without_a_grid_or_a_stated_end(tmp_path):
     assert _wall_row(_grid_recipe(tmp_path)) is None
     assert _wall_row(SimpleNamespace(probes={}), CLAW_TFINAL=2400.0) is None
+
+
+def _fixture_record(name: str) -> dict:
+    from trid3nt_server.tools.fetchers.hazard.fetch_finite_fault import hooks
+
+    fix = Path(__file__).parents[1] / "fixtures" / "geoclaw" / "finite_fault"
+    return hooks.record(get_spec("fetch_finite_fault"), {"event_id": name}, [(fix / f"{name}.fsp").read_bytes()])
+
+
+def test_the_rupture_ends_at_its_last_dtopo_instant_or_its_largest_rupture_plus_rise_time():
+    from trid3nt_server.workflows.geoclaw.modules.module import rupture_end
+
+    record = _fixture_record("chignik_2021")
+    kinematic = {"finite_fault": "finite_fault", "rupture_type": "kinematic", "rise_shape": "quadratic", "times": 30.0}
+    static = {"finite_fault": record, "times": [0.0, 2.0]}
+
+    assert rupture_end("SiftFault", template.STEERING.SiftFault, {}) == 0.0
+    assert rupture_end("SiftFault", {"slips": {}}, {}) is None
+    assert rupture_end("FiniteFault", static, {}) == 2.0
+    assert round(rupture_end("FiniteFault", kinematic, {"finite_fault": record}), 1) == 115.4
+    assert rupture_end("FiniteFault", kinematic, {}) is None
+
+
+def test_the_templates_rise_shape_fills_a_kinematic_statement_that_names_none_and_yields_to_one_that_does():
+    from trid3nt_server.workflows.geoclaw import workflow as gw
+
+    standin = SimpleNamespace(steering=template.STEERING, _states=lambda name, default: getattr(template, name, default))
+    kinematic = {"finite_fault": "finite_fault", "rupture_type": "kinematic", "times": 30.0}
+    filled = gw.GeoclawWorkflow._rise_shaped(standin, {"FiniteFault": kinematic, "CLAW_TFINAL": 60.0})
+    kept = gw.GeoclawWorkflow._rise_shaped(standin, {"FiniteFault": {**kinematic, "rise_shape": "linear"}})
+    static = gw.GeoclawWorkflow._rise_shaped(standin, {"FiniteFault": {"finite_fault": "finite_fault"}})
+
+    assert filled["FiniteFault"]["rise_shape"] == "quadratic" and filled["CLAW_TFINAL"] == 60.0
+    assert kept["FiniteFault"]["rise_shape"] == "linear"
+    assert "rise_shape" not in static["FiniteFault"]

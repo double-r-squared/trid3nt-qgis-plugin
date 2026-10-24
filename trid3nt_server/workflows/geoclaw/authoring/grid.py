@@ -48,12 +48,13 @@ def _facts(artifact: Any) -> dict[str, Any]:
     return facts
 
 
-def grid_keywords(artifact: Any, stated: Iterable[str] = ()) -> dict[str, Any]:
+def grid_keywords(artifact: Any, stated: Iterable[str] = (), rupture_end: float | None = None) -> dict[str, Any]:
     """The grid keywords an accepted grid recipe states -> name to value.
 
     ``stated`` is every keyword the template already states; one that is a grid
     keyword refuses naming it, since the recipe is the one place the grid is
-    stated. No flagregion keyword is returned when the recipe holds none."""
+    stated. No flagregion keyword is returned when the recipe holds none. A region that follows the
+    rupture ends at ``rupture_end`` when that is later than its own t2; with no rupture stated its t2 stands."""
     facts = _facts(artifact)
     if "REGION_REGIONS" in stated:
         _refuse("REGION_REGIONS_UNSUPPORTED", REGIONS_REFUSAL)
@@ -74,7 +75,8 @@ def grid_keywords(artifact: Any, stated: Iterable[str] = ()) -> dict[str, Any]:
     }
     if facts["flagregions"]:
         keywords["FLAGREGION_FLAGREGIONS"] = [
-            [r["name"], r["minlevel"], r["maxlevel"], r["t1"], r["t2"], 1,
+            [r["name"], r["minlevel"], r["maxlevel"], r["t1"],
+             max(r["t2"], rupture_end) if r.get("with_rupture") and rupture_end is not None else r["t2"], 1,
              [r["extent"][0], r["extent"][2], r["extent"][1], r["extent"][3]]]
             for r in facts["flagregions"]]
     return keywords

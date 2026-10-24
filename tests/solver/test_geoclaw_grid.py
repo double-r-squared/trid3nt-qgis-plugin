@@ -258,3 +258,23 @@ def test_a_recipe_without_ratios_refuses_rather_than_defaulting(tmp_path):
                     workdir=tmp_path).accept()
 
     assert caught.value.error_code == "MESH_RATIOS_UNSTATED"
+
+
+def _source_region(**over):
+    return mesh_op("flagregion", **{**_COAST, "t2": 10.0, **over})
+
+
+def test_a_region_that_follows_the_rupture_ends_with_it_and_never_before_its_own_window(tmp_path):
+    art = _accepted(tmp_path, _source_region(with_rupture=True))
+
+    late = grid_keywords(art, rupture_end=115.4)["FLAGREGION_FLAGREGIONS"][0][4]
+    early = grid_keywords(art, rupture_end=0.0)["FLAGREGION_FLAGREGIONS"][0][4]
+    none = grid_keywords(art)["FLAGREGION_FLAGREGIONS"][0][4]
+
+    assert (late, early, none) == (115.4, 10.0, 10.0)
+
+
+def test_a_region_that_states_its_window_without_following_keeps_it(tmp_path):
+    art = _accepted(tmp_path, _source_region())
+
+    assert grid_keywords(art, rupture_end=115.4)["FLAGREGION_FLAGREGIONS"][0][4] == 10.0

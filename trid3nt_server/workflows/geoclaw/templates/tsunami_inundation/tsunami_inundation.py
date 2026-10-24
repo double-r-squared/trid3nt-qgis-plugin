@@ -13,7 +13,7 @@ from trid3nt_server.workflows.geoclaw.modules import GEO
 from trid3nt_server.workflows.geoclaw.workflow import GeoclawWorkflow
 from trid3nt_server.workflows.runtime import register_workflow
 
-__all__ = ["CAPTIONS", "DEEP_BED", "INPUTS", "MESH", "OUTPUTS", "SEA_LEVEL_DATUM", "STEERING",
+__all__ = ["CAPTIONS", "DEEP_BED", "INPUTS", "MESH", "OUTPUTS", "RISE_SHAPE", "SEA_LEVEL_DATUM", "STEERING",
            "geoclaw_tsunami_inundation"]
 
 # The values below are those of R. J. LeVeque's GeoClaw tsunami tutorial for Copalis Beach, WA
@@ -24,6 +24,10 @@ SEA_LEVEL_DATUM = "MHW"
 
 #: The source of the coarse rung of the bed, under the fine one, over the whole grid (the tutorial's etopo22 30-arcsecond file).
 DEEP_BED = "fetch_etopo"
+
+#: How the sea floor rises in a kinematic rupture a run states: Clawpack's quadratic, the nearest of its two shapes to the finite-fault
+#: file's asymmetric-cosine slip velocity (smooth, zero slope at both ends); a statement that names its own rise_shape keeps it.
+RISE_SHAPE = "quadratic"
 
 #: NOAA SIFT unit sources and the slip in metres on each: the tutorial's ASCE_SIFT_Region2 rupture (page "Make ASCE_SIFT_Region2 dtopo
 #: file", the slips credited there to Yong Wei), built there with dtopotools.SiftFault.
@@ -117,9 +121,11 @@ MESH = tool.build_mesh(
     build={"refinement_ratios": _RATIOS},
     ops=[
         # the whole grid to 2', the rupture's sea at level 4 while it moves, the sea to the coast to level 4
-        # (the tutorial's Region_domain, Region_dtopo and Region_12sec), and the coast at the finest level from t = 0
+        # (the tutorial's Region_domain, Region_dtopo and Region_12sec), and the coast at the finest level from t = 0;
+        # the source sea stays refined for the tutorial's 10 s of a static rupture, or until a stated kinematic rupture ends
         mesh_op("flagregion", name="Region_domain", minlevel=1, maxlevel=2, t1=0.0, t2=1.0e9, extent="extent"),
-        mesh_op("flagregion", name="Region_dtopo", minlevel=4, maxlevel=4, t1=0.0, t2=10.0, extent="source"),
+        mesh_op("flagregion", name="Region_dtopo", minlevel=4, maxlevel=4, t1=0.0, t2=10.0, extent="source",
+                with_rupture=True),
         mesh_op("flagregion", name="Region_12sec", minlevel=3, maxlevel=4, t1=10.0, t2=1.0e9, extent="approach"),
         mesh_op("flagregion", name="Region_coast", minlevel=_FINEST, maxlevel=_FINEST, t1=0.0, t2=1.0e9,
                 extent="domain"),

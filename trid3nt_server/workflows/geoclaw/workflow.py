@@ -33,6 +33,7 @@ from trid3nt_server.workflows.solver.staging import discard_run
 from .authoring import check_staged_run, grid_keywords, serialize
 from .errors import GeoclawError
 from .modules import GEO
+from .modules.module import rupture_end
 from .modules.outputs import Solved
 
 if TYPE_CHECKING:
@@ -239,6 +240,16 @@ class GeoclawWorkflow(Workflow):
                                for key, value in entry["kwargs"].items()}
         return asked
 
+    def _rise_shaped(self, keywords: dict[str, Any]) -> dict[str, Any]:
+        """The run's keywords, a kinematic Fault or FiniteFault that states no rise_shape taking the template's RISE_SHAPE."""
+        shape = self._states("RISE_SHAPE", None)
+        for raw, value in keywords.items():
+            _, identifier = identify_on([self.steering], raw)
+            if shape and identifier in ("Fault", "FiniteFault") and isinstance(value, Mapping) \
+                    and value.get("rupture_type") == "kinematic" and value.get("rise_shape") is None:
+                keywords[raw] = {**value, "rise_shape": shape}
+        return keywords
+
     async def launch(self, state: Fill) -> RunResult:
         """The run, in order: the grid, the rows, the data, the sheet written and staged under its review, the solve, the outputs."""
         from trid3nt_server.render.pipeline_emitter import begin_substeps, current_emitter, substep
@@ -249,7 +260,7 @@ class GeoclawWorkflow(Workflow):
         run = env.run
         slots = self._slots()
         domain = slots[DOMAIN]
-        keywords = dict(state.keywords)
+        keywords = self._rise_shaped(dict(state.keywords))
         own, _ = _floor(self.steering, keywords)
         emitter = current_emitter()
         begin_substeps(emitter, 4 + ("mesh" not in run))
@@ -270,10 +281,12 @@ class GeoclawWorkflow(Workflow):
         for name in self.named_rows(run):
             await read(env, name)
         art = run["mesh"]["artifact"]
-        grid = grid_keywords(art, set(own) | set(self.steering.ASSERTED))
         name = str(getattr(await read(env, domain), "name", None) or "domain")
         async with substep(emitter, "data"):
             await self._data(env, own)
+        ends = [rupture_end(composite, own[composite] if composite in own else self.steering.ASSERTED.get(composite), run)
+                for composite in ("Fault", "SiftFault", "FiniteFault")]
+        grid = grid_keywords(art, set(own) | set(self.steering.ASSERTED), max((end for end in ends if end is not None), default=None))
         declared = {row.name for row in self.inputs if not row.is_row}
         staged: dict[str, Any] = {}
         run_tag = new_ulid()
