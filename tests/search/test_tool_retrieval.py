@@ -169,6 +169,8 @@ _RECALL_FIXTURE = [
      "modflow_plume"),
     ("tsunami inundation at Copalis Beach", "geoclaw_tsunami_inundation"),
     ("how far inland would a Cascadia tsunami reach", "geoclaw_tsunami_inundation"),
+    ("storm surge from Hurricane Ike at Galveston", "geoclaw_storm_surge"),
+    ("how high would the surge get from a hurricane", "geoclaw_storm_surge"),
     ("get the NOAA SIFT unit sources for a tsunami earthquake scenario", "fetch_sift_unit_sources"),
     ("the USGS slip model of the 2011 Tohoku earthquake by event id", "fetch_finite_fault"),
     ("how much did each patch of the fault slip in the Kamchatka 2025 earthquake", "fetch_finite_fault"),

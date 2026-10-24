@@ -198,9 +198,10 @@ def _frame(grid: Any, stage: _Stage, number: int) -> Any:
 def _initial_wet(solved: Solved, grid: Any, stage: _Stage) -> Any:
     """The cells wet at frame 0 - the initial sea; a first frame not written at t = 0 is no initial sea."""
     first = _frame(grid, stage, 1)
-    if first.t != 0:
+    start = float(solved.stated("CLAW_T0") or 0.0)
+    if first.t != start:
         raise _refuse("OVERLAND_UNANCHORED", f"the first fgout frame is written at t = {first.t:g} s, so no frame holds "
-                      "the initial sea; state FGOUT_FGOUT_GRIDS tstart 0.")
+                      f"the initial sea; state FGOUT_FGOUT_GRIDS tstart {start:g}, the run's CLAW_T0.")
     return first.h > solved.dry_tolerance
 
 

@@ -194,5 +194,6 @@ from trid3nt_server.workflows.telemac.templates.stratified_flow.stratified_flow 
 from trid3nt_server.workflows.modflow.templates.water_table.water_table import modflow_water_table as _modflow_water_table  # noqa: E402,F401
 from trid3nt_server.workflows.modflow.templates.plume.plume import modflow_plume as _modflow_plume  # noqa: E402,F401
 from trid3nt_server.workflows.geoclaw.templates.tsunami_inundation.tsunami_inundation import geoclaw_tsunami_inundation as _geoclaw_tsunami_inundation  # noqa: E402,F401
+from trid3nt_server.workflows.geoclaw.templates.storm_surge.storm_surge import geoclaw_storm_surge as _geoclaw_storm_surge  # noqa: E402,F401
 from trid3nt_server.tools.mesh.tool import build_mesh as _build_mesh  # noqa: E402,F401
 from trid3nt_server.tools.mesh.op_tool import mesh_op as _mesh_op  # noqa: E402,F401

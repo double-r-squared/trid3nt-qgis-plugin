@@ -165,7 +165,8 @@ docstring: |-
       Historical point props: ``sid``, ``name``, ``season``, ``basin``,
       ``iso_time``, ``nature``, ``wind_kt``, ``pres_mb``, ``category``,
       ``category_label``, ``status``, plus the wind-structure columns
-      (blank-tolerant): ``rmw_nmi`` (USA_RMW), ``poci_mb`` (USA_POCI),
+      (blank-tolerant): ``record`` (USA_RECORD, ``L`` at a landfall fix),
+      ``rmw_nmi`` (USA_RMW), ``poci_mb`` (USA_POCI),
       ``roci_nmi`` (USA_ROCI), ``r34_ne_nmi`` / ``r34_se_nmi`` /
       ``r34_sw_nmi`` / ``r34_nw_nmi`` (USA_R34_*) -- consumed by the
       hurricane-spiderweb parametric wind-field construction for a

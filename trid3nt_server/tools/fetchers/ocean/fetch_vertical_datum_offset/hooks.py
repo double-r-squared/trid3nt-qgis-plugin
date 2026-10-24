@@ -51,11 +51,11 @@ _TIDAL = frozenset({"MLLW", "MLW", "MTL", "LMSL", "MHW", "MHHW"})
 
 #: What a REGION demands of a tidal frame's horizontal frame, where it demands
 #: something other than what ``_SERVED_AS`` pairs that frame with everywhere
-#: else. West-coast tidal grids are published on IGS14 and the service refuses
-#: the pairing in its own words - "For West Coast Region, Target Horizontal
-#: Frame should be IGS14 for Tidal" - whichever side of the conversion the tidal
-#: frame sits on.
-_TIDAL_HORIZONTAL: dict[str, str] = {"westcoast": "IGS14"}
+#: else. West-coast and West Gulf Coast tidal grids are published on IGS14 and the
+#: service refuses the pairing in its own words - "For West Coast Region, Target
+#: Horizontal Frame should be IGS14 for Tidal" - whichever side of the conversion
+#: the tidal frame sits on.
+_TIDAL_HORIZONTAL: dict[str, str] = {"westcoast": "IGS14", "wgom": "IGS14"}
 
 #: What VDatum writes where a grid does not reach the point. It is a value in a
 #: successful response, not an error, so a reader that does not know it treats a

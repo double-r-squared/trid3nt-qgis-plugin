@@ -1,0 +1,12 @@
+# Template routing phrasings: walked into the main retrieval index directly, so
+# an engine template is an ordinary retrieval-pool tool.
+geoclaw_storm_surge:
+- storm surge from Hurricane Ike at Galveston
+- how high would the surge get from a hurricane
+- how far inland would a hurricane storm surge flood the coast
+- run GeoClaw for a hurricane and map the storm surge along the Gulf coast
+- simulate the water level raised by a hurricane's wind and pressure with adaptive mesh refinement
+- maximum storm surge height and flooding depth map for a coastal city from a named storm
+- compare modeled storm surge with tide gauge observations for a past hurricane
+- when does the storm surge arrive at the shore as a hurricane makes landfall
+- what surge would a hurricane like Katrina raise at the coast

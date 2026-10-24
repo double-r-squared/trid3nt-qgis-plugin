@@ -38,6 +38,7 @@ EXPECTED_TEMPLATES = {
     "modflow_water_table",
     "modflow_plume",
     "geoclaw_tsunami_inundation",
+    "geoclaw_storm_surge",
 }
 
 # The 10 deleted engine-door concierge tools.

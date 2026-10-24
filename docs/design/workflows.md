@@ -660,3 +660,17 @@ way it fetches SIFT unit sources; a record the run already holds under that name
 case section the worker reads (`stage_run(case=)`), publishes the module table through `publish_reads`, and its record is the
 outline of the fixed grids. The verification twin (`geoclaw_tsunami_zero_fetch`) runs Thacker's oscillating paraboloid, stated
 and synthetic, against its analytic solution.
+
+### The GeoClaw storm-surge template: `geoclaw_storm_surge`
+
+The second GeoClaw template (`workflows/geoclaw/templates/storm_surge/`) takes Clawpack's `storm-surge/ike` setrun for its
+values and a real storm for its forcing. `Storm` is a composite beside the faults: it reads the points `fetch_storm_tracks`
+returns for ONE storm (several refuse naming them) and writes the fixes spanning CLAW_T0 to CLAW_TFINAL as GeoClaw's storm
+file through Clawpack's `Storm` writer, in SI units (`workflows/geoclaw/authoring/storm.py`), setting `SURGE_STORM_FILE`. The
+wind model, drag law and refinement are the body's own keywords (`SURGE_STORM_SPECIFICATION_TYPE` takes any model the engine
+reads a track for, by its integer); a kept fix without the radius of maximum wind or the outer radius refuses naming the fix
+and the IBTrACS field, a track that begins after the run or ends before it refuses, and Clawpack's fill never fires. The
+workflow fetches the track (`storm_name` and `season` over the level-1 box) and, with no stated `event_time`, counts the run
+from the storm's last landfall fix (`USA_RECORD` L). The run opens three days before landfall, so FixedGrids and the overland
+mask start at CLAW_T0, and the seed gauge listens over the whole run. Friction is the example's domain-wide Manning law as
+`GEO_MANNING_*`; the sea stands at the MHW offset NOAA VDatum measures at the seed. Outputs are the fixed grids and gauges.

@@ -23,7 +23,7 @@ from ...runtime.sheet import Sheet
 from ..errors import GeoclawError
 
 __all__ = ["GeoclawModule", "fault", "finite_fault", "fixed_grids", "initial_surface", "module_input_dir", "rupture_end", "sift_fault",
-           "moment_tensor_fault", "slab_fault", "topography"]
+           "moment_tensor_fault", "slab_fault", "storm", "topography"]
 
 #: What one Topography statement may carry: the surface, and the offset onto the run's frame.
 _SURFACE = ("surface", "offset")
@@ -371,6 +371,43 @@ def moment_tensor_fault(value: Any, *, run: Mapping[str, Any]
     return fault({"subfaults": subfaults, "x": x, "y": y, "times": value["times"]}, run=run)
 
 
+#: What one Storm statement carries: the points fetch_storm_tracks returns, and the name and season of the storm the workflow fetches them for.
+_STORM = ("storm_tracks", "storm_name", "season")
+
+
+def storm(value: Any, *, run: Mapping[str, Any]
+          ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    """One real storm's track as the surge storm file: Storm({storm_tracks, storm_name, season}).
+
+    ``storm_tracks`` is the points document ``fetch_storm_tracks`` returns for one storm; ``storm_name`` and ``season``
+    name that storm for the workflow's fetch. The fixes spanning CLAW_T0 to CLAW_TFINAL are written in GeoClaw's storm
+    format in SI units, counted from the run's event_time (unstated, the storm's last landfall); a fix lacking a
+    value the wind models read refuses. The wind model is SURGE_STORM_SPECIFICATION_TYPE's, by its name."""
+    if not isinstance(value, Mapping):
+        _refuse("STORM_UNSTATED", f"Storm takes a mapping {{{', '.join(_STORM)}}}.")
+    extra = sorted(set(value) - set(_STORM))
+    if extra:
+        _refuse("STORM_UNSTATED", f"Storm states {', '.join(extra)}; it takes {', '.join(_STORM)}.")
+    if value.get("storm_tracks") is None:
+        _refuse("STORM_UNSTATED", "Storm states no storm_tracks: state the name and season of the storm, or hand it the "
+                "points fetch_storm_tracks returns.")
+    if run.get("SURGE_STORM_FILE") is not None:
+        _refuse("STORM_FILE_STATED", "SURGE_STORM_FILE is stated beside Storm: Storm states the storm file, so remove "
+                "the keyword or the composite.")
+    window = [run.get(key) for key in ("CLAW_T0", "CLAW_TFINAL")]
+    if any(item is None for item in window):
+        _refuse("STORM_WINDOW_UNSTATED", "Storm writes the fixes spanning the run, so CLAW_T0 and CLAW_TFINAL are "
+                "stated before it is.")
+    from trid3nt_server.inputs.geometry import read_geometry_doc
+
+    from ..authoring.storm import storm_track
+
+    track = storm_track(read_geometry_doc(value["storm_tracks"]), offset=run.get("event_time"),
+                        t0=float(window[0]), tfinal=float(window[1]))
+    name = "storm_01.storm"
+    return {"SURGE_STORM_FILE": name}, {name: {"storm": track}}
+
+
 def rupture_end(name: str, value: Any, run: Mapping[str, Any]) -> float | None:
     """The second a stated rupture ends -> its last dtopo instant, or the largest rupture_time + rise_time of a kinematic one.
 
@@ -404,7 +441,7 @@ def fixed_grids(value: Any, *, run: Mapping[str, Any]
     """The fixed grids the products are read from: FixedGrids({extent, interval, tstart_max, dt_check, arrival_tol, interp_method}).
 
     One fgmax grid and one fgout grid, both on the cells of the FINEST level of the stated grid recipe that
-    cover ``extent`` whole, so each node reads one finest cell; the fgout frames run from t = 0 to
+    cover ``extent`` whole, so each node reads one finest cell; the fgout frames run from CLAW_T0 (0 unstated) to
     CLAW_TFINAL every ``interval`` seconds, frame 0 being the initial sea the overland products are masked by.
     ``tstart_max`` starts the maxima, ``dt_check`` and ``arrival_tol`` are fgmax's own, and the monitored level is the finest."""
     if not isinstance(value, Mapping):
@@ -430,15 +467,16 @@ def fixed_grids(value: Any, *, run: Mapping[str, Any]
     y1, y2 = ly + math.floor((south - ly) / dy + 1e-9) * dy, ly + math.ceil((north - ly) / dy - 1e-9) * dy
     nx, ny = round((x2 - x1) / dx), round((y2 - y1) / dy)
     interval = float(value["interval"])
-    if interval <= 0 or float(tfinal) <= 0:
-        _refuse("GRIDS_UNSTATED", f"FixedGrids interval {interval:g} s over CLAW_TFINAL {float(tfinal):g} s "
-                "writes no frame.")
-    nout = int(math.floor(float(tfinal) / interval + 1e-9)) + 1
+    if interval <= 0 or float(tfinal) <= float(run.get("CLAW_T0") or 0.0):
+        _refuse("GRIDS_UNSTATED", f"FixedGrids interval {interval:g} s from CLAW_T0 {float(run.get('CLAW_T0') or 0.0):g} s to "
+                f"CLAW_TFINAL {float(tfinal):g} s writes no frame.")
+    start = float(run.get("CLAW_T0") or 0.0)
+    nout = int(math.floor((float(tfinal) - start) / interval + 1e-9)) + 1
     return ({"FGMAX_FGMAX_GRIDS": [[1, float(value["tstart_max"]), 1.0e10, float(value["dt_check"]), levels,
                                     float(value["arrival_tol"]), int(value["interp_method"]), 2,
                                     {"x1": x1 + dx / 2, "y1": y1 + dy / 2, "x2": x2 - dx / 2,
                                      "y2": y2 - dy / 2, "nx": nx, "ny": ny}]],
-             "FGOUT_FGOUT_GRIDS": [[1, 1, nout, 0.0, (nout - 1) * interval, 2, "binary32",
+             "FGOUT_FGOUT_GRIDS": [[1, 1, nout, start, start + (nout - 1) * interval, 2, "binary32",
                                     x1, x2, y1, y2, nx, ny]]}, {})
 
 

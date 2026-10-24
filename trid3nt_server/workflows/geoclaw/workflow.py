@@ -50,7 +50,7 @@ _DISPATCH = "trid3nt_server.workflows.geoclaw.engine.solve_case"
 _OUTPUTS = ["fgmax*", "fgout*", "gauge*", "geoclaw_metrics.json"]
 
 #: The names the workflow writes into the run itself, as the data rows it declares: composites read them, no caller states them.
-_PRODUCED = ("deep_bed_offset", "finite_fault", "sift_unit_sources")
+_PRODUCED = ("deep_bed_offset", "finite_fault", "sift_unit_sources", "storm_tracks")
 
 _FRAME, = BED.states
 
@@ -210,7 +210,7 @@ class GeoclawWorkflow(Workflow):
 
         return {"deep_bed_fetch": self.template.DEEP_BED, "deep_bed_offset": OFFSET_FETCH,
                 "sea_level_offset": OFFSET_FETCH, "sift_unit_sources_fetch": "fetch_sift_unit_sources",
-                "finite_fault_fetch": "fetch_finite_fault"}
+                "finite_fault_fetch": "fetch_finite_fault", "storm_tracks_fetch": "fetch_storm_tracks"}
 
     def check(self) -> None:
         """Refuse at import what this template cannot run on: one domain, one bed, a mesh ask."""
@@ -361,11 +361,39 @@ class GeoclawWorkflow(Workflow):
         if rupture is not None and rupture["slips"] and run.get("sift_unit_sources") is None:
             run["sift_unit_sources"] = await _fetch(env, "sift_unit_sources_fetch", "fetch_sift_unit_sources",
                                                     names=list(rupture["slips"]))
+        track = own["Storm"] if "Storm" in own else self.steering.ASSERTED.get("Storm")
+        if isinstance(track, Mapping) and isinstance(track.get("storm_tracks"), str) and run.get(track["storm_tracks"]) is None:
+            await self._storm(env, track)
         finite = own["FiniteFault"] if "FiniteFault" in own else self.steering.ASSERTED.get("FiniteFault")
         if isinstance(finite, Mapping) and finite.get("event_id") and isinstance(finite.get("finite_fault"), str) \
                 and run.get(finite["finite_fault"]) is None:
             run[finite["finite_fault"]] = await _fetch(env, "finite_fault_fetch", "fetch_finite_fault",
                                                        event_id=finite["event_id"])
+
+    async def _storm(self, env: Any, statement: Mapping[str, Any]) -> None:
+        """The points of the storm a Storm statement names (its name and season, over the level-1 grid), read into the run.
+
+        A run that states no event_time counts its seconds from the storm's last landfall fix."""
+        from trid3nt_server.inputs.geometry import read_geometry_doc
+        from trid3nt_server.inputs.run_notes import journal_note
+
+        from .authoring.storm import landfall_instant
+
+        run = env.run
+        name, season = run.get(statement["storm_name"]), run.get(statement["season"])
+        if name is None or season is None:
+            raise GeoclawError("Storm names no storm: state storm_name and season, the name and the year of the one whose "
+                               "track the run is driven by.", error_code="GEOCLAW_STORM_UNSTATED")
+        facts = run["mesh"]["artifact"].probes["claw_grid"]
+        (west, south), (east, north) = facts["lower"], facts["upper"]
+        layer = await _fetch(env, "storm_tracks_fetch", "fetch_storm_tracks", bbox=[west, south, east, north], storm_name=name,
+                             start_year=int(season), end_year=int(season), geometry="points", purpose="storm track")
+        run[statement["storm_tracks"]] = layer
+        if run.get(EVENT_TIME.name) is None:
+            moment = landfall_instant(await asyncio.to_thread(read_geometry_doc, layer))
+            run[EVENT_TIME.name] = moment
+            journal_note(f"reference time is the storm's last landfall fix, {moment} (IBTrACS USA_RECORD L): the run states no "
+                         "event_time its seconds are counted from.")
 
 
 async def _fetch(env: Any, row: str, runner: str, **kwargs: Any) -> Any:

@@ -71,6 +71,7 @@ def test_the_tool_list_is_generated_from_the_registry() -> None:
         "modflow_water_table",
         "modflow_plume",
         "geoclaw_tsunami_inundation",
+        "geoclaw_storm_surge",
     ):
         assert f"- {name}: " in section, f"live template {name!r} is not listed"
 

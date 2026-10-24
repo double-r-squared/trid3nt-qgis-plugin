@@ -417,6 +417,7 @@ def _parse_ibtracs_csv(
         r34_se = _blank_to_none_float(_col(row, "USA_R34_SE"))
         r34_sw = _blank_to_none_float(_col(row, "USA_R34_SW"))
         r34_nw = _blank_to_none_float(_col(row, "USA_R34_NW"))
+        record = _col(row, "USA_RECORD").strip() or None
         storms.setdefault(sid, []).append(
             {
                 "sid": sid,
@@ -431,6 +432,7 @@ def _parse_ibtracs_csv(
                 "pres_mb": pres,
                 "category": cat,
                 "status": _col(row, "USA_STATUS").strip() or None,
+                "record": record,
                 "rmw_nmi": rmw_nmi,
                 "poci_mb": poci_mb,
                 "roci_nmi": roci_nmi,

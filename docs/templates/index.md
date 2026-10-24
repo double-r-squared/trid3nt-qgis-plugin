@@ -2,13 +2,19 @@
 
 # Templates
 
-18 registered templates, one per question. A template declares raw engine keywords over a module wrapper; `fill` sets the inputs and `run` solves it. The wrappers are in [`../modules.md`](../modules.md).
+19 registered templates, one per question. A template declares raw engine keywords over a module wrapper; `fill` sets the inputs and `run` solves it. The wrappers are in [`../modules.md`](../modules.md).
 
 ## [`artemis_harbor_agitation`](artemis_harbor_agitation.md)
 
 The WAVE AGITATION (Kd = Hs/H0) inside a harbour, marina or basin, behind a declared structure or free-field.
 
 Module `artemis`.
+
+## [`geoclaw_storm_surge`](geoclaw_storm_surge.md)
+
+STORM SURGE from a real hurricane across the sea to a coast - the water height the storm's wind and low pressure raise, how far inland and how deep it floods, and the water level at a gauge.
+
+Module `geoclaw`.
 
 ## [`geoclaw_tsunami_inundation`](geoclaw_tsunami_inundation.md)
 

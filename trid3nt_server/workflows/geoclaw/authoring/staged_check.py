@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from ..errors import GeoclawError
-from .rundata import _fields, _prefix_of
+from .rundata import _fields, _prefix_of, attribute_of
 
 logger = logging.getLogger(
     "trid3nt_server.workflows.geoclaw.authoring.staged_check")
@@ -77,6 +77,9 @@ def check_staged_run(rundir: Path | str, *, sheet: Any,
                     "holds what was never asked for")
         if row.slot.type == "STRUCT":
             _staged_files(work, row)
+        if identifier == "SURGE_STORM_FILE" and not (work / str(row.value)).is_file():
+            _refuse("FILE_MISSING", f"SURGE_STORM_FILE names {row.value!r}, which the run directory does not hold - "
+                    f"holding {_holding(work)}")
         checked.append(identifier)
     result = {"checked": checked, "files": sorted(written)}
     logger.info("geoclaw staged check passed: %i identifiers over %i files",
@@ -109,7 +112,7 @@ def _recovered(path: Path, identifier: str, row: Any, work: Path,
     group = next(obj for attr, obj in vars(rundata).items()
                  if hasattr(obj, "write") and _prefix_of(attr) == prefix)
     ClawData.read(group, str(path))
-    return getattr(group, identifier[len(prefix) + 1:].lower())
+    return getattr(group, attribute_of(group, identifier[len(prefix) + 1:]))
 
 
 def _count(text: str, name: str) -> int:

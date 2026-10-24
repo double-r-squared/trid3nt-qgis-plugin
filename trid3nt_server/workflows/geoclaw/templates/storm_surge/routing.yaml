@@ -1,0 +1,13 @@
+summary: STORM SURGE from a real hurricane across the sea to a coast - the water height the storm's wind and low
+  pressure raise, how far inland and how deep it floods, and the water level at a gauge.
+routing: 'THE tool for "storm surge from Hurricane Ike at Galveston", "how high would the surge get from a hurricane",
+  "how far inland would a hurricane flood". GeoClaw, depth-averaged shallow water on adaptively refined grids
+  in lon/lat, driven by the wind and pressure of one named storm''s IBTrACS best track (Holland 1980), from three days
+  before its landfall to one day after: a level-1 grid over `extent`, refined by the storm and the water, finest at
+  the `domain` coast; the sea stands at the mean high water NOAA VDatum measures at `seed`. State `storm_name`,
+  `season`, `extent`, `domain` and `seed` (a point on the water).'
+not_for: a tsunami or any sea-floor rupture, river or rain flooding, a dam break, groundwater, a tide-only question, or
+  a storm that has not happened (a forecast track)
+returns: 'On success the run''s record (a `LayerURI`): the maximum depth, speed, surface and arrival time, the maximum
+  onshore depth, and the depth, surface and onshore depth at every fgout frame, plus the gauge''s surface and depth
+  charted. On failure a dict with `status="error"` + `error_code`.'

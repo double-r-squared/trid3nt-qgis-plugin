@@ -47,11 +47,13 @@ def serialize(sheet: Any, rundir: Path | str) -> dict[str, Any]:
     _unstated(sheet)
     from .dtopo import write_dtopofiles
     from .qinit import write_qinitfiles
+    from .storm import write_stormfiles
     from .topo import write_topofiles
 
     write_topofiles(sheet, work)
     write_dtopofiles(sheet, work)
     write_qinitfiles(sheet, work)
+    write_stormfiles(sheet, work)
     written = sorted(out_file(obj) for _name, obj in groups.values())
     try:
         rundata.write(str(work))
@@ -137,8 +139,8 @@ def _applied(sheet: Any, groups: dict[str, tuple[str, Any]]) -> None:
     rows = []
     for identifier, row in sheet.filled.items():
         prefix = identifier.partition("_")[0]
-        name = identifier[len(prefix) + 1:].lower()
         group = groups[prefix][1]
+        name = attribute_of(group, identifier[len(prefix) + 1:])
         if row.slot.type == "STRUCT":
             rows.append((identifier, name, row, group))
             continue
@@ -150,6 +152,11 @@ def _applied(sheet: Any, groups: dict[str, tuple[str, Any]]) -> None:
                     "dictionary spells a keyword the rundata group does not hold.")
     for identifier, name, row, group in rows:
         setattr(group, name, _records(identifier, row, groups))
+
+
+def attribute_of(group: Any, lowered: str) -> str:
+    """The attribute a Data group spells a lowercased dictionary name as (``R_refine`` for ``r_refine``); an unknown name stays as given."""
+    return next((name for name in vars(group) if name.lower() == lowered.lower()), lowered.lower())
 
 
 def _fields(row: Any) -> tuple[str, ...]:
