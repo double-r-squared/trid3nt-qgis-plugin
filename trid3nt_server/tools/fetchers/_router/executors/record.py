@@ -23,21 +23,27 @@ logger = logging.getLogger(
 __all__ = ["execute"]
 
 
+def _from_hook(spec: SourceSpec, result: Any) -> bytes:
+    """The record a hook produced with no request as JSON bytes, or the row's EMPTY."""
+    if result is None:
+        raise router_empty_error(
+            spec.error_code_prefix,
+            f"{spec.name}: record hook produced no result",
+            spec.empty_error_suffix,
+        )
+    return json.dumps(result, separators=(",", ":")).encode("utf-8")
+
+
 def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
     record = resolve_hook(spec.hooks.record)  # type: ignore[union-attr]
     build_name = spec.hooks.build_request if spec.hooks is not None else None
     if not build_name:
-        result = record(spec, params, [])
-        if result is None:
-            raise router_empty_error(
-                spec.error_code_prefix,
-                f"{spec.name}: record hook produced no result",
-                spec.empty_error_suffix,
-            )
-        return json.dumps(result, separators=(",", ":")).encode("utf-8")
+        return _from_hook(spec, record(spec, params, []))
 
     build = resolve_hook(build_name)
     plans = build(spec, params)
+    if not plans:
+        return _from_hook(spec, record(spec, params, []))
     for plan in plans:
         body = _get(spec, plan)
         result = record(spec, params, [body])

@@ -14,7 +14,6 @@ from typing import Any, Callable
 from trid3nt_contracts.source_spec import SourceSpec
 from trid3nt_server.render.cog import array_to_cog_bytes
 
-from .._fetch_common import FetchError
 from .._router.errors import router_empty_error, router_input_error, router_upstream_error
 from .._router.hooks import FrameDegraded
 from .._router.transport import TransportError, get_client
@@ -29,7 +28,6 @@ __all__ = [
     "last_active_bottom",
     "head_column",
     "TARGET",
-    "datum_offset_m",
     "shift_to_navd88",
     "masked_window",
     "masked_window_cog",
@@ -287,41 +285,27 @@ def head_column(zf: zipfile.ZipFile, arch: dict[str, Any]) -> tuple[Any, Any, An
     return head * float(arch["factor"]), thickness, measured.astype(int)
 
 
-def datum_offset_m(spec: SourceSpec, lon: float, lat: float, frame: str) -> float:
-    """What VDatum says a zero on ``frame`` reads at on NAVD88 at this point;
-    its refusal is raised as this row's own, naming the point."""
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    try:
-        record = TOOL_REGISTRY["fetch_vertical_datum_offset"].fn(
-            point=[lon, lat], from_frame=frame.lower(), to_frame=TARGET.lower())
-    except FetchError as exc:
-        message = (
-            f"the {frame} elevations of the model cannot be put on "
-            f"{TARGET}: NOAA VDatum has no offset at ({lon:.6f}, {lat:.6f}) - "
-            f"fetch_vertical_datum_offset says ({getattr(exc, 'error_code', '')}): {exc}")
-        if getattr(exc, "retryable", False):
-            raise router_upstream_error(spec.error_code_prefix, message) from exc
-        raise router_input_error(
-            spec.error_code_prefix, message, spec.input_error_suffix) from exc
-    return float(record["offset_m"])
-
-
 def shift_to_navd88(spec: SourceSpec, bbox: tuple[float, ...], frame: str):
-    """The offset onto NAVD88 across the AOI: VDatum's offset at each of the
-    AOI's four corners, bilinear between them. A datum offset is a smooth
-    field, so the corners the caller named bound it without a point chosen
-    for them. The offsets are asked when the shift is first applied, so a
-    frame with no active cell never asks."""
-    west, south, east, north = bbox
+    """The offset onto NAVD88 at each measured cell centre, from PROJ's local grids (no network call
+    after the grids are cached). A measured cell no grid covers refuses by name; the offsets are asked
+    when the shift is first applied, so a frame with no active cell never asks."""
+    import numpy as np
 
-    def shift(xs: Any, ys: Any) -> Any:
-        sw, se, nw, ne = (
-            datum_offset_m(spec, lon, lat, frame)
-            for lon, lat in ((west, south), (east, south), (west, north), (east, north)))
-        u = (xs - west) / max(east - west, 1e-12)
-        v = (ys - south) / max(north - south, 1e-12)
-        return (1 - u) * (1 - v) * sw + u * (1 - v) * se + (1 - u) * v * nw + u * v * ne
+    from .. import _proj_grids
+
+    def shift(xs: Any, ys: Any, needed: Any) -> Any:
+        lon, lat = np.broadcast_arrays(xs, ys)
+        offsets = np.full(needed.shape, np.nan)
+        try:
+            offsets[needed] = _proj_grids.geodetic_offset(frame, TARGET, lon[needed], lat[needed])
+            return offsets
+        except _proj_grids.NoGridCoverage as exc:
+            raise router_input_error(
+                spec.error_code_prefix,
+                f"the {frame} elevations of the model cannot be put on {TARGET}: {exc}",
+                spec.input_error_suffix) from exc
+        except _proj_grids.DatumGridUnavailable as exc:
+            raise router_upstream_error(spec.error_code_prefix, str(exc)) from exc
 
     return shift
 
@@ -332,7 +316,7 @@ def masked_window_cog(
     mask: Any,
     bbox: tuple[float, ...],
     what: str,
-    shift: Callable[[Any, Any], Any] | None = None,
+    shift: Callable[[Any, Any, Any], Any] | None = None,
 ) -> bytes:
     """``masked_window`` written as an EPSG:4326 COG."""
     out, out_t = masked_window(arch, values, mask, bbox, what, shift)
@@ -345,13 +329,13 @@ def masked_window(
     mask: Any,
     bbox: tuple[float, ...],
     what: str,
-    shift: Callable[[Any, Any], Any] | None = None,
+    shift: Callable[[Any, Any, Any], Any] | None = None,
     whole: bool = False,
 ) -> tuple[Any, Any]:
     """One model-grid array over the AOI as (array, EPSG:4326 transform): the
     touched window, active cells only, warped nearest, cropped to cells whose
-    centres fall in the bbox. ``shift(xs, ys)`` is added to the warped cells
-    (lon/lat centres in, one value per cell out). A window with no active cell
+    centres fall in the bbox. ``shift(xs, ys, measured)`` is added to the warped cells
+    (lon/lat centres in with the mask of measured cells, one value per cell out). A window with no active cell
     raises ``FrameDegraded`` naming ``what``, and so does one with any cell
     unmeasured where ``whole`` asks for every cell of the box."""
     import numpy as np
@@ -425,7 +409,7 @@ def masked_window(
             f"{label} {what} measures {int(np.isfinite(out).sum())} of {out.size} cells over this AOI; "
             "a run takes the model only where it measures every cell")
     if shift is not None:
-        out = (out + shift(xs[keep_c][None, :], ys[keep_r][:, None])).astype(
+        out = (out + shift(xs[keep_c][None, :], ys[keep_r][:, None], np.isfinite(out))).astype(
             "float32"
         )
     out_t = dst_t * rasterio.Affine.translation(

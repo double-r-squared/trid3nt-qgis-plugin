@@ -37,3 +37,29 @@ def class_routes_to_the_match():
             f"unreachable: {missed}")
 
     return check
+
+
+_GRIDS = pathlib.Path(__file__).resolve().parents[1] / "fixtures" / "proj_grids"
+
+
+@pytest.fixture
+def proj_grids(monkeypatch):
+    """Point PROJ at one excerpt directory of real grids ("capecod" or "alaska") for a test.
+
+    The grid download is replaced by a failure, so a test that reaches the network fails."""
+    import pyproj
+
+    from trid3nt_server.tools.fetchers import _proj_grids
+
+    original = pyproj.datadir.get_data_dir()
+
+    def use(place: str) -> None:
+        pyproj.datadir.set_data_dir(original)
+        pyproj.datadir.append_data_dir(str(_GRIDS / place))
+
+    def no_network(name, url):
+        raise AssertionError(f"the grid {name} was fetched from {url}")
+
+    monkeypatch.setattr(_proj_grids, "_download", no_network)
+    yield use
+    pyproj.datadir.set_data_dir(original)

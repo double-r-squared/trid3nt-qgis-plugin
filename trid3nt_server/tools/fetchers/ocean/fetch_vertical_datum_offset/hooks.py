@@ -1,21 +1,21 @@
-"""VDatum hooks: the request one conversion needs, and the offset read off it.
+"""Datum-offset hooks: the local PROJ-grid answer for geodetic frames, else the request VDatum needs.
 
-The service couples each vertical frame to the horizontal frame and the geoid
-model it is served under, and answers a mismatched pairing with a number that
-reads plausible and is not the offset, so the pairing is PINNED here rather than
-searched. The height sent is zero, so the height that comes back is the offset.
-Which of the service's regional grids answers is a fact of the POINT and is
-chosen here, because the service serves no lookup from one to the other.
-"""
+A pair of two geodetic frames is answered from PROJ's grids where they cover the point, with no request. Tidal
+frames, Great Lakes frames and a point the grids do not cover go to VDatum, which couples each vertical frame to
+the horizontal frame and the geoid model it is served under and answers a mismatched pairing with a number that
+reads plausible and is not the offset, so the pairing is PINNED rather than searched. The height sent is zero, so
+the height that comes back is the offset; the service's regional grid is chosen here from the point."""
 
 from __future__ import annotations
 
 import json
 import logging
+from functools import lru_cache
 from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
 
+from ... import _proj_grids
 from ..._router.errors import router_empty_error, router_input_error, router_upstream_error
 from ..._router.hooks import RequestPlan, register_hook
 
@@ -41,6 +41,9 @@ _SERVED_AS: dict[str, tuple[str, str]] = {
     "IGLD85": ("NAD83_2011", "geoid18"),
     "LWD_IGLD85": ("NAD83_2011", "geoid18"),
 }
+
+#: The frames the local PROJ grids convert between; a pair with any other frame is VDatum's.
+_GEODETIC = frozenset({"NAVD88", "NGVD29", "EGM2008"})
 
 #: The frames VDatum serves off a TIDAL grid rather than off a geoid model. A
 #: region may demand its own horizontal frame for these and for no other.
@@ -124,9 +127,33 @@ def _horizontal(region: str, frame: str, served: str) -> str:
     return demanded if demanded is not None and frame in _TIDAL else served
 
 
+@lru_cache(maxsize=256)
+def _local(source: str, target: str, lon: float, lat: float) -> tuple[float, list[str]] | None:
+    """The PROJ-grid offset and the grid files it read, or ``None`` where no grid covers the point."""
+    try:
+        return (float(_proj_grids.geodetic_offset(source, target, lon, lat)),
+                _proj_grids.grids_used(source, target, lon, lat))
+    except _proj_grids.NoGridCoverage:
+        return None
+
+
+def _answered_locally(spec: SourceSpec, params: dict[str, Any]):
+    source = _frame(spec, params, "from_frame")
+    target = _frame(spec, params, "to_frame")
+    if not {source, target} <= _GEODETIC:
+        return None
+    lon, lat = (float(v) for v in params["point"])
+    try:
+        return _local(source, target, lon, lat)
+    except _proj_grids.DatumGridUnavailable as exc:
+        raise router_upstream_error(spec.error_code_prefix, str(exc)) from exc
+
+
 @register_hook("vdatum.build_request")
 def build_request(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan]:
-    """The one conversion request: a zero height on the source frame at the point."""
+    """The one conversion request: a zero height on the source frame at the point; none where PROJ's grids answer."""
+    if _answered_locally(spec, params) is not None:
+        return []
     source = _frame(spec, params, "from_frame")
     target = _frame(spec, params, "to_frame")
     lon, lat = (float(v) for v in params["point"])
@@ -152,6 +179,17 @@ def record(spec: SourceSpec, params: dict[str, Any],
     VDatum answers a rejected request with HTTP 200 and an error envelope, and an
     uncovered point with its own sentinel height, so both are read here."""
     sc = spec.error_code_prefix
+    local = _answered_locally(spec, params)
+    if local is not None:
+        lon, lat = (float(v) for v in params["point"])
+        offset, grids = local
+        return {
+            "lon": lon, "lat": lat, "region": "proj-grids",
+            "from_frame": _frame(spec, params, "from_frame"),
+            "to_frame": _frame(spec, params, "to_frame"),
+            "offset_m": round(offset, 4), "uncertainty_m": None,
+            "source": f"PROJ grids ({', '.join(grids)})",
+        }
     try:
         answer = json.loads((bodies[0] if bodies else b"").decode("utf-8"))
     except (IndexError, UnicodeDecodeError, json.JSONDecodeError) as exc:

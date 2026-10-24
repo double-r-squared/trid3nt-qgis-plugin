@@ -1,7 +1,7 @@
 """usgs_model_water_table delegate hook: the head of the model's own water table as an elevation on NAVD88.
 
 The head is the starting head of the cell's topmost active layer from the one archive, in metres; a model
-counted from another datum is put onto NAVD88 through NOAA VDatum. A cell is kept where the thickness row also
+counted from another datum is put onto NAVD88 per cell through PROJ's local VERTCON grid. A cell is kept where the thickness row also
 measures it, and the row answers only where it measures every cell of the box."""
 
 from __future__ import annotations

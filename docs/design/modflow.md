@@ -100,7 +100,7 @@ refuses. The two templates declare the K pair optional and standing in for `tran
 (`Input.optional_need`, workflows.md): inside a published grid the sheet states conductivity by depth and
 asks no transmissivity, anywhere else, or when the run states a transmissivity, it states that. Inside a published
 grid the water table and the saturated thickness come from the same model as the K: `fetch_usgs_model_water_table`
-(the head of the cell's topmost active layer, an elevation on NAVD88, Cape Cod put onto it through VDatum) and
+(the head of the cell's topmost active layer, an elevation on NAVD88, Cape Cod put onto it per cell by the local PROJ-grid seam, VERTCON 2) and
 `fetch_usgs_model_thickness` (that head over the bottom of the cell's deepest active layer) answer the templates'
 optional `water_table` input, standing in for `water_table_depth`, and the thickness; both measure the same
 cells, and each answers only where it measures every cell of the box (a box a grid holds in part, or one with an

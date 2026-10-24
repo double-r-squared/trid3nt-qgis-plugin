@@ -1,7 +1,8 @@
-# NOAA VDatum's one REST call: a point, a source vertical frame and a target one
-# come back as a converted height. The request is sent with a source height of
-# ZERO, so the height that comes back IS the offset between the two frames at that
-# point, which is the number a bed and a water level are put on one axis with.
+# The offset between two vertical frames at a point. NGVD29, NAVD88 and EGM2008 are
+# converted on PROJ's local NGS/NGA grids where they cover the point (no call); every
+# other pair is NOAA VDatum's one REST call, sent with a source height of ZERO so the
+# height that comes back IS the offset: the number a bed and a water level are put on
+# one axis with.
 schema_version: v1
 
 name: fetch_vertical_datum_offset
@@ -62,21 +63,23 @@ payload_estimate:
 caveats:
   - "model-callable, not matched: the offset between two zeros reconciles a matched source and is never one a slot matches, so it carries no coverage row"
   - "the offset is the height a ZERO on the source frame reads at on the target frame: add it to a source-frame elevation to read that elevation on the target frame"
+  - "a pair of NGVD29, NAVD88 and EGM2008 is answered from PROJ's grids (GEOID18 over CONUS, GEOID12B over Alaska, VERTCON 2 over CONUS, EGM2008 at 2.5 arcminutes joined to NAD83(2011) by the WGS 84 (G1674) Helmert step), downloaded once from the PROJ CDN and read from disk after; the record's source names the grid files, its region reads proj-grids and its uncertainty_m is null because the grids state none. A point the grids do not cover (Hawaii, the territories, NGVD29 in Alaska) falls to VDatum, and every tidal or Great Lakes frame is VDatum's"
+  - "on Cape Cod VERTCON 2 sits 0.06 to 0.11 m from VDatum's NGVD29 answer (VDatum states 0.05 to 0.07) and EGM2008 to NAVD88 sits 0.07 to 0.09 m above VDatum's, inside the 0.165 m VDatum states for NAVD88 to EGM2008, and VDatum's own two directions differ by 0.025 to 0.046 m"
   - "VDatum serves the US and its territories only, and each region is its own grid: the region that stands over the point is chosen for you and named on the record, and a point no region stands over refuses by name"
   - "a local PROJECT datum - the Columbia River Datum, a district's own station datum - is NOT a VDatum frame and refuses here; its offset is published on the survey that uses it"
   - "an EGM2008 conversion runs through the ellipsoid and is NOT exactly reversible: the two directions at one point differ by a few centimetres, and VDatum reports no uncertainty for it"
   - "the offset is a SHIFT and not a scaling: it is the same number whatever height it is applied to"
 
 docstring: |-
-  Offset in metres between two VERTICAL DATUMS at one point (NOAA VDatum) -> put a bed and a water level on one axis.
+  Offset in metres between two VERTICAL DATUMS at one point (PROJ grids for NGVD29, NAVD88, EGM2008; NOAA VDatum for tidal and other frames) -> put a bed and a water level on one axis.
 
   What it does:
-      Asks NOAA VDatum what a height of zero on ``from_frame`` reads at on
-      ``to_frame`` at this point. That number IS the offset between the two
-      frames there: ADD it to an elevation on ``from_frame`` to read the same
-      elevation on ``to_frame``. The frames each request pairs with, and the
-      geoid model each needs, are the service's own coupling and are sent for
-      you.
+      Gives what a height of zero on ``from_frame`` reads at on ``to_frame``
+      at this point, from local geoid grids for NGVD29, NAVD88 and EGM2008
+      (CONUS, Alaska) and from NOAA VDatum for tidal frames and elsewhere. That
+      number IS the offset between the two frames there: ADD it to an elevation
+      on ``from_frame`` to read the same elevation on ``to_frame``. VDatum's
+      frame pairing and geoid model are its own coupling and are sent for you.
 
   When to use:
       - A gauge publishes its datum on NGVD29 and the bed is painted on NAVD88,
@@ -117,7 +120,8 @@ docstring: |-
       - Composes WITH: ``fetch_ehydro_surveys``,
         ``fetch_dem``, ``fetch_copernicus_dem``, ``fetch_usgs_nwis_gauges``,
         ``fetch_noaa_coops_tides``.
-      - Upstream data source: NOAA VDatum (https://vdatum.noaa.gov/).
+      - Upstream data sources: NGS GEOID18/GEOID12B/VERTCON and NGA EGM2008 grids
+        through the PROJ CDN; NOAA VDatum (https://vdatum.noaa.gov/).
 
   Cache: ``ttl_class="semi-static-7d"``.
 
@@ -127,6 +131,6 @@ docstring: |-
         rejects as a frame pairing it does not serve there.
       - ``VDATUM_NO_COVERAGE``: the region's grids do not reach this point.
       - ``VDATUM_UPSTREAM_ERROR``: VDatum failed or answered with something that
-        is not its conversion record.
+        is not its conversion record, or a PROJ grid could not be downloaded.
 
   Tier-1 free. No API key.

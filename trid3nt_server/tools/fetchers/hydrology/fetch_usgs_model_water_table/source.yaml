@@ -3,7 +3,7 @@
 # as one EPSG:4326 raster of elevation in metres on NAVD88. The delegate hook
 # reads the head, bottom and layer masks from the archive the K row downloads
 # (one shared cached download), puts a model counted from another datum onto
-# NAVD88 through VDatum, warps the touched window nearest-neighbour and crops to
+# NAVD88 through PROJ's local VERTCON 2 grid, warps the touched window nearest-neighbour and crops to
 # cells whose centres fall in the bbox. It answers only where the model measures
 # every cell of the box, and measures exactly the cells fetch_usgs_model_thickness
 # does, so a run takes both from the model or neither. Ranked beside
@@ -100,7 +100,7 @@ docstring: |-
   **What it does:** Reads the starting head out of two published USGS
   groundwater-flow model archives - the Joint Base Cape Cod (JBCC)
   MODFLOW-2005 model (~400 ft cells; heads in feet on NGVD 29, put onto NAVD 88
-  with NOAA VDatum) and the Des Moines River alluvial-aquifer MODFLOW-6 model
+  with the VERTCON 2 grid) and the Des Moines River alluvial-aquifer MODFLOW-6 model
   (60 m cells; metres on NAVD 88) - and returns the head of each cell's topmost
   active layer in metres as one EPSG:4326 float32 COG over the bbox. It answers
   only where the model measures every cell of the box.

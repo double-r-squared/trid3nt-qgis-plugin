@@ -12,7 +12,6 @@ import io
 import re
 import zipfile
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -26,8 +25,6 @@ from trid3nt_server.tools.fetchers._router.errors import (
     RouterEmptyError,
     RouterInputError,
     RouterUpstreamError,
-    router_empty_error,
-    router_upstream_error,
 )
 from trid3nt_server.tools.fetchers._router.executors import animation_frames as EX
 from trid3nt_server.tools.fetchers._router.transport import TransportError
@@ -49,9 +46,18 @@ _SURVEY_FT = 1200.0 / 3937.0
 
 
 def _offset_field(lon: float, lat: float) -> float:
-    """A stand-in NGVD29 -> NAVD88 offset surface that is LINEAR in lon/lat, so
-    the four-corner bilinear reproduces it exactly at every cell centre."""
-    return -0.30 + 0.50 * (lon + 70.56) + 0.20 * (lat - 41.635)
+    """The NGVD29 -> NAVD88 offset the seam gives at a cell centre; the full VERTCON grid reads -0.2605 at
+    the ring's south-west corner and -0.2606 at its north-east one, so the field is checked against that band."""
+    from trid3nt_server.tools.fetchers import _proj_grids
+
+    value = _proj_grids.geodetic_offset("NGVD29", "NAVD88", lon, lat)
+    assert -0.265 < value < -0.255
+    return value
+
+
+@pytest.fixture(autouse=True)
+def _grids(proj_grids):
+    proj_grids("capecod")
 
 
 def _surface_no(layer_id: str) -> int:
@@ -71,14 +77,13 @@ class _R:
         self.data = data
 
 
-def _wire(monkeypatch, offsets: bool = True) -> dict[str, Any]:
+def _wire(monkeypatch) -> dict[str, Any]:
     """Both cache layers in memory, both archive reads on the excerpt zips (for
     the layers row AND the K row), and VDatum answering a known surface; the
     whole call runs offline."""
     jbcc = (_FIX / "jbcc_ring_excerpt.zip").read_bytes()
     dm = (_FIX / "dm_ring_excerpt.zip").read_bytes()
-    seen: dict[str, Any] = {"gets": 0, "inner": [], "metas": [], "uris": {},
-                            "asks": []}
+    seen: dict[str, Any] = {"gets": 0, "inner": [], "metas": [], "uris": {}}
 
     def _get_bytes(client, url, *, headers=None, params=None):
         seen["gets"] += 1
@@ -102,17 +107,10 @@ def _wire(monkeypatch, offsets: bool = True) -> dict[str, Any]:
         seen["uris"][uri] = data
         return _R(uri=uri, data=data)
 
-    def _vdatum(*, point, from_frame, to_frame):
-        seen["asks"].append((tuple(point), from_frame, to_frame))
-        return {"offset_m": _offset_field(*point), "region": "contiguous"}
-
     monkeypatch.setattr(MK, "get_bytes", _get_bytes)
     monkeypatch.setattr(ML, "get_bytes", _get_bytes)
     monkeypatch.setattr(cache_mod, "read_through", _inner_rt)
     monkeypatch.setattr(EX, "read_through", _outer_rt)
-    if offsets:
-        monkeypatch.setitem(
-            TOOL_REGISTRY, "fetch_vertical_datum_offset", SimpleNamespace(fn=_vdatum))
     return seen
 
 
@@ -235,16 +233,11 @@ def test_cape_cod_is_n_plus_one_frames_in_metres_on_navd88(monkeypatch):
     assert seen["gets"] == 1
     assert all(l.units == "m" and l.layer_type == "raster" for l in layers)
     frames = _frames(seen, layers)
-    # Every ask went to VDatum as NGVD29 -> NAVD88 at the AOI's four corners.
-    assert {a[1:] for a in seen["asks"]} == {("ngvd29", "navd88")}
-    corners = {(_CC_BBOX[0], _CC_BBOX[1]), (_CC_BBOX[2], _CC_BBOX[1]),
-               (_CC_BBOX[0], _CC_BBOX[3]), (_CC_BBOX[2], _CC_BBOX[3])}
-    assert {a[0] for a in seen["asks"]} == corners
     top, _ = frames[0]
     # The active cells of the excerpt window read a median of 10.95 m on NGVD29;
-    # less the stand-in offset (-0.30 m at the ring's centre) that is ~10.65 m,
+    # less the offset (-0.26 m across the ring) that is ~10.69 m,
     # and the frame's bbox crop moves the median by about a tenth.
-    assert float(np.ma.median(top)) == pytest.approx(10.65, abs=0.15)
+    assert float(np.ma.median(top)) == pytest.approx(10.69, abs=0.15)
 
 
 def test_cape_cod_hand_checked_cell(monkeypatch):
@@ -361,7 +354,6 @@ def test_des_moines_is_seven_planned_and_emitted_and_read_as_published(monkeypat
     # Layer 3 has no active cell over the ring but layer 4 does, so layer 3's bottom (4's top) is kept.
     assert sorted(_surface_no(l.layer_id) for l in layers) == [0, 1, 2, 3, 4, 5, 6]
     assert seen["gets"] == 1
-    assert seen["asks"] == [], "a NAVD88 model is read as published, no VDatum ask"
     frames = _frames(seen, layers)
     arr, tf = frames[0]
     r, c, lon, lat = _nearest(arr, tf, _DM_PROBE)
@@ -384,29 +376,29 @@ def test_des_moines_is_seven_planned_and_emitted_and_read_as_published(monkeypat
                 assert (upper.data[both] > lower.data[both]).all()
 
 
-def test_a_vdatum_gap_refuses_by_name_and_returns_no_frames(monkeypatch):
+def test_a_cell_no_grid_covers_refuses_by_name_and_returns_no_frames(monkeypatch):
     _wire(monkeypatch)
+    from trid3nt_server.tools.fetchers import _proj_grids
 
-    def _gap(*, point, from_frame, to_frame):
-        raise router_empty_error("VDATUM", "grids do not reach the point", "NO_COVERAGE")
+    def _gap(*args):
+        raise _proj_grids.NoGridCoverage("no PROJ grid covers the cell")
 
-    monkeypatch.setitem(
-        TOOL_REGISTRY, "fetch_vertical_datum_offset", SimpleNamespace(fn=_gap))
+    monkeypatch.setattr(_proj_grids, "geodetic_offset", _gap)
     with pytest.raises(RouterInputError) as ei:
         TOOL_REGISTRY["fetch_usgs_model_layers"].fn(bbox=_CC_BBOX)
     assert ei.value.error_code == "USGS_MODEL_LAYERS_INPUT_INVALID"
     assert "cannot be put on NAVD88" in str(ei.value)
-    assert "grids do not reach the point" in str(ei.value)
+    assert "no PROJ grid covers the cell" in str(ei.value)
 
 
-def test_a_vdatum_outage_is_retryable_upstream(monkeypatch):
+def test_a_grid_outage_is_retryable_upstream(monkeypatch):
     _wire(monkeypatch)
+    from trid3nt_server.tools.fetchers import _proj_grids
 
-    def _down(*, point, from_frame, to_frame):
-        raise router_upstream_error("VDATUM", "service down", True)
+    def _down(*args):
+        raise _proj_grids.DatumGridUnavailable("cdn down")
 
-    monkeypatch.setitem(
-        TOOL_REGISTRY, "fetch_vertical_datum_offset", SimpleNamespace(fn=_down))
+    monkeypatch.setattr(_proj_grids, "geodetic_offset", _down)
     with pytest.raises(RouterUpstreamError) as ei:
         TOOL_REGISTRY["fetch_usgs_model_layers"].fn(bbox=_CC_BBOX)
     assert ei.value.error_code == "USGS_MODEL_LAYERS_UPSTREAM_ERROR"
@@ -419,7 +411,6 @@ def test_an_aoi_with_no_active_cell_raises_the_typed_empty(monkeypatch):
         TOOL_REGISTRY["fetch_usgs_model_layers"].fn(bbox=_EMPTY_BBOX)
     assert ei.value.error_code == "USGS_MODEL_LAYERS_EMPTY"
     assert "every one of 7 frames" in str(ei.value)
-    assert seen["asks"] == []
 
 
 def test_a_failed_archive_download_is_a_typed_upstream_error(monkeypatch):

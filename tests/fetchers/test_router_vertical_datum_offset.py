@@ -15,7 +15,11 @@ import json
 
 import pytest
 
-from trid3nt_server.tools.fetchers._router.errors import RouterEmptyError, RouterInputError
+from trid3nt_server.tools.fetchers._router.errors import (
+    RouterEmptyError,
+    RouterInputError,
+    RouterUpstreamError,
+)
 from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 from trid3nt_server.tools.fetchers.ocean.fetch_vertical_datum_offset import hooks as vd
 
@@ -29,6 +33,13 @@ _DUCK = [-75.7467, 36.1833]
 @pytest.fixture(scope="module")
 def spec():
     return compose_specs_from_tree()["fetch_vertical_datum_offset"]
+
+
+@pytest.fixture
+def vdatum_only(monkeypatch):
+    """The grids answer nowhere, so every pair reaches the service."""
+    vd._local.cache_clear()
+    monkeypatch.setattr(vd, "_local", lambda *args: None)
 
 
 def _answered(**fields) -> list[bytes]:
@@ -52,7 +63,7 @@ def test_the_declared_frames_are_the_ones_the_table_serves(spec):
     assert set(spec.params["to_frame"].values) == declared
 
 
-def test_the_request_sends_each_frame_under_its_own_pairing(spec):
+def test_the_request_sends_each_frame_under_its_own_pairing(spec, vdatum_only):
     plan, = vd.build_request(spec, _params())
     assert plan.params["s_v_frame"] == "NGVD29"
     assert plan.params["s_h_frame"] == "NAD27"
@@ -64,33 +75,33 @@ def test_the_request_sends_each_frame_under_its_own_pairing(spec):
     assert plan.params["region"] == "westcoast"
 
 
-def test_a_tidal_river_stands_under_its_coastal_region_and_not_the_inland_grid(spec):
+def test_a_tidal_river_stands_under_its_coastal_region_and_not_the_inland_grid(spec, vdatum_only):
     # The contiguous grids carry no tidal surface, and VDatum refuses the
     # conversion there rather than answering short.
     plan, = vd.build_request(spec, _params())
     assert plan.params["region"] == "westcoast"
 
 
-def test_an_inland_point_stands_under_the_contiguous_grid(spec):
+def test_an_inland_point_stands_under_the_contiguous_grid(spec, vdatum_only):
     plan, = vd.build_request(spec, _params(point=[-104.9903, 39.7392]))
     assert plan.params["region"] == "contiguous"
 
 
-def test_a_point_no_region_stands_over_refuses_by_name(spec):
+def test_a_point_no_region_stands_over_refuses_by_name(spec, vdatum_only):
     with pytest.raises(RouterInputError) as caught:
         vd.build_request(spec, _params(point=[-150.0, 30.0]))
     assert caught.value.error_code == "VDATUM_INPUT_INVALID"
     assert "no NOAA VDatum region stands over" in str(caught.value)
 
 
-def test_egm2008_is_sent_under_the_ellipsoid_and_its_own_geoid(spec):
+def test_egm2008_is_sent_under_the_ellipsoid_and_its_own_geoid(spec, vdatum_only):
     plan, = vd.build_request(spec, _params(from_frame="navd88", to_frame="egm2008"))
     assert plan.params["t_h_frame"] == "WGS84_G1674"
     assert plan.params["t_v_geoid"] == "egm2008"
     assert plan.params["s_v_geoid"] == "geoid18"
 
 
-def test_the_converted_height_is_the_offset(spec):
+def test_the_converted_height_is_the_offset(spec, vdatum_only):
     found = vd.record(spec, _params(), _answered())
     assert found["offset_m"] == 1.057
     assert found["uncertainty_m"] == 0.053
@@ -99,19 +110,19 @@ def test_the_converted_height_is_the_offset(spec):
     assert found["source"] == "NOAA VDatum"
 
 
-def test_an_unreportable_uncertainty_is_none_and_not_zero(spec):
+def test_an_unreportable_uncertainty_is_none_and_not_zero(spec, vdatum_only):
     found = vd.record(spec, _params(), _answered(uncertainty="NaN"))
     assert found["uncertainty_m"] is None
 
 
-def test_an_uncovered_point_refuses_rather_than_reading_the_sentinel(spec):
+def test_an_uncovered_point_refuses_rather_than_reading_the_sentinel(spec, vdatum_only):
     with pytest.raises(RouterEmptyError) as caught:
         vd.record(spec, _params(), _answered(t_z="-999999"))
     assert caught.value.error_code == "VDATUM_NO_COVERAGE"
     assert "westcoast" in str(caught.value)
 
 
-def test_the_service_s_own_refusal_arrives_under_http_200(spec):
+def test_the_service_s_own_refusal_arrives_under_http_200(spec, vdatum_only):
     body = [json.dumps({"errorCode": 412, "message": "Uncaught error"}).encode()]
     with pytest.raises(RouterInputError) as caught:
         vd.record(spec, _params(), body)
@@ -119,7 +130,7 @@ def test_the_service_s_own_refusal_arrives_under_http_200(spec):
     assert "Uncaught error" in str(caught.value)
 
 
-def test_a_project_datum_is_not_a_frame_this_fetch_serves(spec):
+def test_a_project_datum_is_not_a_frame_this_fetch_serves(spec, vdatum_only):
     with pytest.raises(RouterInputError) as caught:
         vd.build_request(spec, _params(from_frame="CRD"))
     assert caught.value.error_code == "VDATUM_INPUT_INVALID"
@@ -182,3 +193,51 @@ def test_the_refusal_the_wrong_west_coast_pairing_gets_is_read_as_the_input_erro
     with pytest.raises(RouterInputError) as raised:
         vd.record(spec, asked, [json.dumps(body).encode("utf-8")])
     assert "IGS14 for Tidal" in str(raised.value)
+
+
+def test_two_geodetic_frames_are_answered_from_the_grids_with_no_request(spec, proj_grids):
+    proj_grids("capecod")
+    asked = _params(point=[-70.62, 41.59])
+    assert vd.build_request(spec, asked) == []
+    found = vd.record(spec, asked, [])
+    assert found["offset_m"] == pytest.approx(-0.2605, abs=5e-4)
+    assert found["uncertainty_m"] is None
+    assert found["from_frame"] == "NGVD29" and found["to_frame"] == "NAVD88"
+    assert found["source"] == "PROJ grids (us_noaa_vertcone.tif)"
+
+
+def test_where_no_grid_covers_the_point_the_pair_goes_to_the_service(spec, proj_grids):
+    # Alaska has no VERTCON; the service refuses it there by name, and says so.
+    proj_grids("alaska")
+    vd._local.cache_clear()
+    plan, = vd.build_request(spec, _params(point=[-160.505, 55.333]))
+    assert plan.params["region"] == "ak"
+
+
+def test_a_tidal_pair_never_asks_the_grids(spec, monkeypatch):
+    def fail(*args):
+        raise AssertionError("the grids were asked for a tidal frame")
+
+    monkeypatch.setattr(vd, "_local", fail)
+    plan, = vd.build_request(spec, _params(from_frame="mhw", to_frame="navd88"))
+    assert plan.params["s_v_frame"] == "MHW"
+
+
+def test_a_grid_that_cannot_be_fetched_is_a_retryable_upstream_error(spec, monkeypatch):
+    from trid3nt_server.tools.fetchers import _proj_grids
+
+    def down(*args):
+        raise _proj_grids.DatumGridUnavailable("cdn down")
+
+    monkeypatch.setattr(vd, "_local", down)
+    with pytest.raises(RouterUpstreamError) as caught:
+        vd.build_request(spec, _params())
+    assert caught.value.error_code == "VDATUM_UPSTREAM_ERROR" and caught.value.retryable
+
+
+def test_the_record_executor_runs_the_hook_when_no_request_is_planned(spec, proj_grids):
+    from trid3nt_server.tools.fetchers._router.executors import record as record_executor
+
+    proj_grids("capecod")
+    body = record_executor.execute(spec, _params(point=[-70.62, 41.59]))
+    assert json.loads(body)["offset_m"] == pytest.approx(-0.2605, abs=5e-4)

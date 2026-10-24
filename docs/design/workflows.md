@@ -629,8 +629,8 @@ so fgout frame 0 is the initial sea at the resolution the overland products are 
 fgmax and fgout grids on the finest cells that cover the `domain`, on the same nodes.
 
 The bed is the fetched finest surface at the `domain` (the BED row) over a deep rung over the whole grid (ETOPO 2022, or
-`deep_bed`), two topofiles, nothing merged; the deep rung's zero reaches the run's frame by the VDatum offset the workflow asks
-at the seed. `GEO_SEA_LEVEL` is the offset of the template's tidal datum (`SEA_LEVEL_DATUM`, MHW, as in the tutorial) on that
+`deep_bed`), two topofiles, nothing merged; the deep rung's zero reaches the run's frame by the offset the workflow asks at the seed (`fetch_vertical_datum_offset`:
+PROJ's local geoid grids for NAVD88, NGVD 29 and EGM2008 over CONUS and Alaska, VDatum elsewhere and for every tidal frame). `GEO_SEA_LEVEL` is the offset of the template's tidal datum (`SEA_LEVEL_DATUM`, MHW, as in the tutorial) on that
 frame, measured by the same row at the seed and never moved, unless the run states it. The rupture is the `SiftFault`
 composite: NOAA PMEL SIFT unit sources (`fetch_sift_unit_sources`) slipped by the tutorial's ASCE_SIFT_Region2 slips, each a
 Fault subfault, the dtopo grid being the one Clawpack's `create_dtopo_xy` lays (10 arcsec, 1 degree margin); no slip anywhere is

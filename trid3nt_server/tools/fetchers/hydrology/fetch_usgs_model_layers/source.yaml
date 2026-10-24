@@ -4,7 +4,7 @@
 # into n + 1 frames of the single grid covering the AOI; the bytes hook reads
 # the surface and the masks of the layers it bounds from the archive the K row downloads (one
 # shared cached download), warps the touched window and, for a model counted
-# from NGVD 29, adds NOAA VDatum's offset onto NAVD88. A fetcher with a row is
+# from NGVD 29, adds the VERTCON 2 offset onto NAVD88 per cell from PROJ's local grid. A fetcher with a row is
 # FOUND through its class, so the row carries no sibling corpus.
 schema_version: v1
 
@@ -85,7 +85,7 @@ coverage:
 caveats:
   - "Two published calibrated USGS MODFLOW model grids, nothing more: Cape Cod JBCC (2019 release, 32 layers) and Des Moines MF6 (2024 release, 6 layers). A bbox outside both raises USGS_MODEL_LAYERS_INPUT_INVALID naming them; there is no third grid and nothing is interpolated between grids."
   - "Frames are the model's own surfaces, top of layer 1 first and then the bottom of each layer in order (n layers give n + 1 frames); a layer's top is the previous frame. A surface is kept wherever any layer it bounds is active: the top of layer 1 by layer 1, the bottom of layer n by layer n or layer n + 1 (it is also n + 1's top), the last bottom by the last layer. An inactive layer stays unmeasured in fetch_usgs_model_k while the layers around it keep both their surfaces."
-  - "Datum: the Des Moines surfaces are metres above NAVD88 as published. The Cape Cod surfaces are feet above NGVD 29 as published (data release metadata sir2018-5139.xml) and are put onto NAVD88 here with NOAA VDatum's NGVD29 to NAVD88 offset at the AOI's four corners, bilinear between them (about -0.27 to -0.51 m across the grid). Where VDatum has no offset at a corner the call refuses by name rather than assuming zero."
+  - "Datum: the Des Moines surfaces are metres above NAVD88 as published. The Cape Cod surfaces are feet above NGVD 29 as published (data release metadata sir2018-5139.xml) and are put onto NAVD88 here with the NGS VERTCON 2 NGVD29 to NAVD88 offset read per cell centre from PROJ's local grid (no network call once the grid file is cached). A measured cell the grid does not cover refuses by name rather than assuming zero."
   - "A model layer's top and bottom, not a land surface or a measured contact: layer tops and bottoms are the calibrated models' own discretisation. Nearest-neighbour onto EPSG:4326; a layer with no active cell over the AOI is skipped and recorded, and if no surface covers the call raises USGS_MODEL_LAYERS_EMPTY."
 
 docstring: |-
@@ -95,7 +95,7 @@ docstring: |-
   **What it does:** Reads the layer geometry out of two published USGS
   groundwater-flow model archives - the Joint Base Cape Cod (JBCC)
   MODFLOW-2005 model (32 layers, ~400 ft cells; surfaces published in feet on
-  NGVD 29, converted to metres and put onto NAVD88 with NOAA VDatum) and the
+  NGVD 29, converted to metres and put onto NAVD88 with the VERTCON 2 grid) and the
   Des Moines River alluvial-aquifer MODFLOW-6 model (6 layers, 60 m cells;
   surfaces published in metres on NAVD88) - for the requested bbox, keeps each
   surface wherever a layer it bounds is ACTIVE (the bottom of layer n where n or n + 1 is), warps NEAREST-neighbour onto an

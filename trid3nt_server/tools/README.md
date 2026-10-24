@@ -31,6 +31,7 @@ the cache shim are the two seams they all pass through.
 | --- | --- |
 | `fetchers/_fetch_common.py` | The typed fetch errors and bbox helpers every fetcher shares. |
 | `fetchers/_public_s3.py` | Anonymous access to public AWS S3 buckets, independent of the caller's credentials. |
+| `fetchers/_proj_grids.py` | The offline vertical seam: NGVD29, NAVD88 and EGM2008 heights converted per point on PROJ grids cached once from the PROJ CDN. |
 | `fetchers/us_states.py` | US state and NWS area-code resolution, shared by the alert fetchers. |
 | `fetchers/_router/router.py` | The router engine: a declared row plus the ask to a request, a response and a typed layer. |
 | `fetchers/_router/spec.py` | The source-spec loader - schema validation, co-located corpus pickup, tree walk. |

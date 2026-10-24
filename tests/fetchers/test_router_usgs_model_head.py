@@ -1,7 +1,7 @@
 """``fetch_usgs_model_water_table`` and ``fetch_usgs_model_thickness``: the model's own head as an elevation, and over its layer bottoms.
 
 Built from the real-archive excerpt zips offline: each value against the arrays read straight off the
-excerpt, the head of the topmost active layer, the Des Moines head multiplier, the VDatum shift of the Cape Cod
+excerpt, the head of the topmost active layer, the Des Moines head multiplier, the grid shift of the Cape Cod
 head, the one mask both rows share, the whole-box answer, and the outside-grid and straddle behaviour."""
 
 from __future__ import annotations
@@ -9,7 +9,6 @@ from __future__ import annotations
 import io
 import zipfile
 from pathlib import Path
-from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -39,12 +38,11 @@ class _R:
         self.data = data
 
 
-def _wire(monkeypatch, offset=None):
-    """Both cache layers in memory and both archive reads on the excerpt zips; the datum service answers ``offset`` metres
-    for every point, and asks fail the test where it is None."""
+def _wire(monkeypatch):
+    """Both cache layers in memory and both archive reads on the excerpt zips; the datum grids are the Cape Cod excerpts."""
     zips = {"631405ded34e36012efa3476": (_FIX / "jbcc_ring_excerpt.zip").read_bytes(),
             "6601d849d34e64ff1548e2ad": (_FIX / "dm_ring_excerpt.zip").read_bytes()}
-    seen = {"gets": 0, "uris": {}, "asked": []}
+    seen = {"gets": 0, "uris": {}}
 
     def _get_bytes(client, url, *, headers=None, params=None):
         seen["gets"] += 1
@@ -67,13 +65,6 @@ def _wire(monkeypatch, offset=None):
     monkeypatch.setattr(MT, "get_bytes", _get_bytes)
     monkeypatch.setattr(cache_mod, "read_through", _inner_rt)
     monkeypatch.setattr(router, "read_through", _outer_rt)
-    def _datum(**kw):
-        seen["asked"].append(kw)
-        if offset is None:
-            pytest.fail("this row states a difference or a metre-NAVD88 head; no datum is asked")
-        return {"offset_m": offset}
-
-    monkeypatch.setitem(TOOL_REGISTRY, "fetch_vertical_datum_offset", SimpleNamespace(fn=_datum))
     return seen
 
 
@@ -85,8 +76,8 @@ def _read(cog: bytes):
         return ds.read(1, masked=True), ds.transform
 
 
-def _call(monkeypatch, name, bbox, offset=None):
-    seen = _wire(monkeypatch, offset)
+def _call(monkeypatch, name, bbox):
+    seen = _wire(monkeypatch)
     layer = TOOL_REGISTRY[name].fn(bbox=bbox)
     return layer, _read(seen["uris"][layer.uri]), seen
 
@@ -144,6 +135,11 @@ def _near(cube, row, col):
     return [cube[row + dr, col + dc] for dr in (-1, 0, 1) for dc in (-1, 0, 1)]
 
 
+@pytest.fixture(autouse=True)
+def _grids(proj_grids):
+    proj_grids("capecod")
+
+
 @pytest.mark.parametrize("name", list(_ROWS))
 def test_the_rows_are_registered_and_state_their_quantity(name):
     spec = reg.get_spec(name)
@@ -172,34 +168,41 @@ def test_the_rows_state_a_finer_cell_than_the_zell_sanford_rows():
     assert reg.get_spec("fetch_usgs_model_thickness").coverage[0].resolution_m < zell
 
 
-def _check_cells(arr, tf, want, arch, slack=1e-3):
-    """Each unmasked output cell is the archive value at the cell holding its centre or that cell's neighbour; the share exact."""
+def _check_cells(arr, tf, want, arch, slack=1e-3, shift=False):
+    """Each unmasked output cell is the archive value at the cell holding its centre or that cell's neighbour (plus the
+    NGVD29 -> NAVD88 grid offset at its centre when ``shift``); the share exact."""
+    from trid3nt_server.tools.fetchers import _proj_grids
+
     exact = total = 0
+    lons, lats = np.meshgrid(tf.c + (np.arange(arr.shape[1]) + 0.5) * tf.a,
+                             tf.f + (np.arange(arr.shape[0]) + 0.5) * tf.e)
+    adds = (_proj_grids.geodetic_offset("NGVD29", "NAVD88", lons.ravel(), lats.ravel()).reshape(lons.shape)
+            if shift else np.zeros(lons.shape))
     for r in range(arr.shape[0]):
         for c in range(arr.shape[1]):
             if np.ma.is_masked(arr[r, c]):
                 continue
             row, col = _cell_of(arch, tf, arr, r, c)
-            assert any(float(arr[r, c]) == pytest.approx(v, abs=slack) for v in _near(want, row, col))
-            exact += float(arr[r, c]) == pytest.approx(want[row, col], abs=slack)
+            add = adds[r, c]
+            assert any(float(arr[r, c]) == pytest.approx(v + add, abs=slack) for v in _near(want, row, col))
+            exact += float(arr[r, c]) == pytest.approx(want[row, col] + add, abs=slack)
             total += 1
     return exact, total
 
 
-@pytest.mark.parametrize(("key", "bbox", "offset"), [("jbcc", _CC_BBOX, -0.34), ("des_moines", _DM_BBOX, None)])
-def test_every_cell_is_the_archives_head_and_thickness(monkeypatch, key, bbox, offset):
-    """The water table is the head of the topmost active layer in metres on NAVD88 (Cape Cod through the datum service, Des
+@pytest.mark.parametrize(("key", "bbox", "shifted"), [("jbcc", _CC_BBOX, True), ("des_moines", _DM_BBOX, False)])
+def test_every_cell_is_the_archives_head_and_thickness(monkeypatch, key, bbox, shifted):
+    """The water table is the head of the topmost active layer in metres on NAVD88 (Cape Cod through the datum grids, Des
     Moines as published); the thickness is the head less the deepest active bottom, in the model's datum."""
-    layer, (head, tf), seen = _call(monkeypatch, "fetch_usgs_model_water_table", bbox, offset)
+    layer, (head, tf), seen = _call(monkeypatch, "fetch_usgs_model_water_table", bbox)
     assert layer.units == "m" and layer.quantity == "water_table_elevation"
-    layer, (thick, tft), _ = _call(monkeypatch, "fetch_usgs_model_thickness", bbox, offset)
+    layer, (thick, tft), _ = _call(monkeypatch, "fetch_usgs_model_thickness", bbox)
     assert layer.units == "m" and layer.quantity == "aquifer_saturated_thickness"
     arch = grid.ARCHIVES[key]
     want_head, want_thick, _ = _differences(key)
-    exact, total = _check_cells(head, tf, want_head + (offset or 0.0), arch)
+    exact, total = _check_cells(head, tf, want_head, arch, shift=shifted)
     exact_t, total_t = _check_cells(thick, tft, want_thick, arch)
     assert total > 100 and exact / total > 0.85 and exact_t / total_t > 0.85
-    assert bool(seen["asked"]) is (offset is not None)
 
 
 def test_des_moines_head_carries_the_multiplier_its_initial_condition_states(monkeypatch):
@@ -216,14 +219,14 @@ def test_des_moines_head_carries_the_multiplier_its_initial_condition_states(mon
 
 
 def test_jbcc_head_is_start_heads_in_feet_taken_to_metres_and_onto_navd88(monkeypatch):
-    _, (head, tf), seen = _call(monkeypatch, "fetch_usgs_model_water_table", _CC_BBOX, -0.34)
+    _, (head, tf), _ = _call(monkeypatch, "fetch_usgs_model_water_table", _CC_BBOX)
     arch, heads, masks, _ = _arrays("jbcc")
     r, c = next((r, c) for r in range(head.shape[0]) for c in range(head.shape[1])
                 if not np.ma.is_masked(head[r, c]))
     row, col = _cell_of(arch, tf, head, r, c)
-    assert any(float(head[r, c]) == pytest.approx(heads[0][a, b] * _SURVEY_FT - 0.34, abs=1e-3)
+    # The full VERTCON grid reads -0.2605 m at the ring's south-west corner.
+    assert any(float(head[r, c]) == pytest.approx(heads[0][a, b] * _SURVEY_FT - 0.26, abs=0.01)
                for a, b in [(row + dr, col + dc) for dr in (-1, 0, 1) for dc in (-1, 0, 1)])
-    assert len(seen["asked"]) == 4, "the offset is asked at the box's four corners"
 
 
 def test_a_cell_whose_layer_1_is_inactive_takes_the_head_of_the_topmost_active_layer(monkeypatch):

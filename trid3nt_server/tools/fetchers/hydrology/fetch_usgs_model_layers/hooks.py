@@ -7,7 +7,7 @@ layer n + 1 (it is also the top of n + 1), the last bottom by the last layer.
 A surface is kept wherever any layer it bounds is active, so an inactive layer
 stays unmeasured while the layers around it keep both their surfaces. Every frame is
 metres on NAVD88: a model counted from another datum is put onto NAVD88 through
-NOAA VDatum, refusing where the service has no offset."""
+the local PROJ VERTCON grid per cell, refusing where it has no grid."""
 
 from __future__ import annotations
 
