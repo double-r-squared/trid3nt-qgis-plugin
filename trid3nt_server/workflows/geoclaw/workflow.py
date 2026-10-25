@@ -31,6 +31,7 @@ from trid3nt_server.workflows.runtime.workflow import EVENT_TIME
 from trid3nt_server.workflows.solver.staging import discard_run
 
 from .authoring import check_staged_run, grid_keywords, serialize
+from .authoring.restart import Previous, check_matches, checkpoint_outputs, previous_run
 from .errors import GeoclawError
 from .modules import GEO
 from .modules.module import rupture_end
@@ -48,6 +49,9 @@ _DISPATCH = "trid3nt_server.workflows.geoclaw.engine.solve_case"
 
 #: What the worker uploads from the run directory: the fixed grids' products, the gauges and its verdict.
 _OUTPUTS = ["fgmax*", "fgout*", "gauge*", "geoclaw_metrics.json"]
+
+#: The keyword whose value names the checkpoint a run restarts from, by the URI of its file in the runs bucket.
+_RESTART = "CLAW_RESTART_FILE"
 
 #: The names the workflow writes into the run itself, as the data rows it declares: composites read them, no caller states them.
 _PRODUCED = ("deep_bed_offset", "finite_fault", "sift_unit_sources", "storm_tracks")
@@ -74,21 +78,26 @@ def _results(sheet: Sheet) -> list[str]:
     return found
 
 
-async def stage_sheet(*, sheet: Sheet, run_tag: str, prefix: str, name: str) -> dict[str, Any]:
+async def stage_sheet(*, sheet: Sheet, run_tag: str, prefix: str, name: str,
+                      previous: Previous | None = None) -> dict[str, Any]:
     """A filled sheet written as the run directory, checked against itself and staged -> the staged run.
-    The worker reads only a case's results, so the case section is just those."""
+    The worker reads only a case's results, so the case section is just those. A run restarting from a checkpoint
+    is held to the set that checkpoint was cut on, and the checkpoint and the records it appends to are staged with it."""
     from ..solver.staging import new_rundir, stage_run
 
     rundir = new_rundir(run_tag, stem="geoclaw")
     written = await asyncio.to_thread(serialize, sheet, rundir)
     results = _results(sheet)
+    if previous is not None:
+        await asyncio.to_thread(check_matches, previous, rundir, float(sheet.stated()["CLAW_TFINAL"]))
 
     def check(directory: Any, **_: Any) -> Any:
         return check_staged_run(directory, sheet=sheet, written=written["written"])
 
     staged = await stage_run(
-        rundir, run_tag, module="geoclaw", steering="claw.data", results=results, outputs=_OUTPUTS,
-        mesh_inputs=[], prefix=prefix, sheet=sheet.state(), server_facts={"name": name},
+        rundir, run_tag, module="geoclaw", steering="claw.data", results=results,
+        outputs=[*_OUTPUTS, *checkpoint_outputs(sheet.stated())],
+        mesh_inputs=list(previous.inputs) if previous else [], prefix=prefix, sheet=sheet.state(), server_facts={"name": name},
         result_basename=results[0], check=check, case={"results": results})
     return {**staged, "name": name}
 
@@ -240,6 +249,22 @@ class GeoclawWorkflow(Workflow):
                                for key, value in entry["kwargs"].items()}
         return asked
 
+    def _restarted(self, keywords: dict[str, Any]) -> Previous | None:
+        """The checkpoint the run names, taken off the keywords and replaced by the engine's own pair: CLAW_RESTART true and
+        CLAW_RESTART_FILE the staged file's bare name. A run that states CLAW_RESTART itself is refused: naming the file is the restart."""
+        for raw in list(keywords):
+            body, identifier = identify_on([self.steering], raw)
+            if body is self.steering and identifier == "CLAW_RESTART":
+                raise GeoclawError(f"{raw} is stated: name the checkpoint with {_RESTART} (the URI of its file in the runs "
+                                   "bucket) and the run restarts from it.", error_code="GEOCLAW_RESTART_STATED")
+        for raw in list(keywords):
+            body, identifier = identify_on([self.steering], raw)
+            if body is self.steering and identifier == _RESTART:
+                previous = previous_run(str(keywords.pop(raw)))
+                keywords.update({"CLAW_RESTART": True, _RESTART: previous.name})
+                return previous
+        return None
+
     def _rise_shaped(self, keywords: dict[str, Any]) -> dict[str, Any]:
         """The run's keywords, a kinematic Fault or FiniteFault that states no rise_shape taking the template's RISE_SHAPE."""
         shape = self._states("RISE_SHAPE", None)
@@ -261,6 +286,7 @@ class GeoclawWorkflow(Workflow):
         slots = self._slots()
         domain = slots[DOMAIN]
         keywords = self._rise_shaped(dict(state.keywords))
+        previous = await asyncio.to_thread(self._restarted, keywords)
         own, _ = _floor(self.steering, keywords)
         emitter = current_emitter()
         begin_substeps(emitter, 4 + ("mesh" not in run))
@@ -295,7 +321,7 @@ class GeoclawWorkflow(Workflow):
         async def write(sheet: Sheet) -> None:
             # A card edit fills the sheet again, so the staged run is the one the last fill wrote.
             staged.clear()
-            staged.update(await stage_sheet(sheet=sheet, run_tag=run_tag, prefix=prefix, name=name))
+            staged.update(await stage_sheet(sheet=sheet, run_tag=run_tag, prefix=prefix, name=name, previous=previous))
 
         try:
             await stage("sheet", fill_sheet, steering=self.steering,
@@ -314,8 +340,11 @@ class GeoclawWorkflow(Workflow):
         from trid3nt_server.inputs.run_notes import journal_note
 
         mass = (solved.get("metrics") or {}).get("initial_mass")
-        journal_note(f"Total mass at initial time {mass}" if mass is not None else
-                     "the engine printed no Total mass at initial time")
+        if previous is not None:
+            journal_note(f"restarted from {previous.uri} at t={previous.time:g} s; the engine prints no initial mass on a restart")
+        else:
+            journal_note(f"Total mass at initial time {mass}" if mass is not None else
+                         "the engine printed no Total mass at initial time")
         outputs, captions = self._outputs()
         # A primitive's point, line and band name run inputs; each is read here and rejoins its primitive at publish.
         anchors = [{"at": await given(p.at), "along": await given(p.along), "within": await given(p.within)} for p in outputs]

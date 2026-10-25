@@ -386,13 +386,20 @@ own journal; when none of them answered, the row refuses typed.
 
 ## Continuing a run - an input, not a derivation
 
-A run that carries another on NAMES it: `continue_from=<run id>` is a control on
-every template's wire, like `keywords` or `restart_clean`. The skeleton reads the
-file that run's solve wrote off its own journal line (`solved`), and the step
-that opens the water stages it as the module's previous computation; the fill
-states it and the journal line says which run was continued. A run id whose line
-names no solved result refuses by name (`CONTINUATION_UNSOLVED`). Changing a
-value and running again is simply a new call with that value.
+A run that carries another on NAMES the file it picks up from, as a keyword on the module whose engine restarts: TELEMAC's
+`PREVIOUS_COMPUTATION_FILE` holds the URI of the previous run's result file, GeoClaw's `CLAW_RESTART_FILE` the URI of one
+checkpoint file (`fort.chkNNNNN`, `fort.chkaaaaa` or `fort.chkbbbbb`) in the previous run's folder of the runs bucket. The
+workflow takes the keyword off the floor, stages the file in the run directory and states the engine's own keywords with the
+staged name; the journal says which file was continued. Changing a value and running again is simply a new call with that value.
+
+GeoClaw restarts only from a checkpoint a run wrote because it stated `CLAW_CHECKPT_STYLE` (the worker then uploads
+`fort.chk*`, `fort.tck*` and the `.data` set beside the products). The named run must be a GeoClaw run (its folder holds
+`geoclaw_metrics.json`) that ended at the checkpoint's instant, since the engine appends to the gauge records and the fixed-grid
+records, which are staged with the checkpoint; the new set is held to the previous run's wherever the engine restores from the
+checkpoint (grid, ratios, clock, bed, seafloor motion, constants, storm) and the final time, output times and checkpoints may
+change. Each refusal is typed (`GEOCLAW_RESTART_*`). The fixed-grid maxima are restored from the checkpoint, so a continued run's
+`fgmax` covers the whole history. A restart prints no initial-mass line, so the worker demands one only of a run whose claw.data
+states `restart` false.
 
 A failure NAMES why. Every typed step failure carries a code and a sentence, and
 an exception that stringifies to nothing is named by its type (`said`) rather
@@ -659,7 +666,7 @@ frame. A `FiniteFault` stating `event_id` (and a `finite_fault` name) has the wo
 way it fetches SIFT unit sources; a record the run already holds under that name wins and nothing is fetched. `SlabFault` is a rupture the user states on the real subduction interface: the record `fetch_slab_geometry` reads from USGS Slab2 (one tarball downloaded once through the cache; depth, strike and dip per zone, positive-down depth) and a rectangle - an anchor point (top-edge midpoint or centre), `length` along strike, `width` down dip, the subfault size, `rake` and `slip` - none defaulted, the lengths required to divide into whole subfaults. Subfaults are walked along the interface in half-subfault steps and each centre reads depth, strike and dip from the slab at that centre, so a planar subfault is an approximation of a curved surface; a place Slab2 masks or two zones hold refuses (the nearest node named, the zone to state). It is static, and refuses beside any other rupture. `MomentTensorFault` is a magnitude-only source: the record `fetch_moment_tensor` reads (every ComCat moment-tensor product of the event, none preferred; the centroid is the product's derived origin) and four picks the user states - the solution by code, the nodal plane (1 or 2), the published scaling relation by name and the placement (the published centroid, or the depth `fetch_slab_geometry` reads at that centroid). The relation is a pure helper (`workflows/geoclaw/helpers/scaling.py`), one paper table each, cited by table and page; only Wells and Coppersmith 1994 Table 2A (subsurface length and downdip width, by slip type) is built, since the Strasser 2010 and Blaser 2010 papers were not obtainable. Length and width come from Mw at the scalar moment; a magnitude outside the regression's fitted range refuses. The one subfault carries the plane's strike, dip and rake and slip M0 / (mu L W) with Clawpack's SubFault rigidity. It is static and refuses beside any other rupture. `InitialSurface` opens the sea at a stated raster instead (a qinit file of type 4). The workflow stages only the
 case section the worker reads (`stage_run(case=)`), publishes the module table through `publish_reads`, and its record is the
 outline of the fixed grids. The verification twin (`geoclaw_tsunami_zero_fetch`) runs Thacker's oscillating paraboloid, stated
-and synthetic, against its analytic solution.
+and synthetic, against its analytic solution; `geoclaw_tsunami_continued` runs it in two legs, the second restarted from the first's checkpoint.
 
 ### The GeoClaw storm-surge template: `geoclaw_storm_surge`
 

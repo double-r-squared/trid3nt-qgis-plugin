@@ -100,6 +100,9 @@ assert E._PARSER_VERSION == 'geoclaw-case-1', E._PARSER_VERSION;\
 assert sorted(E._DISPATCH) == ['case'];\
 ok = E._verdict(' Total mass at initial time:    1.0575487000653194E+017\n Done integrating to time    32400.000000000000\n', 32400.0, [], 0);\
 assert ok['correct_end'] and ok['initial_mass'] == 1.0575487000653194e17, ok;\
+rest = E._verdict(' Done integrating to time    600.0\n', 600.0, [], 0, True);\
+assert rest['correct_end'], rest;\
+assert not E._verdict(' Done integrating to time    600.0\n', 600.0, [], 0)['correct_end'];\
 ref = E._verdict(' ERROR:  NetCDF library was not included in this build\n', 32400.0, [], 0);\
 assert not ref['correct_end'] and 'NetCDF' in ref['error'], ref;\
 print('geoclaw worker OK: parser', E._PARSER_VERSION, '| verdict sees success and refusal')"

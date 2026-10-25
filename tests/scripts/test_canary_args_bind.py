@@ -42,11 +42,11 @@ def test_every_arg_a_call_before_a_canary_states_is_one_its_tool_declares(name):
 
 
 def _named(args):
-    """Every ``"$" + name`` placeholder anywhere in ``args``."""
+    """Every ``"$" + name`` placeholder anywhere in ``args``; ``name.part`` names the call ``name``."""
     from dev.testing.live_run import PLACEHOLDER
 
     if isinstance(args, str):
-        return {args[len(PLACEHOLDER):]} if args.startswith(PLACEHOLDER) else set()
+        return {args[len(PLACEHOLDER):].split(".")[0]} if args.startswith(PLACEHOLDER) else set()
     if isinstance(args, dict):
         args = list(args.values())
     if isinstance(args, (list, tuple)):

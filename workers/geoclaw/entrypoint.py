@@ -132,6 +132,20 @@ def _staged_tfinal(claw_data: Path) -> float:
         "directory is not a run this worker can check.")
 
 
+def _staged_restart(claw_data: Path) -> bool:
+    """Whether the STAGED claw.data restarts from a checkpoint (``T =: restart``).
+    A restart prints no initial-mass line, so the verdict reads it to know which
+    run it is judging; an unreadable line is a fresh run."""
+    for line in claw_data.read_text(encoding="utf-8", errors="replace").splitlines():
+        if "=:" not in line:
+            continue
+        value, _, name = line.partition("=:")
+        token = name.split("#", 1)[0].strip().split()
+        if token and token[0] == "restart":
+            return value.strip().upper().startswith(("T", ".T"))
+    return False
+
+
 def _parse_stdout(stdout: str) -> dict[str, str | float | None]:
     """The three facts GeoClaw prints itself: its refusal (if any), the mass at
     t0 and the time it reports having integrated to - read off stdout because a
@@ -156,9 +170,9 @@ def _parse_stdout(stdout: str) -> dict[str, str | float | None]:
 
 
 def _verdict(stdout: str, tfinal: float, missing: list[str],
-             exit_code: int) -> dict[str, Any]:
+             exit_code: int, restart: bool = False) -> dict[str, Any]:
     """What the run actually did, in one dict: success means GeoClaw's own
-    refusal lines are absent, it reported the initial mass, it reached the
+    refusal lines are absent, it reported the initial mass (a restart prints none), it reached the
     staged tfinal and every declared result exists - an exit code alone proves
     nothing, because GeoClaw's ``stop`` exits 0 too."""
     parsed = _parse_stdout(stdout)
@@ -176,7 +190,7 @@ def _verdict(stdout: str, tfinal: float, missing: list[str],
     elif exit_code != 0:
         metrics["error_code"] = "GEOCLAW_SOLVE_FAILED"
         metrics["error"] = f"xgeoclaw exited with code {exit_code}"
-    elif mass is None:
+    elif mass is None and not restart:
         metrics["error_code"] = "GEOCLAW_MASS_LINE_MISSING"
         metrics["error"] = ("xgeoclaw exited cleanly but stdout never printed "
                             "'Total mass at initial time:'")
@@ -255,7 +269,8 @@ def _solve_case(data_dir: Path, body: Any, run_id: str | None) -> dict[str, Any]
     LOG.info("geoclaw case tfinal=%s results=%s", tfinal, results)
     code, stdout = _run_xgeoclaw(data_dir)
     missing = [r for r in results if not (data_dir / r).exists()]
-    metrics = _verdict(stdout, tfinal, missing, code)
+    metrics = _verdict(stdout, tfinal, missing, code,
+                       _staged_restart(data_dir / "claw.data"))
     # The raw engine code rides verbatim: the verdict never rests on it alone
     # (a plain-Fortran stop exits 0), so a reader can see both facts together.
     metrics["engine_exit_code"] = code
