@@ -67,6 +67,10 @@ _MODULE = Input(name="module", type=str, desc=(
 _CORES = Input(name="cores", type=int, desc=(
     "The MPI process count the Boussinesq executable runs under (PETSc's linear solves use them); a whole number from 1 "
     "to this box's cores, unstated 1. Shallow-water runs take none.")).stated()
+_THREADS = Input(name="threads", type=int, desc=(
+    "The OpenMP thread count of each process of the Boussinesq executable (OMP_NUM_THREADS); a whole number from 1 to this "
+    "box's cores, unstated the executable's own default (every core per process, so several processes oversubscribe the box). "
+    "Shallow-water runs take none.")).stated()
 
 
 def _floor(steering: type, keywords: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
@@ -89,7 +93,8 @@ def _results(sheet: Sheet) -> list[str]:
 
 
 async def stage_sheet(*, sheet: Sheet, run_tag: str, prefix: str, name: str,
-                      previous: Previous | None = None, cores: int = 1) -> dict[str, Any]:
+                      previous: Previous | None = None, cores: int = 1,
+                      threads: int | None = None) -> dict[str, Any]:
     """A filled sheet written as the run directory, checked against itself and staged -> the staged run.
     The case section names the module whose executable the worker runs, the process count where it is more than one, and the
     results the worker must find. A run restarting from a checkpoint
@@ -110,7 +115,8 @@ async def stage_sheet(*, sheet: Sheet, run_tag: str, prefix: str, name: str,
         outputs=[*_OUTPUTS, *checkpoint_outputs(sheet.stated())],
         mesh_inputs=list(previous.inputs) if previous else [], prefix=prefix, sheet=sheet.state(), server_facts={"name": name},
         result_basename=results[0], check=check,
-        case={"module": sheet.module, **({"cores": int(cores)} if int(cores) > 1 else {}), "results": results})
+        case={"module": sheet.module, **({"cores": int(cores)} if int(cores) > 1 else {}),
+              **({"threads": int(threads)} if threads is not None else {}), "results": results})
     return {**staged, "name": name}
 
 
@@ -213,7 +219,7 @@ class GeoclawWorkflow(Workflow):
         from trid3nt_server.tools.mesh import recipe as asks
 
         named = set(asks.input_names(self.template.MESH))
-        return (tuple(row for row in asks.INPUTS if row.name in named) + (EVENT_TIME, _MODULE, _CORES) + super().seated())
+        return (tuple(row for row in asks.INPUTS if row.name in named) + (EVENT_TIME, _MODULE, _CORES, _THREADS) + super().seated())
 
     def input(self, name: str) -> Any:
         """The template's own inputs first, then the keyword a name spells on the module."""
@@ -278,6 +284,14 @@ class GeoclawWorkflow(Workflow):
             if not 1 <= int(stated) <= (os.cpu_count() or 1):
                 raise GeoclawError(f"{_CORES.name} {stated!r} is outside 1 to this box's {os.cpu_count()} cores.",
                                    error_code="GEOCLAW_CORES_OUT_OF_RANGE")
+        threads = run.get(_THREADS.name)
+        if threads is not None:
+            if module != "geoclaw_bouss":
+                raise GeoclawError(f"{_THREADS.name} is stated for the module {module}, whose executable is not compiled for "
+                                   "OpenMP: only geoclaw_bouss takes threads.", error_code="GEOCLAW_THREADS_UNUSED")
+            if not 1 <= int(threads) <= (os.cpu_count() or 1):
+                raise GeoclawError(f"{_THREADS.name} {threads!r} is outside 1 to this box's {os.cpu_count()} cores.",
+                                   error_code="GEOCLAW_THREADS_OUT_OF_RANGE")
         return steering
 
     def _restarted(self, keywords: dict[str, Any], steering: type) -> Previous | None:
@@ -354,7 +368,8 @@ class GeoclawWorkflow(Workflow):
             # A card edit fills the sheet again, so the staged run is the one the last fill wrote.
             staged.clear()
             staged.update(await stage_sheet(sheet=sheet, run_tag=run_tag, prefix=prefix, name=name, previous=previous,
-                                            cores=int(run.get(_CORES.name) or 1)))
+                                            cores=int(run.get(_CORES.name) or 1),
+                                            threads=int(run[_THREADS.name]) if run.get(_THREADS.name) is not None else None))
 
         try:
             await stage("sheet", fill_sheet, steering=steering,

@@ -76,8 +76,8 @@ def grid_keywords(artifact: Any, stated: Iterable[str] = (), rupture_end: float 
     if facts["flagregions"]:
         keywords["FLAGREGION_FLAGREGIONS"] = [
             [r["name"], r["minlevel"], r["maxlevel"], r["t1"],
-             max(r["t2"], rupture_end) if r.get("with_rupture") and rupture_end is not None else r["t2"], 1,
-             [r["extent"][0], r["extent"][2], r["extent"][1], r["extent"][3]]]
+             max(r["t2"], rupture_end) if r.get("with_rupture") and rupture_end is not None else r["t2"],
+             *((2, dict(r["ruled"])) if "ruled" in r else (1, [r["extent"][0], r["extent"][2], r["extent"][1], r["extent"][3]]))]
             for r in facts["flagregions"]]
     return keywords
 

@@ -154,6 +154,9 @@ def _gauges(path: Path, work: Path, _rundata: Any) -> Any:
 
 def _flagregions(path: Path, work: Path, rundata: Any) -> Any:
     rundata.flagregiondata.read(str(path))
+    for region in rundata.flagregiondata.flagregions:
+        if region.spatial_region_type == 2:
+            region.read_spatial_region(str(work / region.spatial_region_file))
     return rundata.flagregiondata.flagregions
 
 
@@ -205,8 +208,16 @@ def _record(obj: Any, fields: Sequence[str], stated: Any) -> list[Any]:
     """A grid object as the record the sheet states: ``points`` is the geometry the record named, read off the attributes it named."""
     return [{name: getattr(obj, name) for name in item}
             if field == "points" and isinstance(item, Mapping)
+            else _ruled(obj) if field == "spatial_region" and isinstance(item, Mapping)
             else getattr(obj, field)
             for field, item in zip(fields, stated)]
+
+
+def _ruled(region: Any) -> dict[str, Any]:
+    """A flagregion's ruled rectangle as the record states it, read back off the file the region names."""
+    rule = region.spatial_region
+    return {"ixy": rule.ixy, "method": rule.method, "s": rule.s.tolist(), "lower": rule.lower.tolist(),
+            "upper": rule.upper.tolist(), "filename": region.spatial_region_file}
 
 
 _READERS: dict[str, Any] = {

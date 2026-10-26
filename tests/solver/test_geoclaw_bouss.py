@@ -91,13 +91,23 @@ def test_the_worker_names_the_executable_by_the_module_and_the_process_count():
 
     assert entry._engine_argv("geoclaw", 1) == ["xgeoclaw"]
     assert entry._engine_argv("geoclaw_bouss", 4) == ["mpiexec", "-n", "4", "xgeoclaw_bouss"]
-    assert {"module", "cores"} <= entry._CASE_FIELDS
+    assert {"module", "cores", "threads"} <= entry._CASE_FIELDS
+
+
+def test_a_stated_thread_count_reaches_OMP_NUM_THREADS_and_unstated_leaves_the_environment(monkeypatch):
+    entry = _entrypoint()
+    monkeypatch.delenv("OMP_NUM_THREADS", raising=False)
+
+    assert entry._engine_env(3)["OMP_NUM_THREADS"] == "3"
+    assert "OMP_NUM_THREADS" not in entry._engine_env(None)
+    assert entry._engine_argv("geoclaw_bouss", 2, 3) == ["mpiexec", "-n", "2", "xgeoclaw_bouss"]
 
 
 @pytest.mark.parametrize("case, code", [
     ({"module": "geoclaw_nonlinear", "results": []}, "GEOCLAW_CASE_MODULE_UNKNOWN"),
     ({"results": []}, "GEOCLAW_CASE_MODULE_UNSTATED"),
-    ({"module": "geoclaw", "cores": 4, "results": []}, "GEOCLAW_CASE_CORES_UNUSED")])
+    ({"module": "geoclaw", "cores": 4, "results": []}, "GEOCLAW_CASE_CORES_UNUSED"),
+    ({"module": "geoclaw", "threads": 2, "results": []}, "GEOCLAW_CASE_THREADS_UNUSED")])
 def test_the_worker_refuses_a_module_it_has_no_executable_for_by_name(tmp_path, case, code):
     entry = _entrypoint()
     (tmp_path / "claw.data").write_text("0.0 =: t0\n10.0 =: tfinal\n")
@@ -110,11 +120,11 @@ def test_a_boussinesq_case_runs_the_staged_module_under_mpiexec_and_reports_it(t
     entry = _entrypoint()
     (tmp_path / "claw.data").write_text("0.0 =: t0\n10.0 =: tfinal\n")
     seen = []
-    monkeypatch.setattr(entry, "_run_engine", lambda data_dir, argv: (seen.append(argv) or 0,
+    monkeypatch.setattr(entry, "_run_engine", lambda data_dir, argv, env=None: (seen.append((argv, env["OMP_NUM_THREADS"])) or 0,
                         " Total zeta at initial time:    0.0\n Done integrating to time    10.0\n"))
-    metrics = entry._solve_case(tmp_path, {"module": "geoclaw_bouss", "cores": 3, "results": []}, None)
+    metrics = entry._solve_case(tmp_path, {"module": "geoclaw_bouss", "cores": 3, "threads": 2, "results": []}, None)
 
-    assert seen == [[ "mpiexec", "-n", "3", "xgeoclaw_bouss"]]
+    assert seen == [(["mpiexec", "-n", "3", "xgeoclaw_bouss"], "2")]
     assert metrics["correct_end"] is True and metrics["module"] == "geoclaw_bouss"
     assert metrics["initial_zeta"] == 0.0 and "initial_mass" not in metrics
 
@@ -138,9 +148,12 @@ def test_a_run_names_its_module_and_its_process_count_and_a_wrong_one_refuses_by
     me = SimpleNamespace(steering=template.STEERING)
 
     assert steered(me, {}) is template.STEERING
-    assert steered(me, {"module": "geoclaw_bouss", "cores": 1}).MODULE == "geoclaw_bouss"
+    assert steered(me, {"module": "geoclaw_bouss", "cores": 1, "threads": 1}).MODULE == "geoclaw_bouss"
     for run, code in [({"module": "geoclaw_nonlinear"}, "GEOCLAW_MODULE_UNKNOWN"),
                       ({"cores": 2}, "GEOCLAW_CORES_UNUSED"),
+                      ({"threads": 2}, "GEOCLAW_THREADS_UNUSED"),
+                      ({"module": "geoclaw_bouss", "threads": 0}, "GEOCLAW_THREADS_OUT_OF_RANGE"),
+                      ({"module": "geoclaw_bouss", "threads": (os.cpu_count() or 1) + 1}, "GEOCLAW_THREADS_OUT_OF_RANGE"),
                       ({"module": "geoclaw_bouss", "cores": 0}, "GEOCLAW_CORES_OUT_OF_RANGE"),
                       ({"module": "geoclaw_bouss", "cores": (os.cpu_count() or 1) + 1}, "GEOCLAW_CORES_OUT_OF_RANGE")]:
         with pytest.raises(GeoclawError) as caught:
@@ -162,10 +175,11 @@ def test_the_staged_case_names_the_module_and_carries_cores_only_past_one(tmp_pa
     original, original_serialize = staging.stage_run, workflow.serialize
     staging.stage_run, workflow.serialize = fake_stage_run, lambda sheet, rundir: {"written": []}
     try:
-        for cores in (1, 3):
-            asyncio.run(workflow.stage_sheet(sheet=sheet, run_tag="tagtagtag", prefix="geoclaw", name="x", cores=cores))
+        for cores, threads in ((1, None), (3, 2)):
+            asyncio.run(workflow.stage_sheet(sheet=sheet, run_tag="tagtagtag", prefix="geoclaw", name="x", cores=cores,
+                                             threads=threads))
     finally:
         staging.stage_run, workflow.serialize = original, original_serialize
 
     assert captured == [{"module": "geoclaw_bouss", "results": ["gauge00007.txt"]},
-                        {"module": "geoclaw_bouss", "cores": 3, "results": ["gauge00007.txt"]}]
+                        {"module": "geoclaw_bouss", "cores": 3, "threads": 2, "results": ["gauge00007.txt"]}]

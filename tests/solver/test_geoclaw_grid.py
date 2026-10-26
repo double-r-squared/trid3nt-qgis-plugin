@@ -278,3 +278,53 @@ def test_a_region_that_states_its_window_without_following_keeps_it(tmp_path):
     art = _accepted(tmp_path, _source_region())
 
     assert grid_keywords(art, rupture_end=115.4)["FLAGREGION_FLAGREGIONS"][0][4] == 10.0
+
+
+_DIAGONAL = dict(ixy=1, method=1, s=[-110.0, -70.0], lower=[-50.0, -20.0], upper=[-30.0, 0.0], filename="RuledRectangle_Diagonal.data")
+
+
+def _ruled_op(**over):
+    return mesh_op("flagregion", name="diag", minlevel=2, maxlevel=3, t1=0.0, t2=1e9, ruled={**_DIAGONAL, **over})
+
+
+def test_a_ruled_flagregion_lands_writes_with_clawpacks_file_and_reads_back(tmp_path):
+    from clawpack.amrclaw.region_tools import RuledRectangle
+
+    from trid3nt_server.workflows.geoclaw.authoring.staged_check import check_staged_run
+
+    record = grid_keywords(_accepted(tmp_path, _ruled_op()))["FLAGREGION_FLAGREGIONS"]
+    assert record == [["diag", 2, 3, 0.0, 1e9, 2, {"ixy": 1, "method": 1, "s": [-110.0, -70.0], "lower": [-50.0, -20.0],
+                                                   "upper": [-30.0, 0.0], "filename": "RuledRectangle_Diagonal.data"}]]
+    rundir = tmp_path / "run"
+    sheet = fill(GEO, CLAW_NUM_OUTPUT_TIMES=2, CLAW_TFINAL=3600.0, FLAGREGION_FLAGREGIONS=record)
+    written = serialize(sheet, rundir)["written"]
+
+    assert "'RuledRectangle_Diagonal.data' =: spatial_region_file" in (rundir / "flagregions.data").read_text()
+    assert RuledRectangle(str(rundir / "RuledRectangle_Diagonal.data")).upper.tolist() == [-30.0, 0.0]
+    assert "FLAGREGION_FLAGREGIONS" in check_staged_run(rundir, sheet=sheet, written=written)["checked"]
+
+
+def test_a_ruled_flagregion_is_counted_by_its_polygon_not_its_bounding_box(tmp_path):
+    ruled = _accepted(tmp_path, _ruled_op())
+    boxed = _accepted(tmp_path, mesh_op("flagregion", name="diag", minlevel=2, maxlevel=3, t1=0.0, t2=1e9,
+                                        extent=(-110.0, -50.0, -70.0, 0.0)))
+    got = ruled.probes["claw_grid"]["cells_per_level"][1]["allowed"]
+    bound = boxed.probes["claw_grid"]["cells_per_level"][1]["allowed"]
+
+    assert 0 < got < bound
+    assert got == pytest.approx(bound * 0.4, rel=0.05)
+
+
+@pytest.mark.parametrize("over", [{"s": [-70.0, -110.0]}, {"lower": [-30.0, 1.0]}, {"ixy": 3}, {"method": 2}, {"filename": "a/b"}])
+def test_a_wrong_ruled_rectangle_refuses_by_name(tmp_path, over):
+    with pytest.raises(MeshToolError) as caught:
+        _accepted(tmp_path, _ruled_op(**over))
+
+    assert caught.value.error_code == "MESH_FLAGREGION_RULED"
+
+
+def test_a_flagregion_states_exactly_one_of_extent_and_ruled(tmp_path):
+    with pytest.raises(MeshToolError) as caught:
+        _accepted(tmp_path, mesh_op("flagregion", **_COAST, ruled=_DIAGONAL))
+
+    assert caught.value.error_code == "MESH_FLAGREGION_EXTENT"

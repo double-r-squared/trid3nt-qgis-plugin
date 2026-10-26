@@ -9,7 +9,7 @@ from __future__ import annotations
 import dataclasses
 import math
 from types import SimpleNamespace
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 from trid3nt_server.tools.mesh.grid_geometry import M_PER_DEG_LAT, RegularGrid
 from trid3nt_server.tools.mesh.meshers import (
@@ -28,6 +28,9 @@ __all__ = ["CLAW_GRID", "build", "flagregion"]
 #: The probes key the grid facts travel under to the accepted artifact.
 PROBE_KEY = "claw_grid"
 
+#: The fields a ruled rectangle states, Clawpack's RuledRectangle names plus the file it is written to.
+_RULED_FIELDS = ("ixy", "s", "lower", "upper", "method", "filename")
+
 #: Arc-seconds per degree.
 _ARCSEC = 3600.0
 
@@ -44,12 +47,16 @@ WALL_BASIS = ("counting every cell the regions allow; scaled from the 7-level Co
 
 
 def flagregion(mesh: Mesh, name: str, minlevel: int, maxlevel: int, t1: float,
-               t2: float, extent: Sequence[float], with_rupture: bool = False) -> Mesh:
-    """One Clawpack FlagRegion over a lon/lat rectangle -> the mesh carrying it.
+               t2: float, extent: Sequence[float] | None = None, with_rupture: bool = False,
+               ruled: Mapping[str, Any] | None = None) -> Mesh:
+    """One Clawpack FlagRegion over a lon/lat rectangle or a ruled rectangle -> the mesh carrying it.
 
     Levels minlevel..maxlevel are forced to at least minlevel and allowed up to
-    maxlevel inside ``extent`` (min_lon, min_lat, max_lon, max_lat) between the
-    run times t1 and t2, in seconds. ``with_rupture`` lengthens the window to the end of the run's
+    maxlevel inside ``extent`` (min_lon, min_lat, max_lon, max_lat), or inside ``ruled``, Clawpack's
+    RuledRectangle stated by its own fields: ixy (1 or 'x': s is lon and lower/upper are lat; 2 or 'y':
+    the reverse), s (strictly increasing), lower and upper (one per s, lower at most upper), method
+    (0 piecewise constant, 1 piecewise linear) and filename (the file the run directory holds it in).
+    The window is the run times t1 to t2, in seconds. ``with_rupture`` lengthens the window to the end of the run's
     stated rupture when that is later than t2; the run's keywords state the result."""
     levels = int(mesh.meta["levels"])
     lo, hi = int(minlevel), int(maxlevel)
@@ -66,17 +73,57 @@ def flagregion(mesh: Mesh, name: str, minlevel: int, maxlevel: int, t1: float,
     if not float(t1) <= float(t2):
         _refuse("MESH_FLAGREGION_TIMES",
                 f"flagregion {name!r}: t1 {t1!r} is after t2 {t2!r}.")
-    x1, y1, x2, y2 = (float(v) for v in extent)
-    if not (x2 > x1 and y2 > y1):
+    if (extent is None) == (ruled is None):
         _refuse("MESH_FLAGREGION_EXTENT",
-                f"flagregion {name!r}: extent {tuple(extent)!r} is not "
-                "(min_lon, min_lat, max_lon, max_lat) with max above min.")
+                f"flagregion {name!r} states exactly one of extent and ruled.")
     record = {"name": str(name), "minlevel": lo, "maxlevel": hi,
-              "t1": float(t1), "t2": float(t2), "extent": (x1, y1, x2, y2),
-              "with_rupture": bool(with_rupture)}
+              "t1": float(t1), "t2": float(t2), "with_rupture": bool(with_rupture)}
+    if ruled is not None:
+        record.update(_ruled(str(name), ruled))
+    else:
+        x1, y1, x2, y2 = (float(v) for v in extent)
+        if not (x2 > x1 and y2 > y1):
+            _refuse("MESH_FLAGREGION_EXTENT",
+                    f"flagregion {name!r}: extent {tuple(extent)!r} is not "
+                    "(min_lon, min_lat, max_lon, max_lat) with max above min.")
+        record["extent"] = (x1, y1, x2, y2)
     carried = [*mesh.meta.get("flagregions", ()), record]
     return dataclasses.replace(mesh, meta={**dict(mesh.meta),
                                            "flagregions": carried})
+
+
+def _ruled(name: str, spec: Mapping[str, Any]) -> dict[str, Any]:
+    """A stated ruled rectangle -> its record: the fields as Clawpack's RuledRectangle holds them, its bounding extent and its polygon."""
+    import numpy as np
+    from clawpack.amrclaw.region_tools import RuledRectangle
+
+    unknown = sorted(set(spec) - set(_RULED_FIELDS))
+    missing = sorted(set(_RULED_FIELDS) - set(spec))
+    if unknown or missing:
+        _refuse("MESH_FLAGREGION_RULED",
+                f"flagregion {name!r}: ruled states {list(_RULED_FIELDS)}; unknown {unknown}, missing {missing}.")
+    ixy, method = spec["ixy"], spec["method"]
+    if ixy not in (1, 2, "x", "y") or method not in (0, 1):
+        _refuse("MESH_FLAGREGION_RULED",
+                f"flagregion {name!r}: ixy is 1, 'x', 2 or 'y' and method is 0 or 1; got ixy {ixy!r}, method {method!r}.")
+    s, lower, upper = (np.array([float(v) for v in spec[key]]) for key in ("s", "lower", "upper"))
+    if not (len(s) >= 2 and len(s) == len(lower) == len(upper)):
+        _refuse("MESH_FLAGREGION_RULED",
+                f"flagregion {name!r}: s, lower and upper are equal lists of at least two values.")
+    if np.diff(s).min() <= 0 or np.any(lower > upper):
+        _refuse("MESH_FLAGREGION_RULED",
+                f"flagregion {name!r}: s must increase strictly and lower must not exceed upper.")
+    if not spec["filename"] or not isinstance(spec["filename"], str) or "/" in spec["filename"]:
+        _refuse("MESH_FLAGREGION_RULED", f"flagregion {name!r}: filename is a bare file name, got {spec['filename']!r}.")
+    rule = RuledRectangle()
+    ixy = 1 if ixy in (1, "x") else 2
+    rule.ixy, rule.method, rule.s, rule.lower, rule.upper = ixy, int(method), s, lower, upper
+    x1, x2, y1, y2 = rule.bounding_box()
+    xs, ys = rule.vertices()
+    return {"extent": (float(x1), float(y1), float(x2), float(y2)),
+            "ruled": {"ixy": ixy, "method": int(method), "s": s.tolist(), "lower": lower.tolist(),
+                      "upper": upper.tolist(), "filename": spec["filename"]},
+            "polygon": [(float(x), float(y)) for x, y in zip(xs, ys)]}
 
 
 def build(recipe: Any) -> Mesh:
@@ -129,7 +176,7 @@ def _run(op: MeshOp, mesh: Mesh) -> Mesh:
         raise MeshToolError(
             "MESH_OP_BAD_KWARGS",
             f"mesh_op('flagregion', ...): {exc}. It takes name, minlevel, "
-            "maxlevel, t1, t2, extent and with_rupture.") from None
+            "maxlevel, t1, t2, extent or ruled, and with_rupture.") from None
 
 
 def _ratios(value: Any) -> list[int]:
@@ -206,8 +253,8 @@ def _level_counts(grid: RegularGrid, ratios: list[int],
     for level in range(2, len(ratios) + 2):
         divisor *= ratios[level - 2]
         cell = (grid.dlon / divisor) * (grid.dlat / divisor)
-        forced = [r["extent"] for r in regions if r["minlevel"] >= level]
-        allowed = [r["extent"] for r in regions if r["maxlevel"] >= level]
+        forced = [_shape(r) for r in regions if r["minlevel"] >= level]
+        allowed = [_shape(r) for r in regions if r["maxlevel"] >= level]
         out.append({
             "level": level,
             "forced": math.ceil(_union_area(forced, domain) / cell - 1e-9),
@@ -215,29 +262,19 @@ def _level_counts(grid: RegularGrid, ratios: list[int],
     return out
 
 
-def _union_area(boxes: list[tuple[float, float, float, float]],
-                domain: tuple[float, float, float, float]) -> float:
-    """Area of the union of ``boxes`` clipped to ``domain``, in square degrees."""
-    clipped = []
-    for x1, y1, x2, y2 in boxes:
-        c = (max(x1, domain[0]), max(y1, domain[1]),
-             min(x2, domain[2]), min(y2, domain[3]))
-        if c[2] > c[0] and c[3] > c[1]:
-            clipped.append(c)
-    xs = sorted({x for c in clipped for x in (c[0], c[2])})
-    area = 0.0
-    for left, right in zip(xs, xs[1:]):
-        spans = sorted((c[1], c[3]) for c in clipped
-                       if c[0] <= left and c[2] >= right)
-        top = None
-        for lo, hi in spans:
-            if top is None or lo > top:
-                area += (right - left) * (hi - lo)
-                top = hi
-            elif hi > top:
-                area += (right - left) * (hi - top)
-                top = hi
-    return area
+def _shape(region: Mapping[str, Any]) -> Any:
+    """The ground a region covers: its extent box, or its ruled rectangle's polygon."""
+    from shapely.geometry import Polygon, box
+
+    return Polygon(region["polygon"]) if "polygon" in region else box(*region["extent"])
+
+
+def _union_area(shapes: list[Any], domain: tuple[float, float, float, float]) -> float:
+    """Area of the union of ``shapes`` clipped to ``domain``, in square degrees."""
+    from shapely.geometry import box
+    from shapely.ops import unary_union
+
+    return unary_union(shapes).intersection(box(*domain)).area if shapes else 0.0
 
 
 def _refuse(code: str, message: str) -> None:

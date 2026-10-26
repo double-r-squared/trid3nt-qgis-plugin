@@ -234,7 +234,7 @@ def test_a_finished_solve_reports_correct_end_frames_and_the_engine_code(
     (tmp_path / "gauge32412.txt").write_text("g")
     (tmp_path / "fort.debug").write_text("not a frame")
     monkeypatch.setattr(entry, "_run_engine",
-                        lambda data_dir, argv: (0, _CHILE_STDOUT))
+                        lambda data_dir, argv, env=None: (0, _CHILE_STDOUT))
     metrics = entry._solve_case(
         tmp_path, {"module": "geoclaw", "results": ["fort.q0018", "gauge32412.txt"]}, None)
     assert metrics["correct_end"] is True
@@ -249,7 +249,7 @@ def test_a_clean_exit_missing_its_declared_results_is_a_typed_error(
     entry = _entrypoint()
     (tmp_path / "claw.data").write_text("0.0 =: t0\n32400.0 =: tfinal\n")
     monkeypatch.setattr(entry, "_run_engine",
-                        lambda data_dir, argv: (0, _CHILE_STDOUT))
+                        lambda data_dir, argv, env=None: (0, _CHILE_STDOUT))
     metrics = entry._solve_case(tmp_path, {"module": "geoclaw", "results": ["fort.q0099"]}, None)
     assert metrics["correct_end"] is False
     assert metrics["error_code"] == "GEOCLAW_RESULTS_MISSING"

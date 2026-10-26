@@ -16,12 +16,18 @@ __all__ = ["RELATIONS", "rupture_dimensions", "slip_for_moment"]
 _WC = ("Wells and Coppersmith (1994), Bull. Seismol. Soc. Am. 84(4):974-1002, Table 2A, p. 990: "
        "subsurface rupture length RLD and downdip rupture width RW, log10(km) = a + b * M, {kind} slip")
 
+_TMG = ("Thingbaijam, Mai and Goda (2017), Bull. Seismol. Soc. Am. 107(5):2225-2246, doi 10.1785/0120170017, subduction-interface "
+        "rupture length and downdip width, log10(km) = a + b * Mw, coefficients read from GEM OpenQuake's "
+        "openquake/hazardlib/scalerel/thingbaijam2017.py (ThingbaijamInterface); magnitude range the paper's database as its abstract "
+        "states it (Mw 5.4 to 9.2, all faulting styles)")
+
 #: relation name -> (citation, (a, b, Mmin, Mmax) for length, (a, b, Mmin, Mmax) for width).
 RELATIONS: Mapping[str, tuple[str, tuple[float, ...], tuple[float, ...]]] = MappingProxyType({
     "wells_coppersmith_1994_strike_slip": (_WC.format(kind="strike-slip"), (-2.57, 0.62, 4.8, 8.1), (-0.76, 0.27, 4.8, 8.1)),
     "wells_coppersmith_1994_reverse": (_WC.format(kind="reverse"), (-2.42, 0.58, 4.8, 7.6), (-1.61, 0.41, 4.8, 7.6)),
     "wells_coppersmith_1994_normal": (_WC.format(kind="normal"), (-1.88, 0.50, 5.2, 7.3), (-1.14, 0.35, 5.2, 7.3)),
     "wells_coppersmith_1994_all": (_WC.format(kind="all-slip-type"), (-2.44, 0.59, 4.8, 8.1), (-1.01, 0.32, 4.8, 8.1)),
+    "thingbaijam_2017_interface": (_TMG, (-2.412, 0.583, 5.4, 9.2), (-0.880, 0.366, 5.4, 9.2)),
 })
 
 

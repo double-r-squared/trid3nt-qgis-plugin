@@ -49,7 +49,7 @@ def test_the_relations_return_the_printed_tables_lengths_and_widths():
     assert (length / 1000, width / 1000) == pytest.approx((48.97, 16.98), abs=0.01)
     reverse = rupture_dimensions("wells_coppersmith_1994_reverse", 7.0)
     assert (reverse[0] / 1000, reverse[1] / 1000) == pytest.approx((10 ** (-2.42 + 0.58 * 7), 10 ** (-1.61 + 0.41 * 7)), rel=1e-12)
-    assert set(RELATIONS) == {f"wells_coppersmith_1994_{k}" for k in ("all", "reverse", "strike_slip", "normal")}
+    assert set(RELATIONS) == {f"wells_coppersmith_1994_{k}" for k in ("all", "reverse", "strike_slip", "normal")} | {"thingbaijam_2017_interface"}
 
 
 def test_one_subfault_with_the_stated_planes_angles_the_published_centroid_and_slip_over_the_scaled_rectangle():
@@ -135,3 +135,15 @@ def test_a_rupture_another_composite_wrote_and_a_surface_reaching_rupture_refuse
     none["solutions"][0]["centroid"] = None
     with pytest.raises(GeoclawError, match="publishes no centroid"):
         _subfault(moment_tensor=none)
+
+
+def test_the_thingbaijam_interface_relation_pins_its_coefficients_and_refuses_outside_its_range():
+    citation, length, width = RELATIONS["thingbaijam_2017_interface"]
+    assert length == (-2.412, 0.583, 5.4, 9.2) and width == (-0.880, 0.366, 5.4, 9.2)
+    assert "thingbaijam2017.py" in citation and "10.1785/0120170017" in citation
+    got_length, got_width = rupture_dimensions("thingbaijam_2017_interface", 9.0)
+    assert got_length == pytest.approx(10 ** (-2.412 + 0.583 * 9.0) * 1000.0)
+    assert got_width == pytest.approx(10 ** (-0.880 + 0.366 * 9.0) * 1000.0)
+    for mw in (5.3, 9.3):
+        with pytest.raises(GeoclawError, match=r"outside the thingbaijam_2017_interface length regression's fitted range 5.4 to 9.2"):
+            rupture_dimensions("thingbaijam_2017_interface", mw)

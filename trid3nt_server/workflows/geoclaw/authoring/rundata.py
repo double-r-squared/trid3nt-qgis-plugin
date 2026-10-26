@@ -54,6 +54,7 @@ def serialize(sheet: Any, rundir: Path | str) -> dict[str, Any]:
     write_dtopofiles(sheet, work)
     write_qinitfiles(sheet, work)
     write_stormfiles(sheet, work)
+    write_ruledrectangles(sheet, work)
     written = sorted(out_file(obj) for _name, obj in groups.values())
     try:
         rundata.write(str(work))
@@ -66,6 +67,24 @@ def serialize(sheet: Any, rundir: Path | str) -> dict[str, Any]:
     _relabeled(sheet, work)
     logger.info("geoclaw .data written to %s: %s", work, written)
     return {"written": written}
+
+
+def write_ruledrectangles(sheet: Any, work: Path) -> list[str]:
+    """Write every ruled rectangle a flagregion record states into ``work`` with Clawpack's RuledRectangle.write -> their names."""
+    import numpy as np
+    from clawpack.amrclaw.region_tools import RuledRectangle
+
+    row = sheet.filled.get("FLAGREGION_FLAGREGIONS")
+    names: list[str] = []
+    for record in (row.value if row is not None else ()):
+        if record[5] != 2:
+            continue
+        spec = record[6]
+        rule = RuledRectangle(slu=np.column_stack([spec["s"], spec["lower"], spec["upper"]]).astype(float))
+        rule.ixy, rule.method = spec["ixy"], int(spec["method"])
+        rule.write(str(work / spec["filename"]))
+        names.append(spec["filename"])
+    return names
 
 
 def _refuse(code: str, message: str) -> None:
@@ -217,6 +236,9 @@ def _object(kind: str, fields: tuple[str, ...], record: Any,
 
         obj = FGoutGrid()
     for field, item in zip(fields, record):
+        if kind == "FlagRegion" and field == "spatial_region" and isinstance(item, Mapping):
+            obj.spatial_region_file = item["filename"]
+            continue
         # An fgmax grid's geometry is stated under the tool's own attribute names (x1, y1, x2, y2, nx, ny for a uniform grid): the shape's one ``points`` field carries them.
         stated = (item.items() if kind == "FGmaxGrid" and field == "points"
                   and isinstance(item, Mapping) else [(field, item)])

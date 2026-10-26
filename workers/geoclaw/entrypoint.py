@@ -51,8 +51,9 @@ _SOLVE_TIMEOUT_DEFAULT_S = 86400.0
 #: The keys a ``case`` section carries. tfinal is NOT one: it is the staged
 #: claw.data's own number, read there, so the manifest cannot restate a time
 #: that disagrees with the run. ``cores`` is the MPI process count of the
-#: Boussinesq executable.
-_CASE_FIELDS = frozenset(("module", "cores", "results"))
+#: Boussinesq executable; ``threads`` is the OpenMP thread count of each of its
+#: processes (``OMP_NUM_THREADS``), which only that executable is compiled for.
+_CASE_FIELDS = frozenset(("module", "cores", "threads", "results"))
 
 #: The module word a case names -> the prebuilt executable it runs. The
 #: Boussinesq one is the only MPI program: PETSc's linear solves use its ranks.
@@ -244,10 +245,10 @@ def _solve_timeout_s() -> float:
         return _SOLVE_TIMEOUT_DEFAULT_S
 
 
-def _engine_argv(module: str, cores: int) -> list[str]:
+def _engine_argv(module: str, cores: int, threads: int | None = None) -> list[str]:
     """The command that runs a module's prebuilt executable: the shallow-water one
     directly, the Boussinesq one under ``mpiexec -n <cores>``. A module with no
-    executable, or a process count the module's executable cannot take, refuses."""
+    executable, or a process or thread count the module's executable cannot take, refuses."""
     if module not in _EXECUTABLES:
         raise CaseError(
             "GEOCLAW_CASE_MODULE_UNKNOWN",
@@ -259,17 +260,31 @@ def _engine_argv(module: str, cores: int) -> list[str]:
                 "GEOCLAW_CASE_CORES_UNUSED",
                 f"case states cores {cores} for {module!r}, whose executable "
                 "runs one process.")
+        if threads is not None:
+            raise CaseError(
+                "GEOCLAW_CASE_THREADS_UNUSED",
+                f"case states threads {threads} for {module!r}, whose executable "
+                "is not compiled for OpenMP.")
         return [_EXECUTABLES[module]]
     return ["mpiexec", "-n", str(cores), _EXECUTABLES[module]]
 
 
-def _run_engine(data_dir: Path, argv: list[str]) -> tuple[int, str]:
+def _engine_env(threads: int | None) -> dict[str, str]:
+    """The child's environment: the worker's own, OMP_NUM_THREADS set to the stated
+    thread count; unstated, left as the image has it (OpenMP's default, every core per process)."""
+    env = dict(os.environ)
+    if threads is not None:
+        env["OMP_NUM_THREADS"] = str(threads)
+    return env
+
+
+def _run_engine(data_dir: Path, argv: list[str], env: dict[str, str] | None = None) -> tuple[int, str]:
     """Run the prebuilt executable in the run directory; return its exit code and
     everything it said (stdout merged with stderr, so a runtime refusal on
     either stream is read). The child is bounded; an expiry KILLS it, because a
     wedged solve otherwise holds the container open with no report written."""
     bound = _solve_timeout_s()
-    child = subprocess.Popen(argv, cwd=str(data_dir), text=True,
+    child = subprocess.Popen(argv, cwd=str(data_dir), env=env, text=True,
                              bufsize=1, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT)
     lines: list[str] = []
@@ -306,10 +321,12 @@ def _solve_case(data_dir: Path, body: Any, run_id: str | None) -> dict[str, Any]
             "GEOCLAW_CASE_MODULE_UNSTATED",
             f"case names no module; the modules are {sorted(_EXECUTABLES)}.")
     cores = int(case.get("cores") or 1)
-    argv = _engine_argv(str(module), cores)
+    threads = int(case["threads"]) if case.get("threads") else None
+    argv = _engine_argv(str(module), cores, threads)
     tfinal = _staged_tfinal(data_dir / "claw.data")
-    LOG.info("geoclaw case module=%s cores=%d tfinal=%s results=%s", module, cores, tfinal, results)
-    code, stdout = _run_engine(data_dir, argv)
+    LOG.info("geoclaw case module=%s cores=%d threads=%s tfinal=%s results=%s",
+             module, cores, threads, tfinal, results)
+    code, stdout = _run_engine(data_dir, argv, _engine_env(threads))
     missing = [r for r in results if not (data_dir / r).exists()]
     metrics = _verdict(stdout, tfinal, missing, code,
                        _staged_restart(data_dir / "claw.data"), str(module))

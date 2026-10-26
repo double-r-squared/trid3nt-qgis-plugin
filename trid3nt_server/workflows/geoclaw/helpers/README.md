@@ -8,4 +8,4 @@ geometry, no file. A value outside a relation's published range is refused by na
 | file | what it is |
 | --- | --- |
 | `__init__.py` | The door. Consumers import the module they mean. |
-| `scaling.py` | The published magnitude-to-rupture-size regressions (one table row each, cited by table and page) and the slip a scalar moment makes over a rectangle. |
+| `scaling.py` | The published magnitude-to-rupture-size regressions (one table row each, cited by table and page; Wells and Coppersmith 1994 by slip type, Thingbaijam, Mai and Goda 2017 for the subduction interface) and the slip a scalar moment makes over a rectangle. |
